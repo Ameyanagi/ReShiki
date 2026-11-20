@@ -611,7 +611,7 @@ impl App {
         ]
         .spacing(8);
         if self.tab.arrow_style == Preset::Equilibrium {
-            geometry = geometry.push(number("Reverse length (0.2–1)", Field::Ratio));
+            geometry = geometry.push(number("Reverse length (0.2–5)", Field::Ratio));
         }
         if matches!(self.tab.arrow_style, Preset::Equilibrium | Preset::Retro) {
             geometry = geometry.push(number("Shaft separation (pt)", Field::Gap));

@@ -132,7 +132,11 @@ fn draw_primitives_with_opacity(
                 let stroke = Stroke::default()
                     .with_color(alpha(rgb(style.stroke.rgb())))
                     .with_width(width)
-                    .with_line_cap(canvas::LineCap::Round)
+                    .with_line_cap(if style.round_caps() {
+                        canvas::LineCap::Round
+                    } else {
+                        canvas::LineCap::Butt
+                    })
                     .with_line_join(canvas::LineJoin::Round);
                 if dashes.is_empty() {
                     frame.stroke(&path, stroke);

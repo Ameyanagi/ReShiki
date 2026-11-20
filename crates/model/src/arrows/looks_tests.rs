@@ -334,3 +334,129 @@ fn an_exchange_copy_keeps_an_icon_on_a_chevron_above_its_shapes() {
     assert!(lowered.graphics.len() > 2);
     assert_eq!(icon, lowered.graphics.len() - 1, "the icon paints last");
 }
+
+/// Each drawn piece's horizontal and vertical reach.
+fn reach(arrow: &Arrow) -> Vec<(f32, f32, f32, f32)> {
+    arrow
+        .paths()
+        .iter()
+        .map(|path| {
+            let p = points(&path.commands);
+            let fold = |f: fn(&Point) -> f32, pick: fn(f32, f32) -> f32, start| {
+                p.iter().map(f).fold(start, pick)
+            };
+            (
+                fold(|q| q.x, f32::min, f32::INFINITY),
+                fold(|q| q.x, f32::max, f32::NEG_INFINITY),
+                fold(|q| q.y, f32::min, f32::INFINITY),
+                fold(|q| q.y, f32::max, f32::NEG_INFINITY),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn no_go_marks_reach_five_line_widths_either_side_as_in_chemdraw() {
+    use super::NoGo;
+    for (mark, width) in [(NoGo::Cross, 0.6), (NoGo::Hash, 1.), (NoGo::Hash, 2.)] {
+        let mut style = ArrowStyle::preset(Preset::Forward);
+        style.no_go = mark;
+        style.width_pt = width;
+        let arrow = Arrow::new(
+            1,
+            Point::new(0., 0.),
+            Point::new(100., 0.),
+            Preset::Forward,
+            style,
+        );
+        let half = DEFAULT.world(5. * width);
+        let marks: Vec<_> = reach(&arrow)
+            .into_iter()
+            .filter(|(.., top, bottom)| top + half < 1e-3 && bottom - half > -1e-3)
+            .collect();
+        // A cross is two strokes, a hash one path of two.
+        assert_eq!(
+            marks.len(),
+            if mark == NoGo::Cross { 2 } else { 1 },
+            "{marks:?}"
+        );
+        let left = marks.iter().map(|m| m.0).fold(f32::INFINITY, f32::min);
+        let right = marks.iter().map(|m| m.1).fold(f32::NEG_INFINITY, f32::max);
+        // As wide as it is tall: a hash's two strokes each lean half as far.
+        assert!(
+            ((right - left) - 2. * half).abs() < 1e-3,
+            "{mark:?} {width}"
+        );
+        assert!(((left + right) / 2. - 50.).abs() < 1e-3);
+        // Each hash stroke leans forward, rising twice as far as it runs.
+        if mark == NoGo::Hash {
+            let path = arrow
+                .paths()
+                .into_iter()
+                .find(|p| p.commands.len() == 4)
+                .unwrap();
+            let [
+                PathCommand::Move(a),
+                PathCommand::Line(b),
+                PathCommand::Move(c),
+                PathCommand::Line(d),
+            ] = path.commands[..]
+            else {
+                panic!("{:?}", path.commands);
+            };
+            for (from, to) in [(a, b), (c, d)] {
+                assert!((to.x - from.x - half).abs() < 1e-3);
+                assert!((from.y - to.y - 2. * half).abs() < 1e-3);
+            }
+            assert!((c.x - a.x - half).abs() < 1e-3);
+        }
+    }
+}
+
+#[test]
+fn either_arrow_of_an_equilibrium_can_be_the_short_one() {
+    for (ratio, forward, reverse) in [(1., 100., 100.), (0.5, 100., 50.), (2., 50., 100.)] {
+        let mut style = ArrowStyle::preset(Preset::Equilibrium);
+        style.equilibrium_ratio = ratio;
+        assert!(style.validate().is_ok());
+        let arrow = Arrow::new(
+            1,
+            Point::new(0., 0.),
+            Point::new(100., 0.),
+            Preset::Equilibrium,
+            style,
+        );
+        // The forward arrow above, the reverse one below, each centered.
+        let length = |above: bool| {
+            let pieces: Vec<_> = reach(&arrow)
+                .into_iter()
+                .filter(|(.., top, bottom)| (top + bottom < 0.) == above)
+                .collect();
+            let left = pieces.iter().map(|r| r.0).fold(f32::INFINITY, f32::min);
+            let right = pieces.iter().map(|r| r.1).fold(f32::NEG_INFINITY, f32::max);
+            assert!(((left + right) / 2. - 50.).abs() < 0.5, "{ratio}");
+            right - left
+        };
+        assert!(
+            (length(true) - forward).abs() < 0.5,
+            "{ratio}: {}",
+            length(true)
+        );
+        assert!(
+            (length(false) - reverse).abs() < 0.5,
+            "{ratio}: {}",
+            length(false)
+        );
+    }
+    let mut style = ArrowStyle::preset(Preset::Equilibrium);
+    style.equilibrium_ratio = 2.;
+    let mut doc = Document::default();
+    doc.arrows.push(Arrow::new(
+        1,
+        Point::new(0., 0.),
+        Point::new(100., 0.),
+        Preset::Equilibrium,
+        style,
+    ));
+    assert_eq!(doc.file_version(), DRAWING_ELEMENTS);
+}

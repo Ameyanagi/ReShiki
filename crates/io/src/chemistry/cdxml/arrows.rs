@@ -535,6 +535,20 @@ impl ArrowReader {
         } else {
             Preset::Forward
         };
+        // ChemDraw opens an angled retrosynthesis head as wide as its center
+        // size, so both shafts run into it.
+        if drawing && kind == Preset::Retro && shape == HeadShape::Open {
+            style.head_width_pt = (heads.head_length_pt * (1. - heads.head_notch)).clamp(0.25, 16.);
+        }
+        // ChemDraw keeps the forward arrow of an equilibrium this many
+        // hundredths as long as the reverse one; ReShiki's ratio is the
+        // reverse arrow's length against the forward one.
+        if drawing && kind == Preset::Equilibrium {
+            style.equilibrium_ratio = 100. / scalar(node, "ArrowEquilibriumRatio", "100")?;
+            if !(0.2..=5.).contains(&style.equilibrium_ratio) {
+                return Err(ArrowError::Range("equilibrium_ratio"));
+            }
+        }
         // ChemDraw measures a block head's width from the shaft edge.
         let body = match fill {
             _ if !drawing
