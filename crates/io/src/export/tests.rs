@@ -1665,3 +1665,27 @@ fn file_sizes_follow_the_adaptive_budget() {
     assert_eq!(dpi, 600);
     assert_eq!((width, height), png_pixels(size, 600));
 }
+
+/// PDF fonts carry outlines only, so an emoji embedded as Apple Color Emoji
+/// text was invisible. It must come out as a picture while the letters beside
+/// it stay text.
+#[cfg(target_os = "macos")]
+#[test]
+fn colour_emoji_reach_the_pdf_as_pictures() {
+    let mut doc = Document::default();
+    doc.annotations.push(crate::document::Annotation {
+        id: 1,
+        position: crate::document::Point::default(),
+        text: "H 💡".into(),
+        format: Default::default(),
+        angle: 0.,
+    });
+    // A file and a copy, which macOS pastes into Keynote, Word or PowerPoint.
+    for pdf in [drawing(&doc, "pdf"), clipboard_drawing(&doc, "pdf")] {
+        let pdf = pdf.unwrap();
+        let has = |needle: &[u8]| pdf.windows(needle.len()).any(|w| w == needle);
+        assert!(has(b"/Subtype /Image"));
+        assert!(!has(b"AppleColorEmoji"));
+        assert!(has(b"/FontFile2"));
+    }
+}
