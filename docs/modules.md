@@ -690,6 +690,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/cycles/perimeter_deform.rs`: Tangent-preserving Bow and reversible lanes, built from original perimeter arclength knots.
 - `crates/model/src/cycles/perimeter_names.rs`: Noncircle names follow the final forward shaft, with actual painted ink deciding between inside, outside and nearby positions.
 - `crates/model/src/cycles/perimeter_sides.rs`: Side contacts on the resolved, open, painted step shafts.
+- `crates/model/src/cycles/resize.rs`: Resize an explicit cycle shape without replacing its retained affine frame.
 - `crates/model/src/cycles/shapes.rs`: Cycle-local perimeter geometry.
 - `crates/model/src/cycles/shapes/shaft.rs`: Open geometry read from the native shaft after Bow, lanes and head trim.
 - `crates/model/src/cycles/split.rs`: Keep inherited side parts beside the step that an insertion shortens.
