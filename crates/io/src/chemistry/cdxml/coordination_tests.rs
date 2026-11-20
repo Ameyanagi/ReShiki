@@ -38,6 +38,192 @@ fn assert_frame(doc: &Document, expected: &Document) {
     }
 }
 
+fn ruthenium_wedge_reporter(narrow_at_center: bool) -> Document {
+    let mut doc = Document::default();
+    let center = doc.add_atom("Ru", Point::default());
+    // #1287: the two labelled chlorides must keep their tapered bond paint
+    // beside a terminal double bond and the two plain carbon substituents.
+    for (element, position, order, display) in [
+        ("Cl", Point::new(-36., -21.), 1, "hash"),
+        ("Cl", Point::new(42., 0.), 1, "wedge"),
+        ("C", Point::new(0., -42.), 2, "plain"),
+        ("C", Point::new(-21., 36.), 1, "plain"),
+        ("C", Point::new(21., 36.), 1, "plain"),
+    ] {
+        let ligand = doc.add_atom(element, position);
+        let (a, b) = if narrow_at_center || display == "plain" {
+            (center, ligand)
+        } else {
+            (ligand, center)
+        };
+        doc.add_bond(a, b, order, display);
+    }
+    doc
+}
+
+fn silicon_wedge_drawing(display: &str, narrow_at_center: bool) -> Document {
+    let mut doc = Document::default();
+    let center = doc.add_atom("Si", Point::default());
+    // Four different ligands give Si a valid tetrahedral configuration when
+    // the marker narrows at Si; each marker is tested independently.
+    for (element, position) in [
+        ("Cl", Point::new(-36., -21.)),
+        ("Br", Point::new(42., 0.)),
+        ("F", Point::new(0., -42.)),
+        ("I", Point::new(0., 42.)),
+    ] {
+        let ligand = doc.add_atom(element, position);
+        let marker = element == "Cl";
+        let (a, b) = if marker && !narrow_at_center {
+            (ligand, center)
+        } else {
+            (center, ligand)
+        };
+        doc.add_bond(a, b, 1, if marker { display } else { "plain" });
+    }
+    doc
+}
+
+fn assert_wedge_drawing(doc: &Document, expected: &Document) {
+    assert_eq!(
+        doc.atoms
+            .iter()
+            .map(|atom| &atom.element)
+            .collect::<Vec<_>>(),
+        expected
+            .atoms
+            .iter()
+            .map(|atom| &atom.element)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(doc.bonds.len(), expected.bonds.len());
+    let atom_index = |document: &Document, id| {
+        document
+            .atoms
+            .iter()
+            .position(|atom| atom.id == id)
+            .unwrap()
+    };
+    for (actual, source) in doc.bonds.iter().zip(&expected.bonds) {
+        assert_eq!(actual.order, source.order);
+        assert_eq!(actual.display, source.display);
+        // The first native endpoint is the narrow end for both wedge paints.
+        // Compare atom ordinals so the two Cl and three C atoms stay distinct.
+        assert_eq!(atom_index(doc, actual.a), atom_index(expected, source.a));
+        assert_eq!(atom_index(doc, actual.b), atom_index(expected, source.b));
+    }
+}
+
+#[test]
+fn reporter_ruthenium_cdxml_and_cdx_keep_elements_wedges_and_narrow_ends()
+-> Result<(), Box<dyn std::error::Error>> {
+    for narrow_at_center in [true, false] {
+        let doc = ruthenium_wedge_reporter(narrow_at_center);
+        let xml = drawing::write(&doc, Default::default())?;
+        assert!(xml.contains("Display=\"WedgedHashBegin\""));
+        assert!(xml.contains("Display=\"WedgeBegin\""));
+        for decoded in [
+            xml.clone(),
+            crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml)?)?,
+        ] {
+            let imported = assemble_cdxml(&prepare_cdxml(&decoded)?)?.into_document()?;
+            assert_wedge_drawing(&imported.document, &doc);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn silicon_cdxml_and_cdx_keep_wedge_and_hash_at_either_narrow_end()
+-> Result<(), Box<dyn std::error::Error>> {
+    for display in ["wedge", "hash"] {
+        for narrow_at_center in [true, false] {
+            let doc = silicon_wedge_drawing(display, narrow_at_center);
+            let xml = drawing::write(&doc, Default::default())?;
+            for decoded in [
+                xml.clone(),
+                crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml)?)?,
+            ] {
+                let imported = assemble_cdxml(&prepare_cdxml(&decoded)?)?.into_document()?;
+                assert_wedge_drawing(&imported.document, &doc);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn hand_authored_ruthenium_chloride_begin_and_end_displays_keep_their_narrow_atom()
+-> Result<(), Box<dyn std::error::Error>> {
+    for (display, retained, narrow_at_center) in [
+        ("WedgeBegin", "wedge", true),
+        ("WedgeEnd", "wedge", false),
+        ("WedgedHashBegin", "hash", true),
+        ("WedgedHashEnd", "hash", false),
+    ] {
+        let xml = format!(
+            "<CDXML BondLength='14.4'><page id='1'><fragment id='2'>\
+             <n id='3' p='0 0' Element='44'/><n id='4' p='42 0' Element='17'/>\
+             <b id='5' B='3' E='4' Order='1' Display='{display}'/>\
+             </fragment></page></CDXML>"
+        );
+        for decoded in [
+            xml.clone(),
+            crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml)?)?,
+        ] {
+            let imported = assemble_cdxml(&prepare_cdxml(&decoded)?)?.into_document()?;
+            let doc = &imported.document;
+            let bond = &doc.bonds[0];
+            assert_eq!(bond.display, retained, "{display}");
+            assert_eq!(bond.order, 1);
+            assert_eq!(
+                doc.atom(bond.a).unwrap().element,
+                if narrow_at_center { "Ru" } else { "Cl" },
+                "{display}"
+            );
+            assert_eq!(
+                doc.atom(bond.b).unwrap().element,
+                if narrow_at_center { "Cl" } else { "Ru" },
+                "{display}"
+            );
+            let rewritten = drawing::write(doc, Default::default())?;
+            let tree = roxmltree::Document::parse(&rewritten)?;
+            let written = tree.descendants().find(|n| n.has_tag_name("b")).unwrap();
+            // Native covalent bonds canonicalize ...End by swapping endpoints.
+            // Re-export uses ...Begin with the same physical narrow atom.
+            assert_eq!(
+                written.attribute("Display"),
+                Some(if retained == "wedge" {
+                    "WedgeBegin"
+                } else {
+                    "WedgedHashBegin"
+                })
+            );
+            let reopened = assemble_cdxml(&prepare_cdxml(&rewritten)?)?.into_document()?;
+            assert_wedge_drawing(&reopened.document, doc);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn reporter_ruthenium_wedges_do_not_change_smiles_from_the_all_plain_drawing()
+-> Result<(), Box<dyn std::error::Error>> {
+    for narrow_at_center in [true, false] {
+        let doc = ruthenium_wedge_reporter(narrow_at_center);
+        let mut plain = doc.clone();
+        for bond in &mut plain.bonds {
+            bond.display = "plain".into();
+        }
+        let smiles = |drawing: &Document| -> Result<String, Box<dyn std::error::Error>> {
+            let molecule = chemistry::document::prepare(drawing)?;
+            Ok(chemistry::smiles::write::write(&molecule.state, Default::default())?.text)
+        };
+        assert_eq!(smiles(&doc)?, smiles(&plain)?);
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn placed_coordination_templates_export_and_analyze_without_tetrahedral_stereo()
 -> Result<(), Box<dyn std::error::Error>> {

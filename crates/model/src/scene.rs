@@ -1583,8 +1583,8 @@ pub(crate) fn bond_segment_with_faces(
         }
     };
     let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
-    let a_boxes = boxes(a);
-    let b_boxes = boxes(b);
+    let mut a_boxes = boxes(a);
+    let mut b_boxes = boxes(b);
     let mut span = trimmed_span(a.position, b.position, &a_boxes, &b_boxes, margin)?;
     if dative_needs_core(bond, &span) {
         let core = |atom: &Atom, boxes: &[_]| {
@@ -1594,14 +1594,18 @@ pub(crate) fn bond_segment_with_faces(
                 dative_trim_boxes(&atom_label(atom, doc))
             }
         };
-        span = trimmed_span(
-            a.position,
-            b.position,
-            &core(a, &a_boxes),
-            &core(b, &b_boxes),
-            margin,
-        )?;
+        a_boxes = core(a, &a_boxes);
+        b_boxes = core(b, &b_boxes);
+        span = trimmed_span(a.position, b.position, &a_boxes, &b_boxes, margin)?;
     }
+    let span = recover_stereo_span(
+        span,
+        bond,
+        a.position,
+        b.position,
+        [&a_boxes, &b_boxes],
+        &doc.drawing_style,
+    );
     let span = if span.along <= 0.1 && rounded_connector(bond) {
         let shapes = |atom: &Atom, boxes: &[_]| {
             if boxes.is_empty() {
@@ -1689,7 +1693,7 @@ fn centered_double_rails(
             // Label picking owns the unpadded boxes, both at the rail and at
             // its backbone projection. Do not paint into those owned corners.
             for point in [origin, base] {
-                let guard = label_box_end(point, dx, dy, lo, hi, length, 0.);
+                let guard = label_box_end(point, dx, dy, (lo, hi), length, [0.; 2], None);
                 far = far.max((guard.x - point.x) * dx + (guard.y - point.y) * dy);
             }
         }
@@ -1787,7 +1791,8 @@ fn rounded_label_end(
     let mut far = 0f32;
     for &((lo, hi), radius) in shapes {
         if radius <= 0. || !radius.is_finite() {
-            far = far.max(along(label_box_end(origin, ux, uy, lo, hi, max, margin)));
+            let end = label_box_end(origin, ux, uy, (lo, hi), max, [margin; 2], None);
+            far = far.max(along(end));
             continue;
         }
         // Padding the conservative glyph outline by the requested margin is
@@ -1807,7 +1812,8 @@ fn rounded_label_end(
                 Point::new(inner_high.x, high.y),
             ),
         ] {
-            far = far.max(along(label_box_end(origin, ux, uy, a, b, max, 0.)));
+            let end = label_box_end(origin, ux, uy, (a, b), max, [0.; 2], None);
+            far = far.max(along(end));
         }
         // Two central rectangles plus four discs exactly cover the rounded
         // rectangle. Intersect the finite ray with each convex piece.
@@ -1864,9 +1870,21 @@ pub(crate) fn label_end(
     max: f32,
     margin: f32,
 ) -> Point {
+    label_end_padded(origin, ux, uy, bounds, max, [margin; 2], None)
+}
+
+fn label_end_padded(
+    origin: Point,
+    ux: f32,
+    uy: f32,
+    bounds: &[(Point, Point)],
+    max: f32,
+    padding: [f32; 2],
+    slab: Option<f32>,
+) -> Point {
     bounds
         .iter()
-        .map(|&(lo, hi)| label_box_end(origin, ux, uy, lo, hi, max, margin))
+        .map(|&ink| label_box_end(origin, ux, uy, ink, max, padding, slab))
         .max_by(|a, b| {
             let along = |p: &Point| (p.x - origin.x) * ux + (p.y - origin.y) * uy;
             along(a).total_cmp(&along(b))
@@ -1878,19 +1896,32 @@ fn label_box_end(
     origin: Point,
     ux: f32,
     uy: f32,
-    lo: Point,
-    hi: Point,
+    (lo, hi): (Point, Point),
     max: f32,
-    margin: f32,
+    [pad_x, pad_y]: [f32; 2],
+    slab: Option<f32>,
 ) -> Point {
+    let slab = slab.map(|gap| {
+        let [x0, x1] = [lo.x, hi.x].map(|x| (x - origin.x) * ux);
+        let [y0, y1] = [lo.y, hi.y].map(|y| (y - origin.y) * uy);
+        (
+            0.,
+            1.,
+            x0.min(x1) + y0.min(y1) - gap,
+            x0.max(x1) + y0.max(y1) + gap,
+        )
+    });
     // Intersect the whole segment with the padded label box. A label can
     // extend past the bond midpoint, or sit above its attachment position.
     let mut enter: f32 = 0.;
     let mut exit = max.max(0.);
     for (position, direction, low, high) in [
-        (origin.x, ux, lo.x - margin, hi.x + margin),
-        (origin.y, uy, lo.y - margin, hi.y + margin),
-    ] {
+        (origin.x, ux, lo.x - pad_x, hi.x + pad_x),
+        (origin.y, uy, lo.y - pad_y, hi.y + pad_y),
+    ]
+    .into_iter()
+    .chain(slab)
+    {
         if direction.abs() < 1e-6 {
             if position < low || position > high {
                 return origin;
@@ -2825,25 +2856,102 @@ fn dative_needs_core(b: &Bond, span: &TrimmedSpan) -> bool {
     b.is_dative() && b.display == "plain" && span.along < DATIVE_HEAD_LENGTH
 }
 
+/// A wedge, hash or bold bond whose label-trimmed span is shorter than twice
+/// the bold width trims to the labels' ink instead of the full margin (#1287),
+/// when that gives a longer span at least as long as the bold width. Shorter
+/// spans cannot read as a taper and could swing the wide end into a label.
+/// The bond-axis slab captures the exact end-segment envelope at ink-box
+/// corners, with extra padding for the clearance gap. Check the whole outline
+/// as well, since a widening flank can still cross the narrow end's label.
+fn recover_stereo_span(
+    span: TrimmedSpan,
+    b: &Bond,
+    a: Point,
+    z: Point,
+    [a_boxes, z_boxes]: [&[(Point, Point)]; 2],
+    style: &crate::style::DrawingStyle,
+) -> TrimmedSpan {
+    let display = b.base_display();
+    let bold_width = style.world(style.bold_width_pt);
+    if span.along < 2. * bold_width
+        && !matches!(b.order, 2 | 7)
+        && matches!(
+            display,
+            "wedge" | "hollow_wedge" | "hash" | "hashed" | "bold"
+        )
+    {
+        let TrimmedSpan { ux, uy, .. } = span;
+        let half_line = style.line_width() * 0.5;
+        let overhang = if matches!(display, "hollow_wedge" | "hash" | "hashed") {
+            half_line
+        } else {
+            0.
+        };
+        let gap = half_line + overhang;
+        let half_bold = bold_width * 0.5;
+        let narrow = ([gap; 2], half_line);
+        let wide = (
+            [gap + uy.abs() * half_bold, gap + ux.abs() * half_bold],
+            half_bold,
+        );
+        let [(a_pad, a_half), (z_pad, z_half)] = if matches!(display, "bold" | "hashed") {
+            [wide; 2]
+        } else if b.narrowed_at_acceptor() {
+            [wide, narrow]
+        } else {
+            [narrow, wide]
+        };
+        let length = a.distance(z);
+        let start = label_end_padded(a, ux, uy, a_boxes, length, a_pad, Some(gap));
+        let end = label_end_padded(z, -ux, -uy, z_boxes, length, z_pad, Some(gap));
+        let along = (end.x - start.x) * ux + (end.y - start.y) * uy;
+        if along > span.along && along >= bold_width {
+            let offset = |p: Point, half| p.offset(-uy * half, ux * half);
+            let first = offset(start, a_half);
+            let outline = [
+                first,
+                offset(end, z_half),
+                offset(end, -z_half),
+                offset(start, -a_half),
+                first,
+            ];
+            if a_boxes.iter().chain(z_boxes).any(|&(lo, hi)| {
+                let lo = lo.offset(-overhang, -overhang);
+                let hi = hi.offset(overhang, overhang);
+                outline
+                    .iter()
+                    .zip(outline.iter().skip(1))
+                    .any(|(&p, &q)| crate::atom_labels::segment_hits_rect(p, q, lo, hi))
+            }) {
+                return span;
+            }
+            return TrimmedSpan {
+                start,
+                end,
+                along,
+                ..span
+            };
+        }
+    }
+    span
+}
+
 fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
     let BondScene { faces, style, .. } = scene;
     let (Some(a), Some(z)) = (faces.atom(b.a), faces.atom(b.b)) else {
         return None;
     };
-    let span_with = |core| {
-        trimmed_span(
-            a.position,
-            z.position,
-            &trim_boxes(scene, a.id, core),
-            &trim_boxes(scene, z.id, core),
-            style.world(style.margin_width_pt),
-        )
-    };
-    let mut span = span_with(false)?;
+    let margin = style.world(style.margin_width_pt);
+    let mut a_boxes = trim_boxes(scene, a.id, false);
+    let mut z_boxes = trim_boxes(scene, z.id, false);
+    let mut span = trimmed_span(a.position, z.position, &a_boxes, &z_boxes, margin)?;
     let core = dative_needs_core(b, &span);
     if core {
-        span = span_with(true)?;
+        a_boxes = trim_boxes(scene, a.id, true);
+        z_boxes = trim_boxes(scene, z.id, true);
+        span = trimmed_span(a.position, z.position, &a_boxes, &z_boxes, margin)?;
     }
+    let span = recover_stereo_span(span, b, a.position, z.position, [&a_boxes, &z_boxes], style);
     let (span, rounded) = if span.along <= 0.1 && rounded_connector(b) {
         recover_rounded_span(
             span,
@@ -2851,7 +2959,7 @@ fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
             z.position,
             &connector_shapes(scene, a.id),
             &connector_shapes(scene, z.id),
-            style.world(style.margin_width_pt),
+            margin,
             style.line_width() * 0.5,
         )
     } else {
