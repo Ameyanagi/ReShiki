@@ -22,6 +22,8 @@ pub enum Action {
     /// Select every intermediate, reagent and product of the selected cycle.
     SelectStructures,
     Clockwise(bool),
+    /// Space the selected cycle's intermediates evenly and line up its side parts, as one Undo step.
+    Tidy,
     Edit(Field, String),
     Apply(Field),
     Step(usize),
@@ -267,6 +269,23 @@ impl App {
                 {
                     self.edit_cycle(reshiki::cycles::reverse);
                 }
+            }
+            Action::Tidy => {
+                let Some((id, _)) = self.selected_cycle() else {
+                    self.error = true;
+                    self.status = "Select a catalytic cycle first".into();
+                    return super::focus_drawing();
+                };
+                let before = self.tab.doc.clone();
+                self.error = false;
+                self.status = if reshiki::cycles::tidy(&mut self.tab.doc, id) {
+                    self.changed(before);
+                    "Tidied the cycle"
+                } else {
+                    "The cycle is already tidy"
+                }
+                .into();
+                return super::focus_drawing();
             }
             Action::Edit(field, value) => *self.tab.cycle_inputs.get_mut(field) = value,
             Action::Apply(field) => self.apply_cycle_field(field),
@@ -906,6 +925,7 @@ impl App {
                     "Switching direction runs the steps the other way: reagents become products",
                     iced::widget::tooltip::Position::Top,
                 ),
+                (!cycle.steps.is_empty()).then(|| panel_action("Tidy cycle", send(Action::Tidy))),
                 layout,
                 (!cycle.steps.is_empty()).then_some(rows),
                 text(hint).size(11).style(muted_text),

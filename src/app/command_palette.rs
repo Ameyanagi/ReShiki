@@ -341,6 +341,10 @@ impl App {
                 .selected
                 .is_empty()
                 .then_some("Select something first"),
+            Need::Cycle => self
+                .selected_cycle()
+                .is_none()
+                .then_some("Select a catalytic cycle first"),
             Need::TextBoxes => (!self.selected_text_boxes()).then_some("Select a text box first"),
             Need::Resizable => self.need_unavailable(Need::Selection, target).or_else(|| {
                 let ids = self

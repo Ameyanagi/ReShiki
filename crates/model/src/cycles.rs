@@ -1078,6 +1078,103 @@ pub(crate) fn ungroup_freed(doc: &mut Document, freed: &HashSet<u64>) {
     doc.prune_groups();
 }
 
+/// Tidy cycle graphic `id`: its intermediates go evenly round the circle,
+/// each centred on it, in order and turned as little as they can be; then
+/// each step's reagents line up beside the first half of its drawn arc and
+/// its products beside the second half, on the side of the circle they were
+/// on and within reach of the cycle. Returns whether anything moved.
+pub fn tidy(doc: &mut Document, id: u64) -> bool {
+    let Some(g) = doc.graphics.iter().find(|g| g.id == id) else {
+        return false;
+    };
+    let Some(cycle) = g.cycle.as_deref().cloned() else {
+        return false;
+    };
+    let n = cycle.intermediates.len();
+    if n == 0 {
+        return false;
+    }
+    let (center, radius) = g.cycle_circle();
+    let even = if g.cycle_counterclockwise() {
+        -TAU
+    } else {
+        TAU
+    } / n as f32;
+    let angle = |b: (Point, Point)| {
+        let c = center_of(b);
+        (c.y - center.y).atan2(c.x - center.x)
+    };
+    let all = boxes(doc, &cycle);
+    // The turn that moves them least: the mean of each one's offset from
+    // its even place.
+    let (sin, cos) = all
+        .iter()
+        .take(n)
+        .enumerate()
+        .filter_map(|(k, b)| b.map(|b| angle(b) - even * k as f32))
+        .fold((0., 0.), |(s, c), a| (s + a.sin(), c + a.cos()));
+    let place = |k: usize| sin.atan2(cos) + even * k as f32;
+    // Float noise is no move: a second tidy changes nothing.
+    let shift = |doc: &mut Document, ids: &[u64], from: Point, to: Point| {
+        let far = from.distance(to) > 0.05;
+        if far {
+            let ids = crate::molecule_names::include_annotations(doc, ids);
+            doc.translate(&ids, to.x - from.x, to.y - from.y);
+        }
+        far
+    };
+    let mut moved = false;
+    for (k, (ids, b)) in cycle.intermediates.iter().zip(&all).enumerate() {
+        if let Some(b) = b {
+            moved |= shift(doc, ids, center_of(*b), polar(center, radius, place(k)));
+        }
+    }
+    // Side parts follow the arcs as the intermediates now draw them.
+    let Some(g) = doc.graphics.iter().find(|g| g.id == id) else {
+        return moved;
+    };
+    let drawn = drawn(doc, g);
+    let bond = doc.drawing_style.bond_length_world;
+    let gap = DEFAULT.world(cycle.gap_pt);
+    let reach = radius + 3.5 * bond;
+    let mut moves = vec![];
+    let mut sides = all.iter().skip(n);
+    for (s, step) in cycle.steps.iter().enumerate() {
+        let arc = (drawn.arrows.iter().zip(&drawn.arcs)).find(|(_, a)| **a == Some(s));
+        for (parts, lo, hi) in [(&step.reagents, 0.2, 0.4), (&step.products, 0.6, 0.8)] {
+            for (j, ids) in parts.iter().enumerate() {
+                let Some(&Some(b)) = sides.next() else {
+                    continue;
+                };
+                let t = if parts.len() == 1 {
+                    (lo + hi) * 0.5
+                } else {
+                    lo + (hi - lo) * j as f32 / (parts.len() - 1) as f32
+                };
+                let on = arc.map_or_else(
+                    || polar(center, radius, place(s) + even * t),
+                    |(a, _)| a.point(t),
+                );
+                let a = (on.y - center.y).atan2(on.x - center.x);
+                let (w, h) = (b.1.x - b.0.x, b.1.y - b.0.y);
+                let clear = bond + gap + 0.5 * (w * a.cos().abs() + h * a.sin().abs());
+                let c = center_of(b);
+                let d = on.distance(center);
+                let r = if c.distance(center) < radius {
+                    (d - clear).max(radius * 0.5)
+                } else {
+                    (d + clear).min(reach)
+                };
+                moves.push((ids, c, polar(center, r, a)));
+            }
+        }
+    }
+    for (ids, from, to) in moves {
+        moved |= shift(doc, ids, from, to);
+    }
+    moved
+}
+
 /// Run the cycle the other way round: the order reverses and what came in
 /// now goes out.
 pub fn reverse(cycle: &mut Cycle) {

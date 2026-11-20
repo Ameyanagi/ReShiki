@@ -65,6 +65,7 @@ pub(crate) enum Need {
     Nothing,
     Blocked(&'static str),
     Selection,
+    Cycle,
     TextBoxes,
     /// A selection the Scale field can resize: none of it shown only in 3D.
     Resizable,
@@ -809,6 +810,14 @@ fn edits() -> Vec<Command> {
             "catalytic cycle catalyst loop mechanism intermediates circle",
             Message::Cycle(crate::app::cycles::Action::Make),
         ),
+        send(
+            "Tidy catalytic cycle",
+            Edit,
+            "Space the intermediates evenly and line up reagents and products beside their arcs",
+            "tidy cycle clean up align space evenly layout",
+            Message::Cycle(crate::app::cycles::Action::Tidy),
+        )
+        .need(Need::Cycle),
         selection(
             "Remove from cycle",
             "Take the selected parts out of their catalytic cycle; they stay in the drawing",

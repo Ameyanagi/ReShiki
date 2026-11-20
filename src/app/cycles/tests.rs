@@ -75,6 +75,49 @@ fn make_name_and_reverse_are_each_one_undo_step() {
 }
 
 #[test]
+fn tidy_cycle_is_one_undo_step_and_idempotent() {
+    let (mut app, _) = App::new();
+    let parts = [
+        text(&mut app, 0., -200., "A"),
+        text(&mut app, 170., 90., "B"),
+        text(&mut app, -230., 90., "C"),
+    ];
+    app.tab.selected = parts.to_vec();
+    make(&mut app);
+    app.tab.doc.translate(&[parts[1]], -50., 20.);
+    app.tab.selected = vec![cycle(&app).0];
+    let before = app.tab.doc.clone();
+
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "Tidied the cycle");
+    let tidied = app.tab.doc.clone();
+    assert_ne!(tidied, before);
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, tidied);
+
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "The cycle is already tidy");
+    assert_eq!(app.tab.doc, tidied);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn tidy_without_a_selected_cycle_changes_nothing() {
+    let (mut app, _) = App::new();
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(app.error);
+    assert_eq!(app.status, "Select a catalytic cycle first");
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn dropping_text_beside_a_step_makes_it_a_reagent_in_the_same_undo_step() {
     let (mut app, _) = App::new();
     let parts = [
