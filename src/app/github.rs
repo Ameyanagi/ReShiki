@@ -801,7 +801,6 @@ impl App {
                             };
                             // Versions lists GitHub's versions again.
                             self.github.versions.target = None;
-                            self.star_github_ready();
                             return self.picker_signed_in();
                         }
                     }
@@ -905,7 +904,7 @@ impl App {
                         let (client, login) = (self.github.client.clone(), account.login.clone());
                         let colors = self.github_listed(account, true);
                         self.github.versions.target = None;
-                        self.star_github_signed_in();
+                        let star = self.star_github_signed_in();
                         self.status = format!("Signed in as @{}", login);
                         self.error = false;
                         let mut tasks = vec![colors];
@@ -922,6 +921,7 @@ impl App {
                         if let Some(then) = self.github.after_sign_in.take() {
                             tasks.push(self.github_action(then));
                         }
+                        tasks.push(star);
                         return Task::batch(tasks);
                     }
                     Err(error) => self.github_signed_out(Some(error.to_string())),
