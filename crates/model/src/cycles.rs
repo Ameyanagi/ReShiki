@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
+mod perimeter_arcs;
 mod shapes;
 pub mod steps;
 
@@ -315,6 +316,21 @@ fn boxes(doc: &Document, cycle: &Cycle) -> Vec<Option<(Point, Point)>> {
 
 /// The cycle's arrows and labels as they would be drawn now.
 pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
+    if g.cycle.as_ref().is_some_and(|c| c.shape != Shape::Circle) {
+        let Some(perimeter) = outline(g) else {
+            return Drawn::default();
+        };
+        let mut out = drawn_circle(doc, g);
+        perimeter_arcs::replace(doc, g, &perimeter, &mut out);
+        out
+    } else {
+        drawn_circle(doc, g)
+    }
+}
+
+// Keep legacy Circle construction analytic and unchanged. Noncircle features
+// beyond ordinary shafts still use this path until their perimeter consumers land.
+fn drawn_circle(doc: &Document, g: &Graphic) -> Drawn {
     let Some(cycle) = &g.cycle else {
         return Drawn::default();
     };
@@ -662,7 +678,32 @@ pub fn hit(doc: &Document, g: &Graphic, p: Point, r: f32) -> bool {
         .map(|s| s.bow_pt.abs())
         .fold(0., f32::max);
     let reach = 8. * doc.drawing_style.bond_length_world + DEFAULT.world(bow);
-    if p.distance(center) > radius + reach {
+    let far = if g.cycle.as_ref().is_none_or(|c| c.shape == Shape::Circle) {
+        p.distance(center) > radius + reach
+    } else {
+        // The mean-radius Circle bound can exclude a wide ellipse's ends.
+        let corners = [
+            g.origin,
+            g.origin.offset(g.axis_x.x, g.axis_x.y),
+            g.origin.offset(g.axis_y.x, g.axis_y.y),
+            g.origin
+                .offset(g.axis_x.x + g.axis_y.x, g.axis_x.y + g.axis_y.y),
+        ];
+        let lo = corners
+            .iter()
+            .fold(Point::new(f32::INFINITY, f32::INFINITY), |a, b| {
+                Point::new(a.x.min(b.x), a.y.min(b.y))
+            });
+        let hi = corners
+            .iter()
+            .fold(Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY), |a, b| {
+                Point::new(a.x.max(b.x), a.y.max(b.y))
+            });
+        // Bowed/reversible and side paths still have legacy geometry in
+        // this slice, so keep that bound as well until they move over.
+        !contains(grown((lo, hi), reach + r), p) && p.distance(center) > radius + reach
+    };
+    if far {
         return false;
     }
     let drawn = drawn(doc, g);

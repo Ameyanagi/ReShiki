@@ -186,8 +186,24 @@ impl Outline {
             }
             Geometry::Path(pieces) => {
                 let mut best: Option<(f64, V)> = None;
-                for piece in pieces {
-                    let (t, on) = piece.curve.closest(p, self.length * 1e-8);
+                let tolerance = self.length * 1e-8;
+                // Find a nearby candidate before searching remote cubics.
+                // Their control boxes are conservative bounds, including for
+                // skewed frames; ties still reach the exact comparison below.
+                let mut candidates: Vec<_> = pieces
+                    .iter()
+                    .map(|piece| (piece, piece.curve.bounds_distance(p)))
+                    .collect();
+                candidates.sort_by(|a, b| a.1.total_cmp(&b.1));
+                for (piece, lower) in candidates {
+                    if let Some((_, old)) = best {
+                        let rounding =
+                            32. * f64::EPSILON * (p.length() + old.length() + self.length);
+                        if lower > p.sub(old).length() + tolerance + rounding {
+                            continue;
+                        }
+                    }
+                    let (t, on) = piece.curve.closest(p, tolerance);
                     let s = (piece.start + piece.distance(t)).rem_euclid(self.length);
                     if best.is_none_or(|(old_s, old)| nearer(p, on, s, old, old_s)) {
                         best = Some((s, on));
@@ -471,8 +487,34 @@ impl Segment {
         } else {
             (0., a)
         };
+        // Seed with valid points near a stationary distance before walking
+        // tiny flat intervals. The search below still checks every bound
+        // that can beat these candidates, including other local minima.
+        for t in [on_line(a, b, p), 0.5] {
+            let t = self.refine(p, (0., 1.), t);
+            let q = self.at(t);
+            if nearer(p, q, t, best.1, best.0) {
+                best = (t, q);
+            }
+        }
         self.search(p, self, (0., 1.), tolerance, 0, &mut best);
         best
+    }
+    fn refine(self, p: V, range: (f64, f64), mut t: f64) -> f64 {
+        for _ in 0..8 {
+            let delta = self.at(t).sub(p);
+            let v = self.velocity(t);
+            let slope = v.dot(v) + delta.dot(self.acceleration(t));
+            if slope == 0. {
+                break;
+            }
+            let next = (t - delta.dot(v) / slope).clamp(range.0, range.1);
+            if next == t {
+                break;
+            }
+            t = next;
+        }
+        t
     }
     fn search(
         self,
@@ -495,20 +537,8 @@ impl Segment {
             _ => 0.,
         };
         if flatness <= tolerance || depth == 24 {
-            let mut t = range.0 + (range.1 - range.0) * on_line(a, b, p);
-            for _ in 0..8 {
-                let delta = self.at(t).sub(p);
-                let v = self.velocity(t);
-                let slope = v.dot(v) + delta.dot(self.acceleration(t));
-                if slope == 0. {
-                    break;
-                }
-                let next = (t - delta.dot(v) / slope).clamp(range.0, range.1);
-                if next == t {
-                    break;
-                }
-                t = next;
-            }
+            let initial = range.0 + (range.1 - range.0) * on_line(a, b, p);
+            let t = self.refine(p, range, initial);
             for t in [range.0, t, range.1] {
                 let q = self.at(t);
                 if nearer(p, q, t, best.1, best.0) {
