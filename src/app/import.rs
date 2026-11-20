@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 /// Widget id of the text box, focused whenever the tab opens.
 pub(super) const INPUT: &str = "import-input";
+pub(super) const SVG_IMPORT: &str = "Import SVG as drawing…";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum InputKind {
@@ -60,6 +61,8 @@ pub enum Action {
     Menu(bool),
     ExamplesMenu(bool),
     Choose,
+    ChooseSvg,
+    SvgRead(Ticket, Result<Vec<Picked>, String>),
     /// Files dropped on the desktop window, imported together.
     Files(Vec<PathBuf>),
     /// Chosen files, or files dropped on the browser page, already read, for
@@ -392,6 +395,31 @@ pub(super) async fn load(
     }
     Ok(batch)
 }
+/// SVG artwork has an explicit entry point: Open still restores embedded drawings.
+async fn load_svg(
+    files: Vec<Picked>,
+    style: reshiki::style::DrawingStyle,
+) -> Result<Batch, String> {
+    reshiki::task::spawn_blocking(move || {
+        let paths: Vec<_> = files.iter().map(|file| file.path.clone()).collect();
+        let mut batch = Batch {
+            label: describe(&paths),
+            ..Default::default()
+        };
+        for file in files {
+            let imported = reshiki::svg_drawing::read(&file.contents, style.clone())
+                .map_err(|e| format!("Could not import {}: {e}", name(&file.path)))?;
+            batch.drawings.push(imported.drawing);
+            if !batch.warnings.contains(&imported.notice) {
+                batch.warnings.push(imported.notice);
+            }
+        }
+        Ok(batch)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Picture carriers and the structure formats whose readers stop at 16 MB
 /// are bounded; crystal files and drawings are read whole.
 pub(super) fn limit(path: &Path) -> u64 {
@@ -522,6 +550,33 @@ impl App {
                 self.imports.menu = false;
             }
             Action::Choose => return choose(self.import_ticket()),
+            Action::ChooseSvg => {
+                let ticket = self.import_ticket();
+                let files = super::files::pick(
+                    SVG_IMPORT,
+                    Some(("SVG drawing", &["svg", "svgz"])),
+                    false,
+                    |_| reshiki::svg_drawing::MAX_BYTES as u64,
+                );
+                return Task::perform(files, move |files| {
+                    Message::Imports(Action::SvgRead(ticket, files))
+                });
+            }
+            Action::SvgRead(_, Err(error)) => {
+                self.error = true;
+                self.status = error;
+            }
+            Action::SvgRead(_, Ok(files)) if files.is_empty() => {}
+            Action::SvgRead(ticket, Ok(files)) => {
+                if ticket.epoch != self.tab.file_epoch || !self.begin_import() {
+                    return Task::none();
+                }
+                let ticket = self.import_ticket();
+                let style = self.tab.doc.drawing_style.clone();
+                return Task::perform(load_svg(files, style), move |result| {
+                    Message::Imports(Action::Loaded(ticket, Box::new(result)))
+                });
+            }
             Action::Files(paths) if paths.is_empty() => {}
             Action::Files(paths) => match plan(&paths) {
                 Plan::Reject(reason) => {
@@ -910,7 +965,11 @@ impl App {
         )
         .size(11)
         .style(muted_text);
-        column![editor, actions, files, hint].spacing(10).into()
+        let svg =
+            field("import-svg-drawing", SVG_IMPORT).on_press(Message::Imports(Action::ChooseSvg));
+        column![editor, actions, files, svg, hint]
+            .spacing(10)
+            .into()
     }
 
     /// Outlines the canvas while files are dragged over the window.

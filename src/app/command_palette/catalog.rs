@@ -1709,6 +1709,13 @@ fn files() -> Vec<Command> {
     let (command, alt, shift) = (Modifiers::COMMAND, Modifiers::ALT, Modifiers::SHIFT);
     let mut list = vec![
         send(
+            import::SVG_IMPORT,
+            File,
+            "Import SVG artwork as editable shapes",
+            "svg svgz vector equipment paths curves",
+            Message::Imports(import::Action::ChooseSvg),
+        ),
+        send(
             "New drawing",
             File,
             "Create a drawing in a new tab",
