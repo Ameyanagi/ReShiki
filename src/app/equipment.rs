@@ -878,27 +878,30 @@ impl App {
             for e in sizes {
                 let d = &e.definition;
                 let size_label = size(d);
-                if size_label.is_empty() {
+                // A lone piece without sizes needs no chip: its tile arms it.
+                if size_label.is_empty() && sizes.len() == 1 {
                     continue;
                 }
                 // Two chips of one size name their revision, and two of one
                 // revision the start of their content hash.
                 let twin = |o: &Entry| o.key != e.key && size(&o.definition) == size_label;
-                let mut chip = size_label.clone();
+                let mut parts = vec![size_label.clone()];
                 if sizes.iter().any(|o| twin(o)) {
-                    chip.push_str(&format!(" · r{}", d.revision));
+                    parts.push(format!("r{}", d.revision));
                 }
                 if sizes
                     .iter()
                     .any(|o| twin(o) && o.definition.revision == d.revision)
                 {
                     let hash = e.key.rsplit('#').next().unwrap_or_default();
-                    chip.push_str(&format!(" · {}", hash.get(..6).unwrap_or(hash)));
+                    parts.push(hash.get(..6).unwrap_or(hash).to_owned());
                 }
+                parts.retain(|p| !p.is_empty());
+                let chip = parts.join(" · ");
                 chips = chips.push(
                     reshiki::accessibility::button(
                         format!("equipment-size-{}", e.key),
-                        format!("{} · {size_label}", label(e)),
+                        format!("{} · {chip}", label(e)),
                         text(chip).size(11),
                     )
                     .checked(armed(e))
