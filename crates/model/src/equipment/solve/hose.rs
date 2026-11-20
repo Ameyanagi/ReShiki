@@ -278,13 +278,19 @@ pub fn place_hose(
         .then(|| barb(doc, id, 1, b, reach, false))
         .flatten();
     let b = second.as_ref().map_or(b, |s| s.point);
-    // The middle sags below the leads' midpoint, as a hose hangs.
+    // Held at both ends, the middle sags below the leads' midpoint, as a
+    // hose hangs; a free end already hangs where it was put.
     let lead = |p: Xy, barb: &Option<Port>| {
         barb.as_ref()
             .map_or(p, |b| add(p, mul(b.dir, LEAD_MM * mm)))
     };
     let (la, lb) = (lead(a, &first), lead(b, &second));
-    let m = add(mul(add(la, lb), 0.5), [0., SAG * len(sub(lb, la))]);
+    let sag = if second.is_some() {
+        SAG * len(sub(lb, la))
+    } else {
+        0.
+    };
+    let m = add(mul(add(la, lb), 0.5), [0., sag]);
     reshape(doc, id, [(a, first.clone()), (b, second.clone())], m);
     if let Some(barb) = &second {
         push_on(doc, id, 1, barb);
