@@ -2,7 +2,10 @@ use super::{
     Attributes, BYTE_LIMIT, Error, Fonts, NativeColor, PROPERTY_LIMIT, Palette, Result, bounded,
     named, numeric,
 };
-use crate::typography::{self, Script, TextAlign};
+use crate::{
+    exchange::{SYMBOL_CHARSET, symbol_text},
+    typography::{self, Script, TextAlign},
+};
 use roxmltree::Node;
 use serde::Serialize;
 
@@ -135,6 +138,7 @@ impl<'a, 'input> TextReader<'a, 'input> {
                 .or_else(|| self.root.attribute(key))
         };
         let prefix = if atom { "Label" } else { "Caption" };
+        let inherited_font = inherited(&format!("{prefix}Font"));
         let style = |run: Node<'_, '_>| -> Result<NativeTextStyle> {
             let face = numeric::integer(
                 run.attribute("face")
@@ -163,10 +167,7 @@ impl<'a, 'input> TextReader<'a, 'input> {
                 return Err(Error::TextColorSize);
             }
             Ok(NativeTextStyle {
-                family: self.fonts.get(
-                    run.attribute("font")
-                        .or_else(|| inherited(&format!("{prefix}Font"))),
-                ),
+                family: self.fonts.get(run.attribute("font").or(inherited_font)),
                 size_pt,
                 bold: face & 1 != 0,
                 italic: face & 2 != 0,
@@ -193,7 +194,19 @@ impl<'a, 'input> TextReader<'a, 'input> {
                     value.push_str(child.text().unwrap_or(""));
                 }
             }
-            runs.push((value, style(run)?));
+            let mut style = style(run)?;
+            if style.family.eq_ignore_ascii_case("Symbol") {
+                let charset = run
+                    .attribute(SYMBOL_CHARSET)
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(0);
+                value = symbol_text(&value, charset);
+                style.family = self.fonts.get(inherited_font);
+                if style.family.eq_ignore_ascii_case("Symbol") {
+                    style.family = typography::TextStyle::default().family;
+                }
+            }
+            runs.push((value, style));
         }
         let base = runs
             .first()

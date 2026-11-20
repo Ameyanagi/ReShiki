@@ -291,7 +291,12 @@ fn escape(out: &mut String, text: &str, attribute: bool) -> Result<()> {
     }
     Ok(())
 }
-fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>, tolerant: bool) -> Result<Element> {
+struct Font {
+    charset: u16,
+    symbol: bool,
+}
+
+fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, Font>, tolerant: bool) -> Result<Element> {
     let (mut connection_count, mut node_type_count) = (0usize, 0usize);
     for (tag, _) in &tree.raw {
         match *tag {
@@ -324,7 +329,13 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>, tolerant: bool) -> Re
                     r.take(usize::from(size))?,
                     if charset == 65001 { 65001 } else { 10000 },
                 )?;
-                fonts.insert(id, charset);
+                fonts.insert(
+                    id,
+                    Font {
+                        charset,
+                        symbol: name.eq_ignore_ascii_case("Symbol"),
+                    },
+                );
                 let mut font = Element::new("font");
                 font.set("id", id);
                 font.set("name", name);
@@ -434,7 +445,7 @@ fn property(
     tag: u16,
     p: &Property,
     data: &[u8],
-    fonts: &HashMap<u16, u16>,
+    fonts: &HashMap<u16, Font>,
 ) -> Result<()> {
     {
         if numeric(p.kind) {
@@ -564,7 +575,7 @@ struct Run {
     size: u16,
     color: u16,
 }
-fn decode_text(data: &[u8], fonts: &HashMap<u16, u16>, utf8: bool) -> Result<Vec<Element>> {
+fn decode_text(data: &[u8], fonts: &HashMap<u16, Font>, utf8: bool) -> Result<Vec<Element>> {
     let mut r = Reader::new(data);
     let mut runs = Vec::new();
     for _ in 0..r.u16()? {
@@ -596,13 +607,17 @@ fn decode_text(data: &[u8], fonts: &HashMap<u16, u16>, utf8: bool) -> Result<Vec
             .remaining
             .get(run.start..end)
             .ok_or("Invalid binary text style ranges")?;
+        let font_info = run.font.and_then(|id| fonts.get(&id));
         let charset = if utf8 {
             65001
         } else {
-            run.font.and_then(|id| fonts.get(&id)).copied().unwrap_or(0)
+            font_info.map_or(0, |font| font.charset)
         };
         let mut span = Element::new("s");
         span.text = decode_string(bytes, charset)?.replace('\r', "\n");
+        if !matches!(charset, 0 | 65001) && font_info.is_some_and(|font| font.symbol) {
+            span.set(SYMBOL_CHARSET, charset);
+        }
         if let Some(font) = run.font {
             span.set("font", font);
             span.set("face", run.face);
