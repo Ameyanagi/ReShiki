@@ -43,6 +43,21 @@ fn hold(doc: &mut Document, piece: u64, name: &str, at: [f64; 2]) {
     solve::snap(doc, &ids, 14., false).unwrap();
 }
 
+/// Bring `piece`'s joint near `onto`'s joint and seat it through snapping.
+fn seat(doc: &mut Document, piece: u64, name: &str, onto: u64, joint: &str) {
+    let (m, s) = (port(doc, piece, name), port(doc, onto, joint));
+    let ids = solve::closure(doc, &[piece]);
+    doc.translate(
+        &ids,
+        (s.point[0] - m.point[0]) as f32 + 3.,
+        (s.point[1] - m.point[1]) as f32 - 2.,
+    );
+    let snap = solve::snap(doc, &ids, 14., false).unwrap();
+    assert!(matches!(snap.offer, solve::Offer::Seat));
+    assert_eq!(snap.target.at, s.at);
+    assert_eq!(snap.moving.at, m.at);
+}
+
 /// A 100 mL flask held by a clamp.
 fn clamped() -> (Document, u64, u64) {
     let mut doc = Document::default();
@@ -248,4 +263,154 @@ fn dragging_a_clamps_tilt_handle_turns_it_to_the_pointer() {
     assert!(adjust::set(&mut doc, clamp, "nope", Value::Number(1.)).is_err());
     assert!(adjust::set(&mut doc, clamp, "tilt", Value::State("x".into())).is_err());
     assert_eq!(param(&doc, clamp, "tilt"), None);
+}
+
+#[test]
+fn clicking_a_cow_moves_both_side_receivers_and_keeps_the_largest_receiver_anchored() {
+    let mut doc = Document::default();
+    let cow = add(&mut doc, "reshiki/cow-15", Point::new(0., 0.));
+    let large = add(&mut doc, "reshiki/rbf-100-15", Point::new(100., 100.));
+    let left = add(&mut doc, "reshiki/rbf-50-15", Point::new(-100., 100.));
+    let right = add(&mut doc, "reshiki/rbf-50-15", Point::new(200., 100.));
+    seat(&mut doc, large, "neck", cow, "o2");
+    seat(&mut doc, left, "neck", cow, "o1");
+    seat(&mut doc, right, "neck", cow, "o3");
+    assert_eq!(doc.seats.len(), 3);
+    seated(&doc);
+    let seats = doc.seats.clone();
+    let frame = |doc: &Document, id| {
+        let g = graphic(doc, id);
+        (g.origin, g.axis_x, g.axis_y)
+    };
+    let (large_frame, cow_frame) = (frame(&doc, large), frame(&doc, cow));
+    let mm = f64::from(placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM));
+    let handles = adjust::handles(graphic(&doc, cow));
+    let turn = handles.iter().find(|h| h.param == "turn").unwrap();
+    assert!(turn.toggle);
+    let middle = port(&doc, cow, "o2").point;
+    let sides = [(left, "o1", -54.), (right, "o3", 54.)];
+    let initial = sides.map(|(receiver, outlet, offset)| {
+        let point = port(&doc, cow, outlet).point;
+        assert!(((point[0] - middle[0]) / mm - offset).abs() < 1e-3);
+        (frame(&doc, receiver), point)
+    });
+
+    // The click handle cycles from r2 through r3 and r1, then back to r2.
+    let turned = 35_f64.to_radians().cos();
+    for (state, projection) in [("r3", turned), ("r1", turned), ("r2", 1.)] {
+        let v = adjust::toggled(graphic(&doc, cow), &turn.param).unwrap();
+        assert_eq!(v, Value::State(state.into()));
+        let released = adjust::set(&mut doc, cow, &turn.param, v).unwrap();
+        assert!(released.is_empty(), "{state}: {released:?}");
+        assert_eq!(doc.seats, seats, "{state}");
+        seated(&doc);
+        assert_eq!(frame(&doc, large), large_frame, "{state}");
+        assert_eq!(frame(&doc, cow), cow_frame, "{state}");
+        for ((receiver, outlet, offset), ((before, before_x, before_y), start)) in
+            sides.into_iter().zip(initial)
+        {
+            let point = port(&doc, cow, outlet).point;
+            assert!(
+                ((point[0] - middle[0]) / mm - offset * projection).abs() < 1e-3,
+                "{state} {outlet}: {point:?}"
+            );
+            let (at, x, y) = frame(&doc, receiver);
+            assert!(
+                (f64::from(at.x - before.x) - (point[0] - start[0])).abs() < 1e-3,
+                "{state} {outlet}: {at:?} {before:?}"
+            );
+            assert!(
+                (f64::from(at.y - before.y) - (point[1] - start[1])).abs() < 1e-3,
+                "{state} {outlet}: {at:?} {before:?}"
+            );
+            assert!(x.distance(before_x) < 1e-6);
+            assert!(y.distance(before_y) < 1e-6);
+        }
+    }
+}
+
+#[test]
+fn a_seated_thermometers_depth_handle_moves_its_glass_without_moving_the_assembly() {
+    let mut doc = Document::default();
+    let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(0., 0.));
+    let adapter = add(
+        &mut doc,
+        "reshiki/thermometer-adapter-15",
+        Point::new(100., -100.),
+    );
+    let thermometer = add(&mut doc, "reshiki/thermometer", Point::new(-100., -100.));
+    seat(&mut doc, adapter, "bottom", flask, "neck");
+    seat(&mut doc, thermometer, "stem", adapter, "thermo");
+    assert_eq!(doc.seats.len(), 2);
+    seated(&doc);
+    let seats = doc.seats.clone();
+    let origins = [flask, adapter, thermometer].map(|id| graphic(&doc, id).origin);
+    let stem = port(&doc, thermometer, "stem").point;
+    let before = graphic(&doc, thermometer).shape_bounds().0;
+    let mm = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+
+    let handles = adjust::handles(graphic(&doc, thermometer));
+    let depth = handles.iter().find(|h| h.param == "depth").unwrap();
+    assert!(!depth.toggle);
+    assert_eq!(depth.part.as_deref(), Some("glass"));
+    let to = [depth.at[0], depth.at[1] + f64::from(mm) * 10.];
+    let v = adjust::dragged(graphic(&doc, thermometer), depth, to).unwrap();
+    assert_eq!(v, Value::Number(120.));
+
+    let released = adjust::set(&mut doc, thermometer, "depth", v).unwrap();
+    assert!(released.is_empty());
+    assert_eq!(param(&doc, thermometer, "depth"), Some(Value::Number(120.)));
+    assert_eq!(doc.seats, seats);
+    seated(&doc);
+    assert_eq!(
+        [flask, adapter, thermometer].map(|id| graphic(&doc, id).origin),
+        origins
+    );
+    assert_eq!(port(&doc, thermometer, "stem").point, stem);
+    let after = graphic(&doc, thermometer).shape_bounds().0;
+    assert!((after.x - before.x).abs() < 1e-3);
+    assert!(
+        (after.y - before.y - mm * 10.).abs() < 1e-3,
+        "{before:?} {after:?}"
+    );
+}
+
+#[test]
+fn dragging_a_balloons_top_inflates_it_without_moving_its_needle_or_septum() {
+    let mut doc = Document::default();
+    let septum = add(&mut doc, "reshiki/septum-15", Point::new(0., 0.));
+    let balloon = add(&mut doc, "reshiki/balloon", Point::new(100., -100.));
+    seat(&mut doc, balloon, "needle", septum, "needle");
+    assert_eq!(doc.seats.len(), 1);
+    seated(&doc);
+    let seats = doc.seats.clone();
+    let origins = [septum, balloon].map(|id| graphic(&doc, id).origin);
+    let needle = port(&doc, balloon, "needle").point;
+    let (before_lo, before_hi) = graphic(&doc, balloon).shape_bounds();
+    let mm = f64::from(placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM));
+    let handles = adjust::handles(graphic(&doc, balloon));
+    let inflate = handles.iter().find(|h| h.param == "inflate").unwrap();
+    assert!(!inflate.toggle);
+    assert_eq!(inflate.part.as_deref(), Some("balloon"));
+    let to = [inflate.at[0], f64::from(before_lo.y) - mm * 10.];
+    let v = adjust::dragged(graphic(&doc, balloon), inflate, to).unwrap();
+    let Value::Number(dragged) = v else { panic!() };
+    assert!(dragged > 0.8 && dragged <= 1., "{dragged}");
+    let released = adjust::set(&mut doc, balloon, "inflate", v).unwrap();
+    assert!(released.is_empty());
+    assert_eq!(
+        param(&doc, balloon, "inflate"),
+        Some(Value::Number(dragged))
+    );
+    assert_eq!(doc.seats, seats);
+    seated(&doc);
+    assert_eq!(
+        [septum, balloon].map(|id| graphic(&doc, id).origin),
+        origins
+    );
+    assert_eq!(port(&doc, balloon, "needle").point, needle);
+    let (after_lo, after_hi) = graphic(&doc, balloon).shape_bounds();
+    assert!(after_hi.x - after_lo.x > before_hi.x - before_lo.x);
+    assert!(after_hi.y - after_lo.y > before_hi.y - before_lo.y);
+    assert!(after_lo.y < before_lo.y);
 }
