@@ -222,8 +222,6 @@ fn stereo_commands_are_searchable_and_style_notes_toggle_through_the_palette() {
     let mut app = app();
     for name in ["Check drawing", "Redraw stereo bonds"] {
         search(&mut app, name);
-        // Available commands intentionally precede unavailable ones, including
-        // the style preference whose description also mentions Check drawing.
         let command = &app.commands.items[row(&app, name)];
         assert_eq!(command.need, catalog::Need::Molecule);
         assert_eq!(
@@ -318,7 +316,6 @@ fn ionic_and_centred_charge_commands_follow_selection_eligibility() {
     app.tab.doc = Document::default();
     app.tab.selected = reshiki::editing::ring(&mut app.tab.doc, Point::default(), 7, true, 5.);
     search(&mut app, "Center charge in ring");
-    // Unavailable, it ranks below available matches such as Normalize depiction.
     let center = &app.commands.items[row(&app, "Center charge in ring")];
     assert!(app.command_unavailable(center).is_some());
     app.tab.doc.atoms[0].charge = 1;
@@ -390,11 +387,17 @@ fn stereodescriptors_are_searchable_and_toggle_the_whole_drawing() {
     app.tab.doc.add_atom("C", Point::default());
     app.tab.labels.scope = Scope::Selection;
     app.tab.history = Default::default();
+    let first_catalog = |app: &App| {
+        let state = &app.commands;
+        state.results.iter().copied().find(|&i| i < state.catalog)
+    };
     for query in ["pseudoasymmetric", "CIP", "r/s", "seqCis", "Ra/Sa"] {
         search(&mut app, query);
-        assert_eq!(top(&app).name, "Show stereodescriptors", "{query}");
+        let index = row(&app, "Show stereodescriptors");
+        assert_eq!(first_catalog(&app), Some(index), "{query}");
     }
-    let _ = app.update(Message::Commands(Action::Submit));
+    let show = row(&app, "Show stereodescriptors");
+    let _ = app.update(Message::Commands(Action::Run(show)));
     assert!(app.tab.doc.atom_labels.stereo);
     assert_eq!(app.tab.labels.scope, Scope::Selection);
     assert_eq!(app.tab.doc.atoms[0].display.stereo.show, None);
@@ -402,10 +405,13 @@ fn stereodescriptors_are_searchable_and_toggle_the_whole_drawing() {
     assert!(!app.tab.doc.atom_labels.stereo);
     assert!(!app.tab.history.can_undo());
 
-    run(&mut app, "CIP");
+    search(&mut app, "CIP");
+    let show = row(&app, "Show stereodescriptors");
+    let _ = app.update(Message::Commands(Action::Run(show)));
     search(&mut app, "pseudoasymmetric");
-    assert_eq!(top(&app).name, "Hide stereodescriptors");
-    let _ = app.update(Message::Commands(Action::Submit));
+    let hide = row(&app, "Hide stereodescriptors");
+    assert_eq!(first_catalog(&app), Some(hide));
+    let _ = app.update(Message::Commands(Action::Run(hide)));
     assert!(!app.tab.doc.atom_labels.stereo);
 }
 
@@ -1339,7 +1345,6 @@ fn caption_and_graphic_selections_never_fall_back_to_pointer_or_hotspot() {
                 app.tab.keyboard_drawing.set_target(hotspot, &app.tab.doc);
                 search(&mut app, query);
                 assert_eq!(app.keyboard_target(), keyboard);
-                // Unavailable commands rank below available ones, so pick it by name.
                 let index = row(&app, name);
                 let command = app.commands.items[index].clone();
                 let reason = app.command_unavailable(&command).expect(query);
@@ -1511,6 +1516,55 @@ fn context_favors_commands_for_the_target() {
     app.tab.selected = vec![a, b];
     search(&mut app, "wedge");
     assert_eq!(top(&app).category, Category::Bond);
+}
+
+#[test]
+fn outline_favors_the_selected_panel() {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind, Panel};
+
+    let mut app = app();
+    let id = app.tab.doc.next_id();
+    let mut panel = Graphic::dragged(
+        id,
+        GraphicKind::Rectangle,
+        Point::default(),
+        Point::new(120., 80.),
+        Default::default(),
+        BracketSides::Both,
+        false,
+    );
+    panel.panel = Some(Panel::default());
+    app.tab.doc.graphics.push(panel);
+    app.tab.selected = vec![id];
+
+    search(&mut app, "outline");
+    assert_eq!(top(&app).name, "Panel: Outline");
+    assert!(app.command_unavailable(top(&app)).is_none());
+}
+
+#[test]
+fn hollow_block_favors_the_selected_arrow() {
+    use reshiki::{
+        arrows::{ArrowStyle, Body, Preset},
+        document::Arrow,
+    };
+
+    let mut app = app();
+    let id = app.tab.doc.next_id();
+    let mut style = ArrowStyle::default();
+    style.set_body(Body::Block);
+    app.tab.doc.arrows.push(Arrow::new(
+        id,
+        Point::default(),
+        Point::new(120., 0.),
+        Preset::Forward,
+        style,
+    ));
+    app.tab.selected = vec![id];
+
+    search(&mut app, "hollow block");
+    assert_eq!(top(&app).name, "Arrow body: Hollow block");
+    assert!(app.command_unavailable(top(&app)).is_none());
 }
 
 #[test]
@@ -1850,19 +1904,37 @@ fn tab_cycles_the_category_filter_and_a_new_query_resets_it() {
 }
 
 #[test]
-fn unavailable_commands_rank_after_available_ones() {
+fn unavailable_commands_rank_after_available_ones_in_each_match_tier() {
     let mut app = app();
-    for query in ["copy", "charge", "bond", "select", "nmr"] {
-        search(&mut app, query);
-        let state = &app.commands;
-        let blocked: Vec<_> = state
-            .results
+    open(&mut app);
+    let command = |name, synonyms, need| Command {
+        need,
+        ..Command::new(name, Category::Edit, "", synonyms, Run::Send(vec![]))
+    };
+    let items = vec![
+        command("Blocked fuzzy", "CC", Need::Selection),
+        command("Blocked CCX", "", Need::Selection),
+        command("Available fuzzy", "CC", Need::Nothing),
+        command("Available CCX", "", Need::Nothing),
+    ];
+    app.commands.catalog = items.len();
+    app.commands.items = items;
+    let _ = app.update(Message::Commands(Action::Query("CC".into())));
+    let ranked = app.commands.ranked();
+    assert_eq!(
+        ranked
             .iter()
-            .map(|i| app.command_unavailable(&state.items[*i]).is_some())
-            .collect();
-        assert!(blocked.contains(&true), "{query}: some cannot run");
-        assert!(blocked.is_sorted(), "{query}: available first");
-    }
+            .map(|command| command.name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "Available CCX",
+            "Insert SMILES CC",
+            "Insert structure named “CC”",
+            "Blocked CCX",
+            "Available fuzzy",
+            "Blocked fuzzy",
+        ]
+    );
     // An exact alias still ranks first, to say why it cannot run.
     search(&mut app, "noh");
     assert_eq!(top(&app).name, "Clear highlights");
@@ -1898,6 +1970,7 @@ fn name_matches_outrank_synonym_and_description_matches() {
         .commands
         .ranked()
         .iter()
+        .filter(|c| !matches!(c.run, Run::Name(_) | Run::Smiles(_)))
         .map(|c| c.name.as_str())
         .collect();
     assert_eq!(ranked[..2], ["Big wedges", "Alpha"]);
@@ -1923,6 +1996,28 @@ fn palette_search_accepts_british_spelling() {
     assert_eq!(
         search::normalize_spelling("Colour+CENTRE, grey favourite organise"),
         "color+center, gray favorite organize"
+    );
+}
+
+#[test]
+fn colour_name_matches_lead_even_without_a_reaction() {
+    let mut app = app();
+    assert!(app.tab.selected.is_empty());
+    assert!(app.tab.doc.reactions.is_empty());
+    search(&mut app, "colour");
+
+    let origin = &app.commands.items[row(&app, "Color by origin")];
+    assert!(app.command_unavailable(origin).is_some());
+    let ranked = app.commands.ranked();
+    let names: Vec<_> = ranked
+        .iter()
+        .filter(|command| !matches!(command.run, Run::Name(_)))
+        .map(|command| command.name.as_str())
+        .collect();
+    assert!(names.iter().any(|name| !name.contains("Color")));
+    assert!(
+        names.iter().map(|name| !name.contains("Color")).is_sorted(),
+        "{names:?}"
     );
 }
 

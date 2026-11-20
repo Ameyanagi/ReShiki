@@ -571,6 +571,7 @@ impl App {
             _ => 0,
         };
         let typed = self.commands.query().to_owned();
+        let prefer_selection = !typed.is_empty() && !self.tab.selected.is_empty();
         let normalized = search::normalize_spelling(&typed);
         let normalized = (normalized != typed).then_some(normalized.as_str());
         let mut availability = HashMap::new();
@@ -600,7 +601,6 @@ impl App {
                     && self.selected_model().is_some()
             })
             .map(|command| command.name.clone());
-        // Commands that cannot run now go below those that can.
         let blocked: Vec<bool> = (self.commands.catalog().iter())
             .map(|c| is_blocked(c.need))
             .collect();
@@ -696,23 +696,23 @@ impl App {
                     || names.insert(c.name.clone())
             })
         });
-        let blocked = |i: usize| blocked.get(i).copied().unwrap_or(false);
         // An exact alias ranks first even when it cannot run, to say why.
         // Recent commands stay above the rest, with available ones first.
-        let late = |i: usize, tier: u8| tier < 2 && blocked(i);
         scored.sort_by_key(|&(score, i, tier)| {
+            let late = tier < 2 && blocked[i];
+            let selection = prefer_selection
+                && tier < 2
+                && !late
+                && !matches!(catalog[i].need, Need::Nothing | Need::Blocked(_));
             // An exact typed name wins a tie with an exact normalized name.
-            let exact = normalized.is_some()
-                && catalog
-                    .get(i)
-                    .is_some_and(|command| command.name.eq_ignore_ascii_case(&typed));
-            (late(i, tier), Reverse(tier), Reverse(score), !exact, i)
+            let exact = normalized.is_some() && catalog[i].name.eq_ignore_ascii_case(&typed);
+            (Reverse(tier), late, !selection, Reverse(score), !exact, i)
         });
         let best = scored.iter().map(|(score, ..)| *score).max().unwrap_or(0);
-        // Where the rows that cannot run begin.
+        // Offer insertion after exact aliases and available name or key matches.
         let mut split = scored
             .iter()
-            .filter(|(_, i, tier)| !late(*i, *tier))
+            .take_while(|(_, i, tier)| *tier == 2 || (*tier == 1 && !blocked[*i]))
             .count();
         let start_here = if typed.is_empty() && state.recent.is_empty() {
             scored.iter().filter(|(.., tier)| *tier == 2).count()
