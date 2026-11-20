@@ -1,6 +1,6 @@
 use super::*;
 use crate::canvas::Edit;
-use reshiki::document::{Annotation, Point};
+use reshiki::document::{Annotation, Document, Point};
 
 fn text(app: &mut App, x: f32, y: f32, value: &str) -> u64 {
     let id = app.tab.doc.next_id();
@@ -35,6 +35,25 @@ fn cycle(app: &App) -> (u64, Cycle) {
                 .find_map(|g| Some((g.id, g.cycle.as_deref().cloned()?)))
         })
         .unwrap()
+}
+
+fn tidy_qa(name: &str, before: &Document, preview: &Document) {
+    if let Some(dir) = std::env::var_os("RESHIKI_CYCLE_APP_QA_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for (state, doc) in [("before", before), ("preview", preview)] {
+            std::fs::write(
+                dir.join(format!("{name}-{state}.svg")),
+                reshiki::scene::svg(doc),
+            )
+            .unwrap();
+            std::fs::write(
+                dir.join(format!("{name}-{state}.rsk")),
+                doc.file_json().unwrap(),
+            )
+            .unwrap();
+        }
+    }
 }
 
 #[test]
@@ -73,6 +92,398 @@ fn make_name_and_reverse_are_each_one_undo_step() {
     assert_eq!(app.tab.doc, made);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, initial);
+}
+
+#[test]
+fn tidy_cycle_is_one_undo_step_and_idempotent() {
+    let (mut app, _) = App::new();
+    let parts = [
+        text(&mut app, 0., -200., "A"),
+        text(&mut app, 170., 90., "B"),
+        text(&mut app, -230., 90., "C"),
+    ];
+    app.tab.selected = parts.to_vec();
+    make(&mut app);
+    app.tab.doc.translate(&[parts[1]], -50., 20.);
+    reshiki::leaders::add_callout(
+        &mut app.tab.doc,
+        reshiki::leaders::Target::Object { id: parts[1] },
+        "Moved intermediate",
+    )
+    .unwrap();
+    app.tab.selected = vec![cycle(&app).0];
+    let before = app.tab.doc.clone();
+    let selected = app.tab.selected.clone();
+    let undo_count = app.tab.history.undo_frames().len();
+
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, before, "review leaves the drawing untouched");
+    assert_eq!(app.tab.history.undo_frames().len(), undo_count);
+    assert!(app.cycle_proposal_card().is_some());
+    let preview = app.display_document().clone();
+    assert_ne!(preview, before);
+
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    let tidied = app.tab.doc.clone();
+    assert_eq!(app.status, "Tidied the cycle");
+    assert_eq!(tidied, preview);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.history.undo_frames().len(), undo_count + 1);
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, tidied);
+
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "The cycle is already tidy");
+    assert_eq!(app.tab.doc, tidied);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn tidy_stereo_preview_matches_apply_and_discard_keeps_visible_labels() {
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/chemical-naming-rust/r-lactic-rust-native.rsk"
+    ))
+    .unwrap();
+    let lactic: Vec<_> = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    // (E)-but-2-ene, with the terminal methyl groups across the double bond.
+    let a = app.tab.doc.add_atom("C", Point::new(210., 80.));
+    let b = app.tab.doc.add_atom("C", Point::new(252., 80.));
+    let left = app.tab.doc.add_atom("C", Point::new(189., 44.));
+    let right = app.tab.doc.add_atom("C", Point::new(273., 116.));
+    app.tab.doc.add_bond(a, b, 2, "plain");
+    app.tab.doc.add_bond(a, left, 1, "plain");
+    app.tab.doc.add_bond(b, right, 1, "plain");
+    let third = text(&mut app, -240., 120., "Catalyst");
+    let mut selected = lactic.clone();
+    selected.extend([a, b, left, right, third]);
+    let (id, _) = reshiki::cycles::make(&mut app.tab.doc, &selected).unwrap();
+    app.tab.doc.translate(&lactic, -30., 45.);
+    app.tab.doc.atom_labels.stereo = true;
+    let labels =
+        reshiki::atom_labels::refresh::Refresh::calculate(&app.tab.doc, &Default::default())
+            .unwrap();
+    labels.apply(&mut app.tab.doc);
+    let indicators = reshiki::atom_labels::indicators(&app.tab.doc);
+    assert!(indicators.iter().any(|label| label.text == "(R)"));
+    assert!(indicators.iter().any(|label| label.text == "(E)"));
+    app.tab.selected = vec![id];
+    let before = app.tab.doc.clone();
+    let roles = cycle(&app).1;
+    let frames = app.tab.history.undo_frames().len();
+
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    let preview = app.display_document().clone();
+    tidy_qa("stereo", &before, &preview);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.history.undo_frames().len(), frames);
+    assert!(preview.atom_labels.stereo, "display settings stay enabled");
+    assert!(preview.atoms.iter().all(|a| a.cip_label.is_none()));
+    assert!(preview.bonds.iter().all(|b| b.cip_label.is_none()));
+    assert!(reshiki::atom_labels::indicators(&preview).is_empty());
+    for atom in &before.atoms {
+        let after = preview.atom(atom.id).unwrap();
+        assert_eq!(after.stereo, atom.stereo);
+        assert_eq!(after.label_h, atom.label_h);
+    }
+    let mut cleared = before.clone();
+    reshiki::atom_labels::clear_computed(&mut cleared);
+    assert_eq!(preview.bonds, cleared.bonds);
+    let svg = reshiki::scene::svg(&preview);
+
+    let _ = app.update(Message::Escape);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(
+        reshiki::scene::svg(&app.tab.doc),
+        reshiki::scene::svg(&before)
+    );
+    assert_eq!(app.tab.history.undo_frames().len(), frames);
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert_eq!(app.tab.doc, preview);
+    assert_eq!(reshiki::scene::svg(&app.tab.doc), svg);
+    assert_eq!(cycle(&app).1, roles);
+    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+}
+
+#[test]
+fn tidy_stereo_labels_on_unrelated_molecules_survive_a_text_only_cycle_edit() {
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/chemical-naming-rust/r-lactic-rust-native.rsk"
+    ))
+    .unwrap();
+    app.tab.doc.atom_labels.stereo = true;
+    let parts = [
+        text(&mut app, 300., -200., "A"),
+        text(&mut app, 470., 90., "B"),
+        text(&mut app, 70., 90., "C"),
+    ];
+    let (id, _) = reshiki::cycles::make(&mut app.tab.doc, &parts).unwrap();
+    app.tab.selected = vec![id];
+    let before = app.tab.doc.clone();
+    assert!(
+        reshiki::atom_labels::indicators(&before)
+            .iter()
+            .any(|label| label.text == "(R)")
+    );
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    let preview = app.display_document().clone();
+    assert_ne!(preview.annotations, before.annotations);
+    assert_eq!(preview.atoms, before.atoms);
+    assert_eq!(preview.bonds, before.bonds);
+    assert!(
+        reshiki::atom_labels::indicators(&preview)
+            .iter()
+            .any(|label| label.text == "(R)")
+    );
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert_eq!(app.tab.doc, preview);
+}
+
+#[test]
+fn tidy_preview_blocks_edits_and_discard_preserves_the_drawing() {
+    let (mut app, _) = App::new();
+    let parts = [
+        text(&mut app, 0., -200., "A"),
+        text(&mut app, 170., 90., "B"),
+        text(&mut app, -230., 90., "C"),
+    ];
+    app.tab.selected = parts.to_vec();
+    make(&mut app);
+    app.tab.doc.translate(&[parts[1]], -50., 20.);
+    let before = app.tab.doc.clone();
+    let selected = app.tab.selected.clone();
+    let undo_count = app.tab.history.undo_frames().len();
+
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    let preview = app.display_document().clone();
+    assert_ne!(preview, before);
+    let _ = app.update(Message::Delete);
+    assert_eq!(app.display_document(), &preview);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Cycle(Action::MakeReverse));
+    assert_eq!(app.display_document(), &preview);
+    let _ = app.update(Message::Escape);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.display_document(), &before);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.history.undo_frames().len(), undo_count);
+    assert_eq!(app.status, "Cycle tidy discarded");
+
+    app.tab.busy = true;
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.tab.doc, before);
+    assert!(app.error);
+}
+
+#[test]
+fn actual_suzuki_tidy_preview_applies_as_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/cycles/tidy-before.rsk"
+    ))
+    .unwrap();
+    app.tab.selected = vec![191];
+    let before = app.tab.doc.clone();
+    let roles = cycle(&app).1;
+    let frames = app.tab.history.undo_frames().len();
+
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.history.undo_frames().len(), frames);
+    let preview = app.display_document().clone();
+    assert_ne!(preview, before);
+    tidy_qa("suzuki", &before, &preview);
+
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, preview);
+    assert_eq!(cycle(&app).1, roles);
+    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+    let saved = Document::from_json(&app.tab.doc.file_json().unwrap()).unwrap();
+    assert_eq!(saved.atoms, preview.atoms);
+    assert_eq!(saved.bonds, preview.bonds);
+    assert_eq!(saved.annotations, preview.annotations);
+    assert_eq!(saved.graphics, preview.graphics);
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(cycle(&app).1, roles);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, preview);
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+}
+
+#[test]
+fn noncircle_suzuki_tidy_preview_discard_apply_and_undo_keep_the_shape_and_roles() {
+    for shape in [
+        reshiki::cycles::Shape::Ellipse,
+        reshiki::cycles::Shape::RoundedRectangle,
+        reshiki::cycles::Shape::Rectangle,
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.doc = Document::from_json(include_bytes!(
+            "../../../tests/fixtures/cycles/tidy-before.rsk"
+        ))
+        .unwrap();
+        let g = app
+            .tab
+            .doc
+            .graphics
+            .iter_mut()
+            .find(|g| g.id == 191)
+            .unwrap();
+        let center = g.cycle_circle().0;
+        g.cycle.as_mut().unwrap().shape = shape;
+        g.axis_x.x *= 1.3;
+        g.axis_x.y *= 1.3;
+        g.axis_y.x *= 0.8;
+        g.axis_y.y *= 0.8;
+        g.origin = center.offset(
+            -(g.axis_x.x + g.axis_y.x) * 0.5,
+            -(g.axis_x.y + g.axis_y.y) * 0.5,
+        );
+        app.tab.selected = vec![191];
+        let before = app.tab.doc.clone();
+        let roles = cycle(&app).1;
+        let frames = app.tab.history.undo_frames().len();
+        let _ = app.update(Message::Cycle(Action::Tidy));
+        assert!(!app.error, "{shape:?}: {}", app.status);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.history.undo_frames().len(), frames);
+        let preview = app.display_document().clone();
+        assert_ne!(preview, before);
+        tidy_qa(&format!("noncircle-suzuki-{shape:?}"), &before, &preview);
+        let drawing = reshiki::cycles::drawn(
+            &preview,
+            preview.graphics.iter().find(|g| g.id == 191).unwrap(),
+        );
+        assert!(drawing.arrows.iter().all(|arrow| arrow.arc.is_none()));
+        let _ = app.update(Message::Escape);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.history.undo_frames().len(), frames);
+        let _ = app.update(Message::Cycle(Action::Tidy));
+        let _ = app.update(Message::ContextKey("Enter".into()));
+        assert!(!app.error, "{shape:?}: {}", app.status);
+        assert_eq!(app.tab.doc, preview);
+        assert_eq!(cycle(&app).1, roles);
+        assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+        let saved = app.tab.doc.file_json().unwrap();
+        assert_eq!(
+            Document::from_json(&saved).unwrap().file_json().unwrap(),
+            saved
+        );
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, preview);
+        let _ = app.update(Message::Cycle(Action::Tidy));
+        assert!(app.tab.cycle_inputs.proposal.is_none());
+        assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+    }
+}
+
+#[test]
+fn a_delayed_caption_result_requires_fresh_tidy_review_before_apply() {
+    use crate::app::naming::{Action as NamingAction, Outcome, test_support::record};
+    use reshiki::linked_properties::Property;
+
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/cycles/tidy-before.rsk"
+    ))
+    .unwrap();
+    let ethanol = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/chemical-naming-rust/ethanol-rust-native.rsk"
+    ))
+    .unwrap();
+    let atoms = reshiki::editing::append(&mut app.tab.doc, &ethanol, Point::new(1200., 0.));
+    let _ = app.update(Message::ToggleProperty(atoms, Property::Name));
+    let smiles = app.tab.naming.caption_pending.clone().unwrap();
+    let caption = app.tab.doc.property_captions.last().unwrap().annotation;
+    app.tab.selected = vec![191];
+    let roles = cycle(&app).1;
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(!app.error, "{}", app.status);
+    let old_preview = app.display_document().clone();
+    let frames = app.tab.history.undo_frames().len();
+    let revision = app.tab.revision;
+
+    // This real completion changes caption ink and label_generation, while
+    // retaining the revision and Undo history, as ordinary async names do.
+    let _ = app.update(Message::Naming(NamingAction::CaptionNamed(
+        smiles.clone(),
+        Box::new(Ok(Outcome::Structure(record(&smiles)))),
+    )));
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.undo_frames().len(), frames);
+    let named = app.tab.doc.clone();
+    assert_eq!(
+        named
+            .annotations
+            .iter()
+            .find(|a| a.id == caption)
+            .unwrap()
+            .text,
+        "ethan-1-ol"
+    );
+
+    // First Enter refreshes the candidate. The completed name is retained,
+    // but the user must review that candidate before its layout is applied.
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, named);
+    assert_eq!(app.tab.history.undo_frames().len(), frames);
+    assert!(app.tab.cycle_inputs.proposal.is_some());
+    let fresh_preview = app.display_document().clone();
+    assert_ne!(fresh_preview, old_preview);
+    assert_eq!(
+        fresh_preview
+            .annotations
+            .iter()
+            .find(|a| a.id == caption)
+            .unwrap()
+            .text,
+        "ethan-1-ol"
+    );
+
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(!app.error, "{}", app.status);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.tab.doc, fresh_preview);
+    assert_eq!(cycle(&app).1, roles);
+    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc, named,
+        "Undo retains the completed background caption"
+    );
+}
+
+#[test]
+fn tidy_without_a_selected_cycle_changes_nothing() {
+    let (mut app, _) = App::new();
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(app.error);
+    assert_eq!(app.status, "Select a catalytic cycle first");
+    assert_eq!(app.tab.doc, before);
 }
 
 #[test]

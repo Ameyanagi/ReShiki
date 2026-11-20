@@ -13,14 +13,34 @@ mod tests;
 
 #[path = "perimeter_deform.rs"]
 mod deform;
+#[path = "perimeter_frames.rs"]
+mod frames;
 #[path = "perimeter_names.rs"]
 mod names;
 #[path = "perimeter_sides.rs"]
 mod sides;
+pub(super) use frames::Frame;
+
+pub(super) struct Step<'a> {
+    pub lanes: &'a [Option<super::shapes::Shaft>],
+    pub first: f64,
+    pub span: f64,
+}
 
 /// Resolve noncircle shafts, side arrows and names from the same geometry.
 /// Each reversible lane has its own explicit arc-to-step association.
 pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mut Drawn) {
+    resolve(doc, g, perimeter, out, |_, _| {});
+}
+
+/// Share virtual/painted lanes and the untrimmed directed perimeter span.
+pub(super) fn resolve(
+    doc: &Document,
+    g: &Graphic,
+    perimeter: &Outline,
+    out: &mut Drawn,
+    mut record: impl FnMut(usize, Step<'_>),
+) {
     let Some(cycle) = g.cycle.as_deref() else {
         return;
     };
@@ -150,6 +170,21 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
                 .map(super::shapes::Shaft::from_arrow)
                 .collect()
         };
+        let first = anchors.get(s).copied().unwrap_or(0.);
+        let mut span = anchors
+            .get((s + 1) % n)
+            .map_or(0., |last| (dir * (*last - first)).rem_euclid(length));
+        if span == 0. && n == 1 {
+            span = length;
+        }
+        record(
+            s,
+            Step {
+                lanes: &shafts,
+                first,
+                span: dir * span,
+            },
+        );
         if !step.hidden {
             for arrow in arrows {
                 out.arrows.push(arrow);

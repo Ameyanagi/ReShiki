@@ -143,6 +143,30 @@ impl Outline {
         self.length
     }
 
+    /// Strictly inside the actual outline; its boundary counts as outside.
+    pub(super) fn contains(&self, point: Point) -> Option<bool> {
+        Some(self.locate(point)?.0)
+    }
+
+    /// Classify and project once. All cycle outlines are convex, including
+    /// their affine images. Both incident half-planes retain sharp corners.
+    /// Nearest-point tests avoid cubic ray roots rounding past an endpoint
+    /// when the query lies exactly on a native quarter's horizontal axis.
+    pub(super) fn locate(&self, point: Point) -> Option<(bool, Projection)> {
+        let (s, on) = self.project_raw(point)?;
+        let (incoming, outgoing) = self.tangent_vectors(s)?;
+        let delta = V::from(point).sub(on);
+        let inside = |t: V| t.x * delta.y - t.y * delta.x > 0.;
+        Some((
+            inside(incoming) && inside(outgoing),
+            Projection {
+                s,
+                point: on.point()?,
+                distance: delta.length(),
+            },
+        ))
+    }
+
     /// Point at a wrapped clockwise world distance. Nonfinite distances fail.
     pub fn point(&self, s: f64) -> Option<Point> {
         let s = self.wrapped(s)?;
@@ -158,8 +182,16 @@ impl Outline {
     }
 
     pub fn tangents(&self, s: f64) -> Option<Tangents> {
+        let (incoming, outgoing) = self.tangent_vectors(s)?;
+        Some(Tangents {
+            incoming: incoming.point()?,
+            outgoing: outgoing.point()?,
+        })
+    }
+
+    fn tangent_vectors(&self, s: f64) -> Option<(V, V)> {
         let s = self.wrapped(s)?;
-        let (incoming, outgoing) = match &self.geometry {
+        Some(match &self.geometry {
             Geometry::Circle { radius, .. } => {
                 let (sin, cos) = (s / radius).sin_cos();
                 (V::new(-sin, cos), V::new(-sin, cos))
@@ -181,14 +213,19 @@ impl Outline {
                 };
                 (incoming, outgoing)
             }
-        };
-        Some(Tangents {
-            incoming: incoming.point()?,
-            outgoing: outgoing.point()?,
         })
     }
 
     pub fn project(&self, point: Point) -> Option<Projection> {
+        let (s, on) = self.project_raw(point)?;
+        Some(Projection {
+            s,
+            point: on.point()?,
+            distance: V::from(point).sub(on).length(),
+        })
+    }
+
+    fn project_raw(&self, point: Point) -> Option<(f64, V)> {
         if !point.is_finite() {
             return None;
         }
@@ -198,11 +235,7 @@ impl Outline {
                 let delta = p.sub(*center);
                 let angle = delta.y.atan2(delta.x).rem_euclid(TAU);
                 let on = circle_point(*center, *radius, angle);
-                Some(Projection {
-                    s: angle * radius,
-                    point: on.point()?,
-                    distance: p.sub(on).length(),
-                })
+                Some((angle * radius, on))
             }
             Geometry::Path(pieces) => {
                 let mut best: Option<(f64, V)> = None;
@@ -229,12 +262,7 @@ impl Outline {
                         best = Some((s, on));
                     }
                 }
-                let (s, on) = best?;
-                Some(Projection {
-                    s,
-                    point: on.point()?,
-                    distance: p.sub(on).length(),
-                })
+                best
             }
         }
     }
@@ -459,7 +487,12 @@ impl Outline {
     }
 
     fn wrapped(&self, s: f64) -> Option<f64> {
-        s.is_finite().then(|| s.rem_euclid(self.length))
+        s.is_finite().then(|| {
+            let s = s.rem_euclid(self.length);
+            // Floating-point remainder may round a tiny negative distance to
+            // the full period. The seam always addresses the first segment.
+            if s == 0. || s >= self.length { 0. } else { s }
+        })
     }
 }
 

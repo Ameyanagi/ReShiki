@@ -158,6 +158,55 @@ fn legacy_missing_shape_stays_a_mean_radius_circle_even_on_singular_frames() {
 }
 
 #[test]
+fn containment_keeps_both_sides_of_the_ellipse_axis_and_reflected_corners() {
+    for reflected in [false, true] {
+        let mut g = graphic(Shape::Ellipse);
+        g.origin = Point::new(-500., -200.);
+        g.axis_x = Point::new(1000., 0.);
+        g.axis_y = Point::new(0., 400.);
+        if reflected {
+            g.origin.x += g.axis_x.x;
+            g.axis_x.x = -g.axis_x.x;
+        }
+        let perimeter = outline(&g).unwrap();
+        for x in [-499., -1., -9.536_743e-6, 0., 9.536_743e-6, 1., 499.] {
+            for y in [-9.536_743e-6, 0., 9.536_743e-6] {
+                let point = Point::new(x, y);
+                assert_eq!(perimeter.contains(point), Some(true), "{point:?}");
+            }
+        }
+        for x in [-501., 501.] {
+            assert_eq!(perimeter.contains(Point::new(x, 0.)), Some(false));
+        }
+        g.cycle.as_mut().unwrap().shape = Shape::Rectangle;
+        let perimeter = outline(&g).unwrap();
+        for (x, dx) in [(-500., 1.), (500., -1.)] {
+            for (y, dy) in [(-200., 1.), (200., -1.)] {
+                assert_eq!(perimeter.contains(Point::new(x, y)), Some(false));
+                assert_eq!(perimeter.contains(Point::new(x + dx, y + dy)), Some(true));
+                for point in [
+                    Point::new(x - dx, y + dy),
+                    Point::new(x + dx, y - dy),
+                    Point::new(x - dx, y - dy),
+                ] {
+                    assert_eq!(perimeter.contains(point), Some(false), "{point:?}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn tiny_negative_seam_distances_address_the_first_piece() {
+    for shape in [Shape::Ellipse, Shape::RoundedRectangle, Shape::Rectangle] {
+        let perimeter = outline(&graphic(shape)).unwrap();
+        assert_eq!(perimeter.point(-1e-15), perimeter.point(0.));
+        assert_eq!(perimeter.tangents(-1e-15), perimeter.tangents(0.));
+        assert_eq!(perimeter.subpath(-1e-15, 20.), perimeter.subpath(0., 20.));
+    }
+}
+
+#[test]
 fn explicit_shapes_roundtrip_at_version_40_and_survive_copying_and_remapping() {
     for (shape, wire_name) in [
         (Shape::Circle, "circle"),

@@ -213,7 +213,14 @@ fn inside_outside_and_alternate_search_reserve_prior_names_and_center_label() {
 fn an_unusable_forward_lane_does_not_promote_the_reverse_lane_as_forward() {
     let (_, _, perimeter, arrow) = layout_fixture();
     let name = Name::new("OA".into(), vec![None, Shaft::from_arrow(&arrow)], 50.);
-    let frame = Frame::at(&name, &perimeter, 0.5, -1.).unwrap();
+    let frame = Frame::at(
+        [name.shaft.as_ref(), name.reverse.as_ref()],
+        &perimeter,
+        name.fallback,
+        0.5,
+        -1.,
+    )
+    .unwrap();
     assert_eq!(frame.point, perimeter.point(50.).unwrap());
     assert_eq!(frame.outgoing, Point::new(0., -1.));
     assert_eq!(frame.inward, [0., 0.]);
