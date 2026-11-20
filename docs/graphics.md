@@ -759,6 +759,12 @@ grouped bracket strokes, change stacking values and quantize colors/coordinates.
 A subsequent import keeps the supported visible paths but may have a different
 number of graphic objects. `.rsk` files keep ReShiki's exact model.
 
+Opaque compound paths keep their holes and overlapping fill regions in
+CDXML/CDX. They travel as one filled curve with separate original outlines,
+so a hole shows the artwork behind it. A filled curve with an explicit zero
+line width opens without an outline. Faded and shaded compound paths retain
+their existing separate-fill export; holes in those styles remain a limit.
+
 `.rsk`/SVG/PDF/PNG keep dots. SVG/PDF/EMF/PNG draw path arrowheads, and
 CDXML/CDX keep their editable head settings on open curves.
 ReShiki has no doubled curve or ChemDraw `alpha` transparency yet, and draws

@@ -626,3 +626,51 @@ fn a_condition_icon_keeps_its_disc_and_lends_it_to_no_other_shape() {
     )));
     assert_eq!(app.tab.doc.graphics[1].style.fill, paper);
 }
+
+#[test]
+fn fill_only_path_selection_keeps_visible_width_for_the_next_drawing() {
+    use reshiki::{
+        document::Point,
+        graphics::{Graphic, GraphicKind, GraphicStyle, PathCommand},
+        palette::Color,
+    };
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let mut g = Graphic::dragged(
+        1,
+        GraphicKind::Path,
+        Point::default(),
+        Point::new(1., 1.),
+        GraphicStyle {
+            fill: Some(Color::Ink),
+            ..Default::default()
+        },
+        Default::default(),
+        false,
+    );
+    g.node_types.clear();
+    g.style.width_pt = 0.;
+    g.path = vec![
+        PathCommand::Move(Point::new(0., 0.)),
+        PathCommand::Line(Point::new(10., 0.)),
+        PathCommand::Line(Point::new(10., 10.)),
+        PathCommand::Close,
+    ];
+    app.tab.doc.graphics.push(g);
+    app.set_selection(vec![1]);
+    assert_eq!(app.tab.doc.graphics[0].style.width_pt, 0.);
+    assert_eq!(app.tab.graphic_width_input.parse::<f32>().unwrap(), 0.);
+    assert_eq!(app.tab.graphic_style.width_pt, 0.1);
+    for kind in [GraphicKind::Line, GraphicKind::Rectangle] {
+        let drawn = Graphic::dragged(
+            2,
+            kind,
+            Point::default(),
+            Point::new(10., 10.),
+            app.tab.graphic_style.clone(),
+            Default::default(),
+            false,
+        );
+        drawn.validate().unwrap();
+    }
+}
