@@ -429,10 +429,10 @@ pub fn render(
     Ok(())
 }
 
-/// Whether some glyph of the text comes from a colour face.
+/// Whether some glyph of the text is a colour glyph.
 pub fn is_colour(text: &usvg::Text, ctx: &Context) -> bool {
     text.layouted().iter().flat_map(|span| &span.positioned_glyphs).any(|g| {
-        ctx.colour_faces.get(&g.font).copied().unwrap_or(false)
+        ctx.colour_glyphs.get(&(g.font, g.id.0)).copied().unwrap_or(false)
     })
 }
 
@@ -594,22 +594,22 @@ pub fn fill_fonts(
             Node::Text(t) => {
                 for span in t.layouted() {
                     for g in &span.positioned_glyphs {
-                        ctx.colour_faces.entry(g.font).or_insert_with(|| {
+                        ctx.colour_glyphs.entry((g.font, g.id.0)).or_insert_with(|| {
                             fontdb
                                 .with_face_data(g.font, |data, index| {
-                                    ttf_parser::RawFace::parse(data, index).is_ok_and(
-                                        |face| {
-                                            [b"sbix", b"CBDT", b"COLR", b"SVG "]
-                                                .into_iter()
-                                                .any(|tag| {
-                                                    face.table(Tag::from_bytes(tag))
-                                                        .is_some()
-                                                })
-                                        },
+                                    let face = Face::parse(data, index).ok()?;
+                                    Some(
+                                        face.glyph_raster_image(g.id, u16::MAX).is_some()
+                                            || face.is_color_glyph(g.id)
+                                            || face.glyph_svg_image(g.id).is_some(),
                                     )
                                 })
+                                .flatten()
                                 .unwrap_or(false)
                         });
+                        if ctx.options.pdfa && g.id.0 == 0 {
+                            return Err(ConversionError::MissingGlyphs);
+                        }
                     }
                 }
                 // PDF fonts carry outlines only, so colour glyphs would be

@@ -85,7 +85,7 @@ index 2e80bcc..4445f50 100644
  [dependencies.tiny-skia]
 diff --git b/NOTICE-RESHIKI.md b/NOTICE-RESHIKI.md
 new file mode 100644
-index 0000000..c143eb2
+index 0000000..7a1e5ad
 --- /dev/null
 +++ b/NOTICE-RESHIKI.md
 @@ -0,0 +1,38 @@
@@ -115,10 +115,10 @@ index 0000000..c143eb2
 +- Make two existing `Name` lifetimes explicit for the current Rust warning set.
 +- Include the standalone page's DPI transform in gradient and pattern coordinates.
 +  Keep Form XObject paint coordinates local and apply content scaling only once.
-+- Draw a text node whose glyphs include one from a colour face (an `sbix`,
-+  `CBDT`, `COLR` or `SVG ` table) from usvg's flattened outlines and pictures,
-+  and do not embed it as a font. PDF fonts carry outlines only, so colour emoji
-+  were invisible.
++- Draw a text node with a colour glyph (an `sbix` or `CBDT` picture, a `COLR`
++  layer list or an `SVG ` document) from usvg's flattened outlines and
++  pictures, and do not embed it as a font. PDF fonts carry outlines only, so
++  colour emoji were invisible.
 +
 +Other text is not outlined; selectable PDF text is retained. The
 +usvg 0.45 tree API and pdf-writer 0.12 remain in use. Tests cover TrueType and
@@ -193,7 +193,7 @@ index 91ade5b..3f32b95 100644
                  } else {
                      group::render(
 diff --git a/src/render/text.rs b/src/render/text.rs
-index 7eba1d1..f67f4d5 100644
+index 7eba1d1..a3004a6 100644
 --- a/src/render/text.rs
 +++ b/src/render/text.rs
 @@ -39,8 +39,11 @@ pub fn write_font(
@@ -398,10 +398,10 @@ index 7eba1d1..f67f4d5 100644
      Ok(())
  }
  
-+/// Whether some glyph of the text comes from a colour face.
++/// Whether some glyph of the text is a colour glyph.
 +pub fn is_colour(text: &usvg::Text, ctx: &Context) -> bool {
 +    text.layouted().iter().flat_map(|span| &span.positioned_glyphs).any(|g| {
-+        ctx.colour_faces.get(&g.font).copied().unwrap_or(false)
++        ctx.colour_glyphs.get(&(g.font, g.id.0)).copied().unwrap_or(false)
 +    })
 +}
 +
@@ -440,7 +440,7 @@ index 7eba1d1..f67f4d5 100644
                  for span in t.layouted() {
                      for g in &span.positioned_glyphs {
 -                        let font = ctx.fonts.entry(g.font).or_insert_with(|| {
-+                        ctx.colour_faces.entry(g.font).or_insert_with(|| {
++                        ctx.colour_glyphs.entry((g.font, g.id.0)).or_insert_with(|| {
                              fontdb
 -                                .with_face_data(g.font, |data, face_index| {
 -                                    // TODO: Currently, we are parsing each font twice, once here
@@ -465,20 +465,19 @@ index 7eba1d1..f67f4d5 100644
 -
 -                                    None
 +                                .with_face_data(g.font, |data, index| {
-+                                    ttf_parser::RawFace::parse(data, index).is_ok_and(
-+                                        |face| {
-+                                            [b"sbix", b"CBDT", b"COLR", b"SVG "]
-+                                                .into_iter()
-+                                                .any(|tag| {
-+                                                    face.table(Tag::from_bytes(tag))
-+                                                        .is_some()
-+                                                })
-+                                        },
++                                    let face = Face::parse(data, index).ok()?;
++                                    Some(
++                                        face.glyph_raster_image(g.id, u16::MAX).is_some()
++                                            || face.is_color_glyph(g.id)
++                                            || face.glyph_svg_image(g.id).is_some(),
 +                                    )
                                  })
--                                .flatten()
+                                 .flatten()
 +                                .unwrap_or(false)
                          });
++                        if ctx.options.pdfa && g.id.0 == 0 {
++                            return Err(ConversionError::MissingGlyphs);
++                        }
 +                    }
 +                }
 +                // PDF fonts carry outlines only, so colour glyphs would be
@@ -520,7 +519,7 @@ index 7eba1d1..f67f4d5 100644
                          if let Some(ref mut font) = font {
                              font.glyph_set.insert(g.id.0, g.text.clone());
 diff --git a/src/util/context.rs b/src/util/context.rs
-index 2cf330f..1eb64e4 100644
+index 2cf330f..f364d58 100644
 --- a/src/util/context.rs
 +++ b/src/util/context.rs
 @@ -4,9 +4,9 @@ use usvg::Tree;
@@ -541,10 +540,10 @@ index 2cf330f..1eb64e4 100644
      #[cfg(feature = "text")]
 -    pub fonts: HashMap<ID, Option<Font>>,
 +    pub fonts: HashMap<FontKey, Option<Font>>,
-+    /// Whether each face used draws colour glyphs (sbix, CBDT, COLR or SVG).
-+    /// Text in such a face is drawn from its flattened outlines and pictures.
++    /// Whether each glyph used is a colour glyph (sbix, CBDT, COLR or SVG).
++    /// Text with one is drawn from its flattened outlines and pictures.
 +    #[cfg(feature = "text")]
-+    pub colour_faces: HashMap<fontdb::ID, bool>,
++    pub colour_glyphs: HashMap<(fontdb::ID, u16), bool>,
      srgb_ref: Option<Ref>,
      sgray_ref: Option<Ref>,
      pub ref_allocator: RefAllocator,
@@ -553,7 +552,7 @@ index 2cf330f..1eb64e4 100644
              #[cfg(feature = "text")]
              fonts: HashMap::new(),
 +            #[cfg(feature = "text")]
-+            colour_faces: HashMap::new(),
++            colour_glyphs: HashMap::new(),
              srgb_ref: None,
              sgray_ref: None,
          };

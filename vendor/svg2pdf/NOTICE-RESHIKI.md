@@ -24,10 +24,10 @@ Apache-2.0 terms:
 - Make two existing `Name` lifetimes explicit for the current Rust warning set.
 - Include the standalone page's DPI transform in gradient and pattern coordinates.
   Keep Form XObject paint coordinates local and apply content scaling only once.
-- Draw a text node whose glyphs include one from a colour face (an `sbix`,
-  `CBDT`, `COLR` or `SVG ` table) from usvg's flattened outlines and pictures,
-  and do not embed it as a font. PDF fonts carry outlines only, so colour emoji
-  were invisible.
+- Draw a text node with a colour glyph (an `sbix` or `CBDT` picture, a `COLR`
+  layer list or an `SVG ` document) from usvg's flattened outlines and
+  pictures, and do not embed it as a font. PDF fonts carry outlines only, so
+  colour emoji were invisible.
 
 Other text is not outlined; selectable PDF text is retained. The
 usvg 0.45 tree API and pdf-writer 0.12 remain in use. Tests cover TrueType and

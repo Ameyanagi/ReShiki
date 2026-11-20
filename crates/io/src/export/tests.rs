@@ -1673,9 +1673,12 @@ fn colour_emoji_reach_the_pdf_as_pictures() {
         text: "H 💡".into(),
         format: Default::default(),
     });
-    let pdf = drawing(&doc, "pdf").unwrap();
-    let has = |needle: &[u8]| pdf.windows(needle.len()).any(|w| w == needle);
-    assert!(has(b"/Subtype /Image"));
-    assert!(!has(b"AppleColorEmoji"));
-    assert!(has(b"/FontFile2"));
+    // A file and a copy, which macOS pastes into Keynote, Word or PowerPoint.
+    for pdf in [drawing(&doc, "pdf"), clipboard_drawing(&doc, "pdf")] {
+        let pdf = pdf.unwrap();
+        let has = |needle: &[u8]| pdf.windows(needle.len()).any(|w| w == needle);
+        assert!(has(b"/Subtype /Image"));
+        assert!(!has(b"AppleColorEmoji"));
+        assert!(has(b"/FontFile2"));
+    }
 }
