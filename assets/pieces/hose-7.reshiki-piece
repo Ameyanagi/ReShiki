@@ -5,7 +5,7 @@
  "revision": 1,
  "family": "hose",
  "variant": {
-  "bore_mm": "7"
+  "bore": "7 mm"
  },
  "names": {
   "en": "Rubber hose, 7 mm",
