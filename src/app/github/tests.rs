@@ -563,7 +563,7 @@ fn send_stays_visible_when_a_drawing_not_on_github_comes_to_the_front() {
     finder.add_atom("S", reshiki::document::Point::default());
     let _ = app.update(Message::FilePrepared(Some((
         dir.path().join("finder.rsk"),
-        Ok(crate::app::files::Prepared::Native(Box::new(finder))),
+        Ok(crate::app::files::Prepared::Native(Box::new(finder), None)),
     ))));
     assert!(app.github.locate(app.tab.path.as_deref()).is_none());
     assert!(matches!(app.github.dialog, Some(Dialog::Send(_))));

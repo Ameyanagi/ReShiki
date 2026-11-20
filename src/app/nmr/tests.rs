@@ -99,7 +99,7 @@ fn open_and_restore_keep_source_report_in_its_epoch() {
         } else {
             let _ = app.update(Message::FilePrepared(Some((
                 "nmr-cache-open.rsk".into(),
-                Ok(files::Prepared::Native(Box::new(ethyl_acetate_doc()))),
+                Ok(files::Prepared::Native(Box::new(ethyl_acetate_doc()), None)),
             ))));
         }
         assert_ne!(app.tab.id, source);
