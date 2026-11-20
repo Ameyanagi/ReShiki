@@ -270,21 +270,72 @@ pub fn callout_position(doc: &Document, target: &Target) -> Result<Point, String
     if !target.exists(doc) {
         return Err("Select an atom, a bond, a molecule or an object for the callout".into());
     }
-    let at = match *target {
-        Target::Atom { .. } | Target::Bond { .. } => target.resolve(doc, Point::default()),
+    let (lo, hi) = extent(doc, target).ok_or("The callout target has no position")?;
+    let reach = callout_reach(doc);
+    Ok(Point::new(hi.x + reach, lo.y - reach))
+}
+
+fn callout_reach(doc: &Document) -> f32 {
+    doc.drawing_style.bond_length_world * 1.6
+}
+
+/// The box a callout's text is placed beside: an atom or bond point, or the
+/// bounds of a molecule or object.
+fn extent(doc: &Document, target: &Target) -> Option<(Point, Point)> {
+    match *target {
+        Target::Atom { .. } | Target::Bond { .. } => {
+            target.resolve(doc, Point::default()).map(|at| (at, at))
+        }
         Target::Molecule { atom } => {
             let atoms = crate::reactions::molecules(doc, &[atom])
                 .pop()
                 .unwrap_or_default();
-            crate::scene::selection_bounds(doc, &atoms).map(|(lo, hi)| Point::new(hi.x, lo.y))
+            crate::scene::selection_bounds(doc, &atoms)
         }
-        Target::Object { id } => {
-            crate::scene::selection_bounds(doc, &[id]).map(|(lo, hi)| Point::new(hi.x, lo.y))
-        }
+        Target::Object { id } => crate::scene::selection_bounds(doc, &[id]),
     }
-    .ok_or("The callout target has no position")?;
-    let reach = doc.drawing_style.bond_length_world * 1.6;
-    Ok(at.offset(reach, -reach))
+}
+
+/// Keep the new callout text `text` on the page its target lies on most:
+/// text that would cross the page's right margin goes up and to the left of
+/// the target instead, and text still outside the margins is moved in.
+/// Without pages, or with the target off every page, the text stays put.
+pub fn keep_on_page(doc: &mut Document, text: u64, target: &Target) {
+    let Some(layout) = &doc.page_layout else {
+        return;
+    };
+    let Some((start, end)) = extent(doc, target) else {
+        return;
+    };
+    // The page the target lies on most; a point or a line counts by length.
+    let overlap = |(a, b): (Point, Point)| {
+        let x = end.x.min(b.x) - start.x.max(a.x);
+        let y = end.y.min(b.y) - start.y.max(a.y);
+        (x >= 0. && y >= 0.).then_some(x + y)
+    };
+    let Some((lo, hi)) = (0..layout.count())
+        .filter_map(|i| Some((overlap(layout.bounds(i)?)?, layout.content_bounds(i)?)))
+        .max_by(|(a, _), (b, _)| a.total_cmp(b))
+        .map(|(_, content)| content)
+    else {
+        return;
+    };
+    let Some((a, b)) = crate::scene::selection_bounds(doc, &[text]) else {
+        return;
+    };
+    // Moved in from the far edge first, so text larger than the page starts
+    // at its left or top margin.
+    let inside = |shift: f32, lo: f32, hi: f32, a: f32, b: f32| shift.min(hi - b).max(lo - a);
+    let left = if b.x > hi.x {
+        start.x - callout_reach(doc) - b.x
+    } else {
+        0.
+    };
+    let dx = inside(left, lo.x, hi.x, a.x, b.x);
+    let dy = inside(0., lo.y, hi.y, a.y, b.y);
+    if let Some(label) = doc.annotations.iter_mut().find(|label| label.id == text) {
+        label.position = label.position.offset(dx, dy);
+    }
 }
 
 /// Add the leader from the callout text `text` to `target`.
@@ -335,6 +386,7 @@ pub fn add_callout(doc: &mut Document, target: Target, text: &str) -> Result<u64
             ..Default::default()
         },
     });
+    keep_on_page(doc, id, &target);
     attach(doc, id, target)?;
     Ok(id)
 }

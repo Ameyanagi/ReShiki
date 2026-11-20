@@ -143,6 +143,7 @@ impl App {
                     format,
                 });
                 if let Some(target) = &state.callout {
+                    reshiki::leaders::keep_on_page(&mut doc, id, target);
                     reshiki::leaders::attach(&mut doc, id, target.clone())?;
                 }
                 if let Some(shape) = doc.graphics.iter_mut().find(|g| Some(g.id) == state.shape) {
