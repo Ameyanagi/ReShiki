@@ -58,6 +58,33 @@ fn close(a: f32, b: f32) -> bool {
     (a - b).abs() < 0.05
 }
 
+#[test]
+fn recorded_reaction_keeps_its_plus_signs_in_order_and_is_idempotent() {
+    // Acetic acid + ethanol -> ethyl acetate + water with recorded roles; the
+    // product + starts overlapping the ester's ethyl chain.
+    let doc = Document::from_json(include_bytes!("untidy_ester.rsk")).unwrap();
+    let cleaned = clean(&doc, &[], false).unwrap();
+    let reaction = &doc.reactions[0];
+    let arrow = the_arrow(&cleaned, reaction.arrow);
+    let items = [
+        bounds(&cleaned, &reaction.reactants[0].atoms),
+        bounds(&cleaned, &[16]),
+        bounds(&cleaned, &reaction.reactants[1].atoms),
+        (arrow.start, arrow.end),
+        bounds(&cleaned, &reaction.products[0].atoms),
+        bounds(&cleaned, &[20]),
+        bounds(&cleaned, &reaction.products[1].atoms),
+    ];
+    let gap = doc.drawing_style.bond_length_world * GAP;
+    for pair in items.windows(2) {
+        assert!(close(pair[1].0.x - pair[0].1.x, gap), "{pair:?}");
+    }
+    for (lo, hi) in &items[..3] {
+        assert!(close(lo.lerp(*hi, 0.5).y, arrow.start.y));
+    }
+    assert_eq!(clean(&cleaned, &[], false).unwrap(), cleaned);
+}
+
 /// A + B → C drawn untidily: off the axis, uneven gaps, a short arrow.
 fn untidy() -> (Document, [Vec<u64>; 4], u64) {
     let mut doc = Document::default();
@@ -398,6 +425,39 @@ fn a_selected_arrow_brings_its_recorded_reaction() {
             "{unit:?} is off the axis"
         );
     }
+}
+
+#[test]
+fn a_molecule_recorded_in_another_reaction_stays_out_of_the_row() {
+    // A -> B across, then C (3.5 bond lengths past B on the same line) -> D down.
+    let mut doc = Document::default();
+    let b = doc.drawing_style.bond_length_world;
+    let a = chain(&mut doc, 2, Point::new(0., 0.), b);
+    let across = arrow(&mut doc, Point::new(b * 1.4, 0.), Point::new(b * 4.6, 0.));
+    let product = chain(&mut doc, 2, Point::new(b * 5.1, 0.), b);
+    let c = chain(&mut doc, 2, Point::new(b * 9.5, 0.), b);
+    let x = b * 9.933;
+    let down = arrow(&mut doc, Point::new(x, b * 1.5), Point::new(x, b * 4.7));
+    let d = chain(&mut doc, 2, Point::new(b * 9.5, b * 5.6), b);
+    for (arrow, from, to) in [(across, &a, &product), (down, &c, &d)] {
+        let mut reaction = crate::reactions::Reaction::new(arrow);
+        for (atoms, role) in [
+            (from, crate::reactions::Role::Reactant),
+            (to, crate::reactions::Role::Product),
+        ] {
+            reaction
+                .participants_mut(role)
+                .push(crate::reactions::Participant {
+                    atoms: atoms.clone(),
+                    coefficient: 1,
+                });
+        }
+        doc.reactions.push(reaction);
+    }
+    let cleaned = clean(&doc, &[], false).unwrap();
+    let down = the_arrow(&cleaned, down);
+    assert!(close(down.start.x, x), "{down:?}");
+    assert!(close(centre(&cleaned, &c).x, x));
 }
 
 #[test]

@@ -182,8 +182,19 @@ pub fn clean(
                     }
                 }
             }
+            // A molecule recorded in another reaction is never this row's by position.
+            let elsewhere: HashSet<usize> = doc
+                .reactions
+                .iter()
+                .filter(|r| !row.arrows.contains(&r.arrow))
+                .flat_map(|r| r.reactants.iter().chain(&r.products).chain(&r.agents))
+                .flat_map(|p| p.atoms.iter().filter_map(|id| owner.get(id).copied()))
+                .collect();
             for (i, unit) in units.iter().enumerate() {
-                if places.contains_key(&i) || straight.values().any(|a| *a == i) {
+                if places.contains_key(&i)
+                    || elsewhere.contains(&i)
+                    || straight.values().any(|a| *a == i)
+                {
                     continue;
                 }
                 let Some(extent) = measured.get(&i).copied() else {
@@ -208,7 +219,8 @@ pub fn clean(
                 }
             }
             // Molecules found by position belong to the row only within reach
-            // of its arrows: a gap wider than REACH ends the scheme.
+            // of its arrows: a gap wider than REACH ends the scheme. Recorded
+            // participants always stay, and bridge the reach to nearby signs.
             let mut line: Vec<((f32, f32), Option<usize>)> = row
                 .arrows
                 .iter()
@@ -216,7 +228,7 @@ pub fn clean(
                 .chain(
                     places
                         .iter()
-                        .filter(|(i, place)| **place == Place::Axis && !recorded.contains(*i))
+                        .filter(|(_, place)| **place == Place::Axis)
                         .filter_map(|(i, _)| Some((measured.get(i)?.along, Some(*i)))),
                 )
                 .collect();
@@ -229,7 +241,7 @@ pub fn clean(
             {
                 if range.0 - end > bond * REACH {
                     if !arrow {
-                        for i in cluster.drain(..) {
+                        for i in cluster.drain(..).filter(|i| !recorded.contains(i)) {
                             places.remove(&i);
                         }
                     }
