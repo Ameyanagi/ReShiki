@@ -1,5 +1,11 @@
 use super::*;
-use crate::{allocation_metrics, chemistry::cdxml, palette::Color, typography::Script};
+use crate::{
+    allocation_metrics,
+    document::Document,
+    engine::LocalEngine,
+    palette::Color,
+    typography::{Script, ScriptRun},
+};
 use std::{hint::black_box, time::Instant};
 
 fn local_schema() -> Schema {
@@ -20,10 +26,15 @@ fn first_read_frame(code: u16) -> Vec<u8> {
     bytes
 }
 
-fn assert_symbol_caption(xml: &str) {
-    let document = cdxml::import_cdxml(xml).unwrap().document;
+async fn import_drawing(format: &str, bytes: &[u8]) -> Document {
+    crate::formats::read_with_engine(bytes.to_vec(), format, &LocalEngine::in_process())
+        .await
+        .unwrap()
+}
+
+fn assert_symbol_caption(document: &Document) {
     let caption = &document.annotations[0];
-    let expected = "α β σ Δ ν → ± ′";
+    let expected = "α β σ Δ ν → ± ′ °";
     assert_eq!(caption.text, format!("{expected}x"));
     let symbol = &caption.format.style;
     assert_eq!(symbol.family, "Helvetica");
@@ -36,70 +47,160 @@ fn assert_symbol_caption(xml: &str) {
     assert_eq!(caption.format.at(expected.len()).family, "Times");
 }
 
-#[test]
-fn cdxml_imports_symbol_font_as_unicode() {
+#[tokio::test]
+async fn cdxml_imports_symbol_font_as_unicode() {
     let xml = "<CDXML CaptionFont='3'>
         <colortable><color r='1' g='1' b='1'/><color/><color r='1'/></colortable>
         <fonttable><font id='3' name='Helvetica'/>
         <font id='23' charset='x-mac-roman' name='sYmBoL'/>
         <font id='9' name='Times'/></fonttable>
         <page id='1'><t id='2' p='20 40'>
-            <s font='23' size='14' face='67' color='4'>a b s D n ® ± ¢</s><s font='9'>x</s>
+            <s font='23' size='14' face='67' color='4'>a b s D n ® ± ¢ °</s><s font='9'>x</s>
         </t></page></CDXML>";
-    assert_symbol_caption(xml);
+    let document = import_drawing("cdxml", xml.as_bytes()).await;
+    assert_symbol_caption(&document);
+    let exported = drawing::write(&document, drawing::Options::default()).unwrap();
+    let reopened = import_drawing("cdxml", exported.as_bytes()).await;
+    assert_symbol_caption(&reopened);
 }
 
-#[test]
-fn cdx_imports_symbol_font_bytes_using_the_legacy_charset() {
-    for charset in [10000u16, 1252] {
-        let mut bytes = HEADER.to_vec();
-        bytes.extend_from_slice(&0x8000u16.to_le_bytes());
-        bytes.extend_from_slice(&0u32.to_le_bytes());
-        let mut fonts = vec![0, 0, 3, 0];
-        for (id, name) in [(3u16, "Helvetica"), (23, "Symbol"), (9, "Times")] {
-            fonts.extend_from_slice(&id.to_le_bytes());
-            fonts.extend_from_slice(&charset.to_le_bytes());
-            fonts.extend_from_slice(&word(name.len()).unwrap());
-            fonts.extend_from_slice(name.as_bytes());
-        }
-        property(&mut bytes, 0x0100, &fonts).unwrap();
-        property(&mut bytes, 0x081b, &3u16.to_le_bytes()).unwrap();
-        let colors: Vec<_> = [3u16, 65535, 65535, 65535, 0, 0, 0, 65535, 0, 0]
+fn symbol_caption_cdx(
+    charset: u16,
+    symbol_font: &str,
+    text: &[u8],
+    text_tag: u16,
+    times_tail: bool,
+) -> Vec<u8> {
+    let mut bytes = HEADER.to_vec();
+    bytes.extend_from_slice(&0x8000u16.to_le_bytes());
+    bytes.extend_from_slice(&0u32.to_le_bytes());
+    let mut fonts = vec![0, 0, 3, 0];
+    for (id, name) in [(3u16, "Helvetica"), (23, symbol_font), (9, "Times")] {
+        fonts.extend_from_slice(&id.to_le_bytes());
+        fonts.extend_from_slice(&charset.to_le_bytes());
+        fonts.extend_from_slice(&word(name.len()).unwrap());
+        fonts.extend_from_slice(name.as_bytes());
+    }
+    property(&mut bytes, 0x0100, &fonts).unwrap();
+    property(&mut bytes, 0x081b, &3u16.to_le_bytes()).unwrap();
+    let colors: Vec<_> = [3u16, 65535, 65535, 65535, 0, 0, 0, 65535, 0, 0]
+        .into_iter()
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    property(&mut bytes, 0x0300, &colors).unwrap();
+    for (object, id) in [(0x8001u16, 1u32), (0x8006, 2)] {
+        bytes.extend_from_slice(&object.to_le_bytes());
+        bytes.extend_from_slice(&id.to_le_bytes());
+    }
+    property(&mut bytes, 0x0200, &[0; 8]).unwrap();
+    let mut runs = (1u16 + u16::from(times_tail)).to_le_bytes().to_vec();
+    runs.extend(
+        [0u16, 23, 67, 280, 4]
             .into_iter()
-            .flat_map(u16::to_le_bytes)
-            .collect();
-        property(&mut bytes, 0x0300, &colors).unwrap();
-        for (object, id) in [(0x8001u16, 1u32), (0x8006, 2)] {
-            bytes.extend_from_slice(&object.to_le_bytes());
-            bytes.extend_from_slice(&id.to_le_bytes());
+            .flat_map(u16::to_le_bytes),
+    );
+    if times_tail {
+        runs.extend(
+            [text.len() as u16 - 1, 9, 0, 200, 3]
+                .into_iter()
+                .flat_map(u16::to_le_bytes),
+        );
+    }
+    runs.extend_from_slice(text);
+    property(&mut bytes, text_tag, &runs).unwrap();
+    bytes.extend_from_slice(&[0; 8]);
+    bytes
+}
+
+#[tokio::test]
+async fn cdx_imports_symbol_font_bytes_using_the_legacy_charset() {
+    // The encoder writes Unicode, so build legacy Text properties explicitly.
+    for charset in [10000u16, 1252, 932] {
+        for font in ["Symbol", "Symbol MT"] {
+            let bytes = symbol_caption_cdx(
+                charset,
+                font,
+                b"a b s D n \xae \xb1 \xa2 \xb0x",
+                0x0700,
+                true,
+            );
+            let decoded = from_cdx(&bytes).unwrap();
+            assert_eq!(from_cdx_tolerant(&bytes).unwrap(), decoded);
+            let xml = roxmltree::Document::parse(&decoded).unwrap();
+            assert!(xml.descendants().all(|node| {
+                node.attributes()
+                    .all(|attribute| !attribute.name().starts_with("ReShiki"))
+            }));
+            let symbol = xml
+                .descendants()
+                .find(|node| node.has_tag_name("s") && node.attribute("font") == Some("23"))
+                .unwrap();
+            // 0xB0 is a degree glyph in Symbol even where the text codepage
+            // would decode that byte differently (for example Mac Roman ∞).
+            assert_eq!(symbol.text(), Some("a b s D n ® ± ¢ °"));
+            assert_symbol_caption(&import_drawing("cdx", &bytes).await);
         }
-        property(&mut bytes, 0x0200, &[0; 8]).unwrap();
-        // The encoder writes Unicode, so build a legacy Text property.
-        let text = b"a b s D n \xae \xb1 \xa2x";
-        let mut runs = 2u16.to_le_bytes().to_vec();
-        for run in [
-            [0u16, 23, 67, 280, 4],
-            [text.len() as u16 - 1, 9, 0, 200, 3],
-        ] {
-            runs.extend(run.into_iter().flat_map(u16::to_le_bytes));
-        }
-        runs.extend_from_slice(text);
-        property(&mut bytes, 0x0700, &runs).unwrap();
-        bytes.extend_from_slice(&[0; 8]);
-        assert_symbol_caption(&from_cdx_tolerant(&bytes).unwrap());
     }
 }
 
-#[test]
-fn utf8_symbol_font_keeps_existing_greek() {
-    let xml = "<CDXML><fonttable><font id='23' charset='utf-8' name='Symbol'/></fonttable>
-        <page id='1'><t id='2' p='20 40'><s font='23'>α</s></t></page></CDXML>";
-    let decoded = from_cdx(&to_cdx(xml).unwrap()).unwrap();
-    for source in [xml, decoded.as_str()] {
-        let document = cdxml::import_cdxml(source).unwrap().document;
+#[tokio::test]
+async fn utf8_symbol_fonts_keep_existing_operators_and_greek() {
+    for font in ["Symbol", "Symbol MT"] {
+        let xml = format!(
+            "<CDXML><fonttable><font id='23' charset='utf-8' name='{font}'/></fonttable>
+            <page id='1'><t id='2' p='20 40'><s font='23'>× ÷ α</s></t></page></CDXML>"
+        );
+        let binary = to_cdx(&xml).unwrap();
+        for (format, bytes) in [("cdxml", xml.as_bytes()), ("cdx", binary.as_slice())] {
+            let document = import_drawing(format, bytes).await;
+            let caption = &document.annotations[0];
+            assert_eq!(caption.text, "× ÷ α");
+            assert_eq!(caption.format.style.family, font);
+        }
+    }
+}
+
+#[tokio::test]
+async fn cdx_utf8_text_overrides_a_legacy_symbol_font_charset() {
+    for charset in [10000u16, 1252, 932] {
+        let bytes = symbol_caption_cdx(charset, "Symbol", "× ÷ α".as_bytes(), 0x0709, false);
+        let document = import_drawing("cdx", &bytes).await;
         let caption = &document.annotations[0];
-        assert_eq!(caption.text, "α");
-        assert_eq!(caption.format.style.family, "Arial");
+        assert_eq!(caption.text, "× ÷ α");
+        let style = &caption.format.style;
+        assert_eq!(style.family, "Helvetica");
+        assert_eq!(style.size_pt, 14.0);
+        assert!(style.bold && style.italic);
+        assert_eq!(style.script, Script::Superscript);
+        assert_eq!(style.color, Color::Custom([255, 0, 0]));
+    }
+}
+
+#[tokio::test]
+async fn superscript_symbol_atom_label_imports_with_valid_unicode_ranges() {
+    for (prefix, label, start) in [("", "α", 0), ("<s font='9'>R</s>", "Rα", 1)] {
+        let xml = format!(
+            "<CDXML LabelFont='3'>
+            <fonttable><font id='3' name='Helvetica'/><font id='9' name='Times'/>
+            <font id='23' name='Symbol'/></fonttable>
+            <page id='1'><fragment id='2'>
+                <n id='3' p='20 40' NodeType='Unspecified' Element='0'>
+                    <t id='4'>{prefix}<s font='23' face='64'>a</s></t>
+                </n>
+            </fragment></page></CDXML>"
+        );
+        let document = import_drawing("cdxml", xml.as_bytes()).await;
+        document.validate().unwrap();
+        let atom = &document.atoms[0];
+        assert_eq!(atom.display.variable.as_deref(), Some(label));
+        assert_eq!(
+            atom.display.label_scripts,
+            [ScriptRun {
+                start,
+                end: label.len(),
+                script: Script::Superscript,
+            }]
+        );
     }
 }
 

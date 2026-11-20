@@ -11,7 +11,7 @@ mod values;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use charsets::symbol_text;
+pub(crate) use charsets::{is_symbol_font, symbol_char};
 pub(crate) use decode::{SKIPPED, style_from_cdx};
 pub use decode::{from_cdx, from_cdx_tolerant};
 pub use encode::{to_cds, to_cdx};
@@ -22,8 +22,6 @@ use std::{collections::HashMap, sync::LazyLock};
 pub(crate) const PURPOSE: &str = "ReShikiPurpose";
 /// A panel as JSON, on the group of shapes and text ChemDraw gets for it.
 pub(crate) const PANEL: &str = "ReShikiPanel";
-/// The codepage applied to a legacy CDX Symbol run before the shared XML import.
-pub(crate) const SYMBOL_CHARSET: &str = "ReShikiSymbolCharset";
 
 pub const LIMIT: usize = 16 * 1024 * 1024;
 const MAX_OBJECTS: usize = 100_000;
