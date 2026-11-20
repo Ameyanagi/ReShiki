@@ -156,9 +156,132 @@ fn the_grid_survives_scrolling_searching_and_a_new_recent_row() {
     ];
     for action in steps {
         let _ = app.update(Message::Icons(action));
-        tree.diff(&app.icons_panel());
+        reconcile_grid(&app, &mut tree);
         // A placement adds a Recent row above everything else.
         let _ = app.update(Message::Canvas(Edit::Icon(Point::default())));
-        tree.diff(&app.icons_panel());
+        reconcile_grid(&app, &mut tree);
+    }
+}
+
+/// Diffing may finish before a stale paragraph state panics during layout.
+/// Compare tags as well, so this remains a portable regression without a GPU.
+fn reconcile_grid(app: &App, tree: &mut iced::advanced::widget::Tree) {
+    use iced::advanced::widget::Tree;
+    fn same_shape(actual: &Tree, fresh: &Tree) {
+        assert_eq!(actual.tag, fresh.tag, "a row keeps only compatible state");
+        assert_eq!(actual.children.len(), fresh.children.len());
+        for (actual, fresh) in actual.children.iter().zip(&fresh.children) {
+            same_shape(actual, fresh);
+        }
+    }
+    let panel = app.icons_panel();
+    tree.diff(&panel);
+    same_shape(tree, &Tree::new(&panel));
+}
+
+#[test]
+fn a_keyed_row_replaces_its_state_when_it_becomes_a_heading() {
+    use iced::advanced::widget::Tree;
+    let tiles: Element<'_, Message> =
+        iced::widget::keyed_column([(3, row![text("Light")].into())]).into();
+    let mut tree = Tree::new(&tiles);
+    let heading: Element<'_, Message> =
+        iced::widget::keyed_column([(3, text("Reaction conditions").into())]).into();
+    tree.diff(&heading);
+    let fresh = Tree::new(&heading);
+    assert_eq!(tree.children[0].tag, fresh.children[0].tag);
+    assert!(matches!(
+        tree.children[0].state,
+        iced::advanced::widget::tree::State::Some(_)
+    ));
+}
+
+#[test]
+fn unfiltered_placement_and_search_to_recent_reconcile_each_row() {
+    use iced::advanced::widget::Tree;
+    let mut app = app();
+    let _ = app.update(Message::Tool(Tool::Icons));
+    let mut tree = Tree::new(&app.icons_panel());
+    for action in [
+        Action::Pick(Choice::Condition(SymbolKind::Light)),
+        Action::Search("flask".into()),
+        Action::Pick(by_name("flask")),
+        Action::Search(String::new()),
+        Action::Search("フラスコ".into()),
+        Action::Search("no such icon".into()),
+        Action::Search(String::new()),
+        Action::Filter(Filter::Conditions),
+        Action::Filter(Filter::All),
+    ] {
+        let _ = app.update(Message::Icons(action));
+        reconcile_grid(&app, &mut tree);
+        let _ = app.update(Message::Canvas(Edit::Icon(Point::default())));
+        reconcile_grid(&app, &mut tree);
+    }
+    assert!(
+        app.icons
+            .recent
+            .contains(&Choice::Condition(SymbolKind::Light))
+    );
+    assert!(app.icons.recent.contains(&by_name("flask")));
+}
+
+#[tokio::test]
+#[ignore = "Opt-in headless catalog layout check"]
+async fn the_grid_lays_out_after_placement_search_and_scroll_jumps() {
+    use iced::advanced::{layout, renderer::Headless, widget::Tree};
+    let renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let mut app = app();
+    let _ = app.update(Message::Tool(Tool::Icons));
+    let mut tree = Tree::new(&app.icons_panel());
+    let limits = layout::Limits::new(iced::Size::ZERO, iced::Size::new(340., 900.));
+    let mut layout = |app: &App| {
+        let mut panel = app.icons_panel();
+        tree.diff(&panel);
+        let node = panel.as_widget_mut().layout(&mut tree, &renderer, &limits);
+        assert!(node.size().width.is_finite());
+        assert!(node.size().height.is_finite());
+        let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(
+            iced::Size::new(340., 900.),
+        ));
+        panel.as_widget_mut().operate(
+            &mut tree,
+            iced::advanced::Layout::new(&node),
+            &renderer,
+            &mut iced::advanced::widget::operation::black_box(&mut collect),
+        );
+        assert!(
+            collect.snapshot().duplicate_ids.is_empty(),
+            "{:?}",
+            collect.snapshot().duplicate_ids
+        );
+    };
+    layout(&app);
+    for action in [
+        Action::Pick(Choice::Condition(SymbolKind::Light)),
+        Action::Search("flask".into()),
+        Action::Pick(by_name("flask")),
+        Action::Search(String::new()),
+        Action::Search("search".into()),
+        Action::Search(String::new()),
+    ] {
+        let _ = app.update(Message::Icons(action));
+        layout(&app);
+        let _ = app.update(Message::Canvas(Edit::Icon(Point::default())));
+        layout(&app);
+    }
+    // Both wheel updates and scrollbar drags report this same viewport action.
+    for offset in [46., 92., 460., 3000., 12000., 30000., 0., 20000., 0.] {
+        let _ = app.update(Message::Icons(Action::Scrolled {
+            offset,
+            height: 700.,
+        }));
+        layout(&app);
     }
 }
