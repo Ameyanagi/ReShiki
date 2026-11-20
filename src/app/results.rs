@@ -307,7 +307,11 @@ fn completion(message: &Message) -> Option<Completion> {
             use super::inspector::Action;
             match action {
                 Action::PropertiesCalculated(..) => Some(Completion::Properties),
+                Action::IdentityCopied(..) => Some(Completion::Clipboard),
                 Action::Section(..)
+                | Action::CopyIdentity(_)
+                | Action::NameIdentity
+                | Action::AddIdentityName
                 | Action::ModelControls(_)
                 | Action::Figure(..)
                 | Action::FigureMenu(..)

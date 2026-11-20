@@ -29,3 +29,20 @@ pub(in crate::app) fn record(smiles: &str) -> Record {
         provenance: Provenance::Openclatura,
     }
 }
+
+/// Complete the real Generate request without polling its worker task.
+pub(in crate::app) fn generated(app: &mut App, record: Record) {
+    let atoms = if app.tab.selected.is_empty() {
+        app.tab.doc.atoms.iter().map(|atom| atom.id).collect()
+    } else {
+        app.tab.selected.clone()
+    };
+    let _ = app.generate_structure_name(atoms);
+    let ticket = app
+        .tab
+        .naming
+        .pending
+        .expect("Generate is pending")
+        .ticket();
+    app.naming_finished(ticket, Ok(Outcome::Structure(record)));
+}

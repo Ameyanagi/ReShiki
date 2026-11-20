@@ -570,7 +570,9 @@ impl App {
                     self.figure_exporting = false;
                     Task::none()
                 }
-                Message::CopyAsPrepared(..) | Message::CopyAsWritten(..) => {
+                Message::CopyAsPrepared(..)
+                | Message::CopyAsWritten(..)
+                | Message::InspectorAction(super::inspector::Action::IdentityCopied(..)) => {
                     self.copy_as_busy = false;
                     Task::none()
                 }

@@ -587,6 +587,49 @@ impl App {
         }
     }
 
+    /// Share the existing bounded request with surfaces that have an explicit
+    /// analyzed scope, including the whole drawing when nothing is selected.
+    pub(super) fn generate_structure_name(&mut self, atoms: Vec<u64>) -> Task<Message> {
+        if self.tab.naming.pending.is_some() {
+            return Task::none();
+        }
+        let (ticket, cancel) = self.begin_naming(Pending::Generate);
+        self.tab.naming.structure = None;
+        self.tab.naming.structure_atoms = editing::analysis_atoms(&self.tab.doc, &atoms);
+        self.tab.naming.structure_error = None;
+        let document = self.tab.doc.clone();
+        Task::perform(
+            generate_for_atoms(
+                document,
+                atoms,
+                cancel,
+                self.appearance.write_unknown_stereo,
+            ),
+            move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
+        )
+    }
+
+    /// A generated name belongs to this exact analyzed scope and drawing.
+    pub(super) fn named_identity(&self, atoms: &[u64], canonical: &str) -> Option<&Record> {
+        let state = &self.tab.naming;
+        let (ticket, record) = state.structure.as_ref()?;
+        (state.pending.is_none()
+            && ticket.epoch == self.tab.file_epoch
+            && state.structure_atoms == atoms
+            && record.canonical_smiles == canonical)
+            .then_some(record)
+    }
+
+    pub(super) fn identity_naming_idle(&self) -> bool {
+        self.tab.naming.pending.is_none() && self.tab.naming.caption_pending.is_none()
+    }
+
+    pub(super) fn identity_naming_error(&self, atoms: &[u64]) -> Option<&str> {
+        (self.tab.naming.structure_atoms == atoms)
+            .then_some(self.tab.naming.structure_error.as_deref())
+            .flatten()
+    }
+
     pub(super) fn naming_action(&mut self, action: Action) -> Task<Message> {
         match action {
             #[cfg(target_arch = "wasm32")]
@@ -665,27 +708,7 @@ impl App {
                     "unknown configuration",
                 );
             }
-            Action::Generate => {
-                if self.tab.naming.pending.is_some() {
-                    return Task::none();
-                }
-                let (ticket, cancel) = self.begin_naming(Pending::Generate);
-                self.tab.naming.structure = None;
-                self.tab.naming.structure_atoms =
-                    editing::analysis_atoms(&self.tab.doc, &self.tab.selected);
-                self.tab.naming.structure_error = None;
-                let document = self.tab.doc.clone();
-                let selected = self.tab.selected.clone();
-                return Task::perform(
-                    generate_for_atoms(
-                        document,
-                        selected,
-                        cancel,
-                        self.appearance.write_unknown_stereo,
-                    ),
-                    move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
-                );
-            }
+            Action::Generate => return self.generate_structure_name(self.tab.selected.clone()),
             Action::ShowMoleculeName(atoms) => return self.show_molecule_name(atoms),
             Action::HideMoleculeName(atoms) => self.hide_molecule_name(&atoms),
             Action::Smiles(smiles) => {
