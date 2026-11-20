@@ -272,10 +272,10 @@ async fn identity_controls_are_accessible_and_descriptors_stay_collapsed() -> Re
     .await
     .ok_or("No renderer")?;
     let mut app = ethanol().await;
-    let size = iced::Size::new(360., 1800.);
+    let size = iced::Size::new(280., 720.);
     let snapshot = |app: &App, renderer: &mut iced::Renderer| {
         let mut ui = iced_runtime::UserInterface::build(
-            app.molecular_section(Some(Section::Molecule)),
+            container(app.molecular_section(Some(Section::Molecule))).height(Length::Shrink),
             size,
             iced_runtime::user_interface::Cache::new(),
             renderer,
@@ -320,6 +320,30 @@ async fn identity_controls_are_accessible_and_descriptors_stay_collapsed() -> Re
             .any(|node| node.id == "inspector-section-Descriptors" && node.expanded == Some(false))
     );
     assert!(!initial.nodes.iter().any(|node| node.id == "molecule-name"));
+    generated(&mut app);
+    let named = snapshot(&app, &mut renderer);
+    for field in [
+        IdentityField::Name,
+        IdentityField::SystematicName,
+        IdentityField::Formula,
+        IdentityField::Weight,
+        IdentityField::Smiles,
+        IdentityField::Inchi,
+        IdentityField::InchiKey,
+    ] {
+        let node = named
+            .nodes
+            .iter()
+            .find(|node| node.id == field.id())
+            .unwrap();
+        assert!(node.bounds.height >= 30., "{field:?}: {:?}", node.bounds);
+        assert!(
+            node.visible_bounds
+                .is_some_and(|bounds| bounds.height >= 30.)
+        );
+        assert_eq!(node.value, app.identity_text(field));
+        println!("Identity viewport {field:?}: {:?}", node.bounds);
+    }
     let _ = app.inspector_action(Action::Section(Section::Descriptors, true));
     let _ = app.inspector_action(Action::Section(Section::NameOptions, true));
     let expanded = snapshot(&app, &mut renderer);
@@ -331,6 +355,98 @@ async fn identity_controls_are_accessible_and_descriptors_stay_collapsed() -> Re
                 .nodes
                 .iter()
                 .any(|node| node.id == format!("property-pin-{property:?}"))
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore = "Opt-in actual row layout and rendered-text check"]
+async fn identity_rows_have_visible_text_without_sibling_pins() -> Result<(), String> {
+    use iced::advanced::{renderer, renderer::Headless, widget::operation};
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let mut app = ethanol().await;
+    generated(&mut app);
+    let size = iced::Size::new(260., 64.);
+    let theme = iced::Theme::Light;
+    for field in [
+        IdentityField::Name,
+        IdentityField::SystematicName,
+        IdentityField::Formula,
+        IdentityField::Weight,
+        IdentityField::Smiles,
+        IdentityField::Inchi,
+        IdentityField::InchiKey,
+    ] {
+        let name = matches!(field, IdentityField::Name | IdentityField::SystematicName);
+        let mut ui = iced_runtime::UserInterface::build(
+            iced::widget::column![app.identity_copy_value(
+                field,
+                !name,
+                if field == IdentityField::Name {
+                    17.
+                } else {
+                    12.
+                },
+            )]
+            .height(Length::Shrink),
+            size,
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+        ui.operate(&renderer, &mut operation::black_box(&mut collect));
+        let snapshot = collect.snapshot();
+        let node = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == field.id())
+            .unwrap();
+        assert!(node.bounds.height >= 30., "{field:?}: {:?}", node.bounds);
+        assert_eq!(node.value, app.identity_text(field));
+        if field == IdentityField::Inchi {
+            assert!(
+                node.value
+                    .as_deref()
+                    .unwrap()
+                    .starts_with("InChI=1S/C2H6O/")
+            );
+        }
+        ui.draw(
+            &mut renderer,
+            &theme,
+            &renderer::Style {
+                text_color: theme.palette().text,
+            },
+            iced::mouse::Cursor::Unavailable,
+        );
+        let pixels = Headless::screenshot(
+            &mut renderer,
+            iced::Size::new(size.width as u32, size.height as u32),
+            1.,
+            theme.palette().background,
+        );
+        // Exclude the field label and the reserved hover glyph. Only the
+        // rendered identifier/name can put ink in this part of the row.
+        let start = if name { 0 } else { 81 };
+        let ink = pixels
+            .chunks_exact(4)
+            .enumerate()
+            .filter(|(index, rgba)| {
+                let x = index % size.width as usize;
+                x >= start && x < 234 && rgba[..3].iter().all(|channel| *channel < 180)
+            })
+            .count();
+        assert!(ink > 5, "{field:?}: no visible value text");
+        println!(
+            "Identity standalone {field:?}: {:?}; {ink} text pixels",
+            node.bounds
         );
     }
     Ok(())

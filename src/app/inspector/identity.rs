@@ -341,6 +341,12 @@ impl App {
         let enabled = value.is_some();
         let full = value.unwrap_or_else(|| "Unavailable".into());
         let shown = full.clone();
+        // Responsive fills by default. Give the row its own text/glyph height
+        // so a shrinking card does not depend on a neighboring property pin.
+        let height = text::LineHeight::default()
+            .to_absolute(size.into())
+            .0
+            .max(20.);
         let line = row![
             label.then(|| text(field.label()).size(11).style(muted_text).width(
                 if field == IdentityField::Analysis {
@@ -351,12 +357,15 @@ impl App {
             )),
             responsive(move |bounds| text(one_line(&shown, bounds.width, size))
                 .size(size)
+                .height(Length::Fill)
+                .align_y(Alignment::Center)
                 .wrapping(text::Wrapping::None)
                 .into())
             .width(Length::Fill),
             Space::new().width(20),
         ]
         .spacing(6)
+        .height(height)
         .align_y(Alignment::Center);
         let content = hover(
             line,
