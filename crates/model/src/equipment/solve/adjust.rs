@@ -19,6 +19,8 @@ pub struct Handle {
     pub toggle: bool,
     /// The part it moves; `None` for a liquid's surface.
     pub part: Option<String>,
+    /// A hose's end or middle, dragged to reshape it; `param` is empty then.
+    pub grip: Option<super::hose::Grip>,
 }
 
 fn definition(g: &Graphic) -> Option<(&Arc<Definition>, Values)> {
@@ -64,6 +66,7 @@ pub fn handles(g: &Graphic) -> Vec<Handle> {
                 at: t.apply(parts.get(p.id.as_str())?.apply(h.at)),
                 toggle: h.gesture == Gesture::Toggle,
                 part: Some(p.id.clone()),
+                grip: None,
             })
         })
         .collect();
@@ -78,9 +81,17 @@ pub fn handles(g: &Graphic) -> Vec<Handle> {
                 at,
                 toggle: false,
                 part: None,
+                grip: None,
             });
         }
     }
+    out.extend(super::hose::grips(g).into_iter().map(|(grip, at)| Handle {
+        param: String::new(),
+        at,
+        toggle: false,
+        part: None,
+        grip: Some(grip),
+    }));
     out
 }
 

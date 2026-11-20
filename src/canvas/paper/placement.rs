@@ -2,7 +2,9 @@
 
 use super::Draft;
 use crate::canvas::hit::{bond_target_with, bond_target_with_text, plane_endpoint};
-use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, delocalized_ring_size, layered, rgb};
+use crate::canvas::{
+    Gesture, MoleculeCanvas, State, Tool, World, delocalized_ring_size, layered, rgb,
+};
 use iced::widget::canvas::{Path, Stroke};
 use iced::{Color, Point, Rectangle};
 use reshiki::chains;
@@ -367,6 +369,9 @@ impl MoleculeCanvas<'_> {
         let at = self
             .camera
             .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+        if definition.tube.is_some() {
+            return self.preview_hose(draft, state, definition, at);
+        }
         let doc = draft.preview.to_mut();
         let scale = placed::world_per_mm(doc, placed::DEFAULT_PT_PER_MM);
         let id = doc.next_id();
@@ -409,6 +414,47 @@ impl MoleculeCanvas<'_> {
         ghost.origin = at;
         ghost.style.effects.opacity = Some(0.5);
         doc.graphics.push(ghost);
+    }
+
+    /// The armed hose as release lays it: from the press to the pointer, or
+    /// hung from the pointer before the press, with a ring on a barb it takes.
+    fn preview_hose(
+        &self,
+        draft: &mut Draft<'_>,
+        state: &State,
+        definition: &std::sync::Arc<reshiki::equipment::format::Definition>,
+        at: World,
+    ) {
+        use reshiki::equipment::solve::{REACH_PX, hose};
+        let slop = self.camera.world_len(crate::canvas::pick::DRAG_SLOP_PX);
+        let (from, to) = match &state.gesture {
+            Some(Gesture::Hose { start }) if start.distance(at) >= slop => (*start, at),
+            Some(Gesture::Hose { start }) => (*start, *start),
+            _ => (at, at),
+        };
+        let doc = draft.preview.to_mut();
+        let reach = f64::from(self.camera.world_len(REACH_PX));
+        let xy = |p: World| [f64::from(p.x), f64::from(p.y)];
+        let (id, barbs) = hose::place_hose(doc, definition.clone(), xy(from), xy(to), reach);
+        if let Some(g) = doc.graphics.iter_mut().find(|g| g.id == id) {
+            g.style.effects.opacity = Some(0.5);
+        }
+        if let Some(b) = barbs.last() {
+            draft.seat_hint = Some(super::SeatHint {
+                at: World::new(b.point[0] as f32, b.point[1] as f32),
+                radius: (b.diameter() / 2.) as f32,
+                fits: true,
+                text: format!(
+                    "Push onto the {}",
+                    crate::app::equipment::joint_name(doc, &b.at)
+                ),
+            });
+        }
+        draft.template_notice = Some((
+            "Drag from one hose barb to another, or click a barb to hang a hose · Esc cancels"
+                .into(),
+            true,
+        ));
     }
 
     /// Keyboard Connect shows the offered joint seated, as Return makes it.

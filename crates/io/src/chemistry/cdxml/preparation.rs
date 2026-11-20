@@ -364,6 +364,11 @@ fn combine(parts: &[Fragment]) -> Result<Combined> {
 /// no result is published until all preparation stages succeed. Raw f64 data
 /// remains unrounded; scene assembly and final document validation are separate.
 pub fn prepare_cdxml(text: &str) -> Result<PreparedCdxml> {
+    prepare_chemical_drawing(&super::symbol_text_to_unicode(text))
+}
+
+/// Prepare the chemistry once the import has decoded the text runs.
+pub(crate) fn prepare_chemical_drawing(text: &str) -> Result<PreparedCdxml> {
     prepare(text, true)
 }
 

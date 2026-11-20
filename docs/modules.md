@@ -531,6 +531,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/scene/ring_fills.rs`: Native ChemDraw bond-owned areas and legacy ReShiki-owned polygons.
 - `crates/io/src/chemistry/cdxml/schemes.rs`: Validate external reaction references without inventing native reaction roles.
 - `crates/io/src/chemistry/cdxml/stereo.rs`
+- `crates/io/src/chemistry/cdxml/symbol.rs`
 - `crates/io/src/chemistry/cdxml/tree.rs`: Private detached XML tree.
 - `crates/io/src/chemistry/cdxml/variables.rs`: Drawing-only labels on unspecified atoms; query chemistry remains unsupported.
 - `crates/io/src/chemistry/cdxml/xml_guard.rs`: One linear scan of the XML bytes before any parser runs.
@@ -703,6 +704,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/equipment/revise.rs`: Moving placed pieces to another revision of their definition, as a library offers it.
 - `crates/model/src/equipment/solve.rs`: Seats join the joints and holds of placed pieces.
 - `crates/model/src/equipment/solve/adjust.rs`: Movable parts.
+- `crates/model/src/equipment/solve/hose.rs`: Hoses.
 - `crates/model/src/equipment/validate.rs`: Checks the schema cannot express
 - `crates/model/src/erasing.rs`: Erase the geometry crossed by a pointer stroke, including between motion events.
 - `crates/model/src/fischer.rs`: Explicit Fischer projections

@@ -443,20 +443,32 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         }
         let binary = request.format.as_deref() == Some("cdx");
         let export_binary = binary && request.operation == "export";
-        if binary && request.operation == "import" {
+        if request.operation == "import"
+            && (binary || request.format.as_deref() == Some("cdxml") && request.text.is_some())
+        {
             let text = request.text.take().unwrap_or_default();
             request.text = Some(
                 crate::task::spawn_blocking(move || {
-                    if text.trim().is_empty() {
-                        return Err("Enter a structure first".into());
-                    }
-                    if text.len() > crate::exchange::LIMIT.div_ceil(3) * 4 {
-                        return Err("Drawing exceeds the 16 MB structure limit".into());
-                    }
-                    let bytes = STANDARD
-                        .decode(text)
-                        .map_err(|_| "Invalid binary drawing base64")?;
-                    crate::exchange::from_cdx_tolerant(&bytes)
+                    let xml = if binary {
+                        if text.trim().is_empty() {
+                            return Err("Enter a structure first".into());
+                        }
+                        if text.len() > crate::exchange::LIMIT.div_ceil(3) * 4 {
+                            return Err("Drawing exceeds the 16 MB structure limit".into());
+                        }
+                        let bytes = STANDARD
+                            .decode(text)
+                            .map_err(|_| "Invalid binary drawing base64")?;
+                        crate::exchange::from_cdx_tolerant(&bytes)?
+                    } else {
+                        text
+                    };
+                    Ok::<_, String>(
+                        match crate::chemistry::cdxml::symbol_text_to_unicode(&xml) {
+                            std::borrow::Cow::Owned(mapped) => mapped,
+                            std::borrow::Cow::Borrowed(_) => xml,
+                        },
+                    )
                 })
                 .await
                 .map_err(|e| format!("Drawing conversion failed: {e}"))??,
