@@ -100,7 +100,7 @@ pub enum GradientChoice {
     Radial,
 }
 impl GradientChoice {
-    const ALL: [Self; 3] = [Self::None, Self::Linear, Self::Radial];
+    pub(super) const ALL: [Self; 3] = [Self::None, Self::Linear, Self::Radial];
     fn of(style: &reshiki::graphics::GraphicStyle) -> Self {
         match style.effects.gradient.map(|g| g.kind) {
             None => Self::None,
@@ -176,6 +176,38 @@ pub(super) fn parse_color(s: &str) -> Option<[u8; 3]> {
     ])
 }
 impl App {
+    pub(super) fn selected_styled_graphics(
+        &self,
+    ) -> impl Iterator<Item = &reshiki::graphics::Graphic> {
+        self.tab.doc.graphics.iter().filter(|g| {
+            self.tab.selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none()
+        })
+    }
+
+    pub(super) fn graphic_panel_visible(&self) -> bool {
+        matches!(self.tool, Tool::Graphic(_)) || self.selected_styled_graphics().next().is_some()
+    }
+
+    pub(super) fn graphic_fill_controls(&self) -> bool {
+        let mut selected = self.selected_styled_graphics();
+        let first = selected.next();
+        let kind = match self.tool {
+            Tool::Graphic(kind) => kind,
+            _ => first.map_or(GraphicKind::Rectangle, |g| g.kind),
+        };
+        let mut shapes = first.into_iter().chain(selected);
+        if kind.closed() {
+            !shapes.any(|g| g.cycle.is_some())
+        } else {
+            kind == GraphicKind::Path
+                && shapes.any(|g| {
+                    g.commands()
+                        .iter()
+                        .any(|c| matches!(c, reshiki::graphics::PathCommand::Close))
+                })
+        }
+    }
+
     pub(super) fn graphic_action(&mut self, action: Action) {
         match action {
             Action::Style(change) => self.apply_graphic_style(change),
@@ -236,15 +268,7 @@ impl App {
     }
     pub(super) fn graphic_panel(&self) -> Element<'_, Message> {
         use reshiki::graphics::{BracketSides, GraphicChange, GraphicKind, LinePattern};
-        let selected: Vec<_> = self
-            .tab
-            .doc
-            .graphics
-            .iter()
-            .filter(|g| {
-                self.tab.selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none()
-            })
-            .collect();
+        let selected: Vec<_> = self.selected_styled_graphics().collect();
         // A cycle's style colors its arrows; it has no fill.
         let cycle = selected.iter().any(|g| g.cycle.is_some());
         let kind = match self.tool {
@@ -430,14 +454,7 @@ impl App {
             }
             _ => {}
         }
-        if kind.closed() && !cycle
-            || (kind == GraphicKind::Path
-                && selected.iter().any(|g| {
-                    g.commands()
-                        .iter()
-                        .any(|c| matches!(c, reshiki::graphics::PathCommand::Close))
-                }))
-        {
+        if self.graphic_fill_controls() {
             // A panel's fill swatches and shadow are in its Panel card.
             let panels = selected.iter().any(|g| g.panel.is_some());
             if !panels {

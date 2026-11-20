@@ -139,7 +139,7 @@ version report that an update is required.
 
 1. Select an arrow, or choose the arrow tool.
 2. In **Properties → Body**, or in the arrow tool's context row, choose
-   **Block**, **Hollow**, **Chevron** or **Gradient**. **Line** is the usual
+   **Block**, **Hollow block**, **Chevron** or **Gradient**. **Line** is the usual
    thin arrow.
 3. **Body width (pt)** sets the width of the shaft. **Head length (pt)** and
    **Head half-width (pt)** under **Arrowhead & markers** set the head.

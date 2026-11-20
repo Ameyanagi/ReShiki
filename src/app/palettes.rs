@@ -41,6 +41,31 @@ pub enum Action {
     Graphic(GraphicOption),
     Tool(Tool),
 }
+/// One arrow choice, shared by the visual palette and command catalog.
+pub(super) struct ArrowOption {
+    label: String,
+    preset: ArrowPreset,
+    style: ArrowStyle,
+    arc: Option<f32>,
+}
+impl ArrowOption {
+    pub(super) fn command_name(&self) -> String {
+        if self.label == "Half arrow" {
+            self.label.clone()
+        } else {
+            format!("{} arrow", self.label)
+        }
+    }
+    pub(super) fn action(&self) -> Action {
+        if let Some(sweep) = self.arc {
+            Action::ArcArrow(self.preset, self.style.clone(), sweep)
+        } else if self.style == ArrowStyle::preset(self.preset) {
+            Action::Arrow(self.preset)
+        } else {
+            Action::ArrowVariant(self.preset, self.style.clone())
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq)]
 pub struct GraphicOption {
     pub kind: GraphicKind,
@@ -157,6 +182,89 @@ pub(super) fn bond_tool(preset: BondPreset) -> Tool {
         BondPreset::Wavy => Tool::Wavy,
         _ => Tool::StyledBond(preset),
     }
+}
+pub(super) fn arrow_options() -> Vec<ArrowOption> {
+    let mut options: Vec<_> = ArrowPreset::ALL
+        .iter()
+        .map(|&preset| (preset.to_string(), preset, ArrowStyle::preset(preset), None))
+        .collect();
+    for (label, preset, style) in [
+        (
+            "Bold",
+            ArrowPreset::Forward,
+            ArrowStyle {
+                width_pt: 1.4,
+                head_length_pt: 7.,
+                head_width_pt: 2.4,
+                ..ArrowStyle::default()
+            },
+        ),
+        (
+            "Dashed",
+            ArrowPreset::Forward,
+            ArrowStyle {
+                pattern: LinePattern::Dashed,
+                ..ArrowStyle::default()
+            },
+        ),
+        (
+            "Hollow",
+            ArrowPreset::Forward,
+            ArrowStyle {
+                shape: reshiki::arrows::HeadShape::Hollow,
+                head_length_pt: 6.,
+                head_width_pt: 2.,
+                ..ArrowStyle::default()
+            },
+        ),
+        (
+            "Unequal equilibrium",
+            ArrowPreset::Equilibrium,
+            ArrowStyle {
+                equilibrium_ratio: 0.6,
+                ..ArrowStyle::preset(ArrowPreset::Equilibrium)
+            },
+        ),
+        (
+            "Angled",
+            ArrowPreset::Forward,
+            ArrowStyle {
+                shape: reshiki::arrows::HeadShape::Open,
+                ..ArrowStyle::default()
+            },
+        ),
+        (
+            "Half arrow",
+            ArrowPreset::Forward,
+            ArrowStyle {
+                head: reshiki::arrows::Head::Left,
+                ..ArrowStyle::default()
+            },
+        ),
+    ] {
+        options.push((label.into(), preset, style, None));
+    }
+    for body in [Body::Block, Body::Hollow, Body::Chevron, Body::Gradient] {
+        let mut style = ArrowStyle::default();
+        style.set_body(body);
+        options.push((body.to_string(), ArrowPreset::Forward, style, None));
+    }
+    // One arc preset keeps the palette on screen; Sweep (°) sets any angle.
+    options.push((
+        "Arc".into(),
+        ArrowPreset::Forward,
+        ArrowStyle::default(),
+        Some(180.),
+    ));
+    options
+        .into_iter()
+        .map(|(label, preset, style, arc)| ArrowOption {
+            label,
+            preset,
+            style,
+            arc,
+        })
+        .collect()
 }
 pub(super) fn graphic_options(family: Family) -> Vec<(String, GraphicOption)> {
     use GraphicKind as G;
@@ -588,87 +696,15 @@ impl App {
         &'a self,
         mut body: iced::widget::Column<'a, Message>,
     ) -> iced::widget::Column<'a, Message> {
-        let mut options: Vec<_> = ArrowPreset::ALL
-            .iter()
-            .map(|&preset| (preset.to_string(), preset, ArrowStyle::preset(preset), None))
-            .collect();
-        for (label, preset, style) in [
-            (
-                "Bold",
-                ArrowPreset::Forward,
-                ArrowStyle {
-                    width_pt: 1.4,
-                    head_length_pt: 7.,
-                    head_width_pt: 2.4,
-                    ..ArrowStyle::default()
-                },
-            ),
-            (
-                "Dashed",
-                ArrowPreset::Forward,
-                ArrowStyle {
-                    pattern: LinePattern::Dashed,
-                    ..ArrowStyle::default()
-                },
-            ),
-            (
-                "Hollow",
-                ArrowPreset::Forward,
-                ArrowStyle {
-                    shape: reshiki::arrows::HeadShape::Hollow,
-                    head_length_pt: 6.,
-                    head_width_pt: 2.,
-                    ..ArrowStyle::default()
-                },
-            ),
-            (
-                "Unequal equilibrium",
-                ArrowPreset::Equilibrium,
-                ArrowStyle {
-                    equilibrium_ratio: 0.6,
-                    ..ArrowStyle::preset(ArrowPreset::Equilibrium)
-                },
-            ),
-            (
-                "Angled",
-                ArrowPreset::Forward,
-                ArrowStyle {
-                    shape: reshiki::arrows::HeadShape::Open,
-                    ..ArrowStyle::default()
-                },
-            ),
-            (
-                "Half arrow",
-                ArrowPreset::Forward,
-                ArrowStyle {
-                    head: reshiki::arrows::Head::Left,
-                    ..ArrowStyle::default()
-                },
-            ),
-        ] {
-            options.push((label.into(), preset, style, None));
-        }
-        for body in [Body::Block, Body::Hollow, Body::Chevron, Body::Gradient] {
-            let mut style = ArrowStyle::default();
-            style.set_body(body);
-            // The Hollow head preset is already in the list above.
-            let label = if body == Body::Hollow {
-                "Hollow block".into()
-            } else {
-                body.to_string()
-            };
-            options.push((label, ArrowPreset::Forward, style, None));
-        }
-        // One arc preset keeps the palette on screen; Sweep (°) sets any angle.
-        options.push((
-            "Arc".into(),
-            ArrowPreset::Forward,
-            ArrowStyle::default(),
-            Some(180.),
-        ));
-        for presets in options.chunks(3) {
+        for presets in arrow_options().chunks(3) {
             let mut line = row![].spacing(8);
-            for (label, preset, style, arc) in presets {
+            for option in presets {
+                let ArrowOption {
+                    label,
+                    preset,
+                    style,
+                    arc,
+                } = option;
                 let mut arrow = Arrow::new(
                     1,
                     Point::new(0., 0.),
@@ -705,14 +741,8 @@ impl App {
                             && self.tab.arrows.style == *style
                             && self.tab.arrows.arc == *arc,
                     ))
-                    .on_press(Message::Palette(if let Some(sweep) = arc {
-                        Action::ArcArrow(*preset, style.clone(), *sweep)
-                    } else if style == &ArrowStyle::preset(*preset) {
-                        Action::Arrow(*preset)
-                    } else {
-                        Action::ArrowVariant(*preset, style.clone())
-                    })),
-                    format!("{label}\n{}", preset.meaning()),
+                    .on_press(Message::Palette(option.action())),
+                    format!("{}\n{}", option.command_name(), preset.meaning()),
                     tooltip::Position::Bottom,
                 ));
             }
