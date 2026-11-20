@@ -77,7 +77,7 @@ impl Row {
 
 /// The drawing with each reaction row in `selection` cleaned up, or the whole
 /// drawing's when nothing is selected. With `style_bond_length`, molecules
-/// are first scaled to the drawing style's bond length.
+/// with a visible 2D drawing are first scaled to the drawing style's bond length.
 pub fn clean(
     doc: &Document,
     selection: &[u64],
@@ -87,14 +87,25 @@ pub fn clean(
     let scope = scope(doc, selection);
     let units = crate::editing::groups(doc, &scope);
     let atoms: HashSet<u64> = doc.atoms.iter().map(|a| a.id).collect();
+    let molecule = |unit: &[u64]| unit.iter().any(|id| atoms.contains(id));
+    let grouped: HashSet<_> = doc
+        .groups
+        .iter()
+        .flat_map(|g| &g.members)
+        .copied()
+        .collect();
     let straight: HashMap<u64, usize> = units
         .iter()
         .enumerate()
-        .filter(|(_, unit)| !unit.iter().any(|id| atoms.contains(id)))
+        .filter(|(_, unit)| !molecule(unit))
         .filter_map(|(i, unit)| {
-            let mut arrows = doc.arrows.iter().filter(|a| unit.contains(&a.id));
-            let arrow = arrows.next()?;
-            (arrows.next().is_none()
+            let arrow = doc.arrows.iter().find(|a| unit.contains(&a.id))?;
+            (!grouped.contains(&arrow.id)
+                && unit.iter().all(|id| {
+                    *id == arrow.id
+                        || crate::arrow_labels::of(doc, arrow.id)
+                            .any(|label| label.annotation == *id)
+                })
                 && crate::arrow_labels::supports(arrow)
                 && arrow.start.distance(arrow.end) > 1e-3)
                 .then_some((arrow.id, i))
@@ -103,7 +114,6 @@ pub fn clean(
     if straight.is_empty() {
         return Err("Select a reaction with a straight arrow to clean up".into());
     }
-    let molecule = |unit: &[u64]| unit.iter().any(|id| atoms.contains(id));
     // Molecules and `+` signs can sit on an axis; other text only beside an arrow.
     let sign = |unit: &[u64]| {
         let [id] = unit else { return false };
@@ -270,13 +280,37 @@ pub fn clean(
             .iter()
             .flat_map(|(_, p)| p.keys().copied())
             .collect();
-        for unit in units
+        for core in cores
             .iter()
             .enumerate()
-            .filter(|(i, unit)| members.contains(i) && molecule(unit))
-            .map(|(_, unit)| unit)
+            .filter(|(i, core)| members.contains(i) && molecule(core))
+            .map(|(_, core)| core)
         {
-            scale_to(&mut out, unit, bond);
+            let mut remaining: HashSet<_> = core.iter().copied().collect();
+            for id in core {
+                if !remaining.contains(id) {
+                    continue;
+                }
+                // Bonds and abbreviations join atoms into one molecule to scale.
+                let mut component = vec![*id];
+                loop {
+                    let grown: HashSet<u64> = doc
+                        .expand_abbreviation_selection(&component)
+                        .into_iter()
+                        .flat_map(|id| crate::molecule_names::component(doc, id))
+                        .collect();
+                    if grown.len() == component.len() {
+                        break;
+                    }
+                    component = grown.into_iter().collect();
+                }
+                let hidden = component.iter().any(|id| crate::models3d::hides(doc, *id));
+                component.retain(|id| remaining.remove(id));
+                // A 3D-only molecule can move with its model without reshaping its drawing.
+                if !hidden {
+                    scale_to(&mut out, &component, bond);
+                }
+            }
         }
     }
     // One length for every arrow: the longest any needs for the text or
@@ -441,11 +475,11 @@ fn measure(
 }
 
 /// Scale a molecule about its centre so its median bond is `bond`.
-fn scale_to(doc: &mut Document, unit: &[u64], bond: f32) {
+fn scale_to(doc: &mut Document, atoms: &[u64], bond: f32) {
     let position: HashMap<u64, Point> = doc
         .atoms
         .iter()
-        .filter(|a| unit.contains(&a.id))
+        .filter(|a| atoms.contains(&a.id))
         .map(|a| (a.id, a.position))
         .collect();
     let mut lengths: Vec<f32> = doc
@@ -466,11 +500,10 @@ fn scale_to(doc: &mut Document, unit: &[u64], bond: f32) {
         (_, Some(a), Some(b)) => (a + b) / 2.,
         _ => return,
     };
-    let atoms: Vec<u64> = position.keys().copied().collect();
-    let centre = crate::editing::center(doc, &atoms);
     // A molecule already at the length stays exactly as it is.
     if (bond / median - 1.).abs() > 1e-4 {
-        crate::editing::transform_about(doc, &atoms, centre, bond / median, 0.);
+        let centre = crate::editing::center(doc, atoms);
+        crate::editing::transform_about(doc, atoms, centre, bond / median, 0.);
     }
 }
 

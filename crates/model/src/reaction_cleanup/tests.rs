@@ -195,6 +195,86 @@ fn style_bond_length_redraws_molecules_at_the_style_length() {
 }
 
 #[test]
+fn style_bond_length_moves_a_3d_only_molecule_without_scaling_its_drawing() {
+    use crate::models3d::{Display, ForceField, Model3d, Placed};
+
+    let mut doc = Document::default();
+    let bond = doc.drawing_style.bond_length_world;
+    let atoms = chain(&mut doc, 2, Point::new(0., 30.), bond * 2.);
+    let mut model = Model3d::new(
+        &doc,
+        atoms
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| Placed {
+                id,
+                xyz: [i as f32, 0., 0.],
+            })
+            .collect(),
+        vec![],
+        ForceField::Mmff94s,
+    );
+    model.display = Display::ThreeD;
+    doc.models.push(model);
+    arrow(&mut doc, Point::new(200., 0.), Point::new(260., 0.));
+
+    let placed = clean(&doc, &[], false).unwrap();
+    let cleaned = clean(&doc, &[], true).unwrap();
+    assert_ne!(centre(&cleaned, &atoms), centre(&doc, &atoms));
+    assert!(close(centre(&cleaned, &atoms).y, 0.));
+    for id in atoms {
+        assert_eq!(cleaned.atom(id), placed.atom(id));
+    }
+}
+
+#[test]
+fn style_bond_length_scales_grouped_molecules_about_their_own_centres() {
+    let mut doc = Document::default();
+    let bond = doc.drawing_style.bond_length_world;
+    let a = chain(&mut doc, 2, Point::new(0., 0.), bond);
+    let b = chain(&mut doc, 2, Point::new(80., 22.), bond * 2.);
+    doc.group_selection(&[a[0], b[0]]).unwrap();
+    arrow(&mut doc, Point::new(240., 0.), Point::new(300., 0.));
+
+    let cleaned = clean(&doc, &[], true).unwrap();
+    for molecule in [&a, &b] {
+        let p = |id| cleaned.atom(id).unwrap().position;
+        assert!(close(p(molecule[0]).distance(p(molecule[1])), bond));
+    }
+    let offset = |doc: &Document| {
+        let (a, b) = (
+            crate::editing::center(doc, &a),
+            crate::editing::center(doc, &b),
+        );
+        b.offset(-a.x, -a.y)
+    };
+    assert!(close(offset(&doc).distance(offset(&cleaned)), 0.));
+}
+
+#[test]
+fn style_bond_length_scales_a_collapsed_ligand_with_its_metal() {
+    // The ligand's atoms come before the metal, and only the abbreviation
+    // joins the ring to the metal's bond.
+    let mut doc = Document::default();
+    let bond = doc.drawing_style.bond_length_world;
+    let ligand = chain(&mut doc, 2, Point::new(0., 30.), bond * 2.);
+    let attachment =
+        crate::attachments::add(&mut doc, &ligand, crate::attachments::Kind::MultiCenter).unwrap();
+    let at = doc.atom(attachment).unwrap().position;
+    let metal = doc.add_atom("Fe", at.offset(bond * 2., 0.));
+    doc.add_bond(attachment, metal, 1, "plain");
+    doc.contract(&[ligand[0], ligand[1], attachment], "L", "L")
+        .unwrap();
+    arrow(&mut doc, Point::new(200., 0.), Point::new(260., 0.));
+
+    let cleaned = clean(&doc, &[], true).unwrap();
+    for (a, b) in [(ligand[0], ligand[1]), (attachment, metal)] {
+        let p = |id| cleaned.atom(id).unwrap().position;
+        assert!(close(p(a).distance(p(b)), bond));
+    }
+}
+
+#[test]
 fn a_selection_cleans_only_its_own_reaction() {
     let (mut doc, _, first) = untidy();
     let selected = doc.all_ids();
@@ -205,6 +285,40 @@ fn a_selection_cleans_only_its_own_reaction() {
     assert_ne!(the_arrow(&cleaned, first), the_arrow(&doc, first));
     assert_eq!(the_arrow(&cleaned, second), the_arrow(&doc, second));
     assert_eq!(centre(&cleaned, &other), centre(&doc, &other));
+}
+
+#[test]
+fn grouped_arrows_stay_put_and_arrows_with_attached_labels_are_cleaned() {
+    let (mut doc, _, labelled) = untidy();
+    let grouped = arrow(&mut doc, Point::new(550., 0.), Point::new(610., 0.));
+    // Grouped with only its own label, so the group alone keeps it out.
+    let caption = text(&mut doc, "Step 2", Point::new(580., -35.));
+    let label = text(&mut doc, "heat", Point::new(290., -35.));
+    for (arrow, annotation) in [(grouped, caption), (labelled, label)] {
+        doc.arrow_labels.push(crate::arrow_labels::ArrowLabel {
+            arrow,
+            annotation,
+            side: crate::arrow_labels::Side::Above,
+            gap: None,
+        });
+    }
+    doc.group_selection(&[grouped, caption]).unwrap();
+    let before = doc.clone();
+    crate::arrow_labels::reconcile(&mut doc, &before);
+
+    let cleaned = clean(&doc, &[], false).unwrap();
+    assert_eq!(the_arrow(&cleaned, grouped), the_arrow(&doc, grouped));
+    assert_eq!(centre(&cleaned, &[caption]), centre(&doc, &[caption]));
+    let a = the_arrow(&cleaned, labelled);
+    assert!(close(
+        a.start.distance(a.end),
+        doc.drawing_style.bond_length_world * 3.2
+    ));
+    assert_eq!(cleaned.arrow_labels, doc.arrow_labels);
+    assert!(close(
+        centre(&cleaned, &[label]).x,
+        a.start.lerp(a.end, 0.5).x
+    ));
 }
 
 #[test]
