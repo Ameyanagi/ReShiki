@@ -89,6 +89,152 @@ fn ink(doc: &Document, part: &[u64]) -> (Point, Point) {
     crate::scene::selection_bounds(doc, part).unwrap()
 }
 
+fn suzuki(shape: Shape) -> Document {
+    let mut doc = Document::from_json(include_bytes!(
+        "../../../../tests/fixtures/cycles/tidy-before.rsk"
+    ))
+    .unwrap();
+    let g = doc.graphics.iter_mut().find(|g| g.id == 191).unwrap();
+    let center = g.cycle_circle().0;
+    g.cycle.as_mut().unwrap().shape = shape;
+    g.axis_x.x *= 1.3;
+    g.axis_x.y *= 1.3;
+    g.axis_y.x *= 0.8;
+    g.axis_y.y *= 0.8;
+    g.origin = center.offset(
+        -(g.axis_x.x + g.axis_y.x) * 0.5,
+        -(g.axis_x.y + g.axis_y.y) * 0.5,
+    );
+    doc
+}
+
+fn save_suzuki_qa(shape: Shape, before: &Document, after: &Document) {
+    if let Some(dir) = std::env::var_os("RESHIKI_CYCLE_SHAPE_JOIN_QA_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for (state, doc) in [("before", before), ("preview", after)] {
+            let name = format!("noncircle-suzuki-{shape:?}-{state}");
+            std::fs::write(dir.join(format!("{name}.svg")), crate::scene::svg(doc)).unwrap();
+            std::fs::write(dir.join(format!("{name}.rsk")), doc.file_json().unwrap()).unwrap();
+        }
+        let g = after.graphics.iter().find(|g| g.id == 191).unwrap();
+        std::fs::write(
+            dir.join(format!("{shape:?}-drawn.txt")),
+            format!("{:#?}", cycles::drawn(after, g)),
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn actual_suzuki_tidy_keeps_reversible_contacts_in_order_on_the_painted_lane() {
+    for shape in [
+        Shape::Circle,
+        Shape::Ellipse,
+        Shape::RoundedRectangle,
+        Shape::Rectangle,
+    ] {
+        let mut doc = suzuki(shape);
+        let before = doc.clone();
+        let roles = doc
+            .graphics
+            .iter()
+            .find(|g| g.id == 191)
+            .unwrap()
+            .cycle
+            .clone();
+        assert!(cycles::tidy(&mut doc, 191));
+        let g = doc.graphics.iter().find(|g| g.id == 191).unwrap();
+        let cycle = g.cycle.as_ref().unwrap();
+        assert_eq!(g.cycle, roles);
+        let drawn = cycles::drawn(&doc, g);
+        let shafts: Vec<_> = drawn
+            .arrows
+            .iter()
+            .zip(&drawn.arcs)
+            .filter(|(_, step)| **step == Some(1))
+            .map(|(a, _)| super::super::shapes::Shaft::from_arrow(a).unwrap())
+            .collect();
+        let sides: Vec<_> = drawn
+            .arrows
+            .iter()
+            .zip(&drawn.arcs)
+            .filter(|(_, step)| step.is_none())
+            .map(|(a, _)| a)
+            .collect();
+        assert_eq!(shafts.len(), 2);
+        // The fixture stores step0's reagent, then step1's reagent/product.
+        let reagent = sides[1];
+        let product = sides[2];
+        let part_a = center_of(ink(&doc, &cycle.steps[1].reagents[0]));
+        let part_b = center_of(ink(&doc, &cycle.steps[1].products[0]));
+        let lane = |point| {
+            shafts
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| {
+                    a.project(point)
+                        .unwrap()
+                        .distance
+                        .total_cmp(&b.project(point).unwrap().distance)
+                })
+                .unwrap()
+                .0
+        };
+        let lane_a = lane(part_a);
+        let lane_b = lane(part_b);
+        assert_eq!(lane_a, lane_b, "{shape:?}: same outside painted lane");
+        let shaft = &shafts[lane_a];
+        let a = shaft.project(reagent.end).unwrap();
+        let b = shaft.project(product.start).unwrap();
+        assert!(a.distance < 0.01 && b.distance < 0.01, "{shape:?}");
+        let preferred_order = shaft.project(part_b).unwrap().s - shaft.project(part_a).unwrap().s;
+        let actual_order = b.s - a.s;
+        assert!(preferred_order * actual_order > 0., "{shape:?}");
+        assert!(
+            actual_order.abs() >= f64::from(doc.drawing_style.bond_length_world) - 0.02,
+            "{shape:?}: joined only {} world units apart",
+            actual_order.abs()
+        );
+        let once = doc.clone();
+        assert!(!cycles::tidy(&mut doc, 191), "{shape:?}");
+        assert_eq!(doc, once);
+        save_suzuki_qa(shape, &before, &doc);
+    }
+}
+
+#[test]
+fn actual_rectangular_suzuki_keeps_the_inside_reagent_and_its_connector_clear() {
+    let mut doc = suzuki(Shape::Rectangle);
+    assert!(cycles::tidy(&mut doc, 191));
+    let g = doc.graphics.iter().find(|g| g.id == 191).unwrap();
+    let cycle = g.cycle.as_ref().unwrap();
+    let bounds = ink(&doc, &cycle.steps[0].reagents[0]);
+    let (lo, hi) = super::super::grown(bounds, DEFAULT.world(cycle.gap_pt));
+    let perimeter = cycles::outline(g).unwrap();
+    for point in [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)] {
+        assert_eq!(perimeter.contains(point), Some(true), "{point:?}");
+    }
+    let drawn = cycles::drawn(&doc, g);
+    let connector = drawn
+        .arrows
+        .iter()
+        .zip(&drawn.arcs)
+        .find(|(_, step)| step.is_none())
+        .map(|(a, _)| a)
+        .unwrap();
+    for i in 0..=128 {
+        let point = connector.point(i as f32 / 128.);
+        assert!(
+            !super::super::contains(bounds, point),
+            "the reagent connector entered its molecule: {point:?}"
+        );
+    }
+    let once = doc.clone();
+    assert!(!cycles::tidy(&mut doc, 191));
+    assert_eq!(doc, once);
+}
+
 #[test]
 fn noncircle_tidy_uses_ordered_equal_distance_under_both_directions_and_reflection() {
     for shape in [Shape::Ellipse, Shape::RoundedRectangle, Shape::Rectangle] {

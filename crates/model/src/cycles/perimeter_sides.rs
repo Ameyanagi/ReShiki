@@ -1,39 +1,88 @@
 //! Side contacts on the resolved, open, painted step shafts.
-use super::super::{Projection, center_of, shapes::Shaft, side_arrow};
+use super::super::{Projection, center_of, shapes::Shaft, side_arrow, spaced_joins};
 use crate::{
     arrows::ArrowStyle,
     document::{Arrow, Point},
 };
 
-pub(super) fn arrow<'a>(
-    id: u64,
-    shafts: impl IntoIterator<Item = &'a Shaft>,
+#[derive(Clone, Copy)]
+struct Attachment<'a> {
+    shaft: &'a Shaft,
+    lane: usize,
     ink: (Point, Point),
     incoming: bool,
+    projected: f64,
+    s: f64,
+}
+
+pub(super) fn arrows<'a>(
+    id: u64,
+    shafts: impl IntoIterator<Item = &'a Shaft>,
+    parts: &[(bool, (Point, Point))],
     bond: f32,
     style: &ArrowStyle,
-) -> Option<Arrow> {
-    let center = center_of(ink);
-    // A tie keeps the first (outside, forward) lane. In particular, a
-    // reversible contact never floats on the undrawn baseline between lanes.
-    let mut best: Option<(&Shaft, Projection)> = None;
-    for shaft in shafts {
-        let projected = shaft.project(center)?;
-        if best
-            .as_ref()
-            .is_none_or(|(_, old)| projected.distance < old.distance)
-        {
-            best = Some((shaft, projected));
+) -> Vec<Arrow> {
+    let shafts: Vec<_> = shafts.into_iter().collect();
+    let mut attachments = vec![];
+    for &(incoming, ink) in parts {
+        let center = center_of(ink);
+        // A tie keeps the first (outside, forward) lane. A reversible
+        // contact never floats on the undrawn baseline between lanes.
+        let mut best: Option<(usize, &Shaft, Projection)> = None;
+        for (lane, &shaft) in shafts.iter().enumerate() {
+            let Some(projected) = shaft.project(center) else {
+                continue;
+            };
+            if best
+                .as_ref()
+                .is_none_or(|(_, _, old)| projected.distance < old.distance)
+            {
+                best = Some((lane, shaft, projected));
+            }
+        }
+        let Some((lane, shaft, projected)) = best else {
+            continue;
+        };
+        let ahead = (1.2 * f64::from(bond)).max(1.1 * projected.distance);
+        attachments.push(Attachment {
+            shaft,
+            lane,
+            ink,
+            incoming,
+            projected: projected.s,
+            s: (projected.s + if incoming { ahead } else { -ahead })
+                .clamp(0.15 * shaft.length(), 0.85 * shaft.length()),
+        });
+    }
+    for lane in 0..shafts.len() {
+        let mut ordered: Vec<_> = attachments
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, a)| a.lane == lane)
+            .collect();
+        ordered.sort_by(|(_, a), (_, b)| a.projected.total_cmp(&b.projected));
+        let Some((_, first)) = ordered.first().filter(|_| ordered.len() > 1) else {
+            continue;
+        };
+        let length = first.shaft.length();
+        let gap = (f64::from(bond) / length).min(0.7 / (ordered.len() - 1) as f64) as f32;
+        let preferred: Vec<_> = ordered.iter().map(|(_, a)| (a.s / length) as f32).collect();
+        for ((index, _), t) in ordered.into_iter().zip(spaced_joins(&preferred, gap)) {
+            if let Some(attachment) = attachments.get_mut(index) {
+                attachment.s = f64::from(t) * length;
+            }
         }
     }
-    let (shaft, projected) = best?;
-    let ahead = (1.2 * f64::from(bond)).max(1.1 * projected.distance);
-    let s = (projected.s + if incoming { ahead } else { -ahead })
-        .clamp(0.15 * shaft.length(), 0.85 * shaft.length());
-    // An entering reagent continues along the leaving side of a corner;
-    // a departing product follows the arriving side. Never average the turn.
-    let (touch, tangent) = shaft.sample(s, !incoming)?;
-    Some(side_arrow(id, touch, tangent, ink, incoming, style))
+    attachments
+        .into_iter()
+        .filter_map(|a| {
+            // An entering reagent continues along the leaving side of a
+            // corner; a departing product follows the arriving side.
+            let (touch, tangent) = a.shaft.sample(a.s, !a.incoming)?;
+            Some(side_arrow(id, touch, tangent, a.ink, a.incoming, style))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -57,6 +106,42 @@ mod tests {
             },
         ))
         .unwrap()
+    }
+
+    fn arrow<'a>(
+        id: u64,
+        shafts: impl IntoIterator<Item = &'a Shaft>,
+        ink: (Point, Point),
+        incoming: bool,
+        bond: f32,
+        style: &ArrowStyle,
+    ) -> Option<Arrow> {
+        arrows(id, shafts, &[(incoming, ink)], bond, style)
+            .into_iter()
+            .next()
+    }
+
+    #[test]
+    fn paired_contacts_keep_projection_order_and_one_bond_of_painted_lane_clearance() {
+        let shafts = [
+            straight(Point::new(0., -10.), Point::new(1000., -10.)),
+            straight(Point::new(1000., 10.), Point::new(0., 10.)),
+        ];
+        for (lane, y, first, second) in [(0, -50., 450., 550.), (1, 50., 550., 450.)] {
+            let ink = |x: f32| (Point::new(x - 1., y - 1.), Point::new(x + 1., y + 1.));
+            let parts = [(true, ink(first)), (false, ink(second))];
+            let routes = arrows(1, &shafts, &parts, 100., &ArrowStyle::DEFAULT);
+            assert_eq!(routes.len(), 2);
+            let a = shafts[lane].project(routes[0].end).unwrap();
+            let b = shafts[lane].project(routes[1].start).unwrap();
+            assert!(a.distance < 0.001 && b.distance < 0.001);
+            assert!(b.s - a.s >= 99.99, "{lane}: {} then {}", a.s, b.s);
+            assert!(a.s >= 150. && b.s <= 850.);
+            assert_eq!(
+                routes,
+                arrows(1, &shafts, &parts, 100., &ArrowStyle::DEFAULT)
+            );
+        }
     }
 
     #[test]

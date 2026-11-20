@@ -718,11 +718,6 @@ struct SideAttachment {
 /// otherwise pull two neighbouring connectors onto the same point. Pooling
 /// adjacent conflicts moves the preferred joins as little as possible.
 fn separate_attachments(attachments: &mut [SideAttachment], bond: f32) {
-    #[derive(Clone, Copy)]
-    struct Block {
-        sum: f32,
-        count: usize,
-    }
     for lane in 0..2 {
         let mut ordered: Vec<_> = attachments
             .iter()
@@ -739,38 +734,51 @@ fn separate_attachments(attachments: &mut [SideAttachment], bond: f32) {
             continue;
         }
         let gap = (bond / length).min(0.7 / (ordered.len() - 1) as f32);
-        let maximum = 0.85 - gap * (ordered.len() - 1) as f32;
-        let mut blocks = vec![];
-        for (i, (_, attachment)) in ordered.iter().enumerate() {
-            blocks.push(Block {
-                sum: attachment.t - i as f32 * gap,
-                count: 1,
-            });
-            while let Some([a, b]) = blocks.last_chunk::<2>() {
-                if a.sum / a.count as f32 <= b.sum / b.count as f32 {
-                    break;
-                }
-                let merged = Block {
-                    sum: a.sum + b.sum,
-                    count: a.count + b.count,
-                };
-                blocks.truncate(blocks.len() - 2);
-                blocks.push(merged);
-            }
-        }
-        let mut positions = vec![];
-        for block in blocks {
-            let base = (block.sum / block.count as f32).clamp(0.15, maximum.max(0.15));
-            for _ in 0..block.count {
-                positions.push(base + positions.len() as f32 * gap);
-            }
-        }
+        let preferred: Vec<_> = ordered.iter().map(|(_, a)| a.t).collect();
+        let positions = spaced_joins(&preferred, gap);
         for ((index, _), t) in ordered.into_iter().zip(positions) {
             if let Some(attachment) = attachments.get_mut(index) {
                 attachment.t = t;
             }
         }
     }
+}
+
+/// Closest ordered joins within the central 70% of a painted lane.
+/// Circle and native noncircle shafts use the same numeric pooling rule.
+fn spaced_joins(preferred: &[f32], gap: f32) -> Vec<f32> {
+    #[derive(Clone, Copy)]
+    struct Block {
+        sum: f32,
+        count: usize,
+    }
+    let maximum = 0.85 - gap * preferred.len().saturating_sub(1) as f32;
+    let mut blocks = vec![];
+    for (i, &t) in preferred.iter().enumerate() {
+        blocks.push(Block {
+            sum: t - i as f32 * gap,
+            count: 1,
+        });
+        while let Some([a, b]) = blocks.last_chunk::<2>() {
+            if a.sum / a.count as f32 <= b.sum / b.count as f32 {
+                break;
+            }
+            let merged = Block {
+                sum: a.sum + b.sum,
+                count: a.count + b.count,
+            };
+            blocks.truncate(blocks.len() - 2);
+            blocks.push(merged);
+        }
+    }
+    let mut positions = vec![];
+    for block in blocks {
+        let base = (block.sum / block.count as f32).clamp(0.15, maximum.max(0.15));
+        for _ in 0..block.count {
+            positions.push(base + positions.len() as f32 * gap);
+        }
+    }
+    positions
 }
 
 /// A side arrow between a part's ink and the point where it touches the

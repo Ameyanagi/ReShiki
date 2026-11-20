@@ -137,7 +137,19 @@ fn place(
                 offset.y *= scale;
             }
             let candidate = frame.point.offset(offset.x, offset.y);
-            if candidate.is_finite() && outline.contains(candidate) == Some(inside) {
+            let fits_inside = || {
+                let padding = (gap - bond).max(0.);
+                let (x, y) = (w * 0.5 + padding, h * 0.5 + padding);
+                [(-x, -y), (x, -y), (x, y), (-x, y)]
+                    .into_iter()
+                    .all(|(x, y)| outline.contains(candidate.offset(x, y)) == Some(true))
+            };
+            if candidate.is_finite()
+                && outline.contains(candidate) == Some(inside)
+                // Convex native outlines contain the whole box exactly when
+                // all four corners fit. A center near a turn is insufficient.
+                && (!inside || fits_inside())
+            {
                 return Some(candidate);
             }
         }

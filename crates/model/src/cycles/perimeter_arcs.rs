@@ -193,6 +193,7 @@ pub(super) fn resolve(
         }
         // Hidden steps keep virtual shape-aware targets for their sides.
         // Every part consumes its own ink entry, even when nothing is drawn.
+        let mut side_parts = vec![];
         for incoming in step
             .reagents
             .iter()
@@ -202,17 +203,17 @@ pub(super) fn resolve(
             let Some(&Some(ink)) = parts.next() else {
                 continue;
             };
-            if let Some(arrow) = sides::arrow(
-                g.id,
-                shafts.iter().filter_map(Option::as_ref),
-                grown(ink, gap),
-                incoming,
-                doc.drawing_style.bond_length_world,
-                &style,
-            ) {
-                out.arrows.push(arrow);
-                out.arcs.push(None);
-            }
+            side_parts.push((incoming, grown(ink, gap)));
+        }
+        for arrow in sides::arrows(
+            g.id,
+            shafts.iter().filter_map(Option::as_ref),
+            &side_parts,
+            doc.drawing_style.bond_length_world,
+            &style,
+        ) {
+            out.arrows.push(arrow);
+            out.arcs.push(None);
         }
         if !step.name.trim().is_empty()
             && let (Some(&first), Some(&last)) = (anchors.get(s), anchors.get((s + 1) % n))
