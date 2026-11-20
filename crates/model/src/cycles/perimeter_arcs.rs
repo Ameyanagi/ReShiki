@@ -1,4 +1,4 @@
-//! Noncircle shafts. Side-path consumers remain separate from the perimeter.
+//! Noncircle step shafts and side contacts on their resolved native geometry.
 use super::{Drawn, Outline, boxes, center_of, contains, grown};
 use crate::{
     arrows::{ArrowStyle, Preset},
@@ -13,8 +13,10 @@ mod tests;
 
 #[path = "perimeter_deform.rs"]
 mod deform;
+#[path = "perimeter_sides.rs"]
+mod sides;
 
-/// Replace step shafts while retaining legacy side arrows and labels.
+/// Replace step shafts and side arrows while retaining legacy labels.
 /// Each reversible lane has its own explicit arc-to-step association.
 pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mut Drawn) {
     let Some(cycle) = g.cycle.as_deref() else {
@@ -62,13 +64,13 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
         })
         .collect();
     let gap = DEFAULT.world(cycle.gap_pt);
-    let mut arrows: Vec<_> = cycle
+    let arrows: Vec<_> = cycle
         .steps
         .iter()
         .enumerate()
         .take(n)
         .map(|(s, step)| {
-            if step.hidden {
+            if step.hidden && step.reagents.is_empty() && step.products.is_empty() {
                 return None;
             }
             let (&first, &last) = (anchors.get(s)?, anchors.get((s + 1) % n)?);
@@ -124,39 +126,49 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
             }
         })
         .collect();
-    let mut replaced = vec![false; n];
-    let (mut next_arrows, mut next_arcs) = (vec![], vec![]);
-    for (arrow, step) in std::mem::take(&mut out.arrows)
-        .into_iter()
-        .zip(std::mem::take(&mut out.arcs))
-    {
-        if let Some(s) = step {
-            if let Some(done) = replaced.get_mut(s) {
-                if !*done && let Some(arrows) = arrows.get_mut(s).and_then(Option::take) {
-                    for arrow in arrows {
-                        next_arrows.push(arrow);
-                        next_arcs.push(Some(s));
-                    }
-                }
-                *done = true;
-            }
+    let mut parts = bounds.iter().skip(n);
+    out.arrows.clear();
+    out.arcs.clear();
+    for (s, (step, arrows)) in cycle.steps.iter().zip(arrows).enumerate() {
+        let arrows = arrows.unwrap_or_default();
+        let shafts: Vec<_> = if step.reagents.is_empty() && step.products.is_empty() {
+            vec![]
         } else {
-            next_arrows.push(arrow);
-            next_arcs.push(step);
-        }
-    }
-    // A Circle's shorter surrogate may have had no room for a shaft that
-    // fits the chosen perimeter. Do not make its old visibility a condition.
-    for (s, arrow) in arrows.into_iter().enumerate() {
-        if let Some(arrows) = arrow {
+            arrows
+                .iter()
+                .filter_map(super::shapes::Shaft::from_arrow)
+                .collect()
+        };
+        if !step.hidden {
             for arrow in arrows {
-                next_arrows.push(arrow);
-                next_arcs.push(Some(s));
+                out.arrows.push(arrow);
+                out.arcs.push(Some(s));
+            }
+        }
+        // Hidden steps keep virtual shape-aware targets for their sides.
+        // Every part consumes its own ink entry, even when nothing is drawn.
+        for incoming in step
+            .reagents
+            .iter()
+            .map(|_| true)
+            .chain(step.products.iter().map(|_| false))
+        {
+            let Some(&Some(ink)) = parts.next() else {
+                continue;
+            };
+            if let Some(arrow) = sides::arrow(
+                g.id,
+                &shafts,
+                grown(ink, gap),
+                incoming,
+                doc.drawing_style.bond_length_world,
+                &style,
+            ) {
+                out.arrows.push(arrow);
+                out.arcs.push(None);
             }
         }
     }
-    out.arrows = next_arrows;
-    out.arcs = next_arcs;
 }
 
 /// Clear the ink along distance, never by flattening the shaft. When an

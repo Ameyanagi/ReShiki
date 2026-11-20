@@ -328,8 +328,8 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
     }
 }
 
-// Keep legacy Circle construction analytic and unchanged. Noncircle side
-// arrows and labels still use this path until their perimeter consumers land.
+// Keep legacy Circle construction analytic and unchanged. Noncircle labels
+// still use this path until their perimeter consumer lands.
 fn drawn_circle(doc: &Document, g: &Graphic) -> Drawn {
     let Some(cycle) = &g.cycle else {
         return Drawn::default();

@@ -8,6 +8,9 @@ use kurbo::{CubicBez, ParamCurve, ParamCurveArclen};
 use serde::{Deserialize, Serialize};
 use std::f64::consts::{FRAC_PI_2, TAU};
 
+mod shaft;
+pub(super) use shaft::Shaft;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Shape {

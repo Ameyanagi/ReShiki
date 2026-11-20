@@ -5,6 +5,9 @@ use crate::{
     typography::TextFormat,
 };
 
+#[path = "perimeter_side_tests.rs"]
+mod sides;
+
 fn fixture(shape: Shape, n: usize, mirrored: bool, counterclockwise: bool) -> (Document, u64) {
     let mut doc = Document::default();
     let mut g = Graphic::dragged(
@@ -258,7 +261,7 @@ fn circle_is_exactly_the_legacy_analytic_path_including_other_features() {
 }
 
 #[test]
-fn converted_bow_and_reversible_shafts_preserve_side_arrows_and_names() {
+fn converted_bow_reversible_and_side_arrows_preserve_names() {
     let (mut doc, _) = fixture(Shape::Ellipse, 4, false, false);
     let side = doc.next_id();
     let mut reagent = doc.annotations[0].clone();
@@ -286,7 +289,8 @@ fn converted_bow_and_reversible_shafts_preserve_side_arrows_and_names() {
             .map(|(a, s)| (a.clone(), *s))
             .collect::<Vec<_>>()
     };
-    assert_eq!(retained(&actual), retained(&old));
+    assert_ne!(retained(&actual), retained(&old));
+    assert_eq!(retained(&actual).len(), 1);
     assert_eq!(actual.labels, old.labels);
     assert_eq!(actual.arcs.iter().filter(|s| **s == Some(0)).count(), 2);
     assert!(
