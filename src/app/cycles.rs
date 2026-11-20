@@ -489,11 +489,17 @@ impl App {
                 link.two_decimal_weight = self.appearance.two_decimal_weight;
             }
             reshiki::atom_labels::refresh::refresh_edited(&self.tab.doc, &mut doc);
-            if let Err(rejection) = reshiki::transaction::reconcile(&mut doc, self.tab.doc.clone())
-            {
-                self.error = true;
-                self.status = rejection.message().into();
-                return super::focus_drawing();
+            let reconciled = match reshiki::transaction::reconcile(&mut doc, self.tab.doc.clone()) {
+                Ok(reconciled) => reconciled,
+                Err(rejection) => {
+                    self.error = true;
+                    self.status = rejection.message().into();
+                    return super::focus_drawing();
+                }
+            };
+            // Match Apply's computed-label invalidation without recording history.
+            if reconciled.outcome(&doc).chemistry_changed {
+                reshiki::atom_labels::clear_computed(&mut doc);
             }
             self.tab.cycle_inputs.proposal = Some(Box::new(Proposal {
                 doc,
