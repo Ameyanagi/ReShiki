@@ -68,15 +68,16 @@ const LEAD_MM: f64 = 20.;
 const SAG: f64 = 0.15;
 
 /// One end of a hose as [`shape`] lays it: where it is, the unit vector
-/// into the hose, and how far it runs straight on (world units).
-type End = (Xy, Xy, f64);
+/// into the hose, how far it runs straight on and the radius it turns by
+/// (world units).
+type End = (Xy, Xy, f64, f64);
 
-/// The three Béziers from end `e` towards `m`, `m` excluded: straight on
+/// The three Béziers from an end towards `m`, `m` excluded: straight on
 /// for the lead, then a turn of radius `r`. A lead that ends no more than
-/// `r` short of `m` (or past it; within rounding) turns a quarter circle towards it first, so a
-/// hose doubling back to a barb loops instead of pinching; otherwise it
-/// runs straight on.
-fn leg((p, out, lead): End, m: Xy, r: f64) -> (Vec<Xy>, Xy) {
+/// `r` short of `m` (or past it; within rounding) turns a quarter circle
+/// towards it first, so a hose doubling back to a barb loops instead of
+/// pinching; otherwise it runs straight on.
+fn leg((p, out, lead, r): End, m: Xy) -> (Vec<Xy>, Xy) {
     let l = add(p, mul(out, lead));
     let side = perp(out);
     let n = if dot(side, sub(m, l)) < 0. {
@@ -107,9 +108,9 @@ fn leg((p, out, lead): End, m: Xy, r: f64) -> (Vec<Xy>, Xy) {
 
 /// A smooth line from end `a` through `m` to end `b` as six Béziers: each
 /// end's [`leg`], meeting at `m`, the chain's middle point.
-fn shape(a: End, m: Xy, b: End, r: f64) -> Vec<Xy> {
-    let (mut line, ta) = leg(a, m, r);
-    let (mut back, tb) = leg(b, m, r);
+fn shape(a: End, m: Xy, b: End) -> Vec<Xy> {
+    let (mut line, ta) = leg(a, m);
+    let (mut back, tb) = leg(b, m);
     let along = unit(sub(tb, ta), perp(a.1));
     let tangent = unit(add(unit(sub(m, ta), along), unit(sub(tb, m), along)), along);
     let (da, db) = (len(sub(m, ta)).max(1.), len(sub(tb, m)).max(1.));
@@ -219,19 +220,24 @@ fn reshape(doc: &mut Document, id: u64, ends: [(Xy, Option<Port>); 2], m: Xy) {
     }) else {
         return;
     };
-    let lead = LEAD_MM * mm;
-    // On a barb the hose runs straight on along it; a free end aims at the
-    // middle, with a lead short enough to stay short of it.
+    let (lead, turn) = (LEAD_MM * mm, TURN_WIDTHS * width * mm);
+    // On a barb the hose runs straight on along it and turns as it must; a
+    // free end aims straight at the middle, with a lead and a turn short
+    // enough to stay short of it.
     let end = |(p, barb): &(Xy, Option<Port>)| match barb {
-        Some(b) => (*p, b.dir, lead),
-        None => (
-            *p,
-            unit(sub(m, *p), [1., 0.]),
-            lead.min(len(sub(m, *p)) / 3.).max(1e-3),
-        ),
+        Some(b) => (*p, b.dir, lead, turn),
+        None => {
+            let room = len(sub(m, *p)) / 3.;
+            (
+                *p,
+                unit(sub(m, *p), [1., 0.]),
+                lead.min(room).max(1e-3),
+                turn.min(room).max(1e-3),
+            )
+        }
     };
     let [a, b] = &ends;
-    let line = shape(end(a), m, end(b), TURN_WIDTHS * width * mm);
+    let line = shape(end(a), m, end(b));
     store(doc, id, &line);
 }
 

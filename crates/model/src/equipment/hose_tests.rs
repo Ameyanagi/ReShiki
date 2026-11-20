@@ -109,6 +109,13 @@ fn clicking_away_from_the_barbs_lays_a_free_hose() {
     let start = port(&doc, hose, "a");
     assert_near(start.point, at);
     assert_near(port(&doc, hose, "b").point, add(at, [30. * start.mm, 0.]));
+    // The whole route is straight, not only its ends.
+    let g = graphic(&doc, hose);
+    let line = placed::sampled(&g.piece.as_ref().unwrap().centre_line);
+    assert!(
+        line.iter().all(|p| (p[1] - line[0][1]).abs() < 1e-3),
+        "{line:?}"
+    );
 }
 
 #[test]
