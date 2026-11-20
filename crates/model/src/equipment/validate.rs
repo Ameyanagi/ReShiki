@@ -708,8 +708,9 @@ fn attach(
             "{owner} points into the glass. Flip its direction or click the other side of the opening."
         )
     };
-    // The point that must lie on the joint's own glass.
-    let anchor = match j {
+    // Attachment points on the joint's own drawing. A point attachment repeats
+    // its anchor; an open mouth needs both rim edges.
+    let (anchors, rim_attachment) = match j {
         // A cone the piece draws itself sits on its own drawing, like a plug.
         Joint::Taper {
             draw: JointDraw::None,
@@ -720,7 +721,7 @@ fn attach(
             if gap > ATTACH_MM {
                 return Err(far(gap));
             }
-            at
+            ([at; 2], false)
         }
         Joint::Taper { size, gender, .. } => {
             let Some(t) = taper(size) else {
@@ -739,7 +740,7 @@ fn attach(
                     if near(add(at, u), filled) == 0. {
                         return Err(into());
                     }
-                    base
+                    ([base; 2], false)
                 }
                 // The generated cone's collar meets the author's tube.
                 Gender::M => {
@@ -748,15 +749,31 @@ fn attach(
                     if gap > ATTACH_MM {
                         return Err(far(gap));
                     }
-                    collar
+                    ([collar; 2], false)
                 }
             }
         }
-        Joint::Plug { .. } => {
+        Joint::Plug { size_mm, .. } => {
             let outlines: Vec<&Outline> = all.iter().map(|(_, o)| o).collect();
             let gap = near(at, &outlines);
+            let mut anchors = [at; 2];
             if gap > ATTACH_MM {
-                return Err(far(gap));
+                // The mouth's centre can lie in open air between two walls.
+                // Its diameter and axis reconstruct both physical rim edges.
+                let v = mul(perp(u), size_mm / 2.);
+                anchors = [add(at, v), add(at, mul(v, -1.))];
+                let rim_gap = anchors
+                    .iter()
+                    .map(|p| {
+                        outlines
+                            .iter()
+                            .map(|outline| distance_to_outline(*p, outline))
+                            .fold(f64::INFINITY, f64::min)
+                    })
+                    .fold(0_f64, f64::max);
+                if rim_gap > ATTACH_MM {
+                    return Err(far(gap.min(rim_gap)));
+                }
             }
             let embedded = filled
                 .iter()
@@ -764,7 +781,7 @@ fn attach(
             if !embedded && near(add(at, u), filled) == 0. {
                 return Err(into());
             }
-            at
+            (anchors, gap > ATTACH_MM)
         }
     };
     // A joint that moves with a part must sit on that part's shapes.
@@ -774,7 +791,21 @@ fn attach(
             .filter(|(s, _)| s.part.as_deref().is_some_and(|p| descends(p, k, parts)))
             .map(|(_, o)| o)
             .collect();
-        if !moving.is_empty() && near(anchor, &moving) > ATTACH_MM {
+        let attachment_gap = |anchor| {
+            if rim_attachment {
+                moving
+                    .iter()
+                    .map(|outline| distance_to_outline(anchor, outline))
+                    .fold(f64::INFINITY, f64::min)
+            } else {
+                near(anchor, &moving)
+            }
+        };
+        if !moving.is_empty()
+            && anchors
+                .iter()
+                .any(|anchor| attachment_gap(*anchor) > ATTACH_MM)
+        {
             let param = parts.get(k).map(|p| p.param.as_str()).unwrap_or(k);
             return Err(format!(
                 "{owner} moves with \"{param}\" but sits on the fixed body. Add it to the part or move it."

@@ -509,10 +509,31 @@ impl Draft {
                 .ok_or("The source shapes are missing.")?;
             let piece_id = document.next_id();
             let graphic = self.graphic_with(piece_id, definition.clone());
+            document.graphics.insert(index, graphic);
+            // Keep object links and enclosing groups on the replacement before
+            // deletion prunes the consumed shapes. Chemical targets keep their
+            // atom and bond meanings.
+            for graphic in &mut document.graphics {
+                if let Some(leader) = &mut graphic.leader {
+                    for target in [&mut leader.start, &mut leader.end].into_iter().flatten() {
+                        if let crate::leaders::Target::Object { id } = target
+                            && ids.contains(id)
+                        {
+                            *id = piece_id;
+                        }
+                    }
+                }
+            }
+            for group in &mut document.groups {
+                for member in &mut group.members {
+                    if ids.contains(member) {
+                        *member = piece_id;
+                    }
+                }
+                group.members.sort_unstable();
+                group.members.dedup();
+            }
             document.delete(&ids);
-            document
-                .graphics
-                .insert(index.min(document.graphics.len()), graphic);
             (piece_id, revise::Outcome::default())
         };
         document.piece_definitions = placed::used(&document);

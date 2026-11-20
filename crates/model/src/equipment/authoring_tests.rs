@@ -497,3 +497,209 @@ fn an_incompatible_standard_socket_never_replaces_the_drawn_end() {
     }
     assert_eq!(doc, original);
 }
+
+#[test]
+fn replacing_sources_keeps_object_callouts_and_chemistry_targets() {
+    use crate::leaders::{self, Target};
+
+    let (mut doc, body, edges) = vessel();
+    let other = rectangle(&mut doc, Point::new(30., 0.), Point::new(40., 10.), false);
+    let a = doc.add_atom("C", Point::new(400., 0.));
+    let b = doc.add_atom("O", Point::new(440., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let targets = [
+        Target::Object { id: body },
+        Target::Object { id: other },
+        Target::Atom { atom: a },
+        Target::Molecule { atom: a },
+        Target::Bond {
+            a,
+            b,
+            fraction: 0.5,
+        },
+    ];
+    let cards: Vec<_> = targets
+        .iter()
+        .map(|target| leaders::add_callout(&mut doc, target.clone(), "Keep this link").unwrap())
+        .collect();
+    let original = doc.clone();
+    let mut draft = Draft::from_selection(&doc, &[body, other]).unwrap();
+    draft.calibrate(edges, 10.).unwrap();
+    let accepted = draft.accept(&doc, "lab/linked-vessel").unwrap();
+    assert_eq!(doc, original);
+    let piece_id = accepted.piece_id;
+    let mut result = accepted.document;
+    let _ = crate::transaction::reconcile(&mut result, original).unwrap();
+    for (card, target) in cards.into_iter().zip(targets) {
+        let line = result
+            .graphics
+            .iter()
+            .find_map(|g| {
+                g.leader
+                    .as_ref()
+                    .filter(|leader| leader.start == Some(Target::Object { id: card }))
+            })
+            .unwrap();
+        let expected = match target {
+            Target::Object { .. } => Target::Object { id: piece_id },
+            other => other,
+        };
+        assert_eq!(line.end, Some(expected));
+    }
+}
+
+#[test]
+fn replacing_sources_keeps_groups_added_while_the_draft_is_open() {
+    let (mut doc, body, edges) = vessel();
+    let other = rectangle(&mut doc, Point::new(30., 0.), Point::new(40., 10.), false);
+    doc.group_selection(&[body, other]).unwrap();
+    let mut draft = Draft::from_selection(&doc, &[body]).unwrap();
+    draft.calibrate(edges, 10.).unwrap();
+
+    let atom = doc.add_atom("N", Point::new(400., 0.));
+    doc.group_selection(&[body, atom]).unwrap();
+    let outer = doc.groups.last_mut().unwrap();
+    outer.integral = true;
+    let group_id = outer.id;
+    let original = doc.clone();
+    let accepted = draft.accept(&doc, "lab/grouped-vessel").unwrap();
+    assert_eq!(doc, original);
+    let group = accepted
+        .document
+        .groups
+        .iter()
+        .find(|g| g.id == group_id)
+        .expect("the replacement keeps its group with the unrelated atom");
+    assert!(group.integral);
+    let mut expected = vec![atom, accepted.piece_id];
+    expected.sort_unstable();
+    assert_eq!(group.members, expected);
+    accepted.document.validate().unwrap();
+}
+
+#[test]
+fn a_plug_can_join_the_rim_of_an_open_native_outline() {
+    let mut doc = Document::default();
+    for (from, to) in [
+        (Point::new(-10., 0.), Point::new(-10., 50.)),
+        (Point::new(10., 0.), Point::new(10., 50.)),
+        (Point::new(-10., 50.), Point::new(10., 50.)),
+    ] {
+        let id = doc.next_id();
+        doc.graphics.push(Graphic::dragged(
+            id,
+            GraphicKind::Line,
+            from,
+            to,
+            Default::default(),
+            Default::default(),
+            false,
+        ));
+    }
+    let original = doc.clone();
+    let edges = [Point::new(-10., 0.), Point::new(10., 0.)];
+    let mut draft = Draft::from_selection(&doc, &doc.all_ids()).unwrap();
+    draft.calibrate(edges, 10.).unwrap();
+    assert!(draft.rim(edges).unwrap().ambiguous);
+
+    let mut one_wall = draft.clone();
+    one_wall.definition.shapes.truncate(1);
+    let before = one_wall.clone();
+    assert!(one_wall.add_joint("mouth", edges, plug(10.), true).is_err());
+    assert_eq!(one_wall, before, "both rim edges are required");
+
+    draft.add_joint("mouth", edges, plug(10.), true).unwrap();
+    let ghost = draft.preview_graphic(777).unwrap();
+    let ports = super::super::solve::ports(&ghost);
+    assert_eq!(ports.len(), 1);
+    assert_eq!(ports[0].at.joint, "mouth");
+    close(ports[0].point, [0., 0.]);
+    close(ports[0].dir, [0., -1.]);
+    validate::validate(&draft.finish("lab/open-vessel").unwrap()).unwrap();
+    let before = draft.clone();
+    assert!(
+        draft
+            .add_joint(
+                "floating",
+                [Point::new(-10., -20.), Point::new(10., -20.)],
+                plug(10.),
+                true,
+            )
+            .is_err()
+    );
+    assert_eq!(draft, before, "a detached opening is still refused");
+
+    let mut moving = draft.definition.clone();
+    moving.params.push(Param::Range {
+        id: "slide".into(),
+        names: BTreeMap::from([("en".into(), "Slide".into())]),
+        min: 0.,
+        max: 10.,
+        default: 0.,
+        unit: Unit::Mm,
+    });
+    moving.parts.push(Part {
+        id: "neck".into(),
+        parent: None,
+        param: "slide".into(),
+        motion: Motion::Translate([0., 1.]),
+        handle: None,
+    });
+    for shape in &mut moving.shapes {
+        shape.part = Some("neck".into());
+    }
+    if let Joint::Plug { part, .. } = &mut moving.joints[0] {
+        *part = Some("neck".into());
+    }
+    validate::validate(&moving).unwrap();
+    moving.shapes[1].part = None;
+    assert!(
+        validate::validate(&moving)
+            .unwrap_err()
+            .contains("sits on the fixed body"),
+        "both sides of a moving mouth must belong to its part"
+    );
+    // Filled moving parts around the mouth do not own the fixed rim merely
+    // because they enclose its endpoints.
+    for shape in &mut moving.shapes {
+        shape.part = None;
+    }
+    let at = moving.joints[0].at();
+    for (id, left, right) in [("left-pad", -6., -1.), ("right-pad", 1., 6.)] {
+        let mut pad = moving.shapes[0].clone();
+        pad.id = id.into();
+        pad.layer = Layer::Inner;
+        pad.role = Role::Solid;
+        pad.material = Material::Rubber;
+        pad.part = Some("neck".into());
+        let points =
+            [[left, -10.], [right, -10.], [right, 10.], [left, 10.]].map(|p| geom::add(at, p));
+        pad.path = path(&geom::polygon(&points, true));
+        moving.shapes.push(pad);
+    }
+    assert!(
+        validate::validate(&moving)
+            .unwrap_err()
+            .contains("sits on the fixed body"),
+        "a moving part must reach the rim boundary"
+    );
+    assert_eq!(doc, original);
+}
+
+#[test]
+fn an_embedded_plug_keeps_its_original_attachment_rule() {
+    let (doc, body, edges) = vessel();
+    let mut draft = Draft::from_selection(&doc, &[body]).unwrap();
+    draft.calibrate(edges, 10.).unwrap();
+    draft.definition.joints.push(Joint::Plug {
+        id: "embedded".into(),
+        family: PlugFamily::Stopper,
+        gender: Gender::M,
+        size_mm: 10.,
+        at: [0., 0.],
+        dir: [0., 1.],
+        part: None,
+        poses: BTreeMap::new(),
+    });
+    validate::validate(&draft.definition).unwrap();
+}
