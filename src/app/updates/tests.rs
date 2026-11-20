@@ -1,6 +1,25 @@
 use super::*;
 
 #[test]
+fn about_copies_the_installed_version_and_switches_to_settings() {
+    let (mut app, _) = App::new();
+    let original = app.tab.doc.clone();
+    let _ = app.update(Message::Updates(Action::Show(true)));
+    assert!(!app.updates.version_copied);
+    // Drop the returned task so the test leaves the system clipboard alone.
+    let _ = app.update(Message::Updates(Action::CopyVersion));
+    assert!(app.updates.version_copied);
+    let report = State::version_report();
+    assert!(report.starts_with(&format!("ReShiki {} (", updates::CURRENT_VERSION)));
+    assert!(report.contains(&State::installed_channel().to_string()));
+    let _ = app.update(Message::Updates(Action::OpenSettings));
+    assert!(!app.updates.open);
+    assert!(app.settings.open);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
 fn updates_modal_rejects_drawing_and_file_messages_before_they_change_state() {
     let (mut app, _) = App::new();
     let atom = app
