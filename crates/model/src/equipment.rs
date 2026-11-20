@@ -1,5 +1,6 @@
 //! Lab apparatus: the `.reshiki-piece` format, its validator, the evaluator
 //! and the paint plan. Apparatus is always illustration, never chemistry.
+pub mod authoring;
 pub mod builtin;
 pub mod eval;
 pub mod format;
