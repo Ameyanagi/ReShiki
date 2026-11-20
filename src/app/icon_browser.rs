@@ -4,7 +4,8 @@
 use super::workspace::{command, control, hover_hint, muted_text, section};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
-use iced::widget::{Space, canvas, column, container, row, scrollable, text, tooltip};
+use crate::canvas::layered::canvas;
+use iced::widget::{Space, column, container, row, scrollable, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::{Document, Point};
 use reshiki::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand};
@@ -355,7 +356,7 @@ impl State {
 
 /// A tile's drawing: the icon on its 24-unit grid, scaled to the tile.
 struct Tile(Choice);
-impl<Message> canvas::Program<Message> for Tile {
+impl<Message> iced::widget::canvas::Program<Message> for Tile {
     type State = ();
     fn draw(
         &self,
@@ -364,7 +365,7 @@ impl<Message> canvas::Program<Message> for Tile {
         theme: &iced::Theme,
         bounds: iced::Rectangle,
         _: iced::mouse::Cursor,
-    ) -> Vec<canvas::Geometry> {
+    ) -> Vec<iced::widget::canvas::Geometry> {
         let mut f = crate::canvas::layered::Frame::new(renderer, bounds.size()).with_theme(theme);
         if let Choice::Condition(kind) = self.0 {
             super::icons::Glyph(
@@ -629,7 +630,7 @@ impl App {
                     };
                     line = line.push(hover_hint(
                         reshiki::accessibility::button(
-                            format!("icon-{key}"),
+                            format!("icon-tile-{key}"),
                             c.name(),
                             canvas(Tile(*c)).width(24).height(24),
                         )

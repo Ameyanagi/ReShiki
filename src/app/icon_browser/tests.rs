@@ -131,3 +131,34 @@ fn escape_closes_the_browser_and_returns_to_select() {
     let _ = app.update(Message::Canvas(Edit::Icon(Point::default())));
     assert_eq!(app.tab.doc, before, "a closed browser places nothing");
 }
+
+#[test]
+fn the_grid_survives_scrolling_searching_and_a_new_recent_row() {
+    use iced::advanced::widget::Tree;
+    let mut app = app();
+    let _ = app.update(Message::Tool(Tool::Icons));
+    let mut tree = Tree::new(&app.icons_panel());
+    let scroll = |offset| Action::Scrolled {
+        offset,
+        height: 700.,
+    };
+    let steps = [
+        scroll(3000.),
+        scroll(12000.),
+        scroll(400.),
+        scroll(60000.),
+        scroll(0.),
+        Action::Search("flask".into()),
+        Action::Pick(by_name("flask")),
+        Action::Search(String::new()),
+        Action::Pick(Choice::Condition(SymbolKind::Light)),
+        scroll(5000.),
+    ];
+    for action in steps {
+        let _ = app.update(Message::Icons(action));
+        tree.diff(&app.icons_panel());
+        // A placement adds a Recent row above everything else.
+        let _ = app.update(Message::Canvas(Edit::Icon(Point::default())));
+        tree.diff(&app.icons_panel());
+    }
+}
