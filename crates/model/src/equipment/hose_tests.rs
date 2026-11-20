@@ -77,11 +77,11 @@ fn a_hose_seats_at_both_ends_and_leaves_along_each_barb() {
 
     let g = graphic(&doc, hose);
     let line = &g.piece.as_ref().unwrap().centre_line;
-    assert_eq!(line.len(), 13);
+    assert_eq!(line.len(), 19);
     let (x, y) = (g.axis_x, g.axis_y);
     let frame = Affine([x.x, x.y, y.x, y.y, 0., 0.].map(f64::from));
     assert_near(frame.apply_dir(sub(line[1], line[0])), outlet.dir);
-    assert_near(frame.apply_dir(sub(line[11], line[12])), inlet.dir);
+    assert_near(frame.apply_dir(sub(line[17], line[18])), inlet.dir);
     assert!(solve::closure(&doc, &[condenser]).contains(&hose));
 }
 
@@ -253,4 +253,40 @@ fn a_new_hose_takes_the_scale_of_the_barb_it_starts_on() {
     assert_seated(&doc, &port(&doc, hose, "a"), &barb);
     solve::check(&mut doc, None);
     assert_eq!(doc.seats.len(), 1);
+}
+
+#[test]
+fn a_hose_doubling_back_to_a_barb_loops_clear_of_itself() {
+    // Both barbs face right: the hose passes the second barb and comes back.
+    let (mut doc, first) = with_condenser();
+    let d = builtin::find("reshiki/liebig-15").unwrap();
+    let second = doc.next_id();
+    let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+    doc.graphics
+        .push(placed::graphic(second, d, Point::new(300., 300.), scale));
+    let from = port(&doc, first, "water-out").point;
+    let to = port(&doc, second, "water-in").point;
+    let hose = place(&mut doc, from, to);
+    assert_eq!(doc.seats.len(), 2);
+
+    let g = graphic(&doc, hose);
+    let (x, y, o) = (g.axis_x, g.axis_y, g.origin);
+    let frame = Affine([x.x, x.y, y.x, y.y, o.x, o.y].map(f64::from));
+    let line: Vec<Xy> = g
+        .piece
+        .as_ref()
+        .unwrap()
+        .centre_line
+        .iter()
+        .map(|p| frame.apply(*p))
+        .collect();
+    let samples = placed::sampled(&line);
+    // The way in (lead, turn and the run to the middle and on) stays a hose
+    // width clear of the straight lead onto the second barb.
+    let (way, lead) = (&samples[..=96], &samples[121..]);
+    let clear = way
+        .iter()
+        .flat_map(|p| lead.iter().map(move |q| len(sub(*p, *q))))
+        .fold(f64::INFINITY, f64::min);
+    assert!(clear >= 9. * f64::from(scale), "{clear}");
 }

@@ -64,33 +64,59 @@ const LEAD_MM: f64 = 20.;
 /// share of that line's length.
 const SAG: f64 = 0.15;
 
-/// A smooth line from `a` through `m` to `b` as four Béziers: straight for
-/// a lead from each end along `out` (a unit vector into the hose; the lead
-/// in world units), then bending through `m`, the chain's middle point.
-fn shape(a: Xy, (out_a, lead_a): (Xy, f64), m: Xy, b: Xy, (out_b, lead_b): (Xy, f64)) -> Vec<Xy> {
-    let straight =
-        |p: Xy, out: Xy, lead: f64| [1., 2., 3.].map(|k| add(p, mul(out, lead * k / 3.)));
-    let [a1, a2, la] = straight(a, out_a, lead_a);
-    let [b1, b2, lb] = straight(b, out_b, lead_b);
-    // At least a world unit, so each lead keeps its direction.
-    let (da, db) = (len(sub(m, la)).max(1.), len(sub(lb, m)).max(1.));
-    let along = unit(sub(lb, la), perp(out_a));
-    let tangent = unit(add(unit(sub(m, la), along), unit(sub(lb, m), along)), along);
-    vec![
-        a,
-        a1,
-        a2,
-        la,
-        add(la, mul(out_a, da / 2.)),
+/// One end of a hose as [`shape`] lays it: where it is, the unit vector
+/// into the hose, and how far it runs straight on (world units).
+type End = (Xy, Xy, f64);
+
+/// The three Béziers from end `e` towards `m`, `m` excluded: straight on
+/// for the lead, then a turn of radius `r`. A lead that faces away from
+/// `m` turns a quarter circle towards it first, so a hose doubling back
+/// to a barb loops instead of pinching; otherwise it runs straight on.
+fn leg((p, out, lead): End, m: Xy, r: f64) -> (Vec<Xy>, Xy) {
+    let l = add(p, mul(out, lead));
+    let side = perp(out);
+    let n = if dot(side, sub(m, l)) < 0. {
+        mul(side, -1.)
+    } else {
+        side
+    };
+    let (t, dir) = if dot(out, sub(m, l)) < 0. {
+        (add(l, add(mul(out, r), mul(n, r))), n)
+    } else {
+        (add(l, mul(out, r / 2.)), out)
+    };
+    // A quarter circle's control points sit 0.552 r along its tangents.
+    let k = if dir == out { r / 6. } else { 0.552 * r };
+    let d = len(sub(m, t)).max(1.);
+    let points = vec![
+        p,
+        add(p, mul(out, lead / 3.)),
+        add(p, mul(out, lead * 2. / 3.)),
+        l,
+        add(l, mul(out, k)),
+        sub(t, mul(dir, k)),
+        t,
+        add(t, mul(dir, d / 3.)),
+    ];
+    (points, t)
+}
+
+/// A smooth line from end `a` through `m` to end `b` as six Béziers: each
+/// end's [`leg`], meeting at `m`, the chain's middle point.
+fn shape(a: End, m: Xy, b: End, r: f64) -> Vec<Xy> {
+    let (mut line, ta) = leg(a, m, r);
+    let (mut back, tb) = leg(b, m, r);
+    let along = unit(sub(tb, ta), perp(a.1));
+    let tangent = unit(add(unit(sub(m, ta), along), unit(sub(tb, m), along)), along);
+    let (da, db) = (len(sub(m, ta)).max(1.), len(sub(tb, m)).max(1.));
+    line.extend([
         sub(m, mul(tangent, da / 3.)),
         m,
         add(m, mul(tangent, db / 3.)),
-        add(lb, mul(out_b, db / 2.)),
-        lb,
-        b2,
-        b1,
-        b,
-    ]
+    ]);
+    back.reverse();
+    line.extend(back);
+    line
 }
 
 /// The free hose barb nearest `p` within `reach` that end `k` of hose `id`
@@ -183,20 +209,26 @@ fn push_on(doc: &mut Document, id: u64, k: usize, barb: &Port) {
 /// Where each end of hose `id` goes and the way it leaves into the hose:
 /// along the barb it is on, else towards `m`.
 fn reshape(doc: &mut Document, id: u64, ends: [(Xy, Option<Port>); 2], m: Xy) {
-    let lead = (doc.graphics.iter())
-        .find(|g| g.id == id)
-        .map_or(0., |g| frame(g).scale_factor() * LEAD_MM);
+    let Some((mm, width)) = (doc.graphics.iter()).find(|g| g.id == id).and_then(|g| {
+        let tube = g.piece.as_ref()?.linked.as_ref()?.tube.as_ref()?;
+        Some((frame(g).scale_factor(), tube.width_mm))
+    }) else {
+        return;
+    };
+    let lead = LEAD_MM * mm;
     // On a barb the hose runs straight on along it; a free end aims at the
     // middle, with a lead short enough to stay short of it.
-    let out = |(p, barb): &(Xy, Option<Port>)| match barb {
-        Some(b) => (b.dir, lead),
+    let end = |(p, barb): &(Xy, Option<Port>)| match barb {
+        Some(b) => (*p, b.dir, lead),
         None => (
+            *p,
             unit(sub(m, *p), [1., 0.]),
             lead.min(len(sub(m, *p)) / 3.).max(1e-3),
         ),
     };
     let [a, b] = &ends;
-    let line = shape(a.0, out(a), m, b.0, out(b));
+    // Turns are a width and a half across the centre line: open, not kinked.
+    let line = shape(end(a), m, end(b), 1.5 * width * mm);
     store(doc, id, &line);
 }
 
