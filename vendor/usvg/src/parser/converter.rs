@@ -55,6 +55,11 @@ pub struct Cache {
     mask_index: usize,
     filter_index: usize,
     image_index: usize,
+    conversion_limits: Option<ConversionLimits>,
+    conversion_elements: usize,
+    conversion_segments: usize,
+    conversion_depth: usize,
+    pub(crate) conversion_failed: bool,
 }
 
 impl Cache {
@@ -76,7 +81,60 @@ impl Cache {
             mask_index: 0,
             filter_index: 0,
             image_index: 0,
+            conversion_limits: None,
+            conversion_elements: 0,
+            conversion_segments: 0,
+            conversion_depth: 0,
+            conversion_failed: false,
         }
+    }
+
+    pub(crate) fn enter_conversion(&mut self) -> bool {
+        if self.conversion_failed {
+            return false;
+        }
+        if let Some(limits) = self.conversion_limits {
+            let elements = self.conversion_elements.saturating_add(1);
+            let depth = self.conversion_depth.saturating_add(1);
+            if elements > limits.max_elements || depth > limits.max_depth {
+                self.conversion_failed = true;
+                return false;
+            }
+            self.conversion_elements = elements;
+            self.conversion_depth = depth;
+        }
+        true
+    }
+
+    pub(crate) fn leave_conversion(&mut self) {
+        self.conversion_depth = self.conversion_depth.saturating_sub(1);
+    }
+
+    pub(crate) fn remaining_depth(&self) -> Option<usize> {
+        self.conversion_limits
+            .map(|limits| limits.max_depth.saturating_sub(self.conversion_depth))
+    }
+
+    pub(crate) fn remaining_segments(&self) -> Option<usize> {
+        self.conversion_limits.map(|limits| {
+            limits
+                .max_path_segments
+                .saturating_sub(self.conversion_segments)
+        })
+    }
+
+    pub(crate) fn charge_path(&mut self, segments: usize) -> bool {
+        if self.conversion_failed {
+            return false;
+        }
+        if let Some(limits) = self.conversion_limits {
+            self.conversion_segments = self.conversion_segments.saturating_add(segments);
+            if self.conversion_segments > limits.max_path_segments {
+                self.conversion_failed = true;
+                return false;
+            }
+        }
+        true
     }
 
     // TODO: macros?
@@ -333,6 +391,7 @@ pub(crate) fn convert_doc(svg_doc: &svgtree::Document, opt: &Options) -> Result<
         #[cfg(feature = "text")]
         opt.fontdb.clone(),
     );
+    cache.conversion_limits = opt.conversion_limits;
 
     for node in svg_doc.descendants() {
         if let Some(tag) = node.tag_name() {
@@ -368,8 +427,15 @@ pub(crate) fn convert_doc(svg_doc: &svgtree::Document, opt: &Options) -> Result<
         g.transform = root_ts;
         g.abs_transform = root_ts;
         convert_children(svg_doc.root(), &state, &mut cache, &mut g);
+        if cache.conversion_failed {
+            return Err(Error::ConversionLimitReached);
+        }
         g.calculate_bounding_boxes();
         tree.root.children.push(Node::Group(Box::new(g)));
+    }
+
+    if cache.conversion_failed {
+        return Err(Error::ConversionLimitReached);
     }
 
     // Clear cache to make sure that all `Arc<T>` objects have a single strong reference.
@@ -507,12 +573,23 @@ pub(crate) fn convert_children(
     parent: &mut Group,
 ) {
     for node in parent_node.children() {
+        if cache.conversion_failed {
+            break;
+        }
         convert_element(node, state, cache, parent);
     }
 }
 
 #[inline(never)]
 pub(crate) fn convert_element(node: SvgNode, state: &State, cache: &mut Cache, parent: &mut Group) {
+    if !cache.enter_conversion() {
+        return;
+    }
+    convert_element_inner(node, state, cache, parent);
+    cache.leave_conversion();
+}
+
+fn convert_element_inner(node: SvgNode, state: &State, cache: &mut Cache, parent: &mut Group) {
     let tag_name = match node.tag_name() {
         Some(v) => v,
         None => return,
@@ -559,7 +636,7 @@ fn convert_element_impl(
         | EId::Polyline
         | EId::Polygon
         | EId::Path => {
-            if let Some(path) = super::shapes::convert(node, state) {
+            if let Some(path) = super::shapes::convert(node, state, cache) {
                 convert_path(node, path, state, cache, parent);
             }
         }
@@ -635,7 +712,7 @@ fn convert_clip_path_elements_impl(
 ) {
     match tag_name {
         EId::Rect | EId::Circle | EId::Ellipse | EId::Polyline | EId::Polygon | EId::Path => {
-            if let Some(path) = super::shapes::convert(node, state) {
+            if let Some(path) = super::shapes::convert(node, state, cache) {
                 convert_path(node, path, state, cache, parent);
             }
         }
@@ -812,6 +889,9 @@ fn convert_path(
     cache: &mut Cache,
     parent: &mut Group,
 ) {
+    if !cache.charge_path(tiny_skia_path.len()) {
+        return;
+    }
     debug_assert!(tiny_skia_path.len() >= 2);
     if tiny_skia_path.len() < 2 {
         return;
@@ -904,6 +984,9 @@ fn convert_path(
             cache,
             &mut marker_group,
         );
+        if cache.conversion_failed {
+            return;
+        }
         marker_group.calculate_bounding_boxes();
         marker = Some(marker_group);
     }

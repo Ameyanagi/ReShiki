@@ -414,6 +414,7 @@ fn process(args: Args) -> Result<(), String> {
     };
 
     let re_opt = usvg::Options {
+        conversion_limits: None,
         resources_dir,
         dpi: args.dpi as f32,
         font_family: args

@@ -507,6 +507,19 @@ To make a review image of a piece file, run
 `reshiki --cli pieces render FILE --to svg` (or `--to png -o FILE.png`; add
 `--dark` for the dark canvas).
 
+### Import SVG artwork
+
+1. Choose **Import → Import SVG as drawing…**, or find **Import SVG as drawing…** in **⌘K**.
+2. Choose an `.svg` or `.svgz` file. The artwork arrives as one selected group of editable paths.
+3. Ungroup it to edit a path with **Edit points**. Save a `.rsk` file to keep the paths.
+
+Fills keep their colors. Strokes become editable outlines, and gradients use their middle color.
+Filled paths have a 0.1 pt edge in the same color. Paint opacity is kept. A translucent group makes each path translucent, so overlaps can look darker.
+Blend modes use normal compositing and are listed as approximations.
+Text, pictures, masks, clips, filters, patterns and animation are left out; the import message
+lists what changed. Outline text in the drawing program before importing it.
+**Open** still restores the embedded ReShiki drawing in an SVG exported by ReShiki.
+
 ### Start from a figure layout
 
 **Templates → Figure layouts** has a single-row TOC with a title bar, previous

@@ -615,6 +615,9 @@ explains how the crates and modules fit together.
 - `crates/io/src/piece_library.rs`: Libraries of equipment pieces
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
 - `crates/io/src/recovery.rs`
+- `crates/io/src/svg_drawing.rs`: Bounded SVG import as ordinary, editable vector graphics.
+- `crates/io/src/svg_drawing/css.rs`: Remove unsupported CSS effects without changing selectors or the cascade.
+- `crates/io/src/svg_drawing/references.rs`: Disable unused use references before usvg eagerly expands definitions.
 - `crates/io/src/task.rs`: Blocking chemistry and rendering work off the async executor.
 - `crates/io/src/template_library.rs`: User-authored templates and portable collections.
 
