@@ -88,8 +88,10 @@ pub(crate) fn symbol_text(text: &str, charset: u16) -> String {
                 Some(upper) if !ch.is_ascii() => {
                     let record = point.to_le_bytes();
                     upper
-                        .chunks_exact(4)
-                        .position(|entry| entry == record)
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .position(|entry| *entry == record)
                         .map(|index| index + 0x80)
                 }
                 _ => Some(point as usize),
