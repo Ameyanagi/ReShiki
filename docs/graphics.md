@@ -164,7 +164,8 @@ endpoints, attachments and arrowheads stay in place.
 2. Choose **Wrap in panel** from the canvas menu, the command palette or
    **Properties → Grouping & frames**. A tinted, rounded panel appears behind
    the selection with 10 pt of padding, grouped with it so they move together.
-   Option/Alt-click edits one object inside.
+   Click an object inside a second time to edit it alone. Drag it out of the
+   frame and it leaves the panel.
 3. **Properties** opens on the **Panel** card, above what the panel holds.
    Type a title and press Enter, pick a fill swatch, and turn **Outline** or
    **Shadow** on or off. **Title bar**
@@ -177,7 +178,7 @@ endpoints, attachments and arrowheads stay in place.
    **Corner (pt)** under **Graphic style**). Outline color, line width,
    dashes, gradients and a custom fill color are under **Graphic style**,
    which changes every selected shape: to change the panel alone,
-   Option-click its margin first. **Fit to contents** refits the panel around what it is grouped with.
+   click its margin a second time first. **Fit to contents** refits the panel around what it is grouped with.
 
 Each change is one Undo step. Panels are artwork: reaction detection, atom
 mapping and analysis never read them.
@@ -215,16 +216,26 @@ the gutters. Moving one item by itself leaves it where you put it.
    second half a product going out. A dashed outline and a tag such as
    **Intermediate 3** or **Reagent of step 2** show the role before you let
    go. A part already in the cycle keeps its role when it moves.
-4. Clicking any part selects the whole cycle. Option/Alt-click moves one part
-   alone; every arc and side arrow refits to it.
+4. Clicking any part selects the whole cycle. Click the part again to select
+   it alone, then drag it: every arc and side arrow refits to it. Let go
+   farther out than a reagent's place, and it leaves the cycle; the tag
+   **Release to take it out of the cycle** and the arcs closing up without
+   it show this before you let go. Option/Alt-drag does the same in one go.
+   With the cycle selected, a click on its circle or an arc selects only the
+   circle and its arrows, to restyle them. Right-click and choose **Select
+   structures in cycle** to select every intermediate, reagent and product,
+   for example to change their color or font.
 5. In **Properties → Catalytic cycle**, choose **Clockwise** or
-   **Counterclockwise**, and set **Radius (pt)**, **Gap (pt)** (the space
-   between an arc and an intermediate) and **Center** text. Pick a step to
-   give it a **Name**, make it **Reversible**, **Hide arrow**, or set its
-   **Bow** and extra **Space in** and **out** in points. **Parts** lists every
-   part with its role.
-6. To take a part out, select it alone and choose **Remove from cycle**. It
-   stays in the drawing.
+   **Counterclockwise**. Open **Layout** to set **Radius (pt)**, **Gap (pt)**
+   and **Center** text. Each row shows the step name or the intermediates'
+   names, formulas or text. Choose a step to see its reagents under **In:**
+   and its products under **Out:**. Set the step's **Name**, turn on
+   **Reversible** or **Hide arrow**, or adjust **Bow**, **Space in** and
+   **out** in points. **Purpose and properties** opens the parts' purpose and
+   molecular properties; **Graphic style** below restyles the circle and its
+   arrows.
+6. **Remove from cycle** also takes the selected part out. It stays in the
+   drawing.
 
 Each change is one Undo step. A reagent's side arrow joins the arc without a
 head; a product's leaves it with one. Reaction detection never takes a
@@ -239,9 +250,9 @@ Each step is a reaction: its reactants are the step's first intermediate and
 its reagents, its products the next intermediate and its products. Texts are
 its conditions.
 
-1. Select the cycle and pick the step in **Properties → Catalytic cycle**, or
+1. Select the cycle and open the step in **Properties → Catalytic cycle**, or
    right-click the step's arc.
-2. Under **Step as a reaction**, or in the right-click menu:
+2. Choose an action under the open step or in the right-click menu.
    - **Copy step as reaction SMILES** copies that step's reaction.
    - **Check step balance** says whether the step keeps every atom,
      hydrogens included, and the charge, and what one side has more of.
@@ -320,8 +331,10 @@ seat.
 
 Seated pieces form an assembly. A click selects the whole assembly and a drag
 moves it; turning, scaling, copying and **Bring to Front** act on all of it.
-To take a piece out, Option-drag (Alt-drag on Windows and Linux) it: the
-pieces held only through it come along, and the rest stays. **Properties →
+To take a piece out, click it again so it is selected alone, then drag it:
+the pieces held only through it come along, and the rest stays. The tag
+**Release to take it off** shows before you let go. Option-drag (Alt-drag on
+Windows and Linux) does the same without the second click. **Properties →
 Equipment** lists each joint of the selected piece, what is seated in it and
 **Detach**, which pulls the pieces apart along the joint and leaves a gap.
 
@@ -360,7 +373,7 @@ Joint clips go on seated ground-glass joints. Select an assembly and click
 **Add clips to all joints** in Properties, or pick a clip in the Equipment
 panel and click near a joint of its size; the label says **Clip the flask
 neck · 29/42**. A clip moves with its joint and goes when the joint is
-detached; select it alone with Option-click to delete it.
+detached; click it a second time to select it alone and delete it.
 
 ### Move parts and set liquid levels
 
@@ -371,8 +384,8 @@ J. Young ware can hold liquid.
 
 1. Click a piece to select its whole assembly and show handles for movable
    parts. Hover over a handle to see its setting and value, for example
-   **Valve: Closed · click to switch**. Option-drag still pulls a piece out
-   of the assembly. Holding Option disables the handles.
+   **Valve: Closed · click to switch**. A second click and a drag, or
+   Option-drag, still pulls a piece out of the assembly. Holding Option disables the handles.
 2. Click a circle to cycle through the states of a valve or stopcock. A
    J. Young valve switches between **Closed** and **Open**.
    A stopcock cycles through **Closed**, **Arm to side barb**, **Arm to down
@@ -418,7 +431,7 @@ shows one library or all of them.
 Every drawing carries the pieces it uses. When you open a drawing from
 someone else, **Properties → Equipment** offers **Add to My pieces** for a
 piece you do not have, and **Export this piece…** for any piece. In an
-assembly, Option-click the piece first.
+assembly, click the piece a second time first.
 
 A piece is known by its ID, revision and content. When a library has a newer
 revision of a piece in your drawing, Properties says so, for example

@@ -415,7 +415,17 @@ impl MoleculeCanvas<'_> {
                 // The snapped pose shows what releasing makes; guides would mislead.
                 match reshiki::equipment::solve::snap(preview.to_mut(), ids, reach, false) {
                     Some(snap) => *seat_hint = Some(super::SeatHint::new(preview, &snap)),
-                    None => *smart = guides,
+                    None => {
+                        *smart = guides;
+                        if preview.seats.len() < self.doc.seats.len() {
+                            *chain_badge = Some((p, "Release to take it off".into(), true));
+                        }
+                    }
+                }
+                // The drawing shows what releasing here takes the piece out of.
+                let left = preview.to_mut().take_out(ids, delta);
+                if let Some(names) = reshiki::grouping::Container::names(&left) {
+                    *chain_badge = Some((p, format!("Release to take it out of {names}"), true));
                 }
                 // Say what a drop here would make the part in a cycle.
                 if let Some(target) = reshiki::cycles::drop_target(preview, ids) {

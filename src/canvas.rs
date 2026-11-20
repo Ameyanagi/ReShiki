@@ -409,6 +409,9 @@ pub struct State {
     last_click: Option<(iced::time::Instant, u64)>,
     last_transform_click: Option<HandleClick>,
     modifiers: iced::keyboard::Modifiers,
+    /// The drag moves a piece picked out of its object, as Option/Alt does:
+    /// a stand's rod or a joint no longer holds it in place.
+    pull_out: bool,
 }
 
 /// A context menu suspends pointer gestures, not the expensive drawing caches.

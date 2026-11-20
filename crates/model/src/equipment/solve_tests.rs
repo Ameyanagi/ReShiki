@@ -510,3 +510,41 @@ fn a_joint_an_adapter_joins_wins_over_a_closer_one_nothing_joins() {
     crate::editing::transform_about(&mut doc, &[flask], Point::new(200., 300.), k * 1.0005, 0.);
     assert_eq!(placed::scale_limit(&doc, &[flask, other], 1.), 1.);
 }
+
+#[test]
+fn a_first_click_picks_the_assembly_and_a_second_the_piece() {
+    let mut doc = Document::default();
+    let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(200., 300.));
+    let condenser = add(&mut doc, "reshiki/liebig-15", Point::new(400., 100.));
+    let before = doc.clone();
+    bring(
+        &mut doc,
+        condenser,
+        "bottom",
+        &joint(flask, "neck"),
+        (6., -5.),
+    );
+    solve::snap(&mut doc, &[condenser], 14., false).unwrap();
+    commit(&mut doc, before);
+    assert_eq!(doc.seats.len(), 1);
+    let whole = doc.click_selection(&[], &[condenser]);
+    assert!(whole.contains(&flask) && whole.contains(&condenser));
+    assert_eq!(doc.click_selection(&whole, &[condenser]), vec![condenser]);
+    assert_eq!(doc.click_selection(&[condenser], &[flask]), vec![flask]);
+    // In a group, the assembly comes between the group and the piece.
+    let note = doc.next_id();
+    doc.annotations.push(crate::document::Annotation {
+        id: note,
+        position: Point::new(0., 0.),
+        text: "reflux".into(),
+        format: Default::default(),
+    });
+    doc.group_selection(&[flask, condenser, note]).unwrap();
+    let whole = doc.click_selection(&[], &[condenser]);
+    assert_eq!(whole.len(), 3);
+    let mut assembly = doc.click_selection(&whole, &[condenser]);
+    assembly.sort_unstable();
+    let mut pair = vec![flask, condenser];
+    pair.sort_unstable();
+    assert_eq!(assembly, pair);
+}

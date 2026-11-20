@@ -142,6 +142,65 @@ fn chain(app: &mut App, atoms: &[(&str, f32, f32, u32)]) -> Vec<u64> {
     ids
 }
 
+#[test]
+fn part_names_use_the_linked_name_and_shorten_long_labels() {
+    let (mut app, _) = App::new();
+    let methane = chain(&mut app, &[("C", 0., 0., 0)]);
+    assert_eq!(app.part_name(&methane), "CH₄");
+    let format = reshiki::typography::TextFormat {
+        style: app.tab.doc.drawing_style.text_style(),
+        ..Default::default()
+    };
+    reshiki::molecule_names::show(
+        &mut app.tab.doc,
+        &methane,
+        "Methane".into(),
+        "C".into(),
+        format,
+        false,
+    )
+    .unwrap();
+    // Names are cached per drawing revision; an app edit moves it on.
+    app.tab.revision += 1;
+    assert_eq!(app.part_name(&methane), "Methane");
+
+    let line = "α".repeat(33);
+    let label = text(&mut app, 0., 100., &format!("{line}\nSecond line"));
+    assert_eq!(app.part_name(&[label]), format!("{}…", "α".repeat(31)));
+}
+
+#[test]
+fn cycle_step_rows_and_disclosures_open_on_click() {
+    let (mut app, _) = App::new();
+    let methane = chain(&mut app, &[("C", 0., -200., 0)]);
+    let label = text(&mut app, 170., 90., "ArPdX\nSecond line");
+    let ethane = chain(&mut app, &[("C", -230., 90., 0), ("C", -200., 90., 0)]);
+    app.tab.selected = [methane, vec![label], ethane].concat();
+    make(&mut app);
+    let _ = app.update(Message::Cycle(Action::Edit(Field::Name, "Coupling".into())));
+    let _ = app.update(Message::Cycle(Action::Apply(Field::Name)));
+
+    let (id, cycle) = cycle(&app);
+    let labels = app.step_labels(&cycle);
+    assert_eq!(labels, ["1  Coupling", "2  ArPdX → C₂H₆", "3  C₂H₆ → CH₄"]);
+    assert!(labels.iter().all(|label| !label.contains("atoms")));
+    assert!(!app.tab.cycle_inputs.step_expanded);
+    assert!(!app.tab.cycle_inputs.layout_open);
+    assert!(!app.tab.cycle_inputs.purpose_open);
+
+    let _ = app.update(Message::Cycle(Action::Step(1)));
+    assert!(app.tab.cycle_inputs.step_expanded);
+    assert_eq!(app.cycle_step(), Some((id, 1)));
+    let _ = app.update(Message::Cycle(Action::Step(1)));
+    assert!(!app.tab.cycle_inputs.step_expanded);
+    assert_eq!(app.cycle_step(), Some((id, 1)));
+
+    let _ = app.update(Message::Cycle(Action::ToggleLayout));
+    assert!(app.tab.cycle_inputs.layout_open);
+    let _ = app.update(Message::Cycle(Action::TogglePurpose));
+    assert!(app.tab.cycle_inputs.purpose_open);
+}
+
 fn join(app: &mut App, id: u64, role: Role, part: &[u64]) {
     let ink = reshiki::scene::selection_bounds(&app.tab.doc, part).unwrap();
     reshiki::cycles::assign(
