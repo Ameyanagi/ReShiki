@@ -4,48 +4,91 @@ use crate::{
     arrows::ArrowPath,
     atom_labels::segment_hits_rect,
     document::{Document, Point},
-    graphics::{self, Graphic},
+    graphics::{Graphic, PathCommand},
     style::DEFAULT,
     typography::{TextAlign, TextFormat, layout},
 };
+use kurbo::{BezPath, Line, ParamCurve, ParamCurveExtrema, PathSeg, Rect, Shape};
 
 type Bounds = (Point, Point);
 
 struct PaintedPath {
     bounds: Bounds,
-    contours: Vec<Vec<Point>>,
+    path: BezPath,
     filled: bool,
     stroke: f32,
 }
 
 impl PaintedPath {
-    fn new(path: ArrowPath) -> Option<Self> {
-        let contours = graphics::flattened(&path.commands);
-        let mut points = contours.iter().flatten().copied();
-        let first = points.next()?;
-        let bounds = points.fold((first, first), |(lo, hi), p| {
-            (
-                Point::new(lo.x.min(p.x), lo.y.min(p.y)),
-                Point::new(hi.x.max(p.x), hi.y.max(p.y)),
-            )
-        });
-        Some(Self {
+    fn new(painted: ArrowPath) -> Self {
+        let mut path = BezPath::new();
+        for command in painted.commands {
+            match command {
+                PathCommand::Move(p) => path.move_to(kurbo_point(p)),
+                PathCommand::Line(p) => path.line_to(kurbo_point(p)),
+                PathCommand::Cubic(a, b, c) => {
+                    path.curve_to(kurbo_point(a), kurbo_point(b), kurbo_point(c));
+                }
+                PathCommand::Close => path.close_path(),
+            }
+        }
+        let b = path.bounding_box();
+        let bounds = (
+            Point::new(b.x0 as f32, b.y0 as f32),
+            Point::new(b.x1 as f32, b.y1 as f32),
+        );
+        Self {
             bounds,
-            contours,
-            filled: path.filled,
-            stroke: 0.5 * path.style.width(),
-        })
+            path,
+            filled: painted.filled,
+            stroke: 0.5 * painted.style.width(),
+        }
     }
 
     fn hits(&self, label: Bounds) -> bool {
         let (lo, hi) = grown(label, self.stroke);
-        overlaps((lo, hi), self.bounds)
-            && (self.contours.iter().any(|points| {
-                points
-                    .windows(2)
-                    .any(|edge| matches!(edge, [a, b] if segment_hits_rect(*a, *b, lo, hi)))
-            }) || (self.filled && graphics::fills(center_of(label), &self.contours)))
+        if !overlaps((lo, hi), self.bounds) {
+            return false;
+        }
+        let rect = Rect::from_points(kurbo_point(lo), kurbo_point(hi));
+        let corners = [
+            rect.origin(),
+            kurbo::Point::new(rect.x1, rect.y0),
+            kurbo::Point::new(rect.x1, rect.y1),
+            kurbo::Point::new(rect.x0, rect.y1),
+        ];
+        let includes =
+            |p: kurbo::Point| rect.x0 <= p.x && p.x <= rect.x1 && rect.y0 <= p.y && p.y <= rect.y1;
+        self.path.segments().any(|segment| {
+            if let PathSeg::Line(line) = segment {
+                return segment_hits_rect(
+                    Point::new(line.p0.x as f32, line.p0.y as f32),
+                    Point::new(line.p1.x as f32, line.p1.y as f32),
+                    lo,
+                    hi,
+                );
+            }
+            let b = ParamCurveExtrema::bounding_box(&segment);
+            let overlaps = rect.x0 <= b.x1 && b.x0 <= rect.x1 && rect.y0 <= b.y1 && b.y0 <= rect.y1;
+            // A straight cubic on a rectangle edge, or an arc tangent to it,
+            // may have no edge crossing. Include its extrema in the test.
+            overlaps
+                && (includes(segment.start())
+                    || includes(segment.end())
+                    || segment
+                        .extrema()
+                        .into_iter()
+                        .any(|t| includes(segment.eval(t)))
+                    || corners
+                        .into_iter()
+                        .zip(corners.into_iter().cycle().skip(1))
+                        .any(|(a, b)| !segment.intersect_line(Line::new(a, b)).is_empty()))
+        }) || (self.filled && self.path.winding(kurbo_point(center_of(label))) != 0)
     }
+}
+
+fn kurbo_point(p: Point) -> kurbo::Point {
+    kurbo::Point::new(f64::from(p.x), f64::from(p.y))
 }
 
 fn overlaps((lo, hi): Bounds, (other_lo, other_hi): Bounds) -> bool {
@@ -116,31 +159,48 @@ impl Ring {
         let (y, x) = angle.sin_cos();
         let direction = Point::new(x, y);
         let padding = size.offset(self.clearance, self.clearance);
-        let mut blocked: Vec<_> = occupied
-            .iter()
-            .copied()
-            .chain(painted.iter().map(|p| grown(p.bounds, p.stroke)))
-            .filter_map(|(lo, hi)| {
-                let bounds = (
-                    lo.offset(-padding.x, -padding.y),
-                    hi.offset(padding.x, padding.y),
-                );
-                ray_interval(self.center, direction, bounds)
-            })
-            .collect();
+        let bearing = |(lo, hi): Bounds| {
+            let bounds = (
+                lo.offset(-padding.x, -padding.y),
+                hi.offset(padding.x, padding.y),
+            );
+            ray_interval(self.center, direction, bounds)
+        };
+        let mut blocked: Vec<_> = occupied.iter().copied().filter_map(bearing).collect();
         blocked.sort_by(|a, b| a.0.total_cmp(&b.0));
         let reach = size.x * x.abs() + size.y * y.abs();
         let mut radius = self.radius + reach + 2. * self.clearance;
-        for (enter, exit) in blocked {
-            if radius < enter {
-                break;
+        for _ in 0..8 {
+            radius = first_clear(radius, &blocked, 0.25 * self.clearance);
+            let label = box_at(polar(self.center, radius, angle));
+            if clear(label) {
+                return label;
             }
-            if radius <= exit {
-                radius = exit + 0.25 * self.clearance;
-            }
+            radius += 0.25 * self.spacing;
         }
+
+        // Bounds give a finite escape for a route running along this ray.
+        blocked.extend(
+            painted
+                .iter()
+                .filter_map(|p| bearing(grown(p.bounds, p.stroke))),
+        );
+        blocked.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let radius = first_clear(radius, &blocked, 0.25 * self.clearance);
         box_at(polar(self.center, radius, angle))
     }
+}
+
+fn first_clear(mut radius: f32, blocked: &[(f32, f32)], spacing: f32) -> f32 {
+    for &(enter, exit) in blocked {
+        if radius < enter {
+            break;
+        }
+        if radius <= exit {
+            radius = exit + spacing;
+        }
+    }
+    radius
 }
 
 // Distances along the ray for which the center of a padded label would lie
@@ -197,7 +257,7 @@ pub(super) fn place(
             .arrows
             .iter()
             .flat_map(|arrow| arrow.paths())
-            .filter_map(PaintedPath::new)
+            .map(PaintedPath::new)
             .collect();
         for (name, arc, outward) in names {
             let text = wrapped(name, &format, bond * 2.5);
@@ -236,7 +296,7 @@ mod tests {
             .arrows
             .iter()
             .flat_map(|arrow| arrow.paths())
-            .filter_map(PaintedPath::new)
+            .map(PaintedPath::new)
             .collect();
 
         assert_eq!(drawn.labels.len(), 4);
@@ -296,7 +356,19 @@ mod tests {
             first: -45.,
             sweep: 90.,
         };
-        let label = ring.label_bounds(arc, 1., Point::new(24., 9.), &occupied, &[]);
+        let connector = PaintedPath::new(ArrowPath {
+            commands: vec![
+                PathCommand::Move(Point::new(50., 0.)),
+                PathCommand::Cubic(
+                    Point::new(50., -7053.41),
+                    Point::new(5025., 1473.29),
+                    Point::new(10000., 10000.),
+                ),
+            ],
+            style: Default::default(),
+            filled: false,
+        });
+        let label = ring.label_bounds(arc, 1., Point::new(24., 9.), &occupied, &[connector]);
         assert!(ring.has_room(label, false));
         assert!(
             occupied
@@ -304,5 +376,23 @@ mod tests {
                 .all(|b| !overlaps(grown(label, ring.clearance), *b))
         );
         assert!((228. ..235.).contains(&center_of(label).x));
+    }
+
+    #[test]
+    fn collision_check_follows_a_large_curve_between_sample_points() {
+        let path = PaintedPath::new(ArrowPath {
+            commands: vec![
+                PathCommand::Move(Point::new(40000., 0.)),
+                PathCommand::Cubic(
+                    Point::new(40000., 22091.39),
+                    Point::new(22091.39, 40000.),
+                    Point::new(0., 40000.),
+                ),
+            ],
+            style: Default::default(),
+            filled: false,
+        });
+        let bounds = (Point::new(39985.94, 1012.42), Point::new(40055.94, 1052.42));
+        assert!(path.hits(bounds));
     }
 }
