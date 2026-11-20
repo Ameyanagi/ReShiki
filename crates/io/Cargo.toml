@@ -24,6 +24,8 @@ pdf-writer = "0.12.1"
 png = "0.17"
 resvg = "0.45"
 quick-xml = "0.41"
+simplecss = "0.2.2"
+svgtypes = "0.15"
 i_overlay = "9.1.0"
 roxmltree = "0.20"
 serde = { version = "1", features = ["derive", "rc"] }

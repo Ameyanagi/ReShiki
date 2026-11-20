@@ -16,6 +16,9 @@ use std::{
     io::Read,
 };
 
+mod css;
+mod references;
+
 pub const MAX_BYTES: usize = 8 << 20;
 pub const MAX_ELEMENTS: usize = 50_000;
 pub const MAX_DEPTH: usize = 64;
@@ -78,6 +81,11 @@ pub fn read(bytes: &[u8], style: DrawingStyle) -> Result<Imported, String> {
     check_uses(&xml)?;
     let options = usvg::Options {
         resources_dir: None,
+        conversion_limits: Some(usvg::ConversionLimits {
+            max_elements: MAX_ELEMENTS,
+            max_path_segments: MAX_COMMANDS,
+            max_depth: MAX_DEPTH,
+        }),
         image_href_resolver: usvg::ImageHrefResolver {
             resolve_data: Box::new(|_, _, _| None),
             resolve_string: Box::new(|_, _| None),
@@ -85,7 +93,10 @@ pub fn read(bytes: &[u8], style: DrawingStyle) -> Result<Imported, String> {
         ..Default::default()
     };
     let tree =
-        usvg::Tree::from_str(&clean, &options).map_err(|e| format!("Could not read SVG: {e}"))?;
+        usvg::Tree::from_str(&clean, &options).map_err(|e| match e {
+            usvg::Error::ConversionLimitReached => "The SVG expands beyond 50,000 elements, 20,000 path points or 64 levels. Simplify it before importing.".into(),
+            _ => format!("Could not read SVG: {e}"),
+        })?;
     let mut drawing = Document {
         drawing_style: style,
         ..Default::default()
@@ -209,48 +220,22 @@ fn sanitise(bytes: &[u8], notices: &mut Notices) -> Result<String, String> {
             _ => {}
         }
     }
-    String::from_utf8(writer.into_inner()).map_err(|_| "SVG must be UTF-8 text.".into())
+    let clean = String::from_utf8(writer.into_inner()).map_err(|_| "SVG must be UTF-8 text.")?;
+    let clean = css::sanitise(&clean, notices)?;
+    references::remove_unused_use_links(&clean)
 }
 
 fn check_uses(xml: &roxmltree::Document<'_>) -> Result<(), String> {
-    let ids: HashMap<_, _> = xml
-        .descendants()
-        .filter(|n| n.is_element())
-        .filter_map(|n| n.attribute("id").map(|id| (id, n)))
-        .collect();
+    let ids = references::ids(xml);
     fn size<'a, 'input>(
         node: roxmltree::Node<'a, 'input>,
         ids: &HashMap<&'a str, roxmltree::Node<'a, 'input>>,
         memo: &mut HashMap<roxmltree::NodeId, (usize, usize)>,
         active: &mut HashSet<roxmltree::NodeId>,
         depth: usize,
-        referenced: bool,
     ) -> Result<(usize, usize), String> {
-        // Definitions are not drawn until a live use reaches them. Source
-        // elements were already bounded by the streaming pass.
-        if matches!(
-            node.tag_name().name(),
-            "defs"
-                | "style"
-                | "metadata"
-                | "title"
-                | "desc"
-                | "linearGradient"
-                | "radialGradient"
-                | "stop"
-        ) || node.has_tag_name("symbol") && !referenced
-            || node.attribute("display") == Some("none")
-            || node.attribute("style").is_some_and(|style| {
-                style.split(';').any(|p| {
-                    p.split_once(':').is_some_and(|(k, v)| {
-                        k.trim().eq_ignore_ascii_case("display")
-                            && v.trim().trim_end_matches("!important").trim() == "none"
-                    })
-                })
-            })
-        {
-            return Ok((0, 0));
-        }
+        // usvg parses retained definitions and hidden branches before its
+        // visibility checks, so the budget includes them as well as live uses.
         if depth > MAX_DEPTH || !active.insert(node.id()) {
             return Err("The SVG has a recursive or deeply nested use reference.".into());
         }
@@ -264,22 +249,16 @@ fn check_uses(xml: &roxmltree::Document<'_>) -> Result<(), String> {
         let mut total = 1usize;
         let mut height = 0usize;
         for child in node.children().filter(|n| n.is_element()) {
-            let (n, h) = size(child, ids, memo, active, depth + 1, false)?;
+            let (n, h) = size(child, ids, memo, active, depth + 1)?;
             total = total.saturating_add(n);
             height = height.max(h + 1);
         }
-        if node.has_tag_name("use") {
-            let href = node
-                .attribute("href")
-                .or_else(|| node.attribute(("http://www.w3.org/1999/xlink", "href")));
-            if let Some(target) = href
-                .and_then(|s| s.strip_prefix('#'))
-                .and_then(|id| ids.get(id))
-            {
-                let (n, h) = size(*target, ids, memo, active, depth + 1, true)?;
-                total = total.saturating_add(n);
-                height = height.max(h + 1);
-            }
+        if node.has_tag_name("use")
+            && let Some(target) = references::href(node).and_then(|id| ids.get(id))
+        {
+            let (n, h) = size(*target, ids, memo, active, depth + 1)?;
+            total = total.saturating_add(n);
+            height = height.max(h + 1);
         }
         active.remove(&node.id());
         if total > MAX_ELEMENTS {
@@ -297,7 +276,6 @@ fn check_uses(xml: &roxmltree::Document<'_>) -> Result<(), String> {
         &mut HashMap::new(),
         &mut HashSet::new(),
         0,
-        false,
     )
     .map(|_| ())
 }
@@ -367,6 +345,9 @@ fn collect(
     commands: &mut usize,
     notices: &mut Notices,
 ) -> Result<(), String> {
+    if group.blend_mode() != usvg::BlendMode::Normal {
+        notices.add("blend modes replaced by normal compositing");
+    }
     let opacity = group.opacity().get();
     if opacity > 0. && opacity < 1. {
         notices.add("groups with opacity applied to each path (overlaps may look darker)");
