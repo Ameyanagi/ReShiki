@@ -6,12 +6,13 @@
  "family": "balloon",
  "variant": {},
  "names": {
-  "en": "Balloon on a needle",
+  "en": "Balloon",
   "ja": "風船"
  },
  "category": "addition",
  "keywords": [
   "balloon",
+  "needle",
   "風船",
   "inert gas"
  ],

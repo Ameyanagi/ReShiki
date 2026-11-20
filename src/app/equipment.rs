@@ -336,6 +336,16 @@ pub(crate) fn snap_text(doc: &Document, snap: &Snap) -> String {
 }
 
 /// The size fields, volume first: "100 mL · 15/25".
+/// "Round-bottom flask · 100 mL · 15/25", or the title alone for a piece without sizes.
+fn named(d: &Definition) -> String {
+    let size = size(d);
+    if size.is_empty() {
+        title(d).to_owned()
+    } else {
+        format!("{} · {size}", title(d))
+    }
+}
+
 fn size(d: &Definition) -> String {
     let volume = d.variant.get("volume_ml").map(|v| format!("{v} mL"));
     let rest = d
@@ -400,11 +410,7 @@ impl App {
                 else {
                     return Task::none();
                 };
-                self.status = format!(
-                    "{} · {} · Click to place · Esc cancels",
-                    title(&definition),
-                    size(&definition)
-                );
+                self.status = format!("{} · Click to place · Esc cancels", named(&definition));
                 self.error = false;
                 self.tab.connect = None;
                 self.equipment.armed = Some(definition);
@@ -783,7 +789,7 @@ impl App {
                 .find(|e| Arc::ptr_eq(&e.definition, d))
                 .map_or(Source::BuiltIn, |e| e.source);
             let mut card = column![
-                text(format!("{} · {}", title(d), size(d))).size(14),
+                text(named(d)).size(14),
                 checkbox(state.repeat)
                     .label("Keep placing")
                     .text_size(12)

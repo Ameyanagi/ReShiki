@@ -395,7 +395,7 @@ three-way stopcocks. The **J. Young storage flask, 100 mL** and **J. Young
 Schlenk tube** have J. Young valves. Round-bottom flasks, Schlenk ware and
 J. Young ware can hold liquid. The **Cow receiver adapter, 15/25** turns
 between receivers. The **Thermometer** slides through the **Thermometer
-adapter, 15/25**, and the **Balloon on a needle** inflates and deflates.
+adapter, 15/25**, and the **Balloon** on its needle inflates and deflates.
 
 1. Click a piece to select its whole assembly and show handles for movable
    parts. Hover over a handle to see its setting and value, for example
