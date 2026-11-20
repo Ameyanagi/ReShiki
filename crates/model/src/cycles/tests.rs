@@ -868,6 +868,59 @@ fn tidy_spaces_intermediates_evenly_and_lines_up_side_parts() {
 }
 
 #[test]
+fn tidy_keeps_side_parts_on_their_side_of_bowed_arcs() {
+    for (bow, inside) in [(72., true), (-72., false)] {
+        let mut doc = Document::default();
+        let centered_text = |doc: &mut Document, at: Point, label: &str| {
+            let id = text(doc, Point::default(), label);
+            let from = center_of(ink(doc, id));
+            doc.translate(&[id], at.x - from.x, at.y - from.y);
+            id
+        };
+        let parts = [
+            Point::new(0., -200.),
+            Point::new(200., 0.),
+            Point::new(0., 200.),
+            Point::new(-200., 0.),
+        ]
+        .into_iter()
+        .map(|at| centered_text(&mut doc, at, "Pd"))
+        .collect::<Vec<_>>();
+        let (id, _) = make(&mut doc, &parts).unwrap();
+        let (center, radius) = graphic(&doc, id).cycle_circle();
+        let r = if inside { radius * 0.6 } else { radius * 1.3 };
+        let side = centered_text(&mut doc, super::polar(center, r, -0.8), "ArX");
+        let target = Target {
+            cycle: id,
+            role: Role::Reagent(0),
+            part: vec![side],
+            ink: ink(&doc, side),
+            arc: vec![],
+            tag: String::new(),
+        };
+        super::assign(&mut doc, &target);
+        doc.graphics
+            .iter_mut()
+            .find(|g| g.id == id)
+            .unwrap()
+            .cycle
+            .as_deref_mut()
+            .unwrap()
+            .steps[0]
+            .bow_pt = bow;
+        let roles = cycle(&doc, id).clone();
+
+        assert!(super::tidy(&mut doc, id));
+        let placed = center_of(ink(&doc, side)).distance(center);
+        assert_eq!(placed < radius, inside, "bow {bow}: placed at {placed}");
+        assert!(super::holds(&doc, id, &[side]));
+        assert_eq!(cycle(&doc, id), &roles);
+        assert!(!super::tidy(&mut doc, id), "bow {bow}: second tidy moved");
+        doc.validate().unwrap();
+    }
+}
+
+#[test]
 fn tidy_leaves_an_empty_cycle_and_a_plain_circle_alone() {
     let mut doc = Document::default();
     let id = super::insert(&mut doc, Point::default(), 100.);

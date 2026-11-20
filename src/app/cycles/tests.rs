@@ -85,14 +85,30 @@ fn tidy_cycle_is_one_undo_step_and_idempotent() {
     app.tab.selected = parts.to_vec();
     make(&mut app);
     app.tab.doc.translate(&[parts[1]], -50., 20.);
+    reshiki::leaders::add_callout(
+        &mut app.tab.doc,
+        reshiki::leaders::Target::Object { id: parts[1] },
+        "Moved intermediate",
+    )
+    .unwrap();
     app.tab.selected = vec![cycle(&app).0];
     let before = app.tab.doc.clone();
+    let selected = app.tab.selected.clone();
+    let undo_count = app.tab.history.undo_frames().len();
 
     let _ = app.update(Message::Cycle(Action::Tidy));
     assert!(!app.error, "{}", app.status);
-    assert_eq!(app.status, "Tidied the cycle");
+    assert_eq!(app.tab.doc, before, "review leaves the drawing untouched");
+    assert_eq!(app.tab.history.undo_frames().len(), undo_count);
+    assert!(app.cycle_proposal_card().is_some());
+    let preview = app.display_document().clone();
+    assert_ne!(preview, before);
+    let _ = app.update(Message::ContextKey("Enter".into()));
     let tidied = app.tab.doc.clone();
-    assert_ne!(tidied, before);
+    assert_eq!(app.status, "Tidied the cycle");
+    assert_eq!(tidied, preview);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.history.undo_frames().len(), undo_count + 1);
 
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
@@ -103,8 +119,46 @@ fn tidy_cycle_is_one_undo_step_and_idempotent() {
     assert!(!app.error, "{}", app.status);
     assert_eq!(app.status, "The cycle is already tidy");
     assert_eq!(app.tab.doc, tidied);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn tidy_preview_blocks_edits_and_discard_preserves_the_drawing() {
+    let (mut app, _) = App::new();
+    let parts = [
+        text(&mut app, 0., -200., "A"),
+        text(&mut app, 170., 90., "B"),
+        text(&mut app, -230., 90., "C"),
+    ];
+    app.tab.selected = parts.to_vec();
+    make(&mut app);
+    app.tab.doc.translate(&[parts[1]], -50., 20.);
+    let before = app.tab.doc.clone();
+    let selected = app.tab.selected.clone();
+    let undo_count = app.tab.history.undo_frames().len();
+
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    let preview = app.display_document().clone();
+    assert_ne!(preview, before);
+    let _ = app.update(Message::Delete);
+    assert_eq!(app.display_document(), &preview);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Cycle(Action::MakeReverse));
+    assert_eq!(app.display_document(), &preview);
+    let _ = app.update(Message::Escape);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.display_document(), &before);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.history.undo_frames().len(), undo_count);
+    assert_eq!(app.status, "Cycle tidy discarded");
+
+    app.tab.busy = true;
+    let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.tab.doc, before);
+    assert!(app.error);
 }
 
 #[test]

@@ -1161,9 +1161,9 @@ pub fn tidy(doc: &mut Document, id: u64) -> bool {
                 let c = center_of(b);
                 let d = on.distance(center);
                 let r = if c.distance(center) < radius {
-                    (d - clear).max(radius * 0.5)
+                    (d.min(radius) - clear).max(radius * 0.5)
                 } else {
-                    (d + clear).min(reach)
+                    (d.max(radius) + clear).min(reach)
                 };
                 moves.push((ids, c, polar(center, r, a)));
             }
