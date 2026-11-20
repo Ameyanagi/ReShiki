@@ -222,12 +222,13 @@ the gutters. Moving one item by itself leaves it where you put it.
    or Enter to make it, or **Discard** or Esc to leave the drawing as it was.
    To start from an empty circle instead, choose **Catalytic cycle** in the
    command palette's insert commands.
-3. To add a part, drag a structure or text that is not in a cycle. On the
-   circle it becomes a new intermediate between its neighbors; beside the
-   first half of a step's arc it becomes a reagent coming in, beside the
-   second half a product going out. A dashed outline and a tag such as
-   **Intermediate 3** or **Reagent of step 2** show the role before you let
-   go. A part already in the cycle keeps its role when it moves.
+3. To add a part, drag a structure or text that is not in a cycle. Dropped
+   on an arc, it becomes a new intermediate between that arc's two
+   intermediates; beside the first half of a step's arc it becomes a reagent
+   coming in, beside the second half a product going out. Before you let go,
+   the arc it joins lights up, a dashed outline marks the part, and a tag
+   such as **Insert between 1 and 2** or **Reagent of step 2** says what the
+   drop does. A part already in the cycle keeps its role when it moves.
 4. Clicking any part selects the whole cycle. Click the part again to select
    it alone, then drag it: every arc and side arrow refits to it. Let go
    farther out than a reagent's place, and it leaves the cycle; the tag
