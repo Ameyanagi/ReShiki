@@ -899,6 +899,7 @@ fn bond_text_scene(app: &mut App) -> (u64, World, World, u64, World) {
         .unwrap()
         .clone();
     let mut caption = Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: top.position.offset(-8., -56.),
         text: "Pd2+".into(),

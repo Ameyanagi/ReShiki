@@ -235,6 +235,7 @@ fn column_and_large_group_workloads() {
     });
     let caption = labelled.next_id();
     labelled.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(60., -30.),
         text: "heat".into(),

@@ -101,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
             dest.offset(-(lo.x + hi.x) / 2., -(lo.y + hi.y) / 2.),
         );
         sheet.annotations.push(Annotation {
+            angle: 0.,
             id: sheet.next_id(),
             position: dest.offset(-100., 125.),
             text: title.into(),

@@ -411,6 +411,7 @@ impl Sketch {
             }
             crate::typography::normalize_subscript_digits(&mut text, &mut format);
             doc.annotations.push(crate::document::Annotation {
+                angle: 0.,
                 id: doc.next_id(),
                 position: point(c.position),
                 text,

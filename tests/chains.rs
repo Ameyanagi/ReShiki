@@ -160,6 +160,7 @@ async fn extending_and_joining_grouped_molecules_keeps_captions_and_valid_cdxml(
     for (atom, text) in [(a, "Amine"), (b, "Alcohol")] {
         let id = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: doc.atom(atom).unwrap().position.offset(0., 60.),
             text: text.into(),

@@ -201,6 +201,7 @@ fn drawable_id_order_excludes_groups_but_next_id_includes_them() {
     doc.atoms[0].id = 10;
     doc.atoms[1].id = 2;
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 7,
         position: Point::default(),
         text: "caption".into(),
@@ -660,6 +661,7 @@ fn annotation_text_is_capped_per_text_box_and_per_drawing() {
     let add = |doc: &mut Document, bytes: usize| {
         let id = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: Point::default(),
             text: "x".repeat(bytes),

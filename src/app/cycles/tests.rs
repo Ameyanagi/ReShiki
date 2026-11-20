@@ -6,6 +6,7 @@ fn text(app: &mut App, x: f32, y: f32, value: &str) -> u64 {
     let id = app.tab.doc.next_id();
     let style = app.tab.doc.drawing_style.text_style();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(x, y),
         text: value.into(),

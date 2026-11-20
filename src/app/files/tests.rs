@@ -673,6 +673,7 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
     ));
     let annotation = doc.next_id();
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: annotation,
         position: Point::new(40., -40.),
         text: "heat".into(),

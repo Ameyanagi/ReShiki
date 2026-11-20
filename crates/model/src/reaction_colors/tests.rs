@@ -457,6 +457,7 @@ fn a_new_legend_sits_below_its_reaction_clear_of_other_text() {
     // A caption already there pushes the legend to a free spot.
     let id = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(0., bottom + 30.),
         text: "Diels–Alder, 80 °C, 12 h, toluene".into(),

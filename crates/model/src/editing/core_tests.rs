@@ -283,6 +283,7 @@ fn selection_membership_keeps_collapsed_groups_boundary_stereo_and_object_order(
     doc.contract(&[b, c], "OMe", "MeO").unwrap();
     let caption = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(20., 80.),
         text: "caption".into(),

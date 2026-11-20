@@ -31,6 +31,7 @@ fn type_text(doc: &mut Document, text: &str, at: Point) -> u64 {
     let id = doc.next_id();
     edit(doc, |doc| {
         let mut caption = Annotation {
+            angle: 0.,
             id,
             position: Point::default(),
             text: text.into(),
@@ -98,6 +99,7 @@ fn unattached_text_keeps_its_existing_behaviour() {
     // Text already sitting in a slot is not captured by unrelated edits.
     let mut legacy = scheme();
     legacy.annotations.push(Annotation {
+        angle: 0.,
         id: 9,
         position: Point::new(50., -20.),
         text: "heat".into(),
@@ -212,6 +214,7 @@ fn wide_text_started_mid_arrow_attaches() {
     let mut doc = scheme();
     let wide = "Pd(PPh3)4, K2CO3, toluene/H2O, 80 °C";
     let width = Annotation {
+        angle: 0.,
         id: 0,
         position: Point::default(),
         text: wide.into(),
@@ -501,6 +504,7 @@ fn an_arrow_grown_to_its_text_follows_it_back_down() {
 fn editing_text_already_beside_an_arrow_leaves_it_in_place() {
     let mut doc = scheme();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 9,
         position: Point::new(40., -45.),
         text: "heat".into(),

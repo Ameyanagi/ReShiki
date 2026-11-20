@@ -88,7 +88,10 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
         doc.annotations
             .iter()
             .filter(|a| {
+                // In the text's own upright frame.
                 let (w, h) = a.size();
+                let centre = a.position.offset(w / 2., h / 2.);
+                let (from, to) = (from.turned(centre, -a.angle), to.turned(centre, -a.angle));
                 box_hit(a.position, a.position.offset(w, h), from, to, radius)
             })
             .map(|a| a.id),

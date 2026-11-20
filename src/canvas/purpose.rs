@@ -38,8 +38,7 @@ fn bounds(
         points.extend([lo, hi]);
     }
     for text in doc.annotations.iter().filter(|a| texts.contains(&a.id)) {
-        let (w, h) = text.size();
-        points.extend([text.position, text.position.offset(w, h)]);
+        points.extend(text.corners());
     }
     let first = *points.first()?;
     let (lo, hi) = points.iter().fold((first, first), |(lo, hi), p| {
@@ -156,15 +155,9 @@ fn conditions(doc: &Document, reaction: &Reaction, arrow: &Arrow) -> Vec<u64> {
     let length = dx.hypot(dy);
     let (ux, uy) = (dx / length, dy / length);
     let along = |text: &reshiki::document::Annotation| {
-        let (w, h) = text.size();
-        let p = text.position;
-        let corners = [
-            (p.x, p.y),
-            (p.x + w, p.y),
-            (p.x, p.y + h),
-            (p.x + w, p.y + h),
-        ]
-        .map(|(x, y)| (x - arrow.start.x, y - arrow.start.y));
+        let corners = text
+            .corners()
+            .map(|p| (p.x - arrow.start.x, p.y - arrow.start.y));
         let t = corners.map(|(x, y)| x * ux + y * uy);
         let n = corners.map(|(x, y)| y * ux - x * uy);
         let (n_lo, n_hi) = (
@@ -179,7 +172,7 @@ fn conditions(doc: &Document, reaction: &Reaction, arrow: &Arrow) -> Vec<u64> {
             0.
         };
         let pad = bond * 0.5;
-        (-pad..=length + pad).contains(&((t[0] + t[3]) / 2.)) && gap <= bond
+        (-pad..=length + pad).contains(&((t[0] + t[2]) / 2.)) && gap <= bond
     };
     doc.annotations
         .iter()
@@ -265,6 +258,7 @@ mod tests {
             (5, 0.5 * bond, 4. * bond, "cat."),
         ] {
             doc.annotations.push(Annotation {
+                angle: 0.,
                 id,
                 position: World::new(x, y),
                 text: text.into(),

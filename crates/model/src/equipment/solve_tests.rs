@@ -534,6 +534,7 @@ fn a_first_click_picks_the_assembly_and_a_second_the_piece() {
     // In a group, the assembly comes between the group and the piece.
     let note = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: note,
         position: Point::new(0., 0.),
         text: "reflux".into(),

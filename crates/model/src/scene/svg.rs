@@ -198,6 +198,18 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 push_svg(&mut inner, vec![*primitive], frame, halos);
                 s.push_str(&format!("<g opacity=\"{alpha}\">{inner}</g>"));
             }
+            Primitive::Rotated {
+                pivot,
+                angle,
+                primitives,
+            } => {
+                let mut inner = String::new();
+                push_svg(&mut inner, primitives, frame, halos);
+                s.push_str(&format!(
+                    "<g transform=\"rotate({angle} {} {})\">{inner}</g>",
+                    pivot.x, pivot.y
+                ));
+            }
             Primitive::Halo { radius, primitives } => {
                 if let Some([r, g, b]) = frame.paper {
                     push_halo(s, &primitives, radius, &format!("rgb({r},{g},{b})"));
@@ -653,6 +665,7 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
                 &format!("fill=\"{color}\" {}", spread(0.)),
             ),
             Primitive::Picture(_)
+            | Primitive::Rotated { .. }
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
             | Primitive::Ellipsoid { .. }

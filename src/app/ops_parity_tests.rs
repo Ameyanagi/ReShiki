@@ -51,6 +51,7 @@ fn analysis_drawing() -> (Document, [u64; 4], Vec<u64>, u64) {
     doc.contract(&[anchor, member], "OMe", "MeO").unwrap();
     let caption = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(0., 60.),
         text: "ether".into(),

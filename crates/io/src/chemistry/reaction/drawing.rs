@@ -107,6 +107,7 @@ impl Drawing {
             .separators
             .into_iter()
             .map(|(id, position)| Annotation {
+                angle: 0.,
                 id,
                 position: position.point(),
                 text: "+".into(),
