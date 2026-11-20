@@ -178,6 +178,11 @@ pub enum Action {
     Checked {
         focused: bool,
     },
+    /// Whether a control gained keyboard focus while GitHub was answering.
+    #[cfg(not(target_arch = "wasm32"))]
+    CheckedUnstarred {
+        focused: bool,
+    },
     /// Star on GitHub, in the toast or in About.
     Star {
         toast: bool,
@@ -345,12 +350,7 @@ impl App {
             }
             Action::Tick => {
                 if self.star_ready() {
-                    use iced::advanced::widget::{operate, operation::focusable};
-                    return operate(focusable::count()).map(|count| {
-                        Message::Star(Action::Checked {
-                            focused: count.focused.is_some(),
-                        })
-                    });
+                    return check_focus(|focused| Action::Checked { focused });
                 }
             }
             Action::Checked { focused } => {
@@ -377,16 +377,22 @@ impl App {
                 let Some(starred) = starred else {
                     return Task::none();
                 };
+                if !starred {
+                    return check_focus(|focused| Action::CheckedUnstarred { focused });
+                }
                 self.star.checking = false;
-                if starred {
-                    self.github.starred = true;
-                    self.star.change(|record| {
-                        record.state = Answer::Starred;
-                        true
-                    });
-                    // About's link is named as it now shows.
-                    return self.accessibility_refresh();
-                } else if self.star_ready() {
+                self.github.starred = true;
+                self.star.change(|record| {
+                    record.state = Answer::Starred;
+                    true
+                });
+                // About's link is named as it now shows.
+                return self.accessibility_refresh();
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            Action::CheckedUnstarred { focused } => {
+                self.star.checking = false;
+                if !focused && self.star_ready() {
                     return self.star_show();
                 }
             }
@@ -641,6 +647,11 @@ impl App {
             .extend(toast)
             .into()
     }
+}
+
+fn check_focus(action: fn(bool) -> Action) -> Task<Message> {
+    use iced::advanced::widget::{operate, operation::focusable};
+    operate(focusable::count()).map(move |count| Message::Star(action(count.focused.is_some())))
 }
 
 /// The status after a one-click star.

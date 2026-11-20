@@ -602,7 +602,14 @@ async fn the_first_github_sign_in_asks_once_more_even_after_not_now() {
     assert!(app.github.dialog.is_none());
     assert_eq!(saved_record(&app).unwrap().signed_in_ask, SignedInAsk::Due);
     assert!(app.star_ready(), "the sign-in ask needs no idle time");
-    let _ = app.update(Message::Star(Action::IsStarred(Some(false))));
+    let focus_check = app.update(Message::Star(Action::IsStarred(Some(false))));
+    assert!(iced_runtime::task::into_stream(focus_check).is_some());
+    assert!(!app.star.open, "wait for the current keyboard focus");
+    let _ = app.update(Message::Star(Action::CheckedUnstarred { focused: true }));
+    assert!(!app.star.open, "a control gained focus during the request");
+    assert_eq!(saved_record(&app).unwrap().signed_in_ask, SignedInAsk::Due);
+
+    let _ = app.update(Message::Star(Action::CheckedUnstarred { focused: false }));
     assert!(app.star.open);
     let record = saved_record(&app).unwrap();
     assert_eq!(record.signed_in_ask, SignedInAsk::Asked);
@@ -646,12 +653,12 @@ fn a_sign_in_ask_waits_for_the_dialog_and_covers_a_due_usage_ask() {
     sign_in(&mut app);
     let _ = app.star_github_signed_in();
     app.github.dialog = Some(crate::app::github::Dialog::SignIn);
-    let _ = app.update(Message::Star(Action::IsStarred(Some(false))));
+    let _ = app.update(Message::Star(Action::CheckedUnstarred { focused: false }));
     assert!(!app.star.open);
     assert_eq!(saved_record(&app).unwrap().signed_in_ask, SignedInAsk::Due);
 
     app.github.dialog = None;
-    let _ = app.update(Message::Star(Action::IsStarred(Some(false))));
+    let _ = app.update(Message::Star(Action::CheckedUnstarred { focused: false }));
     assert!(app.star.open);
     let record = saved_record(&app).unwrap();
     assert!(
