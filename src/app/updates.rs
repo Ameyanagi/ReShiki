@@ -39,6 +39,11 @@ pub(super) fn background(message: &Message) -> bool {
     ) || super::results::admitted(super::results::Modal::UpdatesDialog, message)
 }
 
+enum Failure {
+    Check(String),
+    Other(String),
+}
+
 pub struct State {
     pub open: bool,
     pub automatic: bool,
@@ -52,7 +57,7 @@ pub struct State {
     prepared: Option<std::sync::Arc<updates::install::Prepared>>,
     saving: bool,
     latest: Option<Release>,
-    error: Option<String>,
+    error: Option<Failure>,
     version_copied: bool,
     /// The data folder About names, as resolved after startup moved it.
     pub(super) data_folder: Option<std::path::PathBuf>,
@@ -69,7 +74,9 @@ impl State {
         !self.saving && !self.installing && !self.restarting
     }
     pub(super) fn error(&self) -> Option<&str> {
-        self.error.as_deref()
+        self.error.as_ref().map(|error| match error {
+            Failure::Check(message) | Failure::Other(message) => message.as_str(),
+        })
     }
     pub fn new() -> Self {
         let preferences = if cfg!(test) {
@@ -103,6 +110,19 @@ impl State {
             release.channel() == Some(self.channel)
                 && release.available_for(updates::CURRENT_VERSION)
         })
+    }
+    fn card_action(&self) -> (&'static str, &'static str, Action) {
+        if matches!(self.error, Some(Failure::Check(_))) {
+            ("updates-check", "Try again", Action::Check(true))
+        } else if self.available() {
+            if self.channel == Channel::Nightly {
+                ("updates-install", "Download nightly ↗", Action::Portable)
+            } else {
+                ("updates-install", "Update and restart", Action::Install)
+            }
+        } else {
+            ("updates-check", "Check now", Action::Check(true))
+        }
     }
     fn installed_channel() -> Channel {
         Release {
@@ -174,7 +194,7 @@ impl App {
                     return Task::none();
                 }
                 if let Some(reason) = self.update_restart_blocker() {
-                    self.updates.error = Some(reason.into());
+                    self.updates.error = Some(Failure::Other(reason.into()));
                     return Task::none();
                 }
                 if self.updates.prepared.is_some() {
@@ -203,7 +223,7 @@ impl App {
                         self.updates.prepared = Some(prepared);
                         return self.restart_for_update();
                     }
-                    Err(error) => self.updates.error = Some(error),
+                    Err(error) => self.updates.error = Some(Failure::Other(error)),
                 }
             }
             Action::RecoveryCleared => return self.handoff_update(),
@@ -251,10 +271,11 @@ impl App {
                         self.updates.latest = Some(release)
                     }
                     Ok(_) => {
-                        self.updates.error =
-                            Some("The release did not match the selected update channel.".into())
+                        self.updates.error = Some(Failure::Check(
+                            "The release did not match the selected update channel.".into(),
+                        ))
                     }
-                    Err(error) => self.updates.error = Some(error),
+                    Err(error) => self.updates.error = Some(Failure::Check(error)),
                 }
             }
             Action::Channel(channel) => {
@@ -295,8 +316,9 @@ impl App {
             Action::Saved(result) => {
                 self.updates.saving = false;
                 if let Err(error) = result {
-                    self.updates.error =
-                        Some(format!("Could not save update preferences: {error}"));
+                    self.updates.error = Some(Failure::Other(format!(
+                        "Could not save update preferences: {error}"
+                    )));
                 }
             }
             Action::Download => {
@@ -307,7 +329,7 @@ impl App {
             }
             Action::Opened(result) => {
                 if let Err(error) = result {
-                    self.updates.error = Some(error);
+                    self.updates.error = Some(Failure::Other(error));
                 }
             }
             Action::OpenSettings => {
@@ -400,13 +422,13 @@ impl App {
     pub(super) fn update_restart_failed(&mut self, error: String) {
         self.cancel_close();
         self.updates.restarting = false;
-        self.updates.error = Some(error);
+        self.updates.error = Some(Failure::Other(error));
         self.updates.open = true;
     }
 
     fn restart_for_update(&mut self) -> Task<Message> {
         if let Some(reason) = self.update_restart_blocker() {
-            self.updates.error = Some(format!("Update ready. {reason}"));
+            self.updates.error = Some(Failure::Other(format!("Update ready. {reason}")));
             self.updates.open = true;
             return Task::none();
         }
@@ -462,8 +484,8 @@ impl App {
             state.progress.clone()
         } else if state.checking {
             "Checking for updates…".into()
-        } else if let Some(error) = &state.error {
-            error.clone()
+        } else if let Some(error) = state.error() {
+            error.to_owned()
         } else if let Some(latest) = &state.latest {
             if state.available() {
                 if state.channel == Channel::Stable
@@ -549,22 +571,13 @@ impl App {
             let status = text(status).size(14).width(Length::Fill);
             let mut summary = row![status].spacing(10).align_y(Alignment::Center);
             if !pending {
-                let (id, label, action) = if state.available() {
-                    if state.channel == Channel::Nightly {
-                        ("updates-install", "Download nightly ↗", Action::Portable)
-                    } else {
-                        ("updates-install", "Update and restart", Action::Install)
-                    }
-                } else if state.error.is_some() {
-                    ("updates-check", "Try again", Action::Check(true))
-                } else {
-                    ("updates-check", "Check now", Action::Check(true))
-                };
+                let (id, label, action) = state.card_action();
+                let installs = matches!(action, Action::Install | Action::Portable);
                 summary = summary.push(
                     reshiki::accessibility::button(id, label, text(label).size(13))
                         .on_press(msg(action))
                         .padding([7, 10])
-                        .style(if state.available() {
+                        .style(if installs {
                             crate::appearance::primary
                         } else {
                             crate::appearance::outline
