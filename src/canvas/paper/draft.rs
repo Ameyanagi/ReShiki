@@ -359,7 +359,7 @@ impl MoleculeCanvas<'_> {
             translation,
             smart,
             chain_badge,
-            drop_ink,
+            cycle_drop,
             seat_hint,
             ..
         } = draft;
@@ -429,8 +429,17 @@ impl MoleculeCanvas<'_> {
                 }
                 // Say what a drop here would make the part in a cycle.
                 if let Some(target) = reshiki::cycles::drop_target(preview, ids) {
-                    *chain_badge = Some((p, target.role.to_string(), true));
-                    *drop_ink = Some(target.ink);
+                    *chain_badge = Some((p, target.tag.clone(), true));
+                    *cycle_drop = Some(target);
+                }
+                // The tag sits below the dragged piece, clear of its bonds.
+                if let Some((at, ..)) = chain_badge
+                    && let Some((_, hi)) = cycle_drop
+                        .as_ref()
+                        .map(|t| t.ink)
+                        .or_else(|| reshiki::scene::selection_bounds(preview, ids))
+                {
+                    at.y = at.y.max(hi.y);
                 }
             }
         }
@@ -468,5 +477,7 @@ impl MoleculeCanvas<'_> {
     }
 }
 
+#[cfg(test)]
+mod cycle_drop_tests;
 #[cfg(test)]
 mod stretch_tests;

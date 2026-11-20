@@ -54,6 +54,8 @@ fn cycle_document() -> Document {
                 role,
                 part: vec![id],
                 ink,
+                arc: vec![],
+                tag: String::new(),
             },
         );
     }
@@ -161,6 +163,8 @@ fn structure_cycle() -> (Document, u64) {
                 role,
                 part,
                 ink,
+                arc: vec![],
+                tag: String::new(),
             },
         );
     }
@@ -427,6 +431,8 @@ fn a_lone_intermediate_starts_and_ends_its_step() {
             role: crate::cycles::Role::Intermediate(0),
             part,
             ink,
+            arc: vec![],
+            tag: String::new(),
         },
     );
     let xml = write(&document, Default::default()).unwrap();

@@ -1,9 +1,10 @@
-use super::{Role, Target, drawn, drop_target, make, remove, reverse, set_radius};
+use super::{Role, Target, center_of, drawn, drop_target, make, remove, reverse, set_radius};
 use crate::{
     arrows::Head,
     document::{Annotation, DRAWING_ELEMENTS, Document, Point},
     typography::TextFormat,
 };
+use std::f32::consts::TAU;
 
 fn text(doc: &mut Document, at: Point, text: &str) -> u64 {
     let id = doc.next_id();
@@ -170,6 +171,96 @@ fn drop_targets_name_the_role_by_place() {
 }
 
 #[test]
+fn a_drop_on_an_arc_names_its_neighbours_and_shows_that_arc() {
+    let (mut doc, id, [pd0, oa, tm]) = suzuki();
+    let (center, radius) = graphic(&doc, id).cycle_circle();
+    let angle = |t: u64, doc: &Document| {
+        let c = center_of(ink(doc, t));
+        (c.y - center.y).atan2(c.x - center.x)
+    };
+    let (a0, a1) = (angle(pd0, &doc), angle(oa, &doc));
+    let free = text(&mut doc, Point::default(), "Ar–X");
+    let drop_at = |doc: &mut Document, angle: f32, distance: f32| {
+        let c = center_of(ink(doc, free));
+        let to = center.offset(distance * angle.cos(), distance * angle.sin());
+        doc.translate(&[free], to.x - c.x, to.y - c.y);
+        drop_target(doc, &[free]).unwrap()
+    };
+    // Between the first two intermediates, on the circle.
+    let target = drop_at(&mut doc, (a0 + a1) * 0.5, radius);
+    assert_eq!(target.tag, "Insert between 1 and 2");
+    // The highlight is step 1's arc: on the circle, between its ends.
+    let [arc] = target.arc.as_slice() else {
+        panic!("one arc arrow, got {}", target.arc.len());
+    };
+    for p in arc {
+        assert!((p.distance(center) - radius).abs() < 0.5);
+        let a = (p.y - center.y).atan2(p.x - center.x);
+        assert!(a > a0 && a < a1, "{a} outside {a0}..{a1}");
+    }
+    // Between the last and the first, the cycle closes through 1.
+    let (a2, a3) = (angle(tm, &doc), a0 + TAU);
+    let target = drop_at(&mut doc, (a2 + a3) * 0.5, radius);
+    assert_eq!(target.tag, "Insert between 3 and 1");
+    // Beside an arc the tag names the role, and that step's arc lights up.
+    let bond = doc.drawing_style.bond_length_world;
+    let target = drop_at(&mut doc, a0 + (a1 - a0) * 0.3, radius + 2. * bond);
+    assert_eq!(target.tag, "Reagent of step 1");
+    assert_eq!(target.arc.len(), 1);
+}
+
+#[test]
+fn a_drop_on_an_empty_cycle_lights_up_its_whole_circle() {
+    let mut doc = Document::default();
+    let id = super::insert(&mut doc, Point::default(), 100.);
+    let free = text(&mut doc, Point::new(0., -100.), "Pd(0)L2");
+    let c = center_of(ink(&doc, free));
+    doc.translate(&[free], -c.x, -100. - c.y);
+    let target = drop_target(&doc, &[free]).unwrap();
+    assert_eq!((target.cycle, target.tag.as_str()), (id, "Intermediate 1"));
+    // The whole circle: its points go all the way round.
+    let [circle] = target.arc.as_slice() else {
+        panic!("one circle arrow");
+    };
+    assert!(
+        circle
+            .iter()
+            .all(|p| (p.distance(Point::default()) - 100.).abs() < 0.5)
+    );
+    assert!(circle[0].distance(circle[circle.len() / 2]) > 190.);
+}
+
+#[test]
+fn a_drop_on_a_bowed_arc_splits_its_step() {
+    let (mut doc, id, [pd0, oa, _]) = suzuki();
+    let (center, radius) = graphic(&doc, id).cycle_circle();
+    let bond = doc.drawing_style.bond_length_world;
+    if let Some(c) = doc
+        .graphics
+        .iter_mut()
+        .find(|g| g.id == id)
+        .and_then(|g| g.cycle.as_deref_mut())
+    {
+        c.steps[0].bow_pt = 60.;
+    }
+    let angle = |t: u64, doc: &Document| {
+        let c = center_of(ink(doc, t));
+        (c.y - center.y).atan2(c.x - center.x)
+    };
+    let mid = (angle(pd0, &doc) + angle(oa, &doc)) * 0.5;
+    // The visible arc's middle, well off the circle.
+    let drawn = drawn(&doc, graphic(&doc, id));
+    let on_arc = drawn.arrows[drawn.arcs.iter().position(|s| *s == Some(0)).unwrap()].point(0.5);
+    assert!(on_arc.distance(center) - radius > bond);
+    let free = text(&mut doc, Point::default(), "Ar–X");
+    let c = center_of(ink(&doc, free));
+    doc.translate(&[free], on_arc.x - c.x, on_arc.y - c.y);
+    let target = drop_target(&doc, &[free]).unwrap();
+    assert_eq!(target.role, Role::Intermediate(1), "at {mid}");
+    assert_eq!(target.tag, "Insert between 1 and 2");
+}
+
+#[test]
 fn side_arrows_touch_the_arc_and_only_products_have_heads() {
     let (mut doc, id, [pd0, oa, _]) = suzuki();
     let (center, radius) = graphic(&doc, id).cycle_circle();
@@ -221,6 +312,8 @@ fn deleting_an_intermediate_joins_its_steps() {
         role: Role::Reagent(1),
         part: vec![reagent],
         ink: ink(&doc, reagent),
+        arc: vec![],
+        tag: String::new(),
     };
     super::assign(&mut doc, &target);
     if let Some(c) = doc
@@ -302,6 +395,8 @@ fn reversing_runs_the_steps_the_other_way() {
         role: Role::Reagent(0),
         part: vec![reagent],
         ink: ink(&doc, reagent),
+        arc: vec![],
+        tag: String::new(),
     };
     super::assign(&mut doc, &target);
     let g = doc.graphics.iter_mut().find(|g| g.id == id).unwrap();
@@ -613,6 +708,8 @@ fn a_reagent_whose_step_goes_leaves_the_cycle_group_and_keeps_names() {
             role,
             part: vec![part],
             ink: ink(&doc, part),
+            arc: vec![],
+            tag: String::new(),
         };
         super::assign(&mut doc, &target);
     }

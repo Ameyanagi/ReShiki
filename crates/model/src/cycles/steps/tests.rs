@@ -43,6 +43,8 @@ fn join(doc: &mut Document, id: u64, role: Role, part: &[u64]) {
             role,
             part: part.to_vec(),
             ink,
+            arc: vec![],
+            tag: String::new(),
         },
     );
 }

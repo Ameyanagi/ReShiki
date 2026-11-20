@@ -40,8 +40,8 @@ struct Draft<'d> {
     rejection: Option<reshiki::editing::RingRejection>,
     translation: Option<World>,
     smart: Vec<Guide>,
-    /// The ink of a part that would join a catalytic cycle if dropped now.
-    drop_ink: Option<(World, World)>,
+    /// Where a part would join a catalytic cycle if dropped now.
+    cycle_drop: Option<reshiki::cycles::Target>,
     /// The joint a moving equipment piece would snap to.
     seat_hint: Option<SeatHint>,
 }
@@ -86,7 +86,7 @@ impl<'d> Draft<'d> {
             rejection: None,
             translation: None,
             smart: Vec::new(),
-            drop_ink: None,
+            cycle_drop: None,
             seat_hint: None,
         }
     }
@@ -166,7 +166,7 @@ impl MoleculeCanvas<'_> {
             rejection,
             translation,
             smart,
-            drop_ink,
+            cycle_drop,
             seat_hint,
         } = draft;
         if let Some(id) = self.hidden_annotation {
@@ -262,7 +262,7 @@ impl MoleculeCanvas<'_> {
         let nmr_cache = (cached_camera.is_some() && translation.is_none()).then_some(&state.scene);
         self.draw_nmr_assignments(frame, &preview, selected, bounds, nmr_cache);
         self.draw_editor_markers(frame, &preview, bounds);
-        self.draw_drop_ink(frame, drop_ink, bounds);
+        self.draw_cycle_drop(frame, cycle_drop.as_ref(), bounds);
         self.draw_seat_hint(frame, seat_hint.as_ref(), bounds);
         self.draw_pull_out(frame, state, bounds);
         self.draw_orbital_target(frame, state, bounds);

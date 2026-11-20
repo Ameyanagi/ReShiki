@@ -855,6 +855,11 @@ pub struct Target {
     pub part: Vec<u64>,
     /// The part's ink box where it is now.
     pub ink: (Point, Point),
+    /// The arc it would join, as points along each of its arrows: the step
+    /// it splits or sits beside, or an empty cycle's whole circle.
+    pub arc: Vec<Vec<Point>>,
+    /// What the drop does, such as "Insert between 1 and 2".
+    pub tag: String,
 }
 
 /// The drop target for `moved`, one molecule or one text that belongs to no
@@ -880,7 +885,22 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
         if moved.contains(&g.id) {
             return None;
         }
-        let role = zone(doc, g, cycle, p)?;
+        let bond = doc.drawing_style.bond_length_world;
+        let (center, radius) = g.cycle_circle();
+        let bow = (cycle.steps.iter())
+            .map(|s| DEFAULT.world(s.bow_pt).abs())
+            .fold(0., f32::max);
+        if p.distance(center) > radius + 4. * bond + bow {
+            return None;
+        }
+        let drawn = drawn(doc, g);
+        // On an arc, bowed off the circle or not, it splits that arc's step.
+        let on_arc = (drawn.arrows.iter().zip(&drawn.arcs))
+            .find_map(|(a, s)| s.filter(|_| a.hit(p, 0.6 * bond)));
+        let role = match on_arc {
+            Some(s) => Role::Intermediate(s + 1),
+            None => zone(doc, g, cycle, p)?,
+        };
         let n = cycle.intermediates.len();
         // A full list takes no more.
         let full = match role {
@@ -891,11 +911,32 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
         if full {
             return None;
         }
+        let step = match role {
+            Role::Intermediate(i) => (n > 0).then(|| (i + n - 1) % n),
+            Role::Reagent(s) | Role::Product(s) => Some(s),
+        };
+        // Enough points that the highlight follows the arrow when zoomed in.
+        let arc = (drawn.arrows.iter().zip(&drawn.arcs))
+            .filter(|(_, s)| **s == step)
+            .map(|(a, _)| {
+                let (lo, hi) = a.bounds();
+                let count = (4. * lo.distance(hi) / bond).clamp(16., 720.) as usize;
+                (0..=count)
+                    .map(|k| a.point(k as f32 / count as f32))
+                    .collect()
+            })
+            .collect();
+        let tag = match role {
+            Role::Intermediate(i) if n >= 2 => format!("Insert between {i} and {}", i % n + 1),
+            _ => role.to_string(),
+        };
         Some(Target {
             cycle: g.id,
             role,
             part: part.clone(),
             ink,
+            arc,
+            tag,
         })
     })
 }
