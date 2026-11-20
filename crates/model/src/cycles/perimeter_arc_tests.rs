@@ -8,6 +8,9 @@ use crate::{
 #[path = "perimeter_side_tests.rs"]
 mod sides;
 
+#[path = "perimeter_name_tests.rs"]
+mod step_names;
+
 fn fixture(shape: Shape, n: usize, mirrored: bool, counterclockwise: bool) -> (Document, u64) {
     let mut doc = Document::default();
     let mut g = Graphic::dragged(
@@ -291,7 +294,7 @@ fn converted_bow_reversible_and_side_arrows_preserve_names() {
     };
     assert_ne!(retained(&actual), retained(&old));
     assert_eq!(retained(&actual).len(), 1);
-    assert_eq!(actual.labels, old.labels);
+    assert_ne!(actual.labels, old.labels);
     assert_eq!(actual.arcs.iter().filter(|s| **s == Some(0)).count(), 2);
     assert!(
         actual

@@ -13,10 +13,12 @@ mod tests;
 
 #[path = "perimeter_deform.rs"]
 mod deform;
+#[path = "perimeter_names.rs"]
+mod names;
 #[path = "perimeter_sides.rs"]
 mod sides;
 
-/// Replace step shafts and side arrows while retaining legacy labels.
+/// Resolve noncircle shafts, side arrows and names from the same geometry.
 /// Each reversible lane has its own explicit arc-to-step association.
 pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mut Drawn) {
     let Some(cycle) = g.cycle.as_deref() else {
@@ -47,6 +49,7 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
         .into_iter()
         .collect();
         out.arcs = vec![None; out.arrows.len()];
+        names::place(doc, g, perimeter, vec![], &[], out);
         return;
     }
     let bounds = boxes(doc, cycle);
@@ -70,7 +73,11 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
         .enumerate()
         .take(n)
         .map(|(s, step)| {
-            if step.hidden && step.reagents.is_empty() && step.products.is_empty() {
+            if step.hidden
+                && step.reagents.is_empty()
+                && step.products.is_empty()
+                && step.name.trim().is_empty()
+            {
                 return None;
             }
             let (&first, &last) = (anchors.get(s)?, anchors.get((s + 1) % n)?);
@@ -127,16 +134,20 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
         })
         .collect();
     let mut parts = bounds.iter().skip(n);
+    let mut names = vec![];
     out.arrows.clear();
     out.arcs.clear();
     for (s, (step, arrows)) in cycle.steps.iter().zip(arrows).enumerate() {
         let arrows = arrows.unwrap_or_default();
-        let shafts: Vec<_> = if step.reagents.is_empty() && step.products.is_empty() {
+        let shafts: Vec<_> = if step.reagents.is_empty()
+            && step.products.is_empty()
+            && step.name.trim().is_empty()
+        {
             vec![]
         } else {
             arrows
                 .iter()
-                .filter_map(super::shapes::Shaft::from_arrow)
+                .map(super::shapes::Shaft::from_arrow)
                 .collect()
         };
         if !step.hidden {
@@ -158,7 +169,7 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
             };
             if let Some(arrow) = sides::arrow(
                 g.id,
-                &shafts,
+                shafts.iter().filter_map(Option::as_ref),
                 grown(ink, gap),
                 incoming,
                 doc.drawing_style.bond_length_world,
@@ -168,7 +179,21 @@ pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mu
                 out.arcs.push(None);
             }
         }
+        if !step.name.trim().is_empty()
+            && let (Some(&first), Some(&last)) = (anchors.get(s), anchors.get((s + 1) % n))
+        {
+            let mut span = (dir * (last - first)).rem_euclid(length);
+            if span == 0. && n == 1 {
+                span = length;
+            }
+            names.push(names::Name::new(
+                step.name.clone(),
+                shafts,
+                first + dir * span * 0.5,
+            ));
+        }
     }
+    names::place(doc, g, perimeter, names, &bounds, out);
 }
 
 /// Clear the ink along distance, never by flattening the shaft. When an

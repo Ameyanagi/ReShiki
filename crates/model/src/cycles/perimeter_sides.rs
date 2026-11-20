@@ -5,9 +5,9 @@ use crate::{
     document::{Arrow, Point},
 };
 
-pub(super) fn arrow(
+pub(super) fn arrow<'a>(
     id: u64,
-    shafts: &[Shaft],
+    shafts: impl IntoIterator<Item = &'a Shaft>,
     ink: (Point, Point),
     incoming: bool,
     bond: f32,

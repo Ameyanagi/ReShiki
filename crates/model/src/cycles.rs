@@ -320,7 +320,7 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
         let Some(perimeter) = outline(g) else {
             return Drawn::default();
         };
-        let mut out = drawn_circle(doc, g);
+        let mut out = Drawn::default();
         perimeter_arcs::replace(doc, g, &perimeter, &mut out);
         out
     } else {
@@ -328,8 +328,7 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
     }
 }
 
-// Keep legacy Circle construction analytic and unchanged. Noncircle labels
-// still use this path until their perimeter consumer lands.
+// Keep legacy Circle construction and label placement analytic and unchanged.
 fn drawn_circle(doc: &Document, g: &Graphic) -> Drawn {
     let Some(cycle) = &g.cycle else {
         return Drawn::default();
