@@ -4019,7 +4019,11 @@ fn equipment_authoring_measurements_own_raw_clicks_over_selected_handles() {
             zoom: 2.,
         };
         canvas.guides.rulers = rulers;
-        canvas.equipment_authoring = Some((&[], true));
+        canvas.equipment_authoring = Some(EquipmentAuthoring {
+            points: &[],
+            measuring: true,
+            direction: None,
+        });
         let paper = canvas.guides.paper(bounds);
         let mut state = State::default();
         for world in [World::new(-40., -30.), World::new(40., 30.)] {
@@ -4056,7 +4060,11 @@ fn equipment_authoring_measurements_own_raw_clicks_over_selected_handles() {
                 "No edit on release"
             );
         }
-        canvas.equipment_authoring = Some((&[], false));
+        canvas.equipment_authoring = Some(EquipmentAuthoring {
+            points: &[],
+            measuring: false,
+            direction: None,
+        });
         let pointer = Point::new(bounds.center_x(), bounds.center_y());
         let cursor = mouse::Cursor::Available(pointer);
         let action = canvas

@@ -1,5 +1,5 @@
 use super::*;
-use crate::canvas::{Camera, Tool, World, tests::chain_canvas};
+use crate::canvas::{Camera, EquipmentAuthoring, Tool, World, tests::chain_canvas};
 use iced::widget::canvas::Program;
 use reshiki::{chains::ChainMode, document::Document};
 
@@ -561,7 +561,11 @@ fn equipment_authoring_touch_records_only_completed_taps() {
     let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(500., 350.));
     let mut canvas = chain_canvas(&doc, ChainMode::Straight);
     canvas.tool = Tool::Select;
-    canvas.equipment_authoring = Some((&[], true));
+    canvas.equipment_authoring = Some(EquipmentAuthoring {
+        points: &[],
+        measuring: true,
+        direction: None,
+    });
     let start = Point::new(200., 150.);
     let moved = Point::new(235., 170.);
     for scenario in ["tap", "lost", "long press", "drag then pinch"] {

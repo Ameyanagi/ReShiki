@@ -1,11 +1,12 @@
 //! A detached equipment draft, measured and reviewed on the ordinary canvas.
 use super::workspace::{accessible_command, command, muted_text, section};
 use super::{App, InspectorTab, Message, focus_drawing};
-use crate::canvas::{Edit, Tool};
+use crate::canvas::{Edit, EquipmentAuthoring, Tool};
 use iced::widget::{column, row, text};
 use iced::{Element, Task, keyboard};
 use reshiki::document::{Document, Point};
-use reshiki::equipment::authoring::Draft;
+use reshiki::equipment::authoring::{Draft, JointKind};
+use reshiki::equipment::format::{Gender, JointDraw, Role, TAPER_SIZES};
 use std::sync::Arc;
 
 pub(super) const DEFINE: &str = "Define as equipment piece…";
@@ -18,8 +19,47 @@ pub enum Action {
     Name(String),
     Calibrate,
     MeasureAgain,
+    BeginJoint,
+    JointEnd(JointEnd),
+    JointSize(String),
+    FlipJoint,
+    MarkJointAgain,
+    AddJoint,
+    CancelJoint,
     Accept,
     Discard,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JointEnd {
+    Socket,
+    Cone,
+}
+
+impl JointEnd {
+    fn gender(self) -> Gender {
+        match self {
+            Self::Socket => Gender::F,
+            Self::Cone => Gender::M,
+        }
+    }
+}
+
+impl std::fmt::Display for JointEnd {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Socket => "Socket",
+            Self::Cone => "Cone",
+        })
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct JointEdit {
+    points: Vec<Point>,
+    end: JointEnd,
+    size: String,
+    flip: bool,
 }
 
 #[derive(Clone, PartialEq)]
@@ -27,8 +67,10 @@ struct Snapshot {
     draft: Arc<Draft>,
     points: Vec<Point>,
     length: String,
+    measured_length: Option<String>,
     name: String,
     measuring: bool,
+    joint: Option<JointEdit>,
 }
 
 pub(super) struct State {
@@ -38,6 +80,8 @@ pub(super) struct State {
     identity: String,
     pub(super) preview: Option<Document>,
     notice: Option<String>,
+    joint_candidate: Option<Arc<Draft>>,
+    direction: Option<[Point; 2]>,
 }
 
 impl State {
@@ -60,22 +104,104 @@ impl State {
 
     fn refresh(&mut self, doc: &Document) {
         self.preview = None;
-        if !self.current.draft.calibrated() {
+        self.joint_candidate = None;
+        self.direction = None;
+        let mut draft = self.named_draft();
+        if let Some(edit) = &self.current.joint
+            && let [a, b] = edit.points.as_slice()
+        {
+            let edges = [*a, *b];
+            let Some(id) = (1..=draft.definition.joints.len() + 1)
+                .map(|n| format!("joint-{n}"))
+                .find(|id| !draft.definition.joints.iter().any(|j| j.id() == id))
+            else {
+                self.notice = Some("The draft cannot add another joint.".into());
+                return;
+            };
+            let kind = JointKind::Taper {
+                size: edit.size.clone(),
+                gender: edit.end.gender(),
+                draw: JointDraw::Standard,
+            };
+            let glass = draft
+                .definition
+                .shapes
+                .iter()
+                .any(|s| s.role == Role::Glass);
+            let result = if glass {
+                draft.add_joint(&id, edges, kind.clone(), edit.flip)
+            } else {
+                Err("A standard joint needs a filled glass outline. Fill the neck shape before defining it as equipment.".into())
+            };
+            match result {
+                Ok(joint) => {
+                    self.direction = Some(direction_arrow(&draft, joint.at(), joint.dir()));
+                    self.joint_candidate = Some(Arc::new(draft.clone()));
+                }
+                Err(error) => {
+                    self.notice = Some(error);
+                    if draft.calibrated() {
+                        if let Ok(rim) = draft.rim(edges) {
+                            let mut dir = rim.dir;
+                            if edit.flip {
+                                dir = dir.map(|v| -v);
+                            }
+                            self.direction = Some(direction_arrow(&draft, rim.at, dir));
+                        }
+                    } else if glass {
+                        // The first joint sets the physical scale used by the
+                        // normal probes. An uncalibrated rim can choose the
+                        // opposite normal around a notch. A valid opposite
+                        // trial supplies that scale without changing the draft.
+                        let mut opposite = draft.clone();
+                        if let Ok(joint) = opposite.add_joint(&id, edges, kind, !edit.flip) {
+                            self.direction = Some(direction_arrow(
+                                &opposite,
+                                joint.at(),
+                                joint.dir().map(|v| -v),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        if !draft.calibrated() {
             return;
         }
-        match self.named_draft().accept(doc, &self.identity) {
+        match draft.accept(doc, &self.identity) {
             Ok(accepted) => self.preview = Some(accepted.document),
             Err(error) => self.notice = Some(error),
         }
     }
 
     fn ready(&self) -> bool {
-        !self.current.measuring && !self.current.name.trim().is_empty() && self.preview.is_some()
+        !self.current.measuring
+            && self.current.joint.is_none()
+            && !self.current.name.trim().is_empty()
+            && self.preview.is_some()
     }
 
-    pub(super) fn measurement(&self) -> (&[Point], bool) {
-        (&self.current.points, self.current.measuring)
+    pub(super) fn measurement(&self) -> EquipmentAuthoring<'_> {
+        EquipmentAuthoring {
+            points: self
+                .current
+                .joint
+                .as_ref()
+                .map_or(&self.current.points, |j| &j.points),
+            measuring: self.current.measuring || self.current.joint.is_some(),
+            direction: self.direction,
+        }
     }
+}
+
+fn point([x, y]: [f64; 2]) -> Point {
+    Point::new(x as f32, y as f32)
+}
+
+fn direction_arrow(draft: &Draft, at: [f64; 2], dir: [f64; 2]) -> [Point; 2] {
+    let at = draft.frame().apply(at);
+    let dir = draft.frame().apply_dir(dir);
+    [point(at), point([at[0] + dir[0], at[1] + dir[1]])]
 }
 
 /// Like user templates, a new definition has an identity independent of its
@@ -142,14 +268,18 @@ impl App {
                     draft: Arc::new(draft),
                     points: vec![],
                     length: String::new(),
+                    measured_length: None,
                     name: "New equipment piece".into(),
                     measuring: true,
+                    joint: None,
                 },
                 past: vec![],
                 future: vec![],
                 identity,
                 preview: None,
                 notice: None,
+                joint_candidate: None,
+                direction: None,
             });
             self.context_menu = None;
             self.commands.open = false;
@@ -199,9 +329,33 @@ impl App {
             return Task::none();
         };
         state.notice = None;
-        let focus = matches!(action, Action::Calibrate | Action::MeasureAgain);
+        let focus = matches!(
+            action,
+            Action::Calibrate
+                | Action::MeasureAgain
+                | Action::BeginJoint
+                | Action::MarkJointAgain
+                | Action::AddJoint
+                | Action::CancelJoint
+        );
         match action {
-            Action::Point(point) if state.current.measuring && state.current.points.len() < 2 => {
+            Action::Point(point)
+                if state
+                    .current
+                    .joint
+                    .as_ref()
+                    .is_some_and(|j| j.points.len() < 2) =>
+            {
+                state.checkpoint();
+                if let Some(joint) = &mut state.current.joint {
+                    joint.points.push(point);
+                }
+            }
+            Action::Point(point)
+                if state.current.joint.is_none()
+                    && state.current.measuring
+                    && state.current.points.len() < 2 =>
+            {
                 state.checkpoint();
                 state.current.points.push(point);
             }
@@ -213,12 +367,66 @@ impl App {
                 state.checkpoint();
                 state.current.name = value.clone();
             }
-            Action::MeasureAgain => {
+            Action::MeasureAgain
+                if state.current.joint.is_none()
+                    && state.current.draft.definition.joints.is_empty() =>
+            {
                 state.checkpoint();
                 state.current.points.clear();
                 state.current.measuring = true;
             }
-            Action::Calibrate => {
+            Action::BeginJoint if state.current.joint.is_none() => {
+                state.checkpoint();
+                state.current.joint = Some(JointEdit {
+                    points: vec![],
+                    end: JointEnd::Socket,
+                    size: "15/25".into(),
+                    flip: false,
+                });
+            }
+            Action::JointEnd(end) if state.current.joint.as_ref().is_some_and(|j| j.end != end) => {
+                state.checkpoint();
+                if let Some(joint) = &mut state.current.joint {
+                    joint.end = end;
+                }
+            }
+            Action::JointSize(size)
+                if state.current.joint.as_ref().is_some_and(|j| j.size != size) =>
+            {
+                state.checkpoint();
+                if let Some(joint) = &mut state.current.joint {
+                    joint.size = size;
+                }
+            }
+            Action::FlipJoint if state.current.joint.is_some() => {
+                state.checkpoint();
+                if let Some(joint) = &mut state.current.joint {
+                    joint.flip = !joint.flip;
+                }
+            }
+            Action::MarkJointAgain if state.current.joint.is_some() => {
+                state.checkpoint();
+                if let Some(joint) = &mut state.current.joint {
+                    joint.points.clear();
+                }
+            }
+            Action::CancelJoint if state.current.joint.is_some() => {
+                state.checkpoint();
+                state.current.joint = None;
+            }
+            Action::AddJoint if state.joint_candidate.is_some() && state.preview.is_some() => {
+                if let Some(draft) = state.joint_candidate.take() {
+                    state.checkpoint();
+                    if state.current.measuring {
+                        state.current.points.clear();
+                        state.current.length.clear();
+                    }
+                    state.current.draft = draft;
+                    state.current.joint = None;
+                    state.current.measuring = false;
+                }
+            }
+            Action::Calibrate if state.current.joint.is_none() => {
                 let result = match (
                     state.current.points.as_slice(),
                     state.current.length.trim().parse::<f64>(),
@@ -233,6 +441,7 @@ impl App {
                     Ok(draft) => {
                         state.checkpoint();
                         state.current.draft = Arc::new(draft);
+                        state.current.measured_length = Some(state.current.length.trim().into());
                         state.current.measuring = false;
                     }
                     Err(error) => state.notice = Some(error),
@@ -242,7 +451,9 @@ impl App {
         }
         state.refresh(&self.tab.doc);
         self.error = false;
-        self.status = if state.ready() {
+        self.status = if state.current.joint.is_some() {
+            "Mark both rim edges, review the joint, then Add joint"
+        } else if state.ready() {
             "Review the piece, then Accept or Discard"
         } else {
             "Click two points whose distance you know"
@@ -274,17 +485,20 @@ impl App {
     }
 
     pub(super) fn equipment_authoring_gate(&mut self, message: &Message) -> Option<Task<Message>> {
-        let measuring = self.tab.equipment_authoring.as_ref()?.current.measuring;
+        let current = &self.tab.equipment_authoring.as_ref()?.current;
+        let confirm = if current.joint.is_some() {
+            Action::AddJoint
+        } else if current.measuring {
+            Action::Calibrate
+        } else {
+            Action::Accept
+        };
         match message {
             Message::Escape => return Some(self.equipment_authoring_action(Action::Discard)),
             Message::Undo => return Some(self.equipment_draft_history(false)),
             Message::Redo => return Some(self.equipment_draft_history(true)),
             Message::ContextKey(key) if key == "Enter" => {
-                return Some(self.equipment_authoring_action(if measuring {
-                    Action::Calibrate
-                } else {
-                    Action::Accept
-                }));
+                return Some(self.equipment_authoring_action(confirm));
             }
             Message::Canvas(Edit::EquipmentAuthoringPoint(point)) => {
                 return Some(self.equipment_authoring_action(Action::Point(*point)));
@@ -335,7 +549,91 @@ impl App {
                 .size(12),
         ]
         .spacing(10);
-        if current.measuring {
+        if let Some(joint) = &current.joint {
+            body = body
+                .push(text("Ground-glass joint").size(13))
+                .push(
+                    text(match joint.points.len() {
+                        0 => "Click one edge of the opening, then the opposite rim edge.",
+                        1 => "Click the opposite rim edge.",
+                        _ => "Review the standard joint and its outward arrow on the canvas.",
+                    })
+                    .size(12),
+                )
+                .push(
+                    row![
+                        crate::appearance::pick_list(
+                            [JointEnd::Socket, JointEnd::Cone],
+                            Some(joint.end),
+                            |end| Message::EquipmentAuthoring(Action::JointEnd(end))
+                        )
+                        .text_size(12),
+                        crate::appearance::pick_list(
+                            TAPER_SIZES.map(|s| s.label.to_string()).to_vec(),
+                            Some(joint.size.clone()),
+                            |size| Message::EquipmentAuthoring(Action::JointSize(size))
+                        )
+                        .text_size(12),
+                    ]
+                    .spacing(7),
+                );
+            if !current.draft.calibrated() {
+                body = body.push(
+                    text("This size sets the scale of the whole piece when you add the joint.")
+                        .size(12),
+                );
+            } else if let [a, b] = joint.points.as_slice()
+                && let Ok(sizes) = current.draft.taper_sizes([*a, *b], joint.end.gender())
+                && !sizes.is_empty()
+            {
+                body = body.push(
+                    text(format!(
+                        "Fits this opening: {}",
+                        sizes.iter().map(|s| s.label).collect::<Vec<_>>().join(", ")
+                    ))
+                    .size(12),
+                );
+            }
+            if !joint.points.is_empty() {
+                let mut controls = row![command(
+                    "Mark again",
+                    Message::EquipmentAuthoring(Action::MarkJointAgain)
+                )]
+                .spacing(6);
+                if joint.points.len() == 2 {
+                    controls = controls.push(command(
+                        "Flip",
+                        Message::EquipmentAuthoring(Action::FlipJoint),
+                    ));
+                }
+                body = body.push(controls);
+            }
+            body = body
+                .push(
+                    text(
+                        "ReShiki draws the standard joint. Its base must meet a filled glass neck.",
+                    )
+                    .size(12),
+                )
+                .push(
+                    row![
+                        command(
+                            "Cancel joint",
+                            Message::EquipmentAuthoring(Action::CancelJoint)
+                        ),
+                        accessible_command(
+                            "equipment-add-joint",
+                            "Add joint to equipment draft",
+                            "Add joint"
+                        )
+                        .on_press_maybe(
+                            (state.joint_candidate.is_some() && state.preview.is_some())
+                                .then_some(Message::EquipmentAuthoring(Action::AddJoint))
+                        ),
+                    ]
+                    .spacing(6),
+                );
+        } else if current.measuring {
             body = body.push(
                 text(match current.points.len() {
                     0 => "Click the first point of a known length on the drawing.",
@@ -370,9 +668,34 @@ impl App {
                 ));
             }
         } else {
-            body = body.push(text(format!("Measured length: {} mm", current.length.trim())).size(12))
-                .push(command("Measure again", Message::EquipmentAuthoring(Action::MeasureAgain)))
-                .push(text("The canvas shows the equipment piece. Accept replaces the selected shapes in this drawing.").size(12));
+            body = body.push(
+                text(current.measured_length.as_ref().map_or_else(
+                    || "Scale set from the first joint".into(),
+                    |length| format!("Measured length: {length} mm"),
+                ))
+                .size(12),
+            );
+            if current.draft.definition.joints.is_empty() {
+                body = body.push(command(
+                    "Measure again",
+                    Message::EquipmentAuthoring(Action::MeasureAgain),
+                ));
+            } else {
+                body = body.push(
+                    text(format!(
+                        "Fixed joints: {}",
+                        current.draft.definition.joints.len()
+                    ))
+                    .size(12),
+                );
+            }
+            body = body.push(text("The canvas shows the equipment piece. Accept replaces the selected shapes in this drawing.").size(12));
+        }
+        if current.joint.is_none() {
+            body = body.push(command(
+                "Add joint…",
+                Message::EquipmentAuthoring(Action::BeginJoint),
+            ));
         }
         body = body.push(
             row![

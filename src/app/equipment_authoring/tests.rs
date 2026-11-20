@@ -43,6 +43,352 @@ fn calibrate(app: &mut App) {
     );
 }
 
+fn joint_drawing() -> (App, [Point; 2]) {
+    use reshiki::{graphics::PathCommand, palette::Color};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let id = app.tab.doc.next_id();
+    let mut body = Graphic::pen_curve(
+        id,
+        Point::default(),
+        Point::new(1., 1.),
+        GraphicStyle {
+            fill: Some(Color::Paper),
+            ..Default::default()
+        },
+    );
+    body.origin = Point::default();
+    body.axis_x = Point::new(1., 0.);
+    body.axis_y = Point::new(0., 1.);
+    body.node_types.clear();
+    // The socket's generated base meets this neck at y=29, x=±6.5.
+    body.path = vec![
+        PathCommand::Move(Point::new(-9.6, 0.)),
+        PathCommand::Line(Point::new(9.6, 0.)),
+        PathCommand::Line(Point::new(6.5, 29.)),
+        PathCommand::Line(Point::new(25., 45.)),
+        PathCommand::Line(Point::new(-25., 45.)),
+        PathCommand::Line(Point::new(-6.5, 29.)),
+        PathCommand::Close,
+    ];
+    app.tab.doc.graphics.push(body);
+    app.tab.selected.push(id);
+    (app, [Point::new(-9.6, 0.), Point::new(9.6, 0.)])
+}
+
+fn mark_joint(app: &mut App, edges: [Point; 2]) {
+    send(app, Action::BeginJoint);
+    for point in edges {
+        let _ = app.update(Message::Canvas(Edit::EquipmentAuthoringPoint(point)));
+    }
+}
+
+#[test]
+fn equipment_authoring_first_joint_previews_a_true_port_and_accepts_with_one_undo() {
+    let (mut app, edges) = joint_drawing();
+    let before = app.tab.doc.clone();
+    send(&mut app, Action::Begin);
+    mark_joint(&mut app, edges);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert_eq!(state.notice, None);
+    assert!(!state.ready(), "a candidate must be added before accepting");
+    assert!(state.current.draft.definition.joints.is_empty());
+    assert!(!state.current.draft.calibrated());
+    let shown = app.display_document().clone();
+    assert_eq!(shown.piece_definitions[0].joints.len(), 1);
+    let ports = reshiki::equipment::solve::ports(&shown.graphics[0]);
+    assert_eq!(
+        ports.len(),
+        1,
+        "the preview uses a typed joint, not artwork alone"
+    );
+    assert!(ports[0].dir[1] < -0.99);
+    let [at, toward] = state.measurement().direction.unwrap();
+    assert!(toward.y < at.y, "the arrow points out of the mouth");
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    // Enter adds to the detached draft, then a second Enter accepts the piece.
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(app.tab.equipment_authoring.as_ref().unwrap().ready());
+    let _ = app.update(Message::Undo);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.current.joint.is_some());
+    assert!(state.current.draft.definition.joints.is_empty());
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert!(app.tab.equipment_authoring.as_ref().unwrap().ready());
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, shown);
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let accepted = app.tab.doc.clone();
+    let bytes = accepted.file_json().unwrap();
+    let reopened = Document::from_json(&bytes).unwrap();
+    assert_eq!(
+        reshiki::equipment::solve::ports(&reopened.graphics[0]).len(),
+        1
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, accepted);
+}
+
+#[test]
+fn equipment_authoring_joint_errors_flip_and_cancel_are_draft_edits() {
+    let (mut app, edges) = joint_drawing();
+    let before = app.tab.doc.clone();
+    send(&mut app, Action::Begin);
+    mark_joint(&mut app, edges);
+    let candidate = app.display_document().clone();
+    send(&mut app, Action::FlipJoint);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.notice.is_some());
+    assert!(state.joint_candidate.is_none());
+    let [at, toward] = state.measurement().direction.unwrap();
+    assert!(toward.y > at.y);
+    send(&mut app, Action::AddJoint);
+    assert!(
+        app.tab
+            .equipment_authoring
+            .as_ref()
+            .unwrap()
+            .current
+            .draft
+            .definition
+            .joints
+            .is_empty()
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.display_document(), &candidate);
+    send(&mut app, Action::JointSize("24/29".into()));
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert_eq!(
+        state.notice, None,
+        "a first size may recalibrate the candidate"
+    );
+    assert!(!state.current.draft.calibrated());
+    assert!(
+        (state
+            .joint_candidate
+            .as_ref()
+            .unwrap()
+            .rim(edges)
+            .unwrap()
+            .gap_mm
+            - 28.8)
+            .abs()
+            < 1e-5
+    );
+    send(&mut app, Action::MarkJointAgain);
+    for point in [Point::new(-5., 35.), Point::new(5., 35.)] {
+        send(&mut app, Action::Point(point));
+    }
+    assert!(
+        app.tab
+            .equipment_authoring
+            .as_ref()
+            .unwrap()
+            .joint_candidate
+            .is_none()
+    );
+    send(&mut app, Action::CancelJoint);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.current.measuring);
+    assert!(state.current.points.is_empty());
+    assert!(!state.current.draft.calibrated());
+    send(&mut app, Action::Discard);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn equipment_authoring_joint_cone_and_unfilled_art_use_the_same_validation() {
+    let (mut app, edges) = joint_drawing();
+    send(&mut app, Action::Begin);
+    mark_joint(&mut app, edges);
+    send(&mut app, Action::JointEnd(JointEnd::Cone));
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert_eq!(state.notice, None);
+    let joint = &state.joint_candidate.as_ref().unwrap().definition.joints[0];
+    assert!(matches!(
+        joint,
+        reshiki::equipment::format::Joint::Taper {
+            gender: Gender::M,
+            draw: JointDraw::Standard,
+            part: None,
+            ..
+        }
+    ));
+    send(&mut app, Action::CancelJoint);
+    assert!(
+        !app.tab
+            .equipment_authoring
+            .as_ref()
+            .unwrap()
+            .current
+            .draft
+            .calibrated()
+    );
+    let mut app = drawing(); // ordinary unfilled outlines remain Detail, not invented glass
+    send(&mut app, Action::Begin);
+    mark_joint(&mut app, edges);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(
+        state
+            .notice
+            .as_ref()
+            .unwrap()
+            .contains("filled glass outline")
+    );
+    assert!(state.joint_candidate.is_none());
+}
+
+#[test]
+fn equipment_authoring_joint_fixture_calibration_and_later_size_errors() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/equipment-authoring/standard-joint-neck.rsk"
+    ))
+    .unwrap();
+    app.tab.doc.validate().unwrap();
+    app.tab.selected = vec![1];
+    let before = app.tab.doc.clone();
+    let edges = [Point::new(-28.8, 0.), Point::new(28.8, 0.)];
+    send(&mut app, Action::Begin);
+    for point in edges {
+        send(&mut app, Action::Point(point));
+    }
+    send(&mut app, Action::Length("19.2".into()));
+    send(&mut app, Action::Calibrate);
+    assert!(app.tab.equipment_authoring.as_ref().unwrap().ready());
+    let calibrated = app
+        .tab
+        .equipment_authoring
+        .as_ref()
+        .unwrap()
+        .current
+        .clone();
+    mark_joint(&mut app, edges);
+    send(&mut app, Action::CancelJoint);
+    assert!(app.tab.equipment_authoring.as_ref().unwrap().current == calibrated);
+    mark_joint(&mut app, edges);
+    send(&mut app, Action::AddJoint);
+    let draft = app
+        .tab
+        .equipment_authoring
+        .as_ref()
+        .unwrap()
+        .current
+        .draft
+        .clone();
+    assert_eq!(draft.definition.joints.len(), 1);
+    mark_joint(&mut app, edges);
+    send(&mut app, Action::JointSize("24/29".into()));
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.notice.as_ref().unwrap().contains("opening is"));
+    assert!(state.joint_candidate.is_none());
+    assert_eq!(state.current.draft, draft);
+    send(&mut app, Action::Accept);
+    assert_eq!(
+        app.tab.doc, before,
+        "a pending invalid joint cannot be accepted"
+    );
+    send(&mut app, Action::CancelJoint);
+    send(&mut app, Action::Accept);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.piece_definitions[0].joints.len(), 1);
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+}
+
+#[test]
+fn equipment_authoring_joint_drops_unconfirmed_measurement_without_mislabeling_scale() {
+    let (mut app, edges) = joint_drawing();
+    send(&mut app, Action::Begin);
+    send(&mut app, Action::Point(edges[0]));
+    send(&mut app, Action::Length("100".into()));
+    mark_joint(&mut app, edges);
+    send(&mut app, Action::AddJoint);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.ready());
+    assert_eq!(state.current.measured_length, None);
+    assert!(state.current.length.is_empty());
+    assert!(state.current.points.is_empty());
+    assert!((state.current.draft.rim(edges).unwrap().gap_mm - 19.2).abs() < 1e-5);
+
+    let (mut app, edges) = joint_drawing();
+    send(&mut app, Action::Begin);
+    for point in edges {
+        send(&mut app, Action::Point(point));
+    }
+    send(&mut app, Action::Length("19.2".into()));
+    send(&mut app, Action::Calibrate);
+    send(&mut app, Action::MeasureAgain);
+    send(&mut app, Action::Length("100".into()));
+    mark_joint(&mut app, edges);
+    send(&mut app, Action::AddJoint);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.ready());
+    assert_eq!(state.current.measured_length.as_deref(), Some("19.2"));
+    assert!(state.current.length.is_empty());
+}
+
+#[test]
+fn equipment_authoring_rejected_first_joint_arrow_uses_the_proposed_physical_scale() {
+    use reshiki::graphics::PathCommand;
+    let (mut app, _) = joint_drawing();
+    // A small central notch contains neither default-scale probe. Once the
+    // selected 15/25 size calibrates the draft, its +Y probe enters the body.
+    app.tab.doc.graphics[0].path = [
+        (-28.8, 0.),
+        (-3., 0.),
+        (-3., 1.8),
+        (3., 1.8),
+        (3., 0.),
+        (28.8, 0.),
+        (19.5, 87.),
+        (75., 135.),
+        (-75., 135.),
+        (-19.5, 87.),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(i, (x, y))| {
+        let point = Point::new(x, y);
+        if i == 0 {
+            PathCommand::Move(point)
+        } else {
+            PathCommand::Line(point)
+        }
+    })
+    .chain([PathCommand::Close])
+    .collect();
+    let before = app.tab.doc.clone();
+    let edges = [Point::new(-28.8, 0.), Point::new(28.8, 0.)];
+    send(&mut app, Action::Begin);
+    mark_joint(&mut app, edges);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.joint_candidate.is_some());
+    let [at, toward] = state.measurement().direction.unwrap();
+    assert!(toward.y < at.y);
+    send(&mut app, Action::FlipJoint);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.notice.is_some());
+    assert!(state.joint_candidate.is_none());
+    let [at, toward] = state.measurement().direction.unwrap();
+    assert!(
+        toward.y > at.y,
+        "the rejected proposal points into the body"
+    );
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Undo);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.joint_candidate.is_some());
+    let [at, toward] = state.measurement().direction.unwrap();
+    assert!(toward.y < at.y);
+}
+
 #[test]
 fn equipment_authoring_normal_app_preview_accept_and_one_document_undo() {
     let mut app = drawing();

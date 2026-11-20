@@ -296,7 +296,7 @@ pub enum Edit {
     /// Place the armed equipment piece centred here.
     Piece(World),
     Click(World),
-    /// A raw measurement click owned by the detached equipment draft.
+    /// A raw measurement or rim click owned by the detached equipment draft.
     EquipmentAuthoringPoint(World),
     /// Legacy/programmatic camera edits use world coordinates.
     Pan(f32, f32),
@@ -658,6 +658,13 @@ pub struct PreviewStyles<'a> {
     pub bracket_sides: BracketSides,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct EquipmentAuthoring<'a> {
+    pub points: &'a [World],
+    pub measuring: bool,
+    pub direction: Option<[World; 2]>,
+}
+
 pub struct MoleculeCanvas<'a> {
     pub(crate) nmr: Option<nmr::Context<'a>>,
     /// Session-only feedback from the hovered locant in a chemical name.
@@ -665,7 +672,7 @@ pub struct MoleculeCanvas<'a> {
     /// Outlines what takes part in a reaction until the next edit.
     pub(crate) reaction_preview: Option<&'a reshiki::reactions::Reaction>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
-    pub(crate) equipment_authoring: Option<(&'a [World], bool)>,
+    pub(crate) equipment_authoring: Option<EquipmentAuthoring<'a>>,
     /// Keyboard input routing; the marker waits for pointer or key interaction.
     pub(crate) keyboard_target: Option<World>,
     pub(crate) keyboard_marker: bool,
@@ -861,7 +868,10 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         if let Some(context) = self.optimizer {
             optimization::draw_pins(self, context, &mut frame, paper);
         }
-        if let Some((points, _)) = self.equipment_authoring {
+        if let Some(EquipmentAuthoring {
+            points, direction, ..
+        }) = self.equipment_authoring
+        {
             if let [a, b] = points {
                 frame.stroke(
                     &Path::line(self.camera.screen(*a, paper), self.camera.screen(*b, paper)),
@@ -877,6 +887,23 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         .with_width(2.)
                         .with_color(overlay::ACCENT_STRONG),
                 );
+            }
+            if let Some([at, toward]) = direction {
+                let at = self.camera.screen(at, paper);
+                let toward = self.camera.screen(toward, paper);
+                let vector = toward - at;
+                let length = vector.x.hypot(vector.y);
+                if length > 0. {
+                    let u = vector * (1. / length);
+                    let tip = at + u * 32.;
+                    let v = Vector::new(-u.y, u.x);
+                    let stroke = Stroke::default()
+                        .with_width(2.)
+                        .with_color(overlay::ACCENT_STRONG);
+                    frame.stroke(&Path::line(at, tip), stroke);
+                    frame.stroke(&Path::line(tip, tip - u * 8. + v * 4.), stroke);
+                    frame.stroke(&Path::line(tip, tip - u * 8. - v * 4.), stroke);
+                }
             }
         }
         if let Some(target) = self.keyboard_target.filter(|_| self.keyboard_marker) {

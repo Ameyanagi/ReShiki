@@ -66,10 +66,10 @@ impl MoleculeCanvas<'_> {
         state.pull_out = false;
         let point = point?;
         let p = self.camera.world(point, bounds);
-        if let Some((_, measuring)) = self.equipment_authoring {
+        if let Some(context) = self.equipment_authoring {
             state.end_gesture();
             state.last_click = None;
-            return Some(if measuring {
+            return Some(if context.measuring {
                 Action::publish(Edit::EquipmentAuthoringPoint(p)).and_capture()
             } else {
                 Action::request_redraw().and_capture()

@@ -28,5 +28,46 @@ all captures. Select the flask group.
 
 Screenshots show the editor and rendered result. Record Undo/Redo and
 save/reopen observations separately because a still image cannot prove them.
-Do not capture a launch screen or unrelated recovered drawing. This slice
-calibrates a fixed drawing only; it does not create a port from the mouth.
+Do not capture a launch screen or unrelated recovered drawing. This fixture
+exercises length calibration only; use the joint fixture below to author a port.
+
+## Fixed ground-glass joint fixture
+
+`standard-joint-neck.rsk` is editable filled glass artwork with a compatible
+neck for a standard **15/25 Socket**. Its rim edges are world points
+**(-28.8, 0)** and **(28.8, 0)**. The 57.6 drawing-unit gap represents the
+socket's **19.2 mm outer rim**, including its walls; the nominal ground size
+is 15/25. There are no definitions or joints in the source file.
+
+Use a fresh isolated profile and open the fixture. Select its path, then:
+
+1. Choose **Define as equipment piece…**, then **Add joint…**. This route
+   does not require entering a known length first. Set Name to **Glass
+   socket adapter**, keep **Socket** and **15/25**, and click the two rim
+   corners. Capture the ordinary canvas showing the generated joint,
+   segment, circles and outward arrow, together with the draft panel.
+2. Choose **Flip**. Capture the inward arrow and attachment error. **Add
+   joint** and the outer **Accept** must be disabled. Undo the draft edit:
+   the outward arrow and valid ghost return without changing the drawing.
+3. Choose **Add joint**. Draft Undo returns to the pending joint; draft Redo
+   adds it again. Choose **Accept**. Select the piece and inspect its normal
+   Equipment properties. One drawing Undo returns the original editable
+   path; Redo returns the piece. Save under a new name, reopen and inspect
+   its joint, then exercise ordinary snapping with a compatible cone.
+4. Reopen the original fixture and repeat through **Add joint…** with
+   **Cone** and **15/25**. The first size calibrates to the cone's 15 mm
+   shoulder gap. Capture the cone preview, then **Cancel joint** and
+   **Discard**; the original path must remain editable with no drawing Undo.
+5. For a later-size failure, first use the known-length path to calibrate the
+   same rim as **19.2 mm**, then add a **15/25 Socket**. Mark this rim again
+   in a second **Add joint…** operation and choose **24/29**: its different
+   physical opening must be refused without rescaling the existing draft.
+
+Use the same theme, zoom, window and panel width for comparable captures.
+Record source commit and packaged-binary checksum alongside the screenshots.
+The stills show the editor; record Undo/Redo, Discard, save/reopen and normal
+port snapping observations separately. This increment does not support live
+snapping while the draft is open, role/material editing, plug families,
+liquids, holds, moving parts, library destinations or editing a saved
+piece definition. Standard artwork is added to the common glass silhouette;
+arbitrary drawn ends are not automatically trimmed to fit.
