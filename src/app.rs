@@ -296,6 +296,7 @@ pub enum Message {
     Export(&'static str),
     /// Export the figure from the Export tab, with or without the editable
     /// drawing.
+    ExportAgain,
     ExportFigure(&'static str, bool),
     CopySmiles,
     CopyAnalysis,
@@ -470,6 +471,7 @@ pub struct App {
     appearance: crate::appearance::Settings,
     engine: LocalEngine,
     figure_exporting: bool,
+    recent_export: Option<figure_export::Recent>,
     /// Serializes clipboard preparation/publication across document tabs.
     copy_as_busy: bool,
     pdf_copy: clipboard::PdfCopy,
@@ -600,6 +602,7 @@ impl App {
             appearance,
             engine: LocalEngine::default(),
             figure_exporting: false,
+            recent_export: figure_export::Recent::load(),
             copy_as_busy: false,
             pdf_copy: Default::default(),
             native_copy_busy: false,

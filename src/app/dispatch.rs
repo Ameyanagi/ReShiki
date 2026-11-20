@@ -263,6 +263,7 @@ impl App {
             Message::SaveFormat(format) => return Some(self.save_drawing(Some(format))),
             Message::KeepFormat => return Some(self.keep_format()),
             Message::Export(format) => return Some(self.export_drawing(format)),
+            Message::ExportAgain => return Some(self.export_again()),
             Message::ExportFigure(format, editable) => {
                 return Some(self.export_figure(format, false, editable));
             }

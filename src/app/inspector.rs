@@ -2635,6 +2635,15 @@ impl App {
         }
         let mut body = column![
             text("Export").size(18),
+            self.repeat_export().map(|recent| {
+                let label = recent.label();
+                reshiki::accessibility::button("export-again", label.clone(), text(label).size(12))
+                    .width(Length::Fill)
+                    .padding([8, 10])
+                    .on_press_maybe(
+                        (!self.tab.busy && !self.figure_exporting).then_some(Message::ExportAgain),
+                    )
+            }),
             text("File exports use the full drawing.")
                 .size(12)
                 .style(muted_text),
