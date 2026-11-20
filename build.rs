@@ -93,6 +93,14 @@ fn main() -> anyhow::Result<()> {
         );
         println!("cargo:rustc-link-arg-bin=reshiki={}", resource.display());
     }
+    // The icon library is stored deflated; the Icons tool inflates it on first use.
+    let icons = "assets/icons/tabler-outline.tsv";
+    println!("cargo:rerun-if-changed={icons}");
+    let out = PathBuf::from(env::var_os("OUT_DIR").context("Missing build output directory")?);
+    fs::write(
+        out.join("tabler-outline.tsv.deflate"),
+        miniz_oxide::deflate::compress_to_vec(&fs::read(icons)?, 10),
+    )?;
     // The browser editor runs InChI on the page's thread; give it the desktop
     // InChI worker's 32 MiB stack rather than wasm's default 1 MiB.
     if env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("wasm32") {

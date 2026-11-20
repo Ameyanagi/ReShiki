@@ -96,6 +96,7 @@ explains how the crates and modules fit together.
 - `src/app/history.rs`: Undo and redo of drawing history.
 - `src/app/host.rs`: Requests from the page that hosts the browser editor; see web.rs.
 - `src/app/hover_qa.rs`: Opt-in real-widget evidence for the exact large-gallery pointer report.
+- `src/app/icon_browser.rs`: The Icons tool
 - `src/app/icons.rs`
 - `src/app/icons/arrows.rs`
 - `src/app/icons/bonds.rs`
@@ -753,6 +754,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/leaders.rs`: Callout leaders
 - `crates/model/src/lib.rs`
 - `crates/model/src/ligands.rs`: Defined haptic abbreviations
+- `crates/model/src/line_icons.rs`: Line icons placed with the Icons tool.
 - `crates/model/src/linked_properties.rs`: Property captions linked to a molecule
 - `crates/model/src/models3d.rs`: 3D models of structures (#386)
 - `crates/model/src/models3d/cell_occlusion.rs`: Cell ink visible past the model's space-filling balls.

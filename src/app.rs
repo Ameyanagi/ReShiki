@@ -45,6 +45,7 @@ mod figure_export;
 mod figure_panels;
 mod file_shortcuts;
 mod files;
+pub(crate) mod icon_browser;
 #[cfg(target_os = "macos")]
 mod macos_files;
 #[cfg(target_os = "macos")]
@@ -164,6 +165,8 @@ pub enum InspectorTab {
     Templates,
     /// The Equipment browser, opened by its tool.
     Equipment,
+    /// The Icons browser, opened by its tool.
+    Icons,
     Import,
     Names,
     Export,
@@ -219,6 +222,7 @@ pub enum Message {
     ),
     Templates(template_library::Action),
     Equipment(equipment::Action),
+    Icons(icon_browser::Action),
     TemplateNavigate(bool),
     InspectorScroll(f32),
     ResetBondDrawing,
@@ -519,6 +523,7 @@ pub struct App {
     template_index: usize,
     templates: template_library::State,
     equipment: equipment::State,
+    icons: icon_browser::State,
     /// The last committed atom label, which a Text-tool double-click repeats.
     last_label: Option<atom_text::RememberedLabel>,
     /// The last Text-tool click on an atom, to recognize a double-click.
@@ -645,6 +650,7 @@ impl App {
             template_index: 0,
             templates: template_library::State::load(),
             equipment: equipment::State::default(),
+            icons: icon_browser::State::default(),
             last_label: None,
             text_click: None,
             path_click: None,
@@ -1500,8 +1506,9 @@ impl App {
                 self.updates.open,
                 self.tab.atom_text.is_some(),
                 self.inspector_open
-                    && self.inspector_tab == InspectorTab::DrawingStyle
-                    && self.tab.styles.editor.is_some()
+                    && (self.inspector_tab == InspectorTab::DrawingStyle
+                        && self.tab.styles.editor.is_some()
+                        || self.inspector_tab == InspectorTab::Icons)
                     && self.tab.inline_text.is_none()
                     && self.context_menu.is_none(),
             ),

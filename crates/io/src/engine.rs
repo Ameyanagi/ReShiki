@@ -101,6 +101,7 @@ impl Request {
                         g.kind,
                         crate::graphics::GraphicKind::Symbol(_)
                             | crate::graphics::GraphicKind::Orbital(_)
+                            | crate::graphics::GraphicKind::Icon
                     )
                 })
                 .map(|g| {

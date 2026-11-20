@@ -8,9 +8,9 @@ issues: []
   never changes what the arrow means: a block reaction arrow keeps its roles
   and conditions. The arrow palette offers each body as a preset. See
   [Reaction and mechanism arrows](arrows.md).
-- **Condition icons**: the **Chemical symbols** palette has a **Reaction
-  conditions** row with light, electrode, heat, microwave, ultrasound, cold
-  and enzyme icons. Click one onto an arrow and group them, and the icon moves
+- **Condition icons**: the **Icons** tool has a **Reaction conditions**
+  category with light, electrode, heat, microwave, ultrasound, cold and
+  enzyme icons. Click one onto an arrow and group them, and the icon moves
   with the arrow. It is an ordinary shape, so the reaction and its condition
   text are unchanged.
 - An image exported on a black or custom background paints shapes filled with

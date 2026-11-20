@@ -817,3 +817,34 @@ async fn review_close_returns_focus_reaction_preview() {
     assert_eq!(app.tab.selected, vec![arrow]);
     assert_canvas_delete(&mut ui, &mut app).await;
 }
+
+/// The Icons browser: Esc while typing in its search closes it, and the
+/// drawing takes the next key with its selection kept.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn review_close_returns_focus_icons() {
+    use crate::canvas::Tool;
+    let mut ui = Ui::new().await;
+    let mut app = drawing_app();
+    let selected = app.tab.selected.clone();
+    let task = app.update(Message::Tool(Tool::Icons));
+    ui.run_task(&mut app, task).await;
+    assert_eq!(app.inspector_tab, InspectorTab::Icons);
+    let (search, _) = ui.input(&app, "icon-search");
+    ui.click(&mut app, search.center());
+    assert!(ui.input(&app, "icon-search").1);
+    ui.key(
+        &mut app,
+        Key::Character("f".into()),
+        Code::KeyF,
+        Modifiers::empty(),
+        Some("f"),
+    )
+    .await;
+    assert_eq!(app.icons.query, "f");
+    close(&mut ui, &mut app, false).await;
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert_eq!(app.tool, Tool::Select);
+    assert_eq!(app.tab.selected, selected);
+    assert_canvas_delete(&mut ui, &mut app).await;
+}

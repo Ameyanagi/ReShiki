@@ -24,6 +24,8 @@ pub enum Tool {
     Template,
     /// Places the piece armed in the Equipment browser.
     Equipment,
+    /// Places the icon armed in the Icons browser.
+    Icons,
     Arrow,
     Text,
     Erase,
@@ -105,6 +107,7 @@ impl Tool {
             ),
             Self::Template => "Click to place or attach · Drag to orient · Esc cancels".into(),
             Self::Equipment => "Choose a piece, then click to place it · Esc cancels".into(),
+            Self::Icons => "Choose an icon, then click to place it · Esc closes".into(),
             Self::Arrow => {
                 "Click to place or change an arrow · Click again to switch · Drag to draw".into()
             }

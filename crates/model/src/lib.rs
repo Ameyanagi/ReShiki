@@ -52,6 +52,7 @@ pub mod joining;
 pub mod layouts;
 pub mod leaders;
 pub mod ligands;
+pub mod line_icons;
 pub mod linked_properties;
 pub mod models3d;
 pub mod molecule_names;

@@ -741,6 +741,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Abbreviations(..)
         | Message::TemplateNavigate(..)
         | Message::Equipment(..)
+        | Message::Icons(..)
         | Message::InspectorScroll(..)
         | Message::ResetBondDrawing
         | Message::FixedLength(..)

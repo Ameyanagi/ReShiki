@@ -314,7 +314,7 @@ impl App {
                 .filter(|g| self.tab.selected.contains(&g.id) && g.picture.is_none())
             {
                 colors.push(g.style.stroke);
-                colors.extend(g.style.fill.filter(|_| !g.is_condition_icon()));
+                colors.extend(g.style.fill.filter(|_| !g.is_icon()));
             }
         }
         colors
@@ -819,7 +819,7 @@ impl App {
             for graphic in &mut self.tab.doc.graphics {
                 if self.tab.selected.contains(&graphic.id) && graphic.picture.is_none() {
                     graphic.style.stroke = color;
-                    if graphic.style.fill.is_some() && !graphic.is_condition_icon() {
+                    if graphic.style.fill.is_some() && !graphic.is_icon() {
                         graphic.style.fill = Some(color);
                     }
                 }

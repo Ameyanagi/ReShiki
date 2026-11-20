@@ -143,6 +143,7 @@ impl MoleculeCanvas<'_> {
         self.preview_ring_preset(&mut draft, state, bounds);
         self.preview_template(&mut draft, frame, state, bounds);
         self.preview_piece(&mut draft, state, bounds);
+        self.preview_icon(&mut draft, state, bounds);
         self.preview_connect(&mut draft, state);
         self.preview_piece_handle(&mut draft, state, bounds);
         self.preview_move(&mut draft, state, bounds);

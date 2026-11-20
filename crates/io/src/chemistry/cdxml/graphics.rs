@@ -181,6 +181,7 @@ impl NativeGraphic {
             cycle: None,
             text: None,
             piece: None,
+            icon: None,
             path: self
                 .path
                 .unwrap_or_default()
