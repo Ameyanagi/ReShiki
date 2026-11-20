@@ -30,6 +30,15 @@ To add MOL, RXN, CDXML, CDX, SMILES or picture files to the current drawing inst
 
 If ReShiki offers recovery drafts after an interrupted session, choose **Restore** in the status bar to open each one in a tab, then save them to files. Closing a tab or the window with unsaved changes asks whether to save them first; New and Open add a tab instead.
 
+## Import SVG artwork
+
+Choose **Import → Import SVG as drawing…**, or find **Import SVG as drawing…** in **⌘K**.
+Choose an `.svg` or `.svgz` file. It arrives as a group of editable paths. Ungroup it to edit its points.
+Strokes become outlines, gradients use their middle color, and filled paths have a 0.1 pt edge in the same color.
+Transparency becomes opaque on white. Text, pictures, masks, clips, filters, patterns and animation are left out;
+the import message lists what changed. Outline text in the drawing program first.
+**Open** still restores the embedded drawing in an SVG exported by ReShiki.
+
 ## Choose an export
 
 Open **Export → Figure**, choose **SVG**, **SVG for Office**, **PDF** or **PNG** (on Windows also **EMF for Office**), then click its export button, for example **Export SVG…**. Expand **Structure & exchange** for molecular formats and CDXML. When a CDXML file would leave something out, such as reaction roles or gradients, ReShiki lists it first; go on to choose where to save it, or cancel. Expand **Pages & printing** for page setup and printing. **Editable document** saves the complete `.rsk` original.
