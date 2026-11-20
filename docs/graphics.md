@@ -440,6 +440,30 @@ line names the released piece, for example **Tilt: 25° · releases the tube**.
 A hose seated on a piece moves with its assembly. Placing a hose or dragging
 a handle is one Undo step.
 
+### Define equipment from a drawing
+
+1. Draw the piece with shapes, pen paths or curves, then select its shapes or
+   their group. Put all selected shapes on the same drawing layer.
+2. Choose **Define as equipment piece…** in Properties, the context menu or
+   the command palette. The side panel opens an equipment draft.
+3. Click two points whose distance you know. Enter that distance in **mm**
+   and choose **Preview**. The canvas shows the piece at its original position.
+4. Enter a **Name**. Choose **Measure again** to change the calibration.
+5. Choose **Accept** to replace the selected shapes with one equipment piece
+   in this drawing. **Discard** or Escape keeps the original shapes.
+
+**Undo** and **Redo** in the draft panel affect only the draft. After
+**Accept**, one drawing Undo restores all original shapes and links. The
+piece's definition travels with the `.rsk` file. To keep it for other drawings,
+use **Add to My pieces** after accepting it.
+
+This first authoring step makes fixed pieces without joints or holds.
+It does not yet assign materials or paint layers, create liquids or moving
+parts, or edit an existing definition. Pictures, text and chemical objects
+cannot become equipment shapes. Filled shapes use glass; open strokes keep
+their detail appearance. Other drawing commands wait for **Accept** or
+**Discard**.
+
 ### Keep and share equipment pieces
 
 The Equipment panel shows pieces from three places: the built-in catalogue,

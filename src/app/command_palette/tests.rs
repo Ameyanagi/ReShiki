@@ -57,6 +57,7 @@ fn drawing_commands_have_unique_palette_names() {
         "Cycle: Counterclockwise",
         "Cycle step: Reversible",
         "Cycle step: Hide arrow",
+        "Define as equipment piece…",
         "Connect…",
         "Equipment: Add clips to all joints",
         "Equipment: Detach",
@@ -150,7 +151,7 @@ fn drawing_commands_have_unique_palette_names() {
 
 #[test]
 fn drawing_commands_send_the_same_actions_as_their_controls() {
-    use crate::app::{cycles, equipment, figure_panels, palettes};
+    use crate::app::{cycles, equipment, equipment_authoring, figure_panels, palettes};
     use reshiki::highlights::HighlightStyle;
 
     let list = catalog::build(&app());
@@ -159,6 +160,11 @@ fn drawing_commands_send_the_same_actions_as_their_controls() {
             "Make catalytic cycle",
             Message::Cycle(cycles::Action::Make),
             Need::MakeCycle,
+        ),
+        (
+            "Define as equipment piece…",
+            Message::EquipmentAuthoring(equipment_authoring::Action::Begin),
+            Need::DefineEquipment,
         ),
         (
             "Connect…",
@@ -198,6 +204,50 @@ fn drawing_commands_send_the_same_actions_as_their_controls() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn defining_equipment_requires_an_idle_supported_vector_selection() {
+    use reshiki::graphics::{Graphic, GraphicKind};
+
+    let mut app = app();
+    let command = catalog::build(&app)
+        .into_iter()
+        .find(|command| command.need == Need::DefineEquipment)
+        .expect("the piece editor is discoverable without a selection");
+    assert_eq!(command.category, Category::Edit);
+    assert!(app.command_unavailable(&command).is_some());
+
+    let mut shapes = Vec::new();
+    for x in [0., 60.] {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::dragged(
+            id,
+            GraphicKind::Rectangle,
+            Point::new(x, 0.),
+            Point::new(x + 40., 50.),
+            Default::default(),
+            Default::default(),
+            false,
+        ));
+        shapes.push(id);
+    }
+    app.tab.doc.group_selection(&shapes).unwrap();
+    app.tab.selected = vec![shapes[0]];
+    assert!(app.command_unavailable(&command).is_none());
+
+    app.tab.busy = true;
+    assert_eq!(
+        app.command_unavailable(&command),
+        Some("Wait for the current task to finish")
+    );
+    app.tab.busy = false;
+    let atom = app.tab.doc.add_atom("C", Point::new(150., 0.));
+    app.tab.selected.push(atom);
+    assert!(app.command_unavailable(&command).is_some());
+    app.tab.selected = vec![shapes[0]];
+    app.tab.doc.graphics[1].layer += 1;
+    assert!(app.command_unavailable(&command).is_some());
 }
 
 #[test]

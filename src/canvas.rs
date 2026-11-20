@@ -296,6 +296,8 @@ pub enum Edit {
     /// Place the armed equipment piece centred here.
     Piece(World),
     Click(World),
+    /// A raw measurement click owned by the detached equipment draft.
+    EquipmentAuthoringPoint(World),
     /// Legacy/programmatic camera edits use world coordinates.
     Pan(f32, f32),
     Zoom(f32, World),
@@ -663,6 +665,7 @@ pub struct MoleculeCanvas<'a> {
     /// Outlines what takes part in a reaction until the next edit.
     pub(crate) reaction_preview: Option<&'a reshiki::reactions::Reaction>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
+    pub(crate) equipment_authoring: Option<(&'a [World], bool)>,
     /// Keyboard input routing; the marker waits for pointer or key interaction.
     pub(crate) keyboard_target: Option<World>,
     pub(crate) keyboard_marker: bool,
@@ -724,6 +727,7 @@ impl<'a> MoleculeCanvas<'a> {
             locant_highlight: &[],
             reaction_preview: None,
             optimizer: None,
+            equipment_authoring: None,
             keyboard_target: None,
             keyboard_marker: false,
             morph: None,
@@ -856,6 +860,24 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         }
         if let Some(context) = self.optimizer {
             optimization::draw_pins(self, context, &mut frame, paper);
+        }
+        if let Some((points, _)) = self.equipment_authoring {
+            if let [a, b] = points {
+                frame.stroke(
+                    &Path::line(self.camera.screen(*a, paper), self.camera.screen(*b, paper)),
+                    Stroke::default()
+                        .with_width(1.5)
+                        .with_color(overlay::ACCENT_STRONG),
+                );
+            }
+            for point in points {
+                frame.stroke(
+                    &Path::circle(self.camera.screen(*point, paper), 5.),
+                    Stroke::default()
+                        .with_width(2.)
+                        .with_color(overlay::ACCENT_STRONG),
+                );
+            }
         }
         if let Some(target) = self.keyboard_target.filter(|_| self.keyboard_marker) {
             let point = self.camera.screen(target, paper);

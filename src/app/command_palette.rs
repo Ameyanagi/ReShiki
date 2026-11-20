@@ -371,6 +371,16 @@ impl App {
                 .callout_target()
                 .is_none()
                 .then_some("Select a callout target"),
+            Need::DefineEquipment => {
+                if self.tab.busy || !self.updates.idle() {
+                    Some("Wait for the current task to finish")
+                } else if self.tab.drawing_edit_active() {
+                    Some("Finish the current edit first")
+                } else {
+                    (!self.can_define_equipment())
+                        .then_some("Select plain vector shapes for a piece")
+                }
+            }
             Need::Equipment => (!self.pieces_selected()).then_some("Select equipment first"),
             Need::EquipmentClips => (self.tab.selected.len() < 2
                 || reshiki::equipment::solve::unclipped(&self.tab.doc, &self.tab.selected) == 0)

@@ -554,3 +554,99 @@ fn batched_two_finger_events_use_current_camera_and_ignore_third_finger() {
             < 0.001
     );
 }
+
+#[test]
+fn equipment_authoring_touch_records_only_completed_taps() {
+    let doc = Document::default();
+    let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(500., 350.));
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    canvas.equipment_authoring = Some((&[], true));
+    let start = Point::new(200., 150.);
+    let moved = Point::new(235., 170.);
+    for scenario in ["tap", "lost", "long press", "drag then pinch"] {
+        let mut state = State::default();
+        let mut actual = send(
+            &canvas,
+            &mut state,
+            bounds,
+            touch::Event::FingerPressed {
+                id: touch::Finger(1),
+                position: start,
+            },
+        );
+        if scenario == "long press" {
+            actual.extend(edits(canvas.touch_long_press(&mut state, bounds)));
+        }
+        if scenario == "drag then pinch" {
+            actual.extend(send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerMoved {
+                    id: touch::Finger(1),
+                    position: moved,
+                },
+            ));
+            actual.extend(send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerPressed {
+                    id: touch::Finger(2),
+                    position: Point::new(300., 150.),
+                },
+            ));
+            actual.extend(send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerMoved {
+                    id: touch::Finger(2),
+                    position: Point::new(320., 160.),
+                },
+            ));
+            actual.extend(send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerLifted {
+                    id: touch::Finger(2),
+                    position: Point::new(320., 160.),
+                },
+            ));
+        }
+        actual.extend(send(
+            &canvas,
+            &mut state,
+            bounds,
+            if scenario == "lost" {
+                touch::Event::FingerLost {
+                    id: touch::Finger(1),
+                    position: start,
+                }
+            } else {
+                touch::Event::FingerLifted {
+                    id: touch::Finger(1),
+                    position: start,
+                }
+            },
+        ));
+        let points: Vec<_> = actual
+            .into_iter()
+            .filter_map(|edit| match edit {
+                Edit::EquipmentAuthoringPoint(point) => Some(point),
+                _ => None,
+            })
+            .collect();
+        if scenario == "tap" {
+            assert_eq!(points.len(), 1);
+            let world = canvas
+                .camera
+                .world(Point::new(start.x - bounds.x, start.y - bounds.y), bounds);
+            assert!(points[0].distance(world) < 0.001);
+        } else {
+            assert!(points.is_empty(), "{scenario}: {points:?}");
+        }
+    }
+}

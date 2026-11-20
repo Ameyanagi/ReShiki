@@ -65,6 +65,7 @@ pub(super) struct DocumentTab {
     pub(super) inline_text: Option<inline_text::State>,
     pub(super) atom_text: Option<atom_text::State>,
     pub(super) joining: Option<joining::State>,
+    pub(super) equipment_authoring: Option<super::equipment_authoring::State>,
     /// The revision, piece and parameter an equipment slider drag has
     /// reached, and what it let go of; the drag is one Undo step until
     /// release or any other commit.
@@ -167,7 +168,8 @@ impl DocumentTab {
     }
 
     pub(super) fn drawing_edit_active(&self) -> bool {
-        self.joining.is_some()
+        self.equipment_authoring.is_some()
+            || self.joining.is_some()
             || self.optimization.is_some()
             || self.inline_text.is_some()
             || self.atom_text.is_some()
@@ -210,6 +212,7 @@ impl DocumentTab {
             inline_text: None,
             atom_text: None,
             joining: None,
+            equipment_authoring: None,
             piece_sliding: None,
             erase_stroke: false,
             erase_committed: false,
