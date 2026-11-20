@@ -429,6 +429,13 @@ pub fn render(
     Ok(())
 }
 
+/// Whether some glyph of the text is a colour glyph.
+pub fn is_colour(text: &usvg::Text, ctx: &Context) -> bool {
+    text.layouted().iter().flat_map(|span| &span.positioned_glyphs).any(|g| {
+        ctx.colour_glyphs.get(&(g.font, g.id.0)).copied().unwrap_or(false)
+    })
+}
+
 /// Creates the base font name for a font with a specific glyph subset.
 /// Consists of a subset tag and the PostScript name of the font.
 ///
@@ -585,8 +592,31 @@ pub fn fill_fonts(
     for child in group.children() {
         match child {
             Node::Text(t) => {
-                let allocator = &mut ctx.ref_allocator;
                 for span in t.layouted() {
+                    for g in &span.positioned_glyphs {
+                        ctx.colour_glyphs.entry((g.font, g.id.0)).or_insert_with(|| {
+                            fontdb
+                                .with_face_data(g.font, |data, index| {
+                                    let face = Face::parse(data, index).ok()?;
+                                    Some(
+                                        face.glyph_raster_image(g.id, u16::MAX).is_some()
+                                            || face.is_color_glyph(g.id)
+                                            || face.glyph_svg_image(g.id).is_some(),
+                                    )
+                                })
+                                .flatten()
+                                .unwrap_or(false)
+                        });
+                        if ctx.options.pdfa && g.id.0 == 0 {
+                            return Err(ConversionError::MissingGlyphs);
+                        }
+                    }
+                }
+                // PDF fonts carry outlines only, so colour glyphs would be
+                // invisible; such text is drawn from its flattened form.
+                let spans = if is_colour(t, ctx) { &[] } else { t.layouted() };
+                let allocator = &mut ctx.ref_allocator;
+                for span in spans {
                     for g in &span.positioned_glyphs {
                         let font =
                             ctx.fonts.entry(FontKey::from(g)).or_insert_with(|| {
