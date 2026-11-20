@@ -93,13 +93,16 @@ fn overlap(a: Ink, b: Ink) -> bool {
 }
 
 fn segment_distance(a: &[Point], b: &[Point]) -> f32 {
+    let (&[a0, a1], &[b0, b1]) = (a, b) else {
+        return f32::INFINITY;
+    };
     let cross = |a: Point, b: Point| a.x * b.y - a.y * b.x;
     let vector = |a: Point, b: Point| Point::new(b.x - a.x, b.y - a.y);
-    let r = vector(a[0], a[1]);
-    let s = vector(b[0], b[1]);
+    let r = vector(a0, a1);
+    let s = vector(b0, b1);
     let d = cross(r, s);
     if d.abs() > 1e-6 {
-        let from = vector(a[0], b[0]);
+        let from = vector(a0, b0);
         let (t, u) = (cross(from, s) / d, cross(from, r) / d);
         if (0. ..=1.).contains(&t) && (0. ..=1.).contains(&u) {
             return 0.;
@@ -117,10 +120,10 @@ fn segment_distance(a: &[Point], b: &[Point]) -> f32 {
         p.distance(a.lerp(b, t))
     };
     [
-        distance(a[0], b[0], b[1]),
-        distance(a[1], b[0], b[1]),
-        distance(b[0], a[0], a[1]),
-        distance(b[1], a[0], a[1]),
+        distance(a0, b0, b1),
+        distance(a1, b0, b1),
+        distance(b0, a0, a1),
+        distance(b1, a0, a1),
     ]
     .into_iter()
     .fold(f32::INFINITY, f32::min)
@@ -178,8 +181,12 @@ pub(super) fn apply(doc: &mut Document, mut split: Split) {
         .iter()
         .flat_map(|p| p.ids.iter().copied())
         .collect();
-    let g = doc.graphics.iter().find(|g| g.id == split.cycle).unwrap();
-    let cycle = g.cycle.as_deref().unwrap();
+    let Some(g) = doc.graphics.iter().find(|g| g.id == split.cycle) else {
+        return;
+    };
+    let Some(cycle) = g.cycle.as_deref() else {
+        return;
+    };
     let (center, radius) = g.cycle_circle();
     let bond = doc.drawing_style.bond_length_world;
     let gap = DEFAULT.world(cycle.gap_pt);
@@ -284,13 +291,14 @@ pub(super) fn apply(doc: &mut Document, mut split: Split) {
                     bond,
                     gap,
                 ));
-                let touch = if side.incoming {
+                let Some(touch) = (if side.incoming {
                     route.last()
                 } else {
                     route.first()
-                }
-                .copied()
-                .unwrap();
+                })
+                .copied() else {
+                    continue;
+                };
                 let stroke = DEFAULT.world(style.width_pt) * 1.5;
                 // A side curve deliberately merges tangentially with this
                 // step. Only that short join may share its stroke; foreign
