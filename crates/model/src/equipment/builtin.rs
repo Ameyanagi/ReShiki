@@ -3,7 +3,7 @@
 use super::format::{Definition, parse};
 use std::sync::{Arc, OnceLock};
 
-const FILES: [&str; 26] = [
+const FILES: [&str; 27] = [
     include_str!("../../../../assets/pieces/rbf-50-15.reshiki-piece"),
     include_str!("../../../../assets/pieces/rbf-100-15.reshiki-piece"),
     include_str!("../../../../assets/pieces/rbf-100-29.reshiki-piece"),
@@ -25,6 +25,7 @@ const FILES: [&str; 26] = [
     include_str!("../../../../assets/pieces/thermometer-adapter-15.reshiki-piece"),
     include_str!("../../../../assets/pieces/thermometer.reshiki-piece"),
     include_str!("../../../../assets/pieces/cow-15.reshiki-piece"),
+    include_str!("../../../../assets/pieces/hose-7.reshiki-piece"),
     include_str!("../../../../assets/pieces/stand.reshiki-piece"),
     include_str!("../../../../assets/pieces/clamp-3finger.reshiki-piece"),
     include_str!("../../../../assets/pieces/ring.reshiki-piece"),

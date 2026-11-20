@@ -97,6 +97,29 @@ impl MoleculeCanvas<'_> {
                 }
                 Edit::RepeatLabelMove(bracket, World::new(p.x - start.x, p.y - start.y))
             }
+            Gesture::Hose { start } => {
+                if !inside {
+                    return Some(Action::request_redraw().and_capture());
+                }
+                let clicked = start.distance(p) < self.camera.world_len(DRAG_SLOP_PX);
+                Edit::Hose(start, if clicked { start } else { p })
+            }
+            Gesture::PieceHandle {
+                id,
+                handle:
+                    reshiki::equipment::solve::adjust::Handle {
+                        grip: Some(grip), ..
+                    },
+                start,
+            } => {
+                if !inside
+                    || !self.tool.selects()
+                    || start.distance(p) < self.camera.world_len(DRAG_SLOP_PX)
+                {
+                    return Some(Action::request_redraw().and_capture());
+                }
+                Edit::HoseGrip { id, grip, to: p }
+            }
             Gesture::PieceHandle { id, handle, start } => {
                 use reshiki::equipment::solve::adjust;
                 let g = self.doc.graphics.iter().find(|g| g.id == id)?;

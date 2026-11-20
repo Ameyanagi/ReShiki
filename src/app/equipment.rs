@@ -185,6 +185,20 @@ pub(crate) fn joint_name(doc: &Document, j: &JointRef) -> String {
     }
 }
 
+fn xy(p: Point) -> [f64; 2] {
+    [f64::from(p.x), f64::from(p.y)]
+}
+
+/// "Hose on the condenser water in", or that its end hangs free.
+fn hose_text(doc: &Document, barbs: &[solve::Port]) -> String {
+    let names: Vec<String> = barbs.iter().map(|b| joint_name(doc, &b.at)).collect();
+    if names.is_empty() {
+        "Hose end free · drag it onto a hose barb".into()
+    } else {
+        format!("Hose on the {}", names.join(" and the "))
+    }
+}
+
 /// "Tilt: 25°", "Valve: Open", "Liquid level: 40 %": a parameter of the
 /// piece `g` at `value`; its current value when `value` is `None`.
 pub(crate) fn value_text(g: &Graphic, param: &str, value: Option<&Value>) -> String {
@@ -410,7 +424,12 @@ impl App {
                 else {
                     return Task::none();
                 };
-                self.status = format!("{} · Click to place · Esc cancels", named(&definition));
+                let how = if definition.tube.is_some() {
+                    "Drag from one hose barb to another, or click a barb"
+                } else {
+                    "Click to place"
+                };
+                self.status = format!("{} · {how} · Esc cancels", named(&definition));
                 self.error = false;
                 self.tab.connect = None;
                 self.equipment.armed = Some(definition);
@@ -674,6 +693,43 @@ impl App {
         self.changed(before);
         if let Some(snap) = snap.filter(|_| !self.error) {
             self.snapped(&snap);
+        }
+    }
+
+    /// Lay the armed hose from `from` to `to` (one point for a click), its
+    /// ends pushed onto barbs they reach, as one Undo step.
+    pub(super) fn place_hose(&mut self, from: Point, to: Point, before: Document) {
+        let Some(definition) = (self.equipment.armed.clone())
+            .filter(|d| self.tool == Tool::Equipment && d.tube.is_some())
+        else {
+            return;
+        };
+        let reach = f64::from(solve::REACH_PX / self.tab.camera.zoom);
+        let (id, barbs) =
+            solve::hose::place_hose(&mut self.tab.doc, definition, xy(from), xy(to), reach);
+        if !self.equipment.repeat {
+            self.tool = Tool::Select;
+        }
+        self.tab.selected = solve::closure(&self.tab.doc, &[id]);
+        self.changed(before);
+        if !self.error {
+            self.status = hose_text(&self.tab.doc, &barbs);
+        }
+    }
+
+    /// Drag a hose's end or middle, as one Undo step.
+    pub(super) fn drag_hose(
+        &mut self,
+        id: u64,
+        grip: solve::hose::Grip,
+        to: Point,
+        before: Document,
+    ) {
+        let reach = f64::from(solve::REACH_PX / self.tab.camera.zoom);
+        let barb = solve::hose::drag(&mut self.tab.doc, id, grip, xy(to), reach);
+        self.changed(before);
+        if !self.error && grip != solve::hose::Grip::Middle {
+            self.status = hose_text(&self.tab.doc, barb.as_slice());
         }
     }
 

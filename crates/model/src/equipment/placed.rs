@@ -3,8 +3,8 @@
 //! frame in world units per millimetre. Drawings carry their pieces, so they
 //! open the same way without the library they came from.
 use super::eval::{Values, resolve};
-use super::format::{Definition, Material, StyleKind, content_hash};
-use super::geometry::{Affine, Seg};
+use super::format::{Definition, Material, StyleKind, Xy, content_hash};
+use super::geometry::{Affine, Seg, add, len, mul, normalize, sub};
 use super::plan::{Ink, Instance, Pass, PlanPath, Settings, Weight, paint_plan};
 use crate::canvas_theme::CanvasTheme;
 use crate::document::{Document, Point};
@@ -33,6 +33,10 @@ pub struct PieceRef {
     pub definition: String,
     #[serde(default, skip_serializing_if = "Values::is_empty")]
     pub params: Values,
+    /// A hose's centre line in the piece's millimetres: cubic Béziers, 3n + 1
+    /// points from one end to the other. Empty draws the definition's line.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub centre_line: Vec<Xy>,
     /// The definition itself, linked by key when the drawing is read or the
     /// piece is placed.
     #[serde(skip)]
@@ -46,7 +50,9 @@ pub struct PieceRef {
 /// drawing's seats say which joints are seated.
 impl PartialEq for PieceRef {
     fn eq(&self, other: &Self) -> bool {
-        self.definition == other.definition && self.params == other.params
+        self.definition == other.definition
+            && self.params == other.params
+            && self.centre_line == other.centre_line
     }
 }
 
@@ -55,6 +61,7 @@ impl PieceRef {
         Self {
             definition: key(&definition),
             params: Values::new(),
+            centre_line: Vec::new(),
             linked: Some(definition),
             seated: BTreeSet::new(),
         }
@@ -69,6 +76,64 @@ pub fn key(definition: &Definition) -> String {
         definition.revision,
         &content_hash(definition)[..16]
     )
+}
+
+/// A hose's centre line in its millimetres: the stored one, or a straight
+/// line between the ends the definition draws. `None` for a rigid piece.
+pub fn centre_line(d: &Definition, piece: &PieceRef) -> Option<Vec<Xy>> {
+    let tube = d.tube.as_ref()?;
+    let l = &piece.centre_line;
+    // Read only here: at most 64 Béziers, within the page's reach.
+    if (4..=MAX_LINE).contains(&l.len())
+        && (l.len() - 1).is_multiple_of(3)
+        && l.iter().flatten().all(|v| v.abs() < 1e6)
+    {
+        return Some(l.clone());
+    }
+    let end = |id: &str| d.joints.iter().find(|j| j.id() == id).map(|j| j.at());
+    let (a, b) = (end(&tube.ends[0])?, end(&tube.ends[1])?);
+    let at = |t: f64| add(a, mul(sub(b, a), t));
+    Some(vec![a, at(1. / 3.), at(2. / 3.), b])
+}
+
+/// The most points a stored centre line may have: 64 Béziers.
+const MAX_LINE: usize = 3 * 64 + 1;
+
+/// Line segments per Bézier of a hose's centre line, as drawn.
+const STEPS: usize = 24;
+
+/// A centre line as the polyline it is drawn along.
+pub fn sampled(line: &[Xy]) -> Vec<Xy> {
+    let mut out: Vec<Xy> = line.first().copied().into_iter().collect();
+    for c in line.windows(4).step_by(3) {
+        out.extend((1..=STEPS).map(|i| bezier(c, i as f64 / STEPS as f64)));
+    }
+    out
+}
+
+/// A point of the cubic Bézier `c` (four points).
+pub fn bezier(c: &[Xy], t: f64) -> Xy {
+    let u = 1. - t;
+    let k = [u * u * u, 3. * u * u * t, 3. * u * t * t, t * t * t];
+    c.iter()
+        .zip(k)
+        .fold([0., 0.], |p, (q, k)| add(p, mul(*q, k)))
+}
+
+/// Where end `k` (0 or 1) of a centre line is and the way its mouth faces:
+/// out of the hose, along the line.
+pub fn end(line: &[Xy], k: usize) -> (Xy, Xy) {
+    let mut points: Vec<Xy> = line.to_vec();
+    if k == 1 {
+        points.reverse();
+    }
+    let at = points.first().copied().unwrap_or_default();
+    // The first point apart from the end gives its direction.
+    let next = (points.iter())
+        .find(|p| len(sub(**p, at)) > 1e-9)
+        .copied()
+        .unwrap_or(add(at, [1., 0.]));
+    (at, normalize(sub(at, next)))
 }
 
 /// World units per millimetre for `pt_per_mm` in the drawing's style.
@@ -106,6 +171,7 @@ pub fn graphic_keyed(
     g.piece = Some(Box::new(PieceRef {
         definition: key,
         params: Values::new(),
+        centre_line: Vec::new(),
         linked: Some(definition),
         seated: BTreeSet::new(),
     }));
@@ -277,7 +343,7 @@ pub fn plan(g: &Graphic) -> Rc<Vec<PlanPath>> {
     let [x, y, o] = [g.axis_x, g.axis_y, g.origin];
     let key: CacheKey = (
         piece.definition.clone(),
-        serde_json::to_string(&piece.params).unwrap_or_default(),
+        serde_json::to_string(&(&piece.params, &piece.centre_line)).unwrap_or_default(),
         [x.x, x.y, y.x, y.y, o.x, o.y].map(f32::to_bits),
         piece.seated.clone(),
     );
@@ -293,6 +359,7 @@ pub fn plan(g: &Graphic) -> Rc<Vec<PlanPath>> {
     let mut instance = Instance::new(d, transform(g));
     instance.values = piece.params.clone();
     instance.seated = piece.seated.clone();
+    instance.centre_line = centre_line(d, piece).map_or_else(Vec::new, |l| sampled(&l));
     let plan: Vec<PlanPath> = paint_plan(&[instance], Settings::default())
         .unwrap_or_default()
         .into_iter()

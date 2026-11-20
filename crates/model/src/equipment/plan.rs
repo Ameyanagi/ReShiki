@@ -132,6 +132,8 @@ impl Default for Settings {
     }
 }
 
+/// How far a hose pushed onto a barb reaches past the barb's tip, over its ribs.
+const HOSE_CUFF_MM: f64 = 12.;
 const BORE: Rgb = [201, 213, 220];
 
 /// The paint plan of one compositing group, in paint order.
@@ -273,7 +275,27 @@ fn piece(
     if let Some(tube) = &instance.definition.tube
         && instance.centre_line.len() >= 2
     {
-        let path = tube_outline(&instance.centre_line, tube.width_mm);
+        // A seated end is pushed over its barb's ribs.
+        let mut line = instance.centre_line.clone();
+        for (k, end) in tube.ends.iter().enumerate() {
+            if instance.seated.contains(end) {
+                if k == 1 {
+                    line.reverse();
+                }
+                let a = line.first().copied().unwrap_or_default();
+                // The first point apart from the end gives its direction.
+                if let Some(b) = line
+                    .iter()
+                    .find(|p| sub(**p, a).iter().any(|v| v.abs() > 1e-9))
+                {
+                    line.insert(0, add(a, mul(normalize(sub(a, *b)), HOSE_CUFF_MM)));
+                }
+                if k == 1 {
+                    line.reverse();
+                }
+            }
+        }
+        let path = tube_outline(&line, tube.width_mm);
         push(
             items,
             Pass::Front,

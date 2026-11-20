@@ -299,8 +299,8 @@ Atom maps and colors are one Undo step each and are saved with the drawing.
 
 Lab equipment is a preview in this build. The catalogue has round-bottom
 flasks (50 and 100 mL with 15/25 joints; 100, 300 and 500 mL with 29/42),
-Liebig condensers, glass stoppers, rubber septa, a reducing and an
-expansion adapter, a cow receiver adapter, a thermometer and its adapter,
+Liebig condensers, glass stoppers, rubber septa, a rubber hose, a reducing
+and an expansion adapter, a cow receiver adapter, a thermometer and its adapter,
 a balloon on a needle, a lab stand, a three-finger clamp, a support ring
 and joint clips for 15/25 and 29/42.
 
@@ -426,6 +426,19 @@ boss head turns; mount the clamp on a stand to tilt what it holds. Opening the j
 neck takes hold again. If a move would pull the assembly apart, as when two
 clamps on the same rod hold a flask, the nearest clamp lets go. The status
 line names the released piece, for example **Tilt: 25° · releases the tube**.
+
+### Connect hoses
+
+1. Choose **Rubber hose, 7 mm** in the **Equipment** panel.
+2. Drag from one hose barb, such as a condenser's water inlet, to another.
+   Or click a barb to hang a hose from it. A ring marks the barb an end will
+   go on.
+3. With the **Select** tool, click the hose. Diamonds appear at both ends
+   and in the middle. Drag an end onto another barb to reconnect it, or into
+   space to leave it free. Drag the middle diamond to bend the hose.
+
+A hose seated on a piece moves with its assembly. Placing a hose or dragging
+a handle is one Undo step.
 
 ### Keep and share equipment pieces
 
