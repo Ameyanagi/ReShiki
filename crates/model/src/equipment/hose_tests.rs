@@ -86,7 +86,7 @@ fn a_hose_seats_at_both_ends_and_leaves_along_each_barb() {
 }
 
 #[test]
-fn clicking_a_barb_hangs_a_hose_to_its_right_and_below_it() {
+fn clicking_a_barb_hangs_a_hose_round_a_turn_and_down() {
     let (mut doc, condenser) = with_condenser();
     let barb = port(&doc, condenser, "water-in");
     let hose = place(&mut doc, barb.point, barb.point);
@@ -95,7 +95,7 @@ fn clicking_a_barb_hangs_a_hose_to_its_right_and_below_it() {
     assert_seated(&doc, &port(&doc, hose, "a"), &barb);
     assert_near(
         port(&doc, hose, "b").point,
-        add(barb.point, mul([30., 50.], barb.mm)),
+        add(barb.point, mul([20. + 1.5 * 9., 50.], barb.mm)),
     );
 }
 

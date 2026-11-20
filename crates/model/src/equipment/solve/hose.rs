@@ -13,9 +13,12 @@ pub enum Grip {
     Middle,
 }
 
-/// A click places a hose this long, in millimetres: out along the barb, then down.
+/// A click in space lays a straight hose this long, in millimetres; a
+/// click on a barb hangs one this far down.
 const CLICK_OUT_MM: f64 = 30.;
 const CLICK_DOWN_MM: f64 = 50.;
+/// A hose's turns, centre line to centre line, in hose widths: open, not kinked.
+const TURN_WIDTHS: f64 = 1.5;
 
 fn tube(g: &Graphic) -> Option<(&Definition, Vec<Xy>)> {
     let piece = g.piece.as_ref()?;
@@ -228,8 +231,7 @@ fn reshape(doc: &mut Document, id: u64, ends: [(Xy, Option<Port>); 2], m: Xy) {
         ),
     };
     let [a, b] = &ends;
-    // Turns are a width and a half across the centre line: open, not kinked.
-    let line = shape(end(a), m, end(b), 1.5 * width * mm);
+    let line = shape(end(a), m, end(b), TURN_WIDTHS * width * mm);
     store(doc, id, &line);
 }
 
@@ -245,6 +247,7 @@ pub fn place_hose(
     reach: f64,
 ) -> (u64, Vec<Port>) {
     let id = doc.next_id();
+    let width = definition.tube.as_ref().map_or(0., |t| t.width_mm);
     let scale = placed::world_per_mm(doc, placed::DEFAULT_PT_PER_MM);
     let mut g = placed::graphic(
         id,
@@ -264,12 +267,21 @@ pub fn place_hose(
     let mm = first.as_ref().map_or(f64::from(scale), |b| b.mm);
     let a = first.as_ref().map_or(from, |b| b.point);
     let clicked = len(sub(to, from)) < 1e-9;
-    let b = if clicked {
-        let out = first.as_ref().map_or([1., 0.], |b| b.dir);
-        let down = if first.is_some() { CLICK_DOWN_MM } else { 0. };
-        add(a, add(mul(out, CLICK_OUT_MM * mm), [0., down * mm]))
-    } else {
-        to
+    // A click on a barb hangs the hose: straight on, round a turn, then
+    // down. Elsewhere it lays a straight one to the right.
+    let turn = TURN_WIDTHS * width * mm;
+    let hang = first.as_ref().filter(|_| clicked).map(|b| {
+        let along = |k: f64| add(a, mul(b.dir, k));
+        let drop = CLICK_DOWN_MM * mm;
+        (
+            add(along(LEAD_MM * mm + turn), [0., drop]),
+            add(along(LEAD_MM * mm + 0.8 * turn), [0., drop / 2.]),
+        )
+    });
+    let b = match hang {
+        Some((b, _)) => b,
+        None if clicked => add(a, [CLICK_OUT_MM * mm, 0.]),
+        None => to,
     };
     // Seat the first end so the second cannot take the same barb.
     if let Some(barb) = &first {
@@ -280,7 +292,7 @@ pub fn place_hose(
         .flatten();
     let b = second.as_ref().map_or(b, |s| s.point);
     // Held at both ends, the middle sags below the leads' midpoint, as a
-    // hose hangs; a free end already hangs where it was put.
+    // hose hangs.
     let lead = |p: Xy, barb: &Option<Port>| {
         barb.as_ref()
             .map_or(p, |b| add(p, mul(b.dir, LEAD_MM * mm)))
@@ -291,7 +303,7 @@ pub fn place_hose(
     } else {
         0.
     };
-    let m = add(mul(add(la, lb), 0.5), [0., sag]);
+    let m = hang.map_or_else(|| add(mul(add(la, lb), 0.5), [0., sag]), |(_, m)| m);
     reshape(doc, id, [(a, first.clone()), (b, second.clone())], m);
     if let Some(barb) = &second {
         push_on(doc, id, 1, barb);
