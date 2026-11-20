@@ -489,3 +489,15 @@ fn emoji_sequences_measure_as_one_emoji() {
     assert_eq!(laid_out.fragments.len(), 2);
     assert_eq!(laid_out.fragments[1].text, "👩\u{200D}🔬");
 }
+
+/// A decomposed accent keeps its own ink over its letter, inside the
+/// cluster's advance.
+#[test]
+fn an_accent_keeps_its_ink_over_its_letter() {
+    let style = super::TextStyle::default();
+    let boxes = crate::style::text_ink_boxes("e\u{301}", 10., &style);
+    assert_eq!(boxes.len(), 2, "{boxes:?}");
+    let width = crate::style::styled_text_width("e\u{301}", 10., &style);
+    assert!(boxes[1].1.x <= width + 0.5, "{boxes:?} {width}");
+    assert!(boxes[1].0.y < boxes[0].0.y, "the accent sits above the e");
+}

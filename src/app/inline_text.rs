@@ -482,16 +482,21 @@ impl App {
                 }
                 use iced::keyboard::{Key, key::Named};
                 // The editor's Backspace removes one code point, which split a
-                // flag or a joined emoji; take the whole character instead.
+                // flag or a joined emoji; remove each code point of the
+                // character before the cursor instead.
                 if key.key == Key::Named(Named::Backspace)
                     && !key.modifiers.alt()
                     && !key.modifiers.command()
                     && self.tab.caption_editor.selection().is_none()
                 {
-                    return Some(text_editor::Binding::Sequence(vec![
-                        text_editor::Binding::Select(text_editor::Motion::Left),
-                        text_editor::Binding::Backspace,
-                    ]));
+                    let parts = parts_before_cursor(&self.tab.caption_editor);
+                    if parts > 1 {
+                        return Some(text_editor::Binding::Sequence(
+                            (0..parts)
+                                .map(|_| text_editor::Binding::Backspace)
+                                .collect(),
+                        ));
+                    }
                 }
                 let custom = match &key.key {
                     Key::Named(Named::Escape) => Some(Message::InlineText(Action::Finish(false))),
@@ -678,6 +683,15 @@ pub(super) fn script_key(
         iced::keyboard::Key::Character("+" | "=") => Some(Script::Superscript),
         _ => None,
     }
+}
+
+/// How many code points make up the character before the cursor.
+fn parts_before_cursor(editor: &text_editor::Content) -> usize {
+    let text = editor.text();
+    let at = editor_offset(&text, editor.cursor().position);
+    unicode_segmentation::UnicodeSegmentation::graphemes(&text[..at], true)
+        .next_back()
+        .map_or(0, |c| c.chars().count())
 }
 
 fn editor_offset(text: &str, position: text_editor::Position) -> usize {

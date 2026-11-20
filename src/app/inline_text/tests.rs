@@ -629,23 +629,28 @@ fn double_clicking_a_shape_types_centred_text_into_it_in_one_step() {
 }
 
 /// The editor's own Backspace removes one code point, leaving half a flag or a
-/// stray joiner; the caption's Backspace selects the whole character first.
+/// stray joiner; the caption's Backspace repeats it once per code point of the
+/// character before the cursor.
 #[test]
 fn backspace_removes_a_whole_emoji() {
     let mut app = app();
     begin(&mut app, None);
     type_text(&mut app, "x🇯🇵👩\u{200D}🔬");
-    let backspace = |app: &mut App| {
-        let _ = app.update(Message::CaptionAction(Input::Select(Motion::Left)));
-        let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Backspace)));
+    let backspace = |app: &mut App, times: usize| {
+        for _ in 0..times {
+            let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Backspace)));
+        }
     };
-    backspace(&mut app);
+    assert_eq!(parts_before_cursor(&app.tab.caption_editor), 3);
+    backspace(&mut app, 1);
+    assert_eq!(
+        app.tab.caption, "x🇯🇵👩\u{200D}",
+        "one press alone splits it"
+    );
+    backspace(&mut app, 2);
     assert_eq!(app.tab.caption, "x🇯🇵");
-    backspace(&mut app);
+    assert_eq!(parts_before_cursor(&app.tab.caption_editor), 2);
+    backspace(&mut app, 2);
     assert_eq!(app.tab.caption, "x");
-    let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Paste(
-        "🇯🇵".to_owned().into(),
-    ))));
-    let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Backspace)));
-    assert_eq!(app.tab.caption, "x🇯", "the plain edit splits the flag");
+    assert_eq!(parts_before_cursor(&app.tab.caption_editor), 1);
 }

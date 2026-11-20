@@ -281,6 +281,10 @@ pub fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clear();
+    CLUSTERS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clear();
     Ok(faces)
 }
 
@@ -617,8 +621,17 @@ pub fn cluster_metrics(cluster: &str, style: &crate::typography::TextStyle) -> G
     {
         return *result;
     }
-    // The family the system draws emoji in, as a lone emoji resolves it.
-    let emoji = emoji_sequence(cluster).then(|| glyph_metrics('\u{1F600}', style).0);
+    // The system's colour emoji face, else the family a lone emoji resolves
+    // to. A monochrome symbol face may also cover emoji, so name comes first.
+    let emoji = emoji_sequence(cluster).then(|| {
+        let installed = {
+            let fonts = fonts();
+            EMOJI_FAMILIES
+                .iter()
+                .find_map(|family| fonts.names.iter().copied().find(|name| name == family))
+        };
+        installed.unwrap_or_else(|| glyph_metrics('\u{1F600}', style).0)
+    });
     let fonts = fonts();
     let result = cluster_metrics_in(cluster, first, emoji, style, &fonts);
     drop(fonts);
@@ -680,6 +693,9 @@ fn cluster_metrics_in(
         })
         .unwrap_or_else(|| glyph_metrics_in(first, style, fonts))
 }
+
+/// Colour emoji faces on macOS, Windows and Linux.
+const EMOJI_FAMILIES: &[&str] = &["Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"];
 
 /// A cluster the system draws as one emoji: it asks for emoji presentation,
 /// joins emoji, or holds a skin tone, flag letters, a keycap or a tag.
@@ -783,64 +799,74 @@ pub fn text_ink_shapes(
     let mut x = 0.;
     let mut shapes = Vec::new();
     for cluster in unicode_segmentation::UnicodeSegmentation::graphemes(text, true) {
-        // A cluster's ink is its first character's; its advance is the whole.
-        let c = cluster.chars().next().unwrap_or(' ');
         let (_, advance) = cluster_metrics(cluster, style);
-        let key = (style.family.clone(), style.bold, style.italic, c);
-        let cached = GLYPH_INK
-            .lock()
-            .ok()
-            .and_then(|cache| cache.get(&key).copied());
-        let ink = if let Some(ink) = cached {
-            ink
+        // A letter's marks keep their own ink; an emoji is its first picture.
+        let marks = if emoji_sequence(cluster) {
+            1
         } else {
-            let fonts = fonts();
-            let ink = glyph_face(c, style, &fonts)
-                .and_then(|id| {
-                    fonts.db.with_face_data(id, |bytes, index| {
-                        let face = font::face(bytes, index, if style.bold { 700 } else { 400 })?;
-                        let glyph = face.glyph_index(c)?;
-                        let bbox = face.glyph_bounding_box(glyph)?;
-                        let em = face.units_per_em() as f32;
-                        let ascent = face.ascender() as f32;
-                        let mut outline = font::Outline::default();
-                        face.outline_glyph(glyph, &mut outline);
-                        Some((
-                            (
-                                Point::new(
-                                    bbox.x_min as f32 / em,
-                                    (ascent - bbox.y_max as f32) / em,
-                                ),
-                                Point::new(
-                                    bbox.x_max as f32 / em,
-                                    (ascent - bbox.y_min as f32) / em,
-                                ),
-                            ),
-                            outline.corner_radius(bbox) / em,
-                        ))
-                    })
-                })
-                .flatten()
-                .or_else(|| {
-                    (!c.is_whitespace())
-                        .then_some(((Point::default(), Point::new(advance, 1.)), 0.))
-                });
-            if let Ok(mut cache) = GLYPH_INK.lock() {
-                if cache.len() >= 16384 {
-                    cache.clear();
-                }
-                cache.insert(key, ink);
-            }
-            ink
+            usize::MAX
         };
-        if let Some(((lo, hi), radius)) = ink {
-            shapes.push((
-                (
-                    Point::new(x + lo.x * size, lo.y * size),
-                    Point::new(x + hi.x * size, hi.y * size),
-                ),
-                radius * size,
-            ));
+        let mut local = 0.;
+        for c in cluster.chars().take(marks) {
+            let (_, own) = glyph_metrics(c, style);
+            let key = (style.family.clone(), style.bold, style.italic, c);
+            let cached = GLYPH_INK
+                .lock()
+                .ok()
+                .and_then(|cache| cache.get(&key).copied());
+            let ink = if let Some(ink) = cached {
+                ink
+            } else {
+                let fonts = fonts();
+                let ink = glyph_face(c, style, &fonts)
+                    .and_then(|id| {
+                        fonts.db.with_face_data(id, |bytes, index| {
+                            let face =
+                                font::face(bytes, index, if style.bold { 700 } else { 400 })?;
+                            let glyph = face.glyph_index(c)?;
+                            let bbox = face.glyph_bounding_box(glyph)?;
+                            let em = face.units_per_em() as f32;
+                            let ascent = face.ascender() as f32;
+                            let mut outline = font::Outline::default();
+                            face.outline_glyph(glyph, &mut outline);
+                            Some((
+                                (
+                                    Point::new(
+                                        bbox.x_min as f32 / em,
+                                        (ascent - bbox.y_max as f32) / em,
+                                    ),
+                                    Point::new(
+                                        bbox.x_max as f32 / em,
+                                        (ascent - bbox.y_min as f32) / em,
+                                    ),
+                                ),
+                                outline.corner_radius(bbox) / em,
+                            ))
+                        })
+                    })
+                    .flatten()
+                    .or_else(|| {
+                        (!c.is_whitespace())
+                            .then_some(((Point::default(), Point::new(own, 1.)), 0.))
+                    });
+                if let Ok(mut cache) = GLYPH_INK.lock() {
+                    if cache.len() >= 16384 {
+                        cache.clear();
+                    }
+                    cache.insert(key, ink);
+                }
+                ink
+            };
+            if let Some(((lo, hi), radius)) = ink {
+                shapes.push((
+                    (
+                        Point::new(x + (local + lo.x) * size, lo.y * size),
+                        Point::new(x + (local + hi.x) * size, hi.y * size),
+                    ),
+                    radius * size,
+                ));
+            }
+            local += own;
         }
         if style.underline {
             // Underline metrics differ between backends. Reserve its full band.
