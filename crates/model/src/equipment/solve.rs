@@ -433,6 +433,7 @@ fn clips(doc: &mut Document, dropped: &[u64]) {
         doc.graphics
             .retain(|g| !gone.contains(&g.id) || clip_size(g).is_none());
         doc.prune_groups();
+        crate::graphics::table::prune(doc);
     }
 }
 
@@ -885,6 +886,46 @@ fn fixed(doc: &Document, pieces: &BTreeSet<u64>) -> bool {
 /// dragged one must already point within 40°. A clip moved on its own goes
 /// onto the nearest seat of its size.
 pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Option<Snap> {
+    with_cell_ownership(doc, |doc| snap_inner(doc, ids, reach, any_angle))
+}
+
+/// A snap can release seats before choosing a new target. Restore the whole
+/// edit if any resulting link crosses a cell, including after a ground lock
+/// swaps the target and moving sides.
+fn with_cell_ownership(
+    doc: &mut Document,
+    edit: impl FnOnce(&mut Document) -> Option<Snap>,
+) -> Option<Snap> {
+    let before = doc
+        .graphics
+        .iter()
+        .any(|g| g.table.is_some())
+        .then(|| doc.clone());
+    let snap = edit(doc);
+    if let Some(before) = before {
+        let inherited = match &snap {
+            Some(Snap {
+                target,
+                moving,
+                added: Some(id),
+                ..
+            }) => crate::graphics::table::inherit_attachment(
+                &before,
+                doc,
+                &[*id],
+                &[target.at.piece, moving.at.piece],
+            ),
+            _ => Ok(()),
+        };
+        if inherited.is_err() || crate::graphics::table::validate(doc).is_err() {
+            *doc = before;
+            return None;
+        }
+    }
+    snap
+}
+
+fn snap_inner(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Option<Snap> {
     let moving: BTreeSet<u64> = ids.iter().copied().collect();
     let pieces: Vec<&Graphic> = (doc.graphics.iter())
         .filter(|g| g.piece.is_some() && moving.contains(&g.id))
@@ -1037,13 +1078,32 @@ pub fn add_clips(doc: &mut Document, ids: &[u64]) -> usize {
             Some((i, missing_clip(doc, ids, s)?, layer))
         })
         .collect();
+    // Refuse the whole batch before allocating any clips.
+    for (i, ..) in &wanted {
+        let seat = &doc.seats[*i];
+        if crate::graphics::table::require_same_cell(doc, &[seat.a.piece, seat.b.piece]).is_err() {
+            return 0;
+        }
+    }
+    let before = doc
+        .graphics
+        .iter()
+        .any(|g| g.table.is_some())
+        .then(|| doc.clone());
     for (i, d, layer) in &wanted {
+        let targets = [doc.seats[*i].a.piece, doc.seats[*i].b.piece];
         let id = doc.next_id();
         let mut g = placed::graphic(id, d.clone(), Point::default(), 1.);
         g.layer = *layer;
         doc.graphics.push(g);
         if let Some(s) = doc.seats.get_mut(*i) {
             s.clip = Some(id);
+        }
+        if let Some(before) = &before
+            && crate::graphics::table::inherit_attachment(before, doc, &[id], &targets).is_err()
+        {
+            *doc = before.clone();
+            return 0;
         }
     }
     clips(doc, &[]);
@@ -1083,6 +1143,10 @@ pub fn options(doc: &Document, ids: &[u64]) -> Vec<(Port, Port, Offer)> {
 /// Connect the pieces `ids` through joint `m` to the fixed joint `s`, as a
 /// snap would. `None` when either joint is gone or taken.
 pub fn connect(doc: &mut Document, ids: &[u64], s: &JointRef, m: &JointRef) -> Option<Snap> {
+    with_cell_ownership(doc, |doc| connect_inner(doc, ids, s, m))
+}
+
+fn connect_inner(doc: &mut Document, ids: &[u64], s: &JointRef, m: &JointRef) -> Option<Snap> {
     let moving = closure(doc, ids);
     let (s, m) = (port(doc, s)?, port(doc, m)?);
     let taken = |p: &Port| !p.shared() && doc.seats.iter().any(|x| x.holds(&p.at));

@@ -549,3 +549,171 @@ fn a_first_click_picks_the_assembly_and_a_second_the_piece() {
     pair.sort_unstable();
     assert_eq!(assembly, pair);
 }
+
+fn table_cells(doc: &mut Document, members: [Vec<u64>; 2]) -> u64 {
+    use crate::graphics::{
+        Graphic, GraphicKind,
+        table::{Cell, Table},
+    };
+    let id = doc.next_id();
+    let mut graphic = Graphic::dragged(
+        id,
+        GraphicKind::Rectangle,
+        Point::new(-100., -100.),
+        Point::new(2000., 2000.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    graphic.kind = GraphicKind::Table;
+    graphic.table = Some(Box::new(Table {
+        cells: members
+            .into_iter()
+            .enumerate()
+            .map(|(index, members)| Cell {
+                id: index as u32 + 1,
+                lo: Point::new(index as f32 * 0.5, 0.),
+                hi: Point::new((index + 1) as f32 * 0.5, 1.),
+                members,
+                borders: vec![],
+            })
+            .collect(),
+    }));
+    doc.graphics.push(graphic);
+    id
+}
+
+#[test]
+fn table_adapter_inherits_the_actual_endpoints_cell_for_snap_and_connect() {
+    use crate::graphics::table::Membership;
+    for on_canvas in [false, true] {
+        for drag in [false, true] {
+            let mut doc = Document::default();
+            let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(200., 300.));
+            let condenser = add(&mut doc, "reshiki/liebig-29", Point::new(400., 100.));
+            bring(
+                &mut doc,
+                condenser,
+                "bottom",
+                &joint(flask, "neck"),
+                (3., 3.),
+            );
+            table_cells(
+                &mut doc,
+                [
+                    vec![],
+                    if on_canvas {
+                        vec![]
+                    } else {
+                        vec![flask, condenser]
+                    },
+                ],
+            );
+            doc.validate().unwrap();
+            let before = doc.clone();
+            let snap = if drag {
+                solve::snap(&mut doc, &[condenser], 14., false)
+            } else {
+                solve::connect(
+                    &mut doc,
+                    &[condenser],
+                    &joint(flask, "neck"),
+                    &joint(condenser, "bottom"),
+                )
+            }
+            .unwrap();
+            assert!(matches!(snap.offer, Offer::Adapter(_)));
+            let adapter = snap.added.unwrap();
+            let ownership = Membership::new(&doc).unwrap();
+            assert_eq!(ownership.cell_of(adapter), ownership.cell_of(flask));
+            assert_eq!(ownership.cell_of(adapter).is_none(), on_canvas);
+            commit(&mut doc, before);
+            assert_eq!(doc.seats.len(), 2);
+            let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+            assert_eq!(
+                Membership::new(&back).unwrap().cell_of(adapter),
+                Membership::new(&back).unwrap().cell_of(flask)
+            );
+        }
+    }
+}
+
+#[test]
+fn table_cross_cell_equipment_snap_and_connect_are_atomic() {
+    for condenser_kind in ["reshiki/liebig-15", "reshiki/liebig-29"] {
+        for condenser_on_canvas in [false, true] {
+            for drag in [false, true] {
+                let mut doc = Document::default();
+                let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(200., 300.));
+                let condenser = add(&mut doc, condenser_kind, Point::new(400., 100.));
+                bring(
+                    &mut doc,
+                    condenser,
+                    "bottom",
+                    &joint(flask, "neck"),
+                    (3., 3.),
+                );
+                table_cells(
+                    &mut doc,
+                    [
+                        vec![flask],
+                        if condenser_on_canvas {
+                            vec![]
+                        } else {
+                            vec![condenser]
+                        },
+                    ],
+                );
+                doc.validate().unwrap();
+                let before = doc.clone();
+                let snap = if drag {
+                    solve::snap(&mut doc, &[condenser], 14., false)
+                } else {
+                    solve::connect(
+                        &mut doc,
+                        &[condenser],
+                        &joint(flask, "neck"),
+                        &joint(condenser, "bottom"),
+                    )
+                };
+                assert!(snap.is_none());
+                assert_eq!(doc, before);
+            }
+        }
+    }
+}
+
+#[test]
+fn table_rejected_adapter_snap_restores_released_seats_and_their_owned_clip() {
+    let mut doc = Document::default();
+    let flask = add(&mut doc, "reshiki/rbf-300-29", Point::new(200., 300.));
+    let condenser = add(&mut doc, "reshiki/liebig-29", Point::new(400., 100.));
+    solve::connect(
+        &mut doc,
+        &[condenser],
+        &joint(flask, "neck"),
+        &joint(condenser, "bottom"),
+    )
+    .unwrap();
+    assert_eq!(solve::add_clips(&mut doc, &[flask, condenser]), 1);
+    let clip = doc.seats[0].clip.unwrap();
+    let other = add(&mut doc, "reshiki/rbf-100-15", Point::new(5000., 300.));
+    table_cells(&mut doc, [vec![other], vec![flask, condenser, clip]]);
+    let target = port(&doc, &joint(other, "neck"));
+    let moving = port(&doc, &joint(condenser, "bottom"));
+    let exposure = 0.06 * 25. * target.mm;
+    let at = [
+        target.point[0] + target.dir[0] * exposure,
+        target.point[1] + target.dir[1] * exposure,
+    ];
+    doc.translate(
+        &[condenser],
+        (at[0] - moving.point[0]) as f32 + 3.,
+        (at[1] - moving.point[1]) as f32 + 3.,
+    );
+    let before = doc.clone();
+    assert!(solve::snap(&mut doc, &[condenser], 14., false).is_none());
+    assert_eq!(doc, before);
+    assert_eq!(doc.seats[0].clip, Some(clip));
+    assert!(doc.graphics.iter().any(|g| g.id == clip));
+}
