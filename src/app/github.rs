@@ -702,6 +702,7 @@ impl App {
         self.github.generation += 1;
         self.github.client = None;
         self.github.account = Account::SignedOut(note);
+        self.github.repos.clear();
         // The next account has its own stars.
         self.github.starred = false;
         self.github.star_asked = false;
@@ -966,7 +967,6 @@ impl App {
                 self.github.menu = false;
                 let client = self.github.client.take();
                 self.github_signed_out(None);
-                self.github.repos.clear();
                 return perform(
                     async move {
                         match client {
