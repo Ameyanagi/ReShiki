@@ -98,6 +98,161 @@ fn active_cell_text_and_border_edits_are_native_and_each_one_undo() {
     assert_eq!(app.tab.doc, original);
 }
 
+fn changed_inline_caption(app: &mut App) -> u64 {
+    draw(app);
+    edit_cell(app, CellAction::Text("Original cell caption".into()));
+    edit_cell(app, CellAction::AddText);
+    let id = app.tab.doc.annotations.last().unwrap().id;
+    let _ = app.update(Message::Canvas(Edit::BeginText(id)));
+    let _ = app.update(Message::InlineText(
+        super::super::inline_text::Action::ReplaceText("Changed cell caption".into()),
+    ));
+    assert!(app.tab.inline_changed());
+    app.sync_tables();
+    id
+}
+
+#[test]
+fn one_table_apply_commits_a_changed_inline_caption_then_the_border_with_separate_undo() {
+    let (mut app, _) = App::new();
+    let caption = changed_inline_caption(&mut app);
+    let before = app.tab.doc.clone();
+    let caption_only = app.inline_candidate().unwrap();
+    let revision = app.tab.revision;
+    let frames = app.tab.history.frames();
+    edit_cell(&mut app, CellAction::Width("1.2".into()));
+    let target = app.table_target().unwrap();
+    let _ = app.update(Message::Table(Action::Edit(target, CellAction::ApplyWidth)));
+    assert!(!app.error, "{}", app.status);
+    assert!(app.tab.inline_text.is_none());
+    assert_eq!(app.tab.revision, revision.wrapping_add(2));
+    assert_eq!(app.tab.history.frames(), frames + 2);
+    assert_eq!(
+        app.tab
+            .doc
+            .annotations
+            .iter()
+            .find(|a| a.id == caption)
+            .unwrap()
+            .text,
+        "Changed cell caption"
+    );
+    let cell = app.tab.doc.graphics[0]
+        .table
+        .as_ref()
+        .unwrap()
+        .cell(1)
+        .unwrap();
+    assert!(cell.borders.iter().all(|b| b.width_pt == 1.2));
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc, caption_only,
+        "first Undo restores only the border"
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before, "second Undo restores the old caption");
+    let _ = app.update(Message::Redo);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+}
+
+#[test]
+fn one_table_selection_or_done_button_finishes_the_changed_inline_caption() {
+    for action in [CellAction::SelectTable, CellAction::Done] {
+        let (mut app, _) = App::new();
+        changed_inline_caption(&mut app);
+        let target = app.table_target().unwrap();
+        let caption_only = app.inline_candidate().unwrap();
+        let frames = app.tab.history.frames();
+        let done = matches!(action, CellAction::Done);
+        let _ = app.update(Message::Table(Action::Edit(target, action)));
+        assert!(!app.error, "{}", app.status);
+        assert!(app.tab.inline_text.is_none());
+        assert_eq!(app.tab.doc, caption_only);
+        assert_eq!(app.tab.history.frames(), frames + 1);
+        if done {
+            assert!(app.active_table_cell().is_none());
+            assert!(app.tab.selected.is_empty());
+        } else {
+            assert_eq!(app.tab.selected, [target.cell.table]);
+        }
+    }
+}
+
+#[test]
+fn a_stale_table_button_cannot_commit_an_active_caption_or_retarget_itself() {
+    let (mut app, _) = App::new();
+    changed_inline_caption(&mut app);
+    let previous_cell = app.table_target().unwrap();
+    edit_cell(&mut app, CellAction::Cell(2));
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let frames = app.tab.history.frames();
+    let _ = app.update(Message::Table(Action::Edit(
+        previous_cell,
+        CellAction::ApplyWidth,
+    )));
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.frames(), frames);
+    assert!(app.tab.inline_changed());
+    assert_eq!(app.active_table_cell().unwrap().cell, 2);
+
+    // A caption committed earlier is a real revision change, not permission
+    // to refresh an old button when another draft is subsequently opened.
+    let old_revision = app.table_target().unwrap();
+    assert!(app.finish_inline(true));
+    let caption = app.tab.doc.annotations.last().unwrap().id;
+    let _ = app.update(Message::Canvas(Edit::BeginText(caption)));
+    let _ = app.update(Message::InlineText(
+        super::super::inline_text::Action::ReplaceText("Later uncommitted caption".into()),
+    ));
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let frames = app.tab.history.frames();
+    let _ = app.update(Message::Table(Action::Edit(old_revision, CellAction::Done)));
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.frames(), frames);
+    assert!(app.tab.inline_changed());
+    assert!(app.active_table_cell().is_some());
+}
+
+#[test]
+fn a_noop_inline_caption_allows_table_apply_but_an_invalid_draft_blocks_it() {
+    for invalid in [false, true] {
+        let (mut app, _) = App::new();
+        changed_inline_caption(&mut app);
+        let _ = app.update(Message::InlineText(
+            super::super::inline_text::Action::ReplaceText("Original cell caption".into()),
+        ));
+        assert!(!app.tab.inline_changed());
+        if invalid {
+            app.tab.caption_format.width_pt = Some(f32::NAN);
+        }
+        edit_cell(&mut app, CellAction::Width("1.2".into()));
+        let before = app.tab.doc.clone();
+        let frames = app.tab.history.frames();
+        let revision = app.tab.revision;
+        let target = app.table_target().unwrap();
+        let _ = app.update(Message::Table(Action::Edit(target, CellAction::ApplyWidth)));
+        if invalid {
+            assert!(app.error);
+            assert!(app.tab.inline_text.is_some());
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.history.frames(), frames);
+            assert_eq!(app.tab.revision, revision);
+        } else {
+            assert!(!app.error, "{}", app.status);
+            assert!(app.tab.inline_text.is_none());
+            assert_eq!(app.tab.doc.annotations, before.annotations);
+            assert_eq!(app.tab.history.frames(), frames + 1);
+            assert_eq!(app.tab.revision, revision.wrapping_add(1));
+        }
+    }
+}
+
 #[test]
 fn assigning_and_releasing_a_molecule_keeps_geometry_and_refuses_partial_graphs() {
     let (mut app, _) = App::new();

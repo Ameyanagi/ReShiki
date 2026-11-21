@@ -91,6 +91,28 @@ impl App {
         (self.tool != Tool::Graphic(GraphicKind::Table)).then_some(target)
     }
 
+    /// Validate the captured control before committing its inline caption.
+    /// Only this synchronous finish may advance the action to a new revision;
+    /// queued actions from another cell, selection or document stay stale.
+    pub(super) fn finish_table_inline(&mut self, key: Target) -> Option<Target> {
+        self.sync_tables();
+        if self.table_target() != Some(key) {
+            return None;
+        }
+        let had_inline = self.tab.inline_text.is_some();
+        if !self.finish_inline(true) {
+            return None;
+        }
+        self.sync_tables();
+        let current = self.table_target()?;
+        (current.tab == key.tab
+            && current.epoch == key.epoch
+            && current.cell == key.cell
+            && (current.revision == key.revision
+                || had_inline && current.revision == key.revision.wrapping_add(1)))
+        .then_some(current)
+    }
+
     pub(super) fn sync_tables(&mut self) {
         if !self.tab.doc.graphics.iter().any(|g| g.table.is_some()) {
             if self.tab.table_inputs.active.is_some() {
