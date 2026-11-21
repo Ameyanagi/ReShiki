@@ -271,6 +271,7 @@ fn labelled_app() -> App {
     app.engine = reshiki::engine::LocalEngine::in_process();
     app.tab.busy = false;
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: 1,
         position: Default::default(),
         text: "First figure".into(),

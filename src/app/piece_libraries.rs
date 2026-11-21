@@ -649,7 +649,7 @@ fn losses(outcome: &revise::Outcome, next: &Definition) -> String {
 fn save(title: &'static str, name: &str, extension: &'static str, bytes: Vec<u8>) -> Task<Message> {
     let name = name.to_owned();
     Task::perform(
-        async move { super::files::save_bytes(title, &name, extension, &bytes).await },
+        async move { super::files::save_bytes(title, &name, extension, &bytes, None).await },
         |result| Message::Equipment(Action::Exported(result)),
     )
 }

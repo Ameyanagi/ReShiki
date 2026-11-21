@@ -4,7 +4,7 @@ issues: []
 ---
 
 - **⌘K opens the command palette** (**Ctrl+K** on Windows and Linux); press it
-  again to close. **:** still opens it.
+  again to focus search while keeping the query and filter. **:** still opens it.
 - The palette has the new drawing commands: cycles, equipment, callouts,
   panels, layouts, arrow bodies, highlight styles and fill effects. A label
   that needs its section shows it, as in **Panel: Outline**.

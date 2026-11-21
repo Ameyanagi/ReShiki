@@ -103,6 +103,7 @@ fn requested_analysis_ends_on_right_click_target_changes_and_does_not_return() {
     let drawing = app.tab.doc.clone();
     let _ = app.update(Message::Canvas(crate::canvas::Edit::ContextMenu {
         position: iced::Point::new(200., 200.),
+        at: app.tab.doc.atom(atoms[2]).unwrap().position,
         selected: vec![atoms[2]],
         hit: vec![atoms[2]],
     }));
@@ -366,6 +367,7 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
 
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(20., 180.),
         text: "Selected caption".into(),

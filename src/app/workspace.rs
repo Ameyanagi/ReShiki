@@ -3199,7 +3199,7 @@ fn template_tile<'a>(
     document: &'a reshiki::document::Document,
     message: Message,
 ) -> Element<'a, Message> {
-    let preview = canvas(crate::canvas::TemplateThumbnail(document))
+    let preview = canvas(crate::canvas::TemplateThumbnail(document, None))
         .width(54)
         .height(42);
     hover_hint(

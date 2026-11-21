@@ -1070,6 +1070,7 @@ fn reloaded_ruler_units_replace_an_unsaved_browser_choice_and_cached_input() {
     ));
     let before = doc.clone();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 2,
         position: Point::new(20., -40.),
         text: "EtOH, rt".into(),

@@ -117,6 +117,11 @@ impl Editor {
             .zip(typed(&self.height, self.layout.height_pt))
             .unwrap_or((self.layout.width_pt, self.layout.height_pt))
     }
+    #[cfg(test)]
+    pub(super) fn draft_layout(&self) -> Result<Layout, String> {
+        self.candidate()
+    }
+
     fn candidate(&self) -> Result<Layout, String> {
         let number = |s: &str| {
             s.trim()

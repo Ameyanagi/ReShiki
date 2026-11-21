@@ -187,7 +187,12 @@ fn temporary_pages_destination_keeps_panel_choices_and_does_not_apply_them_to_pr
     assert!(app.tab.pages.editor.is_some());
     // Page PDF and Print use the existing page settings/defaults; the panel's
     // temporary picture choices remain available when this subpage is canceled.
-    let printable = app.print_document().unwrap();
+    let printable = reshiki::printing::snapshot(
+        &app.tab.doc,
+        &app.tab.selected,
+        reshiki::printing::Scope::Document,
+    )
+    .unwrap();
     assert_eq!(printable.atoms, drawing.atoms);
     assert!(app.appearance == defaults);
     let _ = app.update(Message::Pages(Action::Cancel));

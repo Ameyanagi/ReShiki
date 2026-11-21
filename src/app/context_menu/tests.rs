@@ -1831,6 +1831,7 @@ fn show_formula_and_masses_below_adds_the_missing_lines_in_one_step() -> Result<
     let open = |app: &mut App| {
         app.edit(Edit::ContextMenu {
             position: Point::new(30., 40.),
+            at: app.tab.doc.atom(ethanol[0]).unwrap().position,
             selected: vec![ethanol[0]],
             hit: vec![ethanol[0]],
         })
@@ -1878,6 +1879,7 @@ fn number_compound_context_action_targets_clicked_molecule_once() -> Result<(), 
     let before = app.tab.doc.clone();
     app.edit(Edit::ContextMenu {
         position: Point::new(30., 40.),
+        at: app.tab.doc.atom(right).unwrap().position,
         selected: vec![right],
         hit: vec![right],
     });
