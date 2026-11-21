@@ -153,6 +153,7 @@ explains how the crates and modules fit together.
 - `src/app/pages.rs`
 - `src/app/palettes.rs`: Compact visual flyouts for toolbar families.
 - `src/app/performance.rs`: Opt-in, release-mode timings of editing work on the event-loop thread.
+- `src/app/performance/equipment.rs`: Opt-in comparison of repeated equipment views with cold and retained tile drawings.
 - `src/app/performance/hover.rs`: Hover profiling through the application update and the real widget renderer.
 - `src/app/performance/redraw.rs`: Redraw and memory workloads
 - `src/app/pictures.rs`: Asynchronous picture replacement and selection-aware size controls.

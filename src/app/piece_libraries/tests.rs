@@ -41,6 +41,75 @@ fn builtins_are_indexed_without_waiting_for_folder_scans() {
 }
 
 #[test]
+fn equipment_tiles_reuse_immutable_drawings_for_each_canvas_theme() {
+    let libraries = Libraries::load();
+    for entry in &libraries.entries {
+        assert!(entry.thumbnails.iter().all(|slot| slot.get().is_none()));
+        let light = entry.thumbnail(CanvasTheme::Light);
+        assert!(std::ptr::eq(light, entry.thumbnail(CanvasTheme::Light)));
+        let dark = entry.thumbnail(CanvasTheme::Dark);
+        assert!(std::ptr::eq(dark, entry.thumbnail(CanvasTheme::Dark)));
+        assert!(!std::ptr::eq(light, dark));
+        assert_eq!(light.canvas_theme, CanvasTheme::Light);
+        assert_eq!(dark.canvas_theme, CanvasTheme::Dark);
+        assert_eq!(light.graphics, dark.graphics);
+        assert_eq!(light.graphics.len(), 1);
+        let graphic = &light.graphics[0];
+        let piece = graphic.piece.as_ref().unwrap();
+        assert_eq!(piece.definition, entry.key);
+        assert!(Arc::ptr_eq(
+            piece.linked.as_ref().unwrap(),
+            &entry.definition
+        ));
+        assert!(placed::middle(graphic).distance(Point::default()) < 0.01);
+    }
+}
+
+#[test]
+fn reindexing_replaces_cached_authored_tiles_with_the_current_content() {
+    let original = piece("lab/authored-piece");
+    let mut libraries = Libraries::load();
+    libraries.mine = folder(original.clone());
+    libraries.index();
+    let entry = libraries
+        .entries
+        .iter()
+        .find(|entry| entry.source == Source::Mine)
+        .unwrap();
+    let before = entry.thumbnail(CanvasTheme::Light).clone();
+    let _ = entry.thumbnail(CanvasTheme::Dark);
+
+    // A reload can replace artwork without changing its ID or revision.
+    let mut changed = (*original).clone();
+    changed.shapes[0].color = Some([210, 230, 240]);
+    reshiki::equipment::validate::validate(&changed).unwrap();
+    let changed = Arc::new(changed);
+    libraries.mine = folder(changed.clone());
+    libraries.index();
+    let entry = libraries
+        .entries
+        .iter()
+        .find(|entry| entry.source == Source::Mine)
+        .unwrap();
+    assert!(entry.thumbnails.iter().all(|slot| slot.get().is_none()));
+    let after = entry.thumbnail(CanvasTheme::Light);
+    assert_ne!(after, &before);
+    let current = after.graphics[0].piece.as_ref().unwrap();
+    assert_eq!(current.definition, key(&changed));
+    assert!(Arc::ptr_eq(current.linked.as_ref().unwrap(), &changed));
+    assert_eq!(entry.thumbnail(CanvasTheme::Dark).graphics, after.graphics);
+
+    libraries.mine = Folder::default();
+    libraries.index();
+    assert!(
+        libraries
+            .entries
+            .iter()
+            .all(|entry| entry.source != Source::Mine)
+    );
+}
+
+#[test]
 fn local_results_publish_without_waiting_for_a_linked_share() {
     let (mut app, _) = App::new();
     let serial = request(&mut app, &["/slow/share"], None);
