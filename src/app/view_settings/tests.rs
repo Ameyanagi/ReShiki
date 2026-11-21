@@ -1,0 +1,205 @@
+use super::*;
+use reshiki::document::{Document, Point};
+
+fn ready() -> App {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.fit_to_view = false;
+    app.appearance = crate::appearance::Settings::default();
+    app.guides = Default::default();
+    app
+}
+
+#[test]
+fn view_menu_choices_keep_the_drawing_camera_and_history() {
+    let mut app = ready();
+    let id = app.tab.doc.add_atom("C", Point::new(120., 35.));
+    app.tab.selected = vec![id];
+    app.tab.camera.center = Point::new(80., -20.);
+    app.tab.camera.zoom = 1.75;
+    let doc = app.tab.doc.clone();
+    let camera = app.tab.camera;
+    let revision = app.tab.revision;
+    let frames = app.tab.history.frames();
+    let dirty = app.tab.dirty();
+    for item in [
+        Item::Grid,
+        Item::Rulers,
+        Item::Crosshair,
+        Item::SmartGuides,
+        Item::ArrangeControls,
+    ] {
+        let before = item.checked(&app).unwrap();
+        let _ = app.update(Message::View(Action::Choose(item)));
+        assert_eq!(
+            item.checked(&app),
+            Some(before),
+            "A closed menu has no live rows"
+        );
+        let _ = app.update(Message::View(Action::Toggle));
+        assert!(app.view_open);
+        let _ = app.update(Message::View(Action::Choose(item)));
+        assert!(!app.view_open);
+        assert_eq!(item.checked(&app), Some(!before));
+        assert_eq!(app.tab.doc, doc);
+        assert_eq!(app.tab.selected, [id]);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.history.frames(), frames);
+        assert_eq!(app.tab.dirty(), dirty);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+    }
+}
+
+#[test]
+fn view_menu_escape_owns_dismissal_and_foreground_commands_close_it() {
+    let mut app = ready();
+    app.tool = crate::canvas::Tool::Text;
+    let _ = app.update(Message::View(Action::Toggle));
+    let refresh = app.property_request_key();
+    let _ = app.update(Message::InspectorAction(
+        super::super::inspector::Action::RefreshPropertiesFor(refresh),
+    ));
+    assert!(app.view_open);
+    for message in [
+        Message::Tick,
+        Message::Viewport(iced::Size::new(800., 600.)),
+        Message::Canvas(crate::canvas::Edit::Hover(Some(Point::default()))),
+        Message::Nmr(super::super::nmr::Action::RenderedSize(iced::Size::new(
+            500., 200.,
+        ))),
+        Message::Updates(super::super::updates::Action::Poll),
+        Message::Updates(super::super::updates::Action::Check(false)),
+    ] {
+        let _ = app.update(message);
+        assert!(app.view_open);
+    }
+    let _ = app.update(Message::Escape);
+    assert!(!app.view_open);
+    assert_eq!(
+        app.tool,
+        crate::canvas::Tool::Text,
+        "Escape only closes View"
+    );
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::View(Action::Toggle));
+    let _ = app.update(Message::Settings(
+        super::super::settings_page::Action::Open(None),
+    ));
+    assert!(!app.view_open);
+    assert!(app.settings.open);
+}
+
+#[test]
+fn view_menu_stays_open_while_stereo_pulses_advance_and_end() {
+    use super::super::stereo;
+    let mut app = ready();
+    let atom = app.tab.doc.add_atom("C", Point::new(120., 35.));
+    app.tab.selected = vec![atom];
+    app.tab.camera.center = Point::new(80., -20.);
+    app.tab.camera.zoom = 1.75;
+    let drawing = app.tab.doc.clone();
+    let camera = app.tab.camera;
+    let revision = app.tab.revision;
+    let history = app.tab.history.frames();
+    let _ = app.update(Message::View(Action::Toggle));
+    for expired in [false, true] {
+        let age = if expired {
+            std::time::Duration::from_secs(2)
+        } else {
+            std::time::Duration::ZERO
+        };
+        app.tab.pulse = Some((vec![atom], iced::time::Instant::now() - age));
+        let _ = app.update(Message::Stereo(stereo::Action::Pulse));
+        assert!(app.view_open, "A redraw-only timer keeps View open");
+        assert_eq!(
+            app.tab.pulse.is_none(),
+            expired,
+            "The pulse still reaches its ordinary timer handler"
+        );
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.tab.selected, [atom]);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.history.frames(), history);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+    }
+    let _ = app.update(Message::Stereo(stereo::Action::Results(true)));
+    assert!(
+        !app.view_open,
+        "A foreground Stereo command still closes View"
+    );
+}
+
+#[test]
+fn page_setup_and_bottom_canvas_toggle_reenter_caption_commit_gates() {
+    use super::super::inline_text;
+    for from_view in [false, true] {
+        let mut app = ready();
+        app.tab.doc = Document::default();
+        let _ = app.update(Message::InlineText(inline_text::Action::Begin(
+            None,
+            Point::default(),
+        )));
+        let _ = app.update(Message::InlineText(inline_text::Action::ReplaceText(
+            "note".into(),
+        )));
+        assert!(app.tab.inline_text.is_some());
+        assert!(app.tab.doc.annotations.is_empty());
+        if from_view {
+            let _ = app.update(Message::View(Action::Toggle));
+            let _ = app.update(Message::View(Action::Choose(Item::PageSetup)));
+        } else {
+            let _ = app.update(Message::CanvasTheme(app.tab.doc.canvas_theme.toggled()));
+        }
+        assert!(app.tab.inline_text.is_none());
+        assert!(!app.view_open);
+        assert_eq!(app.tab.doc.annotations.len(), 1);
+        assert_eq!(app.tab.doc.annotations[0].text, "note");
+        let dark = app.tab.doc.canvas_theme;
+        let _ = app.update(Message::Undo);
+        assert!(app.tab.doc.annotations.is_empty());
+        assert!(!app.tab.history.can_undo(), "The caption is one edit");
+        assert_eq!(
+            app.tab.doc.canvas_theme, dark,
+            "Canvas view stays out of Undo"
+        );
+    }
+}
+
+#[test]
+fn view_menu_closes_for_front_replacements_but_not_background_epochs() {
+    let mut app = ready();
+    let origin = app.tab.id;
+    let _ = app.update(Message::View(Action::Toggle));
+    app.add_tab();
+    assert!(!app.view_open);
+    let front = app.tab.id;
+    let _ = app.update(Message::View(Action::Toggle));
+    app.in_tab(origin, |app| app.begin_file_epoch()).unwrap();
+    assert!(app.view_open);
+    assert_eq!(app.tab.id, front);
+    app.begin_file_epoch();
+    assert!(!app.view_open);
+    let _ = app.update(Message::View(Action::Toggle));
+    app.reset_tab();
+    assert!(!app.view_open);
+}
+
+#[test]
+fn view_and_styles_choosers_keep_independent_foreground_lifecycles() {
+    use super::super::status_style;
+    let mut app = ready();
+    let _ = app.update(Message::StatusStyle(status_style::Action::Toggle));
+    assert!(app.status_style_open);
+    assert!(!app.view_open);
+    let _ = app.update(Message::View(Action::Toggle));
+    assert!(app.view_open);
+    assert!(!app.status_style_open);
+    let _ = app.update(Message::StatusStyle(status_style::Action::Toggle));
+    assert!(app.status_style_open);
+    assert!(!app.view_open);
+    app.begin_file_epoch();
+    assert!(!app.status_style_open);
+    assert!(!app.view_open);
+}

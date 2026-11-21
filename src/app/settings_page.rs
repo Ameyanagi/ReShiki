@@ -257,6 +257,7 @@ fn restored(section: Section, a: &Settings) -> Settings {
             a.smart_guides = d.smart_guides;
             a.arrange_controls = d.arrange_controls;
             a.drawing_style_unit = d.drawing_style_unit;
+            a.ruler_unit = d.ruler_unit;
         }
         Section::CopyExport => {
             a.copy_background = d.copy_background;
@@ -453,7 +454,10 @@ impl App {
             _ => {
                 self.appearance = restored(section, &self.appearance);
                 match section {
-                    Section::Drawing => self.sync_drawing_style_unit(),
+                    Section::Drawing => {
+                        self.sync_drawing_style_unit();
+                        self.sync_ruler_unit();
+                    }
                     Section::CopyExport => {
                         self.reset_export_panel_options();
                     }
@@ -784,6 +788,16 @@ impl App {
                             &Unit::ALL.map(|unit| (unit, unit.to_string())),
                             a.drawing_style_unit,
                             |unit| Message::Settings(Action::DrawingUnit(unit)),
+                        ),
+                    ),
+                    Item::choice(
+                        "Ruler units",
+                        "Canvas rulers, coordinates and arrow label gaps.",
+                        choices(
+                            "settings-ruler-units",
+                            &crate::canvas::guides::Unit::ALL.map(|unit| (unit, unit.to_string())),
+                            self.guides.unit,
+                            |unit| Message::View(View::RulerUnit(unit)),
                         ),
                     ),
                 ],
