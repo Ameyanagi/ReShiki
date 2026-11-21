@@ -217,13 +217,7 @@ impl App {
         };
         let (selected, reversed, mut layout) = (selected.clone(), *reversed, *layout);
         edit(&mut layout);
-        match super::proposed(
-            &self.tab.doc,
-            &selected,
-            reversed,
-            layout,
-            self.appearance.two_decimal_weight,
-        ) {
+        match super::proposed(&self.tab.doc, &selected, reversed, layout) {
             Ok((doc, cycle, left)) => {
                 self.tab.cycle_inputs.proposal = Some(Box::new(Proposal {
                     doc,

@@ -26,7 +26,7 @@ fn fitted_cycle() -> (App, u64) {
     let baseline = doc.clone();
     let proposal = cycles::propose_drop(&doc, &part).expect("a fitted source run");
     let mut doc = proposal.doc;
-    reconcile_preview(&mut doc, &baseline, false).unwrap();
+    reconcile_preview(&mut doc, &baseline).unwrap();
     assert!(
         !doc.graphics[0]
             .cycle
@@ -84,7 +84,7 @@ fn fitted_numeric_and_drag_tilt_keep_the_raw_family_through_a_half_turn() {
                 assert_eq!(new.source_span, -old.source_span);
                 assert_eq!(new.cuts, old.cuts);
             }
-            reconcile_preview(&mut preview, &before, app.appearance.two_decimal_weight).unwrap();
+            reconcile_preview(&mut preview, &before).unwrap();
             assert_eq!(
                 preview.graphics[0].cycle.as_ref().unwrap().split_runs,
                 raw,
@@ -285,7 +285,7 @@ fn an_independent_child_bow_edit_uses_the_model_refit_candidate() {
     let mut expected = before.clone();
     expected.graphics[0].cycle.as_mut().unwrap().steps[step].bow_pt = 72.;
     let review = cycles::fit_edited(&before, &mut expected, id, Some(step)).unwrap();
-    reconcile_preview(&mut expected, &before, app.appearance.two_decimal_weight).unwrap();
+    reconcile_preview(&mut expected, &before).unwrap();
     field(&mut app, Field::Bow, "72");
     assert!(!app.error, "{}", app.status);
     if review {

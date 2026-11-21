@@ -250,72 +250,100 @@ fn loaded_explicit_shapes_keep_their_frame_and_parts_and_each_change_is_one_undo
 
 #[test]
 fn make_preview_matches_apply_for_visible_stereo_and_linked_caption_precision() {
-    let (mut app, _) = App::new();
-    app.tab.doc = Document::from_json(include_bytes!(
-        "../../../tests/fixtures/chemical-naming-rust/r-lactic-rust-native.rsk"
-    ))
-    .unwrap();
-    let lactic: Vec<_> = app.tab.doc.atoms.iter().map(|a| a.id).collect();
-    reshiki::linked_properties::toggle(
-        &mut app.tab.doc,
-        &lactic,
-        reshiki::linked_properties::Property::Weight,
-        Default::default(),
-        !app.appearance.two_decimal_weight,
-    )
-    .unwrap();
-    let a = app.tab.doc.add_atom("C", Point::new(210., 80.));
-    let b = app.tab.doc.add_atom("C", Point::new(252., 80.));
-    let left = app.tab.doc.add_atom("C", Point::new(189., 44.));
-    let right = app.tab.doc.add_atom("C", Point::new(273., 116.));
-    app.tab.doc.add_bond(a, b, 2, "plain");
-    app.tab.doc.add_bond(a, left, 1, "plain");
-    app.tab.doc.add_bond(b, right, 1, "plain");
-    let catalyst = text(&mut app, -240., 120., "Catalyst");
-    app.tab.doc.atom_labels.stereo = true;
-    let labels =
-        reshiki::atom_labels::refresh::Refresh::calculate(&app.tab.doc, &Default::default())
+    for two_decimal_weight in [false, true] {
+        for custom_places in [false, true] {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            app.appearance.two_decimal_weight = two_decimal_weight;
+            app.tab.doc = Document::from_json(include_bytes!(
+                "../../../tests/fixtures/chemical-naming-rust/r-lactic-rust-native.rsk"
+            ))
             .unwrap();
-    labels.apply(&mut app.tab.doc);
-    let indicators = reshiki::atom_labels::indicators(&app.tab.doc);
-    assert!(indicators.iter().any(|label| label.text == "(R)"));
-    assert!(indicators.iter().any(|label| label.text == "(E)"));
-    app.tab.selected = lactic;
-    app.tab.selected.extend([a, b, left, right, catalyst]);
-    let before = app.tab.doc.clone();
-    let _ = app.update(Message::Cycle(Action::Make));
-    let _ = app.update(Message::Cycle(Action::Shape(Shape::Ellipse)));
-    field(&mut app, Field::Width, "300");
-    field(&mut app, Field::Height, "160");
-    assert!(!app.error, "{}", app.status);
-    let preview = app.display_document().clone();
-    assert_eq!(app.tab.doc, before);
-    assert!(preview.atoms.iter().all(|a| a.cip_label.is_none()));
-    assert!(preview.bonds.iter().all(|b| b.cip_label.is_none()));
-    assert!(
-        preview
-            .property_captions
-            .iter()
-            .all(|c| c.two_decimal_weight == app.appearance.two_decimal_weight)
-    );
-    let _ = app.update(Message::ContextKey("Enter".into()));
-    assert!(!app.error, "{}", app.status);
-    assert_eq!(app.tab.doc, preview);
-    assert_eq!(app.tab.history.undo_frames().len(), 1);
-    let _ = app.update(Message::Undo);
-    // Undo restores the molecular drawing. Computed stereo labels and the
-    // current Mol. Wt. display preference follow the ordinary Undo policy.
-    let mut source_chemistry = before.clone();
-    reshiki::atom_labels::clear_computed(&mut source_chemistry);
-    assert_eq!(app.tab.doc.atoms, source_chemistry.atoms);
-    assert_eq!(app.tab.doc.bonds, source_chemistry.bonds);
-    assert_eq!(app.tab.doc.graphics, before.graphics);
-    assert_eq!(app.tab.doc.groups, before.groups);
-    assert_eq!(
-        app.tab.doc.property_captions[0].atoms,
-        before.property_captions[0].atoms
-    );
-    assert!(!app.tab.history.can_undo());
+            let lactic: Vec<_> = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+            reshiki::linked_properties::toggle(
+                &mut app.tab.doc,
+                &lactic,
+                reshiki::linked_properties::Property::Weight,
+                Default::default(),
+                !app.appearance.two_decimal_weight,
+            )
+            .unwrap();
+            reshiki::linked_properties::toggle(
+                &mut app.tab.doc,
+                &lactic,
+                reshiki::linked_properties::Property::ExactMass,
+                Default::default(),
+                !app.appearance.two_decimal_weight,
+            )
+            .unwrap();
+            if custom_places {
+                app.set_property_places(&lactic, reshiki::linked_properties::Property::Weight, 5);
+                app.set_property_places(
+                    &lactic,
+                    reshiki::linked_properties::Property::ExactMass,
+                    2,
+                );
+                assert!(!app.error, "{}", app.status);
+            }
+            let a = app.tab.doc.add_atom("C", Point::new(210., 80.));
+            let b = app.tab.doc.add_atom("C", Point::new(252., 80.));
+            let left = app.tab.doc.add_atom("C", Point::new(189., 44.));
+            let right = app.tab.doc.add_atom("C", Point::new(273., 116.));
+            app.tab.doc.add_bond(a, b, 2, "plain");
+            app.tab.doc.add_bond(a, left, 1, "plain");
+            app.tab.doc.add_bond(b, right, 1, "plain");
+            let catalyst = text(&mut app, -240., 120., "Catalyst");
+            app.tab.doc.atom_labels.stereo = true;
+            let labels = reshiki::atom_labels::refresh::Refresh::calculate(
+                &app.tab.doc,
+                &Default::default(),
+            )
+            .unwrap();
+            labels.apply(&mut app.tab.doc);
+            let indicators = reshiki::atom_labels::indicators(&app.tab.doc);
+            assert!(indicators.iter().any(|label| label.text == "(R)"));
+            assert!(indicators.iter().any(|label| label.text == "(E)"));
+            app.tab.selected = lactic;
+            app.tab.selected.extend([a, b, left, right, catalyst]);
+            let before = app.tab.doc.clone();
+            let frames = app.tab.history.undo_frames().len();
+            let _ = app.update(Message::Cycle(Action::Make));
+            let _ = app.update(Message::Cycle(Action::Shape(Shape::Ellipse)));
+            field(&mut app, Field::Width, "300");
+            field(&mut app, Field::Height, "160");
+            assert!(!app.error, "{}", app.status);
+            let preview = app.display_document().clone();
+            assert_eq!(app.tab.doc, before);
+            assert!(preview.atoms.iter().all(|a| a.cip_label.is_none()));
+            assert!(preview.bonds.iter().all(|b| b.cip_label.is_none()));
+            assert_eq!(
+                preview.property_captions, before.property_captions,
+                "A cycle review preserves each imported or explicitly chosen mass precision"
+            );
+            let _ = app.update(Message::ContextKey("Enter".into()));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.tab.doc, preview);
+            assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+            let _ = app.update(Message::Undo);
+            // Undo restores authored caption precision and placement exactly;
+            // computed stereo labels follow the ordinary history policy.
+            let mut source_chemistry = before.clone();
+            reshiki::atom_labels::clear_computed(&mut source_chemistry);
+            assert_eq!(app.tab.doc.atoms, source_chemistry.atoms);
+            assert_eq!(app.tab.doc.bonds, source_chemistry.bonds);
+            assert_eq!(app.tab.doc.graphics, before.graphics);
+            assert_eq!(app.tab.doc.groups, before.groups);
+            assert_eq!(app.tab.doc.annotations, before.annotations);
+            assert_eq!(app.tab.doc.property_captions, before.property_captions);
+            assert_eq!(app.tab.history.undo_frames().len(), frames);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc.annotations, preview.annotations);
+            assert_eq!(app.tab.doc.property_captions, preview.property_captions);
+            assert_eq!(app.tab.doc.graphics, preview.graphics);
+            assert_eq!(app.tab.doc.groups, preview.groups);
+            assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+        }
+    }
 }
 
 #[test]

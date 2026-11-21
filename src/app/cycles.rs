@@ -215,11 +215,10 @@ fn proposed(
     selected: &[u64],
     reversed: bool,
     layout: MakeLayout,
-    two_decimal_weight: bool,
 ) -> Result<(reshiki::document::Document, u64, bool), String> {
     let mut made = doc.clone();
     let (cycle, left) = make_configured(&mut made, selected, reversed, layout)?;
-    reconcile_preview(&mut made, doc, two_decimal_weight)?;
+    reconcile_preview(&mut made, doc)?;
     Ok((made, cycle, left))
 }
 
@@ -228,11 +227,9 @@ fn proposed(
 fn reconcile_preview(
     doc: &mut reshiki::document::Document,
     before: &reshiki::document::Document,
-    two_decimal_weight: bool,
 ) -> Result<(), String> {
-    for link in &mut doc.property_captions {
-        link.two_decimal_weight = two_decimal_weight;
-    }
+    // Geometry edits preserve each existing caption's precision, including an
+    // imported default and explicitly chosen mass-line decimal places.
     reshiki::atom_labels::refresh::refresh_edited(before, doc);
     let reconciled = reshiki::transaction::reconcile(doc, before.clone())
         .map_err(|rejection| rejection.message().to_owned())?;
@@ -312,13 +309,7 @@ impl App {
                         layout,
                     } = &mut p.kind
                     {
-                        match proposed(
-                            &self.tab.doc,
-                            selected,
-                            !*reversed,
-                            *layout,
-                            self.appearance.two_decimal_weight,
-                        ) {
+                        match proposed(&self.tab.doc, selected, !*reversed, *layout) {
                             Ok((doc, cycle, leaves)) => {
                                 (p.doc, p.cycle, *left) = (doc, cycle, leaves);
                                 *reversed = !*reversed;
@@ -506,13 +497,7 @@ impl App {
             return Task::none();
         }
         let selected = self.tab.selected.clone();
-        match proposed(
-            &self.tab.doc,
-            &selected,
-            false,
-            MakeLayout::default(),
-            self.appearance.two_decimal_weight,
-        ) {
+        match proposed(&self.tab.doc, &selected, false, MakeLayout::default()) {
             Ok((doc, cycle, left)) => {
                 self.tab.cycle_inputs.proposal = Some(Box::new(Proposal {
                     doc,
@@ -578,9 +563,7 @@ impl App {
         let mut doc = self.tab.doc.clone();
         self.error = false;
         if reshiki::cycles::tidy(&mut doc, cycle) {
-            if let Err(error) =
-                reconcile_preview(&mut doc, &self.tab.doc, self.appearance.two_decimal_weight)
-            {
+            if let Err(error) = reconcile_preview(&mut doc, &self.tab.doc) {
                 self.error = true;
                 self.status = error;
                 return super::focus_drawing();
@@ -906,11 +889,7 @@ impl App {
     ) {
         match reshiki::cycles::fit_edited(&self.tab.doc, &mut candidate, cycle, bow_step) {
             Ok(true) => {
-                if let Err(error) = reconcile_preview(
-                    &mut candidate,
-                    &self.tab.doc,
-                    self.appearance.two_decimal_weight,
-                ) {
+                if let Err(error) = reconcile_preview(&mut candidate, &self.tab.doc) {
                     self.error = true;
                     self.status = error;
                     return;
