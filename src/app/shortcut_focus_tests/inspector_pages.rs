@@ -28,7 +28,12 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
         (InspectorTab::Assistant, InspectorTab::Templates),
         (InspectorTab::Assistant, InspectorTab::Import),
     ] {
-        for control in ["inspector-page-back", "inspector-page-close"] {
+        let controls: &[&str] = if page == InspectorTab::Names {
+            &["inspector-page-back"]
+        } else {
+            &["inspector-page-back", "inspector-page-close"]
+        };
+        for &control in controls {
             let mut app = drawing();
             open(&mut app, parent);
             open(&mut app, page);
@@ -63,7 +68,7 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
                 assert_eq!(node.name, format!("{label} tab"));
                 assert!(node.visible_bounds.is_some());
             }
-            for id in ["inspector-page-back", "inspector-page-close"] {
+            for &id in controls {
                 let node = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
                 assert_eq!(node.role, reshiki::accessibility::Role::Button);
                 assert!(node.enabled && node.visible_bounds.is_some());
@@ -72,6 +77,38 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
                 } else {
                     "Close "
                 }));
+            }
+            if page == InspectorTab::Names {
+                assert!(
+                    !snapshot
+                        .nodes
+                        .iter()
+                        .any(|node| node.id == "inspector-page-close")
+                );
+                let import = snapshot
+                    .nodes
+                    .iter()
+                    .find(|node| node.id == "naming.import")
+                    .unwrap();
+                assert_eq!(import.name, "Open SMILES import");
+                assert!(import.enabled && import.visible_bounds.is_some());
+            } else {
+                let title = ui.text(&app, "Assistant");
+                let bounds = |id| {
+                    snapshot
+                        .nodes
+                        .iter()
+                        .find(|node| node.id == id)
+                        .unwrap()
+                        .bounds
+                };
+                let back = bounds("inspector-page-back");
+                let new = bounds("assistant-new-conversation");
+                let close = bounds("inspector-page-close");
+                assert!(back.x < title.x && title.x < new.x && new.x < close.x);
+                for bounds in [back, new, close] {
+                    assert!((bounds.center_y() - title.center_y()).abs() < 0.01);
+                }
             }
             if parent == InspectorTab::Assistant {
                 assert!(snapshot.nodes.iter().any(
@@ -119,6 +156,70 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
 }
 
 #[tokio::test]
+#[ignore = "Opt-in original Chemical names header and scrolling body"]
+async fn chemical_names_keeps_its_fixed_header_import_and_body_scroll() {
+    let mut ui = Ui::new().await;
+    ui.viewport = Rectangle::with_size(Size::new(940., 620.));
+    let mut app = drawing();
+    app.tab.selected.clear();
+    open(&mut app, InspectorTab::Names);
+    let title = ui.text(&app, "Chemical names");
+    let intro = ui.text(&app, "Parse names locally, or confirm an online lookup.");
+    let name = ui.text(&app, "NAME → STRUCTURE");
+    let header = |ui: &mut Ui, app: &App| {
+        let snapshot = ui.semantics(app);
+        ["inspector-page-back", "naming.import"].map(|id| {
+            snapshot
+                .nodes
+                .iter()
+                .find(|node| node.id == id)
+                .unwrap()
+                .bounds
+        })
+    };
+    let controls = header(&mut ui, &app);
+    let parse = |ui: &mut Ui, app: &App| {
+        ui.semantics(app)
+            .nodes
+            .iter()
+            .find(|node| node.id == "naming.resolve")
+            .unwrap()
+            .bounds
+    };
+    let parse_before = parse(&mut ui, &app);
+    assert_eq!(controls[0].y, controls[1].y);
+    assert!(controls[0].y < title.y && title.y < intro.y && intro.y < name.y);
+    ui.run_task(
+        &mut app,
+        iced::widget::operation::scroll_to(
+            "inspector-content",
+            iced::widget::operation::AbsoluteOffset {
+                x: None,
+                y: Some(120.),
+            },
+        ),
+    )
+    .await;
+    assert_eq!(ui.text(&app, "Chemical names"), title);
+    assert_eq!(
+        ui.text(&app, "Parse names locally, or confirm an online lookup."),
+        intro
+    );
+    assert_eq!(header(&mut ui, &app), controls);
+    assert!(parse(&mut ui, &app).y < parse_before.y);
+    ui.focus_control(&mut app, "naming.import").await;
+    ui.key(
+        &mut app,
+        Key::Named(Named::Enter),
+        Code::Enter,
+        Modifiers::empty(),
+        None,
+    )
+    .await;
+    assert_eq!(app.inspector_tab, InspectorTab::Import);
+}
+
+#[tokio::test]
 #[ignore = "Opt-in field-owned Esc before inspector page dismissal"]
 async fn inspector_page_escape_unfocuses_the_field_before_returning() {
     let mut ui = Ui::new().await;
@@ -127,7 +228,6 @@ async fn inspector_page_escape_unfocuses_the_field_before_returning() {
         (InspectorTab::Assistant, "assistant-input"),
     ] {
         let mut app = drawing();
-        // Name → structure first keeps its input visible in this focus test.
         app.tab.selected.clear();
         open(&mut app, InspectorTab::Export);
         open(&mut app, page);
@@ -174,8 +274,8 @@ async fn inspector_page_escape_unfocuses_the_field_before_returning() {
 }
 
 #[tokio::test]
-#[ignore = "Opt-in Chemical names section order from its actual entry point"]
-async fn chemical_names_structure_entry_places_structure_to_name_first() {
+#[ignore = "Opt-in original Chemical names layout and selected structure target"]
+async fn chemical_names_structure_entry_keeps_original_order_and_selected_target() {
     let mut ui = Ui::new().await;
     let mut app = drawing();
     let atoms = app.tab.selected.clone();
@@ -184,10 +284,11 @@ async fn chemical_names_structure_entry_places_structure_to_name_first() {
     let name = ui.text(&app, "NAME → STRUCTURE");
     let structure = ui.text(&app, "STRUCTURE → NAME");
     assert!(name.y < structure.y);
-    let _ = app.update(Message::Naming(naming::Action::OpenPanel(atoms)));
+    let _ = app.update(Message::Naming(naming::Action::OpenPanel(atoms.clone())));
     let name = ui.text(&app, "NAME → STRUCTURE");
     let structure = ui.text(&app, "STRUCTURE → NAME");
-    assert!(structure.y < name.y);
+    assert!(name.y < structure.y);
+    assert_eq!(app.tab.selected, atoms);
     let snapshot = ui.semantics(&app);
     let generate = snapshot
         .nodes
@@ -199,5 +300,6 @@ async fn chemical_names_structure_entry_places_structure_to_name_first() {
     let task = app.update(Message::InspectorAction(inspector::Action::BackPage));
     ui.run_task(&mut app, task).await;
     assert_eq!(app.inspector_tab, InspectorTab::Names);
-    assert!(ui.text(&app, "STRUCTURE → NAME").y < ui.text(&app, "NAME → STRUCTURE").y);
+    assert!(ui.text(&app, "NAME → STRUCTURE").y < ui.text(&app, "STRUCTURE → NAME").y);
+    assert_eq!(app.tab.selected, atoms);
 }

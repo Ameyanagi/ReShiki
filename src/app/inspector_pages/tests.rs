@@ -37,7 +37,6 @@ fn names_back_and_escape_preserve_the_drawing_and_parent_tab() {
             );
             let _ = app.update(Message::Inspector(InspectorTab::Names));
             assert_eq!(app.inspector_parent_tab(), previous);
-            assert!(app.inspector_pages.structure_first);
             let _ = app.update(Message::Naming(naming::Action::Name("ethanol".into())));
             let _ = app.update(close);
             assert_eq!(app.inspector_tab, previous);
@@ -137,26 +136,17 @@ fn selection_order_and_document_switch_do_not_discard_the_open_page() {
         let mut selected = app.tab.selected.clone();
         selected.reverse();
         let _ = app.update(Message::Canvas(Edit::Select(selected)));
+        let original_selection = app.tab.selected.clone();
         assert_eq!(app.inspector_tab, page);
         // Keep Assistant's existing "Go to drawing" route when another
         // document comes forward; changing document is not a canvas selection.
         let _ = app.update(Message::New);
         assert_ne!(app.tab.id, original);
         assert_eq!(app.inspector_tab, page);
-        if page == InspectorTab::Names {
-            assert!(
-                !app.inspector_pages.structure_first,
-                "An empty drawing starts with name input"
-            );
-        }
+        assert!(app.tab.selected.is_empty());
         let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(original)));
         assert_eq!(app.inspector_tab, page);
-        if page == InspectorTab::Names {
-            assert!(
-                app.inspector_pages.structure_first,
-                "The selected structure belongs to this drawing"
-            );
-        }
+        assert_eq!(app.tab.selected, original_selection);
     }
 }
 
@@ -179,12 +169,6 @@ fn file_replacement_rebinds_page_context_without_losing_its_return_route() {
         assert!(app.tab.selected.is_empty());
         assert_eq!(app.inspector_tab, page);
         assert_eq!(app.inspector_parent_tab(), InspectorTab::Import);
-        if page == InspectorTab::Names {
-            assert!(
-                !app.inspector_pages.structure_first,
-                "The replacement file has no selected structure"
-            );
-        }
         let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
         assert_eq!(app.inspector_tab, InspectorTab::Import);
         // Changing selection within this same replacement file is the other
@@ -300,20 +284,19 @@ fn closing_commands_or_keys_keeps_page_history_and_requested_analysis() {
 }
 
 #[test]
-fn chemical_names_entry_point_sets_order_after_selecting_its_structure() {
+fn chemical_names_entry_point_keeps_its_selected_structure_on_return() {
     let mut app = drawing();
     let atoms = app.tab.selected.clone();
     app.tab.selected.clear();
     let _ = app.update(Message::Inspector(InspectorTab::Names));
-    assert!(!app.inspector_pages.structure_first);
+    assert!(app.tab.selected.is_empty());
     let _ = app.update(Message::Naming(naming::Action::OpenPanel(atoms.clone())));
     assert_eq!(app.inspector_tab, InspectorTab::Names);
     assert_eq!(app.tab.selected, atoms);
-    assert!(app.inspector_pages.structure_first);
     let _ = app.update(Message::Assistant(assistant::Action::Open));
     let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
     assert_eq!(app.inspector_tab, InspectorTab::Names);
-    assert!(app.inspector_pages.structure_first);
+    assert_eq!(app.tab.selected, atoms);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -336,7 +319,7 @@ fn publication_keeps_its_existing_selection_route() {
     let _ = app.update(Message::Inspector(InspectorTab::Pages));
     let _ = app.update(Message::Canvas(Edit::Select(vec![])));
     assert_eq!(app.inspector_tab, InspectorTab::Pages);
-    assert!(app.inspector_page_header().is_none());
+    assert!(app.inspector_page_back_label().is_none());
 }
 
 fn names_from_catalog(app: &mut App) {

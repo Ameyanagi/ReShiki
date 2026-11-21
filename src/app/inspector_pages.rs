@@ -1,14 +1,12 @@
 //! Chemical names and Assistant are pages within the ordinary inspector tabs.
 use super::{App, InspectorTab, Message, document_tab::TabId, inspector};
-use iced::widget::{row, text};
-use iced::{Alignment, Element, Length, Task};
+use iced::Task;
 use std::collections::HashSet;
 
 #[derive(Default)]
 pub(super) struct State {
     /// Exact preceding pages; tab-track styling is derived separately.
     previous: Vec<InspectorTab>,
-    pub(super) structure_first: bool,
     selection: Option<Selection>,
 }
 
@@ -47,14 +45,6 @@ impl App {
             if tab != InspectorTab::DrawingStyle {
                 self.tab.styles.editor = None;
             }
-        }
-        if tab == InspectorTab::Names {
-            self.inspector_pages.structure_first = self
-                .tab
-                .doc
-                .atoms
-                .iter()
-                .any(|atom| self.tab.selected.contains(&atom.id));
         }
         self.inspector_pages.selection = is_page(tab).then(|| self.page_selection());
         if tab != InspectorTab::Assistant {
@@ -117,14 +107,6 @@ impl App {
             .as_ref()
             .filter(|before| before.document == document)
         else {
-            if self.inspector_tab == InspectorTab::Names {
-                self.inspector_pages.structure_first = self
-                    .tab
-                    .doc
-                    .atoms
-                    .iter()
-                    .any(|atom| self.tab.selected.contains(&atom.id));
-            }
             self.inspector_pages.selection = Some(self.page_selection());
             return Task::none();
         };
@@ -145,19 +127,17 @@ impl App {
         ])
     }
 
-    pub(super) fn inspector_page_header(&self) -> Option<Element<'_, Message>> {
-        let title = match self.inspector_tab {
-            InspectorTab::Names => "Chemical names",
-            InspectorTab::Assistant => "Assistant",
-            _ => return None,
-        };
+    pub(super) fn inspector_page_back_label(&self) -> Option<&'static str> {
+        if !is_page(self.inspector_tab) {
+            return None;
+        }
         let previous = self
             .inspector_pages
             .previous
             .last()
             .copied()
             .unwrap_or(InspectorTab::Properties);
-        let label = match previous {
+        Some(match previous {
             InspectorTab::Properties => "Properties",
             InspectorTab::Predict => "Predict",
             InspectorTab::Templates => "Add",
@@ -172,46 +152,7 @@ impl App {
             InspectorTab::Labels => "Atom labels",
             InspectorTab::Abbreviations => "Abbreviations",
             InspectorTab::Assistant => "Assistant",
-        };
-        let back = Message::InspectorAction(inspector::Action::BackPage);
-        #[cfg(not(target_arch = "wasm32"))]
-        let new_conversation = (self.inspector_tab == InspectorTab::Assistant).then(|| {
-            reshiki::accessibility::button(
-                "assistant-new-conversation",
-                "New conversation",
-                text("＋").size(16),
-            )
-            .padding([3, 5])
-            .style(iced::widget::button::text)
-            .on_press(Message::Assistant(super::assistant::Action::Reset))
-        });
-        #[cfg(target_arch = "wasm32")]
-        let new_conversation: Option<Element<'_, Message>> = None;
-        Some(
-            row![
-                reshiki::accessibility::button(
-                    "inspector-page-back",
-                    format!("Back to {label}"),
-                    text(format!("‹ {label}")).size(12)
-                )
-                .padding([4, 0])
-                .style(iced::widget::button::text)
-                .on_press(back.clone()),
-                text(format!("· {title}")).size(14).width(Length::Fill),
-                new_conversation,
-                reshiki::accessibility::button(
-                    "inspector-page-close",
-                    format!("Close {title}"),
-                    text("×").size(18)
-                )
-                .padding([3, 5])
-                .style(iced::widget::button::text)
-                .on_press(back),
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center)
-            .into(),
-        )
+        })
     }
 }
 

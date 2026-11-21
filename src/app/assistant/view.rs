@@ -17,10 +17,12 @@ impl App {
             return self.assistant_elsewhere(id);
         }
         let chat = self.assistant_chat();
+        let header = panel_header(self.inspector_page_back_label().unwrap_or("Properties"));
         let footer = self.assistant_footer();
         let result_navigation = self.assistant_result_navigation();
         let base: Element<'_, Message> = container(
             column![
+                header,
                 scrollable(chat)
                     .id("assistant-chat")
                     .height(Length::Fill)
@@ -85,6 +87,7 @@ impl App {
     fn assistant_elsewhere(&self, id: TabId) -> Element<'_, Message> {
         let name = self.strip().find(|tab| tab.id == id).map(|tab| tab.name());
         column![
+            panel_back(self.inspector_page_back_label().unwrap_or("Properties")),
             text(format!(
                 "This conversation belongs to {}.",
                 name.unwrap_or_else(|| "a closed drawing".into())
@@ -592,5 +595,59 @@ fn codex_reply(reply: &str) -> Element<'_, Message> {
         text(reply).size(13).width(Length::Fill)
     ]
     .spacing(6)
+    .into()
+}
+
+fn panel_back<'a>(previous: &str) -> Element<'a, Message> {
+    super::super::workspace::hover_hint(
+        reshiki::accessibility::button(
+            "inspector-page-back",
+            format!("Back to {previous}"),
+            text("‹").size(18),
+        )
+        .padding([3, 8])
+        .style(super::super::workspace::control(false))
+        .on_press(Message::InspectorAction(
+            super::super::inspector::Action::BackPage,
+        )),
+        "Back to inspector",
+        tooltip::Position::Bottom,
+    )
+    .into()
+}
+
+fn panel_header<'a>(previous: &str) -> Element<'a, Message> {
+    row![
+        panel_back(previous),
+        text("Assistant").size(16),
+        Space::new().width(Length::Fill),
+        super::super::workspace::hover_hint(
+            reshiki::accessibility::button(
+                "assistant-new-conversation",
+                "New conversation",
+                text("＋").size(12),
+            )
+            .padding([7, 10])
+            .style(super::super::workspace::control(false))
+            .on_press(Message::Assistant(Action::Reset)),
+            "New conversation",
+            tooltip::Position::Bottom
+        ),
+        super::super::workspace::hover_hint(
+            reshiki::accessibility::button(
+                "inspector-page-close",
+                "Close Assistant",
+                text("×").size(18),
+            )
+            .padding([3, 8])
+            .style(super::super::workspace::control(false))
+            .on_press(Message::InspectorAction(
+                super::super::inspector::Action::BackPage
+            )),
+            "Close assistant",
+            tooltip::Position::Bottom
+        )
+    ]
+    .align_y(Alignment::Center)
     .into()
 }

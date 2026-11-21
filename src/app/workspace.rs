@@ -1969,7 +1969,7 @@ impl App {
             ]
             .spacing(8)
             .into(),
-            InspectorTab::Names => self.naming_panel(),
+            InspectorTab::Names => self.naming_inspector(),
             InspectorTab::Export => self.export_panel(),
             #[cfg(not(target_arch = "wasm32"))]
             InspectorTab::Versions => self.versions_panel(),
@@ -1978,12 +1978,12 @@ impl App {
             InspectorTab::Versions => Space::new().into(),
         };
         let mut content = column![container(header).padding([6., SEGMENT_MARGIN])];
-        if let Some(page_header) = self.inspector_page_header() {
-            content = content.push(container(page_header).padding([4, 16]));
-        }
-        // Assistant owns its chat scroll and fixed composer. Other pages use
-        // the inspector's ordinary scrolling body beneath the shared chrome.
-        content = if self.inspector_tab == InspectorTab::Assistant {
+        // Keep each page's original header, scrolling body and composer below
+        // the shared tabs; ordinary panels use the inspector scroll area.
+        content = if matches!(
+            self.inspector_tab,
+            InspectorTab::Names | InspectorTab::Assistant
+        ) {
             content.push(body)
         } else {
             content.push(
