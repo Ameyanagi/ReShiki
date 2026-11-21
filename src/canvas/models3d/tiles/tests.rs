@@ -75,7 +75,7 @@ fn native_table_tiles_share_export_clips_wrapped_fonts_and_canvas_colors() {
         let mut expected = resvg::tiny_skia::Pixmap::new(width, height).unwrap();
         resvg::render(&tree, Default::default(), &mut expected.as_mut());
         assert!(
-            actual.chunks_exact(4).any(|p| p[3] > 0),
+            actual.as_chunks::<4>().0.iter().any(|p| p[3] > 0),
             "Wrapped font glyphs disappeared"
         );
         assert!(
