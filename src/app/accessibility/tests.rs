@@ -83,6 +83,78 @@ fn native_callback_keeps_its_enqueue_context_across_a_document_revision() {
 }
 
 #[test]
+fn changing_tlc_lane_or_spot_rejects_queued_native_edits_for_the_previous_part() {
+    use super::super::tlc::{Action as Tlc, Field};
+    use reshiki::{
+        document::{Document, Point},
+        graphics::{BracketSides, GraphicKind, GraphicStyle},
+    };
+
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let mut plate = crate::canvas::tlc::dragged(
+        1,
+        GraphicKind::TlcPlate,
+        Point::default(),
+        Point::new(140., 600.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    let t = plate.tlc.as_deref_mut().unwrap();
+    let spot = t.lanes[1].spots[0].clone();
+    t.lanes[1].spots.push(spot);
+    app.tab.doc = Document::default();
+    app.tab.doc.graphics.push(plate);
+    app.tab.selected = vec![1];
+    app.sync_graphics();
+    let _ = app.accessibility_refresh();
+    for spot in [false, true] {
+        let target = app.tlc_target().unwrap();
+        let before = (
+            app.tab.doc.clone(),
+            app.tab.revision,
+            app.tab.selected.clone(),
+        );
+        let version = app.accessibility.context_version;
+        let request = native_request(&mut app, "tlc-rf", reshiki::accessibility::Role::TextInput);
+        let (sender, mut receiver) = mpsc::channel(1);
+        enqueue_native(
+            &sender,
+            &app.accessibility.context_epoch,
+            app.accessibility.generation,
+            request.clone(),
+        );
+        let _ = app.update(Message::Tlc(if spot {
+            Tlc::Spot(target, 1)
+        } else {
+            Tlc::Lane(target, 1)
+        }));
+        assert_eq!(
+            (&app.tab.doc, app.tab.revision, &app.tab.selected),
+            (&before.0, before.1, &before.2)
+        );
+        assert_ne!(app.accessibility.context_version, version);
+        let reopened = native_request(&mut app, "tlc-rf", reshiki::accessibility::Role::TextInput);
+        assert_ne!(request.target_node, reopened.target_node);
+        assert!(app.accessibility.tree.resolve(&request).is_none());
+        assert_eq!(
+            app.accessibility_action(receiver.try_recv().unwrap())
+                .units(),
+            0
+        );
+        assert_eq!(
+            app.accessibility_action(Action::Dispatch(
+                version,
+                Box::new(Message::Tlc(Tlc::Draft(target, Field::Rf, "0.9".into())))
+            ))
+            .units(),
+            0
+        );
+    }
+}
+
+#[test]
 fn cancelled_and_reopened_caption_rejects_old_native_and_dispatched_edits() {
     use super::super::inline_text::Action as Inline;
     use reshiki::document::Point;

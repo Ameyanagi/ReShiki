@@ -19,6 +19,11 @@ pub struct Target {
     lane: usize,
     spot: Option<usize>,
 }
+impl Target {
+    pub(super) fn accessibility_identity(self) -> (u64, usize, Option<usize>) {
+        (self.graphic, self.lane, self.spot)
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {
     Origin,
@@ -94,6 +99,9 @@ fn number(value: f64) -> String {
     text.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 impl App {
+    pub(super) fn tlc_target(&self) -> Option<Target> {
+        self.tab.tlc.target
+    }
     fn selected_tlc(&self) -> Option<&Graphic> {
         let mut graphics = self
             .tab

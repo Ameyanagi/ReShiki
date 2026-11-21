@@ -1044,7 +1044,7 @@ impl App {
             });
         }
         let tlc = self.tlc_panel_visible();
-        let styled_graphics = self.graphic_panel_visible() && !tlc;
+        let styled_graphics = self.graphic_panel_visible();
         if tlc {
             body = body.push(card(container(self.tlc_panel()).padding(12)));
         }

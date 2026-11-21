@@ -404,3 +404,167 @@ fn dedicated_properties_and_generic_style_guard_keep_plate_data_valid() {
     assert_eq!(app.tab.doc, before);
     app.tab.doc.validate().unwrap();
 }
+
+#[test]
+fn mixed_graphic_selection_keeps_generic_properties_and_edits_only_the_rectangle() {
+    let mut app = ready(plate());
+    let rectangle = Graphic::dragged(
+        2,
+        GraphicKind::Rectangle,
+        Point::new(200., 0.),
+        Point::new(300., 100.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    app.tab.doc.graphics.push(rectangle);
+    app.tab.selected.push(2);
+    app.sync_graphics();
+    assert!(app.tlc_panel_visible());
+    assert!(app.graphic_panel_visible());
+    assert!(app.tlc_target().is_none());
+    let before = app.tab.doc.clone();
+    let color = Color::Custom([17, 126, 108]);
+    let _ = app.update(Message::Graphics(super::super::graphics::Action::Style(
+        reshiki::graphics::GraphicChange::Fill(Some(color)),
+    )));
+    assert_eq!(app.tab.doc.graphics[0], before.graphics[0]);
+    assert_eq!(app.tab.doc.graphics[1].style.fill, Some(color));
+    one_undo(&mut app, &before);
+    let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::TlcPlate)));
+    assert!(app.tlc_panel_visible());
+    assert!(!app.graphic_panel_visible());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real TLC widget metadata and native action regression"]
+async fn native_lane_spot_and_toggle_controls_expose_values_and_edit_the_chosen_part() {
+    use iced::advanced::{
+        renderer::Headless,
+        widget::{Operation, operation},
+    };
+    use iced::{Rectangle, Size};
+    use iced_runtime::{UserInterface, user_interface::Cache};
+    use reshiki::accessibility::{
+        Activate, Collect, FocusControl, Role, SetValue, Snapshot, tree::NativeTree,
+    };
+
+    fn operate<T>(app: &App, renderer: &mut iced::Renderer, operation: &mut dyn Operation<T>) {
+        let mut ui = UserInterface::build(
+            app.tlc_panel(),
+            Size::new(340., 1200.),
+            Cache::new(),
+            renderer,
+        );
+        ui.operate(renderer, &mut operation::black_box(operation));
+    }
+    fn snapshot(app: &App, renderer: &mut iced::Renderer) -> Snapshot {
+        let viewport = Rectangle::with_size(Size::new(340., 1200.));
+        let mut collect = Collect::new(viewport);
+        operate(app, renderer, &mut collect);
+        let snapshot = collect.snapshot().clone();
+        assert!(snapshot.duplicate_ids.is_empty());
+        NativeTree::default()
+            .update(&snapshot, "ReShiki", viewport, 2.)
+            .unwrap();
+        snapshot
+    }
+    fn choose(app: &mut App, renderer: &mut iced::Renderer, id: &str, value: &str) {
+        let mut select = SetValue::<Message>::new(id, value.into());
+        operate(app, renderer, &mut select);
+        let operation::Outcome::Some(message) = select.finish() else {
+            panic!("native selection {id}")
+        };
+        let _ = app.update(message);
+    }
+    let mut renderer =
+        <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
+            .await
+            .unwrap();
+    let mut app = ready(plate());
+    let initial = snapshot(&app, &mut renderer);
+    for (id, name, value) in [
+        ("tlc-lane", "Lane", "Lane 1 · 1 spot"),
+        ("tlc-spot", "Spot", "Spot 1 · Rf 0.15"),
+    ] {
+        let node = initial.nodes.iter().find(|node| node.id == id).expect(id);
+        assert_eq!(node.name, name);
+        assert_eq!(node.role, Role::ComboBox);
+        assert_eq!(node.value.as_deref(), Some(value));
+        assert!(node.enabled);
+    }
+    let k = key(&app);
+    let _ = app.update(Message::Tlc(Action::Details(k, true)));
+    let settings = snapshot(&app, &mut renderer);
+    for id in ["tlc-borders", "tlc-show-origin", "tlc-show-front"] {
+        let node = settings.nodes.iter().find(|node| node.id == id).expect(id);
+        assert_eq!(node.role, Role::ToggleButton);
+        assert_eq!(node.checked, Some(true));
+    }
+    let before_selection = app.tab.doc.clone();
+    choose(&mut app, &mut renderer, "tlc-lane", "Lane 2 · 1 spot");
+    assert_eq!(key(&app).lane, 1);
+    assert_eq!(app.tab.doc, before_selection);
+    let k = key(&app);
+    let _ = app.update(Message::Tlc(Action::AddSpot(k)));
+    assert_eq!(key(&app).spot, Some(1));
+    let before_selection = app.tab.doc.clone();
+    choose(&mut app, &mut renderer, "tlc-spot", "Spot 1 · Rf 0.15");
+    assert_eq!(key(&app).spot, Some(0));
+    assert_eq!(app.tab.doc, before_selection);
+    for (id, name, checked) in [
+        ("tlc-filled", "Filled", true),
+        ("tlc-show-rf", "Show Rf", false),
+    ] {
+        let tree = snapshot(&app, &mut renderer);
+        let node = tree.nodes.iter().find(|node| node.id == id).expect(id);
+        assert_eq!(node.name, name);
+        assert_eq!(node.role, Role::ToggleButton);
+        assert_eq!(node.checked, Some(checked));
+        let mut activate = Activate::<Message>::new(id);
+        operate(&app, &mut renderer, &mut activate);
+        let operation::Outcome::Some(message) = activate.finish() else {
+            panic!("native toggle {id}")
+        };
+        let before = app.tab.doc.clone();
+        let _ = app.update(message);
+        let tree = snapshot(&app, &mut renderer);
+        assert_eq!(
+            tree.nodes
+                .iter()
+                .find(|node| node.id == id)
+                .unwrap()
+                .checked,
+            Some(!checked)
+        );
+        assert_eq!(
+            app.tab.doc.graphics[0].tlc.as_deref().unwrap().lanes[0],
+            before.graphics[0].tlc.as_deref().unwrap().lanes[0]
+        );
+        one_undo(&mut app, &before);
+    }
+    // Selection wrappers participate in the ordinary focus operation.
+    let mut ui = UserInterface::build(
+        app.tlc_panel(),
+        Size::new(340., 1200.),
+        Cache::new(),
+        &mut renderer,
+    );
+    let mut focus: Box<dyn Operation> = Box::new(FocusControl::new("tlc-lane"));
+    loop {
+        ui.operate(&renderer, focus.as_mut());
+        match focus.finish() {
+            operation::Outcome::Chain(next) => focus = next,
+            _ => break,
+        }
+    }
+    let mut collect = Collect::new(Rectangle::with_size(Size::new(340., 1200.)));
+    ui.operate(&renderer, &mut operation::black_box(&mut collect));
+    assert!(
+        collect
+            .snapshot()
+            .nodes
+            .iter()
+            .any(|node| node.id == "tlc-lane" && node.focused)
+    );
+}

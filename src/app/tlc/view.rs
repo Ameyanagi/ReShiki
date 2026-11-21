@@ -47,12 +47,21 @@ impl App {
         let mut body = column![
             section("TLC plate"),
             text("Lane").size(11),
-            crate::appearance::pick_list(lanes, selected, move |c| Message::Tlc(Action::Lane(
-                k, c.index
-            )))
-            .text_size(12)
-            .padding(5)
-            .width(Length::Fill),
+            reshiki::accessibility::select(
+                "tlc-lane",
+                "Lane",
+                lanes.clone(),
+                selected
+                    .as_ref()
+                    .map_or_else(String::new, ToString::to_string),
+                move |c| Message::Tlc(Action::Lane(k, c.index)),
+                crate::appearance::pick_list(lanes, selected, move |c| {
+                    Message::Tlc(Action::Lane(k, c.index))
+                })
+                .text_size(12)
+                .padding(5)
+                .width(Length::Fill),
+            ),
             row![
                 action("tlc-add-lane", "Add lane", Action::AddLane(k)),
                 reshiki::accessibility::button(
@@ -84,14 +93,21 @@ impl App {
             let selected = k.spot.and_then(|i| spots.get(i)).cloned();
             body = body
                 .push(text("Spot").size(11))
-                .push(
+                .push(reshiki::accessibility::select(
+                    "tlc-spot",
+                    "Spot",
+                    spots.clone(),
+                    selected
+                        .as_ref()
+                        .map_or_else(String::new, ToString::to_string),
+                    move |c| Message::Tlc(Action::Spot(k, c.index)),
                     crate::appearance::pick_list(spots, selected, move |c| {
                         Message::Tlc(Action::Spot(k, c.index))
                     })
                     .text_size(12)
                     .padding(5)
                     .width(Length::Fill),
-                )
+                ))
                 .push(
                     row![
                         action("tlc-add-spot", "Add spot", Action::AddSpot(k)),
@@ -118,18 +134,14 @@ impl App {
                     )
                     .push(
                         row![
-                            checkbox(s.style.fill.is_some())
-                                .label("Filled")
-                                .on_toggle(move |v| Message::Tlc(Action::Toggle(
-                                    k,
-                                    Switch::Filled,
-                                    v
-                                )))
-                                .text_size(12),
-                            checkbox(s.show_rf)
-                                .label("Show Rf")
-                                .on_toggle(move |v| Message::Tlc(Action::Toggle(k, Switch::Rf, v)))
-                                .text_size(12)
+                            tlc_checkbox(
+                                k,
+                                "tlc-filled",
+                                "Filled",
+                                s.style.fill.is_some(),
+                                Switch::Filled
+                            ),
+                            tlc_checkbox(k, "tlc-show-rf", "Show Rf", s.show_rf, Switch::Rf)
                         ]
                         .spacing(12)
                         .align_y(Alignment::Center),
@@ -188,23 +200,24 @@ impl App {
             body = body
                 .push(
                     row![
-                        checkbox(t.show_borders)
-                            .label("Border")
-                            .on_toggle(move |v| Message::Tlc(Action::Toggle(k, Switch::Borders, v)))
-                            .text_size(12),
-                        checkbox(t.show_origin)
-                            .label("Origin")
-                            .on_toggle(move |v| Message::Tlc(Action::Toggle(k, Switch::Origin, v)))
-                            .text_size(12)
+                        tlc_checkbox(k, "tlc-borders", "Border", t.show_borders, Switch::Borders),
+                        tlc_checkbox(
+                            k,
+                            "tlc-show-origin",
+                            "Origin",
+                            t.show_origin,
+                            Switch::Origin
+                        )
                     ]
                     .spacing(10),
                 )
-                .push(
-                    checkbox(t.show_solvent_front)
-                        .label("Solvent front")
-                        .on_toggle(move |v| Message::Tlc(Action::Toggle(k, Switch::Front, v)))
-                        .text_size(12),
-                )
+                .push(tlc_checkbox(
+                    k,
+                    "tlc-show-front",
+                    "Solvent front",
+                    t.show_solvent_front,
+                    Switch::Front,
+                ))
                 .push(
                     row![
                         self.tlc_input(k, "Origin from bottom (%)", Field::Origin),
@@ -243,4 +256,32 @@ impl App {
         .padding([6, 6])
         .into()
     }
+}
+
+// The shared accessible_checkbox uses compact 14 px boxes. Keep these existing
+// 16 px checkbox children and attach the same checked button semantics.
+fn tlc_checkbox(
+    k: Target,
+    id: &'static str,
+    label: &'static str,
+    checked: bool,
+    switch: Switch,
+) -> reshiki::accessibility::Button<'static, Message> {
+    let message = Message::Tlc(Action::Toggle(k, switch, !checked));
+    let toggle = message.clone();
+    reshiki::accessibility::button(
+        id,
+        label,
+        checkbox(checked)
+            .label(label)
+            .on_toggle(move |_| toggle.clone())
+            .text_size(12),
+    )
+    .checked(checked)
+    .on_press(message)
+    .padding(0)
+    .style(|theme, _| iced::widget::button::Style {
+        text_color: theme.palette().text,
+        ..Default::default()
+    })
 }
