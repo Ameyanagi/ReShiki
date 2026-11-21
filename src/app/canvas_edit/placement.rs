@@ -4,7 +4,6 @@ use crate::canvas::pick::PICK_RADIUS_PX;
 use crate::canvas::{Edit, Tool};
 use reshiki::document::{Document, Point};
 use reshiki::editing;
-use reshiki::graphics::Graphic;
 use reshiki::joining::Placed;
 
 impl App {
@@ -165,7 +164,7 @@ impl App {
                 }
             } else {
                 let id = self.tab.doc.next_id();
-                let mut graphic = Graphic::dragged(
+                let mut graphic = crate::canvas::tlc::dragged(
                     id,
                     kind,
                     start,

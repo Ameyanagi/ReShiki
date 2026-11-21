@@ -77,6 +77,7 @@ mod numeric_transforms;
 mod object_toolbar;
 mod office;
 mod symbol_picker;
+mod tlc;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 #[cfg(test)]
@@ -239,6 +240,7 @@ pub enum Message {
     ApplyBondColor,
     Arc(arcs::Action),
     Graphics(graphics::Action),
+    Tlc(tlc::Action),
     /// Figure panels and lasting layouts.
     Figure(figure_panels::Action),
     /// Catalytic cycles.
@@ -957,6 +959,7 @@ impl App {
         // A flip or another edit can reorder a selected panel's titles.
         self.sync_figure();
         self.sync_cycle();
+        self.sync_tlc();
     }
     /// What every recorded change of the drawing needs, whether an edit made
     /// it or Undo or Redo restored it. Results for the previous revision are
@@ -976,6 +979,7 @@ impl App {
                 .advance_revision(epoch, previous, revision);
         }
         self.error = false;
+        self.sync_tlc();
     }
     fn fit(&mut self) {
         if self.display_document().all_ids().is_empty() {

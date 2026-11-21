@@ -28,6 +28,22 @@ pub(super) fn chain(f: &mut Frame<'_>, ink: Color, mode: reshiki::chains::ChainM
 }
 
 pub(super) fn graphic(f: &mut Frame<'_>, ink: Color, kind: reshiki::graphics::GraphicKind) {
+    if kind == reshiki::graphics::GraphicKind::TlcPlate {
+        line(
+            f,
+            ink,
+            &[(4., 3.), (21., 3.), (21., 22.), (4., 22.), (4., 3.)],
+        );
+        for y in [6., 19.] {
+            for x in [5., 9., 13., 17.] {
+                line(f, ink, &[(x, y), (x + 2., y)]);
+            }
+        }
+        for (x, y) in [(8., 15.), (12.5, 11.), (17., 8.)] {
+            f.fill(&Path::circle(Point::new(x, y), 1.4), ink);
+        }
+        return;
+    }
     if kind == reshiki::graphics::GraphicKind::Path {
         let path = Path::new(|builder| {
             builder.move_to(Point::new(3., 13.));
