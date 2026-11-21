@@ -73,6 +73,7 @@ impl App {
                     let mut format = self.tab.caption_format.clone();
                     reshiki::typography::normalize_subscript_digits(&mut text, &mut format);
                     self.tab.doc.annotations.push(Annotation {
+                        angle: 0.,
                         id,
                         position: p,
                         text,

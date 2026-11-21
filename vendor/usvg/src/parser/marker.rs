@@ -52,6 +52,9 @@ pub(crate) fn convert(
     ];
 
     for (aid, kind) in &list {
+        if cache.conversion_failed {
+            return;
+        }
         let mut marker = None;
         if let Some(link) = node.find_attribute::<SvgNode>(*aid) {
             if link.tag_name() == Some(EId::Marker) {
@@ -164,6 +167,9 @@ fn resolve(
     }
 
     let draw_marker = |p: tiny_skia_path::Point, idx: usize| {
+        if !cache.enter_conversion() {
+            return false;
+        }
         let mut ts = Transform::from_translate(p.x, p.y);
 
         let angle = match convert_orientation(marker_node) {
@@ -202,11 +208,15 @@ fn resolve(
         let mut marker_state = state.clone();
         marker_state.parent_markers.push(marker_node);
         converter::convert_children(marker_node, &marker_state, cache, &mut g);
-        g.calculate_bounding_boxes();
-
-        if g.has_children() {
-            parent.children.push(Node::Group(Box::new(g)));
+        let proceed = !cache.conversion_failed;
+        if proceed {
+            g.calculate_bounding_boxes();
+            if g.has_children() {
+                parent.children.push(Node::Group(Box::new(g)));
+            }
         }
+        cache.leave_conversion();
+        proceed
     };
 
     draw_markers(&segments, marker_kind, draw_marker);
@@ -227,7 +237,7 @@ fn stroke_scale(
 
 fn draw_markers<P>(path: &[Segment], kind: MarkerKind, mut draw_marker: P)
 where
-    P: FnMut(tiny_skia_path::Point, usize),
+    P: FnMut(tiny_skia_path::Point, usize) -> bool,
 {
     match kind {
         MarkerKind::Start => {
@@ -249,7 +259,9 @@ where
                     }
                 };
 
-                draw_marker(p, i);
+                if !draw_marker(p, i) {
+                    return;
+                }
 
                 i += 1;
             }

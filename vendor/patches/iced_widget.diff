@@ -37,10 +37,10 @@ index 0000000..f1148e2
 +CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 diff --git b/UPSTREAM.json b/UPSTREAM.json
 new file mode 100644
-index 0000000..ebb9916
+index 0000000..028ac0d
 --- /dev/null
 +++ b/UPSTREAM.json
-@@ -0,0 +1,20 @@
+@@ -0,0 +1,22 @@
 +{
 +  "upstream": "https://github.com/iced-rs/iced/tree/54abf81d13fec06d4d9ac754b03ce2c3313e8a1f/widget",
 +  "version": "0.14.2",
@@ -50,12 +50,14 @@ index 0000000..ebb9916
 +  "upstream_file_sha256": {
 +    "Cargo.toml": "e8e6b9a72fc0f97c84b8fb2703fe6cdccd738c6c01d2fadf018a012182de93b5",
 +    "src/combo_box.rs": "973901d05003f684be1d13da5adc88ef7e030dc31db07c1bb0717cf9210d2391",
++    "src/keyed/column.rs": "09adcae868d561443e8d8b6f3cdfefd6831d8e94adf2b22c551c85b9669eb620",
 +    "src/text_editor.rs": "cecf8686c90aa92066d55075beba545dfb7dd5a44bad0c1519fcb110a56070e1",
 +    "src/text_input.rs": "7cd64b0f79c6000f2985cc290642698a814be5dcd7b7a56ae463b13ffe5c3b47"
 +  },
-+  "purpose": "Let idle text carets stop producing frames so the GPU driver can release memory while the field stays focused, and let Tab and focus operations reach a combo box's search field.",
++  "purpose": "Let idle text carets stop producing frames so the GPU driver can release memory while the field stays focused, and let Tab and focus operations reach a combo box's search field. Rebuild keyed row state when its widget type changes.",
 +  "local_changes": [
 +    "src/combo_box.rs: forward operate to the search field, so Tab and focus operations reach it, and let the field take an id",
++    "src/keyed/column.rs: diff each keyed child through Tree::diff so a changed widget tag replaces incompatible state",
 +    "src/text_editor.rs: stop scheduling caret blink redraws 10 seconds after updated_at and keep the caret visible after that timeout; input method preedit and commit reset updated_at, as typing already does",
 +    "src/text_input.rs: stop scheduling caret blink redraws 10 seconds after updated_at and keep the caret visible after that timeout; input method preedit resets updated_at, as commit already does; a click inside the field always requests a frame, so the blink restarts even when the cursor does not move",
 +    "LICENSE (added): Iced's MIT license, which the crate package does not include; the same text as licenses/iced/LICENSE"
@@ -101,6 +103,19 @@ index 775702c..a82eb04 100644
      fn update(
          &mut self,
          tree: &mut widget::Tree,
+diff --git a/src/keyed/column.rs b/src/keyed/column.rs
+index f98c58b..af3dacd 100644
+--- a/src/keyed/column.rs
++++ b/src/keyed/column.rs
+@@ -231,7 +231,7 @@ where
+         tree::diff_children_custom_with_search(
+             children,
+             &self.children,
+-            |tree, child| child.as_widget().diff(tree),
++            |tree, child| tree.diff(child.as_widget()),
+             |index| {
+                 self.keys.get(index).or_else(|| self.keys.last()).copied()
+                     != Some(state.keys[index])
 diff --git a/src/text_editor.rs b/src/text_editor.rs
 index ceddb89..0ee17d6 100644
 --- a/src/text_editor.rs

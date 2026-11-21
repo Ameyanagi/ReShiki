@@ -220,7 +220,7 @@ The result, with the image data shortened:
     "content": [
       {
         "type": "text",
-        "text": "{\"validation\":{\"status\":\"valid\"},\"value\":{\"byte_len\":4445,\"height\":85,\"width\":177},\"versions\":{\"app\":\"0.16.0\",\"document\":39,\"engine_protocol\":1,\"operation_api\":2},\"warnings\":[]}"
+        "text": "{\"validation\":{\"status\":\"valid\"},\"value\":{\"byte_len\":4445,\"height\":85,\"width\":177},\"versions\":{\"app\":\"0.16.0\",\"document\":40,\"engine_protocol\":1,\"operation_api\":2},\"warnings\":[]}"
       },
       {
         "type": "image",
@@ -239,7 +239,7 @@ The result, with the image data shortened:
       },
       "versions": {
         "app": "0.16.0",
-        "document": 39,
+        "document": 40,
         "engine_protocol": 1,
         "operation_api": 2
       },
@@ -287,7 +287,7 @@ Every successful `structuredContent` is one envelope,
   },
   "versions": {
     "app": "0.16.0",
-    "document": 39,
+    "document": 40,
     "engine_protocol": 1,
     "operation_api": 2
   },
@@ -332,7 +332,7 @@ an old `base_revision`:
   },
   "versions": {
     "app": "0.16.0",
-    "document": 39,
+    "document": 40,
     "engine_protocol": 1,
     "operation_api": 2
   }

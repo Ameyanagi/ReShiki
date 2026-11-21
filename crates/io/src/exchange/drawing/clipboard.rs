@@ -58,6 +58,7 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
     }
     let mut notices: Vec<_> = crate::arrow_anchors::export_notice(source)
         .into_iter()
+        .chain(crate::graphics::export_notice(source))
         .collect();
     if opacity {
         notices.push(crate::rear_opacity::EXPORT_NOTICE.into());

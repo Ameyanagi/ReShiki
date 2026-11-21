@@ -346,6 +346,7 @@ async fn manual_model_face_frames_and_hints_renderer_evidence() {
     let mut app = setup(&inputs.join("glucose-model.rsk"), false);
     show_only(&mut app);
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: app.tab.doc.next_id(),
         position: reshiki::document::Point::new(-120., -60.),
         text: "Unrelated note".into(),

@@ -1,0 +1,104 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/nmr-tube",
+  "revision": 1,
+  "family": "nmr-tube",
+  "variant": {
+    "od_mm": "5"
+  },
+  "names": {
+    "en": "NMR tube, 5 mm",
+    "ja": "NMR 試料管 5 mm"
+  },
+  "category": "nmr",
+  "keywords": [
+    "NMR"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "s0",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-2.5 -0.01L-2.5 0L-2.5 175.5A2.5 2.5 0 0 0 2.5 175.5L2.5 0L2.5 -0.01Z"
+    },
+    {
+      "id": "s1",
+      "layer": "body",
+      "material": "plastic",
+      "role": "solid",
+      "color": [
+        58,
+        111,
+        181
+      ],
+      "path": "M-2.4 -11L2.4 -11A1.6 1.6 0 0 1 4 -9.4L4 0.4A1.6 1.6 0 0 1 2.4 2L-2.4 2A1.6 1.6 0 0 1 -4 0.4L-4 -9.4A1.6 1.6 0 0 1 -2.4 -11Z"
+    },
+    {
+      "id": "s2",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M3.8 138L7 138",
+      "part": "mark"
+    }
+  ],
+  "params": [
+    {
+      "id": "fill",
+      "names": {
+        "en": "Liquid level",
+        "ja": "液面"
+      },
+      "kind": "fill",
+      "liquid": "body",
+      "default": 0.22727272727272727
+    },
+    {
+      "id": "liquid_color",
+      "names": {
+        "en": "Liquid colour",
+        "ja": "液の色"
+      },
+      "kind": "color",
+      "liquid": "body",
+      "default": [
+        79,
+        143,
+        208
+      ]
+    }
+  ],
+  "parts": [
+    {
+      "id": "mark",
+      "param": "fill",
+      "motion": {
+        "translate": [
+          0,
+          -176
+        ]
+      },
+      "handle": {
+        "at": [
+          5.4,
+          138
+        ],
+        "gesture": "drag"
+      }
+    }
+  ],
+  "liquids": [
+    {
+      "id": "body",
+      "region": "M -1.9 1.99 L -1.9 2 L -1.9 175.5 L -1.89 175.699 L -1.858 175.895 L -1.807 176.087 L -1.736 176.273 L -1.645 176.45 L -1.537 176.617 L -1.412 176.771 L -1.271 176.912 L -1.117 177.037 L -0.95 177.145 L -0.773 177.236 L -0.587 177.307 L -0.395 177.358 L -0.199 177.39 L 0 177.4 L 0.199 177.39 L 0.395 177.358 L 0.587 177.307 L 0.773 177.236 L 0.95 177.145 L 1.117 177.037 L 1.271 176.912 L 1.412 176.771 L 1.537 176.617 L 1.645 176.45 L 1.736 176.273 L 1.807 176.087 L 1.858 175.895 L 1.89 175.699 L 1.9 175.5 L 1.9 2 L 1.9 1.99 Z",
+      "meniscus": "concave"
+    }
+  ]
+}

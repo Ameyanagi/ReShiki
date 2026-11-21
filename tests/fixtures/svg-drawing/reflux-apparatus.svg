@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120mm" height="95mm" viewBox="0 0 480 380">
+  <defs><filter id="liquid-effect"><feColorMatrix type="saturate" values="1"/></filter></defs>
+  <style>
+    .glass { fill:none;stroke:#263238;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round }
+    .water { fill:#b8dce9;stroke:none }
+    .liquid { filter:url(#liquid-effect) }
+  </style>
+  <!-- Original line drawing: flask, jacketed condenser and supporting stand. -->
+  <g fill="none" stroke="#7b8490" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M326 38V338M280 340H373M326 106H204"/>
+    <path d="M204 97H192M204 115H192" stroke-width="3"/>
+  </g>
+  <path class="water" d="M148 38H158V123H148Z M182 38H192V123H182Z"/>
+  <g class="glass">
+    <path d="M146 30H194V126H146Z M160 30V149 M180 30V149"/>
+    <path d="M146 108H119V99 M194 48H221V39"/>
+    <path d="M154 142V195C115 211 97 244 105 277C113 314 143 332 170 332C204 332 232 307 236 277C241 241 222 212 186 195V142"/>
+    <path d="M154 148H186 M154 156H186 M154 164H186" stroke-width="1.2"/>
+  </g>
+  <path class="liquid" d="M109 270Q171 279 232 270C228 304 202 327 170 328C140 327 116 307 109 270" fill="#35a7d2" fill-opacity=".55"/>
+  <path class="glass" d="M109 270Q171 279 232 270" stroke-width="1.2"/>
+  <!-- Overlapping solid paints exercise per-path alpha without text or gradients. -->
+  <path d="M34 40H82V82H34Z" fill="#ff0000" fill-opacity=".5"/>
+  <path d="M58 58H106V100H58Z" fill="#0000ff" fill-opacity=".5"/>
+</svg>

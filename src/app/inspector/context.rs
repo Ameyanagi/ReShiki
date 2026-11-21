@@ -232,7 +232,10 @@ impl App {
             Tool::Template => "Next template",
             Tool::Arrow => "Next arrow",
             Tool::Text => "Next text",
+            Tool::Graphic(reshiki::graphics::GraphicKind::TlcPlate) => "Next TLC plate",
             Tool::Graphic(_) => "Next graphic",
+            Tool::Equipment => "Next equipment",
+            Tool::Icons => "Next icon",
             Tool::Tilt => "Tilt",
             Tool::StretchBond { .. } => "Stretch bond",
             Tool::EditPoints => "Edit points",
@@ -245,6 +248,9 @@ impl App {
             body = body.push(card(container(column(options).spacing(8)).padding(12)));
         }
         match self.tool {
+            Tool::Graphic(reshiki::graphics::GraphicKind::TlcPlate) => {
+                body = body.push(card(container(self.tlc_panel()).padding(12)));
+            }
             Tool::Graphic(_) => {
                 body = body.push(card(container(self.graphic_panel()).padding(12)));
             }

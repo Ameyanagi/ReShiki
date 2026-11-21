@@ -5,7 +5,7 @@ use iced::{Subscription, Task};
 use reshiki::{
     document::{Document, Point},
     editing,
-    engine::{ChemistryEngine, Request, Response},
+    engine::{Analysis, ChemistryEngine, Request, Response},
 };
 
 const INSERT_STRUCTURE_FAILED: &str = "Could not insert structure";
@@ -182,7 +182,12 @@ impl App {
     }
     pub(super) fn analyze_drawing(&mut self) -> Task<Message> {
         self.run(
-            Request::molecule("analyze", self.tab.doc.clone()),
+            // Check chemistry; Illustration molecules are pictures.
+            Request::molecule(
+                "analyze",
+                reshiki::purpose::only(&self.tab.doc, reshiki::purpose::Purpose::is_chemical)
+                    .into_owned(),
+            ),
             Job::Analyze,
         )
     }
@@ -208,19 +213,52 @@ impl App {
                 if matches!(kind, Job::ImportFile(_)) {
                     self.tab.file_handle = None;
                 }
+                let Job::ImportFile(path) = &kind else {
+                    self.error = true;
+                    self.status = e;
+                    return Task::none();
+                };
+                // The tab added for this file closes again, so a failed open
+                // leaves no empty Untitled tab behind. One that failed behind
+                // the front tab stays, with the error, until it is looked at.
+                let id = self.tab.id;
+                let added = self.tabs.opening.contains(&(id, self.tab.file_epoch));
+                self.tabs.opening.retain(|(tab, _)| *tab != id);
+                let closed = if added
+                    && self.tabs.temporary_depth == 0
+                    && self.tab.reusable()
+                    && self.file_io.saving_tab != Some(id)
+                {
+                    self.close_active_tab()
+                } else {
+                    Task::none()
+                };
                 self.error = true;
-                self.status = e;
-                return Task::none();
+                self.status = format!("Could not open {}: {e}", super::import::name(path));
+                return closed;
             }
             Ok(response) => response,
         };
+        let id = self.tab.id;
+        self.tabs.opening.retain(|(tab, _)| *tab != id);
         if let Job::Export(format) = kind {
-            return export_file(
-                response.output.unwrap_or_default(),
-                format,
-                self.export_stem(),
-                response.warnings,
-            );
+            let mut warnings = response.warnings;
+            if matches!(format, "cdx" | "cdxml") && self.tab.doc.canvas_theme.is_dark() {
+                warnings.insert(0, "Light canvas colors: ChemDraw has no dark canvas".into());
+            }
+            let (output, stem) = (response.output.unwrap_or_default(), self.export_stem());
+            // What a ChemDraw file leaves out is read before it is written.
+            #[cfg(not(target_arch = "wasm32"))]
+            if matches!(format, "cdx" | "cdxml") && !warnings.is_empty() {
+                return read_losses(format, warnings).then(move |go| {
+                    if go {
+                        export_file(output.clone(), format, stem.clone(), vec![])
+                    } else {
+                        Task::done(Message::Exported(Ok(None)))
+                    }
+                });
+            }
+            return export_file(output, format, stem, warnings);
         }
         if self.tab.revision != revision {
             self.status = "Finished · Newer edits kept · Run again to update".into();
@@ -251,7 +289,7 @@ impl App {
         let before = std::mem::replace(&mut self.tab.doc, document);
         self.changed(before);
         if !self.error {
-            self.tab.analysis = response.analysis;
+            self.tab.analysis = whole_analysis(&self.tab.doc, response.analysis);
             self.status = format!("{name} applied");
             if !response.warnings.is_empty() {
                 self.status.push_str(" · ");
@@ -273,7 +311,7 @@ impl App {
         let before = std::mem::replace(&mut self.tab.doc, document);
         self.changed(before);
         if !self.error {
-            self.tab.analysis = response.analysis;
+            self.tab.analysis = whole_analysis(&self.tab.doc, response.analysis);
             self.status = format!(
                 "Cleaned up · {} undoes",
                 super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "Z")
@@ -424,7 +462,7 @@ impl App {
             reshiki::atom_labels::copy_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
             self.tab.labels_dirty = false;
-            self.tab.analysis = response.analysis;
+            self.tab.analysis = whole_analysis(&self.tab.doc, response.analysis);
             self.tool = Tool::Select;
             self.status = "Aromatic display changed · Molecular identity retained".into();
         }
@@ -439,7 +477,7 @@ impl App {
                 .doc
                 .expand_abbreviation_selection(&self.tab.selected);
             self.changed(before);
-            self.tab.analysis = response.analysis;
+            self.tab.analysis = whole_analysis(&self.tab.doc, response.analysis);
             self.tool = Tool::Select;
             self.status = if count == 0 {
                 "No matching common groups in this selection".into()
@@ -474,7 +512,9 @@ impl App {
             reshiki::atom_labels::copy_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
         }
-        self.tab.analysis = response.analysis;
+        self.tab.analysis = response
+            .analysis
+            .filter(|_| self.tab.doc.atoms.iter().all(|a| a.map_num == 0));
         self.tab.chemistry_notice = None;
         self.checked_stereo(response.warnings);
         self.error = false;
@@ -485,6 +525,13 @@ impl App {
             self.cancel_reference_stretch();
             let before = self.tab.doc.clone();
             self.tab.doc = document.clone();
+            // An imported file has no canvas of its own: it opens on the
+            // remembered one, as a new drawing does. Other imports keep the tab's.
+            match kind {
+                Job::ImportFile(_) => self.tab.doc.canvas_theme = self.appearance.canvas_theme,
+                Job::Import => self.tab.doc.canvas_theme = before.canvas_theme,
+                _ => {}
+            }
             if !self.adopt_changed_document(before) {
                 return;
             }
@@ -524,7 +571,7 @@ impl App {
                 self.remember_start_browser_tab();
             }
         }
-        self.tab.analysis = response.analysis;
+        self.tab.analysis = whole_analysis(&self.tab.doc, response.analysis);
         self.status = match kind {
             Job::Clean(_) => "Structure cleaned",
             Job::Analyze => "No chemistry errors found",
@@ -550,3 +597,50 @@ mod crystal_tests;
 
 #[cfg(test)]
 mod import_file_tests;
+
+/// A job's analysis of the whole drawing, which counts Illustration
+/// molecules; Properties then asks for the chemical part instead.
+/// An engine analysis of the whole drawing, unless Properties must work it
+/// out itself: without pictures, and without atom maps, which belong to a
+/// reaction and not to a molecule's SMILES.
+pub(super) fn whole_analysis(doc: &Document, analysis: Option<Analysis>) -> Option<Analysis> {
+    analysis.filter(|_| !reshiki::purpose::used(doc) && doc.atoms.iter().all(|a| a.map_num == 0))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+const EXPORT: &str = "Export…";
+
+/// Lists, over the window, what a ChemDraw export leaves out or changes; true
+/// goes on to choose where to save it.
+#[cfg(not(target_arch = "wasm32"))]
+fn read_losses(format: &'static str, losses: Vec<String>) -> Task<bool> {
+    iced::window::latest().then(move |window| {
+        let list: Vec<_> = losses.iter().map(|loss| format!("• {loss}")).collect();
+        let dialog = rfd::AsyncMessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title(format!("Export {}?", format.to_uppercase()))
+            .set_description(format!(
+                "What changes in this file:\n\n{}",
+                list.join("\n\n")
+            ))
+            .set_buttons(rfd::MessageButtons::OkCancelCustom(
+                EXPORT.into(),
+                "Cancel".into(),
+            ));
+        match window {
+            Some(id) => iced::window::run(id, move |window| dialog.set_parent(&window).show())
+                .then(|answer| Task::perform(answer, goes_on)),
+            None => Task::perform(dialog.show(), goes_on),
+        }
+    })
+}
+
+/// Windows and GTK answer Ok; macOS and Zenity name the button.
+#[cfg(not(target_arch = "wasm32"))]
+fn goes_on(answer: rfd::MessageDialogResult) -> bool {
+    match answer {
+        rfd::MessageDialogResult::Ok => true,
+        rfd::MessageDialogResult::Custom(label) => label == EXPORT,
+        _ => false,
+    }
+}

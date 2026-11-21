@@ -51,7 +51,8 @@ async fn a_chemdraw_save_loses_the_schemes_steps_and_pages_it_counts() {
         ChemdrawLoss {
             schemes: 4,
             steps: 12,
-            pages: 0
+            pages: 0,
+            unsupported: 0,
         }
     );
     assert_eq!(
@@ -59,7 +60,8 @@ async fn a_chemdraw_save_loses_the_schemes_steps_and_pages_it_counts() {
         ChemdrawLoss {
             schemes: 9,
             steps: 18,
-            pages: 2
+            pages: 2,
+            unsupported: 0,
         }
     );
 }

@@ -71,6 +71,7 @@ SHARD_SECONDS = {0: 1700}
 WORKSPACE_TARGET_SHARDS = {
     ("reshiki-io", "chemdraw_clipboard_layout"): 0,
     ("reshiki-io", "chemdraw_import_semantics"): 0,
+    ("reshiki-io", "chemdraw_drawing_elements"): 0,
     ("reshiki-io", "chemdraw_multipage"): 0,
     ("reshiki-io", "chemdraw_multipage_boundaries"): 0,
     ("reshiki-io", "chemdraw_save_loss"): 0,
@@ -80,6 +81,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("reshiki-io", "passive_drawing_geometry"): 0,
     ("reshiki-io", "pdf_gradients"): 0,
     ("reshiki-io", "spacefill_seams"): 0,
+    ("reshiki-io", "tlc_plate"): 0,
     ("reshiki-macos", "native_print"): 0,
     ("reshiki-geometry", "c60"): 0,
     ("reshiki-geometry", "embedding"): 0,

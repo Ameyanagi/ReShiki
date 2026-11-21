@@ -277,11 +277,14 @@ pub struct Committed {
 ///    pruned.
 /// 3. Abbreviations the edit broke are dropped before validation, which would
 ///    reject them.
-/// 4. Reaction participants grow with their molecules. A join of separate
-///    participants is rejected here, before validation.
+/// 4. Each molecule keeps one purpose. Reaction participants grow with their
+///    molecules, and non-Chemistry objects leave their reactions. A join of
+///    separate participants is rejected here, before validation.
 /// 5. Only a changed document is validated. Molecule groups are reconciled after
 ///    validation, because their final prune would repair a stale member that
 ///    validation rejects.
+/// 6. Equipment seats are checked last, after layouts have moved their items;
+///    a seat that no longer fits is released.
 pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rejection> {
     recount_radicals(&before, doc);
     crate::fischer::reconcile(doc, &before);
@@ -289,23 +292,35 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
     crate::ring_fills::prune(doc);
     crate::depth_appearance::prune(doc);
     doc.reconcile_abbreviations(&before);
+    crate::purpose::reconcile(doc, &before);
     if let Err(error) = crate::reactions::reconcile(doc) {
         *doc = before;
         return Err(Rejection::Reactions(error));
     }
     crate::reaction_mapping::reconcile_label_changes(&before, doc);
+    crate::reaction_colors::reconcile(doc, &before);
     crate::arrow_anchors::reconcile(doc);
     crate::molecule_names::reconcile(doc, &before);
     crate::linked_properties::reconcile(doc, &before);
     crate::compound_numbers::reconcile(doc, &before);
     crate::arrow_labels::reconcile(doc, &before);
+    crate::shape_text::reconcile_changes(doc, &before);
     crate::models3d::reconcile(doc, &before);
+    crate::cycles::reconcile(doc);
+    doc.piece_definitions = crate::equipment::placed::used(doc);
+    // Leaders settle last: captions and labels they point at may have moved.
+    crate::leaders::reconcile(doc);
     if *doc != before {
         if let Err(error) = doc.validate() {
             *doc = before;
             return Err(Rejection::Invalid(error));
         }
         doc.reconcile_molecule_groups();
+        crate::layouts::reconcile(doc, &before);
+        // Layouts can move shapes; their text follows.
+        crate::shape_text::reconcile_changes(doc, &before);
+        // Last, after layouts have moved things: seats that no longer fit go.
+        crate::equipment::solve::check(doc, Some(&before));
     }
     Ok(Reconciled { before })
 }

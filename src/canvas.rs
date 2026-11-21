@@ -42,12 +42,14 @@ mod pages;
 mod paper;
 pub(crate) mod pick;
 mod previews;
+mod purpose;
 mod render;
 mod selection;
 mod smart_guides;
 mod snapping;
 mod text_cache;
 pub(crate) mod tilt;
+pub(crate) mod tlc;
 mod tool;
 
 #[cfg(test)]
@@ -135,6 +137,8 @@ pub enum Edit {
     Touch(Vec<Edit>),
     ContextMenu {
         position: Point,
+        /// Where the press was, on the paper.
+        at: World,
         selected: Vec<u64>,
         /// The exact secondary-click hit before logical groups or the current
         /// selection expand it. Object-specific commands must use this target.
@@ -143,6 +147,7 @@ pub enum Edit {
     EraseStart(World),
     EraseTo(World, World),
     EraseEnd,
+    /// Edit a caption, or the text a closed shape holds.
     BeginText(u64),
     /// A Text-tool Option/Alt-click: label the atom there
     /// with the last committed label, as ChemDraw repeats labels.
@@ -180,6 +185,20 @@ pub enum Edit {
     /// Move the repeat label beside a bracket by this much.
     RepeatLabelMove(u64, World),
     ArrowHandle(u64, usize, World),
+    /// Set a parameter of an equipment piece: a part's handle was dragged or clicked.
+    PieceParam {
+        id: u64,
+        param: String,
+        value: reshiki::equipment::eval::Value,
+    },
+    /// Drag a hose's end or middle to this point.
+    HoseGrip {
+        id: u64,
+        grip: reshiki::equipment::solve::hose::Grip,
+        to: World,
+    },
+    /// Lay the armed hose from one point to another; a click passes one point twice.
+    Hose(World, World),
     /// Move an arrow node's direction control alone, making the node a Corner.
     ArrowControlFree(u64, usize, World),
     /// Split the arrow's shaft at this point with a new node.
@@ -268,7 +287,25 @@ pub enum Edit {
     DelocalizedRing(World, Option<World>, u8),
     RingPreset(reshiki::rings::Preset, World, Option<World>, bool, bool),
     Template(World, Option<World>),
+    /// Place the armed equipment piece centred here.
+    Piece(World),
+    /// Place the icon armed in the Icons browser centred here.
+    Icon(World),
     Click(World),
+    /// A raw measurement or rim click owned by the detached equipment draft.
+    EquipmentAuthoringPoint(World),
+    EquipmentAuthoringShape {
+        at: World,
+        reach: f32,
+    },
+    EquipmentAuthoringTestStart(u64),
+    EquipmentAuthoringTestCancel(u64),
+    EquipmentAuthoringTest {
+        at: World,
+        epoch: u64,
+        reach: f32,
+        finish: bool,
+    },
     /// Legacy/programmatic camera edits use world coordinates.
     Pan(f32, f32),
     Zoom(f32, World),
@@ -381,12 +418,20 @@ pub struct State {
     gesture: Option<Gesture>,
     relaxation: Option<optimization::Drag>,
     cursor: Option<Point>,
+    /// The application holds a hover point from this canvas. A context menu
+    /// or a resize can leave `cursor` unknown or outside the new bounds, so
+    /// this, not `cursor`, says whether a move off the canvas must clear it.
+    hovering: bool,
     touch: input::touch::Touch,
+    equipment_trial: Option<input::equipment_trial::Capture>,
     /// Only caption transitions during a bond drag need an application hint.
     bond_text_hover: Option<u64>,
     last_click: Option<(iced::time::Instant, u64)>,
     last_transform_click: Option<HandleClick>,
     modifiers: iced::keyboard::Modifiers,
+    /// The drag moves a piece picked out of its object, as Option/Alt does:
+    /// a stand's rod or a joint no longer holds it in place.
+    pull_out: bool,
 }
 
 /// A context menu suspends pointer gestures, not the expensive drawing caches.
@@ -398,6 +443,7 @@ pub(crate) fn reset_menu_pointer(tree: &mut iced::advanced::widget::Tree) {
     {
         state.end_gesture();
         state.touch = Default::default();
+        state.equipment_trial = None;
         state.cursor = None;
         state.last_click = None;
         state.last_transform_click = None;
@@ -486,6 +532,16 @@ enum Gesture {
         /// click inside it selects rather than moves it.
         grab: World,
     },
+    /// A movable part's or a liquid's handle on a selected equipment piece.
+    PieceHandle {
+        id: u64,
+        handle: reshiki::equipment::solve::adjust::Handle,
+        start: World,
+    },
+    /// Laying the armed hose from where the press was.
+    Hose {
+        start: World,
+    },
     Transform(Box<TransformDrag>),
     Tilt(tilt::TiltDrag),
     Turn(models3d::Turn),
@@ -547,6 +603,8 @@ pub struct ArrowOptions<'a> {
     pub style: &'a ArrowStyle,
     pub source: Option<&'a Pick>,
     pub attach_targets: bool,
+    /// The sweep of new arc arrows.
+    pub arc: Option<f32>,
 }
 
 impl Default for ArrowOptions<'_> {
@@ -556,6 +614,7 @@ impl Default for ArrowOptions<'_> {
             style: &ArrowStyle::DEFAULT,
             source: None,
             attach_targets: false,
+            arc: None,
         }
     }
 }
@@ -609,11 +668,24 @@ pub struct PreviewStyles<'a> {
     pub bracket_sides: BracketSides,
 }
 
+#[derive(Clone, Copy, Default)]
+pub(crate) struct EquipmentAuthoring<'a> {
+    pub points: &'a [World],
+    pub measuring: bool,
+    pub direction: Option<[World; 2]>,
+    pub trial: Option<(u64, World, u64)>,
+    pub snap: Option<&'a reshiki::equipment::solve::Snap>,
+    pub shape: &'a [reshiki::equipment::geometry::Seg],
+}
+
 pub struct MoleculeCanvas<'a> {
     pub(crate) nmr: Option<nmr::Context<'a>>,
     /// Session-only feedback from the hovered locant in a chemical name.
     pub(crate) locant_highlight: &'a [u64],
+    /// Outlines what takes part in a reaction until the next edit.
+    pub(crate) reaction_preview: Option<&'a reshiki::reactions::Reaction>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
+    pub(crate) equipment_authoring: Option<EquipmentAuthoring<'a>>,
     /// Keyboard input routing; the marker waits for pointer or key interaction.
     pub(crate) keyboard_target: Option<World>,
     pub(crate) keyboard_marker: bool,
@@ -625,6 +697,8 @@ pub struct MoleculeCanvas<'a> {
     pub bond_drawing: BondDrawing,
     pub chain_drawing: ChainDrawing,
     pub doc: &'a Document,
+    /// Caption policy used to normalize a cycle drop before showing it.
+    pub(crate) two_decimal_weight: bool,
     pub element: &'a str,
     /// The label the Atom tool gives each new atom: `R` on an R group's `*`.
     pub atom_label: Option<&'a str>,
@@ -640,6 +714,16 @@ pub struct MoleculeCanvas<'a> {
     pub aromatic_ring: bool,
     pub template_connection: reshiki::templates::Connection,
     pub template: Option<(&'a reshiki::templates::Template, reshiki::templates::Anchor)>,
+    /// The equipment piece a click places, shown under the pointer.
+    pub piece: Option<&'a std::sync::Arc<reshiki::equipment::format::Definition>>,
+    /// The icon a click places, centred on the origin, shown under the pointer.
+    pub icon: Option<reshiki::graphics::Graphic>,
+    /// Keyboard Connect: the selected pieces, the joint offered and theirs.
+    pub connect: Option<(
+        &'a [u64],
+        &'a reshiki::equipment::solve::JointRef,
+        &'a reshiki::equipment::solve::JointRef,
+    )>,
     pub arrows: ArrowOptions<'a>,
     pub graphics: GraphicOptions<'a>,
 }
@@ -665,7 +749,9 @@ impl<'a> MoleculeCanvas<'a> {
         Self {
             nmr: None,
             locant_highlight: &[],
+            reaction_preview: None,
             optimizer: None,
+            equipment_authoring: None,
             keyboard_target: None,
             keyboard_marker: false,
             morph: None,
@@ -675,6 +761,10 @@ impl<'a> MoleculeCanvas<'a> {
             bond_drawing: styles.bond_drawing,
             chain_drawing: styles.chain_drawing,
             doc,
+            two_decimal_weight: doc
+                .property_captions
+                .first()
+                .is_some_and(|link| link.two_decimal_weight),
             element: "C",
             atom_label: None,
             selected,
@@ -688,6 +778,9 @@ impl<'a> MoleculeCanvas<'a> {
             aromatic_ring: false,
             template_connection: Default::default(),
             template: None,
+            piece: None,
+            icon: None,
+            connect: None,
             arrows: ArrowOptions {
                 preset: styles.arrow_preset,
                 style: styles.arrow_style,
@@ -790,8 +883,74 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     .with_color(overlay::ACCENT_STRONG),
             );
         }
+        purpose::draw_cues(self.doc, &mut frame, self.camera, paper);
+        if let Some(reaction) = self.reaction_preview {
+            purpose::draw_preview(self.doc, reaction, &mut frame, self.camera, paper);
+        }
         if let Some(context) = self.optimizer {
             optimization::draw_pins(self, context, &mut frame, paper);
+        }
+        if let Some(EquipmentAuthoring {
+            points,
+            direction,
+            shape,
+            ..
+        }) = self.equipment_authoring
+        {
+            let highlight = Path::new(|builder| {
+                use reshiki::equipment::geometry::Seg;
+                let screen =
+                    |[x, y]: [f64; 2]| self.camera.screen(World::new(x as f32, y as f32), paper);
+                for segment in shape {
+                    match *segment {
+                        Seg::Move(p) => builder.move_to(screen(p)),
+                        Seg::Line(p) => builder.line_to(screen(p)),
+                        Seg::Cubic(a, b, p) => {
+                            builder.bezier_curve_to(screen(a), screen(b), screen(p))
+                        }
+                        Seg::Close => builder.close(),
+                    }
+                }
+            });
+            frame.stroke(
+                &highlight,
+                Stroke::default()
+                    .with_width(2.)
+                    .with_color(overlay::ACCENT_STRONG.scale_alpha(0.7)),
+            );
+            if let [a, b] = points {
+                frame.stroke(
+                    &Path::line(self.camera.screen(*a, paper), self.camera.screen(*b, paper)),
+                    Stroke::default()
+                        .with_width(1.5)
+                        .with_color(overlay::ACCENT_STRONG),
+                );
+            }
+            for point in points {
+                frame.stroke(
+                    &Path::circle(self.camera.screen(*point, paper), 5.),
+                    Stroke::default()
+                        .with_width(2.)
+                        .with_color(overlay::ACCENT_STRONG),
+                );
+            }
+            if let Some([at, toward]) = direction {
+                let at = self.camera.screen(at, paper);
+                let toward = self.camera.screen(toward, paper);
+                let vector = toward - at;
+                let length = vector.x.hypot(vector.y);
+                if length > 0. {
+                    let u = vector * (1. / length);
+                    let tip = at + u * 32.;
+                    let v = Vector::new(-u.y, u.x);
+                    let stroke = Stroke::default()
+                        .with_width(2.)
+                        .with_color(overlay::ACCENT_STRONG);
+                    frame.stroke(&Path::line(at, tip), stroke);
+                    frame.stroke(&Path::line(tip, tip - u * 8. + v * 4.), stroke);
+                    frame.stroke(&Path::line(tip, tip - u * 8. - v * 4.), stroke);
+                }
+            }
         }
         if let Some(target) = self.keyboard_target.filter(|_| self.keyboard_marker) {
             let point = self.camera.screen(target, paper);

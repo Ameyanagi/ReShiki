@@ -739,6 +739,7 @@ fn loss_notice_document(
             ArrowStyle::preset(Preset::Forward),
         ));
         document.reactions.push(Reaction {
+            colors: None,
             arrow,
             reactants: vec![Participant {
                 atoms: reactants,

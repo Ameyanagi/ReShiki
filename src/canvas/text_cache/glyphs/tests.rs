@@ -13,6 +13,7 @@ fn zooming_evicts_glyphs_instead_of_retaining_every_size() {
                 ..Default::default()
             },
             |_, _| {},
+            |_, _| {},
         );
         assert!(glyphs.within_budget());
         let count = glyphs.cache.outline_command_cache.len();

@@ -106,6 +106,7 @@ fn manual_capture_template_style_renderer_evidence() -> anyhow::Result<()> {
                     .document
                     .clone();
                 saved.annotations.push(Annotation {
+                    angle: 0.,
                     id: saved.next_id(),
                     position: Point::new(-50., 65.),
                     text: "Saved at ACS".into(),

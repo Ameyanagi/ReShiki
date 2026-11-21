@@ -28,6 +28,22 @@ pub(super) fn chain(f: &mut Frame<'_>, ink: Color, mode: reshiki::chains::ChainM
 }
 
 pub(super) fn graphic(f: &mut Frame<'_>, ink: Color, kind: reshiki::graphics::GraphicKind) {
+    if kind == reshiki::graphics::GraphicKind::TlcPlate {
+        line(
+            f,
+            ink,
+            &[(4., 3.), (21., 3.), (21., 22.), (4., 22.), (4., 3.)],
+        );
+        for y in [6., 19.] {
+            for x in [5., 9., 13., 17.] {
+                line(f, ink, &[(x, y), (x + 2., y)]);
+            }
+        }
+        for (x, y) in [(8., 15.), (12.5, 11.), (17., 8.)] {
+            f.fill(&Path::circle(Point::new(x, y), 1.4), ink);
+        }
+        return;
+    }
     if kind == reshiki::graphics::GraphicKind::Path {
         let path = Path::new(|builder| {
             builder.move_to(Point::new(3., 13.));
@@ -57,7 +73,7 @@ pub(super) fn graphic(f: &mut Frame<'_>, ink: Color, kind: reshiki::graphics::Gr
         GraphicKind::Symbol(_) => (World::new(12., 12.), World::new(28., 12.)),
         _ => (World::new(4., 5.), World::new(21., 20.)),
     };
-    let g = Graphic::dragged(
+    let mut g = Graphic::dragged(
         1,
         kind,
         start,
@@ -66,6 +82,8 @@ pub(super) fn graphic(f: &mut Frame<'_>, ink: Color, kind: reshiki::graphics::Gr
         BracketSides::Both,
         false,
     );
+    // An outline glyph: a condition icon's disc would draw as a ring.
+    g.style.fill = None;
     let path = Path::new(|b| {
         for c in g.commands() {
             match c {
@@ -186,4 +204,16 @@ pub(super) fn erase(f: &mut Frame<'_>, ink: Color) {
         ],
     );
     line(f, ink, &[(8., 10.), (16., 18.)]);
+}
+
+/// A round-bottom flask: a neck on a round bulb.
+pub(super) fn equipment(f: &mut Frame<'_>, ink: Color) {
+    let mut points = vec![(10., 3.)];
+    // From the neck's left side, round the bottom, to its right side.
+    points.extend((0..=16).map(|i| {
+        let a = 4.4 - 5.66 * i as f32 / 16.;
+        (12. + 6.5 * a.cos(), 15. + 6.5 * a.sin())
+    }));
+    points.push((14., 3.));
+    line(f, ink, &points);
 }

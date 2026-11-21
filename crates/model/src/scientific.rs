@@ -43,8 +43,26 @@ macro_rules! choices {
         impl std::fmt::Display for $name {fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result {f.write_str(match self {Self::$first=>$label,$(Self::$variant=>$text),*})}}
     }
 }
-choices!(SymbolKind {CirclePlus=>"Circled plus",CircleMinus=>"Circled minus",Plus=>"Plus",Minus=>"Minus",Radical=>"Radical",Diradical=>"Diradical",LonePair=>"Lone pair",LonePairBar=>"Lone pair bar",RadicalCation=>"Radical cation",RadicalAnion=>"Radical anion",HydrogenDot=>"H-dot",HydrogenDash=>"H-dash",Diamond=>"Attachment diamond",Star=>"Attachment star",Wavy=>"Wavy attachment",Bead=>"Polymer bead",Dagger=>"Dagger",DoubleDagger=>"Double dagger",PartialPositive=>"Partial positive",PartialNegative=>"Partial negative"});
+choices!(SymbolKind {CirclePlus=>"Circled plus",CircleMinus=>"Circled minus",Plus=>"Plus",Minus=>"Minus",Radical=>"Radical",Diradical=>"Diradical",LonePair=>"Lone pair",LonePairBar=>"Lone pair bar",RadicalCation=>"Radical cation",RadicalAnion=>"Radical anion",HydrogenDot=>"H-dot",HydrogenDash=>"H-dash",Diamond=>"Attachment diamond",Star=>"Attachment star",Wavy=>"Wavy attachment",Bead=>"Polymer bead",Dagger=>"Dagger",DoubleDagger=>"Double dagger",PartialPositive=>"Partial positive",PartialNegative=>"Partial negative",Light=>"Light",Electrode=>"Electrode",Heat=>"Heat",Microwave=>"Microwave",Ultrasound=>"Ultrasound",Cold=>"Cold",Enzyme=>"Enzyme"});
 impl SymbolKind {
+    /// Ready-made icons for reaction conditions, placed like any shape.
+    pub const CONDITIONS: &'static [Self] = &[
+        Self::Light,
+        Self::Electrode,
+        Self::Heat,
+        Self::Microwave,
+        Self::Ultrasound,
+        Self::Cold,
+        Self::Enzyme,
+    ];
+    pub fn is_condition(self) -> bool {
+        Self::CONDITIONS.contains(&self)
+    }
+    /// The fill a new symbol of this kind takes: a condition icon's disc is
+    /// the paper color, so it covers an arrow's shaft on either canvas.
+    pub fn fill(self) -> Option<crate::palette::Color> {
+        self.is_condition().then_some(crate::palette::Color::Paper)
+    }
     pub fn partial_charge_text(self) -> Option<&'static str> {
         match self {
             Self::PartialPositive => Some("δ+"),
@@ -54,7 +72,9 @@ impl SymbolKind {
     }
 }
 choices!(OrbitalKind {S=>"s orbital",Sigma=>"σ orbital",Lobe=>"Single lobe",P=>"p orbital",Hybrid=>"sp³ hybrid",Dxy=>"dxy orbital",Dz2=>"dz² orbital"});
-choices!(Phase {Solid=>"Solid phase",Open=>"Outline",Shaded=>"Gray phase"});
+// `Gradient` is ChemDraw's shaded phase: white at the upper left of each lobe
+// to the line color at its edge.
+choices!(Phase {Solid=>"Solid phase",Open=>"Outline",Shaded=>"Gray phase",Gradient=>"Shaded phase"});
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MarkKind {
@@ -126,6 +146,27 @@ fn lobe(angle: f32, length: f32, width: f32) -> Vec<PathCommand> {
     .map(|c| c.map(convert))
     .collect()
 }
+/// A circular arc from `a0` to `a1` degrees (y down), as a move and cubics.
+fn arc(x: f32, y: f32, r: f32, a0: f32, a1: f32) -> Vec<PathCommand> {
+    use PathCommand::*;
+    let at = |a: f32| p(x + r * a.cos(), y + r * a.sin());
+    let n = ((a1 - a0).abs() / 90.).ceil().max(1.);
+    let step = (a1 - a0).to_radians() / n;
+    let k = 4. / 3. * (step / 4.).tan() * r;
+    let mut a = a0.to_radians();
+    let mut out = vec![Move(at(a))];
+    for _ in 0..n as usize {
+        let b = a + step;
+        let (p0, p3) = (at(a), at(b));
+        out.push(Cubic(
+            p(p0.x - k * a.sin(), p0.y + k * a.cos()),
+            p(p3.x + k * b.sin(), p3.y - k * b.cos()),
+            p3,
+        ));
+        a = b;
+    }
+    out
+}
 pub fn orbital_parts(
     kind: OrbitalKind,
     phase: Phase,
@@ -143,19 +184,23 @@ pub fn orbital_parts(
             None
         } else {
             let color = style.fill.unwrap_or(style.stroke);
-            Some(if phase == Phase::Solid {
-                color
-            } else {
+            Some(if phase == Phase::Shaded {
                 // Scene documents hold canonical bytes, so this lightens toward the paper.
                 crate::palette::Color::Custom(color.rgb().map(|c| ((c as u16 + 255 * 2) / 3) as u8))
+            } else {
+                color
             })
         };
+        let mut style = GraphicStyle {
+            fill,
+            ..style.clone()
+        };
+        // Shading paints opaque bands, so a see-through orbital fills flat.
+        style.effects.shaded =
+            phase == Phase::Gradient && fill.is_some() && style.effects.opacity.is_none();
         out.push(Part {
             commands,
-            style: GraphicStyle {
-                fill,
-                ..style.clone()
-            },
+            style,
             filled: fill.is_some(),
         });
     };
@@ -185,6 +230,10 @@ pub fn orbital_parts(
     }
     out
 }
+/// A radical ion's sign and dot along its axis, and a free sign's arm.
+const ION_SIGN: f32 = 0.22;
+const ION_DOT: f32 = -0.45;
+const SIGN_ARM: f32 = 0.3;
 pub fn symbol_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle) -> Vec<Part> {
     glyph_parts(kind, amount, style, false)
 }
@@ -204,11 +253,14 @@ fn glyph_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle, mark: bool) -
             filled: true,
         }];
     }
+    if kind.is_condition() {
+        return condition_parts(kind, style);
+    }
     let circled = matches!(kind, SymbolKind::CirclePlus | SymbolKind::CircleMinus);
     let (radius, arm) = if mark && circled {
         (0.4, 0.24)
     } else {
-        (0.52, 0.3)
+        (0.52, SIGN_ARM)
     };
     let mut out = vec![];
     let mut add = |commands: Vec<PathCommand>, fill: bool| {
@@ -243,13 +295,13 @@ fn glyph_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle, mark: bool) -
             SymbolKind::Plus | SymbolKind::CirclePlus | SymbolKind::RadicalCation
         );
         let ion = matches!(kind, SymbolKind::RadicalCation | SymbolKind::RadicalAnion);
-        let x = if ion { 0.22 } else { 0. };
+        let x = if ion { ION_SIGN } else { 0. };
         add(sign(positive, x), false);
         if circled {
             add(circle(0., 0., radius, radius), false);
         }
         if ion {
-            add(circle(-0.45, 0., 0.095, 0.095), true);
+            add(circle(ION_DOT, 0., 0.095, 0.095), true);
         }
         if amount > 1 {
             add(
@@ -333,20 +385,223 @@ fn glyph_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle, mark: bool) -
     }
     out
 }
+/// An icon's disc of `radius` in its fill, with no outline.
+pub(crate) fn disc(style: &GraphicStyle, radius: f32) -> Option<Part> {
+    style.fill.map(|fill| Part {
+        commands: circle(0., 0., radius, radius),
+        style: GraphicStyle {
+            fill: Some(fill),
+            width_pt: 0.,
+            ..style.clone()
+        },
+        filled: true,
+    })
+}
+/// A condition icon: strokes in the symbol's color over a disc in its fill,
+/// the paper color when placed, so an icon on an arrow covers the shaft.
+fn condition_parts(kind: SymbolKind, style: &GraphicStyle) -> Vec<Part> {
+    use PathCommand::*;
+    let stroke = |commands: Vec<PathCommand>| Part {
+        commands,
+        style: GraphicStyle {
+            fill: None,
+            ..style.clone()
+        },
+        filled: false,
+    };
+    let mut out: Vec<Part> = disc(style, 0.62).into_iter().collect();
+    let line = |a: (f32, f32), b: (f32, f32)| [Move(p(a.0, a.1)), Line(p(b.0, b.1))];
+    match kind {
+        SymbolKind::Light => {
+            // A bulb open at its neck, a screw base and five rays.
+            let (neck, r) = (0.13_f32, 0.27_f32);
+            let start = (r * r - neck * neck).sqrt().atan2(neck).to_degrees();
+            let mut bulb = vec![Move(p(neck, 0.3))];
+            bulb.extend(
+                arc(0., -0.1, r, start, -180. - start)
+                    .into_iter()
+                    .map(|c| if let Move(q) = c { Line(q) } else { c }),
+            );
+            bulb.push(Line(p(-neck, 0.3)));
+            out.push(stroke(bulb));
+            let mut base = Vec::new();
+            for (y, half) in [(0.3, 0.15), (0.41, 0.12), (0.51, 0.05)] {
+                base.extend(line((-half, y), (half, y)));
+            }
+            out.push(stroke(base));
+            let mut rays = Vec::new();
+            for angle in [-90_f32, -45., -135., 0., 180.] {
+                let (sin, cos) = angle.to_radians().sin_cos();
+                rays.extend(line(
+                    (cos * 0.36, -0.1 + sin * 0.36),
+                    (cos * 0.5, -0.1 + sin * 0.5),
+                ));
+            }
+            out.push(stroke(rays));
+        }
+        SymbolKind::Electrode => {
+            // Two plates wired to a cell.
+            for x in [-0.38_f32, 0.24] {
+                out.push(stroke(vec![
+                    Move(p(x, -0.05)),
+                    Line(p(x + 0.14, -0.05)),
+                    Line(p(x + 0.14, 0.42)),
+                    Line(p(x, 0.42)),
+                    Close,
+                ]));
+            }
+            let mut wires = vec![
+                Move(p(-0.31, -0.05)),
+                Line(p(-0.31, -0.4)),
+                Line(p(-0.07, -0.4)),
+                Move(p(0.31, -0.05)),
+                Line(p(0.31, -0.4)),
+                Line(p(0.07, -0.4)),
+            ];
+            wires.extend(line((-0.07, -0.56), (-0.07, -0.24)));
+            wires.extend(line((0.07, -0.49), (0.07, -0.31)));
+            out.push(stroke(wires));
+        }
+        SymbolKind::Heat => {
+            // A flame with a side tongue, and an inner flame.
+            out.push(stroke(vec![
+                Move(p(0.06, -0.58)),
+                Cubic(p(0.16, -0.36), p(0.38, -0.18), p(0.38, 0.14)),
+                Cubic(p(0.38, 0.38), p(0.2, 0.52), p(0., 0.52)),
+                Cubic(p(-0.2, 0.52), p(-0.38, 0.38), p(-0.38, 0.16)),
+                Cubic(p(-0.38, -0.02), p(-0.3, -0.14), p(-0.22, -0.26)),
+                Cubic(p(-0.2, -0.12), p(-0.14, -0.04), p(-0.1, -0.04)),
+                Cubic(p(-0.1, -0.26), p(-0.02, -0.4), p(0.06, -0.58)),
+                Close,
+            ]));
+            out.push(stroke(vec![
+                Move(p(0.02, -0.06)),
+                Cubic(p(0.08, 0.06), p(0.17, 0.12), p(0.17, 0.24)),
+                Cubic(p(0.17, 0.34), p(0.09, 0.38), p(0., 0.38)),
+                Cubic(p(-0.09, 0.38), p(-0.17, 0.34), p(-0.17, 0.24)),
+                Cubic(p(-0.17, 0.12), p(-0.06, 0.06), p(0.02, -0.06)),
+                Close,
+            ]));
+        }
+        SymbolKind::Microwave => {
+            // An oven: its door window with a wave, and two knobs.
+            let rect = |x0: f32, y0: f32, x1: f32, y1: f32| {
+                vec![
+                    Move(p(x0, y0)),
+                    Line(p(x1, y0)),
+                    Line(p(x1, y1)),
+                    Line(p(x0, y1)),
+                    Close,
+                ]
+            };
+            out.push(stroke(rect(-0.5, -0.34, 0.5, 0.34)));
+            out.push(stroke(rect(-0.38, -0.22, 0.14, 0.22)));
+            out.push(stroke(vec![
+                Move(p(-0.3, 0.)),
+                Cubic(p(-0.25, -0.12), p(-0.17, -0.12), p(-0.12, 0.)),
+                Cubic(p(-0.07, 0.12), p(0.01, 0.12), p(0.06, 0.)),
+            ]));
+            out.push(stroke(circle(0.32, -0.11, 0.05, 0.05)));
+            out.push(stroke(circle(0.32, 0.11, 0.05, 0.05)));
+        }
+        SymbolKind::Ultrasound => {
+            // A probe sending three sound waves.
+            out.push(stroke(vec![
+                Move(p(-0.38, -0.22)),
+                Line(p(-0.26, -0.22)),
+                Line(p(-0.26, 0.22)),
+                Line(p(-0.38, 0.22)),
+                Close,
+            ]));
+            for r in [0.24, 0.43, 0.62] {
+                out.push(stroke(arc(-0.24, 0., r, -45., 45.)));
+            }
+        }
+        SymbolKind::Cold => {
+            // A snowflake: three bars, each arm ending in a V.
+            let mut flake = Vec::new();
+            for i in 0..6 {
+                let a = (i as f32 * 60. - 90.).to_radians();
+                let (sin, cos) = a.sin_cos();
+                flake.extend(line((0., 0.), (cos * 0.55, sin * 0.55)));
+                for turn in [-45_f32, 45.] {
+                    let b = a + turn.to_radians();
+                    let (x, y) = (cos * 0.33, sin * 0.33);
+                    flake.extend(line((x, y), (x + b.cos() * 0.17, y + b.sin() * 0.17)));
+                }
+            }
+            out.push(stroke(flake));
+        }
+        SymbolKind::Enzyme => {
+            // An enzyme with its open active site, holding a substrate.
+            let mut enzyme = vec![Move(p(-0.08, 0.))];
+            enzyme.extend(
+                arc(-0.08, 0., 0.45, 35., 325.)
+                    .into_iter()
+                    .map(|c| if let Move(q) = c { Line(q) } else { c }),
+            );
+            enzyme.push(Close);
+            out.push(stroke(enzyme));
+            out.push(stroke(circle(0.36, 0., 0.12, 0.12)));
+        }
+        _ => {}
+    }
+    out
+}
 impl Part {
     pub fn map(&mut self, f: impl Fn(Point) -> Point) {
         self.commands = self.commands.iter().map(|c| c.map(&f)).collect();
     }
 }
 impl Graphic {
+    /// An icon's fill is its paper disc, not a color to edit: a condition
+    /// icon or one from the Icons tool.
+    pub fn is_icon(&self) -> bool {
+        self.kind == GraphicKind::Icon
+            || matches!(self.kind, GraphicKind::Symbol(kind) if kind.is_condition())
+    }
     pub fn parts(&self) -> Vec<Part> {
+        if self.kind == GraphicKind::TlcPlate {
+            return self.tlc.as_deref().map_or_else(Vec::new, |t| t.parts(self));
+        }
+        if self.kind == GraphicKind::Piece {
+            return crate::equipment::placed::parts(self);
+        }
         let mut parts = match self.kind {
             GraphicKind::Symbol(kind) => symbol_parts(kind, 1, &self.style),
+            GraphicKind::Icon => self
+                .icon
+                .as_deref()
+                .map_or_else(Vec::new, |icon| crate::line_icons::parts(icon, &self.style)),
             GraphicKind::Orbital(kind) => {
                 orbital_parts(kind, self.phase, self.phase_flipped, &self.style)
             }
             _ => {
-                return self.path_parts();
+                let mut parts = self.path_parts();
+                if self.style.pattern == crate::graphics::LinePattern::Wavy
+                    && let Some(shaft) = parts.first_mut()
+                {
+                    // Closed paths draw no heads, so they wave all round.
+                    let heads = self
+                        .heads
+                        .filter(|_| !self.closed_shape())
+                        .unwrap_or_default();
+                    let radius = crate::graphics::wave_radius(self.style.width_pt);
+                    // Run straight under each head and a little beyond it.
+                    let lead = crate::style::DEFAULT.world(heads.head_length_pt) + radius;
+                    shaft.commands = crate::graphics::wavy(
+                        &shaft.commands,
+                        radius,
+                        [heads.tail, heads.head].map(|h| {
+                            if h == crate::arrows::Head::None {
+                                0.
+                            } else {
+                                lead
+                            }
+                        }),
+                    );
+                }
+                return parts;
             }
         };
         for part in &mut parts {
@@ -356,6 +611,27 @@ impl Graphic {
                     self.axis_x.y * q.x + self.axis_y.y * q.y,
                 )
             });
+        }
+        // A radical ion's sign stands upright however the ion turns, as
+        // ChemDraw draws it; only its place beside the dot turns.
+        if let GraphicKind::Symbol(kind @ (SymbolKind::RadicalCation | SymbolKind::RadicalAnion)) =
+            self.kind
+            && let Some(sign) = parts.first_mut()
+        {
+            use PathCommand::{Line, Move};
+            // A stretched ion keeps a square sign of its mean size.
+            let arm = SIGN_ARM
+                * (self.axis_x.x * self.axis_y.y - self.axis_x.y * self.axis_y.x)
+                    .abs()
+                    .sqrt();
+            let c = self
+                .origin
+                .offset(self.axis_x.x * ION_SIGN, self.axis_x.y * ION_SIGN);
+            sign.commands = vec![Move(c.offset(-arm, 0.)), Line(c.offset(arm, 0.))];
+            if kind == SymbolKind::RadicalCation {
+                sign.commands
+                    .extend([Move(c.offset(0., -arm)), Line(c.offset(0., arm))]);
+            }
         }
         parts
     }
@@ -677,6 +953,7 @@ impl Drawing {
     ) -> Result<u64, String> {
         if let GraphicKind::Symbol(kind) = self.kind
             && self.attach
+            && !kind.is_condition()
             && let Some(id) = doc.nearest(start, radius)
         {
             let default_label_size = doc.drawing_style.font_size_pt;

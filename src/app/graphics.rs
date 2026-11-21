@@ -92,6 +92,35 @@ pub(super) enum ColorField {
     Fill,
 }
 
+/// The fill's gradient, as the Properties list names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GradientChoice {
+    None,
+    Linear,
+    Radial,
+}
+impl GradientChoice {
+    pub(super) const ALL: [Self; 3] = [Self::None, Self::Linear, Self::Radial];
+    fn of(style: &reshiki::graphics::GraphicStyle) -> Self {
+        match style.effects.gradient.map(|g| g.kind) {
+            None => Self::None,
+            Some(reshiki::graphics::GradientKind::Linear { .. }) => Self::Linear,
+            Some(reshiki::graphics::GradientKind::Radial) => Self::Radial,
+        }
+    }
+}
+impl std::fmt::Display for GradientChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::None => "None",
+            Self::Linear => "Linear",
+            Self::Radial => "Radial",
+        })
+    }
+}
+/// The angle a new linear gradient runs at: top to bottom.
+const DOWN: f32 = 90.;
+
 /// Graphic style and scientific-symbol inputs, nested under `Message::Graphics`.
 /// Applied style and superscript changes commit inline and join drafts.
 #[derive(Debug, Clone)]
@@ -99,6 +128,15 @@ pub enum Action {
     Style(GraphicChange),
     Width(String),
     ApplyWidth,
+    Corner(String),
+    ApplyCorner,
+    Opacity(String),
+    ApplyOpacity,
+    Gradient(GradientChoice),
+    GradientFrom(String),
+    ApplyGradientFrom,
+    Angle(String),
+    ApplyAngle,
     Stroke(String),
     ApplyStroke,
     Fill(String),
@@ -121,6 +159,11 @@ pub enum Action {
     SnapOrbitals(bool),
 }
 
+/// Hundredths of a point, so an imported 0.99 pt reads "0.99".
+fn points(value: f32) -> String {
+    ((value * 100.).round() / 100.).to_string()
+}
+
 pub(super) fn parse_color(s: &str) -> Option<[u8; 3]> {
     let s = s.trim().trim_start_matches('#');
     if s.len() != 6 || !s.is_ascii() {
@@ -133,11 +176,56 @@ pub(super) fn parse_color(s: &str) -> Option<[u8; 3]> {
     ])
 }
 impl App {
+    pub(super) fn selected_styled_graphics(
+        &self,
+    ) -> impl Iterator<Item = &reshiki::graphics::Graphic> {
+        self.tab.doc.graphics.iter().filter(|g| {
+            self.tab.selected.contains(&g.id)
+                && g.picture.is_none()
+                && g.piece.is_none()
+                && g.tlc.is_none()
+        })
+    }
+
+    pub(super) fn graphic_panel_visible(&self) -> bool {
+        matches!(self.tool, Tool::Graphic(kind) if kind != GraphicKind::TlcPlate)
+            || self.selected_styled_graphics().next().is_some()
+    }
+
+    pub(super) fn graphic_fill_controls(&self) -> bool {
+        let mut selected = self.selected_styled_graphics();
+        let first = selected.next();
+        let kind = match self.tool {
+            Tool::Graphic(kind) => kind,
+            _ => first.map_or(GraphicKind::Rectangle, |g| g.kind),
+        };
+        let mut shapes = first.into_iter().chain(selected);
+        if kind.closed() {
+            !shapes.any(|g| g.cycle.is_some())
+        } else {
+            kind == GraphicKind::Path
+                && shapes.any(|g| {
+                    g.commands()
+                        .iter()
+                        .any(|c| matches!(c, reshiki::graphics::PathCommand::Close))
+                })
+        }
+    }
+
     pub(super) fn graphic_action(&mut self, action: Action) {
         match action {
             Action::Style(change) => self.apply_graphic_style(change),
             Action::Width(s) => self.tab.graphic_width_input = s,
             Action::ApplyWidth => self.apply_graphic_width(),
+            Action::Corner(s) => self.tab.graphic_corner_input = s,
+            Action::ApplyCorner => self.apply_graphic_corner(),
+            Action::Opacity(s) => self.tab.graphic_opacity_input = s,
+            Action::ApplyOpacity => self.apply_graphic_opacity(),
+            Action::Gradient(choice) => self.set_gradient(choice),
+            Action::GradientFrom(s) => self.tab.graphic_gradient_input = s,
+            Action::ApplyGradientFrom => self.apply_gradient_from(),
+            Action::Angle(s) => self.tab.graphic_angle_input = s,
+            Action::ApplyAngle => self.apply_gradient_angle(),
             Action::Stroke(s) => self.tab.graphic_stroke_input = s,
             Action::ApplyStroke => self.apply_graphic_color(ColorField::Stroke),
             Action::Fill(s) => self.tab.graphic_fill_input = s,
@@ -184,13 +272,9 @@ impl App {
     }
     pub(super) fn graphic_panel(&self) -> Element<'_, Message> {
         use reshiki::graphics::{BracketSides, GraphicChange, GraphicKind, LinePattern};
-        let selected: Vec<_> = self
-            .tab
-            .doc
-            .graphics
-            .iter()
-            .filter(|g| self.tab.selected.contains(&g.id) && g.picture.is_none())
-            .collect();
+        let selected: Vec<_> = self.selected_styled_graphics().collect();
+        // A cycle's style colors its arrows.
+        let cycle = selected.iter().any(|g| g.cycle.is_some());
         let kind = selected.first().map(|g| g.kind).unwrap_or_else(|| {
             if let Tool::Graphic(kind) = self.tool {
                 kind
@@ -227,7 +311,16 @@ impl App {
             } else {
                 "Graphic style"
             }),
-            text(kind.to_string()).size(14),
+            text(if selected.iter().any(|g| g.panel.is_some()) {
+                "Panel".to_owned()
+            } else if cycle {
+                "Cycle arrows".to_owned()
+            } else if let Some(icon) = selected.first().and_then(|g| g.icon.as_ref()) {
+                format!("Icon · {}", icon.name.replace('-', " "))
+            } else {
+                kind.to_string()
+            })
+            .size(14),
             row![
                 text("Line (pt)").size(11),
                 reshiki::accessibility::text_input(
@@ -243,7 +336,15 @@ impl App {
                 .padding(5)
                 .width(48),
                 crate::appearance::pick_list(
-                    [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted],
+                    // Symbols and orbitals draw no waves.
+                    if matches!(
+                        kind,
+                        GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+                    ) {
+                        LinePattern::PLAIN.as_slice()
+                    } else {
+                        LinePattern::ALL.as_slice()
+                    },
                     Some(self.tab.graphic_style.pattern),
                     |p| Message::Graphics(Action::Style(GraphicChange::Pattern(p)))
                 )
@@ -270,7 +371,10 @@ impl App {
                 .padding(6),
         ]
         .spacing(9);
-        if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+        if matches!(
+            kind,
+            GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+        ) {
             let mut preview = selected.first().map(|g| (*g).clone()).unwrap_or_else(|| {
                 reshiki::graphics::Graphic::dragged(
                     1,
@@ -292,18 +396,19 @@ impl App {
         }
         match kind {
             GraphicKind::Symbol(kind) => {
-                panel = panel
-                    .push(
-                        crate::appearance::pick_list(
-                            reshiki::scientific::SymbolKind::ALL,
-                            Some(kind),
-                            |k| Message::Graphics(Action::ScientificKind(GraphicKind::Symbol(k))),
-                        )
-                        .text_size(12)
-                        .padding(6)
-                        .width(Length::Fill),
+                panel = panel.push(
+                    crate::appearance::pick_list(
+                        reshiki::scientific::SymbolKind::ALL,
+                        Some(kind),
+                        |k| Message::Graphics(Action::ScientificKind(GraphicKind::Symbol(k))),
                     )
-                    .push(hover_hint(
+                    .text_size(12)
+                    .padding(6)
+                    .width(Length::Fill),
+                );
+                // Condition icons are free shapes; they never attach.
+                if !kind.is_condition() {
+                    panel = panel.push(hover_hint(
                         checkbox(self.tab.attach_symbols)
                             .label("Attach to atoms")
                             .on_toggle(|attach| Message::Graphics(Action::AttachSymbols(attach)))
@@ -312,6 +417,7 @@ impl App {
                         ATTACH_SYMBOLS_HINT,
                         tooltip::Position::Top,
                     ));
+                }
             }
             GraphicKind::Orbital(kind) => {
                 panel = panel
@@ -360,31 +466,165 @@ impl App {
             }
             _ => {}
         }
-        if kind.closed()
-            || (kind == GraphicKind::Path
-                && selected.iter().any(|g| {
-                    g.commands()
-                        .iter()
-                        .any(|c| matches!(c, reshiki::graphics::PathCommand::Close))
-                }))
-        {
-            panel = panel
-                .push(text("Fill color").size(11).style(muted_text))
-                .push(swatches(
+        if self.graphic_fill_controls() {
+            // A panel's fill swatches and shadow are in its Panel card.
+            let panels = selected.iter().any(|g| g.panel.is_some());
+            if !panels {
+                panel = panel.push(text("Fill color").size(11).style(muted_text));
+                panel = panel.push(swatches(
                     Row::Tint,
                     (
                         style.fill.is_none(),
                         Some(Message::Graphics(Action::Style(GraphicChange::Fill(None)))),
                     ),
                     |color| GraphicChange::Fill(Some(color)),
-                ))
+                ));
+            }
+            let mut effects = row![hover_hint(
+                checkbox(style.effects.shaded)
+                    .label("Shaded")
+                    .on_toggle(|on| { Message::Graphics(Action::Style(GraphicChange::Shaded(on))) })
+                    .size(14)
+                    .text_size(12),
+                "Fill from white at the upper left to the fill color, as ChemDraw shades",
+                tooltip::Position::Top,
+            )]
+            .spacing(14);
+            if !panels {
+                effects = effects.push(hover_hint(
+                    checkbox(style.effects.shadow_pt.is_some())
+                        .label("Shadow")
+                        .on_toggle(|on| {
+                            Message::Graphics(Action::Style(GraphicChange::Shadow(
+                                on.then_some(reshiki::graphics::Effects::SHADOW_PT),
+                            )))
+                        })
+                        .size(14)
+                        .text_size(12),
+                    "A grey drop shadow below and to the right",
+                    tooltip::Position::Top,
+                ));
+            }
+            if panels {
+                panel = panel.push(text("Custom fill color").size(11).style(muted_text));
+            }
+            panel = panel
                 .push(
                     crate::appearance::text_input("#RRGGBB", &self.tab.graphic_fill_input)
                         .on_input(|fill| Message::Graphics(Action::Fill(fill)))
                         .on_submit(Message::Graphics(Action::ApplyFill))
                         .size(12)
                         .padding(6),
+                )
+                .push(effects)
+                .push(
+                    row![
+                        text("Gradient").size(11),
+                        crate::appearance::pick_list(
+                            GradientChoice::ALL,
+                            Some(GradientChoice::of(style)),
+                            |choice| Message::Graphics(Action::Gradient(choice)),
+                        )
+                        .text_size(12)
+                        .padding(5)
+                        .width(Length::Fill),
+                    ]
+                    .spacing(6)
+                    .align_y(Alignment::Center),
                 );
+            if let Some(gradient) = style.effects.gradient {
+                let mut controls = row![
+                    text("From").size(11),
+                    hover_hint(
+                        reshiki::accessibility::text_input(
+                            "graphic-gradient-from",
+                            "Gradient start color",
+                            "Paper",
+                            &self.tab.graphic_gradient_input,
+                        )
+                        .style(crate::appearance::input_style)
+                        .on_input(|value| Message::Graphics(Action::GradientFrom(value)))
+                        .on_submit(Message::Graphics(Action::ApplyGradientFrom))
+                        .size(12)
+                        .padding(5)
+                        .width(76),
+                        "Paper (the canvas color) or a color · Enter applies · the gradient ends at the fill color",
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center);
+                if matches!(
+                    gradient.kind,
+                    reshiki::graphics::GradientKind::Linear { .. }
+                ) {
+                    controls = controls.push(text("Angle (°)").size(11)).push(hover_hint(
+                        reshiki::accessibility::text_input(
+                            "graphic-gradient-angle",
+                            "Gradient angle (degrees)",
+                            "90",
+                            &self.tab.graphic_angle_input,
+                        )
+                        .style(crate::appearance::input_style)
+                        .on_input(|value| Message::Graphics(Action::Angle(value)))
+                        .on_submit(Message::Graphics(Action::ApplyAngle))
+                        .size(12)
+                        .padding(5)
+                        .width(48),
+                        "Enter applies · 0 runs left to right, 90 top to bottom",
+                        tooltip::Position::Top,
+                    ));
+                }
+                panel = panel.push(controls);
+            }
+        }
+        panel = panel.push(
+            row![
+                text("Opacity (%)").size(11),
+                hover_hint(
+                    reshiki::accessibility::text_input(
+                        "graphic-opacity",
+                        "Opacity (%)",
+                        "100",
+                        &self.tab.graphic_opacity_input,
+                    )
+                    .style(crate::appearance::input_style)
+                    .on_input(|value| Message::Graphics(Action::Opacity(value)))
+                    .on_submit(Message::Graphics(Action::ApplyOpacity))
+                    .size(12)
+                    .padding(5)
+                    .width(48),
+                    "Enter applies · fades the fill, or the lines of a shape without one",
+                    tooltip::Position::Top,
+                ),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+        );
+        if kind == GraphicKind::RoundedRectangle {
+            panel = panel.push(
+                row![
+                    text("Corner (pt)").size(11),
+                    hover_hint(
+                        reshiki::accessibility::text_input(
+                            "graphic-corner-radius",
+                            "Corner radius (pt)",
+                            "Auto",
+                            &self.tab.graphic_corner_input,
+                        )
+                        .style(crate::appearance::input_style)
+                        .on_input(|value| Message::Graphics(Action::Corner(value)))
+                        .on_submit(Message::Graphics(Action::ApplyCorner))
+                        .size(12)
+                        .padding(5)
+                        .width(56),
+                        "Enter applies · empty rounds to the shape",
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            );
         }
         if kind == GraphicKind::Arc {
             panel = panel.push(self.arc_controls());
@@ -458,8 +698,8 @@ impl App {
                         "Drag to draw · Shift makes a circle."
                     }
                     GraphicKind::Arc => "Drag the endpoints to adjust the curve.",
-                    _ if kind.brackets() => "Enter applies typed widths, colors and superscripts.",
-                    _ => "Enter applies typed widths and colors.",
+                    _ if kind.brackets() => "Enter applies typed numbers, colors and superscripts.",
+                    _ => "Enter applies typed numbers and colors.",
                 })
                 .size(11)
                 .style(muted_text),
@@ -470,14 +710,28 @@ impl App {
     pub(super) fn sync_graphics(&mut self) {
         self.sync_pictures();
         self.sync_arc();
-        if let Some(g) = self
-            .tab
-            .doc
-            .graphics
-            .iter()
-            .find(|g| self.tab.selected.contains(&g.id))
+        self.sync_tlc();
+        // Read generic inputs from the first graphic those inputs can edit.
+        // Keep dedicated selection synchronization when no ordinary graphic is selected.
+        let style_source = self.selected_styled_graphics().next().map(|g| g.id);
+        let mut selected_width = None;
+        if let Some(g) =
+            self.tab.doc.graphics.iter().find(|g| {
+                self.tab.selected.contains(&g.id) && style_source.is_none_or(|id| g.id == id)
+            })
         {
+            // A condition icon's paper disc stays with the icon, not the next shape.
+            let fill = self.tab.graphic_style.fill;
+            selected_width = Some(g.style.width_pt);
             self.tab.graphic_style = g.style.clone();
+            // Borderless imported paths keep zero on the object, while the
+            // next ordinary line or shape still needs a visible outline.
+            if g.is_fill_only_path() {
+                self.tab.graphic_style.width_pt = 0.1;
+            }
+            if g.is_icon() {
+                self.tab.graphic_style.fill = fill;
+            }
             self.tab.orbital_phase = g.phase;
             self.tab.phase_flipped = g.phase_flipped;
             self.tab.bracket_sides = g.sides;
@@ -514,7 +768,14 @@ impl App {
             self.tab.bracket_superscript = Superscript::of(bracket.superscript.as_deref());
             self.tab.bracket_superscript_input = bracket.superscript.clone().unwrap_or_default();
         }
-        self.tab.graphic_width_input = self.tab.graphic_style.width_pt.to_string();
+        self.tab.graphic_width_input =
+            points(selected_width.unwrap_or(self.tab.graphic_style.width_pt));
+        self.tab.graphic_corner_input = self
+            .tab
+            .graphic_style
+            .corner_pt
+            .map(points)
+            .unwrap_or_default();
         let heads = self
             .selected_open_paths()
             .next()
@@ -527,11 +788,53 @@ impl App {
         if let Some(c) = self.tab.graphic_style.fill {
             self.tab.graphic_fill_input = hex(c);
         }
+        let effects = self.tab.graphic_style.effects;
+        self.tab.graphic_opacity_input = effects
+            .opacity
+            .map_or(100., |a| (a * 1000.).round() / 10.)
+            .to_string();
+        if let Some(gradient) = effects.gradient {
+            self.tab.graphic_gradient_input = if gradient.from == Paint::Paper {
+                "Paper".into()
+            } else {
+                hex(gradient.from)
+            };
+            if let reshiki::graphics::GradientKind::Linear { angle } = gradient.kind {
+                self.tab.graphic_angle_input = points(angle);
+            }
+        }
+        self.sync_figure();
+        self.sync_cycle();
     }
     pub(super) fn apply_graphic_style(&mut self, change: GraphicChange) {
         change.apply(&mut self.tab.graphic_style);
         let before = self.tab.doc.clone();
-        for g in self.selected_graphics_mut().filter(|g| g.picture.is_none()) {
+        for g in self
+            .selected_graphics_mut()
+            .filter(|g| g.picture.is_none() && g.tlc.is_none())
+        {
+            // Symbols and orbitals draw no waves.
+            if matches!(
+                change,
+                GraphicChange::Pattern(reshiki::graphics::LinePattern::Wavy)
+            ) && matches!(
+                g.kind,
+                GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+            ) {
+                continue;
+            }
+            // An icon keeps its disc when a selection's fill or shading changes.
+            if matches!(change, GraphicChange::Fill(_) | GraphicChange::Shaded(_)) && g.is_icon() {
+                continue;
+            }
+            // Only a closed shape has an inside for a gradient to fill.
+            if matches!(
+                change,
+                GraphicChange::Gradient(Some(_)) | GraphicChange::GradientKind(Some(_))
+            ) && !g.closed_shape()
+            {
+                continue;
+            }
             change.apply(&mut g.style);
         }
         if let GraphicChange::Stroke(color) | GraphicChange::Fill(Some(color)) = change {
@@ -549,6 +852,78 @@ impl App {
             _ => {
                 self.error = true;
                 self.status = "Line width must be 0.1–12 pt".into();
+            }
+        }
+    }
+
+    pub(super) fn apply_graphic_corner(&mut self) {
+        let input = self.tab.graphic_corner_input.trim();
+        match input.parse::<f32>() {
+            _ if input.is_empty() => self.apply_graphic_style(GraphicChange::Corner(None)),
+            Ok(radius)
+                if radius.is_finite()
+                    && (0. ..=reshiki::graphics::MAX_CORNER_PT).contains(&radius) =>
+            {
+                self.apply_graphic_style(GraphicChange::Corner(Some(radius)))
+            }
+            _ => {
+                self.error = true;
+                self.status = "Corner radius must be 0–1000 pt".into();
+            }
+        }
+    }
+
+    pub(super) fn apply_graphic_opacity(&mut self) {
+        let input = self.tab.graphic_opacity_input.trim().trim_end_matches('%');
+        match input.trim().parse::<f32>() {
+            Ok(100.) => self.apply_graphic_style(GraphicChange::Opacity(None)),
+            // ChemDraw's FadePercent keeps tenths of a percent.
+            Ok(percent) if percent.is_finite() && (1. ..=99.).contains(&percent) => self
+                .apply_graphic_style(GraphicChange::Opacity(Some(
+                    (percent * 10.).round() / 1000.,
+                ))),
+            _ => {
+                self.error = true;
+                self.status = "Opacity must be 1–99%, or 100 for none".into();
+            }
+        }
+    }
+
+    /// Each selected shape's gradient as `choice`, keeping its own start
+    /// color and angle.
+    pub(super) fn set_gradient(&mut self, choice: GradientChoice) {
+        use reshiki::graphics::GradientKind;
+        self.apply_graphic_style(GraphicChange::GradientKind(match choice {
+            GradientChoice::None => None,
+            GradientChoice::Linear => Some(GradientKind::Linear { angle: DOWN }),
+            GradientChoice::Radial => Some(GradientKind::Radial),
+        }));
+    }
+
+    pub(super) fn apply_gradient_from(&mut self) {
+        let input = self.tab.graphic_gradient_input.trim();
+        let from = if input.eq_ignore_ascii_case("paper") {
+            Some(Paint::Paper)
+        } else {
+            parse_color(input).map(Paint::Custom)
+        };
+        match from {
+            Some(from) => self.apply_graphic_style(GraphicChange::GradientFrom(from)),
+            None => {
+                self.error = true;
+                self.status = "Enter Paper or a six-digit hex color, such as #FFFFFF".into();
+            }
+        }
+    }
+
+    pub(super) fn apply_gradient_angle(&mut self) {
+        match self.tab.graphic_angle_input.trim().parse::<f32>() {
+            Ok(angle) if angle.is_finite() && angle.abs() <= 360. => {
+                self.apply_graphic_style(GraphicChange::GradientAngle(angle))
+            }
+            _ => {
+                self.error = true;
+                self.status = "Angle must be within ±360°".into();
             }
         }
     }
@@ -584,13 +959,14 @@ impl App {
             .filter(|g| self.tab.selected.contains(&g.id) && is_open_path(g))
     }
 
+    /// The selected graphics that take a graphic style: not equipment pieces.
     fn selected_graphics_mut(&mut self) -> impl Iterator<Item = &mut Graphic> {
         let selected = &self.tab.selected;
         self.tab
             .doc
             .graphics
             .iter_mut()
-            .filter(move |g| selected.contains(&g.id))
+            .filter(move |g| selected.contains(&g.id) && g.piece.is_none())
     }
 
     pub(super) fn set_scientific_kind(&mut self, kind: GraphicKind) {
@@ -603,6 +979,9 @@ impl App {
                     | (GraphicKind::Orbital(_), GraphicKind::Orbital(_))
             ) {
                 g.kind = kind;
+                if let GraphicKind::Symbol(symbol) = kind {
+                    g.style.fill = symbol.fill();
+                }
             }
         }
         self.tool = Tool::Graphic(kind);
@@ -651,5 +1030,5 @@ impl App {
 }
 
 fn is_open_path(graphic: &Graphic) -> bool {
-    graphic.path_summary().is_some_and(|path| !path.closed)
+    graphic.kind == GraphicKind::Line || graphic.path_summary().is_some_and(|path| !path.closed)
 }

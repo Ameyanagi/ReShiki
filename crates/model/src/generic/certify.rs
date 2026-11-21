@@ -146,6 +146,7 @@ pub(super) fn certify_translation(
         abbreviations,
         atom_labels: _,
         ring_fills,
+        highlight_style: _,
         depth_appearance,
         version: _,
         atoms,
@@ -161,6 +162,9 @@ pub(super) fn certify_translation(
         reactions,
         models,
         recent_colors: _,
+        piece_definitions: _,
+        on_other_canvas: _,
+        seats: _,
     } = &mut restored;
     for (actual, old) in atoms.iter_mut().zip(&source.atoms) {
         check_shift(old.position, actual.position)?;
@@ -264,6 +268,21 @@ pub(super) fn certify_translation(
         }
         undo(&mut actual.id)?;
         actual.origin = old.origin;
+        if let Some(text) = actual.text.as_mut() {
+            undo(text)?;
+        }
+        if let Some(leader) = actual.leader.as_mut() {
+            for target in [&mut leader.start, &mut leader.end].into_iter().flatten() {
+                for id in target.ids_mut() {
+                    undo(id)?;
+                }
+            }
+        }
+        if let Some(cycle) = actual.cycle.as_deref_mut() {
+            for id in cycle.ids_mut() {
+                undo(id)?;
+            }
+        }
     }
     for g in groups {
         undo(&mut g.id)?;

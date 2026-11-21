@@ -139,6 +139,23 @@ impl App {
             self.status = "Enter a six-digit bond color, such as #205091".into();
         }
     }
+    pub(super) fn set_purpose(&mut self, purpose: reshiki::purpose::Purpose) {
+        let before = self.tab.doc.clone();
+        if !reshiki::purpose::set(&mut self.tab.doc, &self.tab.selected, purpose) {
+            return;
+        }
+        self.changed(before);
+        if !self.error {
+            self.status = match purpose {
+                reshiki::purpose::Purpose::Chemistry => "Chemistry · takes part in reactions",
+                reshiki::purpose::Purpose::Reference => "Reference · never part of a reaction",
+                reshiki::purpose::Purpose::Illustration => {
+                    "Illustration · ignored by chemistry tools"
+                }
+            }
+            .into();
+        }
+    }
     pub(super) fn reverse_selected_bonds(&mut self) {
         let before = self.tab.doc.clone();
         let affected: Vec<_> = self

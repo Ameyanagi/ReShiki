@@ -7,7 +7,8 @@ use std::collections::HashSet;
 
 /// The mean of selected visible atom sites and one stable site per drawing object.
 ///
-/// Captions contribute their upright text's insertion point, arrows their endpoint
+/// Captions contribute their upright text's insertion point (a turning
+/// caption its centre), arrows their endpoint
 /// midpoint, and graphics a point in their retained affine frame. A rotation about
 /// this mean leaves it fixed, so recomputing it for the next command does not move
 /// the pivot. Hidden abbreviation members move with their visible anchor but do
@@ -30,9 +31,24 @@ pub fn center(doc: &Document, ids: &[u64]) -> Option<Point> {
             add(f64::from(atom.position.x), f64::from(atom.position.y));
         }
     }
+    // Text in a shape is placed by the shape, so only the shape counts.
+    let held: HashSet<_> = doc
+        .graphics
+        .iter()
+        .filter(|g| selected.contains(&g.id))
+        .filter_map(|g| g.text)
+        .collect();
+    // The point a caption turns or moves about: upright text in a mixed
+    // selection keeps its insertion point, turning text its centre.
+    let only_text = super::only_text(doc, &selected);
     for caption in &doc.annotations {
-        if selected.contains(&caption.id) {
-            add(f64::from(caption.position.x), f64::from(caption.position.y));
+        if selected.contains(&caption.id) && !held.contains(&caption.id) {
+            let site = if caption.angle == 0. && !only_text {
+                caption.position
+            } else {
+                caption.centre()
+            };
+            add(f64::from(site.x), f64::from(site.y));
         }
     }
     for arrow in &doc.arrows {
@@ -58,8 +74,14 @@ pub fn center(doc: &Document, ids: &[u64]) -> Option<Point> {
 
 fn graphic_anchor(graphic: &Graphic) -> (f64, f64) {
     let (x, y) = match graphic.kind {
-        GraphicKind::Symbol(_) | GraphicKind::Orbital(_) => (0., 0.),
+        GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon => (0., 0.),
         GraphicKind::Line | GraphicKind::Curve => (0.5, 0.),
+        GraphicKind::TlcPlate => graphic.tlc.as_deref().map_or((0.5, 0.5), |t| {
+            (
+                (1. + f64::from(t.bottom_right.x)) * 0.25,
+                (1. + f64::from(t.bottom_right.y)) * 0.25,
+            )
+        }),
         // Legacy half arcs have a half-height frame; both forms use the ellipse center.
         GraphicKind::Arc if graphic.arc.is_none() => (0.5, 1.),
         GraphicKind::Path => {
@@ -85,6 +107,11 @@ fn graphic_anchor(graphic: &Graphic) -> (f64, f64) {
                     )
                 })
                 .unwrap_or_default()
+        }
+        // A piece's frame starts at its millimetre origin; it turns about its middle.
+        GraphicKind::Piece => {
+            let mid = crate::equipment::placed::middle(graphic);
+            return (f64::from(mid.x), f64::from(mid.y));
         }
         GraphicKind::Picture
         | GraphicKind::Rectangle

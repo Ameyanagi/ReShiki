@@ -132,6 +132,7 @@ fn main() -> Result<()> {
         format.style.color = reshiki::palette::Color::Custom([41, 62, 56]);
         format.width_pt = Some(190.);
         gallery.annotations.push(Annotation {
+            angle: 0.,
             id: gallery.next_id(),
             position: Point::new(x, y + 330.),
             text: label.to_string(),

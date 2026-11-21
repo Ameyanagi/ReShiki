@@ -655,6 +655,14 @@ impl App {
                     .map(|warning| text(warning.as_str()).size(12).style(text::danger)),
             )
         }
+        .push(
+            text(format!(
+                "Icons: Tabler Icons {} by Paweł Kuna, MIT License",
+                super::icon_browser::TABLER_VERSION
+            ))
+            .size(11)
+            .style(super::workspace::muted_text),
+        )
         .spacing(10);
         let backdrop = mouse_area(
             container(Space::new())

@@ -41,7 +41,12 @@ impl PathHeads {
             head_notch: self.head_notch,
             color: style.stroke,
             width_pt: style.width_pt,
-            pattern: style.pattern,
+            // The whole path waves once its heads are placed.
+            pattern: if style.pattern == super::LinePattern::Wavy {
+                super::LinePattern::Solid
+            } else {
+                style.pattern
+            },
             ..ArrowStyle::DEFAULT
         }
     }
@@ -51,11 +56,25 @@ impl PathHeads {
 }
 impl Graphic {
     pub(crate) fn path_parts(&self) -> Vec<Part> {
+        let mut parts = self.stroke_parts();
+        if let Some((commands, style)) = self.leader_dot() {
+            parts.push(Part {
+                commands,
+                style,
+                filled: true,
+            });
+        }
+        parts
+    }
+    fn stroke_parts(&self) -> Vec<Part> {
         let mut shaft = Part {
             commands: self.commands(),
             style: self.style.clone(),
             filled: self.filled(),
         };
+        if self.panel.as_ref().is_some_and(|panel| !panel.border) {
+            shaft.style.width_pt = 0.;
+        }
         let Some(heads) = self.heads else {
             return vec![shaft];
         };

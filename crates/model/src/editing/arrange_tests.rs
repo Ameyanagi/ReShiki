@@ -30,6 +30,7 @@ fn geometry() -> Document {
         atom.display.highlight = Some(Color::Custom([240, 225, 190]));
     }
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: Point::new(-20., 90.),
         text: "NH2 · grouped caption".into(),
@@ -37,6 +38,7 @@ fn geometry() -> Document {
     });
     doc.annotations[0].format.style.underline = true;
     doc.arrows.push(Arrow {
+        arc: None,
         start_anchor: None,
         end_anchor: None,
         id: doc.next_id(),
@@ -47,6 +49,7 @@ fn geometry() -> Document {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     doc.graphics.push(Graphic::dragged(
         doc.next_id(),
@@ -89,11 +92,13 @@ fn fixtures() -> Vec<(&'static str, Document)> {
             id: 10,
             members: vec![1, 2, 7],
             integral: false,
+            layout: None,
         },
         Group {
             id: 11,
             members: vec![2, 7, 8],
             integral: false,
+            layout: None,
         },
     ];
     let mut ties = Document::default();
@@ -217,6 +222,8 @@ fn every_arrangement_preserves_explicit_geometry_and_stable_ties() {
                 } else {
                     LinePattern::Dotted
                 },
+                effects: Default::default(),
+                corner_pt: None,
             },
             BracketSides::Both,
             false,
@@ -230,11 +237,13 @@ fn every_arrangement_preserves_explicit_geometry_and_stable_ties() {
             id: 8,
             members: vec![1, 2],
             integral: false,
+            layout: None,
         },
         Group {
             id: 9,
             members: vec![3, 2, 1],
             integral: true,
+            layout: None,
         },
     ];
     original.validate().unwrap();
@@ -409,6 +418,7 @@ fn units_translated_together_match_one_translate_per_unit() {
         id: 10,
         members: vec![1, 2, 8],
         integral: false,
+        layout: None,
     }];
     let anchor = |target| {
         Some(Anchor {
@@ -487,6 +497,7 @@ fn aligning_aligned_objects_leaves_an_unselected_arrow_untouched() {
         boxes.push(id);
     }
     doc.arrows.push(Arrow {
+        arc: None,
         start_anchor: None,
         end_anchor: None,
         id: doc.next_id(),
@@ -497,6 +508,7 @@ fn aligning_aligned_objects_leaves_an_unselected_arrow_untouched() {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     doc.validate().unwrap();
     let before = doc.clone();
@@ -516,6 +528,7 @@ fn labelled_arrows_translated_together_match_one_translate_per_unit() {
         let y = row as f32 * 150.;
         let arrow = doc.next_id();
         doc.arrows.push(Arrow {
+            arc: None,
             start_anchor: None,
             end_anchor: None,
             id: arrow,
@@ -526,9 +539,11 @@ fn labelled_arrows_translated_together_match_one_translate_per_unit() {
             cubic: None,
             nodes: Vec::new(),
             style: None,
+            purpose: Default::default(),
         });
         let caption = doc.next_id();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: caption,
             position: Point::new(60., y - 30.),
             text: "heat".into(),
@@ -656,6 +671,7 @@ fn distributing_part_of_a_reaction_moves_only_the_selection() {
         .map(|x| {
             let id = doc.next_id();
             doc.annotations.push(Annotation {
+                angle: 0.,
                 id,
                 position: Point::new(x, 400.),
                 text: "note".into(),

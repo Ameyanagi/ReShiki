@@ -27,6 +27,7 @@ pub(super) fn molecule(smiles: &str) -> Document {
 fn text(doc: &mut Document, words: &str, x: f32, y: f32) -> u64 {
     let id = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(x, y),
         text: words.into(),
@@ -74,6 +75,7 @@ pub(super) fn drawn(ester_first: bool) -> Scheme {
     let ethanol = atoms(&doc, ids);
     let arrow = doc.next_id();
     doc.arrows.push(crate::document::Arrow {
+        arc: None,
         id: arrow,
         start: Point::new(320., 0.),
         end: Point::new(420., 0.),
@@ -84,6 +86,7 @@ pub(super) fn drawn(ester_first: bool) -> Scheme {
         cubic: None,
         nodes: vec![],
         style: None,
+        purpose: Default::default(),
     });
     let conditions = text(&mut doc, "H2SO4", 370., -20.);
     if !ester_first {
@@ -1615,6 +1618,7 @@ fn two_molecules_and_a_straight_arrow_scaled_together_are_one_line() {
         crate::editing::append(&mut doc, &molecule("OC(=O)c1ccccc1"), Point::new(x, 0.));
     }
     doc.arrows.push(crate::document::Arrow {
+        arc: None,
         id: doc.next_id(),
         start: Point::new(150., 0.),
         end: Point::new(260., 0.),
@@ -1625,6 +1629,7 @@ fn two_molecules_and_a_straight_arrow_scaled_together_are_one_line() {
         cubic: None,
         nodes: vec![],
         style: None,
+        purpose: Default::default(),
     });
     let left = load(&doc);
     let right = edited(&left, |doc| {

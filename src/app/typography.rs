@@ -314,7 +314,7 @@ impl App {
                 .filter(|g| self.tab.selected.contains(&g.id) && g.picture.is_none())
             {
                 colors.push(g.style.stroke);
-                colors.extend(g.style.fill);
+                colors.extend(g.style.fill.filter(|_| !g.is_icon()));
             }
         }
         colors
@@ -412,6 +412,60 @@ impl App {
             .unwrap_or_default();
     }
     pub(super) fn caption_action(&mut self, action: iced::widget::text_editor::Action) {
+        use iced::widget::text_editor::{Action, Cursor, Edit, Position};
+        if matches!(action, Action::Edit(Edit::Backspace))
+            && self.tab.caption_editor.selection().is_none()
+        {
+            let editor = &mut self.tab.caption_editor;
+            let end = editor.cursor().position;
+            let start = editor.line(end.line).and_then(|line| {
+                unicode_segmentation::UnicodeSegmentation::grapheme_indices(
+                    line.text.get(..end.column)?,
+                    true,
+                )
+                .next_back()
+                .filter(|(_, cluster)| cluster.chars().count() > 1)
+                .map(|(start, _)| start)
+            });
+            if let Some(column) = start {
+                // Select logical bytes, not a visual Left motion: text may be
+                // right-to-left. One edit then deletes the whole grapheme and
+                // records one Undo step with its exact formatting range.
+                editor.move_to(Cursor {
+                    position: Position { column, ..end },
+                    selection: Some(end),
+                });
+            }
+        }
+        let typed = matches!(action, Action::Edit(Edit::Insert(_)));
+        self.edit_caption(action);
+        if !typed {
+            return;
+        }
+        // A typed shortcut such as -> becomes its symbol; Undo brings it back.
+        let editor = &mut self.tab.caption_editor;
+        let end = editor.cursor().position;
+        let Some((len, symbol)) = editor.line(end.line).and_then(|line| {
+            line.text
+                .get(..end.column)
+                .and_then(reshiki::symbols::expand)
+        }) else {
+            return;
+        };
+        // Select the shortcut's own bytes: arrow-key motions follow the
+        // visual order, which runs the other way in right-to-left text.
+        editor.move_to(Cursor {
+            position: Position {
+                column: end.column - len,
+                ..end
+            },
+            selection: Some(end),
+        });
+        self.edit_caption(Action::Edit(Edit::Paste(std::sync::Arc::new(
+            symbol.into(),
+        ))));
+    }
+    fn edit_caption(&mut self, action: iced::widget::text_editor::Action) {
         let changed = action.is_edit();
         if changed {
             self.inline_checkpoint();
@@ -421,9 +475,25 @@ impl App {
             &self.tab.caption,
             action,
         ) {
-            self.tab
+            let typed = self
+                .tab
                 .caption_format
                 .edited(&self.tab.caption, &text, replaced);
+            let legend = self.tab.caption_target.is_some_and(|id| {
+                self.tab
+                    .doc
+                    .reactions
+                    .iter()
+                    .any(|r| r.colors.as_ref().and_then(|c| c.legend) == Some(id))
+            });
+            if legend {
+                reshiki::reaction_colors::untint_typed(
+                    &self.tab.caption,
+                    &text,
+                    &mut self.tab.caption_format,
+                    typed,
+                );
+            }
             self.tab.caption = text;
             self.auto_format_caption();
             if self.tab.inline_text.is_some() {
@@ -589,6 +659,40 @@ impl App {
             )
         };
     }
+    pub(super) fn apply_ring_effect(&mut self, effect: reshiki::ring_fills::RingEffect) {
+        let before = self.tab.doc.clone();
+        let count = reshiki::ring_fills::set_effect(&mut self.tab.doc, &self.tab.selected, effect);
+        self.changed(before);
+        self.status = match count {
+            0 => "Select a filled ring to change its effect".into(),
+            1 => format!("{effect} ring fill"),
+            n => format!("{effect} fill on {n} rings"),
+        };
+    }
+    pub(super) fn apply_highlight_style(&mut self, style: reshiki::highlights::HighlightStyle) {
+        if self.tab.doc.highlight_style == style {
+            return;
+        }
+        let before = self.tab.doc.clone();
+        self.tab.doc.highlight_style = style;
+        self.changed(before);
+        self.status = format!("{style} highlights in this drawing");
+    }
+    /// The effect every selected ring fill shares, if they share one.
+    pub(super) fn selected_ring_effect(&self) -> Option<reshiki::ring_fills::RingEffect> {
+        let cycles = reshiki::ring_fills::selected_cycles(&self.tab.doc, &self.tab.selected);
+        let mut effects = self.tab.doc.ring_fills.iter().filter_map(|fill| {
+            cycles
+                .iter()
+                .any(|atoms| {
+                    fill.atoms.len() == atoms.len()
+                        && fill.atoms.iter().all(|id| atoms.contains(id))
+                })
+                .then_some(fill.effect)
+        });
+        let first = effects.next()?;
+        effects.all(|e| e == first).then_some(first)
+    }
     pub(super) fn apply_highlight_color(&mut self, color: Option<Paint>) {
         let before = self.tab.doc.clone();
         let count = reshiki::highlights::apply(&mut self.tab.doc, &self.tab.selected, color);
@@ -715,7 +819,7 @@ impl App {
             for graphic in &mut self.tab.doc.graphics {
                 if self.tab.selected.contains(&graphic.id) && graphic.picture.is_none() {
                     graphic.style.stroke = color;
-                    if graphic.style.fill.is_some() {
+                    if graphic.style.fill.is_some() && !graphic.is_icon() {
                         graphic.style.fill = Some(color);
                     }
                 }

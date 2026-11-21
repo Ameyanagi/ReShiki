@@ -317,6 +317,37 @@ const NAME: CommandSpec = CommandSpec {
     body: name_help,
 };
 
+const PIECES: CommandSpec = CommandSpec {
+    name: "pieces",
+    summary: "Check or render equipment piece files",
+    usage: "reshiki --cli pieces (check FILE...
+                           | render FILE [--to svg|png] [-o OUTPUT|-] [--dark] [--force])",
+    options: &[
+        OptionSpec {
+            help: "Choose svg (default) or png for the preview.",
+            default: Some(|| "svg".into()),
+            ..IMAGE_TO
+        },
+        IMAGE_OUTPUT,
+        OptionSpec {
+            flag: "--dark",
+            value: None,
+            help: "Use dark canvas colors for the preview.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        IMAGE_FORCE,
+    ],
+    tools: &["render"],
+    operand: Some(Operand {
+        name: "FILE",
+        help: "One or more .reshiki-piece files to check, or one to render.",
+        sets: None,
+    }),
+    body: pieces_help,
+};
+
 /// The commands whose flags another command rejects by name ("X does not
 /// take FLAG"); other flags are unknown options to the commands without them.
 pub(crate) const FILE_COMMANDS: &[CommandSpec] = &[CONVERT, RENDER, COMPOSE, ANALYZE, PREDICT_NMR];
@@ -429,6 +460,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     ANALYZE,
     PREDICT_NMR,
     NAME,
+    PIECES,
     INFO,
     TOOLS,
     SCHEMA,
@@ -803,6 +835,25 @@ compose fills in. It is printed as one JSON line without the experimental
 label, so it can be saved and used as a schema file.
 ";
     format!("Usage: {}\n\n{body}", SCHEMA.usage)
+}
+
+fn pieces_help() -> String {
+    let body = "\
+check validates lab equipment piece files (.reshiki-piece). It checks the
+format, limits, references between shapes, joints, parts and parameters,
+and whether each joint sits on the rim of its opening. It prints one JSON line,
+{\"pieces\": [{\"file\", \"ok\", \"id\", \"revision\", \"hash\"} or
+{\"file\", \"ok\": false, \"error\"}]}, and exits 1 when any file fails. The
+hash is the piece's content identity.
+
+render validates one piece and draws it alone in the default line style.
+  --to FORMAT    Choose svg (default) or png.
+  -o OUTPUT      Write to OUTPUT. Omit -o or use -o - for stdout.
+                 PNG output to a terminal is refused.
+  --dark         Use dark canvas colors.
+  --force        Replace OUTPUT if it exists.
+";
+    format!("Usage: {}\n\n{body}", PIECES.usage)
 }
 
 fn skill_help() -> String {

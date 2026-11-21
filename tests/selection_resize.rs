@@ -72,6 +72,7 @@ fn groups_graphics_and_captions_follow_axis_scaling_without_stretching_fonts()
     let graphic_id = graphic.id;
     doc.graphics.push(graphic.clone());
     let caption = Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: Point::new(120., 70.),
         text: "Example".into(),

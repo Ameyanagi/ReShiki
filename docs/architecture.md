@@ -165,8 +165,9 @@ Enhanced stereo groups are identified by `(kind, number)` across the whole drawi
 
 `VERSION` in `crates/model/src/document.rs` is the newest format this build
 reads. Its doc comment holds the table below; update both together.
-`Document::file_version` selects version 40 when a property caption has its
-own decimal places for Mol. Wt. or Exact Mass, version 39 when a property caption has a name
+`Document::file_version` selects version 40 for the new drawing elements and
+styling, or when a property caption sets its own decimal places for Mol. Wt. or
+Exact Mass. It selects version 39 when a property caption has a name
 line or a custom name, version 38 when a property caption is linked
 to a molecule, version 37 when an atom has three or four radical electrons, version 36 when an atom has an enhanced stereo
 group, version 35 when an arrow has interior nodes or the drawing has a custom
@@ -186,41 +187,41 @@ resume chemical valence analysis after a crystal’s cell has been removed.
 Legacy live-cell models supply provenance when opened; a legacy drawing
 whose model was already discarded cannot recover that missing source context.
 
-| Version | Added                                                                                 |
-| ------- | ------------------------------------------------------------------------------------- |
-| 1       | Original native drawings.                                                             |
-| 2       | Arrow styles.                                                                         |
-| 10      | Collapsed abbreviations.                                                              |
-| 11      | Per-bond crossing depth.                                                              |
-| 12      | Physical publication page layouts.                                                    |
-| 13      | Embedded pictures.                                                                    |
-| 14      | Document drawing styles.                                                              |
-| 15      | Reaction membership and roles.                                                        |
-| 16      | Embedded custom themes (later also palette hues).                                     |
-| 17      | Exact custom colors on either canvas; newer-version probing.                          |
-| 18      | Persistent atom and bond highlights.                                                  |
-| 19      | Editable 3D depth appearance and captured projection stereo (#146; 0.11.0).           |
-| 20      | Retained EMF picture sources (#296); cubic arrow controls on a parallel branch.       |
-| 21      | Arrow target links and attachment IDs (cubic-arrow branch).                           |
-| 22      | Persisted rear opacity (parallel branch).                                             |
-| 23      | Not used.                                                                             |
-| 24      | EMF sources, cubic arrows, target links and rear opacity integrated (#297).           |
-| 25      | Linked molecule-name captions and reaction atom-map labels (#298).                    |
-| 26      | Generic structures and coordination joining (#300; 0.12.0).                           |
-| 27      | Condition text attached to reaction arrows.                                           |
-| 28      | 3D models of structures (#386).                                                       |
-| 29      | Crystal unit cells and atom sites on 3D models (#417; 0.13.0).                        |
-| 30      | Persistent distance-derived bond provenance (#517).                                   |
-| 31      | Custom clearances for attached reaction labels (#600).                                |
-| 32      | Thermal ellipsoids and molecule-only crystal display (#417).                          |
-| 33      | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4).       |
-| 34      | Collapsed groups with two attachment atoms (#870).                                    |
-| 35      | Arrows with interior nodes (#761); also used for a custom crossing clearance (#1111). |
-| 36      | Enhanced stereo groups (#766).                                                        |
-| 37      | Three or four radical electrons on an atom.                                           |
-| 38      | Property captions linked to their molecules (#1175).                                  |
-| 39      | Names in property captions: a name line and custom names.                             |
-| 40      | Decimal places chosen for a property caption's Mol. Wt. or Exact Mass.                |
+| Version | Added                                                                                          |
+| ------- | ---------------------------------------------------------------------------------------------- |
+| 1       | Original native drawings.                                                                      |
+| 2       | Arrow styles.                                                                                  |
+| 10      | Collapsed abbreviations.                                                                       |
+| 11      | Per-bond crossing depth.                                                                       |
+| 12      | Physical publication page layouts.                                                             |
+| 13      | Embedded pictures.                                                                             |
+| 14      | Document drawing styles.                                                                       |
+| 15      | Reaction membership and roles.                                                                 |
+| 16      | Embedded custom themes (later also palette hues).                                              |
+| 17      | Exact custom colors on either canvas; newer-version probing.                                   |
+| 18      | Persistent atom and bond highlights.                                                           |
+| 19      | Editable 3D depth appearance and captured projection stereo (#146; 0.11.0).                    |
+| 20      | Retained EMF picture sources (#296); cubic arrow controls on a parallel branch.                |
+| 21      | Arrow target links and attachment IDs (cubic-arrow branch).                                    |
+| 22      | Persisted rear opacity (parallel branch).                                                      |
+| 23      | Not used.                                                                                      |
+| 24      | EMF sources, cubic arrows, target links and rear opacity integrated (#297).                    |
+| 25      | Linked molecule-name captions and reaction atom-map labels (#298).                             |
+| 26      | Generic structures and coordination joining (#300; 0.12.0).                                    |
+| 27      | Condition text attached to reaction arrows.                                                    |
+| 28      | 3D models of structures (#386).                                                                |
+| 29      | Crystal unit cells and atom sites on 3D models (#417; 0.13.0).                                 |
+| 30      | Persistent distance-derived bond provenance (#517).                                            |
+| 31      | Custom clearances for attached reaction labels (#600).                                         |
+| 32      | Thermal ellipsoids and molecule-only crystal display (#417).                                   |
+| 33      | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4).                |
+| 34      | Collapsed groups with two attachment atoms (#870).                                             |
+| 35      | Arrows with interior nodes (#761); also used for a custom crossing clearance (#1111).          |
+| 36      | Enhanced stereo groups (#766).                                                                 |
+| 37      | Three or four radical electrons on an atom.                                                    |
+| 38      | Property captions linked to their molecules (#1175).                                           |
+| 39      | Names in property captions: a name line and custom names.                                      |
+| 40      | Editable drawing elements and styling, and decimal places for Mol. Wt. or Exact Mass captions. |
 
 ## Chemistry requests
 

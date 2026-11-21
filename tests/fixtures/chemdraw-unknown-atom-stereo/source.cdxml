@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CDXML BondLength="30" LineWidth="0.6" LabelFont="3" LabelSize="10">
+  <fonttable><font id="3" name="Arial"/></fonttable>
+  <page id="1">
+    <fragment id="2">
+      <n id="3" p="30 40" Element="7" NumHydrogens="0"/>
+      <n id="4" p="60 40"/>
+      <n id="5" p="90 40" Element="7" NumHydrogens="0"/>
+      <n id="8" p="15 14"/>
+      <n id="9" p="105 14"/>
+      <b id="6" B="3" E="4" Order="2"/>
+      <b id="7" B="4" E="5" Order="2"/>
+      <b id="10" B="3" E="8"/>
+      <b id="11" B="5" E="9"/>
+    </fragment>
+  </page>
+</CDXML>

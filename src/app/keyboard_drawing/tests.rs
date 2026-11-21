@@ -1455,6 +1455,7 @@ fn keys_edit_reaction_participants() {
             let product = propylbenzene(&mut app.tab.doc, 400.);
             let arrow = app.tab.doc.next_id();
             app.tab.doc.arrows.push(reshiki::document::Arrow {
+                arc: None,
                 start_anchor: None,
                 end_anchor: None,
                 id: arrow,
@@ -1465,6 +1466,7 @@ fn keys_edit_reaction_participants() {
                 cubic: None,
                 nodes: Vec::new(),
                 style: None,
+                purpose: Default::default(),
             });
             for (ids, role) in [
                 (reactant, reshiki::reactions::Role::Reactant),

@@ -108,6 +108,10 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
     if degrees == 0. {
         return;
     }
+    // Numeric transforms and canvas tilt both enter here. Rebase fitted
+    // sources after their frame changes, including a turn through the back
+    // of the page; reject the whole tilt if its projected children cannot fit.
+    let fitted = crate::cycles::has_fits(doc).then(|| doc.clone());
     // A molecule shown as a 3D model turns its model and keeps its 2D drawing.
     let mut ids = doc.expand_abbreviation_selection(ids);
     crate::models3d::tilt(doc, &ids, degrees, around_x);
@@ -153,7 +157,8 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
         }
     }
     for g in &mut doc.graphics {
-        if !ids.contains(&g.id) {
+        // Equipment is drawn as seen; it does not tilt in 3D.
+        if !ids.contains(&g.id) || g.kind == crate::graphics::GraphicKind::Piece {
             continue;
         }
         let [oz, xz, yz] = g.depth;
@@ -168,6 +173,9 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
     sync_centroids(doc);
     refresh_depth_bonds(doc, &ids);
     crate::arrow_anchors::reconcile(doc);
+    if let Some(before) = fitted {
+        crate::cycles::fit_transformed(&before, doc, &ids);
+    }
 }
 
 /// Emphasize single, double and aromatic outlines without rewriting stereo or order.

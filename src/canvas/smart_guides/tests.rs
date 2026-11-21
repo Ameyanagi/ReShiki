@@ -228,6 +228,7 @@ fn attached_gap_document() -> Document {
         ArrowStyle::preset(Preset::Forward),
     ));
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 2,
         position: World::new(40., -20.),
         text: "heat, 2 h".into(),

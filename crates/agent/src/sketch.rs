@@ -389,6 +389,7 @@ impl Sketch {
         }
         for a in &self.arrows {
             doc.arrows.push(crate::document::Arrow {
+                arc: None,
                 start_anchor: None,
                 end_anchor: None,
                 id: doc.next_id(),
@@ -399,6 +400,7 @@ impl Sketch {
                 cubic: None,
                 nodes: Vec::new(),
                 style: None,
+                purpose: Default::default(),
             });
         }
         for c in &self.captions {
@@ -409,6 +411,7 @@ impl Sketch {
             }
             crate::typography::normalize_subscript_digits(&mut text, &mut format);
             doc.annotations.push(crate::document::Annotation {
+                angle: 0.,
                 id: doc.next_id(),
                 position: point(c.position),
                 text,
@@ -435,6 +438,7 @@ impl Sketch {
             id: doc.next_id(),
             members: doc.all_ids(),
             integral: true,
+            layout: None,
         });
         doc.validate()?;
         Ok(doc)

@@ -31,10 +31,7 @@ fn indexed_markers_preserve_document_and_selection_order_and_abbreviation_visibi
             .annotations
             .iter()
             .filter(|caption| ids.contains(&caption.id))
-            .map(|caption| {
-                let (w, h) = caption.size();
-                (caption.position, Size::new(w, h))
-            })
+            .map(|caption| caption.corners())
             .collect::<Vec<_>>();
         assert_eq!(markers.bonds, bonds);
         assert_eq!(

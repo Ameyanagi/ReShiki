@@ -125,3 +125,94 @@ fn bent_arrows_refuse_nodes_with_a_status() {
     assert_eq!(app.tab.doc, before);
     assert!(app.selected_node_arrow().is_none());
 }
+
+#[test]
+fn body_and_arc_are_one_undo_step_each_and_keep_the_reaction() {
+    use reshiki::arrows::{ArrowStyle, Body, Preset};
+    let (mut app, _) = App::new();
+    app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+        1,
+        Point::new(0., 0.),
+        Point::new(120., 0.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    ));
+    app.tab.selected = vec![1];
+    let original = app.tab.doc.clone();
+    app.arrow_action(arrows::Action::Body(Body::Block));
+    assert_eq!(app.tab.doc.arrows[0].appearance().body, Body::Block);
+    assert_eq!(app.tab.doc.arrows[0].kind, "forward");
+    app.arrow_action(arrows::Action::MakeArc);
+    assert_eq!(app.tab.doc.arrows[0].arc, Some(180.));
+    app.tab.arrows.sweep = "-90".into();
+    app.arrow_action(arrows::Action::ApplySweep);
+    assert_eq!(app.tab.doc.arrows[0].arc, Some(-90.));
+    for _ in 0..3 {
+        let _ = app.update(Message::Undo);
+    }
+    assert_eq!(app.tab.doc.arrows, original.arrows);
+    for _ in 0..2 {
+        let _ = app.update(Message::Redo);
+    }
+    assert_eq!(app.tab.doc.arrows[0].arc, Some(180.));
+    app.tab.arrows.sweep = "400".into();
+    app.arrow_action(arrows::Action::ApplySweep);
+    assert!(app.error);
+}
+
+#[test]
+fn add_callout_on_a_bond_types_its_text_and_undoes_in_one_step() {
+    let (mut app, _) = App::new();
+    let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(20., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.selected = vec![a, b];
+    let original = app.tab.doc.clone();
+    assert!(matches!(
+        app.callout_target(),
+        Some(reshiki::leaders::Target::Bond { .. })
+    ));
+    let _ = app.update(Message::AddCallout);
+    assert!(app.tab.inline_text.is_some());
+    assert_eq!(app.tab.caption, "Note");
+    app.tab.caption = "New C–C bond".into();
+    assert!(app.finish_inline(true));
+    assert_eq!(app.tab.doc.graphics.len(), 1);
+    assert!(app.tab.doc.graphics[0].leader.is_some());
+    assert!(
+        app.tab
+            .doc
+            .annotations
+            .iter()
+            .any(|t| t.text == "New C–C bond")
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.annotations, original.annotations);
+    assert!(app.tab.doc.graphics.is_empty());
+    // Esc while typing adds nothing.
+    let _ = app.update(Message::AddCallout);
+    app.finish_inline(false);
+    assert_eq!(app.tab.doc, original);
+}
+
+#[test]
+fn a_callout_typed_by_the_page_edge_ends_on_the_page() {
+    let (mut app, _) = App::new();
+    let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(20., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    // The page's right margin is just right of the bond.
+    let mut layout = reshiki::pages::Layout::default();
+    let (lo, hi) = layout.content_bounds(0).unwrap();
+    layout.origin = Point::new(30. - hi.x, -(lo.y + hi.y) / 2.);
+    let (lo, hi) = layout.content_bounds(0).unwrap();
+    app.tab.doc.page_layout = Some(layout);
+    app.tab.selected = vec![a, b];
+    let _ = app.update(Message::AddCallout);
+    app.tab.caption = "New C–C bond, made here".into();
+    assert!(app.finish_inline(true));
+    let text = app.tab.doc.annotations[0].id;
+    let (a, b) = reshiki::scene::selection_bounds(&app.tab.doc, &[text]).unwrap();
+    assert!(a.x >= lo.x && b.x <= hi.x && a.y >= lo.y && b.y <= hi.y);
+    assert!(b.x < 10., "Left of the bond: {a:?} {b:?}");
+}

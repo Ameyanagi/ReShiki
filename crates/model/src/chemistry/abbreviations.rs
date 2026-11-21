@@ -330,8 +330,8 @@ pub fn find_with_policy(
             let atom = atoms
                 .get(id)
                 .ok_or_else(|| invalid("Missing drawing atom"))?;
+            // Atom maps label atoms for a reaction and may sit in a group.
             excluded |= atom.isotope != 0
-                || atom.map_num != 0
                 || atom.stereo.is_some()
                 || !atom.marks.is_empty()
                 || atom.display.number.is_some();

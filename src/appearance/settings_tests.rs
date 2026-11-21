@@ -296,3 +296,17 @@ fn a_save_keeps_an_unreadable_file_when_its_copy_cannot_be_written() {
     assert!(loaded.save_to(&path).is_err());
     assert_eq!(std::fs::read(&path).unwrap(), newer);
 }
+
+#[test]
+fn recent_symbols_default_empty_and_survive_reload() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("appearance.json");
+    std::fs::write(&path, r#"{"mode":"dark"}"#).unwrap();
+    let mut settings = Settings::load_from(&path);
+    assert!(settings.recent_symbols.is_empty());
+    settings.recent_symbols = vec!["⇌".into(), "hν".into()];
+    settings.save_to(&path).unwrap();
+    let loaded = Settings::load_from(&path);
+    assert_eq!(loaded.recent_symbols, ["⇌", "hν"]);
+    assert_eq!(loaded.mode, Mode::Dark);
+}

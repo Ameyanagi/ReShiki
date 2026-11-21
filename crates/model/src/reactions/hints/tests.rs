@@ -242,3 +242,16 @@ fn each_arrow_checks_only_its_own_row_and_neighbors() {
         [ArrowSemanticsHintKind::NotContributingStructures]
     );
 }
+
+#[test]
+fn a_catalytic_cycle_s_parts_are_not_a_scheme_row() {
+    let mut doc = drawing("CCO", "CCN", Preset::Resonance);
+    assert_eq!(
+        kinds(&doc),
+        vec![ArrowSemanticsHintKind::NotContributingStructures]
+    );
+    // The same two molecules as a cycle's intermediates belong to its steps.
+    let ids: Vec<u64> = doc.atoms.iter().map(|a| a.id).collect();
+    crate::cycles::make(&mut doc, &ids).unwrap();
+    assert!(kinds(&doc).is_empty());
+}

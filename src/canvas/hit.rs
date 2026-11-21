@@ -19,6 +19,7 @@ pub(super) fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
     hit_selection_with_object(doc, p, r, || hit_object(doc, p, r))
 }
 
+#[cfg(test)]
 pub(super) fn hit_selection_with_orbital(
     doc: &Document,
     p: World,
@@ -27,6 +28,21 @@ pub(super) fn hit_selection_with_orbital(
 ) -> Vec<u64> {
     hit_selection_with_object(doc, p, r, || {
         hit_object_with_orbital(doc, p, r, foreground_orbital)
+    })
+}
+
+/// Retained hover geometry uses the same drawing snapshot as the canvas scene.
+pub(super) fn hit_selection_cached(
+    doc: &Document,
+    p: World,
+    r: f32,
+    cache: &mut super::cache::SceneCache,
+) -> Vec<u64> {
+    let foreground_orbital = cache.foreground_orbital(doc);
+    hit_selection_with_object(doc, p, r, || {
+        hit_object_with_cycles(doc, p, r, foreground_orbital, |graphic| {
+            cache.cycle_hit(doc, graphic, p, r)
+        })
     })
 }
 
@@ -143,6 +159,8 @@ pub fn bond_text_at(doc: &Document, p: World, radius: f32) -> Option<u64> {
     let id = hit_object(doc, p, radius)?;
     let annotation = doc.annotations.iter().find(|a| a.id == id)?;
     let (lo, hi) = reshiki::atom_text::text_ink_bounds(annotation)?;
+    // In the text's own upright frame.
+    let p = p.turned(annotation.centre(), -annotation.angle);
     (p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y).then_some(id)
 }
 
@@ -200,6 +218,18 @@ fn hit_object_with_orbital(
     r: f32,
     foreground_orbital: bool,
 ) -> Option<u64> {
+    hit_object_with_cycles(doc, p, r, foreground_orbital, |g| {
+        reshiki::cycles::hit(doc, g, p, r)
+    })
+}
+
+fn hit_object_with_cycles(
+    doc: &Document,
+    p: World,
+    r: f32,
+    foreground_orbital: bool,
+    mut cycle_hit: impl FnMut(&reshiki::graphics::Graphic) -> bool,
+) -> Option<u64> {
     let mark = || {
         doc.atoms
             .iter()
@@ -249,7 +279,7 @@ fn hit_object_with_orbital(
                 .map(|(i, g)| (g.layer, i))
         })
         .max();
-    let graphic = |front| {
+    let mut graphic = |front| {
         doc.graphics
             .iter()
             .enumerate()
@@ -258,7 +288,23 @@ fn hit_object_with_orbital(
                     && !(orbital_label.flatten().is_some()
                         && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
                     && !label_rank.is_some_and(|rank| (g.layer, *i) <= rank)
-                    && g.hit_with_text_style(p, r, &doc.drawing_style.text_style())
+                    && if g.cycle.is_some() {
+                        cycle_hit(g)
+                    } else {
+                        g.hit_with_text_style(p, r, &doc.drawing_style.text_style())
+                            // A piece wins only where it shows above its assembly.
+                            && (g.piece.is_none()
+                                || reshiki::equipment::placed::on_top(doc, g.id, p, r))
+                            // Text a shape holds is drawn right after it.
+                            || g.text.is_some_and(|text| {
+                                doc.annotations.iter().any(|a| {
+                                    let (w, h) = a.size();
+                                    a.id == text
+                                        && (a.position.x..a.position.x + w).contains(&p.x)
+                                        && (a.position.y..a.position.y + h).contains(&p.y)
+                                })
+                            })
+                    }
             })
             .max_by_key(|(i, g)| (g.layer, *i))
             .map(|(_, g)| g.id)
@@ -274,12 +320,7 @@ fn hit_object_with_orbital(
             doc.annotations
                 .iter()
                 .rev()
-                .find(|a| {
-                    p.x >= a.position.x
-                        && p.x < a.position.x + a.size().0
-                        && p.y >= a.position.y
-                        && p.y < a.position.y + a.size().1
-                })
+                .find(|a| a.contains(p))
                 .map(|a| a.id)
         })
         .or_else(|| doc.arrows.iter().rev().find(|a| a.hit(p, r)).map(|a| a.id))

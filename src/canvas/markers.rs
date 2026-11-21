@@ -10,7 +10,8 @@ pub(super) struct Markers {
     multiple: bool,
     bonds: Vec<(World, World)>,
     atoms: Vec<(u64, World)>,
-    captions: Vec<(World, Size)>,
+    /// Each selected caption's turned box.
+    captions: Vec<[World; 4]>,
 }
 
 impl Markers {
@@ -90,10 +91,7 @@ impl Markers {
                 .annotations
                 .iter()
                 .filter(|caption| captions && selected.contains(&caption.id))
-                .map(|caption| {
-                    let (width, height) = caption.size();
-                    (caption.position, Size::new(width, height))
-                })
+                .map(|caption| caption.corners())
                 .collect(),
         }
     }
@@ -172,16 +170,28 @@ impl Markers {
             }
         }
         if selected {
-            for &(position, size) in &self.captions {
-                let position = camera.screen(position, bounds);
-                let size = Size::new(size.width * camera.zoom, size.height * camera.zoom);
-                if visible(
-                    position,
-                    position + iced::Vector::new(size.width, size.height),
-                    2.,
-                ) {
+            for corners in &self.captions {
+                let [a, b, c, d] = corners.map(|p| camera.screen(p, bounds));
+                let (lo, hi) = (
+                    Point::new(
+                        a.x.min(b.x).min(c.x).min(d.x),
+                        a.y.min(b.y).min(c.y).min(d.y),
+                    ),
+                    Point::new(
+                        a.x.max(b.x).max(c.x).max(d.x),
+                        a.y.max(b.y).max(c.y).max(d.y),
+                    ),
+                );
+                if visible(lo, hi, 2.) {
+                    let outline = Path::new(|path| {
+                        path.move_to(a);
+                        path.line_to(b);
+                        path.line_to(c);
+                        path.line_to(d);
+                        path.close();
+                    });
                     frame.stroke(
-                        &Path::rectangle(position, size),
+                        &outline,
                         Stroke::default().with_color(Color::from_rgb8(20, 130, 112)),
                     );
                 }

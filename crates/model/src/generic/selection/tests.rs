@@ -43,6 +43,7 @@ fn metadata_cases() -> Vec<(&'static str, Document)> {
             id,
             members: vec![],
             integral: false,
+            layout: None,
         })
         .collect();
     cases.push(("groups", groups));
@@ -162,6 +163,7 @@ fn scope_members_are_reserved_before_native_member_traversal() {
         id: 2,
         members: vec![1; 1024],
         integral: false,
+        layout: None,
     });
     for connected in [false, true] {
         probe::reset();

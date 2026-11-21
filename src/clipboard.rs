@@ -382,7 +382,12 @@ pub async fn copy(
     )
     .await?;
     // Office's embedded object is the drawing, so it follows the switch too.
-    let operation = if cfg!(windows) && !image_only && pictures.editable {
+    // It needs the Office preview, which a see-through or glowing drawing
+    // cannot have; that copy is written without the embedded object.
+    let preview = representations
+        .iter()
+        .any(|r| r.kind == "dev.reshiki.office-metafile");
+    let operation = if cfg!(windows) && !image_only && pictures.editable && preview {
         "write_embedded"
     } else {
         "write"
@@ -491,8 +496,10 @@ async fn prepare_copy_with_limit(
         // source page background. Native data above retains the original theme.
         // Resolve depth paint against the source paper before changing the
         // external snapshot's canvas; a dark drawing fades toward black.
+        // Equipment becomes curves in the colours the source canvas shows.
         let exchange_doc = crate::canvas_theme::for_paste(
-            crate::depth_appearance::materialize(&doc).into_owned(),
+            crate::equipment::placed::materialized(&crate::depth_appearance::materialize(&doc))
+                .into_owned(),
             crate::canvas_theme::CanvasTheme::Light,
         );
         let mut request = Request::molecule("export", exchange_doc.clone());

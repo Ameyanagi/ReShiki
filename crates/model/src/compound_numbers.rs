@@ -74,6 +74,7 @@ pub fn number(doc: &mut Document, atoms: &[u64], mut format: TextFormat) -> Resu
     format.width_pt = None;
     format.name_breaks = false;
     let mut caption = Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: at.offset(0., doc.drawing_style.font_size().max(12.) * 0.5),
         text: "1".into(),

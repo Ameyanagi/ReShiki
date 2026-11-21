@@ -225,6 +225,14 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
         if mods.shift() && !mods.alt() && matches!(key, Key::Named(Named::ArrowRight)) {
             return Some(Message::Shortcut(Action::ReactionCopy));
         }
+        // ⌘+ and ⌘= by the typed character: on a Japanese keyboard they are
+        // Shift+; and Shift+-.
+        if mods.shift()
+            && !mods.alt()
+            && matches!(modified, Key::Character(m) if m == "+" || m == "=")
+        {
+            return Some(Message::Zoom(1.25));
+        }
         let Key::Character(c) = key else {
             return matches!(key, Key::Named(Named::Enter)).then_some(Message::InlineText(
                 super::inline_text::Action::Finish(true),
@@ -266,6 +274,8 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
                 "d" => Message::Optimization(super::optimization::Action::Begin),
                 "e" => Message::Inspector(InspectorTab::Export),
                 "c" => Message::CopyImage,
+                // ⌘+ is ⌘⇧= on US keyboards.
+                "=" => Message::Zoom(1.25),
                 _ => return None,
             });
         }
@@ -283,6 +293,8 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
             "l" => Message::Shortcut(Action::FixedLength),
             "e" => Message::Shortcut(Action::FixedAngles),
             "/" => Message::Fit,
+            "=" | "+" => Message::Zoom(1.25),
+            "-" => Message::Zoom(0.8),
             "," => Message::Settings(super::settings_page::Action::Open(None)),
             ";" => Message::Shortcut(Action::Rulers),
             "[" => Message::BondDepth(false),
@@ -368,6 +380,13 @@ impl App {
                 return self.update(Message::View(super::view_settings::Action::Crosshair(
                     !self.guides.crosshair,
                 )));
+            }
+            Action::Nudge(x, y) if self.connecting().is_some() => {
+                return self.equipment_action(super::equipment::Action::Step(if x + y < 0. {
+                    -1
+                } else {
+                    1
+                }));
             }
             Action::Nudge(x, y) => {
                 self.sync_keyboard_drawing();
@@ -643,10 +662,28 @@ impl App {
 
     pub(super) fn context_key(&mut self, key: &str) -> Task<Message> {
         self.sync_keyboard_drawing();
+        let (hovered_atom, hovered_bond) = self.hovered_target();
+        // Connect a selected equipment piece by its joints.
+        if self.connecting().is_some() && key == "Enter" {
+            return self.equipment_action(super::equipment::Action::Seat);
+        }
+        let hotspot = self.tool.selects()
+            && self.tab.keyboard_drawing.active()
+            && !matches!(
+                self.tab.keyboard_drawing.target(),
+                reshiki::keyboard_drawing::Target::Blank(_)
+            );
+        if key == "j"
+            && hovered_atom.is_none()
+            && hovered_bond.is_none()
+            && !hotspot
+            && self.pieces_selected()
+        {
+            return self.equipment_action(super::equipment::Action::Connect);
+        }
         if self.tool.selects() && self.tab.keyboard_drawing.active() {
             return self.keyboard_context_key(key);
         }
-        let (hovered_atom, hovered_bond) = self.hovered_target();
         let atom = hovered_atom.or_else(|| {
             if hovered_bond.is_none() {
                 match self.tab.selected.as_slice() {

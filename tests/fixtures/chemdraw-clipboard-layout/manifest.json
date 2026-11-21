@@ -50,16 +50,16 @@
     {
       "id": "unsupported-graphic",
       "bond_length": "14.4",
-      "expected": "reject",
+      "expected": "import-with-notice",
       "files": {
         "cdxml": "unsupported-graphic.cdxml",
         "cdx": "unsupported-graphic.cdx",
         "cds": "unsupported-graphic.drawing.cds"
       },
       "sha256": {
-        "cdxml": "2eb5bfc54978d1c71ef180ee89c16472149089a5eb77d7549bdf2246824eccda",
-        "cdx": "c144d9c204c8de5a1b92fddbb244cec52cb2b7e952f1bbbbd33d8c895b380be2",
-        "cds": "6366e8f07c448906e38daaf52132af75a0af256e48f5bef1ae232b1c7c43049c"
+        "cdxml": "c61159730873d1aefba70f01292882a5f01f81b8452e58d5099f16f585ff59f5",
+        "cdx": "27c3cfa94d9af69073c510c234dd7cb29eb6320fd89e1bceda373e0f5b424cc4",
+        "cds": "ce548b36f6ec10332868402b2e15c83879365986528880a93d9eaf4f6bc5de95"
       }
     }
   ]

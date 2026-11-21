@@ -118,7 +118,7 @@ impl Render for Node {
             }
             #[cfg(feature = "text")]
             Node::Text(ref text) => {
-                if ctx.options.embed_text {
+                if ctx.options.embed_text && !text::is_colour(text, ctx) {
                     text::render(text, chunk, content, ctx, rc, accumulated_transform)
                 } else {
                     group::render(

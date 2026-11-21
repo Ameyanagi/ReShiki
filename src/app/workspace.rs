@@ -224,6 +224,7 @@ impl App {
                     Script::Superscript
                 })
             ),
+            self.symbol_button(),
             divider(),
         ]
         .spacing(4)
@@ -296,13 +297,19 @@ impl App {
             locant_highlight: self
                 .pulse_atoms()
                 .unwrap_or_else(|| self.naming_canvas_highlight()),
+            reaction_preview: self.reaction_preview(),
             optimizer: self.optimization_canvas(),
+            equipment_authoring: self
+                .tab
+                .equipment_authoring
+                .as_ref()
+                .map(|s| s.measurement()),
             keyboard_target: if self.keyboard_drawing_active() {
                 self.tab.keyboard_drawing.point(self.display_document())
             } else {
                 None
             },
-            keyboard_marker: self.tab.keyboard_drawing.shown(),
+            keyboard_marker: self.keyboard_drawing_active() && self.tab.keyboard_drawing.shown(),
             morph: self.model_morph(),
             model_generation: self.model_generation(),
             element: self.atom_tool_element(),
@@ -333,10 +340,12 @@ impl App {
                 style: &self.tab.arrows.style,
                 source: self.tab.arrows.source(),
                 attach_targets: self.tab.arrows.attach_targets,
+                arc: self.tab.arrows.arc,
             },
             doc: self.display_document(),
+            two_decimal_weight: self.appearance.two_decimal_weight,
             reviewing_pair: self.tab.mapping.review_pair.is_some() && self.tool.selects(),
-            selected: if self.tab.inline_text.is_some() {
+            selected: if self.tab.inline_text.is_some() || self.tab.equipment_authoring.is_some() {
                 &[]
             } else {
                 &self.tab.selected
@@ -360,6 +369,16 @@ impl App {
                 .get(self.template_index)
                 .filter(|_| self.tool == Tool::Template)
                 .map(|t| (t, self.templates.anchor)),
+            piece: self
+                .equipment
+                .armed
+                .as_ref()
+                .filter(|_| self.tool == Tool::Equipment),
+            icon: self.armed_icon(),
+            connect: self.connecting().and_then(|c| {
+                let (s, m) = c.shown()?;
+                Some((c.ids.as_slice(), s, m))
+            }),
         })
         .shifted(crate::canvas::State::shifts)
         .width(Length::Fill)
@@ -791,6 +810,9 @@ impl App {
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
+            (Tool::Graphic(G::TlcPlate), "TLC plate"),
+            (Tool::Equipment, super::equipment::INSERT),
+            (Tool::Icons, "Icons"),
         ];
         let mut grid = column![].spacing(TOOL_GAP);
         for pair in tools.chunks(2) {
@@ -1038,6 +1060,28 @@ impl App {
                     .sum::<f32>()
                     + 3. * CONTEXT_GAP
             }
+            Tool::Arrow => {
+                let widest = |labels: Vec<String>| {
+                    labels
+                        .iter()
+                        .map(|label| text_width(label, 12.))
+                        .fold(0., f32::max)
+                        + 12.
+                        + 15.
+                };
+                lead + widest(
+                    reshiki::arrows::Preset::ALL
+                        .iter()
+                        .map(|p| p.to_string())
+                        .collect(),
+                ) + CONTEXT_GAP
+                    + widest(
+                        reshiki::arrows::Body::ALL
+                            .iter()
+                            .map(|b| b.to_string())
+                            .collect(),
+                    )
+            }
             _ if self.moving_bonded_selection() => lead + Self::constraints_width(),
             _ => 0.,
         }
@@ -1085,6 +1129,14 @@ impl App {
             commands.extend(self.keyboard_drawing_commands());
         }
         if !self.tab.selected.is_empty() {
+            if self.can_define_equipment() {
+                commands.push(RowCommand {
+                    label: super::equipment_authoring::DEFINE,
+                    menu: super::equipment_authoring::DEFINE,
+                    message: Message::EquipmentAuthoring(super::equipment_authoring::Action::Begin),
+                    enabled: true,
+                });
+            }
             commands.extend(self.selected_join_commands());
             commands.extend(self.selected_attach_commands());
             commands.extend(self.path_head_commands());
@@ -1560,16 +1612,61 @@ impl App {
                     done("Cancel"),
                 ]
             }
+            Tool::Equipment => {
+                vec![
+                    text(
+                        self.equipment
+                            .armed
+                            .as_deref()
+                            .map_or("Choose a piece", super::equipment::name),
+                    )
+                    .size(12)
+                    .into(),
+                    done("Cancel"),
+                ]
+            }
+            Tool::Icons => {
+                vec![
+                    text(
+                        self.icons
+                            .armed
+                            .map_or_else(|| "Choose an icon".into(), |c| c.name()),
+                    )
+                    .size(12)
+                    .into(),
+                    hover_hint(
+                        command("Done", Message::Icons(super::icon_browser::Action::Close)),
+                        "Close Icons and return to Select · Esc",
+                        tooltip::Position::Bottom,
+                    )
+                    .into(),
+                ]
+            }
             Tool::Ring | Tool::RingPreset(_) => self.ring_tool_options(scope),
             Tool::Arrow => {
-                vec![tool_choice(
-                    scope,
-                    "arrow-preset",
-                    "Arrow type",
-                    reshiki::arrows::Preset::ALL.to_vec(),
-                    Some(self.tab.arrow_style),
-                    Message::ArrowStyle,
-                )]
+                vec![
+                    tool_choice(
+                        scope,
+                        "arrow-preset",
+                        "Arrow type",
+                        reshiki::arrows::Preset::ALL.to_vec(),
+                        Some(self.tab.arrow_style),
+                        Message::ArrowStyle,
+                    ),
+                    hover_hint(
+                        tool_choice(
+                            scope,
+                            "arrow-body",
+                            "Arrow body",
+                            reshiki::arrows::Body::ALL.to_vec(),
+                            Some(self.tab.arrows.style.body),
+                            |body| Message::ArrowAction(super::arrows::Action::Body(body)),
+                        ),
+                        "Body · The look only; the arrow keeps its meaning",
+                        tooltip::Position::Bottom,
+                    )
+                    .into(),
+                ]
             }
             Tool::Atom => {
                 vec![
@@ -1668,6 +1765,7 @@ impl App {
     ) -> Vec<Element<'_, Message>> {
         use reshiki::graphics::GraphicKind as G;
         let chooser: Element<'_, Message> = match kind {
+            G::TlcPlate => text("TLC plate").size(12).into(),
             G::Symbol(k) => {
                 crate::appearance::pick_list(reshiki::scientific::SymbolKind::ALL, Some(k), |k| {
                     Message::Graphics(super::graphics::Action::ScientificKind(G::Symbol(k)))
@@ -1897,6 +1995,10 @@ impl App {
         if self.inspector_tab == InspectorTab::DrawingStyle {
             return self.inspector_frame(self.drawing_style_panel());
         }
+        // The icon grid owns its fixed search and scrolling body.
+        if self.inspector_tab == InspectorTab::Icons {
+            return self.inspector_frame(self.icons_panel());
+        }
         let parent = self.inspector_parent_tab();
         let mut tabs = row![];
         for (label, tab) in INSPECTOR_TABS {
@@ -1952,6 +2054,7 @@ impl App {
         .spacing(HISTORY_GAP)
         .align_y(iced::Alignment::Center);
         let body = match self.inspector_tab {
+            _ if self.tab.equipment_authoring.is_some() => self.equipment_authoring_panel(),
             InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),
             InspectorTab::Pages => self.pages_panel(),
@@ -1963,6 +2066,8 @@ impl App {
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
+            InspectorTab::Equipment => self.equipment_panel(),
+            InspectorTab::Icons => self.icons_panel(),
             InspectorTab::Import => column![
                 panel_action("← Add", Message::Inspector(InspectorTab::Templates)),
                 self.import_panel(),
@@ -1993,6 +2098,10 @@ impl App {
                     .height(Length::Fill),
             )
         };
+        if self.tab.equipment_authoring.is_some() {
+            content = content.push(container(self.equipment_authoring_footer()).padding([10, 16]));
+            return self.inspector_frame(reshiki::accessibility::focus_scope(content));
+        }
         if self.inspector_tab == InspectorTab::Properties && self.tab.optimization.is_some() {
             content = content.push(container(self.optimization_footer()).padding([10, 16]));
             // The 3D preview is modal: Tab cycles its controls, Cancel and Apply last.
@@ -2128,9 +2237,38 @@ impl App {
             .width(Length::Fill)
             .height(145)
             .into();
+        body = body.push(horizontal_line()).push(text(&t.name).size(14));
+        if t.is_layout() {
+            // A whole figure: no atom to attach, placed once.
+            return body
+                .push(
+                    canvas(crate::canvas::TemplateThumbnail(&t.document, None))
+                        .width(Length::Fill)
+                        .height(145),
+                )
+                .push(
+                    row![
+                        panel_action("Place", Message::InsertTemplate(self.template_index))
+                            .style(crate::appearance::primary),
+                        panel_action(
+                            if state.library.favorite(&t.id) {
+                                "★ Saved"
+                            } else {
+                                "☆ Favorite"
+                            },
+                            action(A::Favorite(self.template_index))
+                        )
+                    ]
+                    .spacing(6),
+                )
+                .push(
+                    text("Click the canvas or a page to place it.")
+                        .size(11)
+                        .style(muted_text),
+                )
+                .push(text(&t.note).size(11).style(muted_text));
+        }
         body = body
-            .push(horizontal_line())
-            .push(text(&t.name).size(14))
             .push(
                 crate::appearance::pick_list(
                     [
@@ -2269,6 +2407,28 @@ impl App {
             .size(11)
             .style(muted_text),
         );
+        // Layouts look alike at tile size: list them with their names, before
+        // any other match.
+        let (layouts, matches): (Vec<_>, Vec<_>) =
+            matches.into_iter().partition(|(_, t)| t.is_layout());
+        for (index, template) in &layouts {
+            body = body.push(
+                button(
+                    row![
+                        canvas(crate::canvas::TemplateThumbnail(&template.document, None))
+                            .width(64)
+                            .height(44),
+                        text(template.name.as_str()).size(12).width(Length::Fill),
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+                )
+                .padding(4)
+                .width(Length::Fill)
+                .style(control(state.active && self.template_index == *index))
+                .on_press(Message::InsertTemplate(*index)),
+            );
+        }
         for tiles in matches.chunks(3) {
             let mut line = row![].spacing(6);
             for (index, template) in tiles {
@@ -3022,9 +3182,9 @@ impl App {
                 .checked(dark)
                 .on_press(Message::CanvasTheme(self.tab.doc.canvas_theme.toggled())),
                 if dark {
-                    "Dark canvas · Switch to light · Remembered for new drawings"
+                    "Dark canvas · Switch to light · Remembered for new drawings and imports"
                 } else {
-                    "Light canvas · Switch to dark · Remembered for new drawings"
+                    "Light canvas · Switch to dark · Remembered for new drawings and imports"
                 },
                 tooltip::Position::Top,
             )
@@ -3886,6 +4046,8 @@ fn tool_name(tool: Tool) -> (&'static str, &'static str) {
         Tool::Bond(_) | Tool::StyledBond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => "Bond",
         Tool::Ring | Tool::RingPreset(_) => "Ring",
         Tool::Template => "Template",
+        Tool::Equipment => "Equipment",
+        Tool::Icons => "Icons",
         Tool::Arrow => "Reaction arrow",
         Tool::Text => "Text label",
         Tool::Erase => "Eraser",

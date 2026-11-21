@@ -1,0 +1,52 @@
+{
+"format": "reshiki-piece",
+"format_version": 1,
+"id": "reshiki/jy-schlenk-flask-100-15",
+"revision": 1,
+"family": "jy-schlenk-flask",
+"variant": { "volume_ml": "100", "joint": "15/25" },
+"names": { "en": "J. Young Schlenk flask, 100 mL", "ja": "J. Young シュレンクフラスコ 100 mL" },
+"category": "schlenk",
+"keywords": ["Young", "Schlenk", "PTFE valve", "air-free", "ヤング", "シュレンク"],
+"credits": { "author": "ReShiki", "license": "CC0-1.0" },
+"units": "mm",
+"shapes": [
+  { "id": "bulb",   "layer": "body",  "material": "glass", "role": "glass",
+    "path": "M -6.5 -71 L -6.5 -28.3 A 29 29 0 1 0 6.5 -28.3 L 6.5 -71 Z" },
+  { "id": "arm",    "layer": "body",  "material": "glass", "role": "glass", "path": "M 6 -58 H 34 V -52 H 6 Z" },
+  { "id": "barrel", "layer": "body",  "material": "glass", "role": "glass", "path": "M 34 -96 H 46 V -46 H 34 Z" },
+  { "id": "outlet", "layer": "body",  "material": "glass", "role": "glass", "path": "M 46 -58 H 60 V -52 H 46 Z" },
+  { "id": "barb",   "layer": "body",  "material": "glass", "role": "glass", "path": "M 60 -59 L 72 -57.5 L 72 -52.5 L 60 -51 Z" },
+  { "id": "seat",   "layer": "body",  "material": "glass", "role": "detail", "path": "M 35 -60 L 40 -55 L 45 -60" },
+  { "id": "plug",   "layer": "inner", "material": "ptfe",  "role": "solid", "part": "plug",
+    "path": "M 36 -98 H 44 V -62 L 40 -58 L 36 -62 Z" },
+  { "id": "oring",  "layer": "inner", "material": "rubber", "role": "detail", "part": "plug", "path": "M 36 -80 H 44 M 36 -76 H 44" },
+  { "id": "knob",   "layer": "front", "material": "plastic", "color": [43, 47, 51], "role": "solid", "part": "plug",
+    "path": "M 33 -110 H 47 V -98 H 33 Z" },
+  { "id": "shine",  "layer": "body",  "material": "glass", "role": "detail", "style": "shaded",
+    "path": "M -21 -12 C -24 -2 -23 8 -18 15" }
+],
+"joints": [
+  { "id": "top",  "kind": "taper", "size": "15/25", "gender": "F", "at": [0, -100], "dir": [0, -1], "draw": "standard" },
+  { "id": "barb", "kind": "plug", "family": "hose", "size_mm": 8, "gender": "M", "at": [72, -55], "dir": [1, 0] }
+],
+"holds": [
+  { "id": "neck", "kind": "grip", "from": [0, -70], "to": [0, -32], "diameter_mm": 13 }
+],
+"params": [
+  { "id": "valve", "names": { "en": "Valve", "ja": "バルブ" }, "kind": "states", "default": "closed",
+    "states": [ { "id": "closed", "names": { "en": "Closed", "ja": "閉" } },
+                { "id": "open",   "names": { "en": "Open",   "ja": "開" } } ] },
+  { "id": "fill", "names": { "en": "Liquid", "ja": "液量" }, "kind": "fill", "liquid": "bulb", "default": 0 },
+  { "id": "liquid_color", "names": { "en": "Liquid colour", "ja": "液の色" }, "kind": "color", "liquid": "bulb", "default": [214, 236, 240] }
+],
+"parts": [
+  { "id": "plug", "param": "valve",
+    "motion": { "per_state": { "closed": [1, 0, 0, 1, 0, 0], "open": [1, 0, 0, 1, 0, -5] } },
+    "handle": { "at": [40, -114], "gesture": "toggle" } }
+],
+"liquids": [
+  { "id": "bulb", "region": "M 0 -27.6 A 27.6 27.6 0 1 0 0 27.6 A 27.6 27.6 0 1 0 0 -27.6 Z", "meniscus": "concave" }
+],
+"labels": [ { "id": "front", "at": [0, 8] } ]
+}

@@ -76,6 +76,7 @@ fn long_attached_text_avoids_free_captions() {
     let open = bounds(&doc);
     let id = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id,
         position: open.0,
         text: "caption".into(),

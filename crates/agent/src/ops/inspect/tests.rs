@@ -94,6 +94,7 @@ fn everything() -> (Document, Ids) {
     );
     let caption = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(100., -20.),
         text: "heat".into(),
@@ -101,6 +102,7 @@ fn everything() -> (Document, Ids) {
     });
     let arrow = doc.next_id();
     doc.arrows.push(Arrow {
+        arc: None,
         start_anchor: None,
         end_anchor: None,
         id: arrow,
@@ -111,6 +113,7 @@ fn everything() -> (Document, Ids) {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     let png: Picture = serde_json::from_value(json!(PNG_BASE64)).unwrap();
     let picture = doc.next_id();

@@ -176,7 +176,11 @@ pub async fn clean(data: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 pub async fn properties(data: &[u8]) -> Result<String, String> {
+    // The whole drawing leaves out Illustration molecules.
     let document = Document::from_json(data)?;
+    let document =
+        reshiki_model::purpose::only(&document, reshiki_model::purpose::Purpose::is_chemical)
+            .into_owned();
     let analysis = LocalEngine::in_process()
         .request(Request::molecule("analyze", document))
         .await?

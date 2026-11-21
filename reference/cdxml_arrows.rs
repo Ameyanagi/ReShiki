@@ -116,6 +116,7 @@ fn arrows_match_original_helpers_and_document_boundaries() -> anyhow::Result<()>
         (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
     let mut transport_traps = 0;
+    let mut faded = 0;
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let before = case.text.clone();
@@ -178,6 +179,15 @@ fn arrows_match_original_helpers_and_document_boundaries() -> anyhow::Result<()>
                     .then(|| format!("Error {} != {:?} {expected}", error, case.failure_type))
             }
             (Err(error), Some(_)) => Some(format!("Rejected original: {error}")),
+            // ChemDraw draws no fade on an arrow, so FadePercent is no longer refused.
+            (Ok(_), None)
+                if case.failure.as_deref()
+                    == Some("Filled or faded CDXML arrows are not supported yet")
+                    && case.name.contains("FadePercent") =>
+            {
+                faded += 1;
+                None
+            }
             (Ok(_), None) => Some(format!("Accepted original {:?}", case.failure)),
         };
         if let Some(failure) = failure {
@@ -186,7 +196,7 @@ fn arrows_match_original_helpers_and_document_boundaries() -> anyhow::Result<()>
     }
     assert!(child.wait()?.success());
     eprintln!(
-        "CDXML arrows: {accepted} exact helpers, {rejected} original failures, {restricted} separate restrictions; {documents} exact Documents, {conversion_errors} matching conversion rejections; {transport_traps} direct-f32 transport traps"
+        "CDXML arrows: {accepted} exact helpers, {rejected} original failures, {restricted} separate restrictions; {documents} exact Documents, {conversion_errors} matching conversion rejections; {transport_traps} direct-f32 transport traps; {faded} faded arrows now accepted"
     );
     anyhow::ensure!(
         failures.is_empty(),
@@ -203,6 +213,7 @@ fn arrows_match_original_helpers_and_document_boundaries() -> anyhow::Result<()>
     // approximation rejected. Invalid styles/geometry still exercise errors.
     assert!(accepted > 3000 && rejected > 200 && restricted == 2);
     assert!(transport_traps > 0);
+    assert!(faded > 0);
     Ok(())
 }
 #[test]

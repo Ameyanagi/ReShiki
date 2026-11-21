@@ -231,7 +231,7 @@ where
         tree::diff_children_custom_with_search(
             children,
             &self.children,
-            |tree, child| child.as_widget().diff(tree),
+            |tree, child| tree.diff(child.as_widget()),
             |index| {
                 self.keys.get(index).or_else(|| self.keys.last()).copied()
                     != Some(state.keys[index])

@@ -86,6 +86,7 @@ pub fn documents() -> anyhow::Result<Vec<(String, Document)>> {
     group.add_bond(a, b, 1, "plain");
     group.add_bond(b, c, 1, "plain");
     group.annotations.push(Annotation {
+        angle: 0.,
         id: 4,
         position: Point::new(0., 60.),
         text: "ethyl alcohol".into(),
@@ -96,11 +97,13 @@ pub fn documents() -> anyhow::Result<Vec<(String, Document)>> {
         id: 6,
         members: vec![a, b, c, 4],
         integral: true,
+        layout: None,
     });
     group.groups.push(Group {
         id: 7,
         members: vec![a, b, c, 4, n],
         integral: false,
+        layout: None,
     });
     docs.push(("nested mixed groups".into(), group.clone()));
     group
@@ -165,6 +168,7 @@ pub fn documents() -> anyhow::Result<Vec<(String, Document)>> {
                 id: doc.next_id(),
                 members: vec![aid, gid],
                 integral: true,
+                layout: None,
             });
             docs.push((format!("picture/{angle}/{flip}"), doc));
         }

@@ -107,6 +107,7 @@ impl Drawing {
             .separators
             .into_iter()
             .map(|(id, position)| Annotation {
+                angle: 0.,
                 id,
                 position: position.point(),
                 text: "+".into(),
@@ -405,6 +406,7 @@ impl Imported {
         }
         reaction.arrow = builder.id()?;
         let arrow = Arrow {
+            arc: None,
             start_anchor: None,
             end_anchor: None,
             id: reaction.arrow,
@@ -415,6 +417,7 @@ impl Imported {
             cubic: None,
             nodes: Vec::new(),
             style: None,
+            purpose: Default::default(),
         };
         builder.row(
             &self.products,

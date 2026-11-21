@@ -98,6 +98,7 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
             .into_iter()
             .collect();
     crate::arrow_labels::include_labels(doc, &mut ids);
+    crate::shape_text::include_texts(doc, &mut ids);
     let mut part = doc.clone();
     part.molecule_names.retain(|name| {
         ids.contains(&name.annotation) && name.atoms.iter().all(|id| ids.contains(id))
@@ -112,6 +113,12 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.groups
         .retain(|g| g.members.iter().all(|id| ids.contains(id)));
+    // A clip copied without both pieces of its seat comes as a loose clip.
+    for seat in &mut part.seats {
+        if !ids.contains(&seat.a.piece) || !ids.contains(&seat.b.piece) {
+            seat.clip = None;
+        }
+    }
     let removed: Vec<_> = doc.object_ids().filter(|id| !ids.contains(id)).collect();
     if !removed.is_empty() {
         part.delete_preserving_layout(&removed);
@@ -126,6 +133,8 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         .collect();
     part.depth_appearance =
         crate::depth_appearance::selection(doc, &ids.iter().copied().collect::<Vec<_>>());
+    // A cycle copied without some parts draws only the ones it holds.
+    crate::cycles::reconcile(&mut part);
     part
 }
 
@@ -190,6 +199,7 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
         }
     }
     crate::arrow_labels::include_labels(doc, &mut ids);
+    crate::shape_text::include_texts(doc, &mut ids);
     if doc
         .bonds
         .iter()
@@ -537,6 +547,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         abbreviations,
         atom_labels: _,
         ring_fills,
+        highlight_style: _,
         depth_appearance,
         version: _,
         atoms,
@@ -552,6 +563,9 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         reactions,
         models,
         recent_colors: _,
+        piece_definitions: _,
+        on_other_canvas: _,
+        seats,
     } = doc;
     let map = |id: &mut u64| {
         *id = *mapping.get(id)?;
@@ -595,10 +609,30 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
     }
     for g in graphics {
         map(&mut g.id)?;
+        crate::leaders::remap(g, mapping);
+        crate::cycles::remap(g, mapping);
+        if let Some(text) = &mut g.text {
+            map(text)?;
+        }
+    }
+    for seat in seats {
+        map(&mut seat.a.piece)?;
+        map(&mut seat.b.piece)?;
+        if let Some(clip) = &mut seat.clip {
+            map(clip)?;
+        }
     }
     for g in groups {
         map(&mut g.id)?;
         g.members.iter_mut().try_for_each(map)?;
+        // A layout's order names its units; ones not copied drop out.
+        if let Some(layout) = &mut g.layout {
+            layout.order = layout
+                .order
+                .iter()
+                .filter_map(|id| mapping.get(id).copied())
+                .collect();
+        }
     }
     for group in abbreviations {
         map(&mut group.anchor)?;
@@ -630,6 +664,7 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
         doc.require_version(crate::document::ARROW_LABEL_GAPS);
     }
     doc.graphics.extend(part.graphics);
+    doc.seats.extend(part.seats);
     doc.groups.extend(part.groups);
     doc.abbreviations.extend(part.abbreviations);
     doc.reactions.extend(part.reactions);
@@ -664,7 +699,7 @@ fn point_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
             doc.annotations
                 .iter()
                 .filter(|a| ids.contains(&a.id))
-                .flat_map(|a| [a.position, a.position.offset(a.size().0, a.size().1)]),
+                .flat_map(|a| a.corners()),
         )
         .chain(
             doc.arrows
@@ -702,6 +737,7 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         crate::projection::tilt(doc, ids, degrees, matches!(transform, Transform::TiltX(_)));
         return;
     }
+    let fitted = crate::cycles::has_fits(doc).then(|| doc.clone());
     let center = if matches!(transform, Transform::Rotate(_)) {
         let Some(center) = rotation_center(doc, ids) else {
             return;
@@ -729,6 +765,9 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
     };
     transform_display(doc, ids, vector);
     map_positions(doc, ids, convert, vector);
+    if let Some(before) = fitted {
+        crate::cycles::fit_transformed(&before, doc, ids);
+    }
 }
 
 /// Uniform, orientation-preserving transform used by the selection handles.
@@ -740,6 +779,7 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
     {
         return;
     }
+    let fitted = crate::cycles::has_fits(doc).then(|| doc.clone());
     for atom in &mut doc.atoms {
         if ids.contains(&atom.id) {
             atom.depth *= scale;
@@ -765,6 +805,9 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         },
         vector,
     );
+    if let Some(before) = fitted {
+        crate::cycles::fit_transformed(&before, doc, ids);
+    }
 }
 
 /// What a planar transform does to the drawing beyond moving atoms, given
@@ -884,6 +927,7 @@ pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y
     {
         return;
     }
+    let fitted = crate::cycles::has_fits(doc).then(|| doc.clone());
     let vector = |p: Point| Point::new(p.x * x, p.y * y);
     transform_display(doc, ids, vector);
     map_positions(
@@ -895,6 +939,17 @@ pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y
         },
         vector,
     );
+    if let Some(before) = fitted {
+        crate::cycles::fit_transformed(&before, doc, ids);
+    }
+}
+
+/// Whether `ids` holds nothing but text. Such text turns with a transform;
+/// mixed with other objects, upright text stays upright and turned text
+/// turns about its centre.
+pub(crate) fn only_text(doc: &Document, ids: &HashSet<u64>) -> bool {
+    ids.iter()
+        .all(|id| doc.annotations.iter().any(|a| a.id == *id))
 }
 
 fn map_positions(
@@ -906,12 +961,19 @@ fn map_positions(
     let ids: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
     for graphic in &mut doc.graphics {
         if ids.contains(&graphic.id) {
+            let before = graphic.clone();
             // Axes are displacements, not translated points. Subtracting two
             // transformed world endpoints loses precision when imported paths
             // have small axes and large local control coordinates.
             graphic.origin = convert(graphic.origin);
             graphic.axis_x = vector(graphic.axis_x);
             graphic.axis_y = vector(graphic.axis_y);
+            graphic.normalize_panel();
+            if graphic.kind == crate::graphics::GraphicKind::Piece
+                && crate::equipment::placed::validate(graphic).is_err()
+            {
+                crate::equipment::placed::settle(graphic, before, &convert);
+            }
         }
     }
     let boundary: Vec<_> = doc
@@ -929,9 +991,23 @@ fn map_positions(
             a.position = convert(a.position);
         }
     }
+    // Text selected on its own turns when the transform turns.
+    let turns = only_text(doc, &ids)
+        && crate::document::text_angle(vector(Point::new(1., 0.)), vector(Point::new(0., 1.)))
+            != 0.;
     for a in &mut doc.annotations {
-        if ids.contains(&a.id) {
+        if !ids.contains(&a.id) {
+            continue;
+        }
+        if a.angle == 0. && !turns {
             a.position = convert(a.position);
+        } else {
+            let (w, h) = a.size();
+            let centre = convert(a.position.offset(w / 2., h / 2.));
+            let (s, c) = a.angle.to_radians().sin_cos();
+            a.angle =
+                crate::document::text_angle(vector(Point::new(c, s)), vector(Point::new(-s, c)));
+            a.position = centre.offset(-w / 2., -h / 2.);
         }
     }
     for a in &mut doc.arrows {
@@ -981,6 +1057,11 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
         .arrow_labels
         .iter()
         .map(|l| vec![l.arrow, l.annotation])
+        .chain(
+            doc.graphics
+                .iter()
+                .filter_map(|g| Some(vec![g.id, g.text?])),
+        )
         .collect();
     let memberships: Vec<&[u64]> = attachments
         .iter()

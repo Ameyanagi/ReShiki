@@ -40,6 +40,32 @@ struct Draft<'d> {
     rejection: Option<reshiki::editing::RingRejection>,
     translation: Option<World>,
     smart: Vec<Guide>,
+    /// Where a part would join a catalytic cycle if dropped now.
+    cycle_drop: Option<reshiki::cycles::Target>,
+    /// The joint a moving equipment piece would snap to.
+    seat_hint: Option<SeatHint>,
+}
+
+/// A joint a drag or placement snaps to: its mouth, its radius in world
+/// units, whether it seats as is, and what releasing does.
+struct SeatHint {
+    at: World,
+    radius: f32,
+    fits: bool,
+    text: String,
+}
+
+impl SeatHint {
+    fn new(doc: &Document, snap: &reshiki::equipment::solve::Snap) -> Self {
+        use reshiki::equipment::solve::Offer;
+        let p = snap.at;
+        Self {
+            at: World::new(p[0] as f32, p[1] as f32),
+            radius: (snap.target.diameter() / 2.) as f32,
+            fits: matches!(snap.offer, Offer::Seat | Offer::Clip),
+            text: crate::app::equipment::snap_text(doc, snap),
+        }
+    }
 }
 
 struct SelectionPreview<'a> {
@@ -60,8 +86,16 @@ impl<'d> Draft<'d> {
             rejection: None,
             translation: None,
             smart: Vec::new(),
+            cycle_drop: None,
+            seat_hint: None,
         }
     }
+}
+
+fn reconcile_preview(doc: &mut Document, base: &Document) {
+    reshiki::arrow_anchors::reconcile(doc);
+    reshiki::arrow_labels::reconcile(doc, base);
+    reshiki::shape_text::reconcile_changes(doc, base);
 }
 
 impl MoleculeCanvas<'_> {
@@ -70,8 +104,7 @@ impl MoleculeCanvas<'_> {
         let mut draft = Draft::new(self.doc);
         self.preview_pointer_edits(&mut draft, state, bounds);
         let mut doc = draft.preview.into_owned();
-        reshiki::arrow_anchors::reconcile(&mut doc);
-        reshiki::arrow_labels::reconcile(&mut doc, self.doc);
+        reconcile_preview(&mut doc, self.doc);
         doc
     }
 
@@ -113,15 +146,17 @@ impl MoleculeCanvas<'_> {
         self.preview_ring(&mut draft, state, bounds);
         self.preview_ring_preset(&mut draft, state, bounds);
         self.preview_template(&mut draft, frame, state, bounds);
+        self.preview_piece(&mut draft, state, bounds);
+        self.preview_icon(&mut draft, state, bounds);
+        self.preview_connect(&mut draft, state);
+        self.preview_piece_handle(&mut draft, state, bounds);
         self.preview_move(&mut draft, state, bounds);
         self.preview_region(&mut draft, state, bounds);
         self.preview_delocalized_ring(&mut draft, state, bounds);
         self.preview_bonded_atom(&mut draft, state, bounds);
         self.preview_bond(&mut draft, frame, state, bounds);
         if let Cow::Owned(doc) = &mut draft.preview {
-            reshiki::arrow_anchors::reconcile(doc);
-            // Show condition labels and the length clamp as the commit will.
-            reshiki::arrow_labels::reconcile(doc, base);
+            reconcile_preview(doc, base);
         }
         let Draft {
             mut preview,
@@ -132,6 +167,8 @@ impl MoleculeCanvas<'_> {
             rejection,
             translation,
             smart,
+            cycle_drop,
+            seat_hint,
         } = draft;
         if let Some(id) = self.hidden_annotation {
             preview.to_mut().annotations.retain(|a| a.id != id);
@@ -226,9 +263,13 @@ impl MoleculeCanvas<'_> {
         let nmr_cache = (cached_camera.is_some() && translation.is_none()).then_some(&state.scene);
         self.draw_nmr_assignments(frame, &preview, selected, bounds, nmr_cache);
         self.draw_editor_markers(frame, &preview, bounds);
+        self.draw_cycle_drop(frame, cycle_drop.as_ref(), bounds);
+        self.draw_seat_hint(frame, seat_hint.as_ref(), bounds);
+        self.draw_pull_out(frame, state, bounds);
         self.draw_orbital_target(frame, state, bounds);
         self.draw_mark_orbit(frame, state, &preview, bounds);
         self.draw_arrow_handles(frame, &preview, selected, bounds);
+        self.draw_piece_handles(frame, &preview, selected, state, bounds);
         self.draw_arrow_targets(frame, state, bounds, cursor);
         self.draw_notices(
             frame,

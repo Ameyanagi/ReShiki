@@ -240,6 +240,7 @@ fn main() -> anyhow::Result<()> {
     let mut format = reshiki::typography::TextFormat::default();
     format.style.formula = true;
     text_doc.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "C2H5 + NH3 → C2H5NH2".into(),
@@ -322,6 +323,7 @@ fn main() -> anyhow::Result<()> {
                     Point::new(dest.x - center.x, dest.y - center.y),
                 );
                 sheet.annotations.push(Annotation {
+                    angle: 0.,
                     id: sheet.next_id(),
                     position: Point::new(dest.x - 100., dest.y + 85.),
                     text: title

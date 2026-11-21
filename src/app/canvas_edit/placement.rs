@@ -4,7 +4,6 @@ use crate::canvas::pick::PICK_RADIUS_PX;
 use crate::canvas::{Edit, Tool};
 use reshiki::document::{Document, Point};
 use reshiki::editing;
-use reshiki::graphics::Graphic;
 use reshiki::joining::Placed;
 
 impl App {
@@ -165,7 +164,7 @@ impl App {
                 }
             } else {
                 let id = self.tab.doc.next_id();
-                let mut graphic = Graphic::dragged(
+                let mut graphic = crate::canvas::tlc::dragged(
                     id,
                     kind,
                     start,
@@ -240,18 +239,26 @@ impl App {
         let Some(template) = self.templates.library.get(self.template_index) else {
             return;
         };
-        match template.place(
-            &self.tab.doc,
-            anchor,
-            direction,
-            self.tab.camera.world_len(PICK_RADIUS_PX),
-            self.templates.anchor,
-            self.templates.connection,
-        ) {
+        // A figure layout lands where it is clicked, once, joined to nothing.
+        let layout = template.is_layout();
+        let placed = if layout {
+            template.place_layout(&self.tab.doc, anchor)
+        } else {
+            template.place(
+                &self.tab.doc,
+                anchor,
+                direction,
+                self.tab.camera.world_len(PICK_RADIUS_PX),
+                self.templates.anchor,
+                self.templates.connection,
+            )
+        };
+        match placed {
             Ok((document, selected)) => {
                 self.tab.doc = document;
                 self.tab.selected = selected;
-                if !self.templates.repeat {
+                self.sync_figure();
+                if !self.templates.repeat || layout {
                     self.tool = Tool::Select;
                 }
             }

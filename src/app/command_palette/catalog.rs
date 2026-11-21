@@ -2,21 +2,21 @@
 //! or placement path that its button, menu or key already uses. Keys come
 //! from the same tables that menus, tooltips and Help read.
 use super::super::{
-    App, InspectorTab, Message, abbreviations, assistant, cleanup, generic, import, inspector,
-    keyboard_drawing, models3d, naming, nmr, numeric_transforms,
+    App, InspectorTab, Message, abbreviations, arrows, assistant, cleanup, cycles, equipment,
+    equipment_authoring, figure_panels, generic, graphics, import, inspector, keyboard_drawing,
+    models3d, naming, nmr, numeric_transforms,
     numeric_transforms::Field,
-    optimization, pages, palettes, printing, reaction_mapping, reactions,
+    object_toolbar, optimization, pages, palettes, printing, reaction_mapping, reactions,
     shortcuts::{self, TabKey, keys, tab_keys},
-    tabs, view_settings,
+    tabs, template_library, view_settings,
 };
 use crate::canvas::Tool;
 use iced::keyboard::Modifiers;
 use reshiki::{
-    arrows::Preset as ArrowPreset,
     bonds::{BondPreset, DoublePosition},
     chains::ChainMode,
     editing::{Arrange, Transform},
-    graphics::GraphicKind,
+    graphics::{Effects, GraphicChange, GraphicKind, LinePattern, TitlePlace},
     models3d::Display,
     rings::Preset as RingPreset,
     typography::{Script, StyleChange, TextAlign},
@@ -63,11 +63,32 @@ impl Category {
 }
 
 /// What must be targeted before a command can run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Need {
     Nothing,
     Blocked(&'static str),
     Selection,
+    LastingLayout,
+    Layout,
+    ObjectOrder,
+    Callout,
+    DefineEquipment,
+    Equipment,
+    EquipmentClips,
+    MakeCycle,
+    CyclePart,
+    Cycle,
+    CycleStep,
+    Panel,
+    GraphicFill,
+    RingFill,
+    Purpose,
+    ReactionPreview,
+    ReactionReady,
+    ReactionColors,
+    Arrow,
+    ArrowBody,
+    MakeArc,
     TextBoxes,
     /// A selection the Scale field can resize: none of it shown only in 3D.
     Resizable,
@@ -368,8 +389,8 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
     let mut list = inserts(app);
     list.extend(bonds());
     list.extend(atoms());
-    list.extend(edits());
-    list.extend(analysis());
+    list.extend(edits(app));
+    list.extend(analysis(app));
     list.extend(files());
     // GitHub rows only where they apply now, such as Send for unsent drawings.
     #[cfg(not(target_arch = "wasm32"))]
@@ -584,6 +605,38 @@ fn inserts(app: &App) -> Vec<Command> {
             })),
         );
     }
+    list.push(send(
+        equipment::INSERT,
+        Insert,
+        "Choose lab glassware, then click to place it",
+        "equipment apparatus glassware lab flask condenser adapter stopper septum",
+        Message::Tool(Tool::Equipment),
+    ));
+    list.push(send(
+        "Icons…",
+        Insert,
+        "Search over 5,000 line icons and the reaction condition icons, then click to place one",
+        "icons icon symbol pictogram clip art tabler condition light heat flask",
+        Message::Tool(Tool::Icons),
+    ));
+    list.push(send(
+        "Catalytic cycle",
+        Insert,
+        "Add an empty cycle to fill with structures or text.",
+        "catalytic cycle catalyst loop circle mechanism intermediates",
+        Message::Cycle(cycles::Action::Insert),
+    ));
+    let layouts = reshiki::templates::FIGURE_LAYOUTS;
+    list.push(Command::new(
+        layouts,
+        Insert,
+        "Browse templates for comparison figures and reaction schemes.",
+        "template scheme toc panel grid figure layout",
+        Run::Send(vec![
+            Message::Inspector(InspectorTab::Templates),
+            Message::Templates(template_library::Action::Collection(layouts.into())),
+        ]),
+    ));
     list
 }
 
@@ -737,7 +790,7 @@ fn atoms() -> Vec<Command> {
     list
 }
 
-fn edits() -> Vec<Command> {
+fn edits(app: &App) -> Vec<Command> {
     use Category::Edit;
     let selection = |name: &str, detail: &str, synonyms: &str, message| {
         send(name, Edit, detail, synonyms, message).need(Need::Selection)
@@ -792,6 +845,69 @@ fn edits() -> Vec<Command> {
             Message::Group,
         ),
         selection("Ungroup", "Split a group", "split", Message::Ungroup),
+        send(
+            "Make catalytic cycle",
+            Edit,
+            "Arrange the selected structures and text in a catalytic cycle.",
+            "catalyst loop mechanism intermediates circle",
+            Message::Cycle(cycles::Action::Make),
+        )
+        .need(Need::MakeCycle),
+        send(
+            "Tidy catalytic cycle",
+            Edit,
+            "Space the intermediates evenly and line up reagents and products beside their arcs.",
+            "tidy cycle clean up align space evenly layout",
+            Message::Cycle(cycles::Action::Tidy),
+        )
+        .need(Need::Cycle),
+        send(
+            "Remove from cycle",
+            Edit,
+            "Take the selected parts out of their catalytic cycle.",
+            "catalytic loop detach intermediate reagent product",
+            Message::Cycle(cycles::Action::Remove),
+        )
+        .need(Need::CyclePart),
+        selection(
+            "Wrap in panel",
+            "Put a tinted panel with space for titles around the selection.",
+            "panel frame box card background figure",
+            Message::Figure(figure_panels::Action::Wrap),
+        ),
+        send(
+            "Define as equipment piece…",
+            Edit,
+            "Set a measured length and turn the selected shapes into an equipment piece.",
+            "equipment glassware apparatus define create shapes vector calibration",
+            Message::EquipmentAuthoring(equipment_authoring::Action::Begin),
+        )
+        .need(Need::DefineEquipment),
+        send(
+            "Connect…",
+            Edit,
+            "Find a free joint that fits the selected equipment.",
+            "equipment glassware apparatus joint join attach connect",
+            Message::Equipment(equipment::Action::Connect),
+        )
+        .need(Need::Equipment)
+        .keys("J"),
+        send(
+            "Equipment: Add clips to all joints",
+            Edit,
+            "Clip each unclipped ground-glass joint in the selected assembly.",
+            "equipment glassware keck clip joint apparatus",
+            Message::Equipment(equipment::Action::AddClips),
+        )
+        .need(Need::EquipmentClips),
+        send(
+            "Add callout",
+            Edit,
+            "Add a note with a leader pointing to the selection.",
+            "annotation text leader label pointer",
+            Message::AddCallout,
+        )
+        .need(Need::Callout),
         selection(
             "Flip horizontal",
             "Mirror the selection left to right",
@@ -974,6 +1090,46 @@ fn edits() -> Vec<Command> {
             Message::Generic(generic::Action::Expand),
         ),
     ];
+    let (update, update_all) = app
+        .selected_piece_updates()
+        .map_or((None, None), |(update, all)| (Some(update), all));
+    for (name, detail, action, unavailable) in [
+        (
+            "Detach",
+            "Disconnect the selected equipment at its joint.",
+            app.selected_piece_detach().map(equipment::Action::Detach),
+            "Select equipment with one connected joint",
+        ),
+        (
+            "Update",
+            "Replace the selected equipment with its latest revision.",
+            update,
+            "Select equipment with a newer library revision",
+        ),
+        (
+            "Update all in drawing",
+            "Replace matching equipment with its latest revision.",
+            update_all,
+            "Select equipment with matching pieces and a newer revision",
+        ),
+    ] {
+        let need = if action.is_some() {
+            Need::Equipment
+        } else {
+            Need::Blocked(unavailable)
+        };
+        let run = Run::Send(action.into_iter().map(Message::Equipment).collect());
+        list.push(
+            Command::new(
+                format!("Equipment: {name}"),
+                Edit,
+                detail,
+                "equipment glassware apparatus piece joint",
+                run,
+            )
+            .need(need),
+        );
+    }
     for (name, degrees) in [
         ("Rotate 15° clockwise", 15.),
         ("Rotate 15° counterclockwise", -15.),
@@ -1021,6 +1177,41 @@ fn edits() -> Vec<Command> {
             Message::Arrange(arrange),
         ));
     }
+    list.push(send(
+        "Insert symbol…",
+        Category::Insert,
+        "Insert an arrow, Greek letter, charge or other symbol into text",
+        "symbol character special greek alpha arrow equilibrium omega degree plus minus",
+        Message::StyleMenu(super::super::color_popover::Action::Symbols),
+    ));
+    for flow in figure_panels::LASTING_LAYOUTS {
+        list.push(
+            send(
+                flow.label(),
+                Edit,
+                "Lay out the selected objects with gutters that stay even.",
+                "arrange layout align distribute spacing figure",
+                Message::Figure(figure_panels::Action::Arrange(flow)),
+            )
+            .need(Need::LastingLayout),
+        );
+    }
+    for (command, detail) in object_toolbar::Command::ORDER.into_iter().zip([
+        "Move selected graphics or bonds to the front.",
+        "Move selected graphics or bonds to the back.",
+    ]) {
+        list.push(
+            send(
+                command.name(),
+                Edit,
+                detail,
+                "layer order stack depth foreground background",
+                command.message(),
+            )
+            .need(Need::ObjectOrder),
+        );
+    }
+    list.extend(drawing_styles(app));
     list.push(
         send(
             "Format as chemical name",
@@ -1061,7 +1252,225 @@ fn edits() -> Vec<Command> {
     list
 }
 
-fn analysis() -> Vec<Command> {
+fn drawing_styles(app: &App) -> Vec<Command> {
+    use Category::Edit;
+    use figure_panels::Action as Figure;
+    use graphics::Action as Graphics;
+    use reshiki::layouts::{Align, Flow};
+
+    let panel = app.selected_panels().next();
+    let (shadow, need) = if let Some(shape) = panel {
+        (
+            Message::Figure(Figure::Shadow(shape.style.effects.shadow_pt.is_none())),
+            Need::Panel,
+        )
+    } else {
+        let offset = app
+            .tab
+            .graphic_style
+            .effects
+            .shadow_pt
+            .is_none()
+            .then_some(Effects::SHADOW_PT);
+        (
+            Message::Graphics(Graphics::Style(GraphicChange::Shadow(offset))),
+            Need::GraphicFill,
+        )
+    };
+    let mut list = vec![
+        send(
+            "Shadow",
+            Edit,
+            "Toggle the drop shadow on the selected shape.",
+            "panel frame box card drop shadow depth",
+            shadow,
+        )
+        .need(need),
+        send(
+            "Graphic: Shaded",
+            Edit,
+            "Toggle shading from white to the fill color.",
+            "shape fill chemdraw shaded tint",
+            Message::Graphics(Graphics::Style(GraphicChange::Shaded(
+                !app.tab.graphic_style.effects.shaded,
+            ))),
+        )
+        .need(Need::GraphicFill),
+        send(
+            "Make arc",
+            Edit,
+            "Bend the selected arrow into a circular arc.",
+            "curved arrow sweep semicircle mechanism",
+            Message::ArrowAction(arrows::Action::MakeArc),
+        )
+        .need(Need::MakeArc),
+    ];
+    for (name, detail, action) in [
+        (
+            "Outline",
+            "Toggle the outline of the selected panel.",
+            Figure::Border(
+                !panel
+                    .and_then(|g| g.panel.as_ref())
+                    .is_some_and(|p| p.border),
+            ),
+        ),
+        (
+            "Title bar",
+            "Move panel titles into a band above the contents.",
+            Figure::Place(TitlePlace::Bar),
+        ),
+        (
+            "In border",
+            "Place panel titles in the top border.",
+            Figure::Place(TitlePlace::Border),
+        ),
+        (
+            "Rounded corners",
+            "Round the selected panel’s corners.",
+            Figure::Rounded(true),
+        ),
+        (
+            "Square corners",
+            "Square the selected panel’s corners.",
+            Figure::Rounded(false),
+        ),
+        (
+            "Split columns",
+            "Add a vertical divider to the selected panel.",
+            Figure::AddDivider(true),
+        ),
+        (
+            "Split rows",
+            "Add a horizontal divider to the selected panel.",
+            Figure::AddDivider(false),
+        ),
+        (
+            "Fit to contents",
+            "Resize the selected panel around its contents.",
+            Figure::Fit,
+        ),
+        (
+            "Clear contents",
+            "Delete the contents of the selected panel.",
+            Figure::Clear,
+        ),
+    ] {
+        list.push(
+            send(
+                format!("Panel: {name}"),
+                Edit,
+                detail,
+                "panel frame box card figure",
+                Message::Figure(action),
+            )
+            .need(Need::Panel),
+        );
+    }
+    let columns = app
+        .selected_layout()
+        .and_then(|g| g.layout.as_ref())
+        .and_then(|layout| {
+            if let Flow::Grid(columns) = layout.flow {
+                Some(columns)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(2);
+    for (name, flow) in [
+        ("Row", Flow::Row),
+        ("Column", Flow::Column),
+        ("Grid", Flow::Grid(columns)),
+    ] {
+        list.push(
+            send(
+                format!("Layout: {name}"),
+                Edit,
+                "Change the selected layout’s direction.",
+                "lasting layout even gutters arrange",
+                Message::Figure(Figure::Arrange(flow)),
+            )
+            .need(Need::Layout),
+        );
+    }
+    for (name, align) in [
+        ("Start", Align::Start),
+        ("Center", Align::Center),
+        ("End", Align::End),
+    ] {
+        list.push(
+            send(
+                format!("Layout: {name}"),
+                Edit,
+                "Align items inside the selected layout’s cells.",
+                "lasting layout align gutter figure panel",
+                Message::Figure(Figure::Align(align)),
+            )
+            .need(Need::Layout),
+        );
+    }
+    for choice in graphics::GradientChoice::ALL {
+        list.push(
+            send(
+                format!("Gradient: {choice}"),
+                Edit,
+                "Set the gradient of the selected shapes.",
+                "graphic fill shade tint panel color",
+                Message::Graphics(Graphics::Gradient(choice)),
+            )
+            .need(Need::GraphicFill),
+        );
+    }
+    for style in reshiki::highlights::HighlightStyle::ALL {
+        list.push(send(
+            format!("Highlight style: {style}"),
+            Edit,
+            "Set the style of every highlight in the drawing.",
+            "highlight atom bond color halo",
+            Message::HighlightStyle(style),
+        ));
+    }
+    for effect in reshiki::ring_fills::RingEffect::ALL {
+        list.push(
+            send(
+                format!("Fill effect: {effect}"),
+                Edit,
+                "Set the effect of the selected ring fills.",
+                "aromatic ring interior tint color opacity",
+                Message::RingEffect(effect),
+            )
+            .need(Need::RingFill),
+        );
+    }
+    for &body in reshiki::arrows::Body::ALL {
+        list.push(
+            send(
+                format!("Arrow body: {body}"),
+                Edit,
+                "Set the body of the selected arrows.",
+                "arrow reaction scheme shaft",
+                Message::ArrowAction(arrows::Action::Body(body)),
+            )
+            .need(Need::ArrowBody),
+        );
+    }
+    for pattern in LinePattern::ALL {
+        list.push(
+            send(
+                format!("Arrow pattern: {pattern}"),
+                Edit,
+                "Set the line pattern of the selected arrows.",
+                "arrow shaft stroke reaction mechanism",
+                Message::ArrowAction(arrows::Action::Pattern(pattern)),
+            )
+            .need(Need::Arrow),
+        );
+    }
+    list
+}
+
+fn analysis(app: &App) -> Vec<Command> {
     use Category::Analyze;
     let molecule = |name: &str, detail: &str, synonyms: &str, messages| {
         Command::new(name, Analyze, detail, synonyms, Run::Send(messages)).need(Need::Molecule)
@@ -1126,6 +1535,31 @@ fn analysis() -> Vec<Command> {
             Message::Reaction(reactions::Action::Open),
         ),
         send(
+            "Color by origin",
+            Analyze,
+            "Carry each reactant’s color into the products along the atom maps.",
+            "reaction color fragment highlight bond formed ring legend",
+            Message::Reaction(reactions::Action::ColorByOrigin),
+        )
+        .alias(&["origin"])
+        .need(Need::ReactionReady),
+        send(
+            "Color by origin: Clear colors",
+            Analyze,
+            "Remove the colors and legend from the chosen reaction.",
+            "reaction color origin fragment highlight remove",
+            Message::Reaction(reactions::Action::ClearColors),
+        )
+        .need(Need::ReactionColors),
+        send(
+            "Preview reaction",
+            Analyze,
+            "Outline the participants of the selected arrow’s reaction.",
+            "reaction scheme detect participants",
+            Message::Reaction(reactions::Action::Preview),
+        )
+        .need(Need::ReactionPreview),
+        send(
             "Atom maps",
             Analyze,
             "Open reaction atom mapping",
@@ -1150,6 +1584,144 @@ fn analysis() -> Vec<Command> {
             Message::Assistant(assistant::Action::Open),
         ),
     ];
+    use reshiki::purpose::Purpose;
+    for (purpose, detail, synonyms) in [
+        (
+            Purpose::Chemistry,
+            "Include the selection in reactions.",
+            "purpose scheme reaction",
+        ),
+        (
+            Purpose::Reference,
+            "Show the selection as context outside the reaction.",
+            "purpose context known compound",
+        ),
+        (
+            Purpose::Illustration,
+            "Use the selection as a picture that chemistry tools skip.",
+            "purpose picture decorative",
+        ),
+    ] {
+        list.push(
+            send(
+                format!("Purpose: {}", purpose.label()),
+                Analyze,
+                detail,
+                synonyms,
+                Message::Purpose(purpose),
+            )
+            .need(Need::Purpose),
+        );
+    }
+    for (name, detail, action) in [
+        (
+            "Copy step as reaction SMILES",
+            "Copy the chosen cycle step as reaction SMILES.",
+            cycles::Action::CopySmiles,
+        ),
+        (
+            "Check step balance",
+            "Check the chosen step’s atoms and charge.",
+            cycles::Action::Check,
+        ),
+        (
+            "Auto-map step",
+            "Propose atom maps for the chosen cycle step.",
+            cycles::Action::AutoMap,
+        ),
+        (
+            "Color cycle by origin",
+            "Color the cycle steps by the origins of their atoms.",
+            cycles::Action::Color,
+        ),
+    ] {
+        list.push(
+            send(
+                name,
+                Analyze,
+                detail,
+                "catalytic cycle loop step reaction atoms charge",
+                Message::Cycle(action),
+            )
+            .need(Need::CycleStep),
+        );
+    }
+    let step = app
+        .selected_cycle()
+        .zip(app.cycle_step())
+        .and_then(|((_, cycle), (_, index))| cycle.steps.get(index));
+    for (name, detail, need, action) in [
+        (
+            "Cycle: Clockwise",
+            "Set the cycle to run clockwise.",
+            Need::Cycle,
+            cycles::Action::Clockwise(true),
+        ),
+        (
+            "Cycle: Counterclockwise",
+            "Set the cycle to run counterclockwise.",
+            Need::Cycle,
+            cycles::Action::Clockwise(false),
+        ),
+        (
+            "Cycle step: Reversible",
+            "Toggle whether the chosen cycle step is reversible.",
+            Need::CycleStep,
+            cycles::Action::Reversible(!step.is_some_and(|s| s.reversible)),
+        ),
+        (
+            "Cycle step: Hide arrow",
+            "Toggle the chosen cycle step’s arrow.",
+            Need::CycleStep,
+            cycles::Action::Hidden(!step.is_some_and(|s| s.hidden)),
+        ),
+    ] {
+        list.push(
+            send(
+                name,
+                Analyze,
+                detail,
+                "catalytic cycle loop mechanism step arrow",
+                Message::Cycle(action),
+            )
+            .need(need),
+        );
+    }
+    let colors = app.reaction_colors();
+    use reactions::ColorSetting;
+    for (name, detail, setting) in [
+        (
+            "Mark new bonds",
+            "Toggle highlights on newly formed bonds.",
+            ColorSetting::Bonds(!colors.is_some_and(|c| c.bonds)),
+        ),
+        (
+            "Mark broken and changed bonds",
+            "Toggle highlights on broken or changed bonds.",
+            ColorSetting::Changes(!colors.is_some_and(|c| c.changes)),
+        ),
+        (
+            "Fill new rings",
+            "Toggle fills in newly formed rings.",
+            ColorSetting::Rings(!colors.is_some_and(|c| c.rings)),
+        ),
+        (
+            "Legend",
+            "Toggle the legend for the chosen reaction’s colors.",
+            ColorSetting::Legend(!colors.is_some_and(|c| c.legend.is_some())),
+        ),
+    ] {
+        list.push(
+            send(
+                format!("Color by origin: {name}"),
+                Analyze,
+                detail,
+                "color by origin atom map reaction bond ring",
+                Message::Reaction(reactions::Action::ColorSetting(setting)),
+            )
+            .need(Need::ReactionColors),
+        );
+    }
     list.push(send(
         "Find abbreviations",
         Analyze,
@@ -1164,6 +1736,13 @@ fn files() -> Vec<Command> {
     use Category::File;
     let (command, alt, shift) = (Modifiers::COMMAND, Modifiers::ALT, Modifiers::SHIFT);
     let mut list = vec![
+        send(
+            import::SVG_IMPORT,
+            File,
+            "Import SVG artwork as editable shapes",
+            "svg svgz vector equipment paths curves",
+            Message::Imports(import::Action::ChooseSvg),
+        ),
         send(
             "New drawing",
             File,
@@ -1688,6 +2267,11 @@ fn tools() -> Vec<Command> {
         .keys(keys(Modifiers::SHIFT, "J")),
         tool("Text tool", "caption annotation label write", Tool::Text).keys("t"),
         tool("Eraser", "erase delete rubber", Tool::Erase),
+        tool(
+            "TLC plate tool",
+            "thin layer chromatography lane spot Rf",
+            Tool::Graphic(GraphicKind::TlcPlate),
+        ),
         tool("Edit points", "path arrow nodes bezier", Tool::EditPoints),
     ];
     for (preset, synonyms) in [
@@ -1714,13 +2298,13 @@ fn tools() -> Vec<Command> {
             Tool::RingPreset(preset),
         ));
     }
-    for preset in ArrowPreset::ALL {
+    for option in palettes::arrow_options() {
         list.push(send(
-            format!("{preset} arrow"),
+            option.command_name(),
             T,
-            "Choose this arrow tool",
-            "arrow reaction scheme",
-            Message::Palette(palettes::Action::Arrow(*preset)),
+            "Draw arrows with this preset.",
+            "arrow reaction scheme mechanism electron flow",
+            Message::Palette(option.action()),
         ));
     }
     for family in [
@@ -1739,6 +2323,22 @@ fn tools() -> Vec<Command> {
         }
     }
     for kind in reshiki::scientific::SymbolKind::ALL {
+        // Condition icons are chosen in the Icons tool.
+        if kind.is_condition() {
+            list.push(send(
+                kind.to_string(),
+                T,
+                "Choose this condition icon in the Icons tool, then click to place it",
+                &format!(
+                    "icon reaction condition {}",
+                    crate::app::icon_browser::condition_words(*kind)
+                ),
+                Message::Icons(crate::app::icon_browser::Action::Arm(
+                    crate::app::icon_browser::Choice::Condition(*kind),
+                )),
+            ));
+            continue;
+        }
         let synonyms = match kind {
             reshiki::scientific::SymbolKind::PartialPositive
             | reshiki::scientific::SymbolKind::PartialNegative => {

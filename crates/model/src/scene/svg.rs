@@ -198,6 +198,18 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 push_svg(&mut inner, vec![*primitive], frame, halos);
                 s.push_str(&format!("<g opacity=\"{alpha}\">{inner}</g>"));
             }
+            Primitive::Rotated {
+                pivot,
+                angle,
+                primitives,
+            } => {
+                let mut inner = String::new();
+                push_svg(&mut inner, primitives, frame, halos);
+                s.push_str(&format!(
+                    "<g transform=\"rotate({angle} {} {})\">{inner}</g>",
+                    pivot.x, pivot.y
+                ));
+            }
             Primitive::Halo { radius, primitives } => {
                 if let Some([r, g, b]) = frame.paper {
                     push_halo(s, &primitives, radius, &format!("rgb({r},{g},{b})"));
@@ -256,7 +268,7 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 } else {
                     format!(" stroke-dasharray=\"{dashes}\"")
                 };
-                s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{dash}/>",stroke[0],stroke[1],stroke[2],style.width()));
+                s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"{}\" stroke-linejoin=\"round\"{dash}/>",stroke[0],stroke[1],stroke[2],style.width(),if style.round_caps() { "round" } else { "butt" }));
             }
             Primitive::Line(a, b, w) => {
                 s.push_str(&format!("<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{ink}\" stroke-width=\"{w}\" stroke-linecap=\"round\"/>",a.x,a.y,b.x,b.y));
@@ -487,6 +499,74 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     "stroke-linecap=\"round\"".into()
                 }
             )),
+            Primitive::Gradient {
+                commands,
+                frame: [o, x, y],
+                radial,
+                from,
+                to,
+                stops,
+            } => {
+                frame.gradients.set(frame.gradients.get() + 1);
+                let id = format!("{}{}", super::GRADIENT_ID, frame.gradients.get());
+                let geometry = if radial {
+                    format!(
+                        "radialGradient id=\"{id}\" cx=\"{}\" cy=\"{}\" r=\"{}\"",
+                        from[0],
+                        from[1],
+                        (to[0] - from[0]).hypot(to[1] - from[1])
+                    )
+                } else {
+                    format!(
+                        "linearGradient id=\"{id}\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"",
+                        from[0], from[1], to[0], to[1]
+                    )
+                };
+                let stops: String = stops
+                    .iter()
+                    .map(|(offset, [r, g, b], alpha)| {
+                        format!("<stop offset=\"{offset}\" stop-color=\"rgb({r},{g},{b})\" stop-opacity=\"{alpha}\"/>")
+                    })
+                    .collect();
+                let tag = if radial { "radialGradient" } else { "linearGradient" };
+                s.push_str(&format!(
+                    "<defs><{geometry} gradientUnits=\"userSpaceOnUse\" gradientTransform=\"matrix({} {} {} {} {} {})\">{stops}</{tag}></defs><path d=\"{}\" fill=\"url(#{id})\"/>",
+                    x.x,
+                    x.y,
+                    y.x,
+                    y.y,
+                    o.x,
+                    o.y,
+                    path_data(&commands)
+                ));
+            }
+            Primitive::Glow {
+                commands,
+                color: [r, g, b],
+                alpha,
+                spread,
+                blur,
+            } => {
+                frame.gradients.set(frame.gradients.get() + 1);
+                let id = format!("reshiki-glow-{}", frame.gradients.get());
+                // The blur's own region, so nothing of the glow is clipped.
+                let (lo, hi) = super::bounds(&[Primitive::Glow {
+                    commands: commands.clone(),
+                    color: [r, g, b],
+                    alpha,
+                    spread,
+                    blur,
+                }]);
+                s.push_str(&format!(
+                    "<defs><filter id=\"{id}\" filterUnits=\"userSpaceOnUse\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"><feGaussianBlur stdDeviation=\"{blur}\"/></filter></defs><g opacity=\"{alpha}\" filter=\"url(#{id})\"><path d=\"{}\" fill=\"rgb({r},{g},{b})\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{}\" stroke-linejoin=\"round\"/></g>",
+                    lo.x,
+                    lo.y,
+                    hi.x - lo.x,
+                    hi.y - lo.y,
+                    path_data(&commands),
+                    2. * spread
+                ));
+            }
             Primitive::Card {
                 lo,
                 hi,
@@ -617,6 +697,7 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             ),
             Primitive::Picture(_)
             | Primitive::Polyline { .. }
+            | Primitive::Rotated { .. }
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
             | Primitive::Ellipsoid { .. }
@@ -624,7 +705,9 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             | Primitive::ShadedPolygon { .. }
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
-            | Primitive::Card { .. } => {}
+            | Primitive::Card { .. }
+            | Primitive::Gradient { .. }
+            | Primitive::Glow { .. } => {}
         }
     }
 }

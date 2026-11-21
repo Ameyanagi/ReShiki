@@ -26,7 +26,14 @@ pub enum Primitive {
         alpha: f32,
         primitive: Box<Primitive>,
     },
-    Picture(crate::graphics::Graphic),
+    Picture(Box<crate::graphics::Graphic>),
+    /// Text runs ([`Primitive::Text`]) turned `angle` degrees clockwise
+    /// about `pivot`.
+    Rotated {
+        pivot: Point,
+        angle: f32,
+        primitives: Vec<Primitive>,
+    },
     Path {
         commands: Vec<crate::graphics::PathCommand>,
         style: crate::graphics::GraphicStyle,
@@ -120,6 +127,27 @@ pub enum Primitive {
         width: f32,
         color: [u8; 3],
         dash: f32,
+    },
+    /// A gradient fill in exact colors: `stops` (offset, color, alpha) run
+    /// from `from` to `to`, points in the unit square that `frame` (corner,
+    /// x side and y side) maps onto the drawing; a radial one spreads from
+    /// `from` out to the circle through `to`. `commands` fill nonzero.
+    Gradient {
+        commands: Vec<crate::graphics::PathCommand>,
+        frame: [Point; 3],
+        radial: bool,
+        from: [f32; 2],
+        to: [f32; 2],
+        stops: Vec<(f32, [u8; 3], f32)>,
+    },
+    /// A soft glow in an exact color: `commands` filled and grown by
+    /// `spread`, then blurred with a standard deviation of `blur`, at `alpha`.
+    Glow {
+        commands: Vec<crate::graphics::PathCommand>,
+        color: [u8; 3],
+        alpha: f32,
+        spread: f32,
+        blur: f32,
     },
     /// A 3D model's soft background card: a rounded rectangle in exact colors.
     Card {
@@ -231,6 +259,18 @@ pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point,
             }))
         })
         .collect();
+    ink.extend(participant_indicator_ink_boxes(doc, atoms));
+    ink
+}
+
+/// Owned number, mapping and stereo decoration boxes, separate from the
+/// primary atom glyph. Fitted cycle routes keep their passive caches out of
+/// source parameterization while still checking their displayed ink.
+pub(crate) fn participant_indicator_ink_boxes(
+    doc: &Document,
+    atoms: &[u64],
+) -> Vec<(Point, Point)> {
+    let mut ink = vec![];
     for indicator in crate::atom_labels::indicators_with_geometry(doc, doc) {
         if indicator.owner.selected(atoms) && indicator.owner.drawn(doc) {
             ink.extend(label_ink_boxes(&indicator.primitives()));
@@ -1346,6 +1386,29 @@ pub fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
                     .map(|(lo, hi)| (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y))),
             ),
             Primitive::Opacity { alpha, primitive } if *alpha > 0. => collect(primitive, boxes),
+            // The upright box around each turned glyph box.
+            Primitive::Rotated {
+                pivot,
+                angle,
+                primitives,
+            } => {
+                let mut inner = Vec::new();
+                for run in primitives {
+                    collect(run, &mut inner);
+                }
+                boxes.extend(inner.into_iter().map(|(lo, hi)| {
+                    let corners = [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
+                        .map(|p| p.turned(*pivot, *angle));
+                    corners[1..]
+                        .iter()
+                        .fold((corners[0], corners[0]), |(lo, hi), p| {
+                            (
+                                Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                                Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                            )
+                        })
+                }));
+            }
             _ => {}
         }
     }
@@ -1385,6 +1448,22 @@ pub(crate) fn selections_bounds_in_axes(
     doc: &Document,
     selections: &[Vec<u64>],
     axes: Option<(Point, f32)>,
+) -> Vec<Option<(Point, Point)>> {
+    selections_bounds_with_indicators(doc, selections, axes, true)
+}
+
+pub(crate) fn primary_selections_bounds(
+    doc: &Document,
+    selections: &[Vec<u64>],
+) -> Vec<Option<(Point, Point)>> {
+    selections_bounds_with_indicators(doc, selections, None, false)
+}
+
+fn selections_bounds_with_indicators(
+    doc: &Document,
+    selections: &[Vec<u64>],
+    axes: Option<(Point, f32)>,
+    indicators: bool,
 ) -> Vec<Option<(Point, Point)>> {
     use crate::atom_labels::Owner;
     let drawn = doc.abbreviation_render_copy();
@@ -1432,20 +1511,22 @@ pub(crate) fn selections_bounds_in_axes(
             }
         }
     };
-    for label in crate::atom_labels::indicators_with_geometry(doc, doc) {
-        let id = match label.owner {
-            Owner::Number(id)
-            | Owner::Mapping(id)
-            | Owner::AtomStereo(id)
-            | Owner::StereoGroup(id) => id,
-            Owner::BondStereo(a, b) if owners.get(&a) == owners.get(&b) => a,
-            Owner::BondStereo(..) => continue,
-        };
-        if crate::models3d::hides(doc, id) {
-            continue;
+    if indicators {
+        for label in crate::atom_labels::indicators_with_geometry(doc, doc) {
+            let id = match label.owner {
+                Owner::Number(id)
+                | Owner::Mapping(id)
+                | Owner::AtomStereo(id)
+                | Owner::StereoGroup(id) => id,
+                Owner::BondStereo(a, b) if owners.get(&a) == owners.get(&b) => a,
+                Owner::BondStereo(..) => continue,
+            };
+            if crate::models3d::hides(doc, id) {
+                continue;
+            }
+            let corner = label.origin.offset(label.width, label.height);
+            grow(id, &mut [label.origin, corner].into_iter());
         }
-        let corner = label.origin.offset(label.width, label.height);
-        grow(id, &mut [label.origin, corner].into_iter());
     }
     // Only selected objects are measured, so one small selection stays cheap.
     for g in doc.graphics.iter().filter(|g| owners.contains_key(&g.id)) {
@@ -1541,16 +1622,29 @@ pub(crate) fn selections_bounds_in_axes(
             grow(bond.a, &mut [lo, hi].into_iter());
         }
     }
+    // A glow or disc reaches past its ring's atoms.
+    for fill in doc.ring_fills.iter().filter(|f| {
+        matches!(
+            f.effect,
+            crate::ring_fills::RingEffect::Glow | crate::ring_fills::RingEffect::Disc
+        )
+    }) {
+        let owner = fill.atoms.first().and_then(|id| owners.get(id));
+        if owner.is_some()
+            && fill.atoms.iter().all(|id| owners.get(id) == owner)
+            && let Some(paint) = fill.primitive(doc)
+            && let Some(&first) = fill.atoms.first()
+        {
+            let (lo, hi) = crate::scene::bounds(std::slice::from_ref(&paint));
+            grow(first, &mut [lo, hi].into_iter());
+        }
+    }
     for a in doc
         .annotations
         .iter()
         .filter(|a| owners.contains_key(&a.id))
     {
-        let (width, height) = a.size();
-        grow(
-            a.id,
-            &mut [a.position, a.position.offset(width, height)].into_iter(),
-        );
+        grow(a.id, &mut a.corners().into_iter());
     }
     for a in doc.arrows.iter().filter(|a| owners.contains_key(&a.id)) {
         let (lo, hi) = a.bounds();
@@ -2224,6 +2318,18 @@ fn drawing(
     let mut out = vec![];
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
+    // All shadings of the drawing share one band budget.
+    let shaded = graphics
+        .iter()
+        .map(|g| match g.kind {
+            crate::graphics::GraphicKind::Orbital(_) => g
+                .parts()
+                .iter()
+                .filter(|part| part.style.effects.shaded)
+                .count(),
+            _ => usize::from(g.style.effects.shaded),
+        })
+        .sum();
     let mut halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
     let cells = crate::models3d::flat_cells(&raw.models, doc);
     for id in cells.haloed {
@@ -2231,7 +2337,7 @@ fn drawing(
             halos.atoms.push((id, None));
         }
     }
-    push_underlays(&mut out, doc, &graphics, opacity);
+    push_underlays(&mut out, doc, &graphics, shaded, opacity);
     out.extend(cells.behind);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
@@ -2269,8 +2375,22 @@ fn drawing(
     out.extend(cells.above);
     out.extend(crate::models3d::primitives(raw));
     push_arrows_and_annotations(&mut out, doc);
+    let held: std::collections::HashMap<_, _> = doc
+        .graphics
+        .iter()
+        .filter(|g| g.layer >= 0 && g.text.is_some())
+        .filter_map(|g| {
+            Some((
+                g.text?,
+                doc.annotations.iter().find(|a| Some(a.id) == g.text)?,
+            ))
+        })
+        .collect();
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
-        out.extend(graphic_primitive(graphic, &doc.drawing_style.text_style()));
+        out.extend(graphic_primitive(graphic, doc, shaded));
+        if let Some(text) = graphic.text.and_then(|t| held.get(&t)) {
+            push_annotation(&mut out, text);
+        }
         if halos.front.contains(&graphic.id) {
             push_label_halo(&mut out, doc, runs, opacity, &halos.above(Some(graphic.id)));
         }
@@ -2364,12 +2484,11 @@ fn paint_rear_before_front(out: &mut Vec<Primitive>, start: usize) {
 
 fn graphic_primitive(
     g: &&crate::graphics::Graphic,
-    text_style: &crate::typography::TextStyle,
+    doc: &Document,
+    shaded: usize,
 ) -> Vec<Primitive> {
-    if g.kind == crate::graphics::GraphicKind::Picture {
-        vec![Primitive::Picture((*g).clone())]
-    } else {
-        let mut parts: Vec<_> = g
+    if g.kind == crate::graphics::GraphicKind::TlcPlate {
+        let mut out: Vec<_> = g
             .parts()
             .into_iter()
             .map(|p| Primitive::Path {
@@ -2378,29 +2497,318 @@ fn graphic_primitive(
                 filled: p.filled,
             })
             .collect();
-        if let Some(label) = g.superscript_label(text_style) {
+        for label in g.tlc_labels() {
+            push_annotation(&mut out, &label);
+        }
+        return out
+            .into_iter()
+            .map(|p| see_through(p, g.style.effects.opacity))
+            .collect();
+    }
+    if g.cycle.is_some() {
+        return cycle_primitives(g, doc);
+    }
+    if g.kind == crate::graphics::GraphicKind::Piece {
+        return crate::equipment::placed::painted(g, doc);
+    }
+    if g.kind == crate::graphics::GraphicKind::Picture {
+        vec![Primitive::Picture(Box::new((*g).clone()))]
+    } else {
+        use crate::{graphics::GraphicStyle, palette::Color};
+        let flat = |commands, rgb| Primitive::Path {
+            commands,
+            style: GraphicStyle {
+                stroke: Color::Custom(rgb),
+                fill: Some(Color::Custom(rgb)),
+                width_pt: 0.,
+                ..Default::default()
+            },
+            filled: true,
+        };
+        let mut parts: Vec<_> = g
+            .shadow_commands()
+            .map(|commands| flat(commands, crate::graphics::SHADOW_RGB))
+            .into_iter()
+            .collect();
+        let bands = g.shading_bands(shaded);
+        // The color the shape shows: on the dark canvas custom colors arrive
+        // pre-flipped, while Ink shades from black as on the light canvas.
+        let shade = match g.style.fill.unwrap_or(g.style.stroke) {
+            Color::Custom(rgb) => doc.canvas_theme.color(rgb),
+            color => color.rgb(),
+        };
+        let shading = |bands: &[(Vec<Point>, f32)]| -> Vec<Primitive> {
+            bands
+                .iter()
+                .filter_map(|(band, t)| {
+                    use crate::graphics::PathCommand::{Close, Line, Move};
+                    let (first, rest) = band.split_first()?;
+                    let commands = std::iter::once(Move(*first))
+                        .chain(rest.iter().map(|p| Line(*p)))
+                        .chain([Close])
+                        .collect();
+                    // Light on either canvas, so a shaded ball still reads as a ball:
+                    // the canvas flips every color, so flip the shade first.
+                    let rgb = crate::graphics::shade(shade, *t);
+                    Some(flat(commands, doc.canvas_theme.color(rgb)))
+                })
+                .collect()
+        };
+        parts.extend(shading(&bands));
+        let effects = g.style.effects;
+        let gradient = g.gradient_area().zip(effects.gradient.zip(g.style.fill));
+        if let Some(((commands, frame), (gradient, fill))) = gradient.clone() {
+            parts.push(see_through(
+                gradient_primitive(commands, frame, gradient, fill, doc),
+                effects.opacity,
+            ));
+        }
+        // ChemDraw paints a shadowed outline's inside with paper.
+        // A see-through outline stays clear inside.
+        let paper = !parts.is_empty()
+            && bands.is_empty()
+            && gradient.is_none()
+            && effects.opacity.is_none()
+            && g.style.fill.is_none();
+        // A see-through fill fades only the fill; without one, the lines fade.
+        let fades_fill = g.style.fill.is_some() && g.closed_shape();
+        let text_style = &doc.drawing_style.text_style();
+        // Border titles break the outline, never the fill or what is behind.
+        let breaks = g.outline_breaks(text_style);
+        let orbital = match g.kind {
+            crate::graphics::GraphicKind::Orbital(kind) => Some(matches!(
+                kind,
+                crate::scientific::OrbitalKind::S | crate::scientific::OrbitalKind::Sigma
+            )),
+            _ => None,
+        };
+        for (i, p) in g.parts().into_iter().enumerate() {
+            // A shaded orbital phase shades each of its lobes, then outlines
+            // it; a lobe too detailed for the band budget keeps a flat fill.
+            let lobe = orbital
+                .filter(|_| p.filled && p.style.effects.shaded)
+                .map(|oval| crate::graphics::lobe_shading(&p.commands, oval, shaded))
+                .unwrap_or_default();
+            if !lobe.is_empty() {
+                parts.extend(shading(&lobe));
+                parts.push(Primitive::Path {
+                    commands: p.commands,
+                    style: GraphicStyle {
+                        fill: None,
+                        ..p.style
+                    },
+                    filled: false,
+                });
+                continue;
+            }
+            let mut style = p.style;
+            if i == 0 && paper {
+                style.fill = Some(Color::Custom([255; 3]));
+            }
+            let filled = if i == 0 && (!bands.is_empty() || gradient.is_some()) {
+                false
+            } else {
+                p.filled || i == 0 && paper
+            };
+            let path = |style, filled| Primitive::Path {
+                commands: p.commands.clone(),
+                style,
+                filled,
+            };
+            if i == 0 && !breaks.is_empty() {
+                let fade = effects.opacity;
+                if filled {
+                    let mut fill = style.clone();
+                    fill.width_pt = 0.;
+                    let body = path(fill, true);
+                    parts.push(see_through(body, fade.filter(|_| fades_fill)));
+                }
+                style.fill = None;
+                let outline = Primitive::Path {
+                    commands: crate::graphics::panel::broken_outline(&p.commands, &breaks),
+                    style,
+                    filled: false,
+                };
+                parts.push(see_through(outline, fade.filter(|_| !fades_fill)));
+                continue;
+            }
+            match effects.opacity {
+                Some(alpha) if i == 0 && filled && fades_fill => {
+                    let mut fill = style.clone();
+                    fill.width_pt = 0.;
+                    parts.push(see_through(path(fill, true), Some(alpha)));
+                    parts.push(path(style, false));
+                }
+                Some(alpha) if !fades_fill => {
+                    parts.push(see_through(path(style, filled), Some(alpha)))
+                }
+                _ => parts.push(path(style, filled)),
+            }
+        }
+        // A border title reads on the panel's fill as the canvas shows it and
+        // on the page around it.
+        let canvas = doc.canvas_theme;
+        let paper = canvas.background();
+        let backing = g.backing(|c| canvas.color(c.rgb()), paper).unwrap_or(paper);
+        let on_band = g
+            .panel
+            .as_ref()
+            .is_some_and(|p| p.place == crate::graphics::TitlePlace::Bar);
+        parts.extend(
+            g.panel_parts(text_style)
+                .into_iter()
+                .map(|p| Primitive::Path {
+                    commands: p.commands,
+                    style: p.style,
+                    filled: p.filled,
+                }),
+        );
+        // A title on a band reads against the band as the canvas shows it;
+        // the renderer then converts the chosen ink back for that canvas.
+        let band_ink = || {
+            let band = canvas.color(g.style.stroke.rgb());
+            let ink = if crate::color_contrast::luminance(band) > 0.45 {
+                [0; 3]
+            } else {
+                [255; 3]
+            };
+            canvas.color(ink)
+        };
+        let title = if on_band {
+            band_ink()
+        } else {
+            // Each end of a gradient fill is a surface of its own.
+            let mut surfaces = vec![backing, paper];
+            if let (Some(gradient), Some(fill)) = (g.style.effects.gradient, g.style.fill) {
+                surfaces.extend([gradient.from, fill].map(|c| canvas.color(c.rgb())));
+            }
+            canvas.color(crate::graphics::panel::border_title_rgb(
+                canvas.color(g.style.stroke.rgb()),
+                &surfaces,
+            ))
+        };
+        let superscript = g
+            .superscript_label(text_style)
+            .into_iter()
+            .map(|l| (l.style.color.rgb(), l));
+        let titles = g.panel_titles(text_style).into_iter().map(|l| (title, l));
+        for (color, label) in superscript.chain(titles) {
             parts.push(Primitive::Text {
                 position: label.position,
                 text: label.text.into(),
                 size: label.size,
-                color: label.style.color.rgb(),
+                color,
                 style: label.style,
             });
         }
         parts
     }
 }
+/// The SVG ID prefix of a drawing's gradient fills, unlike a 3D model's.
+pub const GRADIENT_ID: &str = "reshiki-gradient-";
+/// How far a glow reaches beyond its shape: the spread and three standard
+/// deviations of blur, past which it is invisible.
+pub(crate) fn glow_reach(spread: f32, blur: f32) -> f32 {
+    spread + 3. * blur
+}
+/// `commands` glowing in `color` as the canvas shows it.
+pub(crate) fn glow_primitive(
+    commands: Vec<crate::graphics::PathCommand>,
+    color: crate::palette::Color,
+    spread: f32,
+    blur: f32,
+    doc: &Document,
+) -> Primitive {
+    Primitive::Glow {
+        commands,
+        color: doc.canvas_theme.color(color.rgb()),
+        alpha: GLOW_ALPHA,
+        spread,
+        blur,
+    }
+}
+/// A glow's strength at its middle, as the plan's soft glow tiles show.
+const GLOW_ALPHA: f32 = 0.9;
+/// `primitive` at `opacity`, or as it is when opaque.
+fn see_through(primitive: Primitive, opacity: Option<f32>) -> Primitive {
+    match opacity {
+        Some(alpha) => Primitive::Opacity {
+            alpha,
+            primitive: Box::new(primitive),
+        },
+        None => primitive,
+    }
+}
+/// `commands` filled with `gradient` from its start color into `fill`, in
+/// the colors the canvas shows them.
+pub(crate) fn gradient_primitive(
+    commands: Vec<crate::graphics::PathCommand>,
+    frame: [Point; 3],
+    gradient: crate::graphics::Gradient,
+    fill: crate::palette::Color,
+    doc: &Document,
+) -> Primitive {
+    let shown = |c: crate::palette::Color| doc.canvas_theme.color(c.rgb());
+    let (from, to) = gradient.ends();
+    Primitive::Gradient {
+        commands,
+        frame,
+        radial: gradient.kind == crate::graphics::GradientKind::Radial,
+        from,
+        to,
+        stops: vec![(0., shown(gradient.from), 1.), (1., shown(fill), 1.)],
+    }
+}
+/// The paper a gradient made while drawing starts from: the canvas's, or the
+/// other canvas's for an object on a card of the other canvas, in the
+/// renderer's canonical bytes.
+pub(crate) fn drawn_paper(doc: &Document, id: u64) -> crate::palette::Color {
+    let canvas = doc.canvas_theme;
+    if doc.on_other_canvas.contains(&id) {
+        crate::palette::Color::Custom(canvas.color(canvas.toggled().background()))
+    } else {
+        crate::graphics::Gradient::PAPER
+    }
+}
+/// A cycle draws only its derived arrows and labels.
+fn cycle_primitives(g: &crate::graphics::Graphic, doc: &Document) -> Vec<Primitive> {
+    let drawn = crate::cycles::drawn(doc, g);
+    let opacity = g.style.effects.opacity;
+    let mut out: Vec<Primitive> = drawn
+        .arrows
+        .iter()
+        .flat_map(|a| a.paths())
+        .map(|p| Primitive::Path {
+            commands: p.commands,
+            style: p.style,
+            filled: p.filled,
+        })
+        .collect();
+    for (origin, text, format) in drawn.labels {
+        for fragment in crate::typography::layout(&text, &format).fragments {
+            out.push(Primitive::Text {
+                position: origin.offset(fragment.position.x, fragment.position.y),
+                text: fragment.text,
+                size: fragment.style.size(),
+                color: fragment.style.color.rgb(),
+                style: fragment.style,
+            });
+        }
+    }
+    out.into_iter().map(|p| see_through(p, opacity)).collect()
+}
 fn push_underlays(
     out: &mut Vec<Primitive>,
     doc: &Document,
     graphics: &[&crate::graphics::Graphic],
+    shaded: usize,
     opacity: &crate::rear_opacity::Paint,
 ) {
     out.extend(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(|g| graphic_primitive(g, &doc.drawing_style.text_style())),
+            .flat_map(|g| graphic_primitive(g, doc, shaded)),
     );
     for fill in &doc.ring_fills {
         out.extend(opacity.owned_parts(
@@ -2776,22 +3184,53 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
         }
     }
     for a in &doc.arrows {
-        out.extend(a.paths().into_iter().map(|p| Primitive::Path {
-            commands: p.commands,
-            style: p.style,
-            filled: p.filled,
-        }));
-    }
-    for a in &doc.annotations {
-        for fragment in crate::typography::layout(&a.text, &a.format).fragments {
-            out.push(Primitive::Text {
-                position: a.position.offset(fragment.position.x, fragment.position.y),
-                text: fragment.text,
-                size: fragment.style.size(),
-                color: fragment.style.color.rgb(),
-                style: fragment.style,
-            });
+        for mut p in a.paths() {
+            // A gradient body fills exactly as a gradient shape does.
+            if let Some(gradient) = &mut p.style.effects.gradient {
+                gradient.from = drawn_paper(doc, a.id);
+                let shape = crate::arrows::shape(a.id, p.commands, &p.style, p.filled);
+                out.extend(graphic_primitive(&&shape, doc, 1));
+            } else {
+                out.push(Primitive::Path {
+                    commands: p.commands,
+                    style: p.style,
+                    filled: p.filled,
+                });
+            }
         }
+    }
+    // Text in a shape in front of the drawing is drawn right after its shape.
+    let front: std::collections::HashSet<_> = doc
+        .graphics
+        .iter()
+        .filter(|g| g.layer >= 0)
+        .filter_map(|g| g.text)
+        .collect();
+    for a in doc.annotations.iter().filter(|a| !front.contains(&a.id)) {
+        push_annotation(out, a);
+    }
+}
+fn push_annotation(out: &mut Vec<Primitive>, a: &crate::document::Annotation) {
+    let layout = crate::typography::layout(&a.text, &a.format);
+    let runs: Vec<_> = layout
+        .fragments
+        .into_iter()
+        .map(|fragment| Primitive::Text {
+            position: a.position.offset(fragment.position.x, fragment.position.y),
+            text: fragment.text,
+            size: fragment.style.size(),
+            color: fragment.style.color.rgb(),
+            style: fragment.style,
+        })
+        .collect();
+    if a.angle == 0. || runs.is_empty() {
+        out.extend(runs);
+    } else {
+        out.push(Primitive::Rotated {
+            pivot: a.position.offset(layout.width / 2., layout.height / 2.),
+            angle: a.angle,
+            primitives: runs,
+        });
     }
 }
 /// Read-only state shared by every bond of the bond pass.
@@ -3727,6 +4166,19 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 let (lo, hi) = g.bounds();
                 points.extend([lo, hi]);
             }
+            Primitive::Rotated {
+                pivot,
+                angle,
+                primitives,
+            } => {
+                let (lo, hi) = bounds(primitives);
+                let pad = STYLE.world(4.);
+                let (lo, hi) = (lo.offset(pad, pad), hi.offset(-pad, -pad));
+                points.extend(
+                    [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]
+                        .map(|p| p.turned(*pivot, *angle)),
+                );
+            }
             Primitive::Path {
                 commands, style, ..
             } => {
@@ -3804,6 +4256,25 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
             } => {
                 let r = outline.width / 2.;
                 points.extend([lo.offset(-r, -r), hi.offset(r, r)]);
+            }
+            Primitive::Gradient { commands, .. } => points.extend(
+                commands
+                    .iter()
+                    .flat_map(crate::graphics::PathCommand::iter_points),
+            ),
+            Primitive::Glow {
+                commands,
+                spread,
+                blur,
+                ..
+            } => {
+                let r = glow_reach(*spread, *blur);
+                for p in commands
+                    .iter()
+                    .flat_map(crate::graphics::PathCommand::iter_points)
+                {
+                    points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                }
             }
             Primitive::Text {
                 position,

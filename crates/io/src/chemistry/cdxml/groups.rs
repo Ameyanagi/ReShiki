@@ -78,6 +78,7 @@ pub fn read_groups(xml: &str, object_map: &[ObjectMapEntry], first_id: u64) -> R
             id,
             members: ids,
             integral,
+            layout: None,
         });
     }
     Ok(result)

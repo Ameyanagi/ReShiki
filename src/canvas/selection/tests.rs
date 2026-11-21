@@ -8,6 +8,59 @@ fn phenylalanine() -> Document {
 }
 
 #[test]
+fn rotated_empty_rectangle_handles_enclose_the_chosen_cycle_outline() {
+    use reshiki::{
+        cycles::{Cycle, Shape},
+        graphics::{Graphic, GraphicKind},
+    };
+    let mut g = Graphic::dragged(
+        1,
+        GraphicKind::Ellipse,
+        World::new(10., 20.),
+        World::new(130., 100.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    g.axis_x = World::new(120., 80.);
+    g.axis_y = World::new(-60., 90.);
+    g.cycle = Some(Box::new(Cycle {
+        shape: Shape::Rectangle,
+        ..Default::default()
+    }));
+    let pad = g.style.width() * 0.5;
+    let mut doc = Document::default();
+    doc.graphics.push(g);
+    let camera = Camera {
+        zoom: 2.,
+        ..Camera::default()
+    };
+    let bounds = Rectangle::with_size(Size::new(1000., 800.));
+    let selection = SelectionBox::new(&doc, &[1], camera, bounds).unwrap();
+    let lo = World::new(-50. - pad, 20. - pad);
+    let hi = World::new(130. + pad, 190. + pad);
+    assert_eq!(
+        selection.corners,
+        [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)]
+    );
+    assert!(selection.resizable);
+    let top_left = camera.screen(lo, bounds);
+    let bottom_right = camera.screen(hi, bounds);
+    let grips = selection.grips();
+    assert_eq!(
+        grips[0],
+        Point::new(top_left.x - FRAME_PADDING_PX, top_left.y - FRAME_PADDING_PX)
+    );
+    assert_eq!(
+        grips[2],
+        Point::new(
+            bottom_right.x + FRAME_PADDING_PX,
+            bottom_right.y + FRAME_PADDING_PX
+        )
+    );
+}
+
+#[test]
 fn rotating_display_frames_and_readouts_keep_upright_label_ink_clear() {
     let source = phenylalanine();
     let ids = source.all_ids();
@@ -251,6 +304,7 @@ fn repeated_asymmetric_rotation_drags_keep_the_pivot_and_preview_geometry() {
         source.add_atom("N", World::new(0., 50.));
         let expected_pivot = if mixed {
             source.annotations.push(Annotation {
+                angle: 0.,
                 id: source.next_id(),
                 position: World::new(120., 60.),
                 text: "Upright".into(),
@@ -433,4 +487,31 @@ fn rotating_rolls_a_model_shown_only_in_3d_and_turns_the_drawing() {
     drag.apply(&mut alone, start.offset(60., 40.), false);
     assert_ne!(alone.models[0].rotation, doc.models[0].rotation);
     assert_eq!(alone.atoms, doc.atoms);
+}
+
+#[test]
+fn an_equipment_piece_keeps_corners_and_rotation_but_not_edges() {
+    use reshiki::equipment::{builtin, placed};
+    let mut doc = Document::default();
+    let id = doc.next_id();
+    let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+    let flask = builtin::find("reshiki/rbf-100-15").unwrap();
+    doc.graphics
+        .push(placed::graphic(id, flask, World::new(0., 0.), scale));
+    let a = doc.add_atom("C", World::new(80., 0.));
+    let b = doc.add_atom("C", World::new(120., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let bounds = Rectangle::new(Point::ORIGIN, Size::new(400., 300.));
+    // With a molecule beside it the piece still decides: no stretching.
+    for ids in [&[id][..], &[id, a, b][..]] {
+        let selection = SelectionBox::new(&doc, ids, Camera::default(), bounds).unwrap();
+        assert_eq!(selection.hit(selection.grips()[0]), Some(Handle::Resize(0)));
+        assert!((0..4).all(|i| !selection.edge_enabled(i)));
+        assert_eq!(
+            selection.hit(selection.rotation_grip()),
+            Some(Handle::Rotate)
+        );
+    }
+    let selection = SelectionBox::new(&doc, &[a, b], Camera::default(), bounds).unwrap();
+    assert!((0..4).any(|i| selection.edge_enabled(i)));
 }

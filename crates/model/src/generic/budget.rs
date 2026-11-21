@@ -233,6 +233,7 @@ impl Presentation {
             abbreviations,
             atom_labels: _,
             ring_fills,
+            highlight_style: _,
             depth_appearance,
             version: _,
             atoms,
@@ -248,6 +249,9 @@ impl Presentation {
             reactions,
             models,
             recent_colors,
+            piece_definitions,
+            on_other_canvas: _,
+            seats,
         } = doc;
         fn records<T>(n: usize) -> usize {
             n.saturating_mul(std::mem::size_of::<T>())
@@ -467,6 +471,10 @@ impl Presentation {
         }
         copy = copy
             .saturating_add(records::<crate::color_contrast::Rgb>(recent_colors.len()))
+            .saturating_add(records::<crate::equipment::format::Definition>(
+                piece_definitions.len(),
+            ))
+            .saturating_add(records::<crate::equipment::solve::Seat>(seats.len()))
             .saturating_add(
                 page_layout
                     .as_ref()

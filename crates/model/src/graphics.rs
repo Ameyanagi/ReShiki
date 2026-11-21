@@ -1,19 +1,33 @@
 //! Editable vector graphics in drawing coordinates. Shared by preview and export.
 mod arc;
+mod effects;
 mod heads;
+pub mod panel;
 mod path;
 mod superscript;
+mod tlc;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
+pub(crate) use effects::bounding_frame;
+pub use effects::{
+    EXPORT_NOTICE, Effects, GLOW_NOTICE, Gradient, GradientKind, SHADOW_RGB, export_notice,
+    lobe_shading, shade, tiled, wave_radius, wavy,
+};
 pub use heads::PathHeads;
+pub use panel::{Divider, Panel, TitlePlace};
 pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
 use serde::{Deserialize, Serialize};
 pub use superscript::GraphicLabel;
+pub use tlc::{MAX_TLC_LANES, MAX_TLC_SPOTS, TlcLane, TlcPlate, TlcRfLabel, TlcSpot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GraphicKind {
     Picture,
+    /// An editable thin-layer chromatography plate with owned lanes and spots.
+    TlcPlate,
+    /// Lab equipment drawn from a piece definition; see [`crate::equipment`].
+    Piece,
     Symbol(crate::scientific::SymbolKind),
     Orbital(crate::scientific::OrbitalKind),
     Rectangle,
@@ -26,6 +40,8 @@ pub enum GraphicKind {
     Braces,
     Curve,
     Path,
+    /// A line icon from the Icons tool; see [`crate::line_icons`].
+    Icon,
 }
 impl GraphicKind {
     pub const DRAWABLE: [Self; 10] = [
@@ -66,6 +82,9 @@ impl std::fmt::Display for GraphicKind {
             Self::Curve => "Bézier curve",
             Self::Path => "Pen path",
             Self::Picture => "Picture",
+            Self::TlcPlate => "TLC plate",
+            Self::Piece => "Equipment piece",
+            Self::Icon => "Icon",
         })
     }
 }
@@ -76,6 +95,13 @@ pub enum LinePattern {
     Solid,
     Dashed,
     Dotted,
+    /// Half-circle waves along the line, as ChemDraw's wavy line.
+    Wavy,
+}
+impl LinePattern {
+    pub const ALL: [Self; 4] = [Self::Solid, Self::Dashed, Self::Dotted, Self::Wavy];
+    /// The patterns of strokes that cannot wave, such as symbols.
+    pub const PLAIN: [Self; 3] = [Self::Solid, Self::Dashed, Self::Dotted];
 }
 impl std::fmt::Display for LinePattern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -83,6 +109,7 @@ impl std::fmt::Display for LinePattern {
             Self::Solid => "Solid",
             Self::Dashed => "Dashed",
             Self::Dotted => "Dotted",
+            Self::Wavy => "Wavy",
         })
     }
 }
@@ -110,6 +137,11 @@ pub struct GraphicStyle {
     pub fill: Option<crate::palette::Color>,
     pub width_pt: f32,
     pub pattern: LinePattern,
+    #[serde(skip_serializing_if = "Effects::is_plain")]
+    pub effects: Effects,
+    /// A rounded rectangle's corner radius; `None` rounds 18% of the shorter side.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub corner_pt: Option<f32>,
 }
 impl Default for GraphicStyle {
     fn default() -> Self {
@@ -118,26 +150,48 @@ impl Default for GraphicStyle {
             fill: None,
             width_pt: 0.6,
             pattern: LinePattern::Solid,
+            effects: Effects::default(),
+            corner_pt: None,
         }
     }
 }
+/// The largest corner radius, beyond any page ChemDraw draws.
+pub const MAX_CORNER_PT: f32 = 1000.;
+/// ChemDraw's dash and gap length, its default hash spacing.
+pub const DASH_PT: f32 = 2.7;
 impl GraphicStyle {
     pub fn width(&self) -> f32 {
         style::DEFAULT.world(self.width_pt)
     }
+    /// As in ChemDraw, dashes and gaps keep one length whatever the line
+    /// width and end square, so a bold dashed line reads as many short
+    /// blocks. Dots stay round and spaced by the width.
     pub fn dashes(&self) -> Vec<f32> {
         let w = self.width();
         match self.pattern {
-            LinePattern::Solid => vec![],
-            LinePattern::Dashed => vec![w * 5.0, w * 3.0],
+            LinePattern::Solid | LinePattern::Wavy => vec![],
+            LinePattern::Dashed => vec![style::DEFAULT.world(DASH_PT); 2],
             LinePattern::Dotted => vec![w * 0.1, w * 2.5],
         }
+    }
+    /// Round line ends, except on dashes.
+    pub fn round_caps(&self) -> bool {
+        self.pattern != LinePattern::Dashed
     }
     pub fn validate(&self) -> Result<(), String> {
         if !self.width_pt.is_finite() || !(0.1..=12.0).contains(&self.width_pt) {
             return Err("Graphic line width must be 0.1–12 pt".into());
         }
-        Ok(())
+        if self
+            .corner_pt
+            .is_some_and(|c| !c.is_finite() || !(0. ..=MAX_CORNER_PT).contains(&c))
+        {
+            return Err("Corner radius must be 0–1000 pt".into());
+        }
+        if self.effects.gradient.is_some() && self.fill.is_none() {
+            return Err("A gradient needs a fill color".into());
+        }
+        self.effects.validate()
     }
 }
 #[derive(Debug, Clone)]
@@ -146,14 +200,102 @@ pub enum GraphicChange {
     Fill(Option<crate::palette::Color>),
     Width(f32),
     Pattern(LinePattern),
+    Shaded(bool),
+    Shadow(Option<f32>),
+    Corner(Option<f32>),
+    Opacity(Option<f32>),
+    Gradient(Option<Gradient>),
+    /// A gradient of this kind for each shape, keeping its own start color
+    /// and, from linear to linear, its own angle; `None` removes it.
+    GradientKind(Option<GradientKind>),
+    /// A new start color for each shape's own gradient.
+    GradientFrom(crate::palette::Color),
+    /// A new angle for each shape's own linear gradient.
+    GradientAngle(f32),
 }
 impl GraphicChange {
     pub fn apply(&self, s: &mut GraphicStyle) {
         match self {
             Self::Stroke(v) => s.stroke = *v,
-            Self::Fill(v) => s.fill = *v,
+            Self::Fill(v) => {
+                s.fill = *v;
+                // Shading and gradients paint the fill, so no fill means neither.
+                if v.is_none() {
+                    s.effects.shaded = false;
+                    s.effects.gradient = None;
+                    // A borderless filled path needs an outline once its fill
+                    // is removed, just like an ordinary unfilled shape.
+                    if s.width_pt == 0. {
+                        s.width_pt = GraphicStyle::default().width_pt;
+                    }
+                }
+            }
             Self::Width(v) => s.width_pt = *v,
             Self::Pattern(v) => s.pattern = *v,
+            Self::Shaded(v) => {
+                s.effects.shaded = *v;
+                // Shading paints the fill color, so an outline gains one.
+                if *v && s.fill.is_none() {
+                    s.fill = Some(s.stroke);
+                }
+                // Shading replaces a gradient and is always opaque.
+                if *v {
+                    s.effects.gradient = None;
+                    s.effects.opacity = None;
+                }
+            }
+            Self::Shadow(v) => s.effects.shadow_pt = *v,
+            Self::Corner(v) => s.corner_pt = *v,
+            Self::Opacity(v) => {
+                s.effects.opacity = *v;
+                if v.is_some() {
+                    s.effects.shaded = false;
+                }
+            }
+            Self::Gradient(v) => {
+                s.effects.gradient = *v;
+                if v.is_some() {
+                    s.effects.shaded = false;
+                    // Paper into the line's tint, so the default reads on
+                    // both canvases; Ink and custom lines fill with themselves.
+                    use crate::palette::{Color, Row};
+                    s.fill = s.fill.or(Some(match s.stroke {
+                        Color::Palette(hue, _) => Color::Palette(hue, Row::Tint),
+                        stroke => stroke,
+                    }));
+                }
+            }
+            Self::GradientKind(None) => s.effects.gradient = None,
+            Self::GradientKind(Some(kind)) => {
+                let gradient = match s.effects.gradient {
+                    Some(
+                        g @ Gradient {
+                            kind: GradientKind::Linear { .. },
+                            ..
+                        },
+                    ) if matches!(kind, GradientKind::Linear { .. }) => g,
+                    Some(g) => Gradient { kind: *kind, ..g },
+                    None => Gradient {
+                        from: Gradient::PAPER,
+                        kind: *kind,
+                    },
+                };
+                Self::Gradient(Some(gradient)).apply(s);
+            }
+            Self::GradientFrom(v) => {
+                if let Some(gradient) = &mut s.effects.gradient {
+                    gradient.from = *v;
+                }
+            }
+            Self::GradientAngle(v) => {
+                if let Some(Gradient {
+                    kind: GradientKind::Linear { angle },
+                    ..
+                }) = &mut s.effects.gradient
+                {
+                    *angle = *v;
+                }
+            }
         }
     }
 }
@@ -204,6 +346,15 @@ pub struct Graphic {
     pub arc: Option<ArcGeometry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub picture: Option<crate::pictures::Picture>,
+    /// The definition and parameter values of a piece of lab equipment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub piece: Option<Box<crate::equipment::placed::PieceRef>>,
+    /// An icon's name and drawing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<Box<crate::line_icons::Icon>>,
+    /// TLC lanes, spot dimensions and Rf labels, in the graphic frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tlc: Option<Box<TlcPlate>>,
     pub id: u64,
     pub kind: GraphicKind,
     pub origin: Point,
@@ -232,6 +383,18 @@ pub struct Graphic {
     /// Optional arrowheads on a single open curve or path.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub heads: Option<PathHeads>,
+    /// Titles, corners and dividers that make a rectangle a figure panel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panel: Option<Panel>,
+    /// A callout leader's attached ends; only lines have one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub leader: Option<crate::leaders::Leader>,
+    /// The intermediates and steps that make an ellipse a catalytic cycle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cycle: Option<Box<crate::cycles::Cycle>>,
+    /// The annotation this closed shape holds, centred inside it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<u64>,
 }
 fn back_layer() -> i32 {
     -1
@@ -264,14 +427,47 @@ impl Graphic {
         sides: BracketSides,
         constrain: bool,
     ) -> Self {
+        let mut style = style;
+        if !kind.closed() {
+            // Shading, shadows and gradients stay with the drawing style for
+            // the next closed shape, not a line or bracket drawn in between;
+            // a see-through line keeps its opacity.
+            style.effects = Effects {
+                opacity: style.effects.opacity,
+                ..Effects::default()
+            };
+        }
+        if kind != GraphicKind::RoundedRectangle {
+            style.corner_pt = None;
+        }
+        // Symbols, icons and orbitals draw no waves.
+        if matches!(
+            kind,
+            GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+        ) && style.pattern == LinePattern::Wavy
+        {
+            style.pattern = LinePattern::Solid;
+        }
         if kind == GraphicKind::Path {
             return Self::pen_curve(id, start, end, style);
         }
-        if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+        if let GraphicKind::Symbol(symbol) = kind {
+            style.fill = symbol.fill();
+        }
+        if kind == GraphicKind::Icon {
+            style.fill = Some(crate::palette::Color::Paper);
+        }
+        if matches!(
+            kind,
+            GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+        ) {
             let delta = Point::new(end.x - start.x, end.y - start.y);
             let length = delta.distance(Point::default());
-            let default = if matches!(kind, GraphicKind::Symbol(_)) {
-                style::DEFAULT.world(8.)
+            let default = if let GraphicKind::Symbol(symbol) = kind {
+                // Condition icons start large enough to read on an arrow.
+                style::DEFAULT.world(if symbol.is_condition() { 11. } else { 8. })
+            } else if kind == GraphicKind::Icon {
+                style::DEFAULT.world(11.)
             } else {
                 42.
             };
@@ -286,7 +482,7 @@ impl Graphic {
             } else {
                 angle
             };
-            let axis = if matches!(kind, GraphicKind::Symbol(_)) {
+            let axis = if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Icon) {
                 Point::new(length, 0.)
             } else {
                 Point::new(length * angle.cos(), length * angle.sin())
@@ -295,6 +491,9 @@ impl Graphic {
                 depth: [0.; 3],
                 arc: None,
                 picture: None,
+                piece: None,
+                icon: None,
+                tlc: None,
                 id,
                 kind,
                 origin: start,
@@ -305,7 +504,7 @@ impl Graphic {
                 superscript: None,
                 phase: Default::default(),
                 phase_flipped: false,
-                layer: if matches!(kind, GraphicKind::Symbol(_)) {
+                layer: if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Icon) {
                     1
                 } else {
                     -1
@@ -313,6 +512,10 @@ impl Graphic {
                 path: vec![],
                 node_types: vec![],
                 heads: None,
+                panel: None,
+                leader: None,
+                cycle: None,
+                text: None,
             };
         }
         let mut dx = end.x - start.x;
@@ -343,6 +546,9 @@ impl Graphic {
             depth: [0.; 3],
             arc: None,
             picture: None,
+            piece: None,
+            icon: None,
+            tlc: None,
             id,
             kind,
             origin,
@@ -357,7 +563,23 @@ impl Graphic {
             path: vec![],
             node_types: vec![],
             heads: None,
+            panel: None,
+            leader: None,
+            cycle: None,
+            text: None,
         }
+    }
+    /// A rounded rectangle's corner radius in drawing units, at most half its
+    /// shorter side.
+    pub fn corner_radius(&self) -> f32 {
+        let side = self
+            .axis_x
+            .distance(Point::default())
+            .min(self.axis_y.distance(Point::default()));
+        self.style
+            .corner_pt
+            .map_or(side * 0.18, |c| style::DEFAULT.world(c))
+            .min(side * 0.5)
     }
     pub fn map_positions(&mut self, f: impl Fn(Point) -> Point) {
         let o = f(self.origin);
@@ -366,9 +588,17 @@ impl Graphic {
         self.origin = o;
         self.axis_x = Point::new(x.x - o.x, x.y - o.y);
         self.axis_y = Point::new(y.x - o.x, y.y - o.y);
+        self.normalize_panel();
     }
     pub fn commands(&self) -> Vec<PathCommand> {
-        if matches!(self.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+        if matches!(
+            self.kind,
+            GraphicKind::Symbol(_)
+                | GraphicKind::Orbital(_)
+                | GraphicKind::Piece
+                | GraphicKind::TlcPlate
+                | GraphicKind::Icon
+        ) {
             return self.parts().into_iter().flat_map(|p| p.commands).collect();
         }
         use PathCommand::*;
@@ -383,11 +613,7 @@ impl Graphic {
                 Close,
             ],
             GraphicKind::RoundedRectangle => {
-                let radius = self
-                    .axis_x
-                    .distance(Point::default())
-                    .min(self.axis_y.distance(Point::default()))
-                    * 0.18;
+                let radius = self.corner_radius();
                 let rx = radius / self.axis_x.distance(Point::default()).max(0.001);
                 let ry = radius / self.axis_y.distance(Point::default()).max(0.001);
                 vec![
@@ -489,19 +715,34 @@ impl Graphic {
         text_style: &crate::typography::TextStyle,
     ) -> (Point, Point) {
         let (mut lo, mut hi) = self.shape_bounds();
-        if let Some(label) = self.superscript_label(text_style) {
-            for (a, b) in label.ink_boxes() {
-                lo.x = lo.x.min(a.x);
-                lo.y = lo.y.min(a.y);
-                hi.x = hi.x.max(b.x);
-                hi.y = hi.y.max(b.y);
-            }
+        let extras = self
+            .panel_parts(text_style)
+            .into_iter()
+            .flat_map(|part| part.commands)
+            .flat_map(|c| c.points())
+            .map(|p| (p, p));
+        let titles = self
+            .superscript_label(text_style)
+            .into_iter()
+            .chain(self.panel_titles(text_style))
+            .flat_map(|label| label.ink_boxes());
+        let tlc = self.tlc_labels().into_iter().map(|a| a.bounds());
+        for (a, b) in extras.chain(titles).chain(tlc) {
+            lo.x = lo.x.min(a.x);
+            lo.y = lo.y.min(a.y);
+            hi.x = hi.x.max(b.x);
+            hi.y = hi.y.max(b.y);
         }
         (lo, hi)
     }
     /// Vector extents, excluding an attached superscript.
     pub fn shape_bounds(&self) -> (Point, Point) {
-        let commands: Vec<_> = self.parts().into_iter().flat_map(|p| p.commands).collect();
+        // A cycle keeps Ellipse as its stored host kind. Measure the same
+        // effective perimeter that paints its chosen shape, including the
+        // legacy mean-radius circle, rather than that storage placeholder.
+        let commands = crate::cycles::outline(self)
+            .and_then(|outline| outline.subpath(0., outline.length()))
+            .unwrap_or_else(|| self.parts().into_iter().flat_map(|p| p.commands).collect());
         let mut points = commands
             .iter()
             .flat_map(PathCommand::iter_points)
@@ -514,10 +755,16 @@ impl Graphic {
             hi.x = hi.x.max(p.x);
             hi.y = hi.y.max(p.y);
         }
-        let pad = if self.kind == GraphicKind::Picture {
-            0.
-        } else {
-            self.style.width() * 0.5
+        let pad = match self.kind {
+            GraphicKind::TlcPlate => self
+                .parts()
+                .iter()
+                .map(|p| p.style.width() * 0.5)
+                .fold(0., f32::max),
+            GraphicKind::Picture => 0.,
+            // A piece's outline is painted twice as wide as its style says.
+            GraphicKind::Piece => self.style.width(),
+            _ => self.style.width() * 0.5,
         };
         (lo.offset(-pad, -pad), hi.offset(pad, pad))
     }
@@ -529,6 +776,14 @@ impl Graphic {
                     .iter()
                     .any(|c| matches!(c, PathCommand::Close)))
     }
+    /// An ordinary filled path may carry no outline. In particular, editable
+    /// exchange can join its contours with doubled, invisible bridge segments.
+    pub fn is_fill_only_path(&self) -> bool {
+        self.kind == GraphicKind::Path
+            && self.style.width_pt == 0.
+            && self.style.fill.is_some()
+            && self.path.iter().any(|c| matches!(c, PathCommand::Close))
+    }
     pub fn hit(&self, p: Point, r: f32) -> bool {
         self.hit_with_text_style(p, r, &crate::typography::TextStyle::default())
     }
@@ -538,11 +793,34 @@ impl Graphic {
         r: f32,
         text_style: &crate::typography::TextStyle,
     ) -> bool {
-        if self.superscript_label(text_style).is_some_and(|label| {
-            label.ink_boxes().into_iter().any(|(lo, hi)| {
-                p.x >= lo.x - r && p.x <= hi.x + r && p.y >= lo.y - r && p.y <= hi.y + r
-            })
+        if self.tlc_labels().iter().any(|a| {
+            let (lo, hi) = a.bounds();
+            p.x >= lo.x - r && p.x <= hi.x + r && p.y >= lo.y - r && p.y <= hi.y + r
         }) {
+            return true;
+        }
+        if self
+            .superscript_label(text_style)
+            .into_iter()
+            .chain(self.panel_titles(text_style))
+            .any(|label| {
+                label.ink_boxes().into_iter().any(|(lo, hi)| {
+                    p.x >= lo.x - r && p.x <= hi.x + r && p.y >= lo.y - r && p.y <= hi.y + r
+                })
+            })
+            || self.panel_parts(text_style).iter().any(|part| {
+                flattened(&part.commands).iter().any(|path| {
+                    if part.filled {
+                        inside_polygon(p, path)
+                    } else {
+                        // Dividers are lines: a click near one picks the panel.
+                        path.windows(2).any(|pair| {
+                            matches!(pair, [a, b] if segment_distance(p, *a, *b) < r + part.style.width() * 0.5)
+                        })
+                    }
+                })
+            })
+        {
             return true;
         }
         if self.kind == GraphicKind::Picture {
@@ -553,21 +831,66 @@ impl Graphic {
                         .any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r))
             });
         }
+        if self.is_fill_only_path() {
+            return boundary_fill_contains(p, &fill_boundaries(&self.commands()));
+        }
+        // A piece's parts carry their own stroke widths.
+        let piece = matches!(self.kind, GraphicKind::Piece | GraphicKind::TlcPlate);
         self.parts().iter().any(|part| {
+            let half = if piece {
+                part.style.width()
+            } else {
+                self.style.width()
+            } * 0.5;
             flattened(&part.commands).iter().any(|path| {
-                path.windows(2).any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r+self.style.width()*0.5)) || (part.filled && inside_polygon(p, path))
+                path.windows(2)
+                    .any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r+half))
+                    || (part.filled && inside_polygon(p, path))
             })
         })
     }
 
     /// Edit one handle, preserving a connected path if its frame rejects the edit.
     pub fn edit_point(&mut self, index: usize, p: Point) -> Result<(), String> {
+        if self.kind == GraphicKind::TlcPlate {
+            return Ok(());
+        }
+        // Dragging a callout leader's end releases it from its target, and
+        // the leader stays a line.
+        let mut ends = self.line_ends();
+        if let Some(leader) = self.leader.as_mut() {
+            match index {
+                0 => leader.start = None,
+                1 => leader.end = None,
+                _ => return Ok(()),
+            }
+            if *leader == Default::default() {
+                self.leader = None;
+            }
+            if !p.is_finite() {
+                return Err("Non-finite graphic point".into());
+            }
+            if let Some(end) = ends.get_mut(index) {
+                *end = p;
+            }
+            self.set_line_ends(ends);
+            return Ok(());
+        }
         if self.kind == GraphicKind::Arc {
             self.edit_arc_endpoint(index, p);
             return Ok(());
         }
         if self.kind == GraphicKind::Picture {
             return Ok(());
+        }
+        if self.kind == GraphicKind::Piece {
+            return Err("An equipment piece keeps its shape: move, turn or scale it".into());
+        }
+        if self.panel.is_some() {
+            return Err("A panel keeps its shape: resize it with its handles".into());
+        }
+        if self.is_icon() {
+            return Err("An icon keeps its shape: move, turn or scale it".into());
         }
         if let Some(result) = self.edit_connected_path_point(index, p) {
             return result;
@@ -589,15 +912,49 @@ impl Graphic {
         Ok(())
     }
     pub fn validate(&self) -> Result<(), String> {
-        self.style.validate()?;
+        if self.is_fill_only_path() {
+            let mut style = self.style.clone();
+            style.width_pt = 0.1;
+            style.validate()?;
+        } else {
+            self.style.validate()?;
+        }
+        if (self.kind == GraphicKind::TlcPlate) != self.tlc.is_some() {
+            return Err("TLC data does not match the graphic kind".into());
+        }
+        if let Some(tlc) = &self.tlc {
+            tlc.validate(self)?;
+        }
         if self.superscript.is_some() && !self.kind.brackets() {
             return Err("A superscript requires a bracket graphic".into());
         }
         if let Some(heads) = self.heads {
-            if !matches!(self.kind, GraphicKind::Curve | GraphicKind::Path) {
+            if !matches!(
+                self.kind,
+                GraphicKind::Line | GraphicKind::Curve | GraphicKind::Path
+            ) {
                 return Err("Path arrowheads do not match the graphic kind".into());
             }
             heads.validate()?;
+        }
+        if let Some(panel) = &self.panel {
+            if !self.kind.panel_capable() {
+                return Err("Panel settings require a rectangle".into());
+            }
+            panel.validate()?;
+        }
+        if let Some(cycle) = &self.cycle {
+            if cycle.shape == crate::cycles::Shape::Circle {
+                let (center, radius) = self.cycle_circle();
+                if self.kind != GraphicKind::Ellipse
+                    || !(center.is_finite() && radius.is_finite() && radius > 1e-3)
+                {
+                    return Err("A catalytic cycle must be a circle of some size".into());
+                }
+            } else if self.kind != GraphicKind::Ellipse || !cycle.shape.valid_frame(self) {
+                return Err("A cycle shape needs a finite frame with two independent axes".into());
+            }
+            cycle.validate()?;
         }
         if let Some(arc) = self.arc {
             if self.kind != GraphicKind::Arc {
@@ -608,6 +965,16 @@ impl Graphic {
         if (self.kind == GraphicKind::Picture) != self.picture.is_some() {
             return Err("Picture data does not match the graphic kind".into());
         }
+        if (self.kind == GraphicKind::Piece) != self.piece.is_some() {
+            return Err("Equipment piece data does not match the graphic kind".into());
+        }
+        if (self.kind == GraphicKind::Icon) != self.icon.is_some() {
+            return Err("Icon data does not match the graphic kind".into());
+        }
+        if let Some(icon) = &self.icon {
+            icon.validate()?;
+        }
+        crate::equipment::placed::validate(self)?;
         if self.picture.is_some() {
             let x = self.axis_x.distance(Point::default());
             let y = self.axis_y.distance(Point::default());
@@ -656,7 +1023,7 @@ pub fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
 }
 // windows(2): an unclosed contour has no closing edge, unlike the closed-contour tests in
 // scientific/label_halo.rs `contains` and mark_placement.rs `intersects`.
-fn inside_polygon(p: Point, path: &[Point]) -> bool {
+pub(crate) fn inside_polygon(p: Point, path: &[Point]) -> bool {
     let mut inside = false;
     for pair in path.windows(2) {
         let [a, b] = pair else {
@@ -667,6 +1034,121 @@ fn inside_polygon(p: Point, path: &[Point]) -> bool {
         }
     }
     inside
+}
+/// Whether `p` lies in the area the outlines `paths` fill together, by the
+/// nonzero rule the renderers use: an inner outline running the other way
+/// leaves a hole.
+pub(crate) fn fills(p: Point, paths: &[Vec<Point>]) -> bool {
+    let mut winding = 0;
+    for path in paths {
+        for (a, b) in path.iter().zip(path.iter().cycle().skip(1)) {
+            if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+                winding += if b.y > a.y { 1 } else { -1 };
+            }
+        }
+    }
+    winding != 0
+}
+
+// Each path here is one retained boundary segment. Its last point must not be
+// joined back to its first: the segments collectively form the closed contours.
+fn boundary_fill_contains(p: Point, paths: &[Vec<Point>]) -> bool {
+    let mut winding = 0;
+    for path in paths {
+        for pair in path.windows(2) {
+            let [a, b] = pair else { continue };
+            if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+                winding += if b.y > a.y { 1 } else { -1 };
+            }
+        }
+    }
+    winding != 0
+}
+
+/// Boundary queries must not treat exact retraced edges as visible ink.
+/// Cancel before flattening: reversed cubics can round their intermediate
+/// points differently, while their original controls still match exactly.
+pub(crate) fn fill_boundaries(commands: &[PathCommand]) -> Vec<Vec<Point>> {
+    use std::collections::HashMap;
+    let key = |[a, b, c, d]: [Point; 4]| -> [u32; 8] {
+        let bits = |v: f32| if v == 0. { 0 } else { v.to_bits() };
+        [
+            bits(a.x),
+            bits(a.y),
+            bits(b.x),
+            bits(b.y),
+            bits(c.x),
+            bits(c.y),
+            bits(d.x),
+            bits(d.y),
+        ]
+    };
+    let mut segments = Vec::new();
+    let mut pending: HashMap<[u32; 8], Vec<usize>> = HashMap::new();
+    let mut append = |start: Point, a: Point, b: Point, end: Point| {
+        // Endpoint-control cubics are the straight lines stored by CDX.
+        let straight = (a == start || a == end) && (b == start || b == end);
+        let (a, b) = if straight { (start, end) } else { (a, b) };
+        let forward = key([start, a, b, end]);
+        let reverse = key([end, b, a, start]);
+        let index = segments.len();
+        let opposite = pending.get_mut(&reverse).and_then(Vec::pop);
+        segments.push((
+            start,
+            if straight {
+                PathCommand::Line(end)
+            } else {
+                PathCommand::Cubic(a, b, end)
+            },
+            forward != reverse && opposite.is_none(),
+        ));
+        if let Some((_, _, visible)) = opposite.and_then(|index| segments.get_mut(index)) {
+            *visible = false;
+        }
+        if opposite.is_none() && forward != reverse {
+            pending.entry(forward).or_default().push(index);
+        }
+    };
+    let mut at = Point::default();
+    let mut first = at;
+    let mut started = false;
+    for command in commands {
+        match *command {
+            PathCommand::Move(p) => {
+                if started {
+                    append(at, at, first, first);
+                }
+                at = p;
+                first = p;
+                started = true;
+            }
+            PathCommand::Line(p) => {
+                append(at, at, p, p);
+                at = p;
+            }
+            PathCommand::Cubic(a, b, p) => {
+                append(at, a, b, p);
+                at = p;
+            }
+            PathCommand::Close => {
+                append(at, at, first, first);
+                at = first;
+            }
+        }
+    }
+    // Filling implicitly closes every contour, including a final open one.
+    if started {
+        append(at, at, first, first);
+    }
+    let mut paths = Vec::new();
+    for (start, command, _) in segments.into_iter().filter(|(_, _, visible)| *visible) {
+        if let PathCommand::Line(end) = command {
+            paths.push(vec![start, end]);
+        } else {
+            paths.extend(flattened(&[PathCommand::Move(start), command]));
+        }
+    }
+    paths
 }
 pub fn flattened(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     let mut paths: Vec<Vec<Point>> = vec![];
@@ -716,3 +1198,28 @@ mod heads_tests;
 mod node_type_tests;
 #[cfg(test)]
 mod path_tests;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scientific::SymbolKind;
+
+    #[test]
+    fn a_condition_icon_keeps_its_shape_when_a_point_edit_is_attempted() {
+        let mut graphic = Graphic::dragged(
+            1,
+            GraphicKind::Symbol(SymbolKind::Light),
+            Point::default(),
+            Point::default(),
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        );
+        let before = graphic.clone();
+        assert_eq!(
+            graphic.edit_point(0, Point::new(1., 1.)).unwrap_err(),
+            "An icon keeps its shape: move, turn or scale it"
+        );
+        assert_eq!(graphic, before);
+    }
+}

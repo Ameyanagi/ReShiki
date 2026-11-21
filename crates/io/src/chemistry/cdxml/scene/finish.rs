@@ -2,6 +2,7 @@ use super::*;
 use crate::{
     atom_labels::{AtomDisplay, MappingDisplay, Number, StereoDisplay},
     bonds::dative_projects,
+    purpose::Purpose,
 };
 
 fn narrow(point: ImportPoint) -> Point {
@@ -111,6 +112,7 @@ impl CdxmlScene {
                 steroid_label: None,
                 undefined_stereo: false,
                 undefined_pseudoasymmetric: false,
+                purpose: Default::default(),
                 stereo_group: *stereo_groups.get(i).ok_or(SceneError::Limit)?,
                 marks: Vec::new(),
                 mark_serial: 0,
@@ -302,12 +304,22 @@ impl CdxmlScene {
                     format: c.format,
                 }
                 .into_document()?;
-                Ok(document::Annotation {
+                let mut caption = document::Annotation {
                     id: c.id,
                     position: narrow(c.position),
                     text,
                     format,
-                })
+                    angle: c.angle,
+                };
+                if c.angle != 0. {
+                    let (w, h) = caption.size();
+                    let at = caption.position;
+                    let centre = c
+                        .centre
+                        .map_or_else(|| at.offset(w / 2., h / 2.).turned(at, c.angle), narrow);
+                    caption.position = centre.offset(-w / 2., -h / 2.);
+                }
+                Ok(caption)
             })
             .collect::<Result<_>>()?;
         document.arrows = self
@@ -375,6 +387,17 @@ impl CdxmlScene {
                 .ok_or(SceneError::Invalid("Missing generic label atom"))?;
             atom.display.set_variable(Some(label));
             atom.cip_label = None;
+        }
+        for purpose in [Purpose::Reference, Purpose::Illustration] {
+            let ids: Vec<_> = self
+                .purposes
+                .iter()
+                .filter(|(p, _)| *p == purpose)
+                .map(|(_, id)| *id)
+                .collect();
+            if !ids.is_empty() {
+                crate::purpose::set(document, &ids, purpose);
+            }
         }
         for attachment in self.attachments {
             let atom = document

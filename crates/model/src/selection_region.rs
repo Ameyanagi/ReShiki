@@ -77,13 +77,7 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         }
     }
     for a in &doc.annotations {
-        let (w, h) = a.size();
-        let p = a.position;
-        if encloses(
-            polygon,
-            &[p, p.offset(w, 0.), p.offset(w, h), p.offset(0., h)],
-            true,
-        ) {
+        if encloses(polygon, &a.corners(), true) {
             result.push(a.id);
         }
     }
@@ -97,9 +91,32 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         }
     }
     for g in &doc.graphics {
-        if flattened(&g.commands())
-            .iter()
-            .all(|path| !path.is_empty() && encloses(polygon, path, false))
+        if g.tlc.is_some() {
+            let paths = flattened(&g.commands());
+            let labels = g.tlc_labels();
+            if (!paths.is_empty() || !labels.is_empty())
+                && paths
+                    .iter()
+                    .all(|path| !path.is_empty() && encloses(polygon, path, false))
+                && labels
+                    .iter()
+                    .all(|label| encloses(polygon, &label.corners(), true))
+            {
+                result.push(g.id);
+            }
+            continue;
+        }
+        let commands = g.commands();
+        let fill_only = g.is_fill_only_path();
+        let paths = if fill_only {
+            crate::graphics::fill_boundaries(&commands)
+        } else {
+            flattened(&commands)
+        };
+        if (!fill_only || !paths.is_empty())
+            && paths
+                .iter()
+                .all(|path| !path.is_empty() && encloses(polygon, path, false))
         {
             result.push(g.id);
         }

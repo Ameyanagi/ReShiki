@@ -4,6 +4,8 @@ use crate::canvas::{Edit, Tool};
 use reshiki::document::{Arrow, Point};
 use reshiki::editing;
 pub(super) mod click;
+#[cfg(test)]
+mod cycle_drop_preview_tests;
 mod placement;
 
 const BOND_TEXT_HINT: &str = "Drag to bond; this text becomes an atom label";
@@ -50,6 +52,46 @@ impl App {
             self.path_click = None;
         }
         match edit {
+            Edit::EquipmentAuthoringPoint(point) => {
+                let _ = self
+                    .equipment_authoring_action(super::equipment_authoring::Action::Point(point));
+                return;
+            }
+            Edit::EquipmentAuthoringShape { at, reach } => {
+                let _ =
+                    self.equipment_authoring_action(super::equipment_authoring::Action::ShapeAt {
+                        at,
+                        reach,
+                    });
+                return;
+            }
+            Edit::EquipmentAuthoringTestStart(epoch) => {
+                let _ = self.equipment_authoring_action(
+                    super::equipment_authoring::Action::TestStart(epoch),
+                );
+                return;
+            }
+            Edit::EquipmentAuthoringTestCancel(epoch) => {
+                let _ = self.equipment_authoring_action(
+                    super::equipment_authoring::Action::TestCancel(epoch),
+                );
+                return;
+            }
+            Edit::EquipmentAuthoringTest {
+                at,
+                epoch,
+                reach,
+                finish,
+            } => {
+                let _ =
+                    self.equipment_authoring_action(super::equipment_authoring::Action::TestAt {
+                        at,
+                        epoch,
+                        reach,
+                        finish,
+                    });
+                return;
+            }
             Edit::ArrowTarget(p, bypass) => {
                 self.arrow_target_click(p, bypass);
                 return;
@@ -62,14 +104,18 @@ impl App {
             }
             Edit::ContextMenu {
                 position,
+                at,
                 selected,
                 hit,
             } => {
                 self.tab.arrows.cancel_source();
                 let closed_inspector = (!self.inspector_open).then_some(self.inspector_tab);
-                self.tab.selected = selected;
                 self.tool = Tool::Select;
-                self.sync_typography();
+                // Every Properties field follows the new selection, so Enter
+                // never applies a value typed for the previous one.
+                self.set_selection(selected);
+                // A cycle's step commands act on the step right-clicked.
+                self.choose_step_at(at, &hit);
                 if let Some(tab) = closed_inspector {
                     self.inspector_open = false;
                     self.inspector_tab = tab;
@@ -123,6 +169,10 @@ impl App {
             return;
         }
         let before = self.tab.doc.clone();
+        // A role a drop gave a part, said after the edit's own status.
+        let mut joined = None;
+        let mut snapped = None;
+        let mut prepared_cycle = false;
         if matches!(edit, Edit::Bond(..) | Edit::TextBond { .. }) {
             self.tab.arrows.cancel_source();
         }
@@ -200,6 +250,17 @@ impl App {
                     self.tab.path_point = Some((id, index));
                 }
                 reshiki::arrow_anchors::edit_handle(&mut self.tab.doc, id, index, p);
+                // The diamond changes an arc's sweep; keep its field in step.
+                if let Some(sweep) = self
+                    .tab
+                    .doc
+                    .arrows
+                    .iter()
+                    .find(|a| a.id == id)
+                    .and_then(|a| a.arc)
+                {
+                    self.tab.arrows.sweep = format!("{sweep:.0}");
+                }
             }
             Edit::ArrowControlFree(id, index, p) => {
                 self.tab.path_point = Some((id, index));
@@ -267,6 +328,10 @@ impl App {
             Edit::Template(anchor, direction) => {
                 return self.place_template(anchor, direction, before);
             }
+            Edit::Piece(at) => return self.place_piece(at, before),
+            Edit::Icon(at) => return self.place_icon(at, before),
+            Edit::Hose(from, to) => return self.place_hose(from, to, before),
+            Edit::HoseGrip { id, grip, to } => return self.drag_hose(id, grip, to, before),
             Edit::Transform {
                 ids,
                 pivot,
@@ -316,7 +381,7 @@ impl App {
                 self.tab.camera.center.x += width_change / (2. * self.tab.camera.zoom);
                 self.viewport.width += width_change;
             }
-            Edit::Move(ids, dx, dy) => {
+            Edit::Move(mut ids, dx, dy) => {
                 if let Some(snapped) = editing::snap_ring(
                     &mut self.tab.doc,
                     &ids,
@@ -326,6 +391,38 @@ impl App {
                     self.tab.selected = snapped;
                 } else {
                     self.tab.doc.translate(&ids, dx, dy);
+                    let moved = ids.clone();
+                    let seats = self.tab.doc.seats.len();
+                    let reach = reshiki::equipment::solve::REACH_PX / self.tab.camera.zoom;
+                    if let Some(snap) =
+                        reshiki::equipment::solve::snap(&mut self.tab.doc, &ids, reach, false)
+                    {
+                        ids = reshiki::equipment::solve::closure(&self.tab.doc, &ids);
+                        snapped = Some(snap);
+                    } else if self.tab.doc.seats.len() < seats {
+                        joined = Some("Pulled out of its assembly".into());
+                    }
+                    reshiki::cycles::fit_moved(&before, &mut self.tab.doc, &moved);
+                    // A piece dragged out of its cycle, panel or group leaves it.
+                    let left = self.tab.doc.take_out(&moved, Point::new(dx, dy));
+                    if let Some(names) = reshiki::grouping::Container::names(&left) {
+                        joined = Some(format!("Took it out of {names}"));
+                    }
+                    // Commit the same candidate geometry the drag showed.
+                    if let Some(proposal) = reshiki::cycles::propose_drop_from(
+                        &before,
+                        &self.tab.doc,
+                        &ids,
+                        Some(self.appearance.two_decimal_weight),
+                    ) {
+                        self.tab.doc = proposal.doc;
+                        prepared_cycle = true;
+                        joined = Some(if proposal.left_reaction {
+                            format!("Now {} · it left its reaction", proposal.target.role)
+                        } else {
+                            format!("Added to the cycle as {}", proposal.target.role)
+                        });
+                    }
                     self.tab.selected = ids;
                 }
             }
@@ -357,19 +454,42 @@ impl App {
             }
             Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
+            Edit::EquipmentAuthoringPoint(_)
+            | Edit::EquipmentAuthoringShape { .. }
+            | Edit::EquipmentAuthoringTestStart(_)
+            | Edit::EquipmentAuthoringTestCancel(_)
+            | Edit::EquipmentAuthoringTest { .. } => return,
             Edit::Click(p) | Edit::RepeatLabel(p) => return self.canvas_click(p, before),
+            Edit::PieceParam { id, param, value } => {
+                return self.set_piece_param(id, &param, value, before);
+            }
         }
-        self.changed(before);
+        if prepared_cycle {
+            let candidate = std::mem::replace(&mut self.tab.doc, before);
+            self.commit_prepared_cycle(candidate);
+        } else {
+            self.changed(before);
+        }
+        if let Some(joined) = joined.filter(|_| !self.error) {
+            self.status = joined;
+        }
+        if let Some(snap) = snapped.filter(|_| !self.error) {
+            self.snapped(&snap);
+        }
     }
     pub(super) fn place_arrow(&mut self, start: Point, end: Point) {
         let id = self.tab.doc.next_id();
-        self.tab.doc.arrows.push(Arrow::new(
+        let mut arrow = Arrow::new(
             id,
             start,
             end,
             self.tab.arrow_style,
             self.tab.arrows.style.clone(),
-        ));
+        );
+        if let Some(sweep) = self.tab.arrows.arc {
+            arrow.set_arc(sweep);
+        }
+        self.tab.doc.arrows.push(arrow);
         self.tab.selected = vec![id];
     }
     fn erase_segment(&mut self, from: Point, to: Point) {

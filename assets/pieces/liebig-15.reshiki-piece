@@ -1,0 +1,175 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/liebig-15",
+ "revision": 1,
+ "family": "liebig",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Liebig condenser, 15/25",
+  "ja": "リービッヒ冷却管 15/25"
+ },
+ "category": "condenser",
+ "keywords": [
+  "Liebig",
+  "condenser",
+  "reflux",
+  "リービッヒ",
+  "冷却管"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-5 -11.6L-5 -3.4L5 -3.4L5 -11.6Z"
+  },
+  {
+   "id": "s1",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M5 -4L5 -203L-5 -203L-5 -4Z"
+  },
+  {
+   "id": "s2",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M5 -16L12 -26L12 -166L5 -176L-5 -176L-12 -166L-12 -26L-5 -16Z"
+  },
+  {
+   "id": "s3",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-6.5 -202L-6.5 -200L6.5 -200L6.5 -202Z"
+  },
+  {
+   "id": "s4",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M8 -34.6L20 -34.6L20 -33.3L24.5 -34.6L24.5 -33.3L29 -34.6L29 -33.4L33 -34.8L33 -41.2L29 -42.6L29 -41.4L24.5 -42.7L24.5 -41.4L20 -42.7L20 -41.4L8 -41.4Z"
+  },
+  {
+   "id": "s5",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M8 -160.6L20 -160.6L20 -159.3L24.5 -160.6L24.5 -159.3L29 -160.6L29 -159.4L33 -160.8L33 -167.2L29 -168.6L29 -167.4L24.5 -168.7L24.5 -167.4L20 -168.7L20 -167.4L8 -167.4Z"
+  },
+  {
+   "id": "s6",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-5 -26L-5 -176"
+  },
+  {
+   "id": "s7",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M5 -26L5 -176"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "kind": "taper",
+   "size": "15/25",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "draw": "standard"
+  },
+  {
+   "id": "top",
+   "kind": "taper",
+   "size": "15/25",
+   "gender": "F",
+   "at": [
+    0,
+    -231
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "draw": "standard"
+  },
+  {
+   "id": "water-in",
+   "kind": "plug",
+   "family": "hose",
+   "gender": "M",
+   "size_mm": 7,
+   "at": [
+    33,
+    -38
+   ],
+   "dir": [
+    1,
+    0
+   ]
+  },
+  {
+   "id": "water-out",
+   "kind": "plug",
+   "family": "hose",
+   "gender": "M",
+   "size_mm": 7,
+   "at": [
+    33,
+    -164
+   ],
+   "dir": [
+    1,
+    0
+   ]
+  }
+ ],
+ "holds": [
+  {
+   "id": "top-neck",
+   "kind": "grip",
+   "from": [
+    0,
+    -202
+   ],
+   "to": [
+    0,
+    -200
+   ],
+   "diameter_mm": 13
+  },
+  {
+   "id": "jacket",
+   "kind": "grip",
+   "from": [
+    0,
+    -46
+   ],
+   "to": [
+    0,
+    -156
+   ],
+   "diameter_mm": 24
+  }
+ ]
+}

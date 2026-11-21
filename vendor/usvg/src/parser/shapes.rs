@@ -9,22 +9,45 @@ use tiny_skia_path::Path;
 use super::svgtree::{AId, EId, SvgNode};
 use super::{converter, units};
 use crate::{ApproxEqUlps, IsValidLength, Rect};
+mod budget;
+use budget::Budget;
 
-pub(crate) fn convert(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
-    match node.tag_name()? {
-        EId::Rect => convert_rect(node, state),
-        EId::Circle => convert_circle(node, state),
-        EId::Ellipse => convert_ellipse(node, state),
+pub(crate) fn convert(
+    node: SvgNode,
+    state: &converter::State,
+    cache: &mut converter::Cache,
+) -> Option<Arc<Path>> {
+    let mut budget = Budget {
+        max: cache.remaining_segments(),
+        max_empty: cache.remaining_depth(),
+        exceeded: false,
+    };
+    let path = match node.tag_name()? {
+        EId::Rect => convert_rect(node, state, &mut budget),
+        EId::Circle => convert_circle(node, state, &mut budget),
+        EId::Ellipse => convert_ellipse(node, state, &mut budget),
         EId::Line => convert_line(node, state),
-        EId::Polyline => convert_polyline(node),
-        EId::Polygon => convert_polygon(node),
-        EId::Path => convert_path(node),
+        EId::Polyline => convert_polyline(node, &mut budget),
+        EId::Polygon => convert_polygon(node, &mut budget),
+        EId::Path => convert_path(node, &mut budget),
         _ => None,
+    };
+    if budget.exceeded
+        || budget
+            .max
+            .is_some_and(|limit| path.as_ref().is_some_and(|p| p.len() > limit))
+    {
+        cache.conversion_failed = true;
+        return None;
     }
+    path
 }
 
-pub(crate) fn convert_path(node: SvgNode) -> Option<Arc<Path>> {
+fn convert_path(node: SvgNode, budget: &mut Budget) -> Option<Arc<Path>> {
     let value: &str = node.attribute(AId::D)?;
+    if !budget.preflight_path(value) {
+        return None;
+    }
     let mut builder = tiny_skia_path::PathBuilder::new();
     for segment in svgtypes::SimplifyingPathParser::from(value) {
         let segment = match segment {
@@ -58,12 +81,16 @@ pub(crate) fn convert_path(node: SvgNode) -> Option<Arc<Path>> {
                 builder.close();
             }
         }
+        if budget.max.is_some_and(|limit| builder.len() > limit) {
+            budget.exceeded = true;
+            return None;
+        }
     }
 
     builder.finish().map(Arc::new)
 }
 
-fn convert_rect(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
+fn convert_rect(node: SvgNode, state: &converter::State, budget: &mut Budget) -> Option<Arc<Path>> {
     // 'width' and 'height' attributes must be positive and non-zero.
     let width = node.convert_user_length(AId::Width, state, Length::zero());
     let height = node.convert_user_length(AId::Height, state, Length::zero());
@@ -105,16 +132,16 @@ fn convert_rect(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
         builder.move_to(x + rx, y);
 
         builder.line_to(x + width - rx, y);
-        builder.arc_to(rx, ry, 0.0, false, true, x + width, y + ry);
+        builder.arc_to(rx, ry, 0.0, false, true, x + width, y + ry, budget);
 
         builder.line_to(x + width, y + height - ry);
-        builder.arc_to(rx, ry, 0.0, false, true, x + width - rx, y + height);
+        builder.arc_to(rx, ry, 0.0, false, true, x + width - rx, y + height, budget);
 
         builder.line_to(x + rx, y + height);
-        builder.arc_to(rx, ry, 0.0, false, true, x, y + height - ry);
+        builder.arc_to(rx, ry, 0.0, false, true, x, y + height - ry, budget);
 
         builder.line_to(x, y + ry);
-        builder.arc_to(rx, ry, 0.0, false, true, x + rx, y);
+        builder.arc_to(rx, ry, 0.0, false, true, x + rx, y, budget);
 
         builder.close();
 
@@ -171,18 +198,22 @@ fn convert_line(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
     builder.finish().map(Arc::new)
 }
 
-fn convert_polyline(node: SvgNode) -> Option<Arc<Path>> {
-    let builder = points_to_path(node, "Polyline")?;
+fn convert_polyline(node: SvgNode, budget: &mut Budget) -> Option<Arc<Path>> {
+    let builder = points_to_path(node, "Polyline", budget)?;
     builder.finish().map(Arc::new)
 }
 
-fn convert_polygon(node: SvgNode) -> Option<Arc<Path>> {
-    let mut builder = points_to_path(node, "Polygon")?;
+fn convert_polygon(node: SvgNode, budget: &mut Budget) -> Option<Arc<Path>> {
+    let mut builder = points_to_path(node, "Polygon", budget)?;
     builder.close();
     builder.finish().map(Arc::new)
 }
 
-fn points_to_path(node: SvgNode, eid: &str) -> Option<tiny_skia_path::PathBuilder> {
+fn points_to_path(
+    node: SvgNode,
+    eid: &str,
+    budget: &mut Budget,
+) -> Option<tiny_skia_path::PathBuilder> {
     use svgtypes::PointsParser;
 
     let mut builder = tiny_skia_path::PathBuilder::new();
@@ -193,6 +224,10 @@ fn points_to_path(node: SvgNode, eid: &str) -> Option<tiny_skia_path::PathBuilde
                     builder.move_to(x as f32, y as f32);
                 } else {
                     builder.line_to(x as f32, y as f32);
+                }
+                if budget.max.is_some_and(|limit| builder.len() > limit) {
+                    budget.exceeded = true;
+                    return None;
                 }
             }
         }
@@ -219,7 +254,11 @@ fn points_to_path(node: SvgNode, eid: &str) -> Option<tiny_skia_path::PathBuilde
     Some(builder)
 }
 
-fn convert_circle(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
+fn convert_circle(
+    node: SvgNode,
+    state: &converter::State,
+    budget: &mut Budget,
+) -> Option<Arc<Path>> {
     let cx = node.convert_user_length(AId::Cx, state, Length::zero());
     let cy = node.convert_user_length(AId::Cy, state, Length::zero());
     let r = node.convert_user_length(AId::R, state, Length::zero());
@@ -232,10 +271,14 @@ fn convert_circle(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> 
         return None;
     }
 
-    ellipse_to_path(cx, cy, r, r)
+    ellipse_to_path(cx, cy, r, r, budget)
 }
 
-fn convert_ellipse(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
+fn convert_ellipse(
+    node: SvgNode,
+    state: &converter::State,
+    budget: &mut Budget,
+) -> Option<Arc<Path>> {
     let cx = node.convert_user_length(AId::Cx, state, Length::zero());
     let cy = node.convert_user_length(AId::Cy, state, Length::zero());
     let (rx, ry) = resolve_rx_ry(node, state);
@@ -256,16 +299,16 @@ fn convert_ellipse(node: SvgNode, state: &converter::State) -> Option<Arc<Path>>
         return None;
     }
 
-    ellipse_to_path(cx, cy, rx, ry)
+    ellipse_to_path(cx, cy, rx, ry, budget)
 }
 
-fn ellipse_to_path(cx: f32, cy: f32, rx: f32, ry: f32) -> Option<Arc<Path>> {
+fn ellipse_to_path(cx: f32, cy: f32, rx: f32, ry: f32, budget: &mut Budget) -> Option<Arc<Path>> {
     let mut builder = tiny_skia_path::PathBuilder::new();
     builder.move_to(cx + rx, cy);
-    builder.arc_to(rx, ry, 0.0, false, true, cx, cy + ry);
-    builder.arc_to(rx, ry, 0.0, false, true, cx - rx, cy);
-    builder.arc_to(rx, ry, 0.0, false, true, cx, cy - ry);
-    builder.arc_to(rx, ry, 0.0, false, true, cx + rx, cy);
+    builder.arc_to(rx, ry, 0.0, false, true, cx, cy + ry, budget);
+    builder.arc_to(rx, ry, 0.0, false, true, cx - rx, cy, budget);
+    builder.arc_to(rx, ry, 0.0, false, true, cx, cy - ry, budget);
+    builder.arc_to(rx, ry, 0.0, false, true, cx + rx, cy, budget);
     builder.close();
     builder.finish().map(Arc::new)
 }
@@ -280,6 +323,7 @@ trait PathBuilderExt {
         sweep: bool,
         x: f32,
         y: f32,
+        budget: &mut Budget,
     );
 }
 
@@ -293,7 +337,11 @@ impl PathBuilderExt for tiny_skia_path::PathBuilder {
         sweep: bool,
         x: f32,
         y: f32,
+        budget: &mut Budget,
     ) {
+        if budget.exceeded {
+            return;
+        }
         let prev = match self.last_point() {
             Some(v) => v,
             None => return,
@@ -310,16 +358,22 @@ impl PathBuilderExt for tiny_skia_path::PathBuilder {
 
         match kurbo::Arc::from_svg_arc(&svg_arc) {
             Some(arc) => {
-                arc.to_cubic_beziers(0.1, |p1, p2, p| {
-                    self.cubic_to(
-                        p1.x as f32,
-                        p1.y as f32,
-                        p2.x as f32,
-                        p2.y as f32,
-                        p.x as f32,
-                        p.y as f32,
-                    );
-                });
+                for segment in arc.append_iter(0.1) {
+                    if budget.max.is_some_and(|limit| self.len() >= limit) {
+                        budget.exceeded = true;
+                        return;
+                    }
+                    if let kurbo::PathEl::CurveTo(p1, p2, p) = segment {
+                        self.cubic_to(
+                            p1.x as f32,
+                            p1.y as f32,
+                            p2.x as f32,
+                            p2.y as f32,
+                            p.x as f32,
+                            p.y as f32,
+                        );
+                    }
+                }
             }
             None => {
                 self.line_to(x, y);

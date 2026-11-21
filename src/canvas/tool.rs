@@ -22,6 +22,10 @@ pub enum Tool {
     Ring,
     RingPreset(reshiki::rings::Preset),
     Template,
+    /// Places the piece armed in the Equipment browser.
+    Equipment,
+    /// Places the icon armed in the Icons browser.
+    Icons,
     Arrow,
     Text,
     Erase,
@@ -102,6 +106,8 @@ impl Tool {
                 "Click to place or attach · Drag rotates in 15° steps · {alt} rotates freely or connects by a bond"
             ),
             Self::Template => "Click to place or attach · Drag to orient · Esc cancels".into(),
+            Self::Equipment => "Choose a piece, then click to place it · Esc cancels".into(),
+            Self::Icons => "Choose an icon, then click to place it · Esc closes".into(),
             Self::Arrow => {
                 "Click to place or change an arrow · Click again to switch · Drag to draw".into()
             }
@@ -109,12 +115,17 @@ impl Tool {
                 "Click an atom to name it · Double-click or {alt}-click another atom to repeat the label · Click empty space for a caption · Esc clears the remembered label"
             ),
             Self::Erase => "Drag to erase atoms, bonds and objects along the stroke".into(),
+            Self::Graphic(GraphicKind::Symbol(kind)) if kind.is_condition() => {
+                "Click to place · Drag to set the size · Group it with an arrow to move them together"
+                    .into()
+            }
             Self::Graphic(GraphicKind::Symbol(_)) => format!(
                 "Click an atom to attach · Drag from it to orbit in 15° steps · {alt} or Shift places freely · Click empty space for a free symbol"
             ),
             Self::Graphic(GraphicKind::Orbital(_)) => format!(
                 "Click to place · Drag from the node for size and direction · Shift snaps to 15° · {alt} bypasses atom snapping"
             ),
+            Self::Graphic(GraphicKind::TlcPlate) => "Drag a plate frame · Edit lanes and spots in Properties · Esc cancels".into(),
             Self::Graphic(GraphicKind::Path) => {
                 "Drag the first segment · Click adds a line · Drag adds a curve · Click the first node to close · Esc cancels"
                     .into()

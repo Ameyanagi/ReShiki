@@ -233,6 +233,7 @@ fn select_all_keeps_a_closed_caption_inspector_closed() {
         app.tab.camera.zoom = 2.;
         app.tab.camera.center = Point::new(42., -20.);
         app.tab.doc.annotations.push(Annotation {
+            angle: 0.,
             id: 1,
             position: Point::new(-120., 30.),
             text: "Conditions".into(),
@@ -272,6 +273,7 @@ fn caption_context_menu_keeps_a_closed_inspector_closed() {
         app.tab.camera.zoom = 2.;
         app.tab.camera.center = Point::new(42., -20.);
         app.tab.doc.annotations.push(Annotation {
+            angle: 0.,
             id: 1,
             position: Point::new(-120., 30.),
             text: "Conditions".into(),
@@ -281,6 +283,7 @@ fn caption_context_menu_keeps_a_closed_inspector_closed() {
         let viewport = app.viewport;
         let position = iced::Point::new(300., 200.);
         let _ = app.update(Message::Canvas(Edit::ContextMenu {
+            at: Default::default(),
             position,
             selected: vec![1],
             hit: vec![1],
@@ -327,6 +330,7 @@ fn selection_revealing_properties_keeps_targets_at_the_same_screen_position() {
             app.tab.fit_to_view = true;
             let at = Point::new(-120., 30.);
             app.tab.doc.annotations.push(Annotation {
+                angle: 0.,
                 id: 1,
                 position: at,
                 text: "Conditions".into(),

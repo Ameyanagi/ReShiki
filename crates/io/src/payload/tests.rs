@@ -11,6 +11,7 @@ fn drawing() -> Document {
     let b = doc.add_atom("O", Point::new(40., 0.));
     doc.add_bond(a, b, 1, "plain");
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: Point::new(0., 60.),
         text: "ReShiki 日本語".into(),

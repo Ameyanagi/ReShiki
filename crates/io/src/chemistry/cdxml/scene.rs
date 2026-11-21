@@ -61,6 +61,15 @@ pub struct NativeCaption {
     pub position: ImportPoint,
     pub text: String,
     pub format: NativeFormat,
+    /// Clockwise turn in degrees, about `centre`, or without one about
+    /// `position`, as ChemDraw turns text about its anchor.
+    #[serde(skip_serializing_if = "is_upright")]
+    pub angle: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub centre: Option<ImportPoint>,
+}
+fn is_upright(angle: &f32) -> bool {
+    *angle == 0.
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct SceneAtom {
@@ -120,6 +129,9 @@ pub struct CdxmlScene {
     /// after owned circles are excluded from subsequent readers.
     pub objects: Vec<ObjectMapEntry>,
     pub removed_sources: Vec<usize>,
+    /// Purposes ReShiki wrote, with the atom or arrow each applies to.
+    #[serde(skip)]
+    pub purposes: Vec<(crate::purpose::Purpose, u64)>,
 }
 #[derive(Clone, Debug)]
 pub struct ImportedCdxml {
@@ -360,6 +372,30 @@ impl Objects {
     }
 }
 
+impl CdxmlScene {
+    /// The drawing objects each file object became, by the file's object ID.
+    pub fn file_objects(&self, prepared: &PreparedCdxml) -> Result<HashMap<u64, Vec<u64>>> {
+        let source = presentation::parse(&prepared.expanded_xml)?;
+        let nodes: Vec<_> = source.descendants().filter(Node::is_element).collect();
+        let mut out: HashMap<u64, Vec<u64>> = HashMap::new();
+        for entry in &self.objects {
+            if let Some(id) = nodes
+                .get(entry.source)
+                .and_then(|n| n.attribute("id"))
+                .and_then(|id| id.parse().ok())
+            {
+                out.entry(id).or_default().extend(&entry.atoms);
+            }
+        }
+        // A fragment can be listed more than once.
+        for ids in out.values_mut() {
+            ids.sort_unstable();
+            ids.dedup();
+        }
+        Ok(out)
+    }
+}
+
 /// Assemble native helper values without narrowing numbers or changing the
 /// prepared snapshot. All source identities refer to its expanded XML.
 pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
@@ -430,6 +466,31 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         &mut slots,
         &mut objects,
     )?;
+    let mut purposes = Vec::new();
+    for (ordinal, node) in nodes.iter().enumerate() {
+        let Some(text) = node.attribute(crate::exchange::PURPOSE) else {
+            continue;
+        };
+        let Some(purpose) = crate::purpose::Purpose::ALL
+            .into_iter()
+            .find(|p| p.label() == text)
+        else {
+            continue;
+        };
+        if node.has_tag_name("n") {
+            let p = point(
+                node.attribute("p").ok_or(SceneError::Missing("p"))?,
+                prepared.source_scale,
+            )?;
+            let index = *order.get(ordinal).ok_or(SceneError::Limit)?;
+            // The purpose goes to the atom's whole molecule.
+            if let Ok(id) = association.identify(&tree, index, p, "") {
+                purposes.push((purpose, id));
+            }
+        } else if let Some(ids) = objects.get(ordinal) {
+            purposes.extend(ids.iter().map(|id| (purpose, *id)));
+        }
+    }
     let Remap {
         removed,
         old_to_new,
@@ -466,6 +527,7 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     )?;
     restore_abbreviation_presentations(prepared, root, &reader, &mut base)?;
     let mut scene = scene_result(prepared, base, objects, removed, &source_by_index)?;
+    scene.purposes = purposes;
     if !hidden.is_empty() {
         scene.notices.push(HIDDEN_DRAWING_NOTICE.into());
     }
@@ -519,7 +581,7 @@ fn hidden_drawing_sources(
         }
         if !matches!(
             node.tag_name().name(),
-            "t" | "arrow" | "curve" | "graphic" | "embeddedobject"
+            "t" | "arrow" | "curve" | "graphic" | "embeddedobject" | "tlcplate"
         ) || !represented.is_empty()
             || node.attribute("ChemicallySignificant") == Some("yes")
             || node.attribute("ObjectID").is_some_and(|id| !id.is_empty())
@@ -615,11 +677,24 @@ fn read_captions_and_arrows(
     mut next_id: u64,
 ) -> Result<u64> {
     let arrows = super::ArrowReader::new(&prepared.expanded_xml)?;
+    let stepped = stepped_arrows(nodes);
+    // The graphics reader reads the pages of a CDXML document; on a lone
+    // page a line stays an arrow, as before.
+    let document = nodes.first().is_some_and(|root| root.has_tag_name("CDXML"));
+    let panels: HashSet<_> = nodes
+        .iter()
+        .filter(|n| graphics::panel_record(**n).is_some())
+        .map(|n| n.id())
+        .collect();
     for page in nodes.iter().filter(|n| n.has_tag_name("page")) {
         let defaults = attributes(*page);
         for node in page.descendants().filter(Node::is_element) {
             let ordinal = *ordinals.get(&node.id()).ok_or(SceneError::Limit)?;
             if matches!(objects.get(ordinal), Some([])) {
+                continue;
+            }
+            // A panel's titles come back with the panel.
+            if node.ancestors().any(|a| panels.contains(&a.id())) {
                 continue;
             }
             if node.has_tag_name("t")
@@ -628,19 +703,42 @@ fn read_captions_and_arrows(
                     .is_none_or(|p| !matches!(p.tag_name().name(), "n" | "objecttag"))
             {
                 let text = reader.read(node, Some(&defaults), false)?;
-                let position = point(
-                    node.attribute("BoundingBox")
-                        .or_else(|| node.attribute("p"))
-                        .unwrap_or("0 0"),
-                    prepared.source_scale,
-                )?;
+                let corner = node
+                    .attribute("BoundingBox")
+                    .or_else(|| node.attribute("p"))
+                    .unwrap_or("0 0");
+                let position = point(corner, prepared.source_scale)?;
+                // Degrees in 16.16 fixed point.
+                let angle = (super::numeric::float(node.attribute("RotationAngle").unwrap_or("0"))?
+                    / 65536.)
+                    .rem_euclid(360.) as f32;
+                // A broken angle reads as upright text.
+                let angle = if angle.is_finite() { angle } else { 0. };
+                // A turned caption's box surrounds the turned text, so its
+                // centre is the text's centre.
+                let centre = match node.attribute("BoundingBox") {
+                    Some(bounds) if angle != 0. => {
+                        let far: Vec<_> = bounds.split_whitespace().skip(2).collect();
+                        let far = point(&far.join(" "), prepared.source_scale)?;
+                        Some(ImportPoint {
+                            x: (position.x + far.x) / 2.,
+                            y: (position.y + far.y) / 2.,
+                        })
+                    }
+                    _ => None,
+                };
                 base.annotations.push(NativeCaption {
                     id: next_id,
                     position,
                     text: text.text,
                     format: text.format,
+                    angle,
+                    centre,
                 });
             } else if node.has_tag_name("arrow")
+                && !(document
+                    && graphics::bare_stroke(node)
+                    && !node.attribute("id").is_some_and(|id| stepped.contains(id)))
                 || node.has_tag_name("curve")
                     && ["ArrowheadHead", "ArrowheadTail"].iter().any(|key| {
                         !matches!(
@@ -650,7 +748,7 @@ fn read_captions_and_arrows(
                     })
                     && arrows.legacy_curve(ordinal, prepared.source_scale)?
             {
-                base.arrows.push(arrows.read(
+                base.arrows.push(arrows.read_drawing(
                     ordinal,
                     prepared.source_scale,
                     &prepared.palette.colors,
@@ -664,6 +762,21 @@ fn read_captions_and_arrows(
         }
     }
     Ok(next_id)
+}
+/// The IDs of the arrows ChemDraw's reaction steps list, directly or by the
+/// older graphic that an arrow supersedes.
+fn stepped_arrows<'a>(nodes: &[Node<'a, '_>]) -> HashSet<&'a str> {
+    let listed: HashSet<_> = nodes
+        .iter()
+        .filter(|n| n.has_tag_name("step"))
+        .filter_map(|n| n.attribute("ReactionStepArrows"))
+        .flat_map(str::split_whitespace)
+        .collect();
+    let superseding = nodes
+        .iter()
+        .filter(|n| n.attribute("id").is_some_and(|id| listed.contains(id)))
+        .filter_map(|n| n.attribute("SupersededBy"));
+    superseding.chain(listed.iter().copied()).collect()
 }
 fn styled_label_atoms(
     prepared: &PreparedCdxml,
@@ -1100,5 +1213,6 @@ fn scene_result(
                     .ok_or(SceneError::Limit)
             })
             .collect::<Result<_>>()?,
+        purposes: Vec::new(),
     })
 }

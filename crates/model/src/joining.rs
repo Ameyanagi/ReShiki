@@ -85,6 +85,7 @@ fn moving_ids(doc: &Document, selected: &[u64]) -> Vec<u64> {
     }
     // An arrow takes its condition text with it, as Copy and Delete do.
     crate::arrow_labels::include_labels(doc, &mut moving);
+    crate::shape_text::include_texts(doc, &mut moving);
     doc.all_ids()
         .into_iter()
         .filter(|id| moving.contains(id))
@@ -352,6 +353,18 @@ impl Prepared {
             {
                 arrow.start_anchor = original.start_anchor.clone();
                 arrow.end_anchor = original.end_anchor.clone();
+            }
+        }
+        // So does an unselected callout leader.
+        for graphic in &mut placed.graphics {
+            if !self.moving.contains(&graphic.id)
+                && let Some(original) = self.original.graphics.iter().find(|g| g.id == graphic.id)
+            {
+                graphic.leader = original.leader.clone();
+            }
+            // A cycle keeps every part, moved or not; the join remaps its atoms.
+            if let Some(original) = self.original.graphics.iter().find(|g| g.id == graphic.id) {
+                graphic.cycle = original.cycle.clone();
             }
         }
         let joined_mapping: HashMap<_, _> = self

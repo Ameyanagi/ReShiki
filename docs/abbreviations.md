@@ -26,7 +26,7 @@ Properties → Labels & chemistry → Chemical abbreviations provides compact la
 - Select a connected fragment whose outside bonds meet at most two selected atoms, enter a name and optional reversed label, and choose **Abbreviate selection**. This changes presentation only.
 - **Expand selected** or **Expand all** restores the internal atoms for editing. A collapsed group selects, moves, copies and deletes as a unit. Individual atom-property changes require expansion.
 
-Each action is one Undo step. Native version-10 documents preserve custom names and reversed labels. SVG, PDF and PNG display the abbreviated drawing. Editable binary/XML exchange carries explicit nested chemical fragments; imported labels can expand back to real atoms. Common reversed labels are recognized on import. Custom reversed spellings are native-only.
+Each action is one Undo step. Native version-10 documents preserve custom names and reversed labels. SVG, PDF and PNG display the abbreviated drawing. Editable binary/XML exchange carries explicit nested chemical fragments; imported labels can expand back to real atoms. Common reversed labels are recognized on import. Other formula labels on one bond open with both spellings, with the attachment atom at the bond as ChemDraw lays them out (PPh3 and Ph3P, PtBu3 and tBu3P); any other custom reversed spelling is native-only.
 
 MOL export writes every collapsed group as a superatom (`SUP`) substance group
 over its real atoms, so programs that ignore groups still read the full

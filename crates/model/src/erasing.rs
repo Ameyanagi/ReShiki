@@ -88,7 +88,10 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
         doc.annotations
             .iter()
             .filter(|a| {
+                // In the text's own upright frame.
                 let (w, h) = a.size();
+                let centre = a.position.offset(w / 2., h / 2.);
+                let (from, to) = (from.turned(centre, -a.angle), to.turned(centre, -a.angle));
                 box_hit(a.position, a.position.offset(w, h), from, to, radius)
             })
             .map(|a| a.id),
@@ -115,8 +118,22 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
                             .into_iter()
                             .any(|(lo, hi)| box_hit(lo, hi, from, to, radius))
                     })
+                    || g.tlc_labels().iter().any(|label| {
+                        let (lo, hi) = label.bounds();
+                        box_hit(lo, hi, from, to, radius)
+                    })
                     || g.parts().iter().any(|part| {
-                        path_hit(&part.commands, from, to, radius + part.style.width() / 2.)
+                        if g.is_fill_only_path() {
+                            crate::graphics::fill_boundaries(&part.commands)
+                                .iter()
+                                .any(|path| {
+                                    path.windows(2).any(|pair| {
+                                        matches!(pair, [a, b] if crossed(from, to, *a, *b, radius))
+                                    })
+                                })
+                        } else {
+                            path_hit(&part.commands, from, to, radius + part.style.width() / 2.)
+                        }
                     })
             })
             .map(|g| g.id),
@@ -136,7 +153,7 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
         .collect();
     drop(drawn);
     if !ids.is_empty() {
-        doc.delete(&ids);
+        doc.delete(&crate::shape_text::with_texts(doc, &ids));
     }
     if !bonds.is_empty() {
         let affected: Vec<_> = bonds.iter().flat_map(|(a, b)| [*a, *b]).collect();

@@ -1,7 +1,7 @@
 //! Editing aids drawn over the document: handles, notices and badges, gesture outlines and hover, the erase cursor, the selection box and tilt bounds.
 
 use crate::canvas::hit::{
-    bond_target_with, bond_target_with_text, bond_text_at, hit_selection_with_orbital,
+    bond_target_with, bond_target_with_text, bond_text_at, hit_selection_cached,
 };
 use crate::canvas::overlay::{ACCENT, ACCENT_STRONG, ACCENT_TINT};
 use crate::canvas::{
@@ -290,6 +290,164 @@ impl MoleculeCanvas<'_> {
         }
     }
 
+    /// Where a drop would add a part to a cycle: the arc it joins lit up and
+    /// a dashed accent box round the part; the badge names what it does.
+    pub(super) fn draw_cycle_drop(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        target: Option<&reshiki::cycles::Target>,
+        bounds: Rectangle,
+    ) {
+        let Some(target) = target else {
+            return;
+        };
+        for arc in &target.arc {
+            if let [first, rest @ ..] = arc.as_slice() {
+                let path = Path::new(|b| {
+                    b.move_to(self.camera.screen(*first, bounds));
+                    for p in rest {
+                        b.line_to(self.camera.screen(*p, bounds));
+                    }
+                });
+                frame.stroke(
+                    &path,
+                    Stroke::default()
+                        .with_width(6.)
+                        .with_color(Color { a: 0.35, ..ACCENT })
+                        .with_line_cap(canvas::LineCap::Round),
+                );
+            }
+        }
+        let (lo, hi) = target.ink;
+        let a = self.camera.screen(lo, bounds);
+        let b = self.camera.screen(hi, bounds);
+        let path = Path::rounded_rectangle(
+            Point::new(a.x - 6., a.y - 6.),
+            iced::Size::new(b.x - a.x + 12., b.y - a.y + 12.),
+            6.0.into(),
+        );
+        frame.fill(&path, Color { a: 0.12, ..ACCENT });
+        frame.stroke(
+            &path,
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: &[5., 3.],
+                    offset: 0,
+                },
+                ..Stroke::default().with_width(1.4).with_color(ACCENT)
+            },
+        );
+    }
+
+    /// A ring round the joint a moving piece snaps to, and what releasing
+    /// does: green where it seats, dashed amber where it needs an adapter or
+    /// nothing fits.
+    pub(super) fn draw_seat_hint(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        hint: Option<&super::SeatHint>,
+        bounds: Rectangle,
+    ) {
+        let Some(hint) = hint else {
+            return;
+        };
+        let (ring, tint, ink) = if hint.fits {
+            ([34, 139, 84], [226, 244, 233], [22, 96, 56])
+        } else {
+            ([214, 140, 20], [253, 241, 214], [122, 76, 0])
+        };
+        let center = self.camera.screen(hint.at, bounds);
+        let radius = (hint.radius * self.camera.zoom).max(8.) + 5.;
+        let dash = [5., 3.];
+        frame.stroke(
+            &Path::circle(center, radius),
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: if hint.fits { &[] } else { &dash },
+                    offset: 0,
+                },
+                ..Stroke::default().with_width(2.).with_color(rgb(ring))
+            },
+        );
+        let width = crate::app::text_width(&hint.text, 12.) + 12.;
+        let position = Point::new(
+            (center.x + radius + 8.).clamp(4., (bounds.width - width - 4.).max(4.)),
+            (center.y - 10.).clamp(4., (bounds.height - 30.).max(4.)),
+        );
+        let pill = Path::rounded_rectangle(position, iced::Size::new(width, 22.), 11.0.into());
+        frame.fill(&pill, rgb(tint));
+        frame.stroke(
+            &pill,
+            Stroke::default().with_width(1.).with_color(rgb(ring)),
+        );
+        frame.fill_text(canvas::Text {
+            content: hint.text.clone(),
+            position: position + Vector::new(6., 4.),
+            color: rgb(ink),
+            size: 12.into(),
+            font: iced::Font::with_name(reshiki::style::ui_font_family()),
+            ..Default::default()
+        });
+    }
+
+    /// With Option held over a seated piece, outline what an Option-drag
+    /// would pull out of its assembly, before the button goes down.
+    pub(super) fn draw_pull_out(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        if !self.tool.selects() || state.gesture.is_some() || !state.modifiers.alt() {
+            return;
+        }
+        let Some(p) = state.cursor.filter(|p| bounds.contains(*p)) else {
+            return;
+        };
+        let at = self
+            .camera
+            .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+        let seated =
+            |id: &u64| (self.doc.seats.iter()).any(|s| s.a.piece == *id || s.b.piece == *id);
+        let hit: Vec<u64> = crate::canvas::hit::hit_selection(
+            self.doc,
+            at,
+            self.camera.world_len(pick::PICK_RADIUS_PX),
+        )
+        .into_iter()
+        .filter(seated)
+        .collect();
+        if hit.is_empty() {
+            return;
+        }
+        // As the press resolves it: integral groups first, then the pull-out.
+        let hit = self.doc.expand_integral_groups(&hit);
+        let out = reshiki::equipment::solve::detached(self.doc, &hit);
+        let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &out) else {
+            return;
+        };
+        let (a, b) = (
+            self.camera.screen(lo, bounds),
+            self.camera.screen(hi, bounds),
+        );
+        let path = Path::rounded_rectangle(
+            Point::new(a.x - 6., a.y - 6.),
+            iced::Size::new(b.x - a.x + 12., b.y - a.y + 12.),
+            6.0.into(),
+        );
+        frame.fill(&path, Color { a: 0.08, ..ACCENT });
+        frame.stroke(
+            &path,
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: &[5., 3.],
+                    offset: 0,
+                },
+                ..Stroke::default().with_width(1.6).with_color(ACCENT)
+            },
+        );
+    }
+
     pub(super) fn draw_editor_markers(
         &self,
         frame: &mut layered::Frame<'_>,
@@ -331,7 +489,8 @@ impl MoleculeCanvas<'_> {
             && (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
         {
             for a in preview.arrows.iter().filter(|a| selected.contains(&a.id)) {
-                if let Some([departure, arrival]) = a.bezier_controls() {
+                // An arc's controls follow its sweep; only its diamond moves it.
+                if let Some([departure, arrival]) = a.bezier_controls().filter(|_| !a.is_arc()) {
                     for (endpoint, control) in [(a.start, departure), (a.end, arrival)] {
                         draw_direction_line(
                             frame,
@@ -340,7 +499,7 @@ impl MoleculeCanvas<'_> {
                         );
                     }
                 }
-                for node in &a.nodes {
+                for node in a.nodes.iter().filter(|_| !a.is_arc()) {
                     let anchor = self.camera.screen(node.point, bounds);
                     for control in node.controls {
                         draw_direction_line(frame, anchor, self.camera.screen(control, bounds));
@@ -379,6 +538,66 @@ impl MoleculeCanvas<'_> {
                     }
                 }
             }
+        }
+    }
+
+    /// A selected piece's handles: diamonds to drag a part or a liquid's
+    /// surface, circles to click through a part's states. Hovering one names
+    /// its parameter and value.
+    pub(super) fn draw_piece_handles(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        doc: &Document,
+        selected: &[u64],
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        use reshiki::equipment::solve::adjust;
+        let dragged = match &state.gesture {
+            Some(Gesture::PieceHandle { id, handle, .. }) => Some((*id, handle)),
+            Some(_) => return,
+            None => None,
+        };
+        if !self.tool.selects() {
+            return;
+        }
+        for g in (doc.graphics.iter()).filter(|g| g.piece.is_some() && selected.contains(&g.id)) {
+            for h in adjust::handles(g) {
+                let at = self
+                    .camera
+                    .screen(World::new(h.at[0] as f32, h.at[1] as f32), bounds);
+                let shape = if h.toggle {
+                    HandleShape::Circle(4.5)
+                } else {
+                    HandleShape::Diamond
+                };
+                let chosen = dragged.is_some_and(|(id, d)| {
+                    id == g.id && d.param == h.param && d.part == h.part && d.grip == h.grip
+                });
+                draw_handle(frame, at, shape, chosen);
+            }
+        }
+        let Some(c) = state
+            .cursor
+            .filter(|c| dragged.is_none() && !state.modifiers.alt() && bounds.contains(*c))
+        else {
+            return;
+        };
+        let local = Point::new(c.x - bounds.x, c.y - bounds.y);
+        let p = self.camera.world(local, bounds);
+        if let Some((id, h)) = self.piece_handle_at(p)
+            && let Some(g) = self.doc.graphics.iter().find(|g| g.id == id)
+        {
+            let text = match h.grip {
+                Some(reshiki::equipment::solve::hose::Grip::Middle) => "Hose · drag to bend".into(),
+                Some(_) => "Hose end · drag onto a hose barb".into(),
+                None => {
+                    let how = if h.toggle { "click to switch" } else { "drag" };
+                    let text = crate::app::equipment::value_text(g, &h.param, None);
+                    format!("{text} · {how}")
+                }
+            };
+            badge(frame, bounds, local, text, true);
         }
     }
 
@@ -520,7 +739,13 @@ impl MoleculeCanvas<'_> {
                 }
             }
         }
-        for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
+        for graphic in preview.graphics.iter().filter(|g| {
+            selected.contains(&g.id)
+                && g.panel.is_none()
+                && g.cycle.is_none()
+                && g.kind != reshiki::graphics::GraphicKind::Piece
+                && !g.is_icon()
+        }) {
             if let Some(handles) = graphic.path_handles() {
                 self.draw_path_handles(frame, graphic, handles, bounds, edit_points);
             } else if edit_points {
@@ -732,11 +957,11 @@ impl MoleculeCanvas<'_> {
                         }
                         return ControlFlow::Continue(());
                     }
-                    let mut hit = hit_selection_with_orbital(
+                    let mut hit = hit_selection_cached(
                         self.doc,
                         point,
                         self.camera.world_len(pick::PICK_RADIUS_PX),
-                        state.scene.borrow_mut().foreground_orbital(self.doc),
+                        &mut state.scene.borrow_mut(),
                     );
                     if self.tool.selects() && hit.is_empty() {
                         hit = state
@@ -745,8 +970,14 @@ impl MoleculeCanvas<'_> {
                             .ring_at(self.doc, point)
                             .unwrap_or_default();
                     }
+                    // The hover shows what a click selects: the whole object,
+                    // or inside a selected one the piece under the pointer.
                     if self.tool.selects() && !state.modifiers.alt() {
-                        hit = self.doc.expand_groups(&hit);
+                        hit = if state.modifiers.shift() {
+                            self.doc.expand_groups(&hit)
+                        } else {
+                            self.doc.click_selection(self.selected, &hit)
+                        };
                     }
                     markers::Markers::hover(self.doc, &hit).draw(frame, self.camera, bounds, false);
                 }

@@ -97,9 +97,11 @@ pub struct Part {
 #[doc(hidden)]
 pub fn part(doc: &Document, ids: Option<&[ObjectId]>) -> Result<Part, OpError> {
     let Some(ids) = ids else {
+        // The whole drawing leaves out Illustration molecules.
+        let doc = crate::purpose::only(doc, crate::purpose::Purpose::is_chemical).into_owned();
         return Ok(Part {
             atoms: doc.atoms.iter().map(|atom| atom.id).collect(),
-            doc: doc.clone(),
+            doc,
         });
     };
     let selected = ids::resolve(doc, ids)?;

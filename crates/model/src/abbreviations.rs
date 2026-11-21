@@ -527,6 +527,7 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         abbreviations,
         atom_labels,
         ring_fills,
+        highlight_style,
         depth_appearance,
         version,
         atoms,
@@ -540,6 +541,9 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         reactions,
         models,
         recent_colors,
+        piece_definitions,
+        on_other_canvas: _,
+        seats,
         property_captions,
         compound_numbers,
     } = a;
@@ -550,6 +554,7 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         && *graphics == b.graphics
         && *generic == b.generic
         && *canvas_theme == b.canvas_theme
+        && *highlight_style == b.highlight_style
         && *color_theme == b.color_theme
         && *custom_theme == b.custom_theme
         && *drawing_style == b.drawing_style
@@ -564,6 +569,8 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         && *reactions == b.reactions
         && *models == b.models
         && *recent_colors == b.recent_colors
+        && *piece_definitions == b.piece_definitions
+        && *seats == b.seats
         && *property_captions == b.property_captions
         && *compound_numbers == b.compound_numbers
 }
@@ -899,6 +906,8 @@ impl Document {
                 {
                     return true;
                 }
+                // Atom maps label atoms for a reaction; they leave the
+                // fragment's chemistry, and so the group, unchanged.
                 let atoms_unchanged = g.members.iter().all(|id| {
                     atoms
                         .get(id)
@@ -911,7 +920,6 @@ impl Document {
                                 a.explicit_h,
                                 a.no_implicit,
                                 a.radical_electrons,
-                                a.map_num,
                                 a.attachment,
                                 &a.centroid,
                             ) == (
@@ -921,7 +929,6 @@ impl Document {
                                 b.explicit_h,
                                 b.no_implicit,
                                 b.radical_electrons,
-                                b.map_num,
                                 b.attachment,
                                 &b.centroid,
                             )

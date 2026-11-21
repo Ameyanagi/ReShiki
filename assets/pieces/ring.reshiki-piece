@@ -1,0 +1,116 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/ring",
+ "revision": 1,
+ "family": "ring",
+ "variant": {},
+ "names": {
+  "en": "Support ring",
+  "ja": "リング"
+ },
+ "category": "holding",
+ "keywords": [
+  "ring",
+  "support ring",
+  "iron ring",
+  "リング"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "path": "M-120 -15L-100 -15A3 3 0 0 1 -97 -12L-97 12A3 3 0 0 1 -100 15L-120 15A3 3 0 0 1 -123 12L-123 -12A3 3 0 0 1 -120 -15Z"
+  },
+  {
+   "id": "s1",
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "path": "M-109.99 -15A0.01 0.01 0 0 1 -110.01 -15A0.01 0.01 0 0 1 -109.99 -15Z"
+  },
+  {
+   "id": "s2",
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "path": "M-112.5 -27L-107.5 -27A1.5 1.5 0 0 1 -106 -25.5L-106 -16.5A1.5 1.5 0 0 1 -107.5 -15L-112.5 -15A1.5 1.5 0 0 1 -114 -16.5L-114 -25.5A1.5 1.5 0 0 1 -112.5 -27Z"
+  },
+  {
+   "id": "s3",
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "path": "M-117 -31L-103 -31A2 2 0 0 1 -101 -29L-101 -28A2 2 0 0 1 -103 -26L-117 -26A2 2 0 0 1 -119 -28L-119 -29A2 2 0 0 1 -117 -31Z"
+  },
+  {
+   "id": "s4",
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "path": "M-95.5 -4L-88.5 -4A1.5 1.5 0 0 1 -87 -2.5L-87 2.5A1.5 1.5 0 0 1 -88.5 4L-95.5 4A1.5 1.5 0 0 1 -97 2.5L-97 -2.5A1.5 1.5 0 0 1 -95.5 -4Z"
+  },
+  {
+   "id": "s5",
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "path": "M-108 -2.5L-32 -2.5A2 2 0 0 1 -30 -0.5L-30 0.5A2 2 0 0 1 -32 2.5L-108 2.5A2 2 0 0 1 -110 0.5L-110 -0.5A2 2 0 0 1 -108 -2.5Z"
+  },
+  {
+   "id": "s6",
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "path": "M-34.3 0A34.3 6.3 0 0 1 34.3 0L31.7 0A31.7 3.7 0 0 0 -31.7 0Z"
+  },
+  {
+   "id": "s7",
+   "layer": "front",
+   "material": "metal",
+   "role": "solid",
+   "path": "M34.3 0A34.3 6.3 0 0 1 -34.3 0L-31.7 0A31.7 3.7 0 0 0 31.7 0Z"
+  }
+ ],
+ "holds": [
+  {
+   "id": "boss",
+   "kind": "slider",
+   "from": [
+    -110,
+    -6
+   ],
+   "to": [
+    -110,
+    6
+   ],
+   "diameter_mm": [
+    8,
+    16
+   ]
+  },
+  {
+   "id": "ring",
+   "kind": "jaw",
+   "from": [
+    0,
+    -3
+   ],
+   "to": [
+    0,
+    3
+   ],
+   "diameter_mm": [
+    30,
+    90
+   ]
+  }
+ ]
+}

@@ -121,6 +121,7 @@ fn gallery(cases: &[(&str, Document)]) -> Document {
             ),
         );
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: doc.next_id(),
             position: center.offset(-165., 160.),
             text: (*label).into(),

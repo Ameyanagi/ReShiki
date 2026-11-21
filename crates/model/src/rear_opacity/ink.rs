@@ -79,7 +79,11 @@ fn stroke(commands: &[PathCommand], style: &GraphicStyle) -> Option<Vec<PathComm
     let dashes = style.dashes();
     let stroke = tiny_skia::Stroke {
         width: style.width(),
-        line_cap: tiny_skia::LineCap::Round,
+        line_cap: if style.round_caps() {
+            tiny_skia::LineCap::Round
+        } else {
+            tiny_skia::LineCap::Butt
+        },
         line_join: tiny_skia::LineJoin::Round,
         dash: if dashes.is_empty() {
             None

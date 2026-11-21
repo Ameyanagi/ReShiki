@@ -277,6 +277,7 @@ async fn generic_drawing_export_keeps_the_snapshot_and_other_drawing_loss_notice
     ));
     let caption = document.next_id();
     document.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(30., 70.),
         text: "heat".into(),

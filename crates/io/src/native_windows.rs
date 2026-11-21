@@ -11,10 +11,27 @@ fn transform(value: usvg::Transform) -> [f32; 6] {
 }
 
 fn color(paint: &usvg::Paint, opacity: f32) -> Result<[u8; 4], String> {
-    match paint {
-        usvg::Paint::Color(c) => Ok([c.red, c.green, c.blue, (opacity * 255.).round() as u8]),
-        _ => Err("Unsupported native print paint; export a PDF instead.".into()),
-    }
+    let stops = match paint {
+        usvg::Paint::Color(c) => {
+            return Ok([c.red, c.green, c.blue, (opacity * 255.).round() as u8]);
+        }
+        // A drawing's gradient fill prints flat, in its average color; a 3D
+        // model's shading still asks for a PDF.
+        usvg::Paint::LinearGradient(g) if g.id().starts_with(scene::GRADIENT_ID) => g.stops(),
+        usvg::Paint::RadialGradient(g) if g.id().starts_with(scene::GRADIENT_ID) => g.stops(),
+        _ => return Err("Unsupported native print paint; export a PDF instead.".into()),
+    };
+    let n = stops.len().max(1) as f32;
+    let (r, g, b, a) = stops.iter().fold((0., 0., 0., 0.), |(r, g, b, a), stop| {
+        let c = stop.color();
+        (
+            r + f32::from(c.red) / n,
+            g + f32::from(c.green) / n,
+            b + f32::from(c.blue) / n,
+            a + stop.opacity().get() / n,
+        )
+    });
+    Ok([r, g, b, a * opacity * 255.].map(|v| v.round() as u8))
 }
 
 fn collect(

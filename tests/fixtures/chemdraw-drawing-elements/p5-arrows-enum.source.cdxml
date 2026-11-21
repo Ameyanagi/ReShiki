@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE CDXML SYSTEM "http://www.cambridgesoft.com/xml/cdxml.dtd" >
+<CDXML CreationProgram="reshiki-probe" BoundingBox="0 0 540 720" LabelFont="3" LabelSize="10" CaptionFont="3" CaptionSize="7" LineWidth="1" BoldWidth="4" BondLength="30" HashSpacing="2.7" MarginWidth="2" color="0" bgcolor="1">
+<colortable><color r="1" g="1" b="1"/><color r="0" g="0" b="0"/><color r="1" g="0" b="0"/><color r="0" g="0" b="1"/></colortable>
+<fonttable><font id="3" charset="iso-8859-1" name="Arial"/></fonttable>
+<page id="1" BoundingBox="0 0 540 720" HeightPages="1" WidthPages="1">
+<arrow id="101" Z="101" LineType="Solid" FillType="None" BoundingBox="30.00 48.00 105.00 62.00" Head3D="105.00 55.00 0" Tail3D="30.00 55.00 0"/>
+<t id="102" p="25.00 72.00" Z="102"><s font="3" size="6" color="0">line LineType=Solid</s></t>
+<arrow id="103" Z="103" LineType="Solid" FillType="None" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="130.00 48.00 205.00 62.00" Head3D="205.00 55.00 0" Tail3D="130.00 55.00 0"/>
+<t id="104" p="125.00 72.00" Z="104"><s font="3" size="6" color="0">arrow LineType=Solid</s></t>
+<arrow id="105" Z="105" LineType="Dashed" FillType="None" BoundingBox="230.00 48.00 305.00 62.00" Head3D="305.00 55.00 0" Tail3D="230.00 55.00 0"/>
+<t id="106" p="225.00 72.00" Z="106"><s font="3" size="6" color="0">line LineType=Dashed</s></t>
+<arrow id="107" Z="107" LineType="Dashed" FillType="None" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="330.00 48.00 405.00 62.00" Head3D="405.00 55.00 0" Tail3D="330.00 55.00 0"/>
+<t id="108" p="325.00 72.00" Z="108"><s font="3" size="6" color="0">arrow LineType=Dashed</s></t>
+<arrow id="109" Z="109" LineType="Bold" FillType="None" BoundingBox="430.00 48.00 505.00 62.00" Head3D="505.00 55.00 0" Tail3D="430.00 55.00 0"/>
+<t id="110" p="425.00 72.00" Z="110"><s font="3" size="6" color="0">line LineType=Bold</s></t>
+<arrow id="111" Z="111" LineType="Bold" FillType="None" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="30.00 90.00 105.00 104.00" Head3D="105.00 97.00 0" Tail3D="30.00 97.00 0"/>
+<t id="112" p="25.00 114.00" Z="112"><s font="3" size="6" color="0">arrow LineType=Bold</s></t>
+<arrow id="113" Z="113" LineType="Wavy" FillType="None" BoundingBox="130.00 90.00 205.00 104.00" Head3D="205.00 97.00 0" Tail3D="130.00 97.00 0"/>
+<t id="114" p="125.00 114.00" Z="114"><s font="3" size="6" color="0">line LineType=Wavy</s></t>
+<arrow id="115" Z="115" LineType="Wavy" FillType="None" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="230.00 90.00 305.00 104.00" Head3D="305.00 97.00 0" Tail3D="230.00 97.00 0"/>
+<t id="116" p="225.00 114.00" Z="116"><s font="3" size="6" color="0">arrow LineType=Wavy</s></t>
+<arrow id="117" Z="117" LineType="Dashed Bold" FillType="None" BoundingBox="330.00 90.00 405.00 104.00" Head3D="405.00 97.00 0" Tail3D="330.00 97.00 0"/>
+<t id="118" p="325.00 114.00" Z="118"><s font="3" size="6" color="0">line LineType=Dashed Bold</s></t>
+<arrow id="119" Z="119" LineType="Dashed Bold" FillType="None" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="430.00 90.00 505.00 104.00" Head3D="505.00 97.00 0" Tail3D="430.00 97.00 0"/>
+<t id="120" p="425.00 114.00" Z="120"><s font="3" size="6" color="0">arrow LineType=Dashed Bold</s></t>
+<arrow id="121" Z="121" LineType="Bold Wavy" FillType="None" BoundingBox="30.00 132.00 105.00 146.00" Head3D="105.00 139.00 0" Tail3D="30.00 139.00 0"/>
+<t id="122" p="25.00 156.00" Z="122"><s font="3" size="6" color="0">line LineType=Bold Wavy</s></t>
+<arrow id="123" Z="123" LineType="Bold Wavy" FillType="None" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="130.00 132.00 205.00 146.00" Head3D="205.00 139.00 0" Tail3D="130.00 139.00 0"/>
+<t id="124" p="125.00 156.00" Z="124"><s font="3" size="6" color="0">arrow LineType=Bold Wavy</s></t>
+<arrow id="125" Z="125" LineType="Dashed Wavy" FillType="None" BoundingBox="230.00 132.00 305.00 146.00" Head3D="305.00 139.00 0" Tail3D="230.00 139.00 0"/>
+<t id="126" p="225.00 156.00" Z="126"><s font="3" size="6" color="0">line LineType=Dashed Wavy</s></t>
+<arrow id="127" Z="127" LineType="Dashed Wavy" FillType="None" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="330.00 132.00 405.00 146.00" Head3D="405.00 139.00 0" Tail3D="330.00 139.00 0"/>
+<t id="128" p="325.00 156.00" Z="128"><s font="3" size="6" color="0">arrow LineType=Dashed Wavy</s></t>
+<arrow id="129" Z="129" FillType="None" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="430.00 132.00 505.00 146.00" Head3D="505.00 139.00 0" Tail3D="430.00 139.00 0"/>
+<t id="130" p="425.00 156.00" Z="130"><s font="3" size="6" color="0">Solid Full</s></t>
+<arrow id="131" Z="131" FillType="None" ArrowheadHead="HalfLeft" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="30.00 174.00 105.00 188.00" Head3D="105.00 181.00 0" Tail3D="30.00 181.00 0"/>
+<t id="132" p="25.00 198.00" Z="132"><s font="3" size="6" color="0">Solid HalfLeft</s></t>
+<arrow id="133" Z="133" FillType="None" ArrowheadHead="HalfRight" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="130.00 174.00 205.00 188.00" Head3D="205.00 181.00 0" Tail3D="130.00 181.00 0"/>
+<t id="134" p="125.00 198.00" Z="134"><s font="3" size="6" color="0">Solid HalfRight</s></t>
+<arrow id="135" Z="135" FillType="None" ArrowheadHead="Full" ArrowheadType="Hollow" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="230.00 174.00 305.00 188.00" Head3D="305.00 181.00 0" Tail3D="230.00 181.00 0"/>
+<t id="136" p="225.00 198.00" Z="136"><s font="3" size="6" color="0">Hollow Full</s></t>
+<arrow id="137" Z="137" FillType="None" ArrowheadHead="HalfLeft" ArrowheadType="Hollow" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="330.00 174.00 405.00 188.00" Head3D="405.00 181.00 0" Tail3D="330.00 181.00 0"/>
+<t id="138" p="325.00 198.00" Z="138"><s font="3" size="6" color="0">Hollow HalfLeft</s></t>
+<arrow id="139" Z="139" FillType="None" ArrowheadHead="HalfRight" ArrowheadType="Hollow" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="430.00 174.00 505.00 188.00" Head3D="505.00 181.00 0" Tail3D="430.00 181.00 0"/>
+<t id="140" p="425.00 198.00" Z="140"><s font="3" size="6" color="0">Hollow HalfRight</s></t>
+<arrow id="141" Z="141" FillType="None" ArrowheadHead="Full" ArrowheadType="Angle" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="30.00 216.00 105.00 230.00" Head3D="105.00 223.00 0" Tail3D="30.00 223.00 0"/>
+<t id="142" p="25.00 240.00" Z="142"><s font="3" size="6" color="0">Angle Full</s></t>
+<arrow id="143" Z="143" FillType="None" ArrowheadHead="HalfLeft" ArrowheadType="Angle" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="130.00 216.00 205.00 230.00" Head3D="205.00 223.00 0" Tail3D="130.00 223.00 0"/>
+<t id="144" p="125.00 240.00" Z="144"><s font="3" size="6" color="0">Angle HalfLeft</s></t>
+<arrow id="145" Z="145" FillType="None" ArrowheadHead="HalfRight" ArrowheadType="Angle" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="230.00 216.00 305.00 230.00" Head3D="305.00 223.00 0" Tail3D="230.00 223.00 0"/>
+<t id="146" p="225.00 240.00" Z="146"><s font="3" size="6" color="0">Angle HalfRight</s></t>
+<arrow id="147" Z="147" ArrowheadHead="Full" ArrowheadTail="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="330.00 216.00 405.00 230.00" Head3D="405.00 223.00 0" Tail3D="330.00 223.00 0"/>
+<t id="148" p="325.00 240.00" Z="148"><s font="3" size="6" color="0">both ends Full</s></t>
+<arrow id="149" Z="149" ArrowheadHead="Full" ArrowheadType="Solid" NoGo="Cross" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="430.00 216.00 505.00 230.00" Head3D="505.00 223.00 0" Tail3D="430.00 223.00 0"/>
+<t id="150" p="425.00 240.00" Z="150"><s font="3" size="6" color="0">NoGo Cross</s></t>
+<arrow id="151" Z="151" ArrowheadHead="Full" ArrowheadType="Solid" NoGo="Hash" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="30.00 258.00 105.00 272.00" Head3D="105.00 265.00 0" Tail3D="30.00 265.00 0"/>
+<t id="152" p="25.00 282.00" Z="152"><s font="3" size="6" color="0">NoGo Hash</s></t>
+<arrow id="153" Z="153" ArrowheadHead="Full" ArrowheadType="Solid" Dipole="yes" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="130.00 258.00 205.00 272.00" Head3D="205.00 265.00 0" Tail3D="130.00 265.00 0"/>
+<t id="154" p="125.00 282.00" Z="154"><s font="3" size="6" color="0">Dipole</s></t>
+<arrow id="155" Z="155" ArrowheadHead="HalfLeft" ArrowheadTail="HalfLeft" ArrowheadType="Solid" ArrowShaftSpacing="400" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="230.00 258.00 305.00 272.00" Head3D="305.00 265.00 0" Tail3D="230.00 265.00 0"/>
+<t id="156" p="225.00 282.00" Z="156"><s font="3" size="6" color="0">equilibrium</s></t>
+<arrow id="157" Z="157" ArrowheadHead="HalfLeft" ArrowheadTail="HalfLeft" ArrowheadType="Solid" ArrowShaftSpacing="400" ArrowEquilibriumRatio="2" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="330.00 258.00 405.00 272.00" Head3D="405.00 265.00 0" Tail3D="330.00 265.00 0"/>
+<t id="158" p="325.00 282.00" Z="158"><s font="3" size="6" color="0">equilibrium ratio 2</s></t>
+<arrow id="159" Z="159" ArrowheadHead="Full" ArrowheadType="Angle" ArrowShaftSpacing="600" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="430.00 258.00 505.00 272.00" Head3D="505.00 265.00 0" Tail3D="430.00 265.00 0"/>
+<t id="160" p="425.00 282.00" Z="160"><s font="3" size="6" color="0">retro Angle</s></t>
+<arrow id="161" Z="161" ArrowheadHead="Full" ArrowheadType="Hollow" FillType="Solid" ArrowShaftSpacing="800" HeadSize="2000" ArrowheadCenterSize="1500" ArrowheadWidth="600" BoundingBox="30.00 300.00 105.00 314.00" Head3D="105.00 307.00 0" Tail3D="30.00 307.00 0"/>
+<t id="162" p="25.00 324.00" Z="162"><s font="3" size="6" color="0">Hollow FillType=Solid</s></t>
+<arrow id="163" Z="163" ArrowheadHead="Full" ArrowheadType="Hollow" FillType="Shaded" ArrowShaftSpacing="800" HeadSize="2000" ArrowheadCenterSize="1500" ArrowheadWidth="600" BoundingBox="130.00 300.00 205.00 314.00" Head3D="205.00 307.00 0" Tail3D="130.00 307.00 0"/>
+<t id="164" p="125.00 324.00" Z="164"><s font="3" size="6" color="0">Hollow FillType=Shaded</s></t>
+<arrow id="165" Z="165" ArrowheadHead="Full" ArrowheadType="Solid" FadePercent="500" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" BoundingBox="230.00 300.00 305.00 314.00" Head3D="305.00 307.00 0" Tail3D="230.00 307.00 0"/>
+<t id="166" p="225.00 324.00" Z="166"><s font="3" size="6" color="0">FadePercent=50</s></t>
+<arrow id="167" Z="167" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" AngularSize="90" Head3D="375.61 301.39 0" Tail3D="354.39 301.39 0" Center3D="365.00 312.00 0" MajorAxisEnd3D="380.00 312.00 0" MinorAxisEnd3D="365.00 327.00 0" BoundingBox="350.00 297.00 380.00 327.00"/>
+<t id="168" p="325.00 324.00" Z="168"><s font="3" size="6" color="0">arc arrow 90</s></t>
+<arrow id="169" Z="169" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" AngularSize="180" Head3D="480.00 312.00 0" Tail3D="450.00 312.00 0" Center3D="465.00 312.00 0" MajorAxisEnd3D="480.00 312.00 0" MinorAxisEnd3D="465.00 327.00 0" BoundingBox="450.00 297.00 480.00 327.00"/>
+<t id="170" p="425.00 324.00" Z="170"><s font="3" size="6" color="0">arc arrow 180</s></t>
+<arrow id="171" Z="171" ArrowheadHead="Full" ArrowheadType="Solid" HeadSize="1000" ArrowheadCenterSize="875" ArrowheadWidth="250" AngularSize="270" Head3D="75.61 364.61 0" Tail3D="54.39 364.61 0" Center3D="65.00 354.00 0" MajorAxisEnd3D="80.00 354.00 0" MinorAxisEnd3D="65.00 369.00 0" BoundingBox="50.00 339.00 80.00 369.00"/>
+<t id="172" p="25.00 366.00" Z="172"><s font="3" size="6" color="0">arc arrow 270</s></t>
+<graphic id="173" Z="173" GraphicType="Line" LineType="Solid" BoundingBox="205.00 349.00 130.00 349.00"/>
+<t id="174" p="125.00 366.00" Z="174"><s font="3" size="6" color="0">legacy graphic Line Solid</s></t>
+<graphic id="175" Z="175" GraphicType="Line" LineType="Dashed" BoundingBox="305.00 349.00 230.00 349.00"/>
+<t id="176" p="225.00 366.00" Z="176"><s font="3" size="6" color="0">legacy graphic Line Dashed</s></t>
+<graphic id="177" Z="177" GraphicType="Line" LineType="Bold" BoundingBox="405.00 349.00 330.00 349.00"/>
+<t id="178" p="325.00 366.00" Z="178"><s font="3" size="6" color="0">legacy graphic Line Bold</s></t>
+<graphic id="179" Z="179" GraphicType="Line" LineType="Wavy" BoundingBox="505.00 349.00 430.00 349.00"/>
+<t id="180" p="425.00 366.00" Z="180"><s font="3" size="6" color="0">legacy graphic Line Wavy</s></t>
+<graphic id="181" Z="181" GraphicType="Line" ArrowType="NoHead" BoundingBox="105.00 391.00 30.00 391.00"/>
+<t id="182" p="25.00 408.00" Z="182"><s font="3" size="6" color="0">legacy ArrowType NoHead</s></t>
+<graphic id="183" Z="183" GraphicType="Line" ArrowType="HalfHead" BoundingBox="205.00 391.00 130.00 391.00"/>
+<t id="184" p="125.00 408.00" Z="184"><s font="3" size="6" color="0">legacy ArrowType HalfHead</s></t>
+<graphic id="185" Z="185" GraphicType="Line" ArrowType="FullHead" BoundingBox="305.00 391.00 230.00 391.00"/>
+<t id="186" p="225.00 408.00" Z="186"><s font="3" size="6" color="0">legacy ArrowType FullHead</s></t>
+<graphic id="187" Z="187" GraphicType="Line" ArrowType="Resonance" BoundingBox="405.00 391.00 330.00 391.00"/>
+<t id="188" p="325.00 408.00" Z="188"><s font="3" size="6" color="0">legacy ArrowType Resonance</s></t>
+<graphic id="189" Z="189" GraphicType="Line" ArrowType="Equilibrium" BoundingBox="505.00 391.00 430.00 391.00"/>
+<t id="190" p="425.00 408.00" Z="190"><s font="3" size="6" color="0">legacy ArrowType Equilibrium</s></t>
+<graphic id="191" Z="191" GraphicType="Line" ArrowType="Hollow" BoundingBox="105.00 433.00 30.00 433.00"/>
+<t id="192" p="25.00 450.00" Z="192"><s font="3" size="6" color="0">legacy ArrowType Hollow</s></t>
+<graphic id="193" Z="193" GraphicType="Line" ArrowType="RetroSynthetic" BoundingBox="205.00 433.00 130.00 433.00"/>
+<t id="194" p="125.00 450.00" Z="194"><s font="3" size="6" color="0">legacy ArrowType RetroSynthetic</s></t>
+</page></CDXML>

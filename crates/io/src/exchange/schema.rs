@@ -431,6 +431,7 @@ pub(super) const PROPERTIES: &[Property] = &[
             ("r", 4),
             ("s", 5),
             ("u", 6),
+            ("?", 12),
         ],
     },
     Property {
@@ -1214,7 +1215,7 @@ pub(super) const PROPERTIES: &[Property] = &[
         name: "SymbolType",
         kind: "INT16",
         variants: &[
-            ("LonePair", 13),
+            ("LonePair", 0),
             ("Electron", 1),
             ("RadicalCation", 2),
             ("RadicalAnion", 3),
@@ -1227,6 +1228,7 @@ pub(super) const PROPERTIES: &[Property] = &[
             ("Racemic", 10),
             ("Absolute", 11),
             ("Relative", 12),
+            ("LonePairBar", 13),
         ],
     },
     Property {
@@ -1422,14 +1424,14 @@ pub(super) const PROPERTIES: &[Property] = &[
     Property {
         code: 0x0a3a,
         name: "Dipole",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
         code: 0x0a3b,
         name: "NoGo",
         kind: "INT8",
-        variants: &[("None", 0), ("Cross", 1), ("Hash", 2)],
+        variants: &[("None", 0), ("Cross", 2), ("Hash", 3)],
     },
     Property {
         code: 0x0a3c,
@@ -1610,25 +1612,25 @@ pub(super) const PROPERTIES: &[Property] = &[
     Property {
         code: 0x0aa2,
         name: "ShowOrigin",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
         code: 0x0aa3,
         name: "ShowSolventFront",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
         code: 0x0aa4,
         name: "ShowBorders",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
         code: 0x0aa5,
         name: "ShowSideTicks",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
@@ -1646,7 +1648,7 @@ pub(super) const PROPERTIES: &[Property] = &[
     Property {
         code: 0x0ab2,
         name: "ShowRf",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
@@ -1932,6 +1934,12 @@ pub(super) const PROPERTIES: &[Property] = &[
         code: 0x0013,
         name: "SupersededBy",
         kind: "CDXObjectID",
+        variants: &[],
+    },
+    Property {
+        code: 0x0303,
+        name: "FadePercent",
+        kind: "INT16",
         variants: &[],
     },
     Property {

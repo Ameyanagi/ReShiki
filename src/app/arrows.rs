@@ -1,11 +1,12 @@
 use super::*;
 mod attachments;
 use crate::canvas::layered::canvas;
-use reshiki::arrows::{ArrowStyle, Head, HeadShape, NoGo, Preset};
+use reshiki::arrows::{ArrowStyle, Body, Head, HeadShape, NoGo, Preset};
 use reshiki::graphics::LinePattern;
 
 /// The arrow card's one line of gesture help; the full text is in the guide.
 const GESTURE_HINT: &str = "Drag the diamond to bend, the squares to aim each end";
+const ARC_HINT: &str = "Drag the diamond to change the sweep";
 const ATTACH_LABEL: &str = "Attach ends to atoms and bonds";
 
 #[derive(Debug, Clone, Copy)]
@@ -52,6 +53,9 @@ pub struct State {
     pub numbers: [String; 6],
     pub color: String,
     pub attach_targets: bool,
+    /// The sweep new arrows take as arcs; None draws them straight.
+    pub arc: Option<f32>,
+    pub sweep: String,
     source: Option<reshiki::arrow_anchors::Pick>,
 }
 impl Default for State {
@@ -62,6 +66,8 @@ impl Default for State {
             style,
             color: "#000000".into(),
             attach_targets: true,
+            arc: None,
+            sweep: String::new(),
             source: None,
         }
     }
@@ -92,6 +98,10 @@ pub enum Action {
     Pattern(LinePattern),
     NoGo(NoGo),
     Dipole(bool),
+    Body(Body),
+    MakeArc,
+    Sweep(String),
+    ApplySweep,
     Number(Field, String),
     ApplyNumber(Field),
     Color(String),
@@ -163,6 +173,7 @@ impl App {
         {
             self.tab.arrow_style = Preset::from_kind(&a.kind);
             self.tab.arrows.style = a.appearance();
+            self.tab.arrows.sweep = a.arc.map_or_else(String::new, |s| format!("{s:.0}"));
             if !matches!(
                 self.inspector_tab,
                 InspectorTab::Templates
@@ -202,6 +213,14 @@ impl App {
                 self.tab.arrows.color = s;
                 return;
             }
+            Action::Sweep(s) => {
+                self.tab.arrows.sweep = s;
+                return;
+            }
+            Action::MakeArc | Action::ApplySweep => {
+                self.arrow_geometry_action(action);
+                return;
+            }
             Action::NodeType(_) | Action::DeleteNode => {
                 let Some((id, index, _)) = self.selected_arrow_node() else {
                     self.status = "Select an arrow node".into();
@@ -237,6 +256,7 @@ impl App {
                 Action::Pattern(v) => s.pattern = v,
                 Action::NoGo(v) => s.no_go = v,
                 Action::Dipole(v) => s.dipole = v,
+                Action::Body(v) => s.set_body(v),
                 Action::ApplyColor => {
                     s.color = reshiki::palette::Color::Custom(
                         graphics::parse_color(&self.tab.arrows.color)
@@ -307,18 +327,108 @@ impl App {
         self.error = false;
         self.status = "Arrow updated · Drag the diamond to bend".into();
     }
-    pub(super) fn arrow_panel(&self) -> Element<'_, Message> {
-        use super::workspace::{accessible_command, command, hover_hint, muted_text};
-        use iced::widget::{Space, checkbox, column, row, text, tooltip};
-        use iced::{Alignment, Length};
-        let s = &self.tab.arrows.style;
-        let selected_arrows = self
-            .tab
+    /// Arc sweeps belong to each selected arrow, not to its style.
+    fn arrow_geometry_action(&mut self, action: Action) {
+        let mut next = self.tab.doc.clone();
+        let mut changed = 0;
+        let sweep = match action {
+            Action::ApplySweep => match self
+                .tab
+                .arrows
+                .sweep
+                .trim()
+                .trim_end_matches('°')
+                .parse::<f32>()
+            {
+                Ok(v)
+                    if v.is_finite()
+                        && (reshiki::arrows::MIN_SWEEP..=reshiki::arrows::MAX_SWEEP)
+                            .contains(&v.abs()) =>
+                {
+                    Some(v)
+                }
+                _ => {
+                    self.status = "Type a sweep of 1–359°; minus turns it the other way".into();
+                    self.error = true;
+                    return;
+                }
+            },
+            _ => None,
+        };
+        for a in next
+            .arrows
+            .iter_mut()
+            .filter(|a| self.tab.selected.contains(&a.id))
+        {
+            match action {
+                Action::MakeArc if a.kind != "bent" && !a.is_attached() && !a.is_arc() => {
+                    a.set_arc(180.);
+                    // A node picked before is gone: the arc's nodes are its own.
+                    self.tab.path_point = None;
+                }
+                Action::ApplySweep if a.is_arc() => a.set_arc(sweep.unwrap_or(180.)),
+                _ => continue,
+            }
+            if let Err(error) = a.validate() {
+                self.status = error;
+                self.error = true;
+                return;
+            }
+            changed += 1;
+        }
+        if changed == 0 {
+            self.status = match action {
+                Action::MakeArc => "Select a free arrow without a corner to make an arc",
+                _ => "Select an arrow first",
+            }
+            .into();
+            self.error = true;
+            return;
+        }
+        let before = std::mem::replace(&mut self.tab.doc, next);
+        self.changed(before);
+        self.sync_arrows();
+        self.error = false;
+        self.status = match action {
+            Action::MakeArc => "Arc arrow · Drag the diamond to change its sweep",
+            _ => "Arrow updated",
+        }
+        .into();
+    }
+    pub(super) fn selected_arrows(&self) -> impl Iterator<Item = &reshiki::document::Arrow> {
+        self.tab
             .doc
             .arrows
             .iter()
             .filter(|a| self.tab.selected.contains(&a.id))
-            .count();
+    }
+
+    pub(super) fn arrow_panel_visible(&self) -> bool {
+        self.tool == Tool::Arrow || self.selected_arrows().next().is_some()
+    }
+
+    pub(super) fn arrow_body_controls(&self) -> bool {
+        !matches!(
+            self.tab.arrow_style,
+            Preset::Equilibrium | Preset::Retro | Preset::Bent
+        )
+    }
+
+    /// Whether the arrow panel offers Make arc: on straight and curved
+    /// arrows alike, but not once one is an arc.
+    pub(super) fn can_make_arc(&self) -> bool {
+        !self.selected_arrows().any(|a| a.is_arc())
+            && self
+                .selected_arrows()
+                .any(|a| a.kind != "bent" && !a.is_attached())
+    }
+
+    pub(super) fn arrow_panel(&self) -> Element<'_, Message> {
+        use super::workspace::{accessible_command, command, hover_hint, muted_text};
+        use iced::widget::{Space, checkbox, column, container, row, text, tooltip};
+        use iced::{Alignment, Length};
+        let s = &self.tab.arrows.style;
+        let selected_arrows = self.selected_arrows().count();
         let has_selection = selected_arrows > 0;
         let heading = match (selected_arrows, self.tab.selected.len()) {
             (0, _) => "Arrow tool".into(),
@@ -364,8 +474,32 @@ impl App {
             .spacing(6)
             .align_y(Alignment::Center)
         };
+        // One chemistry arrow: its roles, colours by origin and atom maps are
+        // one click away instead of under Labels & chemistry.
+        let roles = matches!(
+            self.tab
+                .doc
+                .arrows
+                .iter()
+                .filter(|a| self.tab.selected.contains(&a.id))
+                .collect::<Vec<_>>()
+                .as_slice(),
+            [arrow] if arrow.purpose.is_chemistry()
+                && Preset::from_kind(&arrow.kind).reaction_role_refusal().is_none()
+        );
+        let header: Element<'_, Message> = if roles {
+            row![
+                container(super::workspace::section(&heading)).width(Length::Fill),
+                accessible_command("arrow.reaction-roles", "Reaction roles", "Reaction roles…")
+                    .on_press(Message::Reaction(super::reactions::Action::Open)),
+            ]
+            .align_y(Alignment::Center)
+            .into()
+        } else {
+            super::workspace::section(&heading).into()
+        };
         let mut panel = column![
-            super::workspace::section(&heading),
+            header,
             canvas(crate::canvas::ArrowPreview {
                 arrow: self
                     .tab
@@ -374,13 +508,19 @@ impl App {
                     .iter()
                     .find(|a| self.tab.selected.contains(&a.id))
                     .cloned()
-                    .unwrap_or_else(|| Arrow::new(
-                        1,
-                        Point::new(-65., 0.),
-                        Point::new(65., 0.),
-                        self.tab.arrow_style,
-                        s.clone()
-                    ))
+                    .unwrap_or_else(|| {
+                        let mut arrow = Arrow::new(
+                            1,
+                            Point::new(-65., 0.),
+                            Point::new(65., 0.),
+                            self.tab.arrow_style,
+                            s.clone(),
+                        );
+                        if let Some(sweep) = self.tab.arrows.arc {
+                            arrow.set_arc(sweep);
+                        }
+                        arrow
+                    })
             })
             .width(Length::Fill)
             .height(70),
@@ -413,11 +553,9 @@ impl App {
             ]
             .align_y(Alignment::Center),
             row![
-                crate::appearance::pick_list(
-                    [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted],
-                    Some(s.pattern),
-                    |v| Message::ArrowAction(Action::Pattern(v))
-                )
+                crate::appearance::pick_list(LinePattern::ALL, Some(s.pattern), |v| {
+                    Message::ArrowAction(Action::Pattern(v))
+                })
                 .text_size(12)
                 .padding(5),
                 hover_hint(
@@ -435,6 +573,43 @@ impl App {
             number("Line width (pt)", Field::Line),
         ]
         .spacing(8);
+        let selected: Vec<_> = self.selected_arrows().collect();
+        if self.arrow_body_controls() {
+            panel = panel.push(
+                row![
+                    text("Body").size(11).width(44),
+                    crate::appearance::pick_list(Body::ALL, Some(s.body), |v| {
+                        Message::ArrowAction(Action::Body(v))
+                    })
+                    .text_size(12)
+                    .padding(5)
+                    .width(Length::Fill)
+                ]
+                .align_y(Alignment::Center),
+            );
+            if !s.body.is_line() {
+                panel = panel.push(number("Body width (pt)", Field::Gap));
+            }
+        }
+        if selected.first().is_some_and(|first| first.is_arc()) {
+            panel = panel.push(
+                row![
+                    text("Sweep (°)").size(11).width(Length::Fill),
+                    hover_hint(
+                        crate::appearance::text_input("180", &self.tab.arrows.sweep)
+                            .on_input(|v| Message::ArrowAction(Action::Sweep(v)))
+                            .on_submit(Message::ArrowAction(Action::ApplySweep))
+                            .size(12)
+                            .padding(5)
+                            .width(70),
+                        "1–359 · Minus turns it the other way · Enter applies",
+                        tooltip::Position::Top,
+                    )
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            );
+        }
         let mut geometry = column![
             text("Arrowhead shape").size(11).style(muted_text),
             crate::appearance::pick_list(HeadShape::ALL, Some(s.shape), |v| Message::ArrowAction(
@@ -449,7 +624,7 @@ impl App {
         ]
         .spacing(8);
         if self.tab.arrow_style == Preset::Equilibrium {
-            geometry = geometry.push(number("Reverse length (0.2–1)", Field::Ratio));
+            geometry = geometry.push(number("Reverse length (0.2–5)", Field::Ratio));
         }
         if matches!(self.tab.arrow_style, Preset::Equilibrium | Preset::Retro) {
             geometry = geometry.push(number("Shaft separation (pt)", Field::Gap));
@@ -500,7 +675,18 @@ impl App {
             });
             let mut straighten =
                 row![action("arrow.straighten", "Straighten", Action::Straighten)].spacing(4);
-            if curved {
+            let arcs = selected.iter().any(|a| a.is_arc());
+            let can_arc = self.can_make_arc();
+            let make_arc = || {
+                hover_hint(
+                    action("arrow.make-arc", "Make arc", Action::MakeArc),
+                    "A circular arc through both ends · Drag the diamond to change its sweep",
+                    tooltip::Position::Top,
+                )
+            };
+            if can_arc && !curved {
+                straighten = straighten.push(make_arc());
+            } else if curved && !arcs {
                 straighten = straighten.push(hover_hint(
                     accessible_command("arrow.smooth", "Smooth bow", "Smooth")
                         .width(Length::Fill)
@@ -522,7 +708,7 @@ impl App {
                 straighten,
             ]
             .spacing(2);
-            if curved {
+            if curved && !arcs {
                 commands = commands.push(
                     row![
                         hover_hint(
@@ -534,7 +720,11 @@ impl App {
                             "Average the bow across its perpendicular bisector",
                             tooltip::Position::Top,
                         ),
-                        Space::new().width(Length::Fill),
+                        if can_arc {
+                            Element::from(make_arc())
+                        } else {
+                            Space::new().width(Length::Fill).into()
+                        },
                     ]
                     .spacing(4),
                 );
@@ -632,7 +822,15 @@ impl App {
                 false,
                 geometry,
             ))
-            .push(text(GESTURE_HINT).size(11).style(muted_text))
+            .push(
+                text(if selected.iter().any(|a| a.is_arc()) {
+                    ARC_HINT
+                } else {
+                    GESTURE_HINT
+                })
+                .size(11)
+                .style(muted_text),
+            )
             .into()
     }
     pub(super) fn set_arrow_style(&mut self, style: Preset) {
@@ -651,6 +849,86 @@ impl App {
         }
         self.changed(before);
         self.sync_arrows();
+    }
+}
+
+/// Text a new callout starts with, selected so typing replaces it.
+const CALLOUT_TEXT: &str = "Note";
+impl App {
+    /// What a callout would point at: one atom, one bond (its two atoms), one
+    /// whole molecule, or one text or shape.
+    pub(super) fn callout_target(&self) -> Option<reshiki::leaders::Target> {
+        use reshiki::leaders::Target;
+        let doc = &self.tab.doc;
+        let selected = &self.tab.selected;
+        let atoms: Vec<u64> = selected
+            .iter()
+            .copied()
+            .filter(|id| doc.atom(*id).is_some())
+            .collect();
+        if atoms.len() != selected.len() {
+            let [id] = selected.as_slice() else {
+                return None;
+            };
+            let object = doc.annotations.iter().any(|a| a.id == *id)
+                || doc
+                    .graphics
+                    .iter()
+                    .any(|g| g.id == *id && g.leader.is_none());
+            return object.then_some(Target::Object { id: *id });
+        }
+        match atoms.as_slice() {
+            [] => None,
+            [atom] => Some(Target::Atom { atom: *atom }),
+            [a, b]
+                if doc
+                    .bonds
+                    .iter()
+                    .any(|bond| (bond.a, bond.b) == (*a, *b) || (bond.a, bond.b) == (*b, *a)) =>
+            {
+                Some(Target::Bond {
+                    a: *a,
+                    b: *b,
+                    fraction: 0.5,
+                })
+            }
+            _ => {
+                let molecules = reshiki::reactions::molecules(doc, &atoms);
+                let [molecule] = molecules.as_slice() else {
+                    return None;
+                };
+                let atom = *atoms.first()?;
+                (molecule.len() == atoms.len()).then_some(Target::Molecule { atom })
+            }
+        }
+    }
+    /// Start typing a callout's text beside the selection. Applying the text
+    /// adds it with its leader in one change; Esc adds nothing.
+    pub(super) fn add_callout(&mut self) -> iced::Task<Message> {
+        let position = self
+            .callout_target()
+            .ok_or_else(|| "Select an atom, bond, molecule or text first".to_owned())
+            .and_then(|target| {
+                reshiki::leaders::callout_position(&self.tab.doc, &target).map(|p| (target, p))
+            });
+        let (target, position) = match position {
+            Ok(found) => found,
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+                return iced::Task::none();
+            }
+        };
+        let task = self.inline_action(super::inline_text::Action::Begin(None, position));
+        if let Some(state) = self.tab.inline_text.as_mut() {
+            state.callout = Some(target);
+            self.tab.caption = CALLOUT_TEXT.into();
+            self.tab.caption_editor = iced::widget::text_editor::Content::with_text(CALLOUT_TEXT);
+            self.tab
+                .caption_editor
+                .perform(iced::widget::text_editor::Action::SelectAll);
+        }
+        task
     }
 }
 

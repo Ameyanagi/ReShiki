@@ -414,3 +414,90 @@ fn generated_names_wrap_only_at_chemical_punctuation() {
     edited.edited(name, "My sample", 0..name.len());
     assert!(!edited.name_breaks);
 }
+
+#[test]
+fn replacing_text_keeps_the_style_of_what_stays_the_same() {
+    use super::{StyleChange, TextFormat};
+    use crate::palette::{Color, Hue, Row};
+    let text = "■ A   ■ B";
+    let mut format = TextFormat::default();
+    let blue = Color::Palette(Hue::Blue, Row::Strong);
+    format.apply(text, Some(0..'■'.len_utf8()), &StyleChange::Color(blue));
+    // Pasting the same text over all of it changes nothing.
+    let before = format.clone();
+    format.edited(text, text, 0..text.len());
+    assert_eq!(format, before);
+    // Retyping all of it keeps the unchanged start and end; new text takes
+    // the style of the first character it replaces.
+    let retyped = "■ C   ■ B";
+    format.edited(text, retyped, 0..text.len());
+    assert_eq!(format.at(0).color, blue);
+    assert_eq!(format.at('■'.len_utf8() + 1).color, Color::Ink);
+
+    // Never the style of text outside the selection: CO₂ with "CO" → "COO".
+    let mut formula = TextFormat::default();
+    formula.apply(
+        "CO2",
+        Some(2..3),
+        &StyleChange::Script(super::Script::Subscript),
+    );
+    formula.edited("CO2", "COO2", 0..2);
+    assert_eq!(formula.at(2), formula.at(0));
+    assert_ne!(formula.at(3), formula.at(0));
+}
+
+/// A joined emoji, a flag and a letter with its accent each lay out as one
+/// piece, never split between lines or fragments.
+#[test]
+fn grapheme_clusters_lay_out_whole() {
+    use super::{TextFormat, layout_with_metrics};
+    let clusters = std::cell::RefCell::new(vec![]);
+    let text = "a👩\u{200D}🔬🇯🇵e\u{301}";
+    let laid_out = layout_with_metrics(text, &TextFormat::default(), |cluster, _| {
+        clusters.borrow_mut().push(cluster.to_owned());
+        ("Arial", 0.6)
+    });
+    assert_eq!(
+        clusters.into_inner(),
+        ["a", "👩\u{200D}🔬", "🇯🇵", "e\u{301}"]
+    );
+    assert_eq!(laid_out.fragments.len(), 1);
+    assert_eq!(laid_out.fragments[0].text, text);
+    let size = TextFormat::default().style.size();
+    assert!((laid_out.width - 4. * 0.6 * size).abs() < 1e-3);
+}
+
+/// An emoji sequence is measured as the one picture the system draws, in its
+/// emoji face: a text face's ⚡ is not taken for ⚡️, and a flag or a joined
+/// emoji is about one emoji wide, not the sum of its parts.
+#[cfg(target_os = "macos")]
+#[test]
+fn emoji_sequences_measure_as_one_emoji() {
+    use crate::style::cluster_metrics;
+    let style = super::TextStyle::default();
+    let (emoji, one) = cluster_metrics("💡", &style);
+    assert_eq!(emoji, "Apple Color Emoji");
+    for sequence in ["⚡\u{FE0F}", "👩\u{200D}🔬", "👍🏽", "🇯🇵", "❄\u{FE0F}"] {
+        let (family, advance) = cluster_metrics(sequence, &style);
+        assert_eq!(family, emoji, "{sequence}");
+        assert!(
+            (advance - one).abs() < 0.01,
+            "{sequence}: {advance} vs {one}"
+        );
+    }
+    let laid_out = super::layout("H👩\u{200D}🔬", &Default::default());
+    assert_eq!(laid_out.fragments.len(), 2);
+    assert_eq!(laid_out.fragments[1].text, "👩\u{200D}🔬");
+}
+
+/// A decomposed accent keeps its own ink over its letter, inside the
+/// cluster's advance.
+#[test]
+fn an_accent_keeps_its_ink_over_its_letter() {
+    let style = super::TextStyle::default();
+    let boxes = crate::style::text_ink_boxes("e\u{301}", 10., &style);
+    assert_eq!(boxes.len(), 2, "{boxes:?}");
+    let width = crate::style::styled_text_width("e\u{301}", 10., &style);
+    assert!(boxes[1].1.x <= width + 0.5, "{boxes:?} {width}");
+    assert!(boxes[1].0.y < boxes[0].0.y, "the accent sits above the e");
+}

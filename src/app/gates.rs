@@ -6,7 +6,6 @@ use super::{
 };
 use crate::canvas::{self, Edit, Tool};
 use iced::Task;
-use reshiki::document::Point;
 use std::ops::ControlFlow::{self, Break, Continue};
 
 pub(super) type Gate = ControlFlow<Task<Message>, Message>;
@@ -22,6 +21,12 @@ impl App {
             return Break(task);
         }
         let message = self.file_prepared_gate(message)?;
+        if let Some(task) = self.cycle_proposal_gate(&message) {
+            return Break(task);
+        }
+        if let Some(task) = self.equipment_authoring_gate(&message) {
+            return Break(task);
+        }
         if self.recovery_manager.open() {
             match &message {
                 Message::Recovery(_) => {}
@@ -289,6 +294,12 @@ impl App {
         {
             return Break(self.assistant_action(super::assistant::Action::Menu(None)));
         }
+        if self.reaction_preview().is_some() && matches!(message, Message::Escape) {
+            self.tab.reactions.preview = None;
+            self.status = "Reaction preview hidden".into();
+            self.error = false;
+            return Break(super::focus_drawing());
+        }
         if self.check_results && matches!(message, Message::Escape) {
             self.check_results = false;
             return Break(super::focus_drawing());
@@ -306,6 +317,7 @@ impl App {
             Message::Canvas(Edit::Hover(_) | Edit::PointerHover(_))
                 | Message::Tick
                 | Message::InspectorScroll(_)
+                | Message::Icons(super::icon_browser::Action::Scrolled { .. })
                 | Message::EngineDone { .. }
                 | Message::EngineFinished { .. }
                 | Message::InspectorAction(_)
@@ -383,6 +395,8 @@ impl App {
         if matches!(message, Message::Escape) {
             return Break(if self.tab.inline_text.is_some() {
                 self.inline_action(inline_text::Action::Finish(false))
+            } else if self.connecting().is_some() {
+                self.equipment_action(super::equipment::Action::Cancel)
             } else if self.tab.optimization.is_some() {
                 self.optimization_action(optimization::Action::Cancel)
             } else if self.inspector_tab == InspectorTab::Templates && self.cancel_add_name() {
@@ -404,6 +418,9 @@ impl App {
                 && self.requested_molecular_properties()
             {
                 self.dismiss_molecular_properties()
+            } else if self.inspector_tab == InspectorTab::Icons {
+                // Esc closes the Icons browser, even from its search.
+                self.icon_action(super::icon_browser::Action::Close)
             } else {
                 self.update(Message::Tool(Tool::Select))
             });
@@ -418,9 +435,7 @@ impl App {
             );
         }
         if let Message::Canvas(Edit::BeginText(id)) = message {
-            return Break(
-                self.inline_action(inline_text::Action::Begin(Some(id), Point::default())),
-            );
+            return Break(self.begin_text(id));
         }
         if let Message::Canvas(ref edit @ (Edit::Click(p) | Edit::RepeatLabel(p))) = message
             && self.tool == Tool::Text
@@ -432,7 +447,10 @@ impl App {
                 .filter(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id));
             return Break(self.inline_action(inline_text::Action::Begin(id, p)));
         }
-        if inline_text::commits_draft(&message) && !self.finish_inline(true) {
+        if inline_text::commits_draft(&message)
+            && !self.opens_symbols(&message)
+            && !self.finish_inline(true)
+        {
             return Break(Task::none());
         }
         Continue(message)

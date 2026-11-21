@@ -27,7 +27,7 @@ pub fn wrap(
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
-    inspector_escape: bool,
+    escape_first: bool,
 ) -> Element<'_, Message> {
     Element::new(FileShortcuts {
         content,
@@ -36,7 +36,7 @@ pub fn wrap(
         image_open,
         updates_open,
         atom_text_open,
-        inspector_escape,
+        escape_first,
     })
 }
 
@@ -48,7 +48,7 @@ struct FileShortcuts<'a> {
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
-    inspector_escape: bool,
+    escape_first: bool,
 }
 
 impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
@@ -116,6 +116,17 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
     ) {
         let shortcut = crate::platform::shortcut_event(event);
         let event = shortcut.as_ref().unwrap_or(event);
+        if let Event::Keyboard(keyboard::Event::KeyPressed {
+            key,
+            modifiers,
+            repeat: true,
+            ..
+        }) = event
+            && super::command_palette::is_shortcut(key, *modifiers)
+        {
+            shell.capture_event();
+            return;
+        }
         // The Updates focus scope owns Tab, Enter and Space. Keep other keys
         // away from file routing and the focused editor behind the dialog.
         if self.updates_open
@@ -191,9 +202,9 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             shell.capture_event();
             return;
         }
-        // Dismiss an explicit analysis or cancel a style draft before a focused
-        // input consumes Escape only to unfocus. Modals keep their priority.
-        if self.inspector_escape
+        // A visible sidebar can handle Escape before its focused field does.
+        // Modal dialogs above keep priority.
+        if self.escape_first
             && matches!(
                 event,
                 Event::Keyboard(keyboard::Event::KeyPressed {
@@ -382,8 +393,8 @@ struct Fields {
 
 impl Fields {
     /// Enter that a field applied leaves it. Unhandled Undo, Redo, arrow,
-    /// optimization and joining keys stay in a focused field instead of
-    /// changing the drawing.
+    /// optimization, joining and zoom keys stay in a focused field instead of
+    /// changing the drawing or the view.
     fn after(event: &Event, captured: bool) -> Option<Self> {
         let Event::Keyboard(keyboard::Event::KeyPressed {
             key,
@@ -416,6 +427,7 @@ impl Fields {
                         | Message::Redo
                         | Message::Optimization(super::optimization::Action::Begin)
                         | Message::Shortcut(super::shortcuts::Action::Join)
+                        | Message::Zoom(_)
                 )
             ))
             .then(Self::default)

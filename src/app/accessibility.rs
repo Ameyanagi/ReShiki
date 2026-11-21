@@ -64,6 +64,7 @@ struct Context {
     optimization: Option<super::optimization::AccessibilityContext>,
     recovery: super::recovery_manager::AccessibilityContext,
     inline_session: Option<iced::widget::Id>,
+    tlc_target: Option<(u64, usize, Option<usize>)>,
     surface: (
         super::InspectorTab,
         crate::canvas::Tool,
@@ -226,6 +227,9 @@ impl App {
             .as_ref()
             .map(super::optimization::Session::accessibility_context);
         let recovery = self.recovery_accessibility_context();
+        let tlc_target = self
+            .tlc_target()
+            .map(super::tlc::Target::accessibility_identity);
         let state = &mut self.accessibility;
         let identity_changed = state.context.as_ref().is_none_or(|context| {
             (context.document.0, context.document.1) != (document.0, document.1)
@@ -234,6 +238,7 @@ impl App {
                 || context.optimization != optimization
                 || context.recovery != recovery
                 || context.inline_session != inline_session
+                || context.tlc_target != tlc_target
                 || context.surface != surface
         });
         if identity_changed {
@@ -244,6 +249,7 @@ impl App {
                 optimization,
                 recovery,
                 inline_session,
+                tlc_target,
                 surface,
             });
             state.context_version = state.context_version.wrapping_add(1);

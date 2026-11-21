@@ -817,6 +817,7 @@ fn latent_join() -> Document {
         coefficient: 1,
     };
     doc.reactions.push(Reaction {
+        colors: None,
         arrow,
         reactants: vec![participant(ring.to_vec())],
         products: vec![participant(vec![point, iron])],

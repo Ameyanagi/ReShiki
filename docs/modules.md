@@ -61,6 +61,8 @@ explains how the crates and modules fit together.
 - `src/app/compound_numbers.rs`: Compound numbering uses the normal caption transaction and text editor.
 - `src/app/context_menu.rs`: Commands for the object under a secondary click, or the current selection.
 - `src/app/context_menu/cascade.rs`: Cascading context panels share one event boundary and use laid-out rows as anchors.
+- `src/app/cycles.rs`: Catalytic cycles
+- `src/app/cycles/layout.rs`: Explicit cycle shapes and their dimensions in Properties and Make review.
 - `src/app/depth_appearance.rs`
 - `src/app/desktop.rs`: UI-side ownership acknowledgement; the transport cannot accept a request merely because it queued bytes.
 - `src/app/dispatch.rs`: The message dispatch table
@@ -69,8 +71,13 @@ explains how the crates and modules fit together.
 - `src/app/drawing_panel_capture.rs`: Opt-in real-renderer evidence for the drawing-panel state transitions.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
+- `src/app/equipment.rs`: The Equipment browser
+- `src/app/equipment_authoring.rs`: A detached equipment draft, measured and reviewed on the ordinary canvas.
+- `src/app/equipment_authoring/shapes.rs`: Per-shape controls for the detached piece draft.
+- `src/app/equipment_authoring/trial.rs`: Disposable pieces for testing the draft with the ordinary seating solver.
 - `src/app/event_slot.rs`: Native event receivers are installed before their subscription takes ownership.
 - `src/app/figure_export.rs`: Figure export preserves drawable content independently of molecular validation.
+- `src/app/figure_panels.rs`: Figure panels (Wrap in panel, titles, dividers) and lasting row, column and grid layouts.
 - `src/app/file_shortcuts.rs`
 - `src/app/files.rs`
 - `src/app/files/performance.rs`
@@ -96,6 +103,7 @@ explains how the crates and modules fit together.
 - `src/app/history.rs`: Undo and redo of drawing history.
 - `src/app/host.rs`: Requests from the page that hosts the browser editor; see web.rs.
 - `src/app/hover_qa.rs`: Opt-in real-widget evidence for the exact large-gallery pointer report.
+- `src/app/icon_browser.rs`: The Icons tool
 - `src/app/icons.rs`
 - `src/app/icons/arrows.rs`
 - `src/app/icons/bonds.rs`
@@ -147,6 +155,7 @@ explains how the crates and modules fit together.
 - `src/app/performance/hover.rs`: Hover profiling through the application update and the real widget renderer.
 - `src/app/performance/redraw.rs`: Redraw and memory workloads
 - `src/app/pictures.rs`: Asynchronous picture replacement and selection-aware size controls.
+- `src/app/piece_libraries.rs`: Equipment libraries in the Equipment browser
 - `src/app/popover.rs`: A menu or panel anchored to a toolbar button, drawn over the surrounding rows so that nothing moves.
 - `src/app/printing.rs`
 - `src/app/prompt.rs`: Questions the app asks in its own dialog
@@ -167,11 +176,14 @@ explains how the crates and modules fit together.
 - `src/app/startup.rs`
 - `src/app/status_style.rs`: Journal dimensions and color theme share one status-bar chooser.
 - `src/app/stereo.rs`: Advisory drawing checks and explicit, undoable stereobond fixes.
+- `src/app/symbol_picker.rs`: The Ω symbol picker in the Style bar.
 - `src/app/tabs.rs`: Document tabs
 - `src/app/template_library.rs`
 - `src/app/template_style_evidence.rs`: Opt-in renderer snapshots through the real editor dispatch, usable on baseline too.
 - `src/app/theme_files.rs`: Theme picker and portable library, independent of journal drawing styles.
 - `src/app/theme_generator.rs`: A draft-only theme workbench
+- `src/app/tlc.rs`: TLC plate Properties, with explicit lane/spot targets and one edit per Apply.
+- `src/app/tlc/view.rs`: TLC lanes and spots, with plate settings one click away.
 - `src/app/tool_button.rs`: Direct selection with a delayed flyout and an explicit corner target.
 - `src/app/typography.rs`
 - `src/app/updates.rs`
@@ -201,6 +213,7 @@ explains how the crates and modules fit together.
 - `src/canvas/guides.rs`: Canvas-only measuring aids; coordinates share the drawing/export scale.
 - `src/canvas/hit.rs`: Hit testing
 - `src/canvas/input.rs`: Pointer and keyboard events on the molecule canvas.
+- `src/canvas/input/equipment_trial.rs`: Pointer ownership for the disposable test piece, separate from drawing gestures.
 - `src/canvas/input/motion.rs`: Cursor motion
 - `src/canvas/input/press.rs`: Mouse presses on the paper
 - `src/canvas/input/release.rs`: Pointer releases
@@ -225,6 +238,7 @@ explains how the crates and modules fit together.
 - `src/canvas/performance.rs`: Opt-in release-mode measurements of the actual canvas Program path.
 - `src/canvas/pick.rs`: Zoom-independent pointer tolerances in screen pixels, converted to world units with `Camera::world_len`.
 - `src/canvas/previews.rs`: Thumbnail, inspector, palette and proposal canvas programs; they render through the same scene path as the paper.
+- `src/canvas/purpose.rs`: Editing marks for object purpose and the reaction preview.
 - `src/canvas/render.rs`: Tessellates scene primitives into a layered frame; shared by the paper and every preview program.
 - `src/canvas/selection.rs`
 - `src/canvas/smart_guides.rs`: Smart guides
@@ -233,6 +247,7 @@ explains how the crates and modules fit together.
 - `src/canvas/text_cache/glyphs.rs`: Share hinted glyphs between captions without changing Iced's shaping or size.
 - `src/canvas/text_cache/glyphs/variable.rs`
 - `src/canvas/tilt.rs`: Screen-space tilt gestures share the same projection as the inspector tilt fields.
+- `src/canvas/tlc.rs`: One TLC placement factory for the live gesture and its committed graphic.
 - `src/canvas/tool.rs`: Drawing tools and their usage hints.
 - `src/cli.rs`: `reshiki --cli`
 - `src/cli/analyze.rs`: `reshiki --cli analyze`
@@ -244,6 +259,7 @@ explains how the crates and modules fit together.
 - `src/cli/io.rs`: The CLI's file and standard-input access
 - `src/cli/mcp_usage.rs`: Shared MCP help and heap limits for headless entry points.
 - `src/cli/name.rs`: `reshiki --cli name`
+- `src/cli/pieces.rs`: `reshiki --cli pieces`
 - `src/cli/predict_nmr.rs`: `reshiki --cli predict-nmr`
 - `src/cli/reference.rs`: Deterministic agent documentation from the live CLI and operation contracts.
 - `src/cli/render.rs`: `reshiki --cli render`
@@ -502,6 +518,7 @@ explains how the crates and modules fit together.
 
 - `crates/io/src/chemistry/cdxml.rs`: Bounded molecular CDXML reader for the pinned ChemDraw-enabled RDKit reader.
 - `crates/io/src/chemistry/cdxml/abbreviations.rs`: Explicit chemical abbreviation expansion, ported from reference/engine/abbreviations_exchange.py::flatten.
+- `crates/io/src/chemistry/cdxml/approximate.rs`: ChemDraw styles and objects that ReShiki cannot draw yet.
 - `crates/io/src/chemistry/cdxml/arrows.rs`: Native-precision arrows from reference/engine/arrows_exchange.py::read_arrow.
 - `crates/io/src/chemistry/cdxml/association.rs`: Shared bounded association of source nodes with prepared, scaled atoms.
 - `crates/io/src/chemistry/cdxml/attachments.rs`: ChemDraw NodeType 10/11
@@ -511,6 +528,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/graphics/integer.rs`: Bounded decimal layers retain Python integers until the document boundary.
 - `crates/io/src/chemistry/cdxml/graphics/picture.rs`
 - `crates/io/src/chemistry/cdxml/graphics/shapes.rs`
+- `crates/io/src/chemistry/cdxml/graphics/tlc.rs`: Native TLC geometry and the import-only boundary for unsupported spot data.
 - `crates/io/src/chemistry/cdxml/groups.rs`: Logical groups from reference/engine/groups_exchange.py::read_groups.
 - `crates/io/src/chemistry/cdxml/labels.rs`: Detached label/indicator patches from reference/engine/labels_exchange.py::read_labels.
 - `crates/io/src/chemistry/cdxml/marks.rs`: Detached patches from reference/engine/marks_exchange.py::read_marks.
@@ -531,6 +549,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/scene/ring_fills.rs`: Native ChemDraw bond-owned areas and legacy ReShiki-owned polygons.
 - `crates/io/src/chemistry/cdxml/schemes.rs`: Validate external reaction references without inventing native reaction roles.
 - `crates/io/src/chemistry/cdxml/stereo.rs`
+- `crates/io/src/chemistry/cdxml/symbol.rs`
 - `crates/io/src/chemistry/cdxml/tree.rs`: Private detached XML tree.
 - `crates/io/src/chemistry/cdxml/variables.rs`: Drawing-only labels on unspecified atoms; query chemistry remains unsupported.
 - `crates/io/src/chemistry/cdxml/xml_guard.rs`: One linear scan of the XML bytes before any parser runs.
@@ -581,15 +600,19 @@ explains how the crates and modules fit together.
 - `crates/io/src/engine/reference/colors.rs`: Translate current color tags at the optional historical worker boundary.
 - `crates/io/src/engine/reference/reaction.rs`: Reaction parsing, chemical preparation and canvas assembly stay in Rust.
 - `crates/io/src/exchange/charsets.rs`: Exact legacy codepage tables, generated from Python's standard codecs.
+- `crates/io/src/exchange/cycles.rs`: A catalytic cycle's own data in a ChemDraw file.
 - `crates/io/src/exchange/decode.rs`
 - `crates/io/src/exchange/drawing.rs`: Editable document serialization.
 - `crates/io/src/exchange/drawing/clipboard.rs`: Explicitly lossy presentation conversion for an external clipboard copy.
+- `crates/io/src/exchange/drawing/compound_fill.rs`: Exact compound fills joined by cancelling bridges for editable exchange.
+- `crates/io/src/exchange/drawing/cycles.rs`: A catalytic cycle's ChemDraw steps and the data ReShiki reopens it from.
 - `crates/io/src/exchange/drawing/generic.rs`: ChemDraw generic properties are attached to their actual atom and bracket IDs.
 - `crates/io/src/exchange/drawing/groups.rs`
 - `crates/io/src/exchange/drawing/labels.rs`
 - `crates/io/src/exchange/drawing/ligands.rs`: Hidden-charge and aromatic-ligand presentation using native CDX symbols.
 - `crates/io/src/exchange/drawing/objects.rs`
 - `crates/io/src/exchange/drawing/partial_charges.rs`
+- `crates/io/src/exchange/drawing/tlc.rs`: Native ChemDraw TLC objects, never a flattened collection of ellipses.
 - `crates/io/src/exchange/drawing/tree.rs`
 - `crates/io/src/exchange/encode.rs`
 - `crates/io/src/exchange/mod.rs`: Bounded CDX/CDXML serialization.
@@ -609,8 +632,12 @@ explains how the crates and modules fit together.
 - `crates/io/src/nmr/labels.rs`: Predicted shifts written onto a drawing as atom numbers, for scripts.
 - `crates/io/src/nmr/shifts.rs`: The NMR prediction that Python, the command line and MCP return.
 - `crates/io/src/payload.rs`: Editable drawing snapshots carried by ordinary PNG, SVG, and PDF figures.
+- `crates/io/src/piece_library.rs`: Libraries of equipment pieces
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
 - `crates/io/src/recovery.rs`
+- `crates/io/src/svg_drawing.rs`: Bounded SVG import as ordinary, editable vector graphics.
+- `crates/io/src/svg_drawing/css.rs`: Remove unsupported CSS effects without changing selectors or the cascade.
+- `crates/io/src/svg_drawing/references.rs`: Disable unused use references before usvg eagerly expands definitions.
 - `crates/io/src/task.rs`: Blocking chemistry and rendering work off the async executor.
 - `crates/io/src/template_library.rs`: User-authored templates and portable collections.
 
@@ -638,6 +665,9 @@ explains how the crates and modules fit together.
 - `crates/model/src/arrow_anchors.rs`: Optional drawing links for mechanism arrows.
 - `crates/model/src/arrow_labels.rs`: Condition text attached above or below a straight reaction arrow.
 - `crates/model/src/arrows.rs`: Editable reaction and electron-flow arrows.
+- `crates/model/src/arrows/arc.rs`: Circular arc arrows.
+- `crates/model/src/arrows/body.rs`: Arrow bodies (block, hollow, chevron, gradient).
+- `crates/model/src/arrows/exchange.rs`: Arrow looks that ChemDraw cannot store, written as ordinary grouped shapes for editable exchange.
 - `crates/model/src/arrows/nodes.rs`
 - `crates/model/src/atom_labels.rs`: Atom-label appearance and owned number/stereochemistry indicators.
 - `crates/model/src/atom_labels/dl_descriptors.rs`: Conventional D/L names supplement CIP labels only for recognized structures.
@@ -680,12 +710,46 @@ explains how the crates and modules fit together.
 - `crates/model/src/crossings.rs`: Drawing depth at crossings; never changes chemical connectivity.
 - `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.
+- `crates/model/src/cycles.rs`: Catalytic cycles.
+- `crates/model/src/cycles/label_placement.rs`: Place each step name on one side of the ring with space around the ink.
+- `crates/model/src/cycles/perimeter_arcs.rs`: Noncircle step shafts and side contacts on their resolved native geometry.
+- `crates/model/src/cycles/perimeter_deform.rs`: Tangent-preserving Bow and reversible lanes, built from original perimeter arclength knots.
+- `crates/model/src/cycles/perimeter_drop.rs`: Noncircle drops and ownership follow native painted lanes, not a mean circle.
+- `crates/model/src/cycles/perimeter_fit.rs`: A split run keeps one native source profile and clips its ordered children.
+- `crates/model/src/cycles/perimeter_fit_edit.rs`: Explicit mutation of fitted source families, before a candidate is shown.
+- `crates/model/src/cycles/perimeter_fit_sides.rs`: Bounded relocation of inherited side ink after a fitted child is shortened.
+- `crates/model/src/cycles/perimeter_frames.rs`: Shared painted-lane tangent and corner frames for noncircle names and roles.
+- `crates/model/src/cycles/perimeter_names.rs`: Noncircle names follow the final forward shaft, with actual painted ink deciding between inside, outside and nearby positions.
+- `crates/model/src/cycles/perimeter_sides.rs`: Side contacts on the resolved, open, painted step shafts.
+- `crates/model/src/cycles/resize.rs`: Resize an explicit cycle shape without replacing its retained affine frame.
+- `crates/model/src/cycles/shapes.rs`: Cycle-local perimeter geometry.
+- `crates/model/src/cycles/shapes/profile.rs`: Native geometry for one deformed, open cycle lane.
+- `crates/model/src/cycles/shapes/shaft.rs`: Open geometry read from the native shaft after Bow, lanes and head trim.
+- `crates/model/src/cycles/split.rs`: Keep inherited side parts beside the step that an insertion shortens.
+- `crates/model/src/cycles/split_runs.rs`: Relative topology of child steps cut from one undeformed source span.
+- `crates/model/src/cycles/steps.rs`: A catalytic cycle's steps as ordinary reactions.
+- `crates/model/src/cycles/tidy_phase.rs`: Least-motion phase on a noncircular, world-arclength perimeter.
+- `crates/model/src/cycles/tidy_shape.rs`: Noncircle Tidy preserves ordered roles on equal perimeter distances.
 - `crates/model/src/depiction.rs`: Opt-in nitrogen charge separation using the same cleanup as analysis.
 - `crates/model/src/depth_appearance.rs`: Persistent paint for an editable projection, independent of chemical styles.
 - `crates/model/src/document.rs`
 - `crates/model/src/editing.rs`
 - `crates/model/src/editing/reference.rs`: Exact drawing orientation and single-bond stretching.
 - `crates/model/src/editing/rotation.rs`: Reference sites that follow rotation, unlike axis-aligned drawing bounds.
+- `crates/model/src/equipment.rs`: Lab apparatus
+- `crates/model/src/equipment/authoring.rs`: A piece-editor draft.
+- `crates/model/src/equipment/authoring_artwork.rs`: A bounded certificate for filled artwork without independent stroke-only traces.
+- `crates/model/src/equipment/builtin.rs`: The built-in catalogue
+- `crates/model/src/equipment/eval.rs`: Evaluates a definition at parameter values
+- `crates/model/src/equipment/format.rs`: The `.reshiki-piece` format
+- `crates/model/src/equipment/geometry.rs`: Path data and plane geometry for pieces, in f64 millimetres.
+- `crates/model/src/equipment/placed.rs`: Pieces placed in a drawing.
+- `crates/model/src/equipment/plan.rs`: The paint plan
+- `crates/model/src/equipment/revise.rs`: Moving placed pieces to another revision of their definition, as a library offers it.
+- `crates/model/src/equipment/solve.rs`: Seats join the joints and holds of placed pieces.
+- `crates/model/src/equipment/solve/adjust.rs`: Movable parts.
+- `crates/model/src/equipment/solve/hose.rs`: Hoses.
+- `crates/model/src/equipment/validate.rs`: Checks the schema cannot express
 - `crates/model/src/erasing.rs`: Erase the geometry crossed by a pointer stroke, including between motion events.
 - `crates/model/src/fischer.rs`: Explicit Fischer projections
 - `crates/model/src/generic.rs`: Finite generic definitions are drawing data until deliberately materialized.
@@ -713,11 +777,14 @@ explains how the crates and modules fit together.
 - `crates/model/src/generic/variable.rs`: Bounded variable-substituent placement and ink clearance.
 - `crates/model/src/graphics.rs`: Editable vector graphics in drawing coordinates.
 - `crates/model/src/graphics/arc.rs`: Elliptical arcs in an affine frame, shared by the editor and all exporters.
+- `crates/model/src/graphics/effects.rs`: Shape effects beyond a flat fill and stroke
 - `crates/model/src/graphics/heads.rs`
+- `crates/model/src/graphics/panel.rs`: Figure panels, rectangles with a tint, rounded corners, titles and dividers.
 - `crates/model/src/graphics/path.rs`: Connected path nodes and their editable Bézier constraints.
 - `crates/model/src/graphics/path/smooth.rs`
 - `crates/model/src/graphics/path/symmetry.rs`: Reflection fitting for a connected path, including its Bézier controls.
 - `crates/model/src/graphics/superscript.rs`
+- `crates/model/src/graphics/tlc.rs`: Native TLC plate geometry.
 - `crates/model/src/grouping.rs`: Persistent, nested logical groups, represented as laminar sets of object IDs.
 - `crates/model/src/haworth.rs`: Haworth drawing geometry and chemically defined carbohydrate templates.
 - `crates/model/src/haworth/interchange.rs`: Recognize the tested five/six-member Haworth convention at file boundaries.
@@ -727,8 +794,11 @@ explains how the crates and modules fit together.
 - `crates/model/src/joining/atom_merge.rs`: Join three or more selected atoms without moving the surrounding fragments.
 - `crates/model/src/joining/coordination.rs`: In-place donor-to-metal contacts preserve both endpoint atoms.
 - `crates/model/src/joining/plan.rs`: Route classification shared by Join admission and shortcut execution.
+- `crates/model/src/layouts.rs`: Lasting rows, columns and grids.
+- `crates/model/src/leaders.rs`: Callout leaders
 - `crates/model/src/lib.rs`
 - `crates/model/src/ligands.rs`: Defined haptic abbreviations
+- `crates/model/src/line_icons.rs`: Line icons placed with the Icons tool.
 - `crates/model/src/linked_properties.rs`: Property captions linked to a molecule
 - `crates/model/src/models3d.rs`: 3D models of structures (#386)
 - `crates/model/src/models3d/cell_occlusion.rs`: Cell ink visible past the model's space-filling balls.
@@ -750,7 +820,9 @@ explains how the crates and modules fit together.
 - `crates/model/src/projection.rs`: Editable orthographic projections and nonchemical ring-centre anchors.
 - `crates/model/src/projection/growth.rs`: Bond growth in a Cp/aromatic ring's retained plane.
 - `crates/model/src/projection/vector.rs`: f32 3D vector helpers over retained XYZ (position x/y plus depth).
+- `crates/model/src/purpose.rs`: What a molecule or arrow is for.
 - `crates/model/src/reaction_cleanup.rs`: Clean up reaction
+- `crates/model/src/reaction_colors.rs`: Color a reaction by origin
 - `crates/model/src/reaction_mapping.rs`: Chemical atom correspondence, independent of printed custom atom numbers.
 - `crates/model/src/reaction_mapping/search.rs`: Bounded maximum-cardinality graph matching.
 - `crates/model/src/reactions.rs`: Explicit reaction membership, independent of where a scheme is drawn.
@@ -784,15 +856,18 @@ explains how the crates and modules fit together.
 - `crates/model/src/scientific/label_halo.rs`: Find the atom labels an orbital's complete lobes run into.
 - `crates/model/src/scientific/mark_placement.rs`: Click placement and the orbit of a dragged mark.
 - `crates/model/src/selection_region.rs`: Freeform selection shared by lasso and rectangular selection.
+- `crates/model/src/shape_text.rs`: Text a closed shape holds
 - `crates/model/src/stereo_groups.rs`: Enhanced stereochemistry groups (#766)
 - `crates/model/src/stereochemistry.rs`: Atomic edits of an explicitly defined tetrahedral configuration.
 - `crates/model/src/storage.rs`: Files the app writes for itself and for the user.
 - `crates/model/src/style.rs`: Default ACS structure settings, shared with the exchange worker.
 - `crates/model/src/style/font.rs`
 - `crates/model/src/style/units.rs`: Drawing-style input units.
+- `crates/model/src/symbols.rs`: The symbol picker's table and the typed shortcuts that insert its symbols.
 - `crates/model/src/templates.rs`: Built-in molecules and attachment geometry, shared by preview and placement.
 - `crates/model/src/templates/aromatic.rs`: Bounded aromatic fusion planning.
 - `crates/model/src/templates/coordination.rs`: Depiction-only coordination frames; projected wedges do not assign R/S.
+- `crates/model/src/templates/layouts.rs`: Figure layout templates with panels and placeholder rings to replace.
 - `crates/model/src/templates/nucleosides.rs`: β-D-ribofuranosyl nucleobases, using the carbohydrate projection builder.
 - `crates/model/src/templates/porphine.rs`: Own equal-length geometry for the chemically defined 21H,23H free base.
 - `crates/model/src/templates/steroids.rs`: Own regular-ring geometry in steroid orientation 2a (IUPAC 3S-1.4).

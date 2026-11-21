@@ -1,0 +1,176 @@
+{
+  "version": 40,
+  "atoms": [],
+  "bonds": [],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [
+    {
+      "kind": "path",
+      "origin": {
+        "x": 0,
+        "y": 0
+      },
+      "axis_x": {
+        "x": 1,
+        "y": 0
+      },
+      "axis_y": {
+        "x": 0,
+        "y": 1
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "id": 1,
+      "style": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": [
+          255,
+          255,
+          255
+        ],
+        "width_pt": 0.6,
+        "pattern": "solid"
+      },
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": -24,
+            "y": -100
+          }
+        },
+        {
+          "command": "line",
+          "points": {
+            "x": -24,
+            "y": -35
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": -95,
+              "y": -12
+            },
+            {
+              "x": -105,
+              "y": 70
+            },
+            {
+              "x": -55,
+              "y": 110
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": -25,
+              "y": 137
+            },
+            {
+              "x": 25,
+              "y": 137
+            },
+            {
+              "x": 55,
+              "y": 110
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 105,
+              "y": 70
+            },
+            {
+              "x": 95,
+              "y": -12
+            },
+            {
+              "x": 24,
+              "y": -35
+            }
+          ]
+        },
+        {
+          "command": "line",
+          "points": {
+            "x": 24,
+            "y": -100
+          }
+        },
+        {
+          "command": "close"
+        }
+      ]
+    },
+    {
+      "kind": "path",
+      "origin": {
+        "x": 0,
+        "y": 0
+      },
+      "axis_x": {
+        "x": 1,
+        "y": 0
+      },
+      "axis_y": {
+        "x": 0,
+        "y": 1
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "id": 2,
+      "style": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": null,
+        "width_pt": 0.6,
+        "pattern": "solid"
+      },
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": -24,
+            "y": -86
+          }
+        },
+        {
+          "command": "line",
+          "points": {
+            "x": 24,
+            "y": -86
+          }
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "id": 3,
+      "members": [
+        1,
+        2
+      ],
+      "integral": false
+    }
+  ]
+}

@@ -6,13 +6,84 @@ import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from engine.cdx_exchange import from_cdx, property_bytes, to_cdx
+from engine.cdx_exchange import PROPERTIES, from_cdx, numeric, property_bytes, to_cdx
 from engine.worker import handle
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class BinaryDrawingTests(unittest.TestCase):
+    def test_unknown_atom_stereo_matches_native_cdx_without_inventing_assignment(self):
+        data = (ROOT / "tests/fixtures/chemdraw-unknown-atom-stereo/native.cdx").read_bytes()
+        decoded = from_cdx(data)
+        atom = ET.fromstring(decoded).find(".//n[@id='4']")
+        self.assertEqual(atom.get("AS"), "?")
+        restored = ET.fromstring(from_cdx(to_cdx(decoded)))
+        self.assertEqual(restored.find(".//n[@id='4']").get("AS"), "?")
+        name, kind, enum = PROPERTIES[0x437]
+        for value, number in [
+            ("U", 0),
+            ("N", 1),
+            ("R", 2),
+            ("S", 3),
+            ("r", 4),
+            ("s", 5),
+            ("u", 6),
+            ("?", 12),
+        ]:
+            with self.subTest(value=value):
+                payload = bytes([number])
+                self.assertEqual(numeric(name, kind, enum, value), payload)
+                self.assertEqual(numeric(name, kind, enum, payload, False), value)
+        with self.assertRaisesRegex(ValueError, "Unsupported binary enumeration: AS"):
+            numeric(name, kind, enum, b"\x09", False)
+        with self.assertRaisesRegex(ValueError, "Unsupported drawing value: AS"):
+            numeric(name, kind, enum, "unknown")
+
+    def test_tlc_flags_use_native_empty_payload_and_omit_false(self):
+        # ChemDraw 26.1 saves and SDK 26.8 opens these as implied flags.
+        # A one-byte 01 or 00 payload makes an otherwise valid plate fail
+        # native reopening with error 536. Check bytes, not our own decoder.
+        for code, name in [
+            (0x0AA2, "ShowOrigin"),
+            (0x0AA3, "ShowSolventFront"),
+            (0x0AA4, "ShowBorders"),
+            (0x0AA5, "ShowSideTicks"),
+            (0x0AB2, "ShowRf"),
+        ]:
+            for value in ("yes", "no"):
+                with self.subTest(name=name, value=value):
+                    encoded = to_cdx(f'<CDXML {name}="{value}"/>')
+                    expected = struct.pack("<HH", code, 0) if value == "yes" else b""
+                    self.assertEqual(encoded[28:-4], expected)
+        for value, payload in [("yes", b"\x01"), ("no", b"\x00")]:
+            encoded = to_cdx(f'<CDXML Visible="{value}"/>')
+            self.assertEqual(encoded[28:-4], struct.pack("<HH", 0x0011, 1) + payload)
+
+    def test_native_object_tag_name_has_no_text_style_count(self):
+        encoded = to_cdx('<CDXML><objecttag id="1" Name="rf"/></CDXML>')
+        self.assertEqual(encoded[34:-6], struct.pack("<HH", 0x0008, 2) + b"rf")
+        self.assertEqual(ET.fromstring(from_cdx(encoded)).find("objecttag").get("Name"), "rf")
+
+    def test_dipole_flag_is_implied_and_old_byte_flags_still_read(self):
+        plain = to_cdx("<CDXML><page id='1'><arrow id='2'/></page></CDXML>")
+        self.assertEqual(len(plain), 48)
+        expected = plain[:40] + property_bytes(0xA3A, b"") + plain[40:]
+        self.assertEqual(
+            to_cdx("<CDXML><page id='1'><arrow id='2' Dipole='yes'/></page></CDXML>"),
+            expected,
+        )
+        self.assertEqual(
+            to_cdx("<CDXML><page id='1'><arrow id='2' Dipole='no'/></page></CDXML>"),
+            plain,
+        )
+        for payload, flag in [(b"", "yes"), (b"\1", "yes"), (b"\0", "no")]:
+            with self.subTest(payload=payload):
+                old = plain[:40] + property_bytes(0xA3A, payload) + plain[40:]
+                decoded = from_cdx(old)
+                self.assertEqual(ET.fromstring(decoded).find(".//arrow").get("Dipole"), flag)
+                self.assertEqual(to_cdx(decoded), expected if flag == "yes" else plain)
+
     def test_native_clipboard_fixture_has_expected_structure(self):
         data = (ROOT / "tests/fixtures/native-ethyl-clipboard.cdx").read_bytes()
         result = handle(

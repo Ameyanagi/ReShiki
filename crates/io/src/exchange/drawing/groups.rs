@@ -141,7 +141,7 @@ impl Writer<'_> {
     }
     pub(super) fn groups(&mut self) -> Result<()> {
         let doc = self.doc;
-        if doc.groups.is_empty() {
+        if doc.groups.is_empty() && !self.split_fragments {
             return Ok(());
         }
         let sets: Vec<HashSet<_>> = doc

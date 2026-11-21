@@ -29,7 +29,7 @@ keep a copy saved by 0.12.
   or embed it in your own page with `bun add @ameyanagi/reshiki`. Naming and
   NMR prediction work there too.
 - Type 359 group abbreviations, define your own, and run any command from the
-  command palette (**:**).
+  command palette (now **⌘K** or **Ctrl+K**, with **:** as an alternative).
 - Pan, zoom, hover, edit, copy and export large drawings much faster, with
   less memory for Undo and long stereo chains.
 
@@ -358,7 +358,8 @@ their contributor credits and links to their issues and reviews.
 
 ## Commands and drawing
 
-- **Command palette.** Press **:** to search every command, such as benzene,
+- **Command palette.** In current versions, press **⌘K**, **Ctrl+K** or **:**
+  to search commands such as benzene,
   OMe, double bond, Predict NMR or an export format, and run it with Enter on
   the selection or the pointed atom or bond, as one Undo step. Results are one
   line each, with category chips and the selected command's description.

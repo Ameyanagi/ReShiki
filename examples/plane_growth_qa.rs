@@ -84,6 +84,7 @@ fn main() -> Result<()> {
         format.style.bold = true;
         format.style.color = reshiki::palette::Color::Custom([41, 62, 56]);
         gallery.annotations.push(Annotation {
+            angle: 0.,
             id: gallery.next_id(),
             position: Point::new(x, 255.),
             text: if i == 0 {

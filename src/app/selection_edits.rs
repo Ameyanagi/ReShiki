@@ -10,6 +10,7 @@ use reshiki::{
 impl App {
     /// Replaces the selection and refreshes its cached inspector controls.
     pub(super) fn set_selection(&mut self, ids: Vec<u64>) {
+        self.tab.connect = None;
         self.tab.selected = ids;
         self.sync_requested_molecular_properties();
         self.sync_typography();
@@ -219,7 +220,10 @@ impl App {
     }
     pub(super) fn delete_selection(&mut self) {
         let before = self.tab.doc.clone();
-        let ids = reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected);
+        let ids = reshiki::shape_text::with_texts(
+            &self.tab.doc,
+            &reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected),
+        );
         self.tab.doc.delete(&ids);
         self.changed(before);
     }

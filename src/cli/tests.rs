@@ -1,7 +1,7 @@
 use super::{
     args::{
-        Compose, Convert, Export, Input, Labels, Name, Output, PredictNmr, Render, Schema, Skill,
-        Source, SvgText, parse,
+        Compose, Convert, Export, Input, Labels, Name, Output, PredictNmr, Preview, Render, Schema,
+        Skill, Source, SvgText, parse,
     },
     *,
 };
@@ -1267,13 +1267,22 @@ fn render_command_lines_parse() {
             source,
             format: from.into(),
         },
-        format: to.into(),
-        svg_text: SvgText::Outline,
-        output,
-        width: None,
-        height: None,
-        force: false,
+        preview: Preview {
+            format: to.into(),
+            svg_text: SvgText::Outline,
+            output,
+            width: None,
+            height: None,
+            force: false,
+        },
     };
+    let mut sized = render(Source::Stdin, "mol", "png", Output::Stdout);
+    sized.preview.width = Some(640);
+    sized.preview.height = Some(480);
+    sized.preview.force = true;
+    // The render tool checks the size's range.
+    let mut zero = render(Source::File("a.mol".into()), "mol", "svg", Output::Stdout);
+    zero.preview.width = Some(0);
     for (tokens, expected) in [
         (
             &["render", "a.rsk", "-o", "b.PNG"][..],
@@ -1298,21 +1307,9 @@ fn render_command_lines_parse() {
                 "render", "-", "--from", "mol", "--to", "png", "-o", "-", "--width", "640",
                 "--height", "+480", "--force",
             ],
-            Render {
-                width: Some(640),
-                height: Some(480),
-                force: true,
-                ..render(Source::Stdin, "mol", "png", Output::Stdout)
-            },
+            sized,
         ),
-        // The render tool, not the parser, checks the size's range.
-        (
-            &["render", "a.mol", "--to", "svg", "--width", "0"],
-            Render {
-                width: Some(0),
-                ..render(Source::File("a.mol".into()), "mol", "svg", Output::Stdout)
-            },
-        ),
+        (&["render", "a.mol", "--to", "svg", "--width", "0"], zero),
     ] {
         assert_eq!(parsed(tokens), Ok(Command::Render(expected)), "{tokens:?}");
     }
@@ -2162,6 +2159,7 @@ async fn stereochemistry_limit_reaches_stderr_with_the_shared_message() {
 async fn binary_output_never_goes_to_a_terminal() {
     for tokens in [
         &["render", "--smiles", "C", "--to", "png"][..],
+        &["pieces", "render", "unused.reshiki-piece", "--to", "png"],
         &["compose", "-", "--to", "pdf"],
         &["convert", "--smiles", "C", "--to", "png"],
     ] {
@@ -2206,6 +2204,10 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
     (
         "name",
         include_str!("../../tests/fixtures/cli-help/name.txt"),
+    ),
+    (
+        "pieces",
+        include_str!("../../tests/fixtures/cli-help/pieces.txt"),
     ),
     (
         "info",
@@ -2401,4 +2403,144 @@ async fn pictures_convert_from_the_editable_drawing_inside_them() {
             }
         }
     }
+}
+
+#[tokio::test]
+async fn pieces_check_reports_each_file_and_fails_on_any_error() {
+    let good = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/crates/model/src/equipment/fixtures/rbf-300-29.reshiki-piece"
+    );
+    let folder = tempfile::tempdir().unwrap();
+    let bad = folder.path().join("bad.reshiki-piece");
+    std::fs::write(&bad, r#"{"format": "theme"}"#).unwrap();
+    let (code, out, err) = call(&["pieces", "check", good]).await;
+    assert_eq!((code, err.as_str()), (SUCCESS, ""));
+    let value: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(value["pieces"][0]["ok"], true);
+    assert_eq!(value["pieces"][0]["id"], "reshiki/rbf-300-29");
+    assert_eq!(value["pieces"][0]["hash"].as_str().unwrap().len(), 64);
+    let (code, out, err) = call(&["pieces", "check", good, bad.to_str().unwrap()]).await;
+    assert_eq!(code, FAILURE);
+    assert_eq!(err, "reshiki: error: 1 of 2 piece files did not pass\n");
+    let value: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(
+        value["pieces"][1]["error"],
+        "This is not a ReShiki piece file."
+    );
+    for (tokens, message) in [
+        (
+            &["pieces"][..],
+            "pieces needs a subcommand: check or render",
+        ),
+        (
+            &["pieces", "list"],
+            "unknown pieces subcommand `list`; the subcommands are check and render",
+        ),
+        (&["pieces", "check"], "pieces check needs at least one FILE"),
+        (
+            &["pieces", "check", "--json", good],
+            "unknown option `--json`",
+        ),
+    ] {
+        let (code, out, err) = call(tokens).await;
+        assert_eq!((code, out.as_str()), (USAGE, ""), "{tokens:?}");
+        assert_eq!(err, format!("{USAGE_PREFIX}{message}\n"));
+    }
+}
+
+const BUILTIN_PIECE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/pieces/rbf-300-29.reshiki-piece"
+);
+
+#[tokio::test]
+async fn pieces_render_writes_svg_to_stdout_and_honors_dark() {
+    let (code, light, err) = call(&["pieces", "render", BUILTIN_PIECE]).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(light.starts_with("<svg ") && light.contains("<path "));
+
+    let (code, dark, err) = call(&[
+        "pieces",
+        "render",
+        BUILTIN_PIECE,
+        "--dark",
+        "--to",
+        "svg",
+        "-o",
+        "-",
+    ])
+    .await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(dark.starts_with("<svg ") && dark.contains("<path "));
+    assert_ne!(light, dark);
+}
+
+#[tokio::test]
+async fn pieces_render_refuses_a_dark_png() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("dark.png");
+    let (code, _, err) = call(&[
+        "pieces",
+        "render",
+        BUILTIN_PIECE,
+        "--to",
+        "png",
+        "--dark",
+        "-o",
+        path.to_str().unwrap(),
+    ])
+    .await;
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("--dark needs --to svg"), "{err}");
+    assert!(!path.exists());
+}
+
+#[tokio::test]
+async fn pieces_render_writes_png_and_respects_force() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("preview.png");
+    let args = [
+        "pieces",
+        "render",
+        BUILTIN_PIECE,
+        "--to",
+        "png",
+        "-o",
+        path.to_str().unwrap(),
+    ];
+    let (code, out, err) = call(&args).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(out.is_empty());
+    assert!(
+        std::fs::read(&path)
+            .unwrap()
+            .starts_with(b"\x89PNG\r\n\x1a\n")
+    );
+
+    std::fs::write(&path, b"existing output").unwrap();
+    let (code, out, err) = call(&args).await;
+    assert_eq!(code, FAILURE);
+    assert!(out.is_empty());
+    assert!(err.contains("exists; pass --force to replace"), "{err}");
+    assert_eq!(std::fs::read(&path).unwrap(), b"existing output");
+
+    let (code, out, err) = call(&[args.as_slice(), &["--force"]].concat()).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(out.is_empty());
+    assert!(
+        std::fs::read(&path)
+            .unwrap()
+            .starts_with(b"\x89PNG\r\n\x1a\n")
+    );
+}
+
+#[tokio::test]
+async fn pieces_render_reports_the_piece_check_error() {
+    let folder = tempfile::tempdir().unwrap();
+    let path = folder.path().join("bad.reshiki-piece");
+    std::fs::write(&path, r#"{"format": "theme"}"#).unwrap();
+    let (code, out, err) = call(&["pieces", "render", path.to_str().unwrap()]).await;
+    assert_eq!((code, out.as_str()), (FAILURE, ""));
+    assert_eq!(err, "reshiki: error: This is not a ReShiki piece file.\n");
 }

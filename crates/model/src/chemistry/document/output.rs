@@ -870,6 +870,7 @@ fn reconstruct_atoms(
                 steroid_label: None,
                 undefined_stereo: false,
                 undefined_pseudoasymmetric: false,
+                purpose: old.map(|a| a.purpose).unwrap_or_default(),
                 stereo_group,
                 display: old.map(|a| a.display.clone()).unwrap_or_default(),
                 marks: old.map(|a| a.marks.clone()).unwrap_or_default(),

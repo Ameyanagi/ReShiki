@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE CDXML SYSTEM "http://www.cambridgesoft.com/xml/cdxml.dtd" >
+<CDXML CreationProgram="reshiki-probe" BoundingBox="0 0 540 720" LabelFont="3" LabelSize="10" CaptionFont="3" CaptionSize="7" LineWidth="1" BoldWidth="4" BondLength="30" HashSpacing="2.7" MarginWidth="2" color="0" bgcolor="1">
+<colortable><color r="1" g="1" b="1"/><color r="0" g="0" b="0"/><color r="1" g="0" b="0"/><color r="0" g="0" b="1"/></colortable>
+<fonttable><font id="3" charset="iso-8859-1" name="Arial"/></fonttable>
+<page id="1" BoundingBox="0 0 540 720" HeightPages="1" WidthPages="1">
+<graphic id="101" Z="101" GraphicType="Rectangle" RectangleType="Plain"  BoundingBox="95.00 78.00 30.00 45.00"/>
+<t id="102" p="25.00 92.00" Z="102"><s font="3" size="6" color="0">Rect Plain</s></t>
+<graphic id="103" Z="103" GraphicType="Rectangle" RectangleType="Dashed"  BoundingBox="195.00 78.00 130.00 45.00"/>
+<t id="104" p="125.00 92.00" Z="104"><s font="3" size="6" color="0">Rect Dashed</s></t>
+<graphic id="105" Z="105" GraphicType="Rectangle" RectangleType="Bold"  BoundingBox="295.00 78.00 230.00 45.00"/>
+<t id="106" p="225.00 92.00" Z="106"><s font="3" size="6" color="0">Rect Bold</s></t>
+<graphic id="107" Z="107" GraphicType="Rectangle" RectangleType="Filled"  BoundingBox="395.00 78.00 330.00 45.00"/>
+<t id="108" p="325.00 92.00" Z="108"><s font="3" size="6" color="0">Rect Filled</s></t>
+<graphic id="109" Z="109" GraphicType="Rectangle" RectangleType="Shaded"  BoundingBox="495.00 78.00 430.00 45.00"/>
+<t id="110" p="425.00 92.00" Z="110"><s font="3" size="6" color="0">Rect Shaded</s></t>
+<graphic id="111" Z="111" GraphicType="Rectangle" RectangleType="Shadow"  ShadowSize="400" BoundingBox="95.00 140.00 30.00 107.00"/>
+<t id="112" p="25.00 154.00" Z="112"><s font="3" size="6" color="0">Rect Shadow</s></t>
+<graphic id="113" Z="113" GraphicType="Rectangle" RectangleType="Dashed Bold"  BoundingBox="195.00 140.00 130.00 107.00"/>
+<t id="114" p="125.00 154.00" Z="114"><s font="3" size="6" color="0">Rect Dashed Bold</s></t>
+<graphic id="115" Z="115" GraphicType="Rectangle" RectangleType="Dashed Shaded"  BoundingBox="295.00 140.00 230.00 107.00"/>
+<t id="116" p="225.00 154.00" Z="116"><s font="3" size="6" color="0">Rect Dashed Shaded</s></t>
+<graphic id="117" Z="117" GraphicType="Rectangle" RectangleType="Bold Shadow"  ShadowSize="400" BoundingBox="395.00 140.00 330.00 107.00"/>
+<t id="118" p="325.00 154.00" Z="118"><s font="3" size="6" color="0">Rect Bold Shadow</s></t>
+<graphic id="119" Z="119" GraphicType="Rectangle" RectangleType="Filled Shadow"  ShadowSize="400" BoundingBox="495.00 140.00 430.00 107.00"/>
+<t id="120" p="425.00 154.00" Z="120"><s font="3" size="6" color="0">Rect Filled Shadow</s></t>
+<graphic id="121" Z="121" GraphicType="Rectangle" RectangleType="Dashed Filled"  BoundingBox="95.00 202.00 30.00 169.00"/>
+<t id="122" p="25.00 216.00" Z="122"><s font="3" size="6" color="0">Rect Dashed Filled</s></t>
+<graphic id="123" Z="123" GraphicType="Rectangle" RectangleType="Shaded Shadow"  ShadowSize="400" BoundingBox="195.00 202.00 130.00 169.00"/>
+<t id="124" p="125.00 216.00" Z="124"><s font="3" size="6" color="0">Rect Shaded Shadow</s></t>
+<graphic id="125" Z="125" GraphicType="Rectangle" RectangleType="RoundEdge" CornerRadius="600" BoundingBox="295.00 202.00 230.00 169.00"/>
+<t id="126" p="225.00 216.00" Z="126"><s font="3" size="6" color="0">Rect RoundEdge</s></t>
+<graphic id="127" Z="127" GraphicType="Rectangle" RectangleType="RoundEdge Dashed" CornerRadius="600" BoundingBox="395.00 202.00 330.00 169.00"/>
+<t id="128" p="325.00 216.00" Z="128"><s font="3" size="6" color="0">Rect RoundEdge Dashed</s></t>
+<graphic id="129" Z="129" GraphicType="Rectangle" RectangleType="RoundEdge Bold" CornerRadius="600" BoundingBox="495.00 202.00 430.00 169.00"/>
+<t id="130" p="425.00 216.00" Z="130"><s font="3" size="6" color="0">Rect RoundEdge Bold</s></t>
+<graphic id="131" Z="131" GraphicType="Rectangle" RectangleType="RoundEdge Filled" CornerRadius="600" BoundingBox="95.00 264.00 30.00 231.00"/>
+<t id="132" p="25.00 278.00" Z="132"><s font="3" size="6" color="0">Rect RoundEdge Filled</s></t>
+<graphic id="133" Z="133" GraphicType="Rectangle" RectangleType="RoundEdge Shaded" CornerRadius="600" BoundingBox="195.00 264.00 130.00 231.00"/>
+<t id="134" p="125.00 278.00" Z="134"><s font="3" size="6" color="0">Rect RoundEdge Shaded</s></t>
+<graphic id="135" Z="135" GraphicType="Rectangle" RectangleType="RoundEdge Shadow" CornerRadius="600" ShadowSize="400" BoundingBox="295.00 264.00 230.00 231.00"/>
+<t id="136" p="225.00 278.00" Z="136"><s font="3" size="6" color="0">Rect RoundEdge Shadow</s></t>
+<graphic id="137" Z="137" GraphicType="Rectangle" RectangleType="RoundEdge Dashed Bold" CornerRadius="600" BoundingBox="395.00 264.00 330.00 231.00"/>
+<t id="138" p="325.00 278.00" Z="138"><s font="3" size="6" color="0">Rect RoundEdge Dashed Bold</s></t>
+<graphic id="139" Z="139" GraphicType="Rectangle" RectangleType="RoundEdge Dashed Shaded" CornerRadius="600" BoundingBox="495.00 264.00 430.00 231.00"/>
+<t id="140" p="425.00 278.00" Z="140"><s font="3" size="6" color="0">Rect RoundEdge Dashed Shaded</s></t>
+<graphic id="141" Z="141" GraphicType="Rectangle" RectangleType="RoundEdge Bold Shadow" CornerRadius="600" ShadowSize="400" BoundingBox="95.00 326.00 30.00 293.00"/>
+<t id="142" p="25.00 340.00" Z="142"><s font="3" size="6" color="0">Rect RoundEdge Bold Shadow</s></t>
+<graphic id="143" Z="143" GraphicType="Rectangle" RectangleType="RoundEdge Filled Shadow" CornerRadius="600" ShadowSize="400" BoundingBox="195.00 326.00 130.00 293.00"/>
+<t id="144" p="125.00 340.00" Z="144"><s font="3" size="6" color="0">Rect RoundEdge Filled Shadow</s></t>
+<graphic id="145" Z="145" GraphicType="Rectangle" RectangleType="RoundEdge Dashed Filled" CornerRadius="600" BoundingBox="295.00 326.00 230.00 293.00"/>
+<t id="146" p="225.00 340.00" Z="146"><s font="3" size="6" color="0">Rect RoundEdge Dashed Filled</s></t>
+<graphic id="147" Z="147" GraphicType="Rectangle" RectangleType="RoundEdge Shaded Shadow" CornerRadius="600" ShadowSize="400" BoundingBox="395.00 326.00 330.00 293.00"/>
+<t id="148" p="325.00 340.00" Z="148"><s font="3" size="6" color="0">Rect RoundEdge Shaded Shadow</s></t>
+<graphic id="149" Z="149" GraphicType="Oval" OvalType="Plain"  BoundingBox="493.00 310.00 463.00 310.00" Center3D="463.00 310.00 0" MajorAxisEnd3D="493.00 310.00 0" MinorAxisEnd3D="463.00 325.00 0"/>
+<t id="150" p="425.00 340.00" Z="150"><s font="3" size="6" color="0">Oval Plain</s></t>
+<graphic id="151" Z="151" GraphicType="Oval" OvalType="Dashed"  BoundingBox="93.00 372.00 63.00 372.00" Center3D="63.00 372.00 0" MajorAxisEnd3D="93.00 372.00 0" MinorAxisEnd3D="63.00 387.00 0"/>
+<t id="152" p="25.00 402.00" Z="152"><s font="3" size="6" color="0">Oval Dashed</s></t>
+<graphic id="153" Z="153" GraphicType="Oval" OvalType="Bold"  BoundingBox="193.00 372.00 163.00 372.00" Center3D="163.00 372.00 0" MajorAxisEnd3D="193.00 372.00 0" MinorAxisEnd3D="163.00 387.00 0"/>
+<t id="154" p="125.00 402.00" Z="154"><s font="3" size="6" color="0">Oval Bold</s></t>
+<graphic id="155" Z="155" GraphicType="Oval" OvalType="Filled"  BoundingBox="293.00 372.00 263.00 372.00" Center3D="263.00 372.00 0" MajorAxisEnd3D="293.00 372.00 0" MinorAxisEnd3D="263.00 387.00 0"/>
+<t id="156" p="225.00 402.00" Z="156"><s font="3" size="6" color="0">Oval Filled</s></t>
+<graphic id="157" Z="157" GraphicType="Oval" OvalType="Shaded"  BoundingBox="393.00 372.00 363.00 372.00" Center3D="363.00 372.00 0" MajorAxisEnd3D="393.00 372.00 0" MinorAxisEnd3D="363.00 387.00 0"/>
+<t id="158" p="325.00 402.00" Z="158"><s font="3" size="6" color="0">Oval Shaded</s></t>
+<graphic id="159" Z="159" GraphicType="Oval" OvalType="Shadowed" ShadowSize="400" BoundingBox="493.00 372.00 463.00 372.00" Center3D="463.00 372.00 0" MajorAxisEnd3D="493.00 372.00 0" MinorAxisEnd3D="463.00 387.00 0"/>
+<t id="160" p="425.00 402.00" Z="160"><s font="3" size="6" color="0">Oval Shadowed</s></t>
+<graphic id="161" Z="161" GraphicType="Oval" OvalType="Dashed Bold"  BoundingBox="93.00 434.00 63.00 434.00" Center3D="63.00 434.00 0" MajorAxisEnd3D="93.00 434.00 0" MinorAxisEnd3D="63.00 449.00 0"/>
+<t id="162" p="25.00 464.00" Z="162"><s font="3" size="6" color="0">Oval Dashed Bold</s></t>
+<graphic id="163" Z="163" GraphicType="Oval" OvalType="Bold Shaded"  BoundingBox="193.00 434.00 163.00 434.00" Center3D="163.00 434.00 0" MajorAxisEnd3D="193.00 434.00 0" MinorAxisEnd3D="163.00 449.00 0"/>
+<t id="164" p="125.00 464.00" Z="164"><s font="3" size="6" color="0">Oval Bold Shaded</s></t>
+<graphic id="165" Z="165" GraphicType="Oval" OvalType="Dashed Shadowed" ShadowSize="400" BoundingBox="293.00 434.00 263.00 434.00" Center3D="263.00 434.00 0" MajorAxisEnd3D="293.00 434.00 0" MinorAxisEnd3D="263.00 449.00 0"/>
+<t id="166" p="225.00 464.00" Z="166"><s font="3" size="6" color="0">Oval Dashed Shadowed</s></t>
+<graphic id="167" Z="167" GraphicType="Oval" OvalType="Filled Shadowed" ShadowSize="400" BoundingBox="393.00 434.00 363.00 434.00" Center3D="363.00 434.00 0" MajorAxisEnd3D="393.00 434.00 0" MinorAxisEnd3D="363.00 449.00 0"/>
+<t id="168" p="325.00 464.00" Z="168"><s font="3" size="6" color="0">Oval Filled Shadowed</s></t>
+<graphic id="169" Z="169" GraphicType="Oval" OvalType="Circle"  BoundingBox="480.00 434.00 463.00 434.00" Center3D="463.00 434.00 0" MajorAxisEnd3D="480.00 434.00 0" MinorAxisEnd3D="463.00 451.00 0"/>
+<t id="170" p="425.00 464.00" Z="170"><s font="3" size="6" color="0">Oval Circle</s></t>
+<graphic id="171" Z="171" GraphicType="Oval" OvalType="Circle Dashed"  BoundingBox="80.00 496.00 63.00 496.00" Center3D="63.00 496.00 0" MajorAxisEnd3D="80.00 496.00 0" MinorAxisEnd3D="63.00 513.00 0"/>
+<t id="172" p="25.00 526.00" Z="172"><s font="3" size="6" color="0">Oval Circle Dashed</s></t>
+<graphic id="173" Z="173" GraphicType="Oval" OvalType="Circle Bold"  BoundingBox="180.00 496.00 163.00 496.00" Center3D="163.00 496.00 0" MajorAxisEnd3D="180.00 496.00 0" MinorAxisEnd3D="163.00 513.00 0"/>
+<t id="174" p="125.00 526.00" Z="174"><s font="3" size="6" color="0">Oval Circle Bold</s></t>
+<graphic id="175" Z="175" GraphicType="Oval" OvalType="Circle Filled"  BoundingBox="280.00 496.00 263.00 496.00" Center3D="263.00 496.00 0" MajorAxisEnd3D="280.00 496.00 0" MinorAxisEnd3D="263.00 513.00 0"/>
+<t id="176" p="225.00 526.00" Z="176"><s font="3" size="6" color="0">Oval Circle Filled</s></t>
+<graphic id="177" Z="177" GraphicType="Oval" OvalType="Circle Shaded"  BoundingBox="380.00 496.00 363.00 496.00" Center3D="363.00 496.00 0" MajorAxisEnd3D="380.00 496.00 0" MinorAxisEnd3D="363.00 513.00 0"/>
+<t id="178" p="325.00 526.00" Z="178"><s font="3" size="6" color="0">Oval Circle Shaded</s></t>
+<graphic id="179" Z="179" GraphicType="Oval" OvalType="Circle Shadowed" ShadowSize="400" BoundingBox="480.00 496.00 463.00 496.00" Center3D="463.00 496.00 0" MajorAxisEnd3D="480.00 496.00 0" MinorAxisEnd3D="463.00 513.00 0"/>
+<t id="180" p="425.00 526.00" Z="180"><s font="3" size="6" color="0">Oval Circle Shadowed</s></t>
+<graphic id="181" Z="181" GraphicType="Oval" OvalType="Circle Dashed Bold"  BoundingBox="80.00 558.00 63.00 558.00" Center3D="63.00 558.00 0" MajorAxisEnd3D="80.00 558.00 0" MinorAxisEnd3D="63.00 575.00 0"/>
+<t id="182" p="25.00 588.00" Z="182"><s font="3" size="6" color="0">Oval Circle Dashed Bold</s></t>
+<graphic id="183" Z="183" GraphicType="Oval" OvalType="Circle Bold Shaded"  BoundingBox="180.00 558.00 163.00 558.00" Center3D="163.00 558.00 0" MajorAxisEnd3D="180.00 558.00 0" MinorAxisEnd3D="163.00 575.00 0"/>
+<t id="184" p="125.00 588.00" Z="184"><s font="3" size="6" color="0">Oval Circle Bold Shaded</s></t>
+<graphic id="185" Z="185" GraphicType="Oval" OvalType="Circle Dashed Shadowed" ShadowSize="400" BoundingBox="280.00 558.00 263.00 558.00" Center3D="263.00 558.00 0" MajorAxisEnd3D="280.00 558.00 0" MinorAxisEnd3D="263.00 575.00 0"/>
+<t id="186" p="225.00 588.00" Z="186"><s font="3" size="6" color="0">Oval Circle Dashed Shadowed</s></t>
+<graphic id="187" Z="187" GraphicType="Oval" OvalType="Circle Filled Shadowed" ShadowSize="400" BoundingBox="380.00 558.00 363.00 558.00" Center3D="363.00 558.00 0" MajorAxisEnd3D="380.00 558.00 0" MinorAxisEnd3D="363.00 575.00 0"/>
+<t id="188" p="325.00 588.00" Z="188"><s font="3" size="6" color="0">Oval Circle Filled Shadowed</s></t>
+<graphic id="189" Z="189" GraphicType="Rectangle" RectangleType="Shadow" ShadowSize="200" BoundingBox="495.00 574.00 430.00 541.00"/>
+<t id="190" p="425.00 588.00" Z="190"><s font="3" size="6" color="0">Rect Shadow ShadowSize=200</s></t>
+<graphic id="191" Z="191" GraphicType="Rectangle" RectangleType="Filled" color="2" BoundingBox="95.00 636.00 30.00 603.00"/>
+<t id="192" p="25.00 650.00" Z="192"><s font="3" size="6" color="0">Rect red Filled</s></t>
+<graphic id="193" Z="193" GraphicType="Oval" OvalType="Shaded" color="3" BoundingBox="193.00 620.00 163.00 620.00" Center3D="163.00 620.00 0" MajorAxisEnd3D="193.00 620.00 0" MinorAxisEnd3D="163.00 635.00 0"/>
+<t id="194" p="125.00 650.00" Z="194"><s font="3" size="6" color="0">Oval blue Shaded</s></t>
+<graphic id="195" Z="195" GraphicType="Rectangle" RectangleType="Filled" FadePercent="500" BoundingBox="295.00 636.00 230.00 603.00"/>
+<t id="196" p="225.00 650.00" Z="196"><s font="3" size="6" color="0">Rect FadePercent=50</s></t>
+</page></CDXML>

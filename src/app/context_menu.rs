@@ -28,6 +28,8 @@ pub enum Page {
     Model,
     /// Property lines under the clicked molecule, ticked when shown.
     Properties,
+    /// Chemistry, Reference or Illustration, ticked for the current one.
+    Purpose,
     Attachments,
     CopyAs,
     /// Copy image on a background for this copy only.
@@ -233,14 +235,31 @@ impl App {
             ],
             Page::Model => self.model_entries(),
             Page::Properties => self.property_entries(),
+            Page::Purpose => reshiki::purpose::Purpose::ALL
+                .into_iter()
+                .map(|p| Entry::command(p.label(), Message::Purpose(p), true))
+                .collect(),
             Page::Align => self.align_entries(atoms, multiple),
             Page::Bonds => self.bond_entries(bonds),
-            Page::AlignObjects => self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
-            Page::Distribute => self.arrange_entries(&[&Command::DISTRIBUTE]),
+            // Two objects can already make a lasting row or column.
+            Page::AlignObjects => [
+                self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
+                self.layout_entries(),
+            ]
+            .concat(),
+            Page::Distribute => {
+                let mut entries = self.arrange_entries(&[&Command::DISTRIBUTE]);
+                entries.extend(self.layout_entries());
+                entries
+            }
             Page::Order => self.arrange_entries(&[&Command::ORDER]),
             Page::Arrange => [
                 self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
-                self.arrange_entries(&[&Command::DISTRIBUTE]),
+                [
+                    self.arrange_entries(&[&Command::DISTRIBUTE]),
+                    self.layout_entries(),
+                ]
+                .concat(),
                 self.arrange_entries(&[&Command::ORDER]),
                 self.arrange_entries(&[&Command::TRANSFORM]),
             ]
@@ -286,7 +305,16 @@ impl App {
     /// then Properties and Delete, pinned in the footer.
     fn main_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
         let command = Entry::command;
+        // A selected cycle's step commands come first.
+        let cycle_first = self.selected_cycle().is_some();
+        let cycle = self.cycle_entries();
+        let (first, later) = if cycle_first {
+            (cycle, vec![])
+        } else {
+            (vec![], cycle)
+        };
         [
+            first,
             self.atom_entries(atoms),
             self.molecule_entries(atoms),
             self.structure_entries(atoms, bonds, tilt),
@@ -300,6 +328,8 @@ impl App {
             } else {
                 vec![]
             },
+            self.purpose_entries(atoms),
+            later,
             [
                 command("Cut", Message::Copy(true), true),
                 command("Copy", Message::Copy(false), true),
@@ -324,6 +354,86 @@ impl App {
         .filter(|group| !group.is_empty())
         .collect::<Vec<_>>()
         .join(&Entry::Separator)
+    }
+
+    /// A cycle's step, the one right-clicked, as a reaction; a part of a
+    /// cycle leaves it; two or more free parts make one.
+    fn cycle_entries(&self) -> Vec<Entry> {
+        use super::cycles::Action;
+        if let Some((_, cycle)) = self.selected_cycle() {
+            let steps = self.cycle_step().is_some();
+            let parts = cycle.parts().next().is_some();
+            return [
+                ("Select structures in cycle", Action::SelectStructures),
+                ("Tidy cycle", Action::Tidy),
+            ]
+            .map(|(label, action)| Entry::command(label, Message::Cycle(action), parts))
+            .into_iter()
+            .chain(
+                [
+                    ("Copy step as reaction SMILES", Action::CopySmiles),
+                    ("Auto-map step", Action::AutoMap),
+                    ("Check step balance", Action::Check),
+                    ("Color cycle by origin", Action::Color),
+                ]
+                .map(|(label, action)| Entry::command(label, Message::Cycle(action), steps)),
+            )
+            .collect();
+        }
+        if self.cycle_part_selected() {
+            vec![Entry::command(
+                "Remove from cycle",
+                Message::Cycle(super::cycles::Action::Remove),
+                true,
+            )]
+        } else if self.alignment_count() >= 2 {
+            vec![Entry::command(
+                "Make catalytic cycle",
+                Message::Cycle(super::cycles::Action::Make),
+                true,
+            )]
+        } else {
+            vec![]
+        }
+    }
+
+    /// What the selected molecules and arrows are for, and what takes part in
+    /// the selected arrow's reaction.
+    fn purpose_entries(&self, atoms: bool) -> Vec<Entry> {
+        let arrows: Vec<_> = self
+            .tab
+            .doc
+            .arrows
+            .iter()
+            .filter(|a| self.tab.selected.contains(&a.id))
+            .collect();
+        let mut entries = vec![];
+        // A molecule's Purpose is in its own group.
+        if !atoms && !arrows.is_empty() {
+            entries.push(Entry::page("Purpose", Page::Purpose));
+        }
+        if let [arrow] = arrows.as_slice() {
+            entries.push(Entry::command(
+                "Preview reaction",
+                Message::Reaction(super::reactions::Action::Preview),
+                arrow.purpose.is_chemistry()
+                    && reshiki::arrows::Preset::from_kind(&arrow.kind)
+                        .reaction_role_refusal()
+                        .is_none(),
+            ));
+            let ready = self
+                .tab
+                .doc
+                .reactions
+                .iter()
+                .any(|r| r.arrow == arrow.id && r.ready());
+            entries.push(Entry::command(
+                "Color by origin",
+                Message::Reaction(super::reactions::Action::ColorByOrigin),
+                ready,
+            ));
+        }
+        entries
     }
 
     /// The clicked atom's label and reaction map.
@@ -452,6 +562,7 @@ impl App {
                 true,
             ));
         }
+        entries.push(Entry::page("Purpose", Page::Purpose));
         entries
     }
 
@@ -495,6 +606,13 @@ impl App {
             Action::Run(message) => match message.as_ref() {
                 Message::ToggleProperty(atoms, property) => Some(
                     reshiki::linked_properties::shown(&self.tab.doc, atoms, *property),
+                ),
+                Message::Purpose(purpose) => Some(
+                    self.tab
+                        .selected
+                        .iter()
+                        .filter_map(|id| reshiki::purpose::of(&self.tab.doc, *id))
+                        .all(|p| p == *purpose),
                 ),
                 _ => None,
             },
@@ -629,7 +747,17 @@ impl App {
                 true,
             ));
         }
+        if self.can_define_equipment() {
+            entries.push(command(
+                "Define as equipment piece…",
+                Message::EquipmentAuthoring(super::equipment_authoring::Action::Begin),
+                true,
+            ));
+        }
         entries.push(submenu("Arrange & transform", Page::Align));
+        if self.callout_target().is_some() {
+            entries.push(command("Add callout", Message::AddCallout, true));
+        }
         if bonds {
             entries.push(submenu("Bond appearance", Page::Bonds));
         }
@@ -853,7 +981,10 @@ impl App {
                 Message::Transform(Transform::FlipVertical),
                 true,
             ),
+            Separator,
         ];
+        // Stacking order, as in the selection toolbar's Order menu.
+        entries.extend(self.arrange_entries(&[&Command::ORDER]));
         if multiple {
             entries.push(Separator);
             for (label, action) in [
@@ -890,6 +1021,13 @@ impl App {
             if ungroup {
                 entries.push(command("Ungroup", Message::Ungroup, true));
             }
+        }
+        if !self.tab.selected.is_empty() {
+            entries.push(command(
+                "Wrap in panel",
+                Message::Figure(super::figure_panels::Action::Wrap),
+                true,
+            ));
         }
         entries
     }
@@ -946,6 +1084,23 @@ impl App {
                 .into_iter()
                 .map(|preset| command(preset.name(), Message::ApplyBondPreset(preset), bonds)),
         );
+        entries
+    }
+
+    /// Lasting layouts: rows, columns and grids that keep their gutters.
+    fn layout_entries(&self) -> Vec<Entry> {
+        // Like Align, a layout needs two objects.
+        if self.alignment_count() < 2 {
+            return vec![];
+        }
+        let mut entries = vec![Entry::Separator, Entry::Hint("Lasting layout")];
+        for flow in super::figure_panels::LASTING_LAYOUTS {
+            entries.push(Entry::command(
+                flow.label(),
+                Message::Figure(super::figure_panels::Action::Arrange(flow)),
+                true,
+            ));
+        }
         entries
     }
 

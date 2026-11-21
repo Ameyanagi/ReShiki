@@ -6,6 +6,7 @@ use {
     crate::render::text,
     crate::render::text::{write_font, Font, FontKey},
     std::collections::HashMap,
+    usvg::fontdb,
 };
 
 use super::helper::deflate;
@@ -20,6 +21,10 @@ pub struct Context {
     /// The refs of the fonts
     #[cfg(feature = "text")]
     pub fonts: HashMap<FontKey, Option<Font>>,
+    /// Whether each glyph used is a colour glyph (sbix, CBDT, COLR or SVG).
+    /// Text with one is drawn from its flattened outlines and pictures.
+    #[cfg(feature = "text")]
+    pub colour_glyphs: HashMap<(fontdb::ID, u16), bool>,
     srgb_ref: Option<Ref>,
     sgray_ref: Option<Ref>,
     pub ref_allocator: RefAllocator,
@@ -36,6 +41,8 @@ impl Context {
             options,
             #[cfg(feature = "text")]
             fonts: HashMap::new(),
+            #[cfg(feature = "text")]
+            colour_glyphs: HashMap::new(),
             srgb_ref: None,
             sgray_ref: None,
         };

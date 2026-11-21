@@ -35,6 +35,27 @@ async fn cdxml_any_atom_nicknames_import_as_labelled_dummies_with_warning() {
 }
 
 #[tokio::test]
+async fn errors_for_a_binary_chemdraw_file_name_cdx() {
+    let engine = LocalEngine::in_process();
+    for (xml, expected) in [
+        (
+            nickname("Q", ""),
+            "CDX contains unsupported chemistry: query atom",
+        ),
+        (
+            "<CDXML><page><n id='1' NodeType='Fragment'/></page></CDXML>".into(),
+            "Invalid CDX: An abbreviation needs its explicit chemical definition",
+        ),
+    ] {
+        let bytes = crate::exchange::to_cdx(&xml).unwrap();
+        let error = crate::formats::read_with_engine(bytes, "cdx", &engine)
+            .await
+            .unwrap_err();
+        assert_eq!(error, expected);
+    }
+}
+
+#[tokio::test]
 async fn cdxml_other_generic_nicknames_keep_their_import_policy() {
     let engine = LocalEngine::in_process();
     for label in ["Q", "M", "MH", "R1"] {

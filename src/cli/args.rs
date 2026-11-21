@@ -31,6 +31,8 @@ pub(crate) enum Command {
     Analyze(Input),
     PredictNmr(PredictNmr),
     Name(Name),
+    PiecesCheck(Vec<PathBuf>),
+    PiecesRender(PieceRender),
 }
 
 /// A schema the CLI can print without a tool host.
@@ -113,11 +115,24 @@ pub(crate) struct Labels {
 /// The output formats that keep atom numbers, so `--labels` is allowed.
 pub(crate) const LABEL_FORMATS: &[&str] = &["svg", "png", "pdf", "cdxml", "cdx"];
 
-/// `render`: `format` is one of the ops render formats; `width` and
-/// `height` are `None` for the tool's default.
+/// `render`.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Render {
     pub(crate) input: Input,
+    pub(crate) preview: Preview,
+}
+
+/// `pieces render`.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct PieceRender {
+    pub(crate) file: PathBuf,
+    pub(crate) dark: bool,
+    pub(crate) preview: Preview,
+}
+
+/// The image to write. `width` and `height` are `None` for the tool's default.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Preview {
     pub(crate) format: String,
     pub(crate) svg_text: SvgText,
     pub(crate) output: Output,
@@ -165,6 +180,7 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "tools" => Err("tools takes no arguments".into()),
         "schema" => schema(&options(spec, rest)?),
         "skill" => skill(&options(spec, rest)?),
+        "pieces" => pieces(spec, rest),
         "convert" => convert(&options(spec, rest)?),
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
@@ -196,6 +212,48 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         }
         _ => Err(unknown_command(&lossy)),
     }
+}
+
+fn pieces(spec: &CommandSpec, rest: &[OsString]) -> Result<Command, String> {
+    let Some((sub, tokens)) = rest.split_first() else {
+        return Err("pieces needs a subcommand: check or render".into());
+    };
+    match sub.to_str() {
+        Some("check") => pieces_check(tokens),
+        Some("render") => {
+            let mut options = parse_options("pieces render", spec, tokens)?;
+            let file = options.input.take().ok_or("pieces render needs a FILE")?;
+            options.to.get_or_insert_with(|| "svg".into());
+            Ok(Command::PiecesRender(PieceRender {
+                file: file.into(),
+                dark: options.dark,
+                preview: preview(&options)?,
+            }))
+        }
+        _ => Err(format!(
+            "unknown pieces subcommand `{}`; the subcommands are check and render",
+            sub.to_string_lossy()
+        )),
+    }
+}
+
+/// `pieces check FILE…`: one or more files.
+fn pieces_check(files: &[OsString]) -> Result<Command, String> {
+    let mut paths = Vec::new();
+    let mut options_ended = false;
+    for token in files {
+        if !options_ended && token == "--" {
+            options_ended = true;
+        } else if !options_ended && token.to_string_lossy().starts_with('-') {
+            return Err(format!("unknown option `{}`", token.to_string_lossy()));
+        } else {
+            paths.push(PathBuf::from(token));
+        }
+    }
+    if paths.is_empty() {
+        return Err("pieces check needs at least one FILE".into());
+    }
+    Ok(Command::PiecesCheck(paths))
 }
 
 /// The usage message for a command name that is not in the table.
@@ -263,7 +321,7 @@ fn schema(options: &Options) -> Result<Command, String> {
 /// The tokens after a command, each option at most once.
 #[derive(Default)]
 struct Options {
-    /// INPUT, PROPOSAL or `-`.
+    /// INPUT, PROPOSAL, FILE or `-`.
     input: Option<OsString>,
     smiles: Option<OsString>,
     from: Option<OsString>,
@@ -279,6 +337,7 @@ struct Options {
     decimals: Option<OsString>,
     svg_text: SvgText,
     pages: bool,
+    dark: bool,
     force: bool,
     receipt: bool,
     json: bool,
@@ -287,7 +346,14 @@ struct Options {
 
 /// Splits `tokens` into the command's options and one positional input.
 fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
-    let command = spec.name;
+    parse_options(spec.name, spec, tokens)
+}
+
+fn parse_options(
+    command: &str,
+    spec: &CommandSpec,
+    tokens: &[OsString],
+) -> Result<Options, String> {
     let mut options = Options::default();
     let mut seen: Vec<&str> = Vec::new();
     let mut ended = false;
@@ -345,6 +411,7 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
         } else {
             match name {
                 "--pages" => options.pages = true,
+                "--dark" => options.dark = true,
                 "--force" => options.force = true,
                 "--receipt" => options.receipt = true,
                 "--json" => options.json = true,
@@ -546,17 +613,22 @@ fn nucleus_code(nucleus: &OsStr) -> Result<&'static str, String> {
 
 /// `render`: the input, the image format and destination, then the size.
 fn render(options: &Options) -> Result<Command, String> {
-    let input = input("render", options)?;
-    let (format, output) = destination(options, render_formats())?;
     Ok(Command::Render(Render {
-        input,
+        input: input("render", options)?,
+        preview: preview(options)?,
+    }))
+}
+
+fn preview(options: &Options) -> Result<Preview, String> {
+    let (format, output) = destination(options, render_formats())?;
+    Ok(Preview {
         format,
         svg_text: options.svg_text,
         output,
         width: side("--width", options.width.as_deref())?,
         height: side("--height", options.height.as_deref())?,
         force: options.force,
-    }))
+    })
 }
 
 /// `compose`: the Proposal file or `-`, then the file to write.

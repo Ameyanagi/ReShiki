@@ -21,7 +21,7 @@ fn prepared() -> Opened {
     document.add_atom("O", Point::default());
     Some((
         "oxygen.rsk".into(),
-        Ok(Prepared::Native(Box::new(document))),
+        Ok(Prepared::Native(Box::new(document), None)),
     ))
 }
 
@@ -259,7 +259,7 @@ fn native_open_raises_old_versions_and_clears_computed_labels() {
     // An explicit light canvas: dark drawings before version 17 migrate to 17.
     let mut json = serde_json::to_value(&document).unwrap();
     json["canvas_theme"] = serde_json::json!("light");
-    let Prepared::Native(opened) = prepare(
+    let Prepared::Native(opened, _) = prepare(
         std::path::Path::new("old.rsk"),
         serde_json::to_vec(&json).unwrap(),
     )
@@ -494,7 +494,7 @@ fn cli_input_formats_match_the_app() {
             b"C".to_vec()
         };
         let chosen = match prepare(&path, contents).unwrap() {
-            Prepared::Native(_) => "reshiki",
+            Prepared::Native(_, _) => "reshiki",
             Prepared::Import { format, .. } => format,
             Prepared::Picture(..) => panic!("Structure files are not pictures"),
             Prepared::Records(_) => panic!("Structure files are not SD files"),
@@ -650,6 +650,7 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
         schemes: 1,
         steps: 1,
         pages: 1,
+        unsupported: 0,
     };
     assert_eq!(
         keep_format_text("cdxml", one, &Document::default()),
@@ -672,6 +673,7 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
     ));
     let annotation = doc.next_id();
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: annotation,
         position: Point::new(40., -40.),
         text: "heat".into(),
@@ -688,6 +690,7 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
         format!("Keep as CDX loses arrow links. {unchanged}")
     );
     doc.reactions.push(reshiki::reactions::Reaction {
+        colors: None,
         arrow,
         reactants: vec![],
         products: vec![],
@@ -700,12 +703,85 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
             ChemdrawLoss {
                 schemes: 4,
                 steps: 12,
-                pages: 0
+                pages: 0,
+                unsupported: 3,
             },
             &doc
         ),
         format!(
-            "Keep as CDXML loses 4 reaction schemes, 12 steps, reaction roles and arrow links. {unchanged}"
+            "Keep as CDXML loses 4 reaction schemes, 12 steps, 3 objects ReShiki draws differently or leaves out, reaction roles and arrow links. {unchanged}"
         )
     );
+}
+
+#[test]
+fn keeping_cdxml_keeps_panels_and_purpose_for_reshiki() {
+    use reshiki::formats::ChemdrawLoss;
+    let unchanged = "Save as ReShiki leaves the ChemDraw file unchanged.";
+    let mut doc = Document::default();
+    let mut arrow = reshiki::document::Arrow::new(
+        1,
+        Point::new(0., 0.),
+        Point::new(120., 0.),
+        reshiki::arrows::Preset::Forward,
+        reshiki::arrows::ArrowStyle::preset(reshiki::arrows::Preset::Forward),
+    );
+    arrow.purpose = reshiki::purpose::Purpose::Reference;
+    doc.arrows.push(arrow);
+    let mut panel = reshiki::graphics::Graphic::dragged(
+        2,
+        reshiki::graphics::GraphicKind::RoundedRectangle,
+        Point::new(0., 0.),
+        Point::new(200., 100.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    panel.panel = Some(Default::default());
+    doc.graphics.push(panel);
+    assert_eq!(
+        keep_format_text("cdxml", ChemdrawLoss::default(), &doc),
+        "ChemDraw keeps most of the drawing."
+    );
+    assert_eq!(
+        keep_format_text("cdx", ChemdrawLoss::default(), &doc),
+        format!("Keep as CDX loses panels and object purpose. {unchanged}")
+    );
+}
+
+#[tokio::test]
+async fn a_drawing_reopens_at_the_view_it_was_saved_in() {
+    let mut drawing = Document::default();
+    drawing.add_atom("O", Point::default());
+    drawing.add_atom("N", Point::new(900., 0.));
+    // Pages open fitted to the first page unless the file names a view.
+    drawing.page_layout = Some(Default::default());
+    let view = reshiki::document::View {
+        center: Point::new(640., 12.5),
+        zoom: 0.76,
+    };
+    // A view that shows none of the drawing or its page is not kept.
+    let lost = reshiki::document::View {
+        center: Point::new(1e30, 0.),
+        zoom: 5.,
+    };
+    for (bytes, saved) in [
+        (drawing.file_json_with_view(Some(view)).unwrap(), true),
+        (drawing.file_json().unwrap(), false),
+        (drawing.file_json_with_view(Some(lost)).unwrap(), false),
+    ] {
+        let (mut app, _) = App::new();
+        let opened = prepare_contents("view.rsk".into(), Ok(bytes)).await;
+        let _ = app.update(Message::FilePrepared(opened));
+        assert!(!app.error, "{}", app.status);
+        assert!(!app.dirty(), "A view is not an edit");
+        let camera = (
+            app.tab.camera.center.x,
+            app.tab.camera.center.y,
+            app.tab.camera.zoom,
+        );
+        assert_eq!(camera == (640., 12.5, 0.76), saved, "{camera:?}");
+        // A restored view stays put when the window resizes; a fitted page refits.
+        assert_eq!(app.tab.pages.fit.is_none(), saved);
+    }
 }

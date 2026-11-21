@@ -79,6 +79,7 @@ fn align_moves_only_the_product_plus_not_a_reagent_plus() {
     let plus = |doc: &mut Document, centre: Point, width_pt| {
         let id = doc.next_id();
         let mut sign = Annotation {
+            angle: 0.,
             id,
             position: Point::default(),
             text: "+".into(),
@@ -143,6 +144,7 @@ fn align_keeps_the_product_plus_inside_a_narrowed_gap() {
     ));
     let plus = doc.next_id();
     let mut sign = Annotation {
+        angle: 0.,
         id: plus,
         position: Point::default(),
         // Trailing whitespace must not shift the visible sign's centre.
@@ -202,6 +204,7 @@ fn label_edit_fixture(role: Role) -> (Document, [u64; 2], u64, u64) {
     let mut sign = |center: Point| {
         let id = doc.next_id();
         let mut annotation = Annotation {
+            angle: 0.,
             id,
             position: Point::default(),
             text: "+".into(),

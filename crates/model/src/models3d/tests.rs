@@ -53,6 +53,7 @@ fn selected_molecule_preserves_document_order_groups_and_ignored_nonatoms() {
     let (mut doc, atoms, other) = drawing();
     let note = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: note,
         position: Point::new(0., 80.),
         text: "Ethanol".into(),

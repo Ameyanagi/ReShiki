@@ -160,6 +160,7 @@ fn select(app: &mut App, ids: Vec<u64>) {
 /// Opens the right-click menu at a canvas point for this selection and hit.
 fn context_menu(app: &mut App, at: iced::Point, selected: Vec<u64>, hit: Vec<u64>) {
     let _ = app.update(Message::Canvas(Edit::ContextMenu {
+        at: Default::default(),
         position: at,
         selected,
         hit,
@@ -898,6 +899,7 @@ fn bond_text_scene(app: &mut App) -> (u64, World, World, u64, World) {
         .unwrap()
         .clone();
     let mut caption = Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: top.position.offset(-8., -56.),
         text: "Pd2+".into(),

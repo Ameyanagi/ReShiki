@@ -67,6 +67,7 @@ fn main() -> anyhow::Result<()> {
         }
         doc.graphics.push(graphic);
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: doc.next_id(),
             position: origin.offset(-8., 130.),
             text: label.into(),

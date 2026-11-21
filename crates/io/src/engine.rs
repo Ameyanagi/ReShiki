@@ -77,7 +77,12 @@ impl Request {
         request.prepared = Some(prepared);
         request
     }
-    pub fn molecule(operation: &str, document: Document) -> Self {
+    pub fn molecule(operation: &str, mut document: Document) -> Self {
+        if operation == "export" {
+            // ChemDraw and the other exchange formats have no dark canvas:
+            // they get the drawing as it looks on the light canvas.
+            document.canvas_theme = crate::canvas_theme::CanvasTheme::Light;
+        }
         let graphic_parts = (operation == "export").then(|| {
             // Build parts as the scene does, so phase shading matches the canvas,
             // then give their custom colors back as they appear on the canvas.
@@ -96,6 +101,7 @@ impl Request {
                         g.kind,
                         crate::graphics::GraphicKind::Symbol(_)
                             | crate::graphics::GraphicKind::Orbital(_)
+                            | crate::graphics::GraphicKind::Icon
                     )
                 })
                 .map(|g| {
@@ -414,10 +420,21 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             }
         }
         if self.native_responses && request.operation == "import" {
+            // The ChemDraw readers read a binary file as CDXML; their errors
+            // name the format of the file instead.
+            let cdx = request.format.as_deref() == Some("cdx");
             return match native_import::execute(request, self.inchi.clone())
                 .await
-                .map_err(|e| e.to_string())?
-            {
+                .map_err(|e| {
+                    let message = e.to_string();
+                    if cdx {
+                        message
+                            .replace("molecular CDXML", "CDX")
+                            .replace("CDXML", "CDX")
+                    } else {
+                        message
+                    }
+                })? {
                 native_import::Outcome::Complete(response) => Ok(*response),
                 native_import::Outcome::Deferred(_) => {
                     Err("Native import unexpectedly deferred an import operation".into())
@@ -426,20 +443,32 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         }
         let binary = request.format.as_deref() == Some("cdx");
         let export_binary = binary && request.operation == "export";
-        if binary && request.operation == "import" {
+        if request.operation == "import"
+            && (binary || request.format.as_deref() == Some("cdxml") && request.text.is_some())
+        {
             let text = request.text.take().unwrap_or_default();
             request.text = Some(
                 crate::task::spawn_blocking(move || {
-                    if text.trim().is_empty() {
-                        return Err("Enter a structure first".into());
-                    }
-                    if text.len() > crate::exchange::LIMIT.div_ceil(3) * 4 {
-                        return Err("Drawing exceeds the 16 MB structure limit".into());
-                    }
-                    let bytes = STANDARD
-                        .decode(text)
-                        .map_err(|_| "Invalid binary drawing base64")?;
-                    crate::exchange::from_cdx(&bytes)
+                    let xml = if binary {
+                        if text.trim().is_empty() {
+                            return Err("Enter a structure first".into());
+                        }
+                        if text.len() > crate::exchange::LIMIT.div_ceil(3) * 4 {
+                            return Err("Drawing exceeds the 16 MB structure limit".into());
+                        }
+                        let bytes = STANDARD
+                            .decode(text)
+                            .map_err(|_| "Invalid binary drawing base64")?;
+                        crate::exchange::from_cdx_tolerant(&bytes)?
+                    } else {
+                        text
+                    };
+                    Ok::<_, String>(
+                        match crate::chemistry::cdxml::symbol_text_to_unicode(&xml) {
+                            std::borrow::Cow::Owned(mapped) => mapped,
+                            std::borrow::Cow::Borrowed(_) => xml,
+                        },
+                    )
                 })
                 .await
                 .map_err(|e| format!("Drawing conversion failed: {e}"))??,

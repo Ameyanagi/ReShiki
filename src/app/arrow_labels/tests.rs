@@ -17,6 +17,7 @@ fn fixture() -> App {
     ));
     let before = doc.clone();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: 2,
         position: Point::new(20., -40.),
         text: "H2, Pd/C\nEtOH, rt".into(),

@@ -8,6 +8,18 @@ use std::sync::Arc;
 use crate::FontResolver;
 use crate::{ImageHrefResolver, ImageRendering, ShapeRendering, Size, TextRendering};
 
+/// Optional bounds on conversion work, including repeated marker instances.
+/// Defaults remain unchanged unless the caller opts in.
+#[derive(Debug, Clone, Copy)]
+pub struct ConversionLimits {
+    /// Converted elements and marker instances.
+    pub max_elements: usize,
+    /// Normalized path verbs across all converted occurrences.
+    pub max_path_segments: usize,
+    /// Active element and marker conversion frames.
+    pub max_depth: usize,
+}
+
 /// Processing options.
 #[derive(Debug)]
 pub struct Options<'a> {
@@ -18,6 +30,9 @@ pub struct Options<'a> {
     ///
     /// Default: `None`
     pub resources_dir: Option<std::path::PathBuf>,
+
+    /// Opt-in work limits. Failure returns an error instead of a partial tree.
+    pub conversion_limits: Option<ConversionLimits>,
 
     /// Target DPI.
     ///
@@ -104,6 +119,7 @@ impl Default for Options<'_> {
     fn default() -> Options<'static> {
         Options {
             resources_dir: None,
+            conversion_limits: None,
             dpi: 96.0,
             // Default font is user-agent dependent so we can use whichever we like.
             font_family: "Times New Roman".to_owned(),

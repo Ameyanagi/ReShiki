@@ -13,12 +13,36 @@ pub enum Preset {
     A5,
     Letter,
     Legal,
+    /// Final-size table-of-contents graphics, landscape, without margins.
+    AcsToc,
+    RscAbstract,
+    ElsevierAbstract,
     Custom,
 }
 impl Preset {
-    pub const ALL: [Self; 5] = [Self::A4, Self::A5, Self::Letter, Self::Legal, Self::Custom];
+    pub const ALL: [Self; 8] = [
+        Self::A4,
+        Self::A5,
+        Self::Letter,
+        Self::Legal,
+        Self::AcsToc,
+        Self::RscAbstract,
+        Self::ElsevierAbstract,
+        Self::Custom,
+    ];
+    /// A graphic shown at its printed size rather than a sheet of paper.
+    pub fn graphic(self) -> bool {
+        matches!(
+            self,
+            Self::AcsToc | Self::RscAbstract | Self::ElsevierAbstract
+        )
+    }
     pub fn size(self) -> Option<(f32, f32)> {
+        let cm = |w: f32, h: f32| Some((w * 72. / 2.54, h * 72. / 2.54));
         match self {
+            Self::AcsToc => cm(8.25, 4.45),
+            Self::RscAbstract => cm(8., 4.),
+            Self::ElsevierAbstract => cm(13., 5.),
             Self::A4 => Some((210. * 72. / 25.4, 297. * 72. / 25.4)),
             Self::A5 => Some((148. * 72. / 25.4, 210. * 72. / 25.4)),
             Self::Letter => Some((612., 792.)),
@@ -34,6 +58,9 @@ impl std::fmt::Display for Preset {
             Self::A5 => "A5",
             Self::Letter => "US Letter",
             Self::Legal => "US Legal",
+            Self::AcsToc => "ACS TOC graphic · 8.25 × 4.45 cm",
+            Self::RscAbstract => "RSC graphical abstract · 8 × 4 cm",
+            Self::ElsevierAbstract => "Elsevier graphical abstract · 13 × 5 cm",
             Self::Custom => "Custom",
         })
     }
@@ -226,16 +253,35 @@ impl Layout {
                 {
                     primitive = inner.as_ref();
                 }
-                let crate::scene::Primitive::Path {
-                    commands,
-                    style,
-                    filled,
-                } = primitive
-                else {
-                    return outside(primitive);
-                };
-                // Rendering batches disconnected bond polygons into one path. Each
-                // subpath must fit on a page; the batch can span several pages.
+                // Rendering batches disconnected bond polygons, and glows of
+                // one color, into one path. Each subpath must fit on a page;
+                // the batch can span several pages.
+                let (commands, part): (_, &dyn Fn(Vec<_>) -> crate::scene::Primitive) =
+                    match primitive {
+                        crate::scene::Primitive::Path {
+                            commands,
+                            style,
+                            filled,
+                        } => (commands, &|commands| crate::scene::Primitive::Path {
+                            commands,
+                            style: style.clone(),
+                            filled: *filled,
+                        }),
+                        crate::scene::Primitive::Glow {
+                            commands,
+                            color,
+                            alpha,
+                            spread,
+                            blur,
+                        } => (commands, &|commands| crate::scene::Primitive::Glow {
+                            commands,
+                            color: *color,
+                            alpha: *alpha,
+                            spread: *spread,
+                            blur: *blur,
+                        }),
+                        _ => return outside(primitive),
+                    };
                 let mut start = 0;
                 commands
                     .iter()
@@ -249,13 +295,8 @@ impl Layout {
                         let Some(part_commands) = commands.get(start..end) else {
                             return true;
                         };
-                        let part = crate::scene::Primitive::Path {
-                            commands: part_commands.to_vec(),
-                            style: style.clone(),
-                            filled: *filled,
-                        };
                         start = end;
-                        outside(&part)
+                        outside(&part(part_commands.to_vec()))
                     })
             })
             .count()

@@ -16,7 +16,11 @@ pub(crate) fn available(doc: &Document, ids: &[u64]) -> bool {
         .take(2)
         .count()
         >= 2
-        || doc.graphics.iter().any(|g| ids.contains(&g.id))
+        // Equipment is drawn as seen and does not tilt.
+        || doc
+            .graphics
+            .iter()
+            .any(|g| ids.contains(&g.id) && g.kind != reshiki::graphics::GraphicKind::Piece)
         || reshiki::models3d::shows_3d(doc, &ids)
 }
 
