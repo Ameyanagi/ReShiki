@@ -46,5 +46,5 @@ pub(in crate::app) fn generated(app: &mut App, record: Record) {
         .pending
         .expect("Generate is pending")
         .ticket();
-    app.structure_generated(ticket, Ok((identity, record)));
+    let _ = app.structure_generated(ticket, Ok((identity, record)));
 }

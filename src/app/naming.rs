@@ -644,13 +644,13 @@ impl App {
         &mut self,
         ticket: Ticket,
         result: Result<(naming::Identity, Record), naming::Error>,
-    ) {
+    ) -> Task<Message> {
         let current = matches!(self.tab.naming.pending, Some(Pending::Generate(pending)) if pending == ticket);
         let (identity, result) = match result {
             Ok((identity, record)) => (Some(identity), Ok(Outcome::Structure(record))),
             Err(error) => (None, Err(error)),
         };
-        self.naming_finished(ticket, result);
+        let completion = self.naming_finished(ticket, result);
         if current
             && self
                 .tab
@@ -661,6 +661,7 @@ impl App {
         {
             self.tab.naming.structure_identity = identity;
         }
+        completion
     }
 
     /// A generated name belongs to this exact analyzed scope and drawing.
@@ -862,7 +863,7 @@ impl App {
                 );
             }
             Action::Finished(ticket, result) => return self.naming_finished(ticket, *result),
-            Action::Generated(ticket, result) => self.structure_generated(ticket, *result),
+            Action::Generated(ticket, result) => return self.structure_generated(ticket, *result),
             Action::NameDraft(atoms, name) => self.tab.naming.name_draft = Some((atoms, name)),
             Action::Rename(atoms, name) => self.rename_molecule(&atoms, &name),
             Action::NameRow(atoms) => {
