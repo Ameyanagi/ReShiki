@@ -154,6 +154,20 @@ impl App {
                     .padding([6, 8]),
                 ),
             );
+            // PickList draws its selected value on one line, including a theme
+            // embedded in the document but no longer saved in the library.
+            // Reserve the selector padding and arrow in the 256px body, then
+            // show an ordinary wrapping label when the full name cannot fit.
+            let theme_name = theme.to_string();
+            let mut colors = column![colors].spacing(6);
+            if super::workspace::text_width(&theme_name, 12.) > 220. {
+                colors = colors.push(
+                    text(theme_name)
+                        .size(12)
+                        .width(Length::Fill)
+                        .wrapping(text::Wrapping::WordOrGlyph),
+                );
+            }
             reshiki::accessibility::focus_scope(
                 container(
                     column![

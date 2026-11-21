@@ -170,9 +170,9 @@ impl Ui {
         collect.snapshot().clone()
     }
 
-    fn text(&mut self, app: &App, target: &'static str) -> Rectangle {
-        struct Find(&'static str, Option<Rectangle>);
-        impl Operation for Find {
+    fn text(&mut self, app: &App, target: &str) -> Rectangle {
+        struct Find<'a>(&'a str, Option<Rectangle>);
+        impl Operation for Find<'_> {
             fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
                 operate(self);
             }

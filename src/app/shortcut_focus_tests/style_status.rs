@@ -84,6 +84,12 @@ async fn style_chooser_keeps_footer_and_canvas_geometry_and_keyboard_focus() {
             assert!(node.bounds.y + node.bounds.height <= anchor.y - 3.);
             assert!(node.bounds.x >= 0. && node.bounds.x + node.bounds.width <= size.width);
         }
+        let colors = ui.bounds(&app, "color-theme");
+        let managers = ui.bounds(&app, "status-manage-styles");
+        assert!(
+            (managers.y - (colors.y + colors.height) - 6.).abs() < 0.02,
+            "Short names keep the ordinary gap below the selector"
+        );
         for expected in [
             "color-theme",
             "status-manage-styles",
@@ -201,35 +207,74 @@ async fn style_chooser_keeps_footer_and_canvas_geometry_and_keyboard_focus() {
 async fn long_embedded_theme_keeps_full_value_inside_a_bounded_status_chooser() {
     let mut ui = Ui::new().await;
     ui.viewport = Rectangle::with_size(Size::new(1040., 680.));
-    let (mut app, _) = App::new();
-    app.tab.busy = false;
-    let mut theme = reshiki::theme_files::bundled().unwrap().remove(0);
-    theme.name = "A deliberately long embedded theme name retained from another drawing".into();
-    app.tab.doc.custom_theme = Some(Box::new(theme.clone()));
-    let anchor = ui.bounds(&app, "status-style");
-    assert!(anchor.width <= 214.);
-    for id in [
-        "status-style",
-        "status-view",
-        "status-fit",
-        "status-zoom-in",
-        "status-zoom-out",
+    for name in [
+        "A deliberately long embedded theme name retained from another drawing".into(),
+        "W".repeat(80),
+        "界".repeat(80),
     ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let mut theme = reshiki::theme_files::bundled().unwrap().remove(0);
+        theme.name = name;
+        theme.validate().unwrap();
+        theme.clone().apply(&mut app.tab.doc).unwrap();
+        let anchor = ui.bounds(&app, "status-style");
+        assert!(anchor.width <= 214.);
+        for id in [
+            "status-style",
+            "status-view",
+            "status-fit",
+            "status-zoom-in",
+            "status-zoom-out",
+        ] {
+            let snapshot = ui.semantics(&app);
+            let node = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
+            let visible = node.visible_bounds.unwrap();
+            assert!((visible.width - node.bounds.width).abs() < 0.02);
+        }
+        let task = app.update(Message::StatusStyle(Action::Toggle));
+        ui.run_task(&mut app, task).await;
         let snapshot = ui.semantics(&app);
-        let node = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
-        let visible = node.visible_bounds.unwrap();
-        assert!((visible.width - node.bounds.width).abs() < 0.02);
+        let colors = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == "color-theme")
+            .unwrap();
+        assert_eq!(colors.value.as_deref(), Some(theme.name.as_str()));
+        assert_eq!(app.theme_library.themes().len(), 0);
+
+        // This traverses the real Text widget after renderer layout, rather
+        // than accepting the selector's unbounded accessibility value.
+        let full_name = ui.text(&app, &theme.name);
+        assert!(full_name.height > 20., "The name wraps onto multiple lines");
+        assert!(full_name.width <= colors.bounds.width);
+        assert!(full_name.x >= colors.bounds.x);
+        assert!(full_name.y >= colors.bounds.y + colors.bounds.height + 5.);
+        assert!(full_name.y + full_name.height <= ui.bounds(&app, "status-manage-styles").y - 5.);
+        assert!(full_name.y >= 0.);
+        assert!(full_name.y + full_name.height < anchor.y);
+        assert!(full_name.x + full_name.width <= ui.viewport.width);
+        assert_eq!(ui.focused(&app), ["journal-preset"]);
+        ui.key(
+            &mut app,
+            Key::Named(Named::Tab),
+            Code::Tab,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(ui.focused(&app), ["color-theme"]);
+        ui.key(
+            &mut app,
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert!(!app.status_style_open);
+        assert_eq!(ui.focused(&app), ["status-style"]);
     }
-    let task = app.update(Message::StatusStyle(Action::Toggle));
-    ui.run_task(&mut app, task).await;
-    let snapshot = ui.semantics(&app);
-    let colors = snapshot
-        .nodes
-        .iter()
-        .find(|node| node.id == "color-theme")
-        .unwrap();
-    assert_eq!(colors.value.as_deref(), Some(theme.name.as_str()));
-    assert_eq!(app.theme_library.themes().len(), 0);
 }
 
 #[tokio::test]
