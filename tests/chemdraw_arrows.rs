@@ -129,18 +129,8 @@ fn genuine_chemdraw_dipole_keeps_meaning_and_geometry_in_binary_exchange() -> an
         assert!(arrow.style.dipole);
         assert_eq!(arrow.style.head, Head::Full);
         assert_eq!(arrow.style.tail, Head::None);
-        assert!(
-            arrow
-                .start
-                .distance(reshiki::document::Point::new(130., 265.))
-                < 1e-5
-        );
-        assert!(
-            arrow
-                .end
-                .distance(reshiki::document::Point::new(205., 265.))
-                < 1e-5
-        );
+        assert!((arrow.start.x - 130.).hypot(arrow.start.y - 265.) < 1e-5);
+        assert!((arrow.end.x - 205.).hypot(arrow.end.y - 265.) < 1e-5);
     }
     Ok(())
 }
