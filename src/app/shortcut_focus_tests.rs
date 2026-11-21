@@ -2488,6 +2488,93 @@ async fn add_name_completion_keeps_help_search_focus() {
     assert!(app.tab.history.can_undo());
 }
 
+#[tokio::test]
+#[ignore = "Opt-in real renderer Add SMILES completion focus check"]
+async fn add_smiles_completion_releases_only_add_focus_on_success() {
+    use super::template_library;
+    fn failed(message: Message) -> Message {
+        match message {
+            Message::Tab(id, message) => Message::Tab(id, Box::new(failed(*message))),
+            Message::EngineFinished { key, .. } => Message::EngineFinished {
+                key,
+                result: Box::new(Err("SMILES import failed".into())),
+            },
+            message => message,
+        }
+    }
+
+    let mut ui = Ui::new().await;
+    for help in [false, true] {
+        for failure in [false, true] {
+            let (mut app, _) = App::new();
+            app.engine = reshiki::engine::LocalEngine::in_process();
+            app.tab.busy = false;
+            let _ = app.update(Message::Inspector(InspectorTab::Templates));
+            let _ = app.update(Message::Templates(template_library::Action::Search(
+                "CCO".into(),
+            )));
+            ui.focus_control(&mut app, "add-search").await;
+            let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
+            assert!(app.tab.busy && !app.tab.naming.is_pending());
+            assert!(ui.input(&app, "add-search").1);
+            if help {
+                let task = app.update(Message::ToggleHelp);
+                ui.run_task(&mut app, task).await;
+                assert!(ui.input(&app, "help-search").1);
+            }
+            // Replace only the terminal result, retaining the real request's
+            // receipt and tab routing so the error path has the same owner.
+            let pending = if failure {
+                pending.map(failed)
+            } else {
+                pending
+            };
+            ui.run_task(&mut app, pending).await;
+
+            assert!(!app.tab.busy);
+            assert!(app.tab.engine_job.is_none());
+            assert_eq!(app.error, failure, "{}", app.status);
+            assert_eq!(app.tab.doc.atoms.len(), if failure { 0 } else { 3 });
+            assert_eq!(app.tab.history.can_undo(), !failure);
+            assert_eq!(ui.input_value(&app, "add-search"), "CCO");
+            if help {
+                assert!(app.help_open);
+                assert_eq!(app.inspector_tab, InspectorTab::Templates);
+                assert!(ui.input(&app, "help-search").1);
+                ui.key(
+                    &mut app,
+                    Key::Character("b".into()),
+                    Code::KeyB,
+                    Modifiers::empty(),
+                    Some("b"),
+                )
+                .await;
+                assert_eq!(ui.input_value(&app, "help-search"), "b");
+            } else if failure {
+                assert!(
+                    ui.input(&app, "add-search").1,
+                    "A failed import keeps the Add draft focused for retry"
+                );
+            } else {
+                ui.assert_unfocused(&app);
+                ui.key(
+                    &mut app,
+                    Key::Named(Named::Backspace),
+                    Code::Backspace,
+                    Modifiers::empty(),
+                    None,
+                )
+                .await;
+                assert!(
+                    app.tab.doc.atoms.is_empty(),
+                    "Backspace reaches the drawing"
+                );
+                assert_eq!(ui.input_value(&app, "add-search"), "CCO");
+            }
+        }
+    }
+}
+
 /// Both Add input routes return keys to the drawing after a successful insert;
 /// failed names keep their draft. Advanced Import keeps its existing behavior.
 #[tokio::test]

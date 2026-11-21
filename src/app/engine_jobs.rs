@@ -400,7 +400,18 @@ impl App {
             self.status.push_str(" · ");
             self.status.push_str(&response.warnings.join(" · "));
         }
-        super::focus_drawing()
+        if placement == InsertPlacement::ViewCenter {
+            if self.tabs.temporary_depth == 0
+                && self.inspector_open
+                && self.inspector_tab == super::InspectorTab::Templates
+            {
+                super::add_panel::focus_drawing_after_insert()
+            } else {
+                Task::none()
+            }
+        } else {
+            super::focus_drawing()
+        }
     }
     fn aromatic_display_ready(&mut self, response: Response) {
         if let Some(document) = response.document {

@@ -15,7 +15,7 @@ pub(super) const INPUT: &str = "add-search";
 const INSERT: &str = "add-insert";
 
 /// Release Add's insertion controls without disturbing a later focus owner.
-/// Name resolution may finish after the user has moved into Help or a field.
+/// Import may finish after the user has moved into Help or a field.
 pub(super) fn focus_drawing_after_insert() -> Task<Message> {
     struct ReleaseInsertFocus;
     impl Operation for ReleaseInsertFocus {
