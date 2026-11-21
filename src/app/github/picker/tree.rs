@@ -105,8 +105,7 @@ impl Picker {
 }
 
 impl App {
-    /// The rows on screen, `+ New drawing` and `+ New folder` last, and the
-    /// selected file's preview pane.
+    /// The rows on screen and the selected file's preview pane.
     pub(super) fn picker_tree<'a>(&'a self, picker: &'a Picker) -> Element<'a, Message> {
         let Some((_, truncated)) = &picker.whole else {
             return container(text("Listing…").size(12).style(muted_text))
@@ -129,10 +128,6 @@ impl App {
                 false => "No match in this repository.",
             };
             list = list.push(container(text(empty).size(13).style(muted_text)).padding(10));
-        }
-        if picker.can_create() && query.is_empty() {
-            list = list.push(new_item_row(picker, false));
-            list = list.push(new_item_row(picker, true));
         }
         if *truncated {
             list = list.push(note(TRUNCATED));
@@ -314,46 +309,4 @@ fn tree_pane<'a>(picker: &'a Picker, signed_in: bool) -> Element<'a, Message> {
         .padding(10)
         .style(thumb_frame)
         .into()
-}
-
-/// `+ New drawing` or `+ New folder` as the last rows; clicked, a name field
-/// in place, `.rsk` fixed after a drawing's name. Enter creates it.
-fn new_item_row(picker: &Picker, folder: bool) -> Element<'_, Message> {
-    let label = if folder { "New folder" } else { "New drawing" };
-    if let Some((naming, name)) = &picker.new_item
-        && *naming == folder
-    {
-        let field =
-            reshiki::accessibility::text_input(ITEM_NAME, format!("{label} name"), "Name", name)
-                .style(crate::appearance::input_style)
-                .on_input(|name| msg(Action::NewItemName(name)))
-                .on_submit(msg(Action::CreateItem))
-                .size(12)
-                .padding(4)
-                .width(200);
-        let suffix = (!folder).then(|| text(".rsk").size(12).style(muted_text));
-        return row![Space::new().width(26), field]
-            .push(suffix)
-            .spacing(4)
-            .height(ROW)
-            .align_y(Alignment::Center)
-            .into();
-    }
-    reshiki::accessibility::button(
-        if folder {
-            "github-new-folder"
-        } else {
-            "github-new-drawing"
-        },
-        label,
-        row![Space::new().width(12), text(format!("+ {label}")).size(13)]
-            .spacing(6)
-            .align_y(Alignment::Center),
-    )
-    .width(Length::Fill)
-    .height(ROW)
-    .padding([0, 8])
-    .style(crate::app::workspace::control(false))
-    .on_press(msg(Action::NewItem(folder)))
-    .into()
 }

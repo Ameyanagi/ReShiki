@@ -1,11 +1,10 @@
-//! The empty drawing's import field, actions and recent files.
-#[cfg(not(target_arch = "wasm32"))]
+//! The empty drawing's start actions and recent files.
 use super::workspace::hover_hint;
 use super::workspace::{control, muted_text};
 use super::{App, InspectorTab, Message};
-use iced::widget::{column, container, row, scrollable, text};
 #[cfg(not(target_arch = "wasm32"))]
-use iced::widget::{image, tooltip};
+use iced::widget::image;
+use iced::widget::{column, container, row, scrollable, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
@@ -40,8 +39,7 @@ pub(super) fn compact(value: String, size: f32, muted: bool) -> Element<'static,
 
 #[derive(Debug, Clone)]
 pub enum Action {
-    Input(String),
-    Insert,
+    Dismiss,
     #[cfg(any(target_arch = "wasm32", test))]
     BrowserOpen(super::document_tab::TabId, u64),
     #[cfg(not(target_arch = "wasm32"))]
@@ -52,7 +50,6 @@ pub enum Action {
 
 #[derive(Default)]
 pub(super) struct State {
-    input: String,
     #[cfg(any(target_arch = "wasm32", test))]
     browser_recent: Vec<(super::document_tab::TabId, u64)>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -73,19 +70,18 @@ impl State {
 
 impl App {
     pub(super) fn start_visible(&self) -> bool {
-        self.tab.doc.object_ids().next().is_none()
+        !self.tab.start_dismissed
+            && self.tab.doc.object_ids().next().is_none()
             && !self.tab.drawing_edit_active()
             && self.tab.mapping.review_pair.is_none()
     }
 
     pub(super) fn start_action(&mut self, action: Action) -> Task<Message> {
         match action {
-            Action::Input(input) => {
+            Action::Dismiss => {
                 if self.start_visible() {
-                    self.start.input = input.clone();
-                    // Editing the field cancels its previous name request,
-                    // exactly as editing the ordinary Import name field does.
-                    let _ = self.naming_action(super::naming::Action::Name(input));
+                    self.tab.start_dismissed = true;
+                    return super::focus_drawing();
                 }
             }
             #[cfg(any(target_arch = "wasm32", test))]
@@ -97,31 +93,6 @@ impl App {
                 {
                     return self.tab_action(super::tabs::Action::Select(id));
                 }
-            }
-            Action::Insert => {
-                if !self.start_visible() || self.tab.busy || self.tab.naming.is_pending() {
-                    return Task::none();
-                }
-                let input = self.start.input.trim().to_owned();
-                if input.is_empty() {
-                    return Task::none();
-                }
-                if input.len() > 8192 {
-                    self.status = "Name or SMILES is too long · Use Import for larger text".into();
-                    self.error = true;
-                    return Task::none();
-                }
-                // SMILES wins when the input is valid as both a name and SMILES.
-                // Use the same chemistry parser and insertion jobs as Import.
-                if reshiki::chemistry::smiles::parse_for_import(&input).is_ok() {
-                    self.imports.kind = super::import::InputKind::Structure;
-                    self.imports.set_text(&input);
-                    return self.insert_input();
-                }
-                self.imports.kind = super::import::InputKind::Name;
-                let _ = self.naming_action(super::naming::Action::PeptideSequence(false));
-                let _ = self.naming_action(super::naming::Action::Name(input));
-                return self.naming_action(super::naming::Action::InsertName);
             }
             #[cfg(not(target_arch = "wasm32"))]
             Action::Open(path) => {
@@ -172,18 +143,6 @@ impl App {
             return layers.into();
         }
         let ready = !self.tab.busy && !self.tab.naming.is_pending();
-        let insert = ready && !self.start.input.trim().is_empty();
-        let field = reshiki::accessibility::text_input(
-            "start-input",
-            "Name or SMILES",
-            "Name or SMILES",
-            &self.start.input,
-        )
-        .on_input(|value| Message::Start(Action::Input(value)))
-        .on_submit_maybe(insert.then_some(Message::Start(Action::Insert)))
-        .padding([11, 12])
-        .size(15)
-        .style(crate::appearance::input_style);
         let action = |id, name: &'static str, key: &str, message| {
             reshiki::accessibility::button(
                 id,
@@ -201,37 +160,41 @@ impl App {
         };
         let open_key = super::shortcuts::label(&Message::Open).unwrap_or_default();
         let paste_key = super::shortcuts::label(&Message::Paste).unwrap_or_default();
+        let close = hover_hint(
+            reshiki::accessibility::button(
+                "start-dismiss",
+                "Start with a blank page",
+                text("×").size(18),
+            )
+            .width(28)
+            .height(28)
+            .padding(0)
+            .style(control(false))
+            .on_press(Message::Start(Action::Dismiss)),
+            "Start with a blank page",
+            tooltip::Position::Top,
+        );
         let mut block = column![
-            field,
             row![
-                action("start-open", "Open…", &open_key, Message::Open),
-                action("start-paste", "Paste", &paste_key, Message::Paste),
-                action(
-                    "start-templates",
-                    "Templates",
-                    "",
-                    Message::Inspector(InspectorTab::Templates)
-                ),
+                row![
+                    action("start-open", "Open…", &open_key, Message::Open),
+                    action("start-paste", "Paste", &paste_key, Message::Paste),
+                    action(
+                        "start-templates",
+                        "Templates",
+                        "",
+                        Message::Inspector(InspectorTab::Templates)
+                    ),
+                ]
+                .spacing(7)
+                .width(Length::Fill)
+                .wrap(),
+                close,
             ]
-            .spacing(7)
-            .wrap(),
+            .spacing(8)
+            .align_y(Alignment::Start),
         ]
         .spacing(12);
-        if let Some(notice) = self.start_name_notice(&self.start.input) {
-            block = block.push(
-                column![
-                    text(notice).size(11).style(muted_text),
-                    reshiki::accessibility::button(
-                        "start-import-details",
-                        "Open Import",
-                        "Open Import"
-                    )
-                    .style(iced::widget::button::text)
-                    .on_press(Message::Inspector(InspectorTab::Import)),
-                ]
-                .spacing(4),
-            );
-        }
         #[cfg(not(target_arch = "wasm32"))]
         if !self.start.recent.entries.is_empty() {
             block = block.push(text("Recent").size(11).style(muted_text));

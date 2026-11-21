@@ -580,7 +580,7 @@ impl App {
                     command("Done", Message::Icons(Action::Close)),
                 ]
                 .align_y(Alignment::Center),
-                crate::appearance::text_input("Search icons in English or Japanese…", &state.query)
+                crate::appearance::text_input("Search icons…", &state.query)
                     .id("icon-search")
                     .on_input(|s| Message::Icons(Action::Search(s)))
                     .size(12)

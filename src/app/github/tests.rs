@@ -2352,6 +2352,18 @@ fn alice() -> Repo {
 
 const LIGANDS: &str = "https://github.com/alice/ligands";
 
+fn source_repo() -> Repo {
+    Repo {
+        id: 31,
+        key: RepoKey {
+            owner: "Ameyanagi".into(),
+            repo: "ReShiki".into(),
+        },
+        private: false,
+        ..repo()
+    }
+}
+
 fn the_picker(app: &App) -> &picker::Picker {
     match &app.github.dialog {
         Some(Dialog::Picker(picker)) => picker,
@@ -2461,6 +2473,77 @@ fn a_shared_repository_stays_listed_until_removed() {
     let picker = the_picker(&app);
     assert!(picker.repo.is_none());
     assert!(!picker.repos.iter().flatten().any(|r| r.id == alice().id));
+}
+
+#[test]
+fn the_source_repository_is_not_selected_by_default_but_an_explicit_link_opens_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let source = source_repo();
+    app.github.repos = vec![source.clone(), repo()];
+    app.github.prefs.last = Some(source.id);
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    assert_eq!(the_picker(&app).repo.as_ref(), Some(&repo()));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Link(
+            "https://github.com/ameyanagi/reshiki/tree/main/docs".into(),
+        )),
+    );
+    assert_eq!(the_picker(&app).repo.as_ref(), Some(&source));
+    assert!(app.github.repos.contains(&source));
+}
+
+#[test]
+fn shared_repositories_need_an_installation_to_be_writable() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let may_push = Repo {
+        push: true,
+        ..alice()
+    };
+    resolved(&mut app, LIGANDS, Ok(may_push.clone()));
+    assert_eq!(the_picker(&app).repo.as_ref(), Some(&alice()));
+
+    // Older preferences and working copies could cache the raw permission.
+    let mut old = serde_json::to_value(&app.github.prefs).unwrap();
+    old["shared"][0]["push"] = serde_json::json!(true);
+    app.github.prefs = serde_json::from_value(old).unwrap();
+    run_blocking(workcopy::persist(
+        dir.path(),
+        &may_push.key,
+        RepoState::new(&may_push),
+        7,
+    ))
+    .unwrap();
+    assert!(
+        !app.github_picker_repos()
+            .iter()
+            .find(|r| r.id == may_push.id)
+            .unwrap()
+            .push
+    );
+    assert!(app.github_state(&may_push.key).unwrap().read_only);
+
+    let generation = app.github.generation;
+    github(
+        &mut app,
+        Action::Access(generation, may_push.key.clone(), Ok(may_push.clone())),
+    );
+    assert!(app.github.read_only(&may_push.key));
+    github(
+        &mut app,
+        Action::Listed(
+            generation,
+            Ok(gh::Account {
+                login: "octo".into(),
+                repos: vec![may_push.clone()],
+            }),
+        ),
+    );
+    assert!(!app.github.read_only(&may_push.key));
+    assert!(!app.github.link_only(may_push.id));
+    assert_eq!(the_picker(&app).repo.as_ref(), Some(&may_push));
 }
 
 #[test]

@@ -1,5 +1,4 @@
 use super::*;
-use iced::futures::StreamExt;
 
 #[test]
 fn start_returns_after_the_last_object_is_removed_and_keeps_idle_status_empty() {
@@ -27,108 +26,88 @@ fn start_returns_after_the_last_object_is_removed_and_keeps_idle_status_empty() 
     assert!(app.start_visible());
 }
 
-#[tokio::test]
-async fn start_smiles_uses_normal_insertion_and_one_undo_without_changing_other_tabs() {
+#[test]
+fn dismiss_start_options_leaves_a_clean_usable_drawing_and_stays_dismissed_after_undo() {
     let (mut app, _) = App::new();
-    app.engine = reshiki::engine::LocalEngine::in_process();
     app.tab.busy = false;
     let drawing = app.tab.doc.clone();
-    let _ = app.start_action(Action::Input("CCO".into()));
-    assert_eq!(app.tab.doc, drawing);
-    assert!(!app.tab.history.can_undo());
-    let mut effects =
-        iced_runtime::task::into_stream(app.update(Message::Start(Action::Insert))).unwrap();
-    while let Some(effect) = effects.next().await {
-        if let iced_runtime::Action::Output(message) = effect {
-            let _ = app.update(message);
-        }
-    }
-    assert_eq!(app.tab.doc.atoms.len(), 3, "{}", app.status);
-    assert!(!app.start_visible());
-    let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, drawing);
+    let saved = app.tab.saved.clone();
+    let revision = app.tab.revision;
+    let camera = app.tab.camera;
+    let selected = app.tab.selected.clone();
+    let frames = app.tab.history.frames();
     assert!(app.start_visible());
-    assert!(!app.tab.history.can_undo());
-}
 
-#[tokio::test]
-#[ignore = "Requires the built local naming worker"]
-async fn start_name_uses_the_real_local_import_worker() {
-    let (mut app, _) = App::new();
-    app.engine = reshiki::engine::LocalEngine::in_process();
-    app.tab.busy = false;
-    let _ = app.start_action(Action::Input("ethanol".into()));
-    let mut effects =
-        iced_runtime::task::into_stream(app.update(Message::Start(Action::Insert))).unwrap();
-    while let Some(effect) = effects.next().await {
-        if let iced_runtime::Action::Output(message) = effect {
-            let _ = app.update(message);
-        }
-    }
+    let _ = app.update(Message::Start(Action::Dismiss));
+    assert!(!app.start_visible());
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.saved, saved);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.frames(), frames);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    assert!(!app.tab.dirty());
+    assert!(app.status.is_empty());
+
+    let _ = app.update(Message::ContextKey("n".into()));
     assert_eq!(
         app.tab.doc.atoms.len(),
-        3,
-        "{:?}",
-        app.start_name_notice(&app.start.input)
+        1,
+        "Drawing shortcuts work immediately"
     );
-    assert!(!app.start_visible());
     let _ = app.update(Message::Undo);
-    assert!(app.start_visible());
+    assert_eq!(app.tab.doc, drawing);
+    assert!(
+        !app.start_visible(),
+        "Undoing to empty keeps the user's choice"
+    );
     assert!(!app.tab.history.can_undo());
+    assert!(!app.tab.dirty());
 }
 
 #[test]
-fn start_rejects_hidden_stale_actions_and_preserves_import_feedback() {
+fn start_dismissal_follows_tabs_and_resets_for_new_and_replacement_drawings() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
-    let _ = app.start_action(Action::Input("CCO".into()));
+    let original = app.tab.id;
+    let _ = app.update(Message::Start(Action::Dismiss));
+    app.add_tab();
+    let next = app.tab.id;
+    assert!(
+        app.start_visible(),
+        "A fresh tab gets its own start options"
+    );
+    let _ = app.update(Message::Tabs(super::super::tabs::Action::Select(original)));
+    assert!(!app.start_visible());
+    let _ = app.update(Message::Tabs(super::super::tabs::Action::Select(next)));
+    assert!(app.start_visible());
+
+    let _ = app.update(Message::Start(Action::Dismiss));
+    let _ = app.update(Message::New);
+    assert!(app.start_visible(), "New resets a reusable empty tab");
+    let _ = app.update(Message::Start(Action::Dismiss));
+    app.begin_file_epoch();
+    assert!(
+        app.start_visible(),
+        "Opening a replacement drawing resets dismissal"
+    );
+}
+
+#[test]
+fn start_ignores_hidden_dismissal_and_preserves_file_feedback() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
     app.tab.doc.add_atom("N", Default::default());
-    assert_eq!(app.start_action(Action::Insert).units(), 0);
-    assert_eq!(app.tab.doc.atoms.len(), 1);
+    assert_eq!(app.start_action(Action::Dismiss).units(), 0);
+    assert!(!app.tab.start_dismissed);
     app.status = "Could not open drawing".into();
     app.error = true;
     app.tab.doc.clear_content();
     let _ = app.with_start(iced::widget::Space::new().into());
+    let _ = app.update(Message::Start(Action::Dismiss));
     assert_eq!(app.status, "Could not open drawing");
     assert!(app.error);
-}
-
-#[tokio::test]
-#[ignore = "Requires the built local naming worker"]
-async fn start_name_resets_hidden_peptide_mode_before_resolving_ordinary_names() {
-    async fn insert(peptide: bool) -> (App, reshiki::document::Document) {
-        let (mut app, _) = App::new();
-        app.engine = reshiki::engine::LocalEngine::in_process();
-        app.tab.busy = false;
-        let before = app.tab.doc.clone();
-        let _ = app.naming_action(super::super::naming::Action::PeptideSequence(peptide));
-        let _ = app.start_action(Action::Input("alanine".into()));
-        let mut effects =
-            iced_runtime::task::into_stream(app.update(Message::Start(Action::Insert))).unwrap();
-        while let Some(effect) = effects.next().await {
-            if let iced_runtime::Action::Output(message) = effect {
-                let _ = app.update(message);
-            }
-        }
-        (app, before)
-    }
-    let (ordinary, _) = insert(false).await;
-    let (mut app, before) = insert(true).await;
-    assert_eq!(
-        app.tab.doc.atoms.len(),
-        6,
-        "Start must import alanine, not the ALANINE peptide: {:?}",
-        app.start_name_notice(&app.start.input)
-    );
-    let actual = reshiki::naming::structure_smiles(&app.tab.doc).unwrap();
-    assert_eq!(
-        actual,
-        reshiki::naming::structure_smiles(&ordinary.tab.doc).unwrap(),
-        "The start field must match ordinary-name mode, including stereochemistry"
-    );
-    let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, before);
-    assert!(!app.tab.history.can_undo());
 }
 
 #[test]
@@ -185,11 +164,19 @@ async fn start_controls_have_visible_bounds_and_disappear_with_the_first_object(
         let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
         ui.operate(&renderer, &mut operation::black_box(&mut collect));
         assert!(collect.snapshot().duplicate_ids.is_empty());
+        assert!(
+            !collect
+                .snapshot()
+                .nodes
+                .iter()
+                .any(|node| node.role == reshiki::accessibility::Role::TextInput),
+            "Start options do not contain a Name or SMILES field"
+        );
         for id in [
-            "start-input",
             "start-open",
             "start-paste",
             "start-templates",
+            "start-dismiss",
         ] {
             let node = collect
                 .snapshot()
@@ -204,16 +191,27 @@ async fn start_controls_have_visible_bounds_and_disappear_with_the_first_object(
             );
             println!("Start {size:?} {id}: {:?}", node.bounds);
         }
-        let field = collect
+        let open = collect
             .snapshot()
             .nodes
             .iter()
-            .find(|node| node.id == "start-input")
+            .find(|node| node.id == "start-open")
             .unwrap();
-        assert!((field.bounds.center_x() - size.width / 2.).abs() < 2.);
+        let dismiss = collect
+            .snapshot()
+            .nodes
+            .iter()
+            .find(|node| node.id == "start-dismiss")
+            .unwrap();
+        assert_eq!(dismiss.name, "Start with a blank page");
+        assert!(
+            ((open.bounds.x + dismiss.bounds.x + dismiss.bounds.width) / 2. - size.width / 2.)
+                .abs()
+                < 2.
+        );
         // Sample the card's empty top padding: it shares the inspector's quiet
         // paper surface rather than the theme's colored rounded-box fill.
-        let sample = iced::Point::new(field.bounds.x + 5., field.bounds.y - 10.);
+        let sample = iced::Point::new(open.bounds.x + 5., open.bounds.y - 10.);
         for theme in [iced::Theme::Light, iced::Theme::Dark] {
             ui.draw(
                 &mut renderer,
@@ -292,20 +290,6 @@ async fn start_controls_have_visible_bounds_and_disappear_with_the_first_object(
             .any(|node| node.id.starts_with("start-"))
     );
     Ok(())
-}
-
-#[test]
-fn editing_start_input_cancels_the_previous_local_name_request() {
-    let (mut app, _) = App::new();
-    app.tab.busy = false;
-    let _ = app.start_action(Action::Input("ethanol".into()));
-    let pending = app.start_action(Action::Insert);
-    assert!(app.tab.naming.is_pending());
-    let _ = app.start_action(Action::Input("methanol".into()));
-    assert!(!app.tab.naming.is_pending());
-    assert!(app.tab.doc.object_ids().next().is_none());
-    assert!(!app.tab.history.can_undo());
-    drop(pending);
 }
 
 #[test]

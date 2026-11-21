@@ -586,6 +586,7 @@ impl App {
         // A file import has no engine job, and its result for the old epoch is ignored.
         self.tab.busy = false;
         self.tab.file_epoch = self.next_epoch();
+        self.tab.start_dismissed = false;
         self.tab.stereo_notes.clear();
         self.tab.equipment_authoring = None;
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.

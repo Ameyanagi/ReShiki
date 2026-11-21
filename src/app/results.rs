@@ -313,7 +313,7 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::Start(action) => match action {
             #[cfg(not(target_arch = "wasm32"))]
             super::start::Action::Preview(..) => Some(Completion::StartPreview),
-            super::start::Action::Input(_) | super::start::Action::Insert => None,
+            super::start::Action::Dismiss => None,
             #[cfg(any(target_arch = "wasm32", test))]
             super::start::Action::BrowserOpen(..) => None,
             #[cfg(not(target_arch = "wasm32"))]

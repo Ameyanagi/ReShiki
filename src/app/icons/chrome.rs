@@ -189,6 +189,15 @@ pub(super) fn eye(f: &mut Frame<'_>, ink: Color) {
     f.fill(&Path::circle(Point::new(7., 7.), 1.9), ink);
 }
 
+pub(super) fn search(f: &mut Frame<'_>, ink: Color) {
+    let stroke = Stroke::default().with_width(1.5).with_color(ink);
+    f.stroke(&Path::circle(Point::new(6.5, 6.5), 4.4), stroke);
+    f.stroke(
+        &Path::line(Point::new(9.7, 9.7), Point::new(14., 14.)),
+        stroke,
+    );
+}
+
 /// Four rounded squares in a 16 × 16 box: the Tiles view.
 pub(super) fn tiles(f: &mut Frame<'_>, ink: Color) {
     for (x, y) in [(1.5, 1.5), (9., 1.5), (1.5, 9.), (9., 9.)] {

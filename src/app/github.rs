@@ -301,7 +301,14 @@ impl State {
 
     /// Whether the user may not send to the repository kept in `key`.
     fn read_only(&self, key: &RepoKey) -> bool {
-        self.states.get(key).is_some_and(|state| state.read_only)
+        self.states
+            .get(key)
+            .is_some_and(|state| state.read_only || self.link_only(state.repo_id))
+    }
+
+    /// A remembered link without a repository in the app's installation list.
+    fn link_only(&self, id: u64) -> bool {
+        self.prefs.is_shared(id) && !self.repos.iter().any(|repo| repo.id == id)
     }
 
     /// `Please add ReShiki to owner/repo …` with the page that does it.
@@ -1244,11 +1251,16 @@ impl App {
                 if let Ok(repo) = result
                     && generation == self.github.generation
                     && repo.push
+                    && !self.github.link_only(repo.id)
                     && let Some(state) = self.github.states.get_mut(&key)
                     && state.read_only
                     && state.repo_id == repo.id
                 {
                     state.read_only = false;
+                    if let Some(listed) = self.github.repos.iter_mut().find(|one| one.id == repo.id)
+                    {
+                        listed.push = true;
+                    }
                     // The open picker opens its drawings with access too.
                     if let Some(Dialog::Picker(picker)) = &mut self.github.dialog {
                         let listed = picker.repos.iter_mut().flatten();
@@ -1307,12 +1319,15 @@ impl App {
         self.github.checked = Some(Instant::now());
         let generation = self.github.generation;
         let mut tasks = Vec::new();
+        let mut relist = false;
         for key in open {
             let Some(state) = self.github.states.get(&key) else {
                 continue;
             };
             let client = client.clone();
-            if state.read_only {
+            if self.github.link_only(state.repo_id) {
+                relist = true;
+            } else if state.read_only {
                 let id = state.repo_id;
                 tasks.push(perform(
                     async move { api::repo(&client, id).await },
@@ -1321,6 +1336,9 @@ impl App {
             } else {
                 tasks.push(self.github_check_newer(client, key));
             }
+        }
+        if relist {
+            tasks.push(self.github_list());
         }
         Task::batch(tasks)
     }
@@ -1368,10 +1386,14 @@ impl App {
             .collect();
         let mut cleared = Vec::new();
         for (key, state) in &mut self.github.states {
-            if let Some(push) = push.get(&state.repo_id)
-                && state.read_only == *push
+            let may_push = push
+                .get(&state.repo_id)
+                .copied()
+                .or_else(|| self.github.prefs.is_shared(state.repo_id).then_some(false));
+            if let Some(may_push) = may_push
+                && state.read_only == may_push
             {
-                state.read_only = !push;
+                state.read_only = !may_push;
                 cleared.push(key.clone());
             }
         }
@@ -1404,7 +1426,10 @@ impl App {
     fn github_state(&mut self, key: &RepoKey) -> Option<&mut RepoState> {
         let root = self.github.root.as_deref()?;
         if !self.github.states.contains_key(key) {
-            let state = workcopy::load(root, key).ok()??;
+            let mut state = workcopy::load(root, key).ok()??;
+            if self.github.link_only(state.repo_id) {
+                state.read_only = true;
+            }
             self.github.states.insert(key.clone(), state);
         }
         self.github.states.get_mut(key)

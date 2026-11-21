@@ -133,6 +133,76 @@ fn apply(app: &mut App, messages: Vec<Message>) {
     }
 }
 
+#[tokio::test]
+#[ignore = "Opt-in real renderer layout check"]
+async fn picker_creation_and_search_are_in_its_header_in_both_views() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let mut source = source_repo();
+    source.key.owner.make_ascii_uppercase();
+    source.key.repo.make_ascii_lowercase();
+    app.github.prefs.share(&alice());
+    picker_at(&mut app, Mode::Open, &["ring.rsk"]);
+    app.github.repos.push(source);
+    let _ = app.picker_listed();
+    let mut ui = Ui::new(Size::new(1040., 760.)).await;
+    for tree in [false, true] {
+        github(&mut app, Action::Picker(picker::Action::View(tree)));
+        let opening = the_picker(&app).opening;
+        github(
+            &mut app,
+            Action::Picker(picker::Action::Whole(opening, Ok((vec![], false)))),
+        );
+        let window = ui.pass(&app, None, &[]);
+        assert!(!window.has("github-search"));
+        assert!(!window.has("github-repo-2"));
+        assert!(window.node("github-repo-1").name.contains("read only"));
+        let buttons = [
+            "github-view-tree",
+            "github-new-drawing",
+            "github-new-folder",
+            "github-toggle-search",
+        ]
+        .map(|id| window.node(id).bounds.center());
+        assert!(buttons.windows(2).all(|pair| pair[0].x < pair[1].x));
+        assert!(
+            buttons
+                .iter()
+                .all(|point| (point.y - buttons[0].y).abs() < 2.)
+        );
+
+        let clicked = ui.click(&app, buttons[3]);
+        apply(&mut app, clicked);
+        assert!(ui.pass(&app, None, &[]).has("github-search"));
+        github(
+            &mut app,
+            Action::Picker(picker::Action::Search("no match".into())),
+        );
+        let clicked = ui.click(&app, buttons[3]);
+        apply(&mut app, clicked);
+        assert!(!ui.pass(&app, None, &[]).has("github-search"));
+        assert!(the_picker(&app).search.is_empty());
+
+        let clicked = ui.click(&app, buttons[2]);
+        apply(&mut app, clicked);
+        let naming = ui.pass(&app, None, &[]);
+        assert!(naming.has("github-new-item"));
+        let clicked = ui.click(&app, naming.node("github-cancel-item").bounds.center());
+        apply(&mut app, clicked);
+        assert!(!ui.pass(&app, None, &[]).has("github-new-item"));
+    }
+
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(alice().key)),
+    );
+    picker_lists(&mut app, &[], &["shared.rsk"]);
+    let shared = ui.pass(&app, None, &[]);
+    assert!(!shared.has("github-new-drawing"));
+    assert!(!shared.has("github-new-folder"));
+    let _ = shared.text("Read only");
+}
+
 /// Signed in, with an unsent drawing in front: the cloud is the status
 /// bar's first control, before the chip and the message, and the command
 /// bar has none. Tab goes from it to the chip. Its menu opens upward and its
