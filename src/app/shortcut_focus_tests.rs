@@ -3427,8 +3427,29 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         ),
         "One pointer click publishes one update preference action: {click_messages:?}"
     );
-    let _ = app.update(Message::Escape);
+    apply(&mut app, click_messages);
+    let _ = app.update(Message::Updates(updates::Action::Saved(Ok(()))));
+    assert!(!app.updates.saving());
+    // Settings captures Escape before the underlying Assistant page sees it.
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Settings(super::settings_page::Action::Close)]
+    ));
+    apply(&mut app, messages);
     assert!(!app.settings.open);
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Assistant);
     assert_eq!(app.tab.doc, drawing);
     assert_eq!(app.assistant.input_text(), draft);
     assert!(!app.tab.history.can_undo());
