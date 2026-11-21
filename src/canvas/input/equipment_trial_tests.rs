@@ -37,8 +37,10 @@ fn cancelled(edit: Option<Edit>, epoch: u64) {
     let Some(Edit::Touch(edits)) = edit else {
         panic!("Expected cancellation")
     };
-    assert!(matches!(edits.as_slice(), [Edit::EquipmentAuthoringTest {
-        at, epoch: e, finish: false, .. }, Edit::Hover(None)] if *e == epoch && *at == World::default()));
+    assert!(
+        matches!(edits.as_slice(), [Edit::EquipmentAuthoringTestCancel(e),
+        Edit::Hover(None)] if *e == epoch)
+    );
 }
 
 #[test]

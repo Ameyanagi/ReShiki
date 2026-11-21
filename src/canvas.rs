@@ -301,6 +301,7 @@ pub enum Edit {
     /// A raw measurement or rim click owned by the detached equipment draft.
     EquipmentAuthoringPoint(World),
     EquipmentAuthoringTestStart(u64),
+    EquipmentAuthoringTestCancel(u64),
     EquipmentAuthoringTest {
         at: World,
         epoch: u64,

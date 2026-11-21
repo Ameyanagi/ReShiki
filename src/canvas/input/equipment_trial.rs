@@ -5,7 +5,6 @@ use iced::{Event, Point, Rectangle, keyboard, mouse, widget::canvas::Action};
 #[derive(Clone, Copy)]
 pub(in crate::canvas) struct Capture {
     epoch: u64,
-    start: World,
     offset: World,
 }
 
@@ -14,14 +13,9 @@ pub(in crate::canvas) struct Capture {
 mod tests;
 
 impl Capture {
-    pub(super) fn cancelled(self, reach: f32) -> Edit {
+    pub(super) fn cancelled(self) -> Edit {
         Edit::Touch(vec![
-            Edit::EquipmentAuthoringTest {
-                at: self.start,
-                epoch: self.epoch,
-                reach,
-                finish: false,
-            },
+            Edit::EquipmentAuthoringTestCancel(self.epoch),
             Edit::Hover(None),
         ])
     }
@@ -59,7 +53,6 @@ impl MoleculeCanvas<'_> {
                 state.last_click = None;
                 state.equipment_trial = Some(Capture {
                     epoch,
-                    start: at,
                     offset: World::new(at.x - p.x, at.y - p.y),
                 });
                 Some(Action::publish(Edit::EquipmentAuthoringTestStart(epoch)).and_capture())
@@ -93,7 +86,7 @@ impl MoleculeCanvas<'_> {
                             finish: true,
                         }
                     } else {
-                        capture.cancelled(reach)
+                        capture.cancelled()
                     })
                     .and_capture(),
                 )
@@ -108,7 +101,7 @@ impl MoleculeCanvas<'_> {
             {
                 let capture = state.equipment_trial.take()?;
                 state.gesture = Some(Gesture::Pan { last: point? });
-                Some(Action::publish(capture.cancelled(reach)).and_capture())
+                Some(Action::publish(capture.cancelled()).and_capture())
             }
             Event::Mouse(
                 mouse::Event::CursorLeft | mouse::Event::ButtonPressed(mouse::Button::Right),
@@ -122,7 +115,7 @@ impl MoleculeCanvas<'_> {
                 state.cursor = None;
                 state.hovering = false;
                 state.bond_text_hover = None;
-                Some(Action::publish(capture.cancelled(reach)).and_capture())
+                Some(Action::publish(capture.cancelled()).and_capture())
             }
             _ => None,
         }

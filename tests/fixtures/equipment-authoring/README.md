@@ -99,6 +99,10 @@ port snapping observations separately.
    the usual mismatch feedback must appear. Choose **Glass stopper, 29/42**:
    the existing adapter offer must appear. Repeated dragging must not add
    extra adapters or seats.
+   After releasing an adapter fit, grab the stopper again and cancel without
+   moving, then repeat after dragging it away. Pointer exit, release outside,
+   lost touch and a second-finger pinch must restore the same adapter and fit
+   feedback without adding another adapter. Accept still excludes test objects.
 3. Undo the draft's **Add joint**, then use **Flip** on the pending joint.
    The invalid draft must lose the old trial feedback. Undo and Redo the
    Flip. Choose **Finish testing** before marking a new rim.
