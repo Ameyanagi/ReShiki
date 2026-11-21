@@ -117,6 +117,7 @@ impl Ui {
         let code = match named {
             Named::Enter => Code::Enter,
             Named::Escape => Code::Escape,
+            Named::Tab => Code::Tab,
             _ => unreachable!(),
         };
         self.event(
@@ -226,14 +227,56 @@ async fn prompt_sheets_fit_short_long_and_narrow_windows() {
         assert!(long.y >= 0. && long.y + long.height <= size.height + 0.02);
         assert!(content.height > viewport.height);
         visible(node(&ui.snapshot(&app), "prompt-close"));
-        ui.focus(&app, "prompt-ok");
+        ui.focus(&app, "prompt-close");
+        assert!(ui.key(&app, Named::Tab).is_empty());
         let snapshot = ui.snapshot(&app);
         let ok = node(&snapshot, "prompt-ok");
         assert!(
             ok.focused,
-            "The final action is reachable through the scroll area"
+            "Tab reaches and reveals the final action through the scroll area"
         );
-        visible(ok);
+        let visible = ok.visible_bounds.expect("revealed OK button");
+        assert!((visible.x - ok.bounds.x).abs() < 0.02, "{ok:?}");
+        assert!((visible.y - ok.bounds.y).abs() < 0.02, "{ok:?}");
+        assert!((visible.width - ok.bounds.width).abs() < 0.02, "{ok:?}");
+        // Iced rounds the scroll translation to whole logical pixels. At the
+        // content end this can clip <=0.5 logical pixels from the trailing edge:
+        // allow at most one physical pixel at 2x, only for this revealed edge.
+        let scale = 2.;
+        let clipped_bottom = ok.bounds.y + ok.bounds.height - visible.y - visible.height;
+        assert!(clipped_bottom * scale <= 1., "{ok:?}");
+        assert!(visible.contains(ok.bounds.center()), "{ok:?}");
+
+        let mut native = reshiki::accessibility::tree::NativeTree::default();
+        let tree = native
+            .update(&snapshot, "ReShiki", Rectangle::with_size(size), scale)
+            .expect("valid focused native tree");
+        let native_ok = &tree
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == tree.focus)
+            .expect("native focused control")
+            .1;
+        assert_eq!(native_ok.author_id(), Some("prompt-ok"));
+        assert!(native_ok.supports_action(accesskit::Action::Click));
+        let Some(reshiki::accessibility::tree::Request::Activate(id)) =
+            native.resolve(&accesskit::ActionRequest {
+                action: accesskit::Action::Click,
+                target_tree: accesskit::TreeId::ROOT,
+                target_node: tree.focus,
+                data: None,
+            })
+        else {
+            panic!("The focused native action resolves to the current OK button");
+        };
+        let mut activate = reshiki::accessibility::Activate::<Message>::new(id);
+        ui.inspect(&app, &mut operation::black_box(&mut activate));
+        assert_eq!(
+            answer(vec![activate.message().cloned().expect("live OK action")]),
+            Answer::Save
+        );
+        assert_eq!(answer(ui.key(&app, Named::Enter)), Answer::Save);
+        assert_eq!(answer(ui.click(&app, "prompt-ok")), Answer::Save);
     }
 }
 
