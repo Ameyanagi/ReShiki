@@ -53,7 +53,7 @@ fn source() -> (Document, Frame) {
 #[test]
 fn table_png_and_office_svg_clip_affine_contents_and_keep_native_payload_whole() {
     let (doc, frame) = source();
-    let drawing = serde_json::to_vec(&doc.current()).unwrap();
+    let drawing = crate::payload::encode(&doc.current()).unwrap();
     let (lo, hi) = scene::bounds(&scene::primitives(&doc));
     for format in ["png", "svg-office"] {
         let exported = clipboard_figure_with_drawing(
@@ -95,7 +95,7 @@ fn table_png_and_office_svg_clip_affine_contents_and_keep_native_payload_whole()
             (pix.width(), pix.height(), pix.data().to_vec())
         };
         let mut ink = 0;
-        for (i, pixel) in pixels.chunks_exact(4).enumerate() {
+        for (i, pixel) in pixels.as_chunks::<4>().0.iter().enumerate() {
             if pixel[3] < 100 {
                 continue;
             }

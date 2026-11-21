@@ -453,6 +453,12 @@ fn property(
     data: &[u8],
     fonts: &HashMap<u16, TextEncoding>,
 ) -> Result<()> {
+    // ChemDraw's native table borders can store the foreground index in one
+    // byte. Keep the normal UInt16 contract for other object kinds.
+    if let ("border", "color", [index]) = (tree.name, p.name, data) {
+        el.set(p.name, *index);
+        return Ok(());
+    }
     {
         if numeric(p.kind) {
             el.set(p.name, decode_number(p, data)?);

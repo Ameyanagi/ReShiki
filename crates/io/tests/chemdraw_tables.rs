@@ -128,7 +128,14 @@ fn compare(source: &Document, restored: &Document) {
     {
         assert!(left.lo.distance(right.lo) < 0.0001);
         assert!(left.hi.distance(right.hi) < 0.0001);
-        assert_eq!(left.borders, right.borders);
+        assert_eq!(left.borders.len(), right.borders.len());
+        for (left, right) in left.borders.iter().zip(&right.borders) {
+            assert_eq!(left.side, right.side);
+            assert_eq!(left.color, right.color);
+            assert_eq!(left.pattern, right.pattern);
+            // CDX stores points as 16.16 fixed-point values.
+            assert!((left.width_pt - right.width_pt).abs() <= 1. / 65536.);
+        }
         assert_eq!(cell_texts(source, index), cell_texts(restored, index));
     }
     for (left, right) in source.atoms.iter().zip(&restored.atoms) {
@@ -364,12 +371,21 @@ async fn cell_graphics_keep_their_local_stacking_plane() {
         .await
         .unwrap();
     let restored = read(&bytes, "cdx").await;
+    let mut shape_bounds = Vec::new();
     for doc in [&source, &restored] {
-        let rectangle = doc
+        let cell = &table(doc).table.as_ref().unwrap().cells[1];
+        let shapes = doc
             .graphics
             .iter()
-            .find(|g| g.kind == GraphicKind::Rectangle)
-            .unwrap();
+            .filter(|g| cell.members.contains(&g.id))
+            .collect::<Vec<_>>();
+        assert_eq!(shapes.len(), 1);
+        let rectangle = shapes[0];
+        // Plain rectangles export as equivalent editable paths.
+        assert!(matches!(
+            rectangle.kind,
+            GraphicKind::Rectangle | GraphicKind::Path
+        ));
         assert!(
             rectangle.layer > 0,
             "Outside Z must not change a cell-local shape's layer"
@@ -380,9 +396,17 @@ async fn cell_graphics_keep_their_local_stacking_plane() {
                 .cell_of(rectangle.id)
                 .unwrap()
                 .cell,
-            table(doc).table.as_ref().unwrap().cells[1].id
+            cell.id
         );
+        let (lo, hi) = rectangle.bounds();
+        let origin = table(doc).origin;
+        shape_bounds.push((
+            lo.offset(-origin.x, -origin.y),
+            hi.offset(-origin.x, -origin.y),
+        ));
     }
+    assert!(shape_bounds[0].0.distance(shape_bounds[1].0) < 0.003);
+    assert!(shape_bounds[0].1.distance(shape_bounds[1].1) < 0.003);
 }
 
 #[tokio::test]
