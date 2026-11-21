@@ -171,6 +171,96 @@ impl iced::advanced::widget::Operation for PanelText {
     }
 }
 
+fn panel_snapshot(
+    app: &App,
+    renderer: &mut iced::Renderer,
+) -> (Vec<String>, reshiki::accessibility::Snapshot) {
+    use iced::advanced::widget::operation;
+    let size = iced::Size::new(300., 3000.);
+    let mut ui = iced_runtime::UserInterface::build(
+        app.properties_panel(),
+        size,
+        iced_runtime::user_interface::Cache::new(),
+        renderer,
+    );
+    let mut words = PanelText::default();
+    ui.operate(renderer, &mut operation::black_box(&mut words));
+    let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+    ui.operate(renderer, &mut operation::black_box(&mut collect));
+    let controls = collect.snapshot().clone();
+    assert!(
+        controls.duplicate_ids.is_empty(),
+        "{:?}",
+        controls.duplicate_ids
+    );
+    (words.0, controls)
+}
+
+#[tokio::test]
+#[ignore = "Opt-in actual partial-selection rear opacity and analysis-scope regression"]
+async fn partial_projected_selection_keeps_rear_opacity_without_requesting_analysis()
+-> Result<(), String> {
+    use iced::advanced::renderer::Headless;
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    for projected_bond in [false, true] {
+        for selected_count in [1, 2] {
+            let (mut app, atoms, _, _) = fixture();
+            app.set_selection(atoms[..selected_count].to_vec());
+            let (_, controls) = panel_snapshot(&app, &mut renderer);
+            assert!(
+                !controls
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == "projection-rear-opacity")
+            );
+            if projected_bond {
+                app.tab.doc.bonds[1].projection = true;
+            } else {
+                app.tab.doc.atom_mut(atoms[2]).unwrap().depth = 12.;
+            }
+            // The selected atom/bond itself has neither depth nor a projection
+            // flag. The control applies to its complete covalent component.
+            assert_eq!(app.depth_ids(), atoms);
+            assert!(app.selected_existing_model().is_none());
+            let document = app.tab.doc.clone();
+            let selection = app.tab.selected.clone();
+            for analysis in [false, true, false] {
+                if analysis {
+                    let _ = app.show_molecular_properties();
+                } else {
+                    let _ = app.inspector_action(Action::DismissMolecule);
+                }
+                let (words, controls) = panel_snapshot(&app, &mut renderer);
+                assert!(
+                    words.iter().any(|word| word == "3D appearance"),
+                    "{words:?}"
+                );
+                for id in ["projection-rear-opacity", "projection-rear-opacity-apply"] {
+                    let node = controls
+                        .nodes
+                        .iter()
+                        .find(|node| node.id == id)
+                        .unwrap_or_else(|| panic!("missing {id}: {words:?}"));
+                    assert!(node.enabled && node.visible_bounds.is_some(), "{id}");
+                }
+                assert_eq!(app.requested_molecular_properties(), analysis);
+                assert_eq!(words.iter().any(|word| word == "Identity"), analysis);
+                assert_eq!(app.tab.selected, selection);
+                assert_eq!(app.tab.doc, document);
+                assert!(!app.tab.history.can_undo());
+                assert_eq!(words.last().map(String::as_str), Some("Delete selection"));
+            }
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test]
 #[ignore = "Opt-in actual Properties renderer context and Delete-last regression"]
 async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), String> {
@@ -182,26 +272,7 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
     )
     .await
     .ok_or("No renderer")?;
-    let snapshot = |app: &App, renderer: &mut iced::Renderer| {
-        let size = iced::Size::new(300., 3000.);
-        let mut ui = iced_runtime::UserInterface::build(
-            app.properties_panel(),
-            size,
-            iced_runtime::user_interface::Cache::new(),
-            renderer,
-        );
-        let mut words = PanelText::default();
-        ui.operate(renderer, &mut operation::black_box(&mut words));
-        let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
-        ui.operate(renderer, &mut operation::black_box(&mut collect));
-        let controls = collect.snapshot().clone();
-        assert!(
-            controls.duplicate_ids.is_empty(),
-            "{:?}",
-            controls.duplicate_ids
-        );
-        (words.0, controls)
-    };
+    let snapshot = panel_snapshot;
     let (mut app, atoms, arrow, graphic) = fixture();
     for section in [
         Section::Chemistry,

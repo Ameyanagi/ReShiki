@@ -12,3 +12,5 @@ issues: []
   ends the request. Next-object defaults support keyboard and native
   accessibility actions independently of the context row, as does the selected
   atom's Edit atom label command.
+- Projected molecules keep rear-opacity controls when only an atom or bond is
+  selected, without requesting molecular analysis.

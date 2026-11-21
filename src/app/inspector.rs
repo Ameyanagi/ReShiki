@@ -1122,7 +1122,7 @@ impl App {
         if let Some(section) = self.model_section() {
             body = body.push(section);
         }
-        if molecular && let Some(section) = self.rear_opacity_section(self.depth_ids()) {
+        if let Some(section) = self.rear_opacity_section(self.depth_ids()) {
             body = body.push(section);
         }
         if let Some(notice) = self.properties_contrast_notice(Some(&selected)) {
