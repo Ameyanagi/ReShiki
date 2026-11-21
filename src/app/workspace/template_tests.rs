@@ -15,7 +15,7 @@ fn template_navigation_keeps_browse_rows_in_place_after_returning_to_categories(
             .collect::<Vec<_>>()
     };
     let initial = rows(&app);
-    assert_eq!(initial.len(), 4);
+    assert_eq!(initial.len(), 2);
     assert_eq!(initial[1].1, 2, "Both navigation buttons share one row");
     assert!(!app.templates.can_forward());
 
@@ -43,7 +43,7 @@ fn template_search_scope_row_only_appears_with_an_open_category_and_query() {
         let controls: Element<'_, Message> =
             app.template_browse_controls(iced::widget::column![]).into();
         let tree = Tree::new(controls.as_widget());
-        assert_eq!(tree.children.len(), 4);
+        assert_eq!(tree.children.len(), 2);
         assert_eq!(tree.children[0].children.len(), search_rows);
         assert_eq!(tree.children[1].children.len(), 2);
     }

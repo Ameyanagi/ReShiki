@@ -11,6 +11,12 @@ use reshiki::{
 const INSERT_STRUCTURE_FAILED: &str = "Could not insert structure";
 const PROGRESS_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum InsertPlacement {
+    BesideDrawing,
+    ViewCenter,
+}
+
 /// A receipt belongs to one request, drawing and tab, even after cancellation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Key {
@@ -149,6 +155,17 @@ impl App {
         request.selected_ids = Some(self.tab.selected.clone());
         self.run(request, Job::AromaticDisplay)
     }
+    pub(super) fn cancel_add_structure(&mut self) {
+        if self
+            .tab
+            .engine_job
+            .as_ref()
+            .is_some_and(|job| matches!(job.kind, Job::InsertAtView))
+        {
+            self.cancel_engine_job();
+        }
+    }
+
     pub(super) fn insert_input(&mut self) -> Task<Message> {
         if self.imports.kind == super::import::InputKind::Name {
             return self.naming_action(super::naming::Action::InsertName);
@@ -212,7 +229,12 @@ impl App {
         match kind {
             Job::Clean(_) => self.cleanup_ready(response),
             Job::Projection(name) => self.projection_ready(name, response),
-            Job::Insert => return self.structure_inserted(response),
+            Job::Insert => {
+                return self.structure_inserted(response, InsertPlacement::BesideDrawing);
+            }
+            Job::InsertAtView => {
+                return self.structure_inserted(response, InsertPlacement::ViewCenter);
+            }
             Job::AromaticDisplay => self.aromatic_display_ready(response),
             Job::Abbreviate => self.abbreviations_ready(response),
             Job::Analyze => self.analysis_ready(response),
@@ -266,21 +288,26 @@ impl App {
     /// An empty drawing centers it on the camera instead. Returns the inserted
     /// IDs, or `None` when append inserts nothing, leaving the drawing unchanged
     /// if IDs are exhausted or a document is invalid.
-    pub(super) fn insert_beside_drawing(&mut self, document: &Document) -> Option<Vec<u64>> {
+    pub(super) fn insert_structure(
+        &mut self,
+        document: &Document,
+        placement: InsertPlacement,
+    ) -> Option<Vec<u64>> {
         let center = editing::center(document, &document.all_ids());
-        let offset = if self.tab.doc.all_ids().is_empty() {
-            Point::new(
-                self.tab.camera.center.x - center.x,
-                self.tab.camera.center.y - center.y,
-            )
-        } else {
-            let (_, existing_max) = self.tab.doc.bounds();
-            let (insert_min, _) = document.bounds();
-            Point::new(
-                existing_max.x + self.tab.doc.drawing_style.bond_length_world - insert_min.x,
-                self.tab.camera.center.y - center.y,
-            )
-        };
+        let offset =
+            if placement == InsertPlacement::ViewCenter || self.tab.doc.all_ids().is_empty() {
+                Point::new(
+                    self.tab.camera.center.x - center.x,
+                    self.tab.camera.center.y - center.y,
+                )
+            } else {
+                let (_, existing_max) = self.tab.doc.bounds();
+                let (insert_min, _) = document.bounds();
+                Point::new(
+                    existing_max.x + self.tab.doc.drawing_style.bond_length_world - insert_min.x,
+                    self.tab.camera.center.y - center.y,
+                )
+            };
         // A generated structure follows this drawing's label settings instead
         // of overriding them per atom.
         let mut document = document.clone();
@@ -290,7 +317,17 @@ impl App {
     }
 
     /// Reveal an insertion together with the drawing that was already in view.
-    pub(super) fn commit_structure_insert(&mut self, before: Document, selected: Vec<u64>) {
+    pub(super) fn commit_structure_insert(
+        &mut self,
+        before: Document,
+        selected: Vec<u64>,
+        placement: InsertPlacement,
+    ) {
+        if placement == InsertPlacement::ViewCenter {
+            self.tab.selected = selected;
+            self.adopt_changed_document(before);
+            return;
+        }
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
         let camera = self.tab.camera;
         // The on-screen part of the drawing: objects that reach into the view,
@@ -338,18 +375,22 @@ impl App {
         self.reveal_bounds(lo, hi);
     }
 
-    fn structure_inserted(&mut self, response: Response) -> Task<Message> {
+    fn structure_inserted(
+        &mut self,
+        response: Response,
+        placement: InsertPlacement,
+    ) -> Task<Message> {
         let Some(document) = response.document else {
             return Task::none();
         };
         let before = self.tab.doc.clone();
-        let Some(selected) = self.insert_beside_drawing(&document) else {
+        let Some(selected) = self.insert_structure(&document, placement) else {
             self.tab.doc = before;
             self.error = true;
             self.status = INSERT_STRUCTURE_FAILED.into();
             return Task::none();
         };
-        self.commit_structure_insert(before, selected);
+        self.commit_structure_insert(before, selected, placement);
         if self.error {
             return Task::none();
         }
@@ -359,7 +400,18 @@ impl App {
             self.status.push_str(" · ");
             self.status.push_str(&response.warnings.join(" · "));
         }
-        super::focus_drawing()
+        if placement == InsertPlacement::ViewCenter {
+            if self.tabs.temporary_depth == 0
+                && self.inspector_open
+                && self.inspector_tab == super::InspectorTab::Templates
+            {
+                super::add_panel::focus_drawing_after_insert()
+            } else {
+                Task::none()
+            }
+        } else {
+            super::focus_drawing()
+        }
     }
     fn aromatic_display_ready(&mut self, response: Response) {
         if let Some(document) = response.document {

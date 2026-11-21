@@ -33,6 +33,8 @@ pub enum Action {
     Browse,
     Forward,
     Search(String),
+    InsertQuery,
+    AddMenu(bool),
     SearchAll,
     Filter(Filter),
     Collection(String),
@@ -132,6 +134,7 @@ pub struct State {
     pub library: Library,
     pub path: Option<PathBuf>,
     pub query: String,
+    pub(super) add_menu_open: bool,
     pub filter: Filter,
     pub collection: String,
     pub anchor: Anchor,
@@ -162,6 +165,7 @@ impl Default for State {
             library: Library::default(),
             path: None,
             query: String::new(),
+            add_menu_open: false,
             filter: Filter::All,
             collection: "All collections".into(),
             anchor: Anchor::Auto,
@@ -650,10 +654,15 @@ impl App {
         }
     }
     pub(super) fn template_action(&mut self, action: Action) -> Task<Message> {
+        if matches!(action, Action::InsertQuery) {
+            return self.insert_add_query();
+        }
         let navigation = matches!(
             &action,
             Action::Browse | Action::Forward | Action::Collection(_) | Action::SearchAll
         );
+        let previous_query = (navigation || matches!(action, Action::Search(_)))
+            .then(|| self.templates.query.clone());
         let reveal = matches!(
             action,
             Action::Browse
@@ -672,6 +681,13 @@ impl App {
             self.templates.notice = Some(error.clone());
             self.status = error;
             self.error = true;
+        }
+        if previous_query
+            .as_ref()
+            .is_some_and(|query| query.trim() != self.templates.query.trim())
+        {
+            self.cancel_add_name();
+            self.cancel_add_structure();
         }
         if navigation {
             iced::widget::operation::scroll_to(
@@ -883,6 +899,8 @@ impl App {
                 }
             }
             Action::Search(s) => state.query = s,
+            Action::AddMenu(open) => state.add_menu_open = open,
+            Action::InsertQuery => {}
             Action::SearchAll => {
                 state.remember(self.template_index);
                 state.collection = "All collections".into();
@@ -996,16 +1014,21 @@ impl App {
         Task::none()
     }
     pub(super) fn template_message(&mut self, action: Action) -> Task<Message> {
+        if !matches!(action, Action::AddMenu(_)) {
+            self.templates.add_menu_open = false;
+        }
         if let Some(task) = self.template_async(&action) {
             return task;
         }
         self.template_action(action)
     }
     pub(super) fn insert_template(&mut self, index: usize) {
-        if self.templates.library.get(index).is_some()
-            && (!self.templates.active || self.template_index != index)
-        {
-            self.templates.remember(self.template_index);
+        if self.templates.library.get(index).is_some() {
+            self.cancel_add_name();
+            self.cancel_add_structure();
+            if !self.templates.active || self.template_index != index {
+                self.templates.remember(self.template_index);
+            }
         }
         if let Some(template) = self.templates.library.get(index) {
             if !self.templates.active || self.template_index != index {

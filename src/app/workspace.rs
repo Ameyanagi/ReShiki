@@ -1840,6 +1840,7 @@ impl App {
         let mut tabs = row![];
         for (label, tab) in INSPECTOR_TABS {
             let selected = self.inspector_tab == tab
+                || (tab == InspectorTab::Templates && self.inspector_tab == InspectorTab::Import)
                 || (tab == InspectorTab::Properties
                     && matches!(
                         self.inspector_tab,
@@ -1910,7 +1911,12 @@ impl App {
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
-            InspectorTab::Import => self.import_panel(),
+            InspectorTab::Import => column![
+                panel_action("← Add", Message::Inspector(InspectorTab::Templates)),
+                self.import_panel(),
+            ]
+            .spacing(8)
+            .into(),
             InspectorTab::Names => self.naming_panel(),
             InspectorTab::Export => self.export_panel(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -1938,7 +1944,7 @@ impl App {
         use super::template_library::Action as A;
         let action = Message::Templates;
         let state = &self.templates;
-        let mut body = column![section("Template library")].spacing(8);
+        let mut body = column![].spacing(8);
         body = self.template_browse_controls(body);
         if let Some(error) = &state.notice {
             body = body.push(
@@ -1997,13 +2003,7 @@ impl App {
         let action = Message::Templates;
         let state = &self.templates;
         if !state.active {
-            let mut search = column![
-                crate::appearance::text_input("Search names, collections…", &state.query)
-                    .on_input(|s| Message::Templates(A::Search(s)))
-                    .size(12)
-                    .padding(8),
-            ]
-            .spacing(8);
+            let mut search = column![self.add_search()].spacing(8);
             if state.collection != "All collections" && !state.query.trim().is_empty() {
                 search = search.push(
                     row![
@@ -2044,20 +2044,6 @@ impl App {
                     ]
                     .spacing(3),
                 );
-            body = body.push(
-                button(text("Save selection as template").size(12))
-                    .padding(7)
-                    .width(Length::Fill)
-                    .on_press_maybe((!self.tab.selected.is_empty()).then(|| action(A::BeginSave))),
-            );
-            body = body.push(
-                row![
-                    panel_action("Import…", action(A::Import)),
-                    panel_action("Export…", action(A::Export)),
-                    panel_action("Reload", action(A::Reload))
-                ]
-                .spacing(3),
-            );
         } else {
             body = body.push(command("← Browse templates", action(A::Browse)));
         }
@@ -2174,36 +2160,25 @@ impl App {
             && state.filter == Filter::All
         {
             let mut categories =
-                std::collections::BTreeMap::<&str, (usize, &reshiki::templates::Template)>::new();
+                std::collections::BTreeMap::<&str, &reshiki::templates::Template>::new();
             for template in state.library.iter() {
                 for name in super::template_library::categories(template) {
-                    let entry = categories.entry(name).or_insert((0, template));
-                    entry.0 += 1;
+                    categories.entry(name).or_insert(template);
                 }
             }
             body = body.push(horizontal_line()).push(section("Categories"));
-            for (name, (count, sample)) in categories {
-                let preview: Element<'_, Message> =
-                    canvas(crate::canvas::TemplateThumbnail(&sample.document))
-                        .width(26)
-                        .height(26)
-                        .into();
-                body = body.push(
-                    button(
-                        row![
-                            preview,
-                            text(name).size(12).width(Length::Fill),
-                            text(count.to_string()).size(11).style(muted_text),
-                            text("›").size(15)
-                        ]
-                        .spacing(7)
-                        .align_y(Alignment::Center),
-                    )
-                    .padding([3, 6])
-                    .width(Length::Fill)
-                    .style(button::text)
-                    .on_press(action(A::Collection(name.into()))),
-                );
+            let entries: Vec<_> = categories.into_iter().collect();
+            for tiles in entries.chunks(3) {
+                let mut line = row![].spacing(6);
+                for (name, sample) in tiles {
+                    line = line.push(template_tile(
+                        format!("template-category-{name}"),
+                        name,
+                        &sample.document,
+                        action(A::Collection((*name).into())),
+                    ));
+                }
+                body = body.push(line);
             }
             return body;
         }
@@ -2233,23 +2208,14 @@ impl App {
             .size(11)
             .style(muted_text),
         );
-        for tiles in matches.chunks(4) {
-            let mut line = row![].spacing(4);
+        for tiles in matches.chunks(3) {
+            let mut line = row![].spacing(6);
             for (index, template) in tiles {
-                let preview: Element<'_, Message> =
-                    canvas(crate::canvas::TemplateThumbnail(&template.document))
-                        .width(44)
-                        .height(44)
-                        .into();
-                line = line.push(hover_hint(
-                    button(preview)
-                        .padding(4)
-                        .width(52)
-                        .height(52)
-                        .style(control(state.active && self.template_index == *index))
-                        .on_press(Message::InsertTemplate(*index)),
-                    template.name.as_str(),
-                    tooltip::Position::Left,
+                line = line.push(template_tile(
+                    format!("template-tile-{}", template.id),
+                    &template.name,
+                    &template.document,
+                    Message::InsertTemplate(*index),
                 ));
             }
             body = body.push(line);
@@ -3128,15 +3094,48 @@ impl App {
     }
 }
 
+fn template_tile<'a>(
+    id: String,
+    title: &'a str,
+    document: &'a reshiki::document::Document,
+    message: Message,
+) -> Element<'a, Message> {
+    let preview = canvas(crate::canvas::TemplateThumbnail(document))
+        .width(54)
+        .height(42);
+    hover_hint(
+        reshiki::accessibility::button(
+            id,
+            title,
+            column![
+                preview,
+                text(title)
+                    .size(11)
+                    .height(31)
+                    .width(Length::Fill)
+                    .align_x(iced::alignment::Horizontal::Center),
+            ]
+            .spacing(3)
+            .align_x(Alignment::Center),
+        )
+        .padding([4, 5])
+        .width(90)
+        .style(control(false))
+        .on_press(message),
+        title,
+        tooltip::Position::Left,
+    )
+    .into()
+}
+
 const PALETTE_WIDTH: f32 = 104.;
 const INSPECTOR_WIDTH: f32 = 320.;
 /// The inspector's tab strip: a segmented control. Equal segments cannot fit
 /// "Properties" at 12 px, so each grows with its label.
-const INSPECTOR_TABS: [(&str, InspectorTab); 5] = [
+const INSPECTOR_TABS: [(&str, InspectorTab); 4] = [
     ("Properties", InspectorTab::Properties),
     ("Predict", InspectorTab::Predict),
-    ("Templates", InspectorTab::Templates),
-    ("Import", InspectorTab::Import),
+    ("Add", InspectorTab::Templates),
     ("Export", InspectorTab::Export),
 ];
 /// The tallest the Check drawing findings grow before they scroll; with the

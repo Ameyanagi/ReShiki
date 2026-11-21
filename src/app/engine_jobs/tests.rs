@@ -120,7 +120,7 @@ async fn manual_profile_polyalanine_insert_stages() -> anyhow::Result<()> {
         let before = app.tab.doc.clone();
         let started = Instant::now();
         app.tab.selected = app
-            .insert_beside_drawing(&document)
+            .insert_structure(&document, InsertPlacement::BesideDrawing)
             .ok_or_else(|| anyhow::anyhow!("Insert failed"))?;
         elapsed(&mut stages, "append", started);
         let started = Instant::now();
@@ -163,13 +163,15 @@ fn inserted_structures_follow_the_drawings_label_settings() {
     let b = document.add_atom("C", Point::new(42., 0.));
     document.add_bond(a, b, 1, "plain");
     let before = app.tab.doc.clone();
-    let selected = app.insert_beside_drawing(&document).unwrap();
+    let selected = app
+        .insert_structure(&document, InsertPlacement::BesideDrawing)
+        .unwrap();
     assert!(
         selected
             .iter()
             .all(|id| app.tab.doc.atom(*id).unwrap().display.stereo.show.is_none())
     );
-    app.commit_structure_insert(before.clone(), selected);
+    app.commit_structure_insert(before.clone(), selected, InsertPlacement::BesideDrawing);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
 }
