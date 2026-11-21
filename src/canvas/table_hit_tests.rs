@@ -91,6 +91,44 @@ fn cell_clipping_is_shared_by_pointer_selection_atom_snapping_and_bond_hits() {
 }
 
 #[test]
+fn table_rotation_handle_uses_one_affine_site_even_for_expanded_overflow_selections() {
+    use reshiki::graphics::table::Frame;
+    let (mut doc, _, _, text) = drawing();
+    doc.annotations
+        .iter_mut()
+        .find(|a| a.id == text)
+        .unwrap()
+        .position = World::new(5000., -3000.);
+    let middle = Frame::of(&doc.graphics[0])
+        .unwrap()
+        .point(World::new(0.5, 0.5));
+    for ids in [
+        vec![100],
+        reshiki::graphics::table::with_contents(&doc, &[100]),
+    ] {
+        let selection = SelectionBox::new(
+            &doc,
+            &ids,
+            Camera::default(),
+            Rectangle::with_size(iced::Size::new(1000., 800.)),
+        )
+        .unwrap();
+        assert_eq!(selection.pivot, middle);
+        let mut preview = doc.clone();
+        rotate(&mut preview, &ids, selection.pivot, 1., 180.);
+        assert!(
+            Frame::of(&preview.graphics[0])
+                .unwrap()
+                .point(World::new(0.5, 0.5))
+                .distance(middle)
+                < 1e-4
+        );
+        assert_eq!(preview.graphics[0].table, doc.graphics[0].table);
+        preview.validate().unwrap();
+    }
+}
+
+#[test]
 fn table_clips_apply_to_cached_cycle_hits_without_losing_effective_outline_bounds() {
     use reshiki::cycles::{self, Cycle, Shape};
     let (mut doc, _, _, _) = drawing();

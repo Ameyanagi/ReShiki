@@ -129,6 +129,91 @@ fn dragging_between_existing_different_cell_atoms_rolls_back_without_an_undo_ste
 }
 
 #[test]
+fn table_command_and_numeric_half_turns_keep_the_frame_center_with_off_center_captions() {
+    use crate::app::numeric_transforms::{Action, Field};
+    use reshiki::document::Annotation;
+    use reshiki::editing::Transform;
+    use reshiki::graphics::table::Frame;
+    for numeric in [false, true] {
+        for overflow in [false, true] {
+            let (mut app, atom, _) = app();
+            let table = 100;
+            app.tab.doc.graphics[0].table.as_mut().unwrap().cells = (0..6)
+                .map(|i| Cell {
+                    id: i + 1,
+                    lo: Point::new((i % 3) as f32 / 3., (i / 3) as f32 / 2.),
+                    hi: Point::new((i % 3 + 1) as f32 / 3., (i / 3 + 1) as f32 / 2.),
+                    members: if i == 0 { vec![atom] } else { vec![] },
+                    borders: vec![],
+                })
+                .collect();
+            for (cell, position) in [
+                (0, Point::new(12., 20.)),
+                (
+                    1,
+                    if overflow {
+                        Point::new(5000., -3000.)
+                    } else {
+                        Point::new(120., 25.)
+                    },
+                ),
+            ] {
+                let id = app.tab.doc.next_id();
+                app.tab.doc.annotations.push(Annotation {
+                    id,
+                    position,
+                    text: "off-center caption".into(),
+                    angle: 0.,
+                    format: Default::default(),
+                });
+                app.tab.doc.graphics[0].table.as_mut().unwrap().cells[cell]
+                    .members
+                    .push(id);
+            }
+            app.tab.doc.validate().unwrap();
+            app.tab.selected = vec![table];
+            app.sync_numeric_transforms();
+            let before = app.tab.doc.clone();
+            let center = Frame::of(&before.graphics[0])
+                .unwrap()
+                .point(Point::new(0.5, 0.5));
+            if numeric {
+                let _ = app.update(Message::NumericTransform(Action::Input(
+                    Field::Rotation,
+                    "180".into(),
+                )));
+                let _ = app.update(Message::NumericTransform(Action::Apply(Field::Rotation)));
+            } else {
+                let _ = app.update(Message::Transform(Transform::Rotate(180.)));
+            }
+            assert!(!app.error, "{numeric}, {overflow}: {}", app.status);
+            assert!(
+                Frame::of(&app.tab.doc.graphics[0])
+                    .unwrap()
+                    .point(Point::new(0.5, 0.5))
+                    .distance(center)
+                    < 1e-4
+            );
+            assert_eq!(app.tab.doc.graphics[0].table, before.graphics[0].table);
+            for (old, new) in before.annotations.iter().zip(&app.tab.doc.annotations) {
+                assert!(
+                    new.position.distance(Point::new(
+                        2. * center.x - old.position.x,
+                        2. * center.y - old.position.y
+                    )) < 0.001
+                );
+            }
+            assert_eq!(app.tab.history.undo_frames().len(), 1);
+            let after = app.tab.doc.clone();
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc, after);
+        }
+    }
+}
+
+#[test]
 fn two_click_mechanism_arrows_in_cells_keep_targets_and_one_undo_step() {
     use reshiki::arrow_anchors::Pick;
     for kind in 0..3 {

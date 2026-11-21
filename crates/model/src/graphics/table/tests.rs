@@ -137,11 +137,13 @@ fn table_rotation_uses_its_affine_center_and_keeps_owned_coordinates() {
     let local = frame.local(doc.atom(ids[0]).unwrap().position).unwrap();
     let selected = with_contents(&doc, &[table]);
     let pivot = editing::rotation_center(&doc, &selected).unwrap();
+    assert_eq!(pivot, frame.point(Point::new(0.5, 0.5)));
     let ownership = doc.graphics[0].table.clone();
     for _ in 0..4 {
         editing::transform(&mut doc, &[table], editing::Transform::Rotate(90.));
         doc.validate().unwrap();
         let frame = Frame::of(&doc.graphics[0]).unwrap();
+        assert!(frame.point(Point::new(0.5, 0.5)).distance(pivot) < 1e-4);
         assert!(
             editing::rotation_center(&doc, &[table])
                 .unwrap()
@@ -163,6 +165,74 @@ fn table_rotation_uses_its_affine_center_and_keeps_owned_coordinates() {
         );
         assert_eq!(doc.graphics[0].table, ownership);
     }
+}
+
+#[test]
+fn table_transform_pivots_ignore_owned_overflow_but_keep_free_selection_sites() {
+    use editing::Transform;
+    let (mut source, table, ids) = fixture();
+    source.annotations[0].position = Point::new(5000., -3000.);
+    let middle = Frame::of(&source.graphics[0])
+        .unwrap()
+        .point(Point::new(0.5, 0.5));
+    let expanded = with_contents(&source, &[table]);
+    for transform in [
+        Transform::Rotate(180.),
+        Transform::FlipHorizontal,
+        Transform::FlipVertical,
+    ] {
+        let mut doc = source.clone();
+        let old = doc.annotations[0].position;
+        editing::transform(&mut doc, &expanded, transform);
+        let center = Frame::of(&doc.graphics[0])
+            .unwrap()
+            .point(Point::new(0.5, 0.5));
+        assert!(center.distance(middle) < 1e-4, "{transform:?}");
+        let expected = match transform {
+            Transform::FlipHorizontal => Point::new(2. * middle.x - old.x, old.y),
+            Transform::FlipVertical => Point::new(old.x, 2. * middle.y - old.y),
+            _ => Point::new(2. * middle.x - old.x, 2. * middle.y - old.y),
+        };
+        assert!(doc.annotations[0].position.distance(expected) < 0.001);
+        assert_eq!(doc.graphics[0].table, source.graphics[0].table);
+        doc.validate().unwrap();
+    }
+    let free = source.add_atom("C", Point::new(1000., 1200.));
+    let selected: Vec<_> = expanded.into_iter().chain([free]).collect();
+    let pivot = middle.lerp(source.atom(free).unwrap().position, 0.5);
+    assert_eq!(editing::rotation_center(&source, &selected), Some(pivot));
+    let mut mixed = source.clone();
+    editing::transform(&mut mixed, &selected, Transform::Rotate(180.));
+    let center = Frame::of(&mixed.graphics[0])
+        .unwrap()
+        .point(Point::new(0.5, 0.5));
+    assert!(center.distance(source.atom(free).unwrap().position) < 0.001);
+    assert!(mixed.atom(free).unwrap().position.distance(middle) < 0.001);
+    let mut child = source.clone();
+    let caption = child.annotations.iter().find(|a| a.id == ids[2]).unwrap();
+    let child_center = caption.centre();
+    assert_eq!(
+        editing::rotation_center(&child, &[ids[2]]),
+        Some(child_center)
+    );
+    editing::transform(&mut child, &[ids[2]], Transform::Rotate(180.));
+    assert_eq!(
+        child.graphics, source.graphics,
+        "a child-only rotation never moves its table"
+    );
+    assert!(child.annotations[0].centre().distance(child_center) < 0.001);
+    let explicit = Point::new(-100., 50.);
+    let mut about = source.clone();
+    editing::transform_about(&mut about, &[table], explicit, 1., 180.);
+    let center = Frame::of(&about.graphics[0])
+        .unwrap()
+        .point(Point::new(0.5, 0.5));
+    assert!(
+        center.distance(Point::new(
+            2. * explicit.x - middle.x,
+            2. * explicit.y - middle.y
+        )) < 0.001
+    );
 }
 
 #[test]
