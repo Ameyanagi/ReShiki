@@ -1,6 +1,7 @@
 //! Properties follows the selection; an idle canvas shows drawing settings,
 //! while a drawing tool shows the same defaults as its context row.
 use super::*;
+use iced::widget::column;
 
 /// A request follows its object/atom scope, not the document revision. Caption
 /// pins and appearance edits keep that scope; changing targets does not.

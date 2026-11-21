@@ -289,7 +289,6 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
         position: Point::new(20., 180.),
         text: "Selected caption".into(),
         format: Default::default(),
-        angle: 0.,
     });
     app.tool = Tool::Text;
     app.set_selection(vec![caption]);

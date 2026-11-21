@@ -329,6 +329,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::PropertiesCalculated(..) => Some(Completion::Properties),
                 Action::IdentityCopied(..) => Some(Completion::Clipboard),
                 Action::Section(..)
+                | Action::DismissMolecule
                 | Action::CopyIdentity(_)
                 | Action::NameIdentity
                 | Action::AddIdentityName
