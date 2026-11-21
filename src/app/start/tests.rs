@@ -338,8 +338,5 @@ fn office_session_files_are_not_recent_but_normal_files_still_are() {
         Ok(super::super::files::Prepared::Native(Box::new(document))),
     )));
     assert_eq!(app.start.recent.entries.len(), 1);
-    assert_eq!(
-        app.start.recent.entries[0].path,
-        ordinary.canonicalize().unwrap()
-    );
+    assert_eq!(app.start.recent.entries[0].path, ordinary);
 }
