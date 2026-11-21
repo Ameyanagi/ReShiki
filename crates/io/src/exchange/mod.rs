@@ -10,6 +10,8 @@ mod values;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tlc_tests;
 
 pub(crate) use charsets::{is_symbol_font, symbol_char};
 pub(crate) use decode::{SKIPPED, style_from_cdx};
@@ -22,6 +24,9 @@ use std::{collections::HashMap, sync::LazyLock};
 pub(crate) const PURPOSE: &str = "ReShikiPurpose";
 /// A panel as JSON, on the group of shapes and text ChemDraw gets for it.
 pub(crate) const PANEL: &str = "ReShikiPanel";
+/// Import-only: the binary decoder skipped TLC data, so its drawing reader
+/// must warn or fall back rather than assume an ordinary supported spot.
+pub(crate) const TLC_SKIPPED: &str = "ReShikiTlcSkipped";
 
 pub const LIMIT: usize = 16 * 1024 * 1024;
 const MAX_OBJECTS: usize = 100_000;
@@ -55,6 +60,10 @@ const OBJECTS: &[(u16, &str)] = &[
     (0x8017, "bracketedgroup"),
     (0x8018, "bracketattachment"),
     (0x8019, "crossingbond"),
+    // ChemDraw 26 native TLC hierarchy, checked against an authored plate.
+    (0x801d, "tlcplate"),
+    (0x801e, "tlclane"),
+    (0x801f, "tlcspot"),
     // ChemDraw's linked property text, checked against ChemDraw 26 files.
     (0x8020, "chemicalproperty"),
     // ChemDraw stores arrows as 0x8021, despite the published SDK listing

@@ -581,7 +581,7 @@ fn hidden_drawing_sources(
         }
         if !matches!(
             node.tag_name().name(),
-            "t" | "arrow" | "curve" | "graphic" | "embeddedobject"
+            "t" | "arrow" | "curve" | "graphic" | "embeddedobject" | "tlcplate"
         ) || !represented.is_empty()
             || node.attribute("ChemicallySignificant") == Some("yes")
             || node.attribute("ObjectID").is_some_and(|id| !id.is_empty())

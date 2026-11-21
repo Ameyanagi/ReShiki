@@ -1180,27 +1180,27 @@ async fn atoms_kept_straight_in_a_group_open_as_one_molecule() {
 }
 
 #[tokio::test]
-async fn object_tag_names_written_as_bare_text_are_read() {
-    // ChemDraw writes an atom number's or stereo label's tag name as bare
-    // text, without the style-run count ReShiki's own CDX has.
+async fn native_and_legacy_object_tag_names_are_read() {
+    // Native object tags use bare bytes. Read the style-run count prefix used
+    // in older ReShiki files as well.
     let xml = "<CDXML><page id='1'><fragment id='2'>\
                <n id='3' p='10 10' ShowAtomNumber='yes' AtomNumber='1'>\
                <objecttag TagType='Unknown' Name='number'><t p='12 4'><s size='7.5'>1</s></t>\
                </objecttag></n><n id='4' p='30 10'/><b id='5' B='3' E='4'/></fragment>\
                </page></CDXML>";
-    let plain = exchange::to_cdx(xml).unwrap();
-    let styled = [&[0x08, 0x00, 0x08, 0x00, 0x00, 0x00][..], b"number"].concat();
-    let at = plain
-        .windows(styled.len())
-        .position(|window| window == styled.as_slice())
+    let native = exchange::to_cdx(xml).unwrap();
+    let bare_name = b"\x08\x00\x06\x00number";
+    let at = native
+        .windows(bare_name.len())
+        .position(|window| window == bare_name)
         .unwrap();
-    let mut bare = plain.clone();
-    bare.splice(
-        at..at + styled.len(),
-        [&[0x08, 0x00, 0x06, 0x00][..], b"number"].concat(),
+    let mut legacy = native.clone();
+    legacy.splice(
+        at..at + bare_name.len(),
+        b"\x08\x00\x08\x00\x00\x00number".iter().copied(),
     );
-    let (expected, _) = open(plain, "cdx").await.unwrap();
-    let (document, _) = open(bare, "cdx").await.unwrap();
+    let (expected, _) = open(native, "cdx").await.unwrap();
+    let (document, _) = open(legacy, "cdx").await.unwrap();
     assert_eq!(
         serde_json::to_value(&document).unwrap(),
         serde_json::to_value(&expected).unwrap()
