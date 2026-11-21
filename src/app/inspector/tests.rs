@@ -106,10 +106,12 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
     .unwrap();
     for selected in [vec![], vec![potassium]] {
         app.tab.selected = selected;
+        assert!(app.special_molecular_scope());
         assert!(app.next_property_request().is_none());
         for expanded in [false, true] {
             app.tab.inspector_ui.seed_molecular(Some(expanded));
             let text = panel_text(&app, &mut renderer);
+            assert!(text.contains("Molecular properties"), "{text}");
             assert!(
                 text.contains("Whole drawing · Cl₄KNa₃ · 249.880\u{a0}g/\u{2060}mol"),
                 "{text}"
@@ -149,13 +151,22 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
             .execute(Request::molecule("analyze", app.property_document(&key)))
             .await
             .unwrap();
-        let _ = app.inspector_action(Action::PropertiesCalculated(
-            key,
-            Box::new(Ok(response.analysis.unwrap())),
-        ));
+        let analysis = response.analysis.unwrap();
+        let formula = app.shown_formula(&analysis.display_formula);
+        let weight = format!(
+            "{} g/mol",
+            molecular_weight(analysis.mass, app.appearance.two_decimal_weight)
+        );
+        let smiles = analysis.smiles.clone();
+        let _ = app.inspector_action(Action::PropertiesCalculated(key, Box::new(Ok(analysis))));
+        assert!(!app.special_molecular_scope());
         let text = panel_text(&app, &mut renderer);
-        assert!(text.contains("Weight (g/mol)"), "{text}");
-        assert!(text.contains("Canonical SMILES"), "{text}");
+        assert!(text.lines().any(|line| line == "Identity"), "{text}");
+        assert!(text.contains("Mol. Wt."), "{text}");
+        assert!(text.lines().any(|line| line == weight), "{text}");
+        assert!(text.lines().any(|line| line == formula), "{text}");
+        assert!(text.contains("SMILES"), "{text}");
+        assert!(text.lines().any(|line| line == smiles), "{text}");
         assert!(!text.contains("Crystal structure"));
         assert!(!text.contains("Calculating"));
     }

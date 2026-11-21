@@ -44,6 +44,9 @@ struct CompositionCache {
 /// The pin beside a property row.
 const PIN: f32 = 20.;
 
+mod identity;
+pub use identity::{IdentityCopyKey, IdentityField};
+
 /// Decimal places, shown as the pattern they write, such as 0.0000.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Places(u8);
@@ -119,6 +122,8 @@ pub enum Section {
     Transform,
     Groups,
     Molecule,
+    Descriptors,
+    NameOptions,
     Chemistry,
     DrawingStyle,
     ProjectionAppearance,
@@ -242,6 +247,10 @@ impl std::fmt::Display for ChemicalFormat {
 }
 #[derive(Debug, Clone)]
 pub enum Action {
+    CopyIdentity(IdentityField),
+    IdentityCopied(IdentityCopyKey, Result<(), String>),
+    NameIdentity,
+    AddIdentityName,
     Section(Section, bool),
     ModelControls(bool),
     Figure(FigureFormat),
@@ -353,6 +362,7 @@ pub(super) struct State {
     whole_properties: Option<(PropertyKey, Result<Analysis, String>)>,
     classes: RefCell<ClassCache>,
     composition: RefCell<CompositionCache>,
+    identity_scope: RefCell<identity::ScopeCache>,
     arrow_hints: Option<(u64, u64, Vec<reshiki::reactions::ArrowSemanticsHint>)>,
 }
 impl State {
@@ -448,7 +458,11 @@ impl State {
             | Action::StereoGroup(_)
             | Action::RenumberStereoGroups
             | Action::DepthBonds
-            | Action::ExportEditable(_) => {}
+            | Action::ExportEditable(_)
+            | Action::CopyIdentity(_)
+            | Action::IdentityCopied(..)
+            | Action::NameIdentity
+            | Action::AddIdentityName => {}
         }
     }
 }
@@ -683,6 +697,13 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::CopyIdentity(field) => self.copy_identity(field),
+            Action::IdentityCopied(key, result) => {
+                self.identity_copied(key, result);
+                Task::none()
+            }
+            Action::NameIdentity => self.name_identity(),
+            Action::AddIdentityName => self.add_identity_name(),
             Action::ModelControls(open) => {
                 if open && !self.selected_visible_model() {
                     return Task::none();
@@ -1268,17 +1289,39 @@ impl App {
     }
 
     fn molecular_section(&self, opened: Option<Section>) -> Element<'_, Message> {
-        self.inspector_section_lazy(
-            Section::Molecule,
-            "Molecular properties",
-            self.property_summary(),
-            opened == Some(Section::Molecule),
-            || self.molecular_properties(),
-        )
+        let special = self.special_molecular_scope();
+        column![
+            self.inspector_section_lazy(
+                Section::Molecule,
+                if special {
+                    "Molecular properties"
+                } else {
+                    "Identity"
+                },
+                self.property_summary(),
+                opened == Some(Section::Molecule),
+                || self.molecular_properties(),
+            ),
+            (!special && self.property_analysis().is_some()).then(|| {
+                self.inspector_section_lazy(Section::Descriptors, "Descriptors", "", false, || {
+                    self.descriptor_properties()
+                })
+            }),
+        ]
+        .spacing(10)
+        .into()
     }
 
     /// Show this property under the selected molecule, or hide it.
     fn property_pin(&self, property: reshiki::linked_properties::Property) -> Element<'_, Message> {
+        self.property_pin_enabled(property, true)
+    }
+
+    fn property_pin_enabled(
+        &self,
+        property: reshiki::linked_properties::Property,
+        allowed: bool,
+    ) -> Element<'_, Message> {
         use super::icons::{Glyph, Icon};
         let target = self.property_target(&[]);
         let available = target.is_some();
@@ -1296,8 +1339,14 @@ impl App {
             .padding(0)
             .checked(shown)
             .style(control(shown))
-            .on_press_maybe(target.map(|atoms| Message::ToggleProperty(atoms, property))),
-            if shown {
+            .on_press_maybe(
+                target
+                    .filter(|_| allowed)
+                    .map(|atoms| Message::ToggleProperty(atoms, property)),
+            ),
+            if !allowed {
+                "Select a complete molecule for automatic names"
+            } else if shown {
                 "Hide from the molecule"
             } else if available {
                 "Show under the molecule"
@@ -1340,7 +1389,7 @@ impl App {
 
     /// The molecule's name at the top of Molecular properties: empty shows
     /// the automatic name, typing and Return sets a custom one, ↺ goes back.
-    fn molecule_name(&self, atoms: Vec<u64>) -> Element<'_, Message> {
+    fn molecule_name(&self, atoms: Vec<u64>, automatic_allowed: bool) -> Element<'_, Message> {
         use super::naming::Action;
         use reshiki::linked_properties::{Property, caption};
         let link = caption(&self.tab.doc, &atoms);
@@ -1373,51 +1422,51 @@ impl App {
         } else {
             "Automatic (IUPAC) · type a name, then Return".into()
         };
-        let mut field =
-            column![
-                text("Name").size(11).style(muted_text),
-                row![
-                    reshiki::accessibility::text_input(
-                        "molecule-name",
-                        "Molecule name",
-                        placeholder,
-                        value
-                    )
-                    .on_input({
-                        let atoms = atoms.clone();
-                        move |name| Message::Naming(Action::NameDraft(atoms.clone(), name))
-                    })
-                    .on_submit(Message::Naming(Action::Rename(
-                        atoms.clone(),
-                        value.to_owned()
-                    )))
-                    .size(12)
-                    .padding(6)
-                    .style(crate::appearance::input_style),
-                    hover_hint(
-                        reshiki::accessibility::button(
-                            "molecule-name-automatic",
-                            "Use the automatic name",
-                            text("↺").size(13),
-                        )
-                        .padding([3, 6])
-                        .style(control(false))
-                        .on_press_maybe((!custom.is_empty()).then(|| {
-                            Message::Naming(Action::Rename(atoms.clone(), String::new()))
-                        })),
+        let mut field = column![
+            text("Name").size(11).style(muted_text),
+            row![
+                reshiki::accessibility::text_input(
+                    "molecule-name",
+                    "Molecule name",
+                    placeholder,
+                    value
+                )
+                .on_input({
+                    let atoms = atoms.clone();
+                    move |name| Message::Naming(Action::NameDraft(atoms.clone(), name))
+                })
+                .on_submit_maybe((automatic_allowed || !value.trim().is_empty()).then_some(
+                    Message::Naming(Action::Rename(atoms.clone(), value.to_owned()))
+                ))
+                .size(12)
+                .padding(6)
+                .style(crate::appearance::input_style),
+                hover_hint(
+                    reshiki::accessibility::button(
+                        "molecule-name-automatic",
                         "Use the automatic name",
-                        tooltip::Position::Left,
+                        text("↺").size(13),
+                    )
+                    .padding([3, 6])
+                    .style(control(false))
+                    .on_press_maybe(
+                        (automatic_allowed && !custom.is_empty()).then(|| {
+                            Message::Naming(Action::Rename(atoms.clone(), String::new()))
+                        })
                     ),
-                    self.property_pin(Property::Name),
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-                text(source)
-                    .size(11)
-                    .style(muted_text)
-                    .wrapping(text::Wrapping::WordOrGlyph),
+                    "Use the automatic name",
+                    tooltip::Position::Left,
+                ),
+                self.property_pin_enabled(Property::Name, automatic_allowed),
             ]
-            .spacing(4);
+            .spacing(6)
+            .align_y(Alignment::Center),
+            text(source)
+                .size(11)
+                .style(muted_text)
+                .wrapping(text::Wrapping::WordOrGlyph),
+        ]
+        .spacing(4);
         if link.is_some_and(|link| link.renamed_structure_changed()) {
             field = field.push(
                 text("Structure changed since you named it.")
@@ -1523,15 +1572,11 @@ impl App {
             (self.tab.doc.atoms.len(), self.tab.doc.bonds.len())
         };
         // A selection's counts are already the panel's summary.
-        let mut body = column![
-            self.property_target(&[])
-                .map(|atoms| self.molecule_name(atoms)),
-            key.is_none().then(|| {
-                text(super::workspace::atom_bond_counts(atoms, bonds))
-                    .size(11)
-                    .style(muted_text)
-            })
-        ]
+        let mut body = column![key.is_none().then(|| {
+            text(super::workspace::atom_bond_counts(atoms, bonds))
+                .size(11)
+                .style(muted_text)
+        })]
         .spacing(8);
         for hint in self.checked_arrow_hints() {
             body = body.push(text(hint.kind.message()).size(11).style(muted_text));
@@ -1555,104 +1600,7 @@ impl App {
             );
         }
         if let Some(a) = self.property_analysis() {
-            use reshiki::linked_properties::Property;
-            let unpaired = unpaired_electrons(&self.tab.doc, a, key.as_ref().map(|_| &ids));
-            let rows =
-                std::iter::once(("Formula", None, self.shown_formula(&a.display_formula))).chain(
-                    property_rows(a, self.appearance.two_decimal_weight, unpaired),
-                );
-            let pins = [
-                Some(Property::Formula),
-                Some(Property::Weight),
-                Some(Property::ExactMass),
-                Some(Property::LogP),
-                Some(Property::Tpsa),
-            ];
-            for ((label, hint, value), pin) in
-                rows.zip(pins.into_iter().chain(std::iter::repeat(None)))
-            {
-                let label = text(label).size(11).style(muted_text).width(Length::Fill);
-                let label: Element<'_, Message> = if let Some(hint) = hint {
-                    hover_hint(label, hint, tooltip::Position::Top).into()
-                } else {
-                    label.into()
-                };
-                let mut line = row![label, text(value).size(12)]
-                    .spacing(6)
-                    .align_y(Alignment::Center);
-                if let Some(property) = pin {
-                    if let Some(places) = self.property_places(property) {
-                        line = line.push(places);
-                    }
-                    line = line.push(self.property_pin(property));
-                }
-                body = body.push(line);
-            }
-            let elemental = self.elemental_analysis(a);
-            if let Some(analysis) = &elemental {
-                body = body
-                    .push(
-                        row![
-                            text("Elemental analysis")
-                                .size(11)
-                                .style(muted_text)
-                                .width(Length::Fill),
-                            self.property_pin(Property::Analysis)
-                        ]
-                        .align_y(Alignment::Center),
-                    )
-                    .push(
-                        text(analysis.replace(", ", ",\u{a0}"))
-                            .size(12)
-                            .wrapping(text::Wrapping::WordOrGlyph),
-                    );
-            }
-            let classes = self.property_classes();
-            if !classes.is_empty() {
-                body = body.push(
-                    column![
-                        text("Classes").size(11).style(muted_text),
-                        row(classes.into_iter().map(|class| {
-                            hover_hint(
-                                container(text(class.term).size(11))
-                                    .padding([3, 7])
-                                    .style(container::rounded_box),
-                                class.tooltip,
-                                tooltip::Position::Top,
-                            )
-                            .into()
-                        }))
-                        .spacing(4)
-                        .wrap(),
-                    ]
-                    .spacing(4),
-                );
-            }
-            body = body
-                .push(text("Canonical SMILES").size(12))
-                .push(
-                    text(if a.smiles.is_empty() {
-                        "SMILES cannot represent these hydrogen or partial bonds."
-                    } else {
-                        &a.smiles
-                    })
-                    .size(11)
-                    .wrapping(text::Wrapping::Glyph),
-                )
-                .push(a.smiles_notice.as_deref().map(|notice| {
-                    text(notice)
-                        .size(11)
-                        .style(muted_text)
-                        .wrapping(text::Wrapping::WordOrGlyph)
-                }))
-                .push(
-                    row![
-                        panel_action("Copy SMILES", Message::CopySmiles)
-                            .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),
-                        elemental.map(|_| panel_action("Copy analysis", Message::CopyAnalysis)),
-                    ]
-                    .spacing(6),
-                );
+            body = body.push(self.identity_content(a));
         } else if atoms == 0 {
             return body
                 .push(
@@ -1684,32 +1632,40 @@ impl App {
                 .style(muted_text),
             );
         }
-        body.push(
-            column![
-                reshiki::accessibility::button(
-                    "nmr.open",
-                    "Predict NMR shifts for the selected molecule",
-                    text("Predict NMR…").size(12).width(Length::Fill).center(),
-                )
-                .padding([6, 8])
-                .width(Length::Fill)
-                .on_press(Message::Nmr(super::nmr::Action::Open))
-                .style(crate::appearance::secondary),
-                panel_action(
-                    if key.is_some() {
-                        "Recalculate selection"
-                    } else {
-                        "Recalculate"
-                    },
-                    Message::InspectorAction(Action::RefreshProperties),
-                )
-                .on_press_maybe(
-                    (!self.tab.busy && self.tab.inspector_ui.pending.is_none())
-                        .then_some(Message::InspectorAction(Action::RefreshProperties)),
-                ),
-            ]
-            .spacing(6),
-        )
+        if self.property_analysis().is_some() {
+            return body.into();
+        }
+        body.push(self.identity_name_options())
+            .push(self.molecular_actions())
+            .into()
+    }
+
+    fn molecular_actions(&self) -> Element<'_, Message> {
+        let key = self.property_key();
+        column![
+            reshiki::accessibility::button(
+                "nmr.open",
+                "Predict NMR shifts for the selected molecule",
+                text("Predict NMR…").size(12).width(Length::Fill).center(),
+            )
+            .padding([6, 8])
+            .width(Length::Fill)
+            .on_press(Message::Nmr(super::nmr::Action::Open))
+            .style(crate::appearance::secondary),
+            panel_action(
+                if key.is_some() {
+                    "Recalculate selection"
+                } else {
+                    "Recalculate"
+                },
+                Message::InspectorAction(Action::RefreshProperties),
+            )
+            .on_press_maybe(
+                (!self.tab.busy && self.tab.inspector_ui.pending.is_none())
+                    .then_some(Message::InspectorAction(Action::RefreshProperties)),
+            ),
+        ]
+        .spacing(6)
         .into()
     }
 

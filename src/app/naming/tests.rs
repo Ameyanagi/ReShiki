@@ -1,6 +1,34 @@
 use super::test_support::{ethanol, record};
 use super::*;
 
+#[test]
+fn generated_record_keeps_its_requested_unknown_stereo_preference() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = test_support::ethanol();
+    let atoms = app
+        .tab
+        .doc
+        .atoms
+        .iter()
+        .map(|atom| atom.id)
+        .collect::<Vec<_>>();
+    app.appearance.write_unknown_stereo = false;
+    let requested = naming::selected_identity(&app.tab.doc, &atoms).unwrap();
+    let _ = app.generate_structure_name(atoms.clone());
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    let _ = app.naming_action(Action::WriteUnknownStereo(true));
+    let _ = app.naming_action(Action::Generated(
+        ticket,
+        Box::new(Ok((requested.clone(), test_support::record("CCO")))),
+    ));
+    assert!(app.tab.naming.structure.is_some());
+    assert_eq!(app.tab.naming.structure_identity.as_ref(), Some(&requested));
+    let mut current = requested;
+    current.write_unknown_stereo = app.appearance.write_unknown_stereo;
+    assert!(app.named_identity(&atoms, &current).is_none());
+}
+
 #[tokio::test]
 async fn original_ir_preview_does_not_parse_the_display_smiles() -> Result<(), String> {
     let mut source = record("CCO");

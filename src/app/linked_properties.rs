@@ -89,11 +89,44 @@ impl App {
         !self.error
     }
 
+    /// Identity uses the existing property caption so name, formula and mass
+    /// pins remain one caption. An explicitly chosen alias is a custom name;
+    /// the generated systematic name remains available as the automatic one.
+    pub(super) fn show_identity_name(
+        &mut self,
+        atoms: &[u64],
+        primary: &str,
+        systematic: &str,
+        canonical: &str,
+    ) {
+        if self.edit_captions(|doc, format, two| {
+            if primary == systematic {
+                linked_properties::show(doc, atoms, &[Property::Name], format, two)?;
+            } else {
+                linked_properties::rename(doc, atoms, primary, format, two)?;
+            }
+            if linked_properties::caption(doc, atoms).is_none_or(|link| link.smiles != canonical) {
+                return Err("The molecule changed. Generate its name again.".into());
+            }
+            linked_properties::named(doc, canonical, systematic);
+            Ok(())
+        }) {
+            self.tab
+                .naming
+                .caption_names
+                .insert(canonical.into(), systematic.into());
+            self.status = "Chemical name shown".into();
+        }
+    }
+
     /// The Name field and the name line's double-click both end here. An
     /// empty name returns to the automatic name.
     pub(super) fn rename_molecule(&mut self, atoms: &[u64], name: &str) {
         self.tab.naming.name_draft = None;
         if self.edit_captions(|doc, format, two| {
+            // Editing a legacy standalone name replaces it in the same Undo
+            // step instead of leaving a second name below the molecule.
+            reshiki::molecule_names::hide(doc, atoms);
             linked_properties::rename(doc, atoms, name, format, two)
         }) {
             self.status = if name.trim().is_empty() {

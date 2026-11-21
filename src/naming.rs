@@ -262,7 +262,7 @@ pub fn locant_text(locant: &str) -> String {
         .collect()
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identity {
     pub smiles: String,
     /// Unknown-unit and axis markers for generation; ordinary atom maps are removed.
