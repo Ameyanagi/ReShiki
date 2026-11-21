@@ -13,6 +13,31 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BinaryDrawingTests(unittest.TestCase):
+    def test_tlc_flags_use_native_empty_payload_and_omit_false(self):
+        # ChemDraw 26.1 saves and SDK 26.8 opens these as implied flags.
+        # A one-byte 01 or 00 payload makes an otherwise valid plate fail
+        # native reopening with error 536. Check bytes, not our own decoder.
+        for code, name in [
+            (0x0AA2, "ShowOrigin"),
+            (0x0AA3, "ShowSolventFront"),
+            (0x0AA4, "ShowBorders"),
+            (0x0AA5, "ShowSideTicks"),
+            (0x0AB2, "ShowRf"),
+        ]:
+            for value in ("yes", "no"):
+                with self.subTest(name=name, value=value):
+                    encoded = to_cdx(f'<CDXML {name}="{value}"/>')
+                    expected = struct.pack("<HH", code, 0) if value == "yes" else b""
+                    self.assertEqual(encoded[28:-4], expected)
+        for value, payload in [("yes", b"\x01"), ("no", b"\x00")]:
+            encoded = to_cdx(f'<CDXML Visible="{value}"/>')
+            self.assertEqual(encoded[28:-4], struct.pack("<HH", 0x0011, 1) + payload)
+
+    def test_native_object_tag_name_has_no_text_style_count(self):
+        encoded = to_cdx('<CDXML><objecttag id="1" Name="rf"/></CDXML>')
+        self.assertEqual(encoded[34:-6], struct.pack("<HH", 0x0008, 2) + b"rf")
+        self.assertEqual(ET.fromstring(from_cdx(encoded)).find("objecttag").get("Name"), "rf")
+
     def test_native_clipboard_fixture_has_expected_structure(self):
         data = (ROOT / "tests/fixtures/native-ethyl-clipboard.cdx").read_bytes()
         result = handle(

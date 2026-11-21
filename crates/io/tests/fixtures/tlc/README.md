@@ -10,6 +10,11 @@ not examples copied from a third-party catalogue.
   third is hollow. The associated positioned label has a subscript f.
 - `chemdraw26-default.cdxml` is the original `TLC plate default specimen`:
   three filled spots at Rf 0.15, without Rf labels.
+- `chemdraw26-reaction-check.cdxml` and `.cdx` are the owner's original
+  `TLC reaction check`, reopened and saved by ChemDraw SDK 26.8.0.6801. The
+  240 × 200 pt plate has three lanes, four spots at Rf 0.67/0.32 and one
+  shown Rf label. Its native zero-length show flags reproduce the binary
+  writer's SDK error 536 when incorrectly replaced by one-byte booleans.
 
 The four plate corners, reference lines, physical spot sizes and authored label
 runs are intentional regression data. Fixture provenance and expected physical

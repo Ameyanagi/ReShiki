@@ -8,6 +8,221 @@ use reshiki_model::{
 };
 const XML: &[u8] = include_bytes!("fixtures/tlc/chemdraw26-mixed-spots.cdxml");
 const CDX: &[u8] = include_bytes!("fixtures/tlc/chemdraw26-mixed-spots.cdx");
+const REACTION_XML: &[u8] = include_bytes!("fixtures/tlc/chemdraw26-reaction-check.cdxml");
+const REACTION_CDX: &[u8] = include_bytes!("fixtures/tlc/chemdraw26-reaction-check.cdx");
+
+/// Read the tagged property framing independently of the production decoder.
+/// Its permissive legacy Boolean reads cannot prove a native writer is valid.
+fn native_flag_lengths(bytes: &[u8], rf_size: u16) -> Vec<(u16, usize)> {
+    assert_eq!(&bytes[..12], b"VjCD0100\x04\x03\x02\x01");
+    let mut cursor = 22;
+    let mut flags = vec![];
+    let mut objects = vec![];
+    while cursor < bytes.len() {
+        let code = u16::from_le_bytes(bytes[cursor..cursor + 2].try_into().unwrap());
+        cursor += 2;
+        if code >= 0x8000 {
+            cursor += 4;
+            objects.push(code);
+        } else if code == 0 {
+            objects.pop();
+        } else if code != 0 {
+            let mut length = usize::from(u16::from_le_bytes(
+                bytes[cursor..cursor + 2].try_into().unwrap(),
+            ));
+            cursor += 2;
+            if length == 0xffff {
+                length = u32::from_le_bytes(bytes[cursor..cursor + 4].try_into().unwrap()) as usize;
+                cursor += 4;
+            }
+            if matches!(code, 0x0aa2..=0x0aa5 | 0x0ab2) {
+                flags.push((code, length));
+            }
+            if code == 0x0008 && objects.last() == Some(&0x8011) {
+                // A prefixed name is tolerated by our reader but ChemDraw
+                // misses the authored Rf record and regenerates its styling.
+                assert_eq!(&bytes[cursor..cursor + length], b"rf");
+            }
+            if code == 0x0700 && objects.contains(&0x801f) {
+                let data = &bytes[cursor..cursor + length];
+                assert_eq!(u16::from_le_bytes(data[..2].try_into().unwrap()), 3);
+                for run in 0..3 {
+                    let offset = 2 + run * 10 + 6;
+                    assert_eq!(
+                        u16::from_le_bytes(data[offset..offset + 2].try_into().unwrap()),
+                        rf_size
+                    );
+                }
+            }
+            cursor += length;
+        }
+    }
+    assert_eq!(cursor, bytes.len());
+    flags.sort_unstable();
+    flags
+}
+
+#[tokio::test]
+async fn native_plate_normal_cdx_export_matches_sdk_flag_bytes_for_original_fixtures() {
+    let engine = LocalEngine::in_process();
+    for (xml, cdx, count, rf_size) in [(XML, CDX, 3, 150), (REACTION_XML, REACTION_CDX, 4, 180)] {
+        let expected = vec![(0x0aa2, 0), (0x0aa3, 0), (0x0aa4, 0), (0x0ab2, 0)];
+        assert_eq!(native_flag_lengths(cdx, rf_size), expected);
+        for (format, bytes) in [("cdxml", xml), ("cdx", cdx)] {
+            let (mut doc, warnings) = formats::read_with_warnings(bytes.to_vec(), format, &engine)
+                .await
+                .unwrap();
+            assert!(warnings.is_empty(), "{format}: {warnings:?}");
+            assert_eq!(doc.graphics.len(), 1);
+            let plate = doc.graphics[0].tlc.as_deref().unwrap();
+            assert_eq!(plate.lanes.len(), 3);
+            assert_eq!(
+                plate.lanes.iter().map(|l| l.spots.len()).sum::<usize>(),
+                count
+            );
+            let bytes = formats::write_with_engine(doc.clone(), "cdx", &engine)
+                .await
+                .unwrap();
+            assert_eq!(native_flag_lengths(&bytes, rf_size), expected);
+            for shown in [false, true] {
+                let plate = doc.graphics[0].tlc.as_deref_mut().unwrap();
+                plate.show_origin = shown;
+                plate.show_solvent_front = shown;
+                plate.show_borders = shown;
+                // Keep the one authored label; other spots have no label to show.
+                for spot in plate.lanes.iter_mut().flat_map(|l| &mut l.spots) {
+                    spot.show_rf = shown && spot.label.is_some();
+                }
+                let bytes = formats::write_with_engine(doc.clone(), "cdx", &engine)
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    native_flag_lengths(&bytes, rf_size),
+                    if shown { expected.clone() } else { vec![] }
+                );
+                let back = formats::read_with_engine(bytes, "cdx", &engine)
+                    .await
+                    .unwrap();
+                let plate = back.graphics[0].tlc.as_deref().unwrap();
+                assert_eq!(plate.show_origin, shown);
+                assert_eq!(plate.show_solvent_front, shown);
+                assert_eq!(plate.show_borders, shown);
+                assert_eq!(
+                    plate
+                        .lanes
+                        .iter()
+                        .flat_map(|l| &l.spots)
+                        .filter(|s| s.show_rf)
+                        .count(),
+                    usize::from(shown)
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn native_wide_reaction_plate_geometry_and_authored_rf_anchor_survive_normal_exchange() {
+    let engine = LocalEngine::in_process();
+    let scale = 42. / 14.4;
+    for (format, source) in [("cdxml", REACTION_XML), ("cdx", REACTION_CDX)] {
+        let doc = formats::read_with_engine(source.to_vec(), format, &engine)
+            .await
+            .unwrap();
+        let g = &doc.graphics[0];
+        let plate = g.tlc.as_deref().unwrap();
+        for (lane, x) in [193.33333, 270., 346.66666].into_iter().enumerate() {
+            for spot in &plate.lanes[lane].spots {
+                let center = plate.spot_center(g, lane, spot.rf);
+                let y = 151. + 200. * (0.9 - spot.rf * 0.8);
+                assert!(
+                    center.distance(Point::new(x * scale, (y * f64::from(scale)) as f32)) < 0.002
+                );
+            }
+        }
+        let label = plate
+            .label_annotation(g, 2, &plate.lanes[2].spots[0])
+            .unwrap();
+        assert_eq!(label.format.style.size_pt, 9.);
+        let baseline = rf_anchor(&scene::primitives(&doc)).unwrap();
+        assert!(baseline.distance(Point::new(350.47 * scale, 276. * scale)) < 0.025);
+        let label_offset = label.position.offset(-g.origin.x, -g.origin.y);
+        let baseline_offset = baseline.offset(-g.origin.x, -g.origin.y);
+        // Move the plate, then serialize through the app's normal format API.
+        // Neither lane recalculation nor native writing may shift its Rf record.
+        let mut moved = doc.clone();
+        moved.graphics[0].map_positions(|p| p.offset(40., 30.));
+        for format in ["rsk", "cdxml", "cdx"] {
+            let bytes = formats::write_with_engine(moved.clone(), format, &engine)
+                .await
+                .unwrap();
+            let back = formats::read_with_engine(bytes, format, &engine)
+                .await
+                .unwrap();
+            let p = &back.graphics[0];
+            let t = p.tlc.as_deref().unwrap();
+            let restored = t.label_annotation(p, 2, &t.lanes[2].spots[0]).unwrap();
+            assert_eq!(restored.text, label.text);
+            assert_eq!(restored.format.style.size_pt, 9.);
+            // Editable exchange applies one document-wide page translation;
+            // compare the owned record relative to its plate frame.
+            assert!(
+                restored
+                    .position
+                    .offset(-p.origin.x, -p.origin.y)
+                    .distance(label_offset)
+                    < 0.002
+            );
+            assert!(
+                rf_anchor(&scene::primitives(&back))
+                    .unwrap()
+                    .offset(-p.origin.x, -p.origin.y)
+                    .distance(baseline_offset)
+                    < 0.002
+            );
+            if format == "rsk" {
+                assert!(restored.position.distance(label.position.offset(40., 30.)) < 0.002);
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn native_tlc_ten_point_margin_boundary_stays_stable_after_coordinate_rounding() {
+    let engine = LocalEngine::in_process();
+    for width in [9.99, 10., 10.000001, 10.01] {
+        let source = format!(
+            "<CDXML><page id='1'><tlcplate id='2' TopLeft='0 0' TopRight='{width} 0' BottomRight='{width} 200' BottomLeft='0 200' OriginFraction='0.1' SolventFrontFraction='0.1'><tlclane id='3'><tlcspot id='4' Width='65536' Height='65536' Rf='0.5'/></tlclane><tlclane id='5'/><tlclane id='6'><tlcspot id='7' Width='65536' Height='65536' Rf='0.5'/></tlclane></tlcplate></page></CDXML>"
+        );
+        let doc = formats::read_with_engine(source.into_bytes(), "cdxml", &engine)
+            .await
+            .unwrap();
+        let g = &doc.graphics[0];
+        let t = g.tlc.as_deref().unwrap();
+        let before =
+            [0, 2].map(|lane| t.spot_center(g, lane, 0.5).offset(-g.origin.x, -g.origin.y));
+        for target in ["cdxml", "cdx"] {
+            let bytes = formats::write_with_engine(doc.clone(), target, &engine)
+                .await
+                .unwrap();
+            let back = formats::read_with_engine(bytes, target, &engine)
+                .await
+                .unwrap();
+            let g = &back.graphics[0];
+            let t = g.tlc.as_deref().unwrap();
+            for (lane, expected) in [0, 2].into_iter().zip(before) {
+                assert!(
+                    t.spot_center(g, lane, 0.5)
+                        .offset(-g.origin.x, -g.origin.y)
+                        .distance(expected)
+                        < 0.002,
+                    "{width} {target}"
+                );
+            }
+        }
+    }
+}
+
 /// Recover the native baseline anchor of R from the shared rendered text.
 fn rf_anchor(primitives: &[Primitive]) -> Option<Point> {
     primitives.iter().find_map(|p| match p {

@@ -90,6 +90,107 @@ fn native_rf_edit_updates_standard_label_and_preserves_dimensions_in_one_undo() 
     assert_eq!(s.label.as_ref().unwrap().text, "Rf = 0.28");
     one_undo(&mut app, &before);
 }
+#[tokio::test]
+async fn native_wide_plate_properties_keep_calibrated_geometry_and_editable_exchange() {
+    let engine = reshiki::engine::LocalEngine::in_process();
+    for (format, input) in [
+        (
+            "cdx",
+            include_bytes!("../../../crates/io/tests/fixtures/tlc/chemdraw26-reaction-check.cdx")
+                .as_slice(),
+        ),
+        (
+            "cdxml",
+            include_bytes!("../../../crates/io/tests/fixtures/tlc/chemdraw26-reaction-check.cdxml")
+                .as_slice(),
+        ),
+    ] {
+        let (doc, warnings) = reshiki::formats::read_with_warnings(input.to_vec(), format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.selected = vec![doc.graphics[0].id];
+        app.tab.saved = doc.clone();
+        app.tab.doc = doc;
+        app.sync_graphics();
+        let k = key(&app);
+        let _ = app.update(Message::Tlc(Action::Lane(k, 2)));
+        let before = app.tab.doc.clone();
+        let g = &before.graphics[0];
+        let t = g.tlc.as_deref().unwrap();
+        let original = &t.lanes[2].spots[0];
+        let label = original.label.as_ref().unwrap();
+        assert_eq!(label.text, "Rf = 0.32");
+        assert_eq!(label.format.style.size_pt, 9.);
+        assert!(
+            label
+                .format
+                .spans
+                .iter()
+                .any(|s| s.style.script == Script::Subscript)
+        );
+        edit(&mut app, Field::Rf, "0.48");
+        let g = &app.tab.doc.graphics[0];
+        let t = g.tlc.as_deref().unwrap();
+        let spot = &t.lanes[2].spots[0];
+        assert_eq!(spot.rf, 0.48);
+        assert_eq!(spot.width_pt, original.width_pt);
+        assert_eq!(spot.height_pt, original.height_pt);
+        assert_eq!(spot.label.as_ref().unwrap().text, "Rf = 0.48");
+        assert_eq!(spot.label.as_ref().unwrap().format, label.format);
+        assert_eq!(spot.label.as_ref().unwrap().offset, label.offset);
+        assert_eq!(
+            t.lanes[0],
+            before.graphics[0].tlc.as_deref().unwrap().lanes[0]
+        );
+        assert_eq!(
+            t.lanes[1],
+            before.graphics[0].tlc.as_deref().unwrap().lanes[1]
+        );
+        let center = t.spot_center(g, 2, spot.rf);
+        let world = |pt| reshiki::style::DEFAULT.world(pt);
+        // The fixture's 240 pt bottom span has lane centres at 43⅓, 120,
+        // and 196⅔ pt. Rf 0.48 lies 103.2 pt below the top edge.
+        assert!(
+            center.distance(g.origin.offset(world(196.66667), world(103.2))) < 0.002,
+            "{format}: {center:?}"
+        );
+        assert_eq!(app.tab.history.frames(), 1);
+        one_undo(&mut app, &before);
+        for target in ["rsk", "cdx", "cdxml"] {
+            let output = reshiki::formats::write_with_engine(app.tab.doc.clone(), target, &engine)
+                .await
+                .unwrap();
+            let (back, warnings) = reshiki::formats::read_with_warnings(output, target, &engine)
+                .await
+                .unwrap();
+            assert!(warnings.is_empty(), "{format} to {target}: {warnings:?}");
+            let t = back.graphics[0].tlc.as_deref().unwrap();
+            assert!(t.show_borders && t.show_origin && t.show_solvent_front);
+            assert_eq!(
+                t.lanes.iter().map(|l| l.spots.len()).collect::<Vec<_>>(),
+                [1, 2, 1]
+            );
+            let spot = &t.lanes[2].spots[0];
+            assert_eq!(spot.rf, 0.48);
+            assert_eq!(spot.width_pt, original.width_pt);
+            assert_eq!(spot.height_pt, original.height_pt);
+            assert!(spot.show_rf);
+            let label = spot.label.as_ref().unwrap();
+            assert_eq!(label.text, "Rf = 0.48");
+            assert_eq!(label.format.style.size_pt, 9.);
+            assert!(
+                label
+                    .format
+                    .spans
+                    .iter()
+                    .any(|s| s.style.script == Script::Subscript)
+            );
+        }
+    }
+}
 #[test]
 fn unchanged_display_keeps_exact_native_dimensions_fractions_and_redo() {
     let mut g = plate();
