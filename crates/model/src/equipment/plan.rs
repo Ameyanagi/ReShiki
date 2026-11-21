@@ -166,7 +166,7 @@ pub fn order(paths: &mut [PlanPath]) {
     });
 }
 
-fn layer_pass(layer: Layer) -> Pass {
+pub(super) fn layer_pass(layer: Layer) -> Pass {
     match layer {
         Layer::Back => Pass::Back,
         Layer::Body => Pass::Body,
@@ -354,7 +354,7 @@ fn piece(
     Ok(())
 }
 
-fn fill_area(path: &[Seg]) -> f64 {
+pub(super) fn fill_area(path: &[Seg]) -> f64 {
     super::geometry::flatten(path)
         .iter()
         .map(|(p, _)| area(p).abs())

@@ -1,4 +1,5 @@
 //! A detached equipment draft, measured and reviewed on the ordinary canvas.
+mod shapes;
 mod trial;
 use super::workspace::{accessible_command, command, muted_text, section};
 use super::{App, InspectorTab, Message, focus_drawing};
@@ -7,7 +8,7 @@ use iced::widget::{column, row, text};
 use iced::{Element, Task, keyboard};
 use reshiki::document::{Document, Point};
 use reshiki::equipment::authoring::{Draft, JointKind};
-use reshiki::equipment::format::{Gender, JointDraw, Role, TAPER_SIZES};
+use reshiki::equipment::format::{Gender, JointDraw, Layer, Material, Role, TAPER_SIZES};
 use std::sync::Arc;
 
 pub(super) const DEFINE: &str = "Define as equipment piece…";
@@ -18,6 +19,14 @@ pub enum Action {
     Point(Point),
     Length(String),
     Name(String),
+    SelectShape(shapes::Choice),
+    ShapeAt {
+        at: Point,
+        reach: f32,
+    },
+    ShapeLayer(Layer),
+    ShapeMaterial(Material),
+    ShapeRole(Role),
     Calibrate,
     MeasureAgain,
     BeginJoint,
@@ -97,6 +106,8 @@ pub(super) struct State {
     notice: Option<String>,
     joint_candidate: Option<Arc<Draft>>,
     direction: Option<[Point; 2]>,
+    selected_shape: usize,
+    shape_outline: Vec<reshiki::equipment::geometry::Seg>,
 }
 
 impl State {
@@ -122,6 +133,7 @@ impl State {
     }
 
     fn refresh(&mut self, doc: &Document) {
+        self.refresh_shape();
         self.preview = None;
         self.base_preview = None;
         self.preview_piece = None;
@@ -157,7 +169,7 @@ impl State {
             let result = if glass {
                 draft.add_joint(&id, edges, kind.clone(), edit.flip)
             } else {
-                Err("A standard joint needs a filled glass outline. Fill the neck shape before defining it as equipment.".into())
+                Err("A standard joint needs a filled glass outline. Cancel the joint, then set the closed neck shape to Glass and Joined glass.".into())
             };
             match result {
                 Ok(joint) => {
@@ -244,6 +256,11 @@ impl State {
                 Some((id, reshiki::equipment::placed::middle(g), t.epoch))
             }),
             snap: self.trial.as_ref().and_then(|t| t.snap.as_ref()),
+            shape: if self.is_measuring() || self.trial.is_some() {
+                &[]
+            } else {
+                &self.shape_outline
+            },
         }
     }
 }
@@ -337,6 +354,8 @@ impl App {
                 notice: None,
                 joint_candidate: None,
                 direction: None,
+                selected_shape: 0,
+                shape_outline: vec![],
             });
             self.context_menu = None;
             self.commands.open = false;
@@ -391,6 +410,30 @@ impl App {
             return Task::none();
         };
         match &action {
+            Action::SelectShape(choice) => {
+                if choice.0 < state.current.draft.definition.shapes.len() {
+                    state.selected_shape = choice.0;
+                    state.refresh_shape();
+                }
+                return Task::none();
+            }
+            Action::ShapeAt { at, reach } => {
+                if !state.is_measuring()
+                    && state.trial.is_none()
+                    && let Some(id) = state.current.draft.shape_at(*at, *reach)
+                    && let Some(index) = state
+                        .current
+                        .draft
+                        .definition
+                        .shapes
+                        .iter()
+                        .position(|s| s.id == id)
+                {
+                    state.selected_shape = index;
+                    state.refresh_shape();
+                }
+                return Task::none();
+            }
             Action::TestSnapping => {
                 if !state.is_measuring()
                     && let Some(base) = &state.base_preview
@@ -510,6 +553,12 @@ impl App {
                 | Action::CancelJoint
         );
         match action {
+            Action::ShapeLayer(_) | Action::ShapeMaterial(_) | Action::ShapeRole(_) => {
+                if let Err(error) = state.edit_shape(action) {
+                    state.notice = Some(error);
+                    return Task::none();
+                }
+            }
             Action::Point(point)
                 if state
                     .current
@@ -674,6 +723,12 @@ impl App {
             Message::Canvas(Edit::EquipmentAuthoringPoint(point)) => {
                 return Some(self.equipment_authoring_action(Action::Point(*point)));
             }
+            Message::Canvas(Edit::EquipmentAuthoringShape { at, reach }) => {
+                return Some(self.equipment_authoring_action(Action::ShapeAt {
+                    at: *at,
+                    reach: *reach,
+                }));
+            }
             Message::Canvas(Edit::EquipmentAuthoringTestStart(epoch)) => {
                 return Some(self.equipment_authoring_action(Action::TestStart(*epoch)));
             }
@@ -736,6 +791,7 @@ impl App {
                 .size(12),
         ]
         .spacing(10);
+        body = body.push(state.shapes_panel());
         if let Some(trial) = &state.trial {
             body = body
                 .push(section("Test snapping"))

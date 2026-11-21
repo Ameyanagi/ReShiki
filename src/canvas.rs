@@ -300,6 +300,10 @@ pub enum Edit {
     Click(World),
     /// A raw measurement or rim click owned by the detached equipment draft.
     EquipmentAuthoringPoint(World),
+    EquipmentAuthoringShape {
+        at: World,
+        reach: f32,
+    },
     EquipmentAuthoringTestStart(u64),
     EquipmentAuthoringTest {
         at: World,
@@ -676,6 +680,7 @@ pub(crate) struct EquipmentAuthoring<'a> {
     pub direction: Option<[World; 2]>,
     pub trial: Option<(u64, World, u64)>,
     pub snap: Option<&'a reshiki::equipment::solve::Snap>,
+    pub shape: &'a [reshiki::equipment::geometry::Seg],
 }
 
 pub struct MoleculeCanvas<'a> {
@@ -885,9 +890,32 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             optimization::draw_pins(self, context, &mut frame, paper);
         }
         if let Some(EquipmentAuthoring {
-            points, direction, ..
+            points,
+            direction,
+            shape,
+            ..
         }) = self.equipment_authoring
         {
+            let highlight = Path::new(|builder| {
+                use reshiki::equipment::geometry::Seg;
+                let screen = |[x, y]| self.camera.screen(World::new(x as f32, y as f32), paper);
+                for segment in shape {
+                    match *segment {
+                        Seg::Move(p) => builder.move_to(screen(p)),
+                        Seg::Line(p) => builder.line_to(screen(p)),
+                        Seg::Cubic(a, b, p) => {
+                            builder.bezier_curve_to(screen(a), screen(b), screen(p))
+                        }
+                        Seg::Close => builder.close(),
+                    }
+                }
+            });
+            frame.stroke(
+                &highlight,
+                Stroke::default()
+                    .with_width(2.)
+                    .with_color(overlay::ACCENT_STRONG.scale_alpha(0.7)),
+            );
             if let [a, b] = points {
                 frame.stroke(
                     &Path::line(self.camera.screen(*a, paper), self.camera.screen(*b, paper)),

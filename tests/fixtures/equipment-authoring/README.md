@@ -112,7 +112,54 @@ port snapping observations separately.
    test piece, trial seat or adapter. Verify one drawing Undo, Redo and
    save/reopen, then capture the deselected accepted piece.
 
-This increment does not support role/material editing, authoring plug families,
-liquids, holds, moving parts, library destinations or editing a saved
+The editor does not support authoring plug families, liquids, holds, moving
+parts, library destinations or editing a saved
 piece definition. Standard artwork is added to the common glass silhouette;
 arbitrary drawn ends are not automatically trimmed to fit.
+
+## Shape materials and layers
+
+`materials-and-layers.rsk` extends the measured flask with a stand rod, a
+support, a thermometer stem and a stopper. All six paths are editable and
+grouped. Open the fixture in an isolated profile, select its group and choose
+**Define as equipment piece…**. Mark **(-24, -100)** and **(24, -100)**,
+enter **16 mm**, and choose **Preview**. Use **Stoppered flask** for **Name**.
+
+Set these controls in **Shapes**, using the selector to reach obscured paths:
+
+| Shape | Drawing | Layer | Material | Draw as |
+| --- | --- | --- | --- | --- |
+| Shape 1 | Flask | Body | Glass | Joined glass |
+| Shape 2 | Rim | Body | Ink | Outline |
+| Shape 3 | Stand rod | Back | Metal | Solid |
+| Shape 4 | Support | Back | Metal | Solid |
+| Shape 5 | Thermometer stem | Inner | Metal | Solid |
+| Shape 6 | Stopper | Front | Rubber | Solid |
+
+Changing a filled glass shape to another material selects **Solid**. Open
+paths offer **Detail** and **Outline**. **Joined glass** is available for a
+closed outline with **Glass** material. Clicking a visible shape selects its
+path and shows the same controls; measurement and snap testing keep their
+own pointer gestures.
+
+1. Capture the source and the completed draft at matched theme, zoom, window
+   and panel width. Show the selected stopper and its controls. Use the
+   selector to choose the support, then move it between **Back** and **Front**:
+   it crosses behind or in front of the flask. Check **Inner** on the stem.
+2. Undo and Redo a material change and a layer change. The source drawing
+   stays unchanged until **Accept**. Select another shape without creating a
+   draft Undo step. Choose **Discard** and verify every source path returns.
+3. Repeat and choose **Accept**. Save under a new name, reopen, and verify
+   all six shape settings. One drawing Undo restores the source group; Redo
+   restores the piece. Capture the deselected result in light and dark themes.
+4. In the standard-joint fixture, add a joint and start **Test snapping…**.
+   Change a shape's layer and verify its preview and snap feedback update.
+   Attempt to replace the joint's only glass body with **Rubber**: validation
+   must preserve the previous draft and snap trial. A successful material
+   change on a separate detail must also refresh the trial. **Accept** keeps
+   the styled piece at its original position and discards test objects.
+
+The model and app regressions cover invalid open fills, material/role
+combinations, attachment validation, overlapping shape selection, draft
+history, transactionality, save/reopen and trial refresh. Record native
+interaction results and exact build details separately from screenshots.

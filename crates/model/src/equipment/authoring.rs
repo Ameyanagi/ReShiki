@@ -49,6 +49,24 @@ pub enum JointKind {
     },
 }
 
+/// Paint and stacking for one authored shape. Geometry and identity stay put.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShapeStyle {
+    pub layer: Layer,
+    pub material: Material,
+    pub role: Role,
+}
+
+impl From<&Shape> for ShapeStyle {
+    fn from(shape: &Shape) -> Self {
+        Self {
+            layer: shape.layer,
+            material: shape.material,
+            role: shape.role,
+        }
+    }
+}
+
 impl JointKind {
     /// Physical distance between the two clicked edges. A socket's outer rim
     /// includes its walls; a cone's shoulder uses the nominal diameter.
@@ -278,6 +296,91 @@ impl Draft {
     }
     pub fn calibrated(&self) -> bool {
         self.calibrated
+    }
+
+    /// Change one shape transactionally. Open paths remain strokes, and the
+    /// glass silhouette uses glass paint. Full validation also protects joints
+    /// and liquid regions that depend on that silhouette.
+    pub fn set_shape_style(&mut self, id: &str, style: ShapeStyle) -> Result<(), String> {
+        let mut next = self.clone();
+        let shape = next
+            .definition
+            .shapes
+            .iter_mut()
+            .find(|s| s.id == id)
+            .ok_or("Select a shape in the equipment draft.")?;
+        if style.role == Role::Glass && style.material != Material::Glass {
+            return Err(
+                "Joined glass needs the Glass material. Choose Solid for another material.".into(),
+            );
+        }
+        if style.role.filled() && !closed_shape(shape)? {
+            return Err(
+                "A filled shape needs a closed outline. Use Detail or Outline for an open path."
+                    .into(),
+            );
+        }
+        shape.layer = style.layer;
+        shape.material = style.material;
+        shape.role = style.role;
+        validate::validate(&next.definition)?;
+        *self = next;
+        Ok(())
+    }
+
+    /// Evaluated shape geometry in drawing coordinates, shared by the draft's
+    /// selection highlight and hit test rather than its source bounding box.
+    pub fn shape_path(&self, id: &str) -> Result<Vec<Seg>, String> {
+        let evaluated = eval::evaluate(&self.definition, &Values::new())?;
+        let shape = evaluated
+            .shapes
+            .iter()
+            .find(|s| s.shape.id == id)
+            .ok_or("Select a visible shape in the equipment draft.")?;
+        Ok(self.frame.map(&shape.path))
+    }
+
+    /// Pick the visible shape on top. Body glass follows the paint plan's
+    /// area order; the other layers follow depth and stable drawing order.
+    /// Filled interiors and stroke outlines use the same flattened geometry
+    /// as the ordinary equipment hit test.
+    pub fn shape_at(&self, point: Point, reach: f32) -> Option<&str> {
+        if !point.x.is_finite() || !point.y.is_finite() || !reach.is_finite() || reach <= 0. {
+            return None;
+        }
+        let evaluated = eval::evaluate(&self.definition, &Values::new()).ok()?;
+        let mut shapes: Vec<_> = evaluated.shapes.iter().collect();
+        let pass = |s: &eval::Drawn<'_>| {
+            if s.shape.role == Role::Glass && s.shape.layer == Layer::Body {
+                plan::Pass::Glass
+            } else {
+                plan::layer_pass(s.shape.layer)
+            }
+        };
+        shapes.sort_by(|a, b| {
+            pass(a).cmp(&pass(b)).then_with(|| {
+                if pass(a) == plan::Pass::Glass {
+                    plan::fill_area(&a.path).total_cmp(&plan::fill_area(&b.path))
+                } else {
+                    a.shape.depth.cmp(&b.shape.depth)
+                }
+            })
+        });
+        let point = [f64::from(point.x), f64::from(point.y)];
+        for shape in shapes.into_iter().rev() {
+            let outline = geom::flatten(&self.frame.map(&shape.path));
+            if (shape.shape.role.filled() && geom::inside(point, &outline))
+                || geom::distance_to_outline(point, &outline) <= f64::from(reach)
+            {
+                return self
+                    .definition
+                    .shapes
+                    .iter()
+                    .find(|s| s.id == shape.shape.id)
+                    .map(|s| s.id.as_str());
+            }
+        }
+        None
     }
 
     /// The first confirmed measurement sets the physical scale, preserving
@@ -558,6 +661,16 @@ impl Draft {
             revision,
         })
     }
+}
+
+/// Whether every contour can represent a filled body. A closed line with no
+/// area is still a stroke, even if its last command is Z.
+pub fn closed_shape(shape: &Shape) -> Result<bool, String> {
+    let contours = geom::flatten(&geom::parse_path(&shape.path)?);
+    Ok(!contours.is_empty()
+        && contours.iter().all(|(points, closed)| {
+            *closed && points.len() >= 3 && geom::area(points).abs() > 1e-10
+        }))
 }
 
 fn supported(g: &Graphic) -> Result<(), String> {

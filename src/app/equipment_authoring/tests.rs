@@ -4,6 +4,9 @@ use reshiki::graphics::{Graphic, GraphicKind, GraphicStyle};
 #[path = "trial_tests.rs"]
 mod snap_preview;
 
+#[path = "shape_tests.rs"]
+mod shape_authoring;
+
 fn drawing() -> App {
     let (mut app, _) = App::new();
     app.tab.busy = false;

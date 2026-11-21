@@ -861,3 +861,162 @@ fn outline_role_stays_unfilled_in_geometry_preview_save_and_materialization() {
     invalid.shapes[0].role = Role::Detail;
     validate::validate(&invalid).unwrap();
 }
+
+#[test]
+fn shape_style_changes_are_typed_transactional_and_keep_geometry() {
+    let (mut doc, body, edges) = vessel();
+    let line = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        line,
+        GraphicKind::Line,
+        Point::new(-5., 20.),
+        Point::new(5., 20.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    let original = doc.clone();
+    let mut draft = Draft::from_selection(&doc, &[body, line]).unwrap();
+    draft.calibrate(edges, 10.).unwrap();
+    let paths = world_paths(&draft);
+    let body_id = draft.definition.shapes[0].id.clone();
+    let line_id = draft.definition.shapes[1].id.clone();
+    let style = ShapeStyle {
+        layer: Layer::Front,
+        material: Material::Metal,
+        role: Role::Solid,
+    };
+    draft.set_shape_style(&body_id, style).unwrap();
+    assert_eq!(ShapeStyle::from(&draft.definition.shapes[0]), style);
+    assert_eq!(draft.definition.shapes[1].role, Role::Outline);
+    same_paths(&world_paths(&draft), &paths);
+    let before = draft.clone();
+    for (id, style) in [
+        (
+            &body_id,
+            ShapeStyle {
+                role: Role::Glass,
+                ..style
+            },
+        ),
+        (&line_id, style),
+        (&"missing".into(), style),
+    ] {
+        assert!(draft.set_shape_style(id, style).is_err());
+        assert_eq!(draft, before);
+    }
+    let accepted = draft.accept(&doc, "lab/metal-body").unwrap();
+    assert_eq!(doc, original);
+    let saved = Document::from_json(&accepted.document.file_json().unwrap()).unwrap();
+    assert_eq!(saved.piece_definitions[0].format_version, PREVIEW_VERSION);
+    assert_eq!(
+        ShapeStyle::from(&saved.piece_definitions[0].shapes[0]),
+        style
+    );
+    let plan = placed::plan(&saved.graphics[0]);
+    assert!(plan.iter().any(|p| p.pass == plan::Pass::Front
+        && p.material == Material::Metal
+        && p.ink == plan::Ink::FillStroke(plan::Weight::Outline)));
+}
+
+#[test]
+fn shape_picking_follows_paint_order_and_never_fills_an_open_stroke() {
+    let (mut doc, body, _) = vessel();
+    let overlapping = rectangle(&mut doc, Point::new(-5., 10.), Point::new(5., 30.), true);
+    let line = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        line,
+        GraphicKind::Line,
+        Point::new(-4., 20.),
+        Point::new(4., 20.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    let mut draft = Draft::from_selection(&doc, &[body, overlapping, line]).unwrap();
+    let ids: Vec<_> = draft
+        .definition
+        .shapes
+        .iter()
+        .map(|s| s.id.clone())
+        .collect();
+    assert_eq!(
+        draft.shape_at(Point::new(0., 20.), 0.1),
+        Some(ids[2].as_str())
+    );
+    // Body glass paints small fills before large ones, unlike source z-order.
+    assert_eq!(
+        draft.shape_at(Point::new(0., 25.), 0.1),
+        Some(ids[0].as_str())
+    );
+    let style = ShapeStyle {
+        layer: Layer::Front,
+        material: Material::Rubber,
+        role: Role::Solid,
+    };
+    draft.set_shape_style(&ids[1], style).unwrap();
+    assert_eq!(
+        draft.shape_at(Point::new(0., 20.), 0.1),
+        Some(ids[1].as_str())
+    );
+    draft
+        .set_shape_style(
+            &ids[1],
+            ShapeStyle {
+                layer: Layer::Back,
+                ..style
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        draft.shape_at(Point::new(0., 20.), 0.1),
+        Some(ids[2].as_str())
+    );
+    assert_eq!(
+        draft.shape_at(Point::new(0., 25.), 0.1),
+        Some(ids[0].as_str())
+    );
+    assert_eq!(draft.shape_at(Point::new(100., 100.), 0.1), None);
+    assert_eq!(draft.shape_at(Point::new(f32::NAN, 0.), 0.1), None);
+    let p = draft.shape_path(&ids[2]).unwrap();
+    same_paths(&[p], &[commands(&doc.graphics[2].commands())]);
+}
+
+#[test]
+fn changing_joint_glass_to_solid_is_rejected_without_losing_the_port() {
+    let (doc, body, edges) = vessel();
+    let mut draft = Draft::from_selection(&doc, &[body]).unwrap();
+    draft
+        .add_joint(
+            "mouth",
+            edges,
+            JointKind::Taper {
+                size: "10/18".into(),
+                gender: Gender::M,
+                draw: JointDraw::Standard,
+            },
+            false,
+        )
+        .unwrap();
+    let before = draft.clone();
+    let id = draft.definition.shapes[0].id.clone();
+    let error = draft
+        .set_shape_style(
+            &id,
+            ShapeStyle {
+                layer: Layer::Body,
+                material: Material::Rubber,
+                role: Role::Solid,
+            },
+        )
+        .unwrap_err();
+    assert!(
+        error.contains("outline") || error.contains("glass"),
+        "{error}"
+    );
+    assert_eq!(draft, before);
+    assert_eq!(
+        super::super::solve::ports(&draft.preview_graphic(42).unwrap()).len(),
+        1
+    );
+}

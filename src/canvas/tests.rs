@@ -4079,8 +4079,12 @@ fn equipment_authoring_measurements_own_raw_clicks_over_selected_handles() {
             )
             .unwrap();
         assert!(
-            action.into_inner().0.is_none(),
-            "Preview refuses selection gestures"
+            matches!(
+                action.into_inner().0,
+                Some(Edit::EquipmentAuthoringShape { .. })
+            ),
+            "The draft owns shape selection without starting a drawing gesture"
         );
+        assert!(state.gesture.is_none());
     }
 }
