@@ -718,6 +718,22 @@ fn a_new_folder_in_the_tree_shows_under_its_folder() {
 }
 
 #[test]
+fn editing_search_cancels_creation_in_a_folder_the_filter_hides() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    tree_at(&mut app, &["sub/", "sub/a.mol", "z.mol"], false);
+    let _ = picker(&mut app, picker::Action::Row("sub".into()));
+    let _ = picker(&mut app, picker::Action::NewItem(true));
+    let _ = picker(&mut app, picker::Action::NewItemName("draft".into()));
+    assert!(the_picker(&app).new_item.is_some());
+    let _ = picker(&mut app, picker::Action::Search("z.mol".into()));
+    assert!(the_picker(&app).new_item.is_none());
+    let _ = picker(&mut app, picker::Action::CreateItem);
+    let _ = picker(&mut app, picker::Action::Search(String::new()));
+    assert!(!rows(&app).iter().any(|row| row.trim() == "draft"));
+}
+
+#[test]
 fn files_open_as_listed_at_the_repositorys_commit() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());

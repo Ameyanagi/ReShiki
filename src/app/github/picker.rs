@@ -603,6 +603,9 @@ impl App {
                 if let Some(picker) = self.picker() {
                     picker.search = search;
                     picker.link = found;
+                    // A filter can clear the selected folder. Discard its
+                    // naming form before the destination can change.
+                    picker.new_item = None;
                     picker.highlighted = 0;
                     picker.cant_open = None;
                     picker.limited = false;
