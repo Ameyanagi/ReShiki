@@ -69,7 +69,10 @@ impl App {
             }
         }
         match key {
-            "appearance.json" => self.appearance = crate::appearance::Settings::load(),
+            "appearance.json" => {
+                self.appearance = crate::appearance::Settings::load();
+                self.sync_ruler_unit();
+            }
             "abbreviations.json" => {
                 self.abbreviations.catalog_warning = super::abbreviations::load_user_catalog();
             }

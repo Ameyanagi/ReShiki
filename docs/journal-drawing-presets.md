@@ -36,13 +36,13 @@ Direct journal selection scales existing geometry with its bond length. In the d
 
 ## Canvas colors and interface appearance
 
-The **sun/moon toggle** beside the combined preset and color theme button changes document page colors independently of its journal dimensions. The same setting is available in **Page setup…**. Dark canvas displays and exports black paper with white bonds and labels. Ink and palette colors switch to their dark-canvas tones, custom colors stay exact, and raster pictures retain their original pixels. The canvas choice is saved in the document and can be undone.
+The **Sun/Moon toggle** in the bottom status bar beside the combined preset and color theme button changes document page colors independently of its journal dimensions. The same setting is available in **Page setup…**. Dark canvas displays and exports black paper with white bonds and labels. Ink and palette colors switch to their dark-canvas tones, custom colors stay exact, and raster pictures retain their original pixels. The canvas choice is saved in the document and stays out of Undo history.
 
 **Publication**, **Presentation**, **Pastel**, **Jmol**, and **VESTA** control atom colors independently of the journal preset and light/dark canvas. Presentation and Pastel derive from the [Jmol element color reference](https://jmol.sourceforge.net/jscolors/): Presentation uses lightness 50% and Jmol chroma × 2 on light paper, and lightness 70% with chroma × 1 on dark paper; Pastel uses softer tones. Gamut mapping and automatic-label contrast checks can adjust the displayed colors. Both brighten on dark canvases and retain neutral carbon/hydrogen labels. Jmol keeps the reference palette, with label brightness adjusted for readable contrast. All three use colored element-picker tiles with regular-weight symbols. Ring interiors use the theme's Tint row for each canvas, and automatic atom labels stay legible over light and dark fills.
 
 File exports and printing carry the visible canvas colors and background. Clipboard images and editable copies always have transparent backgrounds, retaining the visible bond and label colors. Dark drawings therefore copy as white ink without a black page rectangle. No separate dark preset is needed.
 
-In **View → Interface**, choose **Match canvas**, **Light**, or **Dark** for the surrounding interface only. This application preference is remembered between launches and never changes the canvas or output.
+In **Settings → Appearance → Interface**, choose **Match canvas**, **Light**, or **Dark** for the surrounding interface only. This application preference is remembered between launches and never changes the canvas or output.
 
 ## Comparing actual drawings
 

@@ -68,7 +68,7 @@ struct Context {
         super::InspectorTab,
         crate::canvas::Tool,
         // Tuples compare up to twelve fields.
-        [bool; 11],
+        [bool; 12],
         u8,
     ),
 }
@@ -209,6 +209,7 @@ impl App {
                 self.context_menu.is_some(),
                 self.imports.menu || self.imports.examples_menu,
                 self.style_menu.is_some() || self.tab.inspector_ui.menu_open(),
+                self.view_open,
             ],
             github_menu,
         );

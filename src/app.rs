@@ -548,6 +548,7 @@ impl App {
     /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
     pub(super) fn begin_file_epoch(&mut self) {
         if self.tabs.temporary_depth == 0 {
+            self.view_open = false;
             self.status_style_open = false;
         }
         self.sync_drawing_panel_context();
@@ -669,6 +670,7 @@ impl App {
             // Opening a drawing replaces the status; the panel keeps it.
             app.abbreviations.catalog_warning = Some(message);
         }
+        app.sync_ruler_unit();
         let data_warning = startup.data_warning.clone();
         let task = app.open_startup(startup);
         // After startup's own messages, such as the shortcut examples'.
@@ -1288,6 +1290,9 @@ impl App {
     }
 
     fn update_front(&mut self, message: Message, background: bool) -> Task<Message> {
+        if !background && !view_settings::keeps_open(&message) {
+            self.view_open = false;
+        }
         if !background && !status_style::keeps_open(&message) {
             self.status_style_open = false;
         }

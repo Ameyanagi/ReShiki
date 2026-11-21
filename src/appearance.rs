@@ -116,6 +116,8 @@ pub struct Settings {
     pub export_svg_live_text: bool,
     /// Display/input preference for the five physical Drawing Style fields.
     pub drawing_style_unit: reshiki::style::units::Unit,
+    /// Units of the canvas rulers, coordinate readout and arrow label gap.
+    pub ruler_unit: crate::canvas::guides::Unit,
     /// Draw at the drawing style's bond length when using Clean up.
     pub cleanup_style_bond_length: bool,
     /// Background of copied pictures (transparent by default).
@@ -145,6 +147,7 @@ impl Default for Settings {
             export_editable_drawing: true,
             export_svg_live_text: false,
             drawing_style_unit: Default::default(),
+            ruler_unit: Default::default(),
             cleanup_style_bond_length: false,
             copy_background: Background::Transparent,
             export_background: Background::Canvas,
