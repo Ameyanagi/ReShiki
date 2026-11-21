@@ -201,11 +201,11 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
         let (from, to) = (t.apply(h.from), t.apply(h.to));
         let length = len(sub(to, from));
         // A part's motion can squash a hold to nothing; it holds nothing then.
-        let d = sub(to, from);
+        let delta = sub(to, from);
         (length.is_finite()
             && length > 0.
-            && (d[0] / length).is_finite()
-            && (d[1] / length).is_finite())
+            && (delta[0] / length).is_finite()
+            && (delta[1] / length).is_finite())
         .then(|| Port {
             at: at(&h.hold.id),
             kind: Kind::Hold(h.hold.kind, h.hold.diameter_mm.range()),
@@ -215,7 +215,7 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
                 Gender::M
             },
             point: from,
-            dir: [d[0] / length, d[1] / length],
+            dir: [delta[0] / length, delta[1] / length],
             mm: t.scale_factor(),
             length,
             // Revision 3's pad contacts require the advertised jaw span.
