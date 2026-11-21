@@ -1,4 +1,5 @@
 //! A detached equipment draft, measured and reviewed on the ordinary canvas.
+mod trial;
 use super::workspace::{accessible_command, command, muted_text, section};
 use super::{App, InspectorTab, Message, focus_drawing};
 use crate::canvas::{Edit, EquipmentAuthoring, Tool};
@@ -26,6 +27,17 @@ pub enum Action {
     MarkJointAgain,
     AddJoint,
     CancelJoint,
+    TestSnapping,
+    TestPiece(trial::Choice),
+    TestTurn(f32),
+    TestStart(u64),
+    TestAt {
+        at: Point,
+        epoch: u64,
+        reach: f32,
+        finish: bool,
+    },
+    FinishTesting,
     Accept,
     Discard,
 }
@@ -79,6 +91,9 @@ pub(super) struct State {
     future: Vec<Snapshot>,
     identity: String,
     pub(super) preview: Option<Document>,
+    base_preview: Option<Document>,
+    preview_piece: Option<u64>,
+    trial: Option<trial::Trial>,
     notice: Option<String>,
     joint_candidate: Option<Arc<Draft>>,
     direction: Option<[Point; 2]>,
@@ -104,6 +119,11 @@ impl State {
 
     fn refresh(&mut self, doc: &Document) {
         self.preview = None;
+        self.base_preview = None;
+        self.preview_piece = None;
+        if let Some(trial) = &mut self.trial {
+            trial.invalidate();
+        }
         self.joint_candidate = None;
         self.direction = None;
         let mut draft = self.named_draft();
@@ -169,8 +189,25 @@ impl State {
             return;
         }
         match draft.accept(doc, &self.identity) {
-            Ok(accepted) => self.preview = Some(accepted.document),
+            Ok(accepted) => {
+                self.preview_piece = Some(accepted.piece_id);
+                self.base_preview = Some(accepted.document.clone());
+                self.preview = Some(accepted.document);
+                self.refresh_trial();
+            }
             Err(error) => self.notice = Some(error),
+        }
+    }
+
+    fn refresh_trial(&mut self) {
+        if let (Some(trial), Some(base)) = (&mut self.trial, &self.base_preview) {
+            self.preview = Some(trial.render(base));
+        }
+    }
+
+    fn keep_trial_pose(&mut self) {
+        if let (Some(trial), Some(shown)) = (&mut self.trial, &self.preview) {
+            trial.keep_pose(shown);
         }
     }
 
@@ -183,13 +220,28 @@ impl State {
 
     pub(super) fn measurement(&self) -> EquipmentAuthoring<'_> {
         EquipmentAuthoring {
-            points: self
-                .current
-                .joint
-                .as_ref()
-                .map_or(&self.current.points, |j| &j.points),
-            measuring: self.current.measuring || self.current.joint.is_some(),
-            direction: self.direction,
+            points: if self.trial.is_some() {
+                &[]
+            } else {
+                self.current
+                    .joint
+                    .as_ref()
+                    .map_or(&self.current.points, |j| &j.points)
+            },
+            measuring: self.trial.is_none()
+                && (self.current.measuring || self.current.joint.is_some()),
+            direction: self.direction.filter(|_| self.trial.is_none()),
+            trial: self.trial.as_ref().and_then(|t| {
+                let id = t.id?;
+                let g = self
+                    .preview
+                    .as_ref()?
+                    .graphics
+                    .iter()
+                    .find(|g| g.id == id)?;
+                Some((id, reshiki::equipment::placed::middle(g), t.epoch))
+            }),
+            snap: self.trial.as_ref().and_then(|t| t.snap.as_ref()),
         }
     }
 }
@@ -277,6 +329,9 @@ impl App {
                 future: vec![],
                 identity,
                 preview: None,
+                base_preview: None,
+                preview_piece: None,
+                trial: None,
                 notice: None,
                 joint_candidate: None,
                 direction: None,
@@ -320,6 +375,11 @@ impl App {
                     if let Some(state) = &mut self.tab.equipment_authoring {
                         state.notice = Some(error);
                         state.preview = None;
+                        state.base_preview = None;
+                        state.preview_piece = None;
+                        if let Some(trial) = &mut state.trial {
+                            trial.invalidate();
+                        }
                     }
                 }
             }
@@ -328,6 +388,114 @@ impl App {
         let Some(state) = &mut self.tab.equipment_authoring else {
             return Task::none();
         };
+        match &action {
+            Action::TestSnapping => {
+                if let Some(base) = &state.base_preview
+                    && let Some(piece) = base
+                        .graphics
+                        .iter()
+                        .find(|g| Some(g.id) == state.preview_piece)
+                {
+                    let choices = trial::choices(base, &state.identity);
+                    let ports = reshiki::equipment::solve::ports(piece);
+                    if ports.is_empty() {
+                        return focus_drawing();
+                    }
+                    let choice = choices
+                        .iter()
+                        .filter(|c| {
+                            let g = reshiki::equipment::placed::graphic(
+                                0,
+                                c.definition.clone(),
+                                Point::default(),
+                                1.,
+                            );
+                            reshiki::equipment::solve::ports(&g).iter().any(|p| {
+                                ports
+                                    .iter()
+                                    .any(|q| p.gender != q.gender && p.size() == q.size())
+                            })
+                        })
+                        .min_by_key(|c| c.definition.joints.len())
+                        .or(choices.first())
+                        .cloned();
+                    if let Some(choice) = choice {
+                        let reach = reshiki::equipment::solve::REACH_PX / self.tab.camera.zoom;
+                        let scale = reshiki::equipment::placed::world_per_mm(
+                            base,
+                            reshiki::equipment::placed::DEFAULT_PT_PER_MM,
+                        );
+                        state.trial = Some(trial::Trial::new(
+                            choice,
+                            choices,
+                            self.tab
+                                .camera
+                                .center
+                                .offset(60. / self.tab.camera.zoom, 0.),
+                            scale,
+                            reach,
+                        ));
+                        state.refresh_trial();
+                    }
+                }
+                return focus_drawing();
+            }
+            Action::FinishTesting => {
+                state.trial = None;
+                state.preview = state.base_preview.clone();
+                return focus_drawing();
+            }
+            Action::TestStart(epoch) => {
+                if state.trial.as_ref().is_some_and(|t| t.epoch == *epoch) {
+                    state.keep_trial_pose();
+                }
+                return Task::none();
+            }
+            Action::TestAt {
+                at,
+                epoch,
+                reach,
+                finish,
+            } => {
+                if let Some(trial) = &mut state.trial
+                    && trial.epoch == *epoch
+                    && at.x.is_finite()
+                    && at.y.is_finite()
+                    && reach.is_finite()
+                    && *reach > 0.
+                {
+                    trial.at = *at;
+                    trial.reach = *reach;
+                    state.refresh_trial();
+                    if *finish {
+                        state.keep_trial_pose();
+                    }
+                }
+                return Task::none();
+            }
+            Action::TestPiece(choice) => {
+                if let Some(trial) = &mut state.trial
+                    && trial.choices.contains(choice)
+                {
+                    trial.choice = choice.clone();
+                    trial.invalidate();
+                    state.refresh_trial();
+                }
+                return Task::none();
+            }
+            Action::TestTurn(turn) => {
+                if turn.is_finite()
+                    && (-180. ..=180.).contains(turn)
+                    && let Some(trial) = &mut state.trial
+                {
+                    trial.turn = *turn;
+                    trial.invalidate();
+                    state.refresh_trial();
+                }
+                return Task::none();
+            }
+            _ => {}
+        }
         state.notice = None;
         let focus = matches!(
             action,
@@ -503,6 +671,22 @@ impl App {
             Message::Canvas(Edit::EquipmentAuthoringPoint(point)) => {
                 return Some(self.equipment_authoring_action(Action::Point(*point)));
             }
+            Message::Canvas(Edit::EquipmentAuthoringTestStart(epoch)) => {
+                return Some(self.equipment_authoring_action(Action::TestStart(*epoch)));
+            }
+            Message::Canvas(Edit::EquipmentAuthoringTest {
+                at,
+                epoch,
+                reach,
+                finish,
+            }) => {
+                return Some(self.equipment_authoring_action(Action::TestAt {
+                    at: *at,
+                    epoch: *epoch,
+                    reach: *reach,
+                    finish: *finish,
+                }));
+            }
             _ => {}
         }
         // Keep this mode visible. Navigation and classified completions still work;
@@ -549,6 +733,19 @@ impl App {
                 .size(12),
         ]
         .spacing(10);
+        if let Some(trial) = &state.trial {
+            body = body
+                .push(section("Test snapping"))
+                .push(crate::appearance::pick_list(
+                    trial.choices.as_slice(), Some(trial.choice.clone()),
+                    |choice| Message::EquipmentAuthoring(Action::TestPiece(choice)),
+                ).text_size(12))
+                .push(text(format!("Turn test piece: {:.0}°", trial.turn)).size(12))
+                .push(iced::widget::slider(-180. ..=180., trial.turn,
+                    |turn| Message::EquipmentAuthoring(Action::TestTurn(turn))).step(15.))
+                .push(text("Drag the gray test piece toward a joint. Test pieces are discarded; Accept keeps your piece at its original position.").size(12))
+                .push(command("Finish testing", Message::EquipmentAuthoring(Action::FinishTesting)));
+        }
         if let Some(joint) = &current.joint {
             body = body
                 .push(text("Ground-glass joint").size(13))
@@ -695,6 +892,19 @@ impl App {
             body = body.push(command(
                 "Add joint…",
                 Message::EquipmentAuthoring(Action::BeginJoint),
+            ));
+        }
+        if state.trial.is_none()
+            && state.base_preview.as_ref().is_some_and(|doc| {
+                doc.graphics
+                    .iter()
+                    .find(|g| Some(g.id) == state.preview_piece)
+                    .is_some_and(|g| !reshiki::equipment::solve::ports(g).is_empty())
+            })
+        {
+            body = body.push(command(
+                "Test snapping…",
+                Message::EquipmentAuthoring(Action::TestSnapping),
             ));
         }
         body = body.push(

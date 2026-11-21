@@ -492,6 +492,13 @@ The first joint can set the piece's scale without a separate length
 measurement; later joints must fit the established scale. A standard joint
 must meet a compatible filled glass neck.
 
+Choose **Test snapping…** after adding a joint. Drag the gray test piece
+toward the draft's joint or another piece in the drawing. The usual joint
+feedback shows a match, an adapter or a mismatch. Choose another test piece
+or turn it with **Turn test piece**. **Finish testing** returns to measuring
+and joint editing. Test pieces, trial seats and adapters are discarded;
+**Accept** keeps the authored piece at its original position.
+
 Authoring makes fixed pieces with optional standard ground-glass joints.
 It does not yet assign materials or paint layers, create holds, liquids or
 moving parts, or edit an existing definition. Pictures, text and chemical objects

@@ -565,6 +565,7 @@ fn equipment_authoring_touch_records_only_completed_taps() {
         points: &[],
         measuring: true,
         direction: None,
+        ..Default::default()
     });
     let start = Point::new(200., 150.);
     let moved = Point::new(235., 170.);
@@ -652,5 +653,142 @@ fn equipment_authoring_touch_records_only_completed_taps() {
         } else {
             assert!(points.is_empty(), "{scenario}: {points:?}");
         }
+    }
+}
+
+#[test]
+fn equipment_trial_touch_drag_cancels_for_pinch_or_lost_finger_without_resuming() {
+    use reshiki::graphics::{Graphic, GraphicKind};
+    let mut doc = Document::default();
+    doc.graphics.push(Graphic::dragged(
+        1,
+        GraphicKind::Rectangle,
+        World::new(-40., -30.),
+        World::new(40., 30.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(500., 350.));
+    for scenario in ["lift", "lost", "pinch"] {
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.camera.zoom = 2.;
+        canvas.guides.rulers = true;
+        canvas.equipment_authoring = Some(EquipmentAuthoring {
+            trial: Some((1, World::default(), 41)),
+            ..Default::default()
+        });
+        let paper = canvas.guides.paper(bounds);
+        let start =
+            canvas.camera.screen(World::new(40., 10.), paper) + Vector::new(paper.x, paper.y);
+        let moved = start + Vector::new(40., 20.);
+        let mut state = State::default();
+        assert!(
+            send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerPressed {
+                    id: touch::Finger(1),
+                    position: start
+                }
+            )
+            .is_empty()
+        );
+        let drag = send(
+            &canvas,
+            &mut state,
+            bounds,
+            touch::Event::FingerMoved {
+                id: touch::Finger(1),
+                position: moved,
+            },
+        );
+        assert!(
+            matches!(drag.as_slice(), [Edit::EquipmentAuthoringTestStart(41),
+            Edit::EquipmentAuthoringTest { at, epoch: 41, reach: 7., finish: false }]
+            if at.distance(World::new(20., 10.)) < 0.001)
+        );
+        assert!(state.equipment_trial.is_some());
+        if scenario == "lift" {
+            let lifted = send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerLifted {
+                    id: touch::Finger(1),
+                    position: moved,
+                },
+            );
+            assert!(matches!(lifted.last(), Some(Edit::EquipmentAuthoringTest {
+                at, epoch: 41, finish: true, .. }) if at.distance(World::new(20., 10.)) < 0.001));
+        } else {
+            let event = if scenario == "lost" {
+                touch::Event::FingerLost {
+                    id: touch::Finger(1),
+                    position: moved,
+                }
+            } else {
+                touch::Event::FingerPressed {
+                    id: touch::Finger(2),
+                    position: Point::new(350., 150.),
+                }
+            };
+            let cancelled = send(&canvas, &mut state, bounds, event);
+            assert!(
+                matches!(cancelled.as_slice(), [Edit::EquipmentAuthoringTest {
+                at, epoch: 41, finish: false, .. }, Edit::Hover(None)] if *at == World::default())
+            );
+            assert!(state.equipment_trial.is_none());
+            if scenario == "pinch" {
+                assert!(matches!(
+                    send(
+                        &canvas,
+                        &mut state,
+                        bounds,
+                        touch::Event::FingerMoved {
+                            id: touch::Finger(2),
+                            position: Point::new(370., 170.)
+                        }
+                    )
+                    .as_slice(),
+                    [Edit::Navigate(Navigation::Pinch { .. }, _)]
+                ));
+                send(
+                    &canvas,
+                    &mut state,
+                    bounds,
+                    touch::Event::FingerLifted {
+                        id: touch::Finger(2),
+                        position: Point::new(370., 170.),
+                    },
+                );
+                let remaining = send(
+                    &canvas,
+                    &mut state,
+                    bounds,
+                    touch::Event::FingerMoved {
+                        id: touch::Finger(1),
+                        position: moved + Vector::new(30., 0.),
+                    },
+                );
+                assert!(remaining.is_empty());
+                assert!(
+                    send(
+                        &canvas,
+                        &mut state,
+                        bounds,
+                        touch::Event::FingerLifted {
+                            id: touch::Finger(1),
+                            position: moved
+                        }
+                    )
+                    .is_empty()
+                );
+            }
+        }
+        assert!(state.equipment_trial.is_none());
+        assert!(state.touch.fingers.is_empty());
+        assert!(!state.touch.mouse_down);
     }
 }

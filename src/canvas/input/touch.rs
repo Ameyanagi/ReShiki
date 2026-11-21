@@ -88,7 +88,7 @@ impl MoleculeCanvas<'_> {
                     state.touch.pending = None;
                     // A measurement commits on a tap. A dragged first finger
                     // may become a pinch, so it must not record a point yet.
-                    if self.equipment_authoring.is_some() {
+                    if self.equipment_authoring.is_some_and(|c| c.trial.is_none()) {
                         state.touch.navigating = true;
                         return Some(Action::capture());
                     }
@@ -117,6 +117,17 @@ impl MoleculeCanvas<'_> {
                     .iter()
                     .position(|(finger, _)| *finger == id)?;
                 let mut events = Vec::new();
+                if matches!(event, touch::Event::FingerLost { .. })
+                    && state.equipment_trial.is_some()
+                {
+                    let action = self.cancel_touch_edit(state);
+                    state.touch.fingers.remove(index);
+                    if state.touch.fingers.is_empty() {
+                        state.touch = Touch::default();
+                        state.cursor = None;
+                    }
+                    return Some(action);
+                }
                 if !state.touch.navigating && index == 0 {
                     if let Some((start, _)) = state.touch.pending.take()
                         && matches!(event, touch::Event::FingerLifted { .. })
@@ -162,10 +173,16 @@ impl MoleculeCanvas<'_> {
     }
 
     fn cancel_touch_edit(&self, state: &mut State) -> Action<Edit> {
+        let trial = state.equipment_trial.take().map(|capture| {
+            capture.cancelled(self.camera.world_len(reshiki::equipment::solve::REACH_PX))
+        });
         let erasing = matches!(state.end_gesture(), Some(Gesture::Erase { .. }));
         state.last_click = None;
         state.last_transform_click = None;
-        match optimization::cancelled(state).or(erasing.then_some(Edit::EraseEnd)) {
+        match trial
+            .or_else(|| optimization::cancelled(state))
+            .or(erasing.then_some(Edit::EraseEnd))
+        {
             Some(edit) => Action::publish(edit).and_capture(),
             None => Action::publish(Edit::Hover(None)).and_capture(),
         }
