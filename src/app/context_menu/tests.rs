@@ -1943,8 +1943,16 @@ fn select_structures_in_cycle_picks_every_part_and_not_the_circle() -> Result<()
         parts.push(id);
     }
     app.tab.selected = parts.clone();
-    let _ = app.update(Message::Cycle(super::super::cycles::Action::Make));
-    let _ = app.update(Message::Cycle(super::super::cycles::Action::MakeApply));
+    let before = app.tab.doc.clone();
+    run_item(&mut app, Page::Main, "Make catalytic cycle")?;
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let made = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, made);
+    assert!(!labels(&app, Page::Main).contains(&"Tidy cycle"));
     let circle = app.selected_cycle().ok_or("no cycle")?.0;
     // With the cycle selected, a click on its circle or arcs picks only them.
     let whole = app.tab.selected.clone();

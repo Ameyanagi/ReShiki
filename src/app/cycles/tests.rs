@@ -23,10 +23,9 @@ fn text(app: &mut App, x: f32, y: f32, value: &str) -> u64 {
     id
 }
 
-/// Make catalytic cycle on the selection, then make it from the review.
+/// Make catalytic cycle on the selection in one action.
 fn make(app: &mut App) {
     let _ = app.update(Message::Cycle(Action::Make));
-    let _ = app.update(Message::Cycle(Action::MakeApply));
 }
 
 fn cycle(app: &App) -> (u64, Cycle) {
@@ -123,16 +122,11 @@ fn tidy_cycle_is_one_undo_step_and_idempotent() {
 
     let _ = app.update(Message::Cycle(Action::Tidy));
     assert!(!app.error, "{}", app.status);
-    assert_eq!(app.tab.doc, before, "review leaves the drawing untouched");
-    assert_eq!(app.tab.history.undo_frames().len(), undo_count);
-    assert!(app.cycle_proposal_card().is_some());
-    let preview = app.display_document().clone();
-    assert_ne!(preview, before);
-
-    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(app.cycle_proposal_card().is_none());
     let tidied = app.tab.doc.clone();
+    assert_ne!(tidied, before);
+    assert_eq!(app.display_document(), &tidied);
     assert_eq!(app.status, "Tidied the cycle");
-    assert_eq!(tidied, preview);
     assert_eq!(app.tab.selected, selected);
     assert_eq!(app.tab.history.undo_frames().len(), undo_count + 1);
 
@@ -151,7 +145,7 @@ fn tidy_cycle_is_one_undo_step_and_idempotent() {
 }
 
 #[test]
-fn tidy_stereo_preview_matches_apply_and_discard_keeps_visible_labels() {
+fn tidy_immediately_reconciles_stereo_labels_and_preserves_authored_stereo() {
     let (mut app, _) = App::new();
     app.tab.doc = Document::from_json(include_bytes!(
         "../../../tests/fixtures/chemical-naming-rust/r-lactic-rust-native.rsk"
@@ -188,8 +182,9 @@ fn tidy_stereo_preview_matches_apply_and_discard_keeps_visible_labels() {
     assert!(!app.error, "{}", app.status);
     let preview = app.display_document().clone();
     tidy_qa("stereo", &before, &preview);
-    assert_eq!(app.tab.doc, before);
-    assert_eq!(app.tab.history.undo_frames().len(), frames);
+    assert_eq!(app.tab.doc, preview);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
     assert!(preview.atom_labels.stereo, "display settings stay enabled");
     assert!(preview.atoms.iter().all(|a| a.cip_label.is_none()));
     assert!(preview.bonds.iter().all(|b| b.cip_label.is_none()));
@@ -202,21 +197,14 @@ fn tidy_stereo_preview_matches_apply_and_discard_keeps_visible_labels() {
     let mut cleared = before.clone();
     reshiki::atom_labels::clear_computed(&mut cleared);
     assert_eq!(preview.bonds, cleared.bonds);
-    let svg = reshiki::scene::svg(&preview);
-
-    let _ = app.update(Message::Escape);
-    assert_eq!(app.tab.doc, before);
-    assert_eq!(
-        reshiki::scene::svg(&app.tab.doc),
-        reshiki::scene::svg(&before)
-    );
-    assert_eq!(app.tab.history.undo_frames().len(), frames);
-    let _ = app.update(Message::Cycle(Action::Tidy));
-    let _ = app.update(Message::ContextKey("Enter".into()));
-    assert_eq!(app.tab.doc, preview);
-    assert_eq!(reshiki::scene::svg(&app.tab.doc), svg);
     assert_eq!(cycle(&app).1, roles);
-    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.atoms, cleared.atoms);
+    assert_eq!(app.tab.doc.bonds, cleared.bonds);
+    assert_eq!(app.tab.doc.annotations, before.annotations);
+    assert_eq!(app.tab.doc.graphics, before.graphics);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, preview);
 }
 
 #[test]
@@ -251,12 +239,11 @@ fn tidy_stereo_labels_on_unrelated_molecules_survive_a_text_only_cycle_edit() {
             .iter()
             .any(|label| label.text == "(R)")
     );
-    let _ = app.update(Message::ContextKey("Enter".into()));
     assert_eq!(app.tab.doc, preview);
 }
 
 #[test]
-fn tidy_preview_blocks_edits_and_discard_preserves_the_drawing() {
+fn tidy_waits_while_a_task_runs_without_changing_the_drawing_or_history() {
     let (mut app, _) = App::new();
     let parts = [
         text(&mut app, 0., -200., "A"),
@@ -268,32 +255,19 @@ fn tidy_preview_blocks_edits_and_discard_preserves_the_drawing() {
     app.tab.doc.translate(&[parts[1]], -50., 20.);
     let before = app.tab.doc.clone();
     let selected = app.tab.selected.clone();
-    let undo_count = app.tab.history.undo_frames().len();
-
-    let _ = app.update(Message::Cycle(Action::Tidy));
-    let preview = app.display_document().clone();
-    assert_ne!(preview, before);
-    let _ = app.update(Message::Delete);
-    assert_eq!(app.display_document(), &preview);
-    assert_eq!(app.tab.doc, before);
-    let _ = app.update(Message::Cycle(Action::MakeReverse));
-    assert_eq!(app.display_document(), &preview);
-    let _ = app.update(Message::Escape);
-    assert!(app.tab.cycle_inputs.proposal.is_none());
-    assert_eq!(app.display_document(), &before);
-    assert_eq!(app.tab.selected, selected);
-    assert_eq!(app.tab.history.undo_frames().len(), undo_count);
-    assert_eq!(app.status, "Cycle tidy discarded");
-
+    let frames = app.tab.history.undo_frames().len();
     app.tab.busy = true;
+    assert!(!app.can_tidy_cycle());
     let _ = app.update(Message::Cycle(Action::Tidy));
+    assert!(app.error);
     assert!(app.tab.cycle_inputs.proposal.is_none());
     assert_eq!(app.tab.doc, before);
-    assert!(app.error);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.history.undo_frames().len(), frames);
 }
 
 #[test]
-fn actual_suzuki_tidy_preview_applies_as_one_undo_step() {
+fn actual_suzuki_tidy_applies_immediately_as_one_undo_step() {
     let (mut app, _) = App::new();
     app.tab.doc = Document::from_json(include_bytes!(
         "../../../tests/fixtures/cycles/tidy-before.rsk"
@@ -306,13 +280,12 @@ fn actual_suzuki_tidy_preview_applies_as_one_undo_step() {
 
     let _ = app.update(Message::Cycle(Action::Tidy));
     assert!(!app.error, "{}", app.status);
-    assert_eq!(app.tab.doc, before);
-    assert_eq!(app.tab.history.undo_frames().len(), frames);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
     let preview = app.display_document().clone();
     assert_ne!(preview, before);
     tidy_qa("suzuki", &before, &preview);
 
-    let _ = app.update(Message::ContextKey("Enter".into()));
     assert!(!app.error, "{}", app.status);
     assert_eq!(app.tab.doc, preview);
     assert_eq!(cycle(&app).1, roles);
@@ -335,7 +308,7 @@ fn actual_suzuki_tidy_preview_applies_as_one_undo_step() {
 }
 
 #[test]
-fn noncircle_suzuki_tidy_preview_discard_apply_and_undo_keep_the_shape_and_roles() {
+fn noncircle_suzuki_tidy_and_undo_keep_the_shape_and_roles() {
     for shape in [
         reshiki::cycles::Shape::Ellipse,
         reshiki::cycles::Shape::RoundedRectangle,
@@ -369,8 +342,8 @@ fn noncircle_suzuki_tidy_preview_discard_apply_and_undo_keep_the_shape_and_roles
         let frames = app.tab.history.undo_frames().len();
         let _ = app.update(Message::Cycle(Action::Tidy));
         assert!(!app.error, "{shape:?}: {}", app.status);
-        assert_eq!(app.tab.doc, before);
-        assert_eq!(app.tab.history.undo_frames().len(), frames);
+        assert!(app.tab.cycle_inputs.proposal.is_none());
+        assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
         let preview = app.display_document().clone();
         assert_ne!(preview, before);
         tidy_qa(&format!("noncircle-suzuki-{shape:?}"), &before, &preview);
@@ -379,11 +352,6 @@ fn noncircle_suzuki_tidy_preview_discard_apply_and_undo_keep_the_shape_and_roles
             preview.graphics.iter().find(|g| g.id == 191).unwrap(),
         );
         assert!(drawing.arrows.iter().all(|arrow| arrow.arc.is_none()));
-        let _ = app.update(Message::Escape);
-        assert_eq!(app.tab.doc, before);
-        assert_eq!(app.tab.history.undo_frames().len(), frames);
-        let _ = app.update(Message::Cycle(Action::Tidy));
-        let _ = app.update(Message::ContextKey("Enter".into()));
         assert!(!app.error, "{shape:?}: {}", app.status);
         assert_eq!(app.tab.doc, preview);
         assert_eq!(cycle(&app).1, roles);
@@ -404,7 +372,7 @@ fn noncircle_suzuki_tidy_preview_discard_apply_and_undo_keep_the_shape_and_roles
 }
 
 #[test]
-fn a_delayed_caption_result_requires_fresh_tidy_review_before_apply() {
+fn tidy_after_a_delayed_caption_result_preserves_the_completed_name_through_undo() {
     use crate::app::naming::{Action as NamingAction, Outcome, test_support::record};
     use reshiki::linked_properties::Property;
 
@@ -431,9 +399,6 @@ fn a_delayed_caption_result_requires_fresh_tidy_review_before_apply() {
         .unwrap();
     app.tab.selected = vec![191];
     let roles = cycle(&app).1;
-    let _ = app.update(Message::Cycle(Action::Tidy));
-    assert!(!app.error, "{}", app.status);
-    let old_preview = app.display_document().clone();
     let frames = app.tab.history.undo_frames().len();
     let revision = app.tab.revision;
 
@@ -456,17 +421,13 @@ fn a_delayed_caption_result_requires_fresh_tidy_review_before_apply() {
         "ethan-1-ol"
     );
 
-    // First Enter refreshes the candidate. The completed name is retained,
-    // but the user must review that candidate before its layout is applied.
-    let _ = app.update(Message::ContextKey("Enter".into()));
+    let _ = app.update(Message::Cycle(Action::Tidy));
     assert!(!app.error, "{}", app.status);
-    assert_eq!(app.tab.doc, named);
-    assert_eq!(app.tab.history.undo_frames().len(), frames);
-    assert!(app.tab.cycle_inputs.proposal.is_some());
-    let fresh_preview = app.display_document().clone();
-    assert_ne!(fresh_preview, old_preview);
+    assert!(app.tab.cycle_inputs.proposal.is_none());
+    assert_ne!(app.tab.doc, named);
     assert_eq!(
-        fresh_preview
+        app.tab
+            .doc
             .annotations
             .iter()
             .find(|a| a.id == caption)
@@ -474,11 +435,6 @@ fn a_delayed_caption_result_requires_fresh_tidy_review_before_apply() {
             .text,
         "ethan-1-ol"
     );
-
-    let _ = app.update(Message::ContextKey("Enter".into()));
-    assert!(!app.error, "{}", app.status);
-    assert!(app.tab.cycle_inputs.proposal.is_none());
-    assert_eq!(app.tab.doc, fresh_preview);
     assert_eq!(cycle(&app).1, roles);
     assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
     let _ = app.update(Message::Undo);
@@ -486,6 +442,45 @@ fn a_delayed_caption_result_requires_fresh_tidy_review_before_apply() {
         app.tab.doc, named,
         "Undo retains the completed background caption"
     );
+}
+
+#[test]
+fn cleanup_cycle_requires_an_idle_selected_cycle_with_steps() {
+    let (mut app, _) = App::new();
+    assert!(!app.can_tidy_cycle());
+    let empty = reshiki::cycles::insert(&mut app.tab.doc, Point::new(1000., 0.), 100.);
+    app.tab.selected = vec![empty];
+    assert!(
+        !app.can_tidy_cycle(),
+        "an empty outline has no parts to tidy"
+    );
+    let parts = [
+        text(&mut app, 0., -200., "A"),
+        text(&mut app, 170., 90., "B"),
+        text(&mut app, -230., 90., "C"),
+    ];
+    app.tab.selected = parts.to_vec();
+    assert!(!app.can_tidy_cycle());
+    make(&mut app);
+    let id = app.selected_cycle().unwrap().0;
+    assert!(
+        app.can_tidy_cycle(),
+        "making a cycle selects it and its parts"
+    );
+    app.tab.selected = vec![parts[0]];
+    assert!(!app.can_tidy_cycle(), "a part alone is not the whole cycle");
+    app.tab.selected = vec![id];
+    assert!(app.can_tidy_cycle(), "selecting only the outline is enough");
+    app.tab.busy = true;
+    assert!(!app.can_tidy_cycle());
+    app.tab.busy = false;
+    let _ = app.inline_action(crate::app::inline_text::Action::Begin(
+        None,
+        Point::default(),
+    ));
+    app.tab.selected = vec![id];
+    assert!(app.tab.drawing_edit_active());
+    assert!(!app.can_tidy_cycle(), "finish the current text edit first");
 }
 
 #[test]
@@ -880,7 +875,7 @@ fn balance_status_names_the_extra_atoms_by_side() {
 }
 
 #[test]
-fn make_shows_the_cycle_for_review_before_it_changes_the_drawing() {
+fn make_applies_immediately_and_undo_restores_the_drawing() {
     let (mut app, _) = App::new();
     let parts = [
         text(&mut app, 0., -200., "A"),
@@ -891,34 +886,20 @@ fn make_shows_the_cycle_for_review_before_it_changes_the_drawing() {
     let initial = app.tab.doc.clone();
     let _ = app.update(Message::Cycle(Action::Make));
     assert!(!app.error, "{}", app.status);
-    // Shown, not made: the drawing and its history are as they were.
-    assert_eq!(app.tab.doc, initial);
-    assert!(!app.tab.history.can_undo());
-    assert!(app.cycle_proposal_card().is_some());
-    let shown = app.display_document();
-    assert!(shown.graphics.iter().any(|g| g.cycle.is_some()));
-    // Edits wait while it is under review.
-    let _ = app.update(Message::Delete);
-    assert_eq!(app.tab.doc, initial);
-    assert!(app.status.contains("Enter applies"), "{}", app.status);
-    // Esc discards.
-    let _ = app.update(Message::Escape);
     assert!(app.tab.cycle_inputs.proposal.is_none());
-    assert_eq!(app.tab.doc, initial);
-    assert_eq!(app.tab.selected, parts);
-
-    // Reversed, then Enter makes it as one Undo step.
-    let _ = app.update(Message::Cycle(Action::Make));
-    let _ = app.update(Message::Cycle(Action::MakeReverse));
-    let _ = app.update(Message::ContextKey("Enter".into()));
-    assert!(!app.error, "{}", app.status);
+    assert!(app.cycle_proposal_card().is_none());
+    assert_ne!(app.tab.doc, initial);
+    assert_eq!(app.display_document(), &app.tab.doc);
     let (_, c) = cycle(&app);
-    assert!(c.counterclockwise);
+    assert!(!c.counterclockwise);
     assert_eq!(c.intermediates[0], vec![parts[0]]);
-    assert_eq!(c.intermediates[1], vec![parts[2]]);
+    assert_eq!(c.intermediates[1], vec![parts[1]]);
     assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let made = app.tab.doc.clone();
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, initial);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, made);
 }
 
 #[test]
@@ -978,7 +959,7 @@ fn cycle_cells(
 }
 
 #[test]
-fn same_cell_make_reviews_the_owned_host_and_applies_once() {
+fn same_cell_make_commits_the_owned_host_immediately_once() {
     use reshiki::graphics::table::Membership;
     for owned in [false, true] {
         let (mut app, _) = App::new();
@@ -995,9 +976,9 @@ fn same_cell_make_reviews_the_owned_host_and_applies_once() {
         let before = app.tab.doc.clone();
         let _ = app.update(Message::Cycle(Action::Make));
         assert!(!app.error, "{}", app.status);
-        assert!(app.cycle_proposal_card().is_some());
-        assert_eq!(app.tab.doc, before);
-        assert!(!app.tab.history.can_undo());
+        assert!(app.cycle_proposal_card().is_none());
+        assert_ne!(app.tab.doc, before);
+        assert_eq!(app.tab.history.undo_frames().len(), 1);
         let shown = app.display_document().clone();
         shown.validate().unwrap();
         let host = shown
@@ -1007,13 +988,6 @@ fn same_cell_make_reviews_the_owned_host_and_applies_once() {
             .unwrap()
             .id;
         assert_eq!(Membership::new(&shown).unwrap().cell_of(host), target);
-        let _ = app.update(Message::Cycle(Action::MakeApply));
-        assert!(!app.error, "{}", app.status);
-        assert_eq!(
-            app.tab.doc, shown,
-            "Apply must match the validated owned preview"
-        );
-        assert_eq!(app.tab.history.undo_frames().len(), 1);
         let saved = app.tab.doc.file_json().unwrap();
         assert_eq!(
             Document::from_json(&saved).unwrap().file_json().unwrap(),

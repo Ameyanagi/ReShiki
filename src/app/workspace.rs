@@ -472,12 +472,25 @@ impl App {
                         on,
                         Action::StyleBondLength(!on),
                     ),
-                    container(section("Reaction")).padding([4, 8]),
+                    container(section("Schemes")).padding([4, 8]),
                     item(
                         "cleanup-reaction",
                         keyed("Clean up reaction", &Message::Cleanup(Action::Scheme)),
                         false,
                         Action::Scheme,
+                    ),
+                    reshiki::accessibility::button(
+                        "cleanup-cycle",
+                        "Clean up cycle",
+                        row![text("").size(12).width(14), text("Clean up cycle").size(12)]
+                            .align_y(Alignment::Center),
+                    )
+                    .padding([6, 8])
+                    .width(Length::Fill)
+                    .style(control(false))
+                    .on_press_maybe(
+                        self.can_tidy_cycle()
+                            .then_some(Message::Cycle(super::cycles::Action::Tidy)),
                     ),
                 ]
                 .spacing(1),
