@@ -17,6 +17,10 @@ impl MoleculeCanvas<'_> {
         bounds: Rectangle,
         canvas_bounds: Rectangle,
     ) -> Option<Action<Edit>> {
+        if self.equipment_authoring.is_some() {
+            state.end_gesture();
+            return Some(Action::request_redraw().and_capture());
+        }
         let p = self.camera.world(point?, bounds);
         let mut hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
         if hit.is_empty() {
@@ -62,6 +66,15 @@ impl MoleculeCanvas<'_> {
         state.pull_out = false;
         let point = point?;
         let p = self.camera.world(point, bounds);
+        if let Some(context) = self.equipment_authoring {
+            state.end_gesture();
+            state.last_click = None;
+            return Some(if context.measuring {
+                Action::publish(Edit::EquipmentAuthoringPoint(p)).and_capture()
+            } else {
+                Action::request_redraw().and_capture()
+            });
+        }
         if self.tool == Tool::Erase {
             state.gesture = Some(Gesture::Erase { last: p });
             return Some(Action::publish(Edit::EraseStart(p)).and_capture());

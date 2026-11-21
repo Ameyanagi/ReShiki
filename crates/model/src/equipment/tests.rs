@@ -1,7 +1,7 @@
 use super::eval::{Value, Values, evaluate, resolve};
-use super::format::{Definition, Param, content_hash, parse, taper};
+use super::format::{Definition, Material, Param, content_hash, parse, taper};
 use super::geometry::{Affine, Seg, area, flatten, len, sub};
-use super::plan::{Ink, Instance, Pass, PlanPath, Settings, mating_transform, paint_plan};
+use super::plan::{Ink, Instance, Pass, PlanPath, Settings, Weight, mating_transform, paint_plan};
 use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
 
@@ -508,6 +508,106 @@ fn limits_hold_at_the_boundary() {
             .unwrap_err()
             .contains("at most 200 characters")
     );
+}
+
+#[test]
+fn a_standard_socket_draws_a_straight_rim_when_empty() {
+    let def = fixture("rbf-300-29");
+    let mut instance = Instance::new(&def, Affine::IDENTITY);
+    let free = paint_plan(std::slice::from_ref(&instance), Settings::default()).unwrap();
+    instance.seated.insert("neck".into());
+    let seated = paint_plan(&[instance], Settings::default()).unwrap();
+    let mouth = -99.528;
+    let taper = taper("29/42").unwrap();
+    let radius = taper.d / 2.;
+    let rim_closed = |plan: &[PlanPath]| {
+        plan.iter()
+            .filter(|p| p.pass == Pass::Outline)
+            .flat_map(|p| flatten(&p.path))
+            .find_map(|(points, closed)| {
+                points
+                    .first()
+                    .zip(points.last())
+                    .filter(|&(a, b)| {
+                        (a[1] - mouth).abs() < 1e-6
+                            && (b[1] - mouth).abs() < 1e-6
+                            && (a[0] + b[0]).abs() < 1e-6
+                            && (a[0].abs() - radius).abs() < 1e-6
+                    })
+                    .map(|_| closed)
+            })
+    };
+    assert_eq!(rim_closed(&free), Some(true));
+    assert_eq!(rim_closed(&seated), Some(false));
+    assert!(
+        free.iter()
+            .filter(|p| p.material == Material::Glass)
+            .all(|p| {
+                p.color.is_none()
+                    && flatten(&p.path)
+                        .iter()
+                        .flat_map(|(points, _)| points)
+                        .all(|p| p[1] >= mouth - 1e-6)
+            })
+    );
+    assert!(
+        free.iter()
+            .any(|p| { p.material == Material::Frosted && p.ink == Ink::Stroke(Weight::Hatch) })
+    );
+}
+
+#[test]
+fn a_standard_socket_opens_the_nearby_authored_rim_without_changing_its_fill() {
+    let mut def = fixture("rbf-300-29");
+    let mut glass = def.shapes[0].clone();
+    glass.id = "source-rim".into();
+    def.shapes.push(glass);
+    // Match the scale of an authored socket; its outline reaches 0.58 mm
+    // past the centerline. A rim 0.53 mm inside it still shows through.
+    let scale = Affine::scale(3.01, [0., 0.]);
+    for (source, rim, opens) in [
+        (
+            "M-16 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80Z",
+            "-99.36",
+            true,
+        ),
+        (
+            "M-16 -99.36L0 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80Z",
+            "-99.36",
+            true,
+        ),
+        (
+            "M0 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80L-16 -99.36Z",
+            "-99.36",
+            true,
+        ),
+        ("M-16 -99L16 -99L15 -80C5 -76 -5 -76 -15 -80Z", "-99", true),
+        (
+            "M-16 -98.75L16 -98.75L15 -80C5 -76 -5 -76 -15 -80Z",
+            "-98.75",
+            false,
+        ),
+    ] {
+        def.shapes.last_mut().unwrap().path = source.into();
+        let path = super::geometry::parse_path(source).unwrap();
+        let expected = if opens {
+            super::geometry::parse_path(&format!("M16 {rim}L15 -80C5 -76 -5 -76 -15 -80L-16 {rim}"))
+                .unwrap()
+        } else {
+            path.clone()
+        };
+        let painted = paint_plan(&[Instance::new(&def, scale)], Settings::default()).unwrap();
+        assert!(
+            painted
+                .iter()
+                .any(|p| { p.pass == Pass::Glass && p.path == scale.map(&path) })
+        );
+        assert!(
+            painted
+                .iter()
+                .any(|p| { p.pass == Pass::Outline && p.path == scale.map(&expected) })
+        );
+    }
 }
 
 #[test]

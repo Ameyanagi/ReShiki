@@ -1,6 +1,202 @@
 use super::*;
 
 #[test]
+fn equipment_drafts_keep_assistant_replies_and_defer_automatic_apply() {
+    use crate::app::equipment_authoring;
+    use reshiki::{
+        document::Point,
+        graphics::{Graphic, GraphicKind, GraphicStyle},
+        palette::Color,
+    };
+
+    for automatic in [false, true] {
+        for accept in [false, true] {
+            for replacement in [false, true] {
+                let (mut app, _) = App::new();
+                app.tab.busy = false;
+                let id = app.tab.doc.next_id();
+                app.tab.doc.graphics.push(Graphic::dragged(
+                    id,
+                    GraphicKind::Rectangle,
+                    Point::default(),
+                    Point::new(40., 50.),
+                    GraphicStyle {
+                        fill: Some(Color::Paper),
+                        ..Default::default()
+                    },
+                    Default::default(),
+                    false,
+                ));
+                app.tab.selected = vec![id];
+                app.assistant.tab = Some(app.tab.id);
+                app.assistant.busy = true;
+                app.assistant.preferences.auto_apply = automatic;
+                let (sender, receiver) = tokio::sync::mpsc::channel(1);
+                app.assistant.progress = Some(receiver);
+                let before = app.tab.doc.clone();
+                let revision = app.tab.revision;
+                let _ = app.update(Message::EquipmentAuthoring(
+                    equipment_authoring::Action::Begin,
+                ));
+                assert!(app.tab.equipment_authoring.is_some());
+                for action in [
+                    equipment_authoring::Action::Point(Point::default()),
+                    equipment_authoring::Action::Point(Point::new(40., 0.)),
+                    equipment_authoring::Action::Length("20".into()),
+                    equipment_authoring::Action::Calibrate,
+                ] {
+                    let _ = app.update(Message::EquipmentAuthoring(action));
+                }
+                sender
+                    .try_send(assistant::codex::Progress::Plan("Kept progress".into()))
+                    .unwrap();
+                let selected = app.tab.selected.clone();
+                let equipment_preview = app.display_document().clone();
+                let _ = app.update(Message::Assistant(Action::Poll));
+                assert_eq!(app.assistant.plan, "Kept progress");
+                let mut fragment = Document::default();
+                fragment.add_atom("O", Point::new(200., 0.));
+                let _ = app.update(Message::Assistant(Action::Done {
+                    serial: app.assistant.serial,
+                    epoch: app.tab.file_epoch,
+                    revision,
+                    replace: if replacement { vec![id] } else { vec![] },
+                    result: Box::new(Ok(assistant::review::Outcome {
+                        proposal: Proposal {
+                            explanation: "Kept reply".into(),
+                            ..Default::default()
+                        },
+                        document: fragment,
+                        review: assistant::review::Report {
+                            verified: true,
+                            ..Default::default()
+                        },
+                    })),
+                }));
+                assert!(!app.assistant.busy);
+                assert!(
+                    app.assistant
+                        .messages
+                        .iter()
+                        .any(|m| m.text == "Kept reply")
+                );
+                assert!(app.assistant.draft.is_some());
+                assert_eq!(app.assistant.waiting_for_canvas_edit, automatic);
+                let _ = app.update(Message::Assistant(Action::Poll));
+                let _ = app.update(Message::Assistant(Action::Apply));
+                assert_eq!(app.tab.doc, before);
+                assert_eq!(app.tab.revision, revision);
+                assert_eq!(app.tab.selected, selected);
+                assert_eq!(app.display_document(), &equipment_preview);
+                assert!(!app.tab.history.can_undo());
+                assert!(app.tab.equipment_authoring.is_some());
+
+                let _ = app.update(Message::EquipmentAuthoring(if accept {
+                    equipment_authoring::Action::Accept
+                } else {
+                    equipment_authoring::Action::Discard
+                }));
+                assert!(app.tab.equipment_authoring.is_none(), "{}", app.status);
+                let after_draft = app.tab.doc.clone();
+                let _ = app.update(Message::Assistant(if automatic {
+                    Action::Poll
+                } else {
+                    Action::Apply
+                }));
+                if accept && replacement {
+                    assert!(
+                        app.assistant.draft.is_some(),
+                        "replacement needs review after Accept"
+                    );
+                    assert_eq!(app.tab.doc, after_draft);
+                    continue;
+                }
+                assert!(app.assistant.draft.is_none());
+                assert!(!app.assistant.waiting_for_canvas_edit);
+                assert_eq!(app.tab.doc.atoms.len(), 1);
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.tab.doc, after_draft, "Assistant Apply has its own Undo");
+                if accept {
+                    let _ = app.update(Message::Undo);
+                    assert_eq!(app.tab.doc, before, "Equipment Accept has its own Undo");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn background_equipment_draft_keeps_its_assistant_result_without_touching_front() {
+    use crate::app::equipment_authoring;
+    use reshiki::{
+        document::Point,
+        graphics::{Graphic, GraphicKind, GraphicStyle},
+        palette::Color,
+    };
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let id = app.tab.doc.next_id();
+    app.tab.doc.graphics.push(Graphic::dragged(
+        id,
+        GraphicKind::Rectangle,
+        Point::default(),
+        Point::new(40., 50.),
+        GraphicStyle {
+            fill: Some(Color::Paper),
+            ..Default::default()
+        },
+        Default::default(),
+        false,
+    ));
+    app.tab.selected = vec![id];
+    let owner = app.tab.id;
+    app.assistant.tab = Some(owner);
+    app.assistant.busy = true;
+    app.assistant.preferences.auto_apply = true;
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::EquipmentAuthoring(
+        equipment_authoring::Action::Begin,
+    ));
+    assert!(app.tab.equipment_authoring.is_some());
+    let (epoch, revision) = (app.tab.file_epoch, app.tab.revision);
+    let front = super::super::tabs::tests::Front::new(&mut app);
+    let mut fragment = Document::default();
+    fragment.add_atom("O", Point::default());
+    let _ = app.update(Message::Tab(
+        owner,
+        Box::new(Message::Assistant(Action::Done {
+            serial: app.assistant.serial,
+            epoch,
+            revision,
+            replace: vec![],
+            result: Box::new(Ok(assistant::review::Outcome {
+                proposal: Proposal::default(),
+                document: fragment,
+                review: assistant::review::Report {
+                    verified: true,
+                    ..Default::default()
+                },
+            })),
+        })),
+    ));
+    let _ = app.update(Message::Assistant(Action::Poll));
+    front.assert_unchanged(&app);
+    assert!(!app.assistant.busy);
+    assert!(app.assistant.draft.is_some());
+    assert!(app.assistant.waiting_for_canvas_edit);
+    let owner = app
+        .tabs
+        .background
+        .iter()
+        .find(|tab| tab.id == owner)
+        .unwrap();
+    assert!(owner.equipment_authoring.is_some());
+    assert_eq!(owner.doc, before);
+    assert_eq!(owner.revision, revision);
+    assert!(!owner.history.can_undo());
+}
+
+#[test]
 fn unsent_assistant_input_blocks_restart_until_cleared() {
     let mut state = State::default();
     assert!(!state.has_unfinished_work());

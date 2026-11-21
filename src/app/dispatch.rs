@@ -76,6 +76,9 @@ impl App {
             Message::Mapping(action) => return Some(self.mapping_action(action)),
             Message::Templates(action) => return Some(self.template_message(action)),
             Message::Equipment(action) => return Some(self.equipment_action(action)),
+            Message::EquipmentAuthoring(action) => {
+                return Some(self.equipment_authoring_action(action));
+            }
             Message::Icons(action) => return Some(self.icon_action(action)),
             Message::ResetBondDrawing => self.reset_bond_drawing(),
             Message::FixedLength(on) => self.tab.bond_drawing.fixed_length = on,

@@ -9,10 +9,7 @@ use reshiki::assistant::{self, codex};
 impl App {
     pub(super) fn assistant_poll(&mut self) -> Task<Message> {
         let mut scroll = false;
-        if self.assistant.waiting_for_canvas_edit
-            && self.tab.inline_text.is_none()
-            && self.tab.joining.is_none()
-        {
+        if self.assistant.waiting_for_canvas_edit && !self.tab.drawing_edit_active() {
             self.assistant.waiting_for_canvas_edit = false;
             if !self.assistant.waiting_apply_is_automatic || self.assistant_can_auto_apply() {
                 return self.assistant_action(Action::Apply);

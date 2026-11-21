@@ -145,6 +145,15 @@ pub enum Role {
     Solid,
     /// A stroke only.
     Detail,
+    /// A stroke only, at the ordinary 0.6 pt outline weight (preview format 0).
+    Outline,
+}
+
+impl Role {
+    /// Whether the shape contributes a filled body rather than only a stroke.
+    pub fn filled(self) -> bool {
+        matches!(self, Self::Glass | Self::Solid)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
