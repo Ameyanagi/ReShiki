@@ -390,3 +390,72 @@ async fn native_tlc_hidden_rf_keeps_authored_text_style_and_position_records() {
         );
     }
 }
+
+#[tokio::test]
+async fn native_plate_group_membership_survives_normal_editable_exchange() {
+    let engine = LocalEngine::in_process();
+    let source=String::from_utf8(XML.to_vec()).unwrap().replace("<tlcplate\n","<group id='900'><tlcplate\n")
+        .replace("</tlcplate>","</tlcplate><graphic id='901' GraphicType='Rectangle' BoundingBox='300 300 320 320'/></group>");
+    let doc = formats::read_with_engine(source.into_bytes(), "cdxml", &engine)
+        .await
+        .unwrap();
+    assert_eq!(doc.graphics.len(), 2);
+    assert_eq!(doc.groups.len(), 1);
+    for target in ["cdxml", "cdx"] {
+        let bytes = formats::write_with_engine(doc.clone(), target, &engine)
+            .await
+            .unwrap();
+        let (back, warnings) = formats::read_with_warnings(bytes, target, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{target}: {warnings:?}");
+        assert_eq!(back.graphics.len(), 2);
+        assert_eq!(back.groups.len(), 1);
+        let mut actual = back.groups[0].members.clone();
+        actual.sort_unstable();
+        let mut expected: Vec<_> = back.graphics.iter().map(|g| g.id).collect();
+        expected.sort_unstable();
+        assert_eq!(actual, expected);
+    }
+}
+#[tokio::test]
+async fn hidden_native_plate_uses_the_existing_hidden_artwork_notice() {
+    let engine = LocalEngine::in_process();
+    let source = String::from_utf8(XML.to_vec())
+        .unwrap()
+        .replace("<tlcplate\n", "<tlcplate Visible='no'\n")
+        .replace(
+            "</page>",
+            "<graphic id='900' GraphicType='Rectangle' BoundingBox='0 0 10 10'/></page>",
+        );
+    let (doc, warnings) = formats::read_with_warnings(source.into_bytes(), "cdxml", &engine)
+        .await
+        .unwrap();
+    assert_eq!(doc.graphics.len(), 1);
+    assert_eq!(doc.graphics[0].kind, GraphicKind::Rectangle);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("Hidden drawing objects")),
+        "{warnings:?}"
+    );
+}
+#[tokio::test]
+async fn native_plate_can_be_an_external_reaction_condition_drawing_with_existing_metadata_notice()
+{
+    let engine = LocalEngine::in_process();
+    let source = String::from_utf8(XML.to_vec()).unwrap().replace(
+        "</page>",
+        "<scheme id='900'><step id='901' ReactionStepObjectsAboveArrow='6'/></scheme></page>",
+    );
+    let (doc, warnings) = formats::read_with_warnings(source.into_bytes(), "cdxml", &engine)
+        .await
+        .unwrap();
+    assert_plate(&doc);
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("external reaction roles")),
+        "{warnings:?}"
+    );
+}
