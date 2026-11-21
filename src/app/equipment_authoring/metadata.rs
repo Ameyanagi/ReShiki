@@ -1,6 +1,6 @@
 //! Names and catalogue metadata in the detached equipment draft.
 use super::*;
-use iced::Length;
+use iced::{Length, widget::column};
 use reshiki::equipment::format::{Category, Credits, Definition};
 use std::collections::BTreeMap;
 
