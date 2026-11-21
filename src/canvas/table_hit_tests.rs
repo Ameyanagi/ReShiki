@@ -91,6 +91,64 @@ fn cell_clipping_is_shared_by_pointer_selection_atom_snapping_and_bond_hits() {
 }
 
 #[test]
+fn table_clips_apply_to_cached_cycle_hits_without_losing_effective_outline_bounds() {
+    use reshiki::cycles::{self, Cycle, Shape};
+    let (mut doc, _, _, _) = drawing();
+    let id = doc.next_id();
+    let mut cycle = Graphic::dragged(
+        id,
+        GraphicKind::Ellipse,
+        World::new(20., 40.),
+        World::new(160., 140.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    cycle.axis_x = World::new(140., 30.);
+    cycle.axis_y = World::new(-20., 100.);
+    cycle.layer = 0;
+    let mut baseline = cycle.clone();
+    baseline.kind = GraphicKind::Rectangle;
+    let stored_ellipse = cycle.shape_bounds();
+    cycle.cycle = Some(Box::new(Cycle {
+        shape: Shape::Rectangle,
+        ..Default::default()
+    }));
+    assert_eq!(cycle.shape_bounds(), baseline.shape_bounds());
+    assert_ne!(cycle.shape_bounds(), stored_ellipse);
+    doc.graphics[0].table.as_mut().unwrap().cells[0]
+        .members
+        .push(id);
+    doc.graphics.push(cycle);
+    doc.validate().unwrap();
+    let original = doc.clone();
+    let mut cache = cache::SceneCache::default();
+    for _ in 0..3 {
+        for (p, visible) in [(World::new(20., 40.), true), (World::new(160., 70.), false)] {
+            let g = doc.graphics.iter().find(|g| g.id == id).unwrap();
+            assert!(
+                cycles::hit(&doc, g, p, 1.),
+                "both corners belong to the native rectangle"
+            );
+            let direct = hit::hit_selection(&doc, p, 1.);
+            let retained = hit::hit_selection_cached(&doc, p, 1., &mut cache);
+            assert_eq!(direct, retained);
+            assert_eq!(retained.contains(&id), visible);
+        }
+    }
+    assert_eq!(
+        cache.cycle_hit_layouts, 1,
+        "one native layout serves repeated hover queries"
+    );
+    assert_eq!(doc, original, "bounds and hit caching stay read-only");
+    // A changed cell frame must gate a previously warmed cycle hit as well.
+    doc.graphics[0].origin.x += 200.;
+    let p = World::new(20., 40.);
+    assert!(!hit::hit_selection(&doc, p, 1.).contains(&id));
+    assert!(!hit::hit_selection_cached(&doc, p, 1., &mut cache).contains(&id));
+}
+
+#[test]
 fn mechanism_target_picking_respects_the_same_cell_clip_for_atoms_marks_and_bonds() {
     use reshiki::arrow_anchors::{self, Pick};
     let (mut doc, visible, hidden, _) = drawing();

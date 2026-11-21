@@ -1,5 +1,6 @@
 //! Pointer and keyboard events on the molecule canvas.
 
+pub(super) mod equipment_trial;
 mod motion;
 mod press;
 mod release;
@@ -61,6 +62,9 @@ impl MoleculeCanvas<'_> {
             .or(cursor.position())
             .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
         let inside = point.is_some_and(|p| Rectangle::with_size(bounds.size()).contains(p));
+        if let Some(action) = self.equipment_trial_event(state, event, bounds, point, inside) {
+            return Some(action);
+        }
         if self.equipment_authoring.is_some() && !matches!(state.gesture, Some(Gesture::Pan { .. }))
         {
             state.end_gesture();
@@ -254,11 +258,11 @@ impl MoleculeCanvas<'_> {
                 // Its own statement, so the scene borrow ends before the hit test takes it again.
                 let plan = state.scene.borrow_mut().stretch(self.doc, fixed, moving);
                 if let Some(plan) = plan
-                    && crate::canvas::hit::hit_selection_with_orbital(
+                    && crate::canvas::hit::hit_selection_cached(
                         self.doc,
                         self.camera.world(p, bounds),
                         self.camera.world_len(PICK_RADIUS_PX),
-                        state.scene.borrow_mut().foreground_orbital(self.doc),
+                        &mut state.scene.borrow_mut(),
                     )
                     .iter()
                     .any(|id| plan.ids.contains(id))

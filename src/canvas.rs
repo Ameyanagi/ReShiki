@@ -302,6 +302,14 @@ pub enum Edit {
     Click(World),
     /// A raw measurement or rim click owned by the detached equipment draft.
     EquipmentAuthoringPoint(World),
+    EquipmentAuthoringTestStart(u64),
+    EquipmentAuthoringTestCancel(u64),
+    EquipmentAuthoringTest {
+        at: World,
+        epoch: u64,
+        reach: f32,
+        finish: bool,
+    },
     /// Legacy/programmatic camera edits use world coordinates.
     Pan(f32, f32),
     Zoom(f32, World),
@@ -419,6 +427,7 @@ pub struct State {
     /// this, not `cursor`, says whether a move off the canvas must clear it.
     hovering: bool,
     touch: input::touch::Touch,
+    equipment_trial: Option<input::equipment_trial::Capture>,
     /// Only caption transitions during a bond drag need an application hint.
     bond_text_hover: Option<u64>,
     last_click: Option<(iced::time::Instant, u64)>,
@@ -438,6 +447,7 @@ pub(crate) fn reset_menu_pointer(tree: &mut iced::advanced::widget::Tree) {
     {
         state.end_gesture();
         state.touch = Default::default();
+        state.equipment_trial = None;
         state.cursor = None;
         state.last_click = None;
         state.last_transform_click = None;
@@ -662,11 +672,13 @@ pub struct PreviewStyles<'a> {
     pub bracket_sides: BracketSides,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub(crate) struct EquipmentAuthoring<'a> {
     pub points: &'a [World],
     pub measuring: bool,
     pub direction: Option<[World; 2]>,
+    pub trial: Option<(u64, World, u64)>,
+    pub snap: Option<&'a reshiki::equipment::solve::Snap>,
 }
 
 pub struct MoleculeCanvas<'a> {

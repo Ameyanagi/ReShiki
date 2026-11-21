@@ -1,7 +1,7 @@
 //! Editing aids drawn over the document: handles, notices and badges, gesture outlines and hover, the erase cursor, the selection box and tilt bounds.
 
 use crate::canvas::hit::{
-    bond_target_with, bond_target_with_text, bond_text_at, hit_selection_with_orbital,
+    bond_target_with, bond_target_with_text, bond_text_at, hit_selection_cached,
 };
 use crate::canvas::overlay::{ACCENT, ACCENT_STRONG, ACCENT_TINT};
 use crate::canvas::{
@@ -957,11 +957,11 @@ impl MoleculeCanvas<'_> {
                         }
                         return ControlFlow::Continue(());
                     }
-                    let mut hit = hit_selection_with_orbital(
+                    let mut hit = hit_selection_cached(
                         self.doc,
                         point,
                         self.camera.world_len(pick::PICK_RADIUS_PX),
-                        state.scene.borrow_mut().foreground_orbital(self.doc),
+                        &mut state.scene.borrow_mut(),
                     );
                     if self.tool.selects() && hit.is_empty() {
                         hit = state

@@ -217,8 +217,12 @@ the gutters. Moving one item by itself leaves it where you put it.
 2. Select them and choose **Make catalytic cycle** from the canvas menu or
    the command palette. The drawing shows them on a circle through them,
    ordered clockwise from the top, with an arc arrow from each to the next,
-   and **Properties → Make catalytic cycle** lists the order. Choose
-   **Reverse order** to run it the other way, then **Make catalytic cycle**
+   and **Properties → Make catalytic cycle** lists the order. Choose **Circle**,
+   **Ellipse**, **Rounded rectangle** or **Rectangle** under **Shape**.
+   Set **Radius (pt)** for a circle or **Width (pt)** and **Height (pt)** for
+   the other shapes. **Rounded rectangle** also has **Corner (pt)**; leave
+   it empty for automatic rounding. Choose **Reverse order** to run it the
+   other way, then **Make catalytic cycle**
    or Enter to make it, or **Discard** or Esc to leave the drawing as it was.
    To start from an empty circle instead, choose **Catalytic cycle** in the
    command palette's insert commands.
@@ -241,11 +245,15 @@ the gutters. Moving one item by itself leaves it where you put it.
 5. In **Properties → Catalytic cycle**, choose **Clockwise** or
    **Counterclockwise**. Choose **Tidy cycle** (also in the canvas menu and
    as **Tidy catalytic cycle** in the command palette) to space the
-   intermediates evenly around the circle and line up each step's reagents
+   intermediates evenly around the outline and line up each step's reagents
    and products beside its arc. Review the drawing, then choose **Apply**
    (Enter) or **Discard** (Esc). Applying makes one Undo step.
-   Open **Layout** to set **Radius (pt)**, **Gap (pt)**
-   and **Center** text. Each row shows the step name or the intermediates'
+   Open **Layout** to change **Shape**, its dimensions, **Gap (pt)**
+   and **Center** text. Changing the shape keeps the parts where they are;
+   **Tidy cycle** previews their alignment on the new outline. Width and height
+   follow the shape's own directions, including after rotation, and move the
+   parts without changing their bond lengths or text sizes.
+   Each row shows the step name or the intermediates'
    names, formulas or text. Choose a step to see its reagents under **In:**
    and its products under **Out:**. Set the step's **Name**, turn on
    **Reversible** or **Hide arrow**, or adjust **Bow**, **Space in** and
@@ -497,6 +505,13 @@ The first joint can set the piece's scale without a separate length
 measurement; later joints must fit the established scale. A standard joint
 must meet a compatible filled glass neck.
 
+Choose **Test snapping…** after adding a joint. Drag the gray test piece
+toward the draft's joint or another piece in the drawing. The usual joint
+feedback shows a match, an adapter or a mismatch. Choose another test piece
+or turn it with **Turn test piece**. **Finish testing** returns to measuring
+and joint editing. Test pieces, trial seats and adapters are discarded;
+**Accept** keeps the authored piece at its original position.
+
 Authoring makes fixed pieces with optional standard ground-glass joints.
 It does not yet assign materials or paint layers, create holds, liquids or
 moving parts, or edit an existing definition. Pictures, text and chemical objects
@@ -612,7 +627,8 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   ChemDraw files.
 - A panel's title uses the drawing's font and size in bold. Title text is
   edited in **Properties**, not on the canvas.
-- A catalytic cycle is a circle. ChemDraw has no cycle object: CDXML and CDX
+- Adding parts to noncircular cycles still uses the circular drop targets.
+- ChemDraw has no cycle object: CDXML and CDX
   get its arrows, text and reaction steps. Only ReShiki reads the cycle back,
   and only from a file nothing else has changed.
 - A step's tools need a structure as each of its two intermediates. A step
@@ -675,7 +691,8 @@ written. ReShiki reads that group back as the one panel; ChemDraw ignores the
 attribute, and CDX has no place for it.
 
 A catalytic cycle is an ellipse graphic with a `cycle` entry
-(`crates/model/src/cycles.rs`): direction, gap, center text, intermediates
+(`crates/model/src/cycles.rs`): explicit outline choice, direction, gap,
+center text, intermediates
 in order (each the atom IDs of one molecule or one text's ID) and one step
 per intermediate with its name, reversible and hidden flags, bow, extra space
 and reagent and product parts. Arcs, side arrows and names are computed on

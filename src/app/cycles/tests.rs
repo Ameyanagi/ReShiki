@@ -2,6 +2,9 @@ use super::*;
 use crate::canvas::Edit;
 use reshiki::document::{Annotation, Document, Point};
 
+#[path = "shape_tests.rs"]
+mod shapes;
+
 fn text(app: &mut App, x: f32, y: f32, value: &str) -> u64 {
     let id = app.tab.doc.next_id();
     let style = app.tab.doc.drawing_style.text_style();
@@ -327,6 +330,75 @@ fn actual_suzuki_tidy_preview_applies_as_one_undo_step() {
     assert!(!app.error, "{}", app.status);
     assert!(app.tab.cycle_inputs.proposal.is_none());
     assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+}
+
+#[test]
+fn noncircle_suzuki_tidy_preview_discard_apply_and_undo_keep_the_shape_and_roles() {
+    for shape in [
+        reshiki::cycles::Shape::Ellipse,
+        reshiki::cycles::Shape::RoundedRectangle,
+        reshiki::cycles::Shape::Rectangle,
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.doc = Document::from_json(include_bytes!(
+            "../../../tests/fixtures/cycles/tidy-before.rsk"
+        ))
+        .unwrap();
+        let g = app
+            .tab
+            .doc
+            .graphics
+            .iter_mut()
+            .find(|g| g.id == 191)
+            .unwrap();
+        let center = g.cycle_circle().0;
+        g.cycle.as_mut().unwrap().shape = shape;
+        g.axis_x.x *= 1.3;
+        g.axis_x.y *= 1.3;
+        g.axis_y.x *= 0.8;
+        g.axis_y.y *= 0.8;
+        g.origin = center.offset(
+            -(g.axis_x.x + g.axis_y.x) * 0.5,
+            -(g.axis_x.y + g.axis_y.y) * 0.5,
+        );
+        app.tab.selected = vec![191];
+        let before = app.tab.doc.clone();
+        let roles = cycle(&app).1;
+        let frames = app.tab.history.undo_frames().len();
+        let _ = app.update(Message::Cycle(Action::Tidy));
+        assert!(!app.error, "{shape:?}: {}", app.status);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.history.undo_frames().len(), frames);
+        let preview = app.display_document().clone();
+        assert_ne!(preview, before);
+        tidy_qa(&format!("noncircle-suzuki-{shape:?}"), &before, &preview);
+        let drawing = reshiki::cycles::drawn(
+            &preview,
+            preview.graphics.iter().find(|g| g.id == 191).unwrap(),
+        );
+        assert!(drawing.arrows.iter().all(|arrow| arrow.arc.is_none()));
+        let _ = app.update(Message::Escape);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.history.undo_frames().len(), frames);
+        let _ = app.update(Message::Cycle(Action::Tidy));
+        let _ = app.update(Message::ContextKey("Enter".into()));
+        assert!(!app.error, "{shape:?}: {}", app.status);
+        assert_eq!(app.tab.doc, preview);
+        assert_eq!(cycle(&app).1, roles);
+        assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+        let saved = app.tab.doc.file_json().unwrap();
+        assert_eq!(
+            Document::from_json(&saved).unwrap().file_json().unwrap(),
+            saved
+        );
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, preview);
+        let _ = app.update(Message::Cycle(Action::Tidy));
+        assert!(app.tab.cycle_inputs.proposal.is_none());
+        assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+    }
 }
 
 #[test]

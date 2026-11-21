@@ -5,7 +5,10 @@ use super::workspace::{
 use super::{App, Message};
 use iced::widget::{button, checkbox, column, container, row, text};
 use iced::{Alignment, Element, Length, Padding, Task};
-use reshiki::cycles::{Cycle, Role, steps};
+use reshiki::cycles::{Cycle, Role, Shape, steps};
+
+mod layout;
+use layout::MakeLayout;
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -22,6 +25,7 @@ pub enum Action {
     /// Select every intermediate, reagent and product of the selected cycle.
     SelectStructures,
     Clockwise(bool),
+    Shape(Shape),
     /// Preview even spacing of the selected cycle and alignment of its side parts.
     Tidy,
     Edit(Field, String),
@@ -45,6 +49,9 @@ pub enum Action {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {
     Radius,
+    Width,
+    Height,
+    Corner,
     Gap,
     Label,
     Name,
@@ -70,6 +77,7 @@ enum ProposalKind {
         /// What it is made of, again on Apply from the drawing as it is then.
         selected: Vec<u64>,
         reversed: bool,
+        layout: MakeLayout,
     },
     Tidy {
         source: ProposalSource,
@@ -101,6 +109,9 @@ pub(super) struct Inputs {
     /// Part names at a drawing revision: a formula costs a chemistry pass.
     names: std::cell::RefCell<PartNames>,
     radius: String,
+    width: String,
+    height: String,
+    corner: String,
     gap: String,
     label: String,
     name: String,
@@ -112,12 +123,30 @@ impl Inputs {
     fn get_mut(&mut self, field: Field) -> &mut String {
         match field {
             Field::Radius => &mut self.radius,
+            Field::Width => &mut self.width,
+            Field::Height => &mut self.height,
+            Field::Corner => &mut self.corner,
             Field::Gap => &mut self.gap,
             Field::Label => &mut self.label,
             Field::Name => &mut self.name,
             Field::Bow => &mut self.bow,
             Field::Lead => &mut self.lead,
             Field::Trail => &mut self.trail,
+        }
+    }
+
+    fn get(&self, field: Field) -> &str {
+        match field {
+            Field::Radius => &self.radius,
+            Field::Width => &self.width,
+            Field::Height => &self.height,
+            Field::Corner => &self.corner,
+            Field::Gap => &self.gap,
+            Field::Label => &self.label,
+            Field::Name => &self.name,
+            Field::Bow => &self.bow,
+            Field::Lead => &self.lead,
+            Field::Trail => &self.trail,
         }
     }
 }
@@ -180,15 +209,46 @@ fn proposed(
     doc: &reshiki::document::Document,
     selected: &[u64],
     reversed: bool,
+    layout: MakeLayout,
+    two_decimal_weight: bool,
 ) -> Result<(reshiki::document::Document, u64, bool), String> {
     let mut made = doc.clone();
-    let (cycle, left) = reshiki::cycles::make(&mut made, selected)?;
-    if reversed {
-        reverse(&mut made, cycle);
-    }
-    reshiki::atom_labels::refresh::refresh_edited(doc, &mut made);
-    let _ = reshiki::transaction::reconcile(&mut made, doc.clone());
+    let (cycle, left) = make_configured(&mut made, selected, reversed, layout)?;
+    reconcile_preview(&mut made, doc, two_decimal_weight)?;
     Ok((made, cycle, left))
+}
+
+/// Match the label and caption policy of committing a drawing edit, without
+/// adding history. Both cycle reviews must show exactly what Apply keeps.
+fn reconcile_preview(
+    doc: &mut reshiki::document::Document,
+    before: &reshiki::document::Document,
+    two_decimal_weight: bool,
+) -> Result<(), String> {
+    for link in &mut doc.property_captions {
+        link.two_decimal_weight = two_decimal_weight;
+    }
+    reshiki::atom_labels::refresh::refresh_edited(before, doc);
+    let reconciled = reshiki::transaction::reconcile(doc, before.clone())
+        .map_err(|rejection| rejection.message().to_owned())?;
+    if reconciled.outcome(doc).chemistry_changed {
+        reshiki::atom_labels::clear_computed(doc);
+    }
+    Ok(())
+}
+
+fn make_configured(
+    doc: &mut reshiki::document::Document,
+    selected: &[u64],
+    reversed: bool,
+    layout: MakeLayout,
+) -> Result<(u64, bool), String> {
+    let (cycle, left) = reshiki::cycles::make(doc, selected)?;
+    if reversed {
+        reverse(doc, cycle);
+    }
+    layout.apply(doc, cycle)?;
+    Ok((cycle, left))
 }
 
 /// Run cycle `id` the other way.
@@ -242,16 +302,32 @@ impl App {
                         left,
                         selected,
                         reversed,
+                        layout,
                     } = &mut p.kind
                     {
-                        *reversed = !*reversed;
-                        if let Ok((doc, cycle, leaves)) =
-                            proposed(&self.tab.doc, selected, *reversed)
-                        {
-                            (p.doc, p.cycle, *left) = (doc, cycle, leaves);
+                        match proposed(
+                            &self.tab.doc,
+                            selected,
+                            !*reversed,
+                            *layout,
+                            self.appearance.two_decimal_weight,
+                        ) {
+                            Ok((doc, cycle, leaves)) => {
+                                (p.doc, p.cycle, *left) = (doc, cycle, leaves);
+                                *reversed = !*reversed;
+                                self.error = false;
+                                self.status =
+                                    "Review the catalytic cycle · Enter applies · Esc discards"
+                                        .into();
+                            }
+                            Err(error) => {
+                                self.error = true;
+                                self.status = error;
+                            }
                         }
                     }
                     self.tab.cycle_inputs.proposal = Some(p);
+                    self.sync_cycle_proposal();
                 }
             }
             Action::Insert => {
@@ -266,7 +342,7 @@ impl App {
                 self.changed(before);
                 self.set_selection(vec![id]);
                 self.tool = crate::canvas::Tool::Select;
-                self.status = "Drag structures or text onto the circle to add them".into();
+                self.status = "Choose a shape in Layout or add structures and text".into();
             }
             Action::Remove => {
                 let before = self.tab.doc.clone();
@@ -298,6 +374,7 @@ impl App {
                     self.edit_cycle(reshiki::cycles::reverse);
                 }
             }
+            Action::Shape(shape) => self.change_cycle_shape(shape),
             Action::Tidy => return self.propose_cycle_tidy(),
             Action::Edit(field, value) => *self.tab.cycle_inputs.get_mut(field) = value,
             Action::Apply(field) => self.apply_cycle_field(field),
@@ -422,7 +499,13 @@ impl App {
             return Task::none();
         }
         let selected = self.tab.selected.clone();
-        match proposed(&self.tab.doc, &selected, false) {
+        match proposed(
+            &self.tab.doc,
+            &selected,
+            false,
+            MakeLayout::default(),
+            self.appearance.two_decimal_weight,
+        ) {
             Ok((doc, cycle, left)) => {
                 self.tab.cycle_inputs.proposal = Some(Box::new(Proposal {
                     doc,
@@ -431,10 +514,12 @@ impl App {
                         left,
                         selected,
                         reversed: false,
+                        layout: MakeLayout::default(),
                     },
                 }));
                 self.inspector_open = true;
                 self.inspector_tab = super::InspectorTab::Properties;
+                self.sync_cycle_proposal();
                 self.error = false;
                 self.status = "Review the catalytic cycle · Enter applies · Esc discards".into();
             }
@@ -485,21 +570,12 @@ impl App {
         let mut doc = self.tab.doc.clone();
         self.error = false;
         if reshiki::cycles::tidy(&mut doc, cycle) {
-            for link in &mut doc.property_captions {
-                link.two_decimal_weight = self.appearance.two_decimal_weight;
-            }
-            reshiki::atom_labels::refresh::refresh_edited(&self.tab.doc, &mut doc);
-            let reconciled = match reshiki::transaction::reconcile(&mut doc, self.tab.doc.clone()) {
-                Ok(reconciled) => reconciled,
-                Err(rejection) => {
-                    self.error = true;
-                    self.status = rejection.message().into();
-                    return super::focus_drawing();
-                }
-            };
-            // Match Apply's computed-label invalidation without recording history.
-            if reconciled.outcome(&doc).chemistry_changed {
-                reshiki::atom_labels::clear_computed(&mut doc);
+            if let Err(error) =
+                reconcile_preview(&mut doc, &self.tab.doc, self.appearance.two_decimal_weight)
+            {
+                self.error = true;
+                self.status = error;
+                return super::focus_drawing();
             }
             self.tab.cycle_inputs.proposal = Some(Box::new(Proposal {
                 doc,
@@ -535,6 +611,7 @@ impl App {
             left: _,
             selected,
             reversed,
+            layout,
         } = proposal.kind
         else {
             self.error = false;
@@ -548,7 +625,7 @@ impl App {
             }
             return super::focus_drawing();
         };
-        let (cycle, left) = match reshiki::cycles::make(&mut self.tab.doc, &selected) {
+        let (cycle, left) = match make_configured(&mut self.tab.doc, &selected, reversed, layout) {
             Ok(made) => made,
             Err(error) => {
                 self.tab.doc = before;
@@ -557,9 +634,6 @@ impl App {
                 return super::focus_drawing();
             }
         };
-        if reversed {
-            reverse(&mut self.tab.doc, cycle);
-        }
         let members = self
             .tab
             .doc
@@ -613,6 +687,19 @@ impl App {
                 | Message::Saved(..)
         ) || matches!(message, Message::Cycle(Action::MakeReverse))
             && matches!(proposal.kind, ProposalKind::Make { .. })
+            || matches!(
+                message,
+                Message::Cycle(
+                    Action::Shape(_)
+                        | Action::Edit(
+                            Field::Radius | Field::Width | Field::Height | Field::Corner,
+                            _
+                        )
+                        | Action::Apply(
+                            Field::Radius | Field::Width | Field::Height | Field::Corner
+                        )
+                )
+            ) && matches!(proposal.kind, ProposalKind::Make { .. })
             || super::gates::preview_passthrough(message)
             || self.answers_save_dialog(message);
         if allowed {
@@ -670,6 +757,7 @@ impl App {
         };
         let mut body = column![
             section("Make catalytic cycle"),
+            layout::controls(g, &self.tab.cycle_inputs),
             text(way).size(11).style(muted_text),
         ]
         .spacing(6);
@@ -707,7 +795,7 @@ impl App {
                     .align_y(Alignment::Center),
                 )
                 .push(
-                    text("Enter makes it · Esc discards")
+                    text("Enter from the drawing makes it · Esc discards")
                         .size(11)
                         .style(muted_text),
                 )
@@ -776,6 +864,13 @@ impl App {
             app.error = true;
             app.status = message.into();
         };
+        if matches!(
+            field,
+            Field::Radius | Field::Width | Field::Height | Field::Corner
+        ) && self.apply_cycle_layout_field(field, &value, number)
+        {
+            return;
+        }
         match field {
             Field::Label => self.edit_cycle(|c| c.label = value),
             Field::Name => self.edit_step(|s| s.name = value),
@@ -791,6 +886,7 @@ impl App {
                 }
                 _ => invalid(self, "Enter a radius of 10–2000 pt"),
             },
+            Field::Width | Field::Height | Field::Corner => {}
             Field::Gap => match number {
                 Some(pt) if (0. ..=72.).contains(&pt) => self.edit_cycle(|c| c.gap_pt = pt),
                 _ => invalid(self, "Enter a gap of 0–72 pt"),
@@ -826,6 +922,10 @@ impl App {
         let inputs = &mut self.tab.cycle_inputs;
         inputs.step = inputs.step.min(cycle.steps.len().saturating_sub(1));
         inputs.radius = points(radius, doc);
+        let [width, height] = layout::dimensions(g);
+        inputs.width = points(width, doc);
+        inputs.height = points(height, doc);
+        inputs.corner = g.style.corner_pt.map(|v| v.to_string()).unwrap_or_default();
         inputs.gap = format!("{}", cycle.gap_pt);
         inputs.label = cycle.label.clone();
         let step = cycle.steps.get(inputs.step).cloned().unwrap_or_default();
@@ -907,7 +1007,8 @@ impl App {
     /// Properties of the selected cycle.
     pub(super) fn cycle_card(&self) -> Option<Element<'_, Message>> {
         let (_, cycle) = self.selected_cycle()?;
-        let counterclockwise = self.selected_cycle_graphic()?.cycle_counterclockwise();
+        let graphic = self.selected_cycle_graphic()?;
+        let counterclockwise = graphic.cycle_counterclockwise();
         let inputs = &self.tab.cycle_inputs;
         let send = |action| Message::Cycle(action);
         let toggle = |label, active: bool, action| {
@@ -918,15 +1019,7 @@ impl App {
                 .on_press(send(action))
         };
         let input = |id: &'static str, name: &'static str, field: Field, width: f32| {
-            let value = match field {
-                Field::Radius => &inputs.radius,
-                Field::Gap => &inputs.gap,
-                Field::Label => &inputs.label,
-                Field::Name => &inputs.name,
-                Field::Bow => &inputs.bow,
-                Field::Lead => &inputs.lead,
-                Field::Trail => &inputs.trail,
-            };
+            let value = inputs.get(field);
             reshiki::accessibility::text_input(id, name, "", value)
                 .style(crate::appearance::input_style)
                 .on_input(move |v| send(Action::Edit(field, v)))
@@ -944,22 +1037,17 @@ impl App {
         .spacing(5);
         if inputs.layout_open {
             layout = layout
+                .push(layout::controls(graphic, inputs))
                 .push(
-                    row![
-                        labelled(
-                            "Radius (pt)",
-                            input("cycle-radius", "Cycle radius (pt)", Field::Radius, 52.)
-                        ),
-                        labelled(
-                            "Gap (pt)",
-                            input(
-                                "cycle-gap",
-                                "Gap around intermediates (pt)",
-                                Field::Gap,
-                                40.
-                            )
-                        ),
-                    ]
+                    row![labelled(
+                        "Gap (pt)",
+                        input(
+                            "cycle-gap",
+                            "Gap around intermediates (pt)",
+                            Field::Gap,
+                            40.
+                        )
+                    ),]
                     .spacing(10),
                 )
                 .push(labelled(
@@ -1054,7 +1142,7 @@ impl App {
             rows = rows.push(entry);
         }
         let hint = if cycle.steps.is_empty() {
-            "Drag a structure or text onto the circle to add it"
+            "Drag a structure or text onto the cycle to add it"
         } else {
             "Drop a structure on an arc to add a step · Click a part twice to move it alone"
         };

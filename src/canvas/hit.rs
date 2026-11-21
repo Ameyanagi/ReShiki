@@ -19,6 +19,7 @@ pub(super) fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
     hit_selection_with_object(doc, p, r, || hit_object(doc, p, r))
 }
 
+#[cfg(test)]
 pub(super) fn hit_selection_with_orbital(
     doc: &Document,
     p: World,
@@ -27,6 +28,21 @@ pub(super) fn hit_selection_with_orbital(
 ) -> Vec<u64> {
     hit_selection_with_object(doc, p, r, || {
         hit_object_with_orbital(doc, p, r, foreground_orbital)
+    })
+}
+
+/// Retained hover geometry uses the same drawing snapshot as the canvas scene.
+pub(super) fn hit_selection_cached(
+    doc: &Document,
+    p: World,
+    r: f32,
+    cache: &mut super::cache::SceneCache,
+) -> Vec<u64> {
+    let foreground_orbital = cache.foreground_orbital(doc);
+    hit_selection_with_object(doc, p, r, || {
+        hit_object_with_cycles(doc, p, r, foreground_orbital, |graphic| {
+            cache.cycle_hit(doc, graphic, p, r)
+        })
     })
 }
 
@@ -216,6 +232,18 @@ fn hit_object_with_orbital(
     r: f32,
     foreground_orbital: bool,
 ) -> Option<u64> {
+    hit_object_with_cycles(doc, p, r, foreground_orbital, |g| {
+        reshiki::cycles::hit(doc, g, p, r)
+    })
+}
+
+fn hit_object_with_cycles(
+    doc: &Document,
+    p: World,
+    r: f32,
+    foreground_orbital: bool,
+    mut cycle_hit: impl FnMut(&reshiki::graphics::Graphic) -> bool,
+) -> Option<u64> {
     let cells = reshiki::scene::table::Layout::new(doc);
     let mark = || {
         doc.atoms
@@ -267,7 +295,7 @@ fn hit_object_with_orbital(
                 .map(|(i, g)| (g.layer, i))
         })
         .max();
-    let graphic = |front| {
+    let mut graphic = |front| {
         doc.graphics
             .iter()
             .enumerate()
@@ -278,7 +306,7 @@ fn hit_object_with_orbital(
                         && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
                     && !label_rank.is_some_and(|rank| (g.layer, *i) <= rank)
                     && if g.cycle.is_some() {
-                        reshiki::cycles::hit(doc, g, p, r)
+                        cycle_hit(g)
                     } else {
                         g.hit_with_text_style(p, r, &doc.drawing_style.text_style())
                             // A piece wins only where it shows above its assembly.
