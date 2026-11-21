@@ -161,7 +161,7 @@ impl App {
         }
         // Text in a shape is centred as it is drawn, also in a save made
         // mid-draft.
-        reshiki::shape_text::reconcile(&mut doc);
+        reshiki::shape_text::reconcile_changes(&mut doc, &self.tab.doc);
         if validate {
             doc.validate()?;
         }

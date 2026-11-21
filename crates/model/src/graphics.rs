@@ -725,7 +725,12 @@ impl Graphic {
     }
     /// Vector extents, excluding an attached superscript.
     pub fn shape_bounds(&self) -> (Point, Point) {
-        let commands: Vec<_> = self.parts().into_iter().flat_map(|p| p.commands).collect();
+        // A cycle keeps Ellipse as its stored host kind. Measure the same
+        // effective perimeter that paints its chosen shape, including the
+        // legacy mean-radius circle, rather than that storage placeholder.
+        let commands = crate::cycles::outline(self)
+            .and_then(|outline| outline.subpath(0., outline.length()))
+            .unwrap_or_else(|| self.parts().into_iter().flat_map(|p| p.commands).collect());
         let mut points = commands
             .iter()
             .flat_map(PathCommand::iter_points)
@@ -907,11 +912,15 @@ impl Graphic {
             panel.validate()?;
         }
         if let Some(cycle) = &self.cycle {
-            let (center, radius) = self.cycle_circle();
-            if self.kind != GraphicKind::Ellipse
-                || !(center.is_finite() && radius.is_finite() && radius > 1e-3)
-            {
-                return Err("A catalytic cycle must be a circle of some size".into());
+            if cycle.shape == crate::cycles::Shape::Circle {
+                let (center, radius) = self.cycle_circle();
+                if self.kind != GraphicKind::Ellipse
+                    || !(center.is_finite() && radius.is_finite() && radius > 1e-3)
+                {
+                    return Err("A catalytic cycle must be a circle of some size".into());
+                }
+            } else if self.kind != GraphicKind::Ellipse || !cycle.shape.valid_frame(self) {
+                return Err("A cycle shape needs a finite frame with two independent axes".into());
             }
             cycle.validate()?;
         }
