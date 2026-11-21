@@ -80,7 +80,10 @@ impl MoleculeCanvas<'_> {
         state: &State,
         bounds: Rectangle,
     ) {
-        if self.equipment_authoring.is_some() {
+        if let Some(context) = self.equipment_authoring {
+            if let Some(snap) = context.snap {
+                draft.seat_hint = Some(super::SeatHint::new(self.doc, snap));
+            }
             return;
         }
         let Draft {

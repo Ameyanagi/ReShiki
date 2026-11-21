@@ -69,6 +69,7 @@ explains how the crates and modules fit together.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
 - `src/app/equipment_authoring.rs`: A detached equipment draft, measured and reviewed on the ordinary canvas.
+- `src/app/equipment_authoring/trial.rs`: Disposable pieces for testing the draft with the ordinary seating solver.
 - `src/app/event_slot.rs`: Native event receivers are installed before their subscription takes ownership.
 - `src/app/figure_export.rs`: Figure export preserves drawable content independently of molecular validation.
 - `src/app/figure_panels.rs`: Figure panels (Wrap in panel, titles, dividers) and lasting row, column and grid layouts.
@@ -199,6 +200,7 @@ explains how the crates and modules fit together.
 - `src/canvas/guides.rs`: Canvas-only measuring aids; coordinates share the drawing/export scale.
 - `src/canvas/hit.rs`: Hit testing
 - `src/canvas/input.rs`: Pointer and keyboard events on the molecule canvas.
+- `src/canvas/input/equipment_trial.rs`: Pointer ownership for the disposable test piece, separate from drawing gestures.
 - `src/canvas/input/motion.rs`: Cursor motion
 - `src/canvas/input/press.rs`: Mouse presses on the paper
 - `src/canvas/input/release.rs`: Pointer releases
