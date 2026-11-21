@@ -4,6 +4,8 @@ use reshiki::graphics::{Graphic, GraphicKind, GraphicStyle};
 #[path = "trial_tests.rs"]
 mod snap_preview;
 
+#[path = "shape_accessibility_tests.rs"]
+mod shape_accessibility;
 #[path = "shape_tests.rs"]
 mod shape_authoring;
 

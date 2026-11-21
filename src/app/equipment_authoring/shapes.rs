@@ -50,6 +50,21 @@ const ROLES: [Named<Role>; 4] = [
 ];
 
 impl State {
+    pub(super) fn shape_control_id(&self, field: &str) -> String {
+        format!(
+            "equipment-shape-{}-{}-{field}",
+            self.identity, self.selected_shape
+        )
+    }
+
+    fn shape_control_message(&self, action: Action) -> Message {
+        Message::EquipmentAuthoring(Action::ShapeControl {
+            draft: self.identity.clone(),
+            shape: self.selected_shape,
+            action: Box::new(action),
+        })
+    }
+
     pub(super) fn refresh_shape(&mut self) {
         self.shape_outline = self
             .current
@@ -103,12 +118,14 @@ impl State {
         };
         let mut body = column![
             section("Shapes"),
-            crate::appearance::pick_list(
+            picker(
+                self,
+                "select",
+                "Shape",
                 (0..shapes.len()).map(Choice).collect::<Vec<_>>(),
                 Some(Choice(self.selected_shape)),
-                |choice| Message::EquipmentAuthoring(Action::SelectShape(choice)),
-            )
-            .text_size(12),
+                Action::SelectShape,
+            ),
         ]
         .spacing(7);
         if self.current.joint.is_some() {
@@ -118,23 +135,23 @@ impl State {
         }
         body = body
             .push(text("Layer").size(12))
-            .push(
-                crate::appearance::pick_list(
-                    LAYERS.as_slice(),
-                    LAYERS.iter().find(|v| v.0 == shape.layer).copied(),
-                    |value| Message::EquipmentAuthoring(Action::ShapeLayer(value.0)),
-                )
-                .text_size(12),
-            )
+            .push(picker(
+                self,
+                "layer",
+                "Layer",
+                LAYERS.to_vec(),
+                LAYERS.iter().find(|v| v.0 == shape.layer).copied(),
+                |value| Action::ShapeLayer(value.0),
+            ))
             .push(text("Material").size(12))
-            .push(
-                crate::appearance::pick_list(
-                    MATERIALS.as_slice(),
-                    MATERIALS.iter().find(|v| v.0 == shape.material).copied(),
-                    |value| Message::EquipmentAuthoring(Action::ShapeMaterial(value.0)),
-                )
-                .text_size(12),
-            );
+            .push(picker(
+                self,
+                "material",
+                "Material",
+                MATERIALS.to_vec(),
+                MATERIALS.iter().find(|v| v.0 == shape.material).copied(),
+                |value| Action::ShapeMaterial(value.0),
+            ));
         let closed = closed_shape(shape).unwrap_or(false);
         let roles: Vec<_> = ROLES
             .into_iter()
@@ -145,14 +162,14 @@ impl State {
             .collect();
         body = body
             .push(text("Draw as").size(12))
-            .push(
-                crate::appearance::pick_list(
-                    roles,
-                    ROLES.iter().find(|v| v.0 == shape.role).copied(),
-                    |value| Message::EquipmentAuthoring(Action::ShapeRole(value.0)),
-                )
-                .text_size(12),
-            )
+            .push(picker(
+                self,
+                "role",
+                "Draw as",
+                roles,
+                ROLES.iter().find(|v| v.0 == shape.role).copied(),
+                |value| Action::ShapeRole(value.0),
+            ))
             .push(
                 text(if closed {
                     "Joined glass merges Body outlines. Solid keeps its own outline."
@@ -166,4 +183,27 @@ impl State {
         }
         body.into()
     }
+}
+
+fn picker<'a, T: ToString + PartialEq + Clone + 'a>(
+    state: &'a State,
+    field: &str,
+    name: &str,
+    options: Vec<T>,
+    selected: Option<T>,
+    action: impl Fn(T) -> Action + Copy + 'a,
+) -> Element<'a, Message> {
+    let message = move |value| state.shape_control_message(action(value));
+    reshiki::accessibility::select(
+        state.shape_control_id(field),
+        name,
+        options.clone(),
+        selected
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_default(),
+        message,
+        crate::appearance::pick_list(options, selected, message).text_size(12),
+    )
+    .into()
 }

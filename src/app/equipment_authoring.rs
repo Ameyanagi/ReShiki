@@ -29,6 +29,11 @@ pub enum Action {
     ShapeLayer(Layer),
     ShapeMaterial(Material),
     ShapeRole(Role),
+    ShapeControl {
+        draft: String,
+        shape: usize,
+        action: Box<Action>,
+    },
     Calibrate,
     MeasureAgain,
     BeginJoint,
@@ -318,6 +323,24 @@ impl App {
     }
 
     pub(super) fn equipment_authoring_action(&mut self, action: Action) -> Task<Message> {
+        // Native value operations can finish after a different shape or draft
+        // becomes current. Retain the target of the picker that offered it.
+        let action =
+            match action {
+                Action::ShapeControl {
+                    draft,
+                    shape,
+                    action,
+                } => {
+                    if !self.tab.equipment_authoring.as_ref().is_some_and(|state| {
+                        state.identity == draft && state.selected_shape == shape
+                    }) {
+                        return Task::none();
+                    }
+                    *action
+                }
+                action => action,
+            };
         if matches!(action, Action::Begin) {
             if self.tab.busy
                 || !self.updates.idle()
