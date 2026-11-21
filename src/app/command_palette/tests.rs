@@ -309,8 +309,10 @@ fn applying_the_current_highlight_style_resets_pasted_styles_and_is_undoable() {
     };
     let mut app = app();
     let _ = app.update(Message::New);
-    let mut source = Document::default();
-    source.highlight_style = HighlightStyle::Glow;
+    let mut source = Document {
+        highlight_style: HighlightStyle::Glow,
+        ..Default::default()
+    };
     let a = source.add_atom("C", Point::default());
     let b = source.add_atom("C", Point::new(42., 0.));
     source.add_bond(a, b, 1, "plain");

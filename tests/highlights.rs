@@ -181,14 +181,18 @@ fn shared_atoms_and_fused_bonds_keep_paint_when_duplicate_geometry_is_removed() 
     use reshiki::highlights::HighlightStyle;
     use reshiki::templates::{self, Anchor, Connection};
     for destination_color in [None, tint(Hue::Red)] {
-        let mut destination = Document::default();
-        destination.highlight_style = HighlightStyle::Disc;
+        let mut destination = Document {
+            highlight_style: HighlightStyle::Disc,
+            ..Default::default()
+        };
         let a = destination.add_atom("C", Point::default());
         let b = destination.add_atom("C", Point::new(42., 0.));
         destination.add_bond(a, b, 1, "plain");
         highlights::apply(&mut destination, &[a, b], destination_color);
-        let mut source = Document::default();
-        source.highlight_style = HighlightStyle::Glow;
+        let mut source = Document {
+            highlight_style: HighlightStyle::Glow,
+            ..Default::default()
+        };
         let x = source.add_atom("C", Point::default());
         let y = source.add_atom("C", Point::new(42., 0.));
         source.add_bond(x, y, 1, "plain");

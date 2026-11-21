@@ -6,8 +6,10 @@ fn pasted_highlights_keep_each_style_without_changing_destination_defaults() {
     let appenders: [fn(&mut Document, &Document, Point) -> Vec<u64>; 2] =
         [append, append_preserving_layout];
     for source_style in HighlightStyle::ALL {
-        let mut source = Document::default();
-        source.highlight_style = source_style;
+        let mut source = Document {
+            highlight_style: source_style,
+            ..Default::default()
+        };
         let a = source.add_atom("C", Point::default());
         let b = source.add_atom("C", Point::new(42., 0.));
         let c = source.add_atom("C", Point::new(84., 0.));
@@ -36,8 +38,10 @@ fn pasted_highlights_keep_each_style_without_changing_destination_defaults() {
         let copied = selection(&source, &source.all_ids());
         for destination_style in HighlightStyle::ALL {
             for insert in appenders {
-                let mut doc = Document::default();
-                doc.highlight_style = destination_style;
+                let mut doc = Document {
+                    highlight_style: destination_style,
+                    ..Default::default()
+                };
                 let x = doc.add_atom("C", Point::new(-100., 0.));
                 let y = doc.add_atom("C", Point::new(-58., 0.));
                 doc.add_bond(x, y, 1, "plain");
@@ -101,8 +105,10 @@ fn pasted_highlights_keep_each_style_without_changing_destination_defaults() {
 
                 // Copying the mixed drawing again retains every native override.
                 let copied_again = selection(&doc, &inserted);
-                let mut next = Document::default();
-                next.highlight_style = source_style;
+                let mut next = Document {
+                    highlight_style: source_style,
+                    ..Default::default()
+                };
                 append(&mut next, &copied_again, Point::default());
                 for (old, actual) in source.atoms.iter().zip(&next.atoms) {
                     if old.display.highlight.is_some() {

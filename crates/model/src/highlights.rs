@@ -906,8 +906,10 @@ mod tests {
         );
         assert!(crate::scene::svg(&doc).contains("<feGaussianBlur"));
 
-        let mut only_flat = Document::default();
-        only_flat.highlight_style = HighlightStyle::Glow;
+        let mut only_flat = Document {
+            highlight_style: HighlightStyle::Glow,
+            ..Default::default()
+        };
         let a = only_flat.add_atom("C", Point::default());
         only_flat.atom_mut(a).unwrap().display.highlight = Some(color);
         only_flat.atom_mut(a).unwrap().display.highlight_style = Some(HighlightStyle::Flat);

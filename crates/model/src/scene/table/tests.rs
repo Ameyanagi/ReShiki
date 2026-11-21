@@ -35,8 +35,10 @@ fn cell(id: u32, lo: f32, hi: f32, members: Vec<u64>) -> Cell {
 #[test]
 fn cell_partition_keeps_default_and_imported_highlight_styles() {
     use crate::highlights::HighlightStyle;
-    let mut doc = Document::default();
-    doc.highlight_style = HighlightStyle::Disc;
+    let mut doc = Document {
+        highlight_style: HighlightStyle::Disc,
+        ..Default::default()
+    };
     let a = doc.add_atom("C", Point::new(20., 50.));
     let b = doc.add_atom("C", Point::new(60., 50.));
     doc.add_bond(a, b, 1, "plain");
