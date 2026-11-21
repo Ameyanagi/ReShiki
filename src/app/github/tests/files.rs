@@ -424,6 +424,24 @@ fn submitting_repository_search_keeps_an_explicit_urls_folder_path() {
 }
 
 #[test]
+fn pressing_enter_from_empty_repository_search_opens_the_selected_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    for tree in [false, true] {
+        if tree {
+            tree_at(&mut app, &["reference.rsk"], false);
+        } else {
+            files_at(&mut app, &["reference.rsk"], |_| None);
+        }
+        let _ = picker(&mut app, picker::Action::Move(1));
+        assert!(the_picker(&app).search.is_empty());
+        let request = app.github.seq;
+        let _ = picker(&mut app, picker::Action::SearchEnter);
+        assert_eq!(app.github.seq, request + 1, "tree: {tree}");
+    }
+}
+
+#[test]
 fn a_tree_listed_in_part_says_so_and_makes_nothing_new() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());

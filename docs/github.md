@@ -21,10 +21,10 @@ so drawings show on GitHub.
    or **Open**. Backspace goes up a folder; the parents in **lab-notes /
    scheme** go back too. Folders come first, then files, each by name; who
    changed each file last and when (**You** for your own changes) fills in
-   as GitHub answers, and nothing moves. The **Search or paste a GitHub URL**
-   field stays visible below the header to filter the open repository's files
-   or search the repository list. It is focused when the Open picker appears;
-   the magnifier focuses it again without clearing what you typed.
+   as GitHub answers, and nothing moves. Type in **Search repositories or
+   paste URL** above the repository list to filter repositories. Use the
+   folder and drawing views on the right to browse the selected repository.
+   The search field starts focused, and the magnifier moves focus back to it.
    The ReShiki source repository is omitted from the Open list. You can open
    it explicitly by its GitHub link.
 4. Edit and save as usual. The status bar chip shows the repository, the
@@ -43,11 +43,12 @@ window title names the repository. Right-click a GitHub tab and choose
 
 In the picker, **+ New repository** (the last repository row) makes a private
 repository. Beside **Tiles** and **Tree** in the header, the document-plus
-icon (**New drawing**) makes an empty drawing and the folder-plus icon
-(**New folder**) opens a new folder. Hover to see their names. The folder
-reaches GitHub with the first drawing sent from it. A new drawing shows
-**not sent yet** until you send it. Creation controls appear in writable
-repositories.
+icon adds a temporary drawing and the folder-plus icon adds a temporary
+folder where it will appear. Type a name and press Enter to create it. Escape
+or an empty name discards the temporary item. A named drawing opens on an
+empty canvas and shows **not sent yet** until you send it. A folder reaches
+GitHub with the first drawing sent from it. Creation controls appear in
+writable repositories.
 
 ### Every chemistry file, and Insert
 
@@ -65,8 +66,8 @@ file's records land side by side. If they do not all fit in one drawing, the
 ones that fit open or are inserted, and the status bar says so in amber, such
 as **Opened 120 of 150 structures · The rest don't fit**.
 
-A folder shows its first 200 files by name, and says how many there are;
-the search field finds the others.
+Tiles shows the first 200 items in a folder. Choose **Show more** at the
+end of the list to load the next 200, or switch to **Tree**.
 
 ### Tiles or Tree
 
@@ -77,13 +78,13 @@ The tree lists the whole repository: click a folder or press → and ← to open
 and close it, ↑ and ↓ to move, Enter to open, Shift+Enter to insert. Each row
 shows the name, the format of a file that is not a drawing, and who changed
 it when. The pane on the right shows the selected file's preview, its path,
-and **Read only: Open makes a local copy** when it opens read only. Searching
-keeps the matches in the tree with their folders opened, across the whole
-repository. **New drawing** and **New folder** go to the selected folder.
+and **Read only: Open makes a local copy** when it opens read only. In Tree,
+**New drawing** and **New folder** add a row inside the selected folder or
+beside the selected drawing. In Tiles, they add a tile in the open folder.
 
 ## Other people's repositories
 
-Paste a github.com link into **Search or paste a GitHub URL**. One row
+Paste a github.com link into **Search repositories or paste URL**. One row
 shows where it leads, such as **ligands / esters /
 route.rsk**; press Enter to open it. A link to a repository or folder opens it
 in the picker; a link to a drawing opens the drawing in a tab. The same works

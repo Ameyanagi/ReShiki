@@ -685,11 +685,10 @@ impl App {
                 if let Some(link) = picker.link.clone() {
                     return self.picker_resolve(link);
                 }
-                if !picker.searching_repos() {
+                if !picker.searching_repos()
+                    || (picker.repo.is_some() && picker.search.trim().is_empty())
+                {
                     return self.picker_action(Action::Enter);
-                }
-                if picker.repo.is_some() && picker.search.trim().is_empty() {
-                    return Task::none();
                 }
                 let key = picker
                     .shown_repos()
