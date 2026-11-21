@@ -156,7 +156,7 @@ impl Operation for Navigate {
 }
 
 fn focus(id: &str) -> Task<Message> {
-    iced::advanced::widget::operate(reshiki::accessibility::FocusControl::new(id))
+    iced::advanced::widget::operate(reshiki::accessibility::FocusControl::new(id)).discard()
 }
 
 pub(super) fn keeps_open(message: &Message) -> bool {
@@ -228,7 +228,8 @@ impl App {
                     direction,
                     ids: Item::ALL.iter().map(|item| Id::new(item.id())).collect(),
                     focused: None,
-                });
+                })
+                .discard();
             }
             Action::Choose(item) => {
                 if !self.view_open {

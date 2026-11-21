@@ -2722,8 +2722,11 @@ async fn view_menu_stays_above_its_anchor_without_resizing_the_canvas() {
                     }
                 }
             } else {
-                let mut activate = reshiki::accessibility::Activate::new(*id);
-                ui.inspect(&app, &mut activate);
+                let mut activate = reshiki::accessibility::Activate::<Message>::new(*id);
+                ui.inspect(
+                    &app,
+                    &mut iced::advanced::widget::operation::black_box(&mut activate),
+                );
                 let message = activate.message().cloned().expect("native menu activation");
                 let task = app.update(message);
                 ui.run_task(&mut app, task).await;
