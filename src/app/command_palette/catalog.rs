@@ -3,8 +3,8 @@
 //! from the same tables that menus, tooltips and Help read.
 use super::super::{
     App, InspectorTab, Message, abbreviations, arrows, assistant, cleanup, cycles, equipment,
-    figure_panels, generic, graphics, import, inspector, keyboard_drawing, models3d, naming, nmr,
-    numeric_transforms,
+    equipment_authoring, figure_panels, generic, graphics, import, inspector, keyboard_drawing,
+    models3d, naming, nmr, numeric_transforms,
     numeric_transforms::Field,
     object_toolbar, optimization, pages, palettes, printing, reaction_mapping, reactions,
     shortcuts::{self, TabKey, keys, tab_keys},
@@ -69,6 +69,7 @@ pub(crate) enum Need {
     Layout,
     ObjectOrder,
     Callout,
+    DefineEquipment,
     Equipment,
     EquipmentClips,
     MakeCycle,
@@ -850,6 +851,14 @@ fn edits(app: &App) -> Vec<Command> {
         )
         .need(Need::MakeCycle),
         send(
+            "Tidy catalytic cycle",
+            Edit,
+            "Space the intermediates evenly and line up reagents and products beside their arcs.",
+            "tidy cycle clean up align space evenly layout",
+            Message::Cycle(cycles::Action::Tidy),
+        )
+        .need(Need::Cycle),
+        send(
             "Remove from cycle",
             Edit,
             "Take the selected parts out of their catalytic cycle.",
@@ -863,6 +872,14 @@ fn edits(app: &App) -> Vec<Command> {
             "panel frame box card background figure",
             Message::Figure(figure_panels::Action::Wrap),
         ),
+        send(
+            "Define as equipment piece…",
+            Edit,
+            "Set a measured length and turn the selected shapes into an equipment piece.",
+            "equipment glassware apparatus define create shapes vector calibration",
+            Message::EquipmentAuthoring(equipment_authoring::Action::Begin),
+        )
+        .need(Need::DefineEquipment),
         send(
             "Connect…",
             Edit,

@@ -743,6 +743,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::CenterRingCharge
         | Message::Abbreviations(..)
         | Message::TemplateNavigate(..)
+        | Message::EquipmentAuthoring(..)
         | Message::Equipment(..)
         | Message::Icons(..)
         | Message::InspectorScroll(..)

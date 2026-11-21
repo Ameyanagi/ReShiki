@@ -106,9 +106,17 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
             }
             continue;
         }
-        if flattened(&g.commands())
-            .iter()
-            .all(|path| !path.is_empty() && encloses(polygon, path, false))
+        let commands = g.commands();
+        let fill_only = g.is_fill_only_path();
+        let paths = if fill_only {
+            crate::graphics::fill_boundaries(&commands)
+        } else {
+            flattened(&commands)
+        };
+        if (!fill_only || !paths.is_empty())
+            && paths
+                .iter()
+                .all(|path| !path.is_empty() && encloses(polygon, path, false))
         {
             result.push(g.id);
         }

@@ -50,16 +50,29 @@ impl Reader<'_, '_> {
             }
             path.push(NativeCommand::Close);
         }
+        let filled = flags & 128 != 0 || el.attribute("FillType") == Some("Solid");
+        let bold = flags & 4 != 0 || el.attribute("LineType") == Some("Bold");
         let mut style = self.style(
             el,
-            flags & 128 != 0 || el.attribute("FillType") == Some("Solid"),
+            filled,
             flags & 2 != 0 || el.attribute("LineType") == Some("Dashed"),
-            flags & 4 != 0 || el.attribute("LineType") == Some("Bold"),
+            bold,
         )?;
         if shaded {
             style.shade();
         } else if path.iter().any(|c| matches!(c, NativeCommand::Close)) {
             self.fade(el, &mut style)?;
+        }
+        // Only an explicitly borderless filled curve keeps zero width. In
+        // particular, its doubled contour bridges must never become ink.
+        if filled
+            && !shaded
+            && !bold
+            && path.iter().any(|c| matches!(c, NativeCommand::Close))
+            && el.attribute("LineWidth").is_some()
+            && float(el, "LineWidth", "0")? == 0.
+        {
+            style.width_pt = 0.;
         }
         let visible_heads = ["ArrowheadHead", "ArrowheadTail"]
             .iter()
