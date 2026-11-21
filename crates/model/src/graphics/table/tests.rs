@@ -79,10 +79,12 @@ fn table_save_reopen_preserves_graphs_ownership_text_and_order_at_v40() {
     assert_eq!(back.annotations, doc.annotations);
     let parts = back.graphics[0].parts();
     assert_eq!(parts.len(), 7);
-    assert_eq!(parts[3].commands, parts[4].commands);
-    assert_eq!(parts[3].style.width_pt, 5.);
+    // Native painting places each cell's vertical borders before horizontal.
+    assert_eq!(parts[1].commands, parts[4].commands);
+    assert_eq!(parts[1].style.width_pt, 5.);
     assert_eq!(parts[4].style.width_pt, 1.);
-    assert_eq!(parts[3].style.stroke, Color::Custom([255, 0, 0]));
+    assert!(!parts[1].style.round_caps() && !parts[4].style.round_caps());
+    assert_eq!(parts[1].style.stroke, Color::Custom([255, 0, 0]));
     assert_eq!(parts[4].style.stroke, Color::Custom([0, 0, 255]));
     let mut seen = false;
     crate::palette::for_each_color_mut(&mut doc, |color| {

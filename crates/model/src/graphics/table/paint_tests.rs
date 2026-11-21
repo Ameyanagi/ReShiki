@@ -34,10 +34,24 @@ fn border(side: Side, width_pt: f32, pattern: LinePattern) -> Border {
     }
 }
 fn points(part: &crate::scientific::Part) -> Vec<Point> {
-    part.commands
+    let points: Vec<Point> = part
+        .commands
         .iter()
         .flat_map(PathCommand::iter_points)
-        .collect()
+        .collect();
+    if let [a, b] = points.as_slice() {
+        let length = a.distance(*b);
+        let half = part.style.width() * 0.5;
+        let (dx, dy) = ((b.x - a.x) / length * half, (b.y - a.y) / length * half);
+        vec![
+            a.offset(-dy, dx),
+            b.offset(-dy, dx),
+            b.offset(dy, -dx),
+            a.offset(dy, -dx),
+        ]
+    } else {
+        points
+    }
 }
 fn frames() -> [(Point, Point); 4] {
     [
@@ -59,9 +73,14 @@ fn solid_single_edges_end_flat_at_the_grid_and_preserve_physical_width() {
                 let parts = cell.border_parts(&g);
                 assert_eq!(parts.len(), 1);
                 let part = &parts[0];
-                assert!(part.filled && part.style.width_pt == 0.);
-                assert_eq!(part.style.fill, Some(Color::Custom([200, 30, 60])));
-                assert!(matches!(part.commands.last(), Some(PathCommand::Close)));
+                if part.filled {
+                    assert_eq!(part.style.width_pt, 0.);
+                    assert_eq!(part.style.fill, Some(Color::Custom([200, 30, 60])));
+                    assert!(matches!(part.commands.last(), Some(PathCommand::Close)));
+                } else {
+                    assert_eq!(part.style.width_pt, width);
+                    assert!(!part.style.round_caps());
+                }
                 let p = Frame::of(&g).unwrap();
                 let (a, b) = match side {
                     Side::Left => (p.point(Point::default()), p.point(Point::new(0., 1.))),
@@ -176,8 +195,11 @@ fn faint_flat_bands_keep_subpixel_coverage_without_changing_their_width() {
                 .map(|p| f64::from(p.alpha()) / 255.)
                 .sum::<f64>();
             let expected = f64::from(1500. * crate::style::DEFAULT.world(width) * zoom * zoom);
+            // At tiny zooms the antialiaser quantizes coverage to 8-bit alpha.
+            // Allow two alpha ticks along the edge, but never vanished ink.
+            let quantization = f64::from(1500. * zoom) * 2. / 255.;
             assert!(
-                area > 0. && (area - expected).abs() <= expected * 0.35,
+                area > 0. && (area - expected).abs() <= expected * 0.35 + quantization,
                 "{width}pt at {zoom}: {area} vs {expected}"
             );
         }

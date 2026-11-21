@@ -214,6 +214,7 @@ fn every_arrangement_preserves_explicit_geometry_and_stable_ties() {
             Point::new(x, y),
             Point::new(x + width, y + height),
             GraphicStyle {
+                flat_caps: false,
                 width_pt: crate::style::DEFAULT.points_per_world() * 2.,
                 stroke: Color::Custom([20 + index as u8, 70, 130]),
                 fill: Some(Color::Custom([230, 210, 180 + index as u8])),

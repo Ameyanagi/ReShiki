@@ -117,7 +117,12 @@ async fn distinct_cuts_that_collapse_at_native_precision_are_refused_not_merged(
         .find(|g| g.kind == GraphicKind::Table)
         .unwrap();
     let cells = &mut g.table.as_mut().unwrap().cells;
-    cells[1].lo.x = f32::from_bits(cells[0].hi.x.to_bits() + 1);
+    // Three distinct cuts in much less than one native tick guarantee a
+    // collision regardless of the writer's translation and rounding phase.
+    let cut = 0.01_f32;
+    cells[0].hi.x = cut;
+    cells[1].lo.x = f32::from_bits(cut.to_bits() + 1);
+    cells[3].hi.x = f32::from_bits(cut.to_bits() + 2);
     doc.validate().unwrap();
     let before = doc.clone();
     let error = formats::write_with_engine(doc.clone(), "cdxml", &LocalEngine::in_process())

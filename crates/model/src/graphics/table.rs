@@ -195,6 +195,28 @@ impl Cell {
                             / across;
                         at.offset(nx * offset + ux * along, ny * offset + uy * along)
                     };
+                    // An orthogonal band's exact rectangle is also a flat-ended
+                    // stroke. Rasterizers retain coverage for very thin strokes
+                    // even when both polygon edges quantize to the same scanline.
+                    // Keep the polygon for affine miters with slanted end faces.
+                    let adjacent_length = adjacent.x.hypot(adjacent.y);
+                    let perpendicular =
+                        (adjacent.x * ux + adjacent.y * uy).abs() <= adjacent_length * 1e-6;
+                    if perpendicular {
+                        return Some(crate::scientific::Part {
+                            commands: vec![
+                                PathCommand::Move(join(a, start, -1., 0.)),
+                                PathCommand::Line(join(b, end, 1., 0.)),
+                            ],
+                            style: GraphicStyle {
+                                stroke: border.color,
+                                width_pt: border.width_pt,
+                                flat_caps: true,
+                                ..Default::default()
+                            },
+                            filled: false,
+                        });
+                    }
                     return Some(crate::scientific::Part {
                         commands: vec![
                             PathCommand::Move(join(a, start, -1., half)),

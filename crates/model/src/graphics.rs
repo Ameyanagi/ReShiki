@@ -136,6 +136,9 @@ pub struct GraphicStyle {
     pub fill: Option<crate::palette::Color>,
     pub width_pt: f32,
     pub pattern: LinePattern,
+    /// Flat ends for derived native grid strokes; ordinary graphics stay round.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flat_caps: bool,
     #[serde(skip_serializing_if = "Effects::is_plain")]
     pub effects: Effects,
     /// A rounded rectangle's corner radius; `None` rounds 18% of the shorter side.
@@ -149,6 +152,7 @@ impl Default for GraphicStyle {
             fill: None,
             width_pt: 0.6,
             pattern: LinePattern::Solid,
+            flat_caps: false,
             effects: Effects::default(),
             corner_pt: None,
         }
@@ -175,7 +179,7 @@ impl GraphicStyle {
     }
     /// Round line ends, except on dashes.
     pub fn round_caps(&self) -> bool {
-        self.pattern != LinePattern::Dashed
+        !self.flat_caps && self.pattern != LinePattern::Dashed
     }
     pub fn validate(&self) -> Result<(), String> {
         if !self.width_pt.is_finite() || !(0.1..=12.0).contains(&self.width_pt) {

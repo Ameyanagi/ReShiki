@@ -836,6 +836,7 @@ impl Arrow {
         let n = Point::new(-u.y, u.x);
         let gap = DEFAULT.world(s.gap_pt) * 0.5;
         let stroke = GraphicStyle {
+            flat_caps: false,
             stroke: s.color,
             fill: None,
             width_pt: s.width_pt,
@@ -927,6 +928,7 @@ impl Arrow {
         Some(ArrowPath {
             commands,
             style: GraphicStyle {
+                flat_caps: false,
                 stroke: s.color,
                 fill: filled.then_some(s.color),
                 width_pt: if filled { 0. } else { s.width_pt },

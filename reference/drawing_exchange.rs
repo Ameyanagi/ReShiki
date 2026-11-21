@@ -805,6 +805,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
                         Point::new(-73.12, 92.3),
                         Point::new(117.8, 215.),
                         GraphicStyle {
+                            flat_caps: false,
                             pattern,
                             fill,
                             stroke: reshiki::palette::Color::Custom([74, 112, 239]),

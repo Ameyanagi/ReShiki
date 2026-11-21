@@ -143,6 +143,7 @@ impl NativeGraphic {
             .transpose()?;
         let style = if let Some(s) = self.style {
             GraphicStyle {
+                flat_caps: false,
                 stroke: s.stroke.into_color()?,
                 fill: s
                     .fill
