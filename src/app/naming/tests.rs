@@ -1232,7 +1232,7 @@ fn changing_peptide_mode_cancels_requests_and_invalidates_the_interpretation() {
         let _ = app.naming_action(Action::Name("AG".into()));
         let _ = app.naming_action(Action::PeptideSequence(true));
         if dock {
-            let _ = app.insert_name_import();
+            let _ = app.insert_name_import(crate::app::engine_jobs::InsertPlacement::BesideDrawing);
         } else {
             let _ = app.naming_action(Action::Resolve);
         }

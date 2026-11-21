@@ -181,7 +181,10 @@ async fn indole_insertion_numbers_only_when_enabled_and_leaves_preview_unchanged
             app.tab.naming.set_preview(preview.clone());
             let _ = app.naming_action(Action::NumberByLocants(numbered));
             if import {
-                app.insert_import_preview(false);
+                app.insert_import_preview(
+                    false,
+                    crate::app::engine_jobs::InsertPlacement::BesideDrawing,
+                );
             } else {
                 app.insert_name_preview();
             }

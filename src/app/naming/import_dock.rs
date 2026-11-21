@@ -2,11 +2,39 @@
 //! verifies locally in one action; opening the editable preview is optional.
 use super::super::workspace::{accessible_checkbox, accessible_command, hover_hint, muted_text};
 use super::*;
+use crate::app::engine_jobs::InsertPlacement;
 use iced::widget::{Space, column, stack, tooltip};
 
 const DETAILS: &str = "Names are parsed locally by default. Online lookup sends a name to PubChem only after you confirm. Ambiguous results and unsupported chemistry are rejected.";
 
 impl App {
+    pub(in crate::app) fn wants_name_caption(&self) -> bool {
+        self.tab.naming.add_name_below
+    }
+
+    pub(in crate::app) fn imported_name_notice(&self, query: &str) -> Option<&str> {
+        let state = &self.tab.naming;
+        state
+            .notice
+            .as_ref()
+            .filter(|_| state.name.trim() == query)
+            .map(Notice::summary)
+    }
+
+    pub(in crate::app) fn cancel_add_name(&mut self) -> bool {
+        let cancelled = matches!(
+            self.tab.naming.pending,
+            Some(Pending::Import {
+                placement: InsertPlacement::ViewCenter,
+                ..
+            })
+        );
+        if cancelled {
+            let _ = self.naming_action(Action::Cancel);
+        }
+        cancelled
+    }
+
     pub(in crate::app) fn cancel_name_import(&mut self) {
         self.tab.naming.online_confirmation = None;
         if matches!(
@@ -22,7 +50,10 @@ impl App {
         }
     }
 
-    pub(super) fn insert_name_import(&mut self) -> Task<Message> {
+    pub(in crate::app) fn insert_name_import(
+        &mut self,
+        placement: InsertPlacement,
+    ) -> Task<Message> {
         if !self.naming_can_edit()
             || self.tab.naming.pending.is_some()
             || self.tab.naming.name.trim().is_empty()
@@ -31,7 +62,7 @@ impl App {
         }
         let caption = self.tab.naming.add_name_below;
         if self.tab.naming.preview.is_some() {
-            self.insert_import_preview(caption);
+            self.insert_import_preview(caption, placement);
             return Task::none();
         }
         let name = match self.tab.naming.name_to_resolve() {
@@ -45,6 +76,7 @@ impl App {
         let (ticket, cancel) = self.begin_naming(|ticket| Pending::Import {
             ticket,
             add_caption: caption,
+            placement,
         });
         let engine = self.engine.clone();
         let options = (&self.tab.doc.drawing_style).into();
@@ -54,7 +86,7 @@ impl App {
         )
     }
 
-    pub(super) fn insert_import_preview(&mut self, caption: bool) {
+    pub(super) fn insert_import_preview(&mut self, caption: bool, placement: InsertPlacement) {
         if !self.naming_can_edit() || self.tab.naming.pending.is_some() {
             self.tab.naming.notice = Some(Notice::new(
                 NoticeKind::Retry,
@@ -118,14 +150,14 @@ impl App {
             }
         }
         let before = self.tab.doc.clone();
-        let Some(selected) = self.insert_beside_drawing(&document) else {
+        let Some(selected) = self.insert_structure(&document, placement) else {
             self.tab.doc = before;
             self.error = true;
             let title = &preview.record.title;
             self.status = format!("Could not insert {title}");
             return;
         };
-        self.commit_structure_insert(before, selected);
+        self.commit_structure_insert(before, selected, placement);
         if self.error {
             return;
         }

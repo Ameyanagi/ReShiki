@@ -50,7 +50,11 @@ enum Pending {
     Preview(Ticket),
     Generate(Ticket),
     Caption(Ticket),
-    Import { ticket: Ticket, add_caption: bool },
+    Import {
+        ticket: Ticket,
+        add_caption: bool,
+        placement: super::engine_jobs::InsertPlacement,
+    },
 }
 impl Pending {
     fn ticket(self) -> Ticket {
@@ -521,8 +525,12 @@ impl App {
         let online = matches!(self.tab.naming.pending, Some(Pending::Online(_)));
         let generate = matches!(self.tab.naming.pending, Some(Pending::Generate(_)));
         let caption = matches!(self.tab.naming.pending, Some(Pending::Caption(_)));
-        let import_caption = match self.tab.naming.pending {
-            Some(Pending::Import { add_caption, .. }) => Some(add_caption),
+        let import = match self.tab.naming.pending {
+            Some(Pending::Import {
+                add_caption,
+                placement,
+                ..
+            }) => Some((add_caption, placement)),
             _ => None,
         };
         let target = self.tab.naming.label_target.take();
@@ -561,10 +569,10 @@ impl App {
                 self.tab.naming.candidates = records;
                 if let Some(preview) = preview {
                     self.tab.naming.set_preview(*preview);
-                    if let Some(caption) = import_caption {
-                        self.insert_import_preview(caption);
+                    if let Some((caption, placement)) = import {
+                        self.insert_import_preview(caption, placement);
                     }
-                } else if import_caption.is_some() {
+                } else if import.is_some() {
                     self.tab.naming.notice = Some(Notice::new(
                         NoticeKind::Failed,
                         "No supported structure was returned.",
@@ -738,7 +746,9 @@ impl App {
             Action::PreviewEdit(edit) => self.edit_name_preview(edit),
             Action::Acknowledge(value) => self.tab.naming.acknowledged = value,
             Action::Insert => self.insert_name_preview(),
-            Action::InsertName => return self.insert_name_import(),
+            Action::InsertName => {
+                return self.insert_name_import(super::engine_jobs::InsertPlacement::BesideDrawing);
+            }
             Action::AddNameBelow(value) => self.tab.naming.add_name_below = value,
             Action::NumberByLocants(value) => self.tab.naming.number_by_locants = value,
             Action::HoverLocant {
@@ -877,13 +887,20 @@ impl App {
         let document = locants::insertion_document(preview, self.tab.naming.number_by_locants);
         let title = preview.record.title.clone();
         let before = self.tab.doc.clone();
-        let Some(selected) = self.insert_beside_drawing(&document) else {
+        let Some(selected) = self.insert_structure(
+            &document,
+            super::engine_jobs::InsertPlacement::BesideDrawing,
+        ) else {
             self.tab.doc = before;
             self.error = true;
             self.status = format!("Could not insert {title}");
             return;
         };
-        self.commit_structure_insert(before, selected);
+        self.commit_structure_insert(
+            before,
+            selected,
+            super::engine_jobs::InsertPlacement::BesideDrawing,
+        );
         self.tool = Tool::Select;
         self.status = if multicomponent {
             "Name result inserted as separate components".into()
