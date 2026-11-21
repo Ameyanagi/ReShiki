@@ -65,6 +65,188 @@ fn cycle_document() -> Document {
     document
 }
 
+fn cell_cycle_document(hidden: bool) -> Document {
+    use crate::graphics::{
+        Graphic, GraphicKind,
+        table::{Cell, Table},
+    };
+    let mut document = cycle_document();
+    if hidden {
+        let cycle = document
+            .graphics
+            .iter_mut()
+            .find_map(|g| g.cycle.as_deref_mut())
+            .unwrap();
+        for step in &mut cycle.steps {
+            step.hidden = true;
+            step.name.clear();
+            step.reagents.clear();
+            step.products.clear();
+        }
+    }
+    let members = document.all_ids();
+    let mut table = Graphic::dragged(
+        document.next_id(),
+        GraphicKind::Table,
+        Point::new(-500., -400.),
+        Point::new(700., 400.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    table.table = Some(Box::new(Table {
+        cells: vec![
+            Cell {
+                id: 1,
+                lo: Point::new(0., 0.),
+                hi: Point::new(0.8, 1.),
+                members,
+                borders: vec![],
+            },
+            Cell {
+                id: 2,
+                lo: Point::new(0.8, 0.),
+                hi: Point::new(1., 1.),
+                members: vec![],
+                borders: vec![],
+            },
+        ],
+    }));
+    document.graphics.push(table);
+    document.validate().unwrap();
+    document
+}
+
+#[tokio::test]
+async fn a_cell_owned_cycle_restores_from_native_editable_cdxml_and_cdx() {
+    use crate::graphics::table::Membership;
+    for hidden in [false, true] {
+        let document = cell_cycle_document(hidden);
+        let xml = write(&document, Default::default()).unwrap();
+        if hidden {
+            let (_, found) = crate::exchange::cycles::take_cdxml(&xml);
+            let Some(crate::exchange::cycles::Found::Fresh(payload)) = found else {
+                panic!("Expected fresh cycle metadata");
+            };
+            assert!(payload.cycles[0].drawn.is_empty());
+        }
+        for (format, text) in [("cdxml", xml.clone()), ("cdx", cdx(&xml))] {
+            let response = import(format, &text).await;
+            assert!(
+                !response
+                    .warnings
+                    .iter()
+                    .any(|w| w == crate::exchange::cycles::EDITED_NOTICE),
+                "{format}: {:?}",
+                response.warnings
+            );
+            let restored = response.document.unwrap();
+            restored.validate().unwrap();
+            let cycles: Vec<_> = restored
+                .graphics
+                .iter()
+                .filter(|g| g.cycle.is_some())
+                .collect();
+            assert_eq!(cycles.len(), 1, "{format}");
+            assert_eq!(restored.annotations.len(), document.annotations.len());
+            assert!(restored.arrows.is_empty());
+            let membership = Membership::new(&restored).unwrap();
+            let owner = membership
+                .cell_of(cycles[0].id)
+                .expect("The restored cycle belongs to its cell");
+            assert_eq!(owner.cell, 1);
+            for id in cycles[0]
+                .cycle
+                .as_ref()
+                .unwrap()
+                .parts()
+                .flat_map(|(_, ids)| ids.iter())
+            {
+                assert_eq!(membership.cell_of(*id), Some(owner), "{format}");
+            }
+            let cell = &restored
+                .graphics
+                .iter()
+                .find(|g| g.id == owner.table)
+                .unwrap()
+                .table
+                .as_ref()
+                .unwrap()
+                .cells[0];
+            assert_eq!(
+                cell.members
+                    .iter()
+                    .filter(|&&id| id == cycles[0].id)
+                    .count(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
+fn restoring_a_cycle_does_not_reparent_outputs_with_edited_cell_ownership() {
+    use crate::exchange::cycles::{self, Found};
+    use crate::graphics::table::{self, CellRef, Membership};
+    for hidden in [false, true] {
+        let source = cell_cycle_document(hidden);
+        let xml = write(&source, Default::default()).unwrap();
+        let (xml, found) = cycles::take_cdxml(&xml);
+        let Some(Found::Fresh(payload)) = found else {
+            panic!("Expected fresh cycle metadata");
+        };
+        let prepared = cdxml::prepare_cdxml(&xml).unwrap();
+        let scene = cdxml::assemble_cdxml(&prepared).unwrap();
+        let objects = scene.file_objects(&prepared).unwrap();
+        let document = scene.into_document().unwrap().document;
+        let basis: Vec<_> = if hidden {
+            assert!(payload.cycles[0].drawn.is_empty());
+            payload.cycles[0]
+                .graphic
+                .cycle
+                .as_ref()
+                .unwrap()
+                .parts()
+                .flat_map(|(_, ids)| ids.iter().copied())
+                .collect()
+        } else {
+            payload.cycles[0].drawn.clone()
+        };
+        let drawn: Vec<_> = basis
+            .iter()
+            .flat_map(|id| objects.get(id).into_iter().flatten().copied())
+            .collect();
+        let unique: std::collections::HashSet<_> = drawn.iter().copied().collect();
+        assert!(unique.len() > 1);
+        let first = *drawn.first().unwrap();
+        let owner = Membership::new(&document).unwrap().cell_of(first).unwrap();
+        for destination in [
+            None,
+            Some(CellRef {
+                table: owner.table,
+                cell: 2,
+            }),
+        ] {
+            let mut edited = document.clone();
+            table::relink(&mut edited, destination, &[first]).unwrap();
+            let before = edited.clone();
+            assert_eq!(
+                cycles::restore(
+                    &mut edited,
+                    &payload,
+                    &objects,
+                    prepared.source_scale as f32
+                ),
+                0
+            );
+            assert_eq!(
+                edited, before,
+                "An ownership edit must remain an edited-cycle fallback"
+            );
+        }
+    }
+}
+
 #[test]
 fn a_cycle_exports_as_its_arrows_and_text_grouped_with_its_parts() {
     let document = cycle_document();

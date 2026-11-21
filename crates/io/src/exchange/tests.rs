@@ -8,6 +8,35 @@ use crate::{
 };
 use std::{hint::black_box, time::Instant};
 
+#[test]
+fn native_table_border_accepts_a_byte_color_without_relaxing_other_objects() {
+    let frame = |kind: u16, color: &[u8]| {
+        let mut bytes = HEADER.to_vec();
+        for (object, id) in [(0x8000u16, 0u32), (kind, 1)] {
+            bytes.extend_from_slice(&object.to_le_bytes());
+            bytes.extend_from_slice(&id.to_le_bytes());
+        }
+        property(&mut bytes, 0x0301, color).unwrap();
+        bytes.extend_from_slice(&[0; 6]);
+        bytes
+    };
+    for (color, expected) in [(vec![10], "10"), (vec![255], "255"), (vec![44, 1], "300")] {
+        let bytes = frame(0x801a, &color);
+        for xml in [
+            from_cdx(&bytes).unwrap(),
+            from_cdx_tolerant(&bytes).unwrap(),
+        ] {
+            let tree = roxmltree::Document::parse(&xml).unwrap();
+            let border = tree
+                .descendants()
+                .find(|n| n.has_tag_name("border"))
+                .unwrap();
+            assert_eq!(border.attribute("color"), Some(expected));
+        }
+    }
+    assert!(from_cdx(&frame(0x8007, &[10])).is_err());
+}
+
 fn local_schema() -> Schema {
     Schema {
         names: schema::PROPERTIES.iter().map(|p| (p.name, p)).collect(),

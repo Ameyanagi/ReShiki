@@ -5,6 +5,45 @@ use super::*;
 // not overlap across independent test threads.
 static METAFILE_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+#[test]
+fn affine_content_clips_survive_metafile_recording_and_reset_for_the_next_item() {
+    let _lock = METAFILE_TEST.lock().unwrap();
+    let snapshot = serde_json::json!({
+        "version": 1, "width_pt": 150., "height_pt": 150., "pages": [[0., 0.]],
+        "primitives": [
+            {"kind": "path", "transform": [2., 0., 0., 2., -100., -100.],
+                "commands": [[0., 0., 0.], [1., 200., 0.], [1., 200., 200.], [1., 0., 200.], [4.]],
+                "fill": [255, 0, 0, 255], "clips": [{"transform": [1., 0., 0.25, 1., 0., 0.],
+                    "commands": [[0., 20., 20.], [1., 160., 20.], [1., 160., 140.], [1., 20., 140.], [4.]]}]},
+            {"kind": "path", "transform": [1., 0., 0., 1., 0., 0.],
+                "commands": [[0., 180., 180.], [1., 195., 180.], [1., 195., 195.], [1., 180., 195.], [4.]],
+                "fill": [0, 0, 255, 255]}
+        ]
+    });
+    let bytes = metafile(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
+    for image in [
+        replay_metafile_plus(&bytes, 400, 400),
+        replay_metafile(&bytes, 400, 400),
+    ] {
+        let at = |x: usize, y: usize| &image[(y * 400 + x) * 4..(y * 400 + x) * 4 + 3];
+        assert_eq!(
+            at(200, 120),
+            [0, 0, 255],
+            "Complete transformed content must paint inside its affine clip"
+        );
+        assert_eq!(
+            at(40, 200),
+            [230; 3],
+            "Affine clipping leaked into its bounding-box corner"
+        );
+        assert_eq!(
+            at(370, 370),
+            [255, 0, 0],
+            "A cell's clip leaked into the next drawing item"
+        );
+    }
+}
+
 fn office_size_mm(emf: &[u8]) -> [f64; 2] {
     let int = |i| u32::from_le_bytes(emf[i..i + 4].try_into().unwrap());
     let header_size = int(4) as usize;

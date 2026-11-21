@@ -220,18 +220,22 @@ impl Writer<'_> {
             for &n in &children {
                 self.spend(1)?;
                 let el = self.tree.node(n)?;
-                let belongs = match el.tag {
-                    "n" => self.tree.get(n, "id")?.is_some_and(|id| ids.contains(id)),
-                    "b" => self.tree.get(n, "B")?.is_some_and(|id| ids.contains(id)),
-                    "graphic" => el.children.iter().any(|&k| {
-                        self.tree.node(k).is_ok_and(|n| n.tag == "represent")
-                            && self
-                                .tree
-                                .get(k, "object")
-                                .is_ok_and(|id| id.is_some_and(|id| ids.contains(id)))
-                    }),
-                    _ => false,
-                };
+                let belongs = self
+                    .atom_artwork
+                    .get(&n)
+                    .is_some_and(|id| component.contains(id))
+                    || match el.tag {
+                        "n" => self.tree.get(n, "id")?.is_some_and(|id| ids.contains(id)),
+                        "b" => self.tree.get(n, "B")?.is_some_and(|id| ids.contains(id)),
+                        "graphic" => el.children.iter().any(|&k| {
+                            self.tree.node(k).is_ok_and(|n| n.tag == "represent")
+                                && self
+                                    .tree
+                                    .get(k, "object")
+                                    .is_ok_and(|id| id.is_some_and(|id| ids.contains(id)))
+                        }),
+                        _ => false,
+                    };
                 if belongs && target != self.fragment {
                     self.tree.attach(target, n)?;
                 }

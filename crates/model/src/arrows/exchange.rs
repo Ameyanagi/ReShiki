@@ -139,6 +139,7 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
     let mut next = doc.next_id();
     let mut removed = Vec::new();
     let mut bodies = Vec::new();
+    let mut replacements = Vec::new();
     for arrow in out.arrows.iter().filter(|a| a.shape_body()) {
         let mut members = shapes(arrow.paths(), &mut next);
         // Under every front shape, as the arrow paints.
@@ -146,6 +147,7 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
             member.layer = 0;
         }
         let ids: Vec<u64> = members.iter().map(|g| g.id).collect();
+        replacements.push((arrow.id, ids.clone()));
         bodies.extend(members);
         removed.push(arrow.id);
         // Every group that holds the arrow holds its shapes, so nested
@@ -171,6 +173,9 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
     }
     // Arrows paint under front shapes, such as an icon on the shaft.
     out.graphics.splice(0..0, bodies);
+    for (source, ids) in replacements {
+        crate::graphics::table::replace_member(&mut out, source, &ids);
+    }
     out.arrows.retain(|a| !removed.contains(&a.id));
     out.arrow_labels.retain(|l| !removed.contains(&l.arrow));
     out.reactions.retain(|r| !removed.contains(&r.arrow));
@@ -202,6 +207,11 @@ pub fn lowered(doc: &Document) -> Cow<'_, Document> {
     }
     out.graphics.extend(dots);
     for (members, dot) in callouts {
+        if let Some(&line) = members.first()
+            && let Some(dot) = dot
+        {
+            crate::graphics::table::replace_member(&mut out, line, &[line, dot]);
+        }
         // A callout already in groups adds its dot to every group holding
         // its line, so nested groups stay nested and move it along.
         let line = members.first().copied();

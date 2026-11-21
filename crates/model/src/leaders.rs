@@ -46,7 +46,8 @@ const GAP_PT: f32 = 2.;
 const DOT_PT: f32 = 1.6;
 
 impl Target {
-    fn ids(&self) -> Vec<u64> {
+    /// Object IDs referenced by this target, for attachment ownership checks.
+    pub fn ids(&self) -> Vec<u64> {
         match *self {
             Self::Atom { atom } | Self::Molecule { atom } => vec![atom],
             Self::Bond { a, b, .. } => vec![a, b],
@@ -363,12 +364,18 @@ pub fn attach(doc: &mut Document, text: u64, target: Target) -> Result<(), Strin
         false,
     );
     line.layer = 1;
+    let targets: Vec<_> = std::iter::once(text).chain(target.ids()).collect();
     line.leader = Some(Leader {
         start: Some(Target::Object { id: text }),
         end: Some(target),
     });
-    doc.graphics.push(line);
-    reconcile(doc);
+    let mut candidate = doc.clone();
+    candidate.graphics.push(line);
+    // Existing text keeps its owner; only this new leader inherits the
+    // caption and target's common cell.
+    crate::graphics::table::inherit_attachment(doc, &mut candidate, &[id], &targets)?;
+    reconcile(&mut candidate);
+    *doc = candidate;
     Ok(())
 }
 
@@ -376,8 +383,9 @@ pub fn attach(doc: &mut Document, text: u64, target: Target) -> Result<(), Strin
 /// the target, in one change. Returns the new text's ID.
 pub fn add_callout(doc: &mut Document, target: Target, text: &str) -> Result<u64, String> {
     let position = callout_position(doc, &target)?;
-    let id = doc.next_id();
-    doc.annotations.push(Annotation {
+    let mut candidate = doc.clone();
+    let id = candidate.next_id();
+    candidate.annotations.push(Annotation {
         angle: 0.,
         id,
         position,
@@ -387,8 +395,10 @@ pub fn add_callout(doc: &mut Document, target: Target, text: &str) -> Result<u64
             ..Default::default()
         },
     });
-    keep_on_page(doc, id, &target);
-    attach(doc, id, target)?;
+    keep_on_page(&mut candidate, id, &target);
+    crate::graphics::table::inherit_attachment(doc, &mut candidate, &[id], &target.ids())?;
+    attach(&mut candidate, id, target)?;
+    *doc = candidate;
     Ok(id)
 }
 

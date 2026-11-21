@@ -42,31 +42,81 @@ fn collect(
     sources: &HashMap<String, &[u8]>,
     paper: [u8; 3],
 ) -> Result<(), String> {
+    collect_with_clips(group, parent, parent_opacity, output, sources, paper, &[])
+}
+
+fn commands(path: &tiny_skia::Path) -> Vec<Vec<f32>> {
+    path.segments()
+        .map(|segment| {
+            use tiny_skia::PathSegment;
+            match segment {
+                PathSegment::MoveTo(p) => vec![0., p.x, p.y],
+                PathSegment::LineTo(p) => vec![1., p.x, p.y],
+                PathSegment::QuadTo(a, b) => vec![2., a.x, a.y, b.x, b.y],
+                PathSegment::CubicTo(a, b, c) => vec![3., a.x, a.y, b.x, b.y, c.x, c.y],
+                PathSegment::Close => vec![4.],
+            }
+        })
+        .collect()
+}
+
+/// Native cells use one polygon in world coordinates. Keep the clipping path
+/// and its composed transform, so GDI+ records the same vector intersection in
+/// both printer and Office metafile snapshots. Refuse unsupported SVG clips
+/// instead of dropping a boundary and exposing hidden content.
+fn push_clip(
+    clip: &usvg::ClipPath,
+    absolute: usvg::Transform,
+    clips: &mut Vec<Value>,
+) -> Result<(), String> {
+    let [usvg::Node::Path(path)] = clip.root().children() else {
+        return Err("Unsupported native vector clipping; export a PDF instead.".into());
+    };
+    clips.push(json!({
+        "transform": transform(absolute.pre_concat(clip.transform()).pre_concat(clip.root().transform())),
+        "commands": commands(path.data()),
+        "even_odd": path.fill().is_some_and(|fill| fill.rule() == usvg::FillRule::EvenOdd),
+    }));
+    if let Some(clip) = clip.clip_path() {
+        push_clip(clip, absolute, clips)?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn collect_with_clips(
+    group: &usvg::Group,
+    parent: usvg::Transform,
+    parent_opacity: f32,
+    output: &mut Vec<Value>,
+    sources: &HashMap<String, &[u8]>,
+    paper: [u8; 3],
+    inherited: &[Value],
+) -> Result<(), String> {
     // Flattened text is a separate subtree: its cached absolute transforms do
     // not include the SVG viewBox. Compose local transforms while traversing.
     let absolute = parent.pre_concat(group.transform());
     let opacity = (parent_opacity * group.opacity().get()).clamp(0., 1.);
+    let mut clips = inherited.to_vec();
+    if let Some(clip) = group.clip_path() {
+        push_clip(clip, absolute, &mut clips)?;
+    }
     for node in group.children() {
         match node {
-            usvg::Node::Group(group) => collect(group, absolute, opacity, output, sources, paper)?,
-            usvg::Node::Text(text) => {
-                collect(text.flattened(), absolute, opacity, output, sources, paper)?
+            usvg::Node::Group(group) => {
+                collect_with_clips(group, absolute, opacity, output, sources, paper, &clips)?
             }
+            usvg::Node::Text(text) => collect_with_clips(
+                text.flattened(),
+                absolute,
+                opacity,
+                output,
+                sources,
+                paper,
+                &clips,
+            )?,
             usvg::Node::Path(path) if path.is_visible() => {
-                let commands: Vec<Vec<f32>> = path
-                    .data()
-                    .segments()
-                    .map(|segment| {
-                        use tiny_skia::PathSegment;
-                        match segment {
-                            PathSegment::MoveTo(p) => vec![0., p.x, p.y],
-                            PathSegment::LineTo(p) => vec![1., p.x, p.y],
-                            PathSegment::QuadTo(a, b) => vec![2., a.x, a.y, b.x, b.y],
-                            PathSegment::CubicTo(a, b, c) => vec![3., a.x, a.y, b.x, b.y, c.x, c.y],
-                            PathSegment::Close => vec![4.],
-                        }
-                    })
-                    .collect();
+                let commands = commands(path.data());
                 let fill = path
                     .fill()
                     .map(|fill| color(fill.paint(), fill.opacity().get() * opacity))
@@ -84,7 +134,7 @@ fn collect(
                 }).transpose()?;
                 output.push(json!({
                     "kind": "path", "transform": transform(absolute),
-                    "commands": commands, "fill": fill, "stroke": stroke,
+                    "commands": commands, "fill": fill, "stroke": stroke, "clips": clips,
                     "even_odd": path.fill().is_some_and(|fill| fill.rule() == usvg::FillRule::EvenOdd)
                 }));
             }
@@ -96,7 +146,7 @@ fn collect(
                     output.push(json!({
                         "kind": "metafile", "transform": transform(absolute),
                         "width": image.size().width(), "height": image.size().height(),
-                        "data": STANDARD.encode(bytes)
+                        "data": STANDARD.encode(bytes), "clips": clips,
                     }));
                     continue;
                 }
@@ -107,7 +157,7 @@ fn collect(
                 output.push(json!({
                     "kind": "image", "transform": transform(absolute),
                     "width": image.size().width(), "height": image.size().height(),
-                    "data": STANDARD.encode(bytes.as_slice())
+                    "data": STANDARD.encode(bytes.as_slice()), "clips": clips,
                 }));
             }
             _ => {}
@@ -121,7 +171,7 @@ fn collect(
                 && halo.id().starts_with("reshiki-label-halo")
             {
                 let start = output.len();
-                collect(halo, absolute, 1., output, sources, paper)?;
+                collect_with_clips(halo, absolute, 1., output, sources, paper, &clips)?;
                 let [r, g, b] = paper;
                 for value in output.iter_mut().skip(start) {
                     if let Some(fill) = value.get_mut("fill").filter(|fill| fill.is_array()) {

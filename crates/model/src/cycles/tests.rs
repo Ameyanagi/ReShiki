@@ -1413,3 +1413,115 @@ fn tidy_leaves_an_empty_cycle_and_a_plain_circle_alone() {
     assert!(!super::tidy(&mut doc, plain));
     assert_eq!(doc, before);
 }
+
+fn cycle_cells(
+    doc: &mut Document,
+    first: Vec<u64>,
+    second: Vec<u64>,
+) -> crate::graphics::table::CellRef {
+    use crate::graphics::{
+        Graphic, GraphicKind,
+        table::{Cell, CellRef, Table},
+    };
+    let id = doc.next_id();
+    let mut table = Graphic::dragged(
+        id,
+        GraphicKind::Rectangle,
+        Point::new(-500., -400.),
+        Point::new(1500., 600.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    table.kind = GraphicKind::Table;
+    table.table = Some(Box::new(Table {
+        cells: vec![
+            Cell {
+                id: 1,
+                lo: Point::default(),
+                hi: Point::new(0.5, 1.),
+                members: first,
+                borders: vec![],
+            },
+            Cell {
+                id: 2,
+                lo: Point::new(0.5, 0.),
+                hi: Point::new(1., 1.),
+                members: second,
+                borders: vec![],
+            },
+        ],
+    }));
+    doc.graphics.push(table);
+    CellRef { table: id, cell: 1 }
+}
+
+#[test]
+fn make_inherits_the_common_cell_of_complete_intermediates() {
+    use crate::graphics::table::Membership;
+    for owned in [false, true] {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::new(0., -180.));
+        let b = doc.add_atom("N", Point::new(40., -180.));
+        doc.add_bond(a, b, 1, "plain");
+        let c = doc.add_atom("C", Point::new(180., 100.));
+        let d = doc.add_atom("O", Point::new(220., 100.));
+        doc.add_bond(c, d, 1, "plain");
+        let note = text(&mut doc, Point::new(-180., 100.), "PdL2");
+        let sibling = text(&mut doc, Point::new(900., 0.), "Other cell");
+        let target = owned.then(|| cycle_cells(&mut doc, vec![a, b, c, d, note], vec![sibling]));
+        doc.validate().unwrap();
+        let sibling_before = doc
+            .annotations
+            .iter()
+            .find(|t| t.id == sibling)
+            .unwrap()
+            .clone();
+        // Selecting one atom selects its complete molecule, including b and d.
+        let (id, _) = make(&mut doc, &[a, c, note]).unwrap();
+        doc.validate().unwrap();
+        assert!(cycle(&doc, id).intermediates.contains(&vec![a, b]));
+        assert!(cycle(&doc, id).intermediates.contains(&vec![c, d]));
+        let membership = Membership::new(&doc).unwrap();
+        for member in [id, a, b, c, d, note] {
+            assert_eq!(membership.cell_of(member), target);
+        }
+        assert_eq!(
+            doc.annotations.iter().find(|t| t.id == sibling).unwrap(),
+            &sibling_before
+        );
+        if let Some(target) = target {
+            assert_eq!(
+                membership.cell_of(sibling),
+                Some(crate::graphics::table::CellRef { cell: 2, ..target })
+            );
+        }
+        let saved = doc.file_json().unwrap();
+        let reopened = Document::from_json(&saved).unwrap();
+        assert_eq!(reopened.file_json().unwrap(), saved);
+        assert_eq!(Membership::new(&reopened).unwrap().cell_of(id), target);
+    }
+}
+
+#[test]
+fn make_rejects_cross_cell_and_cell_canvas_parts_before_any_mutation() {
+    for other_cell in [false, true] {
+        let mut doc = Document::default();
+        let a = text(&mut doc, Point::new(0., -200.), "A");
+        let b = text(&mut doc, Point::new(170., 90.), "B");
+        let c = text(&mut doc, Point::new(-230., 90.), "C");
+        cycle_cells(
+            &mut doc,
+            vec![a, b],
+            if other_cell { vec![c] } else { vec![] },
+        );
+        doc.validate().unwrap();
+        let before = doc.clone();
+        let error = make(&mut doc, &[a, b, c]).unwrap_err();
+        assert!(error.contains("same table cell"), "{error}");
+        assert_eq!(
+            doc, before,
+            "Ownership rejection must precede moving or grouping parts"
+        );
+    }
+}

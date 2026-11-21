@@ -364,6 +364,9 @@ fn best_connection(
                 continue;
             };
             result.add_bond(id, added, 1, "plain");
+            if crate::graphics::table::inherit_attachment(doc, &mut result, &ids, &[id]).is_err() {
+                continue;
+            }
             result.reconcile_molecule_groups();
             if crate::reactions::reconcile(&mut result).is_ok() && result.validate().is_ok() {
                 best = Some((score, result, ids));
@@ -1095,6 +1098,9 @@ impl Attachment<'_> {
             crate::compound_numbers::reconcile(&mut result, &before);
         }
         result.reconcile_molecule_groups();
+        let inserted: Vec<_> = ids.iter().copied().map(mapped).collect();
+        let targets: Vec<_> = shared.values().copied().collect();
+        crate::graphics::table::inherit_attachment(doc, &mut result, &inserted, &targets).ok()?;
         if crate::reactions::reconcile(&mut result).is_err() || result.validate().is_err() {
             return None;
         }

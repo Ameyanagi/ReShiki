@@ -64,6 +64,7 @@ pub fn number(doc: &mut Document, atoms: &[u64], mut format: TextFormat) -> Resu
     if label(doc, &whole).is_some() {
         return Ok(());
     }
+    crate::graphics::table::require_same_cell(doc, &whole)?;
     let at = anchor(doc, &whole).ok_or("The molecule has no bounds")?;
     format.spans.clear();
     format.style.bold = true;
@@ -81,6 +82,12 @@ pub fn number(doc: &mut Document, atoms: &[u64], mut format: TextFormat) -> Resu
         format,
     };
     caption.position.x -= caption.size().0 / 2.;
+    let before = doc
+        .graphics
+        .iter()
+        .any(|g| g.table.is_some())
+        .then(|| doc.clone());
+    let annotation = caption.id;
     doc.compound_numbers.push(CompoundNumber {
         annotation: caption.id,
         atoms: whole,
@@ -88,6 +95,13 @@ pub fn number(doc: &mut Document, atoms: &[u64], mut format: TextFormat) -> Resu
         fixed: false,
     });
     doc.annotations.push(caption);
+    if let Some(before) = before
+        && let Err(error) =
+            crate::graphics::table::inherit_attachment(&before, doc, &[annotation], atoms)
+    {
+        *doc = before;
+        return Err(error);
+    }
     renumber(doc);
     Ok(())
 }

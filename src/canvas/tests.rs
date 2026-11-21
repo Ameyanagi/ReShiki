@@ -4092,3 +4092,203 @@ fn equipment_authoring_measurements_own_raw_clicks_over_selected_handles() {
         assert!(state.gesture.is_none());
     }
 }
+
+fn borderless_table_fixture(degrees: f32, reflected: bool, zero_width: bool) -> Document {
+    use reshiki::graphics::table::{Border, Cell, Side, Table};
+    let mut doc = Document::default();
+    let mut graphic = Graphic::dragged(
+        1,
+        reshiki::graphics::GraphicKind::Rectangle,
+        World::default(),
+        World::new(160., 100.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    let (s, c) = degrees.to_radians().sin_cos();
+    let sign = if reflected { -1. } else { 1. };
+    graphic.axis_x = World::new(160. * c * sign, 160. * s * sign);
+    graphic.axis_y = World::new(-100. * s, 100. * c);
+    graphic.origin = World::new(
+        -(graphic.axis_x.x + graphic.axis_y.x) / 2.,
+        -(graphic.axis_x.y + graphic.axis_y.y) / 2.,
+    );
+    graphic.kind = reshiki::graphics::GraphicKind::Table;
+    graphic.layer = 9;
+    graphic.table = Some(Box::new(Table {
+        cells: [(0., 0.4), (0.6, 1.)]
+            .into_iter()
+            .enumerate()
+            .map(|(i, (lo, hi))| Cell {
+                id: i as u32 + 1,
+                lo: World::new(lo, 0.),
+                hi: World::new(hi, 1.),
+                members: if i == 0 { vec![2] } else { vec![] },
+                borders: if zero_width {
+                    [Side::Left, Side::Top, Side::Bottom, Side::Right]
+                        .map(|side| Border {
+                            side,
+                            width_pt: 0.,
+                            color: reshiki::palette::Color::Ink,
+                            pattern: Default::default(),
+                        })
+                        .to_vec()
+                } else {
+                    vec![]
+                },
+            })
+            .collect(),
+    }));
+    let position = graphic.table.as_ref().unwrap().cells[0]
+        .frame(&graphic)
+        .unwrap()
+        .point(World::new(0.5, 0.5))
+        .offset(-10., -17.5);
+    doc.annotations.push(reshiki::document::Annotation {
+        id: 2,
+        position,
+        text: "H".into(),
+        format: Default::default(),
+        angle: 0.,
+    });
+    assert!(graphic.commands().is_empty());
+    doc.graphics.push(graphic);
+    doc.validate().unwrap();
+    doc
+}
+
+#[test]
+fn borderless_table_pointer_selects_transparent_rotated_and_reflected_cells() {
+    use reshiki::graphics::table::Frame;
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    for zero_width in [false, true] {
+        for (degrees, reflected) in [(0., false), (37., false), (37., true)] {
+            let doc = borderless_table_fixture(degrees, reflected, zero_width);
+            let frame = Frame::of(&doc.graphics[0]).unwrap();
+            let blank = frame.point(World::new(0.8, 0.5));
+            assert_eq!(hit::hit_object(&doc, blank, 3.), Some(1));
+            assert_eq!(
+                hit::hit_selection_cached(&doc, blank, 3., &mut cache::SceneCache::default()),
+                vec![1]
+            );
+            assert!(
+                hit_selection(&doc, frame.point(World::new(0.5, 0.5)), 0.).is_empty(),
+                "A sparse grid gap is not a cell"
+            );
+            assert!(hit_selection(&doc, frame.point(World::new(-0.05, 0.5)), 0.).is_empty());
+            assert!(hit_selection(&doc, frame.point(World::new(-0.005, 0.5)), 3.).is_empty());
+            let canvas = MoleculeCanvas {
+                tool: Tool::Select,
+                ..chain_canvas(&doc, ChainMode::Straight)
+            };
+            let cursor = canvas.camera.screen(blank, canvas.guides.paper(bounds));
+            assert!(bounds.contains(cursor));
+            let mut state = State::default();
+            let _ = canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(cursor),
+            );
+            let edit = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(cursor),
+                )
+                .unwrap()
+                .into_inner()
+                .0
+                .unwrap();
+            let Edit::Select(ids) = edit else {
+                panic!("Expected table selection");
+            };
+            assert_eq!(ids, vec![1]);
+            assert!(
+                hit::region_selection(
+                    &doc,
+                    &[],
+                    &frame.corners(),
+                    iced::keyboard::Modifiers::empty()
+                )
+                .contains(&1)
+            );
+            assert!(doc.graphics[0].commands().is_empty());
+        }
+    }
+}
+
+#[test]
+fn borderless_table_surface_keeps_caption_bond_and_unrelated_ink_priority() {
+    use reshiki::graphics::table::{Border, Side};
+    let mut doc = borderless_table_fixture(0., false, false);
+    let caption = doc.annotations[0].position.offset(10., 10.);
+    assert_eq!(hit_selection(&doc, caption, 3.), vec![2]);
+    let a = doc.add_atom("C", World::new(-70., 30.));
+    let b = doc.add_atom("O", World::new(-30., 30.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.graphics[0].table.as_mut().unwrap().cells[0]
+        .members
+        .extend([a, b]);
+    assert_eq!(hit_selection(&doc, World::new(-70., 30.), 3.), vec![a]);
+    assert_eq!(hit_selection(&doc, World::new(-50., 30.), 3.), vec![a, b]);
+    let mut cover = Graphic::dragged(
+        doc.next_id(),
+        reshiki::graphics::GraphicKind::Rectangle,
+        World::new(38., -10.),
+        World::new(58., 10.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    cover.style.fill = Some(reshiki::palette::Color::Ink);
+    cover.layer = -10;
+    let lower = cover.id;
+    doc.graphics.push(cover.clone());
+    cover.id = doc.next_id();
+    cover.layer = -9;
+    let upper = cover.id;
+    doc.graphics.push(cover);
+    assert_eq!(hit_selection(&doc, World::new(48., 0.), 3.), vec![upper]);
+    doc.graphics[1].layer = -8;
+    assert_eq!(hit_selection(&doc, World::new(48., 0.), 3.), vec![lower]);
+    assert!(doc.graphics[0].commands().is_empty());
+    doc.graphics[0].table.as_mut().unwrap().cells[1]
+        .borders
+        .push(Border {
+            side: Side::Top,
+            width_pt: 1.,
+            color: reshiki::palette::Color::Ink,
+            pattern: Default::default(),
+        });
+    assert!(!doc.graphics[0].commands().is_empty());
+    assert_eq!(hit_selection(&doc, World::new(48., -50.), 3.), vec![1]);
+    doc.validate().unwrap();
+}
+
+#[test]
+fn borderless_table_surface_yields_to_a_visible_3d_model() {
+    let mut doc = borderless_table_fixture(0., false, true);
+    let a = doc.add_atom("C", World::new(40., 0.));
+    let b = doc.add_atom("O", World::new(60., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let atoms = [(a, [-0.7, 0., 0.]), (b, [0.7, 0., 0.])]
+        .map(|(id, xyz)| reshiki::models3d::Placed { id, xyz })
+        .to_vec();
+    let model = reshiki::models3d::Model3d::new(
+        &doc,
+        atoms,
+        vec![],
+        reshiki::models3d::ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    reshiki::models3d::set_display(&mut doc, 0, reshiki::models3d::Display::ThreeD);
+    let (lo, hi) = reshiki::models3d::frame(&doc, &doc.models[0]).unwrap();
+    let probe = lo.lerp(hi, 0.5);
+    assert!(
+        reshiki::graphics::table::cell_frames(&doc.graphics[0]).any(|frame| frame.contains(probe))
+    );
+    assert_eq!(hit_selection(&doc, probe, 3.), vec![a, b]);
+    assert!(doc.graphics[0].commands().is_empty());
+}

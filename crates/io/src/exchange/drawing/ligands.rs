@@ -130,9 +130,13 @@ impl Writer<'_> {
         Ok(())
     }
 
-    pub(super) fn projected_circle(&mut self, circle: &crate::aromatic::Circle) -> Result<()> {
+    pub(super) fn projected_circle(
+        &mut self,
+        circle: &crate::aromatic::Circle,
+        atom: u64,
+    ) -> Result<()> {
         for (points, closed) in super::objects::curve_points(&circle.graphic().commands())? {
-            self.curve(
+            let artwork = self.curve(
                 self.fragment,
                 &points,
                 closed,
@@ -142,6 +146,7 @@ impl Writer<'_> {
                 false,
                 1,
             )?;
+            self.atom_artwork.insert(artwork, atom);
         }
         Ok(())
     }

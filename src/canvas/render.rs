@@ -150,6 +150,7 @@ fn draw_primitives_with_opacity(
             // Vector export only; the canvas draws the bond outlines.
             Primitive::Polyline { .. }
             | Primitive::Sphere { .. }
+            | Primitive::Clip { .. }
             | Primitive::Ellipsoid { .. }
             | Primitive::ShadedQuad { .. }
             | Primitive::ShadedPolygon { .. }
@@ -416,6 +417,7 @@ fn draw_halo(
             }
             Primitive::Picture(_)
             | Primitive::Polyline { .. }
+            | Primitive::Clip { .. }
             | Primitive::Rotated { .. }
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }

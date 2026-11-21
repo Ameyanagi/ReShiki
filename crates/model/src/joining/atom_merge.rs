@@ -27,6 +27,7 @@ fn merge_atoms_with_position(
     position: Option<Point>,
 ) -> Result<(Document, Vec<u64>), String> {
     doc.validate()?;
+    crate::graphics::table::require_same_cell(doc, selected)?;
     let selected_set: HashSet<_> = selected.iter().copied().collect();
     if selected.len() < 3 || selected_set.len() != selected.len() {
         return Err("Select at least three distinct atoms to merge.".into());
@@ -227,12 +228,14 @@ fn merge_atoms_with_position(
         .map(|atom| (atom.id, mapped(atom.id)))
         .collect();
     crate::arrow_anchors::remap_for_join(&mut result, &doc.atoms, &endpoint_mapping);
+    crate::graphics::table::remap_join(&mut result, &endpoint_mapping);
     crate::atom_labels::clear_computed(&mut result);
     crate::arrow_anchors::reconcile(&mut result);
     crate::molecule_names::reconcile(&mut result, doc);
     crate::linked_properties::reconcile(&mut result, doc);
     crate::compound_numbers::reconcile(&mut result, doc);
     crate::models3d::reconcile(&mut result, doc);
+    crate::graphics::table::prune(&mut result);
     result.validate()?;
     Ok((result, vec![survivor]))
 }

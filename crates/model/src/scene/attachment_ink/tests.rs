@@ -1,6 +1,33 @@
 use super::*;
 
 #[test]
+fn table_clip_children_cannot_supply_per_bond_attachment_ink() {
+    let origin = Point::default();
+    let axis = Point::new(1., 0.);
+    let hidden = Primitive::Line(Point::new(40., 0.), Point::new(60., 0.), 2.);
+    assert!(intersects_fraction(&hidden, origin, axis, 50.));
+    let clip = Primitive::Clip {
+        corners: [
+            Point::new(0., -10.),
+            Point::new(20., -10.),
+            Point::new(20., 10.),
+            Point::new(0., 10.),
+        ],
+        primitives: vec![hidden],
+    };
+    assert!(!intersects_fraction(&clip, origin, axis, 50.));
+    assert!(!intersects_fraction(
+        &Primitive::Opacity {
+            alpha: 1.,
+            primitive: Box::new(clip)
+        },
+        origin,
+        axis,
+        50.
+    ));
+}
+
+#[test]
 fn overlapping_double_candidates_share_one_query_graph() {
     let mut constructions = Vec::new();
     for candidates in [1, 32] {

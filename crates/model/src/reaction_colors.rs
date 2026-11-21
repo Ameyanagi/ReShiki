@@ -79,12 +79,15 @@ pub enum Refusal {
     Roles,
     /// No product atom has an atom map.
     Maps,
+    /// The reaction's linked objects do not share one table cell or canvas.
+    Cell,
 }
 impl Refusal {
     pub fn message(&self) -> &'static str {
         match self {
             Self::Roles => "Assign reactants and products first.",
             Self::Maps => "Map the atoms first: run Auto-map.",
+            Self::Cell => "Keep the reaction and its legend in the same table cell.",
         }
     }
 }
@@ -710,37 +713,43 @@ pub fn set_legend(
     shown: bool,
     format: crate::typography::TextFormat,
 ) -> Result<(), Refusal> {
-    let Some(index) = doc.reactions.iter().position(|r| r.arrow == arrow) else {
+    let Some((index, reaction)) = doc
+        .reactions
+        .iter()
+        .enumerate()
+        .find(|(_, r)| r.arrow == arrow)
+    else {
         return Err(Refusal::Roles);
     };
-    let current = doc
-        .reactions
-        .get(index)
-        .and_then(|r| r.colors.as_ref()?.legend);
+    let current = reaction.colors.as_ref().and_then(|colors| colors.legend);
     match (current, shown) {
         (Some(id), false) => {
-            doc.annotations.retain(|a| a.id != id);
-            crate::reactions::prune(doc);
+            doc.delete(&[id]);
             if let Some(colors) = doc.reactions.get_mut(index).and_then(|r| r.colors.as_mut()) {
                 colors.legend = None;
             }
             Ok(())
         }
         (None, true) => {
-            let id = doc.next_id();
-            doc.annotations.push(Annotation {
+            let targets = reaction.ids();
+            let mut candidate = doc.clone();
+            let id = candidate.next_id();
+            candidate.annotations.push(Annotation {
                 angle: 0.,
                 id,
                 position: Point::default(),
                 text: String::new(),
                 format,
             });
-            if let Some(reaction) = doc.reactions.get_mut(index) {
+            if let Some(reaction) = candidate.reactions.get_mut(index) {
                 reaction.annotations.push(id);
                 reaction.colors.get_or_insert_with(Colors::new).legend = Some(id);
             }
-            paint(doc, arrow)?;
-            place(doc, arrow, id);
+            paint(&mut candidate, arrow)?;
+            crate::graphics::table::inherit_attachment(doc, &mut candidate, &[id], &targets)
+                .map_err(|_| Refusal::Cell)?;
+            place(&mut candidate, arrow, id);
+            *doc = candidate;
             Ok(())
         }
         _ => Ok(()),
@@ -959,7 +968,9 @@ pub fn clear_paint(doc: &mut Document, arrow: u64) -> bool {
         return false;
     }
     let legends: HashSet<u64> = colors.iter().filter_map(|c| c.legend).collect();
-    doc.annotations.retain(|a| !legends.contains(&a.id));
+    if !legends.is_empty() {
+        doc.delete(&legends.into_iter().collect::<Vec<_>>());
+    }
     for &i in &steps {
         if let Some(reaction) = doc.reactions.get_mut(i) {
             reaction.colors = None;
