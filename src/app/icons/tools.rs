@@ -28,6 +28,20 @@ pub(super) fn chain(f: &mut Frame<'_>, ink: Color, mode: reshiki::chains::ChainM
 }
 
 pub(super) fn graphic(f: &mut Frame<'_>, ink: Color, kind: reshiki::graphics::GraphicKind) {
+    if kind == reshiki::graphics::GraphicKind::Table {
+        let grid = Path::new(|p| {
+            for x in [3., 9., 15., 21.] {
+                p.move_to(Point::new(x, 5.));
+                p.line_to(Point::new(x, 20.));
+            }
+            for y in [5., 12.5, 20.] {
+                p.move_to(Point::new(3., y));
+                p.line_to(Point::new(21., y));
+            }
+        });
+        f.stroke(&grid, Stroke::default().with_color(ink).with_width(1.2));
+        return;
+    }
     if kind == reshiki::graphics::GraphicKind::Path {
         let path = Path::new(|builder| {
             builder.move_to(Point::new(3., 13.));

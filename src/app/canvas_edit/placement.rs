@@ -136,7 +136,25 @@ impl App {
         before: Document,
     ) {
         if let Tool::Graphic(kind) = self.tool {
-            if matches!(
+            if kind == reshiki::graphics::GraphicKind::Table {
+                match reshiki::graphics::table::editor::dragged(
+                    self.tab.doc.next_id(),
+                    start,
+                    end,
+                    self.tab.table_inputs.grid,
+                    self.tab.doc.drawing_style.line_width_pt,
+                ) {
+                    Ok(graphic) => {
+                        self.tab.selected = vec![graphic.id];
+                        self.tab.doc.graphics.push(graphic);
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                        return;
+                    }
+                }
+            } else if matches!(
                 kind,
                 reshiki::graphics::GraphicKind::Symbol(_)
                     | reshiki::graphics::GraphicKind::Orbital(_)
@@ -188,6 +206,7 @@ impl App {
             if !matches!(kind, reshiki::graphics::GraphicKind::Symbol(_)) {
                 self.tool = Tool::Select;
             }
+            self.sync_tables();
         }
         self.changed(before);
     }

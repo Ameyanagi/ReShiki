@@ -105,6 +105,7 @@ impl App {
                 }
             }
             Message::Cycle(action) => return Some(self.cycle_action(action)),
+            Message::Table(action) => self.table_action(action),
             Message::RotateMark(id, index) => self.rotate_mark(id, index),
             Message::RemoveMark(id, index) => self.remove_mark(id, index),
             Message::AtomRadical(value) => self.set_radical(value),

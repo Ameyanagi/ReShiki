@@ -74,7 +74,8 @@ pub(crate) mod pen_tests;
 mod transform_shortcut_tests;
 
 use grid::GridCache;
-pub use hit::{bond_text_at, distance_to_segment, hit_object};
+pub(crate) use hit::{atom_label_at, nearest_atom, nearest_bond};
+pub use hit::{bond_text_at, hit_object};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 pub(crate) use paper::HINT_STRIP_HEIGHT_PX;
@@ -614,6 +615,8 @@ static DEFAULT_GRAPHIC_STYLE: LazyLock<GraphicStyle> = LazyLock::new(GraphicStyl
 /// Graphic tool geometry, styling and scientific placement options.
 #[derive(Debug, Clone, Copy)]
 pub struct GraphicOptions<'a> {
+    pub table_grid: [usize; 2],
+    pub table_cell: Option<reshiki::graphics::table::CellRef>,
     pub constrain: bool,
     pub arc: ArcGeometry,
     pub style: &'a GraphicStyle,
@@ -631,6 +634,8 @@ pub struct GraphicOptions<'a> {
 impl Default for GraphicOptions<'_> {
     fn default() -> Self {
         Self {
+            table_grid: reshiki::graphics::table::editor::DEFAULT_GRID,
+            table_cell: None,
             constrain: false,
             arc: Default::default(),
             style: &DEFAULT_GRAPHIC_STYLE,

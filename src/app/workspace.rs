@@ -318,6 +318,8 @@ impl App {
             bond_drawing: self.tab.bond_drawing,
             chain_drawing: self.tab.chain_drawing,
             graphics: GraphicOptions {
+                table_grid: self.tab.table_inputs.grid,
+                table_cell: self.active_table_cell(),
                 constrain: self.toolbar.graphic(self.tool).is_some_and(|p| p.constrain),
                 arc: self.tab.arc_editor.geometry,
                 style: &self.tab.graphic_style,
@@ -761,6 +763,7 @@ impl App {
             ),
             (Tool::Graphic(self.toolbar.ellipse.kind), ellipse.as_str()),
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
+            (Tool::Graphic(G::Table), "Table"),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
             (Tool::Equipment, super::equipment::INSERT),
@@ -1636,6 +1639,16 @@ impl App {
         kind: reshiki::graphics::GraphicKind,
     ) -> Vec<Element<'_, Message>> {
         use reshiki::graphics::GraphicKind as G;
+        if kind == G::Table {
+            return vec![
+                text(format!(
+                    "{} × {} cells",
+                    self.tab.table_inputs.grid[0], self.tab.table_inputs.grid[1]
+                ))
+                .size(12)
+                .into(),
+            ];
+        }
         let chooser: Element<'_, Message> = match kind {
             G::Symbol(k) => {
                 crate::appearance::pick_list(reshiki::scientific::SymbolKind::ALL, Some(k), |k| {

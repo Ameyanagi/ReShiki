@@ -1,6 +1,9 @@
 //! Mouse presses on the paper: the context menu and the gesture a left press starts.
 
-use crate::canvas::hit::{bond_text_at, hit_selection};
+use crate::canvas::hit::{
+    bond_text_at, cell_filter, hit_selection, indicator_allowed, nearest_atom, nearest_bond,
+    ring_at,
+};
 use crate::canvas::pick::{HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::{
     Edit, Gesture, HandleClick, MoleculeCanvas, State, Tool, TransformDrag, World, tilt,
@@ -20,7 +23,7 @@ impl MoleculeCanvas<'_> {
         let p = self.camera.world(point?, bounds);
         let mut hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
         if hit.is_empty() {
-            hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
+            hit = ring_at(self.doc, p).unwrap_or_default();
         }
         let target = hit.clone();
         hit = self.doc.expand_groups(&hit);
@@ -108,7 +111,7 @@ impl MoleculeCanvas<'_> {
     fn press_tilt(&self, state: &mut State, p: World, point: Point) -> Option<Action<Edit>> {
         let mut hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
         if hit.is_empty() {
-            hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
+            hit = ring_at(self.doc, p).unwrap_or_default();
         }
         let in_selection = reshiki::scene::selection_bounds(self.doc, self.selected)
             .is_some_and(|(lo, hi)| p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y);
@@ -182,6 +185,7 @@ impl MoleculeCanvas<'_> {
     ) -> Option<(u64, reshiki::equipment::solve::adjust::Handle)> {
         let q = [f64::from(p.x), f64::from(p.y)];
         let reach = f64::from(self.camera.world_len(HANDLE_PICK_PX));
+        let allowed = cell_filter(self.doc, p);
         (self.doc.graphics.iter())
             .filter(|g| g.piece.is_some() && self.selected.contains(&g.id))
             .flat_map(|g| {
@@ -190,21 +194,19 @@ impl MoleculeCanvas<'_> {
                     .map(move |h| (g.id, h))
             })
             .map(|(id, h)| ((h.at[0] - q[0]).hypot(h.at[1] - q[1]), id, h))
-            .filter(|(d, ..)| *d <= reach)
+            .filter(|(d, id, _)| *d <= reach && allowed(*id))
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map(|(_, id, h)| (id, h))
     }
 
     fn press_arrow_handle(&self, state: &mut State, p: World) -> Option<Action<Edit>> {
+        let allowed = cell_filter(self.doc, p);
         if (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
             && self.selected.len() == 1
         {
-            for a in self
-                .doc
-                .arrows
-                .iter()
-                .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
-            {
+            for a in self.doc.arrows.iter().filter(|a| {
+                self.selected.contains(&a.id) && self.doc.atom_visible(a.id) && allowed(a.id)
+            }) {
                 if let Some(index) = a.handle_at(p, self.camera.world_len(HANDLE_PICK_PX)) {
                     let node = reshiki::arrows::node_handle(index);
                     let grab = node
@@ -232,6 +234,7 @@ impl MoleculeCanvas<'_> {
     }
 
     fn press_edit_points(&self, state: &mut State, p: World) -> Option<Action<Edit>> {
+        let allowed = cell_filter(self.doc, p);
         if self.tool == Tool::EditPoints {
             if let Some(indicator) =
                 reshiki::atom_labels::indicators(self.doc)
@@ -240,6 +243,7 @@ impl MoleculeCanvas<'_> {
                         i.owner.selected(self.selected)
                             && i.owner.drawn(self.doc)
                             && i.center.distance(p) < 9. / self.camera.zoom
+                            && indicator_allowed(i.owner, &allowed)
                     })
             {
                 state.gesture = Some(Gesture::AtomIndicator {
@@ -247,12 +251,9 @@ impl MoleculeCanvas<'_> {
                 });
                 return Some(Action::request_redraw().and_capture());
             }
-            for a in self
-                .doc
-                .atoms
-                .iter()
-                .filter(|a| self.selected.contains(&a.id) && self.doc.atom_drawn(a.id))
-            {
+            for a in self.doc.atoms.iter().filter(|a| {
+                self.selected.contains(&a.id) && self.doc.atom_drawn(a.id) && allowed(a.id)
+            }) {
                 if let Some(index) = a.marks.iter().position(|m| {
                     reshiki::scientific::mark_drawn(self.doc, a, m)
                         && a.position.offset(m.offset.x, m.offset.y).distance(p)
@@ -268,9 +269,7 @@ impl MoleculeCanvas<'_> {
             }
         }
         if self.tool == Tool::EditPoints {
-            if let Some(id) = self
-                .doc
-                .nearest(p, self.camera.world_len(PICK_RADIUS_PX))
+            if let Some(id) = nearest_atom(self.doc, p, self.camera.world_len(PICK_RADIUS_PX))
                 .filter(|id| {
                     self.doc.atom(*id).is_some_and(|a| a.attachment.is_some())
                         && self.doc.abbreviation(*id).is_none()
@@ -295,6 +294,7 @@ impl MoleculeCanvas<'_> {
                         && g.cycle.is_none()
                         && g.kind != reshiki::graphics::GraphicKind::Piece
                         && !g.is_icon()
+                        && allowed(g.id)
                 })
             {
                 if let Some(handles) = g.path_handles() {
@@ -340,7 +340,8 @@ impl MoleculeCanvas<'_> {
                     let (lo, hi) = u.label_box(self.doc)?;
                     let inside = (lo.x - pad..=hi.x + pad).contains(&p.x)
                         && (lo.y - pad..=hi.y + pad).contains(&p.y);
-                    inside.then_some(u.bracket?)
+                    let bracket = u.bracket?;
+                    (inside && allowed(bracket)).then_some(bracket)
                 })
             {
                 state.gesture = Some(Gesture::RepeatLabelMove { bracket, start: p });
@@ -389,7 +390,7 @@ impl MoleculeCanvas<'_> {
         let mut hit = model_frame
             .unwrap_or_else(|| hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX)));
         if self.tool.selects() && hit.is_empty() {
-            hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
+            hit = ring_at(self.doc, p).unwrap_or_default();
         }
         // Text in a shape drags its shape, and the shape's group.
         hit = reshiki::shape_text::with_holders(self.doc, &hit);
@@ -417,7 +418,7 @@ impl MoleculeCanvas<'_> {
         let text_start = text.and_then(|id| reshiki::atom_text::text_atom_position(self.doc, id));
         state.gesture = match self.tool {
             Tool::Chain(mode) => {
-                let source = self.doc.nearest(p, self.camera.world_len(PICK_RADIUS_PX));
+                let source = nearest_atom(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
                 let start = source
                     .and_then(|id| self.doc.atom(id).map(|a| a.position))
                     .or(text_start)
@@ -482,15 +483,12 @@ impl MoleculeCanvas<'_> {
                 Gesture::Select { start: p }
             }),
             Tool::Atom
-                if self
-                    .doc
-                    .nearest(p, self.camera.world_len(PICK_RADIUS_PX))
-                    .is_some() =>
+                if nearest_atom(self.doc, p, self.camera.world_len(PICK_RADIUS_PX)).is_some() =>
             {
                 Some(Gesture::Draw {
                     start: p,
                     pressed: p,
-                    id: self.doc.nearest(p, self.camera.world_len(PICK_RADIUS_PX)),
+                    id: nearest_atom(self.doc, p, self.camera.world_len(PICK_RADIUS_PX)),
                     text: None,
                 })
             }
@@ -506,21 +504,14 @@ impl MoleculeCanvas<'_> {
                 id: if self.tool == Tool::Arrow {
                     None
                 } else {
-                    self.doc.nearest(p, self.camera.world_len(PICK_RADIUS_PX))
+                    nearest_atom(self.doc, p, self.camera.world_len(PICK_RADIUS_PX))
                 },
             }),
             Tool::Ring | Tool::RingPreset(_) | Tool::Template => Some(Gesture::Ring {
                 start: p,
-                attached: self
-                    .doc
-                    .nearest(p, self.camera.world_len(PICK_RADIUS_PX))
+                attached: nearest_atom(self.doc, p, self.camera.world_len(PICK_RADIUS_PX))
                     .is_some()
-                    || reshiki::editing::nearest_bond(
-                        self.doc,
-                        p,
-                        self.camera.world_len(PICK_RADIUS_PX),
-                    )
-                    .is_some(),
+                    || nearest_bond(self.doc, p, self.camera.world_len(PICK_RADIUS_PX)).is_some(),
             }),
             // Option/Alt-click repeats the last label, as in ChemDraw. The app
             // detects double-clicks: opening the label editor rebuilds the view.

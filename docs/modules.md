@@ -164,6 +164,7 @@ explains how the crates and modules fit together.
 - `src/app/startup.rs`
 - `src/app/stereo.rs`: Advisory drawing checks and explicit, undoable stereobond fixes.
 - `src/app/symbol_picker.rs`: The Ω symbol picker in the Style bar.
+- `src/app/tables.rs`: Native table creation and explicit cell editing.
 - `src/app/tabs.rs`: Document tabs
 - `src/app/template_library.rs`
 - `src/app/template_style_evidence.rs`: Opt-in renderer snapshots through the real editor dispatch, usable on baseline too.
@@ -197,6 +198,7 @@ explains how the crates and modules fit together.
 - `src/canvas/grid.rs`: The paper's dot grid and its retained geometry.
 - `src/canvas/guides.rs`: Canvas-only measuring aids; coordinates share the drawing/export scale.
 - `src/canvas/hit.rs`: Hit testing
+- `src/canvas/hit/table.rs`: Pointer-local table clipping.
 - `src/canvas/input.rs`: Pointer and keyboard events on the molecule canvas.
 - `src/canvas/input/motion.rs`: Cursor motion
 - `src/canvas/input/press.rs`: Mouse presses on the paper
@@ -747,6 +749,8 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/path/symmetry.rs`: Reflection fitting for a connected path, including its Bézier controls.
 - `crates/model/src/graphics/superscript.rs`
 - `crates/model/src/graphics/table.rs`: Editable table cells own ordinary drawing objects by ID.
+- `crates/model/src/graphics/table/clip.rs`: Pointer geometry clips ink before applying the editor's pick radius.
+- `crates/model/src/graphics/table/editor.rs`: Original empty grids for the native table tool.
 - `crates/model/src/grouping.rs`: Persistent, nested logical groups, represented as laminar sets of object IDs.
 - `crates/model/src/haworth.rs`: Haworth drawing geometry and chemically defined carbohydrate templates.
 - `crates/model/src/haworth/interchange.rs`: Recognize the tested five/six-member Haworth convention at file boundaries.

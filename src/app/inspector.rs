@@ -1044,6 +1044,9 @@ impl App {
             });
         }
         let styled_graphics = self.graphic_panel_visible();
+        if let Some(table) = self.table_card() {
+            body = body.push(card(container(table).padding(12)));
+        }
         let cycle = self.cycle_card();
         let show_cycle = cycle.is_some();
         // A selected panel's title, fill and shadow come before the cards of

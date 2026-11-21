@@ -760,6 +760,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Graphics(..)
         | Message::Figure(..)
         | Message::Cycle(..)
+        | Message::Table(..)
         | Message::RemoveMark(..)
         | Message::RotateMark(..)
         | Message::AtomRadical(..)

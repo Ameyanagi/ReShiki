@@ -37,6 +37,7 @@ mod document_styles;
 mod document_tab;
 #[cfg(test)]
 mod drawing_panel_capture;
+mod tables;
 use document_tab::DocumentTab;
 mod engine_jobs;
 pub(crate) mod equipment;
@@ -241,6 +242,7 @@ pub enum Message {
     Figure(figure_panels::Action),
     /// Catalytic cycles.
     Cycle(cycles::Action),
+    Table(tables::Action),
     RemoveMark(u64, usize),
     RotateMark(u64, usize),
     AtomRadical(u8),

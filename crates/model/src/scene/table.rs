@@ -145,6 +145,27 @@ fn available(frame: Frame, position: Point, angle: f32) -> Option<f32> {
     (width.is_finite() && width > 1e-4).then_some(width)
 }
 
+fn annotation_format(
+    annotation: &crate::document::Annotation,
+    frame: Frame,
+) -> crate::typography::TextFormat {
+    let mut format = annotation.format.clone();
+    if let Some(width) = available(frame, annotation.position, annotation.angle) {
+        let width_pt = width * super::STYLE.points_per_world();
+        format.width_pt = Some(format.width_pt.map_or(width_pt, |old| old.min(width_pt)));
+    }
+    format
+}
+
+/// The derived text layout inside an affine cell, shared by painting and
+/// pointer hits. Canonical text, formatting and child geometry stay untouched.
+pub fn annotation_layout(
+    annotation: &crate::document::Annotation,
+    frame: Frame,
+) -> crate::typography::Layout {
+    crate::typography::cell_layout(&annotation.text, &annotation_format(annotation, frame))
+}
+
 pub(super) fn primitives(doc: &Document) -> Vec<Primitive> {
     // Malformed ownership must never paint the same child outside its clip.
     // Stored drawings are validated; an invalid transient view paints no ink.
@@ -169,11 +190,7 @@ pub(super) fn primitives(doc: &Document) -> Vec<Primitive> {
             });
             let content = if let Some(mut part) = parts.remove(&key) {
                 for a in &mut part.annotations {
-                    if let Some(width) = available(frame, a.position, a.angle) {
-                        let width_pt = width * super::STYLE.points_per_world();
-                        a.format.width_pt =
-                            Some(a.format.width_pt.map_or(width_pt, |old| old.min(width_pt)));
-                    }
+                    a.format = annotation_format(a, frame);
                 }
                 super::primitives_in_cell(&part)
             } else {

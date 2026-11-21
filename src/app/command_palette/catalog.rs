@@ -623,6 +623,13 @@ fn inserts(app: &App) -> Vec<Command> {
         Message::Cycle(cycles::Action::Insert),
     ));
     let layouts = reshiki::templates::FIGURE_LAYOUTS;
+    list.push(send(
+        "Table",
+        Insert,
+        "Draw a table for structures and text.",
+        "table grid cell rows columns chemistry",
+        Message::Tool(Tool::Graphic(GraphicKind::Table)),
+    ));
     list.push(Command::new(
         layouts,
         Insert,

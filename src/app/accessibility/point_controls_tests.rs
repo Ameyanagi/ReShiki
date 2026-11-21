@@ -333,6 +333,50 @@ fn selected_graphic(kind: GraphicKind, size: Size) -> App {
 }
 
 #[tokio::test]
+#[ignore = "Opt-in real table Properties accessibility and Undo regression"]
+async fn table_cell_controls_publish_native_actions_and_keep_the_explicit_target() {
+    use crate::app::tables::Action;
+    use reshiki::graphics::table::Membership;
+    let size = Size::new(1280., 820.);
+    let mut ui = Ui::new(size).await;
+    let mut app = selected_graphic(GraphicKind::Table, size);
+    let snapshot = ui.snapshot(&app);
+    let cell = snapshot
+        .nodes
+        .iter()
+        .find(|n| n.id == "table-active-cell")
+        .unwrap();
+    assert_eq!(cell.value.as_deref(), Some("1"));
+    let operation::Outcome::Some(message) = ui.set_value(&app, "table-active-cell", "2") else {
+        panic!("The native cell selector must accept a cell value");
+    };
+    assert!(matches!(message, Message::Table(Action::Cell(2))));
+    let _ = app.update(message);
+    let before = app.tab.doc.clone();
+    let operation::Outcome::Some(message) = ui.set_value(&app, "table-cell-text", "Editable cell")
+    else {
+        panic!("The cell text control must accept text");
+    };
+    let _ = app.update(message);
+    assert_eq!(app.tab.doc, before);
+    let operation::Outcome::Some(message) = ui.activate(&app, "table-cell-add-text") else {
+        panic!("Add text must have a native action");
+    };
+    let _ = app.update(message);
+    let caption = app.tab.doc.annotations.last().unwrap();
+    assert_eq!(
+        Membership::new(&app.tab.doc)
+            .unwrap()
+            .cell_of(caption.id)
+            .unwrap()
+            .cell,
+        2
+    );
+    ui.undo(&mut app);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[tokio::test]
 #[ignore = "Opt-in real command palette accessibility and input regression"]
 async fn command_palette_unavailable_rows_publish_disabled_state_and_reason() {
     use crate::app::command_palette::Action;

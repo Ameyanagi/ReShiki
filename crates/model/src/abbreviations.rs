@@ -969,5 +969,25 @@ pub fn label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
     crate::scene::abbreviation_label_hit(doc, point, radius)
 }
 
+/// Like [`label_hit`], retaining lower visible labels when a scope clips the
+/// otherwise winning candidate.
+pub fn label_hit_where(
+    doc: &Document,
+    point: Point,
+    radius: f32,
+    allowed: impl Fn(u64) -> bool,
+) -> Option<u64> {
+    crate::scene::abbreviation_label_hit_where(doc, point, radius, allowed)
+}
+
+pub fn label_hit_in(
+    doc: &Document,
+    point: Point,
+    radius: f32,
+    bounds: impl Fn(u64, Point, Point) -> bool,
+) -> Option<u64> {
+    crate::scene::abbreviation_label_hit_in(doc, point, radius, bounds)
+}
+
 #[cfg(test)]
 mod tests;

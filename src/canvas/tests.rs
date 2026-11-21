@@ -1163,6 +1163,8 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
             arc: None,
         },
         graphics: GraphicOptions {
+            table_grid: reshiki::graphics::table::editor::DEFAULT_GRID,
+            table_cell: None,
             constrain: false,
             arc: Default::default(),
             style: &STYLE,

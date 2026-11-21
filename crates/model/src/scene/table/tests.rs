@@ -345,3 +345,53 @@ fn transparent_cell_halo_knocks_out_previous_ink_only_inside_its_affine_clip() {
     );
     assert_eq!(pix.pixel(108, 30).unwrap().alpha(), 255);
 }
+
+#[test]
+fn public_cell_annotation_layout_matches_native_hard_wrapped_scene_runs() {
+    let mut doc = Document::default();
+    doc.annotations.push(Annotation {
+        id: 1,
+        position: Point::new(5., 5.),
+        text: "CompleteUnbrokenCaption".into(),
+        angle: 0.,
+        format: Default::default(),
+    });
+    let graphic = table(vec![cell(1, 0., 0.2, vec![1])]);
+    let frame = graphic.table.as_ref().unwrap().cells[0]
+        .frame(&graphic)
+        .unwrap();
+    let expected = super::super::table_annotation_layout(&doc.annotations[0], frame);
+    doc.graphics.push(graphic);
+    let before = doc.annotations.clone();
+    let scene = super::super::primitives(&doc);
+    let Primitive::Clip { primitives, .. } = &scene[0] else {
+        panic!("Missing cell clip")
+    };
+    let actual: Vec<_> = primitives
+        .iter()
+        .filter_map(|primitive| match primitive {
+            Primitive::Text { position, text, .. } => Some((*position, text.as_str())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        actual,
+        expected
+            .fragments
+            .iter()
+            .map(|fragment| (
+                doc.annotations[0]
+                    .position
+                    .offset(fragment.position.x, fragment.position.y),
+                fragment.text.as_str(),
+            ))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        expected
+            .fragments
+            .iter()
+            .any(|fragment| fragment.position.y > 0.)
+    );
+    assert_eq!(doc.annotations, before);
+}

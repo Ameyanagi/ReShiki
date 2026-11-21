@@ -54,12 +54,13 @@ impl App {
     }
 
     fn keyboard_target_at(&self, point: Point) -> Target {
-        let atom = reshiki::scene::atom_label_hit(&self.tab.doc, point, 0.)
-            .or_else(|| self.tab.doc.nearest(point, 10. / self.tab.camera.zoom));
+        let atom = crate::canvas::atom_label_at(&self.tab.doc, point, 0.).or_else(|| {
+            crate::canvas::nearest_atom(&self.tab.doc, point, 10. / self.tab.camera.zoom)
+        });
         if let Some(id) = atom {
             return Target::Atom(id);
         }
-        reshiki::editing::nearest_bond(&self.tab.doc, point, 7. / self.tab.camera.zoom)
+        crate::canvas::nearest_bond(&self.tab.doc, point, 7. / self.tab.camera.zoom)
             .and_then(|index| self.tab.doc.bonds.get(index))
             .map_or(Target::Blank(point), |bond| {
                 Target::Bond(bond.a.min(bond.b), bond.a.max(bond.b))
@@ -340,7 +341,7 @@ fn begin_drawing(
         if doc.atoms.len() >= 100_000 {
             return Err("Atom limit exceeded".into());
         }
-        if doc.nearest(point, length * 0.15).is_some() {
+        if crate::canvas::nearest_atom(doc, point, length * 0.15).is_some() {
             return Err(
                 "The drawing position overlaps an atom · Use arrows to navigate to it".into(),
             );

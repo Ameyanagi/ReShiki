@@ -132,6 +132,9 @@ impl Tool {
             Self::Graphic(GraphicKind::Arc) => {
                 "Drag an ellipse frame · Shift makes it circular · Esc cancels".into()
             }
+            Self::Graphic(GraphicKind::Table) => {
+                "Set rows and columns in Properties · Drag to draw the table · Esc cancels".into()
+            }
             Self::Graphic(_) => {
                 "Drag to draw · Shift constrains proportions or angle · Esc cancels".into()
             }

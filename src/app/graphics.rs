@@ -180,12 +180,16 @@ impl App {
         &self,
     ) -> impl Iterator<Item = &reshiki::graphics::Graphic> {
         self.tab.doc.graphics.iter().filter(|g| {
-            self.tab.selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none()
+            self.tab.selected.contains(&g.id)
+                && g.picture.is_none()
+                && g.piece.is_none()
+                && g.table.is_none()
         })
     }
 
     pub(super) fn graphic_panel_visible(&self) -> bool {
-        matches!(self.tool, Tool::Graphic(_)) || self.selected_styled_graphics().next().is_some()
+        matches!(self.tool, Tool::Graphic(kind) if kind != GraphicKind::Table)
+            || self.selected_styled_graphics().next().is_some()
     }
 
     pub(super) fn graphic_fill_controls(&self) -> bool {
@@ -704,6 +708,7 @@ impl App {
     }
 
     pub(super) fn sync_graphics(&mut self) {
+        self.sync_tables();
         self.sync_pictures();
         self.sync_arc();
         if let Some(g) = self

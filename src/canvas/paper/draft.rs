@@ -148,21 +148,36 @@ impl MoleculeCanvas<'_> {
                     }
                 } else {
                     let id = preview.next_id();
-                    let mut graphic = Graphic::dragged(
-                        id,
-                        kind,
-                        *start,
-                        end,
-                        self.graphics.style.clone(),
-                        self.graphics.bracket_sides,
-                        state.modifiers.shift() || self.graphics.constrain,
-                    )
-                    .with_arc(self.graphics.arc);
-                    if kind.brackets() {
-                        graphic.superscript = self.graphics.superscript.map(str::to_owned);
+                    let graphic = if kind == reshiki::graphics::GraphicKind::Table {
+                        reshiki::graphics::table::editor::dragged(
+                            id,
+                            *start,
+                            end,
+                            self.graphics.table_grid,
+                            self.doc.drawing_style.line_width_pt,
+                        )
+                        .ok()
+                    } else {
+                        Some(
+                            Graphic::dragged(
+                                id,
+                                kind,
+                                *start,
+                                end,
+                                self.graphics.style.clone(),
+                                self.graphics.bracket_sides,
+                                state.modifiers.shift() || self.graphics.constrain,
+                            )
+                            .with_arc(self.graphics.arc),
+                        )
+                    };
+                    if let Some(mut graphic) = graphic {
+                        if kind.brackets() {
+                            graphic.superscript = self.graphics.superscript.map(str::to_owned);
+                        }
+                        preview.to_mut().graphics.push(graphic);
+                        *ring_selection = Some(vec![id]);
                     }
-                    preview.to_mut().graphics.push(graphic);
-                    *ring_selection = Some(vec![id]);
                 }
             }
             if let Some(Gesture::AtomMark { id, index, start }) = &state.gesture

@@ -1155,6 +1155,17 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
 }
 
 pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
+    nearest_bond_where(doc, p, r, |_, _, _, _| true)
+}
+
+/// Resolve visibility before distance ranking, so a rejected nearer bond does
+/// not hide another candidate. Both endpoint IDs identify a bond's scope.
+pub fn nearest_bond_where(
+    doc: &Document,
+    p: Point,
+    r: f32,
+    allowed: impl Fn(u64, u64, Point, Point) -> bool,
+) -> Option<usize> {
     if doc.bonds.is_empty() {
         return None;
     }
@@ -1177,7 +1188,7 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
             let (a_id, z_id) = (b.a, b.b);
             let (a, z) = (*positions.get(&a_id)?, *positions.get(&z_id)?);
             let distance = crate::graphics::segment_distance(p, a, z);
-            if !(distance < r && doc.bond_drawn(b.a, b.b)) {
+            if !(distance < r && doc.bond_drawn(b.a, b.b) && allowed(b.a, b.b, a, z)) {
                 return None;
             }
             let distance = if two_sided
@@ -2063,6 +2074,11 @@ impl RingInteriors {
 /// Hit the interior of a visible ring, including aromatic and substituted rings.
 /// The separate fusion operation still requires an isolated saturated ring.
 pub fn ring_at(doc: &Document, p: Point) -> Option<Vec<u64>> {
+    ring_at_where(doc, p, |_| true)
+}
+
+/// Ring interiors compete only after the caller's visible-scope check.
+pub fn ring_at_where(doc: &Document, p: Point, allowed: impl Fn(u64) -> bool) -> Option<Vec<u64>> {
     let mut rings = crate::aromatic::ring_circles(doc, false);
     // A ring shown as a 3D model has no 2D interior to hit.
     rings.retain(|ring| ring.atoms.iter().all(|id| doc.atom_drawn(*id)));
@@ -2081,7 +2097,7 @@ pub fn ring_at(doc: &Document, p: Point) -> Option<Vec<u64>> {
                 inside = !inside;
             }
         }
-        inside.then_some(ring)
+        (inside && ring.iter().all(|id| allowed(*id))).then_some(ring)
     })
 }
 
