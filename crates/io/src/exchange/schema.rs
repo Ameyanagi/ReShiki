@@ -1424,7 +1424,7 @@ pub(super) const PROPERTIES: &[Property] = &[
     Property {
         code: 0x0a3a,
         name: "Dipole",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
