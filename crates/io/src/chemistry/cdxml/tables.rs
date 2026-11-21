@@ -226,7 +226,7 @@ pub(super) fn read(
         .iter()
         .map(|m| (m.source, m.atoms.as_slice()))
         .collect();
-    let colors = presentation::palette(root)?;
+    let colors = presentation::palette(root).map_err(|e| invalid(e.to_string()))?;
     // Cell Z values belong to that cell's own plane; they must not move the
     // whole table behind an unrelated outside object.
     let top_layer = nodes

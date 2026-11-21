@@ -73,7 +73,9 @@ pub(super) fn render_part_on(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{} {} {width} {height}\" width=\"{width}\" height=\"{height}\">",
         lo.x, lo.y
     );
-    push_svg(&mut s, drawing, &frame, &mut 0);
+    let mut content = String::new();
+    push_svg(&mut content, drawing, &frame, &mut 0);
+    s.push_str(&content);
     s.push_str("</svg>");
     s
 }

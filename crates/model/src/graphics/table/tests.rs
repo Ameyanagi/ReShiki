@@ -292,9 +292,39 @@ fn native_materialization_keeps_cycle_arrow_and_apparatus_outputs_in_the_cell() 
         style,
     ));
     relink(&mut doc, Some(CellRef { table, cell: 1 }), &[id]).unwrap();
+    // Straight block arrows retain their native ChemDraw identity.
+    let lowered = crate::arrows::lowered(&doc);
+    lowered.validate().unwrap();
+    assert_eq!(
+        lowered.arrows.iter().find(|a| a.id == id),
+        doc.arrows.iter().find(|a| a.id == id)
+    );
+    assert_eq!(
+        Membership::new(&lowered).unwrap().cell_of(id),
+        Some(CellRef { table, cell: 1 })
+    );
+    // Chevron arrows really materialize, and every output inherits the cell.
+    doc.arrows
+        .iter_mut()
+        .find(|a| a.id == id)
+        .unwrap()
+        .style
+        .set_body(crate::arrows::Body::Chevron);
+    let original_ids: std::collections::HashSet<_> = doc.object_ids().collect();
     let lowered = crate::arrows::lowered(&doc);
     lowered.validate().unwrap();
     assert!(!lowered.arrows.iter().any(|a| a.id == id));
+    let outputs: Vec<_> = lowered
+        .object_ids()
+        .filter(|id| !original_ids.contains(id))
+        .collect();
+    assert!(!outputs.is_empty());
+    let ownership = Membership::new(&lowered).unwrap();
+    assert!(
+        outputs
+            .into_iter()
+            .all(|id| ownership.cell_of(id) == Some(CellRef { table, cell: 1 }))
+    );
     let mut doc = lowered.into_owned();
     let flask = crate::equipment::builtin::find("reshiki/rbf-100-15").unwrap();
     let id = doc.next_id();

@@ -594,8 +594,8 @@ pub(crate) fn cell_layout(text: &str, format: &TextFormat) -> Layout {
 
 /// Lay out grapheme clusters, so an emoji sequence or a letter with its marks
 /// is measured, wrapped and drawn as one piece.
-fn layout_with_metrics<'t>(
-    text: &'t str,
+fn layout_with_metrics(
+    text: &str,
     format: &TextFormat,
     cluster_metrics: impl Fn(&str, &TextStyle) -> (&'static str, f32),
 ) -> Layout {
