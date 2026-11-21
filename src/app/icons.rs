@@ -10,8 +10,6 @@ mod tools;
 
 #[derive(Clone, Copy)]
 pub(super) enum Icon {
-    Sun,
-    Moon,
     ColorTiles(bool),
     TextAlign(reshiki::typography::TextAlign),
     LabelAlign(reshiki::abbreviations::LabelAlignment),
@@ -106,8 +104,6 @@ impl Glyph {
         match self.0 {
             Icon::ColorTiles(soft) => chrome::color_tiles(f, ink, soft),
             Icon::Trash => commands::trash(f, ink),
-            Icon::Sun => chrome::sun(f, ink),
-            Icon::Moon => chrome::moon(f, ink),
 
             Icon::Keyboard => chrome::keyboard(f, ink),
             Icon::Settings => chrome::gear(f, ink),

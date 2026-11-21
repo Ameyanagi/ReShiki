@@ -29,47 +29,6 @@ pub(super) fn color_tiles(f: &mut Frame<'_>, ink: Color, soft: bool) {
     }
 }
 
-pub(super) fn sun(f: &mut Frame<'_>, ink: Color) {
-    f.stroke(
-        &Path::circle(Point::new(12., 12.), 4.2),
-        Stroke::default().with_width(1.6).with_color(ink),
-    );
-    for i in 0..8 {
-        let a = i as f32 * std::f32::consts::FRAC_PI_4;
-        line(
-            f,
-            ink,
-            &[
-                (12. + 7. * a.cos(), 12. + 7. * a.sin()),
-                (12. + 10. * a.cos(), 12. + 10. * a.sin()),
-            ],
-        );
-    }
-}
-
-pub(super) fn moon(f: &mut Frame<'_>, ink: Color) {
-    let path = Path::new(|p| {
-        p.move_to(Point::new(17., 3.));
-        p.bezier_curve_to(
-            Point::new(0., 0.),
-            Point::new(0., 23.),
-            Point::new(16., 21.),
-        );
-        p.bezier_curve_to(
-            Point::new(20., 20.),
-            Point::new(22., 17.),
-            Point::new(22., 14.),
-        );
-        p.bezier_curve_to(
-            Point::new(12., 19.),
-            Point::new(9., 7.),
-            Point::new(17., 3.),
-        );
-        p.close();
-    });
-    f.stroke(&path, Stroke::default().with_width(1.6).with_color(ink));
-}
-
 pub(super) fn keyboard(f: &mut Frame<'_>, ink: Color) {
     let outline =
         Path::rounded_rectangle(Point::new(1., 5.), iced::Size::new(22., 15.), 2.5.into());
