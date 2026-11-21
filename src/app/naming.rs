@@ -297,6 +297,11 @@ impl Drop for State {
     }
 }
 impl State {
+    #[cfg(test)]
+    pub(super) fn input_name(&self) -> &str {
+        &self.name
+    }
+
     pub(super) fn is_pending(&self) -> bool {
         self.pending.is_some()
     }

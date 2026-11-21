@@ -42,7 +42,7 @@ fn names_back_and_escape_preserve_the_drawing_and_parent_tab() {
             let _ = app.update(close);
             assert_eq!(app.inspector_tab, previous);
             assert!(app.inspector_open);
-            assert_eq!(app.tab.naming.name, "ethanol");
+            assert_eq!(app.tab.naming.input_name(), "ethanol");
             assert_eq!(
                 (
                     app.tab.doc.clone(),

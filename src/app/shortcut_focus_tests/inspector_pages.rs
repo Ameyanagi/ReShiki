@@ -165,7 +165,7 @@ async fn inspector_page_escape_unfocuses_the_field_before_returning() {
         assert!(app.inspector_open);
         ui.assert_unfocused(&app);
         if page == InspectorTab::Names {
-            assert_eq!(app.tab.naming.name, "x");
+            assert_eq!(app.tab.naming.input_name(), "x");
         } else {
             assert_eq!(app.assistant.input_text(), "x");
         }
