@@ -50,6 +50,115 @@ fn assert_owned(doc: &Document, ids: &[u64], target: CellRef) {
 }
 
 #[test]
+fn mechanism_arrows_inherit_common_cell_before_creation_validation() {
+    use crate::arrow_anchors::{self, Pick};
+    use crate::arrows::{ArrowStyle, Preset};
+    for kind in 0..3 {
+        for reverse in [false, true] {
+            let (mut doc, a, cell) = owned_atom();
+            let b = doc.add_atom("C", Point::new(120., 60.));
+            let c = doc.add_atom("N", Point::new(110., 140.));
+            doc.add_bond(a, b, 1, "plain");
+            doc.graphics[0].table.as_mut().unwrap().cells[0]
+                .members
+                .extend([b, c]);
+            crate::scientific::attach(
+                doc.atom_mut(a).unwrap(),
+                crate::scientific::SymbolKind::LonePair,
+                Point::new(0., -25.),
+            )
+            .unwrap();
+            doc.atom_mut(a).unwrap().marks[0].id = None;
+            doc.atom_mut(a).unwrap().mark_serial = 0;
+            let target = match kind {
+                0 => Pick::Atom(a),
+                1 => Pick::Bond {
+                    a,
+                    b,
+                    fraction: 0.5,
+                },
+                _ => Pick::LonePair {
+                    atom: a,
+                    mark: doc.atom(a).unwrap().marks[0].clone(),
+                },
+            };
+            let other = Pick::Atom(c);
+            let (source, destination) = if reverse {
+                (&other, &target)
+            } else {
+                (&target, &other)
+            };
+            doc.validate().unwrap();
+            let arrow = arrow_anchors::create(
+                &mut doc,
+                source,
+                destination,
+                Preset::Curved,
+                ArrowStyle::preset(Preset::Curved),
+            )
+            .unwrap();
+            assert_owned(&doc, &[a, b, c, arrow], cell);
+            let made = &doc.arrows[0];
+            assert!(made.start_anchor.is_some() && made.end_anchor.is_some());
+            if kind == 2 {
+                assert!(doc.atom(a).unwrap().marks[0].id.is_some());
+            }
+            let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
+            assert_owned(&reopened, &[a, b, c, arrow], cell);
+            assert_eq!(
+                reopened.arrows, doc.arrows,
+                "anchors and geometry stay exact"
+            );
+            // Native saves raise the fixture's in-memory version to the
+            // feature floor required by its table, without changing its ink.
+            assert_eq!(reopened, doc.current());
+        }
+    }
+}
+
+#[test]
+fn mechanism_arrows_refuse_cross_cell_targets_without_allocating_arrow_or_mark_ids() {
+    use crate::arrow_anchors::{self, Pick};
+    use crate::arrows::{ArrowStyle, Preset};
+    for other_cell in [false, true] {
+        let (mut doc, a, _) = owned_atom();
+        let b = doc.add_atom("O", Point::new(240., 60.));
+        if other_cell {
+            doc.graphics[0].table.as_mut().unwrap().cells[1]
+                .members
+                .push(b);
+        }
+        crate::scientific::attach(
+            doc.atom_mut(a).unwrap(),
+            crate::scientific::SymbolKind::LonePair,
+            Point::new(0., -25.),
+        )
+        .unwrap();
+        doc.atom_mut(a).unwrap().marks[0].id = None;
+        doc.atom_mut(a).unwrap().mark_serial = 0;
+        let source = Pick::LonePair {
+            atom: a,
+            mark: doc.atom(a).unwrap().marks[0].clone(),
+        };
+        doc.validate().unwrap();
+        let before = doc.clone();
+        let error = arrow_anchors::create(
+            &mut doc,
+            &source,
+            &Pick::Atom(b),
+            Preset::Curved,
+            ArrowStyle::preset(Preset::Curved),
+        )
+        .unwrap_err();
+        assert!(error.contains("same table cell"), "{error}");
+        assert_eq!(
+            doc, before,
+            "the arrow, cell members and legacy mark stay unchanged"
+        );
+    }
+}
+
+#[test]
 fn converting_cell_captions_transfers_every_replacement_atom_before_deletion() {
     for label in ["N", "Et", "NC"] {
         let (mut doc, atom, target) = owned_atom();
