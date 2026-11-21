@@ -1,7 +1,10 @@
 //! Freeform selection shared by lasso and rectangular selection.
 use crate::{
     document::{Document, Point},
-    graphics::{flattened, segment_distance},
+    graphics::{
+        PathCommand, flattened, segment_distance,
+        table::{Frame, clip},
+    },
 };
 
 const BOUNDARY_TOLERANCE: f32 = 0.001;
@@ -60,16 +63,61 @@ fn encloses(polygon: &[Point], points: &[Point], closed: bool) -> bool {
             .any(|(c, d)| straddles(a, b, *c, *d) && straddles(*c, *d, a, b))
     })
 }
+
+fn clipped_path(
+    polygon: &[Point],
+    frame: Frame,
+    commands: &[PathCommand],
+    half: f32,
+    filled: bool,
+    round: bool,
+) -> Vec<bool> {
+    let paths = flattened(commands);
+    let mut visible: Vec<_> = if filled {
+        clip::fill_contours(frame, &paths)
+            .iter()
+            .map(|contour| encloses(polygon, contour, true))
+            .collect()
+    } else {
+        vec![]
+    };
+    if half > 0. {
+        for path in &paths {
+            let segments: Vec<_> = path
+                .windows(2)
+                .filter_map(|pair| {
+                    let &[a, b] = pair else { return None };
+                    clip::segment(frame, a, b)
+                })
+                .collect();
+            if segments.is_empty() {
+                // A wide stroke may paint inside the cell even though its
+                // centreline never enters. Never turn its closed interior
+                // into a fill merely because the path returns to its start.
+                visible.extend(
+                    clip::stroke_contours(frame, std::slice::from_ref(path), half, round)
+                        .iter()
+                        .map(|contour| encloses(polygon, contour, true)),
+                );
+            } else {
+                // Retain region selection's centreline enclosure convention.
+                visible.push(
+                    segments
+                        .iter()
+                        .all(|(a, b)| encloses(polygon, &[*a, *b], false)),
+                );
+            }
+        }
+    }
+    visible
+}
+
 pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
     if polygon.len() < 3 {
         return vec![];
     }
     let cells = crate::scene::table::Layout::new(doc);
     let visible_path = |id, points: &[Point]| -> Option<bool> {
-        if points.len() > 2 && points.first() == points.last() {
-            let clipped = cells.polygon(id, points);
-            return (!clipped.is_empty()).then(|| encloses(polygon, &clipped, true));
-        }
         let segments: Vec<_> = points
             .windows(2)
             .filter_map(|pair| {
@@ -121,8 +169,26 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         let visible: Vec<_> = a
             .paths()
             .iter()
-            .flat_map(|part| flattened(&part.commands))
-            .filter_map(|points| visible_path(a.id, &points))
+            .flat_map(|part| {
+                cells.frame(a.id).map_or_else(
+                    || {
+                        flattened(&part.commands)
+                            .iter()
+                            .filter_map(|points| visible_path(a.id, points))
+                            .collect()
+                    },
+                    |frame| {
+                        clipped_path(
+                            polygon,
+                            frame,
+                            &part.commands,
+                            part.style.width() * 0.5,
+                            part.filled && part.style.fill.is_some(),
+                            part.style.round_caps(),
+                        )
+                    },
+                )
+            })
             .collect();
         if !visible.is_empty() && visible.into_iter().all(|inside| inside) {
             result.push(a.id);
@@ -138,6 +204,35 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
                     .iter()
                     .all(|corners| encloses(polygon, corners, true))
             {
+                result.push(g.id);
+            }
+            continue;
+        }
+        if let Some(frame) = cells.frame(g.id) {
+            let picture = g.kind == crate::graphics::GraphicKind::Picture;
+            let visible: Vec<_> = g
+                .parts()
+                .iter()
+                .flat_map(|part| {
+                    clipped_path(
+                        polygon,
+                        frame,
+                        &part.commands,
+                        if picture {
+                            0.
+                        } else {
+                            part.style.width() * 0.5
+                        },
+                        picture || (part.filled && part.style.fill.is_some()),
+                        part.style.round_caps(),
+                    )
+                })
+                .chain(g.tlc_labels().iter().filter_map(|label| {
+                    let corners = cells.polygon(g.id, &label.corners());
+                    (!corners.is_empty()).then(|| encloses(polygon, &corners, true))
+                }))
+                .collect();
+            if !visible.is_empty() && visible.into_iter().all(|inside| inside) {
                 result.push(g.id);
             }
             continue;
@@ -195,6 +290,9 @@ pub fn combine(existing: &[u64], hits: &[u64], add: bool, subtract: bool) -> Vec
     }
     ids
 }
+
+#[cfg(test)]
+mod table_tests;
 
 #[cfg(test)]
 mod tests {
