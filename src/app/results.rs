@@ -366,6 +366,9 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Automatic(..)
                 | Action::Download
                 | Action::Install
+                | Action::OpenSettings
+                | Action::CopyVersion
+                | Action::OpenAboutLink(_)
                 | Action::OpenDataFolder
                 | Action::Poll => None,
             }
