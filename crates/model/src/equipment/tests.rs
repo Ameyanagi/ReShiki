@@ -511,32 +511,34 @@ fn limits_hold_at_the_boundary() {
 }
 
 #[test]
-fn a_standard_socket_leaves_the_side_view_mouth_open() {
+fn a_standard_socket_draws_a_straight_rim_when_empty() {
     let def = fixture("rbf-300-29");
     let mut instance = Instance::new(&def, Affine::IDENTITY);
     let free = paint_plan(std::slice::from_ref(&instance), Settings::default()).unwrap();
     instance.seated.insert("neck".into());
     let seated = paint_plan(&[instance], Settings::default()).unwrap();
-    assert_eq!(
-        free, seated,
-        "the socket rim does not change when a cone seats"
-    );
-
     let mouth = -99.528;
     let taper = taper("29/42").unwrap();
     let radius = taper.d / 2.;
-    assert!(free.iter().any(|p| {
-        p.pass == Pass::Outline
-            && flatten(&p.path).iter().any(|(points, closed)| {
-                !closed
-                    && points.first().zip(points.last()).is_some_and(|(a, b)| {
+    let rim_closed = |plan: &[PlanPath]| {
+        plan.iter()
+            .filter(|p| p.pass == Pass::Outline)
+            .flat_map(|p| flatten(&p.path))
+            .find_map(|(points, closed)| {
+                points
+                    .first()
+                    .zip(points.last())
+                    .filter(|&(a, b)| {
                         (a[1] - mouth).abs() < 1e-6
                             && (b[1] - mouth).abs() < 1e-6
                             && (a[0] + b[0]).abs() < 1e-6
                             && (a[0].abs() - radius).abs() < 1e-6
                     })
+                    .map(|_| closed)
             })
-    }));
+    };
+    assert_eq!(rim_closed(&free), Some(true));
+    assert_eq!(rim_closed(&seated), Some(false));
     assert!(
         free.iter()
             .filter(|p| p.material == Material::Glass)

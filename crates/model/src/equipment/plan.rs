@@ -541,8 +541,8 @@ fn standard_joint(
             let ri = |s: f64| big - s / 20.;
             let ro = |s: f64| ri(s) + t.socket_wall;
             let rb = t.bead_radius();
-            // The side view leaves the bore open between the two ends of the lip.
-            // Only the glass fill closes across the mouth.
+            // The empty socket has a straight mouth in side view. Leave that
+            // edge unstroked when a seated cone occupies the bore.
             let body = axial(
                 at,
                 u,
@@ -555,7 +555,7 @@ fn standard_joint(
                     (t.l + 4., t.neck / 2.),
                 ],
             );
-            glass.push((polygon(&body, true), polygon(&body, false), None, None));
+            glass.push((polygon(&body, true), polygon(&body, !seated), None, None));
             ground(
                 axial(
                     at,

@@ -2,7 +2,7 @@
   "architecture-example default": {
     "bounds": [-35.56, -128.33, 84.0, 33.79],
     "moment": [123115.9, -611263.21],
-    "order": "26eb2e032f65da09",
+    "order": "18066fe0e509b7f1",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/Stroke(Hatch)": 1,
@@ -19,7 +19,7 @@
   "architecture-example fill=0": {
     "bounds": [-35.56, -128.33, 84.0, 33.79],
     "moment": [123115.9, -611263.21],
-    "order": "26eb2e032f65da09",
+    "order": "18066fe0e509b7f1",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/Stroke(Hatch)": 1,
@@ -36,7 +36,7 @@
   "architecture-example fill=0.5": {
     "bounds": [-35.56, -128.33, 84.0, 33.79],
     "moment": [110905.26, -714429.5],
-    "order": "1de6c3a57551b8a7",
+    "order": "6d0001752412eca2",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/Stroke(Hatch)": 1,
@@ -55,7 +55,7 @@
   "architecture-example fill=1": {
     "bounds": [-35.56, -128.33, 84.0, 33.79],
     "moment": [305504.53, -1247477.97],
-    "order": "369183dc59a2287c",
+    "order": "3b3955329cfb0317",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/Stroke(Hatch)": 1,
@@ -73,7 +73,7 @@
   "architecture-example valve=closed": {
     "bounds": [-35.56, -128.33, 84.0, 33.79],
     "moment": [123115.9, -611263.21],
-    "order": "26eb2e032f65da09",
+    "order": "18066fe0e509b7f1",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/Stroke(Hatch)": 1,
@@ -90,7 +90,7 @@
   "architecture-example valve=open": {
     "bounds": [-35.56, -134.17, 84.0, 33.79],
     "moment": [123115.9, -618992.38],
-    "order": "26eb2e032f65da09",
+    "order": "18066fe0e509b7f1",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/Stroke(Hatch)": 1,
@@ -227,7 +227,7 @@
   "cow-15 default": {
     "bounds": [-63.35, -57.17, 63.35, 65.33],
     "moment": [102469.3, 744596.27],
-    "order": "940b290f745ffd5b",
+    "order": "0cf61eaa52d85e57",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 4,
       "Body/Frosted/Stroke(Hatch)": 4,
@@ -241,7 +241,7 @@
   "cow-15 turn=r1": {
     "bounds": [-53.64, -57.17, 53.64, 65.33],
     "moment": [91558.3, 691324.96],
-    "order": "5c0d0702880ed2d9",
+    "order": "3da90c5a42329355",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 4,
       "Body/Frosted/Stroke(Hatch)": 4,
@@ -255,7 +255,7 @@
   "cow-15 turn=r2": {
     "bounds": [-63.35, -57.17, 63.35, 65.33],
     "moment": [102469.3, 744596.27],
-    "order": "940b290f745ffd5b",
+    "order": "0cf61eaa52d85e57",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 4,
       "Body/Frosted/Stroke(Hatch)": 4,
@@ -269,7 +269,7 @@
   "cow-15 turn=r3": {
     "bounds": [-53.64, -57.17, 53.64, 65.33],
     "moment": [91558.3, 691324.96],
-    "order": "5c0d0702880ed2d9",
+    "order": "3da90c5a42329355",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 4,
       "Body/Frosted/Stroke(Hatch)": 4,
@@ -415,7 +415,7 @@
   "kugelrohr-bulb-10 default": {
     "bounds": [-63.0, -24.5, 57.17, 24.5],
     "moment": [41444.04, -781.16],
-    "order": "9d0bdeeaa12cd220",
+    "order": "b8d6aa0dc48c0f1a",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -429,7 +429,7 @@
   "kugelrohr-bulb-10 fill=0": {
     "bounds": [-63.0, -24.5, 57.17, 24.5],
     "moment": [41444.04, -781.16],
-    "order": "9d0bdeeaa12cd220",
+    "order": "b8d6aa0dc48c0f1a",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -443,7 +443,7 @@
   "kugelrohr-bulb-10 fill=0.5": {
     "bounds": [-63.0, -24.5, 57.17, 24.5],
     "moment": [39605.1, 63642.89],
-    "order": "d381138176d60d67",
+    "order": "be7b788082f992f9",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -459,7 +459,7 @@
   "kugelrohr-bulb-10 fill=1": {
     "bounds": [-63.0, -24.5, 57.17, 24.5],
     "moment": [48908.06, 17710.12],
-    "order": "3919a7aec6eaf483",
+    "order": "bcd06a6a0feadd20",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -474,7 +474,7 @@
   "liebig-29 default": {
     "bounds": [-21.58, -359.33, 42.0, 50.63],
     "moment": [125869.11, -4130962.39],
-    "order": "5099cc3bd7a72dd4",
+    "order": "fc936485313c423a",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -545,7 +545,7 @@
   "rbf-300-29 default": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
     "moment": [2592.73, -391064.16],
-    "order": "88e4470627a332f7",
+    "order": "00f7c2e05223641d",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/Stroke(Hatch)": 1,
@@ -561,7 +561,7 @@
   "rbf-300-29 fill=0": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
     "moment": [8696.81, -366840.62],
-    "order": "43cda8cea7ccfac1",
+    "order": "3d2705dcf68b7902",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/Stroke(Hatch)": 1,
@@ -575,7 +575,7 @@
   "rbf-300-29 fill=0.5": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
     "moment": [-1716.0, -410697.01],
-    "order": "5a3e92aab86f8519",
+    "order": "f9f75284ff1e0278",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/Stroke(Hatch)": 1,
@@ -591,7 +591,7 @@
   "rbf-300-29 fill=1": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
     "moment": [14919.19, -559874.92],
-    "order": "2915e44238449159",
+    "order": "eb2df2e86af1f58b",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/Stroke(Hatch)": 1,
@@ -606,7 +606,7 @@
   "rbf2-300-29-angled default": {
     "bounds": [-48.45, -116.12, 56.69, 48.45],
     "moment": [242019.73, -928955.73],
-    "order": "230ae210b40b946a",
+    "order": "0e9b44ab998999bf",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -622,7 +622,7 @@
   "rbf2-300-29-angled fill=0": {
     "bounds": [-48.45, -116.12, 56.69, 48.45],
     "moment": [215379.66, -903335.29],
-    "order": "3e0c3c927b7cba05",
+    "order": "1ec0d2d3d6c0754a",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -636,7 +636,7 @@
   "rbf2-300-29-angled fill=0.5": {
     "bounds": [-48.45, -116.12, 56.69, 48.45],
     "moment": [243732.73, -967122.13],
-    "order": "0dfc3e9cfed86b33",
+    "order": "affcb4e599b903b4",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -652,7 +652,7 @@
   "rbf2-300-29-angled fill=1": {
     "bounds": [-48.45, -116.12, 56.69, 48.45],
     "moment": [286512.35, -1201525.43],
-    "order": "23f429b7a3906b53",
+    "order": "b11bb1aff6ad6c09",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -667,7 +667,7 @@
   "rbf2-300-29-straight default": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
     "moment": [191662.9, -939152.55],
-    "order": "230ae210b40b946a",
+    "order": "0e9b44ab998999bf",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -683,7 +683,7 @@
   "rbf2-300-29-straight fill=0": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
     "moment": [172138.54, -911928.97],
-    "order": "3e0c3c927b7cba05",
+    "order": "1ec0d2d3d6c0754a",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -697,7 +697,7 @@
   "rbf2-300-29-straight fill=0.5": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
     "moment": [191749.45, -977685.39],
-    "order": "0dfc3e9cfed86b33",
+    "order": "affcb4e599b903b4",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -713,7 +713,7 @@
   "rbf2-300-29-straight fill=1": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
     "moment": [228633.19, -1213417.01],
-    "order": "23f429b7a3906b53",
+    "order": "b11bb1aff6ad6c09",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 2,
       "Body/Frosted/Stroke(Hatch)": 2,
@@ -728,7 +728,7 @@
   "schlenk-tube-15 default": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
     "moment": [3400616.43, -412275.86],
-    "order": "3c4a0e9c27281f05",
+    "order": "9089aba351b88080",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
@@ -745,7 +745,7 @@
   "schlenk-tube-15 fill=0": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
     "moment": [3400616.43, -412275.86],
-    "order": "3c4a0e9c27281f05",
+    "order": "9089aba351b88080",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
@@ -762,7 +762,7 @@
   "schlenk-tube-15 fill=0.5": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
     "moment": [3445122.76, 1195793.62],
-    "order": "161765ed00e1b9cd",
+    "order": "44f387bdef36c6e5",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
@@ -781,7 +781,7 @@
   "schlenk-tube-15 fill=1": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
     "moment": [3439954.65, 1049697.78],
-    "order": "6269d7d3279e57da",
+    "order": "af5be3e8f18ef098",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
@@ -799,7 +799,7 @@
   "schlenk-tube-15 stopcock=all": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
     "moment": [3503628.99, -421977.65],
-    "order": "52bd37d6827130e2",
+    "order": "6ec9bdec12e5bcb6",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
@@ -816,7 +816,7 @@
   "schlenk-tube-15 stopcock=closed": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
     "moment": [3530229.43, -433820.01],
-    "order": "8921a71e8aae9c88",
+    "order": "d384d687ecc29f2b",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
@@ -833,7 +833,7 @@
   "schlenk-tube-15 stopcock=down": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
     "moment": [3395910.52, -405810.43],
-    "order": "aedebe0a79f62107",
+    "order": "4afd318ae3a9c266",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
@@ -850,7 +850,7 @@
   "schlenk-tube-15 stopcock=side": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
     "moment": [3400616.43, -412275.86],
-    "order": "3c4a0e9c27281f05",
+    "order": "9089aba351b88080",
     "passes": {
       "Body/Frosted/FillStroke(Hatch)": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
@@ -867,7 +867,7 @@
   "setup reflux": {
     "bounds": [-155.17, -478.39, 48.45, 48.45],
     "moment": [-1415988.55, -33713705.86],
-    "order": "53ac3e61f73e3299",
+    "order": "d54060da40707236",
     "passes": {
       "Back/Cork/FillStroke(Outline)": 2,
       "Back/Metal/FillStroke(Outline)": 9,
