@@ -106,6 +106,7 @@ explains how the crates and modules fit together.
 - `src/app/inline_text.rs`: In-place caption drafts.
 - `src/app/inspector.rs`: Selection-focused properties and task-based export controls.
 - `src/app/inspector/identity.rs`: One-click molecular identity, using the Properties analysis and naming caches.
+- `src/app/inspector_pages.rs`: Chemical names and Assistant are pages within the ordinary inspector tabs.
 - `src/app/joining.rs`
 - `src/app/keyboard_drawing.rs`: Application routing for the pointer-independent drawing hotspot.
 - `src/app/label_refresh.rs`: A single label calculation in flight, with exact snapshot identity checks.

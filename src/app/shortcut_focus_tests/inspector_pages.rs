@@ -23,6 +23,7 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
         (InspectorTab::Names, InspectorTab::Properties),
         (InspectorTab::Names, InspectorTab::Templates),
         (InspectorTab::Names, InspectorTab::Import),
+        (InspectorTab::Names, InspectorTab::Assistant),
         (InspectorTab::Assistant, InspectorTab::Export),
         (InspectorTab::Assistant, InspectorTab::Templates),
         (InspectorTab::Assistant, InspectorTab::Import),
@@ -39,10 +40,10 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
                     .iter()
                     .any(|node| node.id == "inspector-tab-Import")
             );
-            let selected = if parent == InspectorTab::Import {
-                InspectorTab::Templates
-            } else {
-                parent
+            let selected = match parent {
+                InspectorTab::Import => InspectorTab::Templates,
+                InspectorTab::Assistant => InspectorTab::Properties,
+                _ => parent,
             };
             for (tab, label) in [
                 ("Properties", "Properties"),
@@ -71,6 +72,11 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
                 } else {
                     "Close "
                 }));
+            }
+            if parent == InspectorTab::Assistant {
+                assert!(snapshot.nodes.iter().any(
+                    |node| node.id == "inspector-page-back" && node.name == "Back to Assistant"
+                ));
             }
             if parent == InspectorTab::Templates {
                 assert!(
@@ -113,7 +119,7 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
 }
 
 #[tokio::test]
-#[ignore = "Opt-in field-owned Escape before inspector page dismissal"]
+#[ignore = "Opt-in field-owned Esc before inspector page dismissal"]
 async fn inspector_page_escape_unfocuses_the_field_before_returning() {
     let mut ui = Ui::new().await;
     for (page, field) in [
@@ -145,7 +151,7 @@ async fn inspector_page_escape_unfocuses_the_field_before_returning() {
             None,
         )
         .await;
-        assert_eq!(app.inspector_tab, page, "the field owns the first Escape");
+        assert_eq!(app.inspector_tab, page, "the field owns the first Esc");
         assert!(!ui.input(&app, field).1);
         ui.key(
             &mut app,

@@ -187,3 +187,81 @@ fn publication_keeps_its_existing_selection_route() {
     assert_eq!(app.inspector_tab, InspectorTab::Pages);
     assert!(app.inspector_page_header().is_none());
 }
+
+fn names_from_catalog(app: &mut App) {
+    use crate::app::command_palette::Action;
+    let _ = app.update(Message::Commands(Action::Open));
+    let _ = app.update(Message::Commands(Action::Query(
+        "Chemical names panel".into(),
+    )));
+    assert_eq!(app.commands.current().unwrap().name, "Chemical names panel");
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert_eq!(app.inspector_tab, InspectorTab::Names);
+}
+
+#[test]
+fn names_from_publication_catalog_returns_to_the_exact_page_and_its_draft() {
+    use crate::app::pages;
+    for close in [
+        Message::InspectorAction(inspector::Action::BackPage),
+        Message::Escape,
+    ] {
+        let mut app = drawing();
+        let _ = app.update(Message::Pages(pages::Action::Open));
+        let _ = app.update(Message::Pages(pages::Action::Input(
+            pages::Field::Width,
+            "123".into(),
+        )));
+        let draft = app.print_document().unwrap();
+        let before = app.tab.doc.clone();
+        names_from_catalog(&mut app);
+        assert_eq!(app.inspector_parent_tab(), InspectorTab::Properties);
+        let _ = app.update(close);
+        assert_eq!(app.inspector_tab, InspectorTab::Pages);
+        assert_eq!(app.inspector_parent_tab(), InspectorTab::Properties);
+        assert!(app.tab.pages.editor.is_some());
+        assert_eq!(app.print_document().unwrap(), draft);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
+fn names_from_assistant_catalog_returns_to_assistant_then_its_previous_page() {
+    for close in [
+        Message::InspectorAction(inspector::Action::BackPage),
+        Message::Escape,
+    ] {
+        let mut app = drawing();
+        let _ = app.update(Message::Inspector(InspectorTab::Export));
+        let _ = app.update(Message::Inspector(InspectorTab::Assistant));
+        names_from_catalog(&mut app);
+        assert_eq!(app.inspector_parent_tab(), InspectorTab::Export);
+        let _ = app.update(close);
+        assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+        assert_eq!(app.inspector_parent_tab(), InspectorTab::Export);
+        let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+        assert_eq!(app.inspector_tab, InspectorTab::Export);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
+fn nested_page_visits_unwind_to_advanced_import_without_a_back_loop() {
+    let mut app = drawing();
+    let _ = app.update(Message::Inspector(InspectorTab::Import));
+    names_from_catalog(&mut app);
+    let _ = app.update(Message::Inspector(InspectorTab::Assistant));
+    names_from_catalog(&mut app);
+    for expected in [
+        InspectorTab::Assistant,
+        InspectorTab::Names,
+        InspectorTab::Import,
+    ] {
+        assert_eq!(app.inspector_parent_tab(), InspectorTab::Import);
+        let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+        assert_eq!(app.inspector_tab, expected);
+    }
+    assert!(app.inspector_open);
+    assert!(!app.tab.history.can_undo());
+}

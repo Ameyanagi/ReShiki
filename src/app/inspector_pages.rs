@@ -4,22 +4,12 @@ use iced::widget::{row, text};
 use iced::{Alignment, Element, Length, Task};
 use std::collections::HashSet;
 
+#[derive(Default)]
 pub(super) struct State {
-    names_parent: InspectorTab,
-    assistant_previous: InspectorTab,
+    /// Exact preceding pages; tab-track styling is derived separately.
+    previous: Vec<InspectorTab>,
     pub(super) structure_first: bool,
     selection: Option<Selection>,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            names_parent: InspectorTab::Properties,
-            assistant_previous: InspectorTab::Properties,
-            structure_first: false,
-            selection: None,
-        }
-    }
 }
 
 struct Selection {
@@ -39,23 +29,24 @@ impl App {
         }
     }
 
-    /// Called before switching pages so Assistant can return to the exact
-    /// preceding page, including Chemical names, History or Publication pages.
+    /// Keep exact page history, including nested Names/Assistant visits,
+    /// independently of the tab highlighted in the shared track.
     pub(super) fn enter_inspector_page(&mut self, tab: InspectorTab) {
         self.templates.add_menu_open = false;
-        if tab == InspectorTab::Names {
+        if is_page(tab) {
             if self.inspector_tab != tab {
-                self.inspector_pages.names_parent = self.inspector_parent_tab();
+                self.inspector_pages.previous.push(self.inspector_tab);
             }
+        } else {
+            self.inspector_pages.previous.clear();
+        }
+        if tab == InspectorTab::Names {
             self.inspector_pages.structure_first = self
                 .tab
                 .doc
                 .atoms
                 .iter()
                 .any(|atom| self.tab.selected.contains(&atom.id));
-        }
-        if tab == InspectorTab::Assistant && self.inspector_tab != tab {
-            self.inspector_pages.assistant_previous = self.inspector_tab;
         }
         self.inspector_pages.selection = is_page(tab).then(|| self.page_selection());
         if tab != InspectorTab::Assistant {
@@ -64,13 +55,17 @@ impl App {
     }
 
     pub(super) fn inspector_parent_tab(&self) -> InspectorTab {
-        let mut tab = self.inspector_tab;
-        if tab == InspectorTab::Assistant {
-            tab = self.inspector_pages.assistant_previous;
-        }
-        if tab == InspectorTab::Names {
-            tab = self.inspector_pages.names_parent;
-        }
+        let tab = if is_page(self.inspector_tab) {
+            self.inspector_pages
+                .previous
+                .iter()
+                .rev()
+                .copied()
+                .find(|tab| !is_page(*tab))
+                .unwrap_or(InspectorTab::Properties)
+        } else {
+            self.inspector_tab
+        };
         match tab {
             InspectorTab::Reactions
             | InspectorTab::Labels
@@ -82,11 +77,14 @@ impl App {
     }
 
     pub(super) fn close_inspector_page(&mut self) -> Task<Message> {
-        let previous = match self.inspector_tab {
-            InspectorTab::Names => self.inspector_pages.names_parent,
-            InspectorTab::Assistant => self.inspector_pages.assistant_previous,
-            _ => return Task::none(),
-        };
+        if !is_page(self.inspector_tab) {
+            return Task::none();
+        }
+        let previous = self
+            .inspector_pages
+            .previous
+            .pop()
+            .unwrap_or(InspectorTab::Properties);
         self.assistant.menu = None;
         self.inspector_tab = previous;
         self.inspector_open = true;
@@ -98,6 +96,9 @@ impl App {
     /// that assign IDs directly. A document-tab switch retains its page routing.
     pub(super) fn sync_inspector_page_selection(&mut self) -> Task<Message> {
         if !self.inspector_open || !is_page(self.inspector_tab) {
+            if !is_page(self.inspector_tab) {
+                self.inspector_pages.previous.clear();
+            }
             self.inspector_pages.selection = None;
             return Task::none();
         }
@@ -118,6 +119,7 @@ impl App {
         }
         self.assistant.menu = None;
         self.inspector_pages.selection = None;
+        self.inspector_pages.previous.clear();
         self.inspector_tab = InspectorTab::Properties;
         Task::batch([
             super::focus_drawing(),
@@ -130,11 +132,17 @@ impl App {
     }
 
     pub(super) fn inspector_page_header(&self) -> Option<Element<'_, Message>> {
-        let (title, previous) = match self.inspector_tab {
-            InspectorTab::Names => ("Chemical names", self.inspector_pages.names_parent),
-            InspectorTab::Assistant => ("Assistant", self.inspector_pages.assistant_previous),
+        let title = match self.inspector_tab {
+            InspectorTab::Names => "Chemical names",
+            InspectorTab::Assistant => "Assistant",
             _ => return None,
         };
+        let previous = self
+            .inspector_pages
+            .previous
+            .last()
+            .copied()
+            .unwrap_or(InspectorTab::Properties);
         let label = match previous {
             InspectorTab::Properties => "Properties",
             InspectorTab::Predict => "Predict",
@@ -149,7 +157,7 @@ impl App {
             InspectorTab::Reactions => "Reaction roles",
             InspectorTab::Labels => "Atom labels",
             InspectorTab::Abbreviations => "Abbreviations",
-            InspectorTab::Assistant => "Properties",
+            InspectorTab::Assistant => "Assistant",
         };
         let back = Message::InspectorAction(inspector::Action::BackPage);
         #[cfg(not(target_arch = "wasm32"))]
