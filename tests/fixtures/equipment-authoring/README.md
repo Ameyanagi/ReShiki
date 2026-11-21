@@ -87,8 +87,36 @@ Use a fresh isolated profile and open the fixture. Select its path, then:
 Use the same theme, zoom, window and panel width for comparable captures.
 Record source commit and packaged-binary checksum alongside the screenshots.
 The stills show the editor; record Undo/Redo, Discard, save/reopen and normal
-port snapping observations separately. This increment does not support live
-snapping while the draft is open, role/material editing, plug families,
+port snapping observations separately.
+
+### Test snapping before acceptance
+
+1. Repeat the socket fixture through **Add joint**, then choose **Test
+   snapping…**. Drag the gray **Glass stopper, 15/25** toward the authored socket.
+   Capture the usual green joint feedback in matched light and dark themes.
+2. Turn the test piece by 90° and drag it back to the socket: it must not
+   seat sideways. Choose a second socket and oppose its mouth to the draft:
+   the usual mismatch feedback must appear. Choose **Glass stopper, 29/42**:
+   the existing adapter offer must appear. Repeated dragging must not add
+   extra adapters or seats.
+   After releasing an adapter fit, grab the stopper again and cancel without
+   moving, then repeat after dragging it away. Pointer exit, release outside,
+   lost touch and a second-finger pinch must restore the same adapter and fit
+   feedback without adding another adapter. Accept still excludes test objects.
+3. Undo the draft's **Add joint**, then use **Flip** on the pending joint.
+   The invalid draft must lose the old trial feedback. Undo and Redo the
+   Flip. Choose **Finish testing** before marking a new rim.
+4. Repeat a trial with a touch drag; add a second finger to pan or pinch.
+   The test piece returns to its drag start and the remaining finger must
+   not resume its drag. Also check pointer exit, window deactivation and
+   release outside the drawing.
+5. Choose **Finish testing**, then **Test snapping…** again. Only one new
+   test piece appears. **Discard** leaves the source unchanged. Repeat with
+   **Accept**: the authored piece stays at its original position, with no
+   test piece, trial seat or adapter. Verify one drawing Undo, Redo and
+   save/reopen, then capture the deselected accepted piece.
+
+This increment does not support role/material editing, authoring plug families,
 liquids, holds, moving parts, library destinations or editing a saved
 piece definition. Standard artwork is added to the common glass silhouette;
 arbitrary drawn ends are not automatically trimmed to fit.

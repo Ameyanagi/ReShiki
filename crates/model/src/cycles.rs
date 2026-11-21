@@ -15,8 +15,15 @@ use std::collections::{HashMap, HashSet};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
 mod label_placement;
+mod perimeter_arcs;
+mod resize;
+mod shapes;
 mod split;
 pub mod steps;
+mod tidy_phase;
+mod tidy_shape;
+
+pub use shapes::{Outline, Projection, Shape, Tangents};
 
 /// Clear space between an arc's end and a part's ink, in points.
 pub const GAP_PT: f32 = 6.;
@@ -26,6 +33,9 @@ const MAX_PARTS: usize = 64;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Cycle {
+    /// The cycle's outline. Missing values retain the legacy mean-radius circle.
+    #[serde(skip_serializing_if = "Shape::is_circle")]
+    pub shape: Shape,
     /// Steps run counterclockwise on the page.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub counterclockwise: bool,
@@ -43,6 +53,7 @@ pub struct Cycle {
 impl Default for Cycle {
     fn default() -> Self {
         Self {
+            shape: Shape::Circle,
             counterclockwise: false,
             intermediates: vec![],
             steps: vec![],
@@ -210,6 +221,14 @@ impl Graphic {
             .as_ref()
             .is_some_and(|c| c.counterclockwise != (self.frame_determinant() < 0.))
     }
+}
+
+/// The cycle's clockwise perimeter, independent of its step direction.
+/// This geometry service does not change how existing cycles are drawn.
+/// Noncircle frames that are singular, nonfinite, or too ill-conditioned to
+/// address every positive-length edge return `None`.
+pub fn outline(graphic: &Graphic) -> Option<Outline> {
+    Outline::new(graphic, graphic.cycle.as_deref()?.shape)
 }
 
 /// What a cycle draws, in drawing coordinates.
@@ -431,10 +450,24 @@ fn boxes(doc: &Document, cycle: &Cycle) -> Vec<Option<(Point, Point)>> {
 
 /// The cycle's arrows and labels as they would be drawn now.
 pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
+    if g.cycle.as_ref().is_some_and(|c| c.shape != Shape::Circle) {
+        let Some(perimeter) = outline(g) else {
+            return Drawn::default();
+        };
+        let mut out = Drawn::default();
+        perimeter_arcs::replace(doc, g, &perimeter, &mut out);
+        out
+    } else {
+        drawn_circle(doc, g)
+    }
+}
+
+// Circle rendering and insertion share their trimmed, bowed span resolver.
+fn drawn_circle(doc: &Document, g: &Graphic) -> Drawn {
     drawn_spans(doc, g, |_, _| {})
 }
 
-// Insertion uses the same trimmed, bowed step as the renderer, including
+// Circle insertion uses the same trimmed, bowed step as its renderer, including
 // hidden steps' side arrows and the centerline of a reversible pair.
 fn drawn_spans(doc: &Document, g: &Graphic, mut record_span: impl FnMut(usize, Span)) -> Drawn {
     drawn_layouts(doc, g, |step, layout| record_span(step, layout.arc))
@@ -686,11 +719,6 @@ struct SideAttachment {
 /// otherwise pull two neighbouring connectors onto the same point. Pooling
 /// adjacent conflicts moves the preferred joins as little as possible.
 fn separate_attachments(attachments: &mut [SideAttachment], bond: f32) {
-    #[derive(Clone, Copy)]
-    struct Block {
-        sum: f32,
-        count: usize,
-    }
     for lane in 0..2 {
         let mut ordered: Vec<_> = attachments
             .iter()
@@ -707,38 +735,51 @@ fn separate_attachments(attachments: &mut [SideAttachment], bond: f32) {
             continue;
         }
         let gap = (bond / length).min(0.7 / (ordered.len() - 1) as f32);
-        let maximum = 0.85 - gap * (ordered.len() - 1) as f32;
-        let mut blocks = vec![];
-        for (i, (_, attachment)) in ordered.iter().enumerate() {
-            blocks.push(Block {
-                sum: attachment.t - i as f32 * gap,
-                count: 1,
-            });
-            while let Some([a, b]) = blocks.last_chunk::<2>() {
-                if a.sum / a.count as f32 <= b.sum / b.count as f32 {
-                    break;
-                }
-                let merged = Block {
-                    sum: a.sum + b.sum,
-                    count: a.count + b.count,
-                };
-                blocks.truncate(blocks.len() - 2);
-                blocks.push(merged);
-            }
-        }
-        let mut positions = vec![];
-        for block in blocks {
-            let base = (block.sum / block.count as f32).clamp(0.15, maximum.max(0.15));
-            for _ in 0..block.count {
-                positions.push(base + positions.len() as f32 * gap);
-            }
-        }
+        let preferred: Vec<_> = ordered.iter().map(|(_, a)| a.t).collect();
+        let positions = spaced_joins(&preferred, gap);
         for ((index, _), t) in ordered.into_iter().zip(positions) {
             if let Some(attachment) = attachments.get_mut(index) {
                 attachment.t = t;
             }
         }
     }
+}
+
+/// Closest ordered joins within the central 70% of a painted lane.
+/// Circle and native noncircle shafts use the same numeric pooling rule.
+fn spaced_joins(preferred: &[f32], gap: f32) -> Vec<f32> {
+    #[derive(Clone, Copy)]
+    struct Block {
+        sum: f32,
+        count: usize,
+    }
+    let maximum = 0.85 - gap * preferred.len().saturating_sub(1) as f32;
+    let mut blocks = vec![];
+    for (i, &t) in preferred.iter().enumerate() {
+        blocks.push(Block {
+            sum: t - i as f32 * gap,
+            count: 1,
+        });
+        while let Some([a, b]) = blocks.last_chunk::<2>() {
+            if a.sum / a.count as f32 <= b.sum / b.count as f32 {
+                break;
+            }
+            let merged = Block {
+                sum: a.sum + b.sum,
+                count: a.count + b.count,
+            };
+            blocks.truncate(blocks.len() - 2);
+            blocks.push(merged);
+        }
+    }
+    let mut positions = vec![];
+    for block in blocks {
+        let base = (block.sum / block.count as f32).clamp(0.15, maximum.max(0.15));
+        for _ in 0..block.count {
+            positions.push(base + positions.len() as f32 * gap);
+        }
+    }
+    positions
 }
 
 /// A side arrow between a part's ink and the point where it touches the
@@ -791,7 +832,78 @@ fn wrapped(name: &str, format: &TextFormat, width: f32) -> String {
 
 /// Whether `p` lies on what the cycle draws.
 pub fn hit(doc: &Document, g: &Graphic, p: Point, r: f32) -> bool {
-    // Side arrows and names stay within a few bond lengths of the circle.
+    if !HitLayout::may_hit(doc, g, p) {
+        return false;
+    }
+    let drawn = drawn(doc, g);
+    (!outside_hit_circle(hit_circle(doc, g), p) && drawn.arrows.iter().any(|a| a.hit(p, r)))
+        || drawn
+            .labels
+            .iter()
+            .any(|(at, text, format)| contains(grown(hit_label_bounds(*at, text, format), r), p))
+}
+
+/// Resolved cycle ink for repeated pointer queries against one drawing snapshot.
+/// Rebuild after any document change: even another object's bounds can displace
+/// a cycle name. Keeping this outside the document also keeps previews read-only.
+pub struct HitLayout {
+    circle: Option<(Point, f32)>,
+    named: bool,
+    arrows: Vec<Arrow>,
+    labels: Vec<(Point, Point)>,
+}
+
+impl HitLayout {
+    /// Unlabeled circles reject distant queries without resolving their paint.
+    /// Named cycles must check their actual label boxes, which can escape the
+    /// circle's arrow bound. This deliberately does not add pointer padding.
+    pub fn may_hit(doc: &Document, g: &Graphic, p: Point) -> bool {
+        !outside_hit_circle(hit_circle(doc, g), p) || hit_has_names(g)
+    }
+
+    pub fn new(doc: &Document, g: &Graphic) -> Self {
+        let drawn = drawn(doc, g);
+        Self {
+            circle: hit_circle(doc, g),
+            named: hit_has_names(g),
+            arrows: drawn.arrows,
+            labels: drawn
+                .labels
+                .into_iter()
+                .map(|(at, text, format)| hit_label_bounds(at, &text, &format))
+                .collect(),
+        }
+    }
+
+    pub fn hit(&self, p: Point, r: f32) -> bool {
+        let outside = outside_hit_circle(self.circle, p);
+        if outside && !self.named {
+            return false;
+        }
+        (!outside && self.arrows.iter().any(|a| a.hit(p, r)))
+            || self
+                .labels
+                .iter()
+                .any(|&bounds| contains(grown(bounds, r), p))
+    }
+}
+
+fn hit_has_names(g: &Graphic) -> bool {
+    g.cycle.as_ref().is_some_and(|c| {
+        !c.label.trim().is_empty() || c.steps.iter().any(|step| !step.name.trim().is_empty())
+    })
+}
+
+fn hit_label_bounds(at: Point, text: &str, format: &TextFormat) -> (Point, Point) {
+    let layout = crate::typography::layout(text, format);
+    (at, at.offset(layout.width, layout.height))
+}
+
+fn outside_hit_circle(circle: Option<(Point, f32)>, p: Point) -> bool {
+    circle.is_some_and(|(center, reach)| p.distance(center) > reach)
+}
+
+fn hit_circle(doc: &Document, g: &Graphic) -> Option<(Point, f32)> {
     let (center, radius) = g.cycle_circle();
     let bow = g
         .cycle
@@ -800,15 +912,12 @@ pub fn hit(doc: &Document, g: &Graphic, p: Point, r: f32) -> bool {
         .map(|s| s.bow_pt.abs())
         .fold(0., f32::max);
     let reach = 8. * doc.drawing_style.bond_length_world + DEFAULT.world(bow);
-    if p.distance(center) > radius + reach {
-        return false;
-    }
-    let drawn = drawn(doc, g);
-    drawn.arrows.iter().any(|a| a.hit(p, r))
-        || drawn.labels.iter().any(|(at, text, format)| {
-            let layout = crate::typography::layout(text, format);
-            contains(grown((*at, at.offset(layout.width, layout.height)), r), p)
-        })
+    // A noncircle's corner miter can exceed both its frame and mean-radius
+    // bounds. Let native arrow hit testing bound the final painted shafts.
+    g.cycle
+        .as_ref()
+        .is_none_or(|c| c.shape == Shape::Circle)
+        .then_some((center, radius + reach))
 }
 
 /// The selection's molecules and texts as cycle parts, in drawing order.
@@ -1128,6 +1237,9 @@ pub fn holds(doc: &Document, cycle: u64, part: &[u64]) -> bool {
         return false;
     };
     let p = center_of(ink);
+    if g.cycle.as_deref().is_some_and(|c| c.shape != Shape::Circle) {
+        return tidy_shape::holds(doc, g, part, p);
+    }
     let reach = 4. * bond;
     if p.distance(center) < radius + reach {
         return true;
@@ -1312,6 +1424,9 @@ pub fn tidy(doc: &mut Document, id: u64) -> bool {
     let Some(cycle) = g.cycle.as_deref().cloned() else {
         return false;
     };
+    if cycle.shape != Shape::Circle {
+        return tidy_shape::tidy(doc, id);
+    }
     let n = cycle.intermediates.len();
     if n == 0 {
         return false;
@@ -1414,7 +1529,8 @@ pub fn reverse(cycle: &mut Cycle) {
     cycle.counterclockwise = !cycle.counterclockwise;
 }
 
-/// Change a cycle's radius; its parts slide straight in or out with it.
+/// Change a cycle's mean radius; its parts slide straight in or out with it.
+/// Explicit noncircle shapes retain their affine frame and aspect ratio.
 pub fn set_radius(doc: &mut Document, id: u64, radius: f32) {
     let Some(g) = doc
         .graphics
@@ -1423,6 +1539,10 @@ pub fn set_radius(doc: &mut Document, id: u64, radius: f32) {
     else {
         return;
     };
+    if g.cycle.as_ref().is_some_and(|c| c.shape != Shape::Circle) {
+        resize::noncircle(doc, id, radius);
+        return;
+    }
     let (center, old) = g.cycle_circle();
     if !(radius.is_finite() && radius > 0. && old > 0.) {
         return;
@@ -1449,6 +1569,14 @@ pub fn set_radius(doc: &mut Document, id: u64, radius: f32) {
         g.axis_x = Point::new(2. * radius, 0.);
         g.axis_y = Point::new(0., if mirrored { -2. } else { 2. } * radius);
     }
+}
+
+/// Change an explicit noncircle cycle's local width and height in world units.
+/// Retain its center and affine axis directions; translate whole parts and
+/// their linked captions without scaling their ink. Invalid or unchanged
+/// dimensions, missing cycles, and legacy Circles return `false` unchanged.
+pub fn set_dimensions(doc: &mut Document, id: u64, width: f32, height: f32) -> bool {
+    resize::dimensions(doc, id, width, height)
 }
 
 /// A cycle as [`materialized`] wrote it.
@@ -1638,6 +1766,8 @@ pub fn reconcile(doc: &mut Document) {
     ungroup_freed(doc, &freed);
 }
 
+#[cfg(test)]
+mod shape_tests;
 #[cfg(test)]
 mod side_attachment_tests;
 #[cfg(test)]

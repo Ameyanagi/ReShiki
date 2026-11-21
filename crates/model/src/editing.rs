@@ -732,7 +732,8 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         };
         center
     } else {
-        center(doc, ids)
+        let references = crate::graphics::table::reference_ids(doc, ids);
+        center(doc, &references)
     };
     let vector = |p: Point| {
         let (x, y) = (p.x, p.y);

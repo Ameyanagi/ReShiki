@@ -23,6 +23,7 @@ pub(super) fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
     })
 }
 
+#[cfg(test)]
 pub(super) fn hit_selection_with_orbital(
     doc: &Document,
     p: World,
@@ -31,6 +32,21 @@ pub(super) fn hit_selection_with_orbital(
 ) -> Vec<u64> {
     hit_selection_with_object(doc, p, r, |clips| {
         hit_object_in_cells(doc, p, r, foreground_orbital, clips)
+    })
+}
+
+/// Retained hover geometry uses the same drawing snapshot as the canvas scene.
+pub(super) fn hit_selection_cached(
+    doc: &Document,
+    p: World,
+    r: f32,
+    cache: &mut super::cache::SceneCache,
+) -> Vec<u64> {
+    let foreground_orbital = cache.foreground_orbital(doc);
+    hit_selection_with_object(doc, p, r, |clips| {
+        hit_object_with_cycles(doc, p, r, foreground_orbital, clips, |graphic| {
+            cache.cycle_hit(doc, graphic, p, r)
+        })
     })
 }
 
@@ -224,6 +240,19 @@ fn hit_object_in_cells(
     foreground_orbital: bool,
     clips: &CellClips<'_>,
 ) -> Option<u64> {
+    hit_object_with_cycles(doc, p, r, foreground_orbital, clips, |g| {
+        reshiki::cycles::hit(doc, g, p, r)
+    })
+}
+
+fn hit_object_with_cycles(
+    doc: &Document,
+    p: World,
+    r: f32,
+    foreground_orbital: bool,
+    clips: &CellClips<'_>,
+    mut cycle_hit: impl FnMut(&reshiki::graphics::Graphic) -> bool,
+) -> Option<u64> {
     let mark = || {
         doc.atoms
             .iter()
@@ -276,7 +305,7 @@ fn hit_object_in_cells(
                 .map(|(i, g)| (g.layer, i))
         })
         .max();
-    let graphic = |front| {
+    let mut graphic = |front| {
         doc.graphics
             .iter()
             .enumerate()
@@ -286,7 +315,7 @@ fn hit_object_in_cells(
                         && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
                     && !label_rank.is_some_and(|rank| (g.layer, *i) <= rank)
                     && (if g.cycle.is_some() {
-                        reshiki::cycles::hit(doc, g, p, r) && clips.graphic_hit(doc, g, p, r)
+                        cycle_hit(g) && clips.graphic_hit(doc, g, p, r)
                     } else {
                         (if g.table.is_some() { table::border_hit(g, p, r) } else { g.hit_with_text_style(p, r, &doc.drawing_style.text_style()) })
                             && clips.graphic_hit(doc, g, p, r)

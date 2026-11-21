@@ -635,6 +635,32 @@ pub fn with_contents(doc: &Document, ids: &[u64]) -> Vec<u64> {
         .collect()
 }
 
+/// A selected table supplies its own transform reference. Its contents still
+/// move with it, but add no independent pivot sites, even in expanded selections.
+/// A child selected without its table remains an ordinary independent object.
+pub(crate) fn reference_ids(doc: &Document, ids: &[u64]) -> Vec<u64> {
+    if !doc.graphics.iter().any(|g| g.table.is_some()) {
+        return ids.to_vec();
+    }
+    let selected: HashSet<_> = ids.iter().copied().collect();
+    let held: HashSet<_> = doc
+        .graphics
+        .iter()
+        .filter(|g| selected.contains(&g.id))
+        .filter_map(|g| g.table.as_ref())
+        .flat_map(|table| {
+            table
+                .cells
+                .iter()
+                .flat_map(|cell| cell.members.iter().copied())
+        })
+        .collect();
+    ids.iter()
+        .copied()
+        .filter(|id| !held.contains(id))
+        .collect()
+}
+
 /// The cell grid, including border ink, remains selectable even when empty.
 pub fn bounds(graphic: &Graphic) -> Option<(Point, Point)> {
     let frame = Frame::of(graphic)?;
