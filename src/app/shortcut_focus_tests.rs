@@ -15,6 +15,7 @@ use iced::keyboard::{
 use iced::{Event, Rectangle, Size};
 
 mod review_close;
+mod selection_properties;
 mod style_status;
 mod view_footer;
 

@@ -11,6 +11,7 @@ impl App {
     /// Replaces the selection and refreshes its cached inspector controls.
     pub(super) fn set_selection(&mut self, ids: Vec<u64>) {
         self.tab.selected = ids;
+        self.sync_requested_molecular_properties();
         self.sync_typography();
         self.sync_graphics();
         self.sync_arrows();

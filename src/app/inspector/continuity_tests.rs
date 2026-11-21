@@ -464,7 +464,7 @@ impl iced::advanced::widget::Operation for PanelText {
 
 #[tokio::test]
 #[ignore = "Opt-in real renderer Molecular Properties text regression"]
-async fn rendered_panel_keeps_whole_mass_and_counts_only_the_whole_drawing() {
+async fn rendered_panel_keeps_only_the_displayed_scope_and_counts() {
     use iced::advanced::{renderer::Headless, widget::operation};
     let mut renderer = <iced::Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
@@ -504,7 +504,7 @@ async fn rendered_panel_keeps_whole_mass_and_counts_only_the_whole_drawing() {
             choose(&mut app, expanded);
         }
         let text = panel_text(&app, &mut renderer);
-        assert!(text.contains("Whole drawing · C₈H₈ · 104.152\u{a0}g/\u{2060}mol"));
+        assert!(!text.contains("Whole drawing · C₈H₈ · 104.152\u{a0}g/\u{2060}mol"));
         assert!(text.contains("Selection · C₂H₄ · 28.054\u{a0}g/\u{2060}mol"));
     }
     // A selection's counts are the panel's summary; the section does not

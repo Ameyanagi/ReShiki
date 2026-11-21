@@ -112,8 +112,9 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
             app.tab.inspector_ui.seed_molecular(Some(expanded));
             let text = panel_text(&app, &mut renderer);
             assert!(text.contains("Molecular properties"), "{text}");
-            assert!(
+            assert_eq!(
                 text.contains("Whole drawing · Cl₄KNa₃ · 249.880\u{a0}g/\u{2060}mol"),
+                app.tab.selected.is_empty(),
                 "{text}"
             );
             assert_eq!(
@@ -121,11 +122,7 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
                 !app.tab.selected.is_empty(),
                 "{text}"
             );
-            assert_eq!(
-                text.matches("\u{a0}g/\u{2060}mol").count(),
-                if app.tab.selected.is_empty() { 1 } else { 2 },
-                "{text}"
-            );
+            assert_eq!(text.matches("\u{a0}g/\u{2060}mol").count(), 1, "{text}");
             assert_eq!(
                 text.contains(reshiki::models3d::crystal::ANALYSIS_NOTICE),
                 expanded,
@@ -900,13 +897,20 @@ fn attachment_composition_is_counted_once_per_drawing_and_selection() {
         let cache = app.tab.inspector_ui.composition.borrow();
         (cache.calculations, cache.shown.clone().map(|shown| shown.2))
     };
+    assert_eq!(
+        counted(&app),
+        (0, None),
+        "idle Properties does not analyze the drawing"
+    );
+    let _ = app.show_molecular_properties();
     assert_eq!(counted(&app), (1, Some(11)));
     assert_eq!(
         counted(&app),
         (1, Some(11)),
         "an unchanged view counts again"
     );
-    app.tab.selected = ring.iter().copied().chain([point]).collect();
+    app.set_selection(ring.iter().copied().chain([point]).collect());
+    assert!(!app.requested_molecular_properties());
     assert_eq!(counted(&app), (2, Some(6)));
     assert_eq!(counted(&app), (2, Some(6)));
     // A selected object that is no atom is part of the scope too.
@@ -918,9 +922,14 @@ fn attachment_composition_is_counted_once_per_drawing_and_selection() {
         Default::default(),
         Default::default(),
     ));
-    app.tab.selected.push(arrow);
+    app.set_selection(app.tab.selected.iter().copied().chain([arrow]).collect());
     assert_eq!(counted(&app), (3, Some(6)));
-    app.tab.selected.clear();
+    app.set_selection(vec![]);
+    assert_eq!(
+        counted(&app),
+        (3, Some(6)),
+        "clearing selection keeps analysis opt-in"
+    );
     let before = app.tab.doc.clone();
     app.tab.doc.atoms.retain(|atom| atom.id != other[0]);
     app.tab
@@ -928,7 +937,14 @@ fn attachment_composition_is_counted_once_per_drawing_and_selection() {
         .bonds
         .retain(|bond| bond.a != other[0] && bond.b != other[0]);
     app.changed(before);
+    assert_eq!(
+        counted(&app),
+        (3, Some(6)),
+        "an idle edit does not analyze the drawing"
+    );
+    let _ = app.show_molecular_properties();
     assert_eq!(counted(&app), (4, Some(10)), "an edit is counted");
+    assert_eq!(counted(&app), (4, Some(10)));
 }
 
 #[test]
