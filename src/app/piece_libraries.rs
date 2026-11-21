@@ -11,6 +11,21 @@ use reshiki::equipment::{builtin, format::Definition, placed::key, revise};
 use reshiki::piece_library::{self as library, Change, Folder};
 use std::{path::PathBuf, sync::Arc};
 
+pub(super) mod loading;
+use loading::{Job, Queue, Target};
+
+#[derive(Clone)]
+enum NoticeKind {
+    Reload,
+    Linked(PathBuf),
+}
+
+struct Notice {
+    serial: u64,
+    status: String,
+    kind: NoticeKind,
+}
+
 /// Where a piece in the browser comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
@@ -57,35 +72,16 @@ pub struct Libraries {
     /// Every piece once, by key: built-in pieces first, then My pieces,
     /// then each lab in the order linked.
     pub entries: Vec<Entry>,
+    loading: Queue,
+    notice: Option<Notice>,
 }
 
 impl Libraries {
+    /// Built-ins are available before any filesystem work starts.
     pub fn load() -> Self {
         let mut libraries = Self::default();
-        if cfg!(test) {
-            libraries.index();
-        } else {
-            libraries.reload(library::linked());
-        }
+        libraries.index();
         libraries
-    }
-
-    pub fn reload(&mut self, labs: Vec<PathBuf>) {
-        if let Ok(dir) = library::my_pieces() {
-            self.mine = library::scan(&dir);
-            // A missing My pieces folder is simply empty.
-            if self.mine.pieces.is_empty() {
-                self.mine.problems.retain(|p| p.path != dir);
-            }
-        }
-        self.labs = labs
-            .into_iter()
-            .map(|root| {
-                let folder = library::scan(&root);
-                (root, folder)
-            })
-            .collect();
-        self.index();
     }
 
     pub fn name(&self, source: Source) -> String {
@@ -171,7 +167,7 @@ impl App {
         &mut self,
         result: Result<Change, String>,
         done: impl FnOnce(&Change) -> String,
-    ) {
+    ) -> Task<Message> {
         match result {
             Ok(change) => {
                 self.status = done(&change);
@@ -186,51 +182,187 @@ impl App {
             }
         }
         let labs = self.lab_roots();
-        self.reload_libraries(labs);
+        self.reload_libraries(labs, None)
     }
 
-    /// Read the libraries again. An armed piece stays armed as the entry
-    /// that now offers it, or is disarmed when none does.
-    fn reload_libraries(&mut self, labs: Vec<PathBuf>) {
+    /// Scan independently so a stalled linked folder cannot hold up My pieces.
+    pub(super) fn load_piece_libraries(&mut self) -> Task<Message> {
+        if cfg!(test) {
+            return Task::none();
+        }
+        self.reload_libraries(library::linked(), None)
+    }
+
+    /// Update linked roots immediately, retaining available pieces while their
+    /// folders refresh. Shelf and armed-piece reconciliation uses current UI
+    /// state, never the state captured when a worker started.
+    fn reload_libraries(
+        &mut self,
+        labs: Vec<PathBuf>,
+        notice: Option<NoticeKind>,
+    ) -> Task<Message> {
+        let shown = self.shown_lab();
         let libraries = &mut self.equipment.libraries;
-        // The lab shown keeps showing, wherever it now is in the list.
-        let shown = match self.equipment.shelf {
-            Some(Source::Lab(i)) => libraries.labs.get(i).map(|(root, _)| root.clone()),
+        let mut previous = std::mem::take(&mut libraries.labs);
+        libraries.labs = labs
+            .into_iter()
+            .map(|root| {
+                let folder = previous
+                    .iter()
+                    .position(|(r, _)| *r == root)
+                    .map(|i| previous.remove(i).1)
+                    .unwrap_or_default();
+                (root, folder)
+            })
+            .collect();
+        let jobs = libraries
+            .loading
+            .request(libraries.labs.iter().map(|(root, _)| root.clone()));
+        libraries.notice = notice.map(|kind| {
+            let status = match &kind {
+                NoticeKind::Reload => "Reloading libraries…".to_owned(),
+                NoticeKind::Linked(root) => format!("Linking {}…", root.display()),
+            };
+            self.status = status.clone();
+            self.error = false;
+            Notice {
+                serial: libraries.loading.serial(),
+                status,
+                kind,
+            }
+        });
+        self.reindex_libraries(shown);
+        Task::batch(jobs.into_iter().map(scan))
+    }
+
+    fn shown_lab(&self) -> Option<PathBuf> {
+        match self.equipment.shelf {
+            Some(Source::Lab(i)) => self
+                .equipment
+                .libraries
+                .labs
+                .get(i)
+                .map(|(root, _)| root.clone()),
             _ => None,
-        };
-        libraries.reload(labs);
+        }
+    }
+
+    fn reindex_libraries(&mut self, shown: Option<PathBuf>) {
+        let libraries = &mut self.equipment.libraries;
+        libraries.index();
         if let Some(root) = shown {
-            self.equipment.shelf = (libraries.labs.iter())
+            self.equipment.shelf = libraries
+                .labs
+                .iter()
                 .position(|(r, _)| *r == root)
                 .map(Source::Lab);
         }
         if let Some(armed) = &self.equipment.armed {
             let k = key(armed);
-            self.equipment.armed = (libraries.entries.iter())
+            self.equipment.armed = libraries
+                .entries
+                .iter()
                 .find(|e| e.key == k)
                 .map(|e| e.definition.clone());
         }
     }
 
+    fn libraries_loaded(
+        &mut self,
+        job: Job,
+        result: Result<Option<Folder>, String>,
+    ) -> Task<Message> {
+        let (accepted, next) = self.equipment.libraries.loading.finish(&job);
+        if accepted {
+            let shown = self.shown_lab();
+            let folder = result.unwrap_or_else(|error| {
+                Some(Folder {
+                    pieces: Vec::new(),
+                    problems: vec![library::Problem {
+                        path: match &job.target {
+                            Target::Mine => {
+                                library::my_pieces().unwrap_or_else(|_| "My pieces".into())
+                            }
+                            Target::Lab(root) => root.clone(),
+                        },
+                        error,
+                    }],
+                })
+            });
+            if let Some(folder) = folder {
+                match &job.target {
+                    Target::Mine => self.equipment.libraries.mine = folder,
+                    Target::Lab(root) => {
+                        for (_, current) in self
+                            .equipment
+                            .libraries
+                            .labs
+                            .iter_mut()
+                            .filter(|(r, _)| r == root)
+                        {
+                            *current = folder.clone();
+                        }
+                    }
+                }
+                self.reindex_libraries(shown);
+            }
+            let libraries = &mut self.equipment.libraries;
+            let done = libraries.notice.as_ref().is_some_and(|notice| {
+                notice.serial == libraries.loading.serial()
+                    && match &notice.kind {
+                        NoticeKind::Reload => !libraries.loading.pending(),
+                        NoticeKind::Linked(root) => {
+                            !libraries.loading.loading(&Target::Lab(root.clone()))
+                        }
+                    }
+            });
+            if done {
+                let notice = libraries.notice.take().unwrap();
+                // Other app actions may have replaced the progress message.
+                if self.status == notice.status && !self.error {
+                    self.status = match notice.kind {
+                        NoticeKind::Reload => "Libraries reloaded".into(),
+                        NoticeKind::Linked(root) => libraries
+                            .labs
+                            .iter()
+                            .enumerate()
+                            .find(|(_, (r, _))| *r == root)
+                            .map(|(i, (_, folder))| {
+                                format!(
+                                    "Linked {} · {}",
+                                    libraries.name(Source::Lab(i)),
+                                    count(folder.pieces.len())
+                                )
+                            })
+                            .unwrap_or_default(),
+                    };
+                }
+            }
+        }
+        next.map_or_else(Task::none, scan)
+    }
+
     fn lab_roots(&self) -> Vec<PathBuf> {
-        (self.equipment.libraries.labs.iter())
+        self.equipment
+            .libraries
+            .labs
+            .iter()
             .map(|(root, _)| root.clone())
             .collect()
     }
 
-    /// Change the saved list of linked folders, starting from what is saved
-    /// now, as another window may have changed it.
-    fn set_labs(&mut self, change: impl FnOnce(&mut Vec<PathBuf>)) -> bool {
+    /// Change only the saved linked list, starting from the latest preferences
+    /// as another window may have changed it. Scans never write preferences.
+    fn set_labs(&mut self, change: impl FnOnce(&mut Vec<PathBuf>)) -> Option<Vec<PathBuf>> {
         let mut labs = library::linked();
         change(&mut labs);
         if let Err(e) = library::set_linked(&labs) {
             self.status = e;
             self.error = true;
-            return false;
+            return None;
         }
         self.equipment.shelf = None;
-        self.reload_libraries(labs);
-        true
+        Some(labs)
     }
 
     pub(super) fn library_action(&mut self, action: Action) -> Task<Message> {
@@ -274,7 +406,7 @@ impl App {
                 if result.as_ref().is_ok_and(|(n, _)| *n == 0) {
                     return Task::none();
                 }
-                self.library_done(result.map(|(_, c)| c), |c| match c.added.len() {
+                return self.library_done(result.map(|(_, c)| c), |c| match c.added.len() {
                     0 if total == 1 => "This piece is already in My pieces".into(),
                     0 => "These pieces are already in My pieces".into(),
                     n => format!("Added {} to My pieces", count(n)),
@@ -339,7 +471,7 @@ impl App {
                 let result =
                     library::my_pieces().and_then(|dir| library::add(&dir, &[(*d).clone()]));
                 let n = name(&d).to_owned();
-                self.library_done(result, |_| format!("Added {n} to My pieces"));
+                return self.library_done(result, |_| format!("Added {n} to My pieces"));
             }
             Action::Remove(k) => {
                 let Some(d) = self.piece_by_key(&k) else {
@@ -350,7 +482,7 @@ impl App {
                 if self.equipment.armed.as_ref().is_some_and(|a| key(a) == k) {
                     self.equipment.armed = None;
                 }
-                self.library_done(result, |_| {
+                return self.library_done(result, |_| {
                     format!("Removed {n} from My pieces · Drawings that use it keep it")
                 });
             }
@@ -362,7 +494,7 @@ impl App {
                 if result.is_ok() {
                     self.equipment.libraries.undo = None;
                 }
-                self.library_done(result.map(|_| Change::default()), |_| {
+                return self.library_done(result.map(|_| Change::default()), |_| {
                     "Library change undone".into()
                 });
             }
@@ -381,22 +513,12 @@ impl App {
                     return Task::none();
                 }
                 let linked = root.clone();
-                if self.set_labs(|labs| {
+                if let Some(labs) = self.set_labs(|labs| {
                     if !labs.contains(&linked) {
                         labs.push(linked);
                     }
                 }) {
-                    let libraries = &self.equipment.libraries;
-                    if let Some((i, (_, folder))) =
-                        (libraries.labs.iter().enumerate()).find(|(_, (r, _))| *r == root)
-                    {
-                        self.status = format!(
-                            "Linked {} · {}",
-                            libraries.name(Source::Lab(i)),
-                            count(folder.pieces.len())
-                        );
-                        self.error = false;
-                    }
+                    return self.reload_libraries(labs, Some(NoticeKind::Linked(root)));
                 }
             }
             Action::Linked(None) => {}
@@ -406,16 +528,16 @@ impl App {
                 };
                 let root = root.clone();
                 let name = self.equipment.libraries.name(Source::Lab(i));
-                if self.set_labs(|labs| labs.retain(|r| *r != root)) {
+                if let Some(labs) = self.set_labs(|labs| labs.retain(|r| *r != root)) {
                     self.status = format!("Unlinked {name}");
                     self.error = false;
+                    return self.reload_libraries(labs, None);
                 }
             }
             Action::Reload => {
-                self.reload_libraries(library::linked());
-                self.status = "Libraries reloaded".into();
-                self.error = false;
+                return self.reload_libraries(library::linked(), Some(NoticeKind::Reload));
             }
+            Action::LibrariesLoaded(job, result) => return self.libraries_loaded(job, result),
             Action::Shelf(shelf) => self.equipment.shelf = shelf.source,
             Action::Update { ids, key: k } => {
                 let Some(next) = self.piece_by_key(&k) else {
@@ -456,8 +578,13 @@ impl App {
             section("Libraries"),
             row![
                 text(format!(
-                    "My pieces · {}",
-                    count(libraries.mine.pieces.len())
+                    "My pieces · {}{}",
+                    count(libraries.mine.pieces.len()),
+                    if libraries.loading.loading(&Target::Mine) {
+                        " · Loading…"
+                    } else {
+                        ""
+                    }
                 ))
                 .size(12)
                 .width(Length::Fill),
@@ -471,9 +598,14 @@ impl App {
         for (i, (root, folder)) in libraries.labs.iter().enumerate() {
             let mut about = column![
                 text(format!(
-                    "{} · {}",
+                    "{} · {}{}",
                     libraries.name(Source::Lab(i)),
-                    count(folder.pieces.len())
+                    count(folder.pieces.len()),
+                    if libraries.loading.loading(&Target::Lab(root.clone())) {
+                        " · Loading…"
+                    } else {
+                        ""
+                    }
                 ))
                 .size(12)
             ];
@@ -667,3 +799,41 @@ async fn pick_folder() -> Option<PathBuf> {
 async fn pick_folder() -> Option<PathBuf> {
     None
 }
+
+/// Only the worker enumerates folders, parses files, and validates definitions.
+fn scan(job: Job) -> Task<Message> {
+    scan_with(job, scan_folder)
+}
+
+fn scan_with(
+    job: Job,
+    read: impl FnOnce(Target) -> Option<Folder> + Send + 'static,
+) -> Task<Message> {
+    let target = job.target.clone();
+    Task::perform(
+        async move {
+            reshiki::task::spawn_blocking(move || read(target))
+                .await
+                .map_err(|e| format!("The library could not be read: {e}"))
+        },
+        move |result| Message::Equipment(Action::LibrariesLoaded(job.clone(), result)),
+    )
+}
+
+fn scan_folder(target: Target) -> Option<Folder> {
+    match target {
+        Target::Mine => {
+            let dir = library::my_pieces().ok()?;
+            let mut folder = library::scan(&dir);
+            // A missing My pieces folder is simply empty.
+            if folder.pieces.is_empty() {
+                folder.problems.retain(|p| p.path != dir);
+            }
+            Some(folder)
+        }
+        Target::Lab(root) => Some(library::scan(&root)),
+    }
+}
+
+#[cfg(test)]
+mod tests;

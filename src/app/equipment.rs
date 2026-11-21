@@ -81,6 +81,10 @@ pub enum Action {
     Linked(Option<PathBuf>),
     Unlink(usize),
     Reload,
+    LibrariesLoaded(
+        super::piece_libraries::loading::Job,
+        Result<Option<reshiki::piece_library::Folder>, String>,
+    ),
     /// Set a parameter of the piece `id`: a valve, a tilt, a liquid level.
     Param {
         id: u64,
@@ -118,7 +122,7 @@ impl Action {
     pub fn completes(&self) -> bool {
         matches!(
             self,
-            Self::Imported(_) | Self::Exported(_) | Self::Linked(_)
+            Self::Imported(_) | Self::Exported(_) | Self::Linked(_) | Self::LibrariesLoaded(..)
         )
     }
 }

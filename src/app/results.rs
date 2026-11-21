@@ -66,7 +66,7 @@ enum Completion {
     FilePrepared,
     /// ThemeFile(Loaded | Saved).
     ThemeFile,
-    /// Equipment(Imported | Exported | Linked).
+    /// Equipment(Imported | Exported | Linked | LibrariesLoaded).
     PieceLibrary,
     /// Opened, the legacy file-open receipt.
     Opened,

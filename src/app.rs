@@ -720,7 +720,8 @@ impl App {
         let update_check = Task::batch([update_check, app.github_start()]);
         app.sync_keyboard_drawing();
         let previews = app.start_previews();
-        (app, Task::batch([task, update_check, previews]))
+        let libraries = app.load_piece_libraries();
+        (app, Task::batch([task, update_check, previews, libraries]))
     }
     pub fn title(&self) -> String {
         #[cfg(not(target_arch = "wasm32"))]
