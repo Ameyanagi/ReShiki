@@ -69,6 +69,43 @@ fn local_results_publish_without_waiting_for_a_linked_share() {
 }
 
 #[test]
+fn failed_installer_handoff_leaves_linked_folders_able_to_reload() {
+    let (mut app, _) = App::new();
+    let root = "/lab";
+    let target = Target::Lab(root.into());
+    let serial = request(&mut app, &[root], Some(NoticeKind::Linked(root.into())));
+    app.updates.restarting = true;
+    let _ = app.restart_after_recovery();
+    assert!(app.exit.frozen() && !app.exit.committed());
+    let exit_status = app.status.clone();
+    let _ = app.update(Message::Equipment(Action::LibrariesLoaded(
+        lab(serial, root),
+        Ok(Some(folder(piece("lab/first")))),
+    )));
+    assert!(!app.equipment.libraries.loading.loading(&target));
+    assert_eq!(app.status, exit_status);
+
+    let _ = app.update(Message::Updates(super::super::updates::Action::Restarted(
+        Err("Installer failed".into()),
+    )));
+    assert!(!app.exit.frozen());
+    let serial = request(&mut app, &[root], None);
+    let updated = piece("lab/updated");
+    let _ = app.update(Message::Equipment(Action::LibrariesLoaded(
+        lab(serial, root),
+        Ok(Some(folder(updated.clone()))),
+    )));
+    assert!(!app.equipment.libraries.loading.loading(&target));
+    assert!(
+        app.equipment
+            .libraries
+            .entries
+            .iter()
+            .any(|entry| entry.key == key(&updated))
+    );
+}
+
+#[test]
 fn detached_folder_entries_and_notices_disappear_before_its_old_scan_finishes() {
     let (mut app, _) = App::new();
     let old = request(&mut app, &["/old/lab"], None);

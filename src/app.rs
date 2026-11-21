@@ -1250,6 +1250,12 @@ impl App {
                 let task = self.recovery_action(action);
                 return ControlFlow::Break(Task::batch([task, self.accessibility_refresh()]));
             }
+            // Settle shared-library work even if an exit may fail. Dropping a
+            // receipt would leave that folder unable to start its next scan.
+            Message::Equipment(action @ equipment::Action::LibrariesLoaded(..)) => {
+                let task = self.library_action(action);
+                return ControlFlow::Break(Task::batch([task, self.accessibility_refresh()]));
+            }
             message => message,
         };
         #[cfg(any(windows, target_os = "linux"))]

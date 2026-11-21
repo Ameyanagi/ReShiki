@@ -3,8 +3,8 @@ use super::*;
 #[test]
 fn pasted_highlights_keep_each_style_without_changing_destination_defaults() {
     use crate::{highlights::HighlightStyle, palette::Color};
-    let appenders: [fn(&mut Document, &Document, Point) -> Vec<u64>; 2] =
-        [append, append_preserving_layout];
+    type Append = fn(&mut Document, &Document, Point) -> Vec<u64>;
+    let appenders: [Append; 2] = [append, append_preserving_layout];
     for source_style in HighlightStyle::ALL {
         let mut source = Document {
             highlight_style: source_style,

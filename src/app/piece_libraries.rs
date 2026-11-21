@@ -320,7 +320,7 @@ impl App {
             });
             if done && let Some(notice) = libraries.notice.take() {
                 // Other app actions may have replaced the progress message.
-                if self.status == notice.status && !self.error {
+                if !self.exit.frozen() && self.status == notice.status && !self.error {
                     self.status = match notice.kind {
                         NoticeKind::Reload => "Libraries reloaded".into(),
                         NoticeKind::Linked(root) => libraries
