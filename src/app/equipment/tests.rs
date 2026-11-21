@@ -1,0 +1,401 @@
+use super::*;
+use crate::canvas::Edit;
+use reshiki::equipment::builtin;
+use reshiki::equipment::solve::hose::Grip;
+use reshiki::graphics::GraphicKind;
+
+/// The key that arms a built-in piece.
+fn k(id: &str) -> String {
+    placed::key(&builtin::find(id).unwrap())
+}
+
+#[test]
+fn search_finds_pieces_by_any_name_keyword_or_size() {
+    let found = |query: &str| -> Vec<&str> {
+        (builtin::catalogue().iter())
+            .filter(|d| matches(d, query))
+            .map(|d| d.id.as_str())
+            .collect()
+    };
+    for query in ["丸底", "round", "ナス", "Round-bottom 100"] {
+        assert!(found(query).contains(&"reshiki/rbf-100-15"), "{query}");
+    }
+    assert_eq!(found("liebig"), ["reshiki/liebig-15", "reshiki/liebig-29"]);
+    assert_eq!(found("septum 29/42"), ["reshiki/septum-29"]);
+    assert!(found("burette").is_empty());
+    assert_eq!(found("").len(), builtin::catalogue().len());
+}
+
+#[test]
+fn names_sizes_and_the_click_hint_come_from_the_definition() {
+    let flask = builtin::find("reshiki/rbf-100-15").unwrap();
+    assert_eq!(title(&flask), "Round-bottom flask");
+    assert_eq!(size(&flask), "100 mL · 15/25");
+    assert_eq!(noun(&flask), "flask");
+    let adapter = builtin::find("reshiki/red-29-15").unwrap();
+    assert_eq!(size(&adapter), "29/42 · 15/25");
+    assert_eq!(noun(&adapter), "adapter");
+}
+
+#[test]
+fn arming_and_placing_a_piece_adds_one_graphic_in_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Tool(Tool::Equipment));
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Equipment);
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/rbf-100-15"))));
+    assert_eq!(app.tool, Tool::Equipment);
+    assert_eq!(app.tab.doc, before, "arming changes nothing");
+    let at = Point::new(120., 80.);
+    let _ = app.update(Message::Canvas(Edit::Piece(at)));
+    assert!(!app.error, "{}", app.status);
+    let [piece] = app.tab.doc.graphics.as_slice() else {
+        panic!("one graphic: {:?}", app.tab.doc.graphics.len());
+    };
+    assert_eq!(piece.kind, GraphicKind::Piece);
+    assert_eq!(app.tab.selected, [piece.id]);
+    let (lo, hi) = piece.shape_bounds();
+    let mid = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    assert!(mid.distance(at) < 0.01, "{mid:?}");
+    assert_eq!(app.tab.doc.piece_definitions.len(), 1);
+    // Keep placing is on: the tool stays armed for the next copy.
+    assert_eq!(app.tool, Tool::Equipment);
+    let placed = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, placed);
+}
+
+#[test]
+fn hanging_a_hose_and_bending_it_are_separate_undo_steps() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/liebig-29"))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(200., 300.))));
+    let before = app.tab.doc.clone();
+    let water_in = solve::ports(&before.graphics[0])
+        .into_iter()
+        .find(|p| p.at.joint == "water-in")
+        .unwrap();
+    let p = Point::new(water_in.point[0] as f32, water_in.point[1] as f32);
+
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/hose-7"))));
+    let _ = app.update(Message::Canvas(Edit::Hose(p, p)));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.graphics.len(), before.graphics.len() + 1);
+    assert_eq!(app.tab.doc.seats.len(), before.seats.len() + 1);
+    assert_eq!(app.status, "Hose on the condenser water in");
+    let hose = app
+        .tab
+        .doc
+        .graphics
+        .iter()
+        .find(|g| g.id != water_in.at.piece)
+        .unwrap();
+    let id = hose.id;
+    let line = hose.piece.as_ref().unwrap().centre_line.clone();
+    let hung = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, hung);
+
+    let _ = app.update(Message::Tool(Tool::Select));
+    app.set_selection(vec![id]);
+    let _ = app.update(Message::Canvas(Edit::HoseGrip {
+        id,
+        grip: Grip::Middle,
+        to: p.offset(50., 60.),
+    }));
+    assert!(!app.error, "{}", app.status);
+    let bent = app.tab.doc.graphics.iter().find(|g| g.id == id).unwrap();
+    assert_ne!(bent.piece.as_ref().unwrap().centre_line, line);
+    assert_eq!(app.tab.doc.seats, hung.seats);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, hung);
+}
+
+#[test]
+fn opening_the_schlenk_tube_valve_is_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Equipment(Action::Arm(k(
+        "reshiki/jy-schlenk-tube",
+    ))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(120., 80.))));
+    let id = app.tab.doc.graphics[0].id;
+    let _ = app.update(Message::Tool(Tool::Select));
+    app.set_selection(vec![id]);
+
+    let open = Value::State("open".into());
+    let _ = app.update(Message::Equipment(Action::Param {
+        id,
+        param: "valve".into(),
+        value: open.clone(),
+    }));
+    let tube = &app.tab.doc.graphics[0];
+    assert_eq!(
+        tube.piece.as_ref().unwrap().params.get("valve"),
+        Some(&open)
+    );
+    assert_eq!(value_text(tube, "valve", None), "Valve: Open");
+
+    let _ = app.update(Message::Undo);
+    let tube = &app.tab.doc.graphics[0];
+    assert_eq!(tube.id, id);
+    assert!(!tube.piece.as_ref().unwrap().params.contains_key("valve"));
+    assert_eq!(value_text(tube, "valve", None), "Valve: Closed");
+}
+
+#[test]
+fn escape_disarms_and_a_click_then_places_nothing() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/liebig-15"))));
+    assert_eq!(app.tool, Tool::Equipment);
+    let _ = app.update(Message::Escape);
+    assert_eq!(app.tool, Tool::Select);
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::default())));
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn without_keep_placing_one_click_returns_to_select() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Equipment(Action::Repeat(false)));
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/stopper-15"))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::default())));
+    assert_eq!(app.tab.doc.graphics.len(), 1);
+    assert_eq!(app.tool, Tool::Select);
+}
+
+/// A flask placed at `at`, and where a piece's joint seats on its neck.
+fn flask_neck(app: &mut App, at: Point) -> Point {
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/rbf-100-15"))));
+    let _ = app.update(Message::Canvas(Edit::Piece(at)));
+    let neck = solve::ports(&app.tab.doc.graphics[0]).remove(0);
+    Point::new(neck.point[0] as f32, neck.point[1] as f32)
+}
+
+#[test]
+fn a_stopper_placed_by_the_neck_seats_and_undo_takes_it_off_in_one_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let neck = flask_neck(&mut app, Point::new(200., 300.));
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/stopper-15"))));
+    let before = app.tab.doc.clone();
+    // A click centres the stopper: aim its shoulder a few points off the neck.
+    let scale = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
+    let probe = placed::graphic(
+        0,
+        builtin::find("reshiki/stopper-15").unwrap(),
+        Point::default(),
+        scale,
+    );
+    let shoulder = solve::ports(&probe)[0].point;
+    let click = Point::new(
+        neck.x - shoulder[0] as f32 + 3.,
+        neck.y - shoulder[1] as f32 - 4.,
+    );
+    let _ = app.update(Message::Canvas(Edit::Piece(click)));
+    assert_eq!(app.tab.doc.seats.len(), 1, "{}", app.status);
+    assert_eq!(app.status, "Seated the stopper bottom on the flask neck");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn keyboard_connect_offers_joints_in_turn_and_return_seats_the_shown_one() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    flask_neck(&mut app, Point::new(200., 300.));
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/rbf-100-29"))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(600., 300.))));
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/stopper-15"))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(260., 100.))));
+    let stopper = app.tab.doc.graphics[2].id;
+    let _ = app.update(Message::Tool(Tool::Select));
+    app.set_selection(vec![stopper]);
+    let _ = app.update(Message::ContextKey("j".into()));
+    assert!(
+        app.status.starts_with("Connect to the flask neck (1 of 2)"),
+        "{}",
+        app.status
+    );
+    let _ = app.update(Message::Shortcut(crate::app::shortcuts::Action::Nudge(
+        0., 1.,
+    )));
+    assert!(app.status.contains("(2 of 2)"), "{}", app.status);
+    let _ = app.update(Message::ContextKey("Enter".into()));
+    assert!(
+        app.status.starts_with("Inserted the reducing adapter"),
+        "{}",
+        app.status
+    );
+    assert_eq!(app.tab.doc.seats.len(), 2);
+    assert!(app.tab.connect.is_none());
+    // Detach from Properties pulls the adapter and stopper off the neck.
+    let neck = app.tab.doc.seats[0].a.clone();
+    let _ = app.update(Message::Equipment(Action::Detach(neck)));
+    assert_eq!(app.tab.doc.seats.len(), 1);
+}
+
+/// A lab's copy of the 100 mL flask, at `revision`, with an extra keyword so
+/// two copies can differ under one ID.
+fn lab_flask(revision: u32, keyword: &str) -> Arc<Definition> {
+    let mut d = (*builtin::find("reshiki/rbf-100-15").unwrap()).clone();
+    d.id = "lab/flask".into();
+    d.revision = revision;
+    d.keywords.push(keyword.into());
+    Arc::new(d)
+}
+
+#[test]
+fn library_pieces_join_the_browser_once_each_and_name_their_library_on_a_clash() {
+    let (mut app, _) = App::new();
+    let mine = lab_flask(1, "mine");
+    let theirs = lab_flask(1, "theirs");
+    let libraries = &mut app.equipment.libraries;
+    libraries.mine.pieces = vec![mine.clone(), mine.clone()];
+    libraries.labs = vec![(
+        PathBuf::from("/labs/Tanaka lab"),
+        reshiki::piece_library::Folder {
+            pieces: vec![theirs.clone(), mine.clone()],
+            problems: vec![],
+        },
+    )];
+    libraries.index();
+    let entries = &libraries.entries;
+    let lab: Vec<_> = (entries.iter())
+        .filter(|e| e.definition.id == "lab/flask")
+        .map(|e| e.source)
+        .collect();
+    assert_eq!(lab, [Source::Mine, Source::Lab(0)]);
+    // The lab's own list still shows the piece My pieces also holds.
+    let in_lab = (entries.iter())
+        .filter(|e| e.definition.id == "lab/flask" && e.in_library(Source::Lab(0)))
+        .count();
+    assert_eq!(in_lab, 2);
+    assert_eq!(libraries.name(Source::Lab(0)), "Tanaka lab");
+    assert_eq!(libraries.newer(&lab_flask(0, "old")).unwrap().0, mine);
+    assert!(libraries.newer(&mine).is_none());
+    // Arming by key places that exact piece.
+    app.tab.busy = false;
+    let _ = app.update(Message::Equipment(Action::Arm(placed::key(&theirs))));
+    assert_eq!(app.equipment.armed.as_deref(), Some(&*theirs));
+}
+
+#[test]
+fn updating_to_a_newer_revision_is_one_undo_step_and_keeps_the_seat() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let old = lab_flask(1, "old");
+    let new = lab_flask(2, "new");
+    app.equipment.libraries.mine.pieces = vec![old.clone(), new.clone()];
+    app.equipment.libraries.index();
+    let _ = app.update(Message::Equipment(Action::Arm(placed::key(&old))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(200., 300.))));
+    let flask = app.tab.selected[0];
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/stopper-15"))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(600., 120.))));
+    let stopper = app.tab.selected[0];
+    let before = app.tab.doc.clone();
+    let joint = |piece, joint: &str| JointRef {
+        piece,
+        joint: joint.into(),
+    };
+    solve::connect(
+        &mut app.tab.doc,
+        &[stopper],
+        &joint(flask, "neck"),
+        &joint(stopper, "bottom"),
+    )
+    .unwrap();
+    app.changed(before);
+    assert_eq!(app.tab.doc.seats.len(), 1, "{}", app.status);
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Equipment(Action::Update {
+        ids: vec![flask],
+        key: placed::key(&new),
+    }));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.status, "Updated to revision 2");
+    let g = app.tab.doc.graphics.iter().find(|g| g.id == flask).unwrap();
+    assert_eq!(g.piece.as_ref().unwrap().definition, placed::key(&new));
+    assert_eq!(app.tab.doc.seats.len(), 1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+/// Where a click places `id` so that the middle of its hold `name` is at `at`.
+fn click_for(app: &App, id: &str, name: &str, at: [f64; 2]) -> Point {
+    let scale = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
+    let probe = placed::graphic(0, builtin::find(id).unwrap(), Point::default(), scale);
+    let p = solve::ports(&probe)
+        .into_iter()
+        .find(|p| p.at.joint == name)
+        .unwrap();
+    let c = [
+        p.point[0] + p.dir[0] * p.length / 2.,
+        p.point[1] + p.dir[1] * p.length / 2.,
+    ];
+    Point::new((at[0] - c[0]) as f32, (at[1] - c[1]) as f32)
+}
+
+#[test]
+fn a_clamp_placed_by_the_rod_mounts_on_it_in_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/stand"))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(0., 0.))));
+    let rod = solve::ports(&app.tab.doc.graphics[0]).remove(0);
+    let at = [
+        rod.point[0] + 3.,
+        rod.point[1] + rod.dir[1] * rod.length / 2.,
+    ];
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/clamp-3finger"))));
+    let before = app.tab.doc.clone();
+    let click = click_for(&app, "reshiki/clamp-3finger", "boss", at);
+    let _ = app.update(Message::Canvas(Edit::Piece(click)));
+    assert_eq!(app.tab.doc.seats.len(), 1, "{}", app.status);
+    assert_eq!(app.status, "Mounted the clamp on the stand rod");
+    // The rod says where along it the clamp is: half of its 560 mm.
+    let doc = &app.tab.doc;
+    let rod = solve::ports(&doc.graphics[0]).remove(0);
+    let partner = solve::partner(doc, &rod.at).unwrap();
+    assert_eq!(seat_state(doc, &rod, &partner), "Holds the clamp at 280 mm");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn add_clips_clips_the_selected_assembly_in_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let neck = flask_neck(&mut app, Point::new(200., 300.));
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/stopper-15"))));
+    let scale = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
+    let probe = placed::graphic(
+        0,
+        builtin::find("reshiki/stopper-15").unwrap(),
+        Point::default(),
+        scale,
+    );
+    let shoulder = solve::ports(&probe)[0].point;
+    let click = Point::new(neck.x - shoulder[0] as f32, neck.y - shoulder[1] as f32);
+    let _ = app.update(Message::Canvas(Edit::Piece(click)));
+    assert_eq!(app.tab.doc.seats.len(), 1, "{}", app.status);
+    let _ = app.update(Message::Tool(Tool::Select));
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Equipment(Action::AddClips));
+    assert_eq!(app.status, "Added 1 joint clip");
+    let clip = app.tab.doc.seats[0].clip.expect("clipped");
+    assert!(app.tab.selected.contains(&clip));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}

@@ -30,6 +30,7 @@ fn main() -> anyhow::Result<()> {
         );
         editing::append(&mut gallery, &template.document, offset);
         gallery.annotations.push(Annotation {
+            angle: 0.,
             id: gallery.next_id(),
             position: offset.offset(-105., 125.),
             text: name.clone(),

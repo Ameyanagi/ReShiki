@@ -20,6 +20,7 @@ use std::{
 };
 
 const ARROWED: &str = "Arrowed, shaded or doubled CDXML curves are not supported yet";
+const FADED: &str = "Transparent/faded CDXML graphics are not supported yet";
 
 #[derive(Deserialize)]
 struct Pixels {
@@ -185,6 +186,8 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut converted, mut bounded, mut decoded) = (0, 0, 0, 0, 0);
     let mut arrowed = 0;
+    let mut effects = 0;
+    let mut faded = 0;
     let mut failures = Vec::new();
     for line in lines {
         // Preserve exact worker transport: JSON -> Value(f64) -> typed Case.
@@ -282,11 +285,42 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
                 rejected += 1;
                 continue;
             }
+            // ChemDraw's FadePercent is no longer refused: ReShiki reads it as
+            // a see-through fill, and a line shows no fade. With it accepted,
+            // the next attribute's own error, if any, comes first.
+            (actual, None)
+                if case.error.as_deref() == Some(FADED)
+                    && case.name.contains("FadePercent")
+                    && match &actual {
+                        // A line shows no fade, so it reads as without one.
+                        Ok(actual) => serde_json::to_string(&actual.graphics)
+                            .is_ok_and(|json| !json.contains("\"opacity\"")),
+                        // The next attribute's error now comes first.
+                        Err(error) => {
+                            case.name.starts_with("error-order") && error.to_string() != FADED
+                        }
+                    } =>
+            {
+                faded += 1;
+                continue;
+            }
             (Err(actual), _) => {
                 failures.push(format!(
                     "{}: Rust {actual}; native {:?}: {:?}",
                     case.name, case.error_type, case.error
                 ));
+                continue;
+            }
+            // Shading, shadows and wavy lines are no longer refused; the
+            // accepted graphic must carry the style the original refused.
+            (Ok(actual), None)
+                if serde_json::to_string(&actual.graphics).is_ok_and(|json| {
+                    json.contains("\"shaded\"")
+                        || json.contains("\"shadow_pt\"")
+                        || json.contains("\"wavy\"")
+                }) =>
+            {
+                effects += 1;
                 continue;
             }
             (Ok(actual), None) => {
@@ -377,9 +411,11 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
             && bounded > 100
             && decoded >= 90
             && arrowed > 0
+            && effects > 0
+            && faded > 0
     );
     eprintln!(
-        "{accepted} native successes, {rejected} exact errors, {arrowed} arrowed curves now accepted (#777), {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"
+        "{accepted} native successes, {rejected} exact errors, {arrowed} arrowed curves now accepted (#777), {effects} shaded, shadowed or wavy graphics now accepted, {faded} faded graphics now accepted, {converted} wire/document conversions, {bounded} separate document boundaries, {decoded} independent Pillow images"
     );
     Ok(())
 }

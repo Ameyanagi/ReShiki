@@ -170,6 +170,8 @@ def arrowed_curves(root, scale, first_id, claimed, error):
     with its bindings; `heads` lists each curve's source arrowhead attributes."""
     if error != "Arrowed, shaded or doubled CDXML curves are not supported yet":
         return None
+    # The heads still count for the stacking cutoff.
+    top = graphics_exchange.stacking_top(root)
     root = copy.deepcopy(root)
     heads = []
     for el in root.iter("curve"):
@@ -180,7 +182,7 @@ def arrowed_curves(root, scale, first_id, claimed, error):
     objects = {elements[i]: [1000 + i] for i in claimed}
     try:
         graphics = graphics_exchange.read_graphics(
-            root, scale, first_id, objects, local_pictures=True
+            root, scale, first_id, objects, local_pictures=True, top=top
         )
     except (ValueError, KeyError, OverflowError):
         return None
@@ -403,6 +405,11 @@ def main():
         root = xml()
         ET.SubElement(root, tag, Z="bad")
         emit(f"middle/{tag}", root)
+    # An arrowed curve above a box keeps the box behind the chemistry.
+    for heads in [{}, {"ArrowheadHead": "Full"}]:
+        root = xml(attrs={"Z": "7"}, chemistry=2)
+        ET.SubElement(root.find("page"), "curve", {"CurvePoints": POINTS, "Z": "8", **heads})
+        emit(f"cutoff/arrowed-curve/{bool(heads)}", root)
     # The exact tree and object membership, not string IDs, control collection.
     for matching, filled, second_fill, count in itertools.product(
         [False, True], [False, True], [False, True], [0, 1, 2, 3]

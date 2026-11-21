@@ -1,0 +1,236 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/thermometer",
+ "revision": 1,
+ "family": "thermometer",
+ "variant": {},
+ "names": {
+  "en": "Thermometer",
+  "ja": "温度計"
+ },
+ "category": "distillation",
+ "keywords": [
+  "thermometer",
+  "温度計"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "inner",
+   "material": "glass",
+   "role": "solid",
+   "path": "M-3.4 0L-3.4 238L-2.2 242L-2.2 256A2.2 2.2 0 0 0 2.2 256L2.2 242L3.4 238L3.4 0A3.4 3.4 0 0 0 -3.4 0Z",
+   "part": "glass"
+  },
+  {
+   "id": "s1",
+   "layer": "inner",
+   "material": "liquid",
+   "role": "solid",
+   "color": [
+    196,
+    59,
+    46
+   ],
+   "path": "M0 60L0 60A0.9 0.9 0 0 1 0.9 60.9L0.9 255.1A0.9 0.9 0 0 1 0 256L0 256A0.9 0.9 0 0 1 -0.9 255.1L-0.9 60.9A0.9 0.9 0 0 1 0 60Z",
+   "part": "glass"
+  },
+  {
+   "id": "s2",
+   "layer": "inner",
+   "material": "liquid",
+   "role": "solid",
+   "color": [
+    196,
+    59,
+    46
+   ],
+   "path": "M0 243L0 243A1.6 1.6 0 0 1 1.6 244.6L1.6 255.9A1.6 1.6 0 0 1 0 257.5L0 257.5A1.6 1.6 0 0 1 -1.6 255.9L-1.6 244.6A1.6 1.6 0 0 1 0 243Z",
+   "part": "glass"
+  },
+  {
+   "id": "s3",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 70L3.4 70",
+   "part": "glass"
+  },
+  {
+   "id": "s4",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 80L3.4 80",
+   "part": "glass"
+  },
+  {
+   "id": "s5",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 90L3.4 90",
+   "part": "glass"
+  },
+  {
+   "id": "s6",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 100L3.4 100",
+   "part": "glass"
+  },
+  {
+   "id": "s7",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 110L3.4 110",
+   "part": "glass"
+  },
+  {
+   "id": "s8",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 120L3.4 120",
+   "part": "glass"
+  },
+  {
+   "id": "s9",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 130L3.4 130",
+   "part": "glass"
+  },
+  {
+   "id": "s10",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 140L3.4 140",
+   "part": "glass"
+  },
+  {
+   "id": "s11",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 150L3.4 150",
+   "part": "glass"
+  },
+  {
+   "id": "s12",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 160L3.4 160",
+   "part": "glass"
+  },
+  {
+   "id": "s13",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 170L3.4 170",
+   "part": "glass"
+  },
+  {
+   "id": "s14",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 180L3.4 180",
+   "part": "glass"
+  },
+  {
+   "id": "s15",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 190L3.4 190",
+   "part": "glass"
+  },
+  {
+   "id": "s16",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 200L3.4 200",
+   "part": "glass"
+  },
+  {
+   "id": "s17",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 210L3.4 210",
+   "part": "glass"
+  },
+  {
+   "id": "s18",
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "path": "M1.8 220L3.4 220",
+   "part": "glass"
+  }
+ ],
+ "joints": [
+  {
+   "id": "stem",
+   "kind": "plug",
+   "family": "thermometer",
+   "gender": "M",
+   "size_mm": 7,
+   "at": [
+    0,
+    150
+   ],
+   "dir": [
+    0,
+    1
+   ]
+  }
+ ],
+ "params": [
+  {
+   "id": "depth",
+   "names": {
+    "en": "Insertion depth",
+    "ja": "差し込み深さ"
+   },
+   "kind": "range",
+   "min": 30,
+   "max": 240,
+   "default": 110,
+   "unit": "mm"
+  }
+ ],
+ "parts": [
+  {
+   "id": "glass",
+   "param": "depth",
+   "motion": {
+    "translate": [
+     0,
+     1
+    ]
+   },
+   "handle": {
+    "at": [
+     0,
+     -2
+    ],
+    "gesture": "drag"
+   }
+  }
+ ]
+}

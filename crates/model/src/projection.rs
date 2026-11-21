@@ -47,11 +47,15 @@ pub fn add_centroid(doc: &mut Document, ids: &[u64]) -> Result<u64, String> {
     if !(2..=300).contains(&members.len()) {
         return Err("Select at least two atoms to add a centroid".into());
     }
-    let id = doc.add_atom("*", Point::default());
-    let atom = doc.atom_mut(id).ok_or("Missing centroid")?;
+    let mut candidate = doc.clone();
+    let id = candidate.add_atom("*", Point::default());
+    let atom = candidate.atom_mut(id).ok_or("Missing centroid")?;
     atom.no_implicit = true;
-    atom.centroid = members;
-    sync_centroids(doc);
+    atom.centroid = members.clone();
+    crate::graphics::table::inherit_attachment(doc, &mut candidate, &[id], &members)?;
+    sync_centroids(&mut candidate);
+    candidate.validate()?;
+    *doc = candidate;
     Ok(id)
 }
 
@@ -108,6 +112,10 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
     if degrees == 0. {
         return;
     }
+    // Numeric transforms and canvas tilt both enter here. Rebase fitted
+    // sources after their frame changes, including a turn through the back
+    // of the page; reject the whole tilt if its projected children cannot fit.
+    let fitted = crate::cycles::has_fits(doc).then(|| doc.clone());
     // A molecule shown as a 3D model turns its model and keeps its 2D drawing.
     let mut ids = doc.expand_abbreviation_selection(ids);
     crate::models3d::tilt(doc, &ids, degrees, around_x);
@@ -153,7 +161,8 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
         }
     }
     for g in &mut doc.graphics {
-        if !ids.contains(&g.id) {
+        // Equipment is drawn as seen; it does not tilt in 3D.
+        if !ids.contains(&g.id) || g.kind == crate::graphics::GraphicKind::Piece {
             continue;
         }
         let [oz, xz, yz] = g.depth;
@@ -168,6 +177,9 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
     sync_centroids(doc);
     refresh_depth_bonds(doc, &ids);
     crate::arrow_anchors::reconcile(doc);
+    if let Some(before) = fitted {
+        crate::cycles::fit_transformed(&before, doc, &ids);
+    }
 }
 
 /// Emphasize single, double and aromatic outlines without rewriting stereo or order.

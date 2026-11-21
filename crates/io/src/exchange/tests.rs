@@ -1,6 +1,41 @@
 use super::*;
-use crate::allocation_metrics;
+use crate::{
+    allocation_metrics,
+    document::Document,
+    engine::LocalEngine,
+    palette::Color,
+    typography::{Script, ScriptRun},
+};
 use std::{hint::black_box, time::Instant};
+
+#[test]
+fn native_table_border_accepts_a_byte_color_without_relaxing_other_objects() {
+    let frame = |kind: u16, color: &[u8]| {
+        let mut bytes = HEADER.to_vec();
+        for (object, id) in [(0x8000u16, 0u32), (kind, 1)] {
+            bytes.extend_from_slice(&object.to_le_bytes());
+            bytes.extend_from_slice(&id.to_le_bytes());
+        }
+        property(&mut bytes, 0x0301, color).unwrap();
+        bytes.extend_from_slice(&[0; 6]);
+        bytes
+    };
+    for (color, expected) in [(vec![10], "10"), (vec![255], "255"), (vec![44, 1], "300")] {
+        let bytes = frame(0x801a, &color);
+        for xml in [
+            from_cdx(&bytes).unwrap(),
+            from_cdx_tolerant(&bytes).unwrap(),
+        ] {
+            let tree = roxmltree::Document::parse(&xml).unwrap();
+            let border = tree
+                .descendants()
+                .find(|n| n.has_tag_name("border"))
+                .unwrap();
+            assert_eq!(border.attribute("color"), Some(expected));
+        }
+    }
+    assert!(from_cdx(&frame(0x8007, &[10])).is_err());
+}
 
 fn local_schema() -> Schema {
     Schema {
@@ -20,10 +55,188 @@ fn first_read_frame(code: u16) -> Vec<u8> {
     bytes
 }
 
+async fn import_drawing(format: &str, bytes: &[u8]) -> Document {
+    crate::formats::read_with_engine(bytes.to_vec(), format, &LocalEngine::in_process())
+        .await
+        .unwrap()
+}
+
+fn assert_symbol_caption(document: &Document) {
+    let caption = &document.annotations[0];
+    let expected = "α β σ Δ ν → ± ′ °";
+    assert_eq!(caption.text, format!("{expected}x"));
+    let symbol = &caption.format.style;
+    assert_eq!(symbol.family, "Helvetica");
+    assert_eq!(symbol.size_pt, 14.0);
+    assert!(symbol.bold && symbol.italic);
+    assert_eq!(symbol.script, Script::Superscript);
+    assert_eq!(symbol.color, Color::Custom([255, 0, 0]));
+    assert_eq!(caption.format.spans.len(), 1);
+    assert_eq!(caption.format.spans[0].start, expected.len());
+    assert_eq!(caption.format.at(expected.len()).family, "Times");
+}
+
+#[tokio::test]
+async fn cdxml_imports_symbol_font_as_unicode() {
+    let xml = "<CDXML CaptionFont='3'>
+        <colortable><color r='1' g='1' b='1'/><color/><color r='1'/></colortable>
+        <fonttable><font id='3' name='Helvetica'/>
+        <font id='23' charset='x-mac-roman' name='sYmBoL'/>
+        <font id='9' name='Times'/></fonttable>
+        <page id='1'><t id='2' p='20 40'>
+            <s font='23' size='14' face='67' color='4'>a b s D n ® ± ¢ °</s><s font='9'>x</s>
+        </t></page></CDXML>";
+    let document = import_drawing("cdxml", xml.as_bytes()).await;
+    assert_symbol_caption(&document);
+    let exported = drawing::write(&document, drawing::Options::default()).unwrap();
+    let reopened = import_drawing("cdxml", exported.as_bytes()).await;
+    assert_symbol_caption(&reopened);
+}
+
+fn symbol_caption_cdx(
+    charset: u16,
+    symbol_font: &str,
+    text: &[u8],
+    text_tag: u16,
+    times_tail: bool,
+) -> Vec<u8> {
+    let mut bytes = HEADER.to_vec();
+    bytes.extend_from_slice(&0x8000u16.to_le_bytes());
+    bytes.extend_from_slice(&0u32.to_le_bytes());
+    let mut fonts = vec![0, 0, 3, 0];
+    for (id, name) in [(3u16, "Helvetica"), (23, symbol_font), (9, "Times")] {
+        fonts.extend_from_slice(&id.to_le_bytes());
+        fonts.extend_from_slice(&charset.to_le_bytes());
+        fonts.extend_from_slice(&word(name.len()).unwrap());
+        fonts.extend_from_slice(name.as_bytes());
+    }
+    property(&mut bytes, 0x0100, &fonts).unwrap();
+    property(&mut bytes, 0x081b, &3u16.to_le_bytes()).unwrap();
+    let colors: Vec<_> = [3u16, 65535, 65535, 65535, 0, 0, 0, 65535, 0, 0]
+        .into_iter()
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    property(&mut bytes, 0x0300, &colors).unwrap();
+    for (object, id) in [(0x8001u16, 1u32), (0x8006, 2)] {
+        bytes.extend_from_slice(&object.to_le_bytes());
+        bytes.extend_from_slice(&id.to_le_bytes());
+    }
+    property(&mut bytes, 0x0200, &[0; 8]).unwrap();
+    let mut runs = (1u16 + u16::from(times_tail)).to_le_bytes().to_vec();
+    runs.extend(
+        [0u16, 23, 67, 280, 4]
+            .into_iter()
+            .flat_map(u16::to_le_bytes),
+    );
+    if times_tail {
+        runs.extend(
+            [text.len() as u16 - 1, 9, 0, 200, 3]
+                .into_iter()
+                .flat_map(u16::to_le_bytes),
+        );
+    }
+    runs.extend_from_slice(text);
+    property(&mut bytes, text_tag, &runs).unwrap();
+    bytes.extend_from_slice(&[0; 8]);
+    bytes
+}
+
+#[tokio::test]
+async fn cdx_imports_symbol_font_bytes_using_the_legacy_charset() {
+    // The encoder writes Unicode, so build legacy Text properties explicitly.
+    for charset in [10000u16, 1252, 932] {
+        for font in ["Symbol", "Symbol MT"] {
+            let bytes = symbol_caption_cdx(
+                charset,
+                font,
+                b"a b s D n \xae \xb1 \xa2 \xb0x",
+                0x0700,
+                true,
+            );
+            let decoded = from_cdx(&bytes).unwrap();
+            assert_eq!(from_cdx_tolerant(&bytes).unwrap(), decoded);
+            let xml = roxmltree::Document::parse(&decoded).unwrap();
+            assert!(xml.descendants().all(|node| {
+                node.attributes()
+                    .all(|attribute| !attribute.name().starts_with("ReShiki"))
+            }));
+            let symbol = xml
+                .descendants()
+                .find(|node| node.has_tag_name("s") && node.attribute("font") == Some("23"))
+                .unwrap();
+            // 0xB0 is a degree glyph in Symbol even where the text codepage
+            // would decode that byte differently (for example Mac Roman ∞).
+            assert_eq!(symbol.text(), Some("a b s D n ® ± ¢ °"));
+            assert_symbol_caption(&import_drawing("cdx", &bytes).await);
+        }
+    }
+}
+
+#[tokio::test]
+async fn utf8_symbol_fonts_keep_existing_operators_and_greek() {
+    for font in ["Symbol", "Symbol MT"] {
+        let xml = format!(
+            "<CDXML><fonttable><font id='23' charset='utf-8' name='{font}'/></fonttable>
+            <page id='1'><t id='2' p='20 40'><s font='23'>× ÷ α</s></t></page></CDXML>"
+        );
+        let binary = to_cdx(&xml).unwrap();
+        for (format, bytes) in [("cdxml", xml.as_bytes()), ("cdx", binary.as_slice())] {
+            let document = import_drawing(format, bytes).await;
+            let caption = &document.annotations[0];
+            assert_eq!(caption.text, "× ÷ α");
+            assert_eq!(caption.format.style.family, font);
+        }
+    }
+}
+
+#[tokio::test]
+async fn cdx_utf8_text_overrides_a_legacy_symbol_font_charset() {
+    for charset in [10000u16, 1252, 932] {
+        let bytes = symbol_caption_cdx(charset, "Symbol", "× ÷ α".as_bytes(), 0x0709, false);
+        let document = import_drawing("cdx", &bytes).await;
+        let caption = &document.annotations[0];
+        assert_eq!(caption.text, "× ÷ α");
+        let style = &caption.format.style;
+        assert_eq!(style.family, "Helvetica");
+        assert_eq!(style.size_pt, 14.0);
+        assert!(style.bold && style.italic);
+        assert_eq!(style.script, Script::Superscript);
+        assert_eq!(style.color, Color::Custom([255, 0, 0]));
+    }
+}
+
+#[tokio::test]
+async fn superscript_symbol_atom_label_imports_with_valid_unicode_ranges() {
+    for (prefix, label, start) in [("", "α", 0), ("<s font='9'>R</s>", "Rα", 1)] {
+        let xml = format!(
+            "<CDXML LabelFont='3'>
+            <fonttable><font id='3' name='Helvetica'/><font id='9' name='Times'/>
+            <font id='23' name='Symbol'/></fonttable>
+            <page id='1'><fragment id='2'>
+                <n id='3' p='20 40' NodeType='Unspecified' Element='0'>
+                    <t id='4'>{prefix}<s font='23' face='64'>a</s></t>
+                </n>
+            </fragment></page></CDXML>"
+        );
+        let document = import_drawing("cdxml", xml.as_bytes()).await;
+        document.validate().unwrap();
+        let atom = &document.atoms[0];
+        assert_eq!(atom.display.variable.as_deref(), Some(label));
+        assert_eq!(
+            atom.display.label_scripts,
+            [ScriptRun {
+                start,
+                end: label.len(),
+                script: Script::Superscript,
+            }]
+        );
+    }
+}
+
 #[test]
 fn shared_schema_preserves_last_property_precedence() {
-    assert_eq!(SCHEMA.names.len(), 267);
-    assert_eq!(SCHEMA.codes.len(), 269);
+    assert_eq!(SCHEMA.names.len(), 268);
+    assert_eq!(SCHEMA.codes.len(), 270);
     assert_eq!(SCHEMA.names.get("SupersededBy").unwrap().code, 0x0013);
     assert_eq!(SCHEMA.names.get("Formula").unwrap().code, 0x0503);
     let fields = |p: &Property| (p.code, p.name, p.kind, p.variants);
@@ -41,6 +254,68 @@ fn shared_schema_preserves_last_property_precedence() {
             fields(SCHEMA.names.get(property.name).unwrap()),
             fields(last)
         );
+    }
+}
+
+#[tokio::test]
+async fn native_unknown_atom_stereo_preserves_codec_parity_without_assignment() {
+    let bytes =
+        include_bytes!("../../../../tests/fixtures/chemdraw-unknown-atom-stereo/native.cdx");
+    let decoded = from_cdx(bytes).unwrap();
+    for xml in [
+        decoded.clone(),
+        from_cdx(&to_cdx(&decoded).unwrap()).unwrap(),
+    ] {
+        let tree = roxmltree::Document::parse(&xml).unwrap();
+        let atom = tree
+            .descendants()
+            .find(|n| n.has_tag_name("n") && n.attribute("id") == Some("4"))
+            .unwrap();
+        assert_eq!(atom.attribute("AS"), Some("?"));
+    }
+    let p = SCHEMA.codes.get(&0x0437).unwrap();
+    for (name, number) in [
+        ("U", 0),
+        ("N", 1),
+        ("R", 2),
+        ("S", 3),
+        ("r", 4),
+        ("s", 5),
+        ("u", 6),
+        ("?", 12),
+    ] {
+        assert_eq!(values::encode_number(p, name).unwrap(), [number]);
+        assert_eq!(values::decode_number(p, &[number]).unwrap(), name);
+    }
+    assert_eq!(
+        values::decode_number(p, &[9]).unwrap_err(),
+        "Unsupported binary enumeration: AS"
+    );
+    assert!(values::encode_number(p, "unknown").is_err());
+    let source =
+        include_bytes!("../../../../tests/fixtures/chemdraw-unknown-atom-stereo/source.cdxml");
+    for document in [
+        import_drawing("cdx", bytes).await,
+        import_drawing("cdxml", source).await,
+    ] {
+        document.validate().unwrap();
+        assert_eq!(document.atoms.len(), 5);
+        assert_eq!(document.bonds.len(), 4);
+        assert!(
+            document
+                .atoms
+                .iter()
+                .all(|a| a.stereo.is_none() && a.stereo_group.is_none() && a.cip_label.is_none())
+        );
+        assert!(
+            document
+                .bonds
+                .iter()
+                .all(|b| b.stereo.is_none() && b.cip_label.is_none())
+        );
+        let mut orders: Vec<_> = document.bonds.iter().map(|b| b.order).collect();
+        orders.sort_unstable();
+        assert_eq!(orders, [1, 1, 2, 2]);
     }
 }
 
@@ -316,4 +591,13 @@ fn measure_schema_retention() {
         cold.allocated_bytes,
         cold.peak_bytes.saturating_sub(baseline)
     );
+}
+
+#[test]
+fn symbol_wildcard_and_hyphen_stay_ascii() {
+    // An atom label's `*` is a wildcard and `-` a sign; Unicode lookalikes
+    // would turn a hidden wildcard atom into an unsupported label.
+    assert_eq!(symbol_char('*'), '*');
+    assert_eq!(symbol_char('-'), '-');
+    assert_eq!(symbol_char('a'), 'α');
 }

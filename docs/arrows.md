@@ -135,12 +135,73 @@ Custom spacing is stored in native `.rsk` format version 31. Drawings using only
 **Auto** continue to save as version 30. Older builds that cannot read the file's
 version report that an update is required.
 
+### Give an arrow a body
+
+1. Select an arrow, or choose the arrow tool.
+2. In **Properties → Body**, or in the arrow tool's context row, choose
+   **Block**, **Hollow block**, **Chevron** or **Gradient**. **Line** is the usual
+   thin arrow.
+3. **Body width (pt)** sets the width of the shaft. **Head length (pt)** and
+   **Head half-width (pt)** under **Arrowhead & markers** set the head.
+
+The body changes only the look. A block reaction arrow keeps its reaction
+roles and condition text, and switching back to **Line** restores line-sized
+heads. Equilibrium, retrosynthesis and elbow arrows keep line bodies. The
+arrow palette also offers **Block**, **Hollow block**, **Chevron** and
+**Gradient** presets. A **Gradient** body fills from the paper color at the
+tail into the arrow's color at the head, as a gradient shape does; ChemDraw
+files keep it as ChemDraw's Shaded fill.
+
+### Put a condition icon on an arrow
+
+1. Click **Icons** in the tools palette. **Reaction conditions** comes first:
+   **Light**, **Electrode**, **Heat**, **Microwave**, **Ultrasound**, **Cold**
+   and **Enzyme**. Click one; any other icon of the panel works the same way.
+2. Click the middle of the arrow. The icon sits on a disc of the paper color,
+   so it covers the shaft behind it.
+3. Press V for Select, click the icon, Shift-click the arrow's shaft and
+   press ⌘/Ctrl+G to group them. Clicking either one now selects both, and
+   they move together.
+   Option/Alt-click selects only the icon, for example to change its color.
+
+An icon is an ordinary shape: **Properties** sets its color and line width,
+and it scales from a corner handle. It never takes part in the reaction. Type the
+condition itself, such as "blue LEDs", as text beside the arrow; the text
+snaps to the arrow as usual, and the arrow still copies as reaction SMILES.
+
+### Draw an arc arrow
+
+1. Open the arrow palette and choose **Arc**, then drag from where the arrow
+   starts to where it ends. Or select a free arrow and choose **Make arc** in
+   **Properties**. Both start as a half circle.
+2. Drag the diamond to change how far the arc bows; it stays a circular arc.
+   Type a sweep in **Sweep (°)** and press Enter for an exact angle. A minus
+   sign turns the arc the other way.
+
+**Flip bend** and **Reverse** keep the arc. **Straighten** or adding a node
+with **Edit points** turns it into an ordinary curved arrow. Arc arrows have
+free ends; they do not attach to atoms.
+
+### Add a callout
+
+1. Select an atom, a bond, a whole molecule or a text.
+2. Right-click it and choose **Add callout**.
+3. Type the callout's text and press ⌘/Ctrl+Enter. The text and its leader
+   are one Undo step; Esc adds neither.
+
+A leader runs from the text to what it points at, with a dot on an atom or
+bond. Move the molecule or the text and the leader follows. Dragging one end
+of the leader releases it. Deleting the text deletes its leader. A callout is
+a drawing, never a reaction arrow.
+
 ### Style an arrow
 
 **Properties** shows a preview and sets each end's head (full, half or none),
 head shape, color, line style and width, head length, half-width and notch.
-Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
-(pt)**. Number and color fields apply when you press Enter.
+Equilibrium arrows also set **Reverse length (0.2–5)**, the reverse arrow's
+length against the forward one (below 1 the reverse arrow is shorter, above 1
+the forward one), and **Shaft separation (pt)**. Number and color fields apply
+when you press Enter.
 
 ## Limits
 
@@ -148,8 +209,9 @@ Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
 - **Recalculate** adds informational hints for a resonance or equilibrium arrow with one complete molecule at each end: a resonance arrow between structures whose atoms or H differ suggests ⇌ for tautomers, and an equilibrium arrow between structures that differ only in π bonds or charge placement suggests ↔. Abbreviations, partial structures and multi-molecule sides are skipped.
 - Only `.rsk` files keep the links between an arrow and its targets. Other
   formats keep the arrow's shape.
-- Circular or elliptical arcs, broad hollow arrow bodies and automatic routing
-  are not available.
+- Arcs are circular. Automatic routing is not available.
+- A condition icon follows its arrow only as part of a group. Dragging an
+  arrow's end or bending it leaves the icon where it was.
 - A multi-segment arrowed curve read from CDXML/CDX opens as a pen path with
   arrowheads, not as an arrow.
 - Some arrow styles cannot be exported to CDXML and give an export error; see
@@ -158,6 +220,9 @@ Equilibrium arrows also set **Reverse length (0.2–1)** and **Shaft separation
   Bending an arrow or attaching its ends releases its labels as ordinary
   text. Text that was already beside an arrow attaches only when you move it;
   editing it in place leaves it unattached.
+- An arrow with the **Illustration** purpose never takes condition text, and
+  the hints skip Reference and Illustration molecules and arrows; see
+  [object purpose](reactions.md#object-purpose).
 - Only `.rsk` files keep the link between an arrow and its condition text.
   CDXML/CDX, SVG, PDF and PNG keep the text and the arrow where they are.
 
@@ -245,8 +310,8 @@ opening in the shaft instead of drawing through the hollow center.
 
 Supported exchange includes straight full/half-headed arrows, straight
 retrosynthesis arrows with editable heads and style, head shape/dimensions/notches,
-color, solid/dashed strokes, resonance, dipole/no-go marks, equal-length
-equilibrium with half heads, single cubic or quadratic Bézier arrows with
+color, solid/dashed strokes, resonance, dipole/no-go marks, equal or
+unequal equilibrium with half heads (ChemDraw's `ArrowEquilibriumRatio`), single cubic or quadratic Bézier arrows with
 solid heads, and arrows with interior nodes, which are written as one
 multi-segment ChemDraw curve with the same heads. Cubic arrows keep both independently editable
 controls; quadratic arrows use their exact equivalent cubic control points.
@@ -259,7 +324,7 @@ This drawing metadata does not change molecular connectivity or electron counts.
 The importer reads multi-segment arrowed splines as pen paths with arrowheads,
 preserving head size even when an end segment is short. It rejects
 circular/elliptical arrow arcs, unknown head/stroke types and unsupported decoration. The exporter
-rejects dotted arrows, curved retrosynthesis arrows, bent/unequal equilibrium,
+rejects dotted arrows, curved retrosynthesis arrows, bent equilibrium,
 equilibrium with full/absent heads, dipoles with a tail head, and curved arrows
 with hollow/angled heads or dipole/no-go decoration. Those combinations remain
 editable and exportable in `.rsk`/SVG/PDF/PNG. Interchange checks found that
@@ -267,6 +332,29 @@ external saves can remove a dipole tail head or convert an angled Bézier head
 to solid; those combinations therefore return an explicit export error. Head
 dimensions are quantized to CDXML's hundredths of a point; external
 applications can render strokes differently.
+
+### Bodies, arcs and callouts
+
+An arrow style's `body` is `line`, `block`, `hollow`, `chevron` or `gradient`;
+`gap_pt` is the body width. A broad body is one closed outline from the tail
+to the tip, with the head notch. Chevrons are filled shapes spaced along the
+shaft. `arc` is the signed sweep in degrees, clockwise positive; `cubic` and `nodes` hold
+its Bézier form, refitted after every edit, so every path, hit test and export
+draws it. A line graphic's `leader` names the atom, bond, molecule or object
+each end follows. Editing reconciles leaders after arrow attachments.
+
+These fields save as `.rsk` version 40. Drawings without them keep their
+earlier version.
+
+CDXML/CDX export writes a straight block, hollow or gradient arrow as a
+ChemDraw arrow with a hollow head, `ArrowShaftSpacing` for the body width and
+`FillType` Solid, None or Shaded. ChemDraw measures `ArrowheadWidth` from the
+shaft edge. A circular arc arrow is written with `AngularSize`, `Center3D` and
+its axis ends. ChemDraw runs an arc from the tail through `-AngularSize`
+degrees, so a clockwise arc has a negative size; it ignores which way the
+minor axis points.
+Chevrons, broad bodies on curves and callout leaders are written as
+grouped shapes and text, and the export names them in a notice.
 
 ### Records
 

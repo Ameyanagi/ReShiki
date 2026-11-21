@@ -804,3 +804,172 @@ async fn aromatic_kekule_mapping_uses_adjacent_anchors_without_repainting_the_gr
     assert_eq!(current, mapped);
     assert!(!history.can_redo());
 }
+
+type Pairs = std::collections::BTreeSet<(usize, usize)>;
+/// The bonds an automatic map forms, breaks and re-orders, as pairs of
+/// reactant atom positions in SMILES order. A broken bond may lead to an
+/// unmatched atom; a bond between two unmatched atoms is not listed.
+async fn reaction_centre(smiles: &str) -> (mapping::Proposal, [Pairs; 3]) {
+    centre(&import(smiles).await)
+}
+fn centre(doc: &Document) -> (mapping::Proposal, [Pairs; 3]) {
+    let proposal = mapping::propose(doc, doc.reactions[0].arrow, Budget::default()).unwrap();
+    assert!(proposal.complete);
+    let reactants = side(doc, Role::Reactant);
+    let products = side(doc, Role::Product);
+    let position = |id: u64| reactants.iter().position(|r| *r == id);
+    let source = |product: u64| {
+        let pair = proposal.pairs.iter().find(|(_, p)| *p == product)?;
+        position(pair.0)
+    };
+    let target = |reactant: u64| {
+        proposal
+            .pairs
+            .iter()
+            .find(|(r, _)| *r == reactant)
+            .map(|p| p.1)
+    };
+    let order = |a: u64, b: u64| {
+        doc.bonds
+            .iter()
+            .find(|x| (x.a, x.b) == (a, b) || (x.b, x.a) == (a, b))
+            .map(|x| x.order)
+    };
+    let pair = |a: usize, b: usize| (a.min(b), a.max(b));
+    let [mut formed, mut broken, mut reordered] = [Pairs::new(), Pairs::new(), Pairs::new()];
+    for bond in &doc.bonds {
+        if products.contains(&bond.a) {
+            let (Some(a), Some(b)) = (source(bond.a), source(bond.b)) else {
+                continue;
+            };
+            match order(reactants[a], reactants[b]) {
+                None => formed.insert(pair(a, b)),
+                Some(o) if o != bond.order => reordered.insert(pair(a, b)),
+                Some(_) => false,
+            };
+        } else if reactants.contains(&bond.a) {
+            let (a, b) = (target(bond.a), target(bond.b));
+            if (a.is_some() || b.is_some()) && a.zip(b).and_then(|(a, b)| order(a, b)).is_none() {
+                broken.insert(pair(position(bond.a).unwrap(), position(bond.b).unwrap()));
+            }
+        }
+    }
+    (proposal, [formed, broken, reordered])
+}
+fn pairs<const N: usize>(list: [(usize, usize); N]) -> Pairs {
+    list.into_iter().collect()
+}
+#[tokio::test]
+async fn diels_alder_moves_the_double_bond_to_the_inner_diene_carbons() {
+    // The integration walkthrough's reactions. Butadiene is atoms 0–3; its
+    // ends bond to the dienophile's carbons and the product alkene joins the
+    // inner pair 1–2. Either end may take either dienophile carbon.
+    for smiles in [
+        "C=CC=C.C=C>>C1CC=CCC1",
+        "C=CC=C.C=CC(=O)OC>>COC(=O)C1CC=CCC1",
+    ] {
+        let (_, [formed, broken, reordered]) = reaction_centre(smiles).await;
+        assert!(
+            [pairs([(0, 4), (3, 5)]), pairs([(0, 5), (3, 4)])].contains(&formed),
+            "{smiles}: formed {formed:?}"
+        );
+        assert_eq!(broken, Pairs::new(), "{smiles}");
+        assert_eq!(
+            reordered,
+            pairs([(0, 1), (1, 2), (2, 3), (4, 5)]),
+            "{smiles}"
+        );
+    }
+    // Isoprene + methyl acrylate → the "para" adduct: one correct map.
+    let (proposal, [formed, broken, reordered]) =
+        reaction_centre("C=C(C)C=C.C=CC(=O)OC>>COC(=O)C1CC=C(C)CC1").await;
+    assert!(!proposal.multiple_best);
+    assert_eq!(formed, pairs([(0, 5), (4, 6)]));
+    assert_eq!(broken, Pairs::new());
+    assert_eq!(reordered, pairs([(0, 1), (1, 3), (3, 4), (5, 6)]));
+}
+#[tokio::test]
+async fn esterification_keeps_the_carbonyl_and_joins_acyl_carbon_to_oxygen() {
+    // Acid chloride: the alcohol oxygen becomes the ester oxygen.
+    let (proposal, [formed, broken, reordered]) =
+        reaction_centre("CC(=O)Cl.OCC>>CC(=O)OCC.Cl").await;
+    assert!(!proposal.multiple_best);
+    assert_eq!(formed, pairs([(1, 4)]));
+    assert_eq!(broken, pairs([(1, 3)]));
+    assert_eq!(reordered, Pairs::new());
+    // Fischer: the carbonyl stays and one C–O bond swaps. Which oxygen leaves
+    // as water is a true graph tie (only ¹⁸O labelling tells), so the map asks
+    // for review.
+    let (proposal, [formed, broken, reordered]) = reaction_centre("CC(=O)O.OCC>>CC(=O)OCC.O").await;
+    assert!(proposal.multiple_best);
+    assert!(
+        [
+            [pairs([(1, 4)]), pairs([(1, 3)])],
+            [pairs([(3, 5)]), pairs([(4, 5)])]
+        ]
+        .contains(&[formed.clone(), broken.clone()]),
+        "formed {formed:?}, broken {broken:?}"
+    );
+    assert_eq!(reordered, Pairs::new());
+}
+#[tokio::test]
+async fn suzuki_coupling_joins_the_two_ipso_carbons() {
+    let (_, [formed, broken, _]) =
+        reaction_centre("Cc1ccc(Br)cc1.OB(O)c1ccccc1>>Cc1ccc(-c2ccccc2)cc1").await;
+    assert_eq!(formed, pairs([(4, 11)]));
+    assert_eq!(broken, pairs([(4, 5), (9, 11)]));
+}
+#[tokio::test]
+async fn sn2_bonds_the_nucleophile_to_the_carbon_that_lost_the_halide() {
+    let (proposal, [formed, broken, reordered]) =
+        reaction_centre("CCCBr.[C-]#N>>CCCC#N.[Br-]").await;
+    assert!(!proposal.multiple_best);
+    assert_eq!(formed, pairs([(2, 4)]));
+    assert_eq!(broken, pairs([(2, 3)]));
+    assert_eq!(reordered, Pairs::new());
+}
+#[tokio::test]
+async fn aldol_bonds_one_alpha_carbon_to_the_other_carbonyl_carbon() {
+    // Two acetaldehydes (0–2, 3–5) → 3-hydroxybutanal; either may be the enol.
+    let (_, [formed, broken, reordered]) = reaction_centre("CC=O.CC=O>>CC(O)CC=O").await;
+    assert!(
+        [
+            [pairs([(1, 3)]), pairs([(1, 2)])],
+            [pairs([(0, 4)]), pairs([(4, 5)])]
+        ]
+        .contains(&[formed.clone(), reordered.clone()]),
+        "formed {formed:?}, reordered {reordered:?}"
+    );
+    assert_eq!(broken, Pairs::new());
+}
+#[tokio::test]
+async fn hydrogens_drawn_as_atoms_count_like_hydrogens_in_labels() {
+    // Penta-1,3-diene → pent-2-ene reduces the terminal C4=C5 bond. Drawing
+    // two of the product's hydrogens as atoms must not change that.
+    let mut doc = import("CC=CC=C>>CC=CCC").await;
+    let products = side(&doc, Role::Product);
+    for &carbon in [products[0], products[3]].iter() {
+        let at = doc.atom(carbon).unwrap().position;
+        let h = doc.add_atom("H", Point::new(at.x, at.y - 40.));
+        doc.add_bond(carbon, h, 1, "plain");
+        doc.reactions[0].products[0].atoms.push(h);
+    }
+    doc.validate().unwrap();
+    let (_, [formed, broken, reordered]) = centre(&doc);
+    assert_eq!(formed, Pairs::new());
+    assert_eq!(broken, Pairs::new());
+    assert_eq!(reordered, pairs([(3, 4)]));
+}
+#[tokio::test]
+async fn reducing_several_triple_bonds_maps_within_the_default_budget() {
+    let (proposal, [formed, broken, reordered]) = reaction_centre(
+        "FCC=CC.FC=CCC.FCCC=C.FCC#CC.FCCC#C.FC#CCC.CC(C#CC#CC#C)CC>>\
+         FCC=CC.FC=CCC.FCCC=C.FCC#CC.FCCC#C.FC#CCC.CC(CCCCCC)CC",
+    )
+    .await;
+    assert!(proposal.complete);
+    assert_eq!(formed, Pairs::new());
+    assert_eq!(broken, Pairs::new());
+    // Only the last molecule's three triple bonds change.
+    assert_eq!(reordered, pairs([(32, 33), (34, 35), (36, 37)]));
+}

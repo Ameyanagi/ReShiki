@@ -31,6 +31,62 @@ fn labels(app: &App, page: Page) -> Vec<&'static str> {
 }
 
 #[test]
+fn defining_equipment_is_offered_for_supported_groups_with_the_shared_action() {
+    use reshiki::graphics::{Graphic, GraphicKind};
+
+    const LABEL: &str = "Define as equipment piece…";
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    assert!(!labels(&app, Page::Main).contains(&LABEL));
+
+    let mut shapes = Vec::new();
+    for x in [0., 60.] {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::dragged(
+            id,
+            GraphicKind::Rectangle,
+            World::new(x, 0.),
+            World::new(x + 40., 50.),
+            Default::default(),
+            Default::default(),
+            false,
+        ));
+        shapes.push(id);
+    }
+    app.tab.doc.group_selection(&shapes).unwrap();
+    app.tab.selected = vec![shapes[0]];
+    let entries = app.context_entries(Page::Main);
+    let commands: Vec<_> = entries
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Item {
+                label: LABEL,
+                action: Action::Run(message),
+                enabled: true,
+                ..
+            } => Some(message.as_ref()),
+            _ => None,
+        })
+        .collect();
+    assert!(matches!(
+        commands.as_slice(),
+        [Message::EquipmentAuthoring(
+            super::super::equipment_authoring::Action::Begin
+        )]
+    ));
+
+    app.tab.busy = true;
+    assert!(!labels(&app, Page::Main).contains(&LABEL));
+    app.tab.busy = false;
+    let atom = app.tab.doc.add_atom("C", World::new(150., 0.));
+    app.tab.selected.push(atom);
+    assert!(!labels(&app, Page::Main).contains(&LABEL));
+    app.tab.selected = vec![shapes[0]];
+    app.tab.doc.graphics[1].layer += 1;
+    assert!(!labels(&app, Page::Main).contains(&LABEL));
+}
+
+#[test]
 fn redraw_stereo_bonds_is_available_for_atom_selections_and_dispatches() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
@@ -248,6 +304,7 @@ fn marked_atom_menu_starts_positioning_without_changing_the_drawing() -> Result<
     let before = app.tab.doc.clone();
     for target in [other, atom] {
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(30., 40.),
             selected: vec![target],
             hit: vec![target],
@@ -278,6 +335,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
     let atom = app.tab.doc.atoms.first().ok_or("ring atom")?.id;
     let before = app.tab.doc.clone();
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![atom],
         hit: vec![atom],
@@ -294,11 +352,13 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "Show formula & masses below",
             "Show properties",
             "Select molecule",
+            "Purpose",
             "—",
             "Join selected atoms or bonds",
             "Merge selected atoms",
             "Show as",
             "Arrange & transform",
+            "Add callout",
             "—",
             "Cut",
             "Copy",
@@ -400,12 +460,14 @@ fn expand_generic_structures_follows_the_target_and_waits_for_a_running_expansio
     app.tab.selected = vec![carbon];
     assert_eq!(enabled(&app, Page::Main, EXPAND), Some(true));
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![carbon],
         hit: vec![ring_atom],
     });
     assert_eq!(enabled(&app, Page::Main, EXPAND), None);
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![ring_atom],
         hit: vec![carbon],
@@ -496,6 +558,7 @@ fn pet_repeat() -> reshiki::document::Document {
 fn add_caption(doc: &mut reshiki::document::Document, text: &str) -> u64 {
     let id = doc.next_id();
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id,
         position: World::new(150., 100.),
         text: text.into(),
@@ -555,6 +618,7 @@ fn expand_context_follows_grouped_graphics_and_generated_name_captions() -> Resu
     for hit in [graphic, name] {
         assert!(!reshiki::generic::touches(&app.tab.doc, &[hit]));
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(30., 40.),
             selected: vec![unrelated],
             hit: vec![hit],
@@ -570,6 +634,7 @@ fn expand_context_follows_grouped_graphics_and_generated_name_captions() -> Resu
     }
     for hit in [unrelated, ordinary] {
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(30., 40.),
             selected: app.tab.doc.all_ids(),
             hit: vec![hit],
@@ -600,6 +665,7 @@ fn expand_context_from_grouped_pet_caption_prepares_its_component() -> Result<()
     let expected = app.tab.doc.all_ids();
     let unrelated = app.tab.doc.add_atom("C", World::new(700., 0.));
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![unrelated],
         hit: vec![caption],
@@ -646,6 +712,7 @@ async fn expand_context_from_grouped_alternative_caption_opens_concrete_products
     app.tab.doc.group_selection(&[carbon, halogen, caption])?;
     let unrelated = app.tab.doc.add_atom("C", World::new(700., 0.));
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![unrelated],
         hit: vec![caption],
@@ -698,6 +765,7 @@ async fn expand_pet_from_ring_bond_context_opens_complete_product() {
     app.tab.doc = pet_repeat();
     let bond = app.tab.doc.bonds[6].clone();
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![bond.a, bond.b],
         hit: vec![bond.a, bond.b],
@@ -769,6 +837,7 @@ async fn expand_context_uses_clicked_molecule_when_selection_contains_another_mo
     app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
     let bond = app.tab.doc.bonds[6].clone();
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: app.tab.doc.all_ids(),
         hit: vec![bond.a, bond.b],
@@ -836,6 +905,7 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
     let all = app.tab.doc.all_ids();
     app.tab.doc.group_selection(&all)?;
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: all,
         hit: vec![first[0]],
@@ -848,6 +918,7 @@ fn chemical_name_menu_uses_clicked_component_and_switches_between_show_and_hide(
     let before = app.tab.doc.clone();
     let reopen = |app: &mut App| {
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(30., 40.),
             selected: app.tab.doc.all_ids(),
             hit: vec![first[0]],
@@ -906,6 +977,7 @@ fn chemical_names_entry_selects_the_clicked_molecule_and_opens_its_inspector() -
     reshiki::editing::append(&mut app.tab.doc, &source, World::new(250., 0.));
     let before = app.tab.doc.clone();
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![first[1]],
         hit: vec![first[1]],
@@ -1258,7 +1330,8 @@ fn arrange_commands_have_one_name_on_every_surface() {
         assert!(
             palette.iter().any(|c| {
                 matches!(&c.run, super::super::command_palette::catalog::Run::Send(messages)
-                    if format!("{:?}", messages[0]) == message && c.name == command.name())
+                    if messages.first().is_some_and(|m| format!("{m:?}") == message)
+                        && c.name == command.name())
             }),
             "{message} is {} in the palette",
             command.name()
@@ -1281,6 +1354,7 @@ fn context_tilt_routes_all_axes_and_tool_without_losing_selection() -> Result<()
         reshiki::editing::append(&mut app.tab.doc, &source, World::new(240., 0.));
         let before = app.tab.doc.clone();
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(20., 20.),
             hit: vec![],
             selected: ids.clone(),
@@ -1308,6 +1382,7 @@ fn context_tilt_routes_all_axes_and_tool_without_losing_selection() -> Result<()
         let _ = app.update(Message::Redo);
         assert_eq!(app.tab.doc, expected);
         app.edit(Edit::ContextMenu {
+            at: Default::default(),
             position: Point::new(20., 20.),
             hit: vec![],
             selected: ids.clone(),
@@ -1368,6 +1443,7 @@ fn context_alignment_preserves_molecular_geometry_and_undo_restores_every_group(
     let before = app.tab.doc.clone();
     let ids = app.tab.doc.all_ids();
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(20., 20.),
         hit: vec![],
         selected: ids.clone(),
@@ -1407,6 +1483,7 @@ fn context_alignment_preserves_molecular_geometry_and_undo_restores_every_group(
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(20., 20.),
         hit: vec![],
         selected: ids,
@@ -1512,6 +1589,7 @@ fn chemical_name_format_menu_targets_annotations_and_uses_document_history() {
     app.tab.selected = vec![atom];
     assert!(!labels(&app, Page::Main).contains(&"Format as chemical name"));
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: 2,
         position: World::new(0., 50.),
         text: "tert-butyl".into(),
@@ -1544,6 +1622,7 @@ fn show_properties_menu_ticks_shown_rows_and_starts_with_weight() -> Result<(), 
     // A counter-ion is its own molecule.
     app.tab.doc.add_atom("Na", World::new(200., 0.));
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![ethanol[0]],
         hit: vec![ethanol[0]],
@@ -1609,6 +1688,7 @@ fn show_properties_menu_ticks_shown_rows_and_starts_with_weight() -> Result<(), 
     let _ = app.update(Message::Undo);
     assert!(app.tab.doc.property_captions.is_empty());
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: Point::new(30., 40.),
         selected: vec![ethanol[0]],
         hit: vec![ethanol[0]],
@@ -1751,6 +1831,7 @@ fn show_formula_and_masses_below_adds_the_missing_lines_in_one_step() -> Result<
     let open = |app: &mut App| {
         app.edit(Edit::ContextMenu {
             position: Point::new(30., 40.),
+            at: app.tab.doc.atom(ethanol[0]).unwrap().position,
             selected: vec![ethanol[0]],
             hit: vec![ethanol[0]],
         })
@@ -1798,6 +1879,7 @@ fn number_compound_context_action_targets_clicked_molecule_once() -> Result<(), 
     let before = app.tab.doc.clone();
     app.edit(Edit::ContextMenu {
         position: Point::new(30., 40.),
+        at: app.tab.doc.atom(right).unwrap().position,
         selected: vec![right],
         hit: vec![right],
     });
@@ -1813,5 +1895,68 @@ fn number_compound_context_action_targets_clicked_molecule_once() -> Result<(), 
     assert_eq!(enabled(&app, Page::Main, "Number compound"), Some(false));
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
+    Ok(())
+}
+
+#[test]
+fn a_shapes_arrange_menu_offers_its_stacking_order() {
+    let (mut app, _) = App::new();
+    let id = app.tab.doc.next_id();
+    app.tab
+        .doc
+        .graphics
+        .push(reshiki::graphics::Graphic::dragged(
+            id,
+            reshiki::graphics::GraphicKind::Rectangle,
+            reshiki::document::Point::new(0., 0.),
+            reshiki::document::Point::new(80., 40.),
+            Default::default(),
+            reshiki::graphics::BracketSides::Both,
+            false,
+        ));
+    app.tab.selected = vec![id];
+    let align = labels(&app, Page::Align);
+    assert!(align.contains(&"Bring to front") && align.contains(&"Send to back"));
+}
+
+#[test]
+fn select_structures_in_cycle_picks_every_part_and_not_the_circle() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    let mut parts = vec![];
+    for (x, y, label) in [
+        (0., -200., "Pd(0)L2"),
+        (170., 90., "ArPdX"),
+        (-230., 90., "ArPdAr"),
+    ] {
+        let id = app.tab.doc.next_id();
+        let style = app.tab.doc.drawing_style.text_style();
+        app.tab.doc.annotations.push(reshiki::document::Annotation {
+            angle: 0.,
+            id,
+            position: World::new(x, y),
+            text: label.into(),
+            format: reshiki::typography::TextFormat {
+                style,
+                ..Default::default()
+            },
+        });
+        parts.push(id);
+    }
+    app.tab.selected = parts.clone();
+    let _ = app.update(Message::Cycle(super::super::cycles::Action::Make));
+    let _ = app.update(Message::Cycle(super::super::cycles::Action::MakeApply));
+    let circle = app.selected_cycle().ok_or("no cycle")?.0;
+    // With the cycle selected, a click on its circle or arcs picks only them.
+    let whole = app.tab.selected.clone();
+    assert_eq!(app.tab.doc.click_selection(&whole, &[circle]), vec![circle]);
+    assert_eq!(
+        enabled(&app, Page::Main, "Select structures in cycle"),
+        Some(true)
+    );
+    run_item(&mut app, Page::Main, "Select structures in cycle")?;
+    let mut selected = app.tab.selected.clone();
+    selected.sort_unstable();
+    parts.sort_unstable();
+    assert_eq!(selected, parts);
     Ok(())
 }

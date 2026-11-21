@@ -1,5 +1,5 @@
 use super::*;
-use reshiki::document::{Arrow, Point};
+use reshiki::document::{Arrow, Document, Point};
 
 #[test]
 fn arrow_semantics_refusal_does_not_edit_the_drawing() {
@@ -76,4 +76,62 @@ fn role_edits_are_undoable_and_arrow_reversal_swaps_roles() {
     assert_eq!(app.tab.doc.atoms, ready.atoms);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, ready);
+}
+
+#[test]
+fn an_arrow_is_named_by_its_panel_column_title() {
+    use reshiki::graphics::{
+        BracketSides, Graphic, GraphicKind,
+        panel::{Divider, Panel},
+    };
+    let mut doc = Document::default();
+    let mut g = Graphic::dragged(
+        1,
+        GraphicKind::Rectangle,
+        Point::new(0., 0.),
+        Point::new(400., 100.),
+        Default::default(),
+        BracketSides::Both,
+        false,
+    );
+    g.panel = Some(Panel {
+        titles: vec!["Previous work".into(), "This work".into()],
+        dividers: vec![Divider {
+            vertical: true,
+            at: 0.5,
+        }],
+        ..Default::default()
+    });
+    doc.graphics.push(g);
+    let arrow = |id, x: f32| {
+        Arrow::new(
+            id,
+            Point::new(x, 50.),
+            Point::new(x + 60., 50.),
+            Default::default(),
+            Default::default(),
+        )
+    };
+    assert_eq!(panel_title(&doc, &arrow(2, 50.)), Some("Previous work"));
+    assert_eq!(panel_title(&doc, &arrow(3, 250.)), Some("This work"));
+    // Outside every panel, the arrow keeps its kind for a name.
+    assert_eq!(panel_title(&doc, &arrow(4, 500.)), None);
+    // Turned a quarter turn, the columns sit one above the other.
+    let g = &mut doc.graphics[0];
+    (g.origin, g.axis_x, g.axis_y) = (
+        Point::new(100., 0.),
+        Point::new(0., 400.),
+        Point::new(-100., 0.),
+    );
+    let down = |id, y: f32| {
+        Arrow::new(
+            id,
+            Point::new(50., y),
+            Point::new(50., y + 60.),
+            Default::default(),
+            Default::default(),
+        )
+    };
+    assert_eq!(panel_title(&doc, &down(5, 50.)), Some("Previous work"));
+    assert_eq!(panel_title(&doc, &down(6, 250.)), Some("This work"));
 }

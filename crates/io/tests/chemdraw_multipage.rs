@@ -154,6 +154,56 @@ async fn identical_local_atom_coordinates_on_separate_pages_do_not_collide() {
 }
 
 #[tokio::test]
+async fn a_page_library_opens_as_a_grid_of_pages_in_page_order() {
+    // 48 letter pages in one column would run past the signed 16.16 point
+    // range of CDX coordinates; ChemDraw's template libraries are like this.
+    let pages: String = (0..48)
+        .map(|page| {
+            format!(
+                "<page id='{}'><graphic id='{}' GraphicType='Rectangle' \
+                 BoundingBox='0 0 540 720'/></page>",
+                2 * page + 1,
+                2 * page + 2
+            )
+        })
+        .collect();
+    let xml = format!("<CDXML>{pages}</CDXML>");
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [
+        ("cdxml", xml.clone().into_bytes()),
+        ("cdx", exchange::to_cdx(&xml).unwrap()),
+    ] {
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap_or_else(|error| panic!("{format}: {error}"));
+        assert!(warnings.iter().any(|w| w.contains("ChemDraw pages")));
+        let boxes: Vec<_> = document
+            .graphics
+            .iter()
+            .map(|graphic| {
+                scene::bounds(&scene::primitives(&Document {
+                    graphics: vec![graphic.clone()],
+                    ..Document::default()
+                }))
+            })
+            .collect();
+        assert_eq!(boxes.len(), 48);
+        // Nine pages to a row, about as wide as a window: Fit shows them all.
+        for (page, (lo, _)) in boxes.iter().enumerate() {
+            let (first, _) = boxes[page / 9 * 9];
+            assert!((lo.y - first.y).abs() < 0.01, "page {page} leaves its row");
+            if page % 9 > 0 {
+                let (_, left) = boxes[page - 1];
+                assert!(lo.x > left.x, "page {page} overlaps the one before");
+            } else if page > 0 {
+                let (_, above) = boxes[page - 9];
+                assert!(lo.y > above.y, "row of page {page} overlaps the one above");
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn text_only_pages_without_boxes_are_spaced_using_their_text_size() {
     let xml = r#"<CDXML CaptionSize="72"><page id="1"><t id="2" p="0 0"><s>One</s></t></page>
         <page id="3"><t id="4" p="0 0"><s>Two</s></t></page></CDXML>"#;

@@ -12,12 +12,14 @@ fn drawing() -> Document {
     let b = d.add_atom("O", Point::new(42., 0.));
     d.add_bond(a, b, 1, "plain");
     d.annotations.push(Annotation {
+        angle: 0.,
         id: 3,
         position: Point::new(0., 60.),
         text: "substrate".into(),
         format: Default::default(),
     });
     d.arrows.push(Arrow {
+        arc: None,
         start_anchor: None,
         end_anchor: None,
         id: 4,
@@ -28,6 +30,7 @@ fn drawing() -> Document {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     d.graphics.push(Graphic::dragged(
         5,
@@ -113,27 +116,32 @@ fn group_validation_rejects_dangling_duplicate_and_crossing_memberships() {
             id: 8,
             members: vec![1, 99],
             integral: false,
+            layout: None,
         }],
         vec![Group {
             id: 1,
             members: vec![1, 2],
             integral: false,
+            layout: None,
         }],
         vec![Group {
             id: 8,
             members: vec![1, 1],
             integral: false,
+            layout: None,
         }],
         vec![
             Group {
                 id: 8,
                 members: vec![1, 2, 3],
                 integral: false,
+                layout: None,
             },
             Group {
                 id: 9,
                 members: vec![2, 3, 4],
                 integral: false,
+                layout: None,
             },
         ],
     ] {
@@ -169,6 +177,7 @@ fn concave_lasso_encloses_whole_objects_and_supports_add_subtract() {
     d.add_atom("O", Point::new(70., 70.));
     d.add_atom("N", Point::new(10., 70.));
     d.arrows.push(Arrow {
+        arc: None,
         start_anchor: None,
         end_anchor: None,
         id: 4,
@@ -179,6 +188,7 @@ fn concave_lasso_encloses_whole_objects_and_supports_add_subtract() {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     let region = [
         Point::new(0., 0.),
@@ -240,4 +250,86 @@ async fn nested_mixed_groups_survive_chemistry_and_cdxml_roundtrip() {
     assert!(r.groups[0].integral);
     assert!(!r.groups[1].integral);
     assert!(d.groups.iter().all(|g| !g.members.contains(&a)));
+}
+
+#[tokio::test]
+async fn a_condition_icon_grouped_with_its_arrow_moves_with_it_and_keeps_the_reaction() {
+    use reshiki::{
+        arrow_labels::{ArrowLabel, Side},
+        clipboard::{self as copy_as, CopyFormat},
+        engine::LocalEngine,
+        scientific::SymbolKind,
+    };
+    let mut d = Document::default();
+    let a = d.add_atom("C", Point::new(0., 0.));
+    let b = d.add_atom("O", Point::new(42., 0.));
+    d.add_bond(a, b, 1, "plain");
+    let c = d.add_atom("C", Point::new(300., 0.));
+    let n = d.add_atom("N", Point::new(342., 0.));
+    d.add_bond(c, n, 1, "plain");
+    let arrow = d.next_id();
+    d.arrows.push(Arrow::new(
+        arrow,
+        Point::new(100., 0.),
+        Point::new(220., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    let text = d.next_id();
+    d.annotations.push(Annotation {
+        angle: 0.,
+        id: text,
+        position: Point::new(130., -20.),
+        text: "blue LEDs".into(),
+        format: Default::default(),
+    });
+    d.arrow_labels.push(ArrowLabel {
+        arrow,
+        annotation: text,
+        side: Side::Above,
+        gap: None,
+    });
+    // A light bulb on the middle of the shaft, grouped with the arrow.
+    let icon = d.next_id();
+    d.graphics.push(Graphic::dragged(
+        icon,
+        GraphicKind::Symbol(SymbolKind::Light),
+        Point::new(160., 0.),
+        Point::new(160., 0.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    ));
+    d.group_selection(&[arrow, icon]).unwrap();
+    d.validate().unwrap();
+    // Its paper-colored disc covers the shaft behind it.
+    let disc = &d.graphics[0].parts()[0];
+    assert!(disc.filled && disc.style.fill == Some(reshiki::palette::Color::Paper));
+
+    // Clicking the arrow picks the bulb too, so dragging moves both.
+    let picked = d.expand_groups(&[arrow]);
+    assert_eq!(picked, vec![arrow, icon]);
+    let (start, origin) = (d.arrows[0].start, d.graphics[0].origin);
+    d.translate(&picked, 30., 15.);
+    assert_eq!(d.arrows[0].start, start.offset(30., 15.));
+    assert_eq!(d.graphics[0].origin, origin.offset(30., 15.));
+
+    // The reaction and its condition text are unchanged by the bulb.
+    let reaction = reshiki::reactions::preview(&d, arrow).unwrap();
+    assert!(reaction.annotations.contains(&text));
+    assert!(!reaction.ids().contains(&icon));
+    let selected: Vec<u64> = [a, b, c, n].into_iter().chain(picked).collect();
+    for ids in [vec![], selected] {
+        let snapshot = copy_as::selection_or_drawing(&d, &ids);
+        let (format, chemical) = copy_as::chemical_text_snapshot(&d, &snapshot).unwrap();
+        assert_eq!(format, CopyFormat::ChemDoodleReaction);
+        let copy = copy_as::prepare_chemical_text(
+            LocalEngine::default(),
+            chemical,
+            CopyFormat::ReactionSmiles,
+        )
+        .await
+        .unwrap();
+        assert_eq!(copy.text(), Some("CO>>CN"));
+    }
 }

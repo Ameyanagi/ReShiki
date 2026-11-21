@@ -1,5 +1,24 @@
 use super::*;
 
+#[test]
+fn symbol_prepass_preserves_xml_outside_legacy_runs() {
+    let start = "<?xml version='1.0'?>\n<!DOCTYPE CDXML SYSTEM 'cdxml.dtd'>\n<CDXML>\n\
+        <fonttable><font id='23' charset='Unknown' name='Symbol MT'/>\
+        <font id='24' charset='UTF-8' name='Symbol'/></fonttable><page><t>";
+    let end = "<s font='24'>× ÷ α</s></t></page>\n</CDXML>";
+    let xml = format!(
+        "{start}<s size='14' font = \"&#50;3\" face='64'>\
+         a&amp;<![CDATA[<b>]]><!-- keep -->c&#13;°ÒÓÔπÿ</s>{end}"
+    );
+    let expected =
+        format!("{start}<s size='14'  face='64'>α&amp;&lt;β&gt;<!-- keep -->χ&#13;°®©™πÿ</s>{end}");
+    assert_eq!(symbol_text_to_unicode(&xml), expected.as_str());
+    assert!(matches!(
+        symbol_text_to_unicode(&expected),
+        std::borrow::Cow::Borrowed(_)
+    ));
+}
+
 fn generic_nickname_xml(label: &str) -> String {
     format!(
         "<CDXML><page><fragment id='1'>\

@@ -204,6 +204,7 @@ fn large_group_connectivity_is_iterative() -> anyhow::Result<()> {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             alignment: Default::default(),
             label: "Polymer".into(),
             reverse_label: String::new(),

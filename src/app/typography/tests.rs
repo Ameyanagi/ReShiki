@@ -12,6 +12,7 @@ fn caption_color_mismatch_preserves_paint_identity_spans_empty_text_and_bond_sco
     app.tab.doc.bonds[0].color = bond_color;
     let empty = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: empty,
         position: Point::new(0., 80.),
         text: String::new(),
@@ -22,6 +23,7 @@ fn caption_color_mismatch_preserves_paint_identity_spans_empty_text_and_bond_sco
     // These paints can resolve to the same black, but retain distinct identity.
     format.style.color = Paint::Custom([0; 3]);
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(0., 120.),
         text: "酸X".into(),
@@ -259,6 +261,7 @@ fn toolbar_aligns_selected_groups_and_captions_in_one_undo_without_changing_chem
     let other = group(&mut app, "OMe", 300.)?;
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(0., 200.),
         text: "Caption".into(),
@@ -391,6 +394,7 @@ fn inline_caption_alignment_never_moves_group_labels_and_can_be_cancelled() -> R
     let id = group(&mut app, "Boc", 0.)?;
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(0., 100.),
         text: "Caption".into(),

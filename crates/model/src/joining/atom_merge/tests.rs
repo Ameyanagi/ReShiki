@@ -280,6 +280,7 @@ fn groups_reaction_roles_coefficients_and_captions_survive_remapping() {
     doc.add_bond(selected[1], selected[2], 1, "plain");
     let caption = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(50., 80.),
         text: "Reactant".into(),
@@ -514,6 +515,7 @@ fn painted_ring_members_remap_and_collapsed_ring_paint_is_rejected() {
     doc.ring_fills.push(crate::ring_fills::RingFill {
         atoms: vec![ring_a, ring_b, ring_c],
         color: crate::palette::Color::Custom([80, 100, 150]),
+        effect: Default::default(),
     });
     let (joined, _) = merge_atoms(&doc, &[selected[0], ring_a, selected[1]]).unwrap();
     assert_eq!(joined.ring_fills[0].atoms, [selected[0], ring_b, ring_c]);
@@ -547,6 +549,7 @@ fn mixed_objects_duplicate_ids_small_selections_and_abbreviations_are_rejected()
     let (mut doc, selected) = sites(3, "C", false);
     let caption = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::default(),
         text: "Note".into(),

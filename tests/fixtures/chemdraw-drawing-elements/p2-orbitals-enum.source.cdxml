@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE CDXML SYSTEM "http://www.cambridgesoft.com/xml/cdxml.dtd" >
+<CDXML CreationProgram="reshiki-probe" BoundingBox="0 0 540 720" LabelFont="3" LabelSize="10" CaptionFont="3" CaptionSize="7" LineWidth="1" BoldWidth="4" BondLength="30" HashSpacing="2.7" MarginWidth="2" color="0" bgcolor="1">
+<colortable><color r="1" g="1" b="1"/><color r="0" g="0" b="0"/><color r="1" g="0" b="0"/><color r="0" g="0" b="1"/></colortable>
+<fonttable><font id="3" charset="iso-8859-1" name="Arial"/></fonttable>
+<page id="1" BoundingBox="0 0 540 720" HeightPages="1" WidthPages="1">
+<graphic id="101" Z="101" GraphicType="Orbital" OrbitalType="s" BoundingBox="63.00 68.00 63.00 48.00"/>
+<t id="102" p="25.00 100.00" Z="102"><s font="3" size="6" color="0">s</s></t>
+<graphic id="103" Z="103" GraphicType="Orbital" OrbitalType="oval" BoundingBox="148.00 68.00 148.00 48.00"/>
+<t id="104" p="110.00 100.00" Z="104"><s font="3" size="6" color="0">oval</s></t>
+<graphic id="105" Z="105" GraphicType="Orbital" OrbitalType="lobe" BoundingBox="233.00 68.00 233.00 48.00"/>
+<t id="106" p="195.00 100.00" Z="106"><s font="3" size="6" color="0">lobe</s></t>
+<graphic id="107" Z="107" GraphicType="Orbital" OrbitalType="p" BoundingBox="318.00 68.00 318.00 48.00"/>
+<t id="108" p="280.00 100.00" Z="108"><s font="3" size="6" color="0">p</s></t>
+<graphic id="109" Z="109" GraphicType="Orbital" OrbitalType="hybridPlus" BoundingBox="403.00 68.00 403.00 48.00"/>
+<t id="110" p="365.00 100.00" Z="110"><s font="3" size="6" color="0">hybridPlus</s></t>
+<graphic id="111" Z="111" GraphicType="Orbital" OrbitalType="hybridMinus" BoundingBox="488.00 68.00 488.00 48.00"/>
+<t id="112" p="450.00 100.00" Z="112"><s font="3" size="6" color="0">hybridMinus</s></t>
+<graphic id="113" Z="113" GraphicType="Orbital" OrbitalType="dz2Plus" BoundingBox="63.00 138.00 63.00 118.00"/>
+<t id="114" p="25.00 170.00" Z="114"><s font="3" size="6" color="0">dz2Plus</s></t>
+<graphic id="115" Z="115" GraphicType="Orbital" OrbitalType="dz2Minus" BoundingBox="148.00 138.00 148.00 118.00"/>
+<t id="116" p="110.00 170.00" Z="116"><s font="3" size="6" color="0">dz2Minus</s></t>
+<graphic id="117" Z="117" GraphicType="Orbital" OrbitalType="dxy" BoundingBox="233.00 138.00 233.00 118.00"/>
+<t id="118" p="195.00 170.00" Z="118"><s font="3" size="6" color="0">dxy</s></t>
+<graphic id="119" Z="119" GraphicType="Orbital" OrbitalType="sShaded" BoundingBox="318.00 138.00 318.00 118.00"/>
+<t id="120" p="280.00 170.00" Z="120"><s font="3" size="6" color="0">sShaded</s></t>
+<graphic id="121" Z="121" GraphicType="Orbital" OrbitalType="ovalShaded" BoundingBox="403.00 138.00 403.00 118.00"/>
+<t id="122" p="365.00 170.00" Z="122"><s font="3" size="6" color="0">ovalShaded</s></t>
+<graphic id="123" Z="123" GraphicType="Orbital" OrbitalType="lobeShaded" BoundingBox="488.00 138.00 488.00 118.00"/>
+<t id="124" p="450.00 170.00" Z="124"><s font="3" size="6" color="0">lobeShaded</s></t>
+<graphic id="125" Z="125" GraphicType="Orbital" OrbitalType="pShaded" BoundingBox="63.00 208.00 63.00 188.00"/>
+<t id="126" p="25.00 240.00" Z="126"><s font="3" size="6" color="0">pShaded</s></t>
+<graphic id="127" Z="127" GraphicType="Orbital" OrbitalType="hybridPlusShaded" BoundingBox="148.00 208.00 148.00 188.00"/>
+<t id="128" p="110.00 240.00" Z="128"><s font="3" size="6" color="0">hybridPlusShaded</s></t>
+<graphic id="129" Z="129" GraphicType="Orbital" OrbitalType="hybridMinusShaded" BoundingBox="233.00 208.00 233.00 188.00"/>
+<t id="130" p="195.00 240.00" Z="130"><s font="3" size="6" color="0">hybridMinusShaded</s></t>
+<graphic id="131" Z="131" GraphicType="Orbital" OrbitalType="dz2PlusShaded" BoundingBox="318.00 208.00 318.00 188.00"/>
+<t id="132" p="280.00 240.00" Z="132"><s font="3" size="6" color="0">dz2PlusShaded</s></t>
+<graphic id="133" Z="133" GraphicType="Orbital" OrbitalType="dz2MinusShaded" BoundingBox="403.00 208.00 403.00 188.00"/>
+<t id="134" p="365.00 240.00" Z="134"><s font="3" size="6" color="0">dz2MinusShaded</s></t>
+<graphic id="135" Z="135" GraphicType="Orbital" OrbitalType="dxyShaded" BoundingBox="488.00 208.00 488.00 188.00"/>
+<t id="136" p="450.00 240.00" Z="136"><s font="3" size="6" color="0">dxyShaded</s></t>
+<graphic id="137" Z="137" GraphicType="Orbital" OrbitalType="sFilled" BoundingBox="63.00 278.00 63.00 258.00"/>
+<t id="138" p="25.00 310.00" Z="138"><s font="3" size="6" color="0">sFilled</s></t>
+<graphic id="139" Z="139" GraphicType="Orbital" OrbitalType="ovalFilled" BoundingBox="148.00 278.00 148.00 258.00"/>
+<t id="140" p="110.00 310.00" Z="140"><s font="3" size="6" color="0">ovalFilled</s></t>
+<graphic id="141" Z="141" GraphicType="Orbital" OrbitalType="lobeFilled" BoundingBox="233.00 278.00 233.00 258.00"/>
+<t id="142" p="195.00 310.00" Z="142"><s font="3" size="6" color="0">lobeFilled</s></t>
+<graphic id="143" Z="143" GraphicType="Orbital" OrbitalType="pFilled" BoundingBox="318.00 278.00 318.00 258.00"/>
+<t id="144" p="280.00 310.00" Z="144"><s font="3" size="6" color="0">pFilled</s></t>
+<graphic id="145" Z="145" GraphicType="Orbital" OrbitalType="hybridPlusFilled" BoundingBox="403.00 278.00 403.00 258.00"/>
+<t id="146" p="365.00 310.00" Z="146"><s font="3" size="6" color="0">hybridPlusFilled</s></t>
+<graphic id="147" Z="147" GraphicType="Orbital" OrbitalType="hybridMinusFilled" BoundingBox="488.00 278.00 488.00 258.00"/>
+<t id="148" p="450.00 310.00" Z="148"><s font="3" size="6" color="0">hybridMinusFilled</s></t>
+<graphic id="149" Z="149" GraphicType="Orbital" OrbitalType="dz2PlusFilled" BoundingBox="63.00 348.00 63.00 328.00"/>
+<t id="150" p="25.00 380.00" Z="150"><s font="3" size="6" color="0">dz2PlusFilled</s></t>
+<graphic id="151" Z="151" GraphicType="Orbital" OrbitalType="dz2MinusFilled" BoundingBox="148.00 348.00 148.00 328.00"/>
+<t id="152" p="110.00 380.00" Z="152"><s font="3" size="6" color="0">dz2MinusFilled</s></t>
+<graphic id="153" Z="153" GraphicType="Orbital" OrbitalType="dxyFilled" BoundingBox="233.00 348.00 233.00 328.00"/>
+<t id="154" p="195.00 380.00" Z="154"><s font="3" size="6" color="0">dxyFilled</s></t>
+</page></CDXML>

@@ -34,6 +34,7 @@ fn arrow(doc: &mut Document, start: Point, end: Point) -> u64 {
 fn text(doc: &mut Document, text: &str, centre: Point) -> u64 {
     let id = doc.next_id();
     let mut caption = Annotation {
+        angle: 0.,
         id,
         position: Point::default(),
         text: text.into(),

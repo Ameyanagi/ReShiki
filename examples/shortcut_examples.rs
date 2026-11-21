@@ -59,6 +59,7 @@ fn caption(doc: &mut Document, text: &str, p: Point, size: f32, bold: bool, widt
         reshiki::palette::Color::Custom(if bold { [41, 62, 56] } else { [78, 90, 87] });
     format.width_pt = Some(width);
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: doc.next_id(),
         position: p,
         text: text.into(),
@@ -260,6 +261,7 @@ fn sections() -> anyhow::Result<Vec<Section>> {
     ));
     let mut arrow = Document::default();
     arrow.arrows.push(reshiki::document::Arrow {
+        arc: None,
         start_anchor: None,
         end_anchor: None,
         id: 1,
@@ -270,6 +272,7 @@ fn sections() -> anyhow::Result<Vec<Section>> {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     tools.push(sample("a / e · Reaction arrow tool", arrow));
     let (base, ids) = chain(2);

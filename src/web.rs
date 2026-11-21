@@ -827,7 +827,7 @@ fn js_error_name(error: &JsValue) -> Option<String> {
 }
 
 /// Complete a save only after the writable stream closes successfully.
-pub(crate) async fn write_file(handle: &JsValue, document: &Document) -> Result<(), String> {
+pub(crate) async fn write_file(handle: &JsValue, bytes: &[u8]) -> Result<(), String> {
     let handle: &FileHandle = handle.unchecked_ref();
     let options = js_sys::Object::new();
     let _ = js_sys::Reflect::set(&options, &"mode".into(), &"readwrite".into());
@@ -847,14 +847,9 @@ pub(crate) async fn write_file(handle: &JsValue, document: &Document) -> Result<
         {
             return Err(JsValue::from_str("Write permission was not granted"));
         }
-        let bytes = document
-            .file_json()
-            .map_err(|error| JsValue::from_str(&error))?;
         let writable = handle.create_writable().await?;
         let result = async {
-            writable
-                .write(&js_sys::Uint8Array::from(bytes.as_slice()))
-                .await?;
+            writable.write(&js_sys::Uint8Array::from(bytes)).await?;
             writable.close().await?;
             Ok(())
         }

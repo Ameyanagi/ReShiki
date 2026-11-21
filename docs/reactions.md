@@ -5,8 +5,8 @@ Reaction roles connect editable molecules to a drawing arrow. They stay attached
 ## Define a reaction
 
 1. Draw or import the molecules and a reaction arrow.
-2. Open **Properties → Labels & chemistry → Reaction roles…**, or **Export → Reaction roles & export…**.
-3. Choose the arrow for this step. For several steps, each arrow has its own roles.
+2. Select the arrow and choose **Reaction roles…** at the top of its properties. **Properties → Labels & chemistry → Reaction roles…** and **Export → Reaction roles & export…** open it too.
+3. Choose the arrow for this step. For several steps, each arrow has its own roles. An arrow inside a titled panel is listed by that title, for example `Arrow 2 · This work`.
 4. Select a molecule on the canvas and choose **Assign selected molecules** under Reactants, Products, or Reagents / catalysts. Selecting one atom assigns its complete connected molecule. You can assign several selected molecules together.
 5. Click a structure thumbnail in the inspector to select that participant on the canvas. Reassigning it moves it to the chosen role. **Clear selected roles** removes its membership without deleting the molecule.
 
@@ -15,6 +15,60 @@ Reaction roles connect editable molecules to a drawing arrow. They stay attached
 Role edits are undoable. **Remove reaction roles** keeps all drawing objects. Deleting an arrow removes its reaction definition; deleting atoms prunes the corresponding membership. Extending an assigned molecule also extends its membership. A bond edit that joins separate participants is rejected: clear their roles first if you intend to combine them. Reversing a defined arrow swaps reactants and products in the same Undo step.
 
 Assistant-generated schemes already contain reactant and product roles, including their coefficients. Reaction conditions remain editable captions. Text written above or below a straight arrow attaches to it, and the arrow keeps itself long enough for the text; see [conditions on an arrow](arrows.md#write-conditions-on-an-arrow). Text conditions do not automatically become chemical reagent structures; draw and assign a reagent when it should be included in reaction data.
+
+## Object purpose
+
+Every molecule and arrow has a purpose. It decides which chemistry tools use
+the object. Only your choice changes it: color, layer order, grouping and
+position never do.
+
+| Purpose      | Use it for                                                    | Chemistry tools                                                                                     |
+| ------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Chemistry    | Molecules and arrows of the scheme. New objects start here.   | Everything: reaction roles, Preview reaction, chemical copy, atom maps, captions and Check drawing. |
+| Reference    | A real structure shown for context, such as a known compound. | Keeps its formula, name, NMR and captions, and its arrow keeps condition text. Never in a reaction. |
+| Illustration | Icons, decorative arrows and molecules drawn as pictures.     | Skipped by reaction tools, chemical copy, Check drawing and the whole-drawing formula.              |
+
+### Set a purpose
+
+1. Select molecules or arrows. Selecting one atom selects its whole molecule.
+2. In **Properties**, choose **Chemistry**, **Reference** or **Illustration**
+   under **Purpose**. You can also right-click and choose **Purpose**.
+
+A dashed outline and a small **Reference** or **Illustration** tag mark these
+objects while you edit. The marks never appear in exports or copied images.
+
+Changing a molecule to Reference or Illustration removes it from its reaction
+roles. Changing an arrow removes its reaction; an Illustration arrow also
+releases its condition text, which stays as ordinary text. Assigning a role in
+**Reaction roles** makes that molecule and its arrow Chemistry again. Atoms you
+draw onto a molecule take its purpose. Joining a Chemistry and a Reference
+molecule gives Chemistry.
+
+### Preview a reaction
+
+Right-click a Chemistry reaction or equilibrium arrow and choose **Preview
+reaction**. The same command is in **Reaction roles** and the command palette.
+Dashed outlines show each reactant, product and reagent, and the arrow with the
+conditions written along it. An arrow with assigned roles
+shows them. Otherwise ReShiki reads the arrow's row: Chemistry molecules before
+the arrow are reactants, molecules after it are products, and molecules above
+or below its middle are reagents. The next arrow in the row ends each side.
+Reference and Illustration objects never take part. Esc or any edit hides the
+preview.
+
+### Limits
+
+- Purpose is kept in `.rsk` files (document version 40) and in CDXML files
+  that ReShiki writes. ChemDraw has no purpose, so it opens every molecule and
+  arrow as chemistry, and export says so. CDX, SVG, PDF and PNG keep the
+  appearance only; reopened in ReShiki, everything is Chemistry. CDXML marks
+  each Reference or Illustration atom and arrow with a `ReShikiPurpose`
+  attribute, which ChemDraw ignores.
+- Text, shapes and pictures have no purpose; they are never chemistry.
+- Commands you run on a selected Illustration molecule, such as its name,
+  NMR prediction or formula, still work. Only drawing-wide tools skip it.
+- Keeping a CDX or MOL file's format on Save warns that it loses the purpose.
+- Preview reaction does not assign roles. Use **Reaction roles** to keep them.
 
 ## Copy a drawn reaction
 
@@ -28,7 +82,9 @@ receiving editor's interpretation of a mixture or salt; copying all components
 does not establish receiver acceptance.
 
 For an unassigned scheme, select all complete participant molecules and exactly
-one straight forward arrow. Copy-only inference assigns starting materials
+one straight forward arrow. Reference and Illustration molecules and arrows in
+the selection are left out, so a reference structure beside the product does
+not become a product. Copy-only inference assigns starting materials
 toward the arrow's start and products toward its end, including vertical,
 diagonal and right-to-left layouts. It groups complete connected components
 and assigns each one once. Molecules touching or crossing the arrow midpoint,
@@ -128,9 +184,9 @@ and align the products to the reactants.
    **Edit atom map…** or **Clear atom map**.
 3. To pair two atoms, select one reactant atom and one product atom and choose
    **Pair selected atoms**.
-4. To map the rest, choose **Auto-map**. **Review atom maps** lists each
-   suggested pair, for example `Map 1 · C #1 → C #5`. Click a row to select the
-   pair in the drawing.
+4. To map the rest, choose **Auto-map**. **Review atom maps** shows the
+   reaction with the suggested numbers, then lists each suggested pair, for
+   example `Map 1 · C #1 → C #5`. Click a row to select the pair in the drawing.
 5. Choose **Apply maps** to keep the suggestion, or **Discard**.
 6. Choose **Align mapped structures** to turn and move each product so that its
    mapped atoms line up with the reactants.
@@ -169,8 +225,12 @@ counterpart. Existing different labels must be cleared before pairing.
 **Auto-map** runs in Rust and stays detached from the document until applied.
 It keeps existing maps as anchors, matches exact elements/isotopes, and excludes
 agents. It maximizes the number of corresponding atoms, then favors conserved
-heavy-atom adjacency, all adjacency, unchanged bond classes, fewer changed atom
-environments, and smaller charge/H/radical differences. Bond order, charge,
+heavy-atom adjacency, all adjacency, smaller charge/H/radical differences,
+unchanged bond classes, and fewer changed atom environments. Hydrogen counts
+rank above bond orders: in a Diels–Alder reaction the double bond moves to the
+inner diene carbons and no hydrogen moves, so keeping a diene double bond by
+moving hydrogens is the wrong map. A hydrogen drawn as an atom counts like one
+in a label. Bond order, charge,
 attached hydrogens, degree and ring membership can change in a reaction and
 never exclude candidate pairs. Coordinates and stereochemistry are preserved;
 they are not used to infer a reaction mechanism.
@@ -213,6 +273,56 @@ reaction SMARTS. The
 motivates correspondence and coordinated drawing. Gaussian/TS export remains
 future work; this editor supplies persistent chemical atom maps and visible
 labels.
+
+## Color by origin
+
+**Color by origin** colors each reactant and carries its color into the
+products along the atom maps. The bonds and rings the reaction forms are
+highlighted, and an optional legend names each color.
+
+### Use it
+
+1. Assign reactants and products (see [Define a reaction](#define-a-reaction)).
+2. Right-click the arrow and choose **Color by origin**, or choose it in
+   **Reaction roles**. Without atom maps, ReShiki runs **Auto-map** first:
+   check the suggested maps and choose **Apply maps**. The reaction is then
+   colored.
+3. In **Reaction roles → Color by origin**, pick each reactant's color and
+   the color of new bonds and rings, and turn on **Mark new bonds**, **Mark
+   broken and changed bonds**, **Fill new rings** or **Legend**. Each change
+   repaints the reaction.
+4. After you edit a molecule or its maps, choose **Color by origin** again. **Clear
+   colors** removes the colors and the legend.
+
+Each command is one Undo step. Coloring hides the map numbers so the figure stays readable; turn on **Show maps** in **Reaction roles** to see them. Atom maps keep abbreviations such as PPh₃ contracted. Bonds take the reactant's palette color, and
+labeled atoms such as O take it too. A new bond keeps its ink and gets a
+highlight; a new ring gets a ring fill. Broken and changed bonds get an amber
+highlight, or orange when new bonds are amber. A new ring's fill is see-through,
+so the new bonds' highlight stays darker than it.
+
+The legend is one text. It starts below the reaction, or at the nearest free
+spot clear of other objects, and on the reaction's page when you use
+[Page setup](publication-pages.md); a legend wider than the page lists one
+entry per line. Edit the names: they stay when you update the colors or turn an
+entry on or off, and retyping the whole legend keeps each swatch's color.
+**Copy as → Reaction SMILES** does not need the legend in the selection.
+
+A molecule's SMILES, in **Properties** and in **Copy SMILES**, leaves out atom
+maps; reaction SMILES and RXN keep them.
+
+In a scheme with several steps, a product colored by one step keeps those
+colors as a reactant of the next step, so a fragment stays one color from
+start to end. Each step keeps its own settings in the reaction.
+
+### Limits
+
+- Colors follow atom maps. An atom without a map partner stays in ink.
+- The colors are palette colors, so they follow the theme and the canvas.
+  Exports and CDX/CDXML files carry them as ordinary bond and label colors,
+  highlights and ring fills; the settings stay in `.rsk` files only
+  (document version 40).
+- Updating colors repaints the reaction's molecules: a bond you colored by hand
+  in one of the reaction's palette colors is repainted too.
 
 ## Current limits and verification
 

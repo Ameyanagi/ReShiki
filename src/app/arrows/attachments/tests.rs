@@ -36,6 +36,7 @@ fn context_menu_edit_cancels_arrow_source() {
     let mut app = app();
     select_source(&mut app);
     app.edit(Edit::ContextMenu {
+        at: Default::default(),
         position: iced::Point::new(200., 200.),
         selected: vec![],
         hit: vec![],

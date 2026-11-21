@@ -1,6 +1,144 @@
 use super::*;
 
 #[test]
+fn pasted_highlights_keep_each_style_without_changing_destination_defaults() {
+    use crate::{highlights::HighlightStyle, palette::Color};
+    type Append = fn(&mut Document, &Document, Point) -> Vec<u64>;
+    let appenders: [Append; 2] = [append, append_preserving_layout];
+    for source_style in HighlightStyle::ALL {
+        let mut source = Document {
+            highlight_style: source_style,
+            ..Default::default()
+        };
+        let a = source.add_atom("C", Point::default());
+        let b = source.add_atom("C", Point::new(42., 0.));
+        let c = source.add_atom("C", Point::new(84., 0.));
+        source.add_atom("O", Point::new(150., 0.)); // Future paint uses the destination.
+        source.add_bond(a, b, 1, "plain");
+        source.add_bond(b, c, 1, "plain");
+        crate::highlights::apply(&mut source, &[a, b, c], Some(Color::Custom([10, 20, 30])));
+        source.atom_mut(b).unwrap().display.highlight_style = Some(HighlightStyle::Flat);
+        source.atom_mut(c).unwrap().display.highlight_style = Some(HighlightStyle::Disc);
+        source.bonds[1].highlight_style = Some(HighlightStyle::Glow);
+        source
+            .abbreviations
+            .push(crate::abbreviations::Abbreviation {
+                label_style: None,
+                label_color_override: false,
+                highlight: Some(Color::Custom([40, 50, 60])),
+                highlight_style: None,
+                label: "Et".into(),
+                reverse_label: String::new(),
+                anchor: b,
+                exit: None,
+                members: vec![b, c],
+                alignment: Default::default(),
+            });
+        let source_before = source.clone();
+        let copied = selection(&source, &source.all_ids());
+        for destination_style in HighlightStyle::ALL {
+            for insert in appenders {
+                let mut doc = Document {
+                    highlight_style: destination_style,
+                    ..Default::default()
+                };
+                let x = doc.add_atom("C", Point::new(-100., 0.));
+                let y = doc.add_atom("C", Point::new(-58., 0.));
+                doc.add_bond(x, y, 1, "plain");
+                crate::highlights::apply(&mut doc, &[x, y], Some(Color::Custom([70, 80, 90])));
+                doc.atoms[0].display.highlight_style = Some(HighlightStyle::Disc);
+                let before = doc.clone();
+                let inserted = insert(&mut doc, &copied, Point::new(200., 0.));
+                assert_eq!(inserted.len(), source.atoms.len());
+                assert_eq!(doc.highlight_style, destination_style);
+                assert_eq!(doc.atoms[..2], before.atoms);
+                assert_eq!(doc.bonds[..1], before.bonds);
+                for (old, actual) in source.atoms.iter().zip(&doc.atoms[2..]) {
+                    assert_eq!(actual.display.highlight, old.display.highlight);
+                    if old.display.highlight.is_some() {
+                        assert_eq!(
+                            actual
+                                .display
+                                .highlight_style
+                                .unwrap_or(doc.highlight_style),
+                            old.display.highlight_style.unwrap_or(source_style)
+                        );
+                    } else {
+                        assert!(actual.display.highlight_style.is_none());
+                    }
+                    assert_eq!(
+                        crate::highlights::atom_style(&doc, actual),
+                        if old.display.highlight.is_some() {
+                            crate::highlights::atom_style(&source, old)
+                        } else {
+                            destination_style
+                        }
+                    );
+                }
+                for (old, actual) in source.bonds.iter().zip(&doc.bonds[1..]) {
+                    assert_eq!(actual.highlight, old.highlight);
+                    assert_eq!(
+                        actual.highlight_style.unwrap_or(doc.highlight_style),
+                        old.highlight_style.unwrap_or(source_style)
+                    );
+                }
+                assert_eq!(
+                    doc.abbreviations[0]
+                        .highlight_style
+                        .unwrap_or(doc.highlight_style),
+                    source_style
+                );
+                doc.validate().unwrap();
+                assert_eq!(doc.file_version(), crate::document::DRAWING_ELEMENTS);
+                let saved = doc.file_json().unwrap();
+                let reopened = Document::from_native_file(&saved).unwrap();
+                assert_eq!(reopened, doc.current());
+                assert_eq!(reopened.file_json().unwrap(), saved);
+
+                let mut history = crate::document::History::default();
+                assert!(history.commit(before.clone(), &doc));
+                let pasted = doc.clone();
+                assert!(history.undo(&mut doc));
+                assert_eq!(doc, before);
+                assert!(history.redo(&mut doc));
+                assert_eq!(doc, pasted);
+
+                // Copying the mixed drawing again retains every native override.
+                let copied_again = selection(&doc, &inserted);
+                let mut next = Document {
+                    highlight_style: source_style,
+                    ..Default::default()
+                };
+                append(&mut next, &copied_again, Point::default());
+                for (old, actual) in source.atoms.iter().zip(&next.atoms) {
+                    if old.display.highlight.is_some() {
+                        assert_eq!(
+                            crate::highlights::atom_style(&source, old),
+                            crate::highlights::atom_style(&next, actual)
+                        );
+                    }
+                }
+            }
+        }
+        assert_eq!(source, source_before);
+    }
+}
+
+#[test]
+fn preserved_append_rejects_different_highlight_defaults_and_keeps_exact_overrides() {
+    use crate::{highlights::HighlightStyle, palette::Color};
+    let mut source = Document::default();
+    let a = source.add_atom("C", Point::default());
+    source.atoms[0].display.highlight = Some(Color::Custom([10, 20, 30]));
+    source.atoms[0].display.highlight_style = Some(HighlightStyle::Disc);
+    let (part, map, _) = preserved_append_part(&source, &source, Point::new(84., 0.)).unwrap();
+    assert_eq!(part.atom(map[&a]).unwrap().display, source.atoms[0].display);
+    let mut destination = source.clone();
+    destination.highlight_style = HighlightStyle::Glow;
+    assert!(preserved_append_part(&destination, &source, Point::default()).is_err());
+}
+
+#[test]
 fn pasted_stereo_groups_get_fresh_numbers_and_keep_label_visibility() {
     use crate::stereo_groups::{Kind, StereoGroup};
     let mut destination = Document::default();
@@ -559,6 +697,7 @@ fn rings_refuse_a_vertex_they_cannot_share() {
         label_style: None,
         label_color_override: false,
         highlight: None,
+        highlight_style: None,
     });
     let rejection = ring_placement(&doc, click, 6, false, 5., Some(drag)).unwrap_err();
     assert_eq!(rejection.label, "Expand the abbreviation first");
@@ -1230,6 +1369,7 @@ fn prepared_ring_interiors_match_live_hits_including_ties_and_hidden_drawings() 
         label_style: None,
         label_color_override: false,
         highlight: None,
+        highlight_style: None,
     });
     compare(&doc);
     doc.abbreviations.clear();

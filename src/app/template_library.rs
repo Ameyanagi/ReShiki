@@ -914,6 +914,8 @@ impl App {
             Action::Collection(s) => {
                 state.remember(self.template_index);
                 state.collection = s;
+                state.query.clear();
+                state.filter = Filter::All;
                 state.active = false;
                 self.tool = Tool::Select;
             }
@@ -1045,10 +1047,14 @@ impl App {
             self.templates.active = true;
             self.tool = Tool::Template;
             self.error = false;
-            self.status = format!(
-                "{} · {} · Esc cancels",
-                template.name, self.templates.connection
-            );
+            self.status = if template.is_layout() {
+                format!("{} · Click to place · Esc cancels", template.name)
+            } else {
+                format!(
+                    "{} · {} · Esc cancels",
+                    template.name, self.templates.connection
+                )
+            };
         }
     }
 }

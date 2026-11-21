@@ -51,10 +51,20 @@ pub(super) fn render_svg(
 /// `drawing` alone over `lo..hi`, one SVG unit per drawing unit, in the light
 /// theme and without a background.
 pub(super) fn render_part(drawing: Vec<Primitive>, lo: super::Point, hi: super::Point) -> String {
+    render_part_on(drawing, lo, hi, Default::default(), None)
+}
+
+pub(super) fn render_part_on(
+    drawing: Vec<Primitive>,
+    lo: super::Point,
+    hi: super::Point,
+    theme: crate::canvas_theme::CanvasTheme,
+    paper: Option<[u8; 3]>,
+) -> String {
     let (width, height) = (hi.x - lo.x, hi.y - lo.y);
     let frame = Frame {
-        theme: Default::default(),
-        paper: None,
+        theme,
+        paper,
         lo,
         hi,
         gradients: Default::default(),
@@ -63,7 +73,9 @@ pub(super) fn render_part(drawing: Vec<Primitive>, lo: super::Point, hi: super::
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{} {} {width} {height}\" width=\"{width}\" height=\"{height}\">",
         lo.x, lo.y
     );
-    push_svg(&mut s, drawing, &frame, &mut 0);
+    let mut content = String::new();
+    push_svg(&mut content, drawing, &frame, &mut 0);
+    s.push_str(&content);
     s.push_str("</svg>");
     s
 }
@@ -193,35 +205,51 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
     let ink = format!("rgb({r},{g},{b})");
     for p in drawing {
         match p {
+            Primitive::Clip { corners, primitives } => {
+                frame.gradients.set(frame.gradients.get() + 1);
+                let id = format!("reshiki-table-cell-{}", frame.gradients.get());
+                let points = corners.iter().map(|p| format!("{},{}", p.x, p.y)).collect::<Vec<_>>().join(" ");
+                s.push_str(&format!("<defs><clipPath id=\"{id}\" clipPathUnits=\"userSpaceOnUse\"><polygon points=\"{points}\"/></clipPath></defs>"));
+                let mut inner = String::new();
+                for primitive in primitives {
+                    if frame.paper.is_none()
+                        && let Primitive::Halo { radius, primitives } = primitive {
+                        // A transparent halo also removes earlier cells' ink,
+                        // but only inside this cell. Flush its preceding ink
+                        // before applying that clipped knockout to the scene.
+                        if !inner.is_empty() {
+                            s.push_str(&format!("<g clip-path=\"url(#{id})\">{inner}</g>"));
+                            inner.clear();
+                        }
+                        knockout(s, &primitives, radius, frame, halos, Some(&id));
+                    } else {
+                        push_svg(&mut inner, vec![primitive], frame, halos);
+                    }
+                }
+                if !inner.is_empty() { s.push_str(&format!("<g clip-path=\"url(#{id})\">{inner}</g>")); }
+            }
             Primitive::Opacity { alpha, primitive } => {
                 let mut inner = String::new();
                 push_svg(&mut inner, vec![*primitive], frame, halos);
                 s.push_str(&format!("<g opacity=\"{alpha}\">{inner}</g>"));
             }
+            Primitive::Rotated {
+                pivot,
+                angle,
+                primitives,
+            } => {
+                let mut inner = String::new();
+                push_svg(&mut inner, primitives, frame, halos);
+                s.push_str(&format!(
+                    "<g transform=\"rotate({angle} {} {})\">{inner}</g>",
+                    pivot.x, pivot.y
+                ));
+            }
             Primitive::Halo { radius, primitives } => {
                 if let Some([r, g, b]) = frame.paper {
                     push_halo(s, &primitives, radius, &format!("rgb({r},{g},{b})"));
                 } else {
-                    // Knock the halo out of everything drawn so far, so the
-                    // destination shows through exactly where paper would.
-                    *halos += 1;
-                    let id = format!("reshiki-label-halo-{halos}");
-                    let (lo, hi) = (frame.lo, frame.hi);
-                    let mut mask = format!(
-                        "<mask id=\"{id}\" maskUnits=\"userSpaceOnUse\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"white\"/><g id=\"{id}-ink\">",
-                        lo.x,
-                        lo.y,
-                        hi.x - lo.x,
-                        hi.y - lo.y,
-                        lo.x,
-                        lo.y,
-                        hi.x - lo.x,
-                        hi.y - lo.y
-                    );
-                    push_halo(&mut mask, &primitives, radius, "black");
-                    mask.push_str("</g></mask>");
-                    let earlier = std::mem::take(s);
-                    s.push_str(&format!("{mask}<g mask=\"url(#{id})\">{earlier}</g>"));
+                    knockout(s, &primitives, radius, frame, halos, None);
                 }
             }
             Primitive::Picture(g) => {
@@ -256,7 +284,7 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 } else {
                     format!(" stroke-dasharray=\"{dashes}\"")
                 };
-                s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{dash}/>",stroke[0],stroke[1],stroke[2],style.width()));
+                s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"{}\" stroke-linejoin=\"round\"{dash}/>",stroke[0],stroke[1],stroke[2],style.width(),if style.round_caps() { "round" } else { "butt" }));
             }
             Primitive::Line(a, b, w) => {
                 s.push_str(&format!("<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{ink}\" stroke-width=\"{w}\" stroke-linecap=\"round\"/>",a.x,a.y,b.x,b.y));
@@ -487,6 +515,74 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     "stroke-linecap=\"round\"".into()
                 }
             )),
+            Primitive::Gradient {
+                commands,
+                frame: [o, x, y],
+                radial,
+                from,
+                to,
+                stops,
+            } => {
+                frame.gradients.set(frame.gradients.get() + 1);
+                let id = format!("{}{}", super::GRADIENT_ID, frame.gradients.get());
+                let geometry = if radial {
+                    format!(
+                        "radialGradient id=\"{id}\" cx=\"{}\" cy=\"{}\" r=\"{}\"",
+                        from[0],
+                        from[1],
+                        (to[0] - from[0]).hypot(to[1] - from[1])
+                    )
+                } else {
+                    format!(
+                        "linearGradient id=\"{id}\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"",
+                        from[0], from[1], to[0], to[1]
+                    )
+                };
+                let stops: String = stops
+                    .iter()
+                    .map(|(offset, [r, g, b], alpha)| {
+                        format!("<stop offset=\"{offset}\" stop-color=\"rgb({r},{g},{b})\" stop-opacity=\"{alpha}\"/>")
+                    })
+                    .collect();
+                let tag = if radial { "radialGradient" } else { "linearGradient" };
+                s.push_str(&format!(
+                    "<defs><{geometry} gradientUnits=\"userSpaceOnUse\" gradientTransform=\"matrix({} {} {} {} {} {})\">{stops}</{tag}></defs><path d=\"{}\" fill=\"url(#{id})\"/>",
+                    x.x,
+                    x.y,
+                    y.x,
+                    y.y,
+                    o.x,
+                    o.y,
+                    path_data(&commands)
+                ));
+            }
+            Primitive::Glow {
+                commands,
+                color: [r, g, b],
+                alpha,
+                spread,
+                blur,
+            } => {
+                frame.gradients.set(frame.gradients.get() + 1);
+                let id = format!("reshiki-glow-{}", frame.gradients.get());
+                // The blur's own region, so nothing of the glow is clipped.
+                let (lo, hi) = super::bounds(&[Primitive::Glow {
+                    commands: commands.clone(),
+                    color: [r, g, b],
+                    alpha,
+                    spread,
+                    blur,
+                }]);
+                s.push_str(&format!(
+                    "<defs><filter id=\"{id}\" filterUnits=\"userSpaceOnUse\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"><feGaussianBlur stdDeviation=\"{blur}\"/></filter></defs><g opacity=\"{alpha}\" filter=\"url(#{id})\"><path d=\"{}\" fill=\"rgb({r},{g},{b})\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{}\" stroke-linejoin=\"round\"/></g>",
+                    lo.x,
+                    lo.y,
+                    hi.x - lo.x,
+                    hi.y - lo.y,
+                    path_data(&commands),
+                    2. * spread
+                ));
+            }
             Primitive::Card {
                 lo,
                 hi,
@@ -520,6 +616,42 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
             }
         }
     }
+}
+
+/// Knock the halo out of everything painted before it. A cell supplies its
+/// clip so the destination shows through only inside that affine boundary.
+fn knockout(
+    s: &mut String,
+    primitives: &[Primitive],
+    radius: f32,
+    frame: &Frame,
+    halos: &mut usize,
+    clip: Option<&str>,
+) {
+    *halos += 1;
+    let id = format!("reshiki-label-halo-{halos}");
+    let (lo, hi) = (frame.lo, frame.hi);
+    let mut mask = format!(
+        "<mask id=\"{id}\" maskUnits=\"userSpaceOnUse\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"white\"/><g id=\"{id}-ink\">",
+        lo.x,
+        lo.y,
+        hi.x - lo.x,
+        hi.y - lo.y,
+        lo.x,
+        lo.y,
+        hi.x - lo.x,
+        hi.y - lo.y,
+    );
+    if let Some(clip) = clip {
+        mask.push_str(&format!("<g clip-path=\"url(#{clip})\">"));
+    }
+    push_halo(&mut mask, primitives, radius, "black");
+    if clip.is_some() {
+        mask.push_str("</g>");
+    }
+    mask.push_str("</g></mask>");
+    let earlier = std::mem::take(s);
+    s.push_str(&format!("{mask}<g mask=\"url(#{id})\">{earlier}</g>"));
 }
 
 fn path_data(commands: &[crate::graphics::PathCommand]) -> String {
@@ -617,6 +749,8 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             ),
             Primitive::Picture(_)
             | Primitive::Polyline { .. }
+            | Primitive::Clip { .. }
+            | Primitive::Rotated { .. }
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
             | Primitive::Ellipsoid { .. }
@@ -624,7 +758,9 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             | Primitive::ShadedPolygon { .. }
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
-            | Primitive::Card { .. } => {}
+            | Primitive::Card { .. }
+            | Primitive::Gradient { .. }
+            | Primitive::Glow { .. } => {}
         }
     }
 }

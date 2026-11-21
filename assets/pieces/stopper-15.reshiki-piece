@@ -1,0 +1,58 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/stopper-15",
+ "revision": 1,
+ "family": "stopper",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Glass stopper, 15/25",
+  "ja": "共栓 15/25"
+ },
+ "category": "addition",
+ "keywords": [
+  "stopper",
+  "共栓",
+  "栓"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "s0",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-5.5 -11.6L-5.5 -3.4L5.5 -3.4L5.5 -11.6Z"
+  },
+  {
+   "id": "s1",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-7.5 -16.6L7.5 -16.6A3 3 0 0 1 10.5 -13.6L10.5 -10.6A3 3 0 0 1 7.5 -7.6L-7.5 -7.6A3 3 0 0 1 -10.5 -10.6L-10.5 -13.6A3 3 0 0 1 -7.5 -16.6Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "kind": "taper",
+   "size": "15/25",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "draw": "standard"
+  }
+ ]
+}

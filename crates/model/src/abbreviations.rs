@@ -14,6 +14,9 @@ pub struct Abbreviation {
     /// Paint behind the contracted label, separate from its internal atoms.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub highlight: Option<crate::palette::Color>,
+    /// An imported label highlight's style; absent uses the drawing's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub highlight_style: Option<crate::highlights::HighlightStyle>,
     pub label: String,
     #[serde(default)]
     pub reverse_label: String,
@@ -527,6 +530,7 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         abbreviations,
         atom_labels,
         ring_fills,
+        highlight_style,
         depth_appearance,
         version,
         atoms,
@@ -540,6 +544,9 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         reactions,
         models,
         recent_colors,
+        piece_definitions,
+        on_other_canvas: _,
+        seats,
         property_captions,
         compound_numbers,
     } = a;
@@ -550,6 +557,7 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         && *graphics == b.graphics
         && *generic == b.generic
         && *canvas_theme == b.canvas_theme
+        && *highlight_style == b.highlight_style
         && *color_theme == b.color_theme
         && *custom_theme == b.custom_theme
         && *drawing_style == b.drawing_style
@@ -564,6 +572,8 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         && *reactions == b.reactions
         && *models == b.models
         && *recent_colors == b.recent_colors
+        && *piece_definitions == b.piece_definitions
+        && *seats == b.seats
         && *property_captions == b.property_captions
         && *compound_numbers == b.compound_numbers
 }
@@ -828,6 +838,7 @@ impl Document {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             alignment: Default::default(),
             label: label.trim().into(),
             reverse_label: reverse_label.trim().into(),
@@ -899,6 +910,8 @@ impl Document {
                 {
                     return true;
                 }
+                // Atom maps label atoms for a reaction; they leave the
+                // fragment's chemistry, and so the group, unchanged.
                 let atoms_unchanged = g.members.iter().all(|id| {
                     atoms
                         .get(id)
@@ -911,7 +924,6 @@ impl Document {
                                 a.explicit_h,
                                 a.no_implicit,
                                 a.radical_electrons,
-                                a.map_num,
                                 a.attachment,
                                 &a.centroid,
                             ) == (
@@ -921,7 +933,6 @@ impl Document {
                                 b.explicit_h,
                                 b.no_implicit,
                                 b.radical_electrons,
-                                b.map_num,
                                 b.attachment,
                                 &b.centroid,
                             )
@@ -962,6 +973,26 @@ fn index_members<'a>(doc: &'a Document, members: &HashSet<u64>) -> MemberIndex<'
 
 pub fn label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
     crate::scene::abbreviation_label_hit(doc, point, radius)
+}
+
+/// Like [`label_hit`], retaining lower visible labels when a scope clips the
+/// otherwise winning candidate.
+pub fn label_hit_where(
+    doc: &Document,
+    point: Point,
+    radius: f32,
+    allowed: impl Fn(u64) -> bool,
+) -> Option<u64> {
+    crate::scene::abbreviation_label_hit_where(doc, point, radius, allowed)
+}
+
+pub fn label_hit_in(
+    doc: &Document,
+    point: Point,
+    radius: f32,
+    bounds: impl Fn(u64, Point, Point) -> bool,
+) -> Option<u64> {
+    crate::scene::abbreviation_label_hit_in(doc, point, radius, bounds)
 }
 
 #[cfg(test)]

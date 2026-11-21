@@ -34,6 +34,7 @@ mod host;
 mod io;
 mod mcp_usage;
 mod name;
+mod pieces;
 mod predict_nmr;
 mod reference;
 mod render;
@@ -163,6 +164,8 @@ async fn run_command(
         Command::Analyze(input) => analyze::run(input, out, err).await,
         Command::PredictNmr(command) => predict_nmr::run(command, out, err).await,
         Command::Name(name) => name::run(name, out, err).await,
+        Command::PiecesCheck(files) => pieces::check(&files, out),
+        Command::PiecesRender(render) => pieces::render(render, out, err, terminal).await,
     };
     match result {
         Ok(()) => Ok(SUCCESS),

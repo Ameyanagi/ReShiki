@@ -83,6 +83,11 @@ impl Fragment {
             return None;
         }
         let atoms = molecules(base, preview, changed_atoms(base, preview)?);
+        // A cycle's arrows follow its parts, so moving one redraws it whole.
+        let held = reshiki::cycles::part_ids(base);
+        if atoms.iter().any(|id| held.contains(id)) {
+            return None;
+        }
         let ids: Vec<_> = preview
             .atoms
             .iter()
@@ -135,6 +140,7 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         abbreviations,
         atom_labels,
         ring_fills,
+        highlight_style,
         depth_appearance,
         version,
         atoms,
@@ -150,6 +156,9 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         reactions,
         models,
         recent_colors,
+        piece_definitions,
+        on_other_canvas: _,
+        seats,
     } = preview;
     let same = depth_appearance.is_empty()
         && base.depth_appearance.is_empty()
@@ -163,11 +172,14 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         && *page_layout == base.page_layout
         && *atom_labels == base.atom_labels
         && *ring_fills == base.ring_fills
+        && *highlight_style == base.highlight_style
         && *version == base.version
         && *annotations == base.annotations
         && *molecule_names == base.molecule_names
         && *property_captions == base.property_captions
         && *compound_numbers == base.compound_numbers
+        && *piece_definitions == base.piece_definitions
+        && *seats == base.seats
         && *arrows == base.arrows
         && *arrow_labels == base.arrow_labels
         && *graphics == base.graphics

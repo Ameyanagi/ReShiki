@@ -1,15 +1,31 @@
 # Publication pages
 
 Open **View → Page setup…** or **Export → Page setup…**. Choose A4, A5,
-US Letter, US Legal or a custom size. Width, height and the four margins use
+US Letter, US Legal, a table-of-contents graphic or a custom size. Width, height and the four margins use
 millimetres. Portrait/landscape and a 1–10 by 1–10 page grid are available.
-Apply creates one Undo step; editing the fields alone does not change the drawing.
+Choosing a size or an orientation applies it at once, as one Undo step, and
+leaves the panel open. A paper size changes only the size: margins and grid
+values you typed stay typed until you apply them, and margins too wide for the
+new size go back to their defaults. An orientation turns the width and height
+as typed, or the applied size while either field holds a mistake. A
+table-of-contents size makes one sheet with no margins, centered
+on the drawing and clears typed margins and grid. **Custom** puts the cursor in **Width**. For typed sizes,
+margins and the page grid, press Enter or **Apply page setup**; editing the
+fields alone does not change the drawing. Print and **Export pages as PDF…**
+use the applied pages, as the canvas shows them. Opening Page setup closes the
+View strip.
 
 The canvas shows sheets in the document’s light or dark canvas colors, with margin guides and page numbers. Page colors are also used when exporting or printing.
 Atom selection markers shrink at page-fit zoom to keep small structures readable.
 Page order runs left to right, then down. The page panel offers Previous/Next,
 Fit page and Fit all pages. The ordinary Fit command still fits the artwork.
 Opening a saved paged document fits the first page.
+
+**ACS TOC graphic · 8.25 × 4.45 cm**, **RSC graphical abstract · 8 × 4 cm**
+and **Elsevier graphical abstract · 13 × 5 cm** set a landscape sheet of that
+size without margins: the sheet edge is the final crop. The canvas shows the
+figure at the document's drawing scale inside it, and **Export pages as PDF…**
+writes it at that printed size.
 
 Changing paper size or page count leaves object positions and sizes intact.
 **Center selection on page** moves complete connected molecules, integral groups
@@ -46,8 +62,9 @@ to choose a larger paper or a page grid; printing never silently shrinks them.
 
 Printing uses a frozen copy of the drawing and runs independently of the canvas.
 You can keep editing while the dialog is open. Cancel adds no Undo step and
-changes no drawing or saved page settings. Valid fields still open in Page setup
-are used for that print without applying them to the document. Finish an inline
+changes no drawing or saved page settings. Fields typed in Page setup and not
+yet applied are not used: apply them first. If the drawing does not fit, Page
+setup opens and keeps what you typed there. Finish an inline
 text draft before printing to include the latest text; ⌘P commits that draft.
 Use the dialog's PDF button to save the print result as a PDF.
 

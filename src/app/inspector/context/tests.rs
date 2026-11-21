@@ -103,6 +103,7 @@ fn requested_analysis_ends_on_right_click_target_changes_and_does_not_return() {
     let drawing = app.tab.doc.clone();
     let _ = app.update(Message::Canvas(crate::canvas::Edit::ContextMenu {
         position: iced::Point::new(200., 200.),
+        at: app.tab.doc.atom(atoms[2]).unwrap().position,
         selected: vec![atoms[2]],
         hit: vec![atoms[2]],
     }));
@@ -366,6 +367,7 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
 
     let caption = app.tab.doc.next_id();
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(20., 180.),
         text: "Selected caption".into(),
@@ -399,6 +401,12 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
             "Next graphic",
             "GRAPHIC DEFAULTS",
         ),
+        (Tool::Graphic(GraphicKind::Table), "Next table", "Rows"),
+        (
+            Tool::Graphic(GraphicKind::TlcPlate),
+            "Next TLC plate",
+            "TLC PLATE",
+        ),
         (Tool::Text, "Next text", "TEXT LABELS"),
         (Tool::Ring, "Next ring", "Size"),
         (
@@ -412,6 +420,12 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
         let shown = words.join("\n");
         assert_eq!(words.first().map(String::as_str), Some(heading));
         assert!(shown.contains(control), "{shown}");
+        if matches!(
+            tool,
+            Tool::Graphic(GraphicKind::Table | GraphicKind::TlcPlate)
+        ) {
+            assert!(!shown.contains("GRAPHIC DEFAULTS"), "{shown}");
+        }
         for forbidden in [
             "Identity",
             "Labels & chemistry",
@@ -432,6 +446,8 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
         Tool::Chain(reshiki::chains::ChainMode::Straight),
         Tool::Atom,
         Tool::Arrow,
+        Tool::Graphic(GraphicKind::Table),
+        Tool::Graphic(GraphicKind::TlcPlate),
     ] {
         app.tool = tool;
         let size = iced::Size::new(1280., 820.);
@@ -487,6 +503,22 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
                 if role.takes_value() {
                     assert!(node.value.is_some(), "{id}");
                 }
+            }
+        }
+        if tool == Tool::Graphic(GraphicKind::Table) {
+            for (id, role) in [
+                ("table-rows", Role::TextInput),
+                ("table-columns", Role::TextInput),
+                ("table-grid-apply", Role::Button),
+            ] {
+                let node = collect
+                    .snapshot()
+                    .nodes
+                    .iter()
+                    .find(|node| node.id == id)
+                    .unwrap_or_else(|| panic!("missing {id}"));
+                assert_eq!(node.role, role, "{id}");
+                assert!(node.enabled, "{id}");
             }
         }
     }

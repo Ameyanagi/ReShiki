@@ -12,8 +12,9 @@ use crate::{bond_joins::Joins, document::Document, rear_opacity::Paint, style::D
 use std::borrow::Cow;
 
 /// Occlusion keeps its supplied document; scene/picking resolve display colors.
-pub(crate) enum Resolve {
+pub(crate) enum Resolve<'a> {
     Scene,
+    SceneOn(crate::canvas_theme::FillBackdrop<'a>),
     AsGiven,
 }
 
@@ -29,7 +30,7 @@ pub(crate) struct BondInputs<'d> {
 }
 
 impl<'d> BondInputs<'d> {
-    pub(crate) fn prepare(doc: &'d Document, opacity: &Paint, resolve: Resolve) -> Self {
+    pub(crate) fn prepare(doc: &'d Document, opacity: &Paint, resolve: Resolve<'_>) -> Self {
         let doc = Self::resolve(doc, resolve);
         let drawn = match doc.abbreviation_render_copy() {
             crate::abbreviations::Drawn::Remapped(drawn) => Some(drawn),
@@ -39,24 +40,27 @@ impl<'d> BondInputs<'d> {
     }
 
     /// The caller already prepared abbreviation geometry for this operation.
-    pub(crate) fn from_drawn(doc: &'d Document, opacity: &Paint, resolve: Resolve) -> Self {
+    pub(crate) fn from_drawn(doc: &'d Document, opacity: &Paint, resolve: Resolve<'_>) -> Self {
         Self::new(Self::resolve(doc, resolve), None, opacity)
     }
 
-    fn resolve(doc: &'d Document, resolve: Resolve) -> Cow<'d, Document> {
-        match resolve {
-            Resolve::Scene => {
-                let paint = crate::depth_appearance::Paint::new(doc);
-                let painted = paint.materialize(doc);
-                let canonical = crate::canvas_theme::canonical_document(&painted);
-                let owned = match canonical {
-                    Cow::Owned(doc) => Some(doc),
-                    Cow::Borrowed(_) => None,
-                };
-                owned.map_or(painted, Cow::Owned)
-            }
-            Resolve::AsGiven => Cow::Borrowed(doc),
-        }
+    fn resolve(doc: &'d Document, resolve: Resolve<'_>) -> Cow<'d, Document> {
+        let backdrop = match resolve {
+            Resolve::Scene => None,
+            Resolve::SceneOn(backdrop) => Some(backdrop),
+            Resolve::AsGiven => return Cow::Borrowed(doc),
+        };
+        let paint = crate::depth_appearance::Paint::new(doc);
+        let painted = paint.materialize(doc);
+        let canonical = match backdrop {
+            Some(backdrop) => crate::canvas_theme::canonical_document_on(&painted, backdrop),
+            None => crate::canvas_theme::canonical_document(&painted),
+        };
+        let owned = match canonical {
+            Cow::Owned(doc) => Some(doc),
+            Cow::Borrowed(_) => None,
+        };
+        owned.map_or(painted, Cow::Owned)
     }
 
     fn new(doc: Cow<'d, Document>, drawn: Option<std::rc::Rc<Document>>, opacity: &Paint) -> Self {

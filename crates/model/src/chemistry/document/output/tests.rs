@@ -713,6 +713,7 @@ fn output_keeps_presentation_and_can_be_undone_as_one_edit() -> anyhow::Result<(
         ..Default::default()
     });
     original.annotations.push(Annotation {
+        angle: 0.,
         id: 55,
         position: Point::new(0., 42.),
         text: "試料 A".into(),
@@ -722,6 +723,7 @@ fn output_keeps_presentation_and_can_be_undone_as_one_edit() -> anyhow::Result<(
         id: 56,
         members: vec![a, b, 55],
         integral: false,
+        layout: None,
     });
     let molecule = prepare(&original)?;
     let draft = for_drawing(&molecule, &original)?;

@@ -346,7 +346,10 @@ fn unpaired_electrons(doc: &Document, analysis: &Analysis, selected: Option<&Has
     let singlets = doc
         .atoms
         .iter()
-        .filter(|atom| atom.singlet && selected.is_none_or(|ids| ids.contains(&atom.id)))
+        .filter(|atom| {
+            atom.singlet
+                && selected.map_or(atom.purpose.is_chemical(), |ids| ids.contains(&atom.id))
+        })
         .count() as u32;
     analysis.unpaired_electrons - 2 * singlets
 }
@@ -356,7 +359,7 @@ pub(super) struct State {
     expected_viewport: Option<iced::Size>,
     expanded: HashMap<Section, bool>,
     requested_molecule: Option<context::MolecularTarget>,
-    model_controls: bool,
+    pub(super) model_controls: bool,
     pub(super) figure: FigureFormat,
     figure_menu: bool,
     resolution_menu: bool,
@@ -511,6 +514,8 @@ pub(super) fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Mes
 impl App {
     pub(super) fn show_molecular_properties(&mut self) -> Task<Message> {
         self.enter_inspector_page(InspectorTab::Properties);
+        // A selected cycle folds the section away: unfold it.
+        self.tab.cycle_inputs.purpose_open = true;
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Properties;
         self.tab.inspector_ui.model_controls = false;
@@ -520,22 +525,8 @@ impl App {
         let key = self.property_request_key();
         let properties = if key.atoms.is_empty() {
             Err("Select atoms or bonds to calculate their properties".into())
-        } else if reshiki::models3d::crystal::touches(&self.tab.doc, &key.atoms) {
-            reshiki::models3d::crystal::composition(&self.tab.doc, &key.atoms)
-        } else if reshiki::attachments::present(&self.tab.doc) {
-            if self.tab.selected.is_empty() {
-                reshiki::attachments::composition(&self.tab.doc)
-            } else {
-                reshiki::attachments::composition(&reshiki::editing::selection(
-                    &self.tab.doc,
-                    &self.tab.selected,
-                ))
-            }
         } else {
-            reshiki::chemistry::document::prepare(&self.property_document(&key))
-                .map_err(|error| error.to_string())
-                .and_then(|molecule| molecule.state.graph.atom_facts())
-                .and_then(|atoms| reshiki::chemistry::properties(&atoms))
+            self.molecular_composition(&key.atoms, &self.tab.selected)
         };
         match properties {
             Ok(properties) => {
@@ -557,8 +548,26 @@ impl App {
         .discard()
     }
 
+    pub(super) fn molecular_composition(
+        &self,
+        atoms: &[u64],
+        selected: &[u64],
+    ) -> Result<reshiki::chemistry::Properties, String> {
+        let doc = &self.tab.doc;
+        if reshiki::models3d::crystal::touches(doc, atoms) {
+            reshiki::models3d::crystal::composition(doc, atoms)
+        } else if reshiki::attachments::present(doc) {
+            let part = (!selected.is_empty()).then(|| reshiki::editing::selection(doc, selected));
+            reshiki::attachments::composition(part.as_ref().unwrap_or(doc))
+        } else {
+            let molecule = reshiki::chemistry::document::prepare(&self.property_fragment(atoms))
+                .map_err(|error| error.to_string())?;
+            reshiki::chemistry::properties(&molecule.state.graph.atom_facts()?)
+        }
+    }
+
     /// `[X]•⁺` reads `[X]⁺•` when the drawing style writes the charge first.
-    fn shown_formula(&self, formula: &str) -> String {
+    pub(super) fn shown_formula(&self, formula: &str) -> String {
         match formula.split_once("]•") {
             Some((head, charge)) if self.tab.doc.drawing_style.charge_before_radical => {
                 format!("{head}]{charge}•")
@@ -597,8 +606,18 @@ impl App {
         })
     }
 
+    /// The molecule Properties describes. Atom maps belong to a reaction, so
+    /// its SMILES (shown and copied there) leaves them out.
     pub(super) fn property_document(&self, key: &PropertyKey) -> Document {
-        reshiki::editing::analysis_document(&self.tab.doc, &key.atoms)
+        self.property_fragment(&key.atoms)
+    }
+
+    fn property_fragment(&self, atoms: &[u64]) -> Document {
+        let mut doc = reshiki::editing::analysis_document(&self.tab.doc, atoms);
+        for atom in &mut doc.atoms {
+            atom.map_num = 0;
+        }
+        doc
     }
 
     pub(super) fn property_request_key(&self) -> PropertyKey {
@@ -610,7 +629,15 @@ impl App {
         PropertyKey {
             revision: self.tab.revision,
             epoch: self.tab.file_epoch,
-            atoms: self.tab.doc.atoms.iter().map(|a| a.id).collect(),
+            // Illustration molecules are pictures, not part of the chemistry.
+            atoms: self
+                .tab
+                .doc
+                .atoms
+                .iter()
+                .filter(|a| a.purpose.is_chemical())
+                .map(|a| a.id)
+                .collect(),
         }
     }
 
@@ -1053,6 +1080,66 @@ impl App {
         let model = self.selected_existing_model();
         let molecular = self.properties_molecular_selection(&selected, model.is_some());
         let mut body = column![text(self.properties_selection_summary()).size(14)].spacing(10);
+        if self.can_define_equipment() {
+            body = body.push(super::workspace::command(
+                super::equipment_authoring::DEFINE,
+                Message::EquipmentAuthoring(super::equipment_authoring::Action::Begin),
+            ));
+        }
+        let styled_graphics = self.selected_styled_graphics().next().is_some();
+        if let Some(table) = self.table_card() {
+            body = body.push(card(container(table).padding(12)));
+        }
+        if self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .any(|g| selected.contains(&g.id) && g.tlc.is_some())
+        {
+            body = body.push(card(container(self.tlc_panel()).padding(12)));
+        }
+        let cycle = self.cycle_card();
+        let show_cycle = cycle.is_some();
+        // A selected panel's title and appearance precede what it holds.
+        let panel_card = self.figure_panel_card().filter(|_| styled_graphics);
+        let panel_first = panel_card.is_some();
+        if let Some(panel) = panel_card {
+            body = body.push(card(container(panel).padding(12)));
+            if !show_cycle {
+                body = body.push(card(container(self.graphic_panel()).padding(12)));
+            }
+        }
+        if !show_cycle && let Some(row) = self.purpose_row(&selected) {
+            body = body.push(row);
+        }
+        if let Some(review) = self.cycle_proposal_card() {
+            body = body.push(card(container(review).padding(12)));
+        }
+        if let Some(review) = self.step_review_card() {
+            body = body.push(card(container(review).padding(12)));
+        }
+        if let Some(cycle) = cycle {
+            use super::cycles::{Action, disclosure};
+            let open = self.tab.cycle_inputs.purpose_open;
+            let mut properties = column![disclosure(
+                "cycle-purpose-properties",
+                "Purpose and properties",
+                open,
+                Action::TogglePurpose,
+            )]
+            .spacing(10);
+            if open {
+                properties = properties
+                    .push(self.purpose_row(&selected))
+                    .push(self.molecular_section(opened));
+            }
+            body = body
+                .push(card(container(cycle).padding(12)))
+                .push(properties);
+        } else if let Some(cycle) = self.cycle_part_card() {
+            body = body.push(card(container(cycle).padding(12)));
+        }
         let crystal_first = model.is_some_and(|model| {
             model.cell.is_some() && model.display == reshiki::models3d::Display::TwoD
         });
@@ -1071,14 +1158,16 @@ impl App {
                 .on_press(Message::InspectorAction(Action::ModelControls(true))),
             );
         }
-        if self
-            .tab
-            .doc
-            .graphics
-            .iter()
-            .any(|g| selected.contains(&g.id) && g.picture.is_none())
-        {
+        if let Some(piece) = self.piece_card() {
+            body = body.push(piece);
+        }
+        // Pieces, tables and TLC plates own their paint; a cycle's host style still
+        // styles its arrows, including when it is held by a figure panel.
+        if styled_graphics && (!panel_first || show_cycle) {
             body = body.push(card(container(self.graphic_panel()).padding(12)));
+        }
+        if let Some(layout) = self.layout_card() {
+            body = body.push(card(container(layout).padding(12)));
         }
         if let Some(section) = self.repeating_unit_section() {
             body = body.push(section);
@@ -1106,7 +1195,7 @@ impl App {
         {
             body = body.push(card(container(self.text_panel()).padding(12)));
         }
-        if molecular {
+        if molecular && !show_cycle {
             body = body.push(self.molecular_section(opened));
         }
         body = body.push(self.selection_panel(&selected, opened));
@@ -1501,6 +1590,15 @@ impl App {
                     .style(muted_text),
                 )
                 .into();
+        } else if key.is_none() && self.whole_property_key().atoms.is_empty() {
+            // Only pictures: nothing is calculated, so say so.
+            return body
+                .push(
+                    text("Illustrations have no molecular properties")
+                        .size(12)
+                        .style(muted_text),
+                )
+                .into();
         } else if let Some(Err(error)) = self.property_result(&self.property_request_key()) {
             body = body.push(if let Some(notice) = deferred_generic_properties(error) {
                 text(notice).size(12).style(muted_text)
@@ -1696,6 +1794,65 @@ impl App {
         self.inspector_section_lazy(Section::Transform, "Transform", "", false, || {
             self.numeric_transform_panel()
         })
+    }
+
+    /// Chemistry, Reference or Illustration for the selected molecules and
+    /// arrows; none is marked when they differ.
+    fn purpose_row(&self, selected: &HashSet<u64>) -> Option<Element<'_, Message>> {
+        use reshiki::purpose::Purpose;
+        let doc = &self.tab.doc;
+        let purposes: Vec<_> = doc
+            .atoms
+            .iter()
+            .filter(|a| selected.contains(&a.id))
+            .map(|a| a.purpose)
+            .chain(
+                doc.arrows
+                    .iter()
+                    .filter(|a| selected.contains(&a.id))
+                    .map(|a| a.purpose),
+            )
+            .collect();
+        let first = *purposes.first()?;
+        let current = purposes.iter().all(|p| *p == first).then_some(first);
+        let mut choices = row![].spacing(2);
+        for purpose in Purpose::ALL {
+            let on = current == Some(purpose);
+            choices = choices.push(
+                reshiki::accessibility::button(
+                    format!("purpose-{}", purpose.label().to_lowercase()),
+                    purpose.label(),
+                    text(purpose.label()).size(12).width(Length::Fill).center(),
+                )
+                .checked(on)
+                .padding([4, 6])
+                .width(Length::Fill)
+                .style(super::workspace::segment(on))
+                .on_press(Message::Purpose(purpose)),
+            );
+        }
+        Some(
+            column![
+                row![
+                    text("Purpose").size(12).width(Length::Fill),
+                    text(match current {
+                        Some(Purpose::Chemistry) => "Takes part in reactions",
+                        Some(Purpose::Reference) => "Shown for context",
+                        Some(Purpose::Illustration) => "Picture only",
+                        None => "Mixed",
+                    })
+                    .size(11)
+                    .style(muted_text),
+                ]
+                .align_y(iced::Alignment::Center),
+                container(choices)
+                    .padding(2)
+                    .width(Length::Fill)
+                    .style(super::workspace::segment_track),
+            ]
+            .spacing(5)
+            .into(),
+        )
     }
 
     fn selection_panel(
@@ -2104,6 +2261,22 @@ impl App {
             row![
                 panel_action("Invert selection", Message::InvertSelection),
                 panel_action("Bracket ion", Message::BracketIon),
+            ]
+            .spacing(6),
+            row![
+                panel_action(
+                    "Wrap in panel",
+                    Message::Figure(super::figure_panels::Action::Wrap)
+                ),
+                crate::appearance::pick_list(
+                    super::figure_panels::LASTING_LAYOUTS,
+                    None::<reshiki::layouts::Flow>,
+                    |flow| Message::Figure(super::figure_panels::Action::Arrange(flow)),
+                )
+                .placeholder("Lasting layout…")
+                .text_size(12)
+                .padding(6)
+                .width(Length::Fill),
             ]
             .spacing(6),
             crate::appearance::pick_list(

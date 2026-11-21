@@ -324,6 +324,7 @@ fn replace_preset(
         label_style: old.and_then(|g| g.label_style.clone()),
         label_color_override: old.is_some_and(|g| g.label_color_override),
         highlight,
+        highlight_style: highlight.and(crate::highlights::atom_style_override(document, anchor)),
         alignment: Default::default(),
         // An alias keeps the typed spelling; its reverse is not defined.
         // A typed reverse spelling (MeO) is the group under its label (OMe).
@@ -447,6 +448,7 @@ fn build_replacement_part(
         if atom.id == target {
             atom.text_style = anchor.text_style.clone();
             atom.display.highlight = anchor.display.highlight;
+            atom.display.highlight_style = anchor.display.highlight_style;
             // Reconstruction may kekulize the root, so track the hydrogen
             // itself rather than the aromatic flag.
             if added_hydrogen {

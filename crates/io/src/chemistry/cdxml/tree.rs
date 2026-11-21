@@ -173,6 +173,21 @@ impl Tree {
         self.node_mut(child)?.parent = Some(parent);
         Ok(())
     }
+    /// A new detached element without attributes or children.
+    pub fn create(&mut self, tag: &str) -> Result<usize> {
+        if self.elements.len() >= ARENA_NODES {
+            return Err(Error::Limit);
+        }
+        self.elements.push(Element {
+            tag: tag.into(),
+            attributes: Vec::new(),
+            text: String::new(),
+            tail: String::new(),
+            children: Vec::new(),
+            parent: None,
+        });
+        Ok(self.elements.len() - 1)
+    }
     pub fn clone_subtree(&mut self, source: usize) -> Result<usize> {
         let root = self.clone_element(source)?;
         let mut stack = vec![(source, root)];

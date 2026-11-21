@@ -676,6 +676,7 @@ fn retrosynthesis_drawing_output_matches_reference() -> anyhow::Result<()> {
                     id: 3,
                     members: vec![1, 2],
                     integral: true,
+                    layout: None,
                 });
             }
             let request = Request::molecule("export", doc.clone());
@@ -738,6 +739,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
     }
     let mut text = Document::default();
     text.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::new(-37.125, 98.3),
         text: "試料 α & <H₂O>\nLine two".into(),
@@ -803,10 +805,13 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
                         Point::new(-73.12, 92.3),
                         Point::new(117.8, 215.),
                         GraphicStyle {
+                            flat_caps: false,
                             pattern,
                             fill,
                             stroke: reshiki::palette::Color::Custom([74, 112, 239]),
                             width_pt: 0.83,
+                            effects: Default::default(),
+                            corner_pt: None,
                         },
                         Default::default(),
                         false,
@@ -833,6 +838,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
     ] {
         let mut doc = Document::default();
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: 1,
             position: Point::new(2., 3.),
             text: "試料 H2O\nSecond line".into(),
@@ -1015,6 +1021,7 @@ fn invalid_export_geometry_and_text_return_errors() -> anyhow::Result<()> {
     }
     let mut text = Document::default();
     text.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::default(),
         text: "invalid\0text".into(),

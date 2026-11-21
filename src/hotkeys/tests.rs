@@ -320,6 +320,8 @@ fn bonding_across_a_hydrogen_bond_keeps_reaction_roles_whole() -> Result<(), Str
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        arc: None,
+        purpose: Default::default(),
     });
     assign(&mut doc, arrow, &[donor], Role::Reactant)?;
     let joined = bond_edit(&doc, h, acceptor, BondPreset::Single)?;

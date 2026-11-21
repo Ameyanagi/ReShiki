@@ -66,6 +66,8 @@ enum Completion {
     FilePrepared,
     /// ThemeFile(Loaded | Saved).
     ThemeFile,
+    /// Equipment(Imported | Exported | Linked | LibrariesLoaded).
+    PieceLibrary,
     /// Opened, the legacy file-open receipt.
     Opened,
     /// OfficePrepared.
@@ -115,6 +117,7 @@ impl Completion {
             | Self::Save
             | Self::FilePrepared
             | Self::ThemeFile
+            | Self::PieceLibrary
             | Self::Opened
             | Self::OfficePrepared
             | Self::Updates
@@ -203,6 +206,13 @@ fn admission(completion: Completion) -> Admission {
         | Completion::ThemeFile => Admission {
             atom_text: false,
             preview: false,
+            optimization: true,
+            updates_dialog: true,
+        },
+        // Library files and folders never touch the drawing.
+        Completion::PieceLibrary => Admission {
+            atom_text: true,
+            preview: true,
             optimization: true,
             updates_dialog: true,
         },
@@ -632,7 +642,9 @@ fn completion(message: &Message) -> Option<Completion> {
             use super::import::Action;
             match action {
                 // A chosen file belongs to the drawing it was chosen for.
-                Action::Loaded(..) | Action::Read(..) => Some(Completion::Imports),
+                Action::Loaded(..) | Action::Read(..) | Action::SvgRead(..) => {
+                    Some(Completion::Imports)
+                }
                 Action::InputKind(..)
                 | Action::Clear
                 | Action::Edit(..)
@@ -640,6 +652,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Menu(..)
                 | Action::ExamplesMenu(..)
                 | Action::Choose
+                | Action::ChooseSvg
                 | Action::Files(..)
                 | Action::Hovered(..)
                 | Action::Dropped(..)
@@ -689,6 +702,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::WriteUnknownStereo(_) => None,
             }
         }
+        Message::Equipment(action) if action.completes() => Some(Completion::PieceLibrary),
         Message::ThemeFile(action) => {
             use super::theme_files::Action;
             match action {
@@ -763,6 +777,9 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::CenterRingCharge
         | Message::Abbreviations(..)
         | Message::TemplateNavigate(..)
+        | Message::EquipmentAuthoring(..)
+        | Message::Equipment(..)
+        | Message::Icons(..)
         | Message::InspectorScroll(..)
         | Message::ResetBondDrawing
         | Message::FixedLength(..)
@@ -776,6 +793,10 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::ApplyBondColor
         | Message::Arc(..)
         | Message::Graphics(..)
+        | Message::Tlc(..)
+        | Message::Figure(..)
+        | Message::Cycle(..)
+        | Message::Table(..)
         | Message::RemoveMark(..)
         | Message::RotateMark(..)
         | Message::AtomRadical(..)
@@ -794,6 +815,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::CaptionAction(..)
         | Message::TextStyle(..)
         | Message::FormatChemicalName
+        | Message::AddCallout
         | Message::ToggleProperty(..)
         | Message::ShowMasses(..)
         | Message::NumberCompound(..)
@@ -803,6 +825,8 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::ApplyFontSize
         | Message::ColorScope(..)
         | Message::ClearRingFill
+        | Message::RingEffect(..)
+        | Message::HighlightStyle(..)
         | Message::ClearHighlights
         | Message::TextColor(..)
         | Message::ApplyTextColor
@@ -857,6 +881,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Transform(..)
         | Message::Arrange(..)
         | Message::ReverseBonds
+        | Message::Purpose(..)
         | Message::BondDepth(..)
         | Message::RingSize(..)
         | Message::AromaticRing(..)

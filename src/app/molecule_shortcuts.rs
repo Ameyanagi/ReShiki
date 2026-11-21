@@ -251,6 +251,7 @@ fn reaction_copy(
     let arrow = doc.next_id();
     let y = (lo.y + hi.y) / 2.;
     doc.arrows.push(Arrow {
+        arc: None,
         start_anchor: None,
         end_anchor: None,
         id: arrow,
@@ -261,6 +262,7 @@ fn reaction_copy(
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     let mut new_ids = copied.clone();
     new_ids.push(arrow);

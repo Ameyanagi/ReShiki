@@ -1054,6 +1054,8 @@ fn look(doc: &Document, object: Object, id: u64) -> (Value, Value) {
                     "layer",
                     "phase",
                     "phase_flipped",
+                    // The text a shape holds is compared as text.
+                    "text",
                 ],
             );
             (style, shape)

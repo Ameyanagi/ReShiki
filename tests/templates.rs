@@ -10,7 +10,7 @@ fn template(name: &str) -> &'static Document {
 
 #[test]
 fn biological_template_collections_have_the_documented_coverage() {
-    assert_eq!(LIBRARY.len(), 202);
+    assert_eq!(LIBRARY.len(), 206);
     for (group, count) in [
         ("Amino acids", 21),
         ("Carbohydrates", 50),
@@ -36,7 +36,11 @@ async fn every_thumbnail_is_the_structure_that_gets_placed()
         let empty = Document::default();
         let (doc, ids) = place(&empty, &item.document, Point::new(150.0, 90.0), None, 5.0).unwrap();
         doc.validate().unwrap();
-        assert_eq!(ids.len(), item.document.atoms.len());
+        // Figure layouts also place arrows, panels and text.
+        assert_eq!(
+            ids.iter().filter(|id| doc.atom(**id).is_some()).count(),
+            item.document.atoms.len()
+        );
         assert!(empty.atoms.is_empty());
         let expected = engine
             .execute(Request::import_smiles(&item.smiles))

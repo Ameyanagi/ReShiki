@@ -355,6 +355,41 @@ async fn review_close_returns_focus_atom_label() {
     }
 }
 
+/// Make catalytic cycle's review: Enter makes the cycle as one Undo step and
+/// selects it; Esc leaves the drawing and its selection as they were.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn review_close_returns_focus_make_cycle() {
+    let mut ui = Ui::new().await;
+    for apply in [true, false] {
+        let mut app = drawing_app();
+        let n = app.tab.doc.add_atom("N", Point::new(300., 0.));
+        app.tab.doc.atom_mut(n).unwrap().label_h = 3;
+        app.tab.selected.push(n);
+        app.tab.saved = app.tab.doc.clone();
+        app.sync_keyboard_drawing();
+        let drawing = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let task = app.update(Message::Cycle(crate::app::cycles::Action::Make));
+        ui.run_task(&mut app, task).await;
+        assert!(app.tab.cycle_inputs.proposal.is_some(), "{}", app.status);
+        assert_eq!(app.tab.doc, drawing);
+        close(&mut ui, &mut app, apply).await;
+        assert!(!app.error, "{}", app.status);
+        assert!(app.tab.cycle_inputs.proposal.is_none());
+        if apply {
+            assert!(app.tab.doc.graphics.iter().any(|g| g.cycle.is_some()));
+            assert_eq!(app.tab.history.undo_frames().len(), 1);
+            assert!(selected.iter().all(|id| app.tab.selected.contains(id)));
+        } else {
+            assert_eq!(app.tab.doc, drawing);
+            assert!(!app.tab.history.can_undo());
+            assert_eq!(app.tab.selected, selected);
+        }
+        assert_canvas_delete(&mut ui, &mut app).await;
+    }
+}
+
 async fn open_import(ui: &mut Ui, app: &mut App) {
     ui.key(
         app,
@@ -759,4 +794,61 @@ async fn check_findings_scroll_to_the_last_one_at_the_minimum_window_size() {
             .any(|message| matches!(message, Message::Stereo(crate::app::stereo::Action::Redraw))),
         "{sent:?}"
     );
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn review_close_returns_focus_reaction_preview() {
+    let mut ui = Ui::new().await;
+    let mut app = drawing_app();
+    let arrow = app.tab.doc.next_id();
+    app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+        arrow,
+        Point::new(120., 0.),
+        Point::new(220., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    let product = app.tab.doc.add_atom("C", Point::new(300., 0.));
+    let other = app.tab.doc.add_atom("O", Point::new(340., 0.));
+    app.tab.doc.add_bond(product, other, 1, "plain");
+    app.tab.selected = vec![arrow];
+    let task = app.update(Message::Reaction(crate::app::reactions::Action::Preview));
+    ui.run_task(&mut app, task).await;
+    assert!(app.reaction_preview().is_some(), "{}", app.status);
+    close(&mut ui, &mut app, false).await;
+    assert!(app.reaction_preview().is_none());
+    assert_eq!(app.tab.selected, vec![arrow]);
+    assert_canvas_delete(&mut ui, &mut app).await;
+}
+
+/// The Icons browser: Esc while typing in its search closes it, and the
+/// drawing takes the next key with its selection kept.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn review_close_returns_focus_icons() {
+    use crate::canvas::Tool;
+    let mut ui = Ui::new().await;
+    let mut app = drawing_app();
+    let selected = app.tab.selected.clone();
+    let task = app.update(Message::Tool(Tool::Icons));
+    ui.run_task(&mut app, task).await;
+    assert_eq!(app.inspector_tab, InspectorTab::Icons);
+    let (search, _) = ui.input(&app, "icon-search");
+    ui.click(&mut app, search.center());
+    assert!(ui.input(&app, "icon-search").1);
+    ui.key(
+        &mut app,
+        Key::Character("f".into()),
+        Code::KeyF,
+        Modifiers::empty(),
+        Some("f"),
+    )
+    .await;
+    assert_eq!(app.icons.query, "f");
+    close(&mut ui, &mut app, false).await;
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert_eq!(app.tool, Tool::Select);
+    assert_eq!(app.tab.selected, selected);
+    assert_canvas_delete(&mut ui, &mut app).await;
 }

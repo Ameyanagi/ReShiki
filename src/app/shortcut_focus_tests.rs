@@ -1259,6 +1259,64 @@ async fn assistant_shortcuts_follow_actual_prompt_focus() {
 
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
+async fn zoom_keys_stay_in_a_focused_editor_and_zoom_after_blur() {
+    let mut ui = Ui::new().await;
+    let mut app = assistant_app();
+    let bounds = ui.input(&app, "assistant-input").0;
+    ui.click(&mut app, bounds.center());
+    assert!(ui.input(&app, "assistant-input").1);
+    let zoom = app.tab.camera.zoom;
+    let draft = app.assistant.input_text();
+    let keys = [("=", Code::Equal), ("-", Code::Minus)];
+    for (c, code) in keys {
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Character(c.into()), code, Modifiers::COMMAND, Some(c)),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(status, iced::event::Status::Captured, "{c}: {messages:?}");
+        assert!(
+            !messages.iter().any(|m| matches!(m, Message::Zoom(_))),
+            "{c}: {messages:?}"
+        );
+        apply(&mut app, messages);
+    }
+    assert_eq!(
+        app.tab.camera.zoom, zoom,
+        "the view keeps its zoom while typing"
+    );
+    assert_eq!(app.assistant.input_text(), draft, "no text is typed");
+
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert!(!ui.input(&app, "assistant-input").1);
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Character("=".into()),
+            Code::Equal,
+            Modifiers::COMMAND,
+            Some("="),
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert!(
+        matches!(messages.as_slice(), [Message::Zoom(z)] if *z > 1.),
+        "{messages:?}"
+    );
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
 async fn updates_dialog_captures_keys_before_editors_file_commands_and_canvas() {
     let mut ui = Ui::new().await;
     let mut app = assistant_app();
@@ -2220,27 +2278,50 @@ async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
     let mut ui = Ui::new().await;
     let (mut app, _) = App::new();
     app.tab.busy = false;
+    let atom = app
+        .tab
+        .doc
+        .add_atom("C", reshiki::document::Point::default());
     let _ = app.update(Message::Commands(Action::Open));
-    let _ = app.update(Message::Commands(Action::Query("bond".into())));
+    let _ = app.update(Message::Commands(Action::Query("select al".into())));
     let field = ui.input(&app, "command-palette-search").0;
     ui.click(&mut app, field.center());
     click_running_tasks(&mut ui, &mut app, "command-palette-filter-edit").await;
     assert_eq!(app.commands.filter.map(|c| c.label()), Some("Edit"));
-    for (key, code, text) in [
-        (Key::Character("s".into()), Code::KeyS, Some("s")),
-        (Key::Named(Named::Enter), Code::Enter, None),
-    ] {
-        let (_, messages) = ui.event(
-            &app,
-            press(key, code, Modifiers::empty(), text),
-            mouse::Cursor::Unavailable,
-        );
-        apply(&mut app, messages);
-        if text.is_some() {
-            assert_eq!(app.commands.query, "bonds");
-        }
-    }
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Character("l".into()),
+            Code::KeyL,
+            Modifiers::empty(),
+            Some("l"),
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert_eq!(app.commands.query, "select all");
+    let ranked = app.commands.ranked();
+    assert_eq!(
+        ranked.first().map(|command| command.name.as_str()),
+        Some("Select all")
+    );
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Commands(Action::Submit)]
+    ));
+    apply(&mut app, messages);
     assert!(!app.commands.open, "Enter ran the selected command");
+    assert_eq!(app.tab.selected, vec![atom]);
 }
 
 /// Clicking a row that cannot run keeps the palette open with typing in the
@@ -3232,4 +3313,293 @@ async fn add_name_and_smiles_return_focus_only_after_a_successful_insert() {
         ui.input(&app, "import-name").1,
         "Advanced completion does not request drawing focus"
     );
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activation() {
+    let mut ui = Ui::new().await;
+    let mut app = assistant_app();
+    let bounds = ui.input(&app, "assistant-input").0;
+    ui.click(&mut app, bounds.center());
+    let drawing = app.tab.doc.clone();
+    let draft = app.assistant.input_text();
+    app.updates.open = true;
+    // Main keeps update preferences in Settings; use About's real route.
+    let _ = app.update(Message::Updates(updates::Action::OpenSettings));
+    assert!(!app.updates.open && app.settings.open);
+    ui.focus_control(&mut app, "settings-update-check").await;
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Updates(updates::Action::Automatic(true))]
+    ));
+    // Drop the asynchronous save task: no user preferences are written.
+    apply(&mut app, messages);
+    let snapshot = ui.semantics(&app);
+    assert!(snapshot.duplicate_ids.is_empty());
+    let automatic = snapshot
+        .nodes
+        .iter()
+        .find(|n| n.id == "settings-update-check")
+        .unwrap();
+    assert_eq!(automatic.role, reshiki::accessibility::Role::ToggleButton);
+    assert_eq!(automatic.checked, Some(true));
+    assert!(!automatic.enabled && !automatic.focused);
+    let mut activate = reshiki::accessibility::Activate::<Message>::new("settings-update-check");
+    ui.inspect(
+        &app,
+        &mut iced::advanced::widget::operation::black_box(&mut activate),
+    );
+    assert!(
+        activate.message().is_none(),
+        "Saving disables semantic activation"
+    );
+    ui.key(
+        &mut app,
+        Key::Named(Named::Tab),
+        Code::Tab,
+        Modifiers::empty(),
+        None,
+    )
+    .await;
+    assert!(
+        !ui.focused(&app)
+            .iter()
+            .any(|id| id == "settings-update-check")
+    );
+    let _ = app.update(Message::Updates(updates::Action::Saved(Ok(()))));
+    ui.focus_control(&mut app, "settings-update-check").await;
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Space),
+            Code::Space,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(messages.is_empty(), "Space activates on release");
+    let (status, messages) = ui.event(
+        &app,
+        Event::Keyboard(keyboard::Event::KeyReleased {
+            key: Key::Named(Named::Space),
+            modified_key: Key::Named(Named::Space),
+            physical_key: Physical::Code(Code::Space),
+            location: keyboard::Location::Standard,
+            modifiers: Modifiers::empty(),
+        }),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Updates(updates::Action::Automatic(false))]
+    ));
+    apply(&mut app, messages);
+    let _ = app.update(Message::Updates(updates::Action::Saved(Ok(()))));
+    let point = ui.bounds(&app, "settings-update-check").center();
+    let mut click_messages = vec![];
+    for event in [
+        mouse::Event::CursorMoved { position: point },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::ButtonReleased(mouse::Button::Left),
+    ] {
+        let (_, messages) = ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(point));
+        click_messages.extend(messages);
+    }
+    assert!(
+        matches!(
+            click_messages.as_slice(),
+            [Message::Updates(updates::Action::Automatic(true))]
+        ),
+        "One pointer click publishes one update preference action: {click_messages:?}"
+    );
+    apply(&mut app, click_messages);
+    let _ = app.update(Message::Updates(updates::Action::Saved(Ok(()))));
+    assert!(!app.updates.saving());
+    // Settings captures Escape before the underlying Assistant page sees it.
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Settings(super::settings_page::Action::Close)]
+    ));
+    apply(&mut app, messages);
+    assert!(!app.settings.open);
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.assistant.input_text(), draft);
+    assert!(!app.tab.history.can_undo());
+}
+
+/// One physical Backspace deletes one character and creates one draft Undo.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn caption_backspace_and_undo_keep_graphemes_whole() {
+    use iced::widget::text_editor::{Action, Edit};
+
+    let mut ui = Ui::new().await;
+    let primary = if cfg!(target_os = "macos") {
+        Modifiers::LOGO
+    } else {
+        Modifiers::CTRL
+    };
+    for (text, remaining, select_all) in [
+        ("Mix 🇯🇵", "Mix ", false),
+        ("Mix 👩\u{200D}🔬", "Mix ", false),
+        ("Mix x", "Mix ", false),
+        ("Mix 🇯🇵", "", true),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let task = app.update(Message::InlineText(super::inline_text::Action::Begin(
+            None,
+            reshiki::document::Point::default(),
+        )));
+        ui.run_task(&mut app, task).await;
+        let _ = app.update(Message::CaptionAction(Action::Edit(Edit::Paste(
+            text.to_owned().into(),
+        ))));
+        if select_all {
+            ui.key(
+                &mut app,
+                Key::Character("a".into()),
+                Code::KeyA,
+                primary,
+                None,
+            )
+            .await;
+        }
+        ui.key(
+            &mut app,
+            Key::Named(Named::Backspace),
+            Code::Backspace,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(app.tab.caption, remaining, "Backspace in {text:?}");
+        ui.key(
+            &mut app,
+            Key::Character("z".into()),
+            Code::KeyZ,
+            primary,
+            None,
+        )
+        .await;
+        assert_eq!(app.tab.caption, text, "one Undo in {text:?}");
+        ui.key(
+            &mut app,
+            Key::Character("z".into()),
+            Code::KeyZ,
+            primary | Modifiers::SHIFT,
+            None,
+        )
+        .await;
+        assert_eq!(app.tab.caption, remaining, "one Redo in {text:?}");
+        assert!(ui.input(&app, "inline-caption").1);
+        assert!(app.tab.doc.annotations.is_empty(), "the edit stays a draft");
+    }
+}
+
+/// The symbol picker inserts into the open caption and hands typing back to
+/// it; Escape closes only the picker, and typed shortcuts still expand.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn symbol_picker_returns_typing_to_the_caption() {
+    use super::color_popover::Menu;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let task = app.update(Message::InlineText(super::inline_text::Action::Begin(
+        None,
+        reshiki::document::Point::default(),
+    )));
+    ui.run_task(&mut app, task).await;
+    assert!(ui.input(&app, "inline-caption").1);
+    click_running_tasks(&mut ui, &mut app, "text-style-symbols").await;
+    assert!(matches!(app.style_menu, Some(Menu::Symbols { .. })));
+    assert!(
+        ui.input(&app, "inline-caption").1,
+        "opening keeps the caption focused"
+    );
+    click_running_tasks(&mut ui, &mut app, "symbol-arrows-equilibrium").await;
+    assert_eq!(app.tab.caption, "⇌");
+    assert!(
+        ui.input(&app, "inline-caption").1,
+        "typing goes to the caption"
+    );
+    let escape = || (Key::Named(Named::Escape), Code::Escape);
+    let (key, code) = escape();
+    ui.key(&mut app, key, code, Modifiers::empty(), None).await;
+    assert!(app.style_menu.is_none());
+    assert!(
+        app.tab.inline_text.is_some(),
+        "Escape closes only the picker"
+    );
+    assert!(ui.input(&app, "inline-caption").1);
+    for (c, code) in [('-', Code::Minus), ('>', Code::Period)] {
+        let typed = c.to_string();
+        ui.key(
+            &mut app,
+            Key::Character(typed.as_str().into()),
+            code,
+            Modifiers::empty(),
+            Some(&typed),
+        )
+        .await;
+    }
+    assert_eq!(app.tab.caption, "⇌→");
+    let (key, code) = escape();
+    ui.key(&mut app, key, code, Modifiers::empty(), None).await;
+    assert!(
+        app.tab.inline_text.is_none(),
+        "a second Escape cancels the draft"
+    );
+    assert!(app.tab.doc.annotations.is_empty());
+}
+
+/// A symbol that starts a caption closes the picker on the click's release;
+/// that release must not reach the drawing below.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn symbol_starting_a_caption_leaves_the_drawing_alone() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    click_running_tasks(&mut ui, &mut app, "text-style-symbols").await;
+    click_running_tasks(&mut ui, &mut app, "symbol-conditions-light").await;
+    assert!(app.style_menu.is_none());
+    assert_eq!(app.tab.caption, "hν");
+    assert!(
+        ui.input(&app, "inline-caption").1,
+        "typing goes to the caption"
+    );
+    // A release on the drawing would have clicked it: applying the draft and
+    // selecting nothing. The draft stays open and the drawing unchanged.
+    assert!(app.tab.inline_text.is_some());
+    assert!(app.tab.doc.annotations.is_empty() && app.tab.selected.is_empty());
 }

@@ -9,7 +9,13 @@ impl App {
             message,
             Message::Inspector(_)
                 | Message::InsertTemplate(_)
-                | Message::Tool(Tool::Arrow | Tool::Graphic(_) | Tool::RingPreset(_))
+                | Message::Tool(
+                    Tool::Arrow
+                        | Tool::Graphic(_)
+                        | Tool::RingPreset(_)
+                        | Tool::Equipment
+                        | Tool::Icons
+                )
         ) || (matches!(message, Message::Tool(Tool::EditPoints))
             && !(self.inspector_open && self.inspector_tab == InspectorTab::Properties))
             || (self.inspector_tab != InspectorTab::Templates
@@ -70,6 +76,11 @@ impl App {
             Message::Reaction(action) => return Some(self.reaction_action(action)),
             Message::Mapping(action) => return Some(self.mapping_action(action)),
             Message::Templates(action) => return Some(self.template_message(action)),
+            Message::Equipment(action) => return Some(self.equipment_action(action)),
+            Message::EquipmentAuthoring(action) => {
+                return Some(self.equipment_authoring_action(action));
+            }
+            Message::Icons(action) => return Some(self.icon_action(action)),
             Message::ResetBondDrawing => self.reset_bond_drawing(),
             Message::FixedLength(on) => self.tab.bond_drawing.fixed_length = on,
             Message::FixedAngles(on) => self.tab.bond_drawing.fixed_angles = on,
@@ -90,6 +101,16 @@ impl App {
             Message::InvertSelection => self.invert_selection(),
             Message::Arc(action) => self.update_arc(action),
             Message::Graphics(action) => self.graphic_action(action),
+            Message::Tlc(action) => self.tlc_action(action),
+            Message::Figure(action) => {
+                let wrap = matches!(action, super::figure_panels::Action::Wrap);
+                self.figure_action(action);
+                if wrap && !self.error {
+                    return Some(self.reveal_panel_card());
+                }
+            }
+            Message::Cycle(action) => return Some(self.cycle_action(action)),
+            Message::Table(action) => self.table_action(action),
             Message::RotateMark(id, index) => self.rotate_mark(id, index),
             Message::RemoveMark(id, index) => self.remove_mark(id, index),
             Message::AtomRadical(value) => self.set_radical(value),
@@ -115,6 +136,7 @@ impl App {
             Message::CaptionAction(action) => self.caption_action(action),
             Message::TextStyle(change) => self.apply_text_style(change),
             Message::FormatChemicalName => self.format_chemical_name(),
+            Message::AddCallout => return Some(self.add_callout()),
             Message::ToggleProperty(atoms, property) => self.toggle_property(&atoms, property),
             Message::ShowMasses(atoms) => self.show_masses(&atoms),
             Message::NumberCompound(atoms) => self.number_compound(&atoms),
@@ -125,6 +147,8 @@ impl App {
             Message::FontSize(value) => self.tab.font_size_input = value,
             Message::ApplyFontSize => self.apply_font_size_input(),
             Message::ClearRingFill => self.apply_ring_color(None),
+            Message::RingEffect(effect) => self.apply_ring_effect(effect),
+            Message::HighlightStyle(style) => self.apply_highlight_style(style),
             Message::ClearHighlights => self.apply_highlight_color(None),
             Message::ColorScope(scope) => self.set_color_scope(scope),
             Message::TextColor(value) => self.set_text_color_input(value),
@@ -170,6 +194,7 @@ impl App {
             Message::Arrange(arrange) => self.arrange_selection(arrange),
             Message::BondDepth(front) => self.layer_objects(front, false, true),
             Message::ReverseBonds => self.reverse_selected_bonds(),
+            Message::Purpose(purpose) => self.set_purpose(purpose),
             Message::MakeIonic => self.make_ionic(),
             Message::CenterRingCharge => self.center_ring_charge(),
             Message::InsertTemplate(index) => self.insert_template(index),

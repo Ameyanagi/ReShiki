@@ -10,10 +10,7 @@ impl App {
         let mut charge_kept = None;
         match self.tool {
             Tool::Atom if self.element == R_GROUP => {
-                let id = self
-                    .tab
-                    .doc
-                    .nearest(p, 10.0 / self.tab.camera.zoom)
+                let id = canvas::nearest_atom(&self.tab.doc, p, 10.0 / self.tab.camera.zoom)
                     .unwrap_or_else(|| self.tab.doc.add_atom("*", p));
                 if !self.label_r_group(id) {
                     self.tab.doc = before;
@@ -22,7 +19,9 @@ impl App {
                 self.tab.selected = vec![id];
             }
             Tool::Atom => {
-                if let Some(id) = self.tab.doc.nearest(p, 10.0 / self.tab.camera.zoom) {
+                if let Some(id) =
+                    canvas::nearest_atom(&self.tab.doc, p, 10.0 / self.tab.camera.zoom)
+                {
                     self.tab.doc.invalidate_chemistry(&[id]);
                     let crystal = self
                         .tab
@@ -73,6 +72,7 @@ impl App {
                     let mut format = self.tab.caption_format.clone();
                     reshiki::typography::normalize_subscript_digits(&mut text, &mut format);
                     self.tab.doc.annotations.push(Annotation {
+                        angle: 0.,
                         id,
                         position: p,
                         text,
@@ -125,22 +125,9 @@ impl App {
         }
     }
     fn click_bond_tool(&mut self, p: Point, before: Document) {
-        let atom = self.tab.doc.nearest(p, 10.0 / self.tab.camera.zoom);
-        let bond = self
-            .tab
-            .doc
-            .bonds
-            .iter()
-            .find(|b| {
-                self.tab
-                    .doc
-                    .atom(b.a)
-                    .zip(self.tab.doc.atom(b.b))
-                    .is_some_and(|(a, z)| {
-                        canvas::distance_to_segment(p, a.position, z.position)
-                            < 7.0 / self.tab.camera.zoom
-                    })
-            })
+        let atom = canvas::nearest_atom(&self.tab.doc, p, 10.0 / self.tab.camera.zoom);
+        let bond = canvas::nearest_bond(&self.tab.doc, p, 7.0 / self.tab.camera.zoom)
+            .and_then(|index| self.tab.doc.bonds.get(index))
             .cloned();
         if let Some(b) = bond.filter(|_| atom.is_none()) {
             let shift_double = self.tool.bond_preset().is_some_and(|preset| {
@@ -276,10 +263,19 @@ impl App {
             let end = editing::bond_extension(&self.tab.doc, start, Some(a), order);
             let ratio = self.tab.bond_drawing.length / reshiki::style::DEFAULT.bond_length_world;
             let end = start.offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
-            let b = self.tab.doc.add_atom("C", end);
-            self.tab.doc.add_bond(a, b, order, display);
-            self.apply_current_bond_preset(a, b);
-            self.tab.selected = vec![b];
+            match editing::add_bonded_atom(&self.tab.doc, a, end, None, "C") {
+                Ok((doc, b)) => {
+                    self.tab.doc = doc;
+                    self.tab.doc.add_bond(a, b, order, display);
+                    self.apply_current_bond_preset(a, b);
+                    self.tab.selected = vec![b];
+                }
+                Err(error) => {
+                    self.status = error;
+                    self.error = true;
+                    return false;
+                }
+            }
         }
         true
     }

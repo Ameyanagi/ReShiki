@@ -159,6 +159,18 @@ impl Session {
             .ok_or_else(|| CliError::Failed("internal error: import returned no document".into()))
     }
 
+    /// Stores an in-memory document and returns its handle for tool calls.
+    pub(crate) fn store_document(&self, doc: crate::document::Document) -> Result<Value, CliError> {
+        self.host
+            .store()
+            .create(&self.principal, doc)
+            .map(|created| json!(created.handle))
+            .map_err(|error| CliError::Tool {
+                code: error.kind.code().into(),
+                message: error.message,
+            })
+    }
+
     /// Reads the stored document using the same handle and access rules as ops.
     pub(crate) fn document(
         &self,

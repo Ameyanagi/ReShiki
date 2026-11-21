@@ -235,3 +235,113 @@ fn mechanism_attachment_92_cdxml_and_cdx_preserve_curve_without_editing_links() 
         assert!(arrow.start_anchor.is_none() && arrow.end_anchor.is_none());
     }
 }
+
+fn read_drawing(xml: &str) -> Arrow {
+    let source = presentation::parse(xml)
+        .unwrap()
+        .root_element()
+        .descendants()
+        .filter(|node| node.is_element())
+        .position(|node| node.has_tag_name("arrow"))
+        .unwrap();
+    let reader = ArrowReader::new(xml).unwrap();
+    let colors = [NativeColor([0.; 3]); 4];
+    reader
+        .read_drawing(source, 1., &colors, 42)
+        .unwrap()
+        .into_document()
+        .unwrap()
+}
+
+#[test]
+fn chemdraw_block_arrows_read_as_bodies_and_the_reference_reader_still_refuses_them() {
+    // The Hollow FillType=Solid and FillType=Shaded cells of ChemDraw's own p5 probe.
+    for (fill, body) in [
+        ("Solid", Body::Block),
+        ("Shaded", Body::Gradient),
+        ("None", Body::Hollow),
+    ] {
+        let xml = format!(
+            r#"<CDXML LineWidth="1"><page><arrow id="227" FillType="{fill}" ArrowheadHead="Full" ArrowheadType="Hollow" HeadSize="2000" ArrowheadCenterSize="1500" ArrowheadWidth="600" ArrowShaftSpacing="800" Head3D="105 307 0" Tail3D="30 307 0"/></page></CDXML>"#
+        );
+        let arrow = read_drawing(&xml);
+        let style = arrow.appearance();
+        assert_eq!((arrow.kind.as_str(), style.body), ("forward", body));
+        assert_eq!(style.gap_pt, 8.);
+        assert_eq!(style.head_width_pt, 14.);
+        assert_eq!(style.head_length_pt, 20.);
+        assert_eq!(style.head_notch, 0.25);
+        if fill != "None" {
+            let source = 2;
+            assert!(
+                ArrowReader::new(&xml)
+                    .unwrap()
+                    .read(source, 1., &[NativeColor([0.; 3]); 4], 1)
+                    .is_err()
+            );
+        }
+    }
+}
+
+#[test]
+fn chemdraw_arc_arrows_read_as_arcs_running_the_same_way() {
+    // ChemDraw's 90°, 180° and 270° arc arrows from its p5 probe render.
+    for (angle, head, tail, center, middle) in [
+        (
+            "90",
+            "375.61 301.39",
+            "375.61 322.61",
+            "365 312",
+            (380., 312.),
+        ),
+        ("180", "480 312", "450 312", "465 312", (465., 327.)),
+        ("270", "75.61 364.61", "75.61 343.39", "65 354", (50., 354.)),
+    ] {
+        let (cx, cy) = {
+            let mut it = center.split(' ').map(|v| v.parse::<f32>().unwrap());
+            (it.next().unwrap(), it.next().unwrap())
+        };
+        let xml = format!(
+            r#"<CDXML><page><arrow id="230" FillType="None" ArrowheadHead="Full" ArrowheadType="Solid" AngularSize="{angle}" Head3D="{head} 0" Tail3D="{tail} 0" Center3D="{center} 0" MajorAxisEnd3D="{} {cy} 0" MinorAxisEnd3D="{cx} {} 0"/></page></CDXML>"#,
+            cx + 15.,
+            cy + 15.,
+        );
+        let arrow = read_drawing(&xml);
+        let sweep: f32 = angle.parse().unwrap();
+        // ChemDraw rounds the ends to hundredths of a point.
+        assert!(
+            (arrow.arc.unwrap() + sweep).abs() < 0.2,
+            "{angle}: {:?}",
+            arrow.arc
+        );
+        let p = arrow.point(0.5);
+        assert!(
+            p.distance(Point::new(middle.0, middle.1)) < 0.05,
+            "{angle}: {p:?}"
+        );
+        arrow.validate().unwrap();
+    }
+}
+
+#[test]
+fn an_elliptical_chemdraw_arc_keeps_its_shape_as_a_curve() {
+    let xml = r#"<CDXML><page><arrow id="1" ArrowheadHead="Full" AngularSize="180" Tail3D="20 0 0" Head3D="-20 0 0" Center3D="0 0 0" MajorAxisEnd3D="20 0 0" MinorAxisEnd3D="0 10 0"/></page></CDXML>"#;
+    let arrow = read_drawing(xml);
+    assert!(arrow.arc.is_none());
+    assert!(arrow.point(0.5).distance(Point::new(0., -10.)) < 0.05);
+    assert_eq!(arrow.end, Point::new(-20., 0.));
+    arrow.validate().unwrap();
+}
+
+#[test]
+fn a_negative_chemdraw_arc_size_runs_clockwise_whatever_the_minor_axis() {
+    // ChemDraw draws both over the top: the sign of AngularSize sets the way.
+    for minor in ["100 120", "100 80"] {
+        let xml = format!(
+            r#"<CDXML><page><arrow id="2" ArrowheadHead="Full" AngularSize="-180" Tail3D="80 100 0" Head3D="120 100 0" Center3D="100 100 0" MajorAxisEnd3D="120 100 0" MinorAxisEnd3D="{minor} 0"/></page></CDXML>"#
+        );
+        let arrow = read_drawing(&xml);
+        assert_eq!(arrow.arc, Some(180.), "{minor}");
+        assert!(arrow.point(0.5).distance(Point::new(100., 80.)) < 0.05);
+    }
+}

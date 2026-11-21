@@ -141,6 +141,8 @@ impl App {
             InspectorTab::Properties => "Properties",
             InspectorTab::Predict => "Predict",
             InspectorTab::Templates => "Add",
+            InspectorTab::Equipment => "Equipment",
+            InspectorTab::Icons => "Icons",
             InspectorTab::Import => "Import",
             InspectorTab::Export => "Export",
             InspectorTab::Names => "Chemical names",
@@ -158,3 +160,36 @@ impl App {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod drawing_routes {
+    use super::*;
+    use crate::app::inspector;
+
+    #[test]
+    fn drawing_sidebars_remain_exact_page_return_targets() {
+        for (previous, label) in [
+            (InspectorTab::Equipment, "Equipment"),
+            (InspectorTab::Icons, "Icons"),
+        ] {
+            for page in [InspectorTab::Names, InspectorTab::Assistant] {
+                let (mut app, _) = App::new();
+                app.tab.busy = false;
+                let atom = app
+                    .tab
+                    .doc
+                    .add_atom("C", reshiki::document::Point::default());
+                let _ = app.update(Message::Inspector(previous));
+                let _ = app.update(Message::Inspector(page));
+                assert_eq!(app.inspector_page_back_label(), Some(label));
+                let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+                assert_eq!(app.inspector_tab, previous);
+                let _ = app.update(Message::Inspector(page));
+                let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![atom])));
+                assert_eq!(app.inspector_tab, InspectorTab::Properties);
+                assert_eq!(app.tab.selected, [atom]);
+                assert!(!app.tab.history.can_undo());
+            }
+        }
+    }
+}

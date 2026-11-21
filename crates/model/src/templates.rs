@@ -1,6 +1,7 @@
 //! Built-in molecules and attachment geometry, shared by preview and placement.
 mod aromatic;
 mod coordination;
+mod layouts;
 mod nucleosides;
 #[cfg(test)]
 mod placement_parity_tests;
@@ -9,6 +10,7 @@ mod steroids;
 use crate::document::{Atom, Document, Point};
 use crate::editing;
 pub(crate) use aromatic::show_circles;
+pub use layouts::GROUP as FIGURE_LAYOUTS;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
@@ -36,6 +38,36 @@ pub struct Template {
     pub anchor: Anchor,
 }
 impl Template {
+    /// A built-in figure layout: placed free, once, never attached to an
+    /// atom. A saved template keeps its own placement in any collection.
+    pub fn is_layout(&self) -> bool {
+        self.group == layouts::GROUP && self.id.starts_with("builtin:")
+    }
+    /// Places the template centered on `point`, joined to nothing.
+    pub fn place_layout(
+        &self,
+        doc: &Document,
+        point: Point,
+    ) -> Result<(Document, Vec<u64>), &'static str> {
+        check_connect_inputs(doc, &self.document, point, None, 1., Anchor::Auto)?;
+        place_free(
+            doc,
+            &self.document,
+            point,
+            None,
+            0.,
+            Anchor::Auto,
+            self.free_scale(doc),
+        )
+    }
+    /// Built-in free placements follow the journal size; saved artwork keeps its size.
+    fn free_scale(&self, doc: &Document) -> f32 {
+        if self.id.starts_with("builtin:") {
+            doc.drawing_style.bond_length_pt / self.document.drawing_style.bond_length_pt
+        } else {
+            1.
+        }
+    }
     /// Built-in free placements follow the journal size; saved artwork keeps its size.
     pub fn place(
         &self,
@@ -46,14 +78,9 @@ impl Template {
         anchor: Anchor,
         mode: Connection,
     ) -> Result<(Document, Vec<u64>), &'static str> {
-        let free_scale = if self.id.starts_with("builtin:") {
-            doc.drawing_style.bond_length_pt / self.document.drawing_style.bond_length_pt
-        } else {
-            1.
-        };
         place_with_mode_scaled(
             doc,
-            (&self.document, free_scale),
+            (&self.document, self.free_scale(doc)),
             point,
             direction,
             radius,
@@ -337,6 +364,9 @@ fn best_connection(
                 continue;
             };
             result.add_bond(id, added, 1, "plain");
+            if crate::graphics::table::inherit_attachment(doc, &mut result, &ids, &[id]).is_err() {
+                continue;
+            }
             result.reconcile_molecule_groups();
             if crate::reactions::reconcile(&mut result).is_ok() && result.validate().is_ok() {
                 best = Some((score, result, ids));
@@ -461,6 +491,7 @@ static BUNDLED: LazyLock<Result<Vec<Template>, String>> = LazyLock::new(|| {
     templates.extend(nucleosides::templates(&templates)?);
     templates.extend(steroids::templates()?);
     templates.extend(coordination::templates()?);
+    templates.extend(layouts::templates()?);
     Ok(templates)
 });
 pub fn builtin_error() -> Option<&'static str> {
@@ -933,6 +964,7 @@ impl Attachment<'_> {
             abbreviations,
             atom_labels: _,
             ring_fills,
+            highlight_style: _,
             depth_appearance,
             version: _,
             atoms,
@@ -951,6 +983,9 @@ impl Attachment<'_> {
             // A removed atom leaves its model when the edit is reconciled.
             models: _,
             recent_colors: _,
+            piece_definitions: _,
+            on_other_canvas: _,
+            seats: _,
         } = &mut result;
         atoms.retain(|a| !mapping.contains_key(&a.id));
         // A multi-edge fusion may map both endpoints of a genuinely new
@@ -1063,6 +1098,9 @@ impl Attachment<'_> {
             crate::compound_numbers::reconcile(&mut result, &before);
         }
         result.reconcile_molecule_groups();
+        let inserted: Vec<_> = ids.iter().copied().map(mapped).collect();
+        let targets: Vec<_> = shared.values().copied().collect();
+        crate::graphics::table::inherit_attachment(doc, &mut result, &inserted, &targets).ok()?;
         if crate::reactions::reconcile(&mut result).is_err() || result.validate().is_err() {
             return None;
         }

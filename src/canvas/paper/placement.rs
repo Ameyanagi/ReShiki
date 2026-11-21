@@ -2,7 +2,9 @@
 
 use super::Draft;
 use crate::canvas::hit::{bond_target_with, bond_target_with_text, plane_endpoint};
-use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, delocalized_ring_size, layered, rgb};
+use crate::canvas::{
+    Gesture, MoleculeCanvas, State, Tool, World, delocalized_ring_size, layered, rgb,
+};
 use iced::widget::canvas::{Path, Stroke};
 use iced::{Color, Point, Rectangle};
 use reshiki::chains;
@@ -258,8 +260,10 @@ impl MoleculeCanvas<'_> {
                 })
                 .or_else(|| {
                     self.template.map(|(template, source_anchor)| {
-                        template
-                            .place(
+                        if template.is_layout() {
+                            template.place_layout(self.doc, anchor)
+                        } else {
+                            template.place(
                                 self.doc,
                                 anchor,
                                 direction,
@@ -267,7 +271,8 @@ impl MoleculeCanvas<'_> {
                                 source_anchor,
                                 self.template_connection,
                             )
-                            .map_err(str::to_owned)
+                        }
+                        .map_err(str::to_owned)
                     })
                 });
             match placement {
@@ -275,6 +280,8 @@ impl MoleculeCanvas<'_> {
                     *template_notice = Some((
                         if self.joining.is_some() {
                             "Move & attach preview · Click or release to join · Esc cancels".into()
+                        } else if self.template.is_some_and(|(t, _)| t.is_layout()) {
+                            "Preview · Click to place the layout · Esc cancels".into()
                         } else {
                             format!(
                                 "Preview · {} new objects ({} atoms) · Shift/Ctrl drag snaps 15° · Esc cancels",
@@ -328,7 +335,7 @@ impl MoleculeCanvas<'_> {
                     for graphic in &mut preview.to_mut().graphics {
                         if !existing.contains(&graphic.id) {
                             graphic.style.stroke = tint;
-                            if graphic.style.fill.is_some() {
+                            if graphic.style.fill.is_some() && !graphic.is_icon() {
                                 graphic.style.fill = Some(Paint::Palette(Hue::Teal, Row::Tint));
                             }
                         }
@@ -346,6 +353,119 @@ impl MoleculeCanvas<'_> {
                 }
                 None => {}
             }
+        }
+    }
+
+    /// The armed equipment piece follows the pointer, placed as a click would.
+    pub(super) fn preview_piece(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
+        use reshiki::equipment::placed;
+        let (Tool::Equipment, Some(definition), Some(p)) = (
+            self.tool,
+            self.piece,
+            state.cursor.filter(|p| bounds.contains(*p)),
+        ) else {
+            return;
+        };
+        let at = self
+            .camera
+            .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+        if definition.tube.is_some() {
+            return self.preview_hose(draft, state, definition, at);
+        }
+        let doc = draft.preview.to_mut();
+        let scale = placed::world_per_mm(doc, placed::DEFAULT_PT_PER_MM);
+        let id = doc.next_id();
+        let mut ghost = placed::graphic(id, definition.clone(), at, scale);
+        // Half strength, so the ghost never passes for a placed piece.
+        ghost.style.effects.opacity = Some(0.5);
+        doc.graphics.push(ghost);
+        let reach = self.camera.world_len(reshiki::equipment::solve::REACH_PX);
+        // Snapped, the ghost shows the seated pose a click makes.
+        if let Some(snap) = reshiki::equipment::solve::snap(doc, &[id], reach, true) {
+            if let Some(adapter) = (doc.graphics.iter_mut()).find(|g| Some(g.id) == snap.added) {
+                adapter.style.effects.opacity = Some(0.5);
+            }
+            draft.seat_hint = Some(super::SeatHint::new(doc, &snap));
+        }
+        draft.template_notice = Some((
+            format!(
+                "Click to place the {} · Esc cancels",
+                crate::app::equipment::noun(definition)
+            ),
+            true,
+        ));
+    }
+
+    /// The armed icon follows the pointer at half strength.
+    pub(super) fn preview_icon(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
+        let (Tool::Icons, Some(icon), Some(p)) = (
+            self.tool,
+            &self.icon,
+            state.cursor.filter(|p| bounds.contains(*p)),
+        ) else {
+            return;
+        };
+        let at = self
+            .camera
+            .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+        let doc = draft.preview.to_mut();
+        let mut ghost = icon.clone();
+        ghost.id = doc.next_id();
+        ghost.origin = at;
+        ghost.style.effects.opacity = Some(0.5);
+        doc.graphics.push(ghost);
+    }
+
+    /// The armed hose as release lays it: from the press to the pointer, or
+    /// hung from the pointer before the press, with a ring on a barb it takes.
+    fn preview_hose(
+        &self,
+        draft: &mut Draft<'_>,
+        state: &State,
+        definition: &std::sync::Arc<reshiki::equipment::format::Definition>,
+        at: World,
+    ) {
+        use reshiki::equipment::solve::{REACH_PX, hose};
+        let slop = self.camera.world_len(crate::canvas::pick::DRAG_SLOP_PX);
+        let (from, to) = match &state.gesture {
+            Some(Gesture::Hose { start }) if start.distance(at) >= slop => (*start, at),
+            Some(Gesture::Hose { start }) => (*start, *start),
+            _ => (at, at),
+        };
+        let doc = draft.preview.to_mut();
+        let reach = f64::from(self.camera.world_len(REACH_PX));
+        let xy = |p: World| [f64::from(p.x), f64::from(p.y)];
+        let (id, barbs) = hose::place_hose(doc, definition.clone(), xy(from), xy(to), reach);
+        if let Some(g) = doc.graphics.iter_mut().find(|g| g.id == id) {
+            g.style.effects.opacity = Some(0.5);
+        }
+        if let Some(b) = barbs.last() {
+            draft.seat_hint = Some(super::SeatHint {
+                at: World::new(b.point[0] as f32, b.point[1] as f32),
+                radius: (b.diameter() / 2.) as f32,
+                fits: true,
+                text: format!(
+                    "Push onto the {}",
+                    crate::app::equipment::joint_name(doc, &b.at)
+                ),
+            });
+        }
+        draft.template_notice = Some((
+            "Drag from one hose barb to another, or click a barb to hang a hose · Esc cancels"
+                .into(),
+            true,
+        ));
+    }
+
+    /// Keyboard Connect shows the offered joint seated, as Return makes it.
+    pub(super) fn preview_connect(&self, draft: &mut Draft<'_>, state: &State) {
+        // A pointer gesture works on the drawing as it is; Connect waits.
+        let (Some((ids, target, moving)), None) = (self.connect, &state.gesture) else {
+            return;
+        };
+        let doc = draft.preview.to_mut();
+        if let Some(snap) = reshiki::equipment::solve::connect(doc, ids, target, moving) {
+            draft.seat_hint = Some(super::SeatHint::new(doc, &snap));
         }
     }
 

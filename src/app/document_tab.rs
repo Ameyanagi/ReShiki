@@ -56,6 +56,8 @@ pub(super) struct DocumentTab {
     pub(super) selected: Vec<u64>,
     pub(super) hover: Option<(Point, u64)>,
     pub(super) keyboard_drawing: reshiki::keyboard_drawing::State,
+    /// Keyboard Connect for equipment, in progress in this drawing.
+    pub(super) connect: Option<super::equipment::Connect>,
     pub(super) camera: Camera,
     pub(super) fit_to_view: bool,
     pub(super) pages: pages::State,
@@ -63,6 +65,11 @@ pub(super) struct DocumentTab {
     pub(super) inline_text: Option<inline_text::State>,
     pub(super) atom_text: Option<atom_text::State>,
     pub(super) joining: Option<joining::State>,
+    pub(super) equipment_authoring: Option<super::equipment_authoring::State>,
+    /// The revision, piece and parameter an equipment slider drag has
+    /// reached, and what it let go of; the drag is one Undo step until
+    /// release or any other commit.
+    pub(super) piece_sliding: Option<(u64, u64, String, String)>,
     pub(super) erase_stroke: bool,
     pub(super) erase_committed: bool,
     pub(super) cleanup_serial: u64,
@@ -105,18 +112,29 @@ pub(super) struct DocumentTab {
     pub(super) chain_angle_input: String,
     pub(super) arc_editor: arcs::Editor,
     pub(super) graphic_style: GraphicStyle,
+    pub(super) tlc: super::tlc::State,
     pub(super) path_point: Option<(u64, usize)>,
     pub(super) orbital_phase: reshiki::scientific::Phase,
     pub(super) phase_flipped: bool,
     pub(super) attach_symbols: bool,
     pub(super) snap_orbitals: bool,
     pub(super) graphic_width_input: String,
+    pub(super) graphic_corner_input: String,
+    pub(super) graphic_opacity_input: String,
+    pub(super) graphic_gradient_input: String,
+    pub(super) graphic_angle_input: String,
     pub(super) path_head_inputs: [String; 3],
     pub(super) graphic_stroke_input: String,
     pub(super) graphic_fill_input: String,
     pub(super) bracket_sides: BracketSides,
     pub(super) bracket_superscript: graphics::Superscript,
     pub(super) bracket_superscript_input: String,
+    pub(super) panel_titles: Vec<String>,
+    pub(super) panel_dividers: Vec<String>,
+    pub(super) layout_gutter: String,
+    pub(super) layout_columns: String,
+    pub(super) cycle_inputs: super::cycles::Inputs,
+    pub(super) table_inputs: super::tables::Inputs,
     pub(super) arrow_style: reshiki::arrows::Preset,
     pub(super) arrows: arrows::State,
     pub(super) caption: String,
@@ -152,7 +170,8 @@ impl DocumentTab {
     }
 
     pub(super) fn drawing_edit_active(&self) -> bool {
-        self.joining.is_some()
+        self.equipment_authoring.is_some()
+            || self.joining.is_some()
             || self.optimization.is_some()
             || self.inline_text.is_some()
             || self.atom_text.is_some()
@@ -188,12 +207,15 @@ impl DocumentTab {
             selected: vec![],
             hover: None,
             keyboard_drawing: Default::default(),
+            connect: None,
             camera: Camera::default(),
             fit_to_view: false,
             pages: pages::State::default(),
             inline_text: None,
             atom_text: None,
             joining: None,
+            equipment_authoring: None,
+            piece_sliding: None,
             erase_stroke: false,
             erase_committed: false,
             cleanup_serial: 0,
@@ -232,6 +254,11 @@ impl DocumentTab {
             attach_symbols: true,
             snap_orbitals: true,
             graphic_width_input: "0.6".into(),
+            tlc: Default::default(),
+            graphic_corner_input: String::new(),
+            graphic_opacity_input: "100".into(),
+            graphic_gradient_input: "#FFFFFF".into(),
+            graphic_angle_input: "90".into(),
             path_head_inputs: graphics::HeadField::ALL
                 .map(|field| field.get(&Default::default()).to_string()),
             graphic_stroke_input: "#000000".into(),
@@ -239,6 +266,12 @@ impl DocumentTab {
             bracket_sides: BracketSides::Both,
             bracket_superscript: Default::default(),
             bracket_superscript_input: String::new(),
+            panel_titles: Vec::new(),
+            panel_dividers: Vec::new(),
+            layout_gutter: String::new(),
+            layout_columns: "2".into(),
+            cycle_inputs: Default::default(),
+            table_inputs: Default::default(),
             arrow_style: Default::default(),
             arrows: Default::default(),
             caption: "Reaction conditions".into(),

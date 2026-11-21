@@ -30,6 +30,7 @@ fn clicked_molecule_is_independent_of_multi_selection_and_logical_groups() {
     assert_eq!(target(&doc, &[], &all), None);
     let arrow = doc.next_id();
     doc.arrows.push(reshiki::document::Arrow {
+        arc: None,
         id: arrow,
         start: Point::new(400., 0.),
         end: Point::new(440., 0.),
@@ -40,6 +41,7 @@ fn clicked_molecule_is_independent_of_multi_selection_and_logical_groups() {
         start_anchor: None,
         end_anchor: None,
         style: None,
+        purpose: Default::default(),
     });
     assert_eq!(target(&doc, &[arrow], &first), None);
 }

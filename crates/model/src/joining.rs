@@ -85,6 +85,7 @@ fn moving_ids(doc: &Document, selected: &[u64]) -> Vec<u64> {
     }
     // An arrow takes its condition text with it, as Copy and Delete do.
     crate::arrow_labels::include_labels(doc, &mut moving);
+    crate::shape_text::include_texts(doc, &mut moving);
     doc.all_ids()
         .into_iter()
         .filter(|id| moving.contains(id))
@@ -268,6 +269,7 @@ impl Prepared {
         let (source_ids, target_ids) =
             match self.resolve_destination(point, radius, anchor, mode)? {
                 Destination::Coordinate { donor, metal } => {
+                    crate::graphics::table::require_same_cell(&self.original, &[donor, metal])?;
                     return Ok((
                         Placed::Coordinated(coordinate_atoms(&self.original, donor, metal)?),
                         vec![donor, metal],
@@ -278,6 +280,8 @@ impl Prepared {
                     target_ids,
                 } => (source_ids, target_ids),
             };
+        let join_ids: Vec<_> = source_ids.iter().chain(&target_ids).copied().collect();
+        crate::graphics::table::require_same_cell(&self.original, &join_ids)?;
         if source_ids
             .iter()
             .any(|id| self.fragment.abbreviation(*id).is_some())
@@ -352,6 +356,18 @@ impl Prepared {
             {
                 arrow.start_anchor = original.start_anchor.clone();
                 arrow.end_anchor = original.end_anchor.clone();
+            }
+        }
+        // So does an unselected callout leader.
+        for graphic in &mut placed.graphics {
+            if !self.moving.contains(&graphic.id)
+                && let Some(original) = self.original.graphics.iter().find(|g| g.id == graphic.id)
+            {
+                graphic.leader = original.leader.clone();
+            }
+            // A cycle keeps every part, moved or not; the join remaps its atoms.
+            if let Some(original) = self.original.graphics.iter().find(|g| g.id == graphic.id) {
+                graphic.cycle = original.cycle.clone();
             }
         }
         let joined_mapping: HashMap<_, _> = self

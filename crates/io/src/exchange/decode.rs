@@ -79,7 +79,7 @@ pub(crate) fn style_from_cdx(data: &[u8]) -> Result<String> {
     if !matches!(r.remaining, [] | [0, 0]) {
         return Err("Unexpected trailing stationery data".into());
     }
-    let root = convert(&tree, &mut HashMap::new())?;
+    let root = convert(&tree, &mut HashMap::new(), false)?;
     let mut xml = String::new();
     root.write(&mut xml)?;
     Ok(xml)
@@ -88,6 +88,25 @@ pub(crate) fn style_from_cdx(data: &[u8]) -> Result<String> {
 /// Decode the supported binary drawing subset. Unknown drawing features fail
 /// explicitly rather than silently yielding a chemically different structure.
 pub fn from_cdx(data: &[u8]) -> Result<String> {
+    decode(data, false)
+}
+
+/// [`from_cdx`] for opening a file: objects, properties and values outside the
+/// supported subset are passed on or skipped instead of refusing the file.
+/// An unknown object keeps a name the import then reports as left out; an
+/// unknown property or value of a drawing object is dropped, so the object
+/// takes the default. An unknown property of an atom, bond or chemical group
+/// is dropped and counted for the import to report; an unknown value there,
+/// broken structure and the size limits are refused as before.
+pub fn from_cdx_tolerant(data: &[u8]) -> Result<String> {
+    decode(data, true)
+}
+
+/// How many properties of an atom, bond or chemical group the tolerant
+/// decoder skipped.
+pub(crate) const SKIPPED: &str = "ReShikiSkippedProperties";
+
+fn decode(data: &[u8], tolerant: bool) -> Result<String> {
     if data.len() > LIMIT {
         return Err("Drawing exceeds the 16 MB structure limit".into());
     }
@@ -107,7 +126,8 @@ pub fn from_cdx(data: &[u8]) -> Result<String> {
         r,
         objects: 0,
         properties: 0,
-        ids: HashSet::new(),
+        ids: HashMap::new(),
+        tolerant,
     };
     let code = parser.r.u16()?;
     let tree = parser.object(code, 0)?;
@@ -118,7 +138,7 @@ pub fn from_cdx(data: &[u8]) -> Result<String> {
         return Err("Unexpected trailing binary drawing data".into());
     }
     let mut fonts = HashMap::new();
-    let root = convert(&tree, &mut fonts)?;
+    let root = convert(&tree, &mut fonts, tolerant)?;
     let mut xml = String::new();
     root.write(&mut xml)?;
     Ok(xml)
@@ -133,7 +153,8 @@ struct Parser<'a> {
     r: Reader<'a>,
     objects: usize,
     properties: usize,
-    ids: HashSet<u32>,
+    ids: HashMap<u32, bool>,
+    tolerant: bool,
 }
 impl<'a> Parser<'a> {
     fn object(&mut self, code: u16, depth: usize) -> Result<Tree<'a>> {
@@ -141,13 +162,27 @@ impl<'a> Parser<'a> {
         if depth > 64 || self.objects > MAX_OBJECTS {
             return Err("Drawing object limit exceeded".into());
         }
-        let name = OBJECTS
-            .iter()
-            .find(|(c, _)| *c == code)
-            .ok_or_else(|| format!("Unsupported binary drawing object 0x{code:04x}"))?
-            .1;
+        let name = match OBJECTS.iter().find(|(c, _)| *c == code) {
+            Some((_, name)) => name,
+            // Codes ChemDraw 26 writes; any other object is only counted.
+            None if self.tolerant => match code {
+                0x800b => "templategrid",
+                0x8025 => "bioshape",
+                _ => "unknownobject",
+            },
+            None => return Err(format!("Unsupported binary drawing object 0x{code:04x}")),
+        };
         let id = self.r.u32()?;
-        if id != 0 && !self.ids.insert(id) {
+        // ChemDraw itself repeats an identifier, for example on linked
+        // property captions; the readers decide whether one that is used
+        // is ambiguous, as they do for the text format.
+        // An atom, bond or fragment stays the only owner of its own: bonds
+        // and marks find them by it.
+        let chemical = matches!(name, "n" | "b" | "fragment");
+        if id != 0
+            && let Some(taken) = self.ids.insert(id, chemical)
+            && (!self.tolerant || chemical || taken)
+        {
             return Err("Duplicate binary drawing object identifier".into());
         }
         let mut tree = Tree {
@@ -175,7 +210,11 @@ impl<'a> Parser<'a> {
             } else {
                 usize::from(size)
             };
-            tree.raw.push((tag, self.r.take(size)?));
+            let value = self.r.take(size)?;
+            // A cycle's own data is read by `cycles::take_cdx`.
+            if tag != super::cycles::CODE {
+                tree.raw.push((tag, value));
+            }
         }
         Ok(tree)
     }
@@ -252,7 +291,26 @@ fn escape(out: &mut String, text: &str, attribute: bool) -> Result<()> {
     }
     Ok(())
 }
-fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
+#[derive(Clone, Copy)]
+enum TextEncoding {
+    Charset(u16),
+    LegacySymbol,
+}
+
+fn convert(
+    tree: &Tree<'_>,
+    fonts: &mut HashMap<u16, TextEncoding>,
+    tolerant: bool,
+) -> Result<Element> {
+    convert_within_tlc(tree, fonts, tolerant, false).map(|(element, _)| element)
+}
+
+fn convert_within_tlc(
+    tree: &Tree<'_>,
+    fonts: &mut HashMap<u16, TextEncoding>,
+    tolerant: bool,
+    within_tlc: bool,
+) -> Result<(Element, bool)> {
     let (mut connection_count, mut node_type_count) = (0usize, 0usize);
     for (tag, _) in &tree.raw {
         match *tag {
@@ -280,31 +338,65 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
                 let id = r.u16()?;
                 let charset = r.u16()?;
                 let size = r.u16()?;
-                let encoding = charset_name(charset)?;
                 let name = decode_string(
                     r.take(usize::from(size))?,
                     if charset == 65001 { 65001 } else { 10000 },
                 )?;
-                fonts.insert(id, charset);
+                let (encoding, charset_name) = if charset != 65001 && is_symbol_font(&name) {
+                    (
+                        TextEncoding::LegacySymbol,
+                        charset_name(charset).unwrap_or("Unknown"),
+                    )
+                } else {
+                    (TextEncoding::Charset(charset), charset_name(charset)?)
+                };
+                fonts.insert(id, encoding);
                 let mut font = Element::new("font");
                 font.set("id", id);
                 font.set("name", name);
-                font.set("charset", encoding);
+                font.set("charset", charset_name);
                 table.children.push(font);
             }
             r.done()?;
             el.children.push(table);
         }
     }
-    let (mut text, mut utf8_text) = (None, None);
+    // Atoms, bonds and what groups them keep every value or fail: a dropped
+    // one would change the chemistry without a word. A property ReShiki does
+    // not know there is counted, for the import to name.
+    let strict = !tolerant
+        || matches!(
+            tree.name,
+            "n" | "b"
+                | "fragment"
+                | "bracketedgroup"
+                | "bracketattachment"
+                | "crossingbond"
+                | "scheme"
+                | "step"
+        );
+    let tlc = matches!(tree.name, "tlcplate" | "tlclane" | "tlcspot");
+    let within_tlc = within_tlc || tlc;
+    let mut tlc_skipped = false;
+    let (mut text, mut utf8_text, mut skipped) = (None, None, 0usize);
     for (tag, data) in &tree.raw {
         if *tag == 0x100 {
             continue;
         }
         let Some(p) = SCHEMA.codes.get(tag) else {
+            if tolerant && within_tlc && !strict {
+                tlc_skipped = true;
+                continue;
+            }
             if matches!(tree.name, "CDXML" | "page")
                 || tree.name == "n" && matches!(tag, 0x448 | 0x44d)
+                || !strict
             {
+                continue;
+            }
+            if tolerant {
+                skipped += 1;
+                tlc_skipped |= within_tlc;
                 continue;
             }
             return Err(format!("Unsupported binary drawing property 0x{tag:04x}"));
@@ -317,9 +409,96 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
             utf8_text = Some(*data);
             continue;
         }
+        match property(tree, &mut el, *tag, p, data, fonts) {
+            Ok(()) => {}
+            Err(error) if strict => return Err(error),
+            Err(_) => match (p.name, *data) {
+                // ChemDraw stores a colour index in four bytes in clip art.
+                ("color", &[a, b, 0, 0]) => el.set(p.name, u16::from_le_bytes([a, b])),
+                // Earlier ReShiki versions wrote the cross as 1.
+                ("NoGo", &[1]) => el.set(p.name, "Cross"),
+                ("CurvePoints3D", _) => {
+                    if let Some(points) = curve_points_3d(data) {
+                        el.set(p.name, points);
+                    } else {
+                        tlc_skipped |= within_tlc;
+                    }
+                }
+                _ => tlc_skipped |= within_tlc,
+            },
+        }
+    }
+    if skipped > 0 {
+        el.set(SKIPPED, skipped);
+    }
+    let attr = |name: &str| {
+        el.attrs
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.as_str())
+    };
+    if let Some(number) = attr("ExternalConnectionNum") {
+        external_connection_number(&el.name, attr("NodeType"), number)?;
+    }
+    if let Some(data) = utf8_text.or(text) {
+        el.children
+            .extend(decode_text(data, fonts, utf8_text.is_some())?);
+    }
+    for child in &tree.children {
+        tlc_skipped |= within_tlc && child.name == "unknownobject";
+        let (child, skipped) = convert_within_tlc(child, fonts, tolerant, within_tlc)?;
+        tlc_skipped |= skipped;
+        el.children.push(child);
+    }
+    if tlc && tlc_skipped {
+        el.set(TLC_SKIPPED, "yes");
+    }
+    Ok((el, tlc_skipped))
+}
+/// A count, then x, y and z for each point.
+fn curve_points_3d(data: &[u8]) -> Option<String> {
+    let mut r = Reader::new(data);
+    let mut values = Vec::new();
+    for _ in 0..r.u16().ok()? {
+        values.push(decode_coordinates(r.take(12).ok()?, "CDXPoint3D").ok()?);
+    }
+    r.done().ok()?;
+    Some(values.join(" "))
+}
+fn property(
+    tree: &Tree<'_>,
+    el: &mut Element,
+    tag: u16,
+    p: &Property,
+    data: &[u8],
+    fonts: &HashMap<u16, TextEncoding>,
+) -> Result<()> {
+    // ChemDraw's native table borders can store the foreground index in one
+    // byte. Keep the normal UInt16 contract for other object kinds.
+    if let ("border", "color", [index]) = (tree.name, p.name, data) {
+        el.set(p.name, *index);
+        return Ok(());
+    }
+    if tree.name == "objecttag" && p.name == "Name" {
+        // Native names are unstyled Latin-1, including `rf` and `stereo`.
+        // Keep valid prefixed strings from older ReShiki files readable too.
+        let name = decode_text(data, fonts, false)
+            .map(|runs| runs.into_iter().map(|run| run.text).collect::<String>())
+            .unwrap_or_else(|_| data.iter().map(|byte| char::from(*byte)).collect());
+        el.set(p.name, name);
+        return Ok(());
+    }
+    {
+        if raw_tlc_dimension(p, tree.name) {
+            let mut r = Reader::new(data);
+            let value = i32::from_le_bytes(r.array()?);
+            r.done()?;
+            el.set(p.name, value);
+            return Ok(());
+        }
         if numeric(p.kind) {
             el.set(p.name, decode_number(p, data)?);
-            continue;
+            return Ok(());
         }
         let mut r = Reader::new(data);
         match p.kind {
@@ -354,7 +533,7 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
                 el.children.push(table);
             }
             "CDXFontStyle" => {
-                let prefix = if *tag == 0x80a { "Label" } else { "Caption" };
+                let prefix = if tag == 0x80a { "Label" } else { "Caption" };
                 for suffix in ["Font", "Face", "Size", "Color"] {
                     let n = r.u16()? as f64 / if suffix == "Size" { 20. } else { 1. };
                     el.set(&format!("{prefix}{suffix}"), n);
@@ -435,23 +614,7 @@ fn convert(tree: &Tree<'_>, fonts: &mut HashMap<u16, u16>) -> Result<Element> {
             _ => return Err(format!("Unsupported binary drawing property: {}", p.name)),
         }
     }
-    let attr = |name: &str| {
-        el.attrs
-            .iter()
-            .find(|(key, _)| key == name)
-            .map(|(_, value)| value.as_str())
-    };
-    if let Some(number) = attr("ExternalConnectionNum") {
-        external_connection_number(&el.name, attr("NodeType"), number)?;
-    }
-    if let Some(data) = utf8_text.or(text) {
-        el.children
-            .extend(decode_text(data, fonts, utf8_text.is_some())?);
-    }
-    for child in &tree.children {
-        el.children.push(convert(child, fonts)?);
-    }
-    Ok(el)
+    Ok(())
 }
 struct Run {
     start: usize,
@@ -460,7 +623,11 @@ struct Run {
     size: u16,
     color: u16,
 }
-fn decode_text(data: &[u8], fonts: &HashMap<u16, u16>, utf8: bool) -> Result<Vec<Element>> {
+fn decode_text(
+    data: &[u8],
+    fonts: &HashMap<u16, TextEncoding>,
+    utf8: bool,
+) -> Result<Vec<Element>> {
     let mut r = Reader::new(data);
     let mut runs = Vec::new();
     for _ in 0..r.u16()? {
@@ -492,15 +659,21 @@ fn decode_text(data: &[u8], fonts: &HashMap<u16, u16>, utf8: bool) -> Result<Vec
             .remaining
             .get(run.start..end)
             .ok_or("Invalid binary text style ranges")?;
-        let charset = if utf8 {
-            65001
-        } else {
-            run.font.and_then(|id| fonts.get(&id)).copied().unwrap_or(0)
+        let encoding = run.font.and_then(|id| fonts.get(&id).copied());
+        let charset = match (utf8, encoding) {
+            (true, _) => 65001,
+            (false, Some(TextEncoding::Charset(charset))) => charset,
+            // Plain CDXML stores legacy Symbol bytes as U+0000–U+00FF.
+            (false, Some(TextEncoding::LegacySymbol) | None) => 0,
         };
         let mut span = Element::new("s");
         span.text = decode_string(bytes, charset)?.replace('\r', "\n");
         if let Some(font) = run.font {
-            span.set("font", font);
+            // UTF8Text overrides the font-table encoding. Omit the legacy
+            // Symbol reference so CDXML readers see this run as Unicode.
+            if !(utf8 && matches!(encoding, Some(TextEncoding::LegacySymbol))) {
+                span.set("font", font);
+            }
             span.set("face", run.face);
             span.set("size", run.size as f64 / 20.);
             span.set("color", run.color);

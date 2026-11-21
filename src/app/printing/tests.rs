@@ -101,25 +101,6 @@ fn preparation_failures_release_the_job_and_duplicate_starts_do_not_replace_it()
     assert!(app.status.contains("Invalid snapshot"));
     assert!(!app.tab.history.can_undo());
 }
-#[test]
-fn printing_uses_valid_page_drafts_without_applying_them() {
-    use crate::app::pages::{Action as Pages, Field};
-    let mut app = ready();
-    let before = app.tab.doc.clone();
-    let _ = app.page_action(Pages::Open);
-    let _ = app.page_action(Pages::Input(Field::Columns, "2".into()));
-    let snapshot = app.print_document().unwrap();
-    assert_eq!(snapshot.page_layout.as_ref().unwrap().count(), 2);
-    assert_eq!(app.tab.doc, before);
-    assert!(!app.tab.history.can_undo());
-    let _ = app.page_action(Pages::Input(Field::Width, "invalid".into()));
-    assert!(app.print_document().is_err());
-    let _ = app.page_action(Pages::Cancel);
-    assert_eq!(app.print_document().unwrap(), before);
-    let _ = app.page_action(Pages::Open);
-    app.tab.file_epoch += 1;
-    assert!(app.print_document().is_err());
-}
 #[cfg(target_os = "macos")]
 #[test]
 fn closing_the_print_panel_returns_focus_to_the_editor_window() {

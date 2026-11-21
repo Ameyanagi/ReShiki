@@ -84,6 +84,7 @@ fn oxygen_starts_immediately_and_labels_do_not_edit_history_or_selection() {
     app.tab.saved = drawing.clone();
     let selected = app.tab.selected.clone();
     app.edit(crate::canvas::Edit::ContextMenu {
+        at: Default::default(),
         position: iced::Point::ORIGIN,
         hit: vec![],
         selected: selected.clone(),
@@ -526,6 +527,7 @@ fn applying_an_unchanged_text_draft_keeps_authored_geometry_and_history() {
     file.bonds[0].order = 1;
     let caption = file.next_id();
     file.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(-40., 60.),
         text: "Step 1".into(),

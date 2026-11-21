@@ -247,39 +247,93 @@ async fn cdxml_keeps_legacy_cubic_and_elbow_arrows_and_imports_curved_splines_as
 }
 
 #[tokio::test]
-async fn path_heads_use_arrow_import_ranges_and_reject_closed_or_filled_splines() {
-    for attribute in [
-        "HeadSize='49'",
-        "HeadSize='2401'",
-        "ArrowheadWidth='24'",
-        "ArrowheadWidth='1601'",
-        "ArrowheadCenterSize='-1'",
-        "ArrowheadCenterSize='1001'",
-        "ArrowheadCenterSize='99'",
-        "ArrowheadType='unsupported'",
+async fn path_heads_use_arrow_import_ranges_and_plain_closed_or_filled_splines() {
+    let engine = reshiki_io::engine::LocalEngine::in_process();
+    let read = |points: &'static str, attributes: &'static str| {
+        formats::read_with_warnings(curve_xml(points, attributes).into_bytes(), "cdxml", &engine)
+    };
+    // A head size outside the range arrows take imports at the nearest one.
+    for (attribute, length, width, notch) in [
+        ("HeadSize='49'", 0.5, 2.5, 0.),
+        ("HeadSize='2401'", 24., 2.5, 0.),
+        ("ArrowheadWidth='24'", 10., 0.25, 0.),
+        ("ArrowheadWidth='1601'", 10., 16., 0.),
+        ("ArrowheadCenterSize='-1'", 10., 2.5, 0.9),
+        ("ArrowheadCenterSize='1001'", 10., 2.5, 0.),
+        ("ArrowheadCenterSize='99'", 10., 2.5, 0.9),
     ] {
-        let mut messages = vec![];
-        for points in [CUBIC, SPLINE] {
-            messages.push(
-                formats::read(curve_xml(points, attribute).into_bytes(), "cdxml")
-                    .await
-                    .unwrap_err(),
-            );
-        }
-        assert_eq!(messages[0], messages[1], "{attribute}");
-    }
-    for attributes in [
-        "Closed='yes'",
-        "FillType='Solid'",
-        "CurveType='1'",
-        "Dipole='yes'",
-        "NoGo='Cross'",
-    ] {
+        let (arrow, warnings) = read(CUBIC, attribute).await.unwrap();
+        let (path, path_warnings) = read(SPLINE, attribute).await.unwrap();
+        assert_eq!(warnings, path_warnings, "{attribute}");
         assert!(
-            formats::read(curve_xml(SPLINE, attributes).into_bytes(), "cdxml")
-                .await
-                .is_err(),
-            "{attributes}"
+            warnings[0]
+                .contains("1 line, arrowhead or shadow size at the nearest size ReShiki draws"),
+            "{attribute}: {warnings:?}"
+        );
+        let style = arrow.arrows[0].style.clone().unwrap();
+        let heads = path.graphics[0].heads.unwrap();
+        for (name, expected, values) in [
+            (
+                "length",
+                length,
+                [style.head_length_pt, heads.head_length_pt],
+            ),
+            ("width", width, [style.head_width_pt, heads.head_width_pt]),
+            ("notch", notch, [style.head_notch, heads.head_notch]),
+        ] {
+            for value in values {
+                assert!(
+                    (value - expected).abs() < 1e-4,
+                    "{attribute} {name}: {value}"
+                );
+            }
+        }
+    }
+    // A head ChemDraw does not have is still refused, the same way for both.
+    let unknown = "ArrowheadType='unsupported'";
+    assert_eq!(
+        read(CUBIC, unknown).await.unwrap_err(),
+        read(SPLINE, unknown).await.unwrap_err()
+    );
+    // A closed or filled spline has no heads; a longer spline has no marks.
+    for (attributes, notice, heads) in [
+        (
+            "Closed='yes'",
+            "1 closed or filled curve without arrowheads",
+            false,
+        ),
+        (
+            "FillType='Solid'",
+            "1 closed or filled curve without arrowheads",
+            false,
+        ),
+        (
+            "CurveType='1'",
+            "1 closed or filled curve without arrowheads",
+            false,
+        ),
+        (
+            "Dipole='yes'",
+            "1 curved arrow without the double shaft, no-go or dipole mark",
+            true,
+        ),
+        (
+            "NoGo='Cross'",
+            "1 curved arrow without the double shaft, no-go or dipole mark",
+            true,
+        ),
+    ] {
+        let (document, warnings) = read(SPLINE, attributes).await.unwrap();
+        assert!(warnings[0].contains(notice), "{attributes}: {warnings:?}");
+        assert_eq!(document.graphics[0].heads.is_some(), heads, "{attributes}");
+    }
+    // A one-segment curved arrow and a bent arrow keep their marks.
+    for points in [CUBIC, ELBOW] {
+        let (document, warnings) = read(points, "NoGo='Cross'").await.unwrap();
+        assert_eq!(warnings, Vec::<String>::new());
+        assert_eq!(
+            document.arrows[0].style.as_ref().unwrap().no_go,
+            reshiki_model::arrows::NoGo::Cross
         );
     }
 }

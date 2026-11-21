@@ -263,9 +263,19 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
 }
 
 pub(crate) async fn execute_with_config(
-    request: Request,
+    mut request: Request,
     config: Option<Config>,
 ) -> Result<Response, Error> {
+    // Illustration molecules are pictures: molecular text formats leave them
+    // out. Callers filter whole-drawing analysis; an explicit selection stays.
+    if request.operation == "export"
+        && matches!(request.format.as_deref(), Some("mol" | "smiles" | "inchi"))
+        && let Some(document) = &mut request.document
+        && crate::purpose::used(document)
+    {
+        *document =
+            crate::purpose::only(document, crate::purpose::Purpose::is_chemical).into_owned();
+    }
     if distance_route(&request) || attachment_analysis_route(&request) {
         // This precedes the attachment-only MOL route, which otherwise does
         // not need ordinary molecular preparation. Validation stays first

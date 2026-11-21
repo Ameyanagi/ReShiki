@@ -37,6 +37,8 @@ PROPERTIES = dict(PUBLISHED)
 # The overview predates these enumerations. Numeric values are cross-checked
 # against the public SDK constants and native clipboard fixtures.
 for code, enum in {
+    # Native ChemDraw 26 cumulenes use 12 for unknown atom stereochemistry.
+    0x437: {**PUBLISHED[0x437][2], "?": 12},
     0x602: {**PUBLISHED[0x601][2], "DottedHydrogen": 15},
     0xA2F: {"Solid": 1, "Hollow": 2, "Angle": 3},
     0xA35: {"None": 0, "Full": 2, "HalfLeft": 3, "HalfRight": 4},
@@ -44,11 +46,17 @@ for code, enum in {
     # Keep the existing native Rust correction when regenerating its schema:
     # ChemDraw-written arrows use 1 for None; zero is Unspecified.
     0xA37: {"Unspecified": 0, "None": 1, "Solid": 2, "Shaded": 4},
-    0xA3B: {"None": 0, "Cross": 1, "Hash": 2},
+    # ChemDraw 26 writes 2 for the cross and 3 for the hash.
+    0xA3B: {"None": 0, "Cross": 2, "Hash": 3},
+    # ChemDraw 26 writes zero for the lone pair and 13 for the bar.
+    0xA07: {**PUBLISHED[0xA07][2], "LonePair": 0, "LonePairBar": 13},
 }.items():
     name, kind, _ = PROPERTIES[code]
     PROPERTIES[code] = name, kind, enum
 PROPERTIES[0x13] = ("SupersededBy", "CDXObjectID", {})
+# ChemDraw 26 faded fills: a plain closed shape's inside in its color at this
+# many tenths of a percent over white. Native CDX writes two signed bytes.
+PROPERTIES[0x303] = ("FadePercent", "INT16", {})
 # ChemDraw 26 native CDX saves use a two-byte color-table index on atoms,
 # bonds, and contracted labels for persistent highlight paint.
 PROPERTIES[0x308] = ("highlightColor", "UINT16", {})
@@ -60,6 +68,14 @@ PROPERTIES[0x44B] = ("ExternalConnectionNum", "INT8", {})
 # 0xA39 with an empty payload; 0xA38 is the numeric CurveSpacing property.
 PROPERTIES[0xA38] = ("CurveSpacing", "UINT16", {})
 PROPERTIES[0xA39] = ("Closed", "CDXBooleanImplied", {})
+# Native ChemDraw 26 TLC flags have empty payloads when true and are absent
+# when false. One-byte Boolean payloads make its SDK reject the whole CDX.
+for code in (0xAA2, 0xAA3, 0xAA4, 0xAA5, 0xAB2):
+    name, _, enum = PROPERTIES[code]
+    PROPERTIES[code] = name, "CDXBooleanImplied", enum
+# ChemDraw 26 writes Dipole as an empty flag. A one-byte Boolean payload
+# makes its CDX reader reject the drawing, although CDXML accepts Dipole=yes.
+PROPERTIES[0xA3A] = ("Dipole", "CDXBooleanImplied", {})
 # Native ChemDraw document annotations accompany clipboard ring-fill drawings.
 PROPERTIES[0x1500] = ("Keyword", "CDXString", {})
 PROPERTIES[0x1501] = ("Content", "CDXString", {})
@@ -191,7 +207,8 @@ def numeric(name, kind, enum, value, encode=True):
             number = float(value)
         if kind == "CDXCoordinate" or name in ANGLES:
             number *= 65536
-        if name == "BondSpacing":
+        # Tenths: a percentage, and the degrees of an arc (ChemDraw 26 files).
+        if name in ("BondSpacing", "AngularSize"):
             number *= 10
         if kind != "FLOAT64":
             number = round(number)
@@ -230,7 +247,7 @@ def numeric(name, kind, enum, value, encode=True):
             raise ValueError("Unsupported binary enumeration: " + name)
     if kind == "CDXCoordinate" or name in ANGLES:
         number /= 65536
-    if name == "BondSpacing":
+    if name in ("BondSpacing", "AngularSize"):
         number /= 10
     return f"{number:.8g}"
 
@@ -325,7 +342,10 @@ def to_cdx(xml):
             elif kind in ("CDXPoint2D", "CDXPoint3D", "CDXRectangle"):
                 data = coordinates(value, kind)
             elif kind == "CDXString":
-                data = b"\0\0" + value.encode("latin-1")
+                # Object-tag names are native unstyled bytes. A style-count
+                # prefix makes ChemDraw regenerate authored Rf labels.
+                prefix = b"" if el.tag == "objecttag" and name == "Name" else b"\0\0"
+                data = prefix + value.encode("latin-1")
             elif kind == "CDXObjectIDArray":
                 data = b"".join(packed("I", int(v)) for v in value.split())
             elif kind == "Unformatted" and el.tag == "embeddedobject":
@@ -483,7 +503,13 @@ def from_cdx(data):
                 el.set(name, coordinates(data, kind, False))
             elif kind == "CDXString":
                 temporary = ET.Element("t")
-                decode_text(data, temporary, fonts)
+                try:
+                    decode_text(data, temporary, fonts)
+                except ValueError:
+                    if name != "Name" or el.tag != "objecttag":
+                        raise
+                    temporary = ET.Element("t")
+                    ET.SubElement(temporary, "s").text = data.decode("latin-1")
                 el.set(name, "".join(s.text or "" for s in temporary))
             elif kind == "CDXColorTable":
                 r = Reader(data)

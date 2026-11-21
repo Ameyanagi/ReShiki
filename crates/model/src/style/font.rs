@@ -49,6 +49,23 @@ pub(super) fn keep_resident(db: &mut resvg::usvg::fontdb::Database, families: &[
 
 /// An alias hidden from font pickers distinguishes the bundled glyph fallback.
 pub(super) const BUNDLED_FAMILY: &str = ".ReShiki Bundled Sans";
+/// The bundled last resort for picker symbols that Liberation Sans lacks. It
+/// is kept out of font pickers, and the bundled alias keeps it out of the
+/// search of installed faces. Source and license: licenses/dejavu-fonts.
+pub(super) const SYMBOLS_FAMILY: &str = "ReShiki Symbols";
+
+pub(super) fn load_symbols(db: &mut resvg::usvg::fontdb::Database) {
+    use resvg::usvg::fontdb::{Language, Source};
+    let bytes: &[u8] = include_bytes!("../../fonts/ReShikiSymbols.ttf");
+    for id in db.load_font_source(Source::Binary(std::sync::Arc::new(bytes))) {
+        if let Some(mut face) = db.face(id).cloned() {
+            db.remove_face(id);
+            face.families
+                .push((BUNDLED_FAMILY.into(), Language::English_UnitedStates));
+            db.push_face_info(face);
+        }
+    }
+}
 
 /// Supply Arial-compatible Latin faces only when the database lacks Arial.
 /// Keep an existing generic sans-serif preference, choosing a visible installed

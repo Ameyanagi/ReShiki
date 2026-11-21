@@ -258,7 +258,11 @@ fn residues_need_two_single_boundaries_and_keep_marked_atoms_visible() {
     let mut doc = drawing("CC(C)(C)OC(=O)N[C@@H](C)C(=O)OC");
     let full = found(&doc, "Ala", &[]);
     let member = full.abbreviations[0].members[0];
+    // An atom map labels a reaction: the residue still contracts.
     doc.atom_mut(member).unwrap().map_num = 12;
+    assert_eq!(found(&doc, "Ala", &[]).abbreviations.len(), 1);
+    // A labelled isotope stays visible.
+    doc.atom_mut(member).unwrap().isotope = 13;
     assert!(found(&doc, "Ala", &[]).abbreviations.is_empty());
     for label in ["Ala", "D-Ala", "Gly", "Pro"] {
         assert!(abbreviations::lookup(label).unwrap().is_none());

@@ -1127,8 +1127,10 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
     MoleculeCanvas {
         nmr: None,
         locant_highlight: &[],
+        reaction_preview: None,
         reviewing_pair: false,
         optimizer: None,
+        equipment_authoring: None,
         keyboard_target: None,
         keyboard_marker: false,
         morph: None,
@@ -1151,13 +1153,19 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         aromatic_ring: false,
         template_connection: reshiki::templates::Connection::Auto,
         template: None,
+        piece: None,
+        icon: None,
+        connect: None,
         arrows: ArrowOptions {
             preset: Default::default(),
             style: &reshiki::arrows::ArrowStyle::DEFAULT,
             source: None,
             attach_targets: true,
+            arc: None,
         },
         graphics: GraphicOptions {
+            table_grid: reshiki::graphics::table::editor::DEFAULT_GRID,
+            table_cell: None,
             constrain: false,
             arc: Default::default(),
             style: &STYLE,
@@ -1638,7 +1646,7 @@ fn secondary_click_selects_its_target_and_preserves_an_existing_multi_selection(
             )
             .unwrap();
         assert!(
-            matches!(action.into_inner().0, Some(Edit::ContextMenu { selected, position, hit }) if selected == expected && position == point && hit == expected_hit)
+            matches!(action.into_inner().0, Some(Edit::ContextMenu { selected, position, hit, .. }) if selected == expected && position == point && hit == expected_hit)
         );
         assert!(state.gesture.is_none());
     }
@@ -2111,6 +2119,60 @@ fn group_clicks_move_all_members_and_alt_selects_a_member() {
 }
 
 #[test]
+fn a_second_click_in_a_selected_group_picks_the_member_and_a_drag_moves_it_alone() {
+    let mut doc = Document::default();
+    doc.add_atom("C", World::new(-50., 0.));
+    doc.add_atom("O", World::new(50., 0.));
+    doc.group_selection(&[1, 2]).unwrap();
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+    // One pointer state throughout: the clicks come faster than a double-click.
+    let mut state = State::default();
+    let mut click = |canvas: &MoleculeCanvas<'_>, to: Point| {
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            mouse::Cursor::Available(Point::new(150., 150.)),
+        );
+        canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(to),
+            )
+            .unwrap()
+            .into_inner()
+            .0
+            .unwrap()
+    };
+    let canvas = MoleculeCanvas {
+        tool: Tool::Select,
+        ..chain_canvas(&doc, ChainMode::Straight)
+    };
+    let Edit::Select(ids) = click(&canvas, Point::new(150., 150.)) else {
+        panic!("expected group selection")
+    };
+    assert_eq!(ids, vec![1, 2]);
+    let canvas = MoleculeCanvas {
+        selected: &ids,
+        ..canvas
+    };
+    let Edit::Select(member) = click(&canvas, Point::new(150., 150.)) else {
+        panic!("expected member selection")
+    };
+    assert_eq!(member, vec![1]);
+    let canvas = MoleculeCanvas {
+        selected: &member,
+        ..canvas
+    };
+    let Edit::Move(moved, ..) = click(&canvas, Point::new(175., 150.)) else {
+        panic!("expected member move")
+    };
+    assert_eq!(moved, vec![1]);
+}
+
+#[test]
 fn filled_background_leaves_atoms_and_bonds_selectable() {
     let mut doc = Document::default();
     let a = doc.add_atom("C", World::new(-20., 0.));
@@ -2320,6 +2382,7 @@ fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
     let atom = doc.add_atom("C", World::new(-100., -80.));
     let label = doc.next_id();
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: label,
         position: World::default(),
         text: "Reaction conditions".into(),
@@ -3335,6 +3398,7 @@ fn arrow_end_drag_preview_keeps_condition_labels_like_the_commit() {
     ));
     let before = doc.clone();
     let mut text = reshiki::document::Annotation {
+        angle: 0.,
         id: 2,
         position: World::default(),
         text: "Pd/C, H2, EtOAc, rt".into(),
@@ -3655,6 +3719,7 @@ fn unmarked_atoms_do_not_change_mark_hit_order_and_hidden_marks_stay_hidden() {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
         });
     assert_eq!(hit::hit_object(&doc, probe, 1.), Some(a));
     doc.abbreviations.clear();
@@ -3789,4 +3854,440 @@ fn edit_points_arrow_shaft_click_adds_a_node_and_node_handles_drag_click_and_fre
         pointer_gesture_with(&canvas, screen(leaving), screen(target), Modifiers::ALT),
         Edit::ArrowControlFree(1, index, p) if index == node + 2 && p.distance(target) < 0.01
     ));
+}
+
+#[test]
+fn dragging_a_clamped_flask_slides_it_along_the_rod_and_leaves_the_stand() -> Result<(), String> {
+    use reshiki::equipment::{builtin, placed, solve};
+    let mut doc = Document::default();
+    let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+    for (id, piece, at) in [
+        (1, "reshiki/stand", World::new(0., 0.)),
+        (2, "reshiki/clamp-3finger", World::new(200., -200.)),
+        (3, "reshiki/rbf-100-15", World::new(300., 100.)),
+    ] {
+        let d = builtin::find(piece).ok_or("piece")?;
+        doc.graphics.push(placed::graphic(id, d, at, scale));
+    }
+    let middle = |doc: &Document, piece: u64, name: &str| -> Option<[f64; 2]> {
+        let g = doc.graphics.iter().find(|g| g.id == piece)?;
+        let p = solve::ports(g).into_iter().find(|p| p.at.joint == name)?;
+        Some([
+            p.point[0] + p.dir[0] * p.length / 2.,
+            p.point[1] + p.dir[1] * p.length / 2.,
+        ])
+    };
+    for (moving, hold, target, onto) in [(2, "jaw", 3, "neck-grip"), (3, "boss", 1, "rod")] {
+        let (a, b) = (
+            middle(&doc, 2, hold).ok_or("hold")?,
+            middle(&doc, target, onto).ok_or("target")?,
+        );
+        let ids = solve::closure(&doc, &[moving]);
+        doc.translate(&ids, (b[0] - a[0]) as f32, (b[1] - a[1]) as f32);
+        solve::snap(&mut doc, &ids, 14., false).ok_or("snap")?;
+    }
+    assert_eq!(doc.seats.len(), 2);
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    let bounds = Rectangle::with_size(iced::Size::new(1200., 1200.));
+    // Press on the bulb, well away from the clamp.
+    let flask = doc.graphics.iter().find(|g| g.id == 3).ok_or("flask")?;
+    let (lo, hi) = flask.shape_bounds();
+    let bulb = World::new((lo.x + hi.x) / 2., lo.y + 0.75 * (hi.y - lo.y));
+    assert_eq!(super::hit::hit_object(&doc, bulb, 10.), Some(3));
+    let start = canvas.camera.screen(bulb, bounds);
+    let mut state = State::default();
+    canvas.update(
+        &mut state,
+        &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        bounds,
+        mouse::Cursor::Available(start),
+    );
+    let edit = canvas
+        .update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            bounds,
+            mouse::Cursor::Available(Point::new(start.x + 25., start.y - 40.)),
+        )
+        .and_then(|action| action.into_inner().0)
+        .ok_or("Missing move")?;
+    let Edit::Move(mut ids, dx, dy) = edit else {
+        return Err("Expected move".into());
+    };
+    ids.sort();
+    assert_eq!(ids, [2, 3], "the stand stays");
+    assert!(dx.abs() < 0.001 && (dy + 40.).abs() < 0.001, "{dx} {dy}");
+    Ok(())
+}
+
+#[test]
+fn a_selected_pieces_handles_switch_a_valve_on_click_and_set_a_level_by_drag() {
+    use iced::keyboard::Modifiers;
+    use reshiki::equipment::{builtin, eval::Value, placed, solve::adjust};
+    let mut doc = Document::default();
+    let tube = builtin::find("reshiki/jy-schlenk-tube").unwrap();
+    doc.graphics.push(placed::graphic(
+        1,
+        tube,
+        reshiki::document::Point::new(0., 0.),
+        1.,
+    ));
+    let handles = adjust::handles(&doc.graphics[0]);
+    let at = |h: &adjust::Handle| World::new(h.at[0] as f32, h.at[1] as f32);
+    let valve = at(handles.iter().find(|h| h.toggle).unwrap());
+    let edits = select_drag(&doc, &[1], valve, valve, Modifiers::default());
+    assert!(
+        edits.iter().any(|e| matches!(e, Edit::PieceParam { id: 1, param, value: Value::State(s) } if param == "valve" && s == "open")),
+        "{edits:?}"
+    );
+    let surface = at(handles.iter().find(|h| h.part.is_none()).unwrap());
+    let edits = select_drag(
+        &doc,
+        &[1],
+        surface,
+        surface.offset(0., -30.),
+        Modifiers::default(),
+    );
+    assert!(
+        edits.iter().any(|e| matches!(e, Edit::PieceParam { param, value: Value::Number(n), .. } if param == "fill" && *n > 0.)),
+        "{edits:?}"
+    );
+    // An unselected piece shows no handles, and Option-drag pulls pieces
+    // out as before.
+    for (selected, modifiers) in [(&[][..], Modifiers::default()), (&[1][..], Modifiers::ALT)] {
+        let edits = select_drag(&doc, selected, valve, valve, modifiers);
+        assert!(!edits.iter().any(|e| matches!(e, Edit::PieceParam { .. })));
+    }
+}
+
+#[test]
+fn text_in_a_front_shape_picks_its_own_shape_over_a_filled_one_below() {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle};
+    let mut doc = Document::default();
+    let shape = |id, lo: World, hi: World| {
+        let mut g = Graphic::dragged(
+            id,
+            GraphicKind::Rectangle,
+            lo,
+            hi,
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        );
+        g.layer = 1;
+        g
+    };
+    let mut below = shape(1, World::new(-100., -100.), World::new(100., 100.));
+    below.style.fill = Some(reshiki::palette::Color::Custom([220, 239, 233]));
+    doc.graphics.push(below);
+    doc.graphics
+        .push(shape(2, World::new(-40., -20.), World::new(40., 20.)));
+    doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
+        id: 3,
+        position: World::default(),
+        text: "hν".into(),
+        format: Default::default(),
+    });
+    doc.graphics[1].text = Some(3);
+    reshiki::shape_text::reconcile(&mut doc);
+    let text = doc.annotations[0].clone();
+    let (w, h) = text.size();
+    let on_text = text.position.offset(w / 2., h / 2.);
+    assert_eq!(hit_object(&doc, on_text, 1.), Some(2));
+    // Beside the outlined shape the filled one shows.
+    assert_eq!(hit_object(&doc, World::new(70., 70.), 1.), Some(1));
+}
+
+#[test]
+fn equipment_authoring_measurements_own_raw_clicks_over_selected_handles() {
+    use reshiki::graphics::{Graphic, GraphicKind, GraphicStyle};
+    let mut doc = Document::default();
+    doc.graphics.push(Graphic::dragged(
+        1,
+        GraphicKind::Rectangle,
+        World::new(-40., -30.),
+        World::new(40., 30.),
+        GraphicStyle::default(),
+        Default::default(),
+        false,
+    ));
+    let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(600., 400.));
+    for rulers in [false, true] {
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.selected = &[1];
+        canvas.tool = Tool::Select;
+        canvas.camera = Camera {
+            center: World::new(15., -20.),
+            zoom: 2.,
+        };
+        canvas.guides.rulers = rulers;
+        canvas.equipment_authoring = Some(EquipmentAuthoring {
+            points: &[],
+            measuring: true,
+            direction: None,
+            ..Default::default()
+        });
+        let paper = canvas.guides.paper(bounds);
+        let mut state = State::default();
+        for world in [World::new(-40., -30.), World::new(40., 30.)] {
+            let local = canvas.camera.screen(world, paper);
+            let pointer = local + iced::Vector::new(paper.x, paper.y);
+            let cursor = mouse::Cursor::Available(pointer);
+            canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::CursorMoved { position: pointer }),
+                bounds,
+                cursor,
+            );
+            let action = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                    bounds,
+                    cursor,
+                )
+                .unwrap();
+            let Some(Edit::EquipmentAuthoringPoint(point)) = action.into_inner().0 else {
+                panic!("Measurement owns the handle");
+            };
+            assert!(point.distance(world) < 0.001, "{point:?} != {world:?}");
+            assert!(state.gesture.is_none());
+            let released = canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                cursor,
+            );
+            assert!(
+                released.and_then(|action| action.into_inner().0).is_none(),
+                "No edit on release"
+            );
+        }
+        canvas.equipment_authoring = Some(EquipmentAuthoring {
+            points: &[],
+            measuring: false,
+            direction: None,
+            ..Default::default()
+        });
+        let pointer = Point::new(bounds.center_x(), bounds.center_y());
+        let cursor = mouse::Cursor::Available(pointer);
+        let action = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                bounds,
+                cursor,
+            )
+            .unwrap();
+        assert!(
+            matches!(
+                action.into_inner().0,
+                Some(Edit::EquipmentAuthoringShape { .. })
+            ),
+            "The draft owns shape selection without starting a drawing gesture"
+        );
+        assert!(state.gesture.is_none());
+    }
+}
+
+fn borderless_table_fixture(degrees: f32, reflected: bool, zero_width: bool) -> Document {
+    use reshiki::graphics::table::{Border, Cell, Side, Table};
+    let mut doc = Document::default();
+    let mut graphic = Graphic::dragged(
+        1,
+        reshiki::graphics::GraphicKind::Rectangle,
+        World::default(),
+        World::new(160., 100.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    let (s, c) = degrees.to_radians().sin_cos();
+    let sign = if reflected { -1. } else { 1. };
+    graphic.axis_x = World::new(160. * c * sign, 160. * s * sign);
+    graphic.axis_y = World::new(-100. * s, 100. * c);
+    graphic.origin = World::new(
+        -(graphic.axis_x.x + graphic.axis_y.x) / 2.,
+        -(graphic.axis_x.y + graphic.axis_y.y) / 2.,
+    );
+    graphic.kind = reshiki::graphics::GraphicKind::Table;
+    graphic.layer = 9;
+    graphic.table = Some(Box::new(Table {
+        cells: [(0., 0.4), (0.6, 1.)]
+            .into_iter()
+            .enumerate()
+            .map(|(i, (lo, hi))| Cell {
+                id: i as u32 + 1,
+                lo: World::new(lo, 0.),
+                hi: World::new(hi, 1.),
+                members: if i == 0 { vec![2] } else { vec![] },
+                borders: if zero_width {
+                    [Side::Left, Side::Top, Side::Bottom, Side::Right]
+                        .map(|side| Border {
+                            side,
+                            width_pt: 0.,
+                            color: reshiki::palette::Color::Ink,
+                            pattern: Default::default(),
+                        })
+                        .to_vec()
+                } else {
+                    vec![]
+                },
+            })
+            .collect(),
+    }));
+    let position = graphic.table.as_ref().unwrap().cells[0]
+        .frame(&graphic)
+        .unwrap()
+        .point(World::new(0.5, 0.5))
+        .offset(-10., -17.5);
+    doc.annotations.push(reshiki::document::Annotation {
+        id: 2,
+        position,
+        text: "H".into(),
+        format: Default::default(),
+        angle: 0.,
+    });
+    assert!(graphic.commands().is_empty());
+    doc.graphics.push(graphic);
+    doc.validate().unwrap();
+    doc
+}
+
+#[test]
+fn borderless_table_pointer_selects_transparent_rotated_and_reflected_cells() {
+    use reshiki::graphics::table::Frame;
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    for zero_width in [false, true] {
+        for (degrees, reflected) in [(0., false), (37., false), (37., true)] {
+            let doc = borderless_table_fixture(degrees, reflected, zero_width);
+            let frame = Frame::of(&doc.graphics[0]).unwrap();
+            let blank = frame.point(World::new(0.8, 0.5));
+            assert_eq!(hit::hit_object(&doc, blank, 3.), Some(1));
+            assert_eq!(
+                hit::hit_selection_cached(&doc, blank, 3., &mut cache::SceneCache::default()),
+                vec![1]
+            );
+            assert!(
+                hit_selection(&doc, frame.point(World::new(0.5, 0.5)), 0.).is_empty(),
+                "A sparse grid gap is not a cell"
+            );
+            assert!(hit_selection(&doc, frame.point(World::new(-0.05, 0.5)), 0.).is_empty());
+            assert!(hit_selection(&doc, frame.point(World::new(-0.005, 0.5)), 3.).is_empty());
+            let canvas = MoleculeCanvas {
+                tool: Tool::Select,
+                ..chain_canvas(&doc, ChainMode::Straight)
+            };
+            let cursor = canvas.camera.screen(blank, canvas.guides.paper(bounds));
+            assert!(bounds.contains(cursor));
+            let mut state = State::default();
+            let _ = canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(cursor),
+            );
+            let edit = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(cursor),
+                )
+                .unwrap()
+                .into_inner()
+                .0
+                .unwrap();
+            let Edit::Select(ids) = edit else {
+                panic!("Expected table selection");
+            };
+            assert_eq!(ids, vec![1]);
+            assert!(
+                hit::region_selection(
+                    &doc,
+                    &[],
+                    &frame.corners(),
+                    iced::keyboard::Modifiers::empty()
+                )
+                .contains(&1)
+            );
+            assert!(doc.graphics[0].commands().is_empty());
+        }
+    }
+}
+
+#[test]
+fn borderless_table_surface_keeps_caption_bond_and_unrelated_ink_priority() {
+    use reshiki::graphics::table::{Border, Side};
+    let mut doc = borderless_table_fixture(0., false, false);
+    let caption = doc.annotations[0].position.offset(10., 10.);
+    assert_eq!(hit_selection(&doc, caption, 3.), vec![2]);
+    let a = doc.add_atom("C", World::new(-70., 30.));
+    let b = doc.add_atom("O", World::new(-30., 30.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.graphics[0].table.as_mut().unwrap().cells[0]
+        .members
+        .extend([a, b]);
+    assert_eq!(hit_selection(&doc, World::new(-70., 30.), 3.), vec![a]);
+    assert_eq!(hit_selection(&doc, World::new(-50., 30.), 3.), vec![a, b]);
+    let mut cover = Graphic::dragged(
+        doc.next_id(),
+        reshiki::graphics::GraphicKind::Rectangle,
+        World::new(38., -10.),
+        World::new(58., 10.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    cover.style.fill = Some(reshiki::palette::Color::Ink);
+    cover.layer = -10;
+    let lower = cover.id;
+    doc.graphics.push(cover.clone());
+    cover.id = doc.next_id();
+    cover.layer = -9;
+    let upper = cover.id;
+    doc.graphics.push(cover);
+    assert_eq!(hit_selection(&doc, World::new(48., 0.), 3.), vec![upper]);
+    doc.graphics[1].layer = -8;
+    assert_eq!(hit_selection(&doc, World::new(48., 0.), 3.), vec![lower]);
+    assert!(doc.graphics[0].commands().is_empty());
+    doc.graphics[0].table.as_mut().unwrap().cells[1]
+        .borders
+        .push(Border {
+            side: Side::Top,
+            width_pt: 1.,
+            color: reshiki::palette::Color::Ink,
+            pattern: Default::default(),
+        });
+    assert!(!doc.graphics[0].commands().is_empty());
+    assert_eq!(hit_selection(&doc, World::new(48., -50.), 3.), vec![1]);
+    doc.validate().unwrap();
+}
+
+#[test]
+fn borderless_table_surface_yields_to_a_visible_3d_model() {
+    let mut doc = borderless_table_fixture(0., false, true);
+    let a = doc.add_atom("C", World::new(40., 0.));
+    let b = doc.add_atom("O", World::new(60., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let atoms = [(a, [-0.7, 0., 0.]), (b, [0.7, 0., 0.])]
+        .map(|(id, xyz)| reshiki::models3d::Placed { id, xyz })
+        .to_vec();
+    let model = reshiki::models3d::Model3d::new(
+        &doc,
+        atoms,
+        vec![],
+        reshiki::models3d::ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    reshiki::models3d::set_display(&mut doc, 0, reshiki::models3d::Display::ThreeD);
+    let (lo, hi) = reshiki::models3d::frame(&doc, &doc.models[0]).unwrap();
+    let probe = lo.lerp(hi, 0.5);
+    assert!(
+        reshiki::graphics::table::cell_frames(&doc.graphics[0]).any(|frame| frame.contains(probe))
+    );
+    assert_eq!(hit_selection(&doc, probe, 3.), vec![a, b]);
+    assert!(doc.graphics[0].commands().is_empty());
 }

@@ -1,6 +1,65 @@
 use super::*;
 use reshiki::typography::{Script, ScriptRun};
 
+fn own_in_left_table_cell(doc: &mut Document, members: Vec<u64>) {
+    use reshiki::graphics::{
+        Graphic, GraphicKind,
+        table::{Cell, Table},
+    };
+    let mut graphic = Graphic::dragged(
+        doc.next_id(),
+        GraphicKind::Rectangle,
+        Point::default(),
+        Point::new(200., 100.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    graphic.kind = GraphicKind::Table;
+    graphic.table = Some(Box::new(Table {
+        cells: vec![Cell {
+            id: 1,
+            lo: Point::default(),
+            hi: Point::new(0.5, 1.),
+            members,
+            borders: vec![],
+        }],
+    }));
+    doc.graphics.push(graphic);
+}
+
+#[test]
+fn atom_and_bond_click_commits_skip_invisible_table_overflow() {
+    let (mut app, _) = App::new();
+    let point = Point::new(140., 50.);
+    let mut doc = Document::default();
+    let hidden = doc.add_atom("C", point);
+    let visible = doc.add_atom("C", point.offset(2., 0.));
+    own_in_left_table_cell(&mut doc, vec![hidden]);
+    app.tab.doc = doc.clone();
+    app.tool = Tool::Atom;
+    app.element = "N".into();
+    app.canvas_click(point, doc);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.atom(hidden).unwrap().element, "C");
+    assert_eq!(app.tab.doc.atom(visible).unwrap().element, "N");
+
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(110., 50.));
+    let b = doc.add_atom("C", Point::new(170., 50.));
+    doc.add_bond(a, b, 1, "plain");
+    let c = doc.add_atom("C", Point::new(110., 52.));
+    let d = doc.add_atom("C", Point::new(170., 52.));
+    doc.add_bond(c, d, 1, "plain");
+    own_in_left_table_cell(&mut doc, vec![a, b]);
+    app.tab.doc = doc.clone();
+    app.tool = Tool::Bond(2);
+    app.canvas_click(point, doc);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.bond_between(a, b).unwrap().1.order, 1);
+    assert_eq!(app.tab.doc.bond_between(c, d).unwrap().1.order, 2);
+}
+
 #[test]
 fn atom_palette_replacement_clears_manual_label_runs() {
     let (mut app, _) = App::new();

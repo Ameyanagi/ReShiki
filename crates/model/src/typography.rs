@@ -368,7 +368,14 @@ impl TextFormat {
     }
     /// Preserve spans across an editor replacement. The original range resolves
     /// ambiguous diffs such as replacing or deleting one of several equal letters.
-    pub fn edited(&mut self, old: &str, new: &str, replaced: Range<usize>) {
+    /// Returns the range of `new` that took an inherited style (the typed text)
+    /// and the offset in `old` of the character it took the style from.
+    pub fn edited(
+        &mut self,
+        old: &str,
+        new: &str,
+        replaced: Range<usize>,
+    ) -> (Range<usize>, usize) {
         if old != new {
             self.name_breaks = false;
         }
@@ -382,31 +389,49 @@ impl TextFormat {
                         .checked_add(suffix.len())
                         .is_some_and(|end| end <= new.len())
             });
-        let mut prefix = if exact {
-            replaced.start
-        } else {
-            old.chars()
-                .zip(new.chars())
-                .take_while(|(a, b)| a == b)
+        // The unchanged start and end of two texts, in bytes.
+        let kept = |a: &str, b: &str| -> (usize, usize) {
+            let head = a
+                .chars()
+                .zip(b.chars())
+                .take_while(|(x, y)| x == y)
                 .map(|(c, _)| c.len_utf8())
-                .sum::<usize>()
-        };
-        while !old.is_char_boundary(prefix) || !new.is_char_boundary(prefix) {
-            prefix -= 1;
-        }
-        let suffix = if exact {
-            old.len() - replaced.end
-        } else {
-            old.get(prefix..)
+                .sum::<usize>();
+            let tail = a
+                .get(head..)
                 .unwrap_or_default()
                 .chars()
                 .rev()
-                .zip(new.get(prefix..).unwrap_or_default().chars().rev())
-                .take_while(|(a, b)| a == b)
+                .zip(b.get(head..).unwrap_or_default().chars().rev())
+                .take_while(|(x, y)| x == y)
                 .map(|(c, _)| c.len_utf8())
-                .sum::<usize>()
+                .sum::<usize>();
+            (head, tail)
         };
-        let inherited = self.at(prefix.min(old.len().saturating_sub(1))).clone();
+        // Inside the replaced range, text that stays the same keeps its style:
+        // pasting a text over itself changes nothing.
+        let (prefix, suffix) = if exact {
+            let inserted = replaced.start..new.len() - (old.len() - replaced.end);
+            let (head, tail) = kept(
+                old.get(replaced.clone()).unwrap_or_default(),
+                new.get(inserted).unwrap_or_default(),
+            );
+            (replaced.start + head, old.len() - replaced.end + tail)
+        } else {
+            kept(old, new)
+        };
+        // New text takes the style of the replaced text it follows, never of
+        // text outside the selection.
+        let from = if exact && replaced.end > replaced.start {
+            prefix.min(replaced.end - 1)
+        } else {
+            prefix
+        };
+        let mut from = from.min(old.len().saturating_sub(1));
+        while !old.is_char_boundary(from) {
+            from -= 1;
+        }
+        let inherited = self.at(from).clone();
         let styles = new
             .char_indices()
             .map(|(i, _)| {
@@ -420,6 +445,7 @@ impl TextFormat {
             })
             .collect();
         self.pack(new, styles);
+        (prefix..new.len() - suffix, from)
     }
 }
 
@@ -556,15 +582,34 @@ fn cjk(c: char) -> bool {
 
 /// One layout feeds canvas, hit testing, selection, SVG, PDF and PNG.
 pub fn layout(text: &str, format: &TextFormat) -> Layout {
-    layout_with_metrics(text, format, style::glyph_metrics)
+    layout_with_metrics(text, format, style::cluster_metrics)
 }
 
+/// Native chemistry-table text first uses normal word boundaries, then wraps
+/// an indivisible word between whole grapheme clusters when the cell is narrow.
+/// This is a derived paint layout; no line breaks or spans are stored back.
+pub(crate) fn cell_layout(text: &str, format: &TextFormat) -> Layout {
+    layout_with_metrics_mode(text, format, style::cluster_metrics, true)
+}
+
+/// Lay out grapheme clusters, so an emoji sequence or a letter with its marks
+/// is measured, wrapped and drawn as one piece.
 fn layout_with_metrics(
     text: &str,
     format: &TextFormat,
-    glyph_metrics: impl Fn(char, &TextStyle) -> (&'static str, f32),
+    cluster_metrics: impl Fn(&str, &TextStyle) -> (&'static str, f32),
 ) -> Layout {
-    let mut lines: Vec<Vec<(char, TextStyle, f32)>> = vec![vec![]];
+    layout_with_metrics_mode(text, format, cluster_metrics, false)
+}
+
+fn layout_with_metrics_mode<'t>(
+    text: &'t str,
+    format: &TextFormat,
+    cluster_metrics: impl Fn(&str, &TextStyle) -> (&'static str, f32),
+    cell: bool,
+) -> Layout {
+    use unicode_segmentation::UnicodeSegmentation;
+    let mut lines: Vec<Vec<(&'t str, TextStyle, f32)>> = vec![vec![]];
     let max_width = format.width_pt.map(|w| style::DEFAULT.world(w));
     let mut width = 0.0;
     let mut formula_digit = false;
@@ -577,8 +622,9 @@ fn layout_with_metrics(
     // Protected name punctuation is usable only if this line has no preferred
     // break and would otherwise overflow. Keep its position through a split.
     let mut name_fallback_at = None;
-    for (index, c) in text.char_indices() {
-        if c == '\n' {
+    for (index, cluster) in text.grapheme_indices(true) {
+        let c = cluster.chars().next().unwrap_or(' ');
+        if cluster.contains('\n') {
             lines.push(vec![]);
             width = 0.0;
             break_at = None;
@@ -595,7 +641,7 @@ fn layout_with_metrics(
             formula_digit = s.script == Script::Subscript;
         }
         previous = c;
-        let (family, advance) = glyph_metrics(c, &s);
+        let (family, advance) = cluster_metrics(cluster, &s);
         s.family = family.into();
         let advance = advance * s.size();
         if let Some(line) = lines.last()
@@ -618,10 +664,13 @@ fn layout_with_metrics(
                 name_fallback_at = Some(line.len());
             }
         }
-        // Prefer word, CJK and unprotected name boundaries. An indivisible word
-        // wider than the box still overflows instead of being cut mid-word.
+        // Prefer word, CJK and unprotected name boundaries. A native cell may
+        // also split a word, keeping each grapheme (and its style) intact.
         if max_width.is_some_and(|limit| width + advance > limit)
-            && let Some(split) = break_at.take().or(name_fallback_at)
+            && let Some(split) = break_at.take().or(name_fallback_at).or_else(|| {
+                cell.then(|| lines.last().map_or(0, Vec::len))
+                    .filter(|&n| n > 0)
+            })
             && let Some(line) = lines.last_mut()
         {
             let overflow = line.split_off(split);
@@ -632,7 +681,7 @@ fn layout_with_metrics(
                 .filter(|at| *at > 0);
         }
         if let Some(line) = lines.last_mut() {
-            line.push((c, s, advance));
+            line.push((cluster, s, advance));
         }
         width += advance;
         before_previous = before;
@@ -673,7 +722,7 @@ fn layout_with_metrics(
             TextAlign::Right => width - line_width,
             _ => 0.0,
         };
-        let spaces = line.iter().filter(|(c, _, _)| *c == ' ').count();
+        let spaces = line.iter().filter(|(c, _, _)| *c == " ").count();
         let gap = if format.alignment == TextAlign::Justified
             && line_index + 1 < line_count
             && spaces > 0
@@ -682,7 +731,7 @@ fn layout_with_metrics(
         } else {
             0.0
         };
-        for (c, s, advance) in line {
+        for (cluster, s, advance) in line {
             let shift = match s.script {
                 Script::Normal if s.size() < size => {
                     (size - s.size()) * style::text_ascent(&s) / s.size()
@@ -698,17 +747,17 @@ fn layout_with_metrics(
                 && (last.position.y - position.y).abs() < 0.001
                 && (last.position.x + fragment_width - position.x).abs() < 0.01
             {
-                last.text.push(c);
+                last.text.push_str(cluster);
                 fragment_width += advance;
             } else {
                 fragments.push(TextFragment {
                     position,
-                    text: c.to_string(),
+                    text: cluster.to_owned(),
                     style: s,
                 });
                 fragment_width = advance;
             }
-            x += advance + if c == ' ' { gap } else { 0.0 };
+            x += advance + if cluster == " " { gap } else { 0.0 };
         }
         y += size * format.line_spacing + script_margin;
     }

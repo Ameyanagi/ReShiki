@@ -325,9 +325,10 @@ fn office_session_files_are_not_recent_but_normal_files_still_are() {
         binding,
         Some((
             session,
-            Ok(super::super::files::Prepared::Native(Box::new(
-                document.clone(),
-            ))),
+            Ok(super::super::files::Prepared::Native(
+                Box::new(document.clone()),
+                None,
+            )),
         )),
     );
     assert!(app.start.recent.entries.is_empty());
@@ -335,7 +336,10 @@ fn office_session_files_are_not_recent_but_normal_files_still_are() {
     std::fs::write(&ordinary, document.file_json().unwrap()).unwrap();
     let _ = app.file_prepared(Some((
         ordinary.clone(),
-        Ok(super::super::files::Prepared::Native(Box::new(document))),
+        Ok(super::super::files::Prepared::Native(
+            Box::new(document),
+            None,
+        )),
     )));
     assert_eq!(app.start.recent.entries.len(), 1);
     assert_eq!(app.start.recent.entries[0].path, ordinary);

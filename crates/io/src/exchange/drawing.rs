@@ -11,13 +11,33 @@ use std::collections::HashMap;
 #[cfg(test)]
 mod bracket_superscript_tests;
 mod clipboard;
+mod compound_fill;
+#[cfg(test)]
+mod compound_fill_tests;
+#[cfg(test)]
+mod cycle_tests;
+mod cycles;
+#[cfg(test)]
+mod effects_tests;
+#[cfg(test)]
+mod fill_effects_tests;
 mod generic;
 mod groups;
 mod labels;
 mod ligands;
 mod objects;
+#[cfg(test)]
+mod panel_tests;
 mod partial_charges;
+#[cfg(test)]
+mod piece_tests;
+#[cfg(test)]
+mod purpose_tests;
+mod tables;
+mod tlc;
 mod tree;
+#[cfg(test)]
+mod turned_text_tests;
 pub use clipboard::write as write_clipboard;
 use tree::{Key, Tree};
 
@@ -134,6 +154,12 @@ impl P {
     fn lerp(self, b: Self, t: f64) -> Self {
         self.add((b.x - self.x) * t, (b.y - self.y) * t)
     }
+    /// This point turned `degrees` clockwise about `pivot`.
+    fn turned(self, pivot: Self, degrees: f64) -> Self {
+        let (s, c) = degrees.to_radians().sin_cos();
+        let (x, y) = (self.x - pivot.x, self.y - pivot.y);
+        pivot.add(x * c - y * s, x * s + y * c)
+    }
 }
 
 struct Writer<'a> {
@@ -153,12 +179,17 @@ struct Writer<'a> {
     atom_nodes: Vec<Key>,
     bond_nodes: Vec<Key>,
     objects: Vec<(u64, Key)>,
+    /// Artwork generated from atoms has no separate drawing object ID.
+    atom_artwork: HashMap<Key, u64>,
     next: usize,
     scale: f64,
     shift: P,
     painted_bounds: (P, P),
     work: usize,
     variable_labels: bool,
+    /// Each molecule in a fragment of its own even without groups, so a
+    /// catalytic cycle's parts can be named apart.
+    split_fragments: bool,
 }
 
 /// Serialize a complete drawing without mutating it. Reject unrepresentable
@@ -194,6 +225,32 @@ fn write_impl(
     let document = depth_painted.as_ref();
     let resolved = crate::canvas_theme::resolved_exchange_document(document);
     let document = resolved.as_ref();
+    // A catalytic cycle travels as the arrows and text it draws.
+    let (cycles, written_cycles) = crate::cycles::materialized(document);
+    let document = cycles.as_ref();
+    // Lab equipment travels as a group of plain curves per piece.
+    let pieces = crate::equipment::placed::materialized(document);
+    let document = pieces.as_ref();
+    // Arrow looks without a ChemDraw form travel as grouped shapes.
+    let lowered = crate::arrows::lowered(document);
+    let document = lowered.as_ref();
+    let shape_paths: HashMap<u64, Vec<PathCommand>>;
+    let options = if matches!(lowered, std::borrow::Cow::Owned(_))
+        || matches!(cycles, std::borrow::Cow::Owned(_))
+        || matches!(pieces, std::borrow::Cow::Owned(_))
+    {
+        let mut paths = options.graphic_paths.cloned().unwrap_or_default();
+        for g in &document.graphics {
+            paths.entry(g.id).or_insert_with(|| g.commands());
+        }
+        shape_paths = paths;
+        Options {
+            graphic_paths: Some(&shape_paths),
+            ..options
+        }
+    } else {
+        options
+    };
     document.validate().map_err(invalid)?;
     if document
         .atoms
@@ -331,6 +388,8 @@ fn write_impl(
         crate::palette::Palette::of(original),
     )?;
     w.variable_labels = variable_labels;
+    w.split_fragments =
+        !written_cycles.is_empty() || document.graphics.iter().any(|g| g.table.is_some());
     w.atoms(&graph, &stereocentres)?;
     w.bonds()?;
     w.circles(&rings)?;
@@ -368,7 +427,8 @@ fn write_impl(
     // created beside their final bond owners.
     w.ring_fills()?;
     w.property_captions()?;
-    if !document.ring_fills.is_empty() || document.canvas_theme.is_dark() {
+    w.purposes()?;
+    if !document.ring_fills.is_empty() {
         // Editable readers need a distinct stacking ordinal for every object.
         // Equal Z values on atoms/bonds can make an opaque fill cover them.
         let mut layers = Vec::new();
@@ -386,45 +446,8 @@ fn write_impl(
             w.tree.set(key, "Z", (rank + 1).to_string())?;
         }
     }
-    if document.canvas_theme.is_dark() {
-        // A real filled object survives paste into another ChemDraw document;
-        // a document background setting alone does not travel with a selection.
-        // The scene resolves colors itself; pass the unresolved document.
-        let (lo, hi) = crate::scene::bounds(&crate::scene::primitives(original));
-        let background = w.raw_color(document.canvas_theme.background())?;
-        w.tree.set(0, "bgcolor", background.clone())?;
-        let id = w.id()?;
-        // ChemDraw treats Z=0 as unspecified. Reserve a positive backmost rank.
-        for key in w.tree.descendants(w.page)? {
-            if let Some(z) = w.tree.get(key, "Z")? {
-                let z = z
-                    .parse::<usize>()
-                    .map_err(|_| invalid("Invalid stacking order"))?;
-                w.tree.set(key, "Z", (z + 1).to_string())?;
-            }
-        }
-        let rectangle = w.tree.add(
-            Some(w.page),
-            "graphic",
-            [
-                ("id", id),
-                ("Z", "1".into()),
-                ("GraphicType", "Rectangle".into()),
-                ("RectangleType", "Filled".into()),
-                ("FillType", "Solid".into()),
-                ("LineType", "Solid".into()),
-                ("LineWidth", "0".into()),
-                ("color", background),
-                (
-                    "BoundingBox",
-                    format!("{} {}", w.position(lo), w.position(hi)),
-                ),
-            ],
-        )?;
-        let children = &mut w.tree.node_mut(w.page)?.children;
-        children.retain(|key| *key != rectangle);
-        children.insert(0, rectangle);
-    }
+    let payload = w.cycles(&written_cycles)?;
+    w.tables()?;
     let (_, hi) = w.painted_bounds;
     let right = (hi.x * w.scale + w.shift.x + 30.).ceil().max(612.);
     let bottom = (hi.y * w.scale + w.shift.y + 30.).ceil().max(792.);
@@ -438,9 +461,17 @@ fn write_impl(
         w.tree
             .set(w.page, "HeightPages", (bottom / 792.).ceil().to_string())?;
     }
-    w.tree.serialize()
+    let xml = w.tree.serialize()?;
+    Ok(
+        match payload.as_ref().and_then(crate::exchange::cycles::encode) {
+            Some(encoded) => crate::exchange::cycles::seal_cdxml(xml, &encoded),
+            None => xml,
+        },
+    )
 }
 
+#[cfg(test)]
+mod looks_tests;
 #[cfg(test)]
 mod tests;
 
@@ -630,12 +661,14 @@ impl<'a> Writer<'a> {
             atom_nodes: Vec::new(),
             bond_nodes: Vec::new(),
             objects: Vec::new(),
+            atom_artwork: HashMap::new(),
             next: doc.atoms.len() + 3,
             scale,
             shift,
             painted_bounds,
             work: 50_000_000,
             variable_labels: false,
+            split_fragments: false,
         };
         w.font(&style.font_family)?;
         // ChemDraw requires the first two explicit entries to remain white and
@@ -763,6 +796,31 @@ impl<'a> Writer<'a> {
                     .map_err(|_| invalid("Invalid stacking order"))
             })
             .transpose()
+    }
+    /// Mark each atom of a Reference or Illustration molecule, and each such
+    /// arrow, with its purpose, so ReShiki reads it back.
+    fn purposes(&mut self) -> Result<()> {
+        let mut marked: Vec<_> = self
+            .atom_nodes
+            .iter()
+            .zip(&self.doc.atoms)
+            .filter(|(_, atom)| !atom.purpose.is_chemistry())
+            .map(|(n, atom)| (*n, atom.purpose))
+            .collect();
+        // A retrosynthesis arrow also has a superseded legacy graphic.
+        for arrow in self.doc.arrows.iter().filter(|a| !a.purpose.is_chemistry()) {
+            marked.extend(
+                self.objects
+                    .iter()
+                    .filter(|(id, _)| *id == arrow.id)
+                    .map(|(_, n)| (*n, arrow.purpose)),
+            );
+        }
+        for (key, purpose) in marked {
+            self.tree
+                .set(key, crate::exchange::PURPOSE, purpose.label())?;
+        }
+        Ok(())
     }
     fn atom_node(&self, id: u64) -> Result<Key> {
         self.atom_indices

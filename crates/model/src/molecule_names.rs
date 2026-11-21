@@ -316,6 +316,12 @@ pub fn show(
     if text.trim().is_empty() || text.len() > 32_768 || identity(doc, atoms)? != smiles {
         return Err("The generated name does not match this molecule".into());
     }
+    crate::graphics::table::require_same_cell(doc, atoms)?;
+    let before = doc
+        .graphics
+        .iter()
+        .any(|g| g.table.is_some())
+        .then(|| doc.clone());
     let (lo, hi) =
         crate::scene::selection_bounds(doc, atoms).ok_or("The molecule has no bounds")?;
     format.spans.clear();
@@ -347,6 +353,7 @@ pub fn show(
         .map(|name| name.annotation)
         .unwrap_or_else(|| doc.next_id());
     let mut caption = Annotation {
+        angle: 0.,
         id,
         position: Point::default(),
         text: text.clone(),
@@ -368,6 +375,9 @@ pub fn show(
         *current = caption;
     } else {
         doc.annotations.push(caption);
+    }
+    if let Some(before) = before {
+        crate::graphics::table::inherit_attachment(&before, doc, &[id], atoms)?;
     }
     doc.molecule_names.retain(|name| name.annotation != id);
     doc.molecule_names.push(MoleculeName {

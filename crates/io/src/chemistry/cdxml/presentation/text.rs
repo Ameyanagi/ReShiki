@@ -238,7 +238,8 @@ impl<'a, 'input> TextReader<'a, 'input> {
         {
             return Err(Error::Paragraph);
         }
-        if numeric::float(inherited("RotationAngle").unwrap_or("0"))? != 0.0 {
+        // A caption's turn is read with its position.
+        if atom && numeric::float(inherited("RotationAngle").unwrap_or("0"))? != 0.0 {
             return Err(Error::Rotation);
         }
         Ok(NativeText {

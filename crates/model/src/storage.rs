@@ -94,13 +94,35 @@ fn write(path: &Path, bytes: &[u8], mode: u32) -> Result<(), String> {
     }
     temp.write_all(bytes).map_err(|e| e.to_string())?;
     temp.as_file().sync_all().map_err(|e| e.to_string())?;
-    temp.persist(path).map_err(|e| e.to_string())?;
+    persist(temp, path)?;
     // The rename is durable once its folder is synced.
     #[cfg(unix)]
     std::fs::File::open(parent)
         .and_then(|folder| folder.sync_all())
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Rename the finished temporary file over `path`. Windows refuses to
+/// replace a file while another writer is replacing or reading it, so a
+/// refused rename is tried again for up to about a second.
+fn persist(mut temp: tempfile::NamedTempFile, path: &Path) -> Result<(), String> {
+    let mut tries = 0;
+    loop {
+        match temp.persist(path) {
+            Ok(_) => return Ok(()),
+            Err(e)
+                if cfg!(windows)
+                    && e.error.kind() == io::ErrorKind::PermissionDenied
+                    && tries < 50 =>
+            {
+                tries += 1;
+                temp = e.file;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(e) => return Err(e.error.to_string()),
+        }
+    }
 }
 
 /// [`write_atomic`] `path`, then remove `old` when given; an `old` already

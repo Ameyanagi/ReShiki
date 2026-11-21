@@ -336,7 +336,7 @@ async fn mixed_phase_graphics_export_as_grouped_colored_vectors() {
 }
 
 #[tokio::test]
-async fn palette_colored_orbitals_export_as_shown_on_the_dark_canvas() {
+async fn palette_colored_orbitals_from_the_dark_canvas_export_as_shown_on_the_light_one() {
     use reshiki::{
         canvas_theme::{CanvasTheme, ColorTheme},
         palette::{Color, Hue, Palette, Row},
@@ -351,7 +351,8 @@ async fn palette_colored_orbitals_export_as_shown_on_the_dark_canvas() {
     tool.style.stroke = Color::Palette(Hue::Blue, Row::Strong);
     tool.place(&mut doc, p(0., 0.), p(60., 0.), false, 2.)
         .unwrap();
-    let blue = Palette::of(&doc).swatch(Hue::Blue, Row::Strong);
+    // ChemDraw has no dark canvas: the file shows the light canvas's blue.
+    let blue = Palette::in_mode(&doc, CanvasTheme::Light).swatch(Hue::Blue, Row::Strong);
     let mut request = Request::molecule("export", doc);
     request.format = Some("cdxml".into());
     let xml = engine.request(request).await.unwrap().output.unwrap();

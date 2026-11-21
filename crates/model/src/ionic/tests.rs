@@ -12,6 +12,7 @@ fn ion_bracket_charge_requires_one_complete_component_and_formats_the_net_charge
     // A generated name caption joins a complete selection but is not an atom.
     let caption = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(-20., 40.),
         text: "methanolate".into(),
@@ -202,6 +203,7 @@ fn condensed_labels_and_abbreviations_stay_intact() {
         label_style: None,
         label_color_override: false,
         highlight: None,
+        highlight_style: None,
         alignment: Default::default(),
     });
     let before = doc.clone();

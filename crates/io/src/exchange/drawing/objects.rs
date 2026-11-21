@@ -1,7 +1,8 @@
 use super::*;
 use crate::{
-    arrows::{Head, HeadShape, NoGo},
-    graphics::{GraphicKind, LinePattern, PathHeads},
+    arrows::{Body, Head, HeadShape, NoGo},
+    graphics::{GraphicKind, GraphicStyle, LinePattern, PathHeads},
+    ring_fills::RingEffect,
     scientific::MarkKind,
 };
 
@@ -79,7 +80,12 @@ impl Writer<'_> {
                         y: (start.y + end.y + end.x - start.x) / 2.,
                     })
                 });
-            let curved = !a.nodes.is_empty() || control.is_some() || cubic.is_some();
+            // ChemDraw draws a circular arc arrow from its centre and sweep.
+            let native_arc = a
+                .arc_circle()
+                .filter(|_| !matches!(a.kind.as_str(), "equilibrium" | "retro"));
+            let curved = native_arc.is_none()
+                && (!a.nodes.is_empty() || control.is_some() || cubic.is_some());
             if s.pattern == LinePattern::Dotted {
                 return Err(invalid("Dotted arrows require native or image export"));
             }
@@ -88,9 +94,9 @@ impl Writer<'_> {
                     "Curved retrosynthesis arrows require native or image export",
                 ));
             }
-            if a.kind == "equilibrium" && (curved || s.equilibrium_ratio != 1.) {
+            if a.kind == "equilibrium" && curved {
                 return Err(invalid(
-                    "Bent or unequal equilibrium arrows require native or image export",
+                    "Bent equilibrium arrows require native or image export",
                 ));
             }
             if s.dipole && s.tail != Head::None {
@@ -137,10 +143,11 @@ impl Writer<'_> {
                         ("LineWidth", number(style_real(s.width_pt))),
                         (
                             "LineType",
-                            if s.pattern == LinePattern::Dashed {
-                                "Dashed"
-                            } else {
-                                "Solid"
+                            // ChemDraw has no wavy curve; its curves stay solid.
+                            match s.pattern {
+                                LinePattern::Dashed => "Dashed",
+                                LinePattern::Wavy if !curved => "Wavy",
+                                _ => "Solid",
                             }
                             .into(),
                         ),
@@ -162,9 +169,73 @@ impl Writer<'_> {
             if s.dipole {
                 self.tree.set(n, "Dipole", "yes")?;
             }
+            // ChemDraw's block arrows: a hollow head on a shaft as wide as
+            // the shaft spacing, filled, outlined or shaded, all sized in
+            // hundredths of the line width.
+            let body = a.drawn_body();
+            if !body.is_line() {
+                let length = style_real(s.head_length_pt);
+                let (gap, width) = (style_real(s.gap_pt), style_real(s.head_width_pt));
+                // A filled body has no visible outline, so a 1 pt line keeps
+                // the sizes in points. An outline keeps its width while every
+                // size stays within what ChemDraw files allow.
+                let outline = style_real(s.width_pt);
+                let fits = |pt: f64, lo: f64, hi: f64| (lo..=hi).contains(&(pt / outline));
+                let line = if body == Body::Hollow
+                    && fits(length, 0.5, 24.)
+                    && fits((width - gap).max(0.25), 0.25, 16.)
+                    && fits(gap, 0.5, 16.)
+                {
+                    outline
+                } else {
+                    1.
+                };
+                self.tree.set(n, "LineWidth", number(line))?;
+                let size = |pt: f64| integer(pt / line * 100.);
+                // Round the length first and keep the center within the
+                // reader's notch range, as for line arrows.
+                let head = (length / line * 100.).round_ties_even();
+                let center = (head * (1. - style_real(s.head_notch)))
+                    .round_ties_even()
+                    .clamp((head / 10.).ceil(), head);
+                self.tree.set(n, "HeadSize", integer(head))?;
+                self.tree.set(n, "ArrowheadCenterSize", integer(center))?;
+                self.tree.set(
+                    n,
+                    "FillType",
+                    match body {
+                        Body::Hollow => "None",
+                        Body::Gradient => "Shaded",
+                        _ => "Solid",
+                    },
+                )?;
+                self.tree.set(n, "ArrowheadType", "Hollow")?;
+                self.tree.set(n, "ArrowShaftSpacing", size(gap))?;
+                self.tree
+                    .set(n, "ArrowheadWidth", size((width - gap).max(0.25)))?;
+            }
             if matches!(a.kind.as_str(), "equilibrium" | "retro") {
                 self.tree
                     .set(n, "ArrowShaftSpacing", integer(style_real(s.gap_pt) * 100.))?;
+            }
+            // ChemDraw opens an angled retrosynthesis head as wide as its
+            // center size, which an angled head has no other use for.
+            if a.kind == "retro" && s.shape == HeadShape::Open {
+                let length = (style_real(s.head_length_pt) * 100.).round_ties_even();
+                let width = (style_real(s.head_width_pt) * 100.).round_ties_even();
+                self.tree.set(
+                    n,
+                    "ArrowheadCenterSize",
+                    integer(width.clamp((length / 10.).ceil(), length)),
+                )?;
+            }
+            // ChemDraw's forward length against the reverse, in hundredths.
+            if a.kind == "equilibrium" && s.equilibrium_ratio != 1. {
+                self.tree.set(
+                    n,
+                    "ArrowEquilibriumRatio",
+                    integer(100. / style_real(s.equilibrium_ratio)),
+                )?;
             }
             if curved {
                 let points = if !a.nodes.is_empty() {
@@ -233,6 +304,19 @@ impl Writer<'_> {
                     .set(n, "Tail3D", format!("{} 0", self.position(start)))?;
                 self.tree
                     .set(n, "Head3D", format!("{} 0", self.position(end)))?;
+                if let (Some((center, radius, _)), Some(sweep)) = (native_arc, a.arc) {
+                    // ChemDraw runs from the tail through -AngularSize degrees:
+                    // the sign alone sets the direction, so a clockwise arc
+                    // has a negative size.
+                    for (key, p) in [
+                        ("Center3D", center),
+                        ("MajorAxisEnd3D", center.offset(radius, 0.)),
+                        ("MinorAxisEnd3D", center.offset(0., radius)),
+                    ] {
+                        self.tree.set(n, key, format!("{} 0", self.position(p)))?;
+                    }
+                    self.tree.set(n, "AngularSize", number(f64::from(-sweep)))?;
+                }
             }
             if a.kind == "retro" {
                 let id = self.id()?;
@@ -284,7 +368,7 @@ impl Writer<'_> {
                             .map_or(doc.drawing_style.font_size_pt, |s| s.size_pt)
                             * 0.75
                     }));
-                    self.partial_charge_text(
+                    let artwork = self.partial_charge_text(
                         text,
                         P::from(atom.position.offset(mark.offset.x, mark.offset.y)),
                         real(size),
@@ -293,6 +377,7 @@ impl Writer<'_> {
                             .map_or(Default::default(), |s| s.color),
                         0,
                     )?;
+                    self.atom_artwork.insert(artwork, atom.id);
                     continue;
                 }
                 let (symbol, attribute) = match kind {
@@ -447,7 +532,15 @@ impl Writer<'_> {
             // ChemDraw's own ring-fill representation: the area belongs to the
             // fragment and references bonds, so atom edits reshape its fill.
             let id = self.id()?;
-            let color = self.color(fill.color)?;
+            // ChemDraw paints a ring fill flat: a gradient as the color halfway
+            // along it, a see-through one as it shows over white paper, and a
+            // glow or disc as the ring's own fill.
+            let rgb = self.palette.rgb(fill.color);
+            let color = self.color(match fill.effect {
+                RingEffect::Flat | RingEffect::Glow | RingEffect::Disc => fill.color,
+                RingEffect::Gradient => mix([255; 3], rgb, 0.5),
+                RingEffect::SeeThrough => mix([255; 3], rgb, crate::graphics::Effects::SEE_THROUGH),
+            })?;
             self.tree.add(
                 parent,
                 "ColoredMolecularArea",
@@ -472,11 +565,25 @@ impl Writer<'_> {
             } else {
                 index + 2 + fill_layer
             };
+            if g.table.is_some() {
+                let n = self.native_table(g, z)?;
+                self.objects.push((g.id, n));
+                continue;
+            }
+            if let Some(tlc) = &g.tlc {
+                let n = self.tlc(g, tlc, z)?;
+                self.objects.push((g.id, n));
+                continue;
+            }
             if self.generic_bracket(g, z)? {
                 continue;
             }
             if g.kind == GraphicKind::Picture {
                 let n = self.picture(g, z)?;
+                self.objects.push((g.id, n));
+                continue;
+            }
+            if let Some(n) = self.native_shape(g, z)? {
                 self.objects.push((g.id, n));
                 continue;
             }
@@ -494,33 +601,137 @@ impl Writer<'_> {
                 self.objects.push((g.id, n));
                 continue;
             }
-            let parts = if let Some(parts) = self.options.graphic_parts.and_then(|p| p.get(&g.id)) {
-                parts.clone()
-            } else {
-                if matches!(g.kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
-                    return Err(invalid(
-                        "Scientific drawing export requires styled vector parts",
-                    ));
+            let mut parts =
+                if let Some(parts) = self.options.graphic_parts.and_then(|p| p.get(&g.id)) {
+                    parts.clone()
+                } else {
+                    if matches!(
+                        g.kind,
+                        GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon
+                    ) {
+                        return Err(invalid(
+                            "Scientific drawing export requires styled vector parts",
+                        ));
+                    }
+                    let commands = self
+                        .options
+                        .graphic_paths
+                        .and_then(|p| p.get(&g.id))
+                        .ok_or_else(|| invalid("Graphic export requires vector geometry"))?
+                        .clone();
+                    // A borderless panel keeps only its fill.
+                    let borderless = g.panel.as_ref().is_some_and(|p| !p.border);
+                    let mut style = g.style.clone();
+                    if borderless {
+                        style.width_pt = 0.;
+                    }
+                    // Border titles break the outline, never the fill.
+                    let breaks = g.outline_breaks(&doc.drawing_style.text_style());
+                    if breaks.is_empty() {
+                        vec![crate::scientific::Part {
+                            commands,
+                            style,
+                            filled: borderless,
+                        }]
+                    } else {
+                        let outline = crate::scientific::Part {
+                            commands: crate::graphics::panel::broken_outline(&commands, &breaks),
+                            // A filled panel's effects belong to its body; an
+                            // unfilled panel's are its outline's.
+                            style: crate::graphics::GraphicStyle {
+                                fill: None,
+                                effects: if style.fill.is_some() {
+                                    Default::default()
+                                } else {
+                                    style.effects
+                                },
+                                ..style.clone()
+                            },
+                            filled: false,
+                        };
+                        // A shadow fills an unfilled body with the page below.
+                        let body = (style.fill.is_some() || g.shadow_commands().is_some())
+                            .then_some(crate::scientific::Part {
+                                commands,
+                                style: crate::graphics::GraphicStyle {
+                                    width_pt: 0.,
+                                    ..style
+                                },
+                                filled: true,
+                            });
+                        body.into_iter().chain([outline]).collect()
+                    }
+                };
+            let page = crate::palette::Color::Custom(doc.canvas_theme.background());
+            // ChemDraw draws no shadow on curves: it goes first as a grey
+            // shape, and an unfilled outline shows the page inside, as the
+            // canvas draws it.
+            if let Some(commands) = g.shadow_commands().filter(|c| {
+                // One closed outline: ChemDraw fills each curve on its own,
+                // so a hole in a compound path would be filled.
+                curve_points(c).is_ok_and(|paths| matches!(paths.as_slice(), [(_, true)]))
+            }) {
+                if g.style.fill.is_none()
+                    && g.style.effects.opacity.is_none()
+                    && let Some(body) = parts.first_mut()
+                {
+                    body.style.fill = Some(page);
                 }
-                let commands = self
-                    .options
-                    .graphic_paths
-                    .and_then(|p| p.get(&g.id))
-                    .ok_or_else(|| invalid("Graphic export requires vector geometry"))?
-                    .clone();
-                vec![crate::scientific::Part {
-                    commands,
-                    style: g.style.clone(),
-                    filled: false,
-                }]
-            };
+                let grey = crate::palette::Color::Custom(
+                    doc.canvas_theme.color(crate::graphics::SHADOW_RGB),
+                );
+                parts.insert(
+                    0,
+                    crate::scientific::Part {
+                        commands,
+                        style: GraphicStyle {
+                            stroke: grey,
+                            fill: Some(grey),
+                            width_pt: 0.,
+                            ..Default::default()
+                        },
+                        filled: true,
+                    },
+                );
+            }
+            let text_style = doc.drawing_style.text_style();
+            // Border titles take the color that reads on the panel's fill and
+            // the page, and titles on a band the color that reads on the band.
+            let border = g
+                .panel
+                .as_ref()
+                .is_some_and(|p| p.place == crate::graphics::TitlePlace::Border);
+            let palette = crate::palette::Palette::of(doc);
+            let paper = doc.canvas_theme.background();
+            let backing = g.backing(|c| palette.rgb(c), paper).unwrap_or(paper);
+            let panel_parts = g.panel_parts(&text_style);
+            let mut panel_titles = g.panel_titles(&text_style);
+            if border {
+                let outline = palette.rgb(g.style.stroke);
+                let rgb = crate::graphics::panel::border_title_rgb(outline, &[backing, paper]);
+                if rgb != outline {
+                    for label in &mut panel_titles {
+                        label.style.color = crate::palette::Color::Custom(rgb);
+                    }
+                }
+            } else {
+                let band = palette.rgb(g.style.stroke);
+                let ink = if crate::color_contrast::luminance(band) > 0.45 {
+                    [0; 3]
+                } else {
+                    [255; 3]
+                };
+                for label in &mut panel_titles {
+                    label.style.color = crate::palette::Color::Custom(ink);
+                }
+            }
             let mut parsed = Vec::new();
             for part in parts {
                 // Scene-created fill pieces have no stroke. Their original
                 // orbital boundary is exported separately, so clipping edges
                 // must not acquire an artificial outline.
                 let mut checked_style = part.style.clone();
-                if part.filled && checked_style.width_pt == 0. {
+                if (part.filled || g.is_fill_only_path()) && checked_style.width_pt == 0. {
                     checked_style.width_pt = 0.6;
                 }
                 checked_style.validate().map_err(invalid)?;
@@ -528,7 +739,8 @@ impl Writer<'_> {
                     return Err(invalid("Dotted graphics require native or image export"));
                 }
                 self.spend(part.commands.len())?;
-                let paths = curve_points(&part.commands)?;
+                let commands = super::compound_fill::explicit_subpaths(&part.commands);
+                let paths = curve_points(&commands)?;
                 if paths.is_empty() || paths.iter().any(|(points, _)| points.len() < 6) {
                     return Err(invalid(
                         "A graphic needs at least two anchors for editable export",
@@ -542,20 +754,34 @@ impl Writer<'_> {
                         "Mixed open and closed filled paths cannot be preserved",
                     ));
                 }
-                parsed.push((part.style, paths));
+                let closed = paths.iter().all(|(_, closed)| *closed);
+                let paint = self.chemdraw_style(&part.style, closed);
+                // A filled compound is one nonzero region, not one fill per
+                // contour. Keep faded/shaded styles on their existing path.
+                let joined = (paths.len() > 1
+                    && closed
+                    && paint.fill.is_some()
+                    && paint.effects.opacity.is_none()
+                    && !paint.effects.shaded)
+                    .then(|| self.joined_fill(&paths))
+                    .transpose()?;
+                parsed.push((paint, paths, joined));
             }
             // Closed and compound paths draw no heads.
             let heads = match parsed.as_slice() {
-                [(_, paths)] if matches!(paths.as_slice(), [(_, false)]) => g.heads.as_ref(),
+                [(_, paths, _)] if matches!(paths.as_slice(), [(_, false)]) => g.heads.as_ref(),
                 _ => None,
             };
             let parent = if g
                 .superscript_label(&doc.drawing_style.text_style())
                 .is_some()
+                || g.panel.is_some()
+                || !panel_parts.is_empty()
+                || !panel_titles.is_empty()
                 || parsed.len() > 1
                 || parsed
                     .iter()
-                    .any(|(paint, paths)| paths.len() > 1 || paint.fill.is_some())
+                    .any(|(paint, paths, _)| paths.len() > 1 || paint.fill.is_some())
             {
                 let id = self.id()?;
                 self.tree
@@ -564,17 +790,42 @@ impl Writer<'_> {
                 self.page
             };
             let mut object = None;
-            for (paint, paths) in &parsed {
-                for (points, closed) in paths {
-                    let target = if parsed.len() > 1 && paint.fill.is_some() {
+            for (paint, paths, joined) in &parsed {
+                let fill_parent = if joined.is_some() {
+                    let target = if parsed.len() > 1 && g.panel.is_none() {
                         let id = self.id()?;
                         self.tree
                             .add(Some(parent), "group", [("id", id), ("Z", z.to_string())])?
                     } else {
                         parent
                     };
-                    if let Some(fill) = paint.fill {
+                    if let (Some(fill), Some(points)) = (paint.fill, joined) {
+                        self.curve(target, points, true, fill, true, 0., false, z)?;
+                    }
+                    object = Some(parent);
+                    Some(target)
+                } else {
+                    None
+                };
+                for (points, closed) in paths {
+                    // A panel's fill and its broken outline share its group.
+                    let target = if let Some(target) = fill_parent {
+                        target
+                    } else if parsed.len() > 1 && paint.fill.is_some() && g.panel.is_none() {
+                        let id = self.id()?;
+                        self.tree
+                            .add(Some(parent), "group", [("id", id), ("Z", z.to_string())])?
+                    } else {
+                        parent
+                    };
+                    // A faded fill is the outline's own: one curve draws both.
+                    let fade = paint.effects.opacity.filter(|_| *closed);
+                    if let Some(fill) = paint.fill.filter(|_| fade.is_none() && joined.is_none()) {
                         let n = self.curve(target, points, *closed, fill, true, 0., false, z)?;
+                        if paint.effects.shaded && *closed {
+                            self.tree.set(n, "CurveType", "257")?;
+                            self.tree.set(n, "FillType", "Shaded")?;
+                        }
                         object = Some(if parent != self.page { parent } else { n });
                     }
                     if paint.width_pt > 0. {
@@ -593,16 +844,215 @@ impl Writer<'_> {
                                 self.tree.set(n, name, value)?;
                             }
                         }
+                        if let Some(alpha) = fade {
+                            self.tree.set(n, "FadePercent", fade_percent(alpha))?;
+                        }
                         object = Some(if parent != self.page { parent } else { n });
                     }
                 }
             }
             self.bracket_superscript(g, parent, z)?;
+            if g.panel.is_some() {
+                self.panel(panel_parts, &panel_titles, parent, z)?;
+                let record = self.panel_record(g)?;
+                self.tree.set(parent, crate::exchange::PANEL, record)?;
+                object = Some(parent);
+            }
             if let Some(n) = object {
                 self.objects.push((g.id, n));
             }
         }
         Ok(middle)
+    }
+    /// A shaded or shadowed rectangle or oval as ChemDraw's own shape, so
+    /// ChemDraw keeps its style editable. Its one color is the fill's; an
+    /// outline in another color follows as a curve in the same group. Rotated
+    /// rectangles and wavy or dotted outlines stay curves; a line without
+    /// heads becomes ChemDraw's line, which reads back as a line and is the
+    /// one shape ChemDraw draws wavy.
+    fn native_shape(&mut self, g: &crate::graphics::Graphic, z: usize) -> Result<Option<Key>> {
+        let style = &self.chemdraw_style(&g.style, g.kind != GraphicKind::Line);
+        let (o, x, y) = (P::from(g.origin), P::from(g.axis_x), P::from(g.axis_y));
+        let ellipse = g.kind == GraphicKind::Ellipse;
+        let line = g.kind == GraphicKind::Line
+            && style.pattern != LinePattern::Dotted
+            && g.heads
+                .is_none_or(|h| h.head == Head::None && h.tail == Head::None);
+        if !line
+            && (style.effects.is_plain()
+                // A panel's titles and dividers go with its curves in one group.
+                || g.panel.is_some()
+                || !matches!(
+                    g.kind,
+                    GraphicKind::Rectangle | GraphicKind::RoundedRectangle | GraphicKind::Ellipse
+                )
+                || matches!(style.pattern, LinePattern::Dotted | LinePattern::Wavy)
+                || !ellipse && (x.y != 0. || y.x != 0.)
+                // CDX keeps CornerRadius in a signed 16-bit field.
+                || g.kind == GraphicKind::RoundedRectangle
+                    && real(g.corner_radius()) * self.scale * 100. > f64::from(i16::MAX))
+        {
+            return Ok(None);
+        }
+        // ChemDraw paints a shadowed outline white inside, so white is no fill.
+        let fill = style.fill.filter(|f| {
+            style.effects.shaded
+                || style.effects.opacity.is_some()
+                || self.palette.rgb(*f) != [255; 3]
+        });
+        // A line keeps any fill it inherited unused; it is drawn in its stroke.
+        let fill = fill.filter(|_| !line);
+        let outline = fill.is_some_and(|f| self.palette.rgb(f) != self.palette.rgb(style.stroke));
+        let color = self.color(fill.unwrap_or(style.stroke))?;
+        let parent = if outline {
+            let id = self.id()?;
+            self.tree
+                .add(Some(self.page), "group", [("id", id), ("Z", z.to_string())])?
+        } else {
+            self.page
+        };
+        let mut attributes: Vec<(&str, String)> = vec![
+            ("id", self.id()?),
+            ("Z", z.to_string()),
+            ("LineWidth", number(real(style.width_pt))),
+            ("color", color),
+        ];
+        if line {
+            // Start first, so the waves come back on the same side.
+            attributes.extend([
+                ("GraphicType", "Line".into()),
+                (
+                    "LineType",
+                    match style.pattern {
+                        LinePattern::Wavy => "Wavy",
+                        LinePattern::Dashed => "Dashed",
+                        _ => "Solid",
+                    }
+                    .into(),
+                ),
+                (
+                    "BoundingBox",
+                    format!("{} {}", self.position(o), self.position(o.add(x.x, x.y))),
+                ),
+            ]);
+            return Ok(Some(self.tree.add(Some(parent), "graphic", attributes)?));
+        }
+        let (width, height) = (x.x.hypot(x.y), y.x.hypot(y.y));
+        let mut flags = vec![];
+        if g.kind == GraphicKind::RoundedRectangle {
+            flags.push("RoundEdge");
+        }
+        if ellipse && (width - height).abs() < 1e-6 && (x.x * y.x + x.y * y.y).abs() < 1e-6 {
+            flags.push("Circle");
+        }
+        if let Some(alpha) = style.effects.opacity.filter(|_| fill.is_some()) {
+            // ChemDraw fades a plain shape's inside with its own color.
+            attributes.push(("FadePercent", fade_percent(alpha)));
+        } else if fill.is_some() {
+            flags.push(if style.effects.shaded {
+                "Shaded"
+            } else {
+                "Filled"
+            });
+        }
+        if style.pattern == LinePattern::Dashed {
+            flags.push("Dashed");
+        }
+        if let Some(d) = style.effects.shadow_pt {
+            flags.push(if ellipse { "Shadowed" } else { "Shadow" });
+            attributes.push(("ShadowSize", format!("{:.0}", real(d) * 100.)));
+        }
+        // ChemDraw's plain oval has no flag; a plain rectangle is Plain.
+        if flags.is_empty() && !ellipse {
+            flags.push("Plain");
+        }
+        if ellipse {
+            let center = o.add((x.x + y.x) / 2., (x.y + y.y) / 2.);
+            let major = center.add(x.x / 2., x.y / 2.);
+            let minor = center.add(y.x / 2., y.y / 2.);
+            attributes.extend([
+                ("GraphicType", "Oval".into()),
+                ("OvalType", flags.join(" ")),
+                (
+                    "BoundingBox",
+                    format!("{} {}", self.position(major), self.position(center)),
+                ),
+                ("Center3D", format!("{} 0", self.position(center))),
+                ("MajorAxisEnd3D", format!("{} 0", self.position(major))),
+                ("MinorAxisEnd3D", format!("{} 0", self.position(minor))),
+            ]);
+        } else {
+            attributes.extend([
+                ("GraphicType", "Rectangle".into()),
+                ("RectangleType", flags.join(" ")),
+                // ChemDraw writes the far corner first; reversed, it casts the
+                // shadow and the shading toward the top left.
+                (
+                    "BoundingBox",
+                    format!("{} {}", self.position(o.add(x.x, y.y)), self.position(o)),
+                ),
+            ]);
+            if g.kind == GraphicKind::RoundedRectangle {
+                let radius = real(g.corner_radius()) * self.scale;
+                attributes.push(("CornerRadius", format!("{:.0}", radius * 100.)));
+            }
+        }
+        let shape = self.tree.add(Some(parent), "graphic", attributes)?;
+        if !outline {
+            return Ok(Some(shape));
+        }
+        let commands = self
+            .options
+            .graphic_paths
+            .and_then(|p| p.get(&g.id))
+            .ok_or_else(|| invalid("Graphic export requires vector geometry"))?
+            .clone();
+        for (points, closed) in curve_points(&commands)? {
+            self.curve(
+                parent,
+                &points,
+                closed,
+                style.stroke,
+                false,
+                real(style.width_pt),
+                style.pattern == LinePattern::Dashed,
+                z,
+            )?;
+        }
+        Ok(Some(parent))
+    }
+    /// The nearest style ChemDraw draws, which has neither gradients nor
+    /// see-through color: a gradient becomes the flat color halfway along it,
+    /// and a see-through color is blended over white paper, except a closed
+    /// fill in its outline's color, which keeps its opacity for ChemDraw's
+    /// faded fill (FadePercent).
+    pub(super) fn chemdraw_style(&self, style: &GraphicStyle, closed: bool) -> GraphicStyle {
+        let mut out = style.clone();
+        if let (Some(gradient), Some(fill)) = (out.effects.gradient.take(), out.fill) {
+            out.fill = Some(mix(
+                self.palette.rgb(gradient.from),
+                self.palette.rgb(fill),
+                0.5,
+            ));
+        }
+        // As the scene draws it: a closed shape fades its fill, others their lines.
+        if let Some(alpha) = out.effects.opacity {
+            match out.fill.filter(|_| closed) {
+                Some(fill)
+                    if style.effects.gradient.is_none()
+                        && out.width_pt > 0.
+                        && self.palette.rgb(fill) == self.palette.rgb(out.stroke) => {}
+                Some(fill) => {
+                    out.fill = Some(mix([255; 3], self.palette.rgb(fill), alpha));
+                    out.effects.opacity = None;
+                }
+                None => {
+                    out.stroke = mix([255; 3], self.palette.rgb(out.stroke), alpha);
+                    out.effects.opacity = None;
+                }
+            }
+        }
+        out
     }
     pub(super) fn bracket_superscript(
         &mut self,
@@ -643,6 +1093,89 @@ impl Writer<'_> {
                 ),
             ],
         )?;
+        Ok(())
+    }
+    /// The panel as ReShiki reads it back: its frame on the page and the
+    /// colors written for it here.
+    fn panel_record(&self, g: &crate::graphics::Graphic) -> Result<String> {
+        let mut record = g.clone();
+        let written = |c| crate::palette::Color::imported(self.palette.rgb(c));
+        record.style.stroke = written(record.style.stroke);
+        record.style.fill = record.style.fill.map(written);
+        if let Some(gradient) = &mut record.style.effects.gradient {
+            gradient.from = written(gradient.from);
+        }
+        let page = |p: Point, shift: P| {
+            let p = P::from(p);
+            Point::new(
+                (p.x * self.scale + shift.x) as f32,
+                (p.y * self.scale + shift.y) as f32,
+            )
+        };
+        record.origin = page(g.origin, self.shift);
+        record.axis_x = page(g.axis_x, P::default());
+        record.axis_y = page(g.axis_y, P::default());
+        serde_json::to_string(&record).map_err(|e| invalid(e.to_string()))
+    }
+    /// A panel's title band, title backings, dividers and titles, as plain
+    /// filled curves, lines and text inside the panel's group.
+    fn panel(
+        &mut self,
+        parts: Vec<crate::scientific::Part>,
+        titles: &[crate::graphics::GraphicLabel<'_>],
+        parent: Key,
+        z: usize,
+    ) -> Result<()> {
+        for part in parts {
+            self.spend(part.commands.len())?;
+            for (points, closed) in curve_points(&part.commands)? {
+                if part.filled
+                    && let Some(fill) = part.style.fill
+                {
+                    self.curve(parent, &points, closed, fill, true, 0., false, z)?;
+                } else {
+                    self.curve(
+                        parent,
+                        &points,
+                        closed,
+                        part.style.stroke,
+                        false,
+                        real(part.style.width_pt),
+                        part.style.pattern == LinePattern::Dashed,
+                        z,
+                    )?;
+                }
+            }
+        }
+        for label in titles {
+            let baseline = label
+                .position
+                .offset(0., crate::style::text_ascent(&label.style));
+            let far = label.position.offset(
+                crate::style::styled_text_width(label.text, label.size, &label.style),
+                label.size,
+            );
+            let id = self.id()?;
+            self.text(
+                parent,
+                label.text,
+                &TextFormat {
+                    style: label.style.clone(),
+                    ..Default::default()
+                },
+                [
+                    ("id", id),
+                    ("Z", z.to_string()),
+                    ("InterpretChemically", "no".into()),
+                    ("CaptionJustification", "Left".into()),
+                    ("p", self.position(baseline)),
+                    (
+                        "BoundingBox",
+                        format!("{} {}", self.position(label.position), self.position(far)),
+                    ),
+                ],
+            )?;
+        }
         Ok(())
     }
     #[allow(clippy::too_many_arguments)]
@@ -806,4 +1339,18 @@ pub(super) fn curve_points(commands: &[PathCommand]) -> Result<Vec<(Vec<P>, bool
         return Err(invalid("Invalid graphic coordinate"));
     }
     Ok(groups)
+}
+
+/// The color `t` of the way from `a` to `b`.
+pub(super) fn mix(a: [u8; 3], b: [u8; 3], t: f32) -> crate::palette::Color {
+    let mut out = a;
+    for (c, b) in out.iter_mut().zip(b) {
+        *c = (f32::from(*c) + (f32::from(b) - f32::from(*c)) * t).round() as u8;
+    }
+    crate::palette::Color::Custom(out)
+}
+
+/// ChemDraw's FadePercent, in tenths of a percent of the color's strength.
+fn fade_percent(alpha: f32) -> String {
+    format!("{:.0}", (alpha * 1000.).clamp(1., 999.))
 }

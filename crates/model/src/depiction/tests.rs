@@ -324,6 +324,7 @@ fn nitrogen_next_to_an_abbreviated_substituent_stays_eligible() {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             alignment: Default::default(),
         });
     assert_eq!(eligible_atoms(&document, &[nitrogen]), vec![nitrogen]);
@@ -342,6 +343,7 @@ fn nitrogen_next_to_an_abbreviated_substituent_stays_eligible() {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             alignment: Default::default(),
         });
     assert!(eligible_atoms(&document, &[nitrogen]).is_empty());

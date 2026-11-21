@@ -6,10 +6,64 @@ use crate::canvas::snapping::arrow_endpoint;
 use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, models3d, pick, tilt};
 use iced::{Point, Rectangle};
 use reshiki::arrows::ArrowHandle;
-use reshiki::graphics::{Graphic, GraphicKind};
+use reshiki::graphics::GraphicKind;
 use std::borrow::Cow;
 
 impl MoleculeCanvas<'_> {
+    /// The document shown by a normal Select drag and the edit its release emits.
+    #[cfg(test)]
+    pub(crate) fn select_drag_candidate(
+        doc: &reshiki::document::Document,
+        ids: &[u64],
+        from: World,
+        to: World,
+        zoom: f32,
+    ) -> (
+        reshiki::document::Document,
+        Option<reshiki::cycles::Target>,
+        crate::canvas::Edit,
+    ) {
+        use iced::widget::canvas::Program;
+        use iced::{Event, Size, Vector, mouse};
+
+        let mut canvas =
+            crate::canvas::tests::chain_canvas(doc, crate::canvas::ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        canvas.selected = ids;
+        canvas.smart_guides = false;
+        canvas.camera.center = from.lerp(to, 0.5);
+        canvas.camera.zoom = zoom;
+        let bounds = Rectangle::new(
+            Point::new(20., 30.),
+            Size::new(
+                ((to.x - from.x).abs() + 1000.) * zoom,
+                ((to.y - from.y).abs() + 1000.) * zoom,
+            ),
+        );
+        let end = canvas.camera.screen(to, bounds) + Vector::new(bounds.x, bounds.y);
+        let mut state = State {
+            gesture: Some(Gesture::Move {
+                start: from,
+                ids: ids.to_vec(),
+                clicked: ids.to_vec(),
+            }),
+            cursor: Some(end),
+            ..Default::default()
+        };
+        let mut draft = Draft::new(doc);
+        canvas.preview_move(&mut draft, &state, bounds);
+        let edit = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(end),
+            )
+            .and_then(|action| action.into_inner().0)
+            .expect("a normal Select drag releases one edit");
+        (draft.preview.into_owned(), draft.cycle_drop, edit)
+    }
+
     pub(super) fn preview_tilt(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
         let Draft {
             preview,
@@ -80,6 +134,12 @@ impl MoleculeCanvas<'_> {
         state: &State,
         bounds: Rectangle,
     ) {
+        if let Some(context) = self.equipment_authoring {
+            if let Some(snap) = context.snap {
+                draft.seat_hint = Some(super::SeatHint::new(self.doc, snap));
+            }
+            return;
+        }
         let Draft {
             preview,
             ring_selection,
@@ -148,21 +208,36 @@ impl MoleculeCanvas<'_> {
                     }
                 } else {
                     let id = preview.next_id();
-                    let mut graphic = Graphic::dragged(
-                        id,
-                        kind,
-                        *start,
-                        end,
-                        self.graphics.style.clone(),
-                        self.graphics.bracket_sides,
-                        state.modifiers.shift() || self.graphics.constrain,
-                    )
-                    .with_arc(self.graphics.arc);
-                    if kind.brackets() {
-                        graphic.superscript = self.graphics.superscript.map(str::to_owned);
+                    let graphic = if kind == reshiki::graphics::GraphicKind::Table {
+                        reshiki::graphics::table::editor::dragged(
+                            id,
+                            *start,
+                            end,
+                            self.graphics.table_grid,
+                            self.doc.drawing_style.line_width_pt,
+                        )
+                        .ok()
+                    } else {
+                        Some(
+                            crate::canvas::tlc::dragged(
+                                id,
+                                kind,
+                                *start,
+                                end,
+                                self.graphics.style.clone(),
+                                self.graphics.bracket_sides,
+                                state.modifiers.shift() || self.graphics.constrain,
+                            )
+                            .with_arc(self.graphics.arc),
+                        )
+                    };
+                    if let Some(mut graphic) = graphic {
+                        if kind.brackets() {
+                            graphic.superscript = self.graphics.superscript.map(str::to_owned);
+                        }
+                        preview.to_mut().graphics.push(graphic);
+                        *ring_selection = Some(vec![id]);
                     }
-                    preview.to_mut().graphics.push(graphic);
-                    *ring_selection = Some(vec![id]);
                 }
             }
             if let Some(Gesture::AtomMark { id, index, start }) = &state.gesture
@@ -236,13 +311,17 @@ impl MoleculeCanvas<'_> {
                     self.bond_drawing.fixed_angles && !state.modifiers.alt(),
                 );
                 let id = preview.next_id();
-                preview.to_mut().arrows.push(reshiki::document::Arrow::new(
+                let mut arrow = reshiki::document::Arrow::new(
                     id,
                     *start,
                     end,
                     self.arrows.preset,
                     self.arrows.style.clone(),
-                ));
+                );
+                if let Some(sweep) = self.arrows.arc {
+                    arrow.set_arc(sweep);
+                }
+                preview.to_mut().arrows.push(arrow);
             }
             if let Some(Gesture::AtomIndicator { owner }) = &state.gesture
                 && let Some(anchor) = owner.anchor(preview)
@@ -318,12 +397,65 @@ impl MoleculeCanvas<'_> {
         }
     }
 
+    /// A part or liquid handle dragged: the piece re-solved as release will
+    /// leave it, with the value and any seat it lets go of beside the pointer.
+    pub(super) fn preview_piece_handle(
+        &self,
+        draft: &mut Draft<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        use reshiki::equipment::solve::adjust;
+        let (Some(Gesture::PieceHandle { id, handle, start }), Some(c)) =
+            (&state.gesture, state.cursor)
+        else {
+            return;
+        };
+        let p = self
+            .camera
+            .world(Point::new(c.x - bounds.x, c.y - bounds.y), bounds);
+        if handle.toggle || start.distance(p) < self.camera.world_len(pick::DRAG_SLOP_PX) {
+            return;
+        }
+        if let Some(grip) = handle.grip.filter(|_| self.tool.selects()) {
+            let reach = f64::from(self.camera.world_len(reshiki::equipment::solve::REACH_PX));
+            let doc = draft.preview.to_mut();
+            let to = [f64::from(p.x), f64::from(p.y)];
+            if let Some(b) = reshiki::equipment::solve::hose::drag(doc, *id, grip, to, reach) {
+                draft.seat_hint = Some(super::SeatHint {
+                    at: World::new(b.point[0] as f32, b.point[1] as f32),
+                    radius: (b.diameter() / 2.) as f32,
+                    fits: true,
+                    text: format!(
+                        "Push onto the {}",
+                        crate::app::equipment::joint_name(doc, &b.at)
+                    ),
+                });
+            }
+            return;
+        }
+        let Some(g) = self.doc.graphics.iter().find(|g| g.id == *id) else {
+            return;
+        };
+        let Some(value) = adjust::dragged(g, handle, [f64::from(p.x), f64::from(p.y)]) else {
+            return;
+        };
+        let text = crate::app::equipment::value_text(g, &handle.param, Some(&value));
+        if let Ok(released) = adjust::set(draft.preview.to_mut(), *id, &handle.param, value) {
+            let note = crate::app::equipment::released_text(self.doc, *id, &released);
+            draft.chain_badge = Some((p, text + &note, released.is_empty()));
+        }
+    }
+
     pub(super) fn preview_move(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
         let Draft {
             preview,
             ring_selection,
             translation,
             smart,
+            chain_badge,
+            cycle_drop,
+            seat_hint,
             ..
         } = draft;
         if let (Some(Gesture::StretchBond { start, plan }), Some(p)) =
@@ -367,8 +499,16 @@ impl MoleculeCanvas<'_> {
                 // Moving every object cannot change their relative geometry,
                 // chemical labels, crossing gaps or ring attachment targets.
                 preview.to_mut().translate(ids, delta.x, delta.y);
+                reshiki::cycles::fit_moved(self.doc, preview.to_mut(), ids);
                 *ring_selection = Some(ids.clone());
-                *translation = Some(delta);
+                // Fitted runs reproject ink and stations even on a rigid move;
+                // render their actual candidate rather than shifting old curves.
+                *translation = (!self
+                    .doc
+                    .graphics
+                    .iter()
+                    .any(|g| g.cycle.as_ref().is_some_and(|c| !c.split_runs.is_empty())))
+                .then_some(delta);
             } else if let Some(snapped) =
                 reshiki::editing::snap_ring(preview.to_mut(), ids, delta, 14.0 / self.camera.zoom)
             {
@@ -377,7 +517,38 @@ impl MoleculeCanvas<'_> {
             } else {
                 preview.to_mut().translate(ids, delta.x, delta.y);
                 *ring_selection = Some(ids.clone());
-                *smart = guides;
+                let reach = self.camera.world_len(reshiki::equipment::solve::REACH_PX);
+                // The snapped pose shows what releasing makes; guides would mislead.
+                match reshiki::equipment::solve::snap(preview.to_mut(), ids, reach, false) {
+                    Some(snap) => *seat_hint = Some(super::SeatHint::new(preview, &snap)),
+                    None => {
+                        *smart = guides;
+                        if preview.seats.len() < self.doc.seats.len() {
+                            *chain_badge = Some((p, "Release to take it off".into(), true));
+                        }
+                    }
+                }
+                reshiki::cycles::fit_moved(self.doc, preview.to_mut(), ids);
+                // The drawing shows what releasing here takes the piece out of.
+                let left = preview.to_mut().take_out(ids, delta);
+                if let Some(names) = reshiki::grouping::Container::names(&left) {
+                    *chain_badge = Some((p, format!("Release to take it out of {names}"), true));
+                }
+                // Show the complete candidate, including its refitted cycle.
+                if let Some(proposal) = reshiki::cycles::propose_drop_from(self.doc, preview, ids) {
+                    *preview = Cow::Owned(proposal.doc);
+                    *chain_badge = Some((p, proposal.target.tag.clone(), true));
+                    *cycle_drop = Some(proposal.target);
+                }
+                // The tag sits below the dragged piece, clear of its bonds.
+                if let Some((at, ..)) = chain_badge
+                    && let Some((_, hi)) = cycle_drop
+                        .as_ref()
+                        .map(|t| t.ink)
+                        .or_else(|| reshiki::scene::selection_bounds(preview, ids))
+                {
+                    at.y = at.y.max(hi.y);
+                }
             }
             if !preview.compound_numbers.is_empty() {
                 reshiki::compound_numbers::preview_layout(preview.to_mut(), self.doc);
@@ -417,5 +588,7 @@ impl MoleculeCanvas<'_> {
     }
 }
 
+#[cfg(test)]
+mod cycle_drop_tests;
 #[cfg(test)]
 mod stretch_tests;

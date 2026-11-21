@@ -8,6 +8,7 @@ fn plain_bond_matches_the_fresh_bond_literals() {
         let expected = Bond {
             distance_derived: false,
             highlight: None,
+            highlight_style: None,
             ring_arc: false,
             projection: false,
             stereo_authoritative: false,

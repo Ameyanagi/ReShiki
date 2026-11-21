@@ -69,7 +69,8 @@ fn raster(primitive: &Primitive, alpha: f32) -> Pixmap {
     let paints =
         format!("fill='{fill}' fill-opacity='{alpha}' stroke='{stroke}' stroke-opacity='{alpha}'");
     let geometry = format!("stroke-width='{width}' stroke-dasharray='{dashes}'");
-    let ends = "stroke-linecap='round' stroke-linejoin='round'";
+    let cap = if style.round_caps() { "round" } else { "butt" };
+    let ends = format!("stroke-linecap='{cap}' stroke-linejoin='round'");
     let svg = format!("{header}<path d='{data}' {paints} {geometry} {ends}/></svg>");
     let tree = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default()).unwrap();
     let mut image = Pixmap::new(144, 144).unwrap();
@@ -205,7 +206,7 @@ fn disjoint_opposite_winding_contours_cancel_the_smaller_inner_stroke_band() {
 }
 
 #[test]
-fn dashed_open_stroke_currently_fills_dash_gaps_but_keeps_end_caps() {
+fn dashed_open_stroke_currently_fills_dash_gaps_and_keeps_square_ends() {
     let start = Point::new(20., 20.);
     let end = Point::new(120., 20.);
     let mut original = path(
@@ -223,8 +224,10 @@ fn dashed_open_stroke_currently_fills_dash_gaps_but_keeps_end_caps() {
     let dash_samples = [0., 1., 2.].map(|i| pixel(start.x + i * (dash + gap) + dash / 2., start.y));
     let gap_samples =
         [0., 1., 2.].map(|i| pixel(start.x + i * (dash + gap) + dash + gap / 2., start.y));
-    let cap_samples = [pixel(start.x - width / 4., start.y), pixel(end.x, end.y)];
+    // Dashes end square, so nothing is drawn before the start.
+    let cap_samples = [pixel(start.x + width / 4., start.y)];
     let blank_samples = [
+        pixel(start.x - width / 4., start.y),
         pixel(start.x - width, start.y),
         pixel(end.x + width, end.y),
         pixel(start.x + dash / 2., start.y + width),

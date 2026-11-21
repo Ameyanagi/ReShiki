@@ -12,6 +12,7 @@ use crate::{
 fn caption(doc: &mut Document, text: &str) -> u64 {
     let id = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id,
         position: Point::new(80., -35.),
         text: text.into(),
@@ -275,6 +276,7 @@ fn conversion_preserves_first_character_style_and_deletes_through_document() {
         id: source.next_id(),
         members: vec![existing, id, other],
         integral: false,
+        layout: None,
     });
     source.validate().unwrap();
     let first_glyph = text_first_glyph_center(&source.annotations[0]).unwrap();

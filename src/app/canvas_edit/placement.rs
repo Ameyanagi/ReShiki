@@ -4,7 +4,6 @@ use crate::canvas::pick::PICK_RADIUS_PX;
 use crate::canvas::{Edit, Tool};
 use reshiki::document::{Document, Point};
 use reshiki::editing;
-use reshiki::graphics::Graphic;
 use reshiki::joining::Placed;
 
 impl App {
@@ -136,7 +135,25 @@ impl App {
         before: Document,
     ) {
         if let Tool::Graphic(kind) = self.tool {
-            if matches!(
+            if kind == reshiki::graphics::GraphicKind::Table {
+                match reshiki::graphics::table::editor::dragged(
+                    self.tab.doc.next_id(),
+                    start,
+                    end,
+                    self.tab.table_inputs.grid,
+                    self.tab.doc.drawing_style.line_width_pt,
+                ) {
+                    Ok(graphic) => {
+                        self.tab.selected = vec![graphic.id];
+                        self.tab.doc.graphics.push(graphic);
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                        return;
+                    }
+                }
+            } else if matches!(
                 kind,
                 reshiki::graphics::GraphicKind::Symbol(_)
                     | reshiki::graphics::GraphicKind::Orbital(_)
@@ -165,7 +182,7 @@ impl App {
                 }
             } else {
                 let id = self.tab.doc.next_id();
-                let mut graphic = Graphic::dragged(
+                let mut graphic = crate::canvas::tlc::dragged(
                     id,
                     kind,
                     start,
@@ -188,6 +205,7 @@ impl App {
             if !matches!(kind, reshiki::graphics::GraphicKind::Symbol(_)) {
                 self.tool = Tool::Select;
             }
+            self.sync_tables();
         }
         self.changed(before);
     }
@@ -240,18 +258,26 @@ impl App {
         let Some(template) = self.templates.library.get(self.template_index) else {
             return;
         };
-        match template.place(
-            &self.tab.doc,
-            anchor,
-            direction,
-            self.tab.camera.world_len(PICK_RADIUS_PX),
-            self.templates.anchor,
-            self.templates.connection,
-        ) {
+        // A figure layout lands where it is clicked, once, joined to nothing.
+        let layout = template.is_layout();
+        let placed = if layout {
+            template.place_layout(&self.tab.doc, anchor)
+        } else {
+            template.place(
+                &self.tab.doc,
+                anchor,
+                direction,
+                self.tab.camera.world_len(PICK_RADIUS_PX),
+                self.templates.anchor,
+                self.templates.connection,
+            )
+        };
+        match placed {
             Ok((document, selected)) => {
                 self.tab.doc = document;
                 self.tab.selected = selected;
-                if !self.templates.repeat {
+                self.sync_figure();
+                if !self.templates.repeat || layout {
                     self.tool = Tool::Select;
                 }
             }
@@ -406,6 +432,8 @@ impl App {
         } else if self.tool == Tool::Arrow {
             self.place_arrow(start, end);
         } else {
+            let source = self.tab.doc.clone();
+            let targets: Vec<_> = a.into_iter().chain(b).collect();
             let a = a.unwrap_or_else(|| self.tab.doc.add_atom("C", start));
             let b = b.unwrap_or_else(|| self.tab.doc.add_atom("C", end));
             if let Some(preset) = self.tool.bond_preset() {
@@ -413,6 +441,17 @@ impl App {
             } else {
                 let (order, display) = self.bond_style();
                 self.tab.doc.add_bond(a, b, order, display);
+            }
+            if let Err(error) = reshiki::graphics::table::inherit_attachment(
+                &source,
+                &mut self.tab.doc,
+                &[a, b],
+                &targets,
+            ) {
+                self.tab.doc = before;
+                self.status = error;
+                self.error = true;
+                return;
             }
             self.tab.selected = vec![b];
         }

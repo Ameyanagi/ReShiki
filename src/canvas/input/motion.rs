@@ -107,7 +107,7 @@ impl MoleculeCanvas<'_> {
             // out the whole application for every intermediate pointer event.
             return Some(Action::request_redraw().and_capture());
         }
-        if inside || was_inside {
+        if inside || was_inside || state.hovering {
             if self.keyboard_target.is_some() && !pointer_moved {
                 return Some(Action::request_redraw());
             }
@@ -116,6 +116,7 @@ impl MoleculeCanvas<'_> {
             } else {
                 None
             };
+            state.hovering = hover.is_some();
             Some(Action::publish(Edit::PointerHover(hover)))
         } else {
             None

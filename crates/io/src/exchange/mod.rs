@@ -1,6 +1,7 @@
 //! Bounded CDX/CDXML serialization. Chemistry remains behind `ChemistryEngine`.
 //! The Python codec is retained as a differential test oracle during migration.
 mod charsets;
+pub mod cycles;
 mod decode;
 pub mod drawing;
 mod encode;
@@ -9,11 +10,23 @@ mod values;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tlc_tests;
 
-pub use decode::from_cdx;
-pub(crate) use decode::style_from_cdx;
+pub(crate) use charsets::{is_symbol_font, symbol_char};
+pub(crate) use decode::{SKIPPED, style_from_cdx};
+pub use decode::{from_cdx, from_cdx_tolerant};
 pub use encode::{to_cds, to_cdx};
 use std::{collections::HashMap, sync::LazyLock};
+
+/// A molecule's or arrow's purpose other than Chemistry, on its fragment or
+/// arrow. ReShiki's own data: ChemDraw ignores it and CDX has no place for it.
+pub(crate) const PURPOSE: &str = "ReShikiPurpose";
+/// A panel as JSON, on the group of shapes and text ChemDraw gets for it.
+pub(crate) const PANEL: &str = "ReShikiPanel";
+/// Import-only: the binary decoder skipped TLC data, so its drawing reader
+/// must warn or fall back rather than assume an ordinary supported spot.
+pub(crate) const TLC_SKIPPED: &str = "ReShikiTlcSkipped";
 
 pub const LIMIT: usize = 16 * 1024 * 1024;
 const MAX_OBJECTS: usize = 100_000;
@@ -44,9 +57,16 @@ const OBJECTS: &[(u16, &str)] = &[
     (0x800d, "scheme"),
     (0x800e, "step"),
     (0x8011, "objecttag"),
+    // Native editable table and cell-edge records, verified in ChemDraw 26.
+    (0x8016, "table"),
     (0x8017, "bracketedgroup"),
     (0x8018, "bracketattachment"),
     (0x8019, "crossingbond"),
+    (0x801a, "border"),
+    // ChemDraw 26 native TLC hierarchy, checked against an authored plate.
+    (0x801d, "tlcplate"),
+    (0x801e, "tlclane"),
+    (0x801f, "tlcspot"),
     // ChemDraw's linked property text, checked against ChemDraw 26 files.
     (0x8020, "chemicalproperty"),
     // ChemDraw stores arrows as 0x8021, despite the published SDK listing

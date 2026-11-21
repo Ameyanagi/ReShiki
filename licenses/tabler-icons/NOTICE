@@ -1,0 +1,18 @@
+Tabler Icons outline library
+============================
+
+ReShiki uses outline icon path data, names, categories and tags from
+Tabler Icons 3.50.0, published as npm @tabler/icons 3.50.0.
+https://tabler.io/icons
+https://github.com/tabler/tabler-icons
+
+Tarball integrity
+sha512-HflLxyrH1cqC7s7jzQGSjpsTAVIoaf7+/yHjbdM59rJQBMjliibp+LYhDPFxOMcwa1M8DNpOk6ENzQiWn9a1Dg==
+
+scripts/build_tabler_icons.py generates assets/icons/tabler-outline.tsv from
+that package. The Japanese search words in assets/icons/tabler-ja.tsv are
+ReShiki's own.
+
+ReShiki distributes the Tabler data as third-party material under its
+upstream MIT terms. See LICENSE in this directory. Original ReShiki code
+and documentation are dual-licensed under the terms in the root LICENSE.

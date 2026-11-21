@@ -314,6 +314,7 @@ fn both_atom_merge_commands_use_rendered_ink_and_exclude_unselected_objects() {
         });
     }
     app.tab.doc.annotations.push(Annotation {
+        angle: 0.,
         id: 7,
         position: Point::new(-1000., -1500.),
         text: "Unselected caption".into(),

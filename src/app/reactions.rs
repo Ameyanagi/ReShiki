@@ -9,6 +9,47 @@ use reshiki::reactions::{Reaction, Role};
 pub struct State {
     arrow: Option<u64>,
     epoch: u64,
+    /// What takes part in a reaction, shown until the drawing changes.
+    pub(super) preview: Option<(u64, Reaction)>,
+    /// Color this arrow's reaction once its reviewed atom maps are applied.
+    pub(super) color_after_maps: Option<u64>,
+}
+
+/// The title of the panel column around `arrow`, in the smallest titled
+/// panel that holds it, such as "This work". Columns follow the panel's own
+/// axes, so a turned panel names its arrows as drawn.
+fn panel_title<'a>(
+    doc: &'a reshiki::document::Document,
+    arrow: &reshiki::document::Arrow,
+) -> Option<&'a str> {
+    doc.graphics
+        .iter()
+        .filter_map(|g| {
+            let panel = g.panel.as_ref()?;
+            let (x, y) = (g.axis_x, g.axis_y);
+            let det = x.x * y.y - x.y * y.x;
+            // Where a point sits across (0 to 1) and down the panel.
+            let local = |p: reshiki::document::Point| {
+                let (dx, dy) = (p.x - g.origin.x, p.y - g.origin.y);
+                ((dx * y.y - dy * y.x) / det, (x.x * dy - x.y * dx) / det)
+            };
+            let ends = [local(arrow.start), local(arrow.end)];
+            if !ends
+                .iter()
+                .all(|(u, v)| (0. ..=1.).contains(u) && (0. ..=1.).contains(v))
+            {
+                return None;
+            }
+            let at = (ends[0].0 + ends[1].0) / 2.;
+            let column = panel
+                .columns()
+                .iter()
+                .position(|(l, r)| (*l..=*r).contains(&at))?;
+            let title = panel.titles.get(column)?.trim();
+            (!title.is_empty()).then_some((title, det.abs()))
+        })
+        .min_by(|(_, x), (_, y)| x.total_cmp(y))
+        .map(|(title, _)| title)
 }
 
 #[cfg(test)]
@@ -23,17 +64,71 @@ pub enum Action {
     SelectAll,
     SelectParticipant(Role, usize),
     Export(&'static str),
+    /// Outline what takes part in the chosen arrow's reaction, or hide it.
+    Preview,
+    /// Color the reaction by origin, mapping its atoms first if needed.
+    ColorByOrigin,
+    ColorSetting(ColorSetting),
+    ClearColors,
 }
+
+/// One color by origin setting of the chosen reaction.
+#[derive(Debug, Clone, Copy)]
+pub enum ColorSetting {
+    Reactant(usize, HueChoice),
+    Formed(HueChoice),
+    Bonds(bool),
+    Changes(bool),
+    Rings(bool),
+    Legend(bool),
+}
+
+/// A palette hue in a menu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HueChoice(pub reshiki::palette::Hue);
+/// `doc` with its map numbers hidden, as a colored figure reads best.
+pub(super) fn maps_hidden(doc: &reshiki::document::Document) -> reshiki::document::Document {
+    reshiki::reaction_mapping::set_maps_visible(doc, false)
+}
+
+/// The status after coloring by origin, which hides the map numbers.
+pub(super) const COLORED: &str = "Colored by origin; Show maps shows the map numbers";
+
+impl std::fmt::Display for HueChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.name())
+    }
+}
+const HUES: [HueChoice; 8] = [
+    HueChoice(reshiki::palette::Hue::Red),
+    HueChoice(reshiki::palette::Hue::Orange),
+    HueChoice(reshiki::palette::Hue::Amber),
+    HueChoice(reshiki::palette::Hue::Green),
+    HueChoice(reshiki::palette::Hue::Teal),
+    HueChoice(reshiki::palette::Hue::Blue),
+    HueChoice(reshiki::palette::Hue::Indigo),
+    HueChoice(reshiki::palette::Hue::Purple),
+];
 impl App {
-    pub(super) fn reaction_arrow(&self) -> Option<u64> {
-        let selected: Vec<_> = self
-            .tab
+    pub(super) fn selected_reaction_arrow(&self) -> Option<&reshiki::document::Arrow> {
+        let mut selected = self.selected_arrows();
+        let arrow = selected.next()?;
+        selected.next().is_none().then_some(arrow)
+    }
+
+    pub(super) fn reaction_colors(&self) -> Option<&reshiki::reaction_colors::Colors> {
+        let arrow = self.reaction_arrow()?;
+        self.tab
             .doc
-            .arrows
+            .reactions
             .iter()
-            .filter(|a| self.tab.selected.contains(&a.id))
-            .collect();
-        if let [arrow] = selected.as_slice() {
+            .find(|r| r.arrow == arrow)?
+            .colors
+            .as_ref()
+    }
+
+    pub(super) fn reaction_arrow(&self) -> Option<u64> {
+        if let Some(arrow) = self.selected_reaction_arrow() {
             return Some(arrow.id);
         }
         if self.tab.reactions.epoch == self.tab.file_epoch
@@ -50,7 +145,126 @@ impl App {
         }
         None
     }
+    /// The reaction preview, while the drawing is unchanged since it was made.
+    pub(super) fn reaction_preview(&self) -> Option<&Reaction> {
+        self.tab
+            .reactions
+            .preview
+            .as_ref()
+            .filter(|(revision, _)| *revision == self.tab.revision)
+            .map(|(_, reaction)| reaction)
+    }
+    fn preview_reaction(&mut self) -> Task<Message> {
+        let shown = self.reaction_preview().map(|r| r.arrow);
+        self.tab.reactions.preview = None;
+        let Some(arrow) = self.reaction_arrow() else {
+            self.error = true;
+            self.status = "Select a reaction arrow first.".into();
+            return Task::none();
+        };
+        if shown == Some(arrow) {
+            self.status = "Reaction preview hidden".into();
+            return super::focus_drawing();
+        }
+        match reshiki::reactions::preview(&self.tab.doc, arrow) {
+            Ok(reaction) => {
+                let agents = match reaction.agents.len() {
+                    0 => String::new(),
+                    1 => " + 1 reagent".into(),
+                    n => format!(" + {n} reagents"),
+                };
+                self.error = false;
+                self.status = format!(
+                    "Preview · {} → {}{agents} · Esc hides it",
+                    reaction.reactants.len(),
+                    reaction.products.len()
+                );
+                self.tab.reactions.preview = Some((self.tab.revision, reaction));
+            }
+            Err(reason) => {
+                self.error = true;
+                self.status = reason.into();
+            }
+        }
+        super::focus_drawing()
+    }
+    /// Color `arrow`'s reaction by origin as one Undo step. Without atom
+    /// maps, run Auto-map first; applying its maps colors the reaction.
+    pub(super) fn color_by_origin(&mut self, arrow: u64) -> Task<Message> {
+        use reshiki::reaction_colors::{Refusal, paint};
+        let before = self.tab.doc.clone();
+        // A colored figure reads without map numbers.
+        self.tab.doc = maps_hidden(&before);
+        match paint(&mut self.tab.doc, arrow) {
+            Ok(()) => {
+                self.changed(before);
+                if !self.error {
+                    self.status = COLORED.into();
+                }
+                Task::none()
+            }
+            Err(Refusal::Maps) => {
+                self.tab.doc = before;
+                self.tab.reactions.color_after_maps = Some(arrow);
+                // The review stays with this arrow while its pairs are selected.
+                self.tab.reactions.arrow = Some(arrow);
+                self.tab.reactions.epoch = self.tab.file_epoch;
+                self.inspector_open = true;
+                self.inspector_tab = InspectorTab::Reactions;
+                Task::done(Message::Mapping(super::reaction_mapping::Action::Auto))
+            }
+            Err(refusal) => {
+                self.tab.doc = before;
+                self.error = true;
+                self.status = refusal.message().into();
+                Task::none()
+            }
+        }
+    }
+    fn color_setting(&mut self, arrow: u64, setting: ColorSetting) {
+        use reshiki::reaction_colors::{set_legend, update};
+        let before = self.tab.doc.clone();
+        let result = match setting {
+            ColorSetting::Legend(shown) => set_legend(
+                &mut self.tab.doc,
+                arrow,
+                shown,
+                self.tab.caption_format.clone(),
+            ),
+            setting => update(&mut self.tab.doc, arrow, |colors| match setting {
+                ColorSetting::Reactant(index, hue) => {
+                    if let Some(slot) = colors.reactants.get_mut(index) {
+                        *slot = hue.0;
+                    }
+                }
+                ColorSetting::Formed(hue) => colors.formed = hue.0,
+                ColorSetting::Bonds(on) => colors.bonds = on,
+                ColorSetting::Changes(on) => colors.changes = on,
+                ColorSetting::Rings(on) => colors.rings = on,
+                ColorSetting::Legend(_) => {}
+            }),
+        };
+        match result {
+            Ok(()) => self.changed(before),
+            Err(refusal) => {
+                self.tab.doc = before;
+                self.error = true;
+                self.status = refusal.message().into();
+            }
+        }
+    }
     pub(super) fn reaction_action(&mut self, action: Action) -> Task<Message> {
+        if let Action::Preview = action {
+            return self.preview_reaction();
+        }
+        if let Action::ColorByOrigin = action {
+            let Some(arrow) = self.reaction_arrow() else {
+                self.error = true;
+                self.status = "Select a reaction arrow first.".into();
+                return Task::none();
+            };
+            return self.color_by_origin(arrow);
+        }
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Reactions;
         self.tool = Tool::Select;
@@ -58,6 +272,14 @@ impl App {
             self.tab.reactions = State {
                 arrow: Some(id),
                 epoch: self.tab.file_epoch,
+                preview: self.tab.reactions.preview.take(),
+                // A pending Color by origin belongs to its own arrow.
+                color_after_maps: self
+                    .tab
+                    .reactions
+                    .color_after_maps
+                    .take()
+                    .filter(|a| *a == id),
             };
             self.tab.selected = vec![id];
             return Task::none();
@@ -68,6 +290,13 @@ impl App {
         self.tab.reactions = State {
             arrow: Some(arrow),
             epoch: self.tab.file_epoch,
+            preview: self.tab.reactions.preview.take(),
+            color_after_maps: self
+                .tab
+                .reactions
+                .color_after_maps
+                .take()
+                .filter(|a| *a == arrow),
         };
         if let Action::Export(format) = action {
             if self.tab.busy {
@@ -100,6 +329,20 @@ impl App {
                 }
             }
             Action::Unlink => self.tab.doc.reactions.retain(|r| r.arrow != arrow),
+            Action::ColorSetting(setting) => {
+                self.color_setting(arrow, setting);
+                return Task::none();
+            }
+            Action::ClearColors => {
+                if !reshiki::reaction_colors::clear_paint(&mut self.tab.doc, arrow) {
+                    return Task::none();
+                }
+                self.changed(before);
+                if !self.error {
+                    self.status = "Colors removed".into();
+                }
+                return Task::none();
+            }
             Action::SelectAll => {
                 if let Some(reaction) = self.tab.doc.reactions.iter().find(|r| r.arrow == arrow) {
                     self.tab.selected = reaction.ids();
@@ -196,16 +439,21 @@ impl App {
             let summary = reaction
                 .map(|r| format!("{} → {}", r.reactants.len(), r.products.len()))
                 .unwrap_or_else(|| {
-                    if preset.reaction_role_refusal().is_some() {
+                    if !arrow.purpose.is_chemistry() {
+                        arrow.purpose.label()
+                    } else if preset.reaction_role_refusal().is_some() {
                         "Roles unavailable"
                     } else {
                         "Assign roles"
                     }
                     .into()
                 });
+            // Two "Arrow · Forward" rows read alike: a panel title names it.
+            let place =
+                panel_title(&self.tab.doc, arrow).map_or_else(|| preset.to_string(), str::to_owned);
             body = body.push(
                 button(row![
-                    text(format!("Arrow {} · {preset}", index + 1))
+                    text(format!("Arrow {} · {place}", index + 1))
                         .size(13)
                         .width(Length::Fill),
                     text(summary).size(12)
@@ -252,25 +500,17 @@ impl App {
                         atom.label_h = source.label_h;
                     }
                 }
+                let name = self.part_name(&part.atoms);
+                let label = if part.coefficient > 1 {
+                    format!("{} × {name}", part.coefficient)
+                } else {
+                    name
+                };
                 card = card.push(
                     button(
                         row![
                             canvas(DrawingThumbnail(preview)).width(92).height(28),
-                            text(format!(
-                                "{}{} {}",
-                                if part.coefficient > 1 {
-                                    format!("{} × ", part.coefficient)
-                                } else {
-                                    String::new()
-                                },
-                                part.atoms.len(),
-                                if part.atoms.len() == 1 {
-                                    "atom"
-                                } else {
-                                    "atoms"
-                                }
-                            ))
-                            .size(12),
+                            text(label).size(12),
                         ]
                         .align_y(iced::Alignment::Center),
                     )
@@ -318,6 +558,7 @@ impl App {
         }
         body = body.push(
             row![
+                command("Preview reaction", Message::Reaction(Action::Preview)),
                 command("Select reaction", Message::Reaction(Action::SelectAll)),
                 command(
                     "Clear selected roles",
@@ -327,6 +568,9 @@ impl App {
             ]
             .spacing(4),
         );
+        if reaction.ready() || reaction.colors.is_some() {
+            body = body.push(self.color_section(reaction));
+        }
         if !self.tab.doc.reactions.is_empty() {
             body = body.push(command(
                 "Remove reaction roles",
@@ -334,5 +578,88 @@ impl App {
             ));
         }
         body.into()
+    }
+
+    /// Color by origin: the command, then the settings once it has run.
+    fn color_section(&self, reaction: &Reaction) -> Element<'static, Message> {
+        use super::workspace::{accessible_checkbox, command, muted_text, section};
+        let send = |setting| Message::Reaction(Action::ColorSetting(setting));
+        let mut body = column![section("Color by origin")].spacing(6);
+        let Some(colors) = &reaction.colors else {
+            return body
+                .push(
+                    text("Color each reactant and carry it into the products along the atom maps.")
+                        .size(11)
+                        .style(muted_text),
+                )
+                .push(
+                    command("Color by origin", Message::Reaction(Action::ColorByOrigin))
+                        .width(Length::Fill),
+                )
+                .into();
+        };
+        for (index, hue) in colors.reactants.iter().enumerate() {
+            body = body.push(
+                row![
+                    text(format!("Reactant {}", index + 1))
+                        .size(12)
+                        .width(Length::Fill),
+                    crate::appearance::pick_list(HUES, Some(HueChoice(*hue)), move |h| {
+                        send(ColorSetting::Reactant(index, h))
+                    })
+                    .text_size(12)
+                    .width(120),
+                ]
+                .align_y(iced::Alignment::Center),
+            );
+        }
+        body = body.push(
+            row![
+                text("New bonds and rings").size(12).width(Length::Fill),
+                crate::appearance::pick_list(HUES, Some(HueChoice(colors.formed)), move |h| {
+                    send(ColorSetting::Formed(h))
+                })
+                .text_size(12)
+                .width(120),
+            ]
+            .align_y(iced::Alignment::Center),
+        );
+        for (id, label, on, setting) in [
+            (
+                "colors-bonds",
+                "Mark new bonds",
+                colors.bonds,
+                ColorSetting::Bonds(!colors.bonds),
+            ),
+            (
+                "colors-changes",
+                "Mark broken and changed bonds",
+                colors.changes,
+                ColorSetting::Changes(!colors.changes),
+            ),
+            (
+                "colors-rings",
+                "Fill new rings",
+                colors.rings,
+                ColorSetting::Rings(!colors.rings),
+            ),
+            (
+                "colors-legend",
+                "Legend",
+                colors.legend.is_some(),
+                ColorSetting::Legend(colors.legend.is_none()),
+            ),
+        ] {
+            body = body.push(accessible_checkbox(id, label, on, Some(send(setting))));
+        }
+        body.push(
+            row![
+                command("Color by origin", Message::Reaction(Action::ColorByOrigin))
+                    .width(Length::Fill),
+                command("Clear colors", Message::Reaction(Action::ClearColors)).width(Length::Fill),
+            ]
+            .spacing(4),
+        )
+        .into()
     }
 }

@@ -19,6 +19,7 @@ fn scheme() -> (Document, Vec<u64>, u64) {
         .collect();
     let note = doc.next_id();
     doc.annotations.push(Annotation {
+        angle: 0.,
         id: note,
         position: Point::new(150., -60.),
         text: "H2SO4".into(),

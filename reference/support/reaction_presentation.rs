@@ -274,6 +274,7 @@ mod tests {
         reaction.products = vec![part(&atoms[5..6]), part(&atoms[6..])];
         for id in [101, 102, 103] {
             doc.annotations.push(Annotation {
+                angle: 0.,
                 id,
                 text: "+".into(),
                 position: Point::new(id as f32, 9.),
@@ -282,6 +283,7 @@ mod tests {
             reaction.annotations.push(id);
         }
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: 104,
             text: "conditions".into(),
             position: Point::new(75., -50.),

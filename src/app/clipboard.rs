@@ -19,6 +19,8 @@ pub struct CopyAsKey {
     pub revision: u64,
     pub format: CopyFormat,
     pub selected: Vec<u64>,
+    /// What was copied, when it is not the selection or drawing.
+    pub what: Option<String>,
 }
 
 #[derive(Default)]
@@ -129,6 +131,28 @@ impl App {
         self.copy_as_snapshot(snapshot, format, true)
     }
 
+    /// Copy a drawing made for one purpose, such as a cycle step's
+    /// reaction, as `format`; `what` names it in the status.
+    pub(super) fn copy_made(
+        &mut self,
+        snapshot: Document,
+        format: CopyFormat,
+        what: String,
+    ) -> Task<Message> {
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
+        if let Some(reason) = format.unavailable_reason(&snapshot) {
+            self.status = reason.into();
+            self.error = true;
+            return Task::none();
+        }
+        let mut key = self.start_copy_as(format);
+        key.what = Some(what);
+        self.queue_copy_as(key, snapshot, false)
+    }
+
     fn copy_as_snapshot(
         &mut self,
         snapshot: Document,
@@ -183,6 +207,7 @@ impl App {
             revision: self.tab.revision,
             format,
             selected: self.tab.selected.clone(),
+            what: None,
         }
     }
 
@@ -362,15 +387,17 @@ impl App {
         }
         match result {
             Ok(notices) => {
-                let scope = match (
-                    !key.selected.is_empty(),
-                    key.revision == self.tab.revision && key.selected == self.tab.selected,
-                ) {
-                    (true, true) => "Selection",
-                    (false, true) => "Drawing",
-                    (true, false) => "Previous selection",
-                    (false, false) => "Previous drawing snapshot",
-                };
+                let scope = key.what.as_deref().unwrap_or(
+                    match (
+                        !key.selected.is_empty(),
+                        key.revision == self.tab.revision && key.selected == self.tab.selected,
+                    ) {
+                        (true, true) => "Selection",
+                        (false, true) => "Drawing",
+                        (true, false) => "Previous selection",
+                        (false, false) => "Previous drawing snapshot",
+                    },
+                );
                 self.status = format!("{scope} copied as {}", key.format.label());
                 if !notices.is_empty() {
                     self.status.push_str(" · Review details\n");
@@ -465,7 +492,10 @@ impl App {
         }
         let snapshot = reshiki::clipboard::selection_or_drawing(&self.tab.doc, &self.tab.selected);
         let cut_ids = if cut {
-            reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected)
+            reshiki::shape_text::with_texts(
+                &self.tab.doc,
+                &reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected),
+            )
         } else {
             vec![]
         };
@@ -619,9 +649,6 @@ impl App {
             && part.arrows.is_empty()
             && part.graphics.iter().all(|g| g.picture.is_some())
         {
-            if let Some(id) = self.tab.selected.first().copied() {
-                self.reveal_picture(id);
-            }
             self.status = "Picture pasted · Drag the corner handles to resize".into();
         } else {
             self.status = "Editable drawing pasted".into();
@@ -635,25 +662,41 @@ impl App {
     /// Adds a pasted `part`, selects it and records the edit; false when
     /// nothing could be added. A small part lands just off the view's centre.
     /// One wider than a quarter of the view would cover what is there, so it
-    /// lands one bond length right of the drawing and is revealed, as an
-    /// inserted structure is. Pages keep the small offset: right of the
-    /// drawing may be off the page.
+    /// lands one bond length right of the drawing. Pages keep the small offset:
+    /// right of the drawing may be off the page. Into one selected empty panel,
+    /// such as a cleared one, the part lands in the panel's middle. The view
+    /// pans if the pasted items are clipped and keeps its zoom.
     pub(super) fn append_pasted(&mut self, part: &Document) -> bool {
         let before = self.tab.doc.clone();
         let center = editing::center(part, &part.all_ids());
         let view = self.guides.paper(iced::Rectangle::with_size(self.viewport));
         let edges = reshiki::scene::selection_bounds;
-        let wide = self.tab.doc.page_layout.is_none()
+        let panel = match self.tab.selected.as_slice() {
+            [id] => before
+                .graphics
+                .iter()
+                .find(|g| g.id == *id && g.panel.is_some())
+                .filter(|g| reshiki::graphics::panel::contents(&before, g.id).is_empty())
+                .map(|g| {
+                    let (lo, hi) = g.shape_bounds();
+                    (g.id, Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.))
+                }),
+            _ => None,
+        };
+        let wide = panel.is_none()
+            && self.tab.doc.page_layout.is_none()
             && edges(part, &part.all_ids())
                 .is_some_and(|(lo, hi)| (hi.x - lo.x) * self.tab.camera.zoom > view.width / 4.);
-        let mut offset = Point::new(
-            self.tab.camera.center.x - center.x + 24.,
-            self.tab.camera.center.y - center.y + 24.,
-        );
+        let mut offset = match panel {
+            Some((_, middle)) => Point::new(middle.x - center.x, middle.y - center.y),
+            None => Point::new(
+                self.tab.camera.center.x - center.x + 24.,
+                self.tab.camera.center.y - center.y + 24.,
+            ),
+        };
         // A wide part is measured on its own in this drawing's settings, with
         // the hydrogens it will be drawn with, so that the visible edges end
         // one bond length apart. `Document::bounds` would pad them for framing.
-        let mut beside = false;
         if wide && let Some((_, drawing)) = edges(&before, &before.all_ids()) {
             let mut blank = before.clone();
             blank.clear_content();
@@ -665,25 +708,27 @@ impl App {
                     drawing.x + before.drawing_style.bond_length_world - lo.x,
                     self.tab.camera.center.y - center.y,
                 );
-                beside = true;
             }
         }
-        let selected = editing::append_preserving_layout(&mut self.tab.doc, part, offset);
-        if selected.is_empty() || self.tab.doc.validate().is_err() {
+        let pasted = editing::append_preserving_layout(&mut self.tab.doc, part, offset);
+        if pasted.is_empty() || self.tab.doc.validate().is_err() {
             self.tab.doc = before;
             return false;
         }
-        if beside {
-            self.commit_structure_insert(
-                before,
-                selected,
-                super::engine_jobs::InsertPlacement::BesideDrawing,
-            );
-        } else {
-            self.tab.selected = selected;
-            if !self.adopt_changed_document(before) {
-                return false;
+        // What fills a panel moves with it, as wrapped contents do.
+        let mut selected = pasted.clone();
+        if let Some((id, _)) = panel {
+            selected.push(id);
+            if let Ok(grouped) = self.tab.doc.group_selection(&selected) {
+                selected = grouped;
             }
+        }
+        self.tab.selected = selected;
+        if !self.adopt_changed_document(before) {
+            return false;
+        }
+        if let Some((lo, hi)) = edges(&self.tab.doc, &pasted) {
+            self.pan_to_show(lo, hi);
         }
         true
     }
@@ -714,7 +759,10 @@ impl App {
         let text = format!("{}{json}", editing::CLIPBOARD_PREFIX);
         if cut {
             let before = self.tab.doc.clone();
-            let ids = reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected);
+            let ids = reshiki::shape_text::with_texts(
+                &self.tab.doc,
+                &reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected),
+            );
             self.tab.doc.delete(&ids);
             self.tab.selected.clear();
             self.changed(before);

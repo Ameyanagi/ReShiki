@@ -1961,6 +1961,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
             steroid_label: None,
             undefined_stereo: false,
             undefined_pseudoasymmetric: false,
+            purpose: Default::default(),
             stereo_group: None,
             position: Point::default(),
             depth: 0.,
@@ -1980,6 +1981,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
         .map(|b| Bond {
             distance_derived: false,
             highlight: None,
+            highlight_style: None,
             ring_arc: false,
             projection: false,
             z_order: 0,
@@ -4183,6 +4185,7 @@ fn ghosts(
         custom_theme: doc.custom_theme.clone(),
         drawing_style: doc.drawing_style.clone(),
         atom_labels: doc.atom_labels.clone(),
+        highlight_style: doc.highlight_style,
         ..Default::default()
     };
     let origin = fit.place([0.; 3]);

@@ -97,6 +97,48 @@ impl MoleculeCanvas<'_> {
                 }
                 Edit::RepeatLabelMove(bracket, World::new(p.x - start.x, p.y - start.y))
             }
+            Gesture::Hose { start } => {
+                if !inside {
+                    return Some(Action::request_redraw().and_capture());
+                }
+                let clicked = start.distance(p) < self.camera.world_len(DRAG_SLOP_PX);
+                Edit::Hose(start, if clicked { start } else { p })
+            }
+            Gesture::PieceHandle {
+                id,
+                handle:
+                    reshiki::equipment::solve::adjust::Handle {
+                        grip: Some(grip), ..
+                    },
+                start,
+            } => {
+                if !inside
+                    || !self.tool.selects()
+                    || start.distance(p) < self.camera.world_len(DRAG_SLOP_PX)
+                {
+                    return Some(Action::request_redraw().and_capture());
+                }
+                Edit::HoseGrip { id, grip, to: p }
+            }
+            Gesture::PieceHandle { id, handle, start } => {
+                use reshiki::equipment::solve::adjust;
+                let g = self.doc.graphics.iter().find(|g| g.id == id)?;
+                // A click switches a state; a drag sets a value.
+                let clicked = start.distance(p) < self.camera.world_len(DRAG_SLOP_PX);
+                let value = match (clicked, handle.toggle) {
+                    (true, true) => adjust::toggled(g, &handle.param),
+                    (false, false) => adjust::dragged(g, &handle, [f64::from(p.x), f64::from(p.y)]),
+                    _ => None,
+                };
+                let Some(value) = value.filter(|_| inside && self.tool.selects()) else {
+                    return Some(Action::request_redraw().and_capture());
+                };
+                Edit::PieceParam {
+                    id,
+                    param: handle.param,
+                    value,
+                }
+            }
             Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
             Gesture::PathPoint(drag) => {
                 if !drag.dragged(p, self.camera) {
@@ -484,7 +526,14 @@ impl MoleculeCanvas<'_> {
         ControlFlow::Continue(if start.distance(p) < click_slop {
             if !state.modifiers.shift()
                 && let Some(label) = hit_object(self.doc, p, self.camera.world_len(HANDLE_PICK_PX))
-                    .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id))
+                    .filter(|id| {
+                        self.doc.annotations.iter().any(|a| a.id == *id)
+                            || self
+                                .doc
+                                .graphics
+                                .iter()
+                                .any(|g| g.id == *id && reshiki::shape_text::supports(g))
+                    })
             {
                 let now = iced::time::Instant::now();
                 if state.last_click.is_some_and(|(time, id)| {
@@ -500,6 +549,11 @@ impl MoleculeCanvas<'_> {
                 .first()
                 .copied()
                 .filter(|id| self.doc.atom(*id).is_some())
+                // A click into the selected object picks a piece of it.
+                .filter(|_| {
+                    !(clicked.len() < self.selected.len()
+                        && clicked.iter().all(|id| self.selected.contains(id)))
+                })
             {
                 let now = iced::time::Instant::now();
                 if state.last_click.is_some_and(|(time, id)| {

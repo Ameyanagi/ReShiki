@@ -13,6 +13,7 @@
 //! stereo sequence. Scene assembly, final CIP labels and identifiers remain
 //! separate. Unsupported queries and malformed fragments fail atomically.
 mod abbreviations;
+mod approximate;
 mod arrows;
 pub(crate) use arrows::native_hypot;
 mod association;
@@ -33,6 +34,8 @@ mod read_abbreviations;
 mod scene;
 pub(crate) mod schemes;
 mod stereo;
+mod symbol;
+pub(crate) mod tables;
 mod tree;
 mod variables;
 pub(crate) mod xml_guard;
@@ -43,6 +46,8 @@ mod coordination_tests;
 mod residue_tests;
 #[cfg(test)]
 mod tests;
+pub use approximate::approximate;
+pub(crate) use symbol::symbol_text_to_unicode;
 pub(crate) use variables::drawing_variables;
 
 pub use abbreviations::{
@@ -57,10 +62,10 @@ pub use labels::{
 };
 pub use marks::{AtomMarks, Marks, NativeMark, read_marks};
 pub use normalize::chemistry_xml;
-pub(crate) use preparation::prepare_drawing;
 pub use preparation::{
     PreparationCause, PreparationError, PreparationStage, PreparedCdxml, prepare_cdxml,
 };
+pub(crate) use preparation::{prepare_chemical_drawing, prepare_drawing};
 pub use read_abbreviations::read_abbreviations;
 pub use scene::{
     CdxmlScene, ImportedCdxml, NativeCaption, NativeScene, SceneAtom, SceneBond, SceneError,

@@ -50,6 +50,7 @@ fn sheet(cases: &[(&str, Document)]) -> Document {
             ..Default::default()
         };
         doc.annotations.push(Annotation {
+            angle: 0.,
             id: doc.next_id(),
             position: center.offset(-140., 200.),
             text: (*label).into(),

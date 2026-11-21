@@ -220,6 +220,7 @@ fn column_and_large_group_workloads() {
     let mut labelled = Document::default();
     let arrow = labelled.next_id();
     labelled.arrows.push(Arrow {
+        arc: None,
         start_anchor: None,
         end_anchor: None,
         id: arrow,
@@ -230,9 +231,11 @@ fn column_and_large_group_workloads() {
         cubic: None,
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     let caption = labelled.next_id();
     labelled.annotations.push(Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(60., -30.),
         text: "heat".into(),

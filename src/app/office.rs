@@ -47,7 +47,7 @@ impl App {
             return Task::none();
         };
         let result = match result {
-            Ok(files::Prepared::Native(doc)) => Ok(doc),
+            Ok(files::Prepared::Native(doc, view)) => Ok((doc, view)),
             Ok(_) => Err("Office editing requires a native ReShiki drawing".into()),
             Err(error) => Err(error),
         };
@@ -59,7 +59,7 @@ impl App {
             return Task::none();
         }
         match result {
-            Ok(doc) => {
+            Ok((doc, view)) => {
                 if path != binding.path {
                     binding.reject();
                     self.status = "Office edit source does not match the opened file".into();
@@ -73,7 +73,7 @@ impl App {
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 let suppressed = std::mem::replace(&mut self.start.recent_suppressed, true);
-                let task = self.file_prepared(Some((path, Ok(files::Prepared::Native(doc)))));
+                let task = self.file_prepared(Some((path, Ok(files::Prepared::Native(doc, view)))));
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     self.start.recent_suppressed = suppressed;

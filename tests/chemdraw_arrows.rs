@@ -29,16 +29,21 @@ async fn constructed_chemdraw_retrosynthesis_and_hollow_arrows_keep_their_kinds(
     assert_eq!(retro.appearance().tail, Head::None);
     assert_eq!(retro.appearance().shape, HeadShape::Open);
     assert_eq!(retro.appearance().head_length_pt, 6.);
-    assert_eq!(retro.appearance().head_width_pt, 1.5);
+    // ChemDraw draws an angled retrosynthesis head as wide as its center size.
+    assert_eq!(retro.appearance().head_width_pt, 5.25);
     assert_eq!(retro.appearance().gap_pt, 2.);
+    // A hollow head on a spaced shaft is ChemDraw's hollow block arrow,
+    // sized in hundredths of its 0.6 pt line.
     let hollow = &document.arrows[1];
+    let style = hollow.appearance();
     assert_eq!(hollow.kind, "forward");
-    assert_eq!(hollow.appearance().head, Head::Full);
-    assert_eq!(hollow.appearance().tail, Head::None);
-    assert_eq!(hollow.appearance().shape, HeadShape::Hollow);
-    assert_eq!(hollow.appearance().head_length_pt, 6.);
-    assert_eq!(hollow.appearance().head_width_pt, 1.5);
-    assert_eq!(hollow.appearance().gap_pt, 6.);
+    assert_eq!(style.body, reshiki::arrows::Body::Hollow);
+    assert_eq!(style.head, Head::Full);
+    assert_eq!(style.tail, Head::None);
+    assert_eq!(style.shape, HeadShape::Hollow);
+    assert!((style.head_length_pt - 3.6).abs() < 1e-5);
+    assert!((style.head_width_pt - 4.5).abs() < 1e-5);
+    assert!((style.gap_pt - 3.6).abs() < 1e-5);
     Ok(())
 }
 
@@ -59,6 +64,74 @@ fn binary_arrows_use_chemdraw_code_and_migrate_legacy_files() -> anyhow::Result<
         .context("Arrow was lost")?;
     assert_eq!(arrow.attribute("Tail3D"), Some("10 20 0"));
     assert_eq!(arrow.attribute("Head3D"), Some("70 20 0"));
+    Ok(())
+}
+
+#[test]
+fn binary_dipole_flag_uses_implied_boolean_and_reads_legacy_byte_flags() -> anyhow::Result<()> {
+    let xml = |flag: &str| format!("<CDXML><page id='1'><arrow id='2'{flag}/></page></CDXML>");
+    let plain = to_cdx(&xml("")).map_err(anyhow::Error::msg)?;
+    // After the 22-byte header and three object headers, the native flag
+    // is 0x0a3a with a zero-length payload. ChemDraw rejects length 1.
+    assert_eq!(plain.len(), 48);
+    let mut expected = plain.clone();
+    expected.splice(40..40, [0x3a, 0x0a, 0, 0]);
+    assert_eq!(
+        to_cdx(&xml(" Dipole='yes'")).map_err(anyhow::Error::msg)?,
+        expected
+    );
+    assert_eq!(
+        to_cdx(&xml(" Dipole='no'")).map_err(anyhow::Error::msg)?,
+        plain
+    );
+
+    for (payload, flag) in [(vec![], "yes"), (vec![1], "yes"), (vec![0], "no")] {
+        let mut binary = plain.clone();
+        let mut property = vec![0x3a, 0x0a, payload.len() as u8, 0];
+        property.extend(payload);
+        binary.splice(40..40, property);
+        let decoded = from_cdx(&binary).map_err(anyhow::Error::msg)?;
+        let tree = presentation::parse(&decoded)?;
+        let arrow = tree
+            .descendants()
+            .find(|n| n.has_tag_name("arrow"))
+            .context("Lost dipole arrow")?;
+        assert_eq!(arrow.attribute("Dipole"), Some(flag));
+        // Old ReShiki bytes stay readable, but all later writes are canonical.
+        assert_eq!(
+            &to_cdx(&decoded).map_err(anyhow::Error::msg)?,
+            if flag == "yes" { &expected } else { &plain }
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn genuine_chemdraw_dipole_keeps_meaning_and_geometry_in_binary_exchange() -> anyhow::Result<()> {
+    let source = include_str!("fixtures/chemdraw-dipole-arrow/source.cdxml");
+    let native = from_cdx(include_bytes!("fixtures/chemdraw-dipole-arrow/native.cdx"))
+        .map_err(anyhow::Error::msg)?;
+    let rewritten =
+        from_cdx(&to_cdx(&native).map_err(anyhow::Error::msg)?).map_err(anyhow::Error::msg)?;
+    for xml in [source, &native, &rewritten] {
+        let tree = presentation::parse(xml)?;
+        let elements: Vec<_> = tree.descendants().filter(|n| n.is_element()).collect();
+        let index = elements
+            .iter()
+            .position(|n| n.has_tag_name("arrow"))
+            .context("Lost dipole arrow")?;
+        assert_eq!(
+            elements.iter().filter(|n| n.has_tag_name("arrow")).count(),
+            1
+        );
+        let palette = presentation::palette(tree.root_element())?;
+        let arrow = ArrowReader::new(xml)?.read(index, 1., &palette.colors, 1)?;
+        assert!(arrow.style.dipole);
+        assert_eq!(arrow.style.head, Head::Full);
+        assert_eq!(arrow.style.tail, Head::None);
+        assert!((arrow.start.x - 130.).hypot(arrow.start.y - 265.) < 1e-5);
+        assert!((arrow.end.x - 205.).hypot(arrow.end.y - 265.) < 1e-5);
+    }
     Ok(())
 }
 
@@ -129,8 +202,7 @@ fn genuine_chemdraw_file_retains_arrow_geometry_style_and_references() -> anyhow
 }
 
 #[tokio::test]
-async fn native_fill_codes_preserve_unfilled_arrows_and_reject_unsupported_fills()
--> anyhow::Result<()> {
+async fn native_fill_codes_preserve_unfilled_arrows_and_read_block_fills() -> anyhow::Result<()> {
     let engine = LocalEngine::default();
     for (fill, code) in [
         ("Unspecified", 0u8),
@@ -153,19 +225,21 @@ async fn native_fill_codes_preserve_unfilled_arrows_and_reject_unsupported_fills
         let result = engine
             .request(Request::import("cdx", &STANDARD.encode(binary)))
             .await;
-        if code <= 1 {
-            assert_eq!(
-                result
-                    .map_err(anyhow::Error::msg)?
-                    .document
-                    .context("Missing document")?
-                    .arrows
-                    .len(),
-                1
-            );
-        } else {
-            assert!(result.unwrap_err().contains("Filled or faded CDXML arrows"));
-        }
+        let arrows = result
+            .map_err(anyhow::Error::msg)?
+            .document
+            .context("Missing document")?
+            .arrows;
+        assert_eq!(arrows.len(), 1);
+        // Solid and Shaded are ChemDraw block arrows.
+        assert_eq!(
+            arrows[0].appearance().body,
+            match code {
+                2 => reshiki::arrows::Body::Block,
+                4 => reshiki::arrows::Body::Gradient,
+                _ => reshiki::arrows::Body::Line,
+            }
+        );
         if code == 0 {
             let mut legacy = to_cdx(&xml).map_err(anyhow::Error::msg)?;
             legacy[34] = 0x27;
@@ -183,10 +257,26 @@ async fn native_fill_codes_preserve_unfilled_arrows_and_reject_unsupported_fills
             );
         }
     }
-    let faded = r#"<CDXML><page id="1"><arrow id="2" Tail3D="10 20 0" Head3D="70 20 0" ArrowheadHead="Full" FillType="None" FadePercent="90"/></page></CDXML>"#;
+    // ChemDraw draws no fade on an arrow, so it opens as the same arrow.
+    let arrow = |fade: &str| {
+        format!(
+            r#"<CDXML><page id="1"><arrow id="2" Tail3D="10 20 0" Head3D="70 20 0" ArrowheadHead="Full" FillType="None"{fade}/></page></CDXML>"#
+        )
+    };
+    let mut appearances = vec![];
+    for fade in ["", r#" FadePercent="90""#] {
+        let result = engine
+            .request(Request::import("cdxml", &arrow(fade)))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let arrows = result.document.context("Missing faded arrow")?.arrows;
+        appearances.push(arrows.first().context("Missing arrow")?.appearance());
+    }
+    assert_eq!(appearances[0], appearances[1]);
+    let filled = arrow(r#" FillType="Pattern""#).replace(r#" FillType="None""#, "");
     assert!(
         engine
-            .request(Request::import("cdxml", faded))
+            .request(Request::import("cdxml", &filled))
             .await
             .unwrap_err()
             .contains("Filled or faded CDXML arrows")

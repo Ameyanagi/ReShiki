@@ -6,6 +6,50 @@ use iced::{Point, Rectangle, Renderer, Theme, Vector, mouse};
 use reshiki::chains::ChainMode;
 use reshiki::document::Document;
 
+#[test]
+fn drawing_an_unrelated_rectangle_preserves_a_legacy_caption_in_preview() {
+    use reshiki::document::Annotation;
+    use reshiki::graphics::{Graphic, GraphicKind, GraphicStyle};
+
+    let mut doc = Document::default();
+    let mut holder = Graphic::dragged(
+        1,
+        GraphicKind::Rectangle,
+        World::new(-120., -75.),
+        World::new(-45., -30.),
+        GraphicStyle::default(),
+        Default::default(),
+        false,
+    );
+    holder.text = Some(2);
+    doc.graphics.push(holder);
+    doc.annotations.push(Annotation {
+        id: 2,
+        position: World::new(-118., -73.),
+        text: "A saved caption with its original layout".into(),
+        angle: 0.73,
+        format: Default::default(),
+    });
+    let mut old_preview = doc.clone();
+    reshiki::shape_text::reconcile(&mut old_preview);
+    assert_ne!(old_preview.annotations, doc.annotations);
+
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Graphic(GraphicKind::Rectangle);
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let state = State {
+        gesture: Some(Gesture::Graphic {
+            start: World::new(20., 25.),
+            hydrogens: Default::default(),
+        }),
+        cursor: Some(canvas.camera.screen(World::new(120., 95.), bounds)),
+        ..Default::default()
+    };
+    let preview = canvas.pointer_preview_document(&state, bounds);
+    assert_eq!(preview.graphics.len(), 2);
+    assert_eq!(preview.annotations, doc.annotations);
+}
+
 fn gallery(copies: usize) -> Document {
     let original: Document = serde_json::from_str(include_str!(
         "../../../assets/examples/shortcut-examples.rsk"

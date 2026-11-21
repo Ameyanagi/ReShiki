@@ -1,8 +1,13 @@
 //! Freeform selection shared by lasso and rectangular selection.
 use crate::{
     document::{Document, Point},
-    graphics::{flattened, segment_distance},
+    graphics::{
+        PathCommand, flattened, segment_distance,
+        table::{Frame, clip},
+    },
 };
+
+const BOUNDARY_TOLERANCE: f32 = 0.001;
 
 pub fn contains(polygon: &[Point], p: Point) -> bool {
     if polygon.len() < 3 {
@@ -14,7 +19,7 @@ pub fn contains(polygon: &[Point], p: Point) -> bool {
         .zip(polygon.iter().cycle().skip(1))
         .take(polygon.len())
     {
-        if segment_distance(p, *a, *b) < 0.001 {
+        if segment_distance(p, *a, *b) < BOUNDARY_TOLERANCE {
             return true;
         }
         if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
@@ -29,6 +34,14 @@ fn encloses(polygon: &[Point], points: &[Point], closed: bool) -> bool {
     }
     let cross =
         |a: Point, b: Point, c: Point| (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    let straddles = |a: Point, b: Point, c: Point, d: Point| {
+        // Clipping and affine frame round trips can put a boundary point a
+        // few ulps across an edge. Use contains' distance tolerance here too:
+        // a point accepted on that edge must not become a strict crossing.
+        let tolerance = BOUNDARY_TOLERANCE * a.distance(b);
+        let (c, d) = (cross(a, b, c), cross(a, b, d));
+        (c < -tolerance && d > tolerance) || (c > tolerance && d < -tolerance)
+    };
     let edges = points
         .windows(2)
         .filter_map(|p| match p {
@@ -47,29 +60,99 @@ fn encloses(polygon: &[Point], points: &[Point], closed: bool) -> bool {
             .iter()
             .zip(polygon.iter().cycle().skip(1))
             .take(polygon.len())
-            .any(|(c, d)| {
-                cross(a, b, *c) * cross(a, b, *d) < -0.0001
-                    && cross(*c, *d, a) * cross(*c, *d, b) < -0.0001
-            })
+            .any(|(c, d)| straddles(a, b, *c, *d) && straddles(*c, *d, a, b))
     })
 }
+
+fn clipped_path(
+    polygon: &[Point],
+    frame: Frame,
+    commands: &[PathCommand],
+    half: f32,
+    filled: bool,
+    round: bool,
+) -> Vec<bool> {
+    let paths = flattened(commands);
+    let mut visible: Vec<_> = if filled {
+        clip::fill_contours(frame, &paths)
+            .iter()
+            .map(|contour| encloses(polygon, contour, true))
+            .collect()
+    } else {
+        vec![]
+    };
+    if half > 0. {
+        for path in &paths {
+            let segments: Vec<_> = path
+                .windows(2)
+                .filter_map(|pair| {
+                    let &[a, b] = pair else { return None };
+                    clip::segment(frame, a, b)
+                })
+                .collect();
+            if segments.is_empty() {
+                // A wide stroke may paint inside the cell even though its
+                // centreline never enters. Never turn its closed interior
+                // into a fill merely because the path returns to its start.
+                visible.extend(
+                    clip::stroke_contours(frame, std::slice::from_ref(path), half, round)
+                        .iter()
+                        .map(|contour| encloses(polygon, contour, true)),
+                );
+            } else {
+                // Retain region selection's centreline enclosure convention.
+                visible.push(
+                    segments
+                        .iter()
+                        .all(|(a, b)| encloses(polygon, &[*a, *b], false)),
+                );
+            }
+        }
+    }
+    visible
+}
+
 pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
     if polygon.len() < 3 {
         return vec![];
     }
+    let cells = crate::scene::table::Layout::new(doc);
+    let visible_path = |id, points: &[Point]| -> Option<bool> {
+        let segments: Vec<_> = points
+            .windows(2)
+            .filter_map(|pair| {
+                let &[a, b] = pair else { return None };
+                cells.segment(id, a, b)
+            })
+            .collect();
+        (!segments.is_empty()).then(|| {
+            segments
+                .iter()
+                .all(|(a, b)| encloses(polygon, &[*a, *b], false))
+        })
+    };
     let mut result: Vec<_> = doc
         .atoms
         .iter()
-        .filter(|a| doc.atom_drawn(a.id) && contains(polygon, a.position))
+        .filter(|a| {
+            doc.atom_drawn(a.id)
+                && cells.contains(a.id, a.position)
+                && contains(polygon, a.position)
+        })
         .map(|a| a.id)
         .collect();
     // A 3D model inside the region selects its molecule.
     for model in &doc.models {
+        let ids = model.linked_ids(doc);
         if model.display != crate::models3d::Display::TwoD
-            && crate::models3d::frame_corners(doc, model)
-                .is_some_and(|corners| encloses(polygon, &corners, true))
+            && crate::models3d::frame_corners(doc, model).is_some_and(|corners| {
+                let corners = ids
+                    .first()
+                    .map_or_else(|| corners.to_vec(), |id| cells.polygon(*id, &corners));
+                !corners.is_empty() && encloses(polygon, &corners, true)
+            })
         {
-            for id in model.linked_ids(doc) {
+            for id in ids {
                 if !result.contains(&id) {
                     result.push(id);
                 }
@@ -77,30 +160,111 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         }
     }
     for a in &doc.annotations {
-        let (w, h) = a.size();
-        let p = a.position;
-        if encloses(
-            polygon,
-            &[p, p.offset(w, 0.), p.offset(w, h), p.offset(0., h)],
-            true,
-        ) {
+        let corners = cells.polygon(a.id, &cells.annotation(a).corners());
+        if !corners.is_empty() && encloses(polygon, &corners, true) {
             result.push(a.id);
         }
     }
     for a in &doc.arrows {
-        if a.paths().iter().all(|part| {
-            flattened(&part.commands)
-                .iter()
-                .all(|points| encloses(polygon, points, false))
-        }) {
+        let visible: Vec<_> = a
+            .paths()
+            .iter()
+            .flat_map(|part| {
+                cells.frame(a.id).map_or_else(
+                    || {
+                        flattened(&part.commands)
+                            .iter()
+                            .filter_map(|points| visible_path(a.id, points))
+                            .collect()
+                    },
+                    |frame| {
+                        clipped_path(
+                            polygon,
+                            frame,
+                            &part.commands,
+                            part.style.width() * 0.5,
+                            part.filled && part.style.fill.is_some(),
+                            part.style.round_caps(),
+                        )
+                    },
+                )
+            })
+            .collect();
+        if !visible.is_empty() && visible.into_iter().all(|inside| inside) {
             result.push(a.id);
         }
     }
     for g in &doc.graphics {
-        if flattened(&g.commands())
+        if g.table.is_some() {
+            let footprints: Vec<_> = crate::graphics::table::cell_frames(g)
+                .map(|frame| frame.corners())
+                .collect();
+            if !footprints.is_empty()
+                && footprints
+                    .iter()
+                    .all(|corners| encloses(polygon, corners, true))
+            {
+                result.push(g.id);
+            }
+            continue;
+        }
+        if let Some(frame) = cells.frame(g.id) {
+            let picture = g.kind == crate::graphics::GraphicKind::Picture;
+            let visible: Vec<_> = g
+                .parts()
+                .iter()
+                .flat_map(|part| {
+                    clipped_path(
+                        polygon,
+                        frame,
+                        &part.commands,
+                        if picture {
+                            0.
+                        } else {
+                            part.style.width() * 0.5
+                        },
+                        picture || (part.filled && part.style.fill.is_some()),
+                        part.style.round_caps(),
+                    )
+                })
+                .chain(g.tlc_labels().iter().filter_map(|label| {
+                    let corners = cells.polygon(g.id, &label.corners());
+                    (!corners.is_empty()).then(|| encloses(polygon, &corners, true))
+                }))
+                .collect();
+            if !visible.is_empty() && visible.into_iter().all(|inside| inside) {
+                result.push(g.id);
+            }
+            continue;
+        }
+        if g.tlc.is_some() {
+            let paths = flattened(&g.commands());
+            let labels = g.tlc_labels();
+            let visible: Vec<_> = paths
+                .iter()
+                .filter_map(|path| visible_path(g.id, path))
+                .chain(labels.iter().filter_map(|label| {
+                    let corners = cells.polygon(g.id, &label.corners());
+                    (!corners.is_empty()).then(|| encloses(polygon, &corners, true))
+                }))
+                .collect();
+            if !visible.is_empty() && visible.into_iter().all(|inside| inside) {
+                result.push(g.id);
+            }
+            continue;
+        }
+        let commands = g.commands();
+        let fill_only = g.is_fill_only_path();
+        let paths = if fill_only {
+            crate::graphics::fill_boundaries(&commands)
+        } else {
+            flattened(&commands)
+        };
+        let visible: Vec<_> = paths
             .iter()
-            .all(|path| !path.is_empty() && encloses(polygon, path, false))
-        {
+            .filter_map(|path| visible_path(g.id, path))
+            .collect();
+        if !visible.is_empty() && visible.into_iter().all(|inside| inside) {
             result.push(g.id);
         }
     }
@@ -125,4 +289,49 @@ pub fn combine(existing: &[u64], hits: &[u64], add: bool, subtract: bool) -> Vec
         }
     }
     ids
+}
+
+#[cfg(test)]
+mod table_tests;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enclosure_uses_the_same_boundary_tolerance_as_point_containment() {
+        let polygon = [
+            Point::default(),
+            Point::new(100., 0.),
+            Point::new(100., 100.),
+            Point::new(0., 100.),
+        ];
+        let just_outside = f32::from_bits(100.0_f32.to_bits() + 2);
+        let clipped = [Point::new(20., 10.), Point::new(just_outside, 10.)];
+        assert!(clipped.iter().all(|p| contains(&polygon, *p)));
+        assert!(encloses(&polygon, &clipped, false));
+        assert!(!encloses(
+            &polygon,
+            &[clipped[0], Point::new(100.01, 10.)],
+            false,
+        ));
+    }
+
+    #[test]
+    fn enclosure_rejects_a_path_crossing_a_visible_concave_gap() {
+        let polygon = [
+            Point::default(),
+            Point::new(100., 0.),
+            Point::new(100., 100.),
+            Point::new(60., 100.),
+            Point::new(60., 40.),
+            Point::new(40., 40.),
+            Point::new(40., 100.),
+            Point::new(0., 100.),
+        ];
+        let crossing = [Point::new(20., 80.), Point::new(80., 80.)];
+        assert!(crossing.iter().all(|p| contains(&polygon, *p)));
+        assert!(!encloses(&polygon, &crossing, false));
+        assert!(!encloses(&polygon, &crossing, true));
+    }
 }

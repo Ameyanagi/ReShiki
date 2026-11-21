@@ -140,6 +140,7 @@ async fn import_cases() -> anyhow::Result<Vec<Case>> {
     for smiles in ["N[C@@H](C)C(=O)O", "[13CH3:41][NH3+]", "COc1ccccc1"] {
         let mut document = import(&reference, smiles).await?;
         document.annotations.push(Annotation {
+            angle: 0.,
             id: document.next_id(),
             position: Point::new(0.1, -0.2),
             text: "試料 α".into(),
@@ -207,6 +208,7 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
     let mut documents = vec![("empty".to_owned(), Document::default())];
     let mut figure = Document::default();
     figure.annotations.push(Annotation {
+        angle: 0.,
         id: 1,
         position: Point::new(0.1, -0.2),
         text: "試料 α".into(),

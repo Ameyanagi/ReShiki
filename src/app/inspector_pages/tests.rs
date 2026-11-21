@@ -109,6 +109,7 @@ fn new_selection_returns_from_either_page_through_canvas_and_context_routes() {
                 0 => Message::Canvas(Edit::Select(vec![carbon])),
                 1 => Message::Canvas(Edit::ContextMenu {
                     position: iced::Point::new(30., 40.),
+                    at: app.tab.doc.atom(carbon).unwrap().position,
                     selected: vec![carbon],
                     hit: vec![carbon],
                 }),
@@ -447,7 +448,14 @@ fn names_from_publication_catalog_returns_to_the_exact_page_and_its_draft() {
             pages::Field::Width,
             "123".into(),
         )));
-        let draft = app.print_document().unwrap();
+        let draft = app
+            .tab
+            .pages
+            .editor
+            .as_ref()
+            .unwrap()
+            .draft_layout()
+            .unwrap();
         let before = app.tab.doc.clone();
         names_from_catalog(&mut app);
         assert_eq!(app.inspector_parent_tab(), InspectorTab::Properties);
@@ -455,7 +463,16 @@ fn names_from_publication_catalog_returns_to_the_exact_page_and_its_draft() {
         assert_eq!(app.inspector_tab, InspectorTab::Pages);
         assert_eq!(app.inspector_parent_tab(), InspectorTab::Properties);
         assert!(app.tab.pages.editor.is_some());
-        assert_eq!(app.print_document().unwrap(), draft);
+        assert_eq!(
+            app.tab
+                .pages
+                .editor
+                .as_ref()
+                .unwrap()
+                .draft_layout()
+                .unwrap(),
+            draft
+        );
         assert_eq!(app.tab.doc, before);
         assert!(!app.tab.history.can_undo());
     }

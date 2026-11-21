@@ -57,11 +57,42 @@ The arrow follows its targets when they move. To draw a free arrow, Option/Alt-c
 
 Only `.rsk` files keep the links between an arrow and its targets. Other formats keep the arrow's shape.
 
+## Color a reaction by origin
+
+Right-click a reaction arrow and choose **Color by origin**. Each reactant gets its own color, and the color follows its atoms into the product. New bonds are highlighted and new rings filled. Without atom maps, ReShiki runs **Auto-map** first; choose **Apply maps** to continue.
+
+In **Reaction roles → Color by origin**, pick the colors, turn on a **Legend**, and choose **Color by origin** again after you edit the molecules. The legend lands on the reaction's page, clear of other objects, and keeps the names you type. **Properties** shows and copies a molecule's SMILES without atom maps; reaction SMILES keep them. The colors are ordinary bond colors, highlights and ring fills, so PNG, SVG, PDF and ChemDraw files show them.
+
+## Mark reference structures and pictures
+
+A figure often shows more than the reaction: a known compound beside the product, a flask icon, a decorative arrow. Give each its purpose so the chemistry tools leave it out:
+
+1. Select the molecule or arrow.
+2. In **Properties**, choose **Reference** or **Illustration** under **Purpose**. You can also right-click and choose **Purpose**.
+
+- **Chemistry**, the default, takes part in reactions.
+- **Reference** keeps its formula, name and captions but never joins a reaction, wherever it sits.
+- **Illustration** is a picture: chemical copy, **Check drawing** and the whole-drawing formula skip it, and its arrow takes no conditions.
+
+A dashed outline and a small tag mark Reference and Illustration objects while you edit; exports never show them. Right-click a reaction arrow and choose **Preview reaction** to outline its reactants, products, reagents and conditions. Esc hides the preview. Only `.rsk` files keep the purpose.
+
+## Change an arrow's look
+
+Select an arrow and choose a **Body** in **Properties**: **Block**, **Hollow block**, **Chevron** or **Gradient**. **Body width (pt)** sets how broad it is. The look never changes the arrow's meaning: a block reaction arrow keeps its roles and its conditions.
+
+To mark light, an electrode, heat, microwaves, ultrasound, cold or an enzyme, click **Icons** in the tools palette and choose an icon under **Reaction conditions**. Click it onto the middle of the arrow; it covers the shaft behind it. Press V for Select, click the icon, Shift-click the arrow's shaft and press ⌘/Ctrl+G, and they move together. The icon is an ordinary shape: the reaction and its condition text stay as they are.
+
+For a curved arrow that runs along a circle, choose **Arc** in the arrow palette, or select an arrow and choose **Make arc**. Drag the diamond to change how far it bows, or type an angle in **Sweep (°)**.
+
+ChemDraw keeps block, hollow and gradient arrows and arc arrows as arrows. Chevrons arrive in ChemDraw as grouped shapes, and condition icons as ordinary shapes.
+
+Lines and arcs in a ChemDraw file open as graphic lines and curves, as lines drawn in ReShiki do; select one and choose an arrowhead in **Properties** if it needs one. A line or arc that a ChemDraw reaction step lists stays an arrow. Arrows with heads stay **Chemistry**, so **Preview reaction** still finds their reactants and products.
+
 ## Make the reaction exportable
 
 The drawing can also carry explicit reactant, product, and reagent roles:
 
-1. Select an arrow and open **Properties → Reaction roles…**.
+1. Select an arrow and choose **Reaction roles…** at the top of its properties.
 2. Select a molecule, then **+ Assign selected molecules** under its role.
 3. Repeat for the remaining molecules.
 
@@ -81,7 +112,7 @@ Atom maps number the atoms that correspond between reactants and products.
 1. Assign reactants and products first. The **Atom maps** section below the roles then shows how many atoms are mapped.
 2. To set one map, select one atom, type a number in **Atom map** and choose **Set**. You can also right-click an atom and choose **Edit atom map…**.
 3. To pair two atoms, select one reactant atom and one product atom, then choose **Pair selected atoms**.
-4. To map the rest, choose **Auto-map**. **Review atom maps** lists each suggested pair; click a row to select that pair in the drawing.
+4. To map the rest, choose **Auto-map**. **Review atom maps** shows the reaction with the suggested numbers and lists each suggested pair; click a row to select that pair in the drawing.
 5. Choose **Apply maps** to keep the suggestion, or **Discard**.
 6. Choose **Align mapped structures** to turn and move each product so that its mapped atoms line up with the reactants.
 

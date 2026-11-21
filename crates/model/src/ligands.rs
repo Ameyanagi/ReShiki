@@ -147,6 +147,7 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
         label_style: doc.abbreviation(id).and_then(|g| g.label_style.clone()),
         label_color_override: doc.abbreviation(id).is_some_and(|g| g.label_color_override),
         highlight,
+        highlight_style: highlight.and(crate::highlights::atom_style_override(doc, anchor)),
         alignment: doc
             .abbreviation(id)
             .map(|g| g.alignment)

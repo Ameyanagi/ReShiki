@@ -82,14 +82,17 @@ impl Row {
 
 /// A document color. Palette colors follow the theme, canvas and hues; custom
 /// colors are exact on both canvases. Stored as "blue.strong" or "blue.tint",
-/// as `[r, g, b]` (read with the `legacy` table, so Ink is black), or as
-/// "#1F4E79" for a custom color that the table would turn into a swatch.
+/// as `[r, g, b]` (read with the `legacy` table, so Ink is black), as
+/// "#1F4E79" for a custom color that the table would turn into a swatch, or as
+/// "paper".
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Color {
     #[default]
     Ink,
     Palette(Hue, Row),
     Custom(Rgb),
+    /// The canvas color: white on the light canvas, black on the dark one.
+    Paper,
 }
 impl Color {
     /// The five hard-coded swatches and four fill swatches of earlier versions.
@@ -123,6 +126,7 @@ impl Color {
     pub fn rgb(self) -> Rgb {
         match self {
             Self::Ink => [0; 3],
+            Self::Paper => [255; 3],
             Self::Custom(rgb) => rgb,
             Self::Palette(hue, row) => Palette::new(
                 ColorTheme::Publication.tones(CanvasTheme::Light),
@@ -135,6 +139,7 @@ impl Color {
     pub fn name(self) -> String {
         match self {
             Self::Ink => "Ink".into(),
+            Self::Paper => "Paper".into(),
             Self::Palette(hue, row) => format!("{} · {}", hue.name(), row.name()),
             Self::Custom(rgb) => hex(rgb),
         }
@@ -147,6 +152,9 @@ impl std::str::FromStr for Color {
             return parse_hex(hex)
                 .map(Self::Custom)
                 .ok_or_else(|| format!("Invalid color {s}"));
+        }
+        if s == "paper" {
+            return Ok(Self::Paper);
         }
         let (hue, row) = s
             .split_once('.')
@@ -169,6 +177,7 @@ impl Serialize for Color {
             Self::Palette(hue, row) => {
                 serializer.serialize_str(&format!("{}.{}", hue.key(), row.name().to_lowercase()))
             }
+            Self::Paper => serializer.serialize_str("paper"),
             // Ink and custom colors that cannot be taken for an old swatch keep
             // the byte form, so earlier versions still open such drawings.
             color if Self::legacy(color.rgb()) == color => color.rgb().serialize(serializer),
@@ -331,6 +340,7 @@ impl Palette {
     pub fn rgb(&self, color: Color) -> Rgb {
         match color {
             Color::Ink => self.canvas.color([0; 3]),
+            Color::Paper => self.canvas.background(),
             Color::Palette(hue, row) => self.swatch(hue, row),
             Color::Custom(rgb) => rgb,
         }
@@ -438,9 +448,20 @@ pub fn for_each_color_mut(doc: &mut Document, mut visit: impl FnMut(&mut Color))
         }
     }
     for graphic in &mut doc.graphics {
+        if let Some(table) = &mut graphic.table {
+            for border in table.cells.iter_mut().flat_map(|cell| &mut cell.borders) {
+                visit(&mut border.color);
+            }
+        }
+        if let Some(tlc) = &mut graphic.tlc {
+            tlc.for_each_color_mut(&mut visit);
+        }
         visit(&mut graphic.style.stroke);
         if let Some(fill) = &mut graphic.style.fill {
             visit(fill);
+        }
+        if let Some(gradient) = &mut graphic.style.effects.gradient {
+            visit(&mut gradient.from);
         }
     }
     for fill in &mut doc.ring_fills {
@@ -483,10 +504,18 @@ pub fn any_color(doc: &Document, test: impl Fn(Color) -> bool) -> bool {
         .arrows
         .iter()
         .filter_map(|a| a.style.as_ref().map(|s| s.color));
-    let graphics = doc
-        .graphics
-        .iter()
-        .flat_map(|g| std::iter::once(g.style.stroke).chain(g.style.fill));
+    let graphics = doc.graphics.iter().flat_map(|g| {
+        std::iter::once(g.style.stroke)
+            .chain(g.style.fill)
+            .chain(g.style.effects.gradient.map(|gradient| gradient.from))
+            .chain(g.table.iter().flat_map(|table| {
+                table
+                    .cells
+                    .iter()
+                    .flat_map(|cell| cell.borders.iter().map(|border| border.color))
+            }))
+            .chain(g.tlc.iter().flat_map(|t| t.colors()))
+    });
     let fills = doc.ring_fills.iter().map(|f| f.color);
     let abbreviations = doc.abbreviations.iter().flat_map(|g| {
         g.label_style

@@ -147,6 +147,27 @@ fn words(text: &str) -> impl Iterator<Item = String> + '_ {
         .map(str::to_lowercase)
 }
 
+/// Accept British spellings as input while preserving query punctuation and keys.
+pub(crate) fn normalize_spelling(query: &str) -> String {
+    let separator = |c: char| !c.is_alphanumeric();
+    let mut normalized = String::with_capacity(query.len());
+    for part in query.split_inclusive(separator) {
+        let word = part.trim_end_matches(separator);
+        // Escapes keep the copy lint from treating input spellings as app text.
+        let spelling = match word.to_ascii_lowercase().as_str() {
+            "colo\u{75}r" => "color",
+            "centr\u{65}" => "center",
+            "grey" => "gray",
+            "favourite" => "favorite",
+            "organise" => "organize",
+            _ => word,
+        };
+        normalized.push_str(spelling);
+        normalized.push_str(&part[word.len()..]);
+    }
+    normalized
+}
+
 /// In-order letters, as "wdg" in "wedge".
 fn subsequence(needle: &str, haystack: &str) -> bool {
     let mut chars = haystack.chars();

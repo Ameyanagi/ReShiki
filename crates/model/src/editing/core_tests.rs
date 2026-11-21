@@ -194,6 +194,7 @@ fn snap_target_cache_preserves_baseline_documents_ids_ties_and_float_bits() {
                         id: doc.next_id(),
                         members: moving.clone(),
                         integral: false,
+                        layout: None,
                     }),
                     11 => doc
                         .bonds
@@ -282,6 +283,7 @@ fn selection_membership_keeps_collapsed_groups_boundary_stereo_and_object_order(
     doc.contract(&[b, c], "OMe", "MeO").unwrap();
     let caption = doc.next_id();
     doc.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: caption,
         position: Point::new(20., 80.),
         text: "caption".into(),

@@ -523,6 +523,12 @@ pub fn toggle(
     {
         return Err("Select one whole molecule to show its properties".into());
     }
+    crate::graphics::table::require_same_cell(doc, &whole)?;
+    let before = doc
+        .graphics
+        .iter()
+        .any(|g| g.table.is_some())
+        .then(|| doc.clone());
     let index = doc
         .property_captions
         .iter()
@@ -548,6 +554,7 @@ pub fn toggle(
         let gap = doc.drawing_style.font_size().max(12.) * 0.5;
         let center = anchor(doc, atoms).map_or(0., |p| p.x);
         doc.annotations.push(Annotation {
+            angle: 0.,
             id,
             position: Point::new(center, hi.y + gap),
             text: String::new(),
@@ -578,6 +585,14 @@ pub fn toggle(
         // An untracked name would go stale.
         link.name.clear();
         link.smiles.clear();
+    }
+    if let Some(before) = before {
+        crate::graphics::table::inherit_attachment(
+            &before,
+            doc,
+            link.annotation.as_slice(),
+            atoms,
+        )?;
     }
     // An edited caption is plain text; showing a property links it again.
     rewrite(doc, link, &shown)

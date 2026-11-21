@@ -143,6 +143,7 @@ fn personal_templates_and_toolbar_presets_keep_their_existing_sizes() {
     let mut personal = builtin("Cyclohexane").clone();
     personal.id = "personal:copy".into();
     personal.document.annotations.push(Annotation {
+        angle: 0.,
         id: personal.document.next_id(),
         position: Point::new(70., -50.),
         text: "Saved artwork".into(),

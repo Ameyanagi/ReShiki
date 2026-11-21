@@ -31,6 +31,11 @@ pub struct State {
     past: Vec<Revision>,
     future: Vec<Revision>,
     auto_formula: bool,
+    /// What a new callout's text points at; its leader is added with the
+    /// text, so one Undo removes both.
+    pub(super) callout: Option<reshiki::leaders::Target>,
+    /// The closed shape new text goes into, centred and wrapped inside it.
+    shape: Option<u64>,
 }
 impl super::DocumentTab {
     /// A caption draft that differs from the text it started with.
@@ -125,18 +130,52 @@ impl App {
             (Some(original), true) => doc.delete(&[original.id]),
             (Some(original), false) => {
                 if let Some(label) = doc.annotations.iter_mut().find(|a| a.id == original.id) {
+                    let centre = label.centre();
                     label.text = text;
                     label.format = format;
+                    // Turned text grows about its centre, which it turns about.
+                    if label.angle != 0. {
+                        let (w, h) = label.size();
+                        label.position = centre.offset(-w / 2., -h / 2.);
+                    }
                 }
             }
-            (None, false) => doc.annotations.push(Annotation {
-                id: doc.next_id(),
-                position: state.position,
-                text,
-                format,
-            }),
+            (None, false) => {
+                let id = doc.next_id();
+                doc.annotations.push(Annotation {
+                    angle: 0.,
+                    id,
+                    position: state.position,
+                    text,
+                    format,
+                });
+                if let Some(target) = &state.callout {
+                    reshiki::leaders::keep_on_page(&mut doc, id, target);
+                    reshiki::graphics::table::inherit_attachment(
+                        &self.tab.doc,
+                        &mut doc,
+                        &[id],
+                        &target.ids(),
+                    )?;
+                    reshiki::leaders::attach(&mut doc, id, target.clone())?;
+                }
+                if let Some(shape) = doc.graphics.iter_mut().find(|g| Some(g.id) == state.shape) {
+                    shape.text = Some(id);
+                }
+                if let Some(shape) = state.shape {
+                    reshiki::graphics::table::inherit_attachment(
+                        &self.tab.doc,
+                        &mut doc,
+                        &[id],
+                        &[shape],
+                    )?;
+                }
+            }
             (None, true) => {}
         }
+        // Text in a shape is centred as it is drawn, also in a save made
+        // mid-draft.
+        reshiki::shape_text::reconcile_changes(&mut doc, &self.tab.doc);
         if validate {
             doc.validate()?;
         }
@@ -204,6 +243,31 @@ impl App {
         (self.inspector_open, self.inspector_tab) = inspector;
         true
     }
+    /// Edit a caption, or the text a closed shape holds. A shape without text
+    /// starts an empty centred line inside it; empty text adds nothing.
+    pub(super) fn begin_text(&mut self, id: u64) -> Task<Message> {
+        let shape = self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .find(|g| g.id == id && reshiki::shape_text::supports(g))
+            .cloned();
+        let Some(shape) = shape else {
+            return self.inline_action(Action::Begin(Some(id), Point::default()));
+        };
+        if shape.text.is_some() {
+            return self.inline_action(Action::Begin(shape.text, Point::default()));
+        }
+        let task = self.inline_action(Action::Begin(None, Point::default()));
+        if let Some(state) = self.tab.inline_text.as_mut() {
+            self.tab.caption_format.alignment = TextAlign::Center;
+            self.tab.caption_format.width_pt = Some(reshiki::shape_text::width_pt(&shape));
+            state.position = reshiki::shape_text::start(&shape, &self.tab.caption_format);
+            state.shape = Some(id);
+        }
+        task
+    }
     pub(super) fn inline_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Begin(id, position) => {
@@ -258,6 +322,8 @@ impl App {
                     epoch: self.tab.file_epoch,
                     past: vec![],
                     future: vec![],
+                    callout: None,
+                    shape: None,
                 });
                 self.palette = None;
                 self.tab.hover = None;
@@ -380,6 +446,9 @@ impl App {
             (natural.height * self.tab.camera.zoom + 20.).max(size * 1.5 + 16.),
             extra,
             condition_arrow,
+            // Centred text, and turned text, edit centred over it.
+            self.tab.caption_format.alignment == TextAlign::Center
+                || state.original.as_ref().is_some_and(|a| a.angle != 0.),
         );
         let x = bounds.x;
         let y = bounds.y;
@@ -512,6 +581,7 @@ impl App {
                 canvas_theme: self.tab.doc.canvas_theme,
                 color_theme: self.tab.doc.color_theme,
                 annotations: vec![Annotation {
+                    angle: 0.,
                     id: 1,
                     position: Point::default(),
                     text: self.tab.caption.clone(),
@@ -769,6 +839,7 @@ fn editor_bounds(
     height: f32,
     extra: f32,
     condition_arrow: Option<iced::Point>,
+    centred: bool,
 ) -> iced::Rectangle {
     let width = width.max(240.).min((viewport.width - 16.).max(24.));
     let height = (height.max(60.) + extra).min((viewport.height - 16.).max(24.));
@@ -783,6 +854,8 @@ fn editor_bounds(
             + 8.;
         let center = label.center() + normal * clearance;
         iced::Point::new(center.x - width / 2., center.y - height / 2.)
+    } else if centred {
+        iced::Point::new(label.center_x() - width / 2., label.y - 8.)
     } else {
         iced::Point::new(label.x - 8., label.y - 8.)
     };
@@ -801,7 +874,8 @@ pub(super) fn commits_draft(message: &Message) -> bool {
     if matches!(
         message,
         Message::Labels(super::atom_labels::Action::LocantsFinished(..))
-    ) {
+    ) || matches!(message, Message::Equipment(a) if a.completes())
+    {
         return false;
     }
     matches!(
@@ -814,7 +888,11 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                 | super::pages::Action::Center(_)
                 | super::pages::Action::Export
         ) | Message::Printing(super::printing::Action::Start(_))
-            | Message::Imports(super::import::Action::Files(_) | super::import::Action::Read(..))
+            | Message::Imports(
+                super::import::Action::Files(_)
+                    | super::import::Action::Read(..)
+                    | super::import::Action::SvgRead(..)
+            )
             | Message::Pictures(
                 super::pictures::Action::Replace
                     | super::pictures::Action::Resize(_)
@@ -862,6 +940,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::CopyAnalysis
             | Message::CopyChemicalText
             | Message::FormatChemicalName
+            | Message::AddCallout
             | Message::ToggleProperty(..)
             | Message::ShowMasses(..)
             | Message::NumberCompound(..)
@@ -906,6 +985,14 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::ApplyElement
             | Message::InsertTemplate(_)
             | Message::Templates(_)
+            | Message::Equipment(_)
+            | Message::Icons(
+                super::icon_browser::Action::Search(_)
+                    | super::icon_browser::Action::Filter(_)
+                    | super::icon_browser::Action::Pick(_)
+                    | super::icon_browser::Action::Arm(_)
+                    | super::icon_browser::Action::Close
+            )
             | Message::AromaticDisplay
             | Message::MakeIonic
             | Message::CenterRingCharge
@@ -930,7 +1017,42 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::ApplyBondPreset(_)
             | Message::BondPosition(_)
             | Message::ReverseBonds
+            | Message::Purpose(_)
             | Message::BondDepth(_)
+            | Message::Figure(
+                super::figure_panels::Action::Wrap
+                    | super::figure_panels::Action::ApplyTitles
+                    | super::figure_panels::Action::Place(_)
+                    | super::figure_panels::Action::Rounded(_)
+                    | super::figure_panels::Action::Border(_)
+                    | super::figure_panels::Action::AddDivider(_)
+                    | super::figure_panels::Action::ApplyDivider(_)
+                    | super::figure_panels::Action::RemoveDivider(_)
+                    | super::figure_panels::Action::Fit
+                    | super::figure_panels::Action::Arrange(_)
+                    | super::figure_panels::Action::ApplyColumns
+                    | super::figure_panels::Action::ApplyGutter
+                    | super::figure_panels::Action::Align(_)
+            )
+            | Message::Table(super::tables::Action::Edit(
+                _,
+                super::tables::CellAction::AddText
+                    | super::tables::CellAction::ApplyWidth
+                    | super::tables::CellAction::AssignSelection
+                    | super::tables::CellAction::ReleaseSelection
+                    | super::tables::CellAction::SelectTable
+                    | super::tables::CellAction::SelectContents
+                    | super::tables::CellAction::Done
+            ))
+            | Message::Tlc(
+                super::tlc::Action::Apply(..)
+                    | super::tlc::Action::Toggle(..)
+                    | super::tlc::Action::Paint(..)
+                    | super::tlc::Action::AddLane(..)
+                    | super::tlc::Action::DeleteLane(..)
+                    | super::tlc::Action::AddSpot(..)
+                    | super::tlc::Action::DeleteSpot(..)
+            )
             | Message::Graphics(
                 super::graphics::Action::Style(_)
                     | super::graphics::Action::Superscript(_)

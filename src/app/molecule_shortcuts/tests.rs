@@ -152,6 +152,7 @@ fn reaction_preserves_groups_abbreviations_and_multiple_participants() -> Result
     doc.contract(&first, "EtOH", "")?;
     let label = doc.next_id();
     doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: label,
         position: Point::new(0., 150.),
         text: "Starting materials".into(),
@@ -260,6 +261,7 @@ fn space_tracks_edits_instead_of_selection_and_follows_history() {
     assert_eq!(app.tab.selected, first);
     let before = app.tab.doc.clone();
     app.tab.doc.annotations.push(reshiki::document::Annotation {
+        angle: 0.,
         id: app.tab.doc.next_id(),
         position: Point::new(0., 200.),
         text: "Caption".into(),
@@ -324,6 +326,7 @@ fn erase_stroke_recalls_every_affected_molecule_without_previous_edits() {
         app.changed(before);
         if caption_first {
             app.tab.doc.annotations.push(reshiki::document::Annotation {
+                angle: 0.,
                 id: app.tab.doc.next_id(),
                 position: Point::new(0., -100.),
                 text: "Caption".into(),

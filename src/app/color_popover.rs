@@ -42,10 +42,19 @@ pub enum Action {
     RestoreHues,
     Cancel,
     Done,
+    /// Open or close the symbol picker.
+    Symbols,
+    /// Insert this symbol at the text cursor.
+    Insert(&'static str),
+    /// Show this symbol's name and shortcut.
+    Hover(&'static reshiki::symbols::Symbol),
 }
 
 pub(super) enum Menu {
     Align,
+    Symbols {
+        hovered: Option<&'static reshiki::symbols::Symbol>,
+    },
     Color {
         /// The typed color could not be read.
         invalid: bool,
@@ -73,10 +82,13 @@ pub(super) fn keeps_open(message: &Message) -> bool {
             | Message::TextColor(_)
             | Message::ApplyTextColor
             | Message::ClearRingFill
+            | Message::RingEffect(_)
+            | Message::HighlightStyle(_)
             | Message::ClearHighlights
             | Message::TextStyle(StyleChange::Color(_))
             | Message::Canvas(crate::canvas::Edit::Hover(_) | crate::canvas::Edit::PointerHover(_))
             | Message::InspectorScroll(_)
+            | Message::Icons(super::icon_browser::Action::Scrolled { .. })
             | Message::Nmr(super::nmr::Action::RenderedSize(_))
             | Message::InspectorAction(
                 super::inspector::Action::RefreshProperties
@@ -123,7 +135,20 @@ impl App {
                     edit: None,
                 });
             }
-            Action::Close => self.close_style_menu(),
+            Action::Close => {
+                let symbols = matches!(self.style_menu, Some(Menu::Symbols { .. }));
+                self.close_style_menu();
+                if symbols {
+                    return self.focus_draft();
+                }
+            }
+            Action::Symbols => return self.open_symbols(),
+            Action::Insert(symbol) => return self.insert_symbol(symbol),
+            Action::Hover(symbol) => {
+                if let Some(Menu::Symbols { hovered }) = &mut self.style_menu {
+                    *hovered = Some(symbol);
+                }
+            }
             Action::AddCustom => {
                 return Task::batch([
                     iced::widget::operation::focus(INPUT),
@@ -527,6 +552,52 @@ impl App {
             ("style-color-apply", "Apply custom color", "Apply"),
         );
         let mut body = column![head, swatches, input].spacing(10);
+        if self.tab.color_scope == ColorScope::Highlights {
+            body = body.push(
+                row![
+                    text("Highlight style").size(12).style(muted_text),
+                    hover_hint(
+                        crate::appearance::pick_list(
+                            reshiki::highlights::HighlightStyle::ALL,
+                            Some(self.tab.doc.highlight_style),
+                            Message::HighlightStyle,
+                        )
+                        .text_size(12)
+                        .padding([5, 8])
+                        .width(Length::Fill),
+                        "Every highlight in the drawing: flat, a soft glow or a disc",
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            );
+        }
+        if self.tab.color_scope == ColorScope::Rings
+            && self.selected_ring_fills().iter().any(Option::is_some)
+        {
+            body = body.push(
+                row![
+                    text("Fill effect").size(12).style(muted_text),
+                    hover_hint(
+                        crate::appearance::pick_list(
+                            reshiki::ring_fills::RingEffect::ALL,
+                            self.selected_ring_effect(),
+                            Message::RingEffect,
+                        )
+                        .placeholder("Mixed")
+                        .text_size(12)
+                        .padding([5, 8])
+                        .width(Length::Fill),
+                        "Choose a gradient, reduced opacity, soft glow or disc",
+                        // Above, so it never covers the list's choices.
+                        tooltip::Position::Top,
+                    ),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            );
+        }
         if invalid {
             body = body.push(text(HINT).size(11).style(text::danger));
         } else if let Some(Paint::Custom(rgb)) = current {

@@ -222,6 +222,7 @@ async fn predicate_cases(key: optimization::Key) -> Vec<(&'static str, Message, 
         revision: app.tab.revision,
         format: reshiki::clipboard::CopyFormat::Smiles,
         selected: vec![],
+        what: None,
     };
     let mut cases = vec![
         (

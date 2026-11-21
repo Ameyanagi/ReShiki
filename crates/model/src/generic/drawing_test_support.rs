@@ -177,6 +177,7 @@ pub(super) fn union_source() -> Document {
         });
     let annotation = source.next_id();
     source.annotations.push(crate::document::Annotation {
+        angle: 0.,
         id: annotation,
         position: Point::new(-380., 180.),
         text: "oxidane".into(),
@@ -206,6 +207,7 @@ pub(super) fn union_source() -> Document {
     };
     let center = target.center(&source).unwrap();
     source.arrows.push(crate::document::Arrow {
+        arc: None,
         id: source.next_id(),
         start: center.offset(-100., 0.),
         end: Point::new(-600., 80.),
@@ -221,6 +223,7 @@ pub(super) fn union_source() -> Document {
         cubic: Some([Point::new(-500., -190.), Point::new(-500., 300.)]),
         nodes: Vec::new(),
         style: None,
+        purpose: Default::default(),
     });
     source.validate().unwrap();
     source

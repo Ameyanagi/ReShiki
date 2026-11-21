@@ -31,6 +31,12 @@ impl Point {
     pub fn is_finite(self) -> bool {
         self.x.is_finite() && self.y.is_finite()
     }
+    /// This point turned `degrees` clockwise about `pivot`.
+    pub fn turned(self, pivot: Self, degrees: f32) -> Self {
+        let (s, c) = degrees.to_radians().sin_cos();
+        let (x, y) = (self.x - pivot.x, self.y - pivot.y);
+        pivot.offset(x * c - y * s, x * s + y * c)
+    }
 }
 
 fn is_zero_u64(value: &u64) -> bool {
@@ -107,6 +113,9 @@ pub struct Atom {
     pub label_h: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_style: Option<TextStyle>,
+    /// What the atom's molecule is for; the same for all its atoms.
+    #[serde(default, skip_serializing_if = "crate::purpose::Purpose::is_chemistry")]
+    pub purpose: crate::purpose::Purpose,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bond {
@@ -118,6 +127,9 @@ pub struct Bond {
     /// Persistent paint behind the bond, independent of its ordinary ink.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub highlight: Option<crate::palette::Color>,
+    /// An imported highlight's style; absent uses the drawing's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub highlight_style: Option<crate::highlights::HighlightStyle>,
     /// Draw the inner component along its ring; chemical order stays unchanged.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub ring_arc: bool,
@@ -167,15 +179,74 @@ fn plain() -> String {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Annotation {
     pub id: u64,
+    /// The top-left corner of the text box before it turns.
     pub position: Point,
     pub text: String,
     #[serde(default)]
     pub format: TextFormat,
+    /// Clockwise turn in degrees about the box's centre.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub angle: f32,
+}
+/// The clockwise turn in degrees, from 0 to 360, of text whose rightward
+/// and downward directions now point along `x` and `y`. Text is never
+/// mirrored: after a reflection it reads along whichever of the two keeps it
+/// nearer upright.
+pub fn text_angle(x: Point, y: Point) -> f32 {
+    let signed = |degrees: f32| (degrees + 180.).rem_euclid(360.) - 180.;
+    let along = signed(x.y.atan2(x.x).to_degrees());
+    let angle = if x.x * y.y - x.y * y.x >= 0. {
+        along
+    } else {
+        let across = signed(y.y.atan2(y.x).to_degrees() - 90.);
+        if across.abs() < along.abs() {
+            across
+        } else {
+            along
+        }
+    };
+    // A full turn, or rounding, leaves the text upright.
+    if angle.abs() < 1e-3 {
+        0.
+    } else {
+        angle.rem_euclid(360.)
+    }
 }
 impl Annotation {
     pub fn size(&self) -> (f32, f32) {
         let layout = crate::typography::layout(&self.text, &self.format);
         (layout.width, layout.height)
+    }
+    /// The box's centre, which it turns about.
+    pub fn centre(&self) -> Point {
+        let (w, h) = self.size();
+        self.position.offset(w / 2., h / 2.)
+    }
+    /// The turned box's corners, clockwise from the top left.
+    pub fn corners(&self) -> [Point; 4] {
+        let (w, h) = self.size();
+        let (p, centre) = (self.position, self.position.offset(w / 2., h / 2.));
+        [p, p.offset(w, 0.), p.offset(w, h), p.offset(0., h)]
+            .map(|corner| corner.turned(centre, self.angle))
+    }
+    /// The upright box around the turned one.
+    pub fn bounds(&self) -> (Point, Point) {
+        let corners = self.corners();
+        corners[1..]
+            .iter()
+            .fold((corners[0], corners[0]), |(lo, hi), p| {
+                (
+                    Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                    Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                )
+            })
+    }
+    /// Whether `p` lies inside the turned box.
+    pub fn contains(&self, p: Point) -> bool {
+        let (w, h) = self.size();
+        let at = self.position;
+        let p = p.turned(at.offset(w / 2., h / 2.), -self.angle);
+        (at.x..at.x + w).contains(&p.x) && (at.y..at.y + h).contains(&p.y)
     }
 }
 /// An interior node of a multi-segment arrow.
@@ -210,6 +281,12 @@ pub struct Arrow {
     pub nodes: Vec<ArrowNode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style: Option<crate::arrows::ArrowStyle>,
+    #[serde(default, skip_serializing_if = "crate::purpose::Purpose::is_chemistry")]
+    pub purpose: crate::purpose::Purpose,
+    /// Signed sweep in degrees of a circular arc through `start` and `end`,
+    /// clockwise positive; `cubic` and `nodes` hold its Bézier form.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc: Option<f32>,
 }
 fn forward() -> String {
     "forward".into()
@@ -260,6 +337,12 @@ pub const PROPERTY_CAPTIONS: u32 = 38;
 pub const CAPTION_NAMES: u32 = 39;
 /// Decimal places chosen for a property caption's Mol. Wt. or Exact Mass.
 pub const CAPTION_PLACES: u32 = 40;
+/// Drawing-element styles: shading, drop shadows, wavy strokes, arrowheads
+/// on lines, corner radii, gradient and see-through fills, glows; Reference and
+/// Illustration molecules and arrows; color by origin settings on reactions;
+/// figure panels and lasting row, column and grid layouts; catalytic cycles;
+/// lab equipment pieces with their embedded definitions; editable chemistry tables.
+pub const DRAWING_ELEMENTS: u32 = 40;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
@@ -269,9 +352,16 @@ pub const CAPTION_PLACES: u32 = 40;
 /// with three or four radical electrons require version 37, linked
 /// property captions require version 38, a property caption with a name
 /// requires version 39, or a property caption with chosen decimal places
-/// requires version 40.
+/// or shading, drop shadows, wavy strokes, arrowheads
+/// on lines, corner radii, gradient and see-through fills, glows, a
+/// Reference or Illustration molecule or arrow, color by origin settings, figure panels,
+/// lasting layouts, arrow bodies, arcs, callout leaders, condition icons, catalytic
+/// cycles or equipment pieces require version 40.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
+/// Optional per-highlight style overrides belong to version 40's highlight
+/// effects. Their absence inherits `Document::highlight_style`; older readers
+/// retain the colors and draw them in the document's style.
 ///
 /// | Version | Added |
 /// | --- | --- |
@@ -307,7 +397,7 @@ pub const CAPTION_PLACES: u32 = 40;
 /// | 37 | Three or four radical electrons on an atom. |
 /// | 38 | Property captions linked to their molecules (#1175). |
 /// | 39 | Names in property captions: a name line and custom names. |
-/// | 40 | Decimal places chosen for a property caption's Mol. Wt. or Exact Mass. |
+/// | 40 | Property-caption decimal places and compound-number metadata; drawing styles, object purpose, color by origin, panels and lasting layouts, arrow bodies, callout leaders, condition icons, cycles and equipment. |
 pub const VERSION: u32 = 40;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
@@ -315,13 +405,38 @@ pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
 /// Bytes of annotation text in one drawing.
 pub const MAX_DRAWING_TEXT: usize = 1024 * 1024;
 
+/// The canvas centre and zoom a native file was saved at. It sits beside the
+/// drawing, not in it: panning never edits the drawing, it raises no document
+/// version, and older ReShiki ignores it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct View {
+    pub center: Point,
+    pub zoom: f32,
+}
+impl View {
+    /// The view stored in native file contents; a missing or unusable one is
+    /// none, never an error, since the drawing opens without it.
+    pub fn read(bytes: &[u8]) -> Option<Self> {
+        #[derive(Deserialize)]
+        struct Probe {
+            view: Option<View>,
+        }
+        serde_json::from_slice::<Probe>(bytes)
+            .ok()?
+            .view
+            .filter(|view| view.center.is_finite() && view.zoom.is_finite() && view.zoom > 0.)
+    }
+}
+
 fn newer_version(version: u64) -> String {
     format!(
         "This drawing was made with a newer version of ReShiki (document version {version}). Update ReShiki to open it."
     )
 }
 
+/// The derive supplies the wire form; the impls below link equipment pieces.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(remote = "Document")]
 pub struct Document {
     #[serde(default, skip_serializing_if = "crate::generic::Generic::is_empty")]
     pub generic: crate::generic::Generic,
@@ -350,6 +465,13 @@ pub struct Document {
     pub atom_labels: crate::atom_labels::Settings,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ring_fills: Vec<crate::ring_fills::RingFill>,
+    /// Default style for atom, bond and contracted-label highlights. Imported
+    /// paint can override it; an explicit drawing-wide style choice resets it.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::highlights::HighlightStyle::is_flat"
+    )]
+    pub highlight_style: crate::highlights::HighlightStyle,
     /// Editable projection paint; ordinary foreground and fill colors remain
     /// the base colors restored by clearing the depth appearance.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -390,12 +512,58 @@ pub struct Document {
     /// Recent custom colors for the color picker, newest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recent_colors: Vec<crate::color_contrast::Rgb>,
+    /// The definition of every equipment piece the drawing uses, so it opens
+    /// the same way without the library the pieces came from.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub piece_definitions: Vec<std::sync::Arc<crate::equipment::format::Definition>>,
+    /// Arrows and atoms on a card of the other canvas, set when the drawing
+    /// is resolved for display, so gradients made while drawing start from
+    /// that card's paper. Never stored.
+    #[serde(skip)]
+    pub on_other_canvas: std::collections::BTreeSet<u64>,
+    /// Which joints of placed equipment pieces are seated in each other.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub seats: Vec<crate::equipment::solve::Seat>,
+}
+/// Every drawing writes the definitions its pieces use, and every drawing read
+/// links its pieces to them, wherever it is written or read: files, the
+/// clipboard, recovery drafts, templates and engine round trips.
+impl Serialize for Document {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let used = crate::equipment::placed::used(self);
+        let current = used.len() == self.piece_definitions.len()
+            && used
+                .iter()
+                .zip(&self.piece_definitions)
+                .all(|(a, b)| std::sync::Arc::ptr_eq(a, b));
+        if current {
+            Document::serialize(self, serializer)
+        } else {
+            Document::serialize(
+                &Document {
+                    piece_definitions: used,
+                    ..self.clone()
+                },
+                serializer,
+            )
+        }
+    }
+}
+impl<'de> Deserialize<'de> for Document {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut doc = Document::deserialize(deserializer)?;
+        crate::equipment::placed::link(&mut doc).map_err(serde::de::Error::custom)?;
+        // A seat that does not fit is released; both pieces keep their poses.
+        crate::equipment::solve::check(&mut doc, None);
+        Ok(doc)
+    }
 }
 impl Default for Document {
     fn default() -> Self {
         Self {
             generic: Default::default(),
             ring_fills: vec![],
+            highlight_style: Default::default(),
             depth_appearance: vec![],
             version: EDITOR_BASELINE,
             drawing_style: Default::default(),
@@ -418,6 +586,9 @@ impl Default for Document {
             reactions: vec![],
             models: vec![],
             recent_colors: vec![],
+            piece_definitions: vec![],
+            on_other_canvas: Default::default(),
+            seats: vec![],
         }
     }
 }
@@ -444,6 +615,7 @@ impl Document {
         let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         doc.validate()?;
         doc.migrate();
+        crate::purpose::repair(&mut doc);
         crate::models3d::retain_whole(&mut doc);
         doc.validate()?;
         Ok(doc)
@@ -475,7 +647,22 @@ impl Document {
     }
     /// Native file contents, marked with the version their fields require.
     pub fn file_json(&self) -> Result<Vec<u8>, String> {
-        serde_json::to_vec_pretty(&self.current()).map_err(|e| e.to_string())
+        self.file_json_with_view(None)
+    }
+    /// [`Self::file_json`] with the view the drawing was saved in.
+    pub fn file_json_with_view(&self, view: Option<View>) -> Result<Vec<u8>, String> {
+        #[derive(Serialize)]
+        struct File<'a> {
+            #[serde(flatten)]
+            doc: &'a Document,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            view: Option<View>,
+        }
+        serde_json::to_vec_pretty(&File {
+            doc: &self.current(),
+            view,
+        })
+        .map_err(|e| e.to_string())
     }
     /// A copy marked with its required native version, for files, clipboard
     /// data and recovery drafts, so reading them back never migrates again.
@@ -487,6 +674,7 @@ impl Document {
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
+        use crate::graphics::{GraphicKind, LinePattern};
         if !self.compound_numbers.is_empty() {
             // Shared format 40: unknown optional metadata may flatten to text.
             CAPTION_PLACES
@@ -496,6 +684,39 @@ impl Document {
             .any(|link| link.weight_places.is_some() || link.exact_mass_places.is_some())
         {
             CAPTION_PLACES
+        } else if self.graphics.iter().any(|g| {
+            !g.style.effects.is_plain()
+                || g.style.corner_pt.is_some()
+                || g.style.pattern == LinePattern::Wavy
+                || g.kind == GraphicKind::Line && g.heads.is_some()
+                || g.panel.is_some()
+                || g.leader.is_some()
+                || g.cycle.is_some()
+                || g.table.is_some()
+                || g.piece.is_some()
+                || g.tlc.is_some()
+                || g.is_icon()
+                || g.phase == crate::scientific::Phase::Gradient
+                || g.text.is_some()
+        }) || self.arrows.iter().any(|a| {
+            let style = a.appearance();
+            style.pattern == LinePattern::Wavy
+                || !style.body.is_line()
+                || a.arc.is_some()
+                || style.equilibrium_ratio > 1.
+        }) || crate::purpose::used(self)
+            || self.reactions.iter().any(|r| r.colors.is_some())
+            || self.groups.iter().any(|g| g.layout.is_some())
+            || self
+                .ring_fills
+                .iter()
+                .any(|f| f.effect != crate::ring_fills::RingEffect::Flat)
+            || !self.highlight_style.is_flat()
+            || crate::highlights::has_overrides(self)
+            || crate::palette::any_color(self, |c| c == crate::palette::Color::Paper)
+            || self.annotations.iter().any(|a| a.angle != 0.)
+        {
+            DRAWING_ELEMENTS
         } else if self.property_captions.iter().any(|link| {
             link.properties
                 .contains(&crate::linked_properties::Property::Name)
@@ -547,6 +768,7 @@ impl Document {
             steroid_label: None,
             undefined_stereo: false,
             undefined_pseudoasymmetric: false,
+            purpose: Default::default(),
             stereo_group: None,
             id,
             element: element.into(),
@@ -588,11 +810,17 @@ impl Document {
         self.bond_between(a, b).map(|(i, _)| i)
     }
     pub fn nearest(&self, point: Point, radius: f32) -> Option<u64> {
+        let cells = crate::scene::table::Layout::new(self);
         self.atoms
             .iter()
             // Most pointer queries are nowhere near most atoms. Resolve the
             // collapsed-group/model visibility only for geometric candidates.
-            .filter(|a| a.position.distance(point) < radius && self.atom_drawn(a.id))
+            .filter(|a| {
+                a.position.distance(point) < radius
+                    && self.atom_drawn(a.id)
+                    && cells.contains(a.id, a.position)
+                    && cells.contains(a.id, point)
+            })
             .min_by(|a, b| {
                 a.position
                     .distance(point)
@@ -615,6 +843,7 @@ impl Document {
         if let Some(retained) = retained {
             fresh.distance_derived = retained.distance_derived;
             fresh.highlight = retained.highlight;
+            fresh.highlight_style = retained.highlight_style;
             fresh.z_order = retained.z_order;
             fresh.indicator = retained.indicator.clone();
             fresh.double_position = retained.double_position;
@@ -671,7 +900,8 @@ impl Document {
         }
     }
     pub fn delete(&mut self, ids: &[u64]) {
-        self.delete_objects(ids);
+        let ids = crate::graphics::table::with_contents(self, ids);
+        self.delete_objects(&ids);
         crate::arrow_anchors::reconcile(self);
     }
     /// Prune an extracted drawing without repairing the surviving geometry.
@@ -698,16 +928,22 @@ impl Document {
         crate::models3d::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
+        crate::equipment::solve::prune(self);
         crate::arrow_labels::prune(self);
+        crate::shape_text::prune(self);
         crate::projection::prune_centroids(self);
         crate::ring_fills::prune(self);
         crate::depth_appearance::prune(self);
         self.prune_groups();
         crate::reactions::prune(self);
         crate::generic::prune(self);
+        crate::graphics::table::prune(self);
     }
     pub fn translate(&mut self, ids: &[u64], dx: f32, dy: f32) {
-        let ids = self.expand_abbreviation_selection(ids);
+        let ids = crate::graphics::table::with_contents(self, ids);
+        // Dragging the text in a shape drags the shape.
+        let ids = crate::shape_text::with_holders(self, &ids);
+        let ids = self.expand_abbreviation_selection(&ids);
         let ids = ids.as_slice();
         for graphic in &mut self.graphics {
             if ids.contains(&graphic.id) {
@@ -748,6 +984,26 @@ impl Document {
                         unit.extend(group.members.iter().map(|member| (*member, index)));
                     }
                 }
+            }
+        }
+        // An explicitly moved table owns its contents' offset, even if a
+        // selection also lists a child as a separate arrangement unit.
+        for graphic in &self.graphics {
+            if let Some(table) = &graphic.table
+                && let Some(index) = unit.get(&graphic.id).copied()
+            {
+                unit.extend(
+                    table
+                        .cells
+                        .iter()
+                        .flat_map(|cell| cell.members.iter().map(|&id| (id, index))),
+                );
+            }
+        }
+        // Dragging the text in a shape drags the shape, unless it moves itself.
+        for g in &self.graphics {
+            if let Some(index) = g.text.and_then(|t| unit.get(&t).copied()) {
+                unit.entry(g.id).or_insert(index);
             }
         }
         let offset = |id: u64, p: Point| match unit.get(&id).and_then(|i| units.get(*i)) {
@@ -801,6 +1057,7 @@ impl Document {
             abbreviations,
             atom_labels: _,
             ring_fills,
+            highlight_style: _,
             depth_appearance,
             version: _,
             atoms,
@@ -816,6 +1073,9 @@ impl Document {
             reactions,
             models,
             recent_colors: _,
+            piece_definitions,
+            on_other_canvas: _,
+            seats,
         } = self;
         atoms.clear();
         models.clear();
@@ -824,6 +1084,8 @@ impl Document {
         annotations.clear();
         arrows.clear();
         graphics.clear();
+        piece_definitions.clear();
+        seats.clear();
         groups.clear();
         abbreviations.clear();
         reactions.clear();
@@ -846,6 +1108,7 @@ impl Document {
             abbreviations,
             atom_labels: _,
             ring_fills,
+            highlight_style: _,
             depth_appearance,
             version: _,
             atoms,
@@ -861,6 +1124,9 @@ impl Document {
             reactions,
             models,
             recent_colors: _,
+            piece_definitions: _,
+            on_other_canvas: _,
+            seats: _,
         } = self;
         !atoms.is_empty()
             || !models.is_empty()
@@ -880,6 +1146,13 @@ impl Document {
             || !generic.is_empty()
     }
     pub fn validate(&self) -> Result<(), String> {
+        let pieces = crate::equipment::placed::used(self).len();
+        if pieces > crate::equipment::placed::MAX_DEFINITIONS {
+            return Err(format!(
+                "A drawing can use at most {} different equipment pieces; this one uses {pieces}.",
+                crate::equipment::placed::MAX_DEFINITIONS
+            ));
+        }
         if self.version < DISTANCE_BONDS && self.bonds.iter().any(|b| b.distance_derived) {
             return Err(format!(
                 "Distance-derived bonds need document version {DISTANCE_BONDS} or later"
@@ -893,6 +1166,16 @@ impl Document {
             }
             text += annotation.text.len();
         }
+        for label in self
+            .graphics
+            .iter()
+            .filter_map(|g| g.tlc.as_deref())
+            .flat_map(|t| &t.lanes)
+            .flat_map(|l| &l.spots)
+            .filter_map(|s| s.label.as_ref())
+        {
+            text = text.saturating_add(label.text.len());
+        }
         if text > MAX_DRAWING_TEXT {
             return Err("A drawing can hold at most 1 MB of text".into());
         }
@@ -901,6 +1184,7 @@ impl Document {
         crate::ring_fills::validate(self)?;
         crate::attachments::validate(self)?;
         crate::generic::validate(self)?;
+        crate::graphics::table::validate(self)?;
         crate::models3d::validate(self)?;
         self.drawing_style.validate()?;
         if let Some(theme) = &self.custom_theme {
@@ -1038,12 +1322,16 @@ impl Document {
             }
         }
         for a in &self.annotations {
+            if !a.angle.is_finite() {
+                return Err("Non-finite text angle".into());
+            }
             a.format.validate(&a.text)?;
         }
         crate::molecule_names::validate(self)?;
         crate::linked_properties::validate(self)?;
         crate::compound_numbers::validate(self)?;
         crate::arrow_labels::validate(self)?;
+        crate::shape_text::validate(self)?;
         for graphic in &self.graphics {
             graphic.validate()?;
         }
@@ -1051,6 +1339,8 @@ impl Document {
             arrow.validate()?;
         }
         crate::arrow_anchors::validate(self)?;
+        crate::leaders::validate(self)?;
+        crate::cycles::validate_fits(self)?;
         Ok(())
     }
     pub fn bounds(&self) -> (Point, Point) {
@@ -1099,7 +1389,49 @@ fn frame_bytes(doc: &Document) -> usize {
         + doc.reactions.len()
         + doc.abbreviations.len();
     let text: usize = doc.annotations.iter().map(|a| a.text.len()).sum();
+    let tlc: usize = doc
+        .graphics
+        .iter()
+        .filter_map(|g| g.tlc.as_deref())
+        .map(|t| {
+            size_of::<crate::graphics::TlcPlate>()
+                + bytes(&t.lanes[..])
+                + t.lanes
+                    .iter()
+                    .map(|l| {
+                        bytes(&l.spots[..])
+                            + l.spots
+                                .iter()
+                                .filter_map(|s| s.label.as_ref())
+                                .map(|l| {
+                                    l.text.len()
+                                        + l.format.style.family.len()
+                                        + bytes(&l.format.spans[..])
+                                        + l.format
+                                            .spans
+                                            .iter()
+                                            .map(|s| s.style.family.len())
+                                            .sum::<usize>()
+                                })
+                                .sum::<usize>()
+                    })
+                    .sum::<usize>()
+        })
+        .sum();
     let paths: usize = doc.graphics.iter().map(|g| bytes(&g.path[..])).sum();
+    let tables: usize = doc
+        .graphics
+        .iter()
+        .filter_map(|g| g.table.as_ref())
+        .map(|table| {
+            bytes(&table.cells[..])
+                + table
+                    .cells
+                    .iter()
+                    .map(|cell| bytes(&cell.members[..]) + bytes(&cell.borders[..]))
+                    .sum::<usize>()
+        })
+        .sum();
     let nodes: usize = doc.arrows.iter().map(|a| bytes(&a.nodes[..])).sum();
     let models: usize = doc
         .models
@@ -1140,6 +1472,8 @@ fn frame_bytes(doc: &Document) -> usize {
         + objects * OWNED
         + text
         + paths
+        + tables
+        + tlc
         + nodes
         + models
 }
@@ -1253,3 +1587,5 @@ impl History {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod turned_text_tests;

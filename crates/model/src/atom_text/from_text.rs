@@ -50,10 +50,15 @@ pub fn text_first_glyph_center(annotation: &Annotation) -> Option<Point> {
             size,
             &fragment.style,
         ))?;
-        return Some(annotation.position.offset(
-            fragment.position.x + advance + (lo.x + hi.x) / 2.,
-            fragment.position.y + (lo.y + hi.y) / 2.,
-        ));
+        return Some(
+            annotation
+                .position
+                .offset(
+                    fragment.position.x + advance + (lo.x + hi.x) / 2.,
+                    fragment.position.y + (lo.y + hi.y) / 2.,
+                )
+                .turned(annotation.centre(), annotation.angle),
+        );
     }
     None
 }
@@ -79,6 +84,8 @@ fn text_atom_preview(doc: &Document, id: u64) -> Option<Document> {
         .annotations
         .iter()
         .find(|annotation| annotation.id == id)?;
+    let effective = crate::scene::table::Layout::new(doc).annotation(annotation);
+    let annotation = effective.as_ref();
     let target = text_first_glyph_center(annotation)?;
     let (text, runs) =
         super::trimmed_label_scripts(&annotation.text, &manual_runs(annotation)).ok()?;
@@ -169,6 +176,7 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             label,
             reverse_label,
             anchor: atom,
@@ -281,6 +289,8 @@ pub fn text_to_atom_toward(
         .iter()
         .find(|annotation| annotation.id == id)
         .ok_or("Select a text annotation to convert to an atom")?;
+    let effective = crate::scene::table::Layout::new(doc).annotation(annotation);
+    let annotation = effective.as_ref();
     let position = text_first_glyph_center(annotation)
         .ok_or("This text has no visible character to anchor an atom")?;
     let text_style = first_glyph_style(annotation).ok_or(TEXT_TOO_LONG)?;
@@ -306,6 +316,12 @@ pub fn text_to_atom_toward(
         .ok_or("The atom is no longer available")?
         .text_style = Some(text_style);
     align_first_glyph(doc, &mut candidate, atom, position);
+    let existing: std::collections::HashSet<_> = doc.object_ids().collect();
+    let replacements: Vec<_> = candidate
+        .object_ids()
+        .filter(|id| !existing.contains(id))
+        .collect();
+    crate::graphics::table::replace_member(&mut candidate, id, &replacements);
     candidate.delete(&[id]);
     candidate.validate()?;
     Ok((candidate, atom))

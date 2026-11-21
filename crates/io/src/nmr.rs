@@ -108,7 +108,13 @@ pub fn predict_drawing(
 ) -> Result<Shifts, String> {
     let selection = match ids {
         Some(ids) => document.expand_abbreviation_selection(ids),
-        None => document.atoms.iter().map(|a| a.id).collect(),
+        // The whole drawing leaves out Illustration molecules.
+        None => document
+            .atoms
+            .iter()
+            .filter(|a| a.purpose.is_chemical())
+            .map(|a| a.id)
+            .collect(),
     };
     let count = reactions::molecules(document, &selection).len();
     if count != 1 {
@@ -128,7 +134,13 @@ pub fn predict_drawing(
 pub fn prepare(document: &Document, selection: &[u64]) -> Result<Request, String> {
     document.validate()?;
     let selection = if selection.is_empty() {
-        document.atoms.iter().map(|a| a.id).collect::<Vec<_>>()
+        // The whole drawing leaves out Illustration molecules.
+        document
+            .atoms
+            .iter()
+            .filter(|a| a.purpose.is_chemical())
+            .map(|a| a.id)
+            .collect::<Vec<_>>()
     } else {
         document.expand_abbreviation_selection(selection)
     };

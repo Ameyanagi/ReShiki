@@ -1,0 +1,141 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/kugelrohr-bulb-10",
+  "revision": 1,
+  "family": "kugelrohr-bulb",
+  "variant": {
+    "joint": "10/18"
+  },
+  "names": {
+    "en": "Kugelrohr bulb, 10/18",
+    "ja": "クーゲルロール球 10/18"
+  },
+  "category": "distillation",
+  "keywords": [
+    "Kugelrohr",
+    "クーゲルロール"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "s0",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M21 0A21 21 0 0 1 -21 0A21 21 0 0 1 21 0Z"
+    },
+    {
+      "id": "s1",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-19 -4.5L-31 -4.5L-31 4.5L-19 4.5Z"
+    },
+    {
+      "id": "s2",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-29 -4.5L-31.2 -4.5L-31.2 4.5L-29 4.5Z"
+    },
+    {
+      "id": "s3",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M19 4.5L29 4.5L29 -4.5L19 -4.5Z"
+    },
+    {
+      "id": "s4",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M27 -4.5L25 -4.5L25 4.5L27 4.5Z"
+    }
+  ],
+  "joints": [
+    {
+      "id": "in",
+      "kind": "taper",
+      "size": "10/18",
+      "gender": "M",
+      "at": [
+        -34.6,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "draw": "standard"
+    },
+    {
+      "id": "out",
+      "kind": "taper",
+      "size": "10/18",
+      "gender": "F",
+      "at": [
+        49,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ],
+      "draw": "standard"
+    }
+  ],
+  "holds": [
+    {
+      "id": "out-neck",
+      "kind": "grip",
+      "from": [
+        27,
+        0
+      ],
+      "to": [
+        25,
+        0
+      ],
+      "diameter_mm": 9
+    }
+  ],
+  "params": [
+    {
+      "id": "fill",
+      "names": {
+        "en": "Liquid level",
+        "ja": "液面"
+      },
+      "kind": "fill",
+      "liquid": "body",
+      "default": 0
+    },
+    {
+      "id": "liquid_color",
+      "names": {
+        "en": "Liquid colour",
+        "ja": "液の色"
+      },
+      "kind": "color",
+      "liquid": "body",
+      "default": [
+        79,
+        143,
+        208
+      ]
+    }
+  ],
+  "liquids": [
+    {
+      "id": "body",
+      "region": "M 19.7 0 L 19.625 1.717 L 19.401 3.421 L 19.029 5.099 L 18.512 6.738 L 17.854 8.326 L 17.061 9.85 L 16.137 11.299 L 15.091 12.663 L 13.93 13.93 L 12.663 15.091 L 11.299 16.137 L 9.85 17.061 L 8.326 17.854 L 6.738 18.512 L 5.099 19.029 L 3.421 19.401 L 1.717 19.625 L 0 19.7 L -1.717 19.625 L -3.421 19.401 L -5.099 19.029 L -6.738 18.512 L -8.326 17.854 L -9.85 17.061 L -11.299 16.137 L -12.663 15.091 L -13.93 13.93 L -15.091 12.663 L -16.137 11.299 L -17.061 9.85 L -17.854 8.326 L -18.512 6.738 L -19.029 5.099 L -19.401 3.421 L -19.625 1.717 L -19.7 0 L -19.625 -1.717 L -19.401 -3.421 L -19.029 -5.099 L -18.512 -6.738 L -17.854 -8.326 L -17.061 -9.85 L -16.137 -11.299 L -15.091 -12.663 L -13.93 -13.93 L -12.663 -15.091 L -11.299 -16.137 L -9.85 -17.061 L -8.326 -17.854 L -6.738 -18.512 L -5.099 -19.029 L -3.421 -19.401 L -1.717 -19.625 L 0 -19.7 L 1.717 -19.625 L 3.421 -19.401 L 5.099 -19.029 L 6.738 -18.512 L 8.326 -17.854 L 9.85 -17.061 L 11.299 -16.137 L 12.663 -15.091 L 13.93 -13.93 L 15.091 -12.663 L 16.137 -11.299 L 17.061 -9.85 L 17.854 -8.326 L 18.512 -6.738 L 19.029 -5.099 L 19.401 -3.421 L 19.625 -1.717 Z",
+      "meniscus": "concave"
+    }
+  ]
+}

@@ -5,7 +5,7 @@
 //! changes in one place. Contextual keys come from the same tables the
 //! drawing uses (`reshiki::hotkeys`), and their previews run those edits.
 use super::super::{
-    Message, optimization, printing, settings_page,
+    Message, command_palette, optimization, printing, settings_page,
     shortcuts::{self, TabKey, keys, tab_keys},
 };
 use iced::keyboard::Modifiers;
@@ -107,6 +107,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             "Search every shortcut, with a drawing of what it does",
             Anywhere,
             &["help", "keyboard", "reference", "keys", "cheat sheet"],
+        ),
+        entry(
+            format!("{} / :", command_palette::shortcut_keys()),
+            "Command palette",
+            "Search drawing commands and run them",
+            Anywhere,
+            &["commands", "search", "run"],
         ),
         entry(
             "Esc",
@@ -634,6 +641,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             "Zoom so the whole drawing fits the window",
             Anywhere,
             &["zoom", "view", "show all"],
+        ),
+        entry(
+            format!("{} / {}", keys(command, "="), keys(command, "-")),
+            "Zoom in / out",
+            "Magnify or shrink the view around its middle. The + key also zooms in. While you edit a caption or label, these keys format the text instead.",
+            Anywhere,
+            &["zoom", "view", "magnify", "plus", "minus"],
         ),
         entry(
             format!("{} / {}", keys(command, ";"), keys(command | alt, "X")),

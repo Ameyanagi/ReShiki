@@ -30,18 +30,24 @@ mod clipboard;
 mod color_popover;
 mod command_palette;
 mod context_menu;
+mod cycles;
 mod depth_appearance;
 mod dispatch;
 mod document_styles;
 mod document_tab;
 #[cfg(test)]
 mod drawing_panel_capture;
+mod tables;
 use document_tab::DocumentTab;
 mod engine_jobs;
+pub(crate) mod equipment;
+mod equipment_authoring;
 mod event_slot;
 mod figure_export;
+mod figure_panels;
 mod file_shortcuts;
 mod files;
+pub(crate) mod icon_browser;
 #[cfg(target_os = "macos")]
 mod macos_files;
 #[cfg(target_os = "macos")]
@@ -74,6 +80,8 @@ mod numeric_transforms;
 mod object_toolbar;
 mod office;
 mod start;
+mod symbol_picker;
+mod tlc;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 mod add_panel;
@@ -88,6 +96,7 @@ mod palettes;
 #[cfg(test)]
 mod performance;
 mod pictures;
+mod piece_libraries;
 mod popover;
 mod printing;
 mod prompt;
@@ -162,6 +171,10 @@ pub enum InspectorTab {
     Predict,
     Labels,
     Templates,
+    /// The Equipment browser, opened by its tool.
+    Equipment,
+    /// The Icons browser, opened by its tool.
+    Icons,
     Import,
     Names,
     Export,
@@ -217,6 +230,9 @@ pub enum Message {
         Result<std::sync::Arc<reshiki::atom_labels::refresh::Refresh>, String>,
     ),
     Templates(template_library::Action),
+    Equipment(equipment::Action),
+    EquipmentAuthoring(equipment_authoring::Action),
+    Icons(icon_browser::Action),
     TemplateNavigate(bool),
     InspectorScroll(f32),
     ResetBondDrawing,
@@ -231,6 +247,12 @@ pub enum Message {
     ApplyBondColor,
     Arc(arcs::Action),
     Graphics(graphics::Action),
+    Tlc(tlc::Action),
+    /// Figure panels and lasting layouts.
+    Figure(figure_panels::Action),
+    /// Catalytic cycles.
+    Cycle(cycles::Action),
+    Table(tables::Action),
     RemoveMark(u64, usize),
     RotateMark(u64, usize),
     AtomRadical(u8),
@@ -252,6 +274,8 @@ pub enum Message {
     CaptionAction(iced::widget::text_editor::Action),
     TextStyle(reshiki::typography::StyleChange),
     FormatChemicalName,
+    /// A callout card beside the selected atom, bond, molecule or object.
+    AddCallout,
     /// Show or hide one property line under a whole molecule.
     ToggleProperty(Vec<u64>, reshiki::linked_properties::Property),
     /// Show Formula, Mol. Wt. and Exact Mass under a whole molecule.
@@ -264,6 +288,8 @@ pub enum Message {
     ApplyFontSize,
     ColorScope(typography::ColorScope),
     ClearRingFill,
+    RingEffect(reshiki::ring_fills::RingEffect),
+    HighlightStyle(reshiki::highlights::HighlightStyle),
     ClearHighlights,
     TextColor(String),
     ApplyTextColor,
@@ -341,6 +367,8 @@ pub enum Message {
     Duplicate,
     Transform(Transform),
     Arrange(Arrange),
+    /// Give the selected molecules and arrows this purpose.
+    Purpose(reshiki::purpose::Purpose),
     ReverseBonds,
     MakeIonic,
     CenterRingCharge,
@@ -523,6 +551,8 @@ pub struct App {
     viewport: iced::Size,
     template_index: usize,
     templates: template_library::State,
+    equipment: equipment::State,
+    icons: icon_browser::State,
     /// The last committed atom label, which a Text-tool double-click repeats.
     last_label: Option<atom_text::RememberedLabel>,
     /// The last Text-tool click on an atom, to recognize a double-click.
@@ -557,6 +587,7 @@ impl App {
         self.tab.busy = false;
         self.tab.file_epoch = self.next_epoch();
         self.tab.stereo_notes.clear();
+        self.tab.equipment_authoring = None;
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
         self.tab.mapping.clear_pending();
@@ -657,6 +688,8 @@ impl App {
             viewport: iced::Size::new(850.0, 600.0),
             template_index: 0,
             templates: template_library::State::load(),
+            equipment: equipment::State::default(),
+            icons: icon_browser::State::default(),
             last_label: None,
             text_click: None,
             path_click: None,
@@ -687,7 +720,8 @@ impl App {
         let update_check = Task::batch([update_check, app.github_start()]);
         app.sync_keyboard_drawing();
         let previews = app.start_previews();
-        (app, Task::batch([task, update_check, previews]))
+        let libraries = app.load_piece_libraries();
+        (app, Task::batch([task, update_check, previews, libraries]))
     }
     pub fn title(&self) -> String {
         #[cfg(not(target_arch = "wasm32"))]
@@ -793,8 +827,9 @@ impl App {
                     return None;
                 }
                 if repeat
-                    && modifiers.is_empty()
-                    && key == iced::keyboard::Key::Named(iced::keyboard::key::Named::F8)
+                    && (command_palette::is_shortcut(&key, modifiers)
+                        || (modifiers.is_empty()
+                            && key == iced::keyboard::Key::Named(iced::keyboard::key::Named::F8)))
                 {
                     return None;
                 }
@@ -954,6 +989,10 @@ impl App {
         let existing: std::collections::HashSet<_> = self.tab.doc.all_ids().into_iter().collect();
         self.tab.selected.retain(|id| existing.contains(id));
         self.sync_arrow_label_gap_input();
+        // A flip or another edit can reorder a selected panel's titles.
+        self.sync_figure();
+        self.sync_cycle();
+        self.sync_tlc();
     }
     /// What every recorded change of the drawing needs, whether an edit made
     /// it or Undo or Redo restored it. Results for the previous revision are
@@ -973,6 +1012,7 @@ impl App {
                 .advance_revision(epoch, previous, revision);
         }
         self.error = false;
+        self.sync_tlc();
     }
     fn fit(&mut self) {
         if self.display_document().all_ids().is_empty() {
@@ -1053,6 +1093,14 @@ impl App {
         focus_drawing()
     }
     fn display_document(&self) -> &Document {
+        if let Some(preview) = self
+            .tab
+            .equipment_authoring
+            .as_ref()
+            .and_then(|s| s.preview.as_ref())
+        {
+            return preview;
+        }
         if let Some(session) =
             self.tab.optimization.as_ref().filter(|session| {
                 session.current(self.tab.id, self.tab.file_epoch, self.tab.revision)
@@ -1060,7 +1108,7 @@ impl App {
         {
             return session.preview_document();
         }
-        &self.tab.doc
+        self.cycle_proposal_document().unwrap_or(&self.tab.doc)
     }
     /// The runtime's entry point. A finished export or copy counts
     /// toward the GitHub star prompt here, once, even when its drawing has
@@ -1112,9 +1160,18 @@ impl App {
         }
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
+        let menu = self.context_menu.is_some();
         let mut task = self.handle(message);
         self.sync_requested_molecular_properties();
         task = Task::batch([task, self.sync_inspector_page_selection()]);
+        // The canvas forgets the pointer when a context menu closes
+        // (canvas::reset_menu_pointer), so the hovered atom or bond goes too:
+        // a key pressed later acts on what the pointer touches next, never on
+        // the object right-clicked, even when the pointer left during the menu.
+        // Menu items (Move & attach) still read the hover while they run.
+        if menu && self.context_menu.is_none() {
+            self.tab.hover = None;
+        }
         self.sync_drawing_panel_context();
         task = Task::batch([task, self.render_png_preview()]);
         // Any message may change the drawing, some (previews, background
@@ -1191,6 +1248,12 @@ impl App {
         let message = match message {
             Message::Recovery(action) if recovery_manager::completion(&action) => {
                 let task = self.recovery_action(action);
+                return ControlFlow::Break(Task::batch([task, self.accessibility_refresh()]));
+            }
+            // Settle shared-library work even if an exit may fail. Dropping a
+            // receipt would leave that folder unable to start its next scan.
+            Message::Equipment(action @ equipment::Action::LibrariesLoaded(..)) => {
+                let task = self.library_action(action);
                 return ControlFlow::Break(Task::batch([task, self.accessibility_refresh()]));
             }
             message => message,
@@ -1443,7 +1506,7 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let preview = self.tab.optimization.is_some()
+        let preview = (self.tab.optimization.is_some() || self.tab.equipment_authoring.is_some())
             && self.inspector_open
             && self.inspector_tab == InspectorTab::Properties;
         #[cfg(not(target_arch = "wasm32"))]
@@ -1493,6 +1556,8 @@ impl App {
                     Some(help::modal_key)
                 } else if self.commands.open {
                     Some(command_palette::modal_key)
+                } else if self.tab.equipment_authoring.is_some() {
+                    Some(equipment_authoring::modal_key)
                 } else {
                     None
                 },
@@ -1503,6 +1568,8 @@ impl App {
                     }
                     #[cfg(target_arch = "wasm32")]
                     None
+                } else if self.tab.equipment_authoring.is_some() {
+                    Some(equipment_authoring::leftover_key)
                 } else {
                     None
                 },
@@ -1513,7 +1580,8 @@ impl App {
                     && ((self.inspector_tab == InspectorTab::DrawingStyle
                         && self.tab.styles.editor.is_some())
                         || (self.inspector_tab == InspectorTab::Properties
-                            && self.requested_molecular_properties()))
+                            && self.requested_molecular_properties())
+                        || self.inspector_tab == InspectorTab::Icons)
                     && self.tab.inline_text.is_none()
                     && self.context_menu.is_none(),
             ),
@@ -1573,6 +1641,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.generic == b.generic
         && a.abbreviations == b.abbreviations
         && a.ring_fills == b.ring_fills
+        && a.highlight_style == b.highlight_style
         && a.depth_appearance == b.depth_appearance
         && a.atoms.len() == b.atoms.len()
         && a.atoms.iter().zip(&b.atoms).all(|(a, b)| same_atom(a, b))
@@ -1584,6 +1653,7 @@ fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
     let reshiki::document::Bond {
         distance_derived,
         highlight,
+        highlight_style,
         ring_arc,
         projection,
         stereo_authoritative,
@@ -1603,6 +1673,7 @@ fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
     } = a;
     *distance_derived == b.distance_derived
         && *highlight == b.highlight
+        && *highlight_style == b.highlight_style
         && *ring_arc == b.ring_arc
         && *projection == b.projection
         && *stereo_authoritative == b.stereo_authoritative
@@ -1647,6 +1718,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         map_num,
         label_h: _,
         text_style,
+        purpose,
     } = a;
     *display == b.display
         && *id == b.id
@@ -1668,6 +1740,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
         && *stereo_group == b.stereo_group
         && *map_num == b.map_num
         && *text_style == b.text_style
+        && *purpose == b.purpose
 }
 
 /// Marks the results of `task` as belonging to tab `id`, unless already marked.

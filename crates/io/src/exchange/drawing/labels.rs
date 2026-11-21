@@ -511,9 +511,9 @@ impl Writer<'_> {
                         .ok_or_else(|| invalid("Invalid aromatic ring"))
                 })
                 .collect::<Result<Vec<_>>>()?;
-            if atoms.len() < 3 {
+            let [first, _, _, ..] = atoms.as_slice() else {
                 return Err(invalid("Invalid aromatic ring"));
-            }
+            };
             let bonds = atoms
                 .iter()
                 .zip(atoms.iter().cycle().skip(1))
@@ -532,7 +532,7 @@ impl Writer<'_> {
                     && c.atoms.len() == atoms.len()
                     && atoms.iter().all(|a| c.atoms.contains(&a.id))
             }) {
-                self.projected_circle(circle)?;
+                self.projected_circle(circle, first.id)?;
                 continue;
             }
             let points: Vec<P> = atoms.iter().map(|a| a.position.into()).collect();
@@ -574,7 +574,7 @@ impl Writer<'_> {
             let id = self.id()?;
             let major = center.add(radius, 0.);
             let minor = center.add(0., radius);
-            self.tree.add(
+            let artwork = self.tree.add(
                 Some(self.fragment),
                 "graphic",
                 [
@@ -591,6 +591,7 @@ impl Writer<'_> {
                     ("color", color),
                 ],
             )?;
+            self.atom_artwork.insert(artwork, first.id);
         }
         Ok(())
     }
@@ -870,6 +871,7 @@ impl Writer<'_> {
                 _ => 0.,
             };
             let edge = f64::from(a.position.x) + width * factor;
+            let pivot = a.centre();
             let part = |range: std::ops::Range<usize>, y: f32| {
                 let text = &a.text[range.clone()];
                 let mut format = a.format.clone();
@@ -899,6 +901,10 @@ impl Writer<'_> {
                 };
                 let (w, h) = part.size();
                 part.position = Point::new((edge - f64::from(w) * factor) as f32, y);
+                // Each part keeps its place in the turned caption.
+                let centre = part.position.offset(w / 2., h / 2.);
+                let moved = centre.turned(pivot, a.angle);
+                part.position = part.position.offset(moved.x - centre.x, moved.y - centre.y);
                 let metrics = TextMetrics {
                     width: (f64::from(w) * scale) as f32,
                     height: (f64::from(h) * scale) as f32,
@@ -918,11 +924,25 @@ impl Writer<'_> {
         Ok(())
     }
 
-    fn annotation(&mut self, a: &Annotation, measured: Option<&TextMetrics>) -> Result<Key> {
+    pub(super) fn annotation(
+        &mut self,
+        a: &Annotation,
+        measured: Option<&TextMetrics>,
+    ) -> Result<Key> {
         let f = &a.format;
         let s = &f.style;
         let (width, height, baseline) = match measured {
             Some(m) => (real(m.width), real(m.height), real(m.baseline)),
+            // Turned text turns about its laid-out centre, so it needs its
+            // laid-out box.
+            None if a.angle != 0. => {
+                let (w, h) = a.size();
+                (
+                    real(w) * self.scale,
+                    real(h) * self.scale,
+                    real(s.size_pt) * 0.9,
+                )
+            }
             None => (
                 f.width_pt.map(real).unwrap_or_else(|| {
                     a.text
@@ -949,8 +969,28 @@ impl Writer<'_> {
             TextAlign::Right => 1.,
             _ => 0.,
         };
-        let anchor = origin.add(width / self.scale * factor, baseline / self.scale);
-        let far = origin.add(width / self.scale, height / self.scale);
+        let (w, h) = (width / self.scale, height / self.scale);
+        // ChemDraw turns text about its anchor; ReShiki about its centre.
+        let (centre, angle) = (origin.add(w / 2., h / 2.), real(a.angle));
+        let anchor = origin
+            .add(w * factor, baseline / self.scale)
+            .turned(centre, angle);
+        let corners = [(0., 0.), (w, 0.), (w, h), (0., h)]
+            .map(|(x, y)| origin.add(x, y).turned(centre, angle));
+        let (origin, far) = corners
+            .iter()
+            .fold((corners[0], corners[0]), |(lo, hi), p| {
+                (
+                    P {
+                        x: lo.x.min(p.x),
+                        y: lo.y.min(p.y),
+                    },
+                    P {
+                        x: hi.x.max(p.x),
+                        y: hi.y.max(p.y),
+                    },
+                )
+            });
         let id = self.id()?;
         let node = self.text(
             self.page,
@@ -990,6 +1030,14 @@ impl Writer<'_> {
                 node,
                 "WordWrapWidth",
                 format!("{:.0}", real(width).round_ties_even()),
+            )?;
+        }
+        if angle != 0. {
+            // Degrees in 16.16 fixed point.
+            self.tree.set(
+                node,
+                "RotationAngle",
+                format!("{:.0}", (angle * 65536.).round_ties_even()),
             )?;
         }
         Ok(node)

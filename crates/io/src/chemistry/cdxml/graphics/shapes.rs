@@ -4,14 +4,15 @@ use crate::scientific::{OrbitalKind, SymbolKind};
 impl Reader<'_, '_> {
     pub(super) fn curve(&mut self, el: Node<'_, '_>) -> Result<NativeGraphic> {
         let flags = numeric::integer(el.attribute("CurveType").unwrap_or("0"))?;
-        if flags.is_none_or(|f| f & !(1 | 2 | 4 | 128) != 0)
+        // ChemDraw draws a wavy curve straight, so Wavy reads as Solid.
+        if flags.is_none_or(|f| f & !(1 | 2 | 4 | 128 | 256) != 0)
             || !matches!(
                 el.attribute("FillType").unwrap_or("None"),
-                "None" | "Solid" | "Unspecified"
+                "None" | "Solid" | "Shaded" | "Unspecified"
             )
             || !matches!(
                 el.attribute("LineType").unwrap_or("Solid"),
-                "Solid" | "Dashed" | "Bold"
+                "Solid" | "Dashed" | "Bold" | "Wavy"
             )
         {
             return Err(Error::Native(
@@ -41,18 +42,38 @@ impl Reader<'_, '_> {
         for i in (3..points.len()).step_by(3) {
             path.push(NativeCommand::Cubic(at(i - 1)?, at(i)?, at(i + 1)?));
         }
-        if flags & 1 != 0 || el.attribute("Closed") == Some("yes") {
+        let shaded = flags & 256 != 0 || el.attribute("FillType") == Some("Shaded");
+        // ChemDraw shades an open curve as if it were closed.
+        if flags & 1 != 0 || el.attribute("Closed") == Some("yes") || shaded {
             if at(points.len() - 2)? != first {
                 path.push(NativeCommand::Cubic(at(points.len() - 1)?, at(0)?, first));
             }
             path.push(NativeCommand::Close);
         }
-        let style = self.style(
+        let filled = flags & 128 != 0 || el.attribute("FillType") == Some("Solid");
+        let bold = flags & 4 != 0 || el.attribute("LineType") == Some("Bold");
+        let mut style = self.style(
             el,
-            flags & 128 != 0 || el.attribute("FillType") == Some("Solid"),
+            filled,
             flags & 2 != 0 || el.attribute("LineType") == Some("Dashed"),
-            flags & 4 != 0 || el.attribute("LineType") == Some("Bold"),
+            bold,
         )?;
+        if shaded {
+            style.shade();
+        } else if path.iter().any(|c| matches!(c, NativeCommand::Close)) {
+            self.fade(el, &mut style)?;
+        }
+        // Only an explicitly borderless filled curve keeps zero width. In
+        // particular, its doubled contour bridges must never become ink.
+        if filled
+            && !shaded
+            && !bold
+            && path.iter().any(|c| matches!(c, NativeCommand::Close))
+            && el.attribute("LineWidth").is_some()
+            && float(el, "LineWidth", "0")? == 0.
+        {
+            style.width_pt = 0.;
+        }
         let visible_heads = ["ArrowheadHead", "ArrowheadTail"]
             .iter()
             .any(|key| !matches!(el.attribute(*key).unwrap_or("None"), "None" | "Unspecified"));
@@ -132,7 +153,11 @@ impl Reader<'_, '_> {
                     "Gradient-shaded CDXML orbitals are not supported yet",
                 ));
             }
-            let key = label.replace("Shaded", "").replace("Solid", "");
+            let gradient = super::super::approximate::GRADIENT;
+            let key = label
+                .replace("Shaded", "")
+                .replace("Solid", "")
+                .replace(gradient, "");
             let key = if label.starts_with("dz2") {
                 "dz2"
             } else {
@@ -158,6 +183,8 @@ impl Reader<'_, '_> {
             )?;
             value.phase = Some(if label.contains("Solid") {
                 Phase::Solid
+            } else if label.contains(gradient) {
+                Phase::Gradient
             } else {
                 Phase::Open
             });
@@ -177,6 +204,9 @@ impl Reader<'_, '_> {
                 Some("HDot") => SymbolKind::HydrogenDot,
                 Some("HDash") => SymbolKind::HydrogenDash,
                 Some("Attachment") => SymbolKind::Diamond,
+                Some("Dagger") => SymbolKind::Dagger,
+                Some("DoubleDagger") => SymbolKind::DoubleDagger,
+                Some("LonePairBar") => SymbolKind::LonePairBar,
                 _ => return Err(Error::Native("Unsupported CDXML chemical symbol")),
             };
             if el.attribute("ChemicallySignificant") == Some("yes")
@@ -205,16 +235,32 @@ impl Reader<'_, '_> {
                 vec![],
             );
         }
+        let mut wavy = false;
+        let mut effects = (false, false);
         let (kind, filled, dashed, bold) = match el.attribute("GraphicType") {
             Some("Line") => {
-                let line = el.attribute("LineType").unwrap_or("Solid");
-                if !matches!(line, "Solid" | "Dashed" | "Bold") {
+                let flags: BTreeSet<_> = el
+                    .attribute("LineType")
+                    .unwrap_or("Solid")
+                    .split_whitespace()
+                    .collect();
+                if flags.is_empty()
+                    || flags
+                        .iter()
+                        .any(|f| !matches!(*f, "Solid" | "Dashed" | "Bold" | "Wavy"))
+                {
                     return Err(Error::Native("Unsupported graphic line style"));
                 }
                 origin = a;
                 x = NativePoint::new(b.x - a.x, b.y - a.y);
                 y = NativePoint::new(0., 0.);
-                (GraphicKind::Line, false, line == "Dashed", line == "Bold")
+                wavy = flags.contains("Wavy");
+                (
+                    GraphicKind::Line,
+                    false,
+                    flags.contains("Dashed"),
+                    flags.contains("Bold"),
+                )
             }
             Some("Rectangle") => {
                 let flags: BTreeSet<_> = el
@@ -222,14 +268,18 @@ impl Reader<'_, '_> {
                     .unwrap_or("Plain")
                     .split_whitespace()
                     .collect();
-                if flags
-                    .iter()
-                    .any(|f| !matches!(*f, "Plain" | "RoundEdge" | "Filled" | "Dashed" | "Bold"))
-                {
+                if flags.iter().any(|f| {
+                    !matches!(
+                        *f,
+                        "Plain" | "RoundEdge" | "Filled" | "Dashed" | "Bold" | "Shaded" | "Shadow"
+                    )
+                }) {
+                    // The original reader's wording, which the reference oracle compares.
                     return Err(Error::Native(
                         "Shadowed/shaded rectangle styles are not supported yet",
                     ));
                 }
+                effects = (flags.contains("Shaded"), flags.contains("Shadow"));
                 (
                     if flags.contains("RoundEdge") {
                         GraphicKind::RoundedRectangle
@@ -270,12 +320,15 @@ impl Reader<'_, '_> {
                     .unwrap_or("Plain")
                     .split_whitespace()
                     .collect();
-                if flags
-                    .iter()
-                    .any(|f| !matches!(*f, "Plain" | "Circle" | "Filled" | "Dashed" | "Bold"))
-                {
+                if flags.iter().any(|f| {
+                    !matches!(
+                        *f,
+                        "Plain" | "Circle" | "Filled" | "Dashed" | "Bold" | "Shaded" | "Shadowed"
+                    )
+                }) {
                     return Err(Error::Native("Unsupported oval style"));
                 }
+                effects = (flags.contains("Shaded"), flags.contains("Shadowed"));
                 (
                     GraphicKind::Ellipse,
                     flags.contains("Filled"),
@@ -289,13 +342,34 @@ impl Reader<'_, '_> {
                 ));
             }
         };
-        self.base(
-            el,
-            kind,
-            [origin, x, y],
-            self.style(el, filled, dashed, bold)?,
-            vec![],
-        )
+        let mut style = self.style(el, filled, dashed, bold)?;
+        if wavy {
+            style.pattern = LinePattern::Wavy;
+        }
+        if effects.0 {
+            style.shade();
+        } else if kind.closed() {
+            self.fade(el, &mut style)?;
+        }
+        style.shadow_pt = self.shadow(el, effects.1)?;
+        // ChemDraw paints a shadowed outline's inside with the page, which
+        // on a colored page, such as a black ChemDraw background, is a fill.
+        if style.shadow_pt.is_some() && style.fill.is_none() && style.opacity.is_none() {
+            style.fill = self.page;
+        }
+        if kind == GraphicKind::RoundedRectangle && el.has_attribute("CornerRadius") {
+            // Hundredths of a point on the page, scaled with the drawing.
+            let radius = float(el, "CornerRadius", "0")? / 100.
+                * self.scale
+                * f64::from(crate::style::DEFAULT.points_per_world());
+            if !radius.is_finite()
+                || !(0. ..=f64::from(crate::graphics::MAX_CORNER_PT)).contains(&radius)
+            {
+                return Err(Error::Native("CDXML corner radius is outside 0–1000 pt"));
+            }
+            style.corner_pt = Some(radius);
+        }
+        self.base(el, kind, [origin, x, y], style, vec![])
     }
 }
 

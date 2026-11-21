@@ -10,7 +10,23 @@ pub(super) struct Markers {
     multiple: bool,
     bonds: Vec<(World, World)>,
     atoms: Vec<(u64, World)>,
-    captions: Vec<(World, Size)>,
+    /// Each selected caption's turned box, clipped when owned by a table cell.
+    captions: Vec<CaptionOutline>,
+}
+
+#[derive(Debug, PartialEq)]
+enum CaptionOutline {
+    Box([World; 4]),
+    Cell(Vec<World>),
+}
+
+impl CaptionOutline {
+    fn points(&self) -> &[World] {
+        match self {
+            Self::Box(points) => points,
+            Self::Cell(points) => points,
+        }
+    }
 }
 
 impl Markers {
@@ -55,6 +71,13 @@ impl Markers {
             return Self::default();
         }
         let selected: HashSet<_> = ids.iter().copied().collect();
+        let cells = captions
+            .then(|| {
+                reshiki::scene::table::Layout::selected_annotations(doc, |id| {
+                    selected.contains(&id)
+                })
+            })
+            .flatten();
         let atoms: HashMap<_, _> = doc.atoms.iter().map(|atom| (atom.id, atom)).collect();
         let hidden: HashSet<_> = doc
             .abbreviations
@@ -91,9 +114,13 @@ impl Markers {
                 .iter()
                 .filter(|caption| captions && selected.contains(&caption.id))
                 .map(|caption| {
-                    let (width, height) = caption.size();
-                    (caption.position, Size::new(width, height))
+                    cells
+                        .as_ref()
+                        .and_then(|cells| cells.annotation_polygon(caption))
+                        .map(CaptionOutline::Cell)
+                        .unwrap_or_else(|| CaptionOutline::Box(caption.corners()))
                 })
+                .filter(|caption| !caption.points().is_empty())
                 .collect(),
         }
     }
@@ -172,16 +199,27 @@ impl Markers {
             }
         }
         if selected {
-            for &(position, size) in &self.captions {
-                let position = camera.screen(position, bounds);
-                let size = Size::new(size.width * camera.zoom, size.height * camera.zoom);
-                if visible(
-                    position,
-                    position + iced::Vector::new(size.width, size.height),
-                    2.,
-                ) {
+            for caption in &self.captions {
+                let mut points = caption.points().iter().map(|p| camera.screen(*p, bounds));
+                let Some(first) = points.next() else {
+                    continue;
+                };
+                let (lo, hi) = points.clone().fold((first, first), |(lo, hi), p| {
+                    (
+                        Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                        Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                    )
+                });
+                if visible(lo, hi, 2.) {
+                    let outline = Path::new(|path| {
+                        path.move_to(first);
+                        for p in points {
+                            path.line_to(p);
+                        }
+                        path.close();
+                    });
                     frame.stroke(
-                        &Path::rectangle(position, size),
+                        &outline,
                         Stroke::default().with_color(Color::from_rgb8(20, 130, 112)),
                     );
                 }

@@ -199,6 +199,7 @@ fn generated_branched_repeat_keeps_branches_and_fixed_neighboring_components() {
         id: source.next_id(),
         members: std::iter::once(fixed).chain(ends).collect(),
         integral: false,
+        layout: None,
     });
     source.validate().unwrap();
     let before = source.clone();

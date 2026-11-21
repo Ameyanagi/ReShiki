@@ -138,6 +138,7 @@ fn bracketed_ion_charge_data_and_hidden_local_labels_survive_cdxml_and_cdx() {
         id: document.next_id(),
         members: vec![carbon, double, left, right, bracket_id],
         integral: false,
+        layout: None,
     });
     let before = document.clone();
     let xml = export(&document);
@@ -214,6 +215,7 @@ fn bracket_superscript_radical_ion_keeps_its_positioned_radical_when_local_charg
         id: document.next_id(),
         members: vec![id, bracket_id],
         integral: false,
+        layout: None,
     });
     let xml = export(&document);
     let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();

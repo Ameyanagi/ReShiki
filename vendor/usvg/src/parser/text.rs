@@ -190,7 +190,7 @@ fn collect_text_chunks_impl(
                     continue;
                 }
 
-                match resolve_text_flow(child, state) {
+                match resolve_text_flow(child, state, cache) {
                     Some(v) => {
                         iter_state.text_flow = v;
                     }
@@ -356,9 +356,17 @@ fn collect_text_chunks_impl(
     }
 }
 
-fn resolve_text_flow(node: SvgNode, state: &converter::State) -> Option<TextFlow> {
+fn resolve_text_flow(
+    node: SvgNode,
+    state: &converter::State,
+    cache: &mut converter::Cache,
+) -> Option<TextFlow> {
     let linked_node = node.attribute::<SvgNode>(AId::Href)?;
-    let path = super::shapes::convert(linked_node, state)?;
+    let path = super::shapes::convert(linked_node, state, cache)?;
+
+    if !cache.charge_path(path.len()) {
+        return None;
+    }
 
     // The reference path's transform needs to be applied
     let transform = linked_node.resolve_transform(AId::Transform, state);

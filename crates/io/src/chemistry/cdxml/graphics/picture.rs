@@ -110,6 +110,8 @@ impl Reader<'_, '_> {
                 format: format.into(),
                 opacity,
             }),
+            panel: None,
+            tlc: None,
         })
     }
 }

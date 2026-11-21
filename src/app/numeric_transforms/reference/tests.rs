@@ -373,7 +373,7 @@ fn resetting_an_office_tab_preserves_docked_nmr_camera_and_cancels_reference_str
         },
         Some((
             path.clone(),
-            Ok(crate::app::files::Prepared::Native(Box::new(drawing))),
+            Ok(crate::app::files::Prepared::Native(Box::new(drawing), None)),
         )),
     ));
     let original = app.tab.id;

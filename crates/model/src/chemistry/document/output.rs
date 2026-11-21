@@ -870,6 +870,7 @@ fn reconstruct_atoms(
                 steroid_label: None,
                 undefined_stereo: false,
                 undefined_pseudoasymmetric: false,
+                purpose: old.map(|a| a.purpose).unwrap_or_default(),
                 stereo_group,
                 display: old.map(|a| a.display.clone()).unwrap_or_default(),
                 marks: old.map(|a| a.marks.clone()).unwrap_or_default(),
@@ -939,6 +940,7 @@ fn reconstruct_bonds(
             let mut bond = Bond {
                 distance_derived: false,
                 highlight: None,
+                highlight_style: None,
                 ring_arc: false,
                 projection: false,
                 stereo_authoritative: false,
