@@ -596,6 +596,18 @@ impl NmrUi {
             _ => None,
         }
     }
+    fn reveal(&mut self, app: &App, id: &str) {
+        use iced::advanced::widget::{Operation, operation};
+        let mut reveal: Box<dyn Operation> =
+            Box::new(reshiki::accessibility::FocusControl::reveal(id));
+        loop {
+            self.operate(app, &mut *reveal);
+            match reveal.finish() {
+                operation::Outcome::Chain(next) => reveal = next,
+                _ => break,
+            }
+        }
+    }
     fn event(
         &mut self,
         app: &App,
@@ -687,19 +699,31 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
         app.inspector_open = true;
         app.inspector_tab = InspectorTab::Properties;
         let mut ui = NmrUi::new(size).await;
-        let snapshot = ui.snapshot(&app);
-        let entry = snapshot
-            .nodes
-            .iter()
-            .find(|n| n.id == "nmr.open")
-            .unwrap_or_else(|| panic!("Entry absent from actual UI: {snapshot:?}"));
-        assert_eq!(entry.role, Role::Button);
-        assert!(entry.enabled && entry.visible_bounds.is_some());
-        assert!(entry.name.contains("selected molecule"));
-        assert!(matches!(
-            ui.activate(&app, "nmr.open"),
-            Some(Message::Nmr(Action::Open))
-        ));
+        assert!(!ui.snapshot(&app).nodes.iter().any(|n| n.id == "nmr.open"));
+        let molecule = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+        for (selected, request) in [(molecule, false), (vec![], true), (vec![2], true)] {
+            app.set_selection(selected);
+            if request {
+                assert!(!ui.snapshot(&app).nodes.iter().any(|n| n.id == "nmr.open"));
+                let _ = app.show_molecular_properties();
+            }
+            // Drawing settings can precede explicitly requested whole-drawing
+            // analysis. Reveal the real control before checking native actions.
+            ui.reveal(&app, "nmr.open");
+            let snapshot = ui.snapshot(&app);
+            let entry = snapshot
+                .nodes
+                .iter()
+                .find(|n| n.id == "nmr.open")
+                .unwrap_or_else(|| panic!("Entry absent from actual UI: {snapshot:?}"));
+            assert_eq!(entry.role, Role::Button);
+            assert!(entry.enabled && entry.visible_bounds.is_some());
+            assert!(entry.name.contains("selected molecule"));
+            assert!(matches!(
+                ui.activate(&app, "nmr.open"),
+                Some(Message::Nmr(Action::Open))
+            ));
+        }
 
         // Supply a real observed-data report, using the same completion path as
         // background prediction, without executing an external UI task here.
