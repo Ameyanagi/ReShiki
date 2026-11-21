@@ -688,10 +688,12 @@ fn hatch(points: &[Xy], h: f64, radius: f64, open_edge: Option<usize>) -> Vec<Se
             (inward, limit, dot(inward, along))
         })
         .collect();
-    let first = (t0 / h).ceil();
+    // Center the pattern in the patch so a narrow taper can still show a hatch.
+    let center = t0.midpoint(t1);
+    let first = ((t0 - center) / h).ceil();
     // A counted loop: t + h may not advance t when the coordinates are huge.
-    for k in 0..((t1 / h - first).ceil().max(0.) as usize) {
-        let base = mul(n, (first + k as f64) * h);
+    for k in 0..(((t1 - center) / h - first).ceil().max(0.) as usize) {
+        let base = mul(n, center + (first + k as f64) * h);
         let (mut start, mut end) = (f64::NEG_INFINITY, f64::INFINITY);
         for &(normal, limit, slope) in &planes {
             let distance = limit - dot(normal, base);
