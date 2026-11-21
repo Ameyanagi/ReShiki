@@ -742,7 +742,7 @@ impl App {
                 ).text_size(12))
                 .push(text(format!("Turn test piece: {:.0}°", trial.turn)).size(12))
                 .push(iced::widget::slider(-180. ..=180., trial.turn,
-                    |turn| Message::EquipmentAuthoring(Action::TestTurn(turn))).step(15.))
+                    |turn| Message::EquipmentAuthoring(Action::TestTurn(turn))).step(15_f32))
                 .push(text("Drag the gray test piece toward a joint. Test pieces are discarded; Accept keeps your piece at its original position.").size(12))
                 .push(command("Finish testing", Message::EquipmentAuthoring(Action::FinishTesting)));
         }
