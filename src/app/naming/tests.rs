@@ -9,7 +9,7 @@ fn failed_start_name_notice_matches_the_submitted_name_with_surrounding_space() 
     let _ = app.start_action(super::super::start::Action::Input(input.into()));
     let _ = app.start_action(super::super::start::Action::Insert);
     let ticket = app.tab.naming.pending.unwrap().ticket();
-    app.naming_finished(ticket, Err(naming::Error::Rejected("unsupported".into())));
+    let _ = app.naming_finished(ticket, Err(naming::Error::Rejected("unsupported".into())));
 
     assert!(
         app.start_name_notice(input)
