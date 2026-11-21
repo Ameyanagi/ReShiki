@@ -60,6 +60,18 @@ async fn style_chooser_keeps_footer_and_canvas_geometry_and_keyboard_focus() {
         assert!(app.status_style_open);
         assert_eq!(ui.focused(&app), ["journal-preset"]);
         assert_eq!(paper(&mut ui, &app), canvas);
+        for (key, code) in [(Named::Enter, Code::Enter), (Named::Delete, Code::Delete)] {
+            let (status, messages) = ui.event(
+                &app,
+                press(Key::Named(key), code, Modifiers::empty(), None),
+                mouse::Cursor::Unavailable,
+            );
+            assert_eq!(status, iced::event::Status::Captured);
+            assert!(
+                messages.is_empty(),
+                "Drawing shortcuts stay out of the chooser"
+            );
+        }
         let snapshot = ui.semantics(&app);
         assert!(snapshot.duplicate_ids.is_empty());
         for id in ["journal-preset", "color-theme"] {

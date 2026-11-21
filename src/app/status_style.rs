@@ -196,7 +196,8 @@ impl App {
                 popup,
                 Message::StatusStyle(Action::Close),
             )
-            .align_end(),
+            .align_end()
+            .capture_plain_keys(),
         )
     }
 }
