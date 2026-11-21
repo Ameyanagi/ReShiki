@@ -2167,7 +2167,7 @@ async fn command_palette_tab_cycles_the_filter_from_the_search_field() {
         apply(&mut app, messages);
         filters.push(app.commands.filter.map(|c| c.label()));
     }
-    assert_eq!(filters, [Some("Insert"), Some("Bond"), Some("Insert")]);
+    assert_eq!(filters, [Some("Insert"), Some("Edit"), Some("Insert")]);
     let (_, messages) = ui.event(
         &app,
         press(
@@ -2221,8 +2221,8 @@ async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
     let _ = app.update(Message::Commands(Action::Query("bond".into())));
     let field = ui.input(&app, "command-palette-search").0;
     ui.click(&mut app, field.center());
-    click_running_tasks(&mut ui, &mut app, "command-palette-filter-bond").await;
-    assert_eq!(app.commands.filter.map(|c| c.label()), Some("Bond"));
+    click_running_tasks(&mut ui, &mut app, "command-palette-filter-edit").await;
+    assert_eq!(app.commands.filter.map(|c| c.label()), Some("Edit"));
     for (key, code, text) in [
         (Key::Character("s".into()), Code::KeyS, Some("s")),
         (Key::Named(Named::Enter), Code::Enter, None),
@@ -2270,7 +2270,54 @@ async fn command_palette_unavailable_row_click_keeps_typing_in_the_search_field(
         .iter()
         .position(|c| c.name == unavailable.name)
         .expect("a catalog row");
-    click_running_tasks(&mut ui, &mut app, &format!("command-palette-row-{index}")).await;
+    let id = format!("command-palette-row-{index}");
+    // Available matches can put this unavailable result below the shared
+    // palette's viewport. Scroll its real list before sending pointer input.
+    let over = ui
+        .semantics(&app)
+        .nodes
+        .into_iter()
+        .filter(|node| node.id.starts_with("command-palette-row-"))
+        .find_map(|node| node.visible_bounds.filter(|bounds| bounds.height > 20.))
+        .expect("a visible result to scroll over")
+        .center();
+    for _ in 0..app.commands.ranked().len() {
+        let target = ui
+            .semantics(&app)
+            .nodes
+            .into_iter()
+            .find(|node| node.id == id)
+            .unwrap();
+        if target
+            .visible_bounds
+            .is_some_and(|bounds| bounds.contains(target.bounds.center()))
+        {
+            break;
+        }
+        let (_, messages) = ui.event(
+            &app,
+            Event::Mouse(mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Lines { x: 0., y: -1. },
+            }),
+            mouse::Cursor::Available(over),
+        );
+        for message in messages {
+            let task = app.update(message);
+            ui.run_task(&mut app, task).await;
+        }
+    }
+    let target = ui
+        .semantics(&app)
+        .nodes
+        .into_iter()
+        .find(|node| node.id == id)
+        .unwrap();
+    assert!(
+        target
+            .visible_bounds
+            .is_some_and(|bounds| bounds.contains(target.bounds.center()))
+    );
+    click_running_tasks(&mut ui, &mut app, &id).await;
     assert!(app.commands.open, "the palette stays open");
     assert_eq!(app.commands.current().unwrap().name, unavailable.name);
     let (_, messages) = ui.event(
