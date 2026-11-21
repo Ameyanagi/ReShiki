@@ -1,5 +1,5 @@
 use super::eval::{Value, Values, evaluate, resolve};
-use super::format::{Definition, Material, Param, content_hash, parse, taper};
+use super::format::{Definition, Material, Param, StyleKind, content_hash, parse, taper};
 use super::geometry::{Affine, Seg, area, flatten, len, sub};
 use super::plan::{Ink, Instance, Pass, PlanPath, Settings, Weight, mating_transform, paint_plan};
 use serde_json::{Value as Json, json};
@@ -650,7 +650,76 @@ fn a_seated_cone_is_cut_at_the_socket_mouth() {
             .iter()
             .any(|(pts, closed)| !closed && pts.len() > 2)
     });
-    assert!(outline.is_some());
+    assert!(outline.is_some_and(|path| path.flat_caps));
+}
+
+#[test]
+fn ground_glass_hatch_ink_stays_inside_the_frosted_zone() {
+    use super::geometry::{add, dot, mul, normalize, perp, sub};
+
+    let settings = Settings {
+        points_per_world: 1.,
+        ..Settings::default()
+    };
+    let radius = f64::from(super::plan::JOINT_HATCH_PT) / 2.;
+    for (name, joint) in [
+        ("reshiki/stopper-15", "bottom"),
+        ("reshiki/liebig-29", "bottom"),
+        ("reshiki/rbf-300-29", "neck"),
+    ] {
+        let def = super::builtin::find(name).unwrap();
+        for (scale, angle) in [(0.2, 0.), (0.4, 37.), (0.8, 0.)] {
+            for seated in [false, true] {
+                let transform =
+                    Affine::scale(scale, [0., 0.]).then(Affine::rotate(angle, [0., 0.]));
+                let mut piece = Instance::new(&def, transform);
+                if seated {
+                    piece.seated.insert(joint.into());
+                }
+                let paths = paint_plan(&[piece], settings).unwrap();
+                let ground = paths
+                    .iter()
+                    .filter(|path| path.material == Material::Frosted);
+                let outlines: Vec<_> = ground
+                    .clone()
+                    .filter(|path| path.ink == Ink::Fill)
+                    .flat_map(|path| flatten(&path.path))
+                    .map(|(contour, _)| contour)
+                    .collect();
+                let strokes: Vec<_> = ground
+                    .filter(|path| path.style == Some(StyleKind::Line))
+                    .collect();
+                assert!(!strokes.is_empty(), "{name} at {scale}");
+                for stroke in strokes {
+                    assert!(stroke.flat_caps);
+                    for line in stroke.path.chunks(2) {
+                        let [Seg::Move(a), Seg::Line(b)] = line else {
+                            panic!("expected one hatch stroke");
+                        };
+                        let normal = mul(normalize(perp(sub(*b, *a))), radius);
+                        let corners = [
+                            add(*a, normal),
+                            sub(*a, normal),
+                            add(*b, normal),
+                            sub(*b, normal),
+                        ];
+                        assert!(
+                            outlines.iter().any(|outline| {
+                                let winding = area(outline).signum();
+                                corners.iter().all(|point| {
+                                    super::geometry::edges(outline, true).all(|(start, end)| {
+                                        let inward = mul(normalize(perp(sub(end, start))), winding);
+                                        dot(inward, sub(*point, start)) >= -1e-8
+                                    })
+                                })
+                            }),
+                            "{name} at {scale}, seated {seated}: {corners:?} escapes the frosted zone"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[test]

@@ -42,9 +42,10 @@ const MATERIALS: [Named<Material>; 13] = [
     Named(Material::Liquid, "Liquid"),
     Named(Material::Ink, "Ink"),
 ];
-const ROLES: [Named<Role>; 4] = [
+const ROLES: [Named<Role>; 5] = [
     Named(Role::Glass, "Joined glass"),
     Named(Role::Solid, "Solid"),
+    Named(Role::Fill, "Fill only"),
     Named(Role::Detail, "Detail"),
     Named(Role::Outline, "Outline"),
 ];
