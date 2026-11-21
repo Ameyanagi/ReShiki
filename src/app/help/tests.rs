@@ -199,6 +199,7 @@ fn search_ranks_names_keys_and_synonyms() {
     assert_eq!(top("R").name, toggle);
     assert!(position("R", toggle) < position("R", "Ring tool"));
     assert_eq!(top("P").name, "Phenyl (Ph)");
+    assert_eq!(top("p").name, "Phosphorus");
     // Modifier symbols and their words find the same chord.
     for query in ["⇧r", "⇧R", "shift r", "shift+R"] {
         assert_eq!(top(query).name, toggle, "{query}");
@@ -227,6 +228,22 @@ fn search_ranks_names_keys_and_synonyms() {
         search::rank(entries(), "  ", false),
         (0..entries().len()).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn command_palette_aliases_are_discoverable_without_hiding_shorter_chords() {
+    use iced::keyboard::Modifiers;
+    for query in ["cmd k", "ctrl k", ":", "cmd shift p", "ctrl shift p"] {
+        assert_eq!(top(query).name, "Command palette", "{query}");
+    }
+    assert_eq!(
+        top("cmd shift p").keys,
+        crate::app::shortcuts::keys(Modifiers::COMMAND | Modifiers::SHIFT, "P")
+    );
+    for query in ["⇧p", "shift P", "P"] {
+        assert_eq!(top(query).name, "Phenyl (Ph)", "{query}");
+    }
+    assert_eq!(top("p").name, "Phosphorus");
 }
 
 #[test]
