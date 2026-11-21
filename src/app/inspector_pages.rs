@@ -42,6 +42,7 @@ impl App {
     /// Called before switching pages so Assistant can return to the exact
     /// preceding page, including Chemical names, History or Publication pages.
     pub(super) fn enter_inspector_page(&mut self, tab: InspectorTab) {
+        self.templates.add_menu_open = false;
         if tab == InspectorTab::Names {
             if self.inspector_tab != tab {
                 self.inspector_pages.names_parent = self.inspector_parent_tab();
@@ -137,7 +138,7 @@ impl App {
         let label = match previous {
             InspectorTab::Properties => "Properties",
             InspectorTab::Predict => "Predict",
-            InspectorTab::Templates => "Templates",
+            InspectorTab::Templates => "Add",
             InspectorTab::Import => "Import",
             InspectorTab::Export => "Export",
             InspectorTab::Names => "Chemical names",

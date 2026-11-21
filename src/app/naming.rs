@@ -50,7 +50,11 @@ enum Pending {
     Preview(Ticket),
     Generate(Ticket),
     Caption(Ticket),
-    Import { ticket: Ticket, add_caption: bool },
+    Import {
+        ticket: Ticket,
+        add_caption: bool,
+        placement: super::engine_jobs::InsertPlacement,
+    },
 }
 impl Pending {
     fn ticket(self) -> Ticket {
@@ -540,17 +544,25 @@ impl App {
         (ticket, cancel)
     }
 
-    fn naming_finished(&mut self, ticket: Ticket, result: Result<Outcome, naming::Error>) {
+    fn naming_finished(
+        &mut self,
+        ticket: Ticket,
+        result: Result<Outcome, naming::Error>,
+    ) -> Task<Message> {
         if self.tab.naming.pending.map(Pending::ticket) != Some(ticket)
             || ticket.epoch != self.tab.file_epoch
         {
-            return;
+            return Task::none();
         }
         let online = matches!(self.tab.naming.pending, Some(Pending::Online(_)));
         let generate = matches!(self.tab.naming.pending, Some(Pending::Generate(_)));
         let caption = matches!(self.tab.naming.pending, Some(Pending::Caption(_)));
-        let import_caption = match self.tab.naming.pending {
-            Some(Pending::Import { add_caption, .. }) => Some(add_caption),
+        let import = match self.tab.naming.pending {
+            Some(Pending::Import {
+                add_caption,
+                placement,
+                ..
+            }) => Some((add_caption, placement)),
             _ => None,
         };
         let target = self.tab.naming.label_target.take();
@@ -568,7 +580,7 @@ impl App {
                     "The drawing changed. Try again.",
                 ));
             }
-            return;
+            return Task::none();
         }
         match result {
             Err(error) => {
@@ -589,10 +601,10 @@ impl App {
                 self.tab.naming.candidates = records;
                 if let Some(preview) = preview {
                     self.tab.naming.set_preview(*preview);
-                    if let Some(caption) = import_caption {
-                        self.insert_import_preview(caption);
+                    if let Some((caption, placement)) = import {
+                        return self.insert_import_preview(caption, placement);
                     }
-                } else if import_caption.is_some() {
+                } else if import.is_some() {
                     self.tab.naming.notice = Some(Notice::new(
                         NoticeKind::Failed,
                         "No supported structure was returned.",
@@ -613,6 +625,7 @@ impl App {
                 }
             }
         }
+        Task::none()
     }
 
     /// Share the existing bounded request with surfaces that have an explicit
@@ -642,13 +655,13 @@ impl App {
         &mut self,
         ticket: Ticket,
         result: Result<(naming::Identity, Record), naming::Error>,
-    ) {
+    ) -> Task<Message> {
         let current = matches!(self.tab.naming.pending, Some(Pending::Generate(pending)) if pending == ticket);
         let (identity, result) = match result {
             Ok((identity, record)) => (Some(identity), Ok(Outcome::Structure(record))),
             Err(error) => (None, Err(error)),
         };
-        self.naming_finished(ticket, result);
+        let completion = self.naming_finished(ticket, result);
         if current
             && self
                 .tab
@@ -659,6 +672,7 @@ impl App {
         {
             self.tab.naming.structure_identity = identity;
         }
+        completion
     }
 
     /// A generated name belongs to this exact analyzed scope and drawing.
@@ -859,8 +873,8 @@ impl App {
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
-            Action::Finished(ticket, result) => self.naming_finished(ticket, *result),
-            Action::Generated(ticket, result) => self.structure_generated(ticket, *result),
+            Action::Finished(ticket, result) => return self.naming_finished(ticket, *result),
+            Action::Generated(ticket, result) => return self.structure_generated(ticket, *result),
             Action::NameDraft(atoms, name) => self.tab.naming.name_draft = Some((atoms, name)),
             Action::Rename(atoms, name) => self.rename_molecule(&atoms, &name),
             Action::NameRow(atoms) => {
@@ -870,7 +884,9 @@ impl App {
             Action::PreviewEdit(edit) => self.edit_name_preview(edit),
             Action::Acknowledge(value) => self.tab.naming.acknowledged = value,
             Action::Insert => self.insert_name_preview(),
-            Action::InsertName => return self.insert_name_import(),
+            Action::InsertName => {
+                return self.insert_name_import(super::engine_jobs::InsertPlacement::BesideDrawing);
+            }
             Action::AddNameBelow(value) => self.tab.naming.add_name_below = value,
             Action::NumberByLocants(value) => self.tab.naming.number_by_locants = value,
             Action::HoverLocant {
@@ -1009,13 +1025,20 @@ impl App {
         let document = locants::insertion_document(preview, self.tab.naming.number_by_locants);
         let title = preview.record.title.clone();
         let before = self.tab.doc.clone();
-        let Some(selected) = self.insert_beside_drawing(&document) else {
+        let Some(selected) = self.insert_structure(
+            &document,
+            super::engine_jobs::InsertPlacement::BesideDrawing,
+        ) else {
             self.tab.doc = before;
             self.error = true;
             self.status = format!("Could not insert {title}");
             return;
         };
-        self.commit_structure_insert(before, selected);
+        self.commit_structure_insert(
+            before,
+            selected,
+            super::engine_jobs::InsertPlacement::BesideDrawing,
+        );
         self.tool = Tool::Select;
         self.status = if multicomponent {
             "Name result inserted as separate components".into()

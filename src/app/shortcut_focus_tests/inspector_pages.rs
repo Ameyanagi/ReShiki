@@ -21,7 +21,11 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
     let mut ui = Ui::new().await;
     for (page, parent) in [
         (InspectorTab::Names, InspectorTab::Properties),
+        (InspectorTab::Names, InspectorTab::Templates),
+        (InspectorTab::Names, InspectorTab::Import),
         (InspectorTab::Assistant, InspectorTab::Export),
+        (InspectorTab::Assistant, InspectorTab::Templates),
+        (InspectorTab::Assistant, InspectorTab::Import),
     ] {
         for control in ["inspector-page-back", "inspector-page-close"] {
             let mut app = drawing();
@@ -29,7 +33,23 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
             open(&mut app, page);
             let snapshot = ui.semantics(&app);
             assert!(snapshot.duplicate_ids.is_empty());
-            for tab in ["Properties", "Predict", "Templates", "Import", "Export"] {
+            assert!(
+                !snapshot
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == "inspector-tab-Import")
+            );
+            let selected = if parent == InspectorTab::Import {
+                InspectorTab::Templates
+            } else {
+                parent
+            };
+            for (tab, label) in [
+                ("Properties", "Properties"),
+                ("Predict", "Predict"),
+                ("Templates", "Add"),
+                ("Export", "Export"),
+            ] {
                 let node = snapshot
                     .nodes
                     .iter()
@@ -37,8 +57,9 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
                     .expect("every parent tab remains available");
                 assert_eq!(
                     node.checked,
-                    Some(node.id == format!("inspector-tab-{parent:?}"))
+                    Some(node.id == format!("inspector-tab-{selected:?}"))
                 );
+                assert_eq!(node.name, format!("{label} tab"));
                 assert!(node.visible_bounds.is_some());
             }
             for id in ["inspector-page-back", "inspector-page-close"] {
@@ -50,6 +71,14 @@ async fn inspector_pages_keep_tabs_and_named_back_close_controls() {
                 } else {
                     "Close "
                 }));
+            }
+            if parent == InspectorTab::Templates {
+                assert!(
+                    snapshot
+                        .nodes
+                        .iter()
+                        .any(|node| node.id == "inspector-page-back" && node.name == "Back to Add")
+                );
             }
             ui.focus_control(&mut app, control).await;
             assert_eq!(ui.focused(&app), [control]);

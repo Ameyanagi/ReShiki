@@ -15,7 +15,11 @@ fn drawing() -> App {
 
 #[test]
 fn names_back_and_escape_preserve_the_drawing_and_parent_tab() {
-    for previous in [InspectorTab::Properties, InspectorTab::Import] {
+    for previous in [
+        InspectorTab::Properties,
+        InspectorTab::Templates,
+        InspectorTab::Import,
+    ] {
         for close in [
             Message::InspectorAction(inspector::Action::BackPage),
             Message::Escape,
@@ -60,6 +64,8 @@ fn names_back_and_escape_preserve_the_drawing_and_parent_tab() {
 fn assistant_returns_to_the_preceding_page_and_keeps_its_parent_tab() {
     for (previous, parent) in [
         (InspectorTab::Predict, InspectorTab::Predict),
+        (InspectorTab::Templates, InspectorTab::Templates),
+        (InspectorTab::Import, InspectorTab::Import),
         (InspectorTab::Export, InspectorTab::Export),
         (InspectorTab::Names, InspectorTab::Properties),
         (InspectorTab::Pages, InspectorTab::Properties),
@@ -70,7 +76,14 @@ fn assistant_returns_to_the_preceding_page_and_keeps_its_parent_tab() {
         ] {
             let mut app = drawing();
             let _ = app.update(Message::Inspector(previous));
+            if previous == InspectorTab::Templates {
+                app.templates.add_menu_open = true;
+            }
             let _ = app.update(Message::Assistant(assistant::Action::Open));
+            assert!(
+                !app.templates.add_menu_open,
+                "a hidden Add menu cannot swallow page Escape"
+            );
             assert_eq!(app.inspector_parent_tab(), parent);
             // Reopening the same page must not replace its return address.
             let _ = app.update(Message::Assistant(assistant::Action::Open));

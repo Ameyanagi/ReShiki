@@ -603,6 +603,8 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Browse
                 | Action::Forward
                 | Action::Search(..)
+                | Action::InsertQuery
+                | Action::AddMenu(_)
                 | Action::SearchAll
                 | Action::Filter(..)
                 | Action::Collection(..)
