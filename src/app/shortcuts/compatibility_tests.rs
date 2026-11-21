@@ -227,7 +227,7 @@ fn dispatcher_preserves_shift_and_does_not_fall_through_modifier_chords() {
 }
 
 #[test]
-fn primary_k_toggles_the_palette_and_keeps_shift_and_alt_actions() {
+fn primary_k_refocuses_the_palette_and_keeps_shift_and_alt_actions() {
     use crate::app::command_palette;
 
     assert!(matches!(
@@ -236,6 +236,10 @@ fn primary_k_toggles_the_palette_and_keeps_shift_and_alt_actions() {
     ));
     assert!(matches!(
         command_palette::modal_key(&key("k"), primary()),
+        Some(Message::Commands(command_palette::Action::FocusSearch))
+    ));
+    assert!(matches!(
+        command_palette::modal_key(&Key::Named(Named::Escape), Modifiers::empty()),
         Some(Message::Commands(command_palette::Action::Close))
     ));
     assert!(matches!(

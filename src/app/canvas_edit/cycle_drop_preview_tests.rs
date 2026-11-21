@@ -188,6 +188,10 @@ fn a_cycle_drag_preserves_each_captions_mass_places_in_preview_commit_and_undo()
                 let unrelated_ids =
                     reshiki::molecule_names::include_annotations(&app.tab.doc, &unrelated);
                 app.tab.doc.translate(&unrelated_ids, 2000., -1500.);
+                // Re-derive the translated fixture name's anchor before the
+                // exact snapshot: adding its gap after a large translation
+                // can differ by one f32 ULP from translating the old anchor.
+                reshiki::molecule_names::preview_layout(&mut app.tab.doc, &unrelated);
                 if custom_places {
                     let before_places = app.tab.doc.clone();
                     linked_properties::set_places(
