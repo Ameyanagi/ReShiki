@@ -313,6 +313,7 @@ impl App {
         Element::new(
             super::popover::popover(anchor, popup, Message::View(Action::Close))
                 .align_end()
+                .capture_plain_keys()
                 .keys(|key| {
                     let direction = match key {
                         Key::Named(Named::ArrowDown) => Direction::Next,

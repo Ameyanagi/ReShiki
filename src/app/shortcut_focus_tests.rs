@@ -2534,6 +2534,33 @@ async fn view_menu_stays_above_its_anchor_without_resizing_the_canvas() {
             assert!(node.bounds.y + node.bounds.height <= anchor.y - 3.);
         }
         assert_eq!(ui.focused(&app), ["view-grid"]);
+        // Unhandled menu keys must never reach the selected drawing atom.
+        for (key, code) in [
+            (Named::Delete, Code::Delete),
+            (Named::Backspace, Code::Backspace),
+            (Named::ArrowLeft, Code::ArrowLeft),
+            (Named::ArrowRight, Code::ArrowRight),
+        ] {
+            let (status, messages) = ui.event(
+                &app,
+                press(Key::Named(key), code, Modifiers::empty(), None),
+                mouse::Cursor::Unavailable,
+            );
+            let no_messages = messages.is_empty();
+            for message in messages {
+                let task = app.update(message);
+                ui.run_task(&mut app, task).await;
+            }
+            assert_eq!(app.tab.doc, drawing);
+            assert_eq!(app.tab.selected, [atom]);
+            assert_eq!(app.tab.revision, revision);
+            assert_eq!(app.tab.dirty(), dirty);
+            assert!(!app.tab.history.can_undo());
+            assert_eq!(status, iced::event::Status::Captured);
+            assert!(no_messages, "Drawing shortcuts stay inside View");
+            assert!(app.view_open);
+            assert_eq!(ui.focused(&app), ["view-grid"]);
+        }
         ui.key(
             &mut app,
             Key::Named(Named::ArrowDown),
@@ -2543,6 +2570,29 @@ async fn view_menu_stays_above_its_anchor_without_resizing_the_canvas() {
         )
         .await;
         assert_eq!(ui.focused(&app), ["view-rulers"]);
+        let before_rulers = app.guides.rulers;
+        ui.key(
+            &mut app,
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(app.guides.rulers, !before_rulers);
+        assert!(!app.view_open);
+        assert_eq!(ui.focused(&app), ["status-view"]);
+        assert_eq!(app.tab.doc, drawing);
+        ui.key(
+            &mut app,
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert!(app.view_open);
+        assert_eq!(ui.focused(&app), ["view-grid"]);
         ui.key(
             &mut app,
             Key::Named(Named::End),
