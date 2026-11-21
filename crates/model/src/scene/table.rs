@@ -2,7 +2,124 @@
 //! derived scene is clipped and wrapped; the document keeps every child whole.
 use super::{Document, Point, Primitive};
 use crate::graphics::table::{CellRef, Frame, Membership};
+use std::borrow::Cow;
 use std::collections::HashMap;
+
+/// Derived cell geometry shared by painting and pointer/region picking.
+/// No stored position, text width, or ownership is changed by this view.
+pub struct Layout {
+    frames: HashMap<u64, Option<Frame>>,
+}
+
+impl Layout {
+    pub fn new(doc: &Document) -> Self {
+        let mut frames = HashMap::new();
+        for g in &doc.graphics {
+            if let Some(table) = &g.table {
+                for cell in &table.cells {
+                    let frame = cell.frame(g);
+                    for &id in &cell.members {
+                        frames.insert(id, frame);
+                    }
+                }
+            }
+        }
+        Self { frames }
+    }
+
+    pub fn contains(&self, id: u64, point: Point) -> bool {
+        self.frames
+            .get(&id)
+            .is_none_or(|frame| frame.is_some_and(|frame| frame.contains(point)))
+    }
+
+    pub fn annotation<'a>(
+        &self,
+        annotation: &'a crate::document::Annotation,
+    ) -> Cow<'a, crate::document::Annotation> {
+        let Some(Some(frame)) = self.frames.get(&annotation.id) else {
+            return Cow::Borrowed(annotation);
+        };
+        let mut effective = annotation.clone();
+        wrap(*frame, &mut effective);
+        Cow::Owned(effective)
+    }
+
+    /// Clip in the cell's affine coordinates, rather than its world AABB.
+    pub fn segment(&self, id: u64, a: Point, b: Point) -> Option<(Point, Point)> {
+        let Some(frame) = self.frames.get(&id) else {
+            return Some((a, b));
+        };
+        let frame = (*frame)?;
+        let (from, to) = (frame.local(a)?, frame.local(b)?);
+        let (mut lo, mut hi) = (0f32, 1f32);
+        for (start, end) in [(from.x, to.x), (from.y, to.y)] {
+            let delta = end - start;
+            if delta == 0. {
+                if !(0. ..=1.).contains(&start) {
+                    return None;
+                }
+            } else {
+                let (u, v) = (-start / delta, (1. - start) / delta);
+                lo = lo.max(u.min(v));
+                hi = hi.min(u.max(v));
+            }
+        }
+        (lo <= hi).then(|| (a.lerp(b, lo), a.lerp(b, hi)))
+    }
+
+    pub fn polygon(&self, id: u64, points: &[Point]) -> Vec<Point> {
+        let Some(frame) = self.frames.get(&id) else {
+            return points.to_vec();
+        };
+        let Some(frame) = frame else { return vec![] };
+        let Some(mut points) = points
+            .iter()
+            .map(|p| frame.local(*p))
+            .collect::<Option<Vec<_>>>()
+        else {
+            return vec![];
+        };
+        for (axis, edge, above) in [(0, 0., true), (0, 1., false), (1, 0., true), (1, 1., false)] {
+            let coordinate = |p: Point| if axis == 0 { p.x } else { p.y };
+            let inside = |p: Point| {
+                if above {
+                    coordinate(p) >= edge
+                } else {
+                    coordinate(p) <= edge
+                }
+            };
+            let mut clipped = vec![];
+            for (&a, &b) in points
+                .iter()
+                .zip(points.iter().cycle().skip(1))
+                .take(points.len())
+            {
+                if inside(a) != inside(b) {
+                    clipped
+                        .push(a.lerp(b, (edge - coordinate(a)) / (coordinate(b) - coordinate(a))));
+                }
+                if inside(b) {
+                    clipped.push(b);
+                }
+            }
+            points = clipped;
+        }
+        points.into_iter().map(|p| frame.point(p)).collect()
+    }
+}
+
+fn wrap(frame: Frame, annotation: &mut crate::document::Annotation) {
+    if let Some(width) = available(frame, annotation.position, annotation.angle) {
+        let width_pt = width * super::STYLE.points_per_world();
+        annotation.format.width_pt = Some(
+            annotation
+                .format
+                .width_pt
+                .map_or(width_pt, |old| old.min(width_pt)),
+        );
+    }
+}
 
 fn empty(doc: &Document) -> Document {
     Document {
@@ -169,11 +286,7 @@ pub(super) fn primitives(doc: &Document) -> Vec<Primitive> {
             });
             let content = if let Some(mut part) = parts.remove(&key) {
                 for a in &mut part.annotations {
-                    if let Some(width) = available(frame, a.position, a.angle) {
-                        let width_pt = width * super::STYLE.points_per_world();
-                        a.format.width_pt =
-                            Some(a.format.width_pt.map_or(width_pt, |old| old.min(width_pt)));
-                    }
+                    wrap(frame, a);
                 }
                 super::primitives_in_cell(&part)
             } else {

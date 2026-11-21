@@ -31,6 +31,44 @@ fn cell(id: u32, lo: f32, hi: f32, members: Vec<u64>) -> Cell {
         borders: vec![],
     }
 }
+
+#[test]
+fn picking_uses_affine_cell_clips_without_changing_raw_geometry() {
+    for reflected in [false, true] {
+        let mut doc = Document::default();
+        let mut g = table(vec![cell(1, 0., 0.5, vec![1, 2])]);
+        g.origin = Point::new(40., 30.);
+        g.axis_x = Point::new(if reflected { -200. } else { 200. }, 60.);
+        g.axis_y = Point::new(50., 150.);
+        let frame = g.table.as_ref().unwrap().cells[0].frame(&g).unwrap();
+        let a = doc.add_atom("C", frame.point(Point::new(0.2, 0.5)));
+        let b = doc.add_atom("C", frame.point(Point::new(1.4, 0.5)));
+        doc.add_bond(a, b, 1, "plain");
+        doc.graphics.push(g);
+        let before = doc.file_json().unwrap();
+        let view = Layout::new(&doc);
+        let outside = frame.point(Point::new(1.1, 0.5));
+        assert!(!view.contains(a, outside));
+        assert_eq!(doc.nearest(doc.atom(b).unwrap().position, 2.), None);
+        let (_, end) = view
+            .segment(
+                a,
+                doc.atom(a).unwrap().position,
+                doc.atom(b).unwrap().position,
+            )
+            .unwrap();
+        assert!(end.distance(frame.point(Point::new(1., 0.5))) < 0.001);
+        assert_eq!(crate::editing::nearest_bond(&doc, outside, 2.), None);
+        let enclosing = [
+            Point::new(-1000., -1000.),
+            Point::new(1000., -1000.),
+            Point::new(1000., 1000.),
+            Point::new(-1000., 1000.),
+        ];
+        assert!(!crate::selection_region::objects(&doc, &enclosing).contains(&b));
+        assert_eq!(doc.file_json().unwrap(), before);
+    }
+}
 fn pixels(drawing: &[Primitive], lo: Point, hi: Point) -> resvg::tiny_skia::Pixmap {
     let svg = super::super::svg_part(drawing, lo, hi);
     let options = resvg::usvg::Options {

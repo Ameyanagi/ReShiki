@@ -18,7 +18,7 @@ pub(crate) use group_labels::clearer_orientation;
 mod occlusion;
 pub(crate) mod projected_bonds;
 mod svg;
-mod table;
+pub mod table;
 
 #[derive(Debug, Clone)]
 pub enum Primitive {
@@ -266,6 +266,7 @@ pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> 
     let doc = drawn.as_ref();
     let reach = LabelReach::new(doc);
     let isotopes = HydrogenIsotopeLabels::new(doc);
+    let cells = table::Layout::new(doc);
     let mut best: Option<(bool, f32, u64)> = None;
     for atom in doc.atoms.iter().rev() {
         // Laying out a label is costly, so skip atoms it cannot reach from.
@@ -273,6 +274,7 @@ pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> 
         if (atom.position.x - point.x).abs() > limit
             || (atom.position.y - point.y).abs() > limit
             || crate::models3d::hides(doc, atom.id)
+            || !cells.contains(atom.id, point)
         {
             continue;
         }
@@ -317,6 +319,7 @@ pub(crate) fn abbreviation_label_hit_prepared(
     radius: f32,
 ) -> Option<u64> {
     let reach = LabelReach::new(doc);
+    let cells = table::Layout::new(doc);
     let atoms: std::collections::HashMap<_, _> =
         doc.atoms.iter().rev().map(|atom| (atom.id, atom)).collect();
     doc.abbreviations.iter().rev().find_map(|group| {
@@ -325,6 +328,7 @@ pub(crate) fn abbreviation_label_hit_prepared(
         if (atom.position.x - point.x).abs() > limit
             || (atom.position.y - point.y).abs() > limit
             || crate::models3d::hides(doc, group.anchor)
+            || !cells.contains(group.anchor, point)
         {
             return None;
         }

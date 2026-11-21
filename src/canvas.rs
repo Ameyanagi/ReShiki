@@ -56,6 +56,8 @@ mod bond_text_render_tests;
 #[cfg(test)]
 mod bond_text_tests;
 #[cfg(test)]
+mod table_hit_tests;
+#[cfg(test)]
 pub(crate) use bond_text_tests::bond_text_drag_edits;
 #[cfg(test)]
 pub(crate) mod label_click_tests;

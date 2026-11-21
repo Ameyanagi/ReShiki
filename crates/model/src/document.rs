@@ -785,11 +785,17 @@ impl Document {
         self.bond_between(a, b).map(|(i, _)| i)
     }
     pub fn nearest(&self, point: Point, radius: f32) -> Option<u64> {
+        let cells = crate::scene::table::Layout::new(self);
         self.atoms
             .iter()
             // Most pointer queries are nowhere near most atoms. Resolve the
             // collapsed-group/model visibility only for geometric candidates.
-            .filter(|a| a.position.distance(point) < radius && self.atom_drawn(a.id))
+            .filter(|a| {
+                a.position.distance(point) < radius
+                    && self.atom_drawn(a.id)
+                    && cells.contains(a.id, a.position)
+                    && cells.contains(a.id, point)
+            })
             .min_by(|a, b| {
                 a.position
                     .distance(point)
