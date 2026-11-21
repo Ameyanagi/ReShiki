@@ -45,7 +45,9 @@ pub(super) fn prepare(doc: &Document, target: &Target) -> Option<Split> {
         .cycle
         .as_deref()?;
     let n = cycle.intermediates.len();
-    if n == 0 {
+    // This repair searches circular spans. Noncircle insertion preserves
+    // inherited side coordinates; native drawing reconnects them to the step.
+    if n == 0 || cycle.shape != Shape::Circle {
         return None;
     }
     let i = i.min(n);

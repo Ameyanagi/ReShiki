@@ -16,6 +16,7 @@ use std::f32::consts::{FRAC_PI_2, TAU};
 
 mod label_placement;
 mod perimeter_arcs;
+mod perimeter_drop;
 mod resize;
 mod shapes;
 mod split;
@@ -1041,6 +1042,9 @@ fn within(doc: &Document, g: &Graphic, cycle: &Cycle, p: Point) -> Option<(usize
 /// The step of cycle graphic `g` whose arc, side arrows or name lie toward
 /// `p` from the center.
 pub fn step_at(doc: &Document, g: &Graphic, p: Point) -> Option<usize> {
+    if g.cycle.as_deref()?.shape != Shape::Circle {
+        return perimeter_drop::step_at(doc, g, p);
+    }
     within(doc, g, g.cycle.as_deref()?, p).map(|(s, _)| s)
 }
 
@@ -1078,28 +1082,54 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
     }
     let ink = crate::scene::selection_bounds(doc, &part)?;
     let p = center_of(ink);
+    let mut blocked = false;
     doc.graphics.iter().rev().find_map(|g| {
+        if blocked {
+            return None;
+        }
         let cycle = g.cycle.as_deref()?;
         if moved.contains(&g.id) {
             return None;
         }
         let bond = doc.drawing_style.bond_length_world;
-        let (center, radius) = g.cycle_circle();
-        let bow = (cycle.steps.iter())
-            .map(|s| DEFAULT.world(s.bow_pt).abs())
-            .fold(0., f32::max);
-        if p.distance(center) > radius + 4. * bond + bow {
-            return None;
-        }
-        let drawn = drawn(doc, g);
-        // On an arc, bowed off the circle or not, it splits that arc's step.
-        let on_arc = (drawn.arrows.iter().zip(&drawn.arcs))
-            .find_map(|(a, s)| s.filter(|_| a.hit(p, 0.6 * bond)));
-        let role = match on_arc {
-            Some(s) => Role::Intermediate(s + 1),
-            None => zone(doc, g, cycle, p)?,
-        };
         let n = cycle.intermediates.len();
+        let (role, arrows) = if cycle.shape != Shape::Circle {
+            match perimeter_drop::target(doc, g, p) {
+                perimeter_drop::Drop::Miss => return None,
+                perimeter_drop::Drop::Blocked => {
+                    blocked = true;
+                    return None;
+                }
+                perimeter_drop::Drop::Target(role, arrows) => (role, arrows),
+            }
+        } else {
+            let (center, radius) = g.cycle_circle();
+            let bow = (cycle.steps.iter())
+                .map(|s| DEFAULT.world(s.bow_pt).abs())
+                .fold(0., f32::max);
+            if p.distance(center) > radius + 4. * bond + bow {
+                return None;
+            }
+            let drawn = drawn(doc, g);
+            // On an arc, bowed off the circle or not, it splits that arc's step.
+            let on_arc = (drawn.arrows.iter().zip(&drawn.arcs))
+                .find_map(|(a, s)| s.filter(|_| a.hit(p, 0.6 * bond)));
+            let role = match on_arc {
+                Some(s) => Role::Intermediate(s + 1),
+                None => zone(doc, g, cycle, p)?,
+            };
+            let step = match role {
+                Role::Intermediate(i) => (n > 0).then(|| (i + n - 1) % n),
+                Role::Reagent(s) | Role::Product(s) => Some(s),
+            };
+            let arrows = drawn
+                .arrows
+                .into_iter()
+                .zip(drawn.arcs)
+                .filter_map(|(a, s)| (s == step).then_some(a))
+                .collect();
+            (role, arrows)
+        };
         // A full list takes no more.
         let full = match role {
             Role::Intermediate(_) => n,
@@ -1109,14 +1139,10 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
         if full {
             return None;
         }
-        let step = match role {
-            Role::Intermediate(i) => (n > 0).then(|| (i + n - 1) % n),
-            Role::Reagent(s) | Role::Product(s) => Some(s),
-        };
         // Enough points that the highlight follows the arrow when zoomed in.
-        let arc = (drawn.arrows.iter().zip(&drawn.arcs))
-            .filter(|(_, s)| **s == step)
-            .map(|(a, _)| {
+        let arc = arrows
+            .iter()
+            .map(|a| {
                 let (lo, hi) = a.bounds();
                 let count = (4. * lo.distance(hi) / bond).clamp(16., 720.) as usize;
                 (0..=count)
@@ -1174,7 +1200,7 @@ pub fn holds(doc: &Document, cycle: u64, part: &[u64]) -> bool {
     };
     let p = center_of(ink);
     if g.cycle.as_deref().is_some_and(|c| c.shape != Shape::Circle) {
-        return tidy_shape::holds(doc, g, part, p);
+        return perimeter_drop::holds(doc, g, part, p);
     }
     let reach = 4. * bond;
     if p.distance(center) < radius + reach {

@@ -134,9 +134,9 @@ pub(super) fn place(
     names: Vec<Name>,
     bounds: &[Option<Box>],
     out: &mut Drawn,
-) {
+) -> Vec<usize> {
     let Some(cycle) = g.cycle.as_deref() else {
-        return;
+        return vec![];
     };
     let gap = DEFAULT.world(cycle.gap_pt);
     let format = TextFormat {
@@ -165,7 +165,8 @@ pub(super) fn place(
     };
     let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
     out.labels.clear();
-    for name in names {
+    let mut placed = vec![];
+    for (i, name) in names.into_iter().enumerate() {
         let text = wrapped(
             &name.text,
             &format,
@@ -217,9 +218,11 @@ pub(super) fn place(
         if let Some((chosen, _)) = best {
             taken.push(chosen);
             out.labels.push((chosen.0, text, format.clone()));
+            placed.push(i);
         }
     }
     if let Some((at, _)) = center_label {
         out.labels.push((at, cycle.label.clone(), format));
     }
+    placed
 }

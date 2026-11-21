@@ -27,6 +27,111 @@ pub(super) struct Step<'a> {
     pub span: f64,
 }
 
+/// Nonpersistent hit ownership, including a hidden step's visible decoration.
+#[derive(Default)]
+pub(super) struct Owners {
+    pub arrows: Vec<Option<usize>>,
+    pub labels: Vec<usize>,
+}
+
+/// Resolve one native step without laying out side arrows or names. The same
+/// routine is used for drawing and for the skipped-member ownership bridge.
+pub(super) fn step_arrows(
+    doc: &Document,
+    g: &Graphic,
+    perimeter: &Outline,
+    step: &super::Step,
+    ends: [(f64, Option<(Point, Point)>); 2],
+    whole: bool,
+) -> Option<(Vec<Arrow>, f64)> {
+    let cycle = g.cycle.as_deref()?;
+    if ![cycle.gap_pt, step.lead_pt, step.trail_pt, step.bow_pt]
+        .into_iter()
+        .all(f32::is_finite)
+    {
+        return None;
+    }
+    let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
+    let length = perimeter.length();
+    let [(first, first_ink), (last, last_ink)] = ends;
+    let mut span = (dir * (last - first)).rem_euclid(length);
+    if span == 0. && whole {
+        span = length;
+    }
+    if span == 0. {
+        return None;
+    }
+    let gap = DEFAULT.world(cycle.gap_pt);
+    let clearance = |ink: Option<(Point, Point)>, anchor, way| {
+        ink.map_or(0., |b| {
+            clear(perimeter, anchor, way, grown(b, gap), span * 0.5)
+        })
+    };
+    let mut from = clearance(first_ink, first, dir);
+    let mut to = span - clearance(last_ink, last, -dir);
+    let available = to - from;
+    if available <= length * 1e-9 {
+        return None;
+    }
+    let room = available - f64::from(0.8 * doc.drawing_style.bond_length_world).min(available);
+    let floor = -cycle.gap_pt;
+    let mut lead = f64::from(DEFAULT.world(step.lead_pt.max(floor)));
+    let mut trail = f64::from(DEFAULT.world(step.trail_pt.max(floor)));
+    if lead + trail > room && lead + trail > 0. {
+        let k = room / (lead + trail);
+        lead *= k;
+        trail *= k;
+    }
+    from += lead;
+    to -= trail;
+    let most = length * 358. / 360.;
+    if to - from > most {
+        let extra = (to - from - most) * 0.5;
+        from += extra;
+        to -= extra;
+    }
+    let (start, signed_length) = (first + dir * from, dir * (to - from));
+    let style = arrow_style(g);
+    let arrows = if step.bow_pt == 0. && !step.reversible {
+        vec![path_arrow(g.id, perimeter, start, signed_length, &style)?]
+    } else {
+        deform::arrows(
+            g.id,
+            perimeter,
+            start,
+            signed_length,
+            f64::from(DEFAULT.world(step.bow_pt)),
+            step.reversible,
+            &style,
+        )?
+    };
+    Some((arrows, dir * span))
+}
+
+fn arrow_style(g: &Graphic) -> ArrowStyle {
+    ArrowStyle {
+        color: g.style.stroke,
+        width_pt: g.style.width_pt,
+        pattern: g.style.pattern,
+        ..ArrowStyle::preset(Preset::Forward)
+    }
+}
+
+pub(super) fn empty_arrow(g: &Graphic, perimeter: &Outline) -> Option<Arrow> {
+    let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
+    let (center, radius) = g.cycle_circle();
+    let top = perimeter.project(center.offset(0., -2. * radius))?.s;
+    let length = perimeter.length();
+    let gap = length * 0.02 / std::f64::consts::TAU;
+    path_arrow(
+        g.id,
+        perimeter,
+        top + dir * gap,
+        dir * (length - 2. * gap),
+        &arrow_style(g),
+    )
+}
+
 /// Resolve noncircle shafts, side arrows and names from the same geometry.
 /// Each reversible lane has its own explicit arc-to-step association.
 pub(super) fn replace(doc: &Document, g: &Graphic, perimeter: &Outline, out: &mut Drawn) {
@@ -39,17 +144,25 @@ pub(super) fn resolve(
     g: &Graphic,
     perimeter: &Outline,
     out: &mut Drawn,
+    record: impl FnMut(usize, Step<'_>),
+) {
+    resolve_owned(doc, g, perimeter, out, &mut Owners::default(), record);
+}
+
+pub(super) fn resolve_owned(
+    doc: &Document,
+    g: &Graphic,
+    perimeter: &Outline,
+    out: &mut Drawn,
+    owners: &mut Owners,
     mut record: impl FnMut(usize, Step<'_>),
 ) {
     let Some(cycle) = g.cycle.as_deref() else {
         return;
     };
-    let style = ArrowStyle {
-        color: g.style.stroke,
-        width_pt: g.style.width_pt,
-        pattern: g.style.pattern,
-        ..ArrowStyle::preset(Preset::Forward)
-    };
+    let style = arrow_style(g);
+    owners.arrows.clear();
+    owners.labels.clear();
     let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
     let length = perimeter.length();
     let (center, radius) = g.cycle_circle();
@@ -58,17 +171,9 @@ pub(super) fn resolve(
         .map_or(0., |p| p.s);
     let n = cycle.intermediates.len();
     if n == 0 {
-        let gap = length * 0.02 / std::f64::consts::TAU;
-        out.arrows = path_arrow(
-            g.id,
-            perimeter,
-            top + dir * gap,
-            dir * (length - 2. * gap),
-            &style,
-        )
-        .into_iter()
-        .collect();
+        out.arrows = empty_arrow(g, perimeter).into_iter().collect();
         out.arcs = vec![None; out.arrows.len()];
+        owners.arrows = vec![None; out.arrows.len()];
         names::place(doc, g, perimeter, vec![], &[], out);
         return;
     }
@@ -100,76 +205,29 @@ pub(super) fn resolve(
             {
                 return None;
             }
-            let (&first, &last) = (anchors.get(s)?, anchors.get((s + 1) % n)?);
-            let mut span = (dir * (last - first)).rem_euclid(length);
-            if span == 0. && n == 1 {
-                span = length;
-            }
-            if span == 0. {
-                return None;
-            }
-            let clearance = |i, anchor, way| {
-                bounds.get(i).copied().flatten().map_or(0., |b| {
-                    clear(perimeter, anchor, way, grown(b, gap), span * 0.5)
-                })
-            };
-            let mut from = clearance(s, first, dir);
-            let mut to = span - clearance((s + 1) % n, last, -dir);
-            let available = to - from;
-            if available <= length * 1e-9 {
-                return None;
-            }
-            let room =
-                available - f64::from(0.8 * doc.drawing_style.bond_length_world).min(available);
-            let floor = -cycle.gap_pt;
-            let mut lead = f64::from(DEFAULT.world(step.lead_pt.max(floor)));
-            let mut trail = f64::from(DEFAULT.world(step.trail_pt.max(floor)));
-            if lead + trail > room && lead + trail > 0. {
-                let k = room / (lead + trail);
-                lead *= k;
-                trail *= k;
-            }
-            from += lead;
-            to -= trail;
-            let most = length * 358. / 360.;
-            if to - from > most {
-                let extra = (to - from - most) * 0.5;
-                from += extra;
-                to -= extra;
-            }
-            let (start, length) = (first + dir * from, dir * (to - from));
-            if step.bow_pt == 0. && !step.reversible {
-                Some(vec![path_arrow(g.id, perimeter, start, length, &style)?])
-            } else {
-                deform::arrows(
-                    g.id,
-                    perimeter,
-                    start,
-                    length,
-                    f64::from(DEFAULT.world(step.bow_pt)),
-                    step.reversible,
-                    &style,
-                )
-            }
+            let end = |i| Some((*anchors.get(i)?, bounds.get(i).copied().flatten()));
+            step_arrows(
+                doc,
+                g,
+                perimeter,
+                step,
+                [end(s)?, end((s + 1) % n)?],
+                n == 1,
+            )
+            .map(|(arrows, _)| arrows)
         })
         .collect();
     let mut parts = bounds.iter().skip(n);
     let mut names = vec![];
+    let mut name_steps = vec![];
     out.arrows.clear();
     out.arcs.clear();
     for (s, (step, arrows)) in cycle.steps.iter().zip(arrows).enumerate() {
         let arrows = arrows.unwrap_or_default();
-        let shafts: Vec<_> = if step.reagents.is_empty()
-            && step.products.is_empty()
-            && step.name.trim().is_empty()
-        {
-            vec![]
-        } else {
-            arrows
-                .iter()
-                .map(super::shapes::Shaft::from_arrow)
-                .collect()
-        };
+        let shafts: Vec<_> = arrows
+            .iter()
+            .map(super::shapes::Shaft::from_arrow)
+            .collect();
         let first = anchors.get(s).copied().unwrap_or(0.);
         let mut span = anchors
             .get((s + 1) % n)
@@ -189,6 +247,7 @@ pub(super) fn resolve(
             for arrow in arrows {
                 out.arrows.push(arrow);
                 out.arcs.push(Some(s));
+                owners.arrows.push(Some(s));
             }
         }
         // Hidden steps keep virtual shape-aware targets for their sides.
@@ -214,6 +273,7 @@ pub(super) fn resolve(
         ) {
             out.arrows.push(arrow);
             out.arcs.push(None);
+            owners.arrows.push(Some(s));
         }
         if !step.name.trim().is_empty()
             && let (Some(&first), Some(&last)) = (anchors.get(s), anchors.get((s + 1) % n))
@@ -227,9 +287,13 @@ pub(super) fn resolve(
                 shafts,
                 first + dir * span * 0.5,
             ));
+            name_steps.push(s);
         }
     }
-    names::place(doc, g, perimeter, names, &bounds, out);
+    owners.labels = names::place(doc, g, perimeter, names, &bounds, out)
+        .into_iter()
+        .filter_map(|i| name_steps.get(i).copied())
+        .collect();
 }
 
 /// Clear the ink along distance, never by flattening the shaft. When an

@@ -694,6 +694,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/cycles/label_placement.rs`: Place each step name on one side of the ring with space around the ink.
 - `crates/model/src/cycles/perimeter_arcs.rs`: Noncircle step shafts and side contacts on their resolved native geometry.
 - `crates/model/src/cycles/perimeter_deform.rs`: Tangent-preserving Bow and reversible lanes, built from original perimeter arclength knots.
+- `crates/model/src/cycles/perimeter_drop.rs`: Noncircle drops and ownership follow native painted lanes, not a mean circle.
 - `crates/model/src/cycles/perimeter_frames.rs`: Shared painted-lane tangent and corner frames for noncircle names and roles.
 - `crates/model/src/cycles/perimeter_names.rs`: Noncircle names follow the final forward shaft, with actual painted ink deciding between inside, outside and nearby positions.
 - `crates/model/src/cycles/perimeter_sides.rs`: Side contacts on the resolved, open, painted step shafts.

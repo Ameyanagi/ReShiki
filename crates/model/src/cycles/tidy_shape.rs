@@ -1,8 +1,7 @@
 //! Noncircle Tidy preserves ordered roles on equal perimeter distances.
-use super::{Drawn, Outline, Role, boxes, center_of, outline, perimeter_arcs, tidy_phase};
+use super::{Drawn, Outline, boxes, center_of, outline, perimeter_arcs, tidy_phase};
 use crate::{
     document::{Document, Point},
-    graphics::Graphic,
     style::DEFAULT,
 };
 
@@ -155,50 +154,6 @@ fn place(
         }
     }
     None
-}
-
-/// The loop and its local outskirts retain elongated tips. A side part may
-/// also sit beside its own Bow, beyond the undeformed outline's outskirts.
-pub(super) fn holds(doc: &Document, g: &Graphic, part: &[u64], point: Point) -> bool {
-    let bond = doc.drawing_style.bond_length_world;
-    if !(bond.is_finite() && bond > 0.) {
-        return false;
-    }
-    let Some(perimeter) = outline(g) else {
-        return false;
-    };
-    let reach = f64::from(4. * bond);
-    let Some((inside, projection)) = perimeter.locate(point) else {
-        return false;
-    };
-    if inside || projection.distance < reach {
-        return true;
-    }
-    let Some(cycle) = g.cycle.as_deref() else {
-        return false;
-    };
-    let Some((role, _)) = cycle
-        .parts()
-        .find(|(_, ids)| ids.iter().any(|id| part.contains(id)))
-    else {
-        return false;
-    };
-    let (Role::Reagent(step) | Role::Product(step)) = role else {
-        // Noncircle insertion's merged-span membership is a separate step;
-        // every intermediate placed by Tidy is already on the actual outline.
-        return false;
-    };
-    let mut held = false;
-    perimeter_arcs::resolve(doc, g, &perimeter, &mut Drawn::default(), |s, resolved| {
-        if s == step {
-            held = resolved
-                .lanes
-                .iter()
-                .flatten()
-                .any(|shaft| shaft.project(point).is_some_and(|p| p.distance < reach));
-        }
-    });
-    held
 }
 
 #[cfg(test)]
