@@ -587,6 +587,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/exchange/decode.rs`
 - `crates/io/src/exchange/drawing.rs`: Editable document serialization.
 - `crates/io/src/exchange/drawing/clipboard.rs`: Explicitly lossy presentation conversion for an external clipboard copy.
+- `crates/io/src/exchange/drawing/compound_fill.rs`: Exact compound fills joined by cancelling bridges for editable exchange.
 - `crates/io/src/exchange/drawing/cycles.rs`: A catalytic cycle's ChemDraw steps and the data ReShiki reopens it from.
 - `crates/io/src/exchange/drawing/generic.rs`: ChemDraw generic properties are attached to their actual atom and bracket IDs.
 - `crates/io/src/exchange/drawing/groups.rs`
