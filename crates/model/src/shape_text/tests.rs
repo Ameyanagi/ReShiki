@@ -153,6 +153,34 @@ fn text_turns_with_its_shape_and_wraps_along_it() {
 }
 
 #[test]
+fn legacy_caption_keeps_its_saved_placement_until_edited() {
+    let mut legacy = shape_with("Held caption from an older drawing");
+    let id = legacy.graphics[0].text.unwrap();
+    legacy.graphics[0].axis_x = Point::new(0., 200.);
+    legacy.graphics[0].axis_y = Point::new(-80., 0.);
+    let centre = inner(&legacy.graphics[0]).0;
+    place(&mut legacy.annotations[0], centre, 22., 0.);
+    let json = serde_json::to_string(&legacy.current()).unwrap();
+    let mut doc: Document = serde_json::from_str(&json).unwrap();
+    let saved = text(&doc, id).clone();
+
+    edit(&mut doc, |_| {});
+    assert_eq!(text(&doc, id), &saved);
+    edit(&mut doc, |doc| {
+        doc.add_atom("O", Point::new(300., 300.));
+    });
+    assert_eq!(text(&doc, id), &saved);
+
+    edit(&mut doc, |doc| {
+        doc.annotations[0].text.push('!');
+    });
+    let updated = text(&doc, id);
+    assert_eq!(updated.angle, 90.);
+    assert_eq!(updated.format.width_pt, Some(width_pt(&doc.graphics[0])));
+    assert!(near(centre_of(updated), centre));
+}
+
+#[test]
 fn deleting_a_shape_takes_its_text_and_deleting_the_text_frees_the_shape() {
     let mut doc = shape_with("hν");
     let ids = with_texts(&doc, &[SHAPE]);

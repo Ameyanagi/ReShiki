@@ -119,22 +119,58 @@ pub fn prune(doc: &mut Document) {
     }
 }
 
-/// Called in the same transaction as every edit: every held text is wrapped
-/// to its shape and centred in it.
+/// Wrap and centre every held caption in its shape.
 pub fn reconcile(doc: &mut Document) {
+    reconcile_matching(doc, None);
+}
+
+/// Keep saved placement for untouched holders and captions, including drawings
+/// saved with older wrapping and orientation rules.
+pub fn reconcile_changes(doc: &mut Document, before: &Document) {
+    reconcile_matching(doc, Some(before));
+}
+
+fn reconcile_matching(doc: &mut Document, before: Option<&Document>) {
     if doc.graphics.iter().all(|g| g.text.is_none()) {
         return;
     }
     prune(doc);
-    let placements: HashMap<u64, (Point, f32, f32)> = doc
+    let previous = before.map(|before| {
+        let holders: HashMap<_, _> = before
+            .graphics
+            .iter()
+            .filter_map(|g| Some((g.text?, g)))
+            .collect();
+        let annotations: HashMap<_, _> = before
+            .annotations
+            .iter()
+            .filter(|a| holders.contains_key(&a.id))
+            .map(|a| (a.id, a))
+            .collect();
+        (holders, annotations)
+    });
+    let holders: HashMap<_, _> = doc
         .graphics
         .iter()
-        .filter_map(|g| Some((g.text?, (inner(g).0, width_pt(g), angle(g)))))
+        .filter_map(|g| Some((g.text?, g)))
         .collect();
     for a in &mut doc.annotations {
-        if let Some((centre, width, angle)) = placements.get(&a.id) {
-            place(a, *centre, *width, *angle);
+        let Some(&g) = holders.get(&a.id) else {
+            continue;
+        };
+        if let Some((old_holders, old_annotations)) = &previous
+            && old_holders.get(&a.id).is_some_and(|old| {
+                old.id == g.id
+                    && old.kind == g.kind
+                    && old.origin == g.origin
+                    && old.axis_x == g.axis_x
+                    && old.axis_y == g.axis_y
+            })
+            && old_annotations.get(&a.id).is_some_and(|old| *old == &*a)
+        {
+            continue;
         }
+        place(a, inner(g).0, width_pt(g), angle(g));
     }
 }
 
