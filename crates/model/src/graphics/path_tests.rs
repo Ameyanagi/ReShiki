@@ -91,6 +91,69 @@ fn fill_only_path_zero_width_is_contextual_and_survives_native_roundtrip() {
 }
 
 #[test]
+fn clearing_fill_gives_a_borderless_path_a_valid_outline() {
+    use crate::{graphics::GraphicChange, palette::Color};
+    let mut graphic = fill_only_bridge(true);
+    let path = graphic.path.clone();
+    GraphicChange::Fill(Some(Color::Paper)).apply(&mut graphic.style);
+    assert_eq!(graphic.style.width_pt, 0., "recoloring keeps no outline");
+    GraphicChange::Fill(None).apply(&mut graphic.style);
+    graphic.validate().unwrap();
+    assert_eq!(graphic.style.fill, None);
+    assert_eq!(graphic.style.width_pt, GraphicStyle::default().width_pt);
+    assert_eq!(graphic.path, path);
+
+    graphic.style.width_pt = 2.5;
+    GraphicChange::Fill(None).apply(&mut graphic.style);
+    assert_eq!(
+        graphic.style.width_pt, 2.5,
+        "existing outlines keep their width"
+    );
+}
+
+#[test]
+fn fill_boundaries_keep_straight_edges_as_two_points_and_curves_sampled() {
+    let p = Point::new;
+    for annulus in [true, false] {
+        let mut graphic = fill_only_bridge(annulus);
+        // A surviving CDX endpoint-control cubic is also a two-point edge.
+        let start = p(0., 0.);
+        let end = p(if annulus { 40. } else { 10. }, 0.);
+        for (a, b) in [(start, start), (start, end), (end, start), (end, end)] {
+            graphic.path[1] = PathCommand::Cubic(a, b, end);
+            let boundaries = super::fill_boundaries(&graphic.commands());
+            assert_eq!(
+                boundaries.len(),
+                8,
+                "retraced bridges cancel before sampling"
+            );
+            assert!(boundaries.iter().all(|edge| edge.len() == 2));
+        }
+    }
+
+    let curve = PathCommand::Cubic(p(10., -5.), p(30., -5.), p(40., 0.));
+    let commands = [
+        PathCommand::Move(p(0., 0.)),
+        curve.clone(),
+        PathCommand::Line(p(40., 40.)),
+        PathCommand::Line(p(0., 40.)),
+        PathCommand::Close,
+    ];
+    let boundaries = super::fill_boundaries(&commands);
+    let sampled = super::flattened(&[PathCommand::Move(p(0., 0.)), curve]);
+    assert_eq!(boundaries.len(), 4);
+    assert_eq!(boundaries[0], sampled[0], "curved sampling stays unchanged");
+    assert!(boundaries[1..].iter().all(|edge| edge.len() == 2));
+    let retraced = [
+        commands[0].clone(),
+        commands[1].clone(),
+        PathCommand::Cubic(p(30., -5.), p(10., -5.), p(0., 0.)),
+        PathCommand::Close,
+    ];
+    assert!(super::fill_boundaries(&retraced).is_empty());
+}
+
+#[test]
 fn fill_only_path_hits_the_nonzero_surface_without_picking_bridges() {
     let mut graphic = fill_only_bridge(true);
     assert!(graphic.hit(Point::new(5., 20.), 1.));

@@ -218,6 +218,11 @@ impl GraphicChange {
                 if v.is_none() {
                     s.effects.shaded = false;
                     s.effects.gradient = None;
+                    // A borderless filled path needs an outline once its fill
+                    // is removed, just like an ordinary unfilled shape.
+                    if s.width_pt == 0. {
+                        s.width_pt = GraphicStyle::default().width_pt;
+                    }
                 }
             }
             Self::Width(v) => s.width_pt = *v,
@@ -1041,18 +1046,19 @@ pub(crate) fn fill_boundaries(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     let mut pending: HashMap<[u32; 8], Vec<usize>> = HashMap::new();
     let mut append = |start: Point, a: Point, b: Point, end: Point| {
         // Endpoint-control cubics are the straight lines stored by CDX.
-        let (a, b) = if (a == start || a == end) && (b == start || b == end) {
-            (start, end)
-        } else {
-            (a, b)
-        };
+        let straight = (a == start || a == end) && (b == start || b == end);
+        let (a, b) = if straight { (start, end) } else { (a, b) };
         let forward = key([start, a, b, end]);
         let reverse = key([end, b, a, start]);
         let index = segments.len();
         let opposite = pending.get_mut(&reverse).and_then(Vec::pop);
         segments.push((
             start,
-            PathCommand::Cubic(a, b, end),
+            if straight {
+                PathCommand::Line(end)
+            } else {
+                PathCommand::Cubic(a, b, end)
+            },
             forward != reverse && opposite.is_none(),
         ));
         if let Some((_, _, visible)) = opposite.and_then(|index| segments.get_mut(index)) {
@@ -1093,11 +1099,15 @@ pub(crate) fn fill_boundaries(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     if started {
         append(at, at, first, first);
     }
-    segments
-        .into_iter()
-        .filter(|(_, _, visible)| *visible)
-        .flat_map(|(start, command, _)| flattened(&[PathCommand::Move(start), command]))
-        .collect()
+    let mut paths = Vec::new();
+    for (start, command, _) in segments.into_iter().filter(|(_, _, visible)| *visible) {
+        if let PathCommand::Line(end) = command {
+            paths.push(vec![start, end]);
+        } else {
+            paths.extend(flattened(&[PathCommand::Move(start), command]));
+        }
+    }
+    paths
 }
 pub fn flattened(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     let mut paths: Vec<Vec<Point>> = vec![];
