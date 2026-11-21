@@ -47,7 +47,9 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         let tree = snapshot(&app, &mut renderer, size);
         for id in [
             "header-new",
-            "header-export",
+            "header-search",
+            "inspector-tab-Import",
+            "inspector-tab-Export",
             "help-open",
             "transform-rotation",
             "transform-width",

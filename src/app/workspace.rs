@@ -580,6 +580,8 @@ impl App {
         // The browser build updates with its page and has no local assistant.
         let browser = cfg!(target_arch = "wasm32");
         let settings = Message::Settings(super::settings_page::Action::Open(None));
+        let search = Message::Commands(super::command_palette::Action::Open);
+        let search_keys = super::shortcuts::label(&search).expect("Search has a shortcut");
         let bar = row![
             hover_hint(
                 reshiki::accessibility::button(
@@ -647,6 +649,27 @@ impl App {
             responsive(move |size| self.tab_strip(size.width))
                 .width(Length::Fill)
                 .height(Length::Shrink),
+            hover_hint(
+                reshiki::accessibility::button(
+                    "header-search",
+                    format!("Search commands, structures and names; {search_keys}"),
+                    row![
+                        text("Search…").size(12),
+                        super::help::chord(&search_keys, 11),
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+                )
+                .height(36)
+                .padding([0, 10])
+                .style(control(self.commands.open))
+                .on_press(search.clone()),
+                keyed("Search commands, structures and names", &search),
+                tooltip::Position::Bottom,
+            ),
+            self.check_button(),
+            self.cleanup_button(),
+            divider(),
             (!browser).then(|| icon_button(
                 Icon::Assistant(self.assistant.busy),
                 if self.assistant.busy {
@@ -657,20 +680,6 @@ impl App {
                 Some(Message::Assistant(super::assistant::Action::Open)),
                 self.inspector_open && self.inspector_tab == InspectorTab::Assistant
             )),
-            icon_button(
-                Icon::Import,
-                keyed("Import", &Message::Inspector(InspectorTab::Import)),
-                Some(Message::Inspector(InspectorTab::Import)),
-                self.inspector_open && self.inspector_tab == InspectorTab::Import
-            ),
-            self.check_button(),
-            self.cleanup_button(),
-            icon_button(
-                Icon::Export,
-                keyed("Export", &Message::Inspector(InspectorTab::Export)),
-                Some(Message::Inspector(InspectorTab::Export)),
-                self.inspector_open && self.inspector_tab == InspectorTab::Export
-            ),
             icon_button(
                 Icon::Settings,
                 keyed("Settings", &settings),

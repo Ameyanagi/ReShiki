@@ -5,6 +5,7 @@ use reshiki::document::Point;
 
 mod assistant;
 mod proposals;
+mod search_header;
 
 fn drawing_app() -> App {
     let (mut app, _) = App::new();

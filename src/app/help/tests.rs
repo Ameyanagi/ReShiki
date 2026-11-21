@@ -214,6 +214,8 @@ fn search_ranks_names_keys_and_synonyms() {
     assert_eq!(top("copy image").name, "Copy as image");
     // Command chords spell out Shift; " / " separates alternatives, not keys.
     assert_eq!(top("cmd shift c").name, "Copy as image");
+    assert_eq!(top("cmd k").name, "Command palette");
+    assert_eq!(top("cmd shift p").name, "Command palette");
     assert_eq!(top("/").name, "Shortcut finder");
     assert!(position("/", "Fit drawing") < 2);
     assert!(

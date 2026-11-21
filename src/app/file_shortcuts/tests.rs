@@ -104,7 +104,16 @@ fn longer_chords_do_not_trigger_plain_file_commands() {
     for c in ["n", "o", "p"] {
         let key = Key::Character(c.into());
         assert!(file_message(&key, primary).is_some());
-        assert!(file_message(&key, primary | Modifiers::SHIFT).is_none());
+        if c == "p" {
+            assert!(matches!(
+                file_message(&key, primary | Modifiers::SHIFT),
+                Some(Message::Commands(
+                    super::super::command_palette::Action::Open
+                ))
+            ));
+        } else {
+            assert!(file_message(&key, primary | Modifiers::SHIFT).is_none());
+        }
         assert!(file_message(&key, primary | Modifiers::ALT).is_none());
     }
 }

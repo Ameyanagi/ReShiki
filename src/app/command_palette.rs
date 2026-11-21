@@ -171,6 +171,14 @@ impl State {
     }
 }
 
+/// Global palette shortcuts; `:` remains a character shortcut outside text fields.
+pub(super) fn is_shortcut(key: &Key, modifiers: Modifiers) -> bool {
+    matches!(key, Key::Character(c)
+        if (modifiers == Modifiers::COMMAND && c.eq_ignore_ascii_case("k"))
+            || (modifiers == Modifiers::COMMAND | Modifiers::SHIFT
+                && c.eq_ignore_ascii_case("p")))
+}
+
 /// Keys the palette takes before its search field: closing, filtering and
 /// moving.
 pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
@@ -909,7 +917,7 @@ impl App {
         let search = reshiki::accessibility::text_input(
             SEARCH,
             name,
-            "Search commands (e.g. benzene, double bond, nmr, :w)",
+            "Commands, structures, names",
             &state.query,
         )
         .style(crate::appearance::input_style)
