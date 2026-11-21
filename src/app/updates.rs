@@ -124,6 +124,13 @@ impl State {
             ("updates-check", "Check now", Action::Check(true))
         }
     }
+    fn card_refresh_action(&self) -> Option<Action> {
+        (!self.checking
+            && !self.installing
+            && !self.restarting
+            && matches!(self.card_action().2, Action::Install | Action::Portable))
+        .then_some(Action::Check(true))
+    }
     fn installed_channel() -> Channel {
         Release {
             version: updates::CURRENT_VERSION.into(),
@@ -268,7 +275,10 @@ impl App {
                 self.updates.checking = false;
                 match result {
                     Ok(release) if release.channel() == Some(self.updates.channel) => {
-                        self.updates.latest = Some(release)
+                        if self.updates.latest.as_ref() != Some(&release) {
+                            self.updates.prepared = None;
+                        }
+                        self.updates.latest = Some(release);
                     }
                     Ok(_) => {
                         self.updates.error = Some(Failure::Check(
@@ -611,7 +621,13 @@ impl App {
                 ]
                 .spacing(4)
                 .align_y(Alignment::Center),
-                link("updates-settings", "Update settings…", Action::OpenSettings),
+                row![
+                    link("updates-settings", "Update settings…", Action::OpenSettings),
+                    state
+                        .card_refresh_action()
+                        .map(|action| { link("updates-check-again", "Check again", action) }),
+                ]
+                .spacing(8),
             ]
             .push(state.data_folder.as_ref().map(|folder| {
                 row![

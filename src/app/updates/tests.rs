@@ -311,6 +311,38 @@ fn background_checks_respect_opt_out_and_do_not_change_a_drawing() {
 }
 
 #[test]
+fn cached_release_can_be_refreshed_after_a_failed_download() {
+    let (mut app, _) = App::new();
+    app.updates.latest = Some(Release {
+        version: "98.0.0".into(),
+    });
+    assert!(!app.updates.automatic);
+    assert!(matches!(
+        app.updates.card_refresh_action(),
+        Some(Action::Check(true))
+    ));
+
+    app.updates.installing = true;
+    assert!(app.updates.card_refresh_action().is_none());
+    let _ = app.update_action(Action::Prepared(Err("Release removed".into())));
+    assert_eq!(app.updates.error(), Some("Release removed"));
+    let refresh = app.updates.card_refresh_action().unwrap();
+    let _ = app.update_action(refresh);
+    assert!(app.updates.checking);
+    assert!(app.updates.card_refresh_action().is_none());
+
+    let _ = app.update_action(Action::Checked(
+        app.updates.check_id,
+        Ok(Release {
+            version: "99.0.0".into(),
+        }),
+    ));
+    assert!(!app.updates.checking);
+    assert!(app.updates.error().is_none());
+    assert_eq!(app.updates.latest.unwrap().version, "99.0.0");
+}
+
+#[test]
 fn switching_channels_ignores_old_results_and_keeps_automatic_checks_disabled() {
     let (mut app, _) = App::new();
     let original = app.tab.doc.clone();
