@@ -246,7 +246,14 @@ async fn native_low_size_authored_rf_caption_uses_common_fallback_and_survives_e
                 let plain = &doc.annotations[0];
                 assert_eq!(plain.text, label.text);
                 assert_eq!(plain.format, label.format);
-                assert!(baseline(plain).distance(Point::new(60. * scale, 250. * scale)) < 0.002);
+                // Ordinary captions use p as their top-left fallback when no
+                // BoundingBox is present; only the owned Rf p is a baseline.
+                assert!(
+                    plain
+                        .position
+                        .distance(Point::new(60. * scale, 250. * scale))
+                        < 0.002
+                );
                 let anchor = baseline(&label).offset(-g.origin.x, -g.origin.y);
                 for target in ["rsk", "cdxml", "cdx"] {
                     let output = formats::write_with_engine(doc.clone(), target, &engine)
