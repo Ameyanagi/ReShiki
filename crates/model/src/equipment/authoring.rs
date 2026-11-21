@@ -343,8 +343,7 @@ impl Draft {
 
     /// Pick the visible shape on top. Body glass follows the paint plan's
     /// area order; the other layers follow depth and stable drawing order.
-    /// Filled interiors and stroke outlines use the same flattened geometry
-    /// as the ordinary equipment hit test.
+    /// Filled interiors follow the painted path's nonzero winding rule.
     pub fn shape_at(&self, point: Point, reach: f32) -> Option<&str> {
         if !point.x.is_finite() || !point.y.is_finite() || !reach.is_finite() || reach <= 0. {
             return None;
@@ -371,7 +370,7 @@ impl Draft {
         let point = [f64::from(point.x), f64::from(point.y)];
         for shape in shapes.into_iter().rev() {
             let outline = geom::flatten(&self.frame.map(&shape.path));
-            if (shape.shape.role.filled() && geom::inside(point, &outline))
+            if (shape.shape.role.filled() && filled_shape_contains(point, &outline))
                 || geom::distance_to_outline(point, &outline) <= f64::from(reach)
             {
                 return self
@@ -663,6 +662,21 @@ impl Draft {
             revision,
         })
     }
+}
+
+/// Filled paths close every contour and keep same-winding overlaps filled.
+fn filled_shape_contains(point: Xy, outline: &[(Vec<Xy>, bool)]) -> bool {
+    let mut winding = 0;
+    for (points, _) in outline {
+        for (a, b) in geom::edges(points, true) {
+            if (a[1] > point[1]) != (b[1] > point[1])
+                && point[0] < a[0] + (point[1] - a[1]) * (b[0] - a[0]) / (b[1] - a[1])
+            {
+                winding += if b[1] > a[1] { 1 } else { -1 };
+            }
+        }
+    }
+    winding != 0
 }
 
 /// Whether every contour can represent a filled body. A closed line with no

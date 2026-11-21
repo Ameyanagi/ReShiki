@@ -983,6 +983,78 @@ fn shape_picking_follows_paint_order_and_never_fills_an_open_stroke() {
 }
 
 #[test]
+fn compound_shape_picking_keeps_same_winding_fills_and_opposite_winding_holes() {
+    use PathCommand::{Close, Line, Move};
+
+    let contour = |points: [Point; 4]| {
+        std::iter::once(Move(points[0]))
+            .chain(points.into_iter().skip(1).map(Line))
+            .chain([Close])
+    };
+    for (nested, imported_fill) in [(false, false), (true, false), (true, true)] {
+        for hole in [false, true] {
+            let mut doc = Document::default();
+            let behind = rectangle(&mut doc, Point::new(60., 30.), Point::new(90., 70.), true);
+            let compound = rectangle(&mut doc, Point::default(), Point::new(150., 100.), true);
+            let outer_right = if nested { 150. } else { 100. };
+            let outer = [
+                Point::default(),
+                Point::new(outer_right, 0.),
+                Point::new(outer_right, 100.),
+                Point::new(0., 100.),
+            ];
+            let mut inner = if nested {
+                [
+                    Point::new(50., 20.),
+                    Point::new(100., 20.),
+                    Point::new(100., 80.),
+                    Point::new(50., 80.),
+                ]
+            } else {
+                [
+                    Point::new(50., 0.),
+                    Point::new(150., 0.),
+                    Point::new(150., 100.),
+                    Point::new(50., 100.),
+                ]
+            };
+            if hole {
+                inner.reverse();
+            }
+            let shape = &mut doc.graphics[1];
+            shape.kind = GraphicKind::Path;
+            shape.origin = Point::default();
+            shape.axis_x = Point::new(1., 0.);
+            shape.axis_y = Point::new(0., 1.);
+            shape.path = contour(outer).chain(contour(inner)).collect();
+            if imported_fill {
+                // The SVG fill route also certifies these disjoint boundaries.
+                shape.style.fill = Some(Color::Ink);
+                shape.style.width_pt = 0.1;
+            }
+            let source = doc.clone();
+            let mut draft = Draft::from_selection(&doc, &[behind, compound]).unwrap();
+            draft
+                .calibrate([Point::default(), Point::new(100., 0.)], 30.)
+                .unwrap();
+            let compound_id = format!("shape-{compound}");
+            let expected = format!("shape-{}", if hole { behind } else { compound });
+            assert_eq!(
+                draft.shape_at(Point::new(75., 50.), 1.),
+                Some(expected.as_str()),
+                "nested={nested}, imported_fill={imported_fill}, hole={hole}"
+            );
+            assert_eq!(
+                draft.shape_at(Point::new(25., 50.), 1.),
+                Some(compound_id.as_str()),
+                "the outer filled region remains pickable"
+            );
+            assert_eq!(doc, source);
+        }
+    }
+}
+
+#[test]
 fn changing_joint_glass_to_solid_is_rejected_without_losing_the_port() {
     let (doc, body, edges) = vessel();
     let mut draft = Draft::from_selection(&doc, &[body]).unwrap();
