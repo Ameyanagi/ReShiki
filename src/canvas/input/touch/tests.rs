@@ -695,7 +695,7 @@ fn equipment_trial_touch_drag_cancels_for_pinch_or_lost_finger_without_resuming(
             )
             .is_empty()
         );
-        let drag = send(
+        let drag: Vec<_> = send(
             &canvas,
             &mut state,
             bounds,
@@ -703,7 +703,10 @@ fn equipment_trial_touch_drag_cancels_for_pinch_or_lost_finger_without_resuming(
                 id: touch::Finger(1),
                 position: moved,
             },
-        );
+        )
+        .into_iter()
+        .filter(|edit| !edit.is_hover())
+        .collect();
         assert!(
             matches!(drag.as_slice(), [Edit::EquipmentAuthoringTestStart(41),
             Edit::EquipmentAuthoringTest { at, epoch: 41, reach: 7., finish: false }]

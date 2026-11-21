@@ -256,7 +256,7 @@ fn equipment_trial_pose_is_retained_but_accept_save_and_undo_never_keep_trial_ob
                     .unwrap()
                     .contains("reshiki/stopper")
             );
-            assert_eq!(Document::from_json(&bytes).unwrap(), app.tab.doc);
+            assert_eq!(Document::from_json(&bytes).unwrap(), app.tab.doc.current());
             let accepted = app.tab.doc.clone();
             let _ = app.update(Message::Undo);
             assert_eq!(app.tab.doc, before);
