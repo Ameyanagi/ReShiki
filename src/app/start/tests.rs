@@ -93,6 +93,44 @@ fn start_rejects_hidden_stale_actions_and_preserves_import_feedback() {
     assert!(app.error);
 }
 
+#[tokio::test]
+#[ignore = "Requires the built local naming worker"]
+async fn start_name_resets_hidden_peptide_mode_before_resolving_ordinary_names() {
+    async fn insert(peptide: bool) -> (App, reshiki::document::Document) {
+        let (mut app, _) = App::new();
+        app.engine = reshiki::engine::LocalEngine::in_process();
+        app.tab.busy = false;
+        let before = app.tab.doc.clone();
+        let _ = app.naming_action(super::super::naming::Action::PeptideSequence(peptide));
+        let _ = app.start_action(Action::Input("alanine".into()));
+        let mut effects =
+            iced_runtime::task::into_stream(app.update(Message::Start(Action::Insert))).unwrap();
+        while let Some(effect) = effects.next().await {
+            if let iced_runtime::Action::Output(message) = effect {
+                let _ = app.update(message);
+            }
+        }
+        (app, before)
+    }
+    let (ordinary, _) = insert(false).await;
+    let (mut app, before) = insert(true).await;
+    assert_eq!(
+        app.tab.doc.atoms.len(),
+        6,
+        "Start must import alanine, not the ALANINE peptide: {:?}",
+        app.start_name_notice(&app.start.input)
+    );
+    let actual = reshiki::naming::structure_smiles(&app.tab.doc).unwrap();
+    assert_eq!(
+        actual,
+        reshiki::naming::structure_smiles(&ordinary.tab.doc).unwrap(),
+        "The start field must match ordinary-name mode, including stereochemistry"
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
 #[test]
 fn browser_recent_uses_tab_and_epoch_identity_instead_of_a_bare_name() {
     let (mut app, _) = App::new();
@@ -173,6 +211,41 @@ async fn start_controls_have_visible_bounds_and_disappear_with_the_first_object(
             .find(|node| node.id == "start-input")
             .unwrap();
         assert!((field.bounds.center_x() - size.width / 2.).abs() < 2.);
+        // Sample the card's empty top padding: it shares the inspector's quiet
+        // paper surface rather than the theme's colored rounded-box fill.
+        let sample = iced::Point::new(field.bounds.x + 5., field.bounds.y - 10.);
+        for theme in [iced::Theme::Light, iced::Theme::Dark] {
+            ui.draw(
+                &mut renderer,
+                &theme,
+                &iced::advanced::renderer::Style {
+                    text_color: theme.palette().text,
+                },
+                iced::mouse::Cursor::Unavailable,
+            );
+            let width = size.width as u32;
+            let height = size.height as u32;
+            let pixels = Headless::screenshot(
+                &mut renderer,
+                iced::Size::new(width, height),
+                1.,
+                theme.palette().background,
+            );
+            let offset = ((sample.y as u32 * width + sample.x as u32) * 4) as usize;
+            let rgb = &pixels[offset..offset + 3];
+            if theme == iced::Theme::Light {
+                assert!(rgb.iter().all(|channel| *channel >= 245), "{rgb:?}");
+            } else {
+                assert!(rgb.iter().all(|channel| *channel < 40), "{rgb:?}");
+            }
+            println!("Start {size:?} {theme:?} card padding: {rgb:?}");
+            if let Some(directory) = std::env::var_os("RESHIKI_START_QA_DIR") {
+                let path = std::path::PathBuf::from(directory)
+                    .join(format!("start-{}x{}-{theme:?}.png", width, height));
+                ::image::save_buffer(path, &pixels, width, height, ::image::ColorType::Rgba8)
+                    .map_err(|error| error.to_string())?;
+            }
+        }
     }
     // The start block belongs below the existing context-menu cascade, so
     // its controls do not leak into the menu's foreground accessibility scope.

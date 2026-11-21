@@ -119,6 +119,7 @@ impl App {
                     return self.insert_input();
                 }
                 self.imports.kind = super::import::InputKind::Name;
+                let _ = self.naming_action(super::naming::Action::PeptideSequence(false));
                 let _ = self.naming_action(super::naming::Action::Name(input));
                 return self.naming_action(super::naming::Action::InsertName);
             }
@@ -317,7 +318,7 @@ impl App {
             .push(
                 container(
                     container(
-                        scrollable(container(block).padding(20).style(container::rounded_box))
+                        scrollable(super::inspector::card(container(block).padding(20)))
                             .height(Length::Shrink),
                     )
                     .width(Length::Fill)
