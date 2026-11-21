@@ -197,6 +197,76 @@ fn file_replacement_rebinds_page_context_without_losing_its_return_route() {
 }
 
 #[test]
+fn explicit_analysis_owns_properties_while_page_back_keeps_its_requested_scope() {
+    for (direct, close) in [false, true].into_iter().flat_map(|direct| {
+        [
+            Message::Escape,
+            Message::InspectorAction(inspector::Action::DismissMolecule),
+        ]
+        .map(|close| (direct, close))
+    }) {
+        let mut app = drawing();
+        let before = (app.tab.doc.clone(), app.tab.selected.clone());
+        let _ = app.update(Message::Inspector(InspectorTab::Import));
+        let _ = app.update(Message::Inspector(InspectorTab::Assistant));
+        let _ = app.update(Message::Inspector(InspectorTab::Names));
+        if direct {
+            let _ = app.show_molecular_properties();
+        } else {
+            let _ = app.update(Message::ContextMenu(
+                crate::app::context_menu::Action::Properties(true),
+            ));
+        }
+        assert_eq!(app.inspector_tab, InspectorTab::Properties);
+        assert!(app.requested_molecular_properties());
+        assert!(
+            app.inspector_pages.previous.is_empty(),
+            "Explicit analysis starts at Properties without an old page return target"
+        );
+        let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+        assert_eq!(app.inspector_tab, InspectorTab::Properties);
+        // A new page visit returns to the requested Properties context, not
+        // to the earlier advanced Import/Assistant/Names stack.
+        let _ = app.update(Message::Inspector(InspectorTab::Assistant));
+        let _ = app.update(Message::Inspector(InspectorTab::Names));
+        let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+        assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+        assert!(app.requested_molecular_properties());
+        let _ = app.update(Message::Escape);
+        assert_eq!(app.inspector_tab, InspectorTab::Properties);
+        assert!(app.requested_molecular_properties());
+        let _ = app.update(close);
+        assert_eq!(app.inspector_tab, InspectorTab::Properties);
+        assert!(!app.requested_molecular_properties());
+        assert_eq!((app.tab.doc.clone(), app.tab.selected.clone()), before);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
+fn new_selection_clears_requested_analysis_and_nested_page_return_history() {
+    let mut app = drawing();
+    let carbon = app.tab.selected[0];
+    let before = app.tab.doc.clone();
+    let _ = app.show_molecular_properties();
+    let _ = app.update(Message::Inspector(InspectorTab::Assistant));
+    let _ = app.update(Message::Inspector(InspectorTab::Names));
+    assert!(app.requested_molecular_properties());
+    let _ = app.update(Message::Canvas(Edit::Select(vec![carbon])));
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert!(!app.requested_molecular_properties());
+    let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    let _ = app.update(Message::Inspector(InspectorTab::Names));
+    let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert!(!app.requested_molecular_properties());
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.selected, vec![carbon]);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
 fn chemical_names_entry_point_sets_order_after_selecting_its_structure() {
     let mut app = drawing();
     let atoms = app.tab.selected.clone();

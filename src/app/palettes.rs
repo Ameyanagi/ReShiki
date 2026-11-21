@@ -763,6 +763,9 @@ impl App {
         body
     }
     pub(super) fn select_tool(&mut self, tool: Tool) {
+        if self.tool != tool {
+            self.tab.inspector_ui.clear_requested_molecule();
+        }
         self.clear_bond_text_hint();
         self.last_label = None;
         self.tab.arrows.cancel_source();

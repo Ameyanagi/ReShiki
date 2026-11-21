@@ -330,6 +330,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::IdentityCopied(..) => Some(Completion::Clipboard),
                 Action::Section(..)
                 | Action::BackPage
+                | Action::DismissMolecule
                 | Action::CopyIdentity(_)
                 | Action::NameIdentity
                 | Action::AddIdentityName

@@ -389,13 +389,23 @@ mod rendered {
             } else {
                 assert_eq!(app.tab.doc.annotations[0].format.line_spacing, 1.2);
                 assert_eq!(app.tab.doc.annotations[0].format.width_pt, Some(160.));
-                app.tool = Tool::Text;
+                app.select_tool(Tool::Text);
+                assert_eq!(app.tab.selected, [1]);
+                let fields = ui.fields(&app, false);
+                assert!(fields.spacing_label.is_some());
+                assert!(
+                    fields.width.is_some(),
+                    "selected text retains its editing controls"
+                );
+                assert!(fields.has_width_units);
+                app.set_selection(vec![]);
                 let fields = ui.fields(&app, false);
                 assert!(fields.spacing_label.is_none());
                 assert!(
                     fields.width.is_none(),
-                    "Text tool retains its early-return panel"
+                    "Text tool without a selected caption shows the placement panel"
                 );
+                assert!(!fields.has_width_units);
             }
         }
     }

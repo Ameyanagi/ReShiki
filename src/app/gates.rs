@@ -399,6 +399,11 @@ impl App {
                 )
             {
                 self.close_inspector_page()
+            } else if self.inspector_open
+                && self.inspector_tab == InspectorTab::Properties
+                && self.requested_molecular_properties()
+            {
+                self.dismiss_molecular_properties()
             } else {
                 self.update(Message::Tool(Tool::Select))
             });

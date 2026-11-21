@@ -16,6 +16,7 @@ use iced::{Event, Rectangle, Size};
 
 mod inspector_pages;
 mod review_close;
+mod selection_properties;
 mod style_status;
 mod view_footer;
 
