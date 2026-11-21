@@ -6,13 +6,22 @@ use reshiki::{
 };
 
 fn elongated(shape: Shape) -> (App, u64, Point) {
+    elongated_with_font(shape, "Arial")
+}
+
+fn elongated_with_font(shape: Shape, family: &str) -> (App, u64, Point) {
     let (mut app, _) = App::new();
     app.tab.busy = false;
+    app.tab.doc.drawing_style.font_family = family.into();
+    // The extreme ellipse tip must leave room for both reversible heads and
+    // the map-number ink. A 100-world short semiaxis has a curvature radius
+    // of only 6.67 here; 300 gives 60, while still escaping the old hit range.
+    let half_height = if shape == Shape::Ellipse { 300. } else { 100. };
     let mut g = Graphic::dragged(
         1,
         GraphicKind::Ellipse,
-        Point::new(-1500., -100.),
-        Point::new(1500., 100.),
+        Point::new(-1500., -half_height),
+        Point::new(1500., half_height),
         Default::default(),
         Default::default(),
         false,
@@ -78,12 +87,22 @@ fn named_ethane(doc: &mut Document, at: Point, two_decimals: bool) -> (Vec<u64>,
     doc.atom_mut(a).unwrap().map_num = 11;
     doc.atom_mut(b).unwrap().map_num = 12;
     let atoms = vec![a, b];
+    // Number styles and linked captions have their own font family; changing
+    // only drawing_style would leave the platform-sensitive map ink in Arial.
+    let family = doc.drawing_style.font_family.clone();
+    for atom in &atoms {
+        doc.atom_mut(*atom).unwrap().display.mapping.style.family = family.clone();
+    }
+    let format = reshiki::typography::TextFormat {
+        style: doc.drawing_style.text_style(),
+        ..Default::default()
+    };
     let name = reshiki::molecule_names::show(
         doc,
         &atoms,
         "ethane".into(),
         "CC".into(),
-        Default::default(),
+        format.clone(),
         false,
     )
     .unwrap();
@@ -91,7 +110,7 @@ fn named_ethane(doc: &mut Document, at: Point, two_decimals: bool) -> (Vec<u64>,
         doc,
         &atoms,
         reshiki::linked_properties::Property::Formula,
-        Default::default(),
+        format,
         two_decimals,
     )
     .unwrap();
@@ -106,8 +125,15 @@ fn middle(doc: &Document, ids: &[u64]) -> Point {
 
 #[test]
 fn moving_onto_an_elongated_painted_shape_inserts_with_captions_settings_and_one_undo() {
-    for shape in [Shape::Ellipse, Shape::RoundedRectangle, Shape::Rectangle] {
-        let (mut app, id, tip) = elongated(shape);
+    reshiki::style::add_font(
+        include_bytes!("../../../crates/model/fonts/LiberationSans-Regular.ttf").to_vec(),
+    )
+    .unwrap();
+    for (shape, family) in [Shape::Ellipse, Shape::RoundedRectangle, Shape::Rectangle]
+        .into_iter()
+        .flat_map(|shape| ["Arial", "Liberation Sans"].map(|family| (shape, family)))
+    {
+        let (mut app, id, tip) = elongated_with_font(shape, family);
         let (atoms, captions) = named_ethane(
             &mut app.tab.doc,
             Point::new(4000., 2000.),
@@ -171,7 +197,7 @@ fn moving_onto_an_elongated_painted_shape_inserts_with_captions_settings_and_one
         )
         .unwrap_or_else(|| {
             panic!(
-                "{shape:?}: the mapped molecule and linked captions must leave a clear fitted split"
+                "{shape:?}/{family}: the mapped molecule and linked captions must leave a clear fitted split"
             )
         });
         let frames = app.tab.history.undo_frames().len();
@@ -221,6 +247,7 @@ fn moving_onto_an_elongated_painted_shape_inserts_with_captions_settings_and_one
             assert!(new.position.distance(old.position.offset(delta.x, delta.y)) < 0.003);
             assert_eq!(new.map_num, old.map_num);
             assert_eq!(new.stereo, old.stereo);
+            assert_eq!(new.display, old.display);
         }
         for caption in captions {
             let old = before.annotations.iter().find(|a| a.id == caption).unwrap();
