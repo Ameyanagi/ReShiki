@@ -27,7 +27,7 @@ pub fn wrap(
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
-    drawing_style_open: bool,
+    inspector_escape: bool,
 ) -> Element<'_, Message> {
     Element::new(FileShortcuts {
         content,
@@ -36,7 +36,7 @@ pub fn wrap(
         image_open,
         updates_open,
         atom_text_open,
-        drawing_style_open,
+        inspector_escape,
     })
 }
 
@@ -48,7 +48,7 @@ struct FileShortcuts<'a> {
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
-    drawing_style_open: bool,
+    inspector_escape: bool,
 }
 
 impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
@@ -191,9 +191,9 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             shell.capture_event();
             return;
         }
-        // Cancel the visible style draft before a focused input consumes
-        // Escape only to unfocus. Modal dialogs above keep their own priority.
-        if self.drawing_style_open
+        // Dismiss an explicit analysis or cancel a style draft before a focused
+        // input consumes Escape only to unfocus. Modals keep their priority.
+        if self.inspector_escape
             && matches!(
                 event,
                 Event::Keyboard(keyboard::Event::KeyPressed {
@@ -203,7 +203,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             )
         {
             // Preserve the application's existing menu/dialog cancellation
-            // priority before it reaches the drawing-style draft.
+            // priority before it reaches the inspector.
             shell.publish(Message::Escape);
             shell.capture_event();
             return;

@@ -60,6 +60,106 @@ fn explicit_fragment_properties_return_to_context_and_keep_identity_section_choi
     assert!(!app.tab.history.can_undo());
 }
 
+#[test]
+fn requested_analysis_survives_caption_pins_and_their_undo_redo() {
+    use reshiki::linked_properties::{self, Property};
+    for fragment in [false, true] {
+        let (mut app, atoms, _, _) = fixture();
+        if fragment {
+            app.set_selection(atoms[..2].to_vec());
+        }
+        let selected = app.tab.selected.clone();
+        let _ = app.show_molecular_properties();
+        for property in [Property::Formula, Property::Weight] {
+            let _ = app.update(Message::ToggleProperty(atoms.to_vec(), property));
+            assert!(!app.error, "{}", app.status);
+            assert!(linked_properties::shown(&app.tab.doc, &atoms, property));
+            assert!(
+                app.requested_molecular_properties(),
+                "{fragment}: {property:?}"
+            );
+            assert_eq!(app.tab.selected, selected);
+        }
+        let pinned = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert!(app.requested_molecular_properties());
+        assert!(!linked_properties::shown(
+            &app.tab.doc,
+            &atoms,
+            Property::Weight
+        ));
+        let _ = app.update(Message::Redo);
+        assert!(app.requested_molecular_properties());
+        assert_eq!(app.tab.doc, pinned);
+        assert_eq!(app.tab.selected, selected);
+    }
+}
+
+#[test]
+fn requested_analysis_ends_on_right_click_target_changes_and_does_not_return() {
+    let (mut app, atoms, _, _) = fixture();
+    app.set_selection(atoms[..2].to_vec());
+    let _ = app.show_molecular_properties();
+    let drawing = app.tab.doc.clone();
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::ContextMenu {
+        position: iced::Point::new(200., 200.),
+        selected: vec![atoms[2]],
+        hit: vec![atoms[2]],
+    }));
+    assert!(!app.requested_molecular_properties());
+    let _ = app.update(Message::Escape); // Close the context menu first.
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(
+        atoms[..2].to_vec(),
+    )));
+    assert!(!app.requested_molecular_properties());
+    assert_eq!(app.tab.doc, drawing);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn requested_analysis_ends_when_its_atom_scope_or_file_changes() {
+    let (mut app, atoms, _, _) = fixture();
+    let _ = app.show_molecular_properties();
+    app.tab.doc.add_atom("N", Point::new(320., 0.));
+    let _ = app.update(Message::Viewport(iced::Size::new(1000., 700.)));
+    assert!(!app.requested_molecular_properties());
+
+    app.set_selection(atoms[..2].to_vec());
+    let _ = app.show_molecular_properties();
+    app.set_selection(vec![atoms[1], atoms[0]]);
+    assert!(
+        app.requested_molecular_properties(),
+        "Reordering IDs keeps the target"
+    );
+    app.tab.file_epoch += 1;
+    let _ = app.update(Message::Viewport(iced::Size::new(1000., 700.)));
+    assert!(!app.requested_molecular_properties());
+}
+
+#[test]
+fn requested_analysis_escape_and_close_preserve_selection_and_document() {
+    for fragment in [false, true] {
+        let (mut app, atoms, _, _) = fixture();
+        if fragment {
+            app.set_selection(atoms[..2].to_vec());
+        }
+        let drawing = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        for close in [
+            Message::Escape,
+            Message::InspectorAction(Action::DismissMolecule),
+        ] {
+            let _ = app.show_molecular_properties();
+            assert_eq!(app.tool, Tool::Select);
+            let _ = app.update(close);
+            assert!(!app.requested_molecular_properties());
+            assert_eq!(app.tab.doc, drawing);
+            assert_eq!(app.tab.selected, selected);
+            assert!(!app.tab.history.can_undo());
+        }
+    }
+}
+
 #[derive(Default)]
 struct PanelText(Vec<String>);
 impl iced::advanced::widget::Operation for PanelText {
@@ -248,6 +348,10 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
         Tool::Graphic(GraphicKind::Arc),
         Tool::EditPoints,
         Tool::Ring,
+        Tool::Bond(1),
+        Tool::Chain(reshiki::chains::ChainMode::Straight),
+        Tool::Atom,
+        Tool::Arrow,
     ] {
         app.tool = tool;
         let size = iced::Size::new(1280., 820.);
@@ -264,6 +368,47 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
             "{tool:?}: {:?}",
             collect.snapshot().duplicate_ids
         );
+        use reshiki::accessibility::Role;
+        let expected: &[(&str, Role)] = match tool {
+            Tool::Ring => &[
+                ("ring-preset", Role::ComboBox),
+                ("ring-size", Role::ComboBox),
+                ("aromatic-ring", Role::ToggleButton),
+            ],
+            Tool::Bond(_) => &[
+                ("bond-preset", Role::ComboBox),
+                ("bond-length", Role::TextInput),
+                ("fixed-length", Role::ToggleButton),
+                ("fixed-angles", Role::ToggleButton),
+            ],
+            Tool::Chain(_) => &[
+                ("chain-atoms", Role::TextInput),
+                ("chain-angle", Role::TextInput),
+                ("bond-length", Role::TextInput),
+            ],
+            Tool::Atom => &[
+                ("element", Role::TextInput),
+                ("apply-element", Role::Button),
+            ],
+            Tool::Arrow => &[("arrow-preset", Role::ComboBox)],
+            _ => &[],
+        };
+        for &(key, role) in expected {
+            for scope in ["context", "properties"] {
+                let id = format!("{scope}-{key}");
+                let node = collect
+                    .snapshot()
+                    .nodes
+                    .iter()
+                    .find(|node| node.id == id)
+                    .unwrap_or_else(|| panic!("{tool:?}: missing {id}"));
+                assert_eq!(node.role, role, "{id}");
+                assert!(node.enabled && !node.name.is_empty(), "{id}");
+                if role.takes_value() {
+                    assert!(node.value.is_some(), "{id}");
+                }
+            }
+        }
     }
     let (doc, model_atoms, _) = crate::canvas::tilt::shown(reshiki::models3d::Display::ThreeD);
     app.tab.doc = doc;

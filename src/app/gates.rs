@@ -372,6 +372,11 @@ impl App {
                 Task::none()
             } else if self.cancel_model_generation() {
                 Task::none()
+            } else if self.inspector_open
+                && self.inspector_tab == InspectorTab::Properties
+                && self.requested_molecular_properties()
+            {
+                self.dismiss_molecular_properties()
             } else {
                 self.update(Message::Tool(Tool::Select))
             });

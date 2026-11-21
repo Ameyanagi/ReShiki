@@ -2,7 +2,50 @@
 //! while a drawing tool shows the same defaults as its context row.
 use super::*;
 
+/// A request follows its object/atom scope, not the document revision. Caption
+/// pins and appearance edits keep that scope; changing targets does not.
+pub(super) struct MolecularTarget {
+    epoch: u64,
+    selection: HashSet<u64>,
+    atoms: HashSet<u64>,
+}
+
 impl App {
+    fn molecular_properties_target(&self) -> MolecularTarget {
+        MolecularTarget {
+            epoch: self.tab.file_epoch,
+            selection: self.tab.selected.iter().copied().collect(),
+            atoms: self.property_request_key().atoms.into_iter().collect(),
+        }
+    }
+
+    pub(in crate::app) fn request_molecular_properties(&mut self) {
+        self.tab.inspector_ui.requested_molecule = Some(self.molecular_properties_target());
+        self.tab
+            .inspector_ui
+            .expanded
+            .insert(Section::Molecule, true);
+        self.tab
+            .inspector_ui
+            .expanded
+            .insert(Section::RequestedMolecule, true);
+    }
+
+    pub(in crate::app) fn dismiss_molecular_properties(&mut self) -> Task<Message> {
+        self.tab.inspector_ui.clear_requested_molecule();
+        super::super::focus_drawing()
+    }
+
+    /// Some selection entry points assign IDs directly. Check their final
+    /// scope after every message as well as before rendering a requested card.
+    pub(in crate::app) fn sync_requested_molecular_properties(&mut self) {
+        if self.tab.inspector_ui.requested_molecule.is_some()
+            && !self.requested_molecular_properties()
+        {
+            self.tab.inspector_ui.clear_requested_molecule();
+        }
+    }
+
     pub(super) fn properties_selection_summary(&self) -> String {
         let summary = self.selection_summary();
         if let [id] = self.tab.selected.as_slice()
@@ -40,11 +83,34 @@ impl App {
         reshiki::generic::intersects(&self.tab.doc, &self.tab.selected)
     }
 
-    pub(super) fn requested_molecular_properties(&self) -> bool {
+    pub(in crate::app) fn requested_molecular_properties(&self) -> bool {
         self.tab
             .inspector_ui
-            .expanded
-            .contains_key(&Section::RequestedMolecule)
+            .requested_molecule
+            .as_ref()
+            .is_some_and(|target| {
+                self.tool == Tool::Select
+                    && target.epoch == self.tab.file_epoch
+                    && target.selection.len() == self.tab.selected.len()
+                    && self
+                        .tab
+                        .selected
+                        .iter()
+                        .all(|id| target.selection.contains(id))
+                    && if self.tab.selected.is_empty() {
+                        target.atoms.len() == self.tab.doc.atoms.len()
+                            && self
+                                .tab
+                                .doc
+                                .atoms
+                                .iter()
+                                .all(|atom| target.atoms.contains(&atom.id))
+                    } else {
+                        let atoms = self.property_request_key().atoms;
+                        target.atoms.len() == atoms.len()
+                            && atoms.iter().all(|id| target.atoms.contains(id))
+                    }
+            })
     }
 
     pub(super) fn properties_contrast_notice(
@@ -193,7 +259,17 @@ impl App {
             _ => {}
         }
         if self.tool.bond_preset().is_some() || matches!(self.tool, Tool::Chain(_)) {
-            body = body.push(panel_action("Reset bonds", Message::ResetBondDrawing));
+            body = body.push(
+                reshiki::accessibility::button(
+                    "properties-reset-bonds",
+                    "Reset bond defaults",
+                    text("Reset bonds").size(12).width(Length::Fill).center(),
+                )
+                .padding([6, 8])
+                .width(Length::Fill)
+                .style(crate::appearance::secondary)
+                .on_press(Message::ResetBondDrawing),
+            );
         }
         body.push(text(hint).size(11).style(muted_text)).into()
     }

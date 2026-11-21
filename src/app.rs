@@ -877,7 +877,6 @@ impl App {
     }
     fn prepare_document_change(&mut self, changed: bool) {
         if changed {
-            self.tab.inspector_ui.clear_requested_molecule();
             self.tab.arrows.cancel_source();
         }
     }
@@ -1084,6 +1083,7 @@ impl App {
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
         let mut task = self.handle(message);
+        self.sync_requested_molecular_properties();
         self.sync_drawing_panel_context();
         task = Task::batch([task, self.render_png_preview()]);
         // Any message may change the drawing, some (previews, background
@@ -1468,8 +1468,10 @@ impl App {
                 self.updates.open,
                 self.tab.atom_text.is_some(),
                 self.inspector_open
-                    && self.inspector_tab == InspectorTab::DrawingStyle
-                    && self.tab.styles.editor.is_some()
+                    && ((self.inspector_tab == InspectorTab::DrawingStyle
+                        && self.tab.styles.editor.is_some())
+                        || (self.inspector_tab == InspectorTab::Properties
+                            && self.requested_molecular_properties()))
                     && self.tab.inline_text.is_none()
                     && self.context_menu.is_none(),
             ),

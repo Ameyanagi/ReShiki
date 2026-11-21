@@ -261,6 +261,7 @@ pub enum Action {
     ExportEditable(Option<bool>),
     Chemical(ChemicalFormat),
     ChemicalMenu(bool),
+    DismissMolecule,
     RefreshProperties,
     RefreshPropertiesFor(PropertyKey),
     Centroid,
@@ -346,6 +347,7 @@ fn unpaired_electrons(doc: &Document, analysis: &Analysis, selected: Option<&Has
 pub(super) struct State {
     expected_viewport: Option<iced::Size>,
     expanded: HashMap<Section, bool>,
+    requested_molecule: Option<context::MolecularTarget>,
     model_controls: bool,
     pub(super) figure: FigureFormat,
     figure_menu: bool,
@@ -385,12 +387,8 @@ impl State {
         }
     }
 
-    pub(super) fn request_molecule(&mut self) {
-        self.expanded.insert(Section::Molecule, true);
-        self.expanded.insert(Section::RequestedMolecule, true);
-    }
-
     pub(super) fn clear_requested_molecule(&mut self) {
+        self.requested_molecule = None;
         self.expanded.remove(&Section::RequestedMolecule);
     }
 
@@ -453,7 +451,8 @@ impl State {
                 self.close_menu();
                 self.chemical_menu = open;
             }
-            Action::RefreshProperties
+            Action::DismissMolecule
+            | Action::RefreshProperties
             | Action::RefreshPropertiesFor(..)
             | Action::PropertiesCalculated(..)
             | Action::Centroid
@@ -505,7 +504,7 @@ impl App {
         self.inspector_tab = InspectorTab::Properties;
         self.tab.inspector_ui.model_controls = false;
         self.tool = Tool::Select;
-        self.tab.inspector_ui.request_molecule();
+        self.request_molecular_properties();
 
         let key = self.property_request_key();
         let properties = if key.atoms.is_empty() {
@@ -700,6 +699,7 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::DismissMolecule => self.dismiss_molecular_properties(),
             Action::CopyIdentity(field) => self.copy_identity(field),
             Action::IdentityCopied(key, result) => {
                 self.identity_copied(key, result);
@@ -1166,6 +1166,14 @@ impl App {
                 self.inspector_section_lazy(Section::Descriptors, "Descriptors", "", false, || {
                     self.descriptor_properties()
                 })
+            }),
+            (section == Section::RequestedMolecule).then(|| {
+                super::workspace::accessible_command(
+                    "properties-close-analysis",
+                    "Close analysis and return to the drawing",
+                    "Close analysis",
+                )
+                .on_press(Message::InspectorAction(Action::DismissMolecule))
             }),
         ]
         .spacing(10)

@@ -935,24 +935,44 @@ impl App {
 
     /// Length and Angles for drawing and bonded movement; their Reset is a
     /// row command, so that it can fold into ⋯.
-    fn bond_constraints(&self) -> Element<'_, Message> {
+    fn bond_constraints(&self, scope: &'static str) -> Element<'_, Message> {
         row![
-            checkbox(self.tab.bond_drawing.fixed_length)
-                .label("Length")
-                .on_toggle(Message::FixedLength)
-                .size(13)
-                .text_size(11),
-            container(unit_field(
-                crate::appearance::text_input("14.4", &self.tab.drawing_length_input)
-                    .on_input(Message::DrawingLength),
+            tool_toggle(
+                scope,
+                "fixed-length",
+                "Length",
+                self.tab.bond_drawing.fixed_length,
+                Message::FixedLength(!self.tab.bond_drawing.fixed_length),
+                checkbox(self.tab.bond_drawing.fixed_length)
+                    .label("Length")
+                    .on_toggle(Message::FixedLength)
+                    .size(13)
+                    .text_size(11),
+            ),
+            container(accessible_unit_field(
+                tool_input(
+                    scope,
+                    "bond-length",
+                    "Bond length (pt)",
+                    "14.4",
+                    &self.tab.drawing_length_input
+                )
+                .on_input(Message::DrawingLength),
                 "pt",
             ))
             .width(UNIT_FIELD),
-            checkbox(self.tab.bond_drawing.fixed_angles)
-                .label("Angles")
-                .on_toggle(Message::FixedAngles)
-                .size(13)
-                .text_size(11),
+            tool_toggle(
+                scope,
+                "fixed-angles",
+                "Angles",
+                self.tab.bond_drawing.fixed_angles,
+                Message::FixedAngles(!self.tab.bond_drawing.fixed_angles),
+                checkbox(self.tab.bond_drawing.fixed_angles)
+                    .label("Angles")
+                    .on_toggle(Message::FixedAngles)
+                    .size(13)
+                    .text_size(11),
+            ),
         ]
         .spacing(6)
         .align_y(Alignment::Center)
@@ -1293,7 +1313,7 @@ impl App {
                 arrange,
             },
         );
-        let (options_list, hint) = self.tool_options(fit.summary);
+        let (options_list, hint) = self.tool_options(fit.summary, "context");
         // A shortened name or hidden summary stays in the name's tooltip.
         let mut about = vec![];
         if fit.short {
@@ -1420,15 +1440,15 @@ impl App {
         hover_hint(anchor, hint, tooltip::Position::Bottom).into()
     }
 
-    /// Inspector defaults reuse context controls that have no row-specific IDs.
+    /// Inspector defaults reuse context controls with their own semantic IDs.
     /// Graphics keep their dedicated panel (including its own arc preset IDs).
     pub(super) fn property_tool_options(
         &self,
     ) -> (Vec<Element<'_, Message>>, std::borrow::Cow<'static, str>) {
         match self.tool {
-            tool if tool.bond_preset().is_some() => self.tool_options(false),
+            tool if tool.bond_preset().is_some() => self.tool_options(false, "properties"),
             Tool::Chain(_) | Tool::Atom | Tool::Ring | Tool::RingPreset(_) | Tool::Arrow => {
-                self.tool_options(false)
+                self.tool_options(false, "properties")
             }
             _ => (vec![], self.tool.hint().into()),
         }
@@ -1440,29 +1460,34 @@ impl App {
     fn tool_options(
         &self,
         summary: bool,
+        scope: &'static str,
     ) -> (Vec<Element<'_, Message>>, std::borrow::Cow<'static, str>) {
         let options = match self.tool {
             tool if tool.bond_preset().is_some() => {
                 vec![
-                    crate::appearance::pick_list(BondPreset::ALL, tool.bond_preset(), |preset| {
-                        Message::Tool(match preset {
-                            BondPreset::Single => Tool::Bond(1),
-                            BondPreset::Double => Tool::Bond(2),
-                            BondPreset::Triple => Tool::Bond(3),
-                            BondPreset::Wedge => Tool::Wedge,
-                            BondPreset::HashedWedge => Tool::Hash,
-                            BondPreset::Wavy => Tool::Wavy,
-                            other => Tool::StyledBond(other),
-                        })
-                    })
-                    .text_size(12)
-                    .padding(5)
-                    .into(),
-                    self.bond_constraints(),
+                    tool_choice(
+                        scope,
+                        "bond-preset",
+                        "Bond type",
+                        BondPreset::ALL.to_vec(),
+                        tool.bond_preset(),
+                        |preset| {
+                            Message::Tool(match preset {
+                                BondPreset::Single => Tool::Bond(1),
+                                BondPreset::Double => Tool::Bond(2),
+                                BondPreset::Triple => Tool::Bond(3),
+                                BondPreset::Wedge => Tool::Wedge,
+                                BondPreset::HashedWedge => Tool::Hash,
+                                BondPreset::Wavy => Tool::Wavy,
+                                other => Tool::StyledBond(other),
+                            })
+                        },
+                    ),
+                    self.bond_constraints(scope),
                 ]
             }
             // The tool name shows the mode; the palette switches it.
-            Tool::Chain(mode) => self.chain_tool_options(mode),
+            Tool::Chain(mode) => self.chain_tool_options(mode, scope),
             Tool::StretchBond { .. } => {
                 vec![
                     reshiki::accessibility::button(
@@ -1510,30 +1535,36 @@ impl App {
                     done("Cancel"),
                 ]
             }
-            Tool::Ring | Tool::RingPreset(_) => self.ring_tool_options(),
+            Tool::Ring | Tool::RingPreset(_) => self.ring_tool_options(scope),
             Tool::Arrow => {
-                vec![
-                    crate::appearance::pick_list(
-                        reshiki::arrows::Preset::ALL,
-                        Some(self.tab.arrow_style),
-                        Message::ArrowStyle,
-                    )
-                    .text_size(12)
-                    .padding(5)
-                    .into(),
-                ]
+                vec![tool_choice(
+                    scope,
+                    "arrow-preset",
+                    "Arrow type",
+                    reshiki::arrows::Preset::ALL.to_vec(),
+                    Some(self.tab.arrow_style),
+                    Message::ArrowStyle,
+                )]
             }
             Tool::Atom => {
                 vec![
                     text(format!("Element: {}", self.element)).size(12).into(),
-                    crate::appearance::text_input("Symbol: Si, Na, Fe…", &self.custom_element)
-                        .on_input(Message::CustomElement)
-                        .on_submit(Message::ApplyElement)
-                        .size(12)
-                        .padding(6)
-                        .width(160)
+                    tool_input(
+                        scope,
+                        "element",
+                        "Element symbol",
+                        "Symbol: Si, Na, Fe…",
+                        &self.custom_element,
+                    )
+                    .on_input(Message::CustomElement)
+                    .on_submit(Message::ApplyElement)
+                    .size(12)
+                    .padding(6)
+                    .width(160)
+                    .into(),
+                    accessible_command(format!("{scope}-apply-element"), "Use element", "Use")
+                        .on_press(Message::ApplyElement)
                         .into(),
-                    command("Use", Message::ApplyElement).into(),
                 ]
             }
             Tool::Tilt => self.tilt_tool_options(),
@@ -1557,16 +1588,26 @@ impl App {
         (options, hint)
     }
 
-    fn chain_tool_options(&self, mode: reshiki::chains::ChainMode) -> Vec<Element<'_, Message>> {
+    fn chain_tool_options(
+        &self,
+        mode: reshiki::chains::ChainMode,
+        scope: &'static str,
+    ) -> Vec<Element<'_, Message>> {
         vec![
             hover_hint(
                 row![
                     text(chain_atoms_label(mode)).size(11),
-                    crate::appearance::text_input("Auto", &self.tab.chain_atoms_input)
-                        .on_input(Message::ChainAtoms)
-                        .width(49)
-                        .size(12)
-                        .padding(5),
+                    tool_input(
+                        scope,
+                        "chain-atoms",
+                        "Chain atom count",
+                        "Auto",
+                        &self.tab.chain_atoms_input
+                    )
+                    .on_input(Message::ChainAtoms)
+                    .width(49)
+                    .size(12)
+                    .padding(5),
                 ]
                 .spacing(4)
                 .align_y(Alignment::Center),
@@ -1576,9 +1617,15 @@ impl App {
             .into(),
             row![
                 text("Angle").size(11),
-                container(unit_field(
-                    crate::appearance::text_input("120", &self.tab.chain_angle_input)
-                        .on_input(Message::ChainAngle),
+                container(accessible_unit_field(
+                    tool_input(
+                        scope,
+                        "chain-angle",
+                        "Chain angle (degrees)",
+                        "120",
+                        &self.tab.chain_angle_input
+                    )
+                    .on_input(Message::ChainAngle),
                     "°",
                 ))
                 .width(UNIT_FIELD),
@@ -1586,7 +1633,7 @@ impl App {
             .spacing(4)
             .align_y(Alignment::Center)
             .into(),
-            self.bond_constraints(),
+            self.bond_constraints(scope),
         ]
     }
 
@@ -1629,54 +1676,62 @@ impl App {
         options
     }
 
-    fn ring_tool_options(&self) -> Vec<Element<'_, Message>> {
+    fn ring_tool_options(&self, scope: &'static str) -> Vec<Element<'_, Message>> {
         use reshiki::rings::Preset;
         let preset = if let Tool::RingPreset(p) = self.tool {
             p
         } else {
             Preset::Regular
         };
-        let mut options = vec![
-            crate::appearance::pick_list(Preset::ALL, Some(preset), |p| {
+        let mut options = vec![tool_choice(
+            scope,
+            "ring-preset",
+            "Ring preset",
+            Preset::ALL.to_vec(),
+            Some(preset),
+            |p| {
                 Message::Tool(if p == Preset::Regular {
                     Tool::Ring
                 } else {
                     Tool::RingPreset(p)
                 })
-            })
-            .text_size(12)
-            .padding(5)
-            .into(),
-        ];
+            },
+        )];
         if preset != Preset::Regular {
             return options;
         }
         options.extend([
             text("Size").size(11).style(muted_text).into(),
-            crate::appearance::pick_list(
-                [3_u8, 4, 5, 6, 7, 8],
+            tool_choice(
+                scope,
+                "ring-size",
+                "Ring size",
+                vec![3_u8, 4, 5, 6, 7, 8],
                 Some(self.ring_size),
                 Message::RingSize,
-            )
-            .text_size(12)
-            .padding(5)
-            .into(),
-            // A separate label draws the shortcut in the shortcut font.
-            row![
-                checkbox(self.aromatic_ring)
-                    .on_toggle(Message::AromaticRing)
-                    .size(14),
-                mouse_area(keyed_text(
-                    "Aromatic",
-                    Some(keys(Modifiers::SHIFT, "R")),
-                    ""
-                ))
-                .on_press(Message::AromaticRing(!self.aromatic_ring))
-                .interaction(iced::mouse::Interaction::Pointer),
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center)
-            .into(),
+            ),
+            tool_toggle(
+                scope,
+                "aromatic-ring",
+                "Aromatic",
+                self.aromatic_ring,
+                Message::AromaticRing(!self.aromatic_ring),
+                // A separate label draws the shortcut in the shortcut font.
+                row![
+                    checkbox(self.aromatic_ring)
+                        .on_toggle(Message::AromaticRing)
+                        .size(14),
+                    mouse_area(keyed_text(
+                        "Aromatic",
+                        Some(keys(Modifiers::SHIFT, "R")),
+                        ""
+                    ))
+                    .on_press(Message::AromaticRing(!self.aromatic_ring))
+                    .interaction(iced::mouse::Interaction::Pointer),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            ),
         ]);
         options
     }
@@ -1745,7 +1800,7 @@ impl App {
             }
             options.push(
                 hover_hint(
-                    self.bond_constraints(),
+                    self.bond_constraints("context"),
                     format!(
                         "Bonded movement follows Length / Angles · {}: free movement",
                         crate::platform::alt_key()
@@ -3545,6 +3600,65 @@ pub(super) fn accessible_unit_field<'a>(
     ]
     .width(Length::Fill)
     .into()
+}
+
+/// The context row and Properties share values/actions, but each visible
+/// instance needs its own native identity and keyboard focus target.
+fn tool_choice<'a, T: ToString + PartialEq + Clone + 'a>(
+    scope: &'static str,
+    key: &'static str,
+    name: &'static str,
+    options: Vec<T>,
+    selected: Option<T>,
+    on_select: impl Fn(T) -> Message + Copy + 'a,
+) -> Element<'a, Message> {
+    let value = selected
+        .as_ref()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    reshiki::accessibility::select(
+        format!("{scope}-{key}"),
+        name,
+        options.clone(),
+        value,
+        on_select,
+        crate::appearance::close_on_escape(
+            crate::appearance::pick_list(options, selected, on_select)
+                .text_size(12)
+                .padding(5),
+        ),
+    )
+    .into()
+}
+
+fn tool_input<'a>(
+    scope: &'static str,
+    key: &'static str,
+    name: &'static str,
+    placeholder: &str,
+    value: &str,
+) -> reshiki::accessibility::TextInput<'a, Message> {
+    reshiki::accessibility::text_input(format!("{scope}-{key}"), name, placeholder, value)
+        .style(crate::appearance::input_style)
+}
+
+fn tool_toggle<'a>(
+    scope: &'static str,
+    key: &'static str,
+    name: &'static str,
+    checked: bool,
+    message: Message,
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    reshiki::accessibility::button(format!("{scope}-{key}"), name, content)
+        .checked(checked)
+        .on_press(message)
+        .padding(0)
+        .style(|theme: &Theme, _| button::Style {
+            text_color: theme.palette().text,
+            ..Default::default()
+        })
+        .into()
 }
 
 /// A panel action: a full-width secondary button, so it reads as a control
