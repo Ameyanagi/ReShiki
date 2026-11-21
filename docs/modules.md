@@ -157,6 +157,8 @@ explains how the crates and modules fit together.
 - `src/app/performance/redraw.rs`: Redraw and memory workloads
 - `src/app/pictures.rs`: Asynchronous picture replacement and selection-aware size controls.
 - `src/app/piece_libraries.rs`: Equipment libraries in the Equipment browser
+- `src/app/piece_libraries/loading.rs`: One scan per folder at a time, with at most the newest refresh waiting.
+- `src/app/piece_libraries/reader.rs`: Detached native readers for equipment library folders.
 - `src/app/popover.rs`: A menu or panel anchored to a toolbar button, drawn over the surrounding rows so that nothing moves.
 - `src/app/printing.rs`
 - `src/app/prompt.rs`: Questions the app asks in its own dialog

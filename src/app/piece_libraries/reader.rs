@@ -1,3 +1,5 @@
+//! Detached native readers for equipment library folders.
+//!
 //! A linked share can block indefinitely. Its reader must not hold Tokio's
 //! blocking pool open when the editor exits.
 use std::{io, panic::AssertUnwindSafe, thread::JoinHandle};
