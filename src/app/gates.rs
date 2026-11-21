@@ -268,6 +268,10 @@ impl App {
             self.context_menu = None;
             return Break(Task::none());
         }
+        if self.templates.add_menu_open && matches!(message, Message::Escape) {
+            self.templates.add_menu_open = false;
+            return Break(Task::none());
+        }
         if (self.imports.menu || self.imports.examples_menu) && matches!(message, Message::Escape) {
             self.imports.menu = false;
             self.imports.examples_menu = false;
@@ -373,6 +377,8 @@ impl App {
                 self.inline_action(inline_text::Action::Finish(false))
             } else if self.tab.optimization.is_some() {
                 self.optimization_action(optimization::Action::Cancel)
+            } else if self.inspector_tab == InspectorTab::Templates && self.cancel_add_name() {
+                Task::none()
             } else if self.tab.engine_job.is_some() {
                 self.cancel_engine_job();
                 Task::none()

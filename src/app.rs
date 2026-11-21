@@ -75,6 +75,7 @@ mod office;
 mod start;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
+mod add_panel;
 #[cfg(test)]
 mod hover_qa;
 mod models3d;
@@ -427,6 +428,7 @@ pub enum Job {
     /// other becomes an Untitled drawing with its basename.
     ImportFile(std::path::PathBuf),
     Insert,
+    InsertAtView,
     Analyze,
     Clean(cleanup::CleanupJob),
     Projection(&'static str),

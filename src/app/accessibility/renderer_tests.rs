@@ -1,4 +1,5 @@
 use super::*;
+use iced::advanced::widget::Operation as _;
 use iced::advanced::{renderer::Headless, widget::operation};
 use iced_runtime::{UserInterface, user_interface::Cache};
 
@@ -48,7 +49,7 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         for id in [
             "header-new",
             "header-search",
-            "inspector-tab-Import",
+            "inspector-tab-Templates",
             "inspector-tab-Export",
             "help-open",
             "transform-rotation",
@@ -59,6 +60,17 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         ] {
             assert!(tree.nodes.iter().any(|node| node.id == id), "missing {id}");
         }
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|node| node.id == "inspector-tab-Templates" && node.name == "Add tab")
+        );
+        assert!(
+            !tree
+                .nodes
+                .iter()
+                .any(|node| node.id == "inspector-tab-Import")
+        );
         assert!(
             tree.nodes
                 .iter()
@@ -121,7 +133,25 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
                 .all(|node| node.id.starts_with("chemical-format-"))
         );
         app.tab.inspector_ui.close_menu();
-        app.inspector_tab = super::super::InspectorTab::Import;
+        app.inspector_tab = super::super::InspectorTab::Templates;
+        let add = snapshot(&app, &mut renderer, size);
+        assert!(
+            add.nodes.iter().any(|node| node.id == "add-search"
+                && node.role == reshiki::accessibility::Role::TextInput)
+        );
+        let _ = app.update(Message::Templates(
+            super::super::template_library::Action::AddMenu(true),
+        ));
+        let mut advanced = Activate::<Message>::new("add-advanced-import");
+        {
+            let mut ui = UserInterface::build(app.view(), size, Cache::new(), &mut renderer);
+            ui.operate(&renderer, &mut operation::black_box(&mut advanced));
+        }
+        let operation::Outcome::Some(message) = advanced.finish() else {
+            panic!("Add exposes the advanced Import route");
+        };
+        let _ = app.update(message);
+        assert_eq!(app.inspector_tab, super::super::InspectorTab::Import);
         app.imports.set_text("CCO");
         app.imports.examples_menu = true;
         let examples = snapshot(&app, &mut renderer, size);
