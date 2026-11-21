@@ -37,6 +37,8 @@ pub(in crate::app) fn generated(app: &mut App, record: Record) {
     } else {
         app.tab.selected.clone()
     };
+    let mut identity = naming::selected_identity(&app.tab.doc, &atoms).unwrap();
+    identity.write_unknown_stereo = app.appearance.write_unknown_stereo;
     let _ = app.generate_structure_name(atoms);
     let ticket = app
         .tab
@@ -44,5 +46,5 @@ pub(in crate::app) fn generated(app: &mut App, record: Record) {
         .pending
         .expect("Generate is pending")
         .ticket();
-    app.naming_finished(ticket, Ok(Outcome::Structure(record)));
+    app.structure_generated(ticket, Ok((identity, record)));
 }

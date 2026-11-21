@@ -70,7 +70,7 @@ async fn write_identity(field: IdentityField, text: String) -> Result<(), String
 pub(super) struct ScopeCache {
     key: Option<PropertyKey>,
     target: Option<Vec<u64>>,
-    canonical: Option<String>,
+    identity: Option<reshiki::naming::Identity>,
     notice: Option<String>,
     #[cfg(test)]
     calculations: usize,
@@ -120,7 +120,7 @@ impl App {
             } else {
                 reshiki::naming::selected_identity(&self.tab.doc, &key.atoms)
             };
-            cache.canonical = result.as_ref().ok().map(|identity| identity.smiles.clone());
+            cache.identity = result.as_ref().ok().cloned();
             cache.target = result.is_ok().then(|| key.atoms.clone());
             cache.notice = result.err();
             cache.key = Some(key);
@@ -133,14 +133,15 @@ impl App {
     }
 
     fn identity_record(&self, atoms: &[u64]) -> Option<&reshiki::naming::Record> {
-        let canonical = self
+        let mut identity = self
             .tab
             .inspector_ui
             .identity_scope
             .borrow()
-            .canonical
+            .identity
             .clone()?;
-        self.named_identity(atoms, &canonical)
+        identity.write_unknown_stereo = self.appearance.write_unknown_stereo;
+        self.named_identity(atoms, &identity)
     }
 
     fn identity_name_stale(&self) -> bool {
@@ -308,7 +309,16 @@ impl App {
             return Task::none();
         };
         if let Message::ToggleProperty(atoms, property) = action {
-            self.toggle_property(&atoms, property);
+            let Some(names) = self.identity_names() else {
+                return Task::none();
+            };
+            if reshiki::linked_properties::caption(&self.tab.doc, &atoms)
+                .is_some_and(|saved| names.primary == saved.name_line())
+            {
+                self.toggle_property(&atoms, property);
+            } else {
+                self.rename_molecule(&atoms, &names.primary);
+            }
         } else if let Some(atoms) = self.identity_target()
             && let Some(record) = self.identity_record(&atoms)
         {

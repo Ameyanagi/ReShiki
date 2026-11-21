@@ -107,6 +107,11 @@ pub enum Action {
     /// Selects this molecule and opens the Chemical names inspector.
     OpenPanel(Vec<u64>),
     Finished(Ticket, Box<Result<Outcome, naming::Error>>),
+    /// Generated names retain the exact input used by the bounded worker.
+    Generated(
+        Ticket,
+        Box<Result<(naming::Identity, Record), naming::Error>>,
+    ),
     /// The Molecular properties Name field of this molecule, before Return.
     NameDraft(Vec<u64>, String),
     /// Name this molecule in its property caption; empty is automatic.
@@ -227,6 +232,7 @@ pub(super) struct State {
     pub(super) structure: Option<(Ticket, Record)>,
     /// The atoms Generate named, and their parent locants once named.
     structure_atoms: Vec<u64>,
+    structure_identity: Option<naming::Identity>,
     structure_locants: HashMap<u64, String>,
     structure_error: Option<String>,
     notice: Option<Notice>,
@@ -260,6 +266,7 @@ impl Default for State {
             acknowledged: false,
             structure: None,
             structure_atoms: vec![],
+            structure_identity: None,
             structure_locants: HashMap::new(),
             structure_error: None,
             notice: None,
@@ -430,15 +437,25 @@ pub(super) async fn generate_for_atoms(
     cancel: naming::Cancel,
     write_unknown_stereo: bool,
 ) -> Result<Outcome, naming::Error> {
+    generate_identity_for_atoms(document, atoms, cancel, write_unknown_stereo)
+        .await
+        .map(|(_, record)| Outcome::Structure(record))
+}
+
+async fn generate_identity_for_atoms(
+    document: Document,
+    atoms: Vec<u64>,
+    cancel: naming::Cancel,
+    write_unknown_stereo: bool,
+) -> Result<(naming::Identity, Record), naming::Error> {
     let mut identity =
         reshiki::task::spawn_blocking(move || naming::selected_identity(&document, &atoms))
             .await
             .map_err(|error| naming::Error::Worker(error.to_string()))?
             .map_err(naming::Error::Rejected)?;
     identity.write_unknown_stereo = write_unknown_stereo;
-    naming::generate_name(&identity, cancel)
-        .await
-        .map(Outcome::Structure)
+    let record = naming::generate_name(&identity, cancel).await?;
+    Ok((identity, record))
 }
 
 impl App {
@@ -595,28 +612,57 @@ impl App {
         }
         let (ticket, cancel) = self.begin_naming(Pending::Generate);
         self.tab.naming.structure = None;
+        self.tab.naming.structure_identity = None;
         self.tab.naming.structure_atoms = editing::analysis_atoms(&self.tab.doc, &atoms);
         self.tab.naming.structure_error = None;
         let document = self.tab.doc.clone();
         Task::perform(
-            generate_for_atoms(
+            generate_identity_for_atoms(
                 document,
                 atoms,
                 cancel,
                 self.appearance.write_unknown_stereo,
             ),
-            move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
+            move |result| Message::Naming(Action::Generated(ticket, Box::new(result))),
         )
     }
 
+    fn structure_generated(
+        &mut self,
+        ticket: Ticket,
+        result: Result<(naming::Identity, Record), naming::Error>,
+    ) {
+        let current = matches!(self.tab.naming.pending, Some(Pending::Generate(pending)) if pending == ticket);
+        let (identity, result) = match result {
+            Ok((identity, record)) => (Some(identity), Ok(Outcome::Structure(record))),
+            Err(error) => (None, Err(error)),
+        };
+        self.naming_finished(ticket, result);
+        if current
+            && self
+                .tab
+                .naming
+                .structure
+                .as_ref()
+                .is_some_and(|(saved, _)| *saved == ticket)
+        {
+            self.tab.naming.structure_identity = identity;
+        }
+    }
+
     /// A generated name belongs to this exact analyzed scope and drawing.
-    pub(super) fn named_identity(&self, atoms: &[u64], canonical: &str) -> Option<&Record> {
+    pub(super) fn named_identity(
+        &self,
+        atoms: &[u64],
+        identity: &naming::Identity,
+    ) -> Option<&Record> {
         let state = &self.tab.naming;
         let (ticket, record) = state.structure.as_ref()?;
         (state.pending.is_none()
             && ticket.epoch == self.tab.file_epoch
             && state.structure_atoms == atoms
-            && record.canonical_smiles == canonical)
+            && state.structure_identity.as_ref() == Some(identity)
+            && record.canonical_smiles == identity.smiles)
             .then_some(record)
     }
 
@@ -752,6 +798,7 @@ impl App {
                 );
             }
             Action::Finished(ticket, result) => self.naming_finished(ticket, *result),
+            Action::Generated(ticket, result) => self.structure_generated(ticket, *result),
             Action::NameDraft(atoms, name) => self.tab.naming.name_draft = Some((atoms, name)),
             Action::Rename(atoms, name) => self.rename_molecule(&atoms, &name),
             Action::NameRow(atoms) => {

@@ -176,6 +176,107 @@ async fn common_name_caption_uses_the_existing_link_and_one_undo() {
 }
 
 #[tokio::test]
+async fn restoring_a_saved_name_caption_uses_the_displayed_common_name() {
+    for common_alias in [true, false] {
+        let mut app = ethanol().await;
+        let atoms = app.identity_target().unwrap();
+        let canonical = reshiki::naming::selected_identity(&app.tab.doc, &atoms)
+            .unwrap()
+            .smiles;
+        app.show_identity_name(&atoms, "ethan-1-ol", "ethan-1-ol", &canonical);
+        app.toggle_property(&atoms, Property::Formula);
+        app.toggle_property(&atoms, Property::Name);
+        // Restore a valid saved caption that retains its automatic name while
+        // other property lines are shown. Ordinary pin toggles may forget it.
+        let link = &mut app.tab.doc.property_captions[0];
+        link.name = "ethan-1-ol".into();
+        link.smiles = canonical;
+        app.tab.doc = Document::from_json(&app.tab.doc.file_json().unwrap()).unwrap();
+        if common_alias {
+            generated(&mut app);
+        } else {
+            // A newly generated systematic name can differ from a saved one too.
+            let mut record = super::super::super::naming::test_support::record("CCO");
+            record.title = "ethanol".into();
+            record.systematic_name = Some("ethanol".into());
+            super::super::super::naming::test_support::generated(&mut app, record);
+        }
+        let displayed = app.identity_text(IdentityField::Name).unwrap();
+        assert_eq!(displayed, "ethanol");
+        let before = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let frames = app.tab.history.frames();
+        let _ = app.inspector_action(Action::AddIdentityName);
+        let caption = reshiki::linked_properties::caption(&app.tab.doc, &atoms).unwrap();
+        assert_eq!(caption.name_line(), displayed);
+        assert_eq!(caption.name, "ethan-1-ol");
+        assert!(caption.properties.contains(&Property::Formula));
+        assert!(caption.properties.contains(&Property::Name));
+        let annotation = app
+            .tab
+            .doc
+            .annotations
+            .iter()
+            .find(|annotation| Some(annotation.id) == caption.annotation)
+            .unwrap();
+        assert_eq!(annotation.text.lines().next(), Some(displayed.as_str()));
+        assert_eq!(app.tab.doc.property_captions.len(), 1);
+        assert_eq!(app.tab.history.frames(), frames + 1);
+        assert_eq!(app.tab.selected, selected);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+    }
+}
+
+#[test]
+fn generated_identity_reuses_layout_but_rejects_changed_wavy_stereo_input() {
+    use reshiki::document::Point;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let mut doc = Document::default();
+    let methyl = doc.add_atom("C", Point::new(0., 0.));
+    let center = doc.add_atom("C", Point::new(42., 0.));
+    let oxygen = doc.add_atom("O", Point::new(42., 42.));
+    let methylene = doc.add_atom("C", Point::new(84., 0.));
+    let terminal = doc.add_atom("C", Point::new(126., 0.));
+    doc.add_bond(methyl, center, 1, "plain");
+    doc.add_bond(center, oxygen, 1, "plain");
+    doc.add_bond(center, methylene, 1, "plain");
+    doc.add_bond(methylene, terminal, 1, "plain");
+    app.tab.doc = doc;
+    let atoms = app.identity_target().unwrap();
+    let original = reshiki::naming::selected_identity(&app.tab.doc, &atoms).unwrap();
+    assert!(original.naming_smiles.is_none());
+    let mut record = super::super::super::naming::test_support::record("CC(O)CC");
+    record.systematic_name = Some("butan-2-ol".into());
+    super::super::super::naming::test_support::generated(&mut app, record);
+    assert!(app.identity_record(&atoms).is_some());
+    let before = app.tab.doc.clone();
+    app.tab.doc.translate(&atoms, 30., 20.);
+    app.changed(before);
+    assert!(app.identity_names().is_some());
+    assert!(app.identity_caption_action().is_some());
+    let before = app.tab.doc.clone();
+    app.tab
+        .doc
+        .bonds
+        .iter_mut()
+        .find(|bond| bond.a == center && bond.b == oxygen)
+        .unwrap()
+        .display = "wavy".into();
+    app.changed(before);
+    let wavy = reshiki::naming::selected_identity(&app.tab.doc, &atoms).unwrap();
+    assert_eq!(original.smiles, wavy.smiles);
+    assert_ne!(original.naming_smiles, wavy.naming_smiles);
+    assert!(app.identity_names().is_none());
+    assert!(app.identity_caption_action().is_none());
+    assert_eq!(app.copy_identity(IdentityField::Name).units(), 0);
+    let _ = app.update(Message::Undo);
+    assert!(app.identity_names().is_some());
+    assert!(app.identity_caption_action().is_some());
+}
+
+#[tokio::test]
 async fn custom_name_and_property_pins_keep_the_existing_caption_model() {
     let mut app = ethanol().await;
     let atoms = app.identity_target().unwrap();
@@ -436,7 +537,9 @@ async fn identity_rows_have_visible_text_without_sibling_pins() -> Result<(), St
         // rendered identifier/name can put ink in this part of the row.
         let start = if name { 0 } else { 81 };
         let ink = pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .enumerate()
             .filter(|(index, rgba)| {
                 let x = index % size.width as usize;
