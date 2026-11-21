@@ -419,23 +419,21 @@ impl App {
     pub(super) fn commands_action(&mut self, action: Action) -> Task<Message> {
         // Filter switching also works from Keys, whose state preserves registry
         // indexes and the existing contextual command gates.
-        if let Action::Filter(filter) = action {
-            return self.palette_filter(filter);
-        }
-        if let Action::Cycle(step) = action {
-            let active = if self.help_open {
-                Some(Category::Keys)
-            } else {
-                self.commands.filter
-            };
-            let at = FILTERS
-                .iter()
-                .position(|filter| *filter == active)
-                .unwrap_or(0) as isize;
-            let next = (at + step).rem_euclid(FILTERS.len() as isize) as usize;
-            return self.palette_filter(FILTERS[next]);
-        }
         match action {
+            Action::Filter(filter) => return self.palette_filter(filter),
+            Action::Cycle(step) => {
+                let active = if self.help_open {
+                    Some(Category::Keys)
+                } else {
+                    self.commands.filter
+                };
+                let at = FILTERS
+                    .iter()
+                    .position(|filter| *filter == active)
+                    .unwrap_or(0) as isize;
+                let next = (at + step).rem_euclid(FILTERS.len() as isize) as usize;
+                return self.palette_filter(FILTERS.get(next).copied().flatten());
+            }
             Action::Open => {
                 self.help_open = false;
                 self.palette = None;
@@ -461,7 +459,6 @@ impl App {
                 self.rank_commands();
                 return scroll_to_top();
             }
-            Action::Filter(_) | Action::Cycle(_) => unreachable!("handled above"),
             Action::Move(step) => {
                 let state = &mut self.commands;
                 let last = state.results.len().saturating_sub(1);
