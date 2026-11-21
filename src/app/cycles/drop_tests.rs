@@ -131,15 +131,60 @@ fn moving_onto_an_elongated_painted_shape_inserts_with_captions_settings_and_one
         app.tab.doc.validate().unwrap();
         let before = app.tab.doc.clone();
         let old_cycle = before.graphics[0].cycle.as_ref().unwrap();
-        let from = middle(&before, &atoms);
+        // Shaped drops route by primary molecule ink. Map numbers are checked
+        // separately for clearance; their display box must not steer the drag.
+        let from = before
+            .atom(atoms[0])
+            .unwrap()
+            .position
+            .lerp(before.atom(atoms[1]).unwrap().position, 0.5);
+        let mut body_ink = before.clone();
+        for atom in &atoms {
+            body_ink.atom_mut(*atom).unwrap().map_num = 0;
+        }
+        assert!(
+            middle(&body_ink, &atoms).distance(from) < 0.003,
+            "{shape:?}: the unlabelled ethane body has a symmetric painted extent"
+        );
         let delta = Point::new(tip.x - from.x, tip.y - from.y);
         let moved = reshiki::molecule_names::include_annotations(&before, &atoms);
+        let mut landed = before.clone();
+        landed.translate(&moved, delta.x, delta.y);
+        let landed_center = landed
+            .atom(atoms[0])
+            .unwrap()
+            .position
+            .lerp(landed.atom(atoms[1]).unwrap().position, 0.5);
+        assert!(
+            landed_center.distance(tip) < 0.003,
+            "{shape:?}: the body, rather than its map-number envelope, lands on the shaft"
+        );
+        let target = cycles::drop_target(&landed, &moved).unwrap_or_else(|| {
+            panic!("{shape:?}: the body-centered painted hit must be splittable")
+        });
+        assert_eq!((target.cycle, target.role), (id, Role::Intermediate(4)));
+        let proposal = cycles::propose_drop_from(
+            &before,
+            &landed,
+            &moved,
+            Some(app.appearance.two_decimal_weight),
+        )
+        .unwrap_or_else(|| {
+            panic!(
+                "{shape:?}: the mapped molecule and linked captions must leave a clear fitted split"
+            )
+        });
         let frames = app.tab.history.undo_frames().len();
         let _ = app.update(Message::Canvas(Edit::Move(moved, delta.x, delta.y)));
         assert!(!app.error, "{shape:?}: {}", app.status);
         assert_eq!(
+            app.tab.doc, proposal.doc,
+            "{shape:?}: app release must commit the same validated visible insertion"
+        );
+        assert_eq!(
             cycles::role_of(&app.tab.doc, atoms[0]),
-            Some((id, Role::Intermediate(4)))
+            Some((id, Role::Intermediate(4))),
+            "{shape:?}"
         );
         let c = app.tab.doc.graphics[0].cycle.as_ref().unwrap();
         assert_eq!(c.shape, shape);
