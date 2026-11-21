@@ -1351,7 +1351,7 @@ async fn updates_dialog_captures_keys_before_editors_file_commands_and_canvas() 
     apply(&mut app, messages);
     assert!(!app.updates.open);
     let _ = app.update(Message::Updates(updates::Action::Show(true)));
-    let close = ui.text(&app, "Close");
+    let close = ui.bounds(&app, "updates-close");
     ui.click(&mut app, close.center());
     assert!(
         !app.updates.open,
