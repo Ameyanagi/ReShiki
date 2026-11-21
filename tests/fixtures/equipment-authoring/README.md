@@ -9,12 +9,6 @@ Use a disposable app wrapper with a fresh `RESHIKI_DATA_DIR`. Open this file,
 fit the drawing, and keep the same window, zoom, theme and panel width for
 all captures. Select the flask group.
 
-The preserved historical fixture has a 0.6 pt unfilled rim detail. Select that
-detail and set **Graphic style → Graphic line width (pt)** to **0.4** in
-Properties before defining the piece. Authoring now
-refuses incompatible stroke widths instead of silently thinning them; the
-previously captured accepted piece already used the 0.4 pt equipment detail.
-
 1. Capture the source group and the **Define as equipment piece…** command
    in Properties or the context menu. Opening the command must leave the
    document unsaved state unchanged.
@@ -39,11 +33,10 @@ exercises length calibration only; use the joint fixture below to author a port.
 
 ### Recheck the review fixes
 
-1. Open the unmodified fixture and find **Define as equipment piece…** in
-   the command palette. It must explain **Use 0.4 pt strokes for equipment
-   line details.** The original group, colors and widths must remain intact.
-   Prepare only the rim as described above, then repeat the normal acceptance
-   walkthrough. Use this prepared source for refreshed matched captures.
+1. Open the unmodified fixture and repeat the normal acceptance walkthrough.
+   The default 0.6 pt open rim must remain 0.6 pt in the accepted piece,
+   including save/reopen and exports. Existing saved pieces using 0.4 pt
+   details keep that weight. No preparation or style edit is required.
 2. On a disposable copy, set a visible detail to a custom red stroke, or to
    2 pt. The command must identify **Ink** or the supported width and leave
    the source unchanged. Restore the supported style before proceeding.

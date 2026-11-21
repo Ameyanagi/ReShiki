@@ -212,6 +212,7 @@ fn piece(
         }
         let ink = match (s.role, s.material) {
             (Role::Detail, _) => Ink::Stroke(Weight::Detail),
+            (Role::Outline, _) => Ink::Stroke(Weight::Outline),
             (_, Material::Ink) => Ink::Fill,
             _ => Ink::FillStroke(Weight::Outline),
         };

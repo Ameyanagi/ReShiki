@@ -35,6 +35,9 @@ pub fn validate(d: &Definition) -> Result<(), String> {
             d.format_version
         ));
     }
+    if d.format_version != PREVIEW_VERSION && d.shapes.iter().any(|s| s.role == Role::Outline) {
+        return Err("The outline role requires preview piece format 0.".into());
+    }
     if !valid_id(&d.id) {
         return Err(format!(
             "The ID \"{}\" must be namespace/name, each 1–64 lowercase letters, digits or hyphens.",
@@ -653,7 +656,7 @@ fn joint(
             .collect();
         let filled: Vec<&Outline> = shown
             .iter()
-            .filter(|(s, _)| s.role != Role::Detail)
+            .filter(|(s, _)| s.role.filled())
             .map(|(_, o)| o)
             .collect();
         attach(

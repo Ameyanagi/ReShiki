@@ -198,7 +198,13 @@ impl Draft {
                         Material::Ink
                     },
                     color: None,
-                    role: if closed { Role::Glass } else { Role::Detail },
+                    role: if closed {
+                        Role::Glass
+                    } else if (g.style.width_pt - 0.6).abs() < 1e-6 {
+                        Role::Outline
+                    } else {
+                        Role::Detail
+                    },
                     style: None,
                     path: path(&inverse.map(&commands(&g.commands()))),
                     part: None,
@@ -344,7 +350,7 @@ impl Draft {
         let filled: Vec<_> = evaluated
             .shapes
             .iter()
-            .filter(|s| s.shape.role != Role::Detail)
+            .filter(|s| s.shape.role.filled())
             .map(|s| geom::flatten(&s.path))
             .collect();
         let inside = |p| filled.iter().any(|outline| geom::inside(p, outline));
@@ -597,8 +603,8 @@ pub fn stroke_problem(g: &Graphic) -> Option<&'static str> {
         ((g.style.width_pt - 0.6).abs() > 1e-6)
             .then_some("Use 0.6 pt outlines on filled equipment shapes.")
     } else {
-        ((g.style.width_pt - 0.4).abs() > 1e-6)
-            .then_some("Use 0.4 pt strokes for equipment line details.")
+        ((g.style.width_pt - 0.4).abs() > 1e-6 && (g.style.width_pt - 0.6).abs() > 1e-6)
+            .then_some("Use 0.4 pt details or 0.6 pt outlines for equipment.")
     }
 }
 

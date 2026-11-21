@@ -226,10 +226,7 @@ fn defining_equipment_requires_an_idle_supported_vector_selection() {
             GraphicKind::Rectangle,
             Point::new(x, 0.),
             Point::new(x + 40., 50.),
-            reshiki::graphics::GraphicStyle {
-                fill: Some(reshiki::palette::Color::Paper),
-                ..Default::default()
-            },
+            Default::default(),
             Default::default(),
             false,
         ));
@@ -242,7 +239,7 @@ fn defining_equipment_requires_an_idle_supported_vector_selection() {
     app.tab.doc.graphics[0].style.width_pt = 2.;
     assert_eq!(
         app.command_unavailable(&command),
-        Some("Use 0.6 pt outlines on filled equipment shapes.")
+        Some("Use 0.4 pt details or 0.6 pt outlines for equipment.")
     );
     app.tab.doc.graphics[0].style.width_pt = 0.6;
 
