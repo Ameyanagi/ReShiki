@@ -59,6 +59,7 @@ explains how the crates and modules fit together.
 - `src/app/context_menu.rs`: Commands for the object under a secondary click, or the current selection.
 - `src/app/context_menu/cascade.rs`: Cascading context panels share one event boundary and use laid-out rows as anchors.
 - `src/app/cycles.rs`: Catalytic cycles
+- `src/app/cycles/layout.rs`: Explicit cycle shapes and their dimensions in Properties and Make review.
 - `src/app/depth_appearance.rs`
 - `src/app/desktop.rs`: UI-side ownership acknowledgement; the transport cannot accept a request merely because it queued bytes.
 - `src/app/dispatch.rs`: The message dispatch table
@@ -69,6 +70,7 @@ explains how the crates and modules fit together.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
 - `src/app/equipment_authoring.rs`: A detached equipment draft, measured and reviewed on the ordinary canvas.
+- `src/app/equipment_authoring/trial.rs`: Disposable pieces for testing the draft with the ordinary seating solver.
 - `src/app/event_slot.rs`: Native event receivers are installed before their subscription takes ownership.
 - `src/app/figure_export.rs`: Figure export preserves drawable content independently of molecular validation.
 - `src/app/figure_panels.rs`: Figure panels (Wrap in panel, titles, dividers) and lasting row, column and grid layouts.
@@ -199,6 +201,7 @@ explains how the crates and modules fit together.
 - `src/canvas/guides.rs`: Canvas-only measuring aids; coordinates share the drawing/export scale.
 - `src/canvas/hit.rs`: Hit testing
 - `src/canvas/input.rs`: Pointer and keyboard events on the molecule canvas.
+- `src/canvas/input/equipment_trial.rs`: Pointer ownership for the disposable test piece, separate from drawing gestures.
 - `src/canvas/input/motion.rs`: Cursor motion
 - `src/canvas/input/press.rs`: Mouse presses on the paper
 - `src/canvas/input/release.rs`: Pointer releases
@@ -512,6 +515,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/graphics/integer.rs`: Bounded decimal layers retain Python integers until the document boundary.
 - `crates/io/src/chemistry/cdxml/graphics/picture.rs`
 - `crates/io/src/chemistry/cdxml/graphics/shapes.rs`
+- `crates/io/src/chemistry/cdxml/graphics/tlc.rs`: Native TLC geometry and the import-only boundary for unsupported spot data.
 - `crates/io/src/chemistry/cdxml/groups.rs`: Logical groups from reference/engine/groups_exchange.py::read_groups.
 - `crates/io/src/chemistry/cdxml/labels.rs`: Detached label/indicator patches from reference/engine/labels_exchange.py::read_labels.
 - `crates/io/src/chemistry/cdxml/marks.rs`: Detached patches from reference/engine/marks_exchange.py::read_marks.
@@ -595,6 +599,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/exchange/drawing/ligands.rs`: Hidden-charge and aromatic-ligand presentation using native CDX symbols.
 - `crates/io/src/exchange/drawing/objects.rs`
 - `crates/io/src/exchange/drawing/partial_charges.rs`
+- `crates/io/src/exchange/drawing/tlc.rs`: Native ChemDraw TLC objects, never a flattened collection of ellipses.
 - `crates/io/src/exchange/drawing/tree.rs`
 - `crates/io/src/exchange/encode.rs`
 - `crates/io/src/exchange/mod.rs`: Bounded CDX/CDXML serialization.
@@ -693,8 +698,18 @@ explains how the crates and modules fit together.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.
 - `crates/model/src/cycles.rs`: Catalytic cycles.
 - `crates/model/src/cycles/label_placement.rs`: Place each step name on one side of the ring with space around the ink.
+- `crates/model/src/cycles/perimeter_arcs.rs`: Noncircle step shafts and side contacts on their resolved native geometry.
+- `crates/model/src/cycles/perimeter_deform.rs`: Tangent-preserving Bow and reversible lanes, built from original perimeter arclength knots.
+- `crates/model/src/cycles/perimeter_frames.rs`: Shared painted-lane tangent and corner frames for noncircle names and roles.
+- `crates/model/src/cycles/perimeter_names.rs`: Noncircle names follow the final forward shaft, with actual painted ink deciding between inside, outside and nearby positions.
+- `crates/model/src/cycles/perimeter_sides.rs`: Side contacts on the resolved, open, painted step shafts.
+- `crates/model/src/cycles/resize.rs`: Resize an explicit cycle shape without replacing its retained affine frame.
+- `crates/model/src/cycles/shapes.rs`: Cycle-local perimeter geometry.
+- `crates/model/src/cycles/shapes/shaft.rs`: Open geometry read from the native shaft after Bow, lanes and head trim.
 - `crates/model/src/cycles/split.rs`: Keep inherited side parts beside the step that an insertion shortens.
 - `crates/model/src/cycles/steps.rs`: A catalytic cycle's steps as ordinary reactions.
+- `crates/model/src/cycles/tidy_phase.rs`: Least-motion phase on a noncircular, world-arclength perimeter.
+- `crates/model/src/cycles/tidy_shape.rs`: Noncircle Tidy preserves ordered roles on equal perimeter distances.
 - `crates/model/src/depiction.rs`: Opt-in nitrogen charge separation using the same cleanup as analysis.
 - `crates/model/src/depth_appearance.rs`: Persistent paint for an editable projection, independent of chemical styles.
 - `crates/model/src/document.rs`
@@ -749,6 +764,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/path/smooth.rs`
 - `crates/model/src/graphics/path/symmetry.rs`: Reflection fitting for a connected path, including its Bézier controls.
 - `crates/model/src/graphics/superscript.rs`
+- `crates/model/src/graphics/tlc.rs`: Native TLC plate geometry.
 - `crates/model/src/grouping.rs`: Persistent, nested logical groups, represented as laminar sets of object IDs.
 - `crates/model/src/haworth.rs`: Haworth drawing geometry and chemically defined carbohydrate templates.
 - `crates/model/src/haworth/interchange.rs`: Recognize the tested five/six-member Haworth convention at file boundaries.

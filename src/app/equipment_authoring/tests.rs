@@ -1,6 +1,9 @@
 use super::*;
 use reshiki::graphics::{Graphic, GraphicKind, GraphicStyle};
 
+#[path = "trial_tests.rs"]
+mod snap_preview;
+
 fn drawing() -> App {
     let (mut app, _) = App::new();
     app.tab.busy = false;

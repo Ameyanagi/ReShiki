@@ -21,22 +21,32 @@ pub fn supports(g: &Graphic) -> bool {
     g.kind.closed() && g.panel.is_none() && g.cycle.is_none()
 }
 
+/// The turn of a shape's text: the text reads along the shape's own x axis,
+/// and a mirrored shape keeps it readable.
+pub fn angle(g: &Graphic) -> f32 {
+    crate::document::text_angle(g.axis_x, g.axis_y)
+}
+
 /// The shape's centre and the width its text wraps to, in world units: the
-/// horizontal chord through the centre, inset so text clears the outline.
+/// chord through the centre along the text, inset so text clears the outline.
 pub fn inner(g: &Graphic) -> (Point, f32) {
     let centre = g.origin.offset(
         (g.axis_x.x + g.axis_y.x) / 2.,
         (g.axis_x.y + g.axis_y.y) / 2.,
     );
-    // One world unit along x, in the shape's unit-square frame. A shape
-    // tilted edge-on has no width.
+    // One world unit along the text, in the shape's unit-square frame. A
+    // shape tilted edge-on has no width.
     let d = g.frame_determinant();
     if d.abs() <= 1e-6 {
         return (centre, 0.);
     }
-    let v = Point::new(g.axis_y.y / d, -g.axis_x.y / d);
+    let (s, c) = angle(g).to_radians().sin_cos();
+    let v = Point::new(
+        (g.axis_y.y * c - g.axis_y.x * s) / d,
+        (g.axis_x.x * s - g.axis_x.y * c) / d,
+    );
     let width = if g.kind == crate::graphics::GraphicKind::Ellipse {
-        // The square inscribed in the ellipse's horizontal chord.
+        // The square inscribed in the ellipse's chord.
         0.65 / v.x.hypot(v.y)
     } else {
         0.85 / v.x.abs().max(v.y.abs())
@@ -109,27 +119,64 @@ pub fn prune(doc: &mut Document) {
     }
 }
 
-/// Called in the same transaction as every edit: every held text is wrapped
-/// to its shape and centred in it.
+/// Wrap and centre every held caption in its shape.
 pub fn reconcile(doc: &mut Document) {
+    reconcile_matching(doc, None);
+}
+
+/// Keep saved placement for untouched holders and captions, including drawings
+/// saved with older wrapping and orientation rules.
+pub fn reconcile_changes(doc: &mut Document, before: &Document) {
+    reconcile_matching(doc, Some(before));
+}
+
+fn reconcile_matching(doc: &mut Document, before: Option<&Document>) {
     if doc.graphics.iter().all(|g| g.text.is_none()) {
         return;
     }
     prune(doc);
-    let placements: HashMap<u64, (Point, f32)> = doc
+    let previous = before.map(|before| {
+        let holders: HashMap<_, _> = before
+            .graphics
+            .iter()
+            .filter_map(|g| Some((g.text?, g)))
+            .collect();
+        let annotations: HashMap<_, _> = before
+            .annotations
+            .iter()
+            .filter(|a| holders.contains_key(&a.id))
+            .map(|a| (a.id, a))
+            .collect();
+        (holders, annotations)
+    });
+    let holders: HashMap<_, _> = doc
         .graphics
         .iter()
-        .filter_map(|g| Some((g.text?, (inner(g).0, width_pt(g)))))
+        .filter_map(|g| Some((g.text?, g)))
         .collect();
     for a in &mut doc.annotations {
-        if let Some((centre, width)) = placements.get(&a.id) {
-            place(a, *centre, *width);
+        let Some(&g) = holders.get(&a.id) else {
+            continue;
+        };
+        if let Some((old_holders, old_annotations)) = &previous
+            && old_holders.get(&a.id).is_some_and(|old| {
+                old.id == g.id
+                    && old.kind == g.kind
+                    && old.origin == g.origin
+                    && old.axis_x == g.axis_x
+                    && old.axis_y == g.axis_y
+            })
+            && old_annotations.get(&a.id).is_some_and(|old| *old == &*a)
+        {
+            continue;
         }
+        place(a, inner(g).0, width_pt(g), angle(g));
     }
 }
 
-fn place(a: &mut Annotation, centre: Point, width_pt: f32) {
+fn place(a: &mut Annotation, centre: Point, width_pt: f32, angle: f32) {
     a.format.width_pt = Some(width_pt);
+    a.angle = angle;
     let (w, h) = a.size();
     a.position = centre.offset(-w / 2., -h / 2.);
 }

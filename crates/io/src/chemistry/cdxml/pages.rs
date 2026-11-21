@@ -24,6 +24,10 @@ const GEOMETRY: &[(&str, usize)] = &[
     ("MinorAxisEnd3D", 3),
     ("CurvePoints", 2),
     ("CurvePoints3D", 3),
+    ("TopLeft", 2),
+    ("TopRight", 2),
+    ("BottomRight", 2),
+    ("BottomLeft", 2),
 ];
 
 fn native_integer(value: f64) -> Result<f64> {

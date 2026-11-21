@@ -917,7 +917,11 @@ impl Writer<'_> {
         Ok(())
     }
 
-    fn annotation(&mut self, a: &Annotation, measured: Option<&TextMetrics>) -> Result<Key> {
+    pub(super) fn annotation(
+        &mut self,
+        a: &Annotation,
+        measured: Option<&TextMetrics>,
+    ) -> Result<Key> {
         let f = &a.format;
         let s = &f.style;
         let (width, height, baseline) = match measured {

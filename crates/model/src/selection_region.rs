@@ -91,6 +91,21 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         }
     }
     for g in &doc.graphics {
+        if g.tlc.is_some() {
+            let paths = flattened(&g.commands());
+            let labels = g.tlc_labels();
+            if (!paths.is_empty() || !labels.is_empty())
+                && paths
+                    .iter()
+                    .all(|path| !path.is_empty() && encloses(polygon, path, false))
+                && labels
+                    .iter()
+                    .all(|label| encloses(polygon, &label.corners(), true))
+            {
+                result.push(g.id);
+            }
+            continue;
+        }
         let commands = g.commands();
         let fill_only = g.is_fill_only_path();
         let paths = if fill_only {

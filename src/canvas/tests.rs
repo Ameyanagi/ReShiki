@@ -4024,6 +4024,7 @@ fn equipment_authoring_measurements_own_raw_clicks_over_selected_handles() {
             points: &[],
             measuring: true,
             direction: None,
+            ..Default::default()
         });
         let paper = canvas.guides.paper(bounds);
         let mut state = State::default();
@@ -4065,6 +4066,7 @@ fn equipment_authoring_measurements_own_raw_clicks_over_selected_handles() {
             points: &[],
             measuring: false,
             direction: None,
+            ..Default::default()
         });
         let pointer = Point::new(bounds.center_x(), bounds.center_y());
         let cursor = mouse::Cursor::Available(pointer);
