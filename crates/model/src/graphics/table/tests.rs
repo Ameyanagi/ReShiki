@@ -309,6 +309,8 @@ fn native_materialization_keeps_cycle_arrow_and_apparatus_outputs_in_the_cell() 
         .find(|a| a.id == id)
         .unwrap()
         .style
+        .as_mut()
+        .unwrap()
         .set_body(crate::arrows::Body::Chevron);
     let original_ids: std::collections::HashSet<_> = doc.object_ids().collect();
     let lowered = crate::arrows::lowered(&doc);
