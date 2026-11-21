@@ -8,7 +8,7 @@ use super::{
     workspace::{control, muted_text},
 };
 use iced::keyboard::{Key, Modifiers, key::Named};
-use iced::widget::{Space, column, row, stack, text};
+use iced::widget::{column, container, row, scrollable, stack, text};
 use iced::{Alignment, Element, Length};
 
 #[derive(Debug, Clone)]
@@ -141,7 +141,6 @@ impl App {
                 .into(),
                 "Choose a file name. Downloading keeps any edits marked as unsaved.".into(),
                 row![
-                    Space::new().width(Length::Fill),
                     button("prompt-cancel", "Cancel", Answer::Cancel, false),
                     button("prompt-download", "Download", Answer::Save, true),
                 ],
@@ -151,7 +150,6 @@ impl App {
                 "Your changes will be lost if you don’t save them.".to_owned(),
                 row![
                     button("prompt-dont-save", "Don’t Save", Answer::DontSave, false),
-                    Space::new().width(Length::Fill),
                     button("prompt-cancel", "Cancel", Answer::Cancel, false),
                     button("prompt-save", "Save", Answer::Save, true),
                 ],
@@ -166,7 +164,6 @@ impl App {
                 ),
                 super::files::keep_format_text(format, self.tab.chemdraw_loss, &self.tab.doc),
                 row![
-                    Space::new().width(Length::Fill),
                     button(
                         "prompt-keep-format",
                         &format!("Keep as {}", format.to_uppercase()),
@@ -179,31 +176,34 @@ impl App {
             Prompt::SaveAs => (
                 "Save as".to_owned(),
                 "ChemDraw keeps most of the drawing. MOL keeps the structure only.".to_owned(),
-                row![
-                    Space::new().width(Length::Fill),
-                    button("prompt-cancel", "Cancel", Answer::Cancel, false),
-                ],
+                row![button("prompt-cancel", "Cancel", Answer::Cancel, false),],
             ),
             Prompt::Notice { title, text, .. } => (
                 title.clone(),
                 text.clone(),
-                row![
-                    Space::new().width(Length::Fill),
-                    button("prompt-ok", "OK", Answer::Save, true),
-                ],
+                row![button("prompt-ok", "OK", Answer::Save, true),],
             ),
         };
-        let height = match prompt {
-            Prompt::Download { .. } => 225.,
-            // The list of what a ChemDraw save loses runs to three lines.
-            Prompt::KeepFormat(format) if description != super::files::format_keeps(format) => 190.,
-            Prompt::KeepFormat(_) => 150.,
-            Prompt::SaveAs => 330.,
-            _ => 180.,
-        };
         let content = column![
-            text(title).size(15),
-            text(description).size(13).style(muted_text),
+            row![
+                text(title)
+                    .size(15)
+                    .width(Length::Fill)
+                    .wrapping(text::Wrapping::WordOrGlyph),
+                reshiki::accessibility::button("prompt-close", "Close dialog", text("×").size(20))
+                    .width(32)
+                    .height(32)
+                    .padding(0)
+                    .style(control(false))
+                    .on_press(Message::Prompt(Answer::Cancel)),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Start),
+            text(description)
+                .size(13)
+                .width(Length::Fill)
+                .style(muted_text)
+                .wrapping(text::Wrapping::WordOrGlyph),
         ]
         .spacing(10);
         let content = if let Prompt::Download { name, .. } = prompt {
@@ -231,15 +231,38 @@ impl App {
         } else {
             content
         };
-        let content = content
-            .push(Space::new().height(Length::Fill))
-            .push(buttons.spacing(8).align_y(Alignment::Center));
+        let content = content.push(
+            container(
+                buttons
+                    .spacing(8)
+                    .align_y(Alignment::Center)
+                    .wrap()
+                    .vertical_spacing(8)
+                    .align_x(Alignment::End),
+            )
+            .align_right(Length::Fill),
+        );
+        // Short questions take only their content's height. The window's
+        // layout limits cap long questions, whose actions remain scrollable.
+        let content = container(
+            scrollable(content)
+                .id("prompt-scroll")
+                .height(Length::Shrink)
+                .direction(scrollable::Direction::Vertical(
+                    scrollable::Scrollbar::new().spacing(8),
+                )),
+        )
+        .id("prompt-content");
         modal(
             base,
             content.into(),
             440.,
-            height,
-            Placement::Center,
+            f32::INFINITY,
+            if cfg!(target_os = "macos") {
+                Placement::Top
+            } else {
+                Placement::Fit
+            },
             Message::Prompt(Answer::Cancel),
         )
     }

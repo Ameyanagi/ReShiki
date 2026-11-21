@@ -2,6 +2,8 @@ use super::*;
 use crate::app::{Pending, tabs};
 use reshiki::document::Point;
 
+mod renderer;
+
 fn edited() -> App {
     let (mut app, _) = App::new();
     app.tab.busy = false;
