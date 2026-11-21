@@ -206,6 +206,7 @@ fn exporting_a_snapshot_blocks_duplicate_exports_and_always_resets() {
     assert!(!app.error);
     let _ = app.update(Message::FigureExported(Ok(Some(Saved {
         path: PathBuf::from("gallery.png"),
+        recent: None,
         details: vec!["PNG: 6627 × 5285 pixels at 300 dpi".into()],
     }))));
     assert!(app.status.contains("300 dpi"));
@@ -252,4 +253,349 @@ fn export_receipts_distinguish_browser_handoff_from_desktop_write() {
         super::super::files::export_status(path, &details, true),
         "Downloaded aspirin.pdf · PDF: 2 pages"
     );
+}
+
+async fn prepared(app: &App, format: &'static str, editable: bool) -> Prepared {
+    use iced::futures::StreamExt;
+    let mut stream =
+        iced_runtime::task::into_stream(app.prepare_figure(format, false, editable)).unwrap();
+    let Some(iced_runtime::Action::Output(result)) = stream.next().await else {
+        panic!("Missing figure");
+    };
+    result.unwrap()
+}
+
+fn labelled_app() -> App {
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.tab.busy = false;
+    app.tab.doc.annotations.push(reshiki::document::Annotation {
+        id: 1,
+        position: Default::default(),
+        text: "First figure".into(),
+        format: Default::default(),
+    });
+    app
+}
+
+#[tokio::test]
+async fn export_again_renders_current_drawing_with_saved_options_to_exact_destination() {
+    use iced::futures::StreamExt;
+    let directory = tempfile::tempdir().unwrap();
+    let destination = directory.path().join("chosen figure.png");
+    let mut app = labelled_app();
+    app.tab.path = Some(directory.path().join("drawing.rsk"));
+    app.appearance.export_background = crate::appearance::Background::Custom;
+    app.appearance.custom_background = [29, 56, 87];
+    app.appearance.export_dpi = crate::appearance::Dpi::try_from(300).unwrap();
+    let first = prepared(&app, "png", false).await;
+    std::fs::write(&destination, &first.bytes).unwrap();
+    let _ = app.update(first.completed(Ok(Some(destination.clone()))));
+    assert_eq!(
+        app.repeat_export().unwrap().label(),
+        "Export again: chosen figure.png (PNG · up to 300 dpi)"
+    );
+
+    // New preferences must not silently change the repeated export's recipe.
+    app.appearance.export_background = crate::appearance::Background::White;
+    app.appearance.custom_background = [255, 0, 0];
+    app.appearance.export_dpi = crate::appearance::Dpi::try_from(1200).unwrap();
+    app.appearance.export_editable_drawing = true;
+    app.tab.doc.annotations[0].text = "A longer, revised figure".into();
+    let drawing = app.tab.doc.clone();
+    let selection = app.tab.selected.clone();
+    let original = std::fs::read(&destination).unwrap();
+    let mut stream = iced_runtime::task::into_stream(app.update(Message::ExportAgain)).unwrap();
+    assert!(app.figure_exporting);
+    while let Some(action) = stream.next().await {
+        if let iced_runtime::Action::Output(message) = action {
+            let _ = app.update(message);
+        }
+    }
+    assert!(!app.figure_exporting);
+    assert!(!app.error, "{}", app.status);
+    let bytes = std::fs::read(&destination).unwrap();
+    assert_ne!(
+        bytes, original,
+        "Repeat renders the edited drawing, not old bytes"
+    );
+    assert!(
+        reshiki::payload::read(&bytes).is_none(),
+        "Saved editable choice wins"
+    );
+    let image = image::load_from_memory(&bytes).unwrap().into_rgba8();
+    assert_eq!(image.get_pixel(0, 0).0, [29, 56, 87, 255]);
+    assert!(app.status.contains("300 dpi"), "{}", app.status);
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.selected, selection);
+    assert!(!app.tab.history.can_undo());
+    assert_eq!(
+        std::fs::read_dir(directory.path()).unwrap().count(),
+        1,
+        "No new filename or document save"
+    );
+}
+
+#[tokio::test]
+async fn recent_export_survives_restart_but_does_not_target_a_different_drawing() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut app = labelled_app();
+    let source = directory.path().join("source.rsk");
+    app.tab.path = Some(source.clone());
+    let export = prepared(&app, "svg", false).await;
+    let _ = app.update(export.completed(Ok(Some(directory.path().join("custom.svg")))));
+    let record = directory.path().join("recent-export.json");
+    app.recent_export
+        .as_ref()
+        .unwrap()
+        .save_to(&record)
+        .unwrap();
+    let loaded = Recent::load_from(&record).unwrap();
+    assert!(
+        loaded.recipe.origin.is_none(),
+        "Session tab ids are never persisted"
+    );
+    app.recent_export = Some(loaded);
+    assert!(app.repeat_export().is_some());
+    app.tab.path = Some(directory.path().join("other.rsk"));
+    assert!(app.repeat_export().is_none());
+    assert_eq!(app.update(Message::ExportAgain).units(), 0);
+    let normal = prepared(&app, "pdf", true).await;
+    assert_eq!(
+        normal.name, "other.pdf",
+        "Normal Export retains its own filename"
+    );
+    assert_eq!(normal.directory.as_deref(), Some(directory.path()));
+    app.tab.path = Some(source);
+    assert!(app.repeat_export().is_some());
+}
+
+#[tokio::test]
+async fn cancellation_failure_and_untitled_replacement_preserve_recent_export_safely() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut app = labelled_app();
+    let previous = directory.path().join("previous.pdf");
+    let export = prepared(&app, "pdf", true).await;
+    let _ = app.update(export.completed(Ok(Some(previous.clone()))));
+    assert!(app.repeat_export().is_some());
+    for result in [Ok(None), Err("Disk full".into())] {
+        let attempted = prepared(&app, "png", false).await;
+        let _ = app.update(attempted.completed(result));
+        assert_eq!(app.recent_export.as_ref().unwrap().path, previous);
+    }
+    let record = directory.path().join("recent-export.json");
+    app.recent_export
+        .as_ref()
+        .unwrap()
+        .save_to(&record)
+        .unwrap();
+    app.recent_export = Recent::load_from(&record);
+    assert!(
+        app.repeat_export().is_none(),
+        "An old untitled file never binds to a new tab after restart"
+    );
+    // A replacement document can reuse the tab id, but not its file epoch.
+    let export = prepared(&app, "pdf", true).await;
+    let _ = app.update(export.completed(Ok(Some(previous))));
+    assert!(app.repeat_export().is_some());
+    app.tab.file_epoch += 1;
+    assert!(app.repeat_export().is_none());
+}
+
+#[tokio::test]
+async fn repeat_svg_keeps_saved_text_and_payload_choices_and_failed_write_is_retryable() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut app = labelled_app();
+    app.appearance.export_svg_live_text = true;
+    let export = prepared(&app, "svg", false).await;
+    let _ = app.update(export.completed(Ok(Some(directory.path().join("missing/out.svg")))));
+    app.appearance.export_svg_live_text = false;
+    let recent = app.repeat_export().unwrap().clone();
+    let result = prepared_recipe(&app, recent.recipe.clone()).await;
+    let svg = roxmltree::Document::parse(std::str::from_utf8(&result.bytes).unwrap()).unwrap();
+    assert!(svg.descendants().any(|node| node.has_tag_name("text")));
+    assert!(reshiki::payload::read(&result.bytes).is_none());
+    use iced::futures::StreamExt;
+    let mut stream = iced_runtime::task::into_stream(app.update(Message::ExportAgain)).unwrap();
+    while let Some(action) = stream.next().await {
+        if let iced_runtime::Action::Output(message) = action {
+            let _ = app.update(message);
+        }
+    }
+    assert!(app.error);
+    assert!(!app.figure_exporting);
+    assert_eq!(app.repeat_export().unwrap().path, recent.path);
+}
+
+async fn prepared_recipe(app: &App, recipe: Recipe) -> Prepared {
+    use iced::futures::StreamExt;
+    let mut stream = iced_runtime::task::into_stream(app.prepare_recipe(recipe)).unwrap();
+    let Some(iced_runtime::Action::Output(result)) = stream.next().await else {
+        panic!("Missing figure");
+    };
+    result.unwrap()
+}
+
+#[tokio::test]
+async fn browser_repeat_never_identifies_files_by_their_shared_basename() {
+    let mut app = labelled_app();
+    app.tab.path = Some("drawing.rsk".into());
+    let export = prepared(&app, "svg", false).await;
+    let recipe = export.recipe.unwrap();
+    assert!(recipe.belongs_to_platform(&app.tab, true));
+    // Another dropped drawing can have the same browser name, including in
+    // the same reused tab. Only the actual session identity may match.
+    app.tab.file_epoch += 1;
+    assert!(!recipe.belongs_to_platform(&app.tab, true));
+    app.tab.id = super::super::document_tab::TabId(app.tab.id.0 + 1);
+    assert!(!recipe.belongs_to_platform(&app.tab, true));
+    let mut reopened: Recipe =
+        serde_json::from_slice(&serde_json::to_vec(&recipe).unwrap()).unwrap();
+    assert!(reopened.origin.is_none());
+    assert!(
+        !reopened.belongs_to_platform(&app.tab, true),
+        "A bare filename cannot restore browser identity after reload"
+    );
+    reopened.source = None;
+    assert!(!reopened.belongs_to_platform(&app.tab, false));
+}
+
+#[tokio::test]
+async fn switched_or_closed_export_completion_remembers_the_destination_without_touching_front_tab()
+{
+    let directory = tempfile::tempdir().unwrap();
+    for closed in [false, true] {
+        let mut app = labelled_app();
+        app.tab.path = Some(directory.path().join("source.rsk"));
+        app.tab.mark_saved(app.tab.doc.clone());
+        let id = app.tab.id;
+        let export = prepared(&app, "pdf", false).await;
+        let receipt = export.completed(Ok(Some(directory.path().join("chosen.pdf"))));
+        if closed {
+            let _ = app.close_active_tab();
+        } else {
+            app.add_tab();
+        }
+        let drawing = app.tab.doc.clone();
+        let status = app.status.clone();
+        let _ = app.update(Message::Tab(id, Box::new(receipt)));
+        assert!(app.recent_export.is_some());
+        assert!(app.repeat_export().is_none());
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.status, status);
+    }
+}
+
+#[tokio::test]
+async fn native_relative_source_names_do_not_alias_across_working_directories() {
+    let directory = tempfile::tempdir().unwrap();
+    let a = directory.path().join("a");
+    let b = directory.path().join("b");
+    std::fs::create_dir_all(&a).unwrap();
+    std::fs::create_dir_all(&b).unwrap();
+    std::fs::write(a.join("drawing.rsk"), b"first").unwrap();
+    std::fs::write(b.join("drawing.rsk"), b"second").unwrap();
+    let first = source_identity_in(Path::new("drawing.rsk"), &a).unwrap();
+    let second = source_identity_in(Path::new("drawing.rsk"), &b).unwrap();
+    assert_ne!(first, second);
+    assert!(first.is_absolute() && second.is_absolute());
+    let mut app = labelled_app();
+    app.tab.path = Some(first.clone());
+    let export = prepared(&app, "pdf", false).await;
+    let _ = app.update(export.completed(Ok(Some(a.join("custom.pdf")))));
+    app.recent_export.as_mut().unwrap().recipe.origin = None;
+    assert!(app.repeat_export().is_some());
+    app.tab.path = Some(second);
+    assert!(app.repeat_export().is_none());
+
+    // Loading an old relative source cannot resolve its historical directory.
+    app.recent_export.as_mut().unwrap().recipe.source = Some("drawing.rsk".into());
+    let record = directory.path().join("recent.json");
+    app.recent_export
+        .as_ref()
+        .unwrap()
+        .save_to(&record)
+        .unwrap();
+    let loaded = Recent::load_from(&record).unwrap();
+    assert!(loaded.recipe.source.is_none());
+    assert_eq!(
+        loaded.path,
+        a.join("custom.pdf"),
+        "The remembered folder remains usable"
+    );
+    app.recent_export = Some(loaded);
+    app.tab.path = Some("drawing.rsk".into());
+    assert!(app.repeat_export().is_none());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[tokio::test]
+async fn naming_or_renaming_the_same_drawing_keeps_its_repeat_target_after_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut app = labelled_app();
+    let destination = directory.path().join("figure.svg");
+    let export = prepared(&app, "svg", false).await;
+    let _ = app.update(export.completed(Ok(Some(destination.clone()))));
+    for name in ["first.rsk", "renamed.rsk"] {
+        // The normal save completion, including the first name of an untitled
+        // drawing, must move only its source binding and keep the export file.
+        let source = directory.path().join(name);
+        std::fs::write(&source, app.tab.doc.file_json().unwrap()).unwrap();
+        let snapshot = app.tab.doc.clone();
+        let _ = app.update(Message::Saved(
+            app.tab.file_epoch,
+            Box::new(snapshot),
+            Ok(Some(source)),
+        ));
+        let record = directory.path().join("recent.json");
+        app.recent_export
+            .as_ref()
+            .unwrap()
+            .save_to(&record)
+            .unwrap();
+        app.recent_export = Recent::load_from(&record);
+        assert!(
+            app.repeat_export().is_some(),
+            "Naming {name} retains restart identity"
+        );
+        assert_eq!(app.repeat_export().unwrap().path, destination);
+    }
+    // A save for a different front drawing cannot rebind the remembered file.
+    app.add_tab();
+    let source_before = app.recent_export.as_ref().unwrap().recipe.source.clone();
+    let _ = app.update(Message::Saved(
+        app.tab.file_epoch,
+        Box::new(app.tab.doc.clone()),
+        Ok(Some(directory.path().join("other.rsk"))),
+    ));
+    assert_eq!(
+        app.recent_export.as_ref().unwrap().recipe.source,
+        source_before
+    );
+    assert!(app.repeat_export().is_none());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[tokio::test]
+async fn saving_while_picture_preparation_is_pending_keeps_the_completed_source_binding() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut app = labelled_app();
+    let export = prepared(&app, "svg", false).await;
+    let source = directory.path().join("named-during-export.rsk");
+    std::fs::write(&source, app.tab.doc.file_json().unwrap()).unwrap();
+    let snapshot = app.tab.doc.clone();
+    let _ = app.update(Message::Saved(
+        app.tab.file_epoch,
+        Box::new(snapshot),
+        Ok(Some(source)),
+    ));
+    let _ = app.update(export.completed(Ok(Some(directory.path().join("figure.svg")))));
+    let record = directory.path().join("recent.json");
+    app.recent_export
+        .as_ref()
+        .unwrap()
+        .save_to(&record)
+        .unwrap();
+    app.recent_export = Recent::load_from(&record);
+    assert!(app.repeat_export().is_some());
 }

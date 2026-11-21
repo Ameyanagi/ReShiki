@@ -851,6 +851,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::KeepFormat
             | Message::Close(_)
             | Message::Export(_)
+            | Message::ExportAgain
             | Message::ExportFigure(..)
             | Message::Copy(_)
             | Message::CopyImage

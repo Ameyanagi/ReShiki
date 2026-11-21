@@ -562,8 +562,16 @@ impl App {
                     result,
                     ..
                 } => export_result(*result, format),
-                Message::FigureExported(_)
-                | Message::ExportReady(super::figure_export::Prepared {
+                Message::FigureExported(result) => {
+                    self.figure_exporting = false;
+                    if let Ok(Some(saved)) = result
+                        && let Some(recent) = saved.recent
+                    {
+                        let _ = self.remember_export(recent);
+                    }
+                    Task::none()
+                }
+                Message::ExportReady(super::figure_export::Prepared {
                     kind: super::figure_export::Kind::Figure,
                     ..
                 }) => {
