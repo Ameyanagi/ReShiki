@@ -10,4 +10,6 @@ issues: []
   stay loose until dragged onto a cycle.
 - Splitting a bowed or paired shaped-cycle arrow keeps its displayed curve
   between structures. Layout edits that move other intermediates show the
-  complete result for review before Apply.
+  complete result for review before Apply. Tilting a fitted cycle keeps its
+  saved arrow paths through a half turn and declines projections that cannot
+  keep every child arrow drawable.

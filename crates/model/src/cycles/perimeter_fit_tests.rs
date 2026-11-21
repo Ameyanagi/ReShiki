@@ -879,6 +879,102 @@ fn whole_selected_thirteen_degree_rotation_preserves_capture_and_reflection_maps
 }
 
 #[test]
+fn whole_selected_projection_tilt_maps_fitted_sources_before_reconciliation() {
+    use crate::projection;
+    let (_, before, _, id) = applied();
+    let ids = before.all_ids();
+    let captured = graphic(&before, id)
+        .cycle
+        .as_ref()
+        .unwrap()
+        .split_runs
+        .clone();
+    for around_x in [true, false] {
+        let mut doc = before.clone();
+        projection::tilt(&mut doc, &ids, 180., around_x);
+        assert_ne!(doc, before, "a half turn must actually run");
+        let mut expected = captured.clone();
+        for run in &mut expected {
+            let start = (-run.source_start).rem_euclid(1.);
+            run.source_start = if start >= 1. || start == 0. {
+                0.
+            } else {
+                start
+            };
+            run.source_span = -run.source_span;
+        }
+        assert_eq!(
+            graphic(&doc, id).cycle.as_ref().unwrap().split_runs,
+            expected,
+            "tilt reflects the saved source once, like a planar flip"
+        );
+        assert!(valid(&doc, id));
+        doc.validate().unwrap();
+        let tilted = doc.clone();
+        cycles::reconcile(&mut doc);
+        assert_eq!(
+            doc, tilted,
+            "ordinary reconciliation must not retire the raw fitted family or move its cut"
+        );
+        assert_eq!(
+            Document::from_native_file(&doc.file_json().unwrap()).unwrap(),
+            doc
+        );
+    }
+}
+
+#[test]
+fn fitted_projection_tilt_keeps_valid_families_on_both_sides_of_edge_on() {
+    let (_, before, _, id) = applied();
+    let ids = before.all_ids();
+    let captured = graphic(&before, id)
+        .cycle
+        .as_ref()
+        .unwrap()
+        .split_runs
+        .clone();
+    for around_x in [true, false] {
+        for degrees in [15., 89.99, 90., 90.01, 120.] {
+            let mut doc = before.clone();
+            crate::projection::tilt(&mut doc, &ids, degrees, around_x);
+            let runs = &graphic(&doc, id).cycle.as_ref().unwrap().split_runs;
+            assert_eq!(runs.len(), captured.len(), "{around_x}, {degrees}");
+            assert_eq!(
+                runs.iter().map(|r| &r.cuts).collect::<Vec<_>>(),
+                captured.iter().map(|r| &r.cuts).collect::<Vec<_>>(),
+                "a whole tilt rebases or declines without retiring or sliding a cut"
+            );
+            assert!(valid(&doc, id), "{around_x}, {degrees}");
+            doc.validate().unwrap();
+        }
+    }
+}
+
+#[test]
+fn fitted_projection_tilt_that_collapses_its_host_rolls_back_the_complete_document() {
+    let (mut doc, _, id) = straight_split();
+    let ids = [id];
+    let center = crate::editing::center(&doc, &ids);
+    let cos = 90_f32.to_radians().cos();
+    let g = doc.graphics.iter_mut().find(|g| g.id == id).unwrap();
+    // This retained Z slope makes the X quarter turn exactly edge-on,
+    // including the f32 approximation of cos(90°).
+    g.depth = [
+        (g.origin.y - center.y) * cos,
+        g.axis_x.y * cos,
+        g.axis_y.y * cos,
+    ];
+    doc.validate().unwrap();
+    let before = doc.clone();
+    crate::projection::tilt(&mut doc, &ids, 90., true);
+    assert_eq!(
+        doc, before,
+        "no partial frame, depth or source edit survives"
+    );
+    assert!(valid(&doc, id));
+}
+
+#[test]
 fn computed_label_lifecycle_keeps_frozen_source_and_nominal_children_valid() {
     use crate::atom_labels::{Number, Owner, clear_computed, refresh::Refresh};
 

@@ -49,6 +49,147 @@ fn field(app: &mut App, field: Field, value: &str) {
 }
 
 #[test]
+fn fitted_numeric_and_drag_tilt_keep_the_raw_family_through_a_half_turn() {
+    use super::super::numeric_transforms::{Action as NumericAction, Field as NumericField};
+    use crate::canvas::{Edit, Tool, tilt};
+    for around_x in [true, false] {
+        for numeric in [true, false] {
+            let (mut app, id) = fitted_cycle();
+            app.tab.selected = app.tab.doc.all_ids();
+            if !numeric {
+                let _ = app.update(Message::Tool(Tool::Tilt));
+            }
+            app.sync_numeric_transforms();
+            let before = app.tab.doc.clone();
+            let ids = app.tab.selected.clone();
+            let mut preview = before.clone();
+            let (x, y) = if around_x { (180., 0.) } else { (0., 180.) };
+            tilt::apply(&mut preview, &ids, x, y);
+            assert_ne!(preview, before, "the requested half turn must run");
+            preview.validate().unwrap();
+            let captured = before.graphics[0]
+                .cycle
+                .as_ref()
+                .unwrap()
+                .split_runs
+                .clone();
+            let raw = preview.graphics[0]
+                .cycle
+                .as_ref()
+                .unwrap()
+                .split_runs
+                .clone();
+            assert_eq!(raw.len(), captured.len());
+            for (old, new) in captured.iter().zip(&raw) {
+                assert_eq!(new.source_span, -old.source_span);
+                assert_eq!(new.cuts, old.cuts);
+            }
+            reconcile_preview(&mut preview, &before, app.appearance.two_decimal_weight).unwrap();
+            assert_eq!(
+                preview.graphics[0].cycle.as_ref().unwrap().split_runs,
+                raw,
+                "the raw candidate is already fitted; reconciliation must not retire it"
+            );
+            let frames = app.tab.history.undo_frames().len();
+            if numeric {
+                let field = if around_x {
+                    NumericField::TiltX
+                } else {
+                    NumericField::TiltY
+                };
+                let _ = app.update(Message::NumericTransform(NumericAction::Input(
+                    field,
+                    "180".into(),
+                )));
+                let _ = app.update(Message::NumericTransform(NumericAction::Apply(field)));
+            } else {
+                let _ = app.update(Message::Canvas(Edit::Tilt { ids, x, y }));
+            }
+            assert!(!app.error, "{numeric}, {around_x}: {}", app.status);
+            assert_eq!(
+                app.tab.doc, preview,
+                "numeric and drag commit the fitted candidate"
+            );
+            assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+            let g = app.tab.doc.graphics.iter().find(|g| g.id == id).unwrap();
+            let drawn = cycles::drawn(&app.tab.doc, g);
+            let c = g.cycle.as_ref().unwrap();
+            for run in &c.split_runs {
+                for child in 0..=run.cuts.len() {
+                    let step = (run.first_step + child) % c.steps.len();
+                    assert!(
+                        drawn.arcs.contains(&Some(step)),
+                        "every fitted child stays visible"
+                    );
+                }
+            }
+            assert_eq!(
+                Document::from_native_file(&preview.file_json().unwrap()).unwrap(),
+                preview
+            );
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc, preview);
+        }
+    }
+}
+
+#[test]
+fn fitted_numeric_and_drag_edge_on_tilt_decline_without_retiring_sources_or_history() {
+    use super::super::numeric_transforms::{Action as NumericAction, Field as NumericField};
+    use crate::canvas::{Edit, Tool, tilt};
+    for numeric in [true, false] {
+        let (mut app, id) = fitted_cycle();
+        if !numeric {
+            let _ = app.update(Message::Tool(Tool::Tilt));
+        }
+        let center = reshiki::editing::center(&app.tab.doc, &[id]);
+        let cos = 90_f32.to_radians().cos();
+        let g = app
+            .tab
+            .doc
+            .graphics
+            .iter_mut()
+            .find(|g| g.id == id)
+            .unwrap();
+        g.depth = [
+            (g.origin.y - center.y) * cos,
+            g.axis_x.y * cos,
+            g.axis_y.y * cos,
+        ];
+        app.tab.doc.validate().unwrap();
+        app.sync_numeric_transforms();
+        let before = app.tab.doc.clone();
+        let mut preview = before.clone();
+        tilt::apply(&mut preview, &[id], 90., 0.);
+        assert_eq!(
+            preview, before,
+            "the complete edge-on candidate is declined"
+        );
+        if numeric {
+            let _ = app.update(Message::NumericTransform(NumericAction::Input(
+                NumericField::TiltX,
+                "90".into(),
+            )));
+            let _ = app.update(Message::NumericTransform(NumericAction::Apply(
+                NumericField::TiltX,
+            )));
+        } else {
+            let _ = app.update(Message::Canvas(Edit::Tilt {
+                ids: vec![id],
+                x: 90.,
+                y: 0.,
+            }));
+        }
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        app.tab.doc.validate().unwrap();
+    }
+}
+
+#[test]
 fn a_width_edit_with_a_fitted_cut_reviews_and_applies_the_exact_snapshot_once() {
     let (mut app, _) = fitted_cycle();
     let before = app.tab.doc.clone();
