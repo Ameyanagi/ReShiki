@@ -920,6 +920,85 @@ fn shape_style_changes_are_typed_transactional_and_keep_geometry() {
 }
 
 #[test]
+fn filled_style_eligibility_uses_nonzero_paint_instead_of_signed_area() {
+    let (doc, body, _) = vessel();
+    let source = Draft::from_selection(&doc, &[body]).unwrap();
+    let style = ShapeStyle {
+        layer: Layer::Front,
+        material: Material::Metal,
+        role: Role::Solid,
+    };
+    for (path, painted) in [
+        ("M0 0H10V10H0Z", true),
+        ("M0 0L10 10L0 10L10 0Z", true), // bowtie: signed area is zero
+        ("M0 0L10 0L0 10L10 10Z", true), // opposite winding
+        ("M0 0L10 0L20 0Z", false),
+        ("M0 0H10V10H0V0V10H10V0Z", false),     // retraced contour
+        ("M0 0H10V10H0Z M0 0V10H10V0Z", false), // opposite duplicates cancel
+        ("M0 0H10V10H0Z M0 0H10V10H0Z", true),  // same winding stays filled
+        ("M0 0H10V10H0Z M20 0V10H30V0Z", true), // disjoint, zero signed sum
+        ("M0 0H10V10H0Z M2 2V8H8V2Z", true),    // a hole leaves a painted rim
+        ("M0 0H10V10H0Z M20 0L30 0Z", true),    // a closed degenerate contour
+        ("M0 0L10 10L0 10L10 0", false),
+        ("M0 0H10V10H0Z M20 0L30 0", false), // preserve open-path filtering
+    ] {
+        let mut draft = source.clone();
+        draft.definition.shapes[0].path = path.into();
+        let before = draft.clone();
+        let shape = &draft.definition.shapes[0];
+        assert_eq!(closed_shape(shape).unwrap(), painted, "{path}");
+        let id = shape.id.clone();
+        let result = draft.set_shape_style(&id, style);
+        if painted {
+            result.unwrap();
+            let mut expected = before.definition.shapes[0].clone();
+            expected.layer = style.layer;
+            expected.material = style.material;
+            expected.role = style.role;
+            assert_eq!(draft.definition.shapes[0], expected, "{path}");
+        } else {
+            assert!(result.unwrap_err().contains("closed outline"), "{path}");
+            assert_eq!(draft, before, "rejected edits are transactional: {path}");
+        }
+    }
+}
+
+#[test]
+fn filled_compound_outlines_keep_the_existing_path_budget() {
+    let (doc, body, _) = vessel();
+    let mut draft = Draft::from_selection(&doc, &[body]).unwrap();
+    let shape = &mut draft.definition.shapes[0];
+    // Retraced curves add no ink. The rectangle and its hole still fill a rim,
+    // even when flattening a legal command count produces more sampled points.
+    shape.path = format!(
+        "M0 0{}H10V10H0Z M2 2V8H8V2Z",
+        "C0 1 1 1 1 0C1 1 0 1 0 0".repeat(2000)
+    );
+    let segs = geom::parse_path(&shape.path).unwrap();
+    assert!(segs.len() < validate::MAX_PATH_COMMANDS);
+    assert!(
+        geom::flatten(&segs)
+            .iter()
+            .map(|(points, _)| points.len())
+            .sum::<usize>()
+            > validate::MAX_PATH_COMMANDS
+    );
+    assert!(closed_shape(shape).unwrap());
+    let id = shape.id.clone();
+    validate::validate(&draft.definition).unwrap();
+    draft
+        .set_shape_style(
+            &id,
+            ShapeStyle {
+                layer: Layer::Front,
+                material: Material::Glass,
+                role: Role::Glass,
+            },
+        )
+        .unwrap();
+}
+
+#[test]
 fn shape_picking_follows_paint_order_and_never_fills_an_open_stroke() {
     let (mut doc, body, _) = vessel();
     let overlapping = rectangle(&mut doc, Point::new(-5., 10.), Point::new(5., 30.), true);
