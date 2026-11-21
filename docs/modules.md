@@ -57,6 +57,7 @@ explains how the crates and modules fit together.
 - `src/app/color_popover.rs`: Style bar menus
 - `src/app/command_palette.rs`: The command palette
 - `src/app/command_palette/catalog.rs`: The palette's commands
+- `src/app/command_palette/focus.rs`: F6 moves between the palette search and its live action buttons.
 - `src/app/compound_numbers.rs`: Compound numbering uses the normal caption transaction and text editor.
 - `src/app/context_menu.rs`: Commands for the object under a secondary click, or the current selection.
 - `src/app/context_menu/cascade.rs`: Cascading context panels share one event boundary and use laid-out rows as anchors.
@@ -88,7 +89,7 @@ explains how the crates and modules fit together.
 - `src/app/graphics/heads.rs`
 - `src/app/graphics/path.rs`: Contextual pen authoring and node edits.
 - `src/app/graphics/path_cleanup.rs`: Selection-wide path commands share one document transaction with curved arrows.
-- `src/app/help.rs`: Help
+- `src/app/help.rs`: The Keys filter
 - `src/app/help/examples.rs`: Before/after drawings for Help, made by running the shortcut's own edit on a small fixture, so the preview cannot drift from the behavior.
 - `src/app/help/registry.rs`: The one list of shortcuts that Help searches and shows.
 - `src/app/help/search.rs`: Fuzzy ranking over the shortcut registry and the command palette.
