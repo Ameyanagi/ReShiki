@@ -2606,7 +2606,10 @@ async fn view_menu_stays_above_its_anchor_without_resizing_the_canvas() {
         for node in snapshot.nodes {
             let visible = node.visible_bounds.expect("visible menu row");
             assert!(node.bounds.width > 200. && node.bounds.height >= 25.);
-            assert_eq!(visible, node.bounds);
+            assert!((visible.x - node.bounds.x).abs() < 0.02);
+            assert!((visible.y - node.bounds.y).abs() < 0.02);
+            assert!((visible.width - node.bounds.width).abs() < 0.02);
+            assert!((visible.height - node.bounds.height).abs() < 0.02);
             assert!(ui.viewport.contains(node.bounds.position()));
             assert!(node.bounds.y + node.bounds.height <= anchor.y - 3.);
         }

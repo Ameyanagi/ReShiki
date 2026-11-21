@@ -56,6 +56,11 @@ fn view_menu_escape_owns_dismissal_and_foreground_commands_close_it() {
     let mut app = ready();
     app.tool = crate::canvas::Tool::Text;
     let _ = app.update(Message::View(Action::Toggle));
+    let refresh = app.property_request_key();
+    let _ = app.update(Message::InspectorAction(
+        super::super::inspector::Action::RefreshPropertiesFor(refresh),
+    ));
+    assert!(app.view_open);
     for message in [
         Message::Tick,
         Message::Viewport(iced::Size::new(800., 600.)),
