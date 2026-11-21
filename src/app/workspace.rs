@@ -3344,7 +3344,7 @@ fn segment_portion(label: &str) -> u16 {
 }
 const TOOL_BUTTON_WIDTH: f32 = 32.;
 /// Leave room for the atom rows below the drawing tools at the default height.
-const TOOL_BUTTON_HEIGHT: f32 = 29.;
+const TOOL_BUTTON_HEIGHT: f32 = 28.;
 const TOOL_GAP: f32 = 1.;
 /// The scrolled tools and atoms fade out this far above the Help button.
 const PALETTE_FADE: f32 = 16.;
