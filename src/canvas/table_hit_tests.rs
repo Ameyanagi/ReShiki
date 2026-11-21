@@ -91,6 +91,45 @@ fn cell_clipping_is_shared_by_pointer_selection_atom_snapping_and_bond_hits() {
 }
 
 #[test]
+fn mechanism_target_picking_respects_the_same_cell_clip_for_atoms_marks_and_bonds() {
+    use reshiki::arrow_anchors::{self, Pick};
+    let (mut doc, visible, hidden, _) = drawing();
+    doc.atom_mut(hidden).unwrap().element = "O".into();
+    reshiki::scientific::attach(
+        doc.atom_mut(visible).unwrap(),
+        reshiki::scientific::SymbolKind::LonePair,
+        World::new(80., 0.),
+    )
+    .unwrap();
+    doc.validate().unwrap();
+    let before = doc.clone();
+    let paint = std::rc::Rc::new(reshiki::rear_opacity::Paint::new(&doc));
+    for p in [
+        doc.atom(hidden).unwrap().position,
+        World::new(120., 185.),
+        World::new(110., 185.),
+    ] {
+        assert_eq!(arrow_anchors::pick(&doc, p, 2.), None);
+        assert_eq!(
+            arrow_anchors::pick_with_paint(&doc, p, 2., paint.clone()),
+            None
+        );
+    }
+    assert_eq!(
+        arrow_anchors::pick(&doc, doc.atom(visible).unwrap().position, 2.),
+        Some(Pick::Atom(visible))
+    );
+    assert!(matches!(
+        arrow_anchors::pick(&doc, World::new(70., 185.), 2.),
+        Some(Pick::Bond { a, b, .. }) if a == visible && b == hidden
+    ));
+    assert_eq!(
+        doc, before,
+        "picking keeps the clipped chemistry and mark intact"
+    );
+}
+
+#[test]
 fn wrapped_lower_caption_lines_use_the_painted_layout_for_selection_and_bond_targeting() {
     let (doc, _, _, text) = drawing();
     let original = doc.annotations.iter().find(|a| a.id == text).unwrap();

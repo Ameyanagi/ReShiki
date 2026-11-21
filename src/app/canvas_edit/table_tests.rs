@@ -129,6 +129,113 @@ fn dragging_between_existing_different_cell_atoms_rolls_back_without_an_undo_ste
 }
 
 #[test]
+fn two_click_mechanism_arrows_in_cells_keep_targets_and_one_undo_step() {
+    use reshiki::arrow_anchors::Pick;
+    for kind in 0..3 {
+        let (mut app, a, cell) = app();
+        app.tab.camera.zoom = 2.5;
+        let b = app.tab.doc.add_atom("C", Point::new(120., 60.));
+        let c = app.tab.doc.add_atom("N", Point::new(110., 140.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.doc.graphics[0].table.as_mut().unwrap().cells[0]
+            .members
+            .extend([b, c]);
+        reshiki::scientific::attach(
+            app.tab.doc.atom_mut(a).unwrap(),
+            reshiki::scientific::SymbolKind::LonePair,
+            Point::new(0., -25.),
+        )
+        .unwrap();
+        app.tab.doc.atom_mut(a).unwrap().marks[0].id = None;
+        app.tab.doc.atom_mut(a).unwrap().mark_serial = 0;
+        let _ = app.update(Message::ArrowStyle(reshiki::arrows::Preset::Curved));
+        assert!(app.arrow_attach_mode());
+        let before = app.tab.doc.clone();
+        let source = match kind {
+            0 => Point::new(60., 60.),
+            1 => Point::new(90., 60.),
+            _ => Point::new(60., 35.),
+        };
+        let frames = app.tab.history.undo_frames().len();
+        let _ = app.update(Message::Canvas(Edit::ArrowTarget(source, false)));
+        assert!(!app.error, "{}", app.status);
+        assert!(matches!(
+            (kind, app.tab.arrows.source()),
+            (0, Some(Pick::Atom(_)))
+                | (1, Some(Pick::Bond { .. }))
+                | (2, Some(Pick::LonePair { .. }))
+        ));
+        assert_eq!(app.tab.doc, before, "the first click is UI state only");
+        assert_eq!(app.tab.history.undo_frames().len(), frames);
+        let _ = app.update(Message::Canvas(Edit::ArrowTarget(
+            Point::new(110., 140.),
+            false,
+        )));
+        assert!(!app.error, "kind {kind}: {}", app.status);
+        assert!(app.tab.arrows.source().is_none());
+        let arrow = &app.tab.doc.arrows[0];
+        assert!(arrow.start_anchor.is_some() && arrow.end_anchor.is_some());
+        assert_eq!(app.tab.selected, [arrow.id]);
+        assert_eq!(
+            Membership::new(&app.tab.doc).unwrap().cell_of(arrow.id),
+            Some(cell)
+        );
+        app.tab.doc.validate().unwrap();
+        assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+        let after = app.tab.doc.clone();
+        assert_eq!(
+            Document::from_native_file(&after.file_json().unwrap()).unwrap(),
+            after
+        );
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+    }
+}
+
+#[test]
+fn two_click_mechanism_arrows_across_cells_are_atomic_and_leave_no_history() {
+    for other_cell in [false, true] {
+        let (mut app, a, _) = app();
+        app.tab.camera.zoom = 2.5;
+        let b = app.tab.doc.add_atom("O", Point::new(240., 60.));
+        if other_cell {
+            app.tab.doc.graphics[0].table.as_mut().unwrap().cells[1]
+                .members
+                .push(b);
+        }
+        reshiki::scientific::attach(
+            app.tab.doc.atom_mut(a).unwrap(),
+            reshiki::scientific::SymbolKind::LonePair,
+            Point::new(0., -25.),
+        )
+        .unwrap();
+        app.tab.doc.atom_mut(a).unwrap().marks[0].id = None;
+        app.tab.doc.atom_mut(a).unwrap().mark_serial = 0;
+        let _ = app.update(Message::ArrowStyle(reshiki::arrows::Preset::Curved));
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Canvas(Edit::ArrowTarget(
+            Point::new(60., 35.),
+            false,
+        )));
+        assert!(!app.error, "{}", app.status);
+        let _ = app.update(Message::Canvas(Edit::ArrowTarget(
+            Point::new(240., 60.),
+            false,
+        )));
+        assert!(app.error);
+        assert!(app.status.contains("same table cell"), "{}", app.status);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        assert!(app.tab.arrows.source().is_some());
+        let _ = app.update(Message::Escape);
+        assert!(app.tab.arrows.source().is_none());
+        assert_eq!(app.tab.doc, before);
+    }
+}
+
+#[test]
 fn first_linked_formula_caption_on_imported_cell_molecule_has_one_undo() {
     let (mut app, atom, target) = app();
     let before = app.tab.doc.clone();

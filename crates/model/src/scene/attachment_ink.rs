@@ -7,6 +7,7 @@ use std::{cell::OnceCell, rc::Rc};
 pub(crate) struct AttachmentInk<'a> {
     doc: &'a Document,
     drawn: crate::abbreviations::Drawn<'a>,
+    cells: super::table::Layout,
     active: bool,
     opacity: OnceCell<Rc<crate::rear_opacity::Paint>>,
     bonds: OnceCell<Vec<Vec<Primitive>>>,
@@ -17,6 +18,7 @@ impl<'a> AttachmentInk<'a> {
         Self {
             doc,
             drawn: doc.abbreviation_render_copy(),
+            cells: super::table::Layout::new(doc),
             active: crate::rear_opacity::present(doc),
             opacity: OnceCell::new(),
             bonds: OnceCell::new(),
@@ -31,6 +33,9 @@ impl<'a> AttachmentInk<'a> {
     }
     pub(crate) fn drawn(&self) -> &Document {
         &self.drawn
+    }
+    pub(crate) fn cell_contains(&self, id: u64, p: Point) -> bool {
+        self.cells.contains(id, p)
     }
     fn opacity(&self) -> Option<&crate::rear_opacity::Paint> {
         self.active.then(|| {
@@ -84,7 +89,7 @@ impl<'a> AttachmentInk<'a> {
             .atoms
             .iter()
             .rev()
-            .filter(|a| self.doc.atom_drawn(a.id))
+            .filter(|a| self.doc.atom_drawn(a.id) && self.cells.contains(a.id, p))
             .find_map(|a| {
                 (label_ink_boxes(&atom_label_shown(a, &self.drawn, &isotopes, || {
                     visible(a, &self.drawn)
@@ -103,7 +108,12 @@ impl<'a> AttachmentInk<'a> {
         self.doc
             .atoms
             .iter()
-            .filter(|a| a.position.distance(p) < radius && self.vertex(a))
+            .filter(|a| {
+                a.position.distance(p) < radius
+                    && self.cells.contains(a.id, p)
+                    && self.cells.contains(a.id, a.position)
+                    && self.vertex(a)
+            })
             .min_by(|a, b| a.position.distance(p).total_cmp(&b.position.distance(p)))
             .map(|a| a.id)
             .or_else(|| {
