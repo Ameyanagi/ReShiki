@@ -361,8 +361,8 @@ Equipment** shows its name and size. Equipment is always an illustration: it
 is never part of a reaction.
 
 Pieces are drawn in line style at 0.4 pt per mm with 0.6 pt outlines,
-whatever their size: white glass, hatched ground-glass joints and an open
-socket mouth. Flasks start empty.
+whatever their size: white glass, hatched ground-glass joints and a straight
+mouth in side view when the socket is empty. Flasks start empty.
 
 ### Connect equipment by its joints
 
@@ -480,6 +480,43 @@ line names the released piece, for example **Tilt: 25° · releases the tube**.
 
 A hose seated on a piece moves with its assembly. Placing a hose or dragging
 a handle is one Undo step.
+
+### Define equipment from a drawing
+
+1. Draw the piece with shapes, pen paths or curves, then select its shapes or
+   their group. Put all selected shapes on the same drawing layer.
+2. Choose **Define as equipment piece…** in Properties, the context menu or
+   the command palette. The side panel opens an equipment draft.
+3. Click two points whose distance you know. Enter that distance in **mm**
+   and choose **Preview**. The canvas shows the piece at its original position.
+4. Enter a **Name**. Choose **Measure again** to change the calibration.
+5. Choose **Accept** to replace the selected shapes with one equipment piece
+   in this drawing. **Discard** or Escape keeps the original shapes.
+
+**Undo** and **Redo** in the draft panel affect only the draft. After
+**Accept**, one drawing Undo restores all original shapes and links. The
+piece's definition travels with the `.rsk` file. To keep it for other drawings,
+use **Add to My pieces** after accepting it.
+
+To add a ground-glass joint, choose **Add joint…**, choose **Socket** or
+**Cone** and a standard size, then click both rim edges. Review the generated
+joint and its outward arrow, use **Flip** if needed, then choose **Add joint**.
+The first joint can set the piece's scale without a separate length
+measurement; later joints must fit the established scale. A standard joint
+must meet a compatible filled glass neck.
+
+Authoring makes fixed pieces with optional standard ground-glass joints.
+It does not yet assign materials or paint layers, create holds, liquids or
+moving parts, or edit an existing definition. Pictures, text and chemical objects
+cannot become equipment shapes. Filled artwork becomes glass. Visible
+outlines must use **Ink** at **0.6 pt**. Open artwork keeps **0.6 pt**
+outlines or **0.4 pt** details. Change unsupported stroke colors or widths in
+Properties before defining the piece; conversion refuses them. General
+stroke styling belongs to the later material and layer editor.
+Filled SVG artwork can enter without a separate stroke. Complex or
+overlapping filled paths may need simplifying or separating first.
+Other drawing commands wait for **Accept** or
+**Discard**.
 
 ### Keep and share equipment pieces
 
@@ -800,6 +837,12 @@ CDXML does not keep ReShiki's parametric shape type. External saves may split
 grouped bracket strokes, change stacking values and quantize colors/coordinates.
 A subsequent import keeps the supported visible paths but may have a different
 number of graphic objects. `.rsk` files keep ReShiki's exact model.
+
+Opaque compound paths keep their holes and overlapping fill regions in
+CDXML/CDX. They travel as one filled curve with separate original outlines,
+so a hole shows the artwork behind it. A filled curve with an explicit zero
+line width opens without an outline. Faded and shaded compound paths retain
+their existing separate-fill export; holes in those styles remain a limit.
 
 `.rsk`/SVG/PDF/PNG keep dots. SVG/PDF/EMF/PNG draw path arrowheads, and
 CDXML/CDX keep their editable head settings on open curves.

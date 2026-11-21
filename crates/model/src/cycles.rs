@@ -820,6 +820,78 @@ fn wrapped(name: &str, format: &TextFormat, width: f32) -> String {
 
 /// Whether `p` lies on what the cycle draws.
 pub fn hit(doc: &Document, g: &Graphic, p: Point, r: f32) -> bool {
+    if !HitLayout::may_hit(doc, g, p) {
+        return false;
+    }
+    let drawn = drawn(doc, g);
+    (!outside_hit_circle(hit_circle(doc, g), p) && drawn.arrows.iter().any(|a| a.hit(p, r)))
+        || drawn
+            .labels
+            .iter()
+            .any(|(at, text, format)| contains(grown(hit_label_bounds(*at, text, format), r), p))
+}
+
+/// Resolved cycle ink for repeated pointer queries against one drawing snapshot.
+/// Rebuild after any document change: even another object's bounds can displace
+/// a cycle name. Keeping this outside the document also keeps previews read-only.
+pub struct HitLayout {
+    circle: Option<(Point, f32)>,
+    named: bool,
+    arrows: Vec<Arrow>,
+    labels: Vec<(Point, Point)>,
+}
+
+impl HitLayout {
+    /// Unlabeled circles reject distant queries without resolving their paint.
+    /// Named cycles must check their actual label boxes, which can escape the
+    /// circle's arrow bound. This deliberately does not add pointer padding.
+    pub fn may_hit(doc: &Document, g: &Graphic, p: Point) -> bool {
+        !outside_hit_circle(hit_circle(doc, g), p) || hit_has_names(g)
+    }
+
+    pub fn new(doc: &Document, g: &Graphic) -> Self {
+        let drawn = drawn(doc, g);
+        Self {
+            circle: hit_circle(doc, g),
+            named: hit_has_names(g),
+            arrows: drawn.arrows,
+            labels: drawn
+                .labels
+                .into_iter()
+                .map(|(at, text, format)| hit_label_bounds(at, &text, &format))
+                .collect(),
+        }
+    }
+
+    pub fn hit(&self, p: Point, r: f32) -> bool {
+        let outside = outside_hit_circle(self.circle, p);
+        if outside && !self.named {
+            return false;
+        }
+        (!outside && self.arrows.iter().any(|a| a.hit(p, r)))
+            || self
+                .labels
+                .iter()
+                .any(|&bounds| contains(grown(bounds, r), p))
+    }
+}
+
+fn hit_has_names(g: &Graphic) -> bool {
+    g.cycle.as_ref().is_some_and(|c| {
+        !c.label.trim().is_empty() || c.steps.iter().any(|step| !step.name.trim().is_empty())
+    })
+}
+
+fn hit_label_bounds(at: Point, text: &str, format: &TextFormat) -> (Point, Point) {
+    let layout = crate::typography::layout(text, format);
+    (at, at.offset(layout.width, layout.height))
+}
+
+fn outside_hit_circle(circle: Option<(Point, f32)>, p: Point) -> bool {
+    circle.is_some_and(|(center, reach)| p.distance(center) > reach)
+}
+
+fn hit_circle(doc: &Document, g: &Graphic) -> Option<(Point, f32)> {
     let (center, radius) = g.cycle_circle();
     let bow = g
         .cycle
@@ -830,23 +902,10 @@ pub fn hit(doc: &Document, g: &Graphic, p: Point, r: f32) -> bool {
     let reach = 8. * doc.drawing_style.bond_length_world + DEFAULT.world(bow);
     // A noncircle's corner miter can exceed both its frame and mean-radius
     // bounds. Let native arrow hit testing bound the final painted shafts.
-    let outside_circle = g.cycle.as_ref().is_none_or(|c| c.shape == Shape::Circle)
-        && p.distance(center) > radius + reach;
-    // Crowded step names can escape this bound, as can a long center label.
-    // Unlabeled circles still reject distant queries without resolving paint.
-    if outside_circle
-        && g.cycle.as_ref().is_none_or(|c| {
-            c.label.trim().is_empty() && c.steps.iter().all(|step| step.name.trim().is_empty())
-        })
-    {
-        return false;
-    }
-    let drawn = drawn(doc, g);
-    (!outside_circle && drawn.arrows.iter().any(|a| a.hit(p, r)))
-        || drawn.labels.iter().any(|(at, text, format)| {
-            let layout = crate::typography::layout(text, format);
-            contains(grown((*at, at.offset(layout.width, layout.height)), r), p)
-        })
+    g.cycle
+        .as_ref()
+        .is_none_or(|c| c.shape == Shape::Circle)
+        .then_some((center, radius + reach))
 }
 
 /// The selection's molecules and texts as cycle parts, in drawing order.

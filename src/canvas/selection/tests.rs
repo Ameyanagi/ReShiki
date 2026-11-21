@@ -8,6 +8,59 @@ fn phenylalanine() -> Document {
 }
 
 #[test]
+fn rotated_empty_rectangle_handles_enclose_the_chosen_cycle_outline() {
+    use reshiki::{
+        cycles::{Cycle, Shape},
+        graphics::{Graphic, GraphicKind},
+    };
+    let mut g = Graphic::dragged(
+        1,
+        GraphicKind::Ellipse,
+        World::new(10., 20.),
+        World::new(130., 100.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    g.axis_x = World::new(120., 80.);
+    g.axis_y = World::new(-60., 90.);
+    g.cycle = Some(Box::new(Cycle {
+        shape: Shape::Rectangle,
+        ..Default::default()
+    }));
+    let pad = g.style.width() * 0.5;
+    let mut doc = Document::default();
+    doc.graphics.push(g);
+    let camera = Camera {
+        zoom: 2.,
+        ..Camera::default()
+    };
+    let bounds = Rectangle::with_size(Size::new(1000., 800.));
+    let selection = SelectionBox::new(&doc, &[1], camera, bounds).unwrap();
+    let lo = World::new(-50. - pad, 20. - pad);
+    let hi = World::new(130. + pad, 190. + pad);
+    assert_eq!(
+        selection.corners,
+        [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)]
+    );
+    assert!(selection.resizable);
+    let top_left = camera.screen(lo, bounds);
+    let bottom_right = camera.screen(hi, bounds);
+    let grips = selection.grips();
+    assert_eq!(
+        grips[0],
+        Point::new(top_left.x - FRAME_PADDING_PX, top_left.y - FRAME_PADDING_PX)
+    );
+    assert_eq!(
+        grips[2],
+        Point::new(
+            bottom_right.x + FRAME_PADDING_PX,
+            bottom_right.y + FRAME_PADDING_PX
+        )
+    );
+}
+
+#[test]
 fn rotating_display_frames_and_readouts_keep_upright_label_ink_clear() {
     let source = phenylalanine();
     let ids = source.all_ids();

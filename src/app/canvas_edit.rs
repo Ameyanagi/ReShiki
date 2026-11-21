@@ -52,6 +52,11 @@ impl App {
             self.path_click = None;
         }
         match edit {
+            Edit::EquipmentAuthoringPoint(point) => {
+                let _ = self
+                    .equipment_authoring_action(super::equipment_authoring::Action::Point(point));
+                return;
+            }
             Edit::ArrowTarget(p, bypass) => {
                 self.arrow_target_click(p, bypass);
                 return;
@@ -414,6 +419,7 @@ impl App {
             }
             Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
+            Edit::EquipmentAuthoringPoint(_) => return,
             Edit::Click(p) | Edit::RepeatLabel(p) => return self.canvas_click(p, before),
             Edit::PieceParam { id, param, value } => {
                 return self.set_piece_param(id, &param, value, before);
