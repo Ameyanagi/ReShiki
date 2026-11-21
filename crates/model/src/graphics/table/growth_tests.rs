@@ -239,7 +239,7 @@ fn typed_arrow_labels_inherit_cells_but_existing_cross_cell_text_does_not() {
             } else {
                 doc.annotations.push(caption);
             }
-            crate::transaction::reconcile(&mut doc, before).unwrap();
+            let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
             doc.validate().unwrap();
             if !existing && !other_cell {
                 assert_eq!(doc.arrow_labels[0].annotation, text);
