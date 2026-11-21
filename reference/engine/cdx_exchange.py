@@ -37,6 +37,8 @@ PROPERTIES = dict(PUBLISHED)
 # The overview predates these enumerations. Numeric values are cross-checked
 # against the public SDK constants and native clipboard fixtures.
 for code, enum in {
+    # Native ChemDraw 26 cumulenes use 12 for unknown atom stereochemistry.
+    0x437: {**PUBLISHED[0x437][2], "?": 12},
     0x602: {**PUBLISHED[0x601][2], "DottedHydrogen": 15},
     0xA2F: {"Solid": 1, "Hollow": 2, "Angle": 3},
     0xA35: {"None": 0, "Full": 2, "HalfLeft": 3, "HalfRight": 4},

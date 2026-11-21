@@ -1,0 +1,21 @@
+{
+  "authorship": "Original five-atom fixture authored for this regression; no vendor drawing copied.",
+  "sdk_creation_program": "ChemDrawSDK 26.8.0.6801",
+  "source": {
+    "file": "source.cdxml",
+    "sha256": "19589562f335d18379b89c7ca63ab9a899ca57fe9198fb6efd2431a7f9cf1106"
+  },
+  "native": {
+    "file": "native.cdx",
+    "sha256": "c1c6cba5d56627d846f8134c06912537ae55f8eb521ab628d616ebb04f47d2d7"
+  },
+  "sdk_renderer_sha256": "74c33be8cc180c2366a8b1d815e1d3aef4e08e6ce3a622122b57a78a072b9b89",
+  "unknown_atom_stereo_property": {
+    "object_id": 4,
+    "code": "0x0437",
+    "offset": 1178,
+    "length": 1,
+    "payload_hex": "0c",
+    "cdxml_value": "?"
+  }
+}

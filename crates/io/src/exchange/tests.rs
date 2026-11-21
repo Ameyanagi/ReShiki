@@ -228,6 +228,68 @@ fn shared_schema_preserves_last_property_precedence() {
     }
 }
 
+#[tokio::test]
+async fn native_unknown_atom_stereo_preserves_codec_parity_without_assignment() {
+    let bytes =
+        include_bytes!("../../../../tests/fixtures/chemdraw-unknown-atom-stereo/native.cdx");
+    let decoded = from_cdx(bytes).unwrap();
+    for xml in [
+        decoded.clone(),
+        from_cdx(&to_cdx(&decoded).unwrap()).unwrap(),
+    ] {
+        let tree = roxmltree::Document::parse(&xml).unwrap();
+        let atom = tree
+            .descendants()
+            .find(|n| n.has_tag_name("n") && n.attribute("id") == Some("4"))
+            .unwrap();
+        assert_eq!(atom.attribute("AS"), Some("?"));
+    }
+    let p = SCHEMA.codes.get(&0x0437).unwrap();
+    for (name, number) in [
+        ("U", 0),
+        ("N", 1),
+        ("R", 2),
+        ("S", 3),
+        ("r", 4),
+        ("s", 5),
+        ("u", 6),
+        ("?", 12),
+    ] {
+        assert_eq!(values::encode_number(p, name).unwrap(), [number]);
+        assert_eq!(values::decode_number(p, &[number]).unwrap(), name);
+    }
+    assert_eq!(
+        values::decode_number(p, &[9]).unwrap_err(),
+        "Unsupported binary enumeration: AS"
+    );
+    assert!(values::encode_number(p, "unknown").is_err());
+    let source =
+        include_bytes!("../../../../tests/fixtures/chemdraw-unknown-atom-stereo/source.cdxml");
+    for document in [
+        import_drawing("cdx", bytes).await,
+        import_drawing("cdxml", source).await,
+    ] {
+        document.validate().unwrap();
+        assert_eq!(document.atoms.len(), 5);
+        assert_eq!(document.bonds.len(), 4);
+        assert!(
+            document
+                .atoms
+                .iter()
+                .all(|a| a.stereo.is_none() && a.stereo_group.is_none() && a.cip_label.is_none())
+        );
+        assert!(
+            document
+                .bonds
+                .iter()
+                .all(|b| b.stereo.is_none() && b.cip_label.is_none())
+        );
+        let mut orders: Vec<_> = document.bonds.iter().map(|b| b.order).collect();
+        orders.sort_unstable();
+        assert_eq!(orders, [1, 1, 2, 2]);
+    }
+}
+
 #[test]
 fn native_numbered_connections_are_preserved_as_data() {
     for (bytes, numbers) in [
