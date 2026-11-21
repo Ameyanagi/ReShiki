@@ -2257,28 +2257,40 @@ async fn the_history_clock_follows_the_tab_track_on_github_drawings() -> Result<
         ui.operate(&renderer, &mut stops);
         (collect.snapshot().nodes.clone(), messages, stops.0)
     };
-    // The five tabs and what follows them, in focus order.
+    // The four tabs and what follows them, in focus order.
     let header = |nodes: &[Node]| -> Vec<Node> {
         let first = nodes
             .iter()
             .position(|node| node.id == "inspector-tab-Properties")
             .expect("tab track");
-        nodes[first..first + 6].to_vec()
+        nodes[first..first + 5].to_vec()
     };
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     app.inspector_open = true;
     let (nodes, _, stops) = tree(&app, None);
     let github = header(&nodes);
-    let (export, clock) = (&github[4], &github[5]);
-    assert_eq!(export.id, "inspector-tab-Export");
+    assert_eq!(
+        github[..4]
+            .iter()
+            .map(|node| node.id.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "inspector-tab-Properties",
+            "inspector-tab-Predict",
+            "inspector-tab-Templates",
+            "inspector-tab-Export"
+        ]
+    );
+    assert_eq!(github[2].name, "Add tab");
+    let (export, clock) = (&github[3], &github[4]);
     assert_eq!(clock.id, "inspector-history");
     assert_eq!(clock.name, "History");
     assert_eq!(clock.checked, Some(false));
     assert!(clock.bounds.x >= export.bounds.x + export.bounds.width + 4.);
     assert!(clock.bounds.x + clock.bounds.width <= size.width);
     assert!((clock.bounds.center_y() - export.bounds.center_y()).abs() < 1.);
-    for tab in &github[..5] {
+    for tab in &github[..4] {
         let label = tab.name.trim_end_matches(" tab");
         let width = crate::app::workspace::text_width(label, 12.);
         assert!(width + 6. <= tab.bounds.width, "{label}: {:?}", tab.bounds);
@@ -2298,7 +2310,7 @@ async fn the_history_clock_follows_the_tab_track_on_github_drawings() -> Result<
     }
     assert_eq!(app.inspector_tab, InspectorTab::Versions);
     let (nodes, ..) = tree(&app, None);
-    let clock = &header(&nodes)[5];
+    let clock = &header(&nodes)[4];
     assert_eq!(clock.id, "inspector-history");
     assert_eq!(clock.checked, Some(true));
 
@@ -2307,10 +2319,10 @@ async fn the_history_clock_follows_the_tab_track_on_github_drawings() -> Result<
     let (nodes, ..) = tree(&app, None);
     assert!(!nodes.iter().any(|node| node.id == "inspector-history"));
     let local = header(&nodes);
-    assert_ne!(local[5].id, "inspector-history");
+    assert_ne!(local[4].id, "inspector-history");
     // The track takes the clock's room.
     assert!(
-        local[4].bounds.x + local[4].bounds.width > github[4].bounds.x + github[4].bounds.width
+        local[3].bounds.x + local[3].bounds.width > github[3].bounds.x + github[3].bounds.width
     );
     Ok(())
 }

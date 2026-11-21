@@ -142,6 +142,7 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         annotations,
         molecule_names,
         property_captions,
+        compound_numbers,
         arrows,
         arrow_labels,
         graphics,
@@ -166,6 +167,7 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         && *annotations == base.annotations
         && *molecule_names == base.molecule_names
         && *property_captions == base.property_captions
+        && *compound_numbers == base.compound_numbers
         && *arrows == base.arrows
         && *arrow_labels == base.arrow_labels
         && *graphics == base.graphics

@@ -3,7 +3,7 @@
 // and also checked by tests/cli.rs and crates/python/tests/test_parity.py.
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { convert, inchi, renderSvg, smiles } from "../src/index.js";
+import { convert, inchi, predictNmr, renderSvg, smiles } from "../src/index.js";
 import "./wasm.ts";
 
 const fixture = JSON.parse(
@@ -12,6 +12,24 @@ const fixture = JSON.parse(
 const molecule = fixture.molecule.smiles as string;
 
 describe("cross-surface parity", () => {
+  for (const nucleus of ["1H", "13C"] as const) {
+    test(`${nucleus} NMR rows match the command line fixture`, async () => {
+      const prediction = await predictNmr(fixture.nmr.smiles, "smiles", nucleus);
+      expect(prediction.rows).toEqual(fixture.nmr[nucleus]);
+      expect(prediction).toEqual({
+        nucleus,
+        solvent: "CDCl3",
+        rows: fixture.nmr[nucleus],
+        method: expect.any(String),
+        data_version: expect.any(String),
+        conditions: expect.any(String),
+        limitations: expect.any(String),
+        credit: expect.stringContaining("nmrshiftdb2"),
+        data_access: expect.stringContaining("/data/nmr"),
+      });
+    });
+  }
+
   test("the molecule converts as the command line converts it", async () => {
     expect(await convert(molecule, "smiles", "smiles")).toBe(fixture.molecule.outputs.smiles);
     expect(await smiles(molecule, "smiles")).toBe(fixture.molecule.outputs.smiles);

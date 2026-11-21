@@ -851,9 +851,11 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::KeepFormat
             | Message::Close(_)
             | Message::Export(_)
+            | Message::ExportAgain
             | Message::ExportFigure(..)
             | Message::Copy(_)
             | Message::CopyImage
+            | Message::CopyForOffice
             | Message::CopyImageOn(..)
             | Message::CopyAs(_)
             | Message::CopySmiles
@@ -862,6 +864,8 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::FormatChemicalName
             | Message::ToggleProperty(..)
             | Message::ShowMasses(..)
+            | Message::NumberCompound(..)
+            | Message::RenumberCompounds
             | Message::PropertyPlaces(..)
             | Message::Paste
             | Message::PastePicture

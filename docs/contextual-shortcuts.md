@@ -4,7 +4,8 @@
 
 Open **Help** at the bottom of the tool strip, or press **F1**,
 **Cmd/Ctrl+Shift+/** (Cmd+? on macOS) or **?** away from atoms and bonds (over
-one, **?** opens its properties). Help lists every shortcut. Search by action,
+one, **?** opens its properties). These entry points open **Commands & keys**
+with the **Keys** filter selected. It lists every shortcut. Search by action,
 description or key: **wedge**, **boc**, **⇧R** and **shift r** all work, and
 synonyms such as **stereo** find their keys. **r** and **R** are different keys.
 
@@ -13,15 +14,17 @@ synonyms such as **stereo** find their keys. **r** and **R** are different keys.
 - An empty search lists shortcuts in their usual order.
 - **Cmd/Ctrl+/** stays **Fit drawing**.
 
-Each row shows the keys as the menus show them (symbols on macOS, words elsewhere), the action, a one-line description and where it applies: atom, bond, selection, empty canvas, keyboard drawing or anywhere. **Up/Down** (or Page Up/Page Down) move the selection, a click selects a row, and **Escape** closes Help. A row that is also a [command](#run-a-command), such as **Select all** or **Fit drawing**, is marked **Run ↩**: **Enter** or the **Run** button under its description runs it and closes Help. After a click on a row, typing and **Enter** still go to the search. When the command cannot run now, the reason is shown under **Run**. Other rows are reference only; selecting one never changes the drawing.
+Each row shows its action and scope, with its keycap on the right. **Up/Down** (or Page Up/Page Down) move the selection, a click selects a shortcut row, and **Escape** closes the palette. The selected row's description appears in the bottom strip. A row that is also a [command](#run-a-command), such as **Select all** or **Fit drawing**, can run with **Enter** or its **Run** button. After clicking a row, typing and **Enter** still go to the search. When the command cannot run now, the reason appears beside its description. Other rows are reference only; selecting one preserves the drawing.
 
-The preview pane labels its drawings **Example: before** and **Example: after**. They use a small fixture, separate from your drawing, and ReShiki's own drawing code applies the same edit as the key. Atom keys and most bond keys use a chain; ring-fusion keys use a benzene bond, so **a** shows benzene becoming naphthalene. The target atom or bond is highlighted in the example's before drawing.
+When an example exists, the same bottom strip shows **Before** and **After** drawings side by side. They use a small fixture, separate from your drawing, and ReShiki's own drawing code applies the same edit as the key. Atom keys and most bond keys use a chain; ring-fusion keys use a benzene bond, so **a** shows benzene becoming naphthalene. The target atom or bond is highlighted in the before drawing.
 
 ## Run a command
 
-Press **:** to open the **command palette**, also over an atom or bond; in a
-text field, **:** types a colon. Type part of a command and press **Enter** or
-click a row: unlike Help, the palette runs the command and closes. Each row
+Choose **Search…** in the header, or press **Cmd/Ctrl+K**, **Cmd/Ctrl+Shift+P**
+or **:** to open the **command palette**, also over an atom or bond. Shortcuts with Cmd/Ctrl work from text fields; **:** types a colon there. Dialogs
+keep their own keyboard input. Type part of a command and press **Enter** or
+click a command row to run it and close the palette. Search opens the **All**
+command filter; Help opens **Keys** in the same palette. Each row
 shows its category and shortcut, so the palette also teaches the keys, and the
 selected row's description appears below the list.
 
@@ -31,19 +34,19 @@ selected row's description appears below the list.
 | **Page Up** / **Page Down** | Move a screenful                        |
 | **Home** / **End**          | First or last result                    |
 | **Tab** / **Shift+Tab**     | Show only the next or previous category |
+| **F6** / **Shift+F6**       | Move between search and enabled actions |
 | **Enter**                   | Run the selected command                |
 | **Escape**                  | Close                                   |
 
-The chips under the search field (**All**, **Insert**, **Bond**…) show how
-many results each category has; click one to show only that category.
+The chips under the search field are **All · Insert · Edit · View · File · Keys**. Click a chip, or press **Tab** / **Shift+Tab** to cycle through them. The query stays when switching between commands and keys. **Insert** includes drawing tools; **Edit** includes atom, bond, selection and analysis commands. Empty categories stay available.
 
-Commands opens near the top of the window, horizontally centered, and shrinks
-to fit its results up to its maximum height. Its hint names the pointed target
-or counts the selected objects. Keyboard navigation scrolls only far enough
-to keep the highlighted row fully visible; a new query or filter returns the
-list to the top. Help keeps its centered dialog.
+Press **F6** to move from search to **Run** when available, then **About**,
+**Examples**, and back to search. **Shift+F6** moves in reverse. **Enter** or
+**Space** activates a focused button; **Esc** closes the palette from any control.
 
-The palette searches the same way as Help. Each word you type may start any word of a command's name, keywords or shortcut, in any order (**ben to** finds **Benzene tool**). A word that matches nothing more directly may be the initials of the name's words (**bt**), letters in order (**bnz**), or, in five or more letters, carry one typo (**benzne**). An exact name ranks first; stored template keywords of two or more letters, such as **Phe**, rank the same way. Then come names whose words all start with what you typed, then keyword and description matches. It lists:
+The palette is centered over the drawing, with one result list and a bottom strip for the selected description and any preview. The target hint names the pointed target or counts the selected objects. Keyboard navigation scrolls to keep the highlighted row visible; a new query or filter returns the list to the top. **About** and editable shortcut **Examples** remain available in the footer.
+
+Command and shortcut searches use the same ranking rules. Each word you type may start any word of a command's name, keywords or shortcut, in any order (**ben to** finds **Benzene tool**). A word that matches nothing more directly may be the initials of the name's words (**bt**), letters in order (**bnz**), or, in five or more letters, carry one typo (**benzne**). An exact name ranks first; stored template keywords of two or more letters, such as **Phe**, rank the same way. Then come names whose words all start with what you typed, then keyword and description matches. It lists:
 
 - **Insert**: rings (cyclopropane to cyclooctane, benzene, chairs, cyclopentadiene, Haworth rings), the template library, the import examples, every abbreviation preset (OMe, Boc, Ph, Ts, TBS…, also found by name such as **methoxy** or **tosyl**) and every element (by symbol or name, such as **bromine**).
 - **Bond** and **Atom** edits: every bond style (single, double, triple, wedges, wavy, bold, dashed, dative, hydrogen bond…), double-bond line position, bond direction and depth, charge, radicals and the contextual atom keys (extend chain, carbonyl, tert-butyl, Cp ligand…).
@@ -121,7 +124,7 @@ The sections cover common groups; elements, variables and charges; atom growth; 
 
 [View all nine example sections and the drawing gestures](changes/shortcut-help.md).
 
-The canvas fills the drawing area. Rulers reserve only their top and left gutters when enabled; the crosshair is an overlay. **View → Page setup…** is optional and is intended for printing and multipage PDF export.
+The canvas fills the drawing area. The **Sun/Moon** button in the bottom status bar switches canvas brightness; view aids stay in **View**. Rulers reserve only their top and left gutters when enabled; the crosshair is an overlay. **View → Page setup…** is optional and is intended for printing and multipage PDF export.
 
 ## How to read the keys
 

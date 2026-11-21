@@ -39,6 +39,23 @@ pub use copy_as::{
     CopyFormat, PreparedCopy, chemical_snapshot, chemical_text_snapshot, prepare_as,
     prepare_chemical_text, prepare_name, selection_or_drawing, write_prepared,
 };
+/// Copy exact plain text through the acknowledged native clipboard transport.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn write_text(text: String) -> Result<(), String> {
+    if text.len() > LIMIT {
+        return Err("Clipboard text exceeds 64 MB".into());
+    }
+    invoke(
+        "write",
+        &[Representation::new(
+            "public.utf8-plain-text",
+            text.as_bytes(),
+        )],
+    )
+    .await?;
+    Ok(())
+}
+
 const CDX_TYPES: [&str; 3] = [
     "com.revvity.chemdraw.cdx-clipboard",
     "com.perkinelmer.chemdraw.cdx-clipboard",

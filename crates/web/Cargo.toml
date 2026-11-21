@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 reshiki-io = { path = "../io" }
 reshiki-model = { path = "../model" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
 # The `code` property of the errors the exports throw.
 js-sys = "0.3"
 # scripts/build_wasm.sh installs the wasm-bindgen CLI of exactly this version.

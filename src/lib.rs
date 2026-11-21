@@ -21,13 +21,13 @@ static ALLOCATOR: allocation_metrics::MeasuredAllocator<std::alloc::System> =
 
 pub use reshiki_model::{
     abbreviations, aromatic, arrow_anchors, arrow_labels, arrows, atom_labels, atom_text,
-    attachments, bonds, canvas_theme, chains, color_contrast, common_groups, compare, crossings,
-    depiction, depth_appearance, document, editing, erasing, fischer, generic, graphics, grouping,
-    haworth, highlights, ionic, joining, ligands, linked_properties, models3d, molecule_names,
-    pages, palette, pictures, projection, reaction_cleanup, reaction_mapping, reactions,
-    rear_opacity, ring_arcs, ring_fills, rings, scene, scientific, selection_region, stereo_groups,
-    stereochemistry, storage, style, templates, theme_files, theme_generator, transaction,
-    typography,
+    attachments, bonds, canvas_theme, chains, color_contrast, common_groups, compare,
+    compound_numbers, crossings, depiction, depth_appearance, document, editing, erasing, fischer,
+    generic, graphics, grouping, haworth, highlights, ionic, joining, ligands, linked_properties,
+    models3d, molecule_names, pages, palette, pictures, projection, reaction_cleanup,
+    reaction_mapping, reactions, rear_opacity, ring_arcs, ring_fills, rings, scene, scientific,
+    selection_region, stereo_groups, stereochemistry, storage, style, templates, theme_files,
+    theme_generator, transaction, typography,
 };
 
 #[cfg(not(target_arch = "wasm32"))]

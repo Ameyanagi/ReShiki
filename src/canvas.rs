@@ -77,13 +77,6 @@ pub use hit::{bond_text_at, distance_to_segment, hit_object};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 pub(crate) use paper::HINT_STRIP_HEIGHT_PX;
-#[cfg_attr(
-    target_arch = "wasm32",
-    expect(
-        unused_imports,
-        reason = "Only the desktop assistant previews whole drawings"
-    )
-)]
 pub use previews::{
     ArrowPreview, DrawingPreview, DrawingThumbnail, OwnedDrawingPreview, PalettePreview,
     ScientificPreview, TemplateAnchorPreview, TemplateThumbnail,

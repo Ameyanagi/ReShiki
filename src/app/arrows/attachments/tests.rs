@@ -211,6 +211,7 @@ fn mechanism_attachment_92_exchange_export_receipt_exposes_link_loss() {
     app.structure_exported(Ok(Some(crate::app::figure_export::Saved {
         path: std::path::PathBuf::from("mechanism.cdxml"),
         details: vec![reshiki::arrow_anchors::EXPORT_NOTICE.into()],
+        recent: None,
     })));
     assert!(!app.error);
     assert!(app.status.contains("mechanism.cdxml"));

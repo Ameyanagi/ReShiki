@@ -138,10 +138,10 @@ async fn pending_message(app: &mut App, row: ResultRow, directory: &tempfile::Te
             let message = output(app.naming_action(naming::Action::Generate)).await;
             app.tab.doc = drawing;
             app.tab.selected = selected;
-            let Message::Naming(naming::Action::Finished(ticket, _)) = message else {
-                panic!("Naming returns Finished");
+            let Message::Naming(naming::Action::Generated(ticket, _)) = message else {
+                panic!("Naming returns Generated");
             };
-            Message::Naming(naming::Action::Finished(
+            Message::Naming(naming::Action::Generated(
                 ticket,
                 Box::new(Err(reshiki::naming::Error::Worker(FAILURE.into()))),
             ))

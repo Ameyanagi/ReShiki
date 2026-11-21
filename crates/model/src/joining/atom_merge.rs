@@ -199,6 +199,12 @@ fn merge_atoms_with_position(
         }
         dedup(&mut link.atoms);
     }
+    for link in &mut result.compound_numbers {
+        for id in &mut link.atoms {
+            *id = mapped(*id);
+        }
+        dedup(&mut link.atoms);
+    }
     for scope in &mut result.depth_appearance {
         for id in &mut scope.atoms {
             *id = mapped(*id);
@@ -225,6 +231,7 @@ fn merge_atoms_with_position(
     crate::arrow_anchors::reconcile(&mut result);
     crate::molecule_names::reconcile(&mut result, doc);
     crate::linked_properties::reconcile(&mut result, doc);
+    crate::compound_numbers::reconcile(&mut result, doc);
     crate::models3d::reconcile(&mut result, doc);
     result.validate()?;
     Ok((result, vec![survivor]))

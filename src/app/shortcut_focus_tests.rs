@@ -14,7 +14,11 @@ use iced::keyboard::{
 };
 use iced::{Event, Rectangle, Size};
 
+mod keys_palette;
 mod review_close;
+mod selection_properties;
+mod style_status;
+mod view_footer;
 
 struct Ui {
     renderer: iced::Renderer,
@@ -169,9 +173,9 @@ impl Ui {
         collect.snapshot().clone()
     }
 
-    fn text(&mut self, app: &App, target: &'static str) -> Rectangle {
-        struct Find(&'static str, Option<Rectangle>);
-        impl Operation for Find {
+    fn text(&mut self, app: &App, target: &str) -> Rectangle {
+        struct Find<'a>(&'a str, Option<Rectangle>);
+        impl Operation for Find<'_> {
             fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
                 operate(self);
             }
@@ -370,20 +374,22 @@ async fn tabs_style_buttons_and_canvas_theme_are_named_controls() {
     let bold = node("text-style-bold".into());
     assert_eq!((bold.role, bold.checked), (Role::ToggleButton, Some(false)));
     assert_eq!(node("text-style-size".into()).role, Role::TextInput);
-    let theme = node("canvas-theme".into());
+    let view = node("status-view".into());
     assert_eq!(
-        (theme.name.as_str(), theme.checked),
-        ("Dark canvas", Some(false))
+        (view.name.as_str(), view.expanded),
+        ("Drawing view options", Some(false))
     );
-    for (id, name) in [
-        ("text-style-font", "Font"),
-        ("journal-preset", "Journal preset"),
-        ("color-theme", "Color theme"),
-    ] {
-        let select = node(id.into());
-        assert_eq!((select.name.as_str(), select.role), (name, Role::ComboBox));
-        assert!(select.value.as_ref().is_some_and(|v| !v.is_empty()), "{id}");
-    }
+    let font = node("text-style-font".into());
+    assert_eq!((font.name.as_str(), font.role), ("Font", Role::ComboBox));
+    assert!(font.value.as_ref().is_some_and(|v| !v.is_empty()));
+    assert_eq!(node("status-style".into()).expanded, Some(false));
+    assert!(
+        !snapshot
+            .nodes
+            .iter()
+            .any(|node| node.id == "journal-preset")
+    );
+    assert!(!snapshot.nodes.iter().any(|node| node.id == "color-theme"));
 }
 
 /// The journal preset and color theme choose options from the keyboard and
@@ -414,17 +420,19 @@ async fn style_lists_choose_options_by_keyboard_and_by_name() {
             _ => None,
         }
     };
+    let family = reshiki::style::font_families()[0];
+    assert!(matches!(
+        message(&mut ui, &app, "text-style-font", family),
+        Some(Message::TextStyle(reshiki::typography::StyleChange::Family(f))) if f == family
+    ));
+    let task = app.update(Message::StatusStyle(super::status_style::Action::Toggle));
+    ui.run_task(&mut app, task).await;
     // By name: an option name chooses it; any other name does nothing.
     let chosen = message(&mut ui, &app, "journal-preset", &first).expect("a preset");
     apply(&mut app, vec![chosen]);
     assert_eq!(value(&mut ui, &app, "journal-preset"), first);
     assert!(message(&mut ui, &app, "journal-preset", "Manage styles…").is_none());
     assert!(message(&mut ui, &app, "color-theme", "Manage themes…").is_none());
-    let family = reshiki::style::font_families()[0];
-    assert!(matches!(
-        message(&mut ui, &app, "text-style-font", family),
-        Some(Message::TextStyle(reshiki::typography::StyleChange::Family(f))) if f == family
-    ));
 
     // Keyboard: ↓ and ↑ choose the next and previous preset.
     ui.focus_control(&mut app, "journal-preset").await;
@@ -737,9 +745,7 @@ async fn help_hides_the_focus_ring_of_the_control_behind_it() {
         }
         let task = app.update(Message::ToggleHelp);
         ui.run_task(&mut app, task).await;
-        ui.key(&mut app, tab, Code::Tab, Modifiers::empty(), None)
-            .await;
-        assert_eq!(ui.focused(&app), ["help-about"]);
+        assert_eq!(ui.focused(&app), ["help-search"]);
         shots.push(pixels(&mut ui, &app));
         if focused_behind {
             let task = app.update(Message::ToggleHelp);
@@ -1351,7 +1357,7 @@ async fn updates_dialog_captures_keys_before_editors_file_commands_and_canvas() 
     apply(&mut app, messages);
     assert!(!app.updates.open);
     let _ = app.update(Message::Updates(updates::Action::Show(true)));
-    let close = ui.text(&app, "Close");
+    let close = ui.bounds(&app, "updates-close");
     ui.click(&mut app, close.center());
     assert!(
         !app.updates.open,
@@ -1363,7 +1369,7 @@ async fn updates_dialog_captures_keys_before_editors_file_commands_and_canvas() 
 
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
-async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activation() {
+async fn about_keyboard_traversal_copies_version_and_opens_update_settings() {
     let mut ui = Ui::new().await;
     let mut app = assistant_app();
     let bounds = ui.input(&app, "assistant-input").0;
@@ -1373,8 +1379,6 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
     let draft = app.assistant.input_text();
     app.updates.open = true;
     app.updates.data_folder = Some(std::path::PathBuf::from("/home/me/.reshiki"));
-    // Enter/Space without a focused modal control must never reach the
-    // drawing's contextual-key or select-recent shortcuts.
     for (named, code) in [(Named::Enter, Code::Enter), (Named::Space, Code::Space)] {
         let (status, messages) = ui.event(
             &app,
@@ -1384,9 +1388,26 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
         assert_eq!(status, iced::event::Status::Captured);
         assert!(messages.is_empty(), "{messages:?}");
     }
-    let tab = |modifiers| press(Key::Named(Named::Tab), Code::Tab, modifiers, None);
-    let focused = |ui: &mut Ui, app: &App| {
-        let snapshot = ui.semantics(app);
+    for expected in [
+        "updates-copy-version",
+        "updates-close",
+        "updates-check",
+        "updates-notes",
+        "updates-star",
+        "updates-website",
+        "updates-license",
+        "updates-settings",
+        "updates-data-folder",
+        "updates-copy-version",
+    ] {
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Named(Named::Tab), Code::Tab, Modifiers::empty(), None),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(messages.is_empty());
+        let snapshot = ui.semantics(&app);
         assert!(snapshot.duplicate_ids.is_empty());
         assert!(
             snapshot
@@ -1394,161 +1415,61 @@ async fn updates_automatic_check_supports_modal_keyboard_traversal_and_activatio
                 .iter()
                 .all(|node| node.id.starts_with("updates-"))
         );
-        snapshot
-            .nodes
-            .into_iter()
-            .filter(|node| node.focused)
-            .map(|node| node.id)
-            .collect::<Vec<_>>()
+        assert_eq!(
+            snapshot
+                .nodes
+                .iter()
+                .filter(|node| node.focused)
+                .map(|node| node.id.as_str())
+                .collect::<Vec<_>>(),
+            [expected]
+        );
+    }
+
+    let enter = || {
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        )
     };
-    for expected in [
-        "updates-close",
-        "updates-data-folder",
-        "updates-stable",
-        "updates-nightly",
-        "updates-check",
-        "updates-automatic",
-        "updates-notes",
-        "updates-star",
-        "updates-close",
-    ] {
-        let (status, messages) =
-            ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
-        assert_eq!(status, iced::event::Status::Captured);
-        assert!(messages.is_empty());
-        assert_eq!(focused(&mut ui, &app), vec![expected]);
-    }
-    for expected in ["updates-star", "updates-notes", "updates-automatic"] {
-        let (status, messages) = ui.event(&app, tab(Modifiers::SHIFT), mouse::Cursor::Unavailable);
-        assert_eq!(status, iced::event::Status::Captured);
-        assert!(messages.is_empty());
-        assert_eq!(focused(&mut ui, &app), vec![expected]);
-    }
-    let (status, messages) = ui.event(
-        &app,
-        press(
-            Key::Named(Named::Enter),
-            Code::Enter,
-            Modifiers::empty(),
-            None,
-        ),
-        mouse::Cursor::Unavailable,
-    );
+    let (status, messages) = ui.event(&app, enter(), mouse::Cursor::Unavailable);
     assert_eq!(status, iced::event::Status::Captured);
     assert!(matches!(
         messages.as_slice(),
-        [Message::Updates(updates::Action::Automatic(true))]
+        [Message::Updates(updates::Action::CopyVersion)]
     ));
-    // Dispatch updates the real state, but drop its asynchronous preference
-    // save task: this test never writes user preferences or starts a request.
     apply(&mut app, messages);
-    let snapshot = ui.semantics(&app);
-    let automatic = snapshot
-        .nodes
-        .iter()
-        .find(|node| node.id == "updates-automatic")
-        .unwrap();
-    assert_eq!(automatic.role, reshiki::accessibility::Role::ToggleButton);
-    assert_eq!(automatic.checked, Some(true));
-    assert!(!automatic.enabled && !automatic.focused);
-    let mut activate = reshiki::accessibility::Activate::<Message>::new("updates-automatic");
-    ui.inspect(
-        &app,
-        &mut iced::advanced::widget::operation::black_box(&mut activate),
-    );
     assert!(
-        activate.message().is_none(),
-        "Saving disables every activation path"
+        ui.semantics(&app)
+            .nodes
+            .iter()
+            .any(|node| { node.id == "updates-copy-version" && node.name == "Version copied" })
     );
-    for expected in [
-        "updates-close",
-        "updates-data-folder",
-        "updates-check",
-        "updates-notes",
-        "updates-star",
-        "updates-close",
-    ] {
-        let (_, messages) = ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
+
+    for _ in 0..7 {
+        let (_, messages) = ui.event(
+            &app,
+            press(Key::Named(Named::Tab), Code::Tab, Modifiers::empty(), None),
+            mouse::Cursor::Unavailable,
+        );
         assert!(messages.is_empty());
-        assert_eq!(focused(&mut ui, &app), vec![expected]);
     }
-    let _ = app.update(Message::Updates(updates::Action::Saved(Ok(()))));
-    for expected in ["updates-star", "updates-notes", "updates-automatic"] {
-        let (_, messages) = ui.event(&app, tab(Modifiers::SHIFT), mouse::Cursor::Unavailable);
-        assert!(messages.is_empty());
-        assert_eq!(focused(&mut ui, &app), vec![expected]);
-    }
-    let (status, messages) = ui.event(
-        &app,
-        press(
-            Key::Named(Named::Space),
-            Code::Space,
-            Modifiers::empty(),
-            None,
-        ),
-        mouse::Cursor::Unavailable,
-    );
-    assert_eq!(status, iced::event::Status::Captured);
-    assert!(messages.is_empty(), "Space activates on release");
-    let (status, messages) = ui.event(
-        &app,
-        Event::Keyboard(keyboard::Event::KeyReleased {
-            key: Key::Named(Named::Space),
-            modified_key: Key::Named(Named::Space),
-            physical_key: Physical::Code(Code::Space),
-            location: keyboard::Location::Standard,
-            modifiers: Modifiers::empty(),
-        }),
-        mouse::Cursor::Unavailable,
-    );
-    assert_eq!(status, iced::event::Status::Captured);
+    assert_eq!(ui.focused(&app), ["updates-settings"]);
+    let (_, messages) = ui.event(&app, enter(), mouse::Cursor::Unavailable);
     assert!(matches!(
         messages.as_slice(),
-        [Message::Updates(updates::Action::Automatic(false))]
+        [Message::Updates(updates::Action::OpenSettings)]
     ));
     apply(&mut app, messages);
-    let _ = app.update(Message::Updates(updates::Action::Saved(Ok(()))));
-    let point = ui.input(&app, "updates-automatic").0.center();
-    let mut click_messages = Vec::new();
-    for event in [
-        mouse::Event::CursorMoved { position: point },
-        mouse::Event::ButtonPressed(mouse::Button::Left),
-        mouse::Event::ButtonReleased(mouse::Button::Left),
-    ] {
-        let (_, messages) = ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(point));
-        click_messages.extend(messages);
-    }
+    assert!(!app.updates.open);
+    assert!(app.settings.open);
     assert!(
-        matches!(
-            click_messages.as_slice(),
-            [Message::Updates(updates::Action::Automatic(true))]
-        ),
-        "The checkbox and its focus wrapper must publish one mouse action: {click_messages:?}"
-    );
-    for expected in ["updates-notes", "updates-star", "updates-close"] {
-        let (_, messages) = ui.event(&app, tab(Modifiers::empty()), mouse::Cursor::Unavailable);
-        assert!(messages.is_empty());
-        assert_eq!(focused(&mut ui, &app), vec![expected]);
-    }
-    let (status, messages) = ui.event(
-        &app,
-        press(
-            Key::Named(Named::Enter),
-            Code::Enter,
-            Modifiers::empty(),
-            None,
-        ),
-        mouse::Cursor::Unavailable,
-    );
-    assert_eq!(status, iced::event::Status::Captured);
-    assert!(matches!(
-        messages.as_slice(),
-        [Message::Updates(updates::Action::Show(false))]
-    ));
-    apply(&mut app, messages);
-    assert!(
-        !app.updates.open,
-        "Enter activates the focused Close button"
+        ui.semantics(&app)
+            .nodes
+            .iter()
+            .any(|node| node.id == "settings-update-check")
     );
     assert_eq!(app.tab.doc, drawing);
     assert_eq!(app.assistant.input_text(), draft);
@@ -2248,7 +2169,7 @@ async fn command_palette_tab_cycles_the_filter_from_the_search_field() {
         apply(&mut app, messages);
         filters.push(app.commands.filter.map(|c| c.label()));
     }
-    assert_eq!(filters, [Some("Insert"), Some("Bond"), Some("Insert")]);
+    assert_eq!(filters, [Some("Insert"), Some("Edit"), Some("Insert")]);
     let (_, messages) = ui.event(
         &app,
         press(
@@ -2302,8 +2223,8 @@ async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
     let _ = app.update(Message::Commands(Action::Query("bond".into())));
     let field = ui.input(&app, "command-palette-search").0;
     ui.click(&mut app, field.center());
-    click_running_tasks(&mut ui, &mut app, "command-palette-filter-bond").await;
-    assert_eq!(app.commands.filter.map(|c| c.label()), Some("Bond"));
+    click_running_tasks(&mut ui, &mut app, "command-palette-filter-edit").await;
+    assert_eq!(app.commands.filter.map(|c| c.label()), Some("Edit"));
     for (key, code, text) in [
         (Key::Character("s".into()), Code::KeyS, Some("s")),
         (Key::Named(Named::Enter), Code::Enter, None),
@@ -2351,7 +2272,54 @@ async fn command_palette_unavailable_row_click_keeps_typing_in_the_search_field(
         .iter()
         .position(|c| c.name == unavailable.name)
         .expect("a catalog row");
-    click_running_tasks(&mut ui, &mut app, &format!("command-palette-row-{index}")).await;
+    let id = format!("command-palette-row-{index}");
+    // Available matches can put this unavailable result below the shared
+    // palette's viewport. Scroll its real list before sending pointer input.
+    let over = ui
+        .semantics(&app)
+        .nodes
+        .into_iter()
+        .filter(|node| node.id.starts_with("command-palette-row-"))
+        .find_map(|node| node.visible_bounds.filter(|bounds| bounds.height > 20.))
+        .expect("a visible result to scroll over")
+        .center();
+    for _ in 0..app.commands.ranked().len() {
+        let target = ui
+            .semantics(&app)
+            .nodes
+            .into_iter()
+            .find(|node| node.id == id)
+            .unwrap();
+        if target
+            .visible_bounds
+            .is_some_and(|bounds| bounds.contains(target.bounds.center()))
+        {
+            break;
+        }
+        let (_, messages) = ui.event(
+            &app,
+            Event::Mouse(mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Lines { x: 0., y: -1. },
+            }),
+            mouse::Cursor::Available(over),
+        );
+        for message in messages {
+            let task = app.update(message);
+            ui.run_task(&mut app, task).await;
+        }
+    }
+    let target = ui
+        .semantics(&app)
+        .nodes
+        .into_iter()
+        .find(|node| node.id == id)
+        .unwrap();
+    assert!(
+        target
+            .visible_bounds
+            .is_some_and(|bounds| bounds.contains(target.bounds.center()))
+    );
+    click_running_tasks(&mut ui, &mut app, &id).await;
     assert!(app.commands.open, "the palette stays open");
     assert_eq!(app.commands.current().unwrap().name, unavailable.name);
     let (_, messages) = ui.event(
@@ -2528,4 +2496,739 @@ async fn context_row_rotation_field_applies_a_typed_angle() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, drawing);
     assert!(!app.tab.history.can_undo());
+}
+
+/// Opening View overlays the paper; none of its controls takes canvas space.
+#[tokio::test]
+#[ignore = "Opt-in real View menu geometry, focus and activation check"]
+async fn view_menu_stays_above_its_anchor_without_resizing_the_canvas() {
+    use super::view_settings::Action as View;
+    struct Paper(Option<Rectangle>);
+    impl Operation for Paper {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+            if id == Some(&Id::new("atom-text-canvas")) {
+                self.0 = Some(bounds);
+            }
+        }
+    }
+    fn paper(ui: &mut Ui, app: &App) -> Rectangle {
+        let mut bounds = Paper(None);
+        ui.inspect(app, &mut bounds);
+        bounds.0.expect("the actual canvas container")
+    }
+    let ids = [
+        "view-grid",
+        "view-rulers",
+        "view-crosshair",
+        "view-smart-guides",
+        "view-arrange-controls",
+        "view-page-setup",
+    ];
+    for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {
+        let mut ui = Ui::new().await;
+        ui.viewport = Rectangle::with_size(size);
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.fit_to_view = false;
+        app.appearance = crate::appearance::Settings::default();
+        app.guides = Default::default();
+        app.tab.doc.canvas_theme = reshiki::canvas_theme::CanvasTheme::Light;
+        let atom = app
+            .tab
+            .doc
+            .add_atom("C", reshiki::document::Point::default());
+        app.tab.selected = vec![atom];
+        app.tab.camera.center = reshiki::document::Point::new(85., -23.);
+        app.tab.camera.zoom = 1.4;
+        let canvas = paper(&mut ui, &app);
+        app.viewport = canvas.size();
+        let camera = app.tab.camera;
+        let drawing = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let dirty = app.tab.dirty();
+        let anchor = ui.bounds(&app, "status-view");
+        ui.focus_control(&mut app, "status-view").await;
+        ui.key(
+            &mut app,
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert!(app.view_open);
+        assert_eq!(paper(&mut ui, &app), canvas);
+        let snapshot = ui.semantics(&app);
+        assert_eq!(
+            snapshot
+                .nodes
+                .iter()
+                .map(|node| node.id.as_str())
+                .collect::<Vec<_>>(),
+            ids
+        );
+        for node in snapshot.nodes {
+            let visible = node.visible_bounds.expect("visible menu row");
+            assert!(node.bounds.width > 200. && node.bounds.height >= 25.);
+            assert!((visible.x - node.bounds.x).abs() < 0.02);
+            assert!((visible.y - node.bounds.y).abs() < 0.02);
+            assert!((visible.width - node.bounds.width).abs() < 0.02);
+            assert!((visible.height - node.bounds.height).abs() < 0.02);
+            assert!(ui.viewport.contains(node.bounds.position()));
+            assert!(node.bounds.y + node.bounds.height <= anchor.y - 3.);
+        }
+        assert_eq!(ui.focused(&app), ["view-grid"]);
+        // Unhandled menu keys must never reach the selected drawing atom.
+        for (key, code) in [
+            (Named::Delete, Code::Delete),
+            (Named::Backspace, Code::Backspace),
+            (Named::ArrowLeft, Code::ArrowLeft),
+            (Named::ArrowRight, Code::ArrowRight),
+        ] {
+            let (status, messages) = ui.event(
+                &app,
+                press(Key::Named(key), code, Modifiers::empty(), None),
+                mouse::Cursor::Unavailable,
+            );
+            let no_messages = messages.is_empty();
+            for message in messages {
+                let task = app.update(message);
+                ui.run_task(&mut app, task).await;
+            }
+            assert_eq!(app.tab.doc, drawing);
+            assert_eq!(app.tab.selected, [atom]);
+            assert_eq!(app.tab.revision, revision);
+            assert_eq!(app.tab.dirty(), dirty);
+            assert!(!app.tab.history.can_undo());
+            assert_eq!(status, iced::event::Status::Captured);
+            assert!(no_messages, "Drawing shortcuts stay inside View");
+            assert!(app.view_open);
+            assert_eq!(ui.focused(&app), ["view-grid"]);
+        }
+        ui.key(
+            &mut app,
+            Key::Named(Named::ArrowDown),
+            Code::ArrowDown,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(ui.focused(&app), ["view-rulers"]);
+        let before_rulers = app.guides.rulers;
+        ui.key(
+            &mut app,
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(app.guides.rulers, !before_rulers);
+        assert!(!app.view_open);
+        assert_eq!(ui.focused(&app), ["status-view"]);
+        assert_eq!(app.tab.doc, drawing);
+        ui.key(
+            &mut app,
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert!(app.view_open);
+        assert_eq!(ui.focused(&app), ["view-grid"]);
+        ui.key(
+            &mut app,
+            Key::Named(Named::End),
+            Code::End,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(ui.focused(&app), ["view-page-setup"]);
+        ui.key(
+            &mut app,
+            Key::Named(Named::Home),
+            Code::Home,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        for expected in ids.iter().cycle().skip(1).take(ids.len()) {
+            ui.key(
+                &mut app,
+                Key::Named(Named::Tab),
+                Code::Tab,
+                Modifiers::empty(),
+                None,
+            )
+            .await;
+            assert_eq!(ui.focused(&app), [*expected]);
+        }
+        ui.key(
+            &mut app,
+            Key::Named(Named::Tab),
+            Code::Tab,
+            Modifiers::SHIFT,
+            None,
+        )
+        .await;
+        assert_eq!(ui.focused(&app), ["view-page-setup"]);
+        ui.key(
+            &mut app,
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert!(!app.view_open);
+        assert_eq!(ui.focused(&app), ["status-view"]);
+        assert_eq!(paper(&mut ui, &app), canvas);
+        assert_eq!(ui.bounds(&app, "status-view"), anchor);
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.dirty(), dirty);
+        assert_eq!(app.tab.selected, [atom]);
+        assert!(!app.tab.history.can_undo());
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+
+        // Every View toggle releases its row back to the opener.
+        for (index, id) in ids.iter().take(5).enumerate() {
+            let at = ui.bounds(&app, "status-view").center();
+            let _ = ui.drag(&mut app, at, at).await;
+            let before = ui
+                .semantics(&app)
+                .nodes
+                .into_iter()
+                .find(|node| node.id == *id)
+                .unwrap()
+                .checked
+                .unwrap();
+            ui.focus_control(&mut app, id).await;
+            if index % 3 == 0 {
+                ui.key(
+                    &mut app,
+                    Key::Named(Named::Enter),
+                    Code::Enter,
+                    Modifiers::empty(),
+                    None,
+                )
+                .await;
+            } else if index % 3 == 1 {
+                for event in [
+                    press(
+                        Key::Named(Named::Space),
+                        Code::Space,
+                        Modifiers::empty(),
+                        Some(" "),
+                    ),
+                    Event::Keyboard(keyboard::Event::KeyReleased {
+                        key: Key::Named(Named::Space),
+                        modified_key: Key::Named(Named::Space),
+                        physical_key: Physical::Code(Code::Space),
+                        location: keyboard::Location::Standard,
+                        modifiers: Modifiers::empty(),
+                    }),
+                ] {
+                    let (_, messages) = ui.event(&app, event, mouse::Cursor::Unavailable);
+                    for message in messages {
+                        let task = app.update(message);
+                        ui.run_task(&mut app, task).await;
+                    }
+                }
+            } else {
+                let mut activate = reshiki::accessibility::Activate::<Message>::new(*id);
+                ui.inspect(
+                    &app,
+                    &mut iced::advanced::widget::operation::black_box(&mut activate),
+                );
+                let message = activate.message().cloned().expect("native menu activation");
+                let task = app.update(message);
+                ui.run_task(&mut app, task).await;
+            }
+            assert!(!app.view_open);
+            assert_eq!(ui.focused(&app), ["status-view"]);
+            assert_eq!(paper(&mut ui, &app), canvas);
+            let task = app.update(Message::View(View::Toggle));
+            ui.run_task(&mut app, task).await;
+            let after = ui
+                .semantics(&app)
+                .nodes
+                .into_iter()
+                .find(|node| node.id == *id)
+                .unwrap()
+                .checked
+                .unwrap();
+            assert_eq!(after, !before, "{id} toggled once");
+            let task = app.update(Message::View(View::Close));
+            ui.run_task(&mut app, task).await;
+        }
+        let at = ui.bounds(&app, "status-view").center();
+        let _ = ui.drag(&mut app, at, at).await;
+        let before_grid = app.grid;
+        let at = ui.bounds(&app, "view-grid").center();
+        let _ = ui.drag(&mut app, at, at).await;
+        assert_eq!(app.grid, !before_grid);
+        assert!(!app.view_open);
+        assert_eq!(ui.focused(&app), ["status-view"]);
+        let task = app.update(Message::View(View::Toggle));
+        ui.run_task(&mut app, task).await;
+        let before_rulers = app.guides.rulers;
+        ui.key(
+            &mut app,
+            Key::Character(";".into()),
+            Code::Semicolon,
+            Modifiers::COMMAND,
+            None,
+        )
+        .await;
+        assert_eq!(app.guides.rulers, !before_rulers);
+        assert!(!app.view_open);
+        assert_eq!(ui.focused(&app), ["status-view"]);
+        let task = app.update(Message::View(View::Toggle));
+        ui.run_task(&mut app, task).await;
+        let before_crosshair = app.guides.crosshair;
+        ui.key(
+            &mut app,
+            Key::Character("x".into()),
+            Code::KeyX,
+            Modifiers::COMMAND | Modifiers::ALT,
+            None,
+        )
+        .await;
+        assert_eq!(app.guides.crosshair, !before_crosshair);
+        assert!(!app.view_open);
+        assert_eq!(ui.focused(&app), ["status-view"]);
+        let task = app.update(Message::View(View::Toggle));
+        ui.run_task(&mut app, task).await;
+        let drawing = app.tab.doc.clone();
+        let outside = canvas.center();
+        for event in [
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ] {
+            let pressed = matches!(&event, mouse::Event::ButtonPressed(_));
+            let (status, messages) =
+                ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(outside));
+            if pressed {
+                assert_eq!(status, iced::event::Status::Captured);
+            }
+            for message in messages {
+                let task = app.update(message);
+                ui.run_task(&mut app, task).await;
+            }
+        }
+        assert!(!app.view_open);
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.tab.selected, [atom]);
+        assert_eq!(paper(&mut ui, &app), canvas);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+        assert!(!app.tab.history.can_undo());
+        // The menu forwards Page setup to the ordinary page inspector.
+        let task = app.update(Message::View(View::Toggle));
+        ui.run_task(&mut app, task).await;
+        let at = ui.bounds(&app, "view-page-setup").center();
+        let _ = ui.drag(&mut app, at, at).await;
+        assert!(!app.view_open);
+        assert_eq!(app.inspector_tab, InspectorTab::Pages);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real Settings search for moved View preferences"]
+async fn settings_search_keeps_ruler_units_separate_from_drawing_style_units() {
+    use super::settings_page::{Action, Section};
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.appearance = crate::appearance::Settings::default();
+    app.sync_ruler_unit();
+    let task = app.update(Message::Settings(Action::Open(Some(Section::Drawing))));
+    ui.run_task(&mut app, task).await;
+    for (query, prefix) in [
+        ("Interface", "settings-interface"),
+        ("Ruler units", "settings-ruler-units"),
+        ("Molecular weight", "settings-weight"),
+        ("Chemical name typography", "settings-name-typography"),
+    ] {
+        let task = app.update(Message::Settings(Action::Query(query.into())));
+        ui.run_task(&mut app, task).await;
+        let snapshot = ui.semantics(&app);
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|node| node.id.starts_with(prefix)),
+            "{query}"
+        );
+        if query == "Ruler units" {
+            assert!(
+                !snapshot
+                    .nodes
+                    .iter()
+                    .any(|node| node.id.starts_with("settings-units"))
+            );
+        }
+    }
+    let task = app.update(Message::Settings(Action::Query("units".into())));
+    ui.run_task(&mut app, task).await;
+    let snapshot = ui.semantics(&app);
+    assert!(
+        snapshot
+            .nodes
+            .iter()
+            .any(|node| node.id.starts_with("settings-units"))
+    );
+    assert!(
+        snapshot
+            .nodes
+            .iter()
+            .any(|node| node.id.starts_with("settings-ruler-units"))
+    );
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer and built local naming worker check"]
+async fn add_name_completion_keeps_help_search_focus() {
+    use super::template_library;
+    let mut ui = Ui::new().await;
+    for keys in [true, false] {
+        let search = if keys {
+            "help-search"
+        } else {
+            "command-palette-search"
+        };
+        let (mut app, _) = App::new();
+        app.engine = reshiki::engine::LocalEngine::in_process();
+        app.tab.busy = false;
+        let _ = app.update(Message::Inspector(InspectorTab::Templates));
+        let _ = app.update(Message::Templates(template_library::Action::Search(
+            "ethanol".into(),
+        )));
+        ui.focus_control(&mut app, "add-search").await;
+        let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
+        assert!(app.tab.naming.is_pending());
+        assert!(ui.input(&app, "add-search").1);
+
+        let palette = app.update(if keys {
+            Message::ToggleHelp
+        } else {
+            Message::Commands(super::command_palette::Action::Open)
+        });
+        ui.run_task(&mut app, palette).await;
+        assert_eq!(app.help_open, keys);
+        assert_eq!(app.commands.open, !keys);
+        assert_eq!(app.inspector_tab, InspectorTab::Templates);
+        assert!(ui.input(&app, search).1);
+        ui.run_task(&mut app, pending).await;
+
+        assert_eq!(app.tab.doc.atoms.len(), 3, "{}", app.status);
+        assert_eq!(app.help_open, keys);
+        assert_eq!(app.commands.open, !keys);
+        assert!(
+            ui.input(&app, search).1,
+            "Insertion completion must preserve the current focus owner"
+        );
+        ui.key(
+            &mut app,
+            Key::Character("b".into()),
+            Code::KeyB,
+            Modifiers::empty(),
+            Some("b"),
+        )
+        .await;
+        assert_eq!(ui.input_value(&app, search), "b");
+        // Both palette filters mask the inert background from widget operations.
+        // Check the retained Add draft only after returning to that surface.
+        ui.key(
+            &mut app,
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert!(!app.help_open && !app.commands.open);
+        assert_eq!(ui.input_value(&app, "add-search"), "ethanol");
+        assert!(app.tab.history.can_undo());
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer Add SMILES completion focus check"]
+async fn add_smiles_completion_releases_only_add_focus_on_success() {
+    use super::template_library;
+    fn failed(message: Message) -> Message {
+        match message {
+            Message::Tab(id, message) => Message::Tab(id, Box::new(failed(*message))),
+            Message::EngineFinished { key, .. } => Message::EngineFinished {
+                key,
+                result: Box::new(Err("SMILES import failed".into())),
+            },
+            message => message,
+        }
+    }
+
+    let mut ui = Ui::new().await;
+    for palette in [None, Some(true), Some(false)] {
+        for failure in [false, true] {
+            let (mut app, _) = App::new();
+            app.engine = reshiki::engine::LocalEngine::in_process();
+            app.tab.busy = false;
+            let _ = app.update(Message::Inspector(InspectorTab::Templates));
+            let _ = app.update(Message::Templates(template_library::Action::Search(
+                "CCO".into(),
+            )));
+            ui.focus_control(&mut app, "add-search").await;
+            let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
+            assert!(app.tab.busy && !app.tab.naming.is_pending());
+            assert!(ui.input(&app, "add-search").1);
+            let palette_search = palette.map(|keys| {
+                if keys {
+                    "help-search"
+                } else {
+                    "command-palette-search"
+                }
+            });
+            if let Some(search) = palette_search {
+                let task = app.update(if palette == Some(true) {
+                    Message::ToggleHelp
+                } else {
+                    Message::Commands(super::command_palette::Action::Open)
+                });
+                ui.run_task(&mut app, task).await;
+                assert!(ui.input(&app, search).1);
+            }
+            // Replace only the terminal result, retaining the real request's
+            // receipt and tab routing so the error path has the same owner.
+            let pending = if failure {
+                pending.map(failed)
+            } else {
+                pending
+            };
+            ui.run_task(&mut app, pending).await;
+
+            assert!(!app.tab.busy);
+            assert!(app.tab.engine_job.is_none());
+            assert_eq!(app.error, failure, "{}", app.status);
+            assert_eq!(app.tab.doc.atoms.len(), if failure { 0 } else { 3 });
+            assert_eq!(app.tab.history.can_undo(), !failure);
+            if let Some(search) = palette_search {
+                assert_eq!(app.help_open, palette == Some(true));
+                assert_eq!(app.commands.open, palette == Some(false));
+                assert_eq!(app.inspector_tab, InspectorTab::Templates);
+                assert!(ui.input(&app, search).1);
+                ui.key(
+                    &mut app,
+                    Key::Character("b".into()),
+                    Code::KeyB,
+                    Modifiers::empty(),
+                    Some("b"),
+                )
+                .await;
+                assert_eq!(ui.input_value(&app, search), "b");
+                ui.key(
+                    &mut app,
+                    Key::Named(Named::Escape),
+                    Code::Escape,
+                    Modifiers::empty(),
+                    None,
+                )
+                .await;
+                assert!(!app.help_open && !app.commands.open);
+            } else if failure {
+                assert!(
+                    ui.input(&app, "add-search").1,
+                    "A failed import keeps the Add draft focused for retry"
+                );
+            } else {
+                ui.assert_unfocused(&app);
+                ui.key(
+                    &mut app,
+                    Key::Named(Named::Backspace),
+                    Code::Backspace,
+                    Modifiers::empty(),
+                    None,
+                )
+                .await;
+                assert!(
+                    app.tab.doc.atoms.is_empty(),
+                    "Backspace reaches the drawing"
+                );
+            }
+            assert_eq!(ui.input_value(&app, "add-search"), "CCO");
+        }
+    }
+}
+
+/// Both Add input routes return keys to the drawing after a successful insert;
+/// failed names keep their draft. Advanced Import keeps its existing behavior.
+#[tokio::test]
+#[ignore = "Opt-in real renderer and built local naming worker check"]
+async fn add_name_and_smiles_return_focus_only_after_a_successful_insert() {
+    use super::{naming, template_library};
+    let mut ui = Ui::new().await;
+    for enter in [true, false] {
+        for query in ["CCO", "ethanol", "this is not a chemical name"] {
+            let (mut app, _) = App::new();
+            app.engine = reshiki::engine::LocalEngine::in_process();
+            app.tab.busy = false;
+            let before = app.tab.doc.clone();
+            let _ = app.update(Message::Inspector(InspectorTab::Templates));
+            let _ = app.update(Message::Templates(template_library::Action::Search(
+                query.into(),
+            )));
+            ui.focus_control(&mut app, "add-search").await;
+            assert!(ui.input(&app, "add-search").1);
+            if enter {
+                let (status, messages) = ui.event(
+                    &app,
+                    press(
+                        Key::Named(Named::Enter),
+                        Code::Enter,
+                        Modifiers::empty(),
+                        None,
+                    ),
+                    mouse::Cursor::Unavailable,
+                );
+                assert_eq!(status, iced::event::Status::Captured);
+                assert!(
+                    ui.input(&app, "add-search").1,
+                    "Submission waits for its result"
+                );
+                assert!(!messages.is_empty());
+                for message in messages {
+                    let task = app.update(message);
+                    assert!(
+                        ui.input(&app, "add-search").1,
+                        "Pending insertion keeps the draft focused"
+                    );
+                    let (status, repeated) = ui.event(
+                        &app,
+                        press(
+                            Key::Named(Named::Enter),
+                            Code::Enter,
+                            Modifiers::empty(),
+                            None,
+                        ),
+                        mouse::Cursor::Unavailable,
+                    );
+                    assert_eq!(status, iced::event::Status::Captured);
+                    assert!(repeated.iter().all(|message| matches!(
+                        message,
+                        Message::Templates(template_library::Action::InsertQuery)
+                    )));
+                    for message in repeated {
+                        let _ = app.update(message);
+                    }
+                    assert_eq!(app.inspector_tab, InspectorTab::Templates);
+                    assert_eq!(app.tab.doc, before);
+                    ui.run_task(&mut app, task).await;
+                }
+            } else {
+                let at = ui.bounds(&app, "add-insert").center();
+                let _ = ui.drag(&mut app, at, at).await;
+            }
+            assert_eq!(ui.input_value(&app, "add-search"), query);
+            if query == "this is not a chemical name" {
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+                if enter {
+                    assert!(ui.input(&app, "add-search").1, "Failed name keeps focus");
+                }
+                assert!(app.imported_name_notice(query).is_some());
+            } else {
+                assert_eq!(app.tab.doc.atoms.len(), 3, "{}", app.status);
+                ui.assert_unfocused(&app);
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+            }
+        }
+    }
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.tab.busy = false;
+    let _ = app.update(Message::Inspector(InspectorTab::Templates));
+    let _ = app.update(Message::Templates(template_library::Action::Search(
+        "ethanol".into(),
+    )));
+    let origin = app.tab.id;
+    let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
+    app.add_tab();
+    let front = app.tab.id;
+    let _ = app.update(Message::Templates(template_library::Action::Search(
+        "caffeine".into(),
+    )));
+    ui.focus_control(&mut app, "add-search").await;
+    ui.run_task(&mut app, pending).await;
+    assert_eq!(app.tab.id, front);
+    assert!(app.tab.doc.atoms.is_empty());
+    assert!(
+        ui.input(&app, "add-search").1,
+        "Background insertion leaves front focus alone"
+    );
+    assert_eq!(ui.input_value(&app, "add-search"), "caffeine");
+    assert_eq!(app.in_tab(origin, |app| app.tab.doc.atoms.len()), Some(3));
+
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.tab.busy = false;
+    let _ = app.update(Message::Inspector(InspectorTab::Templates));
+    let _ = app.update(Message::Templates(template_library::Action::Search(
+        "ethanol".into(),
+    )));
+    let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
+    let _ = app.update(Message::ToggleInspector);
+    assert!(!app.inspector_open);
+    ui.focus_control(&mut app, "text-style-size").await;
+    assert!(ui.input(&app, "text-style-size").1);
+    ui.run_task(&mut app, pending).await;
+    assert_eq!(app.tab.doc.atoms.len(), 3, "{}", app.status);
+    assert!(
+        ui.input(&app, "text-style-size").1,
+        "A completion behind hidden Add leaves the STYLE draft focused"
+    );
+
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.tab.busy = false;
+    let _ = app.update(Message::Inspector(InspectorTab::Import));
+    let _ = app.update(Message::Imports(super::import::Action::InputKind(
+        super::import::InputKind::Name,
+    )));
+    let _ = app.update(Message::Naming(naming::Action::Name("ethanol".into())));
+    // The second advanced insert reuses its preview synchronously.
+    for atoms in [3, 6] {
+        ui.focus_control(&mut app, "import-name").await;
+        ui.key(
+            &mut app,
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(app.tab.doc.atoms.len(), atoms, "{}", app.status);
+        assert!(
+            !ui.input(&app, "import-name").1,
+            "Advanced Enter keeps its existing blur"
+        );
+        assert_eq!(ui.input_value(&app, "import-name"), "ethanol");
+    }
+    ui.focus_control(&mut app, "import-name").await;
+    let task = app.update(Message::Naming(naming::Action::InsertName));
+    ui.run_task(&mut app, task).await;
+    assert_eq!(app.tab.doc.atoms.len(), 9);
+    assert!(
+        ui.input(&app, "import-name").1,
+        "Advanced completion does not request drawing focus"
+    );
 }

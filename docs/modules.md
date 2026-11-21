@@ -21,6 +21,7 @@ explains how the crates and modules fit together.
 - `src/app.rs`
 - `src/app/abbreviations.rs`
 - `src/app/accessibility.rs`: Window lifecycle and a bounded, generation-checked native action queue.
+- `src/app/add_panel.rs`: Shared search for templates, chemical names and SMILES in the Add tab.
 - `src/app/arcs.rs`
 - `src/app/arrow_labels.rs`: Contextual controls for attached reaction-condition clearances.
 - `src/app/arrows.rs`
@@ -56,6 +57,8 @@ explains how the crates and modules fit together.
 - `src/app/color_popover.rs`: Style bar menus
 - `src/app/command_palette.rs`: The command palette
 - `src/app/command_palette/catalog.rs`: The palette's commands
+- `src/app/command_palette/focus.rs`: F6 moves between the palette search and its live action buttons.
+- `src/app/compound_numbers.rs`: Compound numbering uses the normal caption transaction and text editor.
 - `src/app/context_menu.rs`: Commands for the object under a secondary click, or the current selection.
 - `src/app/context_menu/cascade.rs`: Cascading context panels share one event boundary and use laid-out rows as anchors.
 - `src/app/depth_appearance.rs`
@@ -86,7 +89,7 @@ explains how the crates and modules fit together.
 - `src/app/graphics/heads.rs`
 - `src/app/graphics/path.rs`: Contextual pen authoring and node edits.
 - `src/app/graphics/path_cleanup.rs`: Selection-wide path commands share one document transaction with curved arrows.
-- `src/app/help.rs`: Help
+- `src/app/help.rs`: The Keys filter
 - `src/app/help/examples.rs`: Before/after drawings for Help, made by running the shortcut's own edit on a small fixture, so the preview cannot drift from the behavior.
 - `src/app/help/registry.rs`: The one list of shortcuts that Help searches and shows.
 - `src/app/help/search.rs`: Fuzzy ranking over the shortcut registry and the command palette.
@@ -103,6 +106,8 @@ explains how the crates and modules fit together.
 - `src/app/import.rs`: The Import tab, and structure or picture files chosen or dropped on the window.
 - `src/app/inline_text.rs`: In-place caption drafts.
 - `src/app/inspector.rs`: Selection-focused properties and task-based export controls.
+- `src/app/inspector/context.rs`: Properties follows the selection; an idle canvas shows drawing settings, while a drawing tool shows the same defaults as its context row.
+- `src/app/inspector/identity.rs`: One-click molecular identity, using the Properties analysis and naming caches.
 - `src/app/joining.rs`
 - `src/app/keyboard_drawing.rs`: Application routing for the pointer-independent drawing hotspot.
 - `src/app/label_refresh.rs`: A single label calculation in flight, with exact snapshot identity checks.
@@ -156,7 +161,10 @@ explains how the crates and modules fit together.
 - `src/app/shortcut_examples.rs`: An editable, unbound copy of the bundled reference in a document tab.
 - `src/app/shortcuts.rs`
 - `src/app/star_prompt.rs`: The "Like ReShiki?" toast, which asks for a GitHub star after use or the first GitHub sign-in.
+- `src/app/start.rs`: The empty drawing's import field, actions and recent files.
+- `src/app/start/recent.rs`: Five local file identities; previews are bounded, disposable and never reopened.
 - `src/app/startup.rs`
+- `src/app/status_style.rs`: Journal dimensions and color theme share one status-bar chooser.
 - `src/app/stereo.rs`: Advisory drawing checks and explicit, undoable stereobond fixes.
 - `src/app/tabs.rs`: Document tabs
 - `src/app/template_library.rs`
@@ -667,6 +675,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/compare/chemistry.rs`: One molecule as chemistry, for comparing
 - `crates/model/src/compare/fit.rs`: The 2D fit (Kabsch) that best carries one set of points onto another, with what is left over
 - `crates/model/src/compare/structure.rs`: Molecules matched by structure
+- `crates/model/src/compound_numbers.rs`: Compound numbers are ordinary bold text, linked to atom instances rather than chemical identity.
 - `crates/model/src/crossings.rs`: Drawing depth at crossings; never changes chemical connectivity.
 - `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.

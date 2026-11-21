@@ -1,4 +1,5 @@
 use super::*;
+use iced::advanced::widget::Operation as _;
 use iced::advanced::{renderer::Headless, widget::operation};
 use iced_runtime::{UserInterface, user_interface::Cache};
 
@@ -16,6 +17,43 @@ fn snapshot(app: &App, renderer: &mut iced::Renderer, size: iced::Size) -> Snaps
         .update(&snapshot, "ReShiki", iced::Rectangle::with_size(size), 2.)
         .expect("the native consumer receives a valid live tree");
     snapshot
+}
+
+pub(super) fn assert_keys_palette(snapshot: &Snapshot) {
+    let rows = snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.id.starts_with("help-row-"))
+        .count();
+    assert!(rows > 0);
+    let mut controls = snapshot
+        .nodes
+        .iter()
+        .filter(|node| !node.id.starts_with("help-row-"))
+        .map(|node| node.id.as_str())
+        .collect::<Vec<_>>();
+    controls.sort_unstable();
+    assert_eq!(
+        controls,
+        [
+            "command-palette-close",
+            "command-palette-filter-all",
+            "command-palette-filter-edit",
+            "command-palette-filter-file",
+            "command-palette-filter-insert",
+            "command-palette-filter-keys",
+            "command-palette-filter-view",
+            "help-about",
+            "help-examples",
+            "help-search",
+        ]
+    );
+    for node in &snapshot.nodes {
+        assert!(node.enabled, "{node:?}");
+        if node.id.starts_with("command-palette-filter-") {
+            assert_eq!(node.checked, Some(node.id.ends_with("keys")));
+        }
+    }
 }
 
 #[tokio::test]
@@ -47,7 +85,9 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         let tree = snapshot(&app, &mut renderer, size);
         for id in [
             "header-new",
-            "header-export",
+            "header-search",
+            "inspector-tab-Templates",
+            "inspector-tab-Export",
             "help-open",
             "transform-rotation",
             "transform-width",
@@ -57,6 +97,17 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         ] {
             assert!(tree.nodes.iter().any(|node| node.id == id), "missing {id}");
         }
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|node| node.id == "inspector-tab-Templates" && node.name == "Add tab")
+        );
+        assert!(
+            !tree
+                .nodes
+                .iter()
+                .any(|node| node.id == "inspector-tab-Import")
+        );
         assert!(
             tree.nodes
                 .iter()
@@ -76,15 +127,7 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         assert!(!tree.nodes.iter().any(|node| node.id == "transform-tilt-x"));
         app.help_open = true;
         let help = snapshot(&app, &mut renderer, size);
-        // Close, search, About, examples and Done, plus one named button per result row.
-        let rows = help
-            .nodes
-            .iter()
-            .filter(|node| node.id.starts_with("help-row-"))
-            .count();
-        assert!(rows > 0);
-        assert_eq!(help.nodes.len() - rows, 5);
-        assert!(help.nodes.iter().all(|node| node.id.starts_with("help-")));
+        assert_keys_palette(&help);
         app.help_open = false;
         let _ = app.context_action(super::super::context_menu::Action::Open(
             super::super::context_menu::Page::Arrange,
@@ -109,12 +152,6 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         app.tab.inspector_ui.close_menu();
         app.tab
             .inspector_ui
-            .update(super::super::inspector::Action::Section(
-                super::super::inspector::Section::ExportChemical,
-                true,
-            ));
-        app.tab
-            .inspector_ui
             .update(super::super::inspector::Action::ChemicalMenu(true));
         let chemicals = snapshot(&app, &mut renderer, size);
         assert_eq!(chemicals.nodes.len(), 4);
@@ -125,7 +162,25 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
                 .all(|node| node.id.starts_with("chemical-format-"))
         );
         app.tab.inspector_ui.close_menu();
-        app.inspector_tab = super::super::InspectorTab::Import;
+        app.inspector_tab = super::super::InspectorTab::Templates;
+        let add = snapshot(&app, &mut renderer, size);
+        assert!(
+            add.nodes.iter().any(|node| node.id == "add-search"
+                && node.role == reshiki::accessibility::Role::TextInput)
+        );
+        let _ = app.update(Message::Templates(
+            super::super::template_library::Action::AddMenu(true),
+        ));
+        let mut advanced = Activate::<Message>::new("add-advanced-import");
+        {
+            let mut ui = UserInterface::build(app.view(), size, Cache::new(), &mut renderer);
+            ui.operate(&renderer, &mut operation::black_box(&mut advanced));
+        }
+        let operation::Outcome::Some(message) = advanced.finish() else {
+            panic!("Add exposes the advanced Import route");
+        };
+        let _ = app.update(message);
+        assert_eq!(app.inspector_tab, super::super::InspectorTab::Import);
         app.imports.set_text("CCO");
         app.imports.examples_menu = true;
         let examples = snapshot(&app, &mut renderer, size);

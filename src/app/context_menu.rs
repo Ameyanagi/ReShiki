@@ -424,6 +424,11 @@ impl App {
                 .into_iter()
                 .any(|p| !shown(&self.tab.doc, &target, p));
             entries.push(command(
+                "Number compound",
+                Message::NumberCompound(target.clone()),
+                reshiki::compound_numbers::label(&self.tab.doc, &target).is_none(),
+            ));
+            entries.push(command(
                 "Show formula & masses below",
                 Message::ShowMasses(target),
                 missing,
@@ -1058,10 +1063,8 @@ impl App {
             Action::Properties(molecular) => {
                 self.context_menu = None;
                 if molecular {
-                    self.tab.inspector_ui.update(inspector::Action::Section(
-                        inspector::Section::Molecule,
-                        true,
-                    ));
+                    self.tool = Tool::Select;
+                    self.request_molecular_properties();
                 }
                 return self.update(Message::Inspector(InspectorTab::Properties));
             }

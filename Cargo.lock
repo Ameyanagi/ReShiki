@@ -4045,6 +4045,7 @@ dependencies = [
  "time",
  "tokio",
  "ttf-parser",
+ "unicode-segmentation",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -4251,6 +4252,7 @@ dependencies = [
  "js-sys",
  "reshiki-io",
  "reshiki-model",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]

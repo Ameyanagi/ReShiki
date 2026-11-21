@@ -17,7 +17,8 @@ mod read;
 pub use read::reaction_part;
 pub use read::reaction_part_partial;
 pub use read::{
-    Configuration, Dropped, Imported, InputAtom, read, read_dropping_flagged_ez, read_partial,
+    Configuration, Dropped, Imported, InputAtom, parse_input_for_import, read,
+    read_dropping_flagged_ez, read_partial,
 };
 
 #[cfg(test)]

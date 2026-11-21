@@ -14,7 +14,7 @@ export type OutputFormat = BinaryFormat | TextFormat;
 
 /** The `code` of every Error these functions reject with, as the MCP tools
  * and the CLI report the same failure: `invalid_arguments` for a format or
- * option that is not accepted, `failed` when the structure cannot be read,
+ * option or nucleus that is not accepted, `failed` when the structure cannot be read,
  * drawn or written. */
 export type ErrorCode = "invalid_arguments" | "failed";
 
@@ -45,6 +45,44 @@ export interface PngOptions {
   maxWidth?: number;
   /** Default 1000; 1 to 8192. */
   maxHeight?: number;
+}
+
+export type NmrNucleus = "1H" | "13C";
+
+/** One carbon site (13C), or the H attached to one heavy atom (1H).
+ * Sites without a prediction retain their row, null values and a note. */
+export interface NmrShift {
+  /** Decimal atom ID; for 1H, the heavy atom the H are attached to. */
+  atom: string;
+  nucleus: NmrNucleus;
+  /** Median chemical shift in ppm. */
+  ppm: number | null;
+  /** Sphere radius of the reference match. */
+  shell: number | null;
+  references: number | null;
+  sd: number | null;
+  min: number | null;
+  max: number | null;
+  broad: boolean;
+  /** Attached H count for 1H; null for 13C. */
+  hydrogen_count: number | null;
+  /** Decimal IDs of attached H drawn as atoms; implicit H have none. */
+  hydrogens: string[];
+  note: string | null;
+}
+
+/** The CLI's NMR result without its session revision. */
+export interface NmrPrediction {
+  nucleus: NmrNucleus;
+  solvent: string;
+  rows: NmrShift[];
+  method: string;
+  data_version: string;
+  conditions: string;
+  limitations: string;
+  /** Cite this nmrshiftdb2 attribution with published values. */
+  credit: string;
+  data_access: string;
 }
 
 /** Load the WebAssembly module. Every function calls it, so calling it first
@@ -97,6 +135,16 @@ export function smiles(data: Input, format: InputFormat): Promise<string>;
 
 /** The standard InChI. */
 export function inchi(data: Input, format: InputFormat): Promise<string>;
+
+/** Predict offline 1H or 13C chemical shifts for exactly one whole molecule.
+ * Cite the result's credit with published values. Rejects with
+ * invalid_arguments for another nucleus, or failed for unsupported chemistry,
+ * more than one molecule or no sites for the requested nucleus. */
+export function predictNmr(
+  data: Input,
+  format: InputFormat,
+  nucleus: NmrNucleus,
+): Promise<NmrPrediction>;
 
 /** Add a TrueType or OpenType font (or collection), from a URL or bytes, for
  * figures and previews; text whose font lacks a glyph, such as Japanese,

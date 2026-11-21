@@ -925,6 +925,7 @@ fn settings(doc: &Document) -> Value {
             "arrow_labels",
             "molecule_names",
             "property_captions",
+            "compound_numbers",
             "reactions",
             "abbreviations",
             "generic",
@@ -1009,7 +1010,14 @@ fn look(doc: &Document, object: Object, id: u64) -> (Value, Value) {
                 .map(|caption| json(&caption.properties));
             (
                 style,
-                json(&(label.map(|l| (l.arrow, json(&l.side))), caption)),
+                json(&(
+                    label.map(|l| (l.arrow, json(&l.side))),
+                    caption,
+                    doc.compound_numbers
+                        .iter()
+                        .find(|n| n.annotation == id)
+                        .map(|n| (&n.atoms, n.fixed)),
+                )),
             )
         }
         Object::Arrow => {

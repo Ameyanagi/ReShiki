@@ -2,7 +2,7 @@
 use super::{GAP, MARGIN};
 use crate::app::{
     App, InspectorTab, Message,
-    inspector::{Action, ChemicalFormat, Section},
+    inspector::{Action, ChemicalFormat},
 };
 use iced::advanced::{
     renderer::Headless,
@@ -200,24 +200,7 @@ async fn chemical_export_choices_fit_without_shrinking_and_keep_keyboard_actions
         let drawing = app.tab.doc.clone();
         let revision = app.tab.revision;
         let _ = app.update(Message::Inspector(InspectorTab::Export));
-        for section in [Section::ExportFigure, Section::ExportChemical] {
-            let _ = app.update(Message::InspectorAction(Action::Section(section, true)));
-        }
-        // The Figure section and its preview push the format control below the
-        // panel. Scroll it to where its menu fits below only in the regular
-        // window.
-        let start = find(&ui.snapshot(&app), "export-chemical-format").bounds.y;
-        let (_, messages) = ui.event_at(
-            &app,
-            Event::Mouse(mouse::Event::WheelScrolled {
-                delta: mouse::ScrollDelta::Pixels {
-                    x: 0.,
-                    y: 560. - start,
-                },
-            }),
-            mouse::Cursor::Available(iced::Point::new(size.width - 160., 400.)),
-        );
-        apply(&mut app, messages);
+        // Destination controls remain at the top, ahead of shared options.
         ui.focus(&app, "export-chemical-format");
         let snapshot = ui.snapshot(&app);
         let anchor = find(&snapshot, "export-chemical-format");
@@ -251,9 +234,8 @@ async fn chemical_export_choices_fit_without_shrinking_and_keep_keyboard_actions
         }
         let first = find(&popup, IDS[0]).bounds;
         let last = find(&popup, IDS[3]).bounds;
-        if size.height == 820. {
-            // Keep the existing below-anchor gap and five-pixel surface inset
-            // when the complete popup already fits there.
+        let popup_height = last.y + last.height - first.y + 10.;
+        if anchor.y + anchor.height + GAP + popup_height + MARGIN <= size.height {
             close(first.y, anchor.y + anchor.height + GAP + 5.);
         } else {
             assert!(last.y + last.height <= anchor.y - GAP);

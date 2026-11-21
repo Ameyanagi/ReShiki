@@ -235,3 +235,74 @@ fn caption_follows_held_model_resize_at_the_same_position_as_the_commit() {
         }
     }
 }
+
+#[test]
+fn numbered_resize_preview_reflows_names_without_changing_cached_source_bounds() {
+    use crate::canvas::{
+        cache::Frame,
+        selection::{Handle, SelectionBox, TransformDrag},
+    };
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::default());
+    let b = doc.add_atom("C", World::new(500., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let atoms = [a, b];
+    reshiki::linked_properties::rename(
+        &mut doc,
+        &atoms,
+        "2-(acetyloxy)benzoic acid",
+        Default::default(),
+        false,
+    )
+    .unwrap();
+    reshiki::compound_numbers::number(&mut doc, &atoms, Default::default()).unwrap();
+    let source = doc.clone();
+    let canvas = MoleculeCanvas {
+        selected: &atoms,
+        ..chain_canvas(&doc, reshiki::chains::ChainMode::Straight)
+    };
+    let bounds = Rectangle::new(Point::new(50., 80.), iced::Size::new(800., 600.));
+    let selection = SelectionBox::new(&doc, &atoms, canvas.camera, bounds).unwrap();
+    let (lo, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
+    let end = lo.lerp(hi, 0.25);
+    let drag = TransformDrag::new(selection, Handle::Resize(2), hi, &atoms);
+    let mut committed = doc.clone();
+    drag.apply(&mut committed, end, false);
+    let _ = reshiki::transaction::reconcile(&mut committed, doc.clone()).unwrap();
+    let state = State {
+        cursor: Some(canvas.camera.screen(end, bounds) + iced::Vector::new(bounds.x, bounds.y)),
+        gesture: Some(super::super::Gesture::Transform(Box::new(drag))),
+        ..Default::default()
+    };
+    // During a draw, this cache is tied to the original document. Measuring
+    // the draft through it would reuse or poison the original selection box.
+    let _frame = Frame::begin(&state.scene, &doc);
+    let cached = state
+        .scene
+        .borrow_mut()
+        .selection(&doc, &atoms, canvas.camera, bounds);
+    let mut draft = Draft::new(&doc);
+    canvas.preview_transform(&mut draft, &state, bounds);
+    assert_eq!(draft.preview.annotations, committed.annotations);
+    let name_id = doc.property_captions[0].annotation.unwrap();
+    let height = |doc: &Document| {
+        doc.annotations
+            .iter()
+            .find(|a| a.id == name_id)
+            .unwrap()
+            .size()
+            .1
+    };
+    assert!(height(&draft.preview) > height(&doc));
+    assert_eq!(
+        format!("{cached:?}"),
+        format!(
+            "{:?}",
+            state
+                .scene
+                .borrow_mut()
+                .selection(&doc, &atoms, canvas.camera, bounds)
+        )
+    );
+    assert_eq!(doc, source);
+}

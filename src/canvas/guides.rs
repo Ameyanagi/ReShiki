@@ -6,7 +6,8 @@ use iced::{Point, Rectangle, Size};
 pub const RULER_WIDTH: f32 = 38.;
 pub const RULER_HEIGHT: f32 = 26.;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Unit {
     #[default]
     Millimetres,

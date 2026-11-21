@@ -10,9 +10,29 @@ Open **Export → Figure**, choose a format from the menu (**Vector**: **SVG**, 
 | PNG                      | An opaque image at the chosen resolution (1200 dpi by default), with physical resolution metadata.          |
 | EMF for Office (Windows) | Vector picture for Microsoft Office at the drawing's physical size. Text becomes vector outlines.           |
 
-By default, file exports in all formats include the document’s canvas colors and background, and copied pictures use a transparent background, preserving the visible ink for slides and other documents. **Canvas: Dark** exports white bonds and labels on black paper; **View → Interface** changes only the surrounding UI. To change either default, see [Background](#background).
+By default, file exports in all formats include the document’s canvas colors and background, and copied pictures use a transparent background, preserving the visible ink for slides and other documents. With the bottom **Sun/Moon** control set to a dark canvas, exports use white bonds and labels on black paper; **Settings → Appearance → Interface** changes only the surrounding UI. To change either default, see [Background](#background).
 
 Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Export pages as PDF** uses an explicitly configured publication layout; ordinary figure export crops to the artwork. See [publication pages](publication-pages.md).
+
+## Export again
+
+Available in Nightly builds; not in ReShiki 0.16.0.
+
+After exporting a picture, the top of **Export** offers **Export again**, with
+the filename, format and PNG resolution. Click it to replace that file with the
+current full drawing, using the previous background, resolution, SVG text and
+editable-drawing choices. Page exports keep their all-pages choice. The drawing's
+current geometry and style determine its physical size.
+
+The latest successful picture export replaces the previous repeat choice. Its
+row belongs to the drawing that chose the destination. On the desktop, reopening
+a saved drawing restores it. Saving an untitled drawing keeps that link when you
+reopen it. The browser keeps the row for the current tab until the drawing is
+replaced or the page reloads. Normal export still asks for a filename and starts
+in the last picture-export folder.
+Canceling or failing an export keeps the previous successful export. In the
+browser, **Export again** starts another download with the same name; the browser
+decides where it goes and whether it adds a suffix.
 
 ## Background
 

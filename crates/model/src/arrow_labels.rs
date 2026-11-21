@@ -337,6 +337,7 @@ pub fn prune(doc: &mut Document) {
         .iter()
         .map(|n| n.annotation)
         .chain(doc.property_captions.iter().filter_map(|l| l.annotation))
+        .chain(doc.compound_numbers.iter().map(|n| n.annotation))
         .collect();
     doc.arrow_labels.retain(|l| {
         arrows.contains(&l.arrow)
@@ -382,6 +383,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
         .iter()
         .map(|n| n.annotation)
         .chain(doc.property_captions.iter().filter_map(|l| l.annotation))
+        .chain(doc.compound_numbers.iter().map(|n| n.annotation))
         .collect();
     let candidates: Vec<u64> = doc
         .annotations
@@ -568,6 +570,10 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || !sides.insert((label.arrow, label.side))
             || !doc.annotations.iter().any(|a| a.id == label.annotation)
             || crate::molecule_names::is_caption(doc, label.annotation)
+            || doc
+                .compound_numbers
+                .iter()
+                .any(|n| n.annotation == label.annotation)
             || !doc
                 .arrows
                 .iter()

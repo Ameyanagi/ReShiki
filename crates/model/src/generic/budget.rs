@@ -53,6 +53,7 @@ pub(super) fn charge_validation(doc: &Document, work: &mut Work) -> Result<(), S
         .saturating_add(doc.groups.len())
         .saturating_add(doc.abbreviations.len())
         .saturating_add(doc.molecule_names.len())
+        .saturating_add(doc.compound_numbers.len())
         .saturating_add(doc.arrow_labels.len())
         .saturating_add(doc.reactions.len())
         .saturating_add(doc.arrows.len())
@@ -125,6 +126,7 @@ pub(super) fn charge_validation(doc: &Document, work: &mut Work) -> Result<(), S
             doc.annotations
                 .len()
                 .saturating_add(doc.molecule_names.len())
+                .saturating_add(doc.compound_numbers.len())
                 .saturating_add(doc.arrows.len())
                 .saturating_add(1),
         ),
@@ -133,6 +135,14 @@ pub(super) fn charge_validation(doc: &Document, work: &mut Work) -> Result<(), S
         cost = cost
             .saturating_add(doc.annotations.len())
             .saturating_add(name.atoms.len().saturating_mul(atoms.saturating_add(1)));
+    }
+    for n in &doc.compound_numbers {
+        cost = cost
+            .saturating_add(doc.annotations.len())
+            .saturating_add(doc.molecule_names.len())
+            .saturating_add(doc.property_captions.len())
+            .saturating_add(doc.arrow_labels.len())
+            .saturating_add(n.atoms.len().saturating_mul(atoms.saturating_add(1)));
     }
     for abbreviation in &doc.abbreviations {
         // Connectivity is indexed once; each abbreviation's boundary check
@@ -230,6 +240,7 @@ impl Presentation {
             annotations,
             molecule_names,
             property_captions,
+            compound_numbers,
             arrows,
             arrow_labels,
             graphics,
@@ -346,6 +357,14 @@ impl Presentation {
         }
         for link in property_captions {
             work.charge(1)?;
+            copy = copy
+                .saturating_add(std::mem::size_of_val(link))
+                .saturating_add(records::<u64>(link.atoms.len()))
+                .saturating_add(link.text.len());
+        }
+        for link in compound_numbers {
+            work.charge(1)?;
+            named_members = named_members.saturating_add(link.atoms.len());
             copy = copy
                 .saturating_add(std::mem::size_of_val(link))
                 .saturating_add(records::<u64>(link.atoms.len()))
@@ -523,7 +542,7 @@ impl Presentation {
             atom,
             bond,
             named_members,
-            names: molecule_names.len(),
+            names: molecule_names.len().saturating_add(compound_numbers.len()),
             attached_ends,
         };
         work.charge(copy.saturating_add(result.reference_work(
@@ -575,6 +594,7 @@ impl Presentation {
             .chain(source.groups.iter().map(|g| g.members.len()))
             .chain(source.abbreviations.iter().map(|g| g.members.len()))
             .chain(source.molecule_names.iter().map(|n| n.atoms.len()))
+            .chain(source.compound_numbers.iter().map(|n| n.atoms.len()))
             .chain(source.ring_fills.iter().map(|g| g.atoms.len()))
             .chain(source.depth_appearance.iter().map(|g| g.atoms.len()))
             .chain(source.reactions.iter().map(|r| {

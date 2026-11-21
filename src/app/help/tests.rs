@@ -14,7 +14,7 @@ fn shortcuts_dialog_partial_redraws_preserve_unchanged_pixels() {
         iced::Font::default(),
         iced::Pixels(16.),
     ));
-    let mut view = app.with_help(Space::new().width(Length::Fill).height(Length::Fill).into());
+    let mut view = app.with_commands(Space::new().width(Length::Fill).height(Length::Fill).into());
     let mut tree = Tree::new(view.as_widget());
     let node = view
         .as_widget_mut()
@@ -199,6 +199,7 @@ fn search_ranks_names_keys_and_synonyms() {
     assert_eq!(top("R").name, toggle);
     assert!(position("R", toggle) < position("R", "Ring tool"));
     assert_eq!(top("P").name, "Phenyl (Ph)");
+    assert_eq!(top("p").name, "Phosphorus");
     // Modifier symbols and their words find the same chord.
     for query in ["⇧r", "⇧R", "shift r", "shift+R"] {
         assert_eq!(top(query).name, toggle, "{query}");
@@ -227,6 +228,22 @@ fn search_ranks_names_keys_and_synonyms() {
         search::rank(entries(), "  ", false),
         (0..entries().len()).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn command_palette_aliases_are_discoverable_without_hiding_shorter_chords() {
+    use iced::keyboard::Modifiers;
+    for query in ["cmd k", "ctrl k", ":", "cmd shift p", "ctrl shift p"] {
+        assert_eq!(top(query).name, "Command palette", "{query}");
+    }
+    assert_eq!(
+        top("cmd shift p").keys,
+        crate::app::shortcuts::keys(Modifiers::COMMAND | Modifiers::SHIFT, "P")
+    );
+    for query in ["⇧p", "shift P", "P"] {
+        assert_eq!(top(query).name, "Phenyl (Ph)", "{query}");
+    }
+    assert_eq!(top("p").name, "Phosphorus");
 }
 
 #[test]
@@ -263,7 +280,7 @@ fn molecular_weight_precision_help_names_the_option_and_both_display_defaults() 
     for query in ["molecular weight precision", "MW rounding"] {
         let entry = top(query);
         assert_eq!(entry.name, "Molecular weight precision", "{query}");
-        assert_eq!(entry.keys, "View → 2-decimal MW");
+        assert_eq!(entry.keys, "Settings → Names & checks → Molecular weight");
         assert!(entry.description.contains("default 3"));
         assert!(entry.description.contains("exact mass keeps 5"));
         assert_eq!(entry.scope, registry::Scope::Anywhere);
@@ -651,7 +668,7 @@ async fn help_renderer_evidence() {
             let bounds = iced::Rectangle::with_size(size);
             let theme = app.theme();
             let mut view =
-                app.with_help(Space::new().width(Length::Fill).height(Length::Fill).into());
+                app.with_commands(Space::new().width(Length::Fill).height(Length::Fill).into());
             let mut tree = Tree::new(view.as_widget());
             let node =
                 view.as_widget_mut()

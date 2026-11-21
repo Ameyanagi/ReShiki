@@ -164,3 +164,33 @@ fn selecting_page_artwork_keeps_page_controls_and_centers_only_the_selection() {
     assert_eq!(app.inspector_tab, InspectorTab::Pages);
     assert!(!app.tab.history.can_undo());
 }
+
+#[test]
+fn temporary_pages_destination_keeps_panel_choices_and_does_not_apply_them_to_print_defaults() {
+    let mut app = ready();
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    app.export_tab_background = Some(crate::appearance::Background::Black);
+    app.export_tab_editable = Some(false);
+    let drawing = app.tab.doc.clone();
+    let defaults = app.appearance.clone();
+    let _ = app.update(Message::Pages(Action::Show));
+    assert_eq!(app.inspector_tab, InspectorTab::Pages);
+    assert!(app.tab.pages.editor.is_some());
+    // Page PDF and Print use the existing page settings/defaults; the panel's
+    // temporary picture choices remain available when this subpage is canceled.
+    let printable = app.print_document().unwrap();
+    assert_eq!(printable.atoms, drawing.atoms);
+    assert!(app.appearance == defaults);
+    let _ = app.update(Message::Pages(Action::Cancel));
+    assert_eq!(app.inspector_tab, InspectorTab::Export);
+    assert_eq!(
+        app.export_tab_background,
+        Some(crate::appearance::Background::Black)
+    );
+    assert_eq!(app.export_tab_editable, Some(false));
+    assert_eq!(app.tab.doc, drawing);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    assert_eq!(app.export_tab_background, None);
+    assert_eq!(app.export_tab_editable, None);
+}

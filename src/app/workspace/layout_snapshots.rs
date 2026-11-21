@@ -838,6 +838,55 @@ async fn tab_strip_clicks_switch_and_close_tabs() {
     );
 }
 
+#[tokio::test]
+#[ignore = "Opt-in compact header with both platform shortcut hints"]
+async fn compact_search_header_keeps_three_tabs_with_each_shortcut_hint() {
+    use iced::advanced::widget::operation;
+    use iced_runtime::{UserInterface, user_interface::Cache};
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let (mut app, _) = App::new();
+    many_tabs(&mut app);
+    let _ = app.update(Message::Tabs(crate::app::tabs::Action::Menu(false)));
+    let size = Size::new(1040., 54.);
+    let viewport = Rectangle::with_size(size);
+    for keys in ["⌘K", "Ctrl+K"] {
+        let mut ui = UserInterface::build(
+            app.command_bar_at(size.width, keys),
+            size,
+            Cache::new(),
+            &mut renderer,
+        );
+        let mut collect = reshiki::accessibility::Collect::new(viewport);
+        ui.operate(&renderer, &mut operation::black_box(&mut collect));
+        let snapshot = collect.snapshot();
+        let tabs: Vec<_> = snapshot
+            .nodes
+            .iter()
+            .filter(|node| {
+                node.id
+                    .strip_prefix("document-tab-")
+                    .is_some_and(|suffix| suffix.parse::<u64>().is_ok())
+            })
+            .collect();
+        assert_eq!(tabs.len(), 3, "{keys}: {tabs:?}");
+        for tab in tabs {
+            assert!(tab.bounds.width >= 84., "{keys}: {tab:?}");
+        }
+        for node in &snapshot.nodes {
+            assert!(
+                node.bounds.x >= 0. && node.bounds.x + node.bounds.width <= size.width,
+                "{keys}: {node:?}"
+            );
+        }
+    }
+}
+
 /// Every tool's context row fits the canvas of a 1040 px window with any
 /// inspector tab or none, including Reset and bonded-movement controls.
 #[tokio::test]

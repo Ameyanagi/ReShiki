@@ -27,7 +27,7 @@ pub fn wrap(
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
-    drawing_style_open: bool,
+    inspector_escape: bool,
 ) -> Element<'_, Message> {
     Element::new(FileShortcuts {
         content,
@@ -36,7 +36,7 @@ pub fn wrap(
         image_open,
         updates_open,
         atom_text_open,
-        drawing_style_open,
+        inspector_escape,
     })
 }
 
@@ -48,7 +48,7 @@ struct FileShortcuts<'a> {
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
-    drawing_style_open: bool,
+    inspector_escape: bool,
 }
 
 impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
@@ -191,9 +191,9 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             shell.capture_event();
             return;
         }
-        // Cancel the visible style draft before a focused input consumes
-        // Escape only to unfocus. Modal dialogs above keep their own priority.
-        if self.drawing_style_open
+        // Dismiss an explicit analysis or cancel a style draft before a focused
+        // input consumes Escape only to unfocus. Modals keep their priority.
+        if self.inspector_escape
             && matches!(
                 event,
                 Event::Keyboard(keyboard::Event::KeyPressed {
@@ -203,7 +203,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             )
         {
             // Preserve the application's existing menu/dialog cancellation
-            // priority before it reaches the drawing-style draft.
+            // priority before it reaches the inspector.
             shell.publish(Message::Escape);
             shell.capture_event();
             return;
@@ -443,10 +443,11 @@ impl Operation for Fields {
     fn text_input(&mut self, _id: Option<&Id>, _bounds: Rectangle, _state: &mut dyn TextInput) {
         self.single_line = true;
     }
-    fn focusable(&mut self, _id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
+    fn focusable(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
         if state.is_focused() && !self.button {
             self.focused = true;
-            if self.leave && self.single_line {
+            // Add resolves asynchronously; its successful insertion releases focus.
+            if self.leave && self.single_line && id != Some(&Id::new(super::add_panel::INPUT)) {
                 state.unfocus();
             }
         }
@@ -501,6 +502,11 @@ fn browser_tab_binding(
 
 pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Message> {
     use super::tabs::Action as Tabs;
+    // Open Search before a focused editor can consume the command. The modal
+    // branch above this router keeps dialogs in charge of their own keys.
+    if super::command_palette::is_shortcut(key, modifiers) {
+        return Some(Message::Commands(super::command_palette::Action::Open));
+    }
     for (tab, message) in [
         (TabKey::New, Message::New),
         (TabKey::Close, Message::Tabs(Tabs::Close(None))),

@@ -1019,3 +1019,143 @@ async fn manual_settings_snapshots() {
         }
     }
 }
+
+#[test]
+fn ruler_units_have_their_own_setting_default_roundtrip_and_restore() {
+    use crate::canvas::guides::Unit as RulerUnit;
+    let legacy: Settings =
+        serde_json::from_str(r#"{"mode":"light","smart_guides":false}"#).unwrap();
+    assert_eq!(legacy.ruler_unit, RulerUnit::Millimetres);
+    assert!(!legacy.smart_guides);
+    let settings = Settings {
+        ruler_unit: RulerUnit::Inches,
+        ..legacy
+    };
+    let encoded = serde_json::to_string(&settings).unwrap();
+    assert!(serde_json::from_str::<Settings>(&encoded).unwrap() == settings);
+    let mut app = app();
+    app.appearance = Settings::default();
+    let _ = app.update(Message::View(
+        super::super::view_settings::Action::RulerUnit(RulerUnit::Inches),
+    ));
+    assert_eq!(app.appearance.ruler_unit, RulerUnit::Inches);
+    assert_eq!(app.guides.unit, RulerUnit::Inches);
+    let names: Vec<_> = app
+        .settings_groups(Section::Drawing)
+        .into_iter()
+        .flat_map(|(_, items)| items.into_iter().map(|item| item.name))
+        .collect();
+    assert!(names.contains(&"Ruler units"));
+    assert!(names.contains(&"Drawing Style units"));
+    let _ = app.settings_action(Action::Restore(Section::Drawing));
+    assert_eq!(app.guides.unit, RulerUnit::Millimetres);
+    assert_eq!(app.appearance.ruler_unit, RulerUnit::Millimetres);
+}
+
+#[test]
+fn reloaded_ruler_units_replace_an_unsaved_browser_choice_and_cached_input() {
+    use crate::canvas::guides::Unit as RulerUnit;
+    let mut app = app();
+    use reshiki::{
+        arrows::{ArrowStyle, Preset},
+        document::{Annotation, Arrow, Document, Point},
+    };
+    let mut doc = Document::default();
+    doc.arrows.push(Arrow::new(
+        1,
+        Point::default(),
+        Point::new(160., 0.),
+        Preset::Forward,
+        ArrowStyle::default(),
+    ));
+    let before = doc.clone();
+    doc.annotations.push(Annotation {
+        id: 2,
+        position: Point::new(20., -40.),
+        text: "EtOH, rt".into(),
+        format: Default::default(),
+    });
+    let _ = reshiki::transaction::reconcile(&mut doc, before).unwrap();
+    doc.arrow_labels.first_mut().unwrap().gap = Some(42.);
+    app.tab.doc = doc.clone();
+    app.set_selection(vec![2]);
+    app.appearance.ruler_unit = RulerUnit::Inches;
+    app.sync_ruler_unit();
+    let inches = app.tab.arrow_label_gap_input.clone();
+    // Browser storage reloads the saved preferences after a failed write.
+    app.appearance = Settings::default();
+    app.sync_ruler_unit();
+    assert_eq!(app.guides.unit, RulerUnit::Millimetres);
+    assert_ne!(app.tab.arrow_label_gap_input, inches);
+    assert_eq!(app.tab.doc, doc);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn export_panel_background_defaults_and_explicit_swatch_keep_settings_independent() {
+    use crate::app::{InspectorTab, inspector::Action as Inspector};
+    let mut app = app();
+    app.appearance.copy_background = Background::Transparent;
+    app.appearance.export_background = Background::White;
+    let defaults = app.appearance.clone();
+    let drawing = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    assert_eq!(app.export_tab_background, None);
+    assert_eq!(app.office_copy_pictures().background, Paper::Transparent);
+    assert_eq!(app.export_picture_background(), Background::White);
+    assert_eq!(
+        app.preview_key().1,
+        [(Paper::Transparent, None), (Paper::Color([255; 3]), None)]
+    );
+    let _ = app.update(Message::InspectorAction(Inspector::ExportBackground(Some(
+        Background::Black,
+    ))));
+    assert_eq!(app.office_copy_pictures().background, Paper::Color([0; 3]));
+    assert_eq!(app.export_picture_background(), Background::Black);
+    assert_eq!(app.preview_key().1, [(Paper::Color([0; 3]), None); 2]);
+    // Ordinary Copy and Copy Image retain the Copy Settings default.
+    assert_eq!(app.copy_pictures(None).background, Paper::Transparent);
+    assert!(app.appearance == defaults);
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Settings(Action::Open(Some(Section::CopyExport))));
+    assert_eq!(
+        app.preview_key().1,
+        [(Paper::Transparent, None), (Paper::Color([255; 3]), None)]
+    );
+    let _ = app.update(Message::Settings(Action::Close));
+    assert_eq!(app.preview_key().1, [(Paper::Color([0; 3]), None); 2]);
+    let _ = app.update(Message::InspectorAction(Inspector::ExportBackground(None)));
+    assert_eq!(app.office_copy_pictures().background, Paper::Transparent);
+    assert_eq!(app.export_picture_background(), Background::White);
+}
+
+#[test]
+fn export_panel_overrides_reset_together_on_reopen_or_restored_defaults() {
+    use crate::app::{InspectorTab, inspector::Action as Inspector};
+    let mut app = app();
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    let choose = |app: &mut App| {
+        let _ = app.update(Message::InspectorAction(Inspector::ExportBackground(Some(
+            Background::Black,
+        ))));
+        let _ = app.update(Message::InspectorAction(Inspector::ExportEditable(Some(
+            false,
+        ))));
+    };
+    choose(&mut app);
+    let _ = app.update(Message::Inspector(InspectorTab::Properties));
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    assert_eq!(app.export_tab_background, None);
+    assert_eq!(app.export_tab_editable, None);
+    choose(&mut app);
+    let _ = app.update(Message::ToggleInspector);
+    assert_eq!(app.export_tab_background, None);
+    assert_eq!(app.export_tab_editable, None);
+    choose(&mut app);
+    let _ = app.update(Message::Settings(Action::Restore(Section::CopyExport)));
+    assert_eq!(app.export_tab_background, None);
+    assert_eq!(app.export_tab_editable, None);
+}

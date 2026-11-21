@@ -52,6 +52,11 @@ export async function inchi(data, format) {
   return wasm.inchi(bytes(data), format);
 }
 
+export async function predictNmr(data, format, nucleus) {
+  await init();
+  return JSON.parse(await wasm.predictNmr(bytes(data), format, nucleus));
+}
+
 export async function addFont(font) {
   await init();
   if (typeof font === "string" || font instanceof URL) {

@@ -225,6 +225,11 @@ pub fn include_annotations(doc: &Document, ids: &[u64]) -> Vec<u64> {
                 .iter()
                 .filter_map(|l| Some((l.annotation?, &l.atoms))),
         );
+    let links = links.chain(
+        doc.compound_numbers
+            .iter()
+            .map(|n| (n.annotation, &n.atoms)),
+    );
     for (annotation, atoms) in links {
         if atoms.iter().all(|id| selected.contains(id)) {
             selected.insert(annotation);

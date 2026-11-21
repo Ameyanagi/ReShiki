@@ -7,7 +7,7 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 ## Set the drawing style
 
-New documents use **JACS / ACS**. The style selector in the status bar switches directly between **JACS / ACS**, **ACS Document 1996**, **Nature**, **RSC**, **Angewandte**, and **SYNLETT / SYNTHESIS**. **JACS / ACS** is the ACS 1996 style with the values ACS publishes. **ACS Document 1996** uses ChemDraw's stationery values, which differ by less than 0.02 pt. These presets follow publisher instructions or official stationery; the editor links to each publisher. Direct selection updates matching text/strokes and scales the geometry in one Undo step. [Settings and publisher sources](/developer/journal-drawing-presets/).
+New documents use **JACS / ACS**. Open the combined preset and color theme button in the status bar, such as **JACS · Publication**. Its **Journal preset** list offers **JACS / ACS**, **ACS Document 1996**, **Nature**, **RSC**, **Angewandte**, and **SYNLETT / SYNTHESIS**. **JACS / ACS** is the ACS 1996 style with the values ACS publishes. **ACS Document 1996** uses ChemDraw's stationery values, which differ by less than 0.02 pt. These presets follow publisher instructions or official stationery; the editor links to each publisher. Direct selection updates matching text/strokes and scales the geometry in one Undo step. [Settings and publisher sources](/developer/journal-drawing-presets/).
 
 Choose **Manage styles…** to edit fonts, label size, bond length and stroke settings with a live sample preview. The fixed footer has **Import**, **Export**, and **Save** icons. Save applies the draft; returning to Properties leaves it unapplied. Export offers a native `.reshiki-style` file or ChemDraw `.cds`. Import accepts those files plus document settings from `.cdx` and `.cdxml`; template artwork and page layout are not imported. **Scale layout with bond length** is off by default in this editor; enable it when existing geometry should resize.
 
@@ -17,7 +17,7 @@ Choose **Manage styles…** to edit fonts, label size, bond length and stroke se
 
 [Compare and download every theme palette and element color →](/guide/color-palettes/)
 
-The theme selector next to it offers **Publication**, **Presentation**, **Pastel**, **Jmol**, **VESTA**, and your saved themes. The **sun/moon** button changes the canvas between white and black paper, independently of journal dimensions. Publication labels elements in neutral ink; the other themes color them. Every theme has a palette of eight hues in a **Strong** row for bonds, text and strokes and a **Tint** row for fills and ring interiors; choose them from the color button in the style bar. **View → Interface → Match canvas / Light / Dark** changes only the surrounding interface.
+The **Color theme** list in the same chooser offers **Publication**, **Presentation**, **Pastel**, **Jmol**, **VESTA**, and your saved themes. The **Sun/Moon** button in the bottom status bar changes the canvas between white and black paper, independently of journal dimensions. Publication labels elements in neutral ink; the other themes color them. Every theme has a palette of eight hues in a **Strong** row for bonds, text and strokes and a **Tint** row for fills and ring interiors; choose them from the color button in the style bar. **Settings → Appearance → Interface → Match canvas / Light / Dark** changes only the surrounding interface.
 
 Choose **Manage themes…** to preview, import, export, edit or delete custom themes. Built-ins are protected. **New theme…** lets you choose a reference palette and adjust lightness and color intensity separately for both modes. The periodic tables and molecule previews update live; use the preview icons for labels, solid tiles, interface tiles or ring-fill examples. **B** toggles bold preview symbols. Import opens a draft for review, Save stores and applies it, and Export writes both palettes without applying them. [Theme file format and contribution guide](https://github.com/Ameyanagi/ReShiki/tree/main/presets/themes).
 
@@ -52,6 +52,15 @@ Select an object to see its controls in **Properties**. **Molecular properties**
 
 Select artwork to change its style in **Properties**. Pictures can be resized, rotated, replaced, or sent behind the drawing. Group a picture and caption to move them together.
 
+### Identity in Nightly builds
+
+In Nightly builds, **Identity** puts the name, formula, molecular weight,
+**SMILES**, **InChI**, **InChIKey** and elemental analysis first. Click a value to
+copy it. **Name it** generates a name on request for a complete supported
+molecule; **Add name below** places it. Partial selections retain their fragment
+analysis. **Descriptors** holds the other calculated properties, and **Name
+options** keeps custom-name editing. See [Molecular identity](/developer/molecular-identity/).
+
 ### Show properties under a molecule
 
 1. Right-click a molecule and choose **Show properties**. **Mol. Wt.** appears centered below the molecule.
@@ -59,7 +68,7 @@ Select artwork to change its style in **Properties**. Pictures can be resized, r
 
 For mass spectrometry, right-click a molecule and choose **Show formula & masses below**. It adds the **Formula**, **Mol. Wt.** and **Exact Mass** lines that are not shown yet, in one Undo step.
 
-The caption has one line per property, in the panel's order: `Formula: C6H6O`, `Mol. Wt.: 94.11`, `Exact Mass: 94.0419`, `cLogP: 1.39`, `TPSA: 20.23` and `Anal. Calcd for C6H6O: C, 76.57; H, 6.43`. **Mol. Wt.** follows **View → 2-decimal MW**, and **Exact Mass** has 4 decimal places. To change them for one caption, select its molecule and choose from 0 to 0.00000 in the menu beside the **Weight (g/mol)** or **Exact mass (Da)** pin in **Molecular properties**. A caption with its own decimal places saves as a version 40 `.rsk` file, which ReShiki 0.16.0 cannot open.
+The caption has one line per property, in the panel's order: `Formula: C6H6O`, `Mol. Wt.: 94.11`, `Exact Mass: 94.0419`, `cLogP: 1.39`, `TPSA: 20.23` and `Anal. Calcd for C6H6O: C, 76.57; H, 6.43`. **Mol. Wt.** follows **Settings → Names & checks → Molecular weight**, and **Exact Mass** has 4 decimal places. To change them for one caption, select its molecule and choose from 0 to 0.00000 in the menu beside the **Weight (g/mol)** or **Exact mass (Da)** pin in **Molecular properties**. A caption with its own decimal places saves as a version 40 `.rsk` file, which ReShiki 0.16.0 cannot open.
 
 The lines update with every edit to the molecule, in the same Undo step. A salt's counter-ion is a separate molecule. Changing the caption's font, size or color keeps it up to date. Editing its text makes it ordinary text. Deleting the molecule deletes its caption.
 

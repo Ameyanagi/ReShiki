@@ -1,6 +1,25 @@
 use super::*;
 
 #[test]
+fn about_copies_the_installed_version_and_switches_to_settings() {
+    let (mut app, _) = App::new();
+    let original = app.tab.doc.clone();
+    let _ = app.update(Message::Updates(Action::Show(true)));
+    assert!(!app.updates.version_copied);
+    // Drop the returned task so the test leaves the system clipboard alone.
+    let _ = app.update(Message::Updates(Action::CopyVersion));
+    assert!(app.updates.version_copied);
+    let report = State::version_report();
+    assert!(report.starts_with(&format!("ReShiki {} (", updates::CURRENT_VERSION)));
+    assert!(report.contains(&State::installed_channel().to_string()));
+    let _ = app.update(Message::Updates(Action::OpenSettings));
+    assert!(!app.updates.open);
+    assert!(app.settings.open);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
 fn updates_modal_rejects_drawing_and_file_messages_before_they_change_state() {
     let (mut app, _) = App::new();
     let atom = app
@@ -242,13 +261,17 @@ fn updates_cannot_discard_unsaved_drawing_or_assistant_work() {
     let _ = app.update_action(Action::Install);
     assert!(!app.updates.installing);
     assert!(!app.updates.restarting);
-    assert!(app.updates.error.as_ref().unwrap().contains("Save"));
+    assert!(app.updates.error().unwrap().contains("Save"));
+    assert!(matches!(
+        app.updates.card_action(),
+        (_, "Update and restart", Action::Install)
+    ));
     app.tab.mark_saved(app.tab.doc.clone());
     app.tab.path = Some("saved drawing.rsk".into());
     app.assistant.busy = true;
     let _ = app.update_action(Action::Install);
     assert!(!app.updates.installing);
-    assert!(app.updates.error.as_ref().unwrap().contains("assistant"));
+    assert!(app.updates.error().unwrap().contains("assistant"));
     assert_eq!(app.tab.doc, original);
     app.assistant.busy = false;
     assert!(app.update_restart_blocker().is_none());
@@ -279,7 +302,44 @@ fn background_checks_respect_opt_out_and_do_not_change_a_drawing() {
     let _ = app.update_action(Action::Checked(app.updates.check_id, Err("Offline".into())));
     assert!(!app.updates.checking);
     assert!(app.updates.available());
+    assert_eq!(app.updates.error(), Some("Offline"));
+    assert!(matches!(
+        app.updates.card_action(),
+        (_, "Try again", Action::Check(true))
+    ));
     assert_eq!(app.tab.doc, original);
+}
+
+#[test]
+fn cached_release_can_be_refreshed_after_a_failed_download() {
+    let (mut app, _) = App::new();
+    app.updates.latest = Some(Release {
+        version: "98.0.0".into(),
+    });
+    assert!(!app.updates.automatic);
+    assert!(matches!(
+        app.updates.card_refresh_action(),
+        Some(Action::Check(true))
+    ));
+
+    app.updates.installing = true;
+    assert!(app.updates.card_refresh_action().is_none());
+    let _ = app.update_action(Action::Prepared(Err("Release removed".into())));
+    assert_eq!(app.updates.error(), Some("Release removed"));
+    let refresh = app.updates.card_refresh_action().unwrap();
+    let _ = app.update_action(refresh);
+    assert!(app.updates.checking);
+    assert!(app.updates.card_refresh_action().is_none());
+
+    let _ = app.update_action(Action::Checked(
+        app.updates.check_id,
+        Ok(Release {
+            version: "99.0.0".into(),
+        }),
+    ));
+    assert!(!app.updates.checking);
+    assert!(app.updates.error().is_none());
+    assert_eq!(app.updates.latest.unwrap().version, "99.0.0");
 }
 
 #[test]
@@ -293,7 +353,7 @@ fn switching_channels_ignores_old_results_and_keeps_automatic_checks_disabled() 
     app.updates.latest = Some(Release {
         version: "99.0.0".into(),
     });
-    app.updates.error = Some("Old error".into());
+    app.updates.error = Some(Failure::Other("Old error".into()));
     let _ = app.update_action(Action::Channel(Channel::Nightly));
     let nightly = app.updates.check_id;
     assert!(nightly > old);
@@ -357,7 +417,7 @@ fn nightly_downloads_cannot_enter_the_stable_installer() {
     ));
     assert!(app.updates.latest.is_none());
     assert!(!app.updates.available());
-    assert!(app.updates.error.as_ref().unwrap().contains("channel"));
+    assert!(app.updates.error().unwrap().contains("channel"));
 }
 
 #[tokio::test]

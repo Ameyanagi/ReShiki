@@ -823,7 +823,15 @@ pub fn read_partial(text: &str) -> Result<Imported> {
     read_with(text, true, true)
 }
 
-fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported> {
+/// Recognize an import's raw graph without sanitizing or interpreting its suffix.
+/// Names and CX annotations use the same boundary as the full import reader;
+/// pass the original input to that reader to retain them and their notices.
+pub fn parse_input_for_import(text: &str) -> Result<Parsed> {
+    let (body, _) = split_input(text)?;
+    super::parse_for_import(body)
+}
+
+fn split_input(text: &str) -> Result<(&str, &str)> {
     if text.len() > 1024 * 1024 {
         return Err(Error::Limit);
     }
@@ -831,14 +839,18 @@ fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported
         .bytes()
         .position(|b| matches!(b, b' ' | b'\t'))
         .filter(|&i| i != 0);
-    let (body, suffix) = if let Some(i) = split {
+    Ok(if let Some(i) = split {
         (
             text.get(..i).ok_or(Error::Limit)?,
             cx::trim(text.get(i..).ok_or(Error::Limit)?),
         )
     } else {
         (text, "")
-    };
+    })
+}
+
+fn read_with(text: &str, keep_stated_ez: bool, partial: bool) -> Result<Imported> {
+    let (body, suffix) = split_input(text)?;
     let mut parsed = if partial {
         super::parse_for_import(body)?
     } else {

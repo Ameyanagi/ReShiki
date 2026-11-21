@@ -318,6 +318,36 @@ impl App {
         }
         Task::none()
     }
+    /// The Export destination keeps both print scopes, including valid page
+    /// drafts that have not been applied to the drawing.
+    fn page_print_controls(&self) -> Element<'static, Message> {
+        let selection = Message::Printing(super::printing::Action::Start(
+            reshiki::printing::Scope::Selection,
+        ));
+        row![
+            reshiki::accessibility::button(
+                "pages-print",
+                "Print drawing",
+                text(super::workspace::keyed("Print…", &print())).size(12)
+            )
+            .padding([8, 10])
+            .width(Length::Fill)
+            .style(crate::appearance::secondary)
+            .on_press_maybe(self.printing.active.is_none().then(print)),
+            (!self.tab.selected.is_empty()).then(|| reshiki::accessibility::button(
+                "pages-print-selection",
+                "Print selection",
+                text("Print selection…").size(12)
+            )
+            .padding([8, 10])
+            .width(Length::Fill)
+            .style(crate::appearance::secondary)
+            .on_press_maybe(self.printing.active.is_none().then_some(selection))),
+        ]
+        .spacing(6)
+        .into()
+    }
+
     fn pages_overview(&self) -> Element<'_, Message> {
         let mut body = column![text("Publication pages").size(17)].spacing(14);
         if let Some(layout) = &self.tab.doc.page_layout {
@@ -383,12 +413,7 @@ impl App {
                         .width(Length::Fill),
                 );
             if reshiki::printing::available() {
-                body = body.push(
-                    super::workspace::keyed_command("Print…", print())
-                        .padding([8, 10])
-                        .on_press_maybe(self.printing.active.is_none().then(print))
-                        .width(Length::Fill),
-                );
+                body = body.push(self.page_print_controls());
             }
             let overflow = layout.overflow(&self.tab.doc);
             if overflow > 0 {
@@ -565,12 +590,7 @@ impl App {
                         .width(Length::Fill),
                 );
             if reshiki::printing::available() {
-                body = body.push(
-                    super::workspace::keyed_command("Print…", print())
-                        .padding([8, 10])
-                        .on_press_maybe(self.printing.active.is_none().then(print))
-                        .width(Length::Fill),
-                );
+                body = body.push(self.page_print_controls());
             }
             let overflow = layout.overflow(&self.tab.doc);
             if overflow > 0 {
@@ -581,6 +601,9 @@ impl App {
                     .on_press(Message::Pages(Action::Remove))
                     .style(button::text),
             );
+        }
+        if self.tab.doc.page_layout.is_none() && reshiki::printing::available() {
+            body = body.push(self.page_print_controls());
         }
         body.push(super::workspace::hover_hint(
             text("Objects stay in place · Margins do not print")

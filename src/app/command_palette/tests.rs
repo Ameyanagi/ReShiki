@@ -47,6 +47,72 @@ fn top(app: &App) -> &Command {
 }
 
 #[test]
+fn search_shortcuts_open_the_palette_and_preserve_longer_chords() {
+    use crate::app::{file_shortcuts, shortcuts};
+    for (key, modifiers) in [
+        ("k", Modifiers::COMMAND),
+        ("K", Modifiers::COMMAND),
+        ("p", Modifiers::COMMAND | Modifiers::SHIFT),
+        ("P", Modifiers::COMMAND | Modifiers::SHIFT),
+    ] {
+        let key = Key::Character(key.into());
+        for message in [
+            shortcuts::key_message(&key, &key, modifiers),
+            file_shortcuts::file_message(&key, modifiers),
+        ] {
+            assert!(matches!(message, Some(Message::Commands(Action::Open))));
+            let mut app = app();
+            let before = app.tab.doc.clone();
+            let _ = app.update(message.unwrap());
+            assert!(app.commands.open);
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
+        }
+    }
+    for (key, modifiers) in [
+        ("k", Modifiers::empty()),
+        ("k", Modifiers::COMMAND | Modifiers::SHIFT),
+        ("k", Modifiers::COMMAND | Modifiers::ALT),
+        ("p", Modifiers::COMMAND),
+        ("p", Modifiers::COMMAND | Modifiers::SHIFT | Modifiers::ALT),
+    ] {
+        let key = Key::Character(key.into());
+        assert!(!is_shortcut(&key, modifiers));
+        assert!(!matches!(
+            file_shortcuts::file_message(&key, modifiers),
+            Some(Message::Commands(_))
+        ));
+    }
+    let key = Key::Character("k".into());
+    assert!(matches!(
+        shortcuts::key_message(&key, &key, Modifiers::COMMAND | Modifiers::SHIFT),
+        Some(Message::Cleanup(crate::app::cleanup::Action::Begin))
+    ));
+    assert!(matches!(
+        shortcuts::key_message(&key, &key, Modifiers::COMMAND | Modifiers::ALT),
+        Some(Message::AromaticDisplay)
+    ));
+}
+
+#[test]
+fn import_and_export_stay_available_through_search() {
+    use crate::app::InspectorTab;
+    let mut app = app();
+    for (name, tab) in [
+        ("Import structure or name", InspectorTab::Import),
+        ("Export panel", InspectorTab::Export),
+    ] {
+        search(&mut app, name);
+        let index = row(&app, name);
+        let _ = app.update(Message::Commands(Action::Run(index)));
+        assert!(!app.commands.open);
+        assert!(app.inspector_open);
+        assert_eq!(app.inspector_tab, tab);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
 fn stereo_commands_are_searchable_and_style_notes_toggle_through_the_palette() {
     let mut app = app();
     for name in ["Check drawing", "Redraw stereo bonds"] {
@@ -1630,30 +1696,37 @@ fn tab_cycles_the_category_filter_and_a_new_query_resets_it() {
     ));
     let mut app = app();
     search(&mut app, "bond");
-    let categories: Vec<_> = app
-        .commands
-        .categories()
-        .into_iter()
-        .map(|(c, _)| c)
-        .collect();
-    assert!(categories.len() > 1, "{categories:?}");
     let all = app.commands.results.len();
     let cycle = |app: &mut App, step| {
         let _ = app.update(Message::Commands(Action::Cycle(step)));
-        app.commands.filter
+        if app.help_open {
+            Some(Category::Keys)
+        } else {
+            app.commands.filter
+        }
     };
-    for &category in &categories {
+    for category in [
+        Category::Insert,
+        Category::Edit,
+        Category::View,
+        Category::File,
+    ] {
         assert_eq!(cycle(&mut app, 1), Some(category));
-        assert!(app.commands.ranked().iter().all(|c| c.category == category));
+        assert!(
+            app.commands
+                .results
+                .iter()
+                .all(|index| app.commands.in_category(*index, category))
+        );
         assert_eq!(app.commands.selected, 0);
     }
+    assert_eq!(cycle(&mut app, 1), Some(Category::Keys));
+    assert!(app.help_open && !app.commands.open);
+    assert_eq!(app.help.query, "bond");
     assert_eq!(cycle(&mut app, 1), None, "Tab wraps back to All");
+    assert!(app.commands.open && !app.help_open);
     assert_eq!(app.commands.results.len(), all);
-    assert_eq!(
-        cycle(&mut app, -1),
-        categories.last().copied(),
-        "Shift+Tab wraps"
-    );
+    assert_eq!(cycle(&mut app, -1), Some(Category::Keys), "Shift+Tab wraps");
     // A chip filters directly; a query without that category shows all again.
     let _ = app.update(Message::Commands(Action::Filter(Some(Category::Bond))));
     assert_eq!(top(&app).category, Category::Bond);
@@ -2472,4 +2545,123 @@ fn save_as_has_one_name_on_every_surface() {
         save.name
             .ends_with(&super::super::files::SAVE_AS.to_lowercase().replace('…', ""))
     );
+}
+
+#[test]
+fn unified_palette_entry_points_keep_keys_and_commands_distinct() {
+    let mut app = app();
+    let atom = app.tab.doc.add_atom("C", Point::new(12., 34.));
+    app.tab.selected = vec![atom];
+    let drawing = app.tab.doc.clone();
+    let _ = app.empty_context_key("?");
+    assert!(app.help_open && !app.commands.open);
+    assert!(!app.keyboard_drawing_active());
+    let key = Key::Character("k".into());
+    let message = super::super::help::modal_key(&key, Modifiers::COMMAND).unwrap();
+    let _ = app.update(message);
+    assert!(app.commands.open && !app.help_open);
+    assert_eq!(app.commands.filter, None);
+    let message = modal_key(&Key::Named(Named::F1), Modifiers::empty()).unwrap();
+    let _ = app.update(message);
+    assert!(app.help_open && !app.commands.open);
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.selected, [atom]);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn f6_stays_within_the_open_palette_and_leaves_modified_window_shortcuts_alone() {
+    let key = Key::Named(Named::F6);
+    for handler in [modal_key, super::super::help::modal_key] {
+        assert!(matches!(
+            handler(&key, Modifiers::empty()),
+            Some(Message::Commands(Action::FocusActions(false)))
+        ));
+        assert!(matches!(
+            handler(&key, Modifiers::SHIFT),
+            Some(Message::Commands(Action::FocusActions(true)))
+        ));
+        for modifiers in [Modifiers::COMMAND, Modifiers::ALT, Modifiers::CTRL] {
+            assert!(handler(&key, modifiers).is_none());
+        }
+    }
+    assert!(crate::app::shortcuts::key_message(&key, &key, Modifiers::empty()).is_none());
+    let mut app = app();
+    assert_eq!(app.commands_action(Action::FocusActions(false)).units(), 0);
+}
+
+#[test]
+fn repeated_search_shortcuts_keep_the_active_query_and_filter() {
+    let mut app = app();
+    search(&mut app, "bond");
+    let _ = app.update(Message::Commands(Action::Filter(Some(Category::Edit))));
+    for (key, modifiers) in [
+        ("k", Modifiers::COMMAND),
+        ("P", Modifiers::COMMAND | Modifiers::SHIFT),
+    ] {
+        let message = modal_key(&Key::Character(key.into()), modifiers).unwrap();
+        assert!(matches!(message, Message::Commands(Action::FocusSearch)));
+        let _ = app.update(message);
+        assert!(app.commands.open && !app.help_open);
+        assert_eq!(app.commands.query, "bond");
+        assert_eq!(app.commands.filter, Some(Category::Edit));
+    }
+}
+
+#[test]
+fn fixed_palette_filters_cover_all_command_categories_and_keep_empty_results() {
+    let mut app = app();
+    open(&mut app);
+    let groups = app.commands.categories();
+    assert_eq!(
+        groups.iter().map(|(_, count)| count).sum::<usize>(),
+        app.commands.hits.len()
+    );
+    for index in &app.commands.hits {
+        assert_eq!(
+            groups
+                .iter()
+                .filter(|(category, _)| app.commands.in_category(*index, *category))
+                .count(),
+            1
+        );
+    }
+    let _ = app.update(Message::Commands(Action::Query(
+        "no_such_palette_entry_987654321".into(),
+    )));
+    let query = app.commands.query.clone();
+    let all = app.commands.results.clone();
+    let _ = app.update(Message::Commands(Action::Filter(Some(Category::File))));
+    assert_eq!(app.commands.filter, Some(Category::File));
+    assert!(app.commands.results.is_empty());
+    let _ = app.update(Message::Commands(Action::Filter(Some(Category::Keys))));
+    assert!(app.help_open && !app.commands.open);
+    assert_eq!(app.help.query, query);
+    assert!(app.help.results(app.help_contextual()).is_empty());
+    let _ = app.update(Message::Commands(Action::Filter(None)));
+    assert!(app.commands.open && !app.help_open);
+    assert_eq!(app.commands.query, query);
+    assert_eq!(app.commands.results, all);
+}
+
+#[test]
+fn palette_footer_routes_replace_both_filters() {
+    for keys in [false, true] {
+        for examples in [false, true] {
+            let mut app = app();
+            let _ = app.update(if keys {
+                Message::ToggleHelp
+            } else {
+                Message::Commands(Action::Open)
+            });
+            assert!(app.help_open || app.commands.open);
+            let _ = app.update(if examples {
+                Message::OpenShortcutExamples
+            } else {
+                Message::Updates(super::super::updates::Action::Show(true))
+            });
+            assert!(!app.help_open && !app.commands.open);
+            assert_eq!(app.updates.open, !examples);
+        }
+    }
 }

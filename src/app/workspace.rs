@@ -263,9 +263,9 @@ impl App {
             .into();
         let paper = self.with_drop_overlay(
             sensor(super::atom_text::canvas_anchor(self.with_context_menu(
-                self.with_inline_text(
-                    self.with_star_prompt(self.with_model_notice(drawing.map(Message::Canvas))),
-                ),
+                self.with_inline_text(self.with_star_prompt(
+                    self.with_start(self.with_model_notice(drawing.map(Message::Canvas))),
+                )),
             )))
             .on_show(Message::Viewport)
             .on_resize(Message::Viewport)
@@ -284,9 +284,6 @@ impl App {
             body = body.push(background(self.inspector()));
         }
         content = content.push(body);
-        if self.view_open {
-            content = content.push(background(self.view_options()));
-        }
         content
             .push(background(self.status_bar()))
             .height(Length::Fill)
@@ -577,9 +574,20 @@ impl App {
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
+        responsive(move |size| {
+            let search = Message::Commands(super::command_palette::Action::Open);
+            let keys = super::shortcuts::label(&search).unwrap_or_default();
+            self.command_bar_at(size.width, &keys)
+        })
+        .height(Length::Shrink)
+        .into()
+    }
+
+    fn command_bar_at(&self, width: f32, search_keys: &str) -> Element<'_, Message> {
         // The browser build updates with its page and has no local assistant.
         let browser = cfg!(target_arch = "wasm32");
         let settings = Message::Settings(super::settings_page::Action::Open(None));
+        let search = Message::Commands(super::command_palette::Action::Open);
         let bar = row![
             hover_hint(
                 reshiki::accessibility::button(
@@ -647,6 +655,27 @@ impl App {
             responsive(move |size| self.tab_strip(size.width))
                 .width(Length::Fill)
                 .height(Length::Shrink),
+            hover_hint(
+                reshiki::accessibility::button(
+                    "header-search",
+                    format!("Search commands, structures and names; {search_keys}"),
+                    row![
+                        text("Search…").size(12),
+                        super::help::chord(search_keys, 11),
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+                )
+                .height(36)
+                .padding([0, 10])
+                .style(control(self.commands.open))
+                .on_press(search.clone()),
+                keyed("Search commands, structures and names", &search),
+                tooltip::Position::Bottom,
+            ),
+            self.check_button(),
+            self.cleanup_button(),
+            divider(),
             (!browser).then(|| icon_button(
                 Icon::Assistant(self.assistant.busy),
                 if self.assistant.busy {
@@ -657,20 +686,6 @@ impl App {
                 Some(Message::Assistant(super::assistant::Action::Open)),
                 self.inspector_open && self.inspector_tab == InspectorTab::Assistant
             )),
-            icon_button(
-                Icon::Import,
-                keyed("Import", &Message::Inspector(InspectorTab::Import)),
-                Some(Message::Inspector(InspectorTab::Import)),
-                self.inspector_open && self.inspector_tab == InspectorTab::Import
-            ),
-            self.check_button(),
-            self.cleanup_button(),
-            icon_button(
-                Icon::Export,
-                keyed("Export", &Message::Inspector(InspectorTab::Export)),
-                Some(Message::Inspector(InspectorTab::Export)),
-                self.inspector_open && self.inspector_tab == InspectorTab::Export
-            ),
             icon_button(
                 Icon::Settings,
                 keyed("Settings", &settings),
@@ -684,7 +699,9 @@ impl App {
                 self.inspector_open
             )
         ]
-        .spacing(4)
+        // Keep three ordinary tabs beside Search at the minimum window size,
+        // including the longer Ctrl+K hint on Windows and Linux.
+        .spacing(if width < 1200. { 2 } else { 4 })
         .align_y(Alignment::Center);
         container(bar).padding([9, 14]).style(panel).into()
     }
@@ -935,24 +952,44 @@ impl App {
 
     /// Length and Angles for drawing and bonded movement; their Reset is a
     /// row command, so that it can fold into ⋯.
-    fn bond_constraints(&self) -> Element<'_, Message> {
+    fn bond_constraints(&self, scope: &'static str) -> Element<'_, Message> {
         row![
-            checkbox(self.tab.bond_drawing.fixed_length)
-                .label("Length")
-                .on_toggle(Message::FixedLength)
-                .size(13)
-                .text_size(11),
-            container(unit_field(
-                crate::appearance::text_input("14.4", &self.tab.drawing_length_input)
-                    .on_input(Message::DrawingLength),
+            tool_toggle(
+                scope,
+                "fixed-length",
+                "Length",
+                self.tab.bond_drawing.fixed_length,
+                Message::FixedLength(!self.tab.bond_drawing.fixed_length),
+                checkbox(self.tab.bond_drawing.fixed_length)
+                    .label("Length")
+                    .on_toggle(Message::FixedLength)
+                    .size(13)
+                    .text_size(11),
+            ),
+            container(accessible_unit_field(
+                tool_input(
+                    scope,
+                    "bond-length",
+                    "Bond length (pt)",
+                    "14.4",
+                    &self.tab.drawing_length_input
+                )
+                .on_input(Message::DrawingLength),
                 "pt",
             ))
             .width(UNIT_FIELD),
-            checkbox(self.tab.bond_drawing.fixed_angles)
-                .label("Angles")
-                .on_toggle(Message::FixedAngles)
-                .size(13)
-                .text_size(11),
+            tool_toggle(
+                scope,
+                "fixed-angles",
+                "Angles",
+                self.tab.bond_drawing.fixed_angles,
+                Message::FixedAngles(!self.tab.bond_drawing.fixed_angles),
+                checkbox(self.tab.bond_drawing.fixed_angles)
+                    .label("Angles")
+                    .on_toggle(Message::FixedAngles)
+                    .size(13)
+                    .text_size(11),
+            ),
         ]
         .spacing(6)
         .align_y(Alignment::Center)
@@ -1070,6 +1107,14 @@ impl App {
                     enabled: true,
                 });
             }
+        }
+        if !self.tab.doc.compound_numbers.is_empty() {
+            commands.push(RowCommand {
+                label: "Renumber",
+                menu: "Renumber",
+                message: Message::RenumberCompounds,
+                enabled: !self.tab.busy,
+            });
         }
         commands.extend(self.depth_commands());
         if !keyboard {
@@ -1293,7 +1338,7 @@ impl App {
                 arrange,
             },
         );
-        let (options_list, hint) = self.tool_options(fit.summary);
+        let (options_list, hint) = self.tool_options(fit.summary, "context");
         // A shortened name or hidden summary stays in the name's tooltip.
         let mut about = vec![];
         if fit.short {
@@ -1420,35 +1465,54 @@ impl App {
         hover_hint(anchor, hint, tooltip::Position::Bottom).into()
     }
 
+    /// Inspector defaults reuse context controls with their own semantic IDs.
+    /// Graphics keep their dedicated panel (including its own arc preset IDs).
+    pub(super) fn property_tool_options(
+        &self,
+    ) -> (Vec<Element<'_, Message>>, std::borrow::Cow<'static, str>) {
+        match self.tool {
+            tool if tool.bond_preset().is_some() => self.tool_options(false, "properties"),
+            Tool::Chain(_) | Tool::Atom | Tool::Ring | Tool::RingPreset(_) | Tool::Arrow => {
+                self.tool_options(false, "properties")
+            }
+            _ => (vec![], self.tool.hint().into()),
+        }
+    }
+
     /// Options for the current tool, and the usage hint shown on the tool
     /// name (`Tool::hint`). `summary` shows the selection summary of the
     /// selection tools.
     fn tool_options(
         &self,
         summary: bool,
+        scope: &'static str,
     ) -> (Vec<Element<'_, Message>>, std::borrow::Cow<'static, str>) {
         let options = match self.tool {
             tool if tool.bond_preset().is_some() => {
                 vec![
-                    crate::appearance::pick_list(BondPreset::ALL, tool.bond_preset(), |preset| {
-                        Message::Tool(match preset {
-                            BondPreset::Single => Tool::Bond(1),
-                            BondPreset::Double => Tool::Bond(2),
-                            BondPreset::Triple => Tool::Bond(3),
-                            BondPreset::Wedge => Tool::Wedge,
-                            BondPreset::HashedWedge => Tool::Hash,
-                            BondPreset::Wavy => Tool::Wavy,
-                            other => Tool::StyledBond(other),
-                        })
-                    })
-                    .text_size(12)
-                    .padding(5)
-                    .into(),
-                    self.bond_constraints(),
+                    tool_choice(
+                        scope,
+                        "bond-preset",
+                        "Bond type",
+                        BondPreset::ALL.to_vec(),
+                        tool.bond_preset(),
+                        |preset| {
+                            Message::Tool(match preset {
+                                BondPreset::Single => Tool::Bond(1),
+                                BondPreset::Double => Tool::Bond(2),
+                                BondPreset::Triple => Tool::Bond(3),
+                                BondPreset::Wedge => Tool::Wedge,
+                                BondPreset::HashedWedge => Tool::Hash,
+                                BondPreset::Wavy => Tool::Wavy,
+                                other => Tool::StyledBond(other),
+                            })
+                        },
+                    ),
+                    self.bond_constraints(scope),
                 ]
             }
             // The tool name shows the mode; the palette switches it.
-            Tool::Chain(mode) => self.chain_tool_options(mode),
+            Tool::Chain(mode) => self.chain_tool_options(mode, scope),
             Tool::StretchBond { .. } => {
                 vec![
                     reshiki::accessibility::button(
@@ -1496,30 +1560,36 @@ impl App {
                     done("Cancel"),
                 ]
             }
-            Tool::Ring | Tool::RingPreset(_) => self.ring_tool_options(),
+            Tool::Ring | Tool::RingPreset(_) => self.ring_tool_options(scope),
             Tool::Arrow => {
-                vec![
-                    crate::appearance::pick_list(
-                        reshiki::arrows::Preset::ALL,
-                        Some(self.tab.arrow_style),
-                        Message::ArrowStyle,
-                    )
-                    .text_size(12)
-                    .padding(5)
-                    .into(),
-                ]
+                vec![tool_choice(
+                    scope,
+                    "arrow-preset",
+                    "Arrow type",
+                    reshiki::arrows::Preset::ALL.to_vec(),
+                    Some(self.tab.arrow_style),
+                    Message::ArrowStyle,
+                )]
             }
             Tool::Atom => {
                 vec![
                     text(format!("Element: {}", self.element)).size(12).into(),
-                    crate::appearance::text_input("Symbol: Si, Na, Fe…", &self.custom_element)
-                        .on_input(Message::CustomElement)
-                        .on_submit(Message::ApplyElement)
-                        .size(12)
-                        .padding(6)
-                        .width(160)
+                    tool_input(
+                        scope,
+                        "element",
+                        "Element symbol",
+                        "Symbol: Si, Na, Fe…",
+                        &self.custom_element,
+                    )
+                    .on_input(Message::CustomElement)
+                    .on_submit(Message::ApplyElement)
+                    .size(12)
+                    .padding(6)
+                    .width(160)
+                    .into(),
+                    accessible_command(format!("{scope}-apply-element"), "Use element", "Use")
+                        .on_press(Message::ApplyElement)
                         .into(),
-                    command("Use", Message::ApplyElement).into(),
                 ]
             }
             Tool::Tilt => self.tilt_tool_options(),
@@ -1543,16 +1613,26 @@ impl App {
         (options, hint)
     }
 
-    fn chain_tool_options(&self, mode: reshiki::chains::ChainMode) -> Vec<Element<'_, Message>> {
+    fn chain_tool_options(
+        &self,
+        mode: reshiki::chains::ChainMode,
+        scope: &'static str,
+    ) -> Vec<Element<'_, Message>> {
         vec![
             hover_hint(
                 row![
                     text(chain_atoms_label(mode)).size(11),
-                    crate::appearance::text_input("Auto", &self.tab.chain_atoms_input)
-                        .on_input(Message::ChainAtoms)
-                        .width(49)
-                        .size(12)
-                        .padding(5),
+                    tool_input(
+                        scope,
+                        "chain-atoms",
+                        "Chain atom count",
+                        "Auto",
+                        &self.tab.chain_atoms_input
+                    )
+                    .on_input(Message::ChainAtoms)
+                    .width(49)
+                    .size(12)
+                    .padding(5),
                 ]
                 .spacing(4)
                 .align_y(Alignment::Center),
@@ -1562,9 +1642,15 @@ impl App {
             .into(),
             row![
                 text("Angle").size(11),
-                container(unit_field(
-                    crate::appearance::text_input("120", &self.tab.chain_angle_input)
-                        .on_input(Message::ChainAngle),
+                container(accessible_unit_field(
+                    tool_input(
+                        scope,
+                        "chain-angle",
+                        "Chain angle (degrees)",
+                        "120",
+                        &self.tab.chain_angle_input
+                    )
+                    .on_input(Message::ChainAngle),
                     "°",
                 ))
                 .width(UNIT_FIELD),
@@ -1572,7 +1658,7 @@ impl App {
             .spacing(4)
             .align_y(Alignment::Center)
             .into(),
-            self.bond_constraints(),
+            self.bond_constraints(scope),
         ]
     }
 
@@ -1615,54 +1701,62 @@ impl App {
         options
     }
 
-    fn ring_tool_options(&self) -> Vec<Element<'_, Message>> {
+    fn ring_tool_options(&self, scope: &'static str) -> Vec<Element<'_, Message>> {
         use reshiki::rings::Preset;
         let preset = if let Tool::RingPreset(p) = self.tool {
             p
         } else {
             Preset::Regular
         };
-        let mut options = vec![
-            crate::appearance::pick_list(Preset::ALL, Some(preset), |p| {
+        let mut options = vec![tool_choice(
+            scope,
+            "ring-preset",
+            "Ring preset",
+            Preset::ALL.to_vec(),
+            Some(preset),
+            |p| {
                 Message::Tool(if p == Preset::Regular {
                     Tool::Ring
                 } else {
                     Tool::RingPreset(p)
                 })
-            })
-            .text_size(12)
-            .padding(5)
-            .into(),
-        ];
+            },
+        )];
         if preset != Preset::Regular {
             return options;
         }
         options.extend([
             text("Size").size(11).style(muted_text).into(),
-            crate::appearance::pick_list(
-                [3_u8, 4, 5, 6, 7, 8],
+            tool_choice(
+                scope,
+                "ring-size",
+                "Ring size",
+                vec![3_u8, 4, 5, 6, 7, 8],
                 Some(self.ring_size),
                 Message::RingSize,
-            )
-            .text_size(12)
-            .padding(5)
-            .into(),
-            // A separate label draws the shortcut in the shortcut font.
-            row![
-                checkbox(self.aromatic_ring)
-                    .on_toggle(Message::AromaticRing)
-                    .size(14),
-                mouse_area(keyed_text(
-                    "Aromatic",
-                    Some(keys(Modifiers::SHIFT, "R")),
-                    ""
-                ))
-                .on_press(Message::AromaticRing(!self.aromatic_ring))
-                .interaction(iced::mouse::Interaction::Pointer),
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center)
-            .into(),
+            ),
+            tool_toggle(
+                scope,
+                "aromatic-ring",
+                "Aromatic",
+                self.aromatic_ring,
+                Message::AromaticRing(!self.aromatic_ring),
+                // A separate label draws the shortcut in the shortcut font.
+                row![
+                    checkbox(self.aromatic_ring)
+                        .on_toggle(Message::AromaticRing)
+                        .size(14),
+                    mouse_area(keyed_text(
+                        "Aromatic",
+                        Some(keys(Modifiers::SHIFT, "R")),
+                        ""
+                    ))
+                    .on_press(Message::AromaticRing(!self.aromatic_ring))
+                    .interaction(iced::mouse::Interaction::Pointer),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            ),
         ]);
         options
     }
@@ -1731,7 +1825,7 @@ impl App {
             }
             options.push(
                 hover_hint(
-                    self.bond_constraints(),
+                    self.bond_constraints("context"),
                     format!(
                         "Bonded movement follows Length / Angles · {}: free movement",
                         crate::platform::alt_key()
@@ -1812,6 +1906,7 @@ impl App {
         let mut tabs = row![];
         for (label, tab) in INSPECTOR_TABS {
             let selected = self.inspector_tab == tab
+                || (tab == InspectorTab::Templates && self.inspector_tab == InspectorTab::Import)
                 || (tab == InspectorTab::Properties
                     && matches!(
                         self.inspector_tab,
@@ -1882,7 +1977,12 @@ impl App {
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
-            InspectorTab::Import => self.import_panel(),
+            InspectorTab::Import => column![
+                panel_action("← Add", Message::Inspector(InspectorTab::Templates)),
+                self.import_panel(),
+            ]
+            .spacing(8)
+            .into(),
             InspectorTab::Names => self.naming_panel(),
             InspectorTab::Export => self.export_panel(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -1910,7 +2010,7 @@ impl App {
         use super::template_library::Action as A;
         let action = Message::Templates;
         let state = &self.templates;
-        let mut body = column![section("Template library")].spacing(8);
+        let mut body = column![].spacing(8);
         body = self.template_browse_controls(body);
         if let Some(error) = &state.notice {
             body = body.push(
@@ -1969,13 +2069,7 @@ impl App {
         let action = Message::Templates;
         let state = &self.templates;
         if !state.active {
-            let mut search = column![
-                crate::appearance::text_input("Search names, collections…", &state.query)
-                    .on_input(|s| Message::Templates(A::Search(s)))
-                    .size(12)
-                    .padding(8),
-            ]
-            .spacing(8);
+            let mut search = column![self.add_search()].spacing(8);
             if state.collection != "All collections" && !state.query.trim().is_empty() {
                 search = search.push(
                     row![
@@ -2016,20 +2110,6 @@ impl App {
                     ]
                     .spacing(3),
                 );
-            body = body.push(
-                button(text("Save selection as template").size(12))
-                    .padding(7)
-                    .width(Length::Fill)
-                    .on_press_maybe((!self.tab.selected.is_empty()).then(|| action(A::BeginSave))),
-            );
-            body = body.push(
-                row![
-                    panel_action("Import…", action(A::Import)),
-                    panel_action("Export…", action(A::Export)),
-                    panel_action("Reload", action(A::Reload))
-                ]
-                .spacing(3),
-            );
         } else {
             body = body.push(command("← Browse templates", action(A::Browse)));
         }
@@ -2146,36 +2226,25 @@ impl App {
             && state.filter == Filter::All
         {
             let mut categories =
-                std::collections::BTreeMap::<&str, (usize, &reshiki::templates::Template)>::new();
+                std::collections::BTreeMap::<&str, &reshiki::templates::Template>::new();
             for template in state.library.iter() {
                 for name in super::template_library::categories(template) {
-                    let entry = categories.entry(name).or_insert((0, template));
-                    entry.0 += 1;
+                    categories.entry(name).or_insert(template);
                 }
             }
             body = body.push(horizontal_line()).push(section("Categories"));
-            for (name, (count, sample)) in categories {
-                let preview: Element<'_, Message> =
-                    canvas(crate::canvas::TemplateThumbnail(&sample.document))
-                        .width(26)
-                        .height(26)
-                        .into();
-                body = body.push(
-                    button(
-                        row![
-                            preview,
-                            text(name).size(12).width(Length::Fill),
-                            text(count.to_string()).size(11).style(muted_text),
-                            text("›").size(15)
-                        ]
-                        .spacing(7)
-                        .align_y(Alignment::Center),
-                    )
-                    .padding([3, 6])
-                    .width(Length::Fill)
-                    .style(button::text)
-                    .on_press(action(A::Collection(name.into()))),
-                );
+            let entries: Vec<_> = categories.into_iter().collect();
+            for tiles in entries.chunks(3) {
+                let mut line = row![].spacing(6);
+                for (name, sample) in tiles {
+                    line = line.push(template_tile(
+                        format!("template-category-{name}"),
+                        name,
+                        &sample.document,
+                        action(A::Collection((*name).into())),
+                    ));
+                }
+                body = body.push(line);
             }
             return body;
         }
@@ -2205,23 +2274,14 @@ impl App {
             .size(11)
             .style(muted_text),
         );
-        for tiles in matches.chunks(4) {
-            let mut line = row![].spacing(4);
+        for tiles in matches.chunks(3) {
+            let mut line = row![].spacing(6);
             for (index, template) in tiles {
-                let preview: Element<'_, Message> =
-                    canvas(crate::canvas::TemplateThumbnail(&template.document))
-                        .width(44)
-                        .height(44)
-                        .into();
-                line = line.push(hover_hint(
-                    button(preview)
-                        .padding(4)
-                        .width(52)
-                        .height(52)
-                        .style(control(state.active && self.template_index == *index))
-                        .on_press(Message::InsertTemplate(*index)),
-                    template.name.as_str(),
-                    tooltip::Position::Left,
+                line = line.push(template_tile(
+                    format!("template-tile-{}", template.id),
+                    &template.name,
+                    &template.document,
+                    Message::InsertTemplate(*index),
                 ));
             }
             body = body.push(line);
@@ -2789,124 +2849,6 @@ impl App {
             .into()
     }
 
-    /// Interface, canvas aids, data display and actions, set apart by wider
-    /// gaps. On a narrow window whole groups wrap to a second line rather than
-    /// run off the edge.
-    fn view_options(&self) -> Element<'_, Message> {
-        let group = |items: Vec<Element<'static, Message>>| -> Element<'static, Message> {
-            iced::widget::Row::with_children(items)
-                .spacing(10)
-                .align_y(Alignment::Center)
-                .into()
-        };
-        let interface = group(vec![
-            text("View").size(12).style(muted_text).into(),
-            text("Interface").size(12).style(muted_text).into(),
-            crate::appearance::pick_list(
-                crate::appearance::Mode::ALL,
-                Some(self.appearance.mode),
-                Message::Appearance,
-            )
-            .text_size(12)
-            .padding(5)
-            .width(132)
-            .into(),
-        ]);
-        let canvas = group(vec![
-            checkbox(self.grid)
-                .label("Grid")
-                .on_toggle(|_| Message::View(super::view_settings::Action::Grid))
-                .size(14)
-                .text_size(12)
-                .into(),
-            checkbox(self.guides.rulers)
-                .label("Rulers")
-                .on_toggle(|on| Message::View(super::view_settings::Action::Rulers(on)))
-                .size(14)
-                .text_size(12)
-                .into(),
-            checkbox(self.guides.crosshair)
-                .label("Crosshair")
-                .on_toggle(|on| Message::View(super::view_settings::Action::Crosshair(on)))
-                .size(14)
-                .text_size(12)
-                .into(),
-            text("Units").size(12).style(muted_text).into(),
-            crate::appearance::pick_list(
-                crate::canvas::guides::Unit::ALL,
-                Some(self.guides.unit),
-                |unit| Message::View(super::view_settings::Action::RulerUnit(unit)),
-            )
-            .text_size(12)
-            .padding(5)
-            .width(68)
-            .into(),
-            hover_hint(
-                checkbox(self.appearance.smart_guides)
-                    .label("Smart guides")
-                    .on_toggle(|on| Message::View(super::view_settings::Action::SmartGuides(on)))
-                    .size(14)
-                    .text_size(12),
-                format!(
-                    "Snap dragged objects to other objects' edges, centers and equal gaps · Hold {} to move freely",
-                    crate::platform::alt_key()
-                ),
-                tooltip::Position::Top,
-            )
-            .into(),
-            hover_hint(
-                checkbox(self.appearance.arrange_controls)
-                    .label("Arrange controls")
-                    .on_toggle(|visible| {
-                        Message::ObjectToolbar(super::object_toolbar::Action::Visible(visible))
-                    })
-                    .size(14)
-                    .text_size(12),
-                "Align, distribute, order, flip and rotate at the right end of the Select row",
-                tooltip::Position::Top,
-            )
-            .into(),
-        ]);
-        let data = group(vec![
-            hover_hint(
-                checkbox(self.appearance.two_decimal_weight)
-                    .label("2-decimal MW")
-                    .on_toggle(|on| {
-                        Message::View(super::view_settings::Action::TwoDecimalWeight(on))
-                    })
-                    .size(14)
-                    .text_size(12),
-                "Mol. Wt. with 2 decimal places instead of 3; a caption can set its own",
-                tooltip::Position::Top,
-            )
-            .into(),
-            hover_hint(
-                checkbox(self.appearance.name_typography)
-                    .label("Chemical name typography")
-                    .on_toggle(|on| Message::View(super::view_settings::Action::NameTypography(on)))
-                    .size(14)
-                    .text_size(12),
-                "Italic descriptors, primes and superscripts in name captions",
-                tooltip::Position::Top,
-            )
-            .into(),
-        ]);
-        let actions = group(vec![
-            command("Page setup…", Message::Pages(super::pages::Action::Show)).into(),
-            command("Done", Message::View(super::view_settings::Action::Toggle)).into(),
-        ]);
-        container(
-            row![interface, canvas, data, actions]
-                .spacing(24)
-                .wrap()
-                .vertical_spacing(4),
-        )
-        .padding([7, 14])
-        .width(Length::Fill)
-        .style(panel)
-        .into()
-    }
-
     fn status_bar(&self) -> Element<'_, Message> {
         let summary = self.status.lines().next().unwrap_or(&self.status);
         let error = self.error;
@@ -3032,11 +2974,7 @@ impl App {
             .align_y(Alignment::Center)
             .height(32)
             .push(divider())
-            .push(
-                accessible_command("status-view", "Drawing view options", "View")
-                    .on_press(Message::View(super::view_settings::Action::Toggle))
-                    .style(control(self.view_open)),
-            )
+            .push(self.view_menu())
             .push(
                 accessible_command("status-zoom-out", "Zoom out", "−").on_press(Message::Zoom(0.8)),
             )
@@ -3071,72 +3009,11 @@ impl App {
             .into()
     }
 
-    /// Journal preset, color theme and canvas light/dark: whole-document
-    /// settings, kept beside View and zoom.
-    fn document_settings(&self) -> [Element<'_, Message>; 3] {
-        use super::document_styles::Choice;
-        use super::theme_files::Choice as ThemeChoice;
-        use reshiki::document_styles::Preset;
-        let current = Preset::ALL
-            .into_iter()
-            .find(|p| p.style() == self.tab.doc.drawing_style)
-            .map(Choice::Journal)
-            .unwrap_or(Choice::Custom);
-        let (themes, theme) = self.theme_choices();
-        let themes_only: Vec<_> = (themes.iter())
-            .filter(|choice| **choice != ThemeChoice::Manage)
-            .cloned()
-            .collect();
+    /// The combined style chooser and the canvas light/dark control.
+    fn document_settings(&self) -> [Element<'_, Message>; 2] {
         let dark = self.tab.doc.canvas_theme.is_dark();
         [
-            hover_hint(
-                // Manage styles… opens the inspector, so ↑ ↓ skip it.
-                reshiki::accessibility::select(
-                    "journal-preset",
-                    "Journal preset",
-                    Preset::ALL.to_vec(),
-                    current.to_string(),
-                    |preset| Message::QuickDrawingStyle(Choice::Journal(preset)),
-                    crate::appearance::close_on_escape(
-                        crate::appearance::pick_list(
-                            Preset::ALL
-                                .into_iter()
-                                .map(Choice::Journal)
-                                .chain([Choice::Details])
-                                .collect::<Vec<_>>(),
-                            Some(current),
-                            Message::QuickDrawingStyle,
-                        )
-                        .text_size(11)
-                        .padding([4, 8]),
-                    ),
-                ),
-                "Journal preset · Bond length, line widths and label font",
-                tooltip::Position::Top,
-            )
-            .into(),
-            hover_hint(
-                // Manage themes… opens the theme editor, so ↑ ↓ skip it.
-                reshiki::accessibility::select(
-                    "color-theme",
-                    "Color theme",
-                    themes_only,
-                    theme.to_string(),
-                    |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
-                    crate::appearance::close_on_escape(
-                        crate::appearance::pick_list(themes, Some(theme.clone()), |choice| {
-                            Message::ThemeFile(super::theme_files::Action::Choose(choice))
-                        })
-                        // Sizes the list for an embedded theme's name, which is not an option.
-                        .placeholder(theme.to_string())
-                        .text_size(11)
-                        .padding([4, 8]),
-                    ),
-                ),
-                "Color theme",
-                tooltip::Position::Top,
-            )
-            .into(),
+            self.status_style(),
             hover_hint(
                 reshiki::accessibility::button(
                     "canvas-theme",
@@ -3161,15 +3038,48 @@ impl App {
     }
 }
 
+fn template_tile<'a>(
+    id: String,
+    title: &'a str,
+    document: &'a reshiki::document::Document,
+    message: Message,
+) -> Element<'a, Message> {
+    let preview = canvas(crate::canvas::TemplateThumbnail(document))
+        .width(54)
+        .height(42);
+    hover_hint(
+        reshiki::accessibility::button(
+            id,
+            title,
+            column![
+                preview,
+                text(title)
+                    .size(11)
+                    .height(31)
+                    .width(Length::Fill)
+                    .align_x(iced::alignment::Horizontal::Center),
+            ]
+            .spacing(3)
+            .align_x(Alignment::Center),
+        )
+        .padding([4, 5])
+        .width(90)
+        .style(control(false))
+        .on_press(message),
+        title,
+        tooltip::Position::Left,
+    )
+    .into()
+}
+
 const PALETTE_WIDTH: f32 = 104.;
 const INSPECTOR_WIDTH: f32 = 320.;
 /// The inspector's tab strip: a segmented control. Equal segments cannot fit
 /// "Properties" at 12 px, so each grows with its label.
-const INSPECTOR_TABS: [(&str, InspectorTab); 5] = [
+const INSPECTOR_TABS: [(&str, InspectorTab); 4] = [
     ("Properties", InspectorTab::Properties),
     ("Predict", InspectorTab::Predict),
-    ("Templates", InspectorTab::Templates),
-    ("Import", InspectorTab::Import),
+    ("Add", InspectorTab::Templates),
     ("Export", InspectorTab::Export),
 ];
 /// The tallest the Check drawing findings grow before they scroll; with the
@@ -3476,35 +3386,7 @@ fn hint_tooltip<'a>(
     .snap_within_viewport(true)
 }
 
-/// A numeric input with its unit inside the right edge of the field.
-pub(super) fn unit_field<'a>(
-    input: iced::widget::TextInput<'a, Message>,
-    unit: &'a str,
-) -> Element<'a, Message> {
-    iced::widget::stack![
-        input
-            .size(12)
-            .padding(iced::Padding {
-                top: 5.,
-                right: 18.,
-                bottom: 5.,
-                left: 5.,
-            })
-            .width(Length::Fill),
-        // The degree sign is too small to see at the other units' size.
-        container(
-            text(unit)
-                .size(if unit == "°" { 16 } else { 11 })
-                .style(muted_text)
-        )
-        .padding([0, 4])
-        .align_right(Length::Fill)
-        .center_y(Length::Fill),
-    ]
-    .width(Length::Fill)
-    .into()
-}
-
+/// A named numeric input with its unit inside the right edge of the field.
 pub(super) fn accessible_unit_field<'a>(
     input: reshiki::accessibility::TextInput<'a, Message>,
     unit: &'a str,
@@ -3531,6 +3413,65 @@ pub(super) fn accessible_unit_field<'a>(
     ]
     .width(Length::Fill)
     .into()
+}
+
+/// The context row and Properties share values/actions, but each visible
+/// instance needs its own native identity and keyboard focus target.
+fn tool_choice<'a, T: ToString + PartialEq + Clone + 'a>(
+    scope: &'static str,
+    key: &'static str,
+    name: &'static str,
+    options: Vec<T>,
+    selected: Option<T>,
+    on_select: impl Fn(T) -> Message + Copy + 'a,
+) -> Element<'a, Message> {
+    let value = selected
+        .as_ref()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    reshiki::accessibility::select(
+        format!("{scope}-{key}"),
+        name,
+        options.clone(),
+        value,
+        on_select,
+        crate::appearance::close_on_escape(
+            crate::appearance::pick_list(options, selected, on_select)
+                .text_size(12)
+                .padding(5),
+        ),
+    )
+    .into()
+}
+
+fn tool_input<'a>(
+    scope: &'static str,
+    key: &'static str,
+    name: &'static str,
+    placeholder: &str,
+    value: &str,
+) -> reshiki::accessibility::TextInput<'a, Message> {
+    reshiki::accessibility::text_input(format!("{scope}-{key}"), name, placeholder, value)
+        .style(crate::appearance::input_style)
+}
+
+fn tool_toggle<'a>(
+    scope: &'static str,
+    key: &'static str,
+    name: &'static str,
+    checked: bool,
+    message: Message,
+    content: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    reshiki::accessibility::button(format!("{scope}-{key}"), name, content)
+        .checked(checked)
+        .on_press(message)
+        .padding(0)
+        .style(|theme: &Theme, _| button::Style {
+            text_color: theme.palette().text,
+            ..Default::default()
+        })
+        .into()
 }
 
 /// A panel action: a full-width secondary button, so it reads as a control

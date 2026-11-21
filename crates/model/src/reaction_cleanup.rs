@@ -427,6 +427,12 @@ fn scope(doc: &Document, selection: &[u64]) -> Vec<u64> {
             .filter(|name| name.atoms.iter().any(|id| atoms.contains(id)))
             .map(|name| name.annotation),
     );
+    ids.extend(
+        doc.compound_numbers
+            .iter()
+            .filter(|n| n.atoms.iter().any(|id| atoms.contains(id)))
+            .map(|n| n.annotation),
+    );
     let mut ids = crate::arrow_labels::with_labels(doc, &ids);
     ids.sort_unstable();
     ids.dedup();

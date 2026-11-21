@@ -66,6 +66,7 @@ await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 | `renderPng(data, format, { maxWidth, maxHeight })` | The editor's PNG preview on white, scaled to fit (1600 × 1000 by default).    |
 | `smiles(data, format)`                             | The canonical SMILES.                                                         |
 | `inchi(data, format)`                              | The standard InChI.                                                           |
+| `predictNmr(data, format, nucleus)`                | Offline `"1H"` or `"13C"` shifts, reference statistics and data credit.       |
 | `addFont(font)`                                    | Adds a font (a URL or bytes) that figures fall back to, such as for Japanese. |
 | `version()`                                        | The ReShiki release version, e.g. `0.16.0` (including any prerelease suffix). |
 
@@ -89,7 +90,7 @@ with the same default.
 Failures reject with an `Error` that carries the app's message and a `code`,
 the [error code](https://reshiki.com/developer/agent-api/#error-codes) the MCP
 tools and the command line report for the same failure:
-`invalid_arguments` for a format or option that is not accepted, and `failed`
+`invalid_arguments` for a format, option or nucleus that is not accepted, and `failed`
 when the structure cannot be read, drawn or written.
 
 ```js
@@ -102,7 +103,7 @@ try {
 
 Some inputs import with a change or an assumption, such as a SMILES bond of any
 order (`~`), which is drawn as a single bond. The app shows
-a warning for these; `convert`, `renderSvg`, `renderPng`, `smiles` and `inchi`
+a warning for these; `convert`, `renderSvg`, `renderPng`, `smiles`, `inchi` and `predictNmr`
 return only their result. To see the warnings, `read` the input first and
 continue from its drawing:
 
@@ -113,6 +114,41 @@ const { drawing, warnings } = await read("C~C", "smiles");
 for (const warning of warnings) console.warn(warning);
 const mol = await convert(drawing, "rsk", "mol");
 ```
+
+## Predict NMR
+
+```js
+import { predictNmr } from "@ameyanagi/reshiki-headless";
+
+const prediction = await predictNmr("CCOC(C)=O", "smiles", "13C");
+for (const row of prediction.rows) console.log(row.atom, row.ppm);
+console.log(prediction.credit); // cite this with published values
+```
+
+Use `"1H"` for proton shifts or `"13C"` for carbon shifts. The drawing must
+contain exactly one molecule. Prediction runs offline with the same reference
+index and result as `reshiki --cli predict-nmr`, without its `revision` field.
+The result contains `nucleus`, `solvent`, `rows`, `method`, `data_version`,
+`conditions`, `limitations`, `credit` and `data_access`.
+
+Each row contains `atom`, `nucleus`, `ppm`, `shell`, `references`, `sd`, `min`,
+`max`, `broad`, `hydrogen_count`, `hydrogens` and `note`. Atom IDs, including
+the attached explicit H IDs in `hydrogens`, are decimal strings. A proton row
+groups the H attached to one heavy atom; it is not an assigned stereospecific
+peak. Sites without reference data retain their row, null statistics and a
+note. `hydrogen_count` is null for carbon rows.
+
+The reference data comes from nmrshiftdb2 under the
+[nmrshiftdb2 Database License](https://github.com/Ameyanagi/ReShiki/blob/main/licenses/nmrshiftdb2/DATABASE-LICENSE.txt),
+which the package includes. Cite the returned `credit` with published values.
+`data_access` links to the derivative index and its transformation method.
+Read `conditions` and `limitations` with the values: these are connectivity
+based chemical shifts in CDCl3, with no coupling or multiplet prediction.
+
+An unsupported nucleus rejects with `invalid_arguments`. More than one
+molecule, unsupported chemistry or no sites for the requested nucleus reject
+with `failed`. A molecule whose sites all lack reference data still returns
+its rows.
 
 ## How the library differs from the desktop
 

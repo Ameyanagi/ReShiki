@@ -487,6 +487,7 @@ impl App {
                 if !self.finish_inline(true) {
                     return Task::none();
                 }
+                self.status_style_open = false;
                 self.tab.styles.serial = self.tab.styles.serial.wrapping_add(1);
                 self.tab.styles.editor = Some(Editor::new(
                     &self.tab.doc.drawing_style,

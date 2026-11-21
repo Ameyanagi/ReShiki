@@ -71,7 +71,12 @@ impl App {
         }
     }
 
-    pub(super) fn place_molecule_caption(&mut self, atoms: &[u64], text: String, identity: String) {
+    pub(in crate::app) fn place_molecule_caption(
+        &mut self,
+        atoms: &[u64],
+        text: String,
+        identity: String,
+    ) {
         let before = self.tab.doc.clone();
         let result = reshiki::molecule_names::show(
             &mut self.tab.doc,

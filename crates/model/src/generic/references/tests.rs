@@ -27,6 +27,9 @@ fn generated_union_rejects_changed_component_dependencies_atomically() {
             text: "propane".into(),
         });
     cases.push((named, "generated name captions"));
+    let mut numbered = union_source();
+    crate::compound_numbers::number(&mut numbered, &[1, 2, 3], Default::default()).unwrap();
+    cases.push((numbered, "compound numbers"));
     let mut rear = union_source();
     rear.depth_appearance[0].atoms.push(1);
     rear.depth_appearance[0].weights.insert(1, 0.5);

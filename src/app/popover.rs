@@ -21,6 +21,7 @@ pub struct Popover<'a> {
     keys: fn(&keyboard::Key) -> Option<Message>,
     fit_anchor: bool,
     align_end: bool,
+    capture_plain_keys: bool,
 }
 
 /// `popup` is shown while it is Some; `close` is sent for a click outside it.
@@ -39,6 +40,7 @@ pub fn popover<'a>(
         keys: |_| None,
         fit_anchor: false,
         align_end: false,
+        capture_plain_keys: false,
     }
 }
 impl Popover<'_> {
@@ -59,6 +61,11 @@ impl Popover<'_> {
     /// Keys the popup handles when none of its widgets does.
     pub fn keys(mut self, keys: fn(&keyboard::Key) -> Option<Message>) -> Self {
         self.keys = keys;
+        self
+    }
+    /// Keep unhandled drawing hotkeys in the popup while allowing app commands.
+    pub fn capture_plain_keys(mut self) -> Self {
+        self.capture_plain_keys = true;
         self
     }
 }
@@ -185,6 +192,7 @@ impl Widget<Message, Theme, Renderer> for Popover<'_> {
             keys: self.keys,
             fit_anchor: self.fit_anchor,
             align_end: self.align_end,
+            capture_plain_keys: self.capture_plain_keys,
         })))
     }
 }
@@ -198,6 +206,7 @@ struct Popup<'a, 'b> {
     keys: fn(&keyboard::Key) -> Option<Message>,
     fit_anchor: bool,
     align_end: bool,
+    capture_plain_keys: bool,
 }
 
 impl overlay::Overlay<Message, Theme, Renderer> for Popup<'_, '_> {
@@ -292,9 +301,11 @@ impl overlay::Overlay<Message, Theme, Renderer> for Popup<'_, '_> {
             return;
         }
         match event {
-            Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
+            Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
                 if let Some(message) = (self.keys)(key) {
                     shell.publish(message);
+                    shell.capture_event();
+                } else if self.capture_plain_keys && !modifiers.command() {
                     shell.capture_event();
                 }
             }

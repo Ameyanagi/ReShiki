@@ -247,6 +247,9 @@ impl App {
     }
 
     fn overlay_escape_gate(&mut self, message: Message) -> Gate {
+        if self.status_style_open && matches!(message, Message::Escape) {
+            return Break(self.status_style_action(super::status_style::Action::Close));
+        }
         if self.help_open && matches!(message, Message::Escape | Message::ToggleHelp) {
             self.help_open = false;
             return Break(Task::none());
@@ -255,11 +258,18 @@ impl App {
             self.commands.open = false;
             return Break(Task::none());
         }
+        if self.view_open && matches!(message, Message::Escape) {
+            return Break(self.view_action(view_settings::Action::Close));
+        }
         if let Message::ContextMenu(action) = message {
             return Break(self.context_action(action));
         }
         if self.context_menu.is_some() && matches!(message, Message::Escape) {
             self.context_menu = None;
+            return Break(Task::none());
+        }
+        if self.templates.add_menu_open && matches!(message, Message::Escape) {
+            self.templates.add_menu_open = false;
             return Break(Task::none());
         }
         if (self.imports.menu || self.imports.examples_menu) && matches!(message, Message::Escape) {
@@ -367,11 +377,18 @@ impl App {
                 self.inline_action(inline_text::Action::Finish(false))
             } else if self.tab.optimization.is_some() {
                 self.optimization_action(optimization::Action::Cancel)
+            } else if self.inspector_tab == InspectorTab::Templates && self.cancel_add_name() {
+                Task::none()
             } else if self.tab.engine_job.is_some() {
                 self.cancel_engine_job();
                 Task::none()
             } else if self.cancel_model_generation() {
                 Task::none()
+            } else if self.inspector_open
+                && self.inspector_tab == InspectorTab::Properties
+                && self.requested_molecular_properties()
+            {
+                self.dismiss_molecular_properties()
             } else {
                 self.update(Message::Tool(Tool::Select))
             });
@@ -463,6 +480,7 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
             | Message::ToggleInspector
             | Message::Inspector(_)
             | Message::Appearance(_)
+            | Message::StatusStyle(_)
             | Message::View(
                 view_settings::Action::Grid
                     | view_settings::Action::SmartGuides(_)
@@ -474,6 +492,9 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
                     | view_settings::Action::Crosshair(_)
                     | view_settings::Action::RulerUnit(_)
                     | view_settings::Action::Toggle
+                    | view_settings::Action::Close
+                    | view_settings::Action::Choose(_)
+                    | view_settings::Action::Focus(_)
             )
             | Message::ObjectToolbar(object_toolbar::Action::Visible(_))
             | Message::Tick

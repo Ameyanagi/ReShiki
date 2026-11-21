@@ -898,6 +898,9 @@ impl Attachment<'_> {
         if ids.len() != part.all_ids().len() {
             return None;
         }
+        // The incoming captions are already posed and have their new IDs,
+        // but still need the original component anchor before fusion.
+        let numbered = (!result.compound_numbers.is_empty()).then(|| result.clone());
         let added: HashMap<_, _> = part
             .all_ids()
             .into_iter()
@@ -937,6 +940,7 @@ impl Attachment<'_> {
             annotations,
             molecule_names,
             property_captions,
+            compound_numbers,
             // Their anchors follow in `remap_for_join` below.
             arrows: _,
             arrow_labels: _,
@@ -1034,6 +1038,15 @@ impl Attachment<'_> {
             .collect();
         annotations.retain(|a| !repeated.contains(&a.id));
         property_captions.retain(|link| !link.atoms.is_empty());
+        // Preserve number ownership through fusion. Reconciliation below
+        // chooses a fixed number first, otherwise the older annotation.
+        for link in compound_numbers.iter_mut() {
+            for id in &mut link.atoms {
+                *id = mapped(*id);
+            }
+            link.atoms.sort_unstable();
+            link.atoms.dedup();
+        }
         for scope in depth_appearance.iter_mut() {
             scope.retain_members(|id| !host_keeps(&painted, id));
         }
@@ -1046,6 +1059,9 @@ impl Attachment<'_> {
         }
         crate::arrow_anchors::remap_for_join(&mut result, &endpoint_atoms, &endpoint_mapping);
         crate::arrow_anchors::reconcile(&mut result);
+        if let Some(before) = numbered {
+            crate::compound_numbers::reconcile(&mut result, &before);
+        }
         result.reconcile_molecule_groups();
         if crate::reactions::reconcile(&mut result).is_err() || result.validate().is_err() {
             return None;

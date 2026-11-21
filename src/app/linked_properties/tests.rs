@@ -65,7 +65,7 @@ fn weight_captions_follow_the_two_decimal_setting() {
     let id = app.tab.doc.property_captions[0].annotation.unwrap();
     app.tab.selected = vec![id];
     app.sync_typography();
-    app.view_action(TwoDecimalWeight(false));
+    let _ = app.view_action(TwoDecimalWeight(false));
     assert_eq!(caption(&app), Some("Mol. Wt.: 46.069"));
     assert_eq!(app.tab.caption, "Mol. Wt.: 46.069");
     // One Undo step. Other edits leave the caption's precision alone.
@@ -127,7 +127,7 @@ fn weight_captions_in_other_tabs_follow_the_setting() {
     app.sync_typography();
     app.add_tab();
     app.inspector_open = false;
-    app.view_action(TwoDecimalWeight(false));
+    let _ = app.view_action(TwoDecimalWeight(false));
     // The selected caption's text box follows; the front tab's inspector stays shut.
     assert!(!app.inspector_open);
     app.select_tab(0);
@@ -310,7 +310,7 @@ fn mass_decimals_change_one_caption_in_one_undo_step() {
     let one = Message::PropertyPlaces(atoms.clone(), Property::Weight, 1);
     let _ = app.update(one.clone());
     let chosen = app.tab.doc.clone();
-    app.view_action(TwoDecimalWeight(false));
+    let _ = app.view_action(TwoDecimalWeight(false));
     assert_eq!(app.tab.doc, chosen);
     let _ = app.update(one);
     assert_eq!(app.tab.doc, chosen);
@@ -325,9 +325,56 @@ fn mass_decimals_change_one_caption_in_one_undo_step() {
         caption(&app),
         Some("Formula: C2H6O\nMol. Wt.: 46.069\nExact Mass: 46.0419")
     );
-    app.view_action(TwoDecimalWeight(true));
+    let _ = app.view_action(TwoDecimalWeight(true));
     assert_eq!(
         caption(&app),
         Some("Formula: C2H6O\nMol. Wt.: 46.07\nExact Mass: 46.0419")
     );
+}
+
+#[test]
+fn arriving_multiline_name_moves_compound_number_without_an_extra_undo() {
+    let (mut app, _) = App::new();
+    let atoms = ethanol(&mut app);
+    let _ = app.update(Message::ToggleProperty(atoms.clone(), Property::Name));
+    let smiles = app.tab.naming.caption_pending.clone().unwrap();
+    let _ = app.update(Message::NumberCompound(atoms.clone()));
+    let number = reshiki::compound_numbers::label(&app.tab.doc, &atoms)
+        .unwrap()
+        .annotation;
+    let start = app
+        .tab
+        .doc
+        .annotations
+        .iter()
+        .find(|a| a.id == number)
+        .unwrap()
+        .position;
+    let frames = app.tab.history.frames();
+    let revision = app.tab.revision;
+    let mut named = record("CCO");
+    named.systematic_name = Some("2,3,4,5,6-pentahydroxy-N-(2-hydroxyethyl)hexanamide".into());
+    let _ = app.update(Message::Naming(Action::CaptionNamed(
+        smiles,
+        Box::new(Ok(Outcome::Structure(named))),
+    )));
+    let caption = link(&app).annotation.unwrap();
+    let (_, bottom) = reshiki::scene::selection_bounds(&app.tab.doc, &[caption]).unwrap();
+    let position = app
+        .tab
+        .doc
+        .annotations
+        .iter()
+        .find(|a| a.id == number)
+        .unwrap()
+        .position;
+    assert!(position.y > start.y);
+    assert!(position.y > bottom.y);
+    assert_eq!(app.tab.history.frames(), frames);
+    assert_eq!(app.tab.revision, revision);
+    let named = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.compound_numbers.is_empty());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, named);
 }

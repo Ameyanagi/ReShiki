@@ -290,6 +290,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "—",
             "Show chemical name",
             "Chemical names…",
+            "Number compound",
             "Show formula & masses below",
             "Show properties",
             "Select molecule",
@@ -1784,5 +1785,33 @@ fn show_formula_and_masses_below_adds_the_missing_lines_in_one_step() -> Result<
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, weight);
     assert!(!shown(&app.tab.doc, &ethanol, Property::ExactMass));
+    Ok(())
+}
+
+#[test]
+fn number_compound_context_action_targets_clicked_molecule_once() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::document::Document::default();
+    let left = app.tab.doc.add_atom("C", World::default());
+    let right = app.tab.doc.add_atom("O", World::new(200., 0.));
+    let before = app.tab.doc.clone();
+    app.edit(Edit::ContextMenu {
+        position: Point::new(30., 40.),
+        selected: vec![right],
+        hit: vec![right],
+    });
+    assert_eq!(enabled(&app, Page::Main, "Number compound"), Some(true));
+    run_item(&mut app, Page::Main, "Number compound")?;
+    assert_eq!(
+        reshiki::compound_numbers::label(&app.tab.doc, &[right])
+            .unwrap()
+            .text,
+        "1"
+    );
+    assert!(reshiki::compound_numbers::label(&app.tab.doc, &[left]).is_none());
+    assert_eq!(enabled(&app, Page::Main, "Number compound"), Some(false));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
     Ok(())
 }

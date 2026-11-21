@@ -7,6 +7,7 @@ import {
   addFont,
   convert,
   inchi,
+  predictNmr,
   read,
   renderPng,
   renderSvg,
@@ -133,6 +134,19 @@ function svgDeviation(a: string, b: string): number {
 }
 
 describe.skipIf(!cli)("matches the desktop CLI", () => {
+  for (const nucleus of ["1H", "13C"] as const) {
+    test(`${nucleus} NMR returns the CLI value without its revision`, async () => {
+      const smiles = "CCOC(C)=O";
+      const { value: expected } = JSON.parse(
+        new TextDecoder().decode(
+          desktop(["predict-nmr", "--smiles", smiles, "--nucleus", nucleus]),
+        ),
+      );
+      delete expected.revision;
+      expect(await predictNmr(smiles, "smiles", nucleus)).toEqual(expected);
+    });
+  }
+
   for (const input of STRUCTURES) {
     for (const format of ["smiles", "mol", "inchi", "cdxml"] as const) {
       test(`${format} of ${input}`, async () => {

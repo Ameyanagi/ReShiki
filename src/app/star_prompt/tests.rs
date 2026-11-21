@@ -256,6 +256,7 @@ fn two_running_copies_keep_each_others_counts_and_answers() {
         Message::FigureExported(Ok(Some(Saved {
             path: "Molecule.png".into(),
             details: vec![],
+            recent: None,
         })))
     };
     save(
@@ -315,6 +316,7 @@ fn every_export_and_copy_counts_once_wherever_its_drawing_went() {
         Some(Saved {
             path: "Molecule.png".into(),
             details: vec![],
+            recent: None,
         })
     };
     let _ = app.receive(Message::FigureExported(Ok(saved())));
@@ -494,6 +496,7 @@ fn focus_and_held_input_are_followed_before_the_count_is_reached() {
     let _ = app.receive(Message::FigureExported(Ok(Some(Saved {
         path: "Molecule.png".into(),
         details: vec![],
+        recent: None,
     }))));
     assert!(
         app.star

@@ -519,6 +519,22 @@ pub(super) fn tree_key(key: &iced::keyboard::Key, modifiers: Modifiers) -> Optio
 }
 
 impl App {
+    /// A recent local working copy uses the same repository identity as its tab.
+    pub(super) fn github_recent_place(&self, path: &Path) -> Option<Element<'_, Message>> {
+        let (key, _) = self.github.locate(Some(path))?;
+        let named = self.github.named(&key);
+        let hue = self.github.hue(&key);
+        let letters = identity::monogram(&named.repo);
+        Some(
+            row![
+                identity::badge(hue, letters, self.github.read_only(&key)),
+                super::start::compact(named.repo, 10., true)
+            ]
+            .spacing(5)
+            .align_y(Alignment::Center)
+            .into(),
+        )
+    }
     /// The keys of the open GitHub dialog: [`tree_key`] in the picker's tree
     /// while no field there has text to move through, else [`modal_key`].
     pub(super) fn github_keys(&self) -> super::file_shortcuts::ModalKeys {

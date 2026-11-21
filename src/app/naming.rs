@@ -50,7 +50,11 @@ enum Pending {
     Preview(Ticket),
     Generate(Ticket),
     Caption(Ticket),
-    Import { ticket: Ticket, add_caption: bool },
+    Import {
+        ticket: Ticket,
+        add_caption: bool,
+        placement: super::engine_jobs::InsertPlacement,
+    },
 }
 impl Pending {
     fn ticket(self) -> Ticket {
@@ -107,6 +111,11 @@ pub enum Action {
     /// Selects this molecule and opens the Chemical names inspector.
     OpenPanel(Vec<u64>),
     Finished(Ticket, Box<Result<Outcome, naming::Error>>),
+    /// Generated names retain the exact input used by the bounded worker.
+    Generated(
+        Ticket,
+        Box<Result<(naming::Identity, Record), naming::Error>>,
+    ),
     /// The Molecular properties Name field of this molecule, before Return.
     NameDraft(Vec<u64>, String),
     /// Name this molecule in its property caption; empty is automatic.
@@ -227,6 +236,7 @@ pub(super) struct State {
     pub(super) structure: Option<(Ticket, Record)>,
     /// The atoms Generate named, and their parent locants once named.
     structure_atoms: Vec<u64>,
+    structure_identity: Option<naming::Identity>,
     structure_locants: HashMap<u64, String>,
     structure_error: Option<String>,
     notice: Option<Notice>,
@@ -260,6 +270,7 @@ impl Default for State {
             acknowledged: false,
             structure: None,
             structure_atoms: vec![],
+            structure_identity: None,
             structure_locants: HashMap::new(),
             structure_error: None,
             notice: None,
@@ -430,18 +441,39 @@ pub(super) async fn generate_for_atoms(
     cancel: naming::Cancel,
     write_unknown_stereo: bool,
 ) -> Result<Outcome, naming::Error> {
+    generate_identity_for_atoms(document, atoms, cancel, write_unknown_stereo)
+        .await
+        .map(|(_, record)| Outcome::Structure(record))
+}
+
+async fn generate_identity_for_atoms(
+    document: Document,
+    atoms: Vec<u64>,
+    cancel: naming::Cancel,
+    write_unknown_stereo: bool,
+) -> Result<(naming::Identity, Record), naming::Error> {
     let mut identity =
         reshiki::task::spawn_blocking(move || naming::selected_identity(&document, &atoms))
             .await
             .map_err(|error| naming::Error::Worker(error.to_string()))?
             .map_err(naming::Error::Rejected)?;
     identity.write_unknown_stereo = write_unknown_stereo;
-    naming::generate_name(&identity, cancel)
-        .await
-        .map(Outcome::Structure)
+    let record = naming::generate_name(&identity, cancel).await?;
+    Ok((identity, record))
 }
 
 impl App {
+    pub(super) fn start_name_notice(&self, input: &str) -> Option<String> {
+        (self.tab.naming.name.trim() == input.trim())
+            .then(|| {
+                self.tab
+                    .naming
+                    .notice
+                    .as_ref()
+                    .map(|notice| notice.summary().to_owned())
+            })
+            .flatten()
+    }
     #[cfg(target_arch = "wasm32")]
     pub(super) fn naming_subscription(&self) -> iced::Subscription<Message> {
         if self.strip().any(|tab| tab.naming.local_cancel.is_some()) {
@@ -512,17 +544,25 @@ impl App {
         (ticket, cancel)
     }
 
-    fn naming_finished(&mut self, ticket: Ticket, result: Result<Outcome, naming::Error>) {
+    fn naming_finished(
+        &mut self,
+        ticket: Ticket,
+        result: Result<Outcome, naming::Error>,
+    ) -> Task<Message> {
         if self.tab.naming.pending.map(Pending::ticket) != Some(ticket)
             || ticket.epoch != self.tab.file_epoch
         {
-            return;
+            return Task::none();
         }
         let online = matches!(self.tab.naming.pending, Some(Pending::Online(_)));
         let generate = matches!(self.tab.naming.pending, Some(Pending::Generate(_)));
         let caption = matches!(self.tab.naming.pending, Some(Pending::Caption(_)));
-        let import_caption = match self.tab.naming.pending {
-            Some(Pending::Import { add_caption, .. }) => Some(add_caption),
+        let import = match self.tab.naming.pending {
+            Some(Pending::Import {
+                add_caption,
+                placement,
+                ..
+            }) => Some((add_caption, placement)),
             _ => None,
         };
         let target = self.tab.naming.label_target.take();
@@ -540,7 +580,7 @@ impl App {
                     "The drawing changed. Try again.",
                 ));
             }
-            return;
+            return Task::none();
         }
         match result {
             Err(error) => {
@@ -561,10 +601,10 @@ impl App {
                 self.tab.naming.candidates = records;
                 if let Some(preview) = preview {
                     self.tab.naming.set_preview(*preview);
-                    if let Some(caption) = import_caption {
-                        self.insert_import_preview(caption);
+                    if let Some((caption, placement)) = import {
+                        return self.insert_import_preview(caption, placement);
                     }
-                } else if import_caption.is_some() {
+                } else if import.is_some() {
                     self.tab.naming.notice = Some(Notice::new(
                         NoticeKind::Failed,
                         "No supported structure was returned.",
@@ -585,6 +625,131 @@ impl App {
                 }
             }
         }
+        Task::none()
+    }
+
+    /// Share the existing bounded request with surfaces that have an explicit
+    /// analyzed scope, including the whole drawing when nothing is selected.
+    pub(super) fn generate_structure_name(&mut self, atoms: Vec<u64>) -> Task<Message> {
+        if self.tab.naming.pending.is_some() {
+            return Task::none();
+        }
+        let (ticket, cancel) = self.begin_naming(Pending::Generate);
+        self.tab.naming.structure = None;
+        self.tab.naming.structure_identity = None;
+        self.tab.naming.structure_atoms = editing::analysis_atoms(&self.tab.doc, &atoms);
+        self.tab.naming.structure_error = None;
+        let document = self.tab.doc.clone();
+        Task::perform(
+            generate_identity_for_atoms(
+                document,
+                atoms,
+                cancel,
+                self.appearance.write_unknown_stereo,
+            ),
+            move |result| Message::Naming(Action::Generated(ticket, Box::new(result))),
+        )
+    }
+
+    fn structure_generated(
+        &mut self,
+        ticket: Ticket,
+        result: Result<(naming::Identity, Record), naming::Error>,
+    ) -> Task<Message> {
+        let current = matches!(self.tab.naming.pending, Some(Pending::Generate(pending)) if pending == ticket);
+        let (identity, result) = match result {
+            Ok((identity, record)) => (Some(identity), Ok(Outcome::Structure(record))),
+            Err(error) => (None, Err(error)),
+        };
+        let completion = self.naming_finished(ticket, result);
+        if current
+            && self
+                .tab
+                .naming
+                .structure
+                .as_ref()
+                .is_some_and(|(saved, _)| *saved == ticket)
+        {
+            self.tab.naming.structure_identity = identity;
+        }
+        completion
+    }
+
+    /// A generated name belongs to this exact analyzed scope and drawing.
+    pub(super) fn named_identity(
+        &self,
+        atoms: &[u64],
+        identity: &naming::Identity,
+    ) -> Option<&Record> {
+        let state = &self.tab.naming;
+        let (ticket, record) = state.structure.as_ref()?;
+        let requested = state.structure_identity.as_ref()?;
+        (state.pending.is_none()
+            && ticket.epoch == self.tab.file_epoch
+            && state.structure_atoms == atoms
+            && requested.smiles == identity.smiles
+            && requested.naming_smiles == identity.naming_smiles
+            && requested.unknown_stereo_smiles == identity.unknown_stereo_smiles
+            && requested.write_unknown_stereo == identity.write_unknown_stereo
+            && record.canonical_smiles == identity.smiles)
+            .then_some(record)
+    }
+
+    pub(super) fn named_identity_warnings(
+        &self,
+        atoms: &[u64],
+        identity: &naming::Identity,
+    ) -> Option<Vec<String>> {
+        let record = self.named_identity(atoms, identity)?;
+        let requested = self.tab.naming.structure_identity.as_ref()?;
+        // The generator prepends the request's display-dependent warnings.
+        // Refresh only that prefix; reconstruction/provenance notes stay intact.
+        if let Some(provenance) = record.warnings.strip_prefix(requested.warnings.as_slice()) {
+            return Some(
+                identity
+                    .warnings
+                    .iter()
+                    .chain(provenance)
+                    .cloned()
+                    .collect(),
+            );
+        }
+        let marked = |warnings: &[String]| {
+            warnings
+                .iter()
+                .map(|warning| {
+                    if let Some(prefix) = warning.strip_suffix("; the name leaves it unspecified") {
+                        format!("{prefix}; the name marks it as unknown")
+                    } else if let Some(prefix) =
+                        warning.strip_suffix("; the name leaves them unspecified")
+                    {
+                        format!("{prefix}; the name marks them as unknown")
+                    } else {
+                        warning.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        let marked_request = marked(&requested.warnings);
+        if let Some(provenance) = record.warnings.strip_prefix(marked_request.as_slice()) {
+            return Some(
+                marked(&identity.warnings)
+                    .into_iter()
+                    .chain(provenance.iter().cloned())
+                    .collect(),
+            );
+        }
+        Some(record.warnings.clone())
+    }
+
+    pub(super) fn identity_naming_idle(&self) -> bool {
+        self.tab.naming.pending.is_none() && self.tab.naming.caption_pending.is_none()
+    }
+
+    pub(super) fn identity_naming_error(&self, atoms: &[u64]) -> Option<&str> {
+        (self.tab.naming.structure_atoms == atoms)
+            .then_some(self.tab.naming.structure_error.as_deref())
+            .flatten()
     }
 
     pub(super) fn naming_action(&mut self, action: Action) -> Task<Message> {
@@ -665,27 +830,7 @@ impl App {
                     "unknown configuration",
                 );
             }
-            Action::Generate => {
-                if self.tab.naming.pending.is_some() {
-                    return Task::none();
-                }
-                let (ticket, cancel) = self.begin_naming(Pending::Generate);
-                self.tab.naming.structure = None;
-                self.tab.naming.structure_atoms =
-                    editing::analysis_atoms(&self.tab.doc, &self.tab.selected);
-                self.tab.naming.structure_error = None;
-                let document = self.tab.doc.clone();
-                let selected = self.tab.selected.clone();
-                return Task::perform(
-                    generate_for_atoms(
-                        document,
-                        selected,
-                        cancel,
-                        self.appearance.write_unknown_stereo,
-                    ),
-                    move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
-                );
-            }
+            Action::Generate => return self.generate_structure_name(self.tab.selected.clone()),
             Action::ShowMoleculeName(atoms) => return self.show_molecule_name(atoms),
             Action::HideMoleculeName(atoms) => self.hide_molecule_name(&atoms),
             Action::Smiles(smiles) => {
@@ -728,7 +873,8 @@ impl App {
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
-            Action::Finished(ticket, result) => self.naming_finished(ticket, *result),
+            Action::Finished(ticket, result) => return self.naming_finished(ticket, *result),
+            Action::Generated(ticket, result) => return self.structure_generated(ticket, *result),
             Action::NameDraft(atoms, name) => self.tab.naming.name_draft = Some((atoms, name)),
             Action::Rename(atoms, name) => self.rename_molecule(&atoms, &name),
             Action::NameRow(atoms) => {
@@ -738,7 +884,9 @@ impl App {
             Action::PreviewEdit(edit) => self.edit_name_preview(edit),
             Action::Acknowledge(value) => self.tab.naming.acknowledged = value,
             Action::Insert => self.insert_name_preview(),
-            Action::InsertName => return self.insert_name_import(),
+            Action::InsertName => {
+                return self.insert_name_import(super::engine_jobs::InsertPlacement::BesideDrawing);
+            }
             Action::AddNameBelow(value) => self.tab.naming.add_name_below = value,
             Action::NumberByLocants(value) => self.tab.naming.number_by_locants = value,
             Action::HoverLocant {
@@ -877,13 +1025,20 @@ impl App {
         let document = locants::insertion_document(preview, self.tab.naming.number_by_locants);
         let title = preview.record.title.clone();
         let before = self.tab.doc.clone();
-        let Some(selected) = self.insert_beside_drawing(&document) else {
+        let Some(selected) = self.insert_structure(
+            &document,
+            super::engine_jobs::InsertPlacement::BesideDrawing,
+        ) else {
             self.tab.doc = before;
             self.error = true;
             self.status = format!("Could not insert {title}");
             return;
         };
-        self.commit_structure_insert(before, selected);
+        self.commit_structure_insert(
+            before,
+            selected,
+            super::engine_jobs::InsertPlacement::BesideDrawing,
+        );
         self.tool = Tool::Select;
         self.status = if multicomponent {
             "Name result inserted as separate components".into()

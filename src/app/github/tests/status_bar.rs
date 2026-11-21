@@ -154,7 +154,7 @@ async fn the_github_button_leads_the_status_bar_and_its_menu_opens_upward() {
         );
         let chip = window.node("github-chip-place").bounds;
         let message = window.text("Status for the test");
-        let preset = window.node("journal-preset").bounds;
+        let preset = window.node("status-style").bounds;
         let cloud = button.bounds;
         assert!(cloud.y > 800. - 50., "in the status bar: {cloud:?}");
         assert!(cloud.x < 20., "at its left end: {cloud:?}");
@@ -172,7 +172,7 @@ async fn the_github_button_leads_the_status_bar_and_its_menu_opens_upward() {
         let at = window.stop("status-github");
         assert!(window.stop("header-inspector") < at);
         assert_eq!(window.stop("github-chip-place"), at + 1);
-        assert!(window.stop("journal-preset") > at + 1);
+        assert!(window.stop("status-style") > at + 1);
     }
     // Controls wider than the room, as a long theme name makes them: the
     // message gives way, the cloud keeps its size.
