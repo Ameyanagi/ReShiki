@@ -318,8 +318,7 @@ impl App {
                         }
                     }
             });
-            if done {
-                let notice = libraries.notice.take().unwrap();
+            if done && let Some(notice) = libraries.notice.take() {
                 // Other app actions may have replaced the progress message.
                 if self.status == notice.status && !self.error {
                     self.status = match notice.kind {

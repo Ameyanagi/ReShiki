@@ -23,9 +23,10 @@ pub struct Queue {
 impl Queue {
     pub fn request(&mut self, labs: impl Iterator<Item = PathBuf>) -> Vec<Job> {
         self.serial += 1;
+        let serial = self.serial;
         self.waiting = std::iter::once(Target::Mine)
             .chain(labs.map(Target::Lab))
-            .map(|target| (target, self.serial))
+            .map(|target| (target, serial))
             .collect();
         let ready: Vec<_> = self
             .waiting
@@ -33,7 +34,10 @@ impl Queue {
             .filter(|target| !self.running.contains_key(*target))
             .cloned()
             .collect();
-        ready.into_iter().map(|target| self.start(target)).collect()
+        ready
+            .into_iter()
+            .map(|target| self.start(target, serial))
+            .collect()
     }
 
     pub fn serial(&self) -> u64 {
@@ -55,18 +59,17 @@ impl Queue {
             return (false, None);
         }
         self.running.remove(&job.target);
-        match self.waiting.get(&job.target) {
-            Some(serial) if *serial == job.serial => {
+        match self.waiting.get(&job.target).copied() {
+            Some(serial) if serial == job.serial => {
                 self.waiting.remove(&job.target);
                 (true, None)
             }
-            Some(_) => (false, Some(self.start(job.target.clone()))),
+            Some(serial) => (false, Some(self.start(job.target.clone(), serial))),
             None => (false, None),
         }
     }
 
-    fn start(&mut self, target: Target) -> Job {
-        let serial = self.waiting[&target];
+    fn start(&mut self, target: Target, serial: u64) -> Job {
         self.running.insert(target.clone(), serial);
         Job { serial, target }
     }
