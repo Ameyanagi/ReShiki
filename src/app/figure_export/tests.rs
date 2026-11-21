@@ -293,7 +293,7 @@ async fn export_again_renders_current_drawing_with_saved_options_to_exact_destin
     let _ = app.update(first.completed(Ok(Some(destination.clone()))));
     assert_eq!(
         app.repeat_export().unwrap().label(),
-        "Export again: chosen figure.png (PNG · 300 dpi)"
+        "Export again: chosen figure.png (PNG · up to 300 dpi)"
     );
 
     // New preferences must not silently change the repeated export's recipe.

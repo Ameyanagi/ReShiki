@@ -117,7 +117,7 @@ impl Recent {
         let name = self.path.file_name().unwrap_or_default().to_string_lossy();
         let format = super::export_format_label(&self.recipe.format);
         let options = if self.recipe.format == "png" {
-            format!("{format} · {} dpi", self.recipe.dpi.get())
+            format!("{format} · up to {} dpi", self.recipe.dpi.get())
         } else if self.recipe.pages {
             format!("{format} · all pages")
         } else {
