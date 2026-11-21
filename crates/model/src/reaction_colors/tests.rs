@@ -682,3 +682,127 @@ fn a_letter_typed_into_a_colored_name_keeps_its_color() {
     legend.text = new;
     assert_eq!(legend.format.at(at).color, BLUE);
 }
+
+fn table_cells(doc: &mut Document, members: [Vec<u64>; 2]) -> u64 {
+    use crate::graphics::{
+        Graphic, GraphicKind,
+        table::{Cell, Table},
+    };
+    let id = doc.next_id();
+    let mut graphic = Graphic::dragged(
+        id,
+        GraphicKind::Rectangle,
+        Point::new(-100., -100.),
+        Point::new(2000., 2000.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    graphic.kind = GraphicKind::Table;
+    graphic.table = Some(Box::new(Table {
+        cells: members
+            .into_iter()
+            .enumerate()
+            .map(|(index, members)| Cell {
+                id: index as u32 + 1,
+                lo: Point::new(index as f32 * 0.5, 0.),
+                hi: Point::new((index + 1) as f32 * 0.5, 1.),
+                members,
+                borders: vec![],
+            })
+            .collect(),
+    }));
+    doc.graphics.push(graphic);
+    id
+}
+
+#[test]
+fn table_legend_creation_hide_and_clear_colors_keep_cell_membership_valid() {
+    use crate::graphics::table::Membership;
+    for clear_colors in [false, true] {
+        let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+        let members = doc.reactions[0].ids();
+        let table = table_cells(&mut doc, [vec![], members.clone()]);
+        doc.validate().unwrap();
+        let before = doc.clone();
+        set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+        let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+        let legend = doc.reactions[0].colors.as_ref().unwrap().legend.unwrap();
+        let ownership = Membership::new(&doc).unwrap();
+        assert_eq!(ownership.cell_of(legend), ownership.cell_of(arrow));
+        assert_eq!(ownership.cell_of(legend).unwrap().cell, 2);
+        let mut doc = Document::from_json(&doc.file_json().unwrap()).unwrap();
+        let before = doc.clone();
+        if clear_colors {
+            assert!(clear_paint(&mut doc, arrow));
+            assert!(doc.reactions[0].colors.is_none());
+        } else {
+            set_legend(&mut doc, arrow, false, Default::default()).unwrap();
+            assert!(doc.reactions[0].colors.as_ref().unwrap().legend.is_none());
+        }
+        let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+        assert!(
+            doc.annotations
+                .iter()
+                .all(|annotation| annotation.id != legend)
+        );
+        assert!(!doc.reactions[0].annotations.contains(&legend));
+        let cells = &doc
+            .graphics
+            .iter()
+            .find(|g| g.id == table)
+            .unwrap()
+            .table
+            .as_ref()
+            .unwrap()
+            .cells;
+        assert_eq!(cells[1].members, members);
+        assert_eq!(Membership::new(&doc).unwrap().cell_of(legend), None);
+        Document::from_json(&doc.file_json().unwrap())
+            .unwrap()
+            .validate()
+            .unwrap();
+    }
+}
+
+#[test]
+fn table_legend_rejects_reactions_across_cells_or_canvas_without_any_changes() {
+    for product_on_canvas in [false, true] {
+        let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+        let product: Vec<_> = doc.reactions[0]
+            .products
+            .iter()
+            .flat_map(|p| p.atoms.iter().copied())
+            .collect();
+        let rest = doc.reactions[0]
+            .ids()
+            .into_iter()
+            .filter(|id| !product.contains(id))
+            .collect();
+        table_cells(
+            &mut doc,
+            [rest, if product_on_canvas { vec![] } else { product }],
+        );
+        let before = doc.clone();
+        assert_eq!(
+            set_legend(&mut doc, arrow, true, Default::default()),
+            Err(Refusal::Cell)
+        );
+        assert_eq!(doc, before);
+    }
+}
+
+#[test]
+fn table_unowned_reaction_legend_stays_on_the_canvas() {
+    let DielsAlder { mut doc, arrow, .. } = diels_alder(true);
+    table_cells(&mut doc, [vec![], vec![]]);
+    set_legend(&mut doc, arrow, true, Default::default()).unwrap();
+    let legend = doc.reactions[0].colors.as_ref().unwrap().legend.unwrap();
+    assert_eq!(
+        crate::graphics::table::Membership::new(&doc)
+            .unwrap()
+            .cell_of(legend),
+        None
+    );
+    doc.validate().unwrap();
+}

@@ -360,6 +360,12 @@ pub fn toggle(
     {
         return Err("Select one whole molecule to show its properties".into());
     }
+    crate::graphics::table::require_same_cell(doc, &whole)?;
+    let before = doc
+        .graphics
+        .iter()
+        .any(|g| g.table.is_some())
+        .then(|| doc.clone());
     let index = doc
         .property_captions
         .iter()
@@ -413,6 +419,9 @@ pub fn toggle(
         // An untracked name would go stale.
         link.name.clear();
         link.smiles.clear();
+    }
+    if let Some(before) = before {
+        crate::graphics::table::inherit_attachment(&before, doc, &[link.annotation], atoms)?;
     }
     // An edited caption is plain text; showing a property links it again.
     rewrite(doc, link, &shown)

@@ -52,8 +52,16 @@ fn hit_selection_with_object(
     r: f32,
     object: impl FnOnce() -> Option<u64>,
 ) -> Vec<u64> {
+    let cells = reshiki::scene::table::Layout::new(doc);
     if let Some(i) = reshiki::atom_labels::indicators(doc).into_iter().find(|i| {
         i.owner.drawn(doc)
+            && match i.owner {
+                reshiki::atom_labels::Owner::Number(id)
+                | reshiki::atom_labels::Owner::Mapping(id)
+                | reshiki::atom_labels::Owner::AtomStereo(id)
+                | reshiki::atom_labels::Owner::StereoGroup(id) => cells.contains(id, p),
+                reshiki::atom_labels::Owner::BondStereo(a, _) => cells.contains(a, p),
+            }
             && (p.x - i.center.x).abs() < i.width / 2. + r
             && (p.y - i.center.y).abs() < i.height / 2. + r
     }) {
@@ -71,6 +79,7 @@ fn hit_selection_with_object(
     // A 3D model selects its whole molecule. It is painted above molecules and
     // background graphics, below arrows, text and foreground graphics.
     if let Some(atoms) = reshiki::models3d::frame_hit(doc, p)
+        && atoms.first().is_none_or(|id| cells.contains(*id, p))
         && !object.is_some_and(|id| above_models(doc, id))
     {
         return atoms;
@@ -125,6 +134,7 @@ fn bond_targets(
     radius: f32,
     mut drawing: BondDrawing,
 ) -> BondTargets {
+    let cells = reshiki::scene::table::Layout::new(doc);
     let origin = source.and_then(|id| doc.atom(id));
     if origin.is_some_and(|a| !a.centroid.is_empty()) {
         // A centre-to-metal contact often extends beyond the ring radius.
@@ -136,6 +146,8 @@ fn bond_targets(
             .iter()
             .filter(|a| {
                 doc.atom_drawn(a.id)
+                    && cells.contains(a.id, p)
+                    && cells.contains(a.id, a.position)
                     && Some(a.id) != source
                     && a.position.distance(p) < radius
                     && !origin.is_some_and(|o| {
@@ -158,7 +170,9 @@ fn bond_targets(
 pub fn bond_text_at(doc: &Document, p: World, radius: f32) -> Option<u64> {
     let id = hit_object(doc, p, radius)?;
     let annotation = doc.annotations.iter().find(|a| a.id == id)?;
-    let (lo, hi) = reshiki::atom_text::text_ink_bounds(annotation)?;
+    let cells = reshiki::scene::table::Layout::new(doc);
+    let annotation = cells.annotation(annotation);
+    let (lo, hi) = reshiki::atom_text::text_ink_bounds(&annotation)?;
     // In the text's own upright frame.
     let p = p.turned(annotation.centre(), -annotation.angle);
     (p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y).then_some(id)
@@ -230,6 +244,7 @@ fn hit_object_with_cycles(
     foreground_orbital: bool,
     mut cycle_hit: impl FnMut(&reshiki::graphics::Graphic) -> bool,
 ) -> Option<u64> {
+    let cells = reshiki::scene::table::Layout::new(doc);
     let mark = || {
         doc.atoms
             .iter()
@@ -237,6 +252,7 @@ fn hit_object_with_cycles(
             .find(|a| {
                 !a.marks.is_empty()
                     && doc.atom_drawn(a.id)
+                    && cells.contains(a.id, p)
                     && reshiki::scientific::document_mark_parts(a, doc)
                         .iter()
                         .any(|part| {
@@ -285,6 +301,7 @@ fn hit_object_with_cycles(
             .enumerate()
             .filter(|(i, g)| {
                 (g.layer >= 0) == front
+                    && cells.contains(g.id, p)
                     && !(orbital_label.flatten().is_some()
                         && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
                     && !label_rank.is_some_and(|rank| (g.layer, *i) <= rank)
@@ -298,10 +315,9 @@ fn hit_object_with_cycles(
                             // Text a shape holds is drawn right after it.
                             || g.text.is_some_and(|text| {
                                 doc.annotations.iter().any(|a| {
-                                    let (w, h) = a.size();
                                     a.id == text
-                                        && (a.position.x..a.position.x + w).contains(&p.x)
-                                        && (a.position.y..a.position.y + h).contains(&p.y)
+                                        && cells.contains(a.id, p)
+                                        && cells.annotation(a).contains(p)
                                 })
                             })
                     }
@@ -320,16 +336,42 @@ fn hit_object_with_cycles(
             doc.annotations
                 .iter()
                 .rev()
-                .find(|a| a.contains(p))
+                .find(|a| cells.contains(a.id, p) && cells.annotation(a).contains(p))
                 .map(|a| a.id)
         })
-        .or_else(|| doc.arrows.iter().rev().find(|a| a.hit(p, r)).map(|a| a.id))
+        .or_else(|| {
+            doc.arrows
+                .iter()
+                .rev()
+                .find(|a| cells.contains(a.id, p) && a.hit(p, r))
+                .map(|a| a.id)
+        })
         .or_else(|| {
             if reshiki::editing::nearest_bond(doc, p, r * 0.7).is_none() {
                 graphic(false)
             } else {
                 None
             }
+        })
+        .or_else(|| {
+            // Empty cell surfaces select their table only after actual ink.
+            // Keep bond/model targets ahead of this structural fallback too.
+            let table = doc
+                .graphics
+                .iter()
+                .enumerate()
+                .filter(|(_, g)| {
+                    reshiki::graphics::table::cell_frames(g).any(|frame| frame.contains(p))
+                })
+                .max_by_key(|(i, g)| (g.layer, *i))
+                .map(|(_, g)| g.id)?;
+            if reshiki::editing::nearest_bond(doc, p, r * 0.7).is_some()
+                || reshiki::models3d::frame_hit(doc, p)
+                    .is_some_and(|ids| ids.first().is_none_or(|id| cells.contains(*id, p)))
+            {
+                return None;
+            }
+            Some(table)
         })
 }
 pub fn distance_to_segment(p: World, a: World, b: World) -> f32 {

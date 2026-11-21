@@ -277,10 +277,19 @@ impl App {
             let end = editing::bond_extension(&self.tab.doc, start, Some(a), order);
             let ratio = self.tab.bond_drawing.length / reshiki::style::DEFAULT.bond_length_world;
             let end = start.offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
-            let b = self.tab.doc.add_atom("C", end);
-            self.tab.doc.add_bond(a, b, order, display);
-            self.apply_current_bond_preset(a, b);
-            self.tab.selected = vec![b];
+            match editing::add_bonded_atom(&self.tab.doc, a, end, None, "C") {
+                Ok((doc, b)) => {
+                    self.tab.doc = doc;
+                    self.tab.doc.add_bond(a, b, order, display);
+                    self.apply_current_bond_preset(a, b);
+                    self.tab.selected = vec![b];
+                }
+                Err(error) => {
+                    self.status = error;
+                    self.error = true;
+                    return false;
+                }
+            }
         }
         true
     }

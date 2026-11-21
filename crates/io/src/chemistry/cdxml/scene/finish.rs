@@ -335,6 +335,7 @@ impl CdxmlScene {
             .into_iter()
             .map(|g| g.into_document(&mut budget).map_err(SceneError::from))
             .collect::<Result<_>>()?;
+        document.graphics.extend(self.base.tables);
         document.groups = self.base.groups;
         document.ring_fills = self.base.ring_fills;
         // ChemDraw links property text to a selection. ReShiki links one whole

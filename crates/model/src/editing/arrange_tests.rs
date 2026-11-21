@@ -189,6 +189,188 @@ fn arrangement_builds_highlight_joins_once_and_keeps_single_unit_measurement() {
     }
 }
 
+fn table_arrangement() -> Document {
+    use crate::graphics::table::{Border, Cell, Side, Table};
+    let mut doc = Document::default();
+    let width_pt = crate::style::DEFAULT.points_per_world() * 2.;
+    for (x, y, width, height) in [
+        (0., 0., 20., 20.),
+        (240., 200., 40., 30.),
+        (85., 65., 10., 10.),
+        // Partly clipped by its cell: raw child bounds must not enlarge the
+        // selected table's arrangement reference.
+        (135., 80., 15., 10.),
+        (80., 60., 60., 40.),
+    ] {
+        doc.graphics.push(Graphic::dragged(
+            doc.next_id(),
+            GraphicKind::Rectangle,
+            Point::new(x, y),
+            Point::new(x + width, y + height),
+            GraphicStyle {
+                width_pt,
+                ..Default::default()
+            },
+            BracketSides::Both,
+            false,
+        ));
+    }
+    let table = &mut doc.graphics[4];
+    table.kind = GraphicKind::Table;
+    table.table = Some(Box::new(Table {
+        cells: (0..2)
+            .map(|i| Cell {
+                id: i + 1,
+                lo: Point::new(i as f32 * 0.5, 0.),
+                hi: Point::new((i + 1) as f32 * 0.5, 1.),
+                members: vec![u64::from(i) + 3],
+                borders: [Side::Left, Side::Top, Side::Bottom, Side::Right]
+                    .map(|side| Border {
+                        side,
+                        width_pt,
+                        color: Color::Ink,
+                        pattern: LinePattern::Solid,
+                    })
+                    .to_vec(),
+            })
+            .collect(),
+    }));
+    doc.validate().unwrap();
+    doc
+}
+
+fn arrangement_fixture_ink_bounds(graphic: &Graphic) -> (Point, Point) {
+    let Some(table) = &graphic.table else {
+        return graphic.bounds();
+    };
+    // These native bands are flat-ended strokes whose endpoints already
+    // include the adjacent border's outer edge. Selection bounds also pad
+    // those endpoints; measure their painted rectangles independently.
+    let mut points = table
+        .cells
+        .iter()
+        .flat_map(|cell| cell.border_parts(graphic))
+        .flat_map(|part| {
+            assert!(part.style.flat_caps && !part.filled);
+            let [
+                crate::graphics::PathCommand::Move(a),
+                crate::graphics::PathCommand::Line(b),
+            ] = part.commands.as_slice()
+            else {
+                panic!("fixture borders must be two-point flat strokes");
+            };
+            let (dx, dy) = (b.x - a.x, b.y - a.y);
+            let scale = part.style.width() * 0.5 / dx.hypot(dy);
+            let (nx, ny) = (-dy * scale, dx * scale);
+            [
+                a.offset(nx, ny),
+                a.offset(-nx, -ny),
+                b.offset(nx, ny),
+                b.offset(-nx, -ny),
+            ]
+        });
+    let first = points.next().unwrap();
+    points.fold((first, first), |(lo, hi), point| {
+        (
+            Point::new(lo.x.min(point.x), lo.y.min(point.y)),
+            Point::new(hi.x.max(point.x), hi.y.max(point.y)),
+        )
+    })
+}
+
+fn assert_arrangement_gaps(
+    doc: &Document,
+    ids: &[u64],
+    horizontal: bool,
+    expected_reference: f32,
+    expected_ink: f32,
+) {
+    let units: Vec<_> = ids.iter().map(|&id| vec![id]).collect();
+    let reference: Vec<_> = crate::scene::selections_bounds(doc, &units)
+        .into_iter()
+        .map(Option::unwrap)
+        .collect();
+    let ink: Vec<_> = ids
+        .iter()
+        .map(|id| {
+            arrangement_fixture_ink_bounds(doc.graphics.iter().find(|g| g.id == *id).unwrap())
+        })
+        .collect();
+    let coordinate = |p: Point| if horizontal { p.x } else { p.y };
+    for (name, bounds, expected) in [
+        ("reference", reference, expected_reference),
+        ("ink", ink, expected_ink),
+    ] {
+        let gaps: Vec<_> = bounds
+            .windows(2)
+            .map(|pair| coordinate(pair[1].0) - coordinate(pair[0].1))
+            .collect();
+        assert!(
+            gaps.iter().all(|gap| (gap - expected).abs() < 1e-4),
+            "{name} gaps {gaps:?}, expected {expected}; bounds {bounds:?}"
+        );
+    }
+}
+
+#[test]
+fn distribution_counts_a_selected_table_and_its_children_once() {
+    let original = table_arrangement();
+    for (action, delta, gap) in [
+        (Arrange::DistributeHorizontal, Point::new(20., 0.), 78.),
+        (Arrange::DistributeVertical, Point::new(0., 30.), 68.),
+    ] {
+        let mut expected = original.clone();
+        for graphic in &mut expected.graphics[2..] {
+            graphic.origin = graphic.origin.offset(delta.x, delta.y);
+        }
+        for ids in [vec![5, 1, 2], vec![3, 4, 5, 1, 2], vec![2, 5, 4, 1, 3, 3]] {
+            let mut doc = original.clone();
+            arrange(&mut doc, &ids, action);
+            // The table and both children move by the same offset exactly
+            // once; outer objects, ownership and persisted groups stay put.
+            assert_eq!(doc, expected, "{action:?}, {ids:?}");
+            assert_arrangement_gaps(&doc, &[1, 5, 2], delta.x != 0., gap - 1., gap);
+            doc.validate().unwrap();
+        }
+    }
+}
+
+#[test]
+fn distribution_of_table_children_without_the_table_remains_independent() {
+    let original = table_arrangement();
+    let mut expected = original.clone();
+    expected.graphics[3].origin.x = 160.;
+    let mut doc = original;
+    arrange(&mut doc, &[3, 4, 1, 2], Arrange::DistributeHorizontal);
+    assert_eq!(doc, expected);
+    assert_arrangement_gaps(&doc, &[1, 3, 4, 2], true, 63., 63.);
+    doc.validate().unwrap();
+}
+
+#[test]
+fn distribution_of_ordinary_graphics_keeps_equal_gaps() {
+    let mut original = table_arrangement();
+    original
+        .graphics
+        .retain(|graphic| ![3, 4].contains(&graphic.id));
+    let middle = &mut original.graphics[2];
+    middle.kind = GraphicKind::Rectangle;
+    middle.table = None;
+    original.validate().unwrap();
+    for (action, delta, gap) in [
+        (Arrange::DistributeHorizontal, Point::new(20., 0.), 78.),
+        (Arrange::DistributeVertical, Point::new(0., 30.), 68.),
+    ] {
+        let mut expected = original.clone();
+        expected.graphics[2].origin = expected.graphics[2].origin.offset(delta.x, delta.y);
+        let mut doc = original.clone();
+        arrange(&mut doc, &[2, 5, 1], action);
+        assert_eq!(doc, expected, "{action:?}");
+        assert_arrangement_gaps(&doc, &[1, 5, 2], delta.x != 0., gap, gap);
+        doc.validate().unwrap();
+    }
+}
+
 #[test]
 fn every_arrangement_preserves_explicit_geometry_and_stable_ties() {
     // Rectangles avoid host-font metrics. Their two-world-unit strokes add one
@@ -214,6 +396,7 @@ fn every_arrangement_preserves_explicit_geometry_and_stable_ties() {
             Point::new(x, y),
             Point::new(x + width, y + height),
             GraphicStyle {
+                flat_caps: false,
                 width_pt: crate::style::DEFAULT.points_per_world() * 2.,
                 stroke: Color::Custom([20 + index as u8, 70, 130]),
                 fill: Some(Color::Custom([230, 210, 180 + index as u8])),

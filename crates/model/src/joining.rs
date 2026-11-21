@@ -269,6 +269,7 @@ impl Prepared {
         let (source_ids, target_ids) =
             match self.resolve_destination(point, radius, anchor, mode)? {
                 Destination::Coordinate { donor, metal } => {
+                    crate::graphics::table::require_same_cell(&self.original, &[donor, metal])?;
                     return Ok((
                         Placed::Coordinated(coordinate_atoms(&self.original, donor, metal)?),
                         vec![donor, metal],
@@ -279,6 +280,8 @@ impl Prepared {
                     target_ids,
                 } => (source_ids, target_ids),
             };
+        let join_ids: Vec<_> = source_ids.iter().chain(&target_ids).copied().collect();
+        crate::graphics::table::require_same_cell(&self.original, &join_ids)?;
         if source_ids
             .iter()
             .any(|id| self.fragment.abbreviation(*id).is_some())

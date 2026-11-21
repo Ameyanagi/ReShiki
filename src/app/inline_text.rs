@@ -151,10 +151,24 @@ impl App {
                 });
                 if let Some(target) = &state.callout {
                     reshiki::leaders::keep_on_page(&mut doc, id, target);
+                    reshiki::graphics::table::inherit_attachment(
+                        &self.tab.doc,
+                        &mut doc,
+                        &[id],
+                        &target.ids(),
+                    )?;
                     reshiki::leaders::attach(&mut doc, id, target.clone())?;
                 }
                 if let Some(shape) = doc.graphics.iter_mut().find(|g| Some(g.id) == state.shape) {
                     shape.text = Some(id);
+                }
+                if let Some(shape) = state.shape {
+                    reshiki::graphics::table::inherit_attachment(
+                        &self.tab.doc,
+                        &mut doc,
+                        &[id],
+                        &[shape],
+                    )?;
                 }
             }
             (None, true) => {}

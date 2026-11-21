@@ -407,6 +407,9 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
         .map(|a| a.id)
         .filter(|id| arrow_unchanged(doc, *id))
         .collect();
+    let Ok(owners) = crate::graphics::table::Membership::new(doc) else {
+        return;
+    };
     for id in candidates {
         let Some(text) = doc.annotations.iter().find(|a| a.id == id) else {
             continue;
@@ -415,6 +418,10 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             .arrows
             .iter()
             .filter(|a| stable.contains(&a.id))
+            .filter(|a| {
+                owners.cell_of(a.id) == owners.cell_of(id)
+                    || (!old_texts.contains_key(&id) && owners.cell_of(id).is_none())
+            })
             .filter_map(|a| slot(doc, a, text).map(|(side, distance)| (a.id, side, distance)))
             .filter(|(arrow, side, _)| {
                 !doc.arrow_labels
@@ -423,6 +430,11 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             })
             .min_by(|a, b| a.2.total_cmp(&b.2));
         if let Some((arrow, side, _)) = best {
+            // Only a newly authored, unowned caption inherits its holder.
+            // Existing text keeps its explicit cell even when dragged nearby.
+            if crate::graphics::table::inherit_attachment(before, doc, &[id], &[arrow]).is_err() {
+                continue;
+            }
             doc.arrow_labels.push(ArrowLabel {
                 arrow,
                 annotation: id,

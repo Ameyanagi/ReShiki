@@ -33,6 +33,7 @@ mod partial_charges;
 mod piece_tests;
 #[cfg(test)]
 mod purpose_tests;
+mod tables;
 mod tlc;
 mod tree;
 #[cfg(test)]
@@ -178,6 +179,8 @@ struct Writer<'a> {
     atom_nodes: Vec<Key>,
     bond_nodes: Vec<Key>,
     objects: Vec<(u64, Key)>,
+    /// Artwork generated from atoms has no separate drawing object ID.
+    atom_artwork: HashMap<Key, u64>,
     next: usize,
     scale: f64,
     shift: P,
@@ -385,7 +388,8 @@ fn write_impl(
         crate::palette::Palette::of(original),
     )?;
     w.variable_labels = variable_labels;
-    w.split_fragments = !written_cycles.is_empty();
+    w.split_fragments =
+        !written_cycles.is_empty() || document.graphics.iter().any(|g| g.table.is_some());
     w.atoms(&graph, &stereocentres)?;
     w.bonds()?;
     w.circles(&rings)?;
@@ -443,6 +447,7 @@ fn write_impl(
         }
     }
     let payload = w.cycles(&written_cycles)?;
+    w.tables()?;
     let (_, hi) = w.painted_bounds;
     let right = (hi.x * w.scale + w.shift.x + 30.).ceil().max(612.);
     let bottom = (hi.y * w.scale + w.shift.y + 30.).ceil().max(792.);
@@ -656,6 +661,7 @@ impl<'a> Writer<'a> {
             atom_nodes: Vec::new(),
             bond_nodes: Vec::new(),
             objects: Vec::new(),
+            atom_artwork: HashMap::new(),
             next: doc.atoms.len() + 3,
             scale,
             shift,

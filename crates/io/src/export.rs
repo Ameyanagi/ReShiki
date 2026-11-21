@@ -891,4 +891,6 @@ pub fn pages_pdf(doc: &Document, background: Background) -> Result<Vec<u8>, Stri
 }
 
 #[cfg(test)]
+mod table_tests;
+#[cfg(test)]
 mod tests;

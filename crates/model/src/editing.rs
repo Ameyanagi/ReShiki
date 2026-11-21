@@ -6,6 +6,7 @@ mod arrange_tests;
 #[cfg(test)]
 mod nearest_tests;
 mod rotation;
+mod table_captions;
 pub use rotation::center as rotation_center;
 pub mod reference;
 
@@ -44,6 +45,8 @@ pub fn add_bonded_atom(
         doc.invalidate_chemistry(&[start, id]);
         doc.add_bond(start, id, 1, "plain");
     }
+    let targets: Vec<_> = std::iter::once(start).chain(target).collect();
+    crate::graphics::table::inherit_attachment(source, &mut doc, &[id], &targets)?;
     crate::reactions::reconcile(&mut doc)?;
     doc.validate()?;
     Ok((doc, id))
@@ -87,7 +90,8 @@ pub enum Arrange {
 /// The selected part as its own document: [`crate::attachments::selection`],
 /// then [`Document::expand_abbreviation_selection`].
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
-    let ids = crate::generic::selection(doc, ids);
+    let ids = crate::graphics::table::with_contents(doc, ids);
+    let ids = crate::generic::selection(doc, &ids);
     let ids = crate::attachments::selection(doc, &ids);
     let ids: HashSet<_> = doc
         .expand_abbreviation_selection(&ids)
@@ -595,6 +599,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         map(&mut g.id)?;
         crate::leaders::remap(g, mapping);
         crate::cycles::remap(g, mapping);
+        crate::graphics::table::remap(g, mapping)?;
         if let Some(text) = &mut g.text {
             map(text)?;
         }
@@ -716,6 +721,8 @@ pub fn center(doc: &Document, ids: &[u64]) -> Point {
 }
 
 pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
+    let ids = crate::graphics::table::with_contents(doc, ids);
+    let ids = ids.as_slice();
     if let Transform::TiltX(degrees) | Transform::TiltY(degrees) = transform {
         crate::projection::tilt(doc, ids, degrees, matches!(transform, Transform::TiltX(_)));
         return;
@@ -727,7 +734,8 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         };
         center
     } else {
-        center(doc, ids)
+        let references = crate::graphics::table::reference_ids(doc, ids);
+        center(doc, &references)
     };
     let vector = |p: Point| {
         let (x, y) = (p.x, p.y);
@@ -755,6 +763,8 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
 
 /// Uniform, orientation-preserving transform used by the selection handles.
 pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32, degrees: f32) {
+    let ids = crate::graphics::table::with_contents(doc, ids);
+    let ids = ids.as_slice();
     if !scale.is_finite()
         || scale <= 0.0
         || !degrees.is_finite()
@@ -800,6 +810,8 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
 /// line on the other side, so the configuration stays as drawn. The Flip
 /// tool and Compare's lined-up view both use it.
 pub fn transform_display(doc: &mut Document, ids: &[u64], vector: impl Fn(Point) -> Point) {
+    let ids = crate::graphics::table::with_contents(doc, ids);
+    let ids = ids.as_slice();
     transform_hydrogen_positions(doc, ids, &vector);
     let (x, y) = (vector(Point::new(1., 0.)), vector(Point::new(0., 1.)));
     let mirrored = x.x * y.y - x.y * y.x < 0.;
@@ -900,6 +912,8 @@ fn transform_hydrogen_positions(doc: &mut Document, ids: &[u64], vector: impl Fn
 /// Stretch the drawing in its plane without reflecting atoms or resizing text.
 /// Projection depth stays unchanged: this changes X/Y, not the Z axis.
 pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y: f32) {
+    let ids = crate::graphics::table::with_contents(doc, ids);
+    let ids = ids.as_slice();
     if !x.is_finite()
         || !y.is_finite()
         || x <= 0.
@@ -942,6 +956,10 @@ fn map_positions(
     vector: impl Fn(Point) -> Point,
 ) {
     let ids: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
+    // Capture the cell's derived wrapping before its frame moves. A table's
+    // upright captions move by their ink centres, rather than sending their
+    // insertion points to the opposite clip edge during a flip or half-turn.
+    let captions = table_captions::Positions::new(doc, &ids);
     for graphic in &mut doc.graphics {
         if ids.contains(&graphic.id) {
             let before = graphic.clone();
@@ -978,11 +996,21 @@ fn map_positions(
     let turns = only_text(doc, &ids)
         && crate::document::text_angle(vector(Point::new(1., 0.)), vector(Point::new(0., 1.)))
             != 0.;
+    let cells = (!captions.is_empty()).then(|| crate::scene::table::Layout::new(doc));
     for a in &mut doc.annotations {
         if !ids.contains(&a.id) {
             continue;
         }
-        if a.angle == 0. && !turns {
+        if let (Some(position), Some(cells)) = (captions.get(a.id), cells.as_ref()) {
+            if a.angle != 0. || turns {
+                let (s, c) = a.angle.to_radians().sin_cos();
+                a.angle = crate::document::text_angle(
+                    vector(Point::new(c, s)),
+                    vector(Point::new(-s, c)),
+                );
+            }
+            position.place(a, cells, &convert, &vector);
+        } else if a.angle == 0. && !turns {
             a.position = convert(a.position);
         } else {
             let (w, h) = a.size();
@@ -1104,7 +1132,10 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
         action,
         Arrange::DistributeHorizontal | Arrange::DistributeVertical
     );
-    let groups = groups(doc, ids);
+    // The table moves its children, but supplies the only spacing/alignment
+    // reference even when selection expansion also lists those children.
+    let references = crate::graphics::table::reference_ids(doc, ids);
+    let groups = groups(doc, &references);
     if groups.is_empty() {
         return;
     }
@@ -1160,6 +1191,7 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
     }
     let drawn = doc.abbreviation_render_copy();
     let doc = drawn.as_ref();
+    let cells = crate::scene::table::Layout::new(doc);
     // One index per query replaces two linear atom searches for every bond.
     // Reversed insertion retains Document::atom's first-ID behavior even for
     // an unvalidated document containing duplicate IDs.
@@ -1176,6 +1208,10 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
         .filter_map(|(i, b)| {
             let (a_id, z_id) = (b.a, b.b);
             let (a, z) = (*positions.get(&a_id)?, *positions.get(&z_id)?);
+            if !cells.contains(a_id, p) {
+                return None;
+            }
+            let (a, z) = cells.segment(a_id, a, z)?;
             let distance = crate::graphics::segment_distance(p, a, z);
             if !(distance < r && doc.bond_drawn(b.a, b.b)) {
                 return None;
@@ -1186,6 +1222,7 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
                         .is_some_and(|group| group.exit.is_some())
                 }) {
                 let (a, z) = crate::scene::bond_segment(doc, b, None)?;
+                let (a, z) = cells.segment(a_id, a, z)?;
                 crate::graphics::segment_distance(p, a, z)
             } else {
                 distance
@@ -1898,6 +1935,18 @@ fn check_ring_candidate(
             ));
         }
     }
+    let targets: Vec<_> = ids
+        .iter()
+        .copied()
+        .filter(|id| doc.atom(*id).is_some())
+        .collect();
+    crate::graphics::table::inherit_attachment(doc, &mut result, &ids, &targets).map_err(|_| {
+        reject(
+            "A ring cannot join different table cells.",
+            "Different table cells",
+            None,
+        )
+    })?;
     result.reconcile_molecule_groups();
     crate::reactions::reconcile(&mut result).map_err(|_| {
         reject(

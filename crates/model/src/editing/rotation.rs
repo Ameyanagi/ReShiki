@@ -13,9 +13,13 @@ use std::collections::HashSet;
 /// this mean leaves it fixed, so recomputing it for the next command does not move
 /// the pivot. Hidden abbreviation members move with their visible anchor but do
 /// not add weight. Derived drawing centroids likewise contribute no extra site.
+/// A selected table contributes its affine center without weighting its contents.
 /// Bounds-based layout and explicit-pivot transforms use their own centers.
 pub fn center(doc: &Document, ids: &[u64]) -> Option<Point> {
-    let selected: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
+    let expanded = doc.expand_abbreviation_selection(ids);
+    let selected: HashSet<_> = crate::graphics::table::reference_ids(doc, &expanded)
+        .into_iter()
+        .collect();
     let (mut x, mut y, mut count) = (0_f64, 0_f64, 0_u64);
     let mut add = |px: f64, py: f64| {
         x += px;
@@ -114,6 +118,7 @@ fn graphic_anchor(graphic: &Graphic) -> (f64, f64) {
             return (f64::from(mid.x), f64::from(mid.y));
         }
         GraphicKind::Picture
+        | GraphicKind::Table
         | GraphicKind::Rectangle
         | GraphicKind::RoundedRectangle
         | GraphicKind::Ellipse

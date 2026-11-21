@@ -323,7 +323,12 @@ fn pick_with_ink(
     p: Point,
     radius: f32,
 ) -> Option<Pick> {
-    for a in doc.atoms.iter().rev().filter(|a| doc.atom_visible(a.id)) {
+    for a in doc
+        .atoms
+        .iter()
+        .rev()
+        .filter(|a| doc.atom_visible(a.id) && ink.cell_contains(a.id, p))
+    {
         for m in a.marks.iter().rev().filter(|m| lone_pair(m.kind)) {
             let center = a.position.offset(m.offset.x, m.offset.y);
             if center.distance(p) <= radius + mark_size(doc, a, m) * 0.3 && ink.mark(a.id) {
@@ -355,7 +360,7 @@ fn pick_with_ink(
         .iter()
         .enumerate()
         .rev()
-        .filter(|(_, b)| doc.bond_visible(b.a, b.b))
+        .filter(|(_, b)| doc.bond_visible(b.a, b.b) && ink.cell_contains(b.a, p))
         .filter_map(|(index, bond)| {
             let (a, b) = if bond.a < bond.b {
                 (bond.a, bond.b)
@@ -1008,7 +1013,14 @@ pub fn create(
     });
     arrow.start_anchor = Some(start_anchor);
     arrow.end_anchor = Some(end_anchor);
+    let targets: Vec<_> = arrow
+        .start_anchor
+        .iter()
+        .chain(&arrow.end_anchor)
+        .flat_map(|anchor| anchor.target.atoms())
+        .collect();
     candidate.arrows.push(arrow);
+    crate::graphics::table::inherit_attachment(doc, &mut candidate, &[id], &targets)?;
     let resolved = resolved_endpoints(&candidate, drawn);
     apply_resolved_endpoints(&mut candidate, resolved);
     candidate.validate()?;

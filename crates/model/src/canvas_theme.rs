@@ -381,8 +381,15 @@ pub fn resolved_exchange_document(
 fn resolve_document(
     doc: &crate::document::Document,
 ) -> std::borrow::Cow<'_, crate::document::Document> {
+    resolve_document_on(doc, FillBackdrop::default())
+}
+
+fn resolve_document_on<'a>(
+    doc: &'a crate::document::Document,
+    backdrop: FillBackdrop<'_>,
+) -> std::borrow::Cow<'a, crate::document::Document> {
     use std::borrow::Cow;
-    let carded = on_fills(doc);
+    let carded = on_fills(doc, backdrop);
     let doc = carded.as_ref();
     if doc.custom_theme.is_none()
         && doc.color_theme.is_publication()
@@ -405,25 +412,26 @@ pub fn ink_canvas(rgb: [u8; 3]) -> CanvasTheme {
     }
 }
 
-/// Objects drawn on a filled shape take the colors of the canvas whose ink
-/// reads on that fill: black ink on a light card even on the dark canvas, and
-/// white ink on a dark card on the light one. Palette fills follow the canvas,
-/// so this mostly concerns custom and Ink fills. The topmost filled shape
-/// under an object's middle decides; shapes stack in paint order.
-fn on_fills(doc: &crate::document::Document) -> std::borrow::Cow<'_, crate::document::Document> {
-    use crate::{document::Point, graphics::flattened};
-    /// A filled shape: its outline, bounds and the canvas its contents take.
-    struct Card {
-        outline: Vec<Vec<Point>>,
-        bounds: (Point, Point),
-        canvas: CanvasTheme,
-    }
-    let canvas = doc.canvas_theme;
-    let [light, dark] = CanvasTheme::ALL.map(|mode| Palette::in_mode(doc, mode));
-    let under = |cards: &[Card], p: Point| {
+/// A filled shape: its outline, bounds and the canvas its contents take.
+struct Card {
+    outline: Vec<Vec<crate::document::Point>>,
+    bounds: (crate::document::Point, crate::document::Point),
+    canvas: CanvasTheme,
+}
+
+/// Borrow the ordinary fills painted before a table. Cell-owned fills stay
+/// local to that cell, and fills painted above the table cannot recolor it.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct FillBackdrop<'a> {
+    cards: &'a [Card],
+}
+
+impl FillBackdrop<'_> {
+    fn under(self, canvas: CanvasTheme, cards: &[Card], p: crate::document::Point) -> CanvasTheme {
         cards
             .iter()
             .rev()
+            .chain(self.cards.iter().rev())
             .find(|card| {
                 let (lo, hi) = card.bounds;
                 (lo.x..=hi.x).contains(&p.x)
@@ -431,51 +439,114 @@ fn on_fills(doc: &crate::document::Document) -> std::borrow::Cow<'_, crate::docu
                     && crate::graphics::fills(p, &card.outline)
             })
             .map_or(canvas, |card| card.canvas)
-    };
-    let middle = |(lo, hi): (Point, Point)| Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
-    // Shapes in paint order; the chemistry lies over those behind it.
-    let mut order: Vec<_> = doc.graphics.iter().enumerate().collect();
-    order.sort_by_key(|(_, g)| g.layer);
-    let mut cards: Vec<Card> = vec![];
-    let mut graphics = vec![canvas; doc.graphics.len()];
-    // How many cards lie under each shape's text: those painted before it
-    // and its own.
-    let mut through = vec![0; doc.graphics.len()];
-    let mut behind_chemistry = None;
-    for (i, g) in order {
-        if g.layer >= 0 && behind_chemistry.is_none() {
-            behind_chemistry = Some(cards.len());
-        }
-        let bounds = g.bounds();
-        let mode = under(&cards, middle(bounds));
-        if let Some(slot) = graphics.get_mut(i) {
-            *slot = mode;
-        }
-        let palette = if mode.is_dark() { dark } else { light };
-        if let Some(rgb) = g.backing(|c| palette.rgb(c), mode.background()) {
-            // Shading is white at its highlight and mostly light; ink reads
-            // on its middle band.
-            let rgb = if g.style.effects.shaded {
-                crate::graphics::shade(rgb, 0.5)
-            } else {
-                rgb
-            };
-            cards.push(Card {
-                outline: flattened(&g.commands()),
-                bounds,
-                canvas: ink_canvas(rgb),
-            });
-        }
-        if let Some(slot) = through.get_mut(i) {
-            *slot = cards.len();
+    }
+}
+
+/// One fill index in stable scene paint order, shared by every table cell.
+pub(crate) struct FillBackdrops {
+    cards: Vec<Card>,
+    graphics: Vec<CanvasTheme>,
+    before: Vec<usize>,
+    through: Vec<usize>,
+    behind_chemistry: usize,
+}
+
+impl FillBackdrops {
+    pub(crate) fn new(doc: &crate::document::Document) -> Self {
+        Self::on(doc, FillBackdrop::default())
+    }
+
+    pub(crate) fn before_graphic(&self, index: usize) -> FillBackdrop<'_> {
+        FillBackdrop {
+            cards: self
+                .cards
+                .get(..self.before.get(index).copied().unwrap_or(0))
+                .unwrap_or_default(),
         }
     }
-    if cards.iter().all(|card| card.canvas == canvas) {
+
+    fn on(doc: &crate::document::Document, backdrop: FillBackdrop<'_>) -> Self {
+        use crate::{document::Point, graphics::flattened};
+        let canvas = doc.canvas_theme;
+        let [light, dark] = CanvasTheme::ALL.map(|mode| Palette::in_mode(doc, mode));
+        let mut order: Vec<_> = doc.graphics.iter().enumerate().collect();
+        order.sort_by_key(|(_, g)| g.layer);
+        let mut cards: Vec<Card> = vec![];
+        let mut graphics = vec![canvas; doc.graphics.len()];
+        let mut before = vec![0; doc.graphics.len()];
+        let mut through = vec![0; doc.graphics.len()];
+        let mut behind_chemistry = None;
+        for (i, g) in order {
+            if g.layer >= 0 && behind_chemistry.is_none() {
+                behind_chemistry = Some(cards.len());
+            }
+            if let Some(slot) = before.get_mut(i) {
+                *slot = cards.len();
+            }
+            let bounds = g.bounds();
+            let (lo, hi) = bounds;
+            let middle = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+            let mode = backdrop.under(canvas, &cards, middle);
+            if let Some(slot) = graphics.get_mut(i) {
+                *slot = mode;
+            }
+            let palette = if mode.is_dark() { dark } else { light };
+            if let Some(rgb) = g.backing(|c| palette.rgb(c), mode.background()) {
+                // Shading is white at its highlight and mostly light; ink
+                // reads on its middle band.
+                let rgb = if g.style.effects.shaded {
+                    crate::graphics::shade(rgb, 0.5)
+                } else {
+                    rgb
+                };
+                cards.push(Card {
+                    outline: flattened(&g.commands()),
+                    bounds,
+                    canvas: ink_canvas(rgb),
+                });
+            }
+            if let Some(slot) = through.get_mut(i) {
+                *slot = cards.len();
+            }
+        }
+        Self {
+            behind_chemistry: behind_chemistry.unwrap_or(cards.len()),
+            cards,
+            graphics,
+            before,
+            through,
+        }
+    }
+}
+
+/// Objects drawn on a filled shape take the colors of the canvas whose ink
+/// reads on that fill: black ink on a light card even on the dark canvas, and
+/// white ink on a dark card on the light one. Palette fills follow the canvas,
+/// so this mostly concerns custom and Ink fills. The topmost filled shape
+/// under an object's middle decides; shapes stack in paint order.
+fn on_fills<'a>(
+    doc: &'a crate::document::Document,
+    backdrop: FillBackdrop<'_>,
+) -> std::borrow::Cow<'a, crate::document::Document> {
+    use crate::document::Point;
+    let canvas = doc.canvas_theme;
+    let FillBackdrops {
+        cards,
+        graphics,
+        through,
+        behind_chemistry,
+        ..
+    } = FillBackdrops::on(doc, backdrop);
+    let under = |cards: &[Card], p: Point| backdrop.under(canvas, cards, p);
+    let middle = |(lo, hi): (Point, Point)| Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    if cards
+        .iter()
+        .chain(backdrop.cards)
+        .all(|card| card.canvas == canvas)
+    {
         return std::borrow::Cow::Borrowed(doc);
     }
-    let chemistry = cards
-        .get(..behind_chemistry.unwrap_or(cards.len()))
-        .unwrap_or_default();
+    let chemistry = cards.get(..behind_chemistry).unwrap_or_default();
     let on = |p: Point| under(chemistry, p);
     let positions: std::collections::HashMap<u64, Point> =
         doc.atoms.iter().map(|a| (a.id, a.position)).collect();
@@ -653,7 +724,14 @@ fn resolve_all(doc: &crate::document::Document) -> crate::document::Document {
 pub fn canonical_document(
     doc: &crate::document::Document,
 ) -> std::borrow::Cow<'_, crate::document::Document> {
-    let resolved = resolved_document(doc);
+    canonical_document_on(doc, FillBackdrop::default())
+}
+
+pub(crate) fn canonical_document_on<'a>(
+    doc: &'a crate::document::Document,
+    backdrop: FillBackdrop<'_>,
+) -> std::borrow::Cow<'a, crate::document::Document> {
+    let resolved = resolve_document_on(doc, backdrop);
     let canvas = resolved.canvas_theme;
     if canvas.is_light() {
         return resolved;

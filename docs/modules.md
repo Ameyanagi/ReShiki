@@ -542,6 +542,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/schemes.rs`: Validate external reaction references without inventing native reaction roles.
 - `crates/io/src/chemistry/cdxml/stereo.rs`
 - `crates/io/src/chemistry/cdxml/symbol.rs`
+- `crates/io/src/chemistry/cdxml/tables.rs`: Native table pages own ordinary editable objects.
 - `crates/io/src/chemistry/cdxml/tree.rs`: Private detached XML tree.
 - `crates/io/src/chemistry/cdxml/variables.rs`: Drawing-only labels on unspecified atoms; query chemistry remains unsupported.
 - `crates/io/src/chemistry/cdxml/xml_guard.rs`: One linear scan of the XML bytes before any parser runs.
@@ -604,6 +605,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/exchange/drawing/ligands.rs`: Hidden-charge and aromatic-ligand presentation using native CDX symbols.
 - `crates/io/src/exchange/drawing/objects.rs`
 - `crates/io/src/exchange/drawing/partial_charges.rs`
+- `crates/io/src/exchange/drawing/tables.rs`: Native cell pages keep chemistry editable and let ChemDraw clip/reflow it.
 - `crates/io/src/exchange/drawing/tlc.rs`: Native ChemDraw TLC objects, never a flattened collection of ellipses.
 - `crates/io/src/exchange/drawing/tree.rs`
 - `crates/io/src/exchange/encode.rs`
@@ -727,6 +729,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/editing.rs`
 - `crates/model/src/editing/reference.rs`: Exact drawing orientation and single-bond stretching.
 - `crates/model/src/editing/rotation.rs`: Reference sites that follow rotation, unlike axis-aligned drawing bounds.
+- `crates/model/src/editing/table_captions.rs`: Preserve readable cell ink when its owning table is transformed.
 - `crates/model/src/equipment.rs`: Lab apparatus
 - `crates/model/src/equipment/authoring.rs`: A piece-editor draft.
 - `crates/model/src/equipment/authoring_artwork.rs`: A bounded certificate for filled artwork without independent stroke-only traces.
@@ -775,6 +778,8 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/path/smooth.rs`
 - `crates/model/src/graphics/path/symmetry.rs`: Reflection fitting for a connected path, including its Bézier controls.
 - `crates/model/src/graphics/superscript.rs`
+- `crates/model/src/graphics/table.rs`: Editable table cells own ordinary drawing objects by ID.
+- `crates/model/src/graphics/table/clip.rs`: Pointer geometry clips ink before applying the editor's pick radius.
 - `crates/model/src/graphics/tlc.rs`: Native TLC plate geometry.
 - `crates/model/src/grouping.rs`: Persistent, nested logical groups, represented as laminar sets of object IDs.
 - `crates/model/src/haworth.rs`: Haworth drawing geometry and chemically defined carbohydrate templates.
@@ -842,6 +847,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/scene/performance.rs`: Opt-in release-mode measurements of how model queries grow with the drawing.
 - `crates/model/src/scene/projected_bonds.rs`: Secondary rails in a retained ring face, projected without rescaling XY.
 - `crates/model/src/scene/svg.rs`: SVG serialization of the scene primitives.
+- `crates/model/src/scene/table.rs`: Table cells are independently painted native drawing scopes.
 - `crates/model/src/scientific.rs`: Chemical marks and orbital diagrams.
 - `crates/model/src/scientific/label_halo.rs`: Find the atom labels an orbital's complete lobes run into.
 - `crates/model/src/scientific/mark_placement.rs`: Click placement and the orbit of a dragged mark.

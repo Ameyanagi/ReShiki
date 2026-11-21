@@ -47,11 +47,15 @@ pub fn add_centroid(doc: &mut Document, ids: &[u64]) -> Result<u64, String> {
     if !(2..=300).contains(&members.len()) {
         return Err("Select at least two atoms to add a centroid".into());
     }
-    let id = doc.add_atom("*", Point::default());
-    let atom = doc.atom_mut(id).ok_or("Missing centroid")?;
+    let mut candidate = doc.clone();
+    let id = candidate.add_atom("*", Point::default());
+    let atom = candidate.atom_mut(id).ok_or("Missing centroid")?;
     atom.no_implicit = true;
-    atom.centroid = members;
-    sync_centroids(doc);
+    atom.centroid = members.clone();
+    crate::graphics::table::inherit_attachment(doc, &mut candidate, &[id], &members)?;
+    sync_centroids(&mut candidate);
+    candidate.validate()?;
+    *doc = candidate;
     Ok(id)
 }
 

@@ -5,6 +5,7 @@ mod heads;
 pub mod panel;
 mod path;
 mod superscript;
+pub mod table;
 mod tlc;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
@@ -42,6 +43,8 @@ pub enum GraphicKind {
     Path,
     /// A line icon from the Icons tool; see [`crate::line_icons`].
     Icon,
+    /// Native editable cells containing ordinary chemistry and drawing objects.
+    Table,
 }
 impl GraphicKind {
     pub const DRAWABLE: [Self; 10] = [
@@ -85,6 +88,7 @@ impl std::fmt::Display for GraphicKind {
             Self::TlcPlate => "TLC plate",
             Self::Piece => "Equipment piece",
             Self::Icon => "Icon",
+            Self::Table => "Table",
         })
     }
 }
@@ -137,6 +141,9 @@ pub struct GraphicStyle {
     pub fill: Option<crate::palette::Color>,
     pub width_pt: f32,
     pub pattern: LinePattern,
+    /// Flat ends for derived native grid strokes; ordinary graphics stay round.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flat_caps: bool,
     #[serde(skip_serializing_if = "Effects::is_plain")]
     pub effects: Effects,
     /// A rounded rectangle's corner radius; `None` rounds 18% of the shorter side.
@@ -150,6 +157,7 @@ impl Default for GraphicStyle {
             fill: None,
             width_pt: 0.6,
             pattern: LinePattern::Solid,
+            flat_caps: false,
             effects: Effects::default(),
             corner_pt: None,
         }
@@ -176,7 +184,7 @@ impl GraphicStyle {
     }
     /// Round line ends, except on dashes.
     pub fn round_caps(&self) -> bool {
-        self.pattern != LinePattern::Dashed
+        !self.flat_caps && self.pattern != LinePattern::Dashed
     }
     pub fn validate(&self) -> Result<(), String> {
         if !self.width_pt.is_finite() || !(0.1..=12.0).contains(&self.width_pt) {
@@ -392,6 +400,8 @@ pub struct Graphic {
     /// The intermediates and steps that make an ellipse a catalytic cycle.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cycle: Option<Box<crate::cycles::Cycle>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table: Option<Box<table::Table>>,
     /// The annotation this closed shape holds, centred inside it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<u64>,
@@ -515,6 +525,7 @@ impl Graphic {
                 panel: None,
                 leader: None,
                 cycle: None,
+                table: None,
                 text: None,
             };
         }
@@ -566,6 +577,7 @@ impl Graphic {
             panel: None,
             leader: None,
             cycle: None,
+            table: None,
             text: None,
         }
     }
@@ -598,6 +610,7 @@ impl Graphic {
                 | GraphicKind::Piece
                 | GraphicKind::TlcPlate
                 | GraphicKind::Icon
+                | GraphicKind::Table
         ) {
             return self.parts().into_iter().flat_map(|p| p.commands).collect();
         }
@@ -737,6 +750,11 @@ impl Graphic {
     }
     /// Vector extents, excluding an attached superscript.
     pub fn shape_bounds(&self) -> (Point, Point) {
+        if self.table.is_some()
+            && let Some(bounds) = table::bounds(self)
+        {
+            return bounds;
+        }
         // A cycle keeps Ellipse as its stored host kind. Measure the same
         // effective perimeter that paints its chosen shape, including the
         // legacy mean-radius circle, rather than that storage placeholder.
@@ -852,6 +870,9 @@ impl Graphic {
 
     /// Edit one handle, preserving a connected path if its frame rejects the edit.
     pub fn edit_point(&mut self, index: usize, p: Point) -> Result<(), String> {
+        if self.table.is_some() {
+            return Err("Resize table cells with their table controls".into());
+        }
         if self.kind == GraphicKind::TlcPlate {
             return Ok(());
         }
@@ -919,6 +940,7 @@ impl Graphic {
         } else {
             self.style.validate()?;
         }
+        table::validate_graphic(self)?;
         if (self.kind == GraphicKind::TlcPlate) != self.tlc.is_some() {
             return Err("TLC data does not match the graphic kind".into());
         }

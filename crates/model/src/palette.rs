@@ -448,6 +448,11 @@ pub fn for_each_color_mut(doc: &mut Document, mut visit: impl FnMut(&mut Color))
         }
     }
     for graphic in &mut doc.graphics {
+        if let Some(table) = &mut graphic.table {
+            for border in table.cells.iter_mut().flat_map(|cell| &mut cell.borders) {
+                visit(&mut border.color);
+            }
+        }
         if let Some(tlc) = &mut graphic.tlc {
             tlc.for_each_color_mut(&mut visit);
         }
@@ -503,6 +508,12 @@ pub fn any_color(doc: &Document, test: impl Fn(Color) -> bool) -> bool {
         std::iter::once(g.style.stroke)
             .chain(g.style.fill)
             .chain(g.style.effects.gradient.map(|gradient| gradient.from))
+            .chain(g.table.iter().flat_map(|table| {
+                table
+                    .cells
+                    .iter()
+                    .flat_map(|cell| cell.borders.iter().map(|border| border.color))
+            }))
             .chain(g.tlc.iter().flat_map(|t| t.colors()))
     });
     let fills = doc.ring_fills.iter().map(|f| f.color);

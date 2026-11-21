@@ -979,6 +979,15 @@ pub fn make(doc: &mut Document, ids: &[u64]) -> Result<(u64, bool), String> {
     if units.len() > MAX_PARTS {
         return Err("A cycle has at most 64 intermediates".into());
     }
+    // Check complete molecules/texts before moving them or removing reaction
+    // roles. The new host must share their cell, including canvas ownership.
+    let targets: Vec<_> = units.iter().flatten().copied().collect();
+    crate::graphics::table::require_same_cell(doc, &targets)?;
+    let before = doc
+        .graphics
+        .iter()
+        .any(|g| g.table.is_some())
+        .then(|| doc.clone());
     let centers: Vec<Point> = crate::scene::selections_bounds(doc, &units)
         .into_iter()
         .map(|b| b.map(center_of))
@@ -1034,8 +1043,11 @@ pub fn make(doc: &mut Document, ids: &[u64]) -> Result<(u64, bool), String> {
         ..Default::default()
     }));
     doc.graphics.push(g);
+    if let Some(before) = before {
+        crate::graphics::table::inherit_attachment(&before, doc, &[id], &targets)?;
+    }
     let mut members = vec![id];
-    members.extend(units.into_iter().flatten());
+    members.extend(targets);
     doc.group_selection(&members)?;
     Ok((id, left))
 }
@@ -1924,6 +1936,7 @@ pub fn materialized(doc: &Document) -> (std::borrow::Cow<'_, Document>, Vec<Mate
         {
             group.members.extend(&ids);
         }
+        crate::graphics::table::replace_member(&mut out, g.id, &ids);
         written.push(Materialized {
             graphic: g.clone(),
             drawn: ids,

@@ -397,6 +397,8 @@ pub fn atom_edit(
                 focus = sprout(&mut result, id, "C", preset, length, key == "0")?;
             }
         }
+        let inserted: Vec<_> = result.object_ids().collect();
+        crate::graphics::table::inherit_attachment(doc, &mut result, &inserted, &[id])?;
         result.invalidate_chemistry(&[id, focus]);
         // The new atoms join the grown molecule's reaction participant.
         crate::reactions::reconcile(&mut result)?;

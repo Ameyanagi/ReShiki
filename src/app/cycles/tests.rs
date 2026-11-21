@@ -927,3 +927,126 @@ fn make_waits_while_a_task_runs() {
     assert!(app.tab.cycle_inputs.proposal.is_none());
     assert!(app.error);
 }
+
+fn cycle_cells(
+    doc: &mut Document,
+    first: Vec<u64>,
+    second: Vec<u64>,
+) -> reshiki::graphics::table::CellRef {
+    use reshiki::graphics::{
+        Graphic, GraphicKind,
+        table::{Cell, CellRef, Table},
+    };
+    let id = doc.next_id();
+    let mut table = Graphic::dragged(
+        id,
+        GraphicKind::Rectangle,
+        Point::new(-500., -400.),
+        Point::new(1500., 600.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    table.kind = GraphicKind::Table;
+    table.table = Some(Box::new(Table {
+        cells: vec![
+            Cell {
+                id: 1,
+                lo: Point::default(),
+                hi: Point::new(0.5, 1.),
+                members: first,
+                borders: vec![],
+            },
+            Cell {
+                id: 2,
+                lo: Point::new(0.5, 0.),
+                hi: Point::new(1., 1.),
+                members: second,
+                borders: vec![],
+            },
+        ],
+    }));
+    doc.graphics.push(table);
+    CellRef { table: id, cell: 1 }
+}
+
+#[test]
+fn same_cell_make_reviews_the_owned_host_and_applies_once() {
+    use reshiki::graphics::table::Membership;
+    for owned in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = Document::default();
+        let parts = [
+            text(&mut app, 0., -200., "A"),
+            text(&mut app, 170., 90., "B"),
+            text(&mut app, -230., 90., "C"),
+        ];
+        let target = owned.then(|| cycle_cells(&mut app.tab.doc, parts.to_vec(), vec![]));
+        app.tab.doc.validate().unwrap();
+        app.tab.selected = parts.to_vec();
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Cycle(Action::Make));
+        assert!(!app.error, "{}", app.status);
+        assert!(app.cycle_proposal_card().is_some());
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        let shown = app.display_document().clone();
+        shown.validate().unwrap();
+        let host = shown
+            .graphics
+            .iter()
+            .find(|g| g.cycle.is_some())
+            .unwrap()
+            .id;
+        assert_eq!(Membership::new(&shown).unwrap().cell_of(host), target);
+        let _ = app.update(Message::Cycle(Action::MakeApply));
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(
+            app.tab.doc, shown,
+            "Apply must match the validated owned preview"
+        );
+        assert_eq!(app.tab.history.undo_frames().len(), 1);
+        let saved = app.tab.doc.file_json().unwrap();
+        assert_eq!(
+            Document::from_json(&saved).unwrap().file_json().unwrap(),
+            saved
+        );
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, shown);
+    }
+}
+
+#[test]
+fn cross_cell_make_rejects_without_preview_or_history() {
+    for other_cell in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = Document::default();
+        let parts = [
+            text(&mut app, 0., -200., "A"),
+            text(&mut app, 170., 90., "B"),
+            text(&mut app, -230., 90., "C"),
+        ];
+        cycle_cells(
+            &mut app.tab.doc,
+            parts[..2].to_vec(),
+            if other_cell { vec![parts[2]] } else { vec![] },
+        );
+        app.tab.doc.validate().unwrap();
+        app.tab.selected = parts.to_vec();
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Cycle(Action::Make));
+        assert!(
+            app.error && app.status.contains("same table cell"),
+            "{}",
+            app.status
+        );
+        assert!(app.tab.cycle_inputs.proposal.is_none());
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.selected, parts);
+        assert!(!app.tab.history.can_undo());
+    }
+}
