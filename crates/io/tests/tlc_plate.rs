@@ -257,7 +257,7 @@ async fn native_plate_inherits_plate_color_and_width_and_warns_for_approximated_
     let engine = LocalEngine::in_process();
     let sheet = |attributes: &str, child: &str| {
         format!(
-            "<CDXML LineWidth='0.6' color='3'><colortable><color r='1' g='1' b='1'/><color r='0' g='0' b='0'/><color r='1' g='0' b='0'/><color r='0' g='0' b='1'/></colortable><page id='1'><tlcplate id='2' TopLeft='0 0' TopRight='40 0' BottomRight='40 200' BottomLeft='0 200' LineWidth='1.5' color='5' ShowOrigin='yes' ShowSolventFront='yes' ShowBorders='yes'><tlclane id='3'><tlcspot id='4' Rf='0.3' Width='65536' Height='131072' CurveType='128' {attributes}>{child}</tlcspot></tlclane></tlcplate></page></CDXML>"
+            "<CDXML LineWidth='0.6' color='3'><colortable><color r='1' g='1' b='1'/><color r='0' g='0' b='0'/><color r='1' g='0' b='0'/><color r='0' g='0' b='1'/></colortable><page id='1'><tlcplate id='2' TopLeft='0 0' TopRight='40 0' BottomRight='40 200' BottomLeft='0 200' OriginFraction='0.1' SolventFrontFraction='0.1' LineWidth='1.5' color='5' ShowOrigin='yes' ShowSolventFront='yes' ShowBorders='yes'><tlclane id='3'><tlcspot id='4' Rf='0.3' Width='65536' Height='131072' CurveType='128' {attributes}>{child}</tlcspot></tlclane></tlcplate></page></CDXML>"
         )
     };
     let (doc, warnings) = formats::read_with_warnings(sheet("", "").into_bytes(), "cdxml", &engine)
@@ -458,4 +458,14 @@ async fn native_plate_can_be_an_external_reaction_condition_drawing_with_existin
             .any(|w| w.contains("external reaction roles")),
         "{warnings:?}"
     );
+}
+
+#[tokio::test]
+async fn native_rf_tag_exception_does_not_accept_an_unowned_indicator() {
+    let engine = LocalEngine::in_process();
+    let source = "<CDXML><page><graphic GraphicType='Rectangle' BoundingBox='0 0 10 10'/><objecttag Name='rf'><t p='10 20'><s size='9'>unowned</s></t></objecttag></page></CDXML>";
+    let error = formats::read_with_engine(source.as_bytes().to_vec(), "cdxml", &engine)
+        .await
+        .unwrap_err();
+    assert!(error.contains("Unattached object tags"), "{error}");
 }

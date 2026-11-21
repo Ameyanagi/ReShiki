@@ -1822,25 +1822,11 @@ impl Pass {
         let parent = self.node(index)?.parent;
         // TLC Rf captions are owned text, with their own measured baseline and
         // explicit turn. Other object tags retain the legacy upright fallback.
-        let mut tlc_rf_caption = false;
-        if tag == "t" {
-            let mut current = Some(index);
-            tlc_rf_caption = true;
-            for expected in ["t", "objecttag", "tlcspot", "tlclane", "tlcplate"] {
-                let Some(i) = current else {
-                    tlc_rf_caption = false;
-                    break;
-                };
-                let node = self.node(i)?;
-                if node.tag != expected
-                    || expected == "objecttag" && node.attr("Name") != Some("rf")
-                {
-                    tlc_rf_caption = false;
-                    break;
-                }
-                current = node.parent;
-            }
-        }
+        let tlc_rf_caption = tag == "t"
+            && parent
+                .map(|i| super::graphics::tlc::is_rf_tag(&self.tree, i))
+                .transpose()?
+                .unwrap_or(false);
         let caption = tlc_rf_caption
             || tag == "t"
                 && match parent {

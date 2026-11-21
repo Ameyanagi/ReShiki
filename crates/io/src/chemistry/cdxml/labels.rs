@@ -475,6 +475,9 @@ where
     }
     for &index in &order {
         let element = tree.node(index)?;
+        if element.tag == "objecttag" && super::graphics::tlc::is_rf_tag(&tree, index)? {
+            continue;
+        }
         if element.tag == "objecttag"
             && !matches!(
                 element

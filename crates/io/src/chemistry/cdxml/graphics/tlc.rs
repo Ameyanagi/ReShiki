@@ -462,6 +462,23 @@ impl Reader<'_, '_> {
     }
 }
 
+/// Rf text is owned by a native spot, never an unattached chemical indicator.
+pub(in crate::chemistry::cdxml) fn is_rf_tag(
+    tree: &Tree,
+    index: usize,
+) -> super::super::Result<bool> {
+    let mut current = Some(index);
+    for expected in ["objecttag", "tlcspot", "tlclane", "tlcplate"] {
+        let Some(i) = current else { return Ok(false) };
+        let node = tree.node(i)?;
+        if node.tag != expected || expected == "objecttag" && node.attr("Name") != Some("rf") {
+            return Ok(false);
+        }
+        current = node.parent;
+    }
+    Ok(true)
+}
+
 const PLATE: &[&str] = &[
     "id",
     "BoundingBox",
