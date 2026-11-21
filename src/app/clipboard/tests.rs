@@ -1075,3 +1075,67 @@ fn a_wide_paste_lands_beside_the_drawing_and_a_small_one_near_the_view_centre() 
     let pasted = app.tab.doc.atom(app.tab.selected[0]).unwrap().position;
     assert_eq!(pasted, center.offset(24., 24.));
 }
+
+#[test]
+fn office_destination_uses_rich_copy_for_selection_or_drawing_without_mutating_either() {
+    for selected in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        app.tab.doc.add_atom("O", Point::new(200., 0.));
+        app.tab.selected = if selected { vec![a] } else { vec![] };
+        let drawing = app.tab.doc.clone();
+        let selection = app.tab.selected.clone();
+        let revision = app.tab.revision;
+        if !selected {
+            assert_eq!(app.copy_native(false, false, None).units(), 0);
+            assert_eq!(app.status, "Select objects to copy");
+        }
+        let task = app.update(Message::CopyForOffice);
+        assert!(
+            task.units() > 0,
+            "prepare only; do not publish to the actual clipboard"
+        );
+        assert!(app.native_copy_busy && app.tab.clipboard_busy);
+        assert_eq!(app.status, "Preparing clipboard…");
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.tab.selected, selection);
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.tab.history.can_undo());
+        assert_eq!(
+            app.copy_for_office().units(),
+            0,
+            "busy copies are serialized"
+        );
+    }
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    assert_eq!(app.copy_for_office().units(), 0);
+    assert_eq!(app.status, "There is nothing to copy");
+    assert!(!app.native_copy_busy && !app.tab.clipboard_busy);
+}
+
+#[test]
+fn office_destination_payload_choice_does_not_change_regular_copy_options() {
+    use crate::app::inspector::Action;
+    let (mut app, _) = App::new();
+    let defaults = app.copy_pictures(None);
+    let _ = app.update(Message::InspectorAction(Action::ExportEditable(Some(
+        false,
+    ))));
+    let _ = app.update(Message::InspectorAction(Action::ExportBackground(Some(
+        crate::appearance::Background::Black,
+    ))));
+    let office = app.office_copy_pictures();
+    assert!(!office.editable);
+    assert_eq!(
+        office.background,
+        reshiki::export::Background::Color([0; 3])
+    );
+    assert_eq!(office.dpi, defaults.dpi);
+    let ordinary = app.copy_pictures(None);
+    assert_eq!(ordinary.background, defaults.background);
+    assert_eq!(ordinary.editable, defaults.editable);
+    assert_eq!(ordinary.dpi, defaults.dpi);
+}

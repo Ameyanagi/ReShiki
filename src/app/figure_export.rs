@@ -263,6 +263,24 @@ impl App {
         pages: bool,
         editable: bool,
     ) -> Task<Message> {
+        self.export_figure_background(format, pages, editable, self.appearance.export_background)
+    }
+
+    pub(super) fn export_panel_figure(
+        &mut self,
+        format: &'static str,
+        editable: bool,
+    ) -> Task<Message> {
+        self.export_figure_background(format, false, editable, self.export_picture_background())
+    }
+
+    fn export_figure_background(
+        &mut self,
+        format: &'static str,
+        pages: bool,
+        editable: bool,
+        background: crate::appearance::Background,
+    ) -> Task<Message> {
         if self.figure_exporting {
             return Task::none();
         }
@@ -270,24 +288,35 @@ impl App {
         self.error = false;
         let label = super::export_format_label(format);
         self.status = format!("Preparing {label} export…");
-        self.prepare_figure(format, pages, editable)
+        self.prepare_figure_background(format, pages, editable, background)
             .then(|result| match result {
                 Ok(export) => export.start(),
                 Err(error) => Task::done(Message::FigureExported(Err(error))),
             })
     }
 
+    #[cfg(test)]
     fn prepare_figure(
         &self,
         format: &'static str,
         pages: bool,
         editable: bool,
     ) -> Task<Result<Prepared, String>> {
+        self.prepare_figure_background(format, pages, editable, self.appearance.export_background)
+    }
+
+    fn prepare_figure_background(
+        &self,
+        format: &'static str,
+        pages: bool,
+        editable: bool,
+        background: crate::appearance::Background,
+    ) -> Task<Result<Prepared, String>> {
         let recipe = Recipe {
             format: format.into(),
             pages,
             editable,
-            background: self.appearance.export_background,
+            background,
             custom_background: self.appearance.custom_background,
             dpi: self.appearance.export_dpi,
             svg_live_text: self.appearance.export_svg_live_text,

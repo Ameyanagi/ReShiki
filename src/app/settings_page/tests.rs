@@ -1019,3 +1019,72 @@ async fn manual_settings_snapshots() {
         }
     }
 }
+
+#[test]
+fn export_panel_background_defaults_and_explicit_swatch_keep_settings_independent() {
+    use crate::app::{InspectorTab, inspector::Action as Inspector};
+    let mut app = app();
+    app.appearance.copy_background = Background::Transparent;
+    app.appearance.export_background = Background::White;
+    let defaults = app.appearance.clone();
+    let drawing = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    assert_eq!(app.export_tab_background, None);
+    assert_eq!(app.office_copy_pictures().background, Paper::Transparent);
+    assert_eq!(app.export_picture_background(), Background::White);
+    assert_eq!(
+        app.preview_key().1,
+        [(Paper::Transparent, None), (Paper::Color([255; 3]), None)]
+    );
+    let _ = app.update(Message::InspectorAction(Inspector::ExportBackground(Some(
+        Background::Black,
+    ))));
+    assert_eq!(app.office_copy_pictures().background, Paper::Color([0; 3]));
+    assert_eq!(app.export_picture_background(), Background::Black);
+    assert_eq!(app.preview_key().1, [(Paper::Color([0; 3]), None); 2]);
+    // Ordinary Copy and Copy Image retain the Copy Settings default.
+    assert_eq!(app.copy_pictures(None).background, Paper::Transparent);
+    assert!(app.appearance == defaults);
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Settings(Action::Open(Some(Section::CopyExport))));
+    assert_eq!(
+        app.preview_key().1,
+        [(Paper::Transparent, None), (Paper::Color([255; 3]), None)]
+    );
+    let _ = app.update(Message::Settings(Action::Close));
+    assert_eq!(app.preview_key().1, [(Paper::Color([0; 3]), None); 2]);
+    let _ = app.update(Message::InspectorAction(Inspector::ExportBackground(None)));
+    assert_eq!(app.office_copy_pictures().background, Paper::Transparent);
+    assert_eq!(app.export_picture_background(), Background::White);
+}
+
+#[test]
+fn export_panel_overrides_reset_together_on_reopen_or_restored_defaults() {
+    use crate::app::{InspectorTab, inspector::Action as Inspector};
+    let mut app = app();
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    let choose = |app: &mut App| {
+        let _ = app.update(Message::InspectorAction(Inspector::ExportBackground(Some(
+            Background::Black,
+        ))));
+        let _ = app.update(Message::InspectorAction(Inspector::ExportEditable(Some(
+            false,
+        ))));
+    };
+    choose(&mut app);
+    let _ = app.update(Message::Inspector(InspectorTab::Properties));
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    assert_eq!(app.export_tab_background, None);
+    assert_eq!(app.export_tab_editable, None);
+    choose(&mut app);
+    let _ = app.update(Message::ToggleInspector);
+    assert_eq!(app.export_tab_background, None);
+    assert_eq!(app.export_tab_editable, None);
+    choose(&mut app);
+    let _ = app.update(Message::Settings(Action::Restore(Section::CopyExport)));
+    assert_eq!(app.export_tab_background, None);
+    assert_eq!(app.export_tab_editable, None);
+}

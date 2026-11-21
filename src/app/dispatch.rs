@@ -142,6 +142,7 @@ impl App {
             Message::CustomElement(s) => self.custom_element = s,
             Message::ApplyElement => self.apply_custom_element(),
             Message::CopyImage => return Some(self.copy_native(false, true, None)),
+            Message::CopyForOffice => return Some(self.copy_for_office()),
             Message::CopyImageOn(background, editable) => {
                 return Some(self.copy_native(false, true, Some((background, editable))));
             }
@@ -265,7 +266,7 @@ impl App {
             Message::Export(format) => return Some(self.export_drawing(format)),
             Message::ExportAgain => return Some(self.export_again()),
             Message::ExportFigure(format, editable) => {
-                return Some(self.export_figure(format, false, editable));
+                return Some(self.export_panel_figure(format, editable));
             }
             Message::FigureExported(result) => self.figure_exported(result),
             message @ (Message::EngineDone { .. }

@@ -63,6 +63,12 @@ fn normalize_pasted_captions(doc: &mut Document) {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NativeCopyScope {
+    Selection,
+    SelectionOrDrawing,
+}
+
 impl App {
     pub(super) fn clipboard_working(&self) -> bool {
         self.copy_as_busy
@@ -406,19 +412,58 @@ impl App {
         image_only: bool,
         once: Option<(reshiki::export::Background, bool)>,
     ) -> Task<Message> {
+        let scope = if image_only {
+            NativeCopyScope::SelectionOrDrawing
+        } else {
+            NativeCopyScope::Selection
+        };
+        self.copy_native_in_scope(cut, image_only, once, scope)
+    }
+
+    /// Preserve the ordinary rich Office bundle, including Windows' editable
+    /// Office preview, without changing the selection to copy an entire drawing.
+    pub(super) fn copy_for_office(&mut self) -> Task<Message> {
+        let pictures = self.office_copy_pictures();
+        self.copy_native_in_scope(
+            false,
+            false,
+            Some((pictures.background, pictures.editable)),
+            NativeCopyScope::SelectionOrDrawing,
+        )
+    }
+
+    pub(super) fn office_copy_pictures(&self) -> reshiki::clipboard::Pictures {
+        self.copy_pictures(Some((
+            self.export_tab_background
+                .unwrap_or(self.appearance.copy_background)
+                .paper(self.appearance.custom_background),
+            self.export_editable(),
+        )))
+    }
+
+    fn copy_native_in_scope(
+        &mut self,
+        cut: bool,
+        image_only: bool,
+        once: Option<(reshiki::export::Background, bool)>,
+        scope: NativeCopyScope,
+    ) -> Task<Message> {
         if self.clipboard_working() {
             self.status = "A clipboard operation is already in progress".into();
             return Task::none();
         }
-        if self.tab.selected.is_empty() && !image_only {
+        if self.tab.selected.is_empty() && scope == NativeCopyScope::Selection {
             self.status = "Select objects to copy".into();
             return Task::none();
         }
-        let snapshot = if self.tab.selected.is_empty() {
-            self.tab.doc.clone()
-        } else {
-            editing::selection(&self.tab.doc, &self.tab.selected)
-        };
+        if scope == NativeCopyScope::SelectionOrDrawing
+            && !image_only
+            && self.tab.doc.object_ids().next().is_none()
+        {
+            self.status = "There is nothing to copy".into();
+            return Task::none();
+        }
+        let snapshot = reshiki::clipboard::selection_or_drawing(&self.tab.doc, &self.tab.selected);
         let cut_ids = if cut {
             reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected)
         } else {

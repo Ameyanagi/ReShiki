@@ -313,6 +313,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::FigureMenu(..)
                 | Action::ResolutionMenu(..)
                 | Action::ExportEditable(..)
+                | Action::ExportBackground(..)
                 | Action::Chemical(..)
                 | Action::ChemicalMenu(..)
                 | Action::RefreshProperties
@@ -811,6 +812,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::CopyChemicalText
         | Message::Copy(..)
         | Message::CopyImage
+        | Message::CopyForOffice
         | Message::CopyImageOn(..)
         | Message::CopyAs(..)
         | Message::Paste

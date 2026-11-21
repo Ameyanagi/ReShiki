@@ -599,3 +599,48 @@ async fn saving_while_picture_preparation_is_pending_keeps_the_completed_source_
     app.recent_export = Recent::load_from(&record);
     assert!(app.repeat_export().is_some());
 }
+
+#[tokio::test]
+async fn panel_swatch_is_captured_in_picture_bytes_without_changing_other_export_defaults() {
+    use crate::appearance::{Background, Dpi};
+    use iced::futures::StreamExt;
+    let mut app = labelled_app();
+    app.appearance.export_background = Background::White;
+    app.appearance.export_dpi = Dpi::try_from(300).unwrap();
+    app.export_tab_background = Some(Background::Black);
+    let mut stream = iced_runtime::task::into_stream(app.prepare_figure_background(
+        "png",
+        false,
+        false,
+        app.export_picture_background(),
+    ))
+    .unwrap();
+    let Some(iced_runtime::Action::Output(panel)) = stream.next().await else {
+        panic!("Missing panel picture")
+    };
+    let panel = panel.unwrap();
+    assert_eq!(panel.recipe.as_ref().unwrap().background, Background::Black);
+    let pixel = |bytes: &[u8]| {
+        image::load_from_memory(bytes)
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(0, 0)
+            .0
+    };
+    assert_eq!(pixel(&panel.bytes), [0, 0, 0, 255]);
+    let ordinary = prepared(&app, "png", false).await;
+    assert_eq!(
+        ordinary.recipe.as_ref().unwrap().background,
+        Background::White
+    );
+    assert_eq!(pixel(&ordinary.bytes), [255, 255, 255, 255]);
+    assert_eq!(app.appearance.export_background, Background::White);
+    // A remembered recipe is independent of the current panel's choice.
+    let recipe = ordinary.recipe.unwrap();
+    app.export_tab_background = Some(Background::Custom);
+    let mut stream = iced_runtime::task::into_stream(app.prepare_recipe(recipe)).unwrap();
+    let Some(iced_runtime::Action::Output(repeated)) = stream.next().await else {
+        panic!("Missing repeated picture")
+    };
+    assert_eq!(repeated.unwrap().bytes, ordinary.bytes);
+}
