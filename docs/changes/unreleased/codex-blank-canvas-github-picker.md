@@ -9,3 +9,5 @@ issues: []
   GitHub picker. The search icon opens the search and link field.
 - The Icon Browser uses a short **Search icons…** prompt.
 - The **TLC plate tool** is available through the command palette.
+- Caption symbol shortcuts accept a backslash or yen prefix, such as
+  `\alpha` and `¥alpha` for α.
