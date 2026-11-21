@@ -2,11 +2,39 @@
 //! verifies locally in one action; opening the editable preview is optional.
 use super::super::workspace::{accessible_checkbox, accessible_command, hover_hint, muted_text};
 use super::*;
+use crate::app::engine_jobs::InsertPlacement;
 use iced::widget::{Space, column, stack, tooltip};
 
 const DETAILS: &str = "Names are parsed locally by default. Online lookup sends a name to PubChem only after you confirm. Ambiguous results and unsupported chemistry are rejected.";
 
 impl App {
+    pub(in crate::app) fn wants_name_caption(&self) -> bool {
+        self.tab.naming.add_name_below
+    }
+
+    pub(in crate::app) fn imported_name_notice(&self, query: &str) -> Option<&str> {
+        let state = &self.tab.naming;
+        state
+            .notice
+            .as_ref()
+            .filter(|_| state.name.trim() == query)
+            .map(Notice::summary)
+    }
+
+    pub(in crate::app) fn cancel_add_name(&mut self) -> bool {
+        let cancelled = matches!(
+            self.tab.naming.pending,
+            Some(Pending::Import {
+                placement: InsertPlacement::ViewCenter,
+                ..
+            })
+        );
+        if cancelled {
+            let _ = self.naming_action(Action::Cancel);
+        }
+        cancelled
+    }
+
     pub(in crate::app) fn cancel_name_import(&mut self) {
         self.tab.naming.online_confirmation = None;
         if matches!(
@@ -22,7 +50,10 @@ impl App {
         }
     }
 
-    pub(super) fn insert_name_import(&mut self) -> Task<Message> {
+    pub(in crate::app) fn insert_name_import(
+        &mut self,
+        placement: InsertPlacement,
+    ) -> Task<Message> {
         if !self.naming_can_edit()
             || self.tab.naming.pending.is_some()
             || self.tab.naming.name.trim().is_empty()
@@ -31,8 +62,7 @@ impl App {
         }
         let caption = self.tab.naming.add_name_below;
         if self.tab.naming.preview.is_some() {
-            self.insert_import_preview(caption);
-            return Task::none();
+            return self.insert_import_preview(caption, placement);
         }
         let name = match self.tab.naming.name_to_resolve() {
             Ok(name) => name,
@@ -45,6 +75,7 @@ impl App {
         let (ticket, cancel) = self.begin_naming(|ticket| Pending::Import {
             ticket,
             add_caption: caption,
+            placement,
         });
         let engine = self.engine.clone();
         let options = (&self.tab.doc.drawing_style).into();
@@ -54,23 +85,27 @@ impl App {
         )
     }
 
-    pub(super) fn insert_import_preview(&mut self, caption: bool) {
+    pub(super) fn insert_import_preview(
+        &mut self,
+        caption: bool,
+        placement: InsertPlacement,
+    ) -> Task<Message> {
         if !self.naming_can_edit() || self.tab.naming.pending.is_some() {
             self.tab.naming.notice = Some(Notice::new(
                 NoticeKind::Retry,
                 "Finish the current edit, then try again.",
             ));
-            return;
+            return Task::none();
         }
         let Some(preview) = self.tab.naming.preview.clone() else {
-            return;
+            return Task::none();
         };
         if self.tab.naming.smiles != preview.smiles {
             self.tab.naming.notice = Some(Notice::new(
                 NoticeKind::Retry,
                 "Apply the edited SMILES before inserting.",
             ));
-            return;
+            return Task::none();
         }
         // The caption keeps the drawn identity: layout may add an explicit
         // stereo hydrogen (e.g. proline in a macrocycle) that the parser's
@@ -81,7 +116,7 @@ impl App {
             Ok(identity) => identity,
             Err(error) => {
                 self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
-                return;
+                return Task::none();
             }
         };
         let multicomponent = preview.is_multicomponent();
@@ -93,7 +128,7 @@ impl App {
                     NoticeKind::Retry,
                     "The alias choice changed. Choose its name again.",
                 ));
-                return;
+                return Task::none();
             };
             alias.name.clone()
         } else {
@@ -114,20 +149,20 @@ impl App {
                 self.appearance.name_typography,
             ) {
                 self.tab.naming.notice = Some(Notice::new(NoticeKind::Failed, error));
-                return;
+                return Task::none();
             }
         }
         let before = self.tab.doc.clone();
-        let Some(selected) = self.insert_beside_drawing(&document) else {
+        let Some(selected) = self.insert_structure(&document, placement) else {
             self.tab.doc = before;
             self.error = true;
             let title = &preview.record.title;
             self.status = format!("Could not insert {title}");
-            return;
+            return Task::none();
         };
-        self.commit_structure_insert(before, selected);
+        self.commit_structure_insert(before, selected, placement);
         if self.error {
-            return;
+            return Task::none();
         }
         self.tool = Tool::Select;
         // One-step insertion still states what was assumed or ignored.
@@ -149,6 +184,15 @@ impl App {
         } else {
             format!("Inserted {}", preview.record.title)
         };
+        if placement == InsertPlacement::ViewCenter
+            && self.tabs.temporary_depth == 0
+            && self.inspector_open
+            && self.inspector_tab == InspectorTab::Templates
+        {
+            super::super::add_panel::focus_drawing_after_insert()
+        } else {
+            Task::none()
+        }
     }
 
     pub(in crate::app) fn name_import_panel(&self) -> Element<'_, Message> {

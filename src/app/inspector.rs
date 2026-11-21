@@ -2731,6 +2731,7 @@ impl App {
 
     pub(super) fn toggle_inspector(&mut self) -> Task<Message> {
         self.inspector_open = !self.inspector_open;
+        self.templates.add_menu_open = false;
         self.reset_export_panel_options();
         if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
             return self.assistant_action(super::assistant::Action::Open);
@@ -2771,6 +2772,7 @@ impl App {
         }
         // The Export tab starts at the default each time it opens.
         self.reset_export_panel_options();
+        self.templates.add_menu_open = false;
         self.inspector_tab = tab;
         self.inspector_open = true;
         if tab == InspectorTab::Import {
