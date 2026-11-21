@@ -443,7 +443,7 @@ pub(super) async fn generate_for_atoms(
 
 impl App {
     pub(super) fn start_name_notice(&self, input: &str) -> Option<String> {
-        (self.tab.naming.name == input)
+        (self.tab.naming.name.trim() == input.trim())
             .then(|| {
                 self.tab
                     .naming

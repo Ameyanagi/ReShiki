@@ -81,13 +81,29 @@ impl Recent {
     }
 
     pub(super) fn remember(&mut self, path: &Path) {
-        let Ok(path) = path.canonicalize() else {
+        let path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            let Ok(path) = std::path::absolute(path) else {
+                return;
+            };
+            path
+        };
+        let Ok(canonical_path) = path.canonicalize() else {
             return;
         };
-        if !path.is_file() {
+        if !canonical_path.is_file() {
             return;
         }
-        self.entries.retain(|entry| entry.path != path);
+        // Reopen with the original spelling so GitHub can classify its working
+        // copies and saved versions under the configured data directory.
+        self.entries.retain(|entry| {
+            entry.path != path
+                && !entry
+                    .path
+                    .canonicalize()
+                    .is_ok_and(|resolved| resolved == canonical_path)
+        });
         self.generation = self.generation.wrapping_add(1);
         self.entries.insert(
             0,

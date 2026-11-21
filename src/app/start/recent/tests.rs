@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn recent_files_keep_five_canonical_paths_and_reopen_in_use_order() {
+fn recent_files_keep_five_open_paths_in_use_order() {
     let directory = tempfile::tempdir().unwrap();
     let store = directory.path().join("recent-files.json");
     let mut recent = Recent::load_from(store.clone());
@@ -10,7 +10,7 @@ fn recent_files_keep_five_canonical_paths_and_reopen_in_use_order() {
         let path = directory.path().join(format!("drawing-{index}.rsk"));
         std::fs::write(&path, b"{}").unwrap();
         recent.remember(&path);
-        files.push(path.canonicalize().unwrap());
+        files.push(path);
     }
     recent.remember(&files[3]);
     assert_eq!(recent.entries.len(), 5);
@@ -30,6 +30,34 @@ fn recent_files_keep_five_canonical_paths_and_reopen_in_use_order() {
             .collect::<Vec<_>>()
     );
     assert!(!reopened.contains(&files[0]));
+}
+
+#[cfg(unix)]
+#[test]
+fn recent_files_reopen_through_the_configured_directory_and_deduplicate_aliases() {
+    let directory = tempfile::tempdir().unwrap();
+    let versions = directory.path().join("versions");
+    let configured = directory.path().join("configured-versions");
+    std::fs::create_dir(&versions).unwrap();
+    std::os::unix::fs::symlink(&versions, &configured).unwrap();
+    let original = configured.join("saved.rsk");
+    std::fs::write(&original, b"{}").unwrap();
+    let resolved = original.canonicalize().unwrap();
+    assert_ne!(resolved, original);
+
+    let store = directory.path().join("recent-files.json");
+    let mut recent = Recent::load_from(store.clone());
+    recent.remember(&resolved);
+    // Deduplication also works when the resolved path came from a saved list.
+    let mut recent = Recent::load_from(store.clone());
+    recent.remember(&original);
+
+    let reopened = Recent::load_from(store);
+    assert_eq!(reopened.entries.len(), 1);
+    assert!(reopened.contains(&original));
+    assert_eq!(reopened.entries[0].path, original);
+    assert!(reopened.entries[0].path.starts_with(configured));
+    assert!(!reopened.contains(&resolved));
 }
 
 #[test]
@@ -56,10 +84,7 @@ fn recent_loading_rejects_newer_records_relative_names_and_oversized_data() {
                 "Unsupported records stay untouched"
             );
         } else {
-            assert_eq!(
-                Recent::load_from(store.clone()).entries[0].path,
-                drawing.canonicalize().unwrap()
-            );
+            assert_eq!(Recent::load_from(store.clone()).entries[0].path, drawing);
         }
     }
 }
@@ -75,9 +100,9 @@ fn a_late_preview_cannot_replace_a_newer_preview_for_the_same_file() {
     recent.remember(&path);
     let newer = recent.entries[0].generation;
     let preview = image::Handle::from_rgba(1, 1, vec![0, 0, 0, 255]);
-    recent.previewed(&path.canonicalize().unwrap(), older, Some(preview.clone()));
+    recent.previewed(&path, older, Some(preview.clone()));
     assert!(recent.entries[0].preview.is_none());
-    recent.previewed(&path.canonicalize().unwrap(), newer, Some(preview));
+    recent.previewed(&path, newer, Some(preview));
     assert!(recent.entries[0].preview.is_some());
 }
 

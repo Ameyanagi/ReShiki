@@ -1,6 +1,23 @@
 use super::test_support::{ethanol, record};
 use super::*;
 
+#[test]
+fn failed_start_name_notice_matches_the_submitted_name_with_surrounding_space() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let input = "  an unsupported chemical name  ";
+    let _ = app.start_action(super::super::start::Action::Input(input.into()));
+    let _ = app.start_action(super::super::start::Action::Insert);
+    let ticket = app.tab.naming.pending.unwrap().ticket();
+    app.naming_finished(ticket, Err(naming::Error::Rejected("unsupported".into())));
+
+    assert!(
+        app.start_name_notice(input)
+            .is_some_and(|notice| notice.contains("Name not supported locally"))
+    );
+    assert!(app.start_name_notice("a different name").is_none());
+}
+
 #[tokio::test]
 async fn original_ir_preview_does_not_parse_the_display_smiles() -> Result<(), String> {
     let mut source = record("CCO");
