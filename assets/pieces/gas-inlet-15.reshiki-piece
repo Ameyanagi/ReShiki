@@ -1,0 +1,187 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/gas-inlet-15",
+ "revision": 1,
+ "family": "gas-inlet",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Gas inlet adapter",
+  "ja": "ガス導入管"
+ },
+ "category": "addition",
+ "keywords": [
+  "gas inlet",
+  "addition and gas"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-6.5 -11.6L-6.5 -3.4L6.5 -3.4L6.5 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M-6.5 -2L-6.5 -26A6.5 6.5 0 0 1 6.5 -26L6.5 -2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M5.5 -14.6L26 -14.6L26 -21.4L5.5 -21.4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M22.5 -18A6.5 6.5 0 0 1 9.5 -18A6.5 6.5 0 0 1 22.5 -18Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-5",
+   "path": "M20.3 -18A4.3 4.3 0 0 1 11.7 -18A4.3 4.3 0 0 1 20.3 -18Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-6",
+   "path": "M18.4 -31.5L18.4 -4.5L13.6 -4.5L13.6 -31.5Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "id": "shape-7",
+   "path": "M18 -18A2 2 0 0 1 14 -18A2 2 0 0 1 18 -18Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-8",
+   "path": "M23 -14.6L35 -14.6L35 -13.3L39.5 -14.6L39.5 -13.3L44 -14.6L44 -13.4L48 -14.8L48 -21.2L44 -22.6L44 -21.4L39.5 -22.7L39.5 -21.4L35 -22.7L35 -21.4L23 -21.4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-9",
+   "path": "M2.5 -20.4L29.5 -20.4L29.5 -15.6L2.5 -15.6Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "barb-1",
+   "gender": "M",
+   "at": [
+    48,
+    -18
+   ],
+   "dir": [
+    1,
+    0
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  }
+ ],
+ "params": [
+  {
+   "id": "valve",
+   "names": {
+    "en": "Valve"
+   },
+   "kind": "states",
+   "default": "closed",
+   "states": [
+    {
+     "id": "closed",
+     "names": {
+      "en": "Closed"
+     }
+    },
+    {
+     "id": "open",
+     "names": {
+      "en": "Open"
+     }
+    }
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "control",
+   "param": "valve",
+   "motion": {
+    "per_state": {
+     "closed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "open": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     16,
+     -18
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ]
+}

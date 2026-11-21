@@ -1,0 +1,184 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/vigreux-15",
+  "revision": 1,
+  "family": "vigreux",
+  "variant": {
+    "joint": "15/25"
+  },
+  "names": {
+    "en": "Vigreux column",
+    "ja": "ビグリュー管"
+  },
+  "category": "distillation",
+  "keywords": [
+    "vigreux",
+    "distillation"
+  ],
+  "credits": {
+    "author": "ReShiki"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-1",
+      "path": "M-9 -11.6L-9 -3.4L9 -3.4L9 -11.6Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-2",
+      "path": "M9 -3 L9 -187 Q9 -195 6.5 -200 L6.5 -203 L-6.5 -203 L-6.5 -200 Q-9 -195 -9 -187 L-9 -3 Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-3",
+      "path": "M-6.5 -201.2L-6.5 -199L6.5 -199L6.5 -201.2Z"
+    },
+    {
+      "id": "alternating-crescent-1",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-8.7 -183 C-6.12 -182 -2.61 -179.3 -1.71 -176.9 C-3.87 -175.3 -6.66 -176.4 -8.7 -177.5"
+    },
+    {
+      "id": "alternating-crescent-2",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M8.7 -171 C6.12 -170 2.61 -167.3 1.71 -164.9 C3.87 -163.3 6.66 -164.4 8.7 -165.5"
+    },
+    {
+      "id": "alternating-crescent-3",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-8.7 -159 C-6.12 -158 -2.61 -155.3 -1.71 -152.9 C-3.87 -151.3 -6.66 -152.4 -8.7 -153.5"
+    },
+    {
+      "id": "alternating-crescent-4",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M8.7 -147 C6.12 -146 2.61 -143.3 1.71 -140.9 C3.87 -139.3 6.66 -140.4 8.7 -141.5"
+    },
+    {
+      "id": "alternating-crescent-5",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-8.7 -135 C-6.12 -134 -2.61 -131.3 -1.71 -128.9 C-3.87 -127.3 -6.66 -128.4 -8.7 -129.5"
+    },
+    {
+      "id": "alternating-crescent-6",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M8.7 -123 C6.12 -122 2.61 -119.3 1.71 -116.9 C3.87 -115.3 6.66 -116.4 8.7 -117.5"
+    },
+    {
+      "id": "alternating-crescent-7",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-8.7 -111 C-6.12 -110 -2.61 -107.3 -1.71 -104.9 C-3.87 -103.3 -6.66 -104.4 -8.7 -105.5"
+    },
+    {
+      "id": "alternating-crescent-8",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M8.7 -99 C6.12 -98 2.61 -95.3 1.71 -92.9 C3.87 -91.3 6.66 -92.4 8.7 -93.5"
+    },
+    {
+      "id": "alternating-crescent-9",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-8.7 -87 C-6.12 -86 -2.61 -83.3 -1.71 -80.9 C-3.87 -79.3 -6.66 -80.4 -8.7 -81.5"
+    },
+    {
+      "id": "alternating-crescent-10",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M8.7 -75 C6.12 -74 2.61 -71.3 1.71 -68.9 C3.87 -67.3 6.66 -68.4 8.7 -69.5"
+    },
+    {
+      "id": "alternating-crescent-11",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-8.7 -63 C-6.12 -62 -2.61 -59.3 -1.71 -56.9 C-3.87 -55.3 -6.66 -56.4 -8.7 -57.5"
+    },
+    {
+      "id": "alternating-crescent-12",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M8.7 -51 C6.12 -50 2.61 -47.3 1.71 -44.9 C3.87 -43.3 6.66 -44.4 8.7 -45.5"
+    },
+    {
+      "id": "alternating-crescent-13",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M-8.7 -39 C-6.12 -38 -2.61 -35.3 -1.71 -32.9 C-3.87 -31.3 -6.66 -32.4 -8.7 -33.5"
+    }
+  ],
+  "joints": [
+    {
+      "id": "bottom",
+      "gender": "M",
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        1
+      ],
+      "kind": "taper",
+      "size": "15/25",
+      "draw": "standard"
+    },
+    {
+      "id": "top",
+      "gender": "F",
+      "at": [
+        0,
+        -230
+      ],
+      "dir": [
+        0,
+        -1
+      ],
+      "kind": "taper",
+      "size": "15/25",
+      "draw": "standard"
+    }
+  ],
+  "holds": [
+    {
+      "id": "column",
+      "kind": "grip",
+      "from": [
+        0,
+        -20
+      ],
+      "to": [
+        0,
+        -180
+      ],
+      "diameter_mm": 18
+    }
+  ]
+}

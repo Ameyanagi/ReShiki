@@ -1,0 +1,405 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/rbf3-300-15",
+ "revision": 1,
+ "family": "rbf3",
+ "variant": {
+  "joint": "15/25",
+  "volume_ml": "300"
+ },
+ "names": {
+  "en": "Three-neck flask",
+  "ja": "三口フラスコ"
+ },
+ "category": "flask",
+ "keywords": [
+  "rbf3",
+  "flasks"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M41.53 0A41.53 41.53 0 0 1 -41.53 0A41.53 41.53 0 0 1 41.53 0Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M6.5 -40.62L6.5 -52.53L-6.5 -52.53L-6.5 -40.62Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M-6.5 -51.73L-6.5 -49.53L6.5 -49.53L6.5 -51.73Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "when": {
+    "neck-angle": [
+     "straight"
+    ]
+   },
+   "id": "shape-4",
+   "path": "M-20.19 -24.56L-20.19 -40.81L-33.19 -40.81L-33.19 -24.56Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "when": {
+    "neck-angle": [
+     "straight"
+    ]
+   },
+   "id": "shape-5",
+   "path": "M-33.19 -40.01L-33.19 -37.81L-20.19 -37.81L-20.19 -40.01Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "when": {
+    "neck-angle": [
+     "straight"
+    ]
+   },
+   "id": "shape-6",
+   "path": "M33.19 -24.56L33.19 -40.81L20.19 -40.81L20.19 -24.56Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "when": {
+    "neck-angle": [
+     "straight"
+    ]
+   },
+   "id": "shape-7",
+   "path": "M20.19 -40.01L20.19 -37.81L33.19 -37.81L33.19 -40.01Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "when": {
+    "neck-angle": [
+     "angled"
+    ]
+   },
+   "id": "shape-8",
+   "path": "M-19.36 -30.29L-23.29 -42.38L-35.66 -38.36L-31.73 -26.27Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "when": {
+    "neck-angle": [
+     "angled"
+    ]
+   },
+   "id": "shape-9",
+   "path": "M-35.41 -37.6L-34.73 -35.51L-22.37 -39.53L-23.05 -41.62Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "when": {
+    "neck-angle": [
+     "angled"
+    ]
+   },
+   "id": "shape-10",
+   "path": "M31.73 -26.27L35.66 -38.36L23.29 -42.38L19.36 -30.29Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "when": {
+    "neck-angle": [
+     "angled"
+    ]
+   },
+   "id": "shape-11",
+   "path": "M23.05 -41.62L22.37 -39.53L34.73 -35.51L35.41 -37.6Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "neck",
+   "gender": "F",
+   "at": [
+    0,
+    -80.52831
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "side1",
+   "gender": "F",
+   "at": [
+    -26.69388,
+    -68.81253
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard",
+   "poses": {
+    "neck-angle": {
+     "angled": {
+      "at": [
+       -38.12751,
+       -67.00162
+      ],
+      "dir": [
+       -0.30902,
+       -0.95106
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "side2",
+   "gender": "F",
+   "at": [
+    26.69388,
+    -68.81253
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard",
+   "poses": {
+    "neck-angle": {
+     "angled": {
+      "at": [
+       38.12751,
+       -67.00162
+      ],
+      "dir": [
+       0.30902,
+       -0.95106
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "stir",
+   "gender": "F",
+   "at": [
+    0,
+    38.925
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "plug",
+   "family": "stir",
+   "size_mm": 24
+  }
+ ],
+ "holds": [
+  {
+   "id": "neck-grip",
+   "kind": "grip",
+   "from": [
+    0,
+    -41.52831
+   ],
+   "to": [
+    0,
+    -51.52831
+   ],
+   "diameter_mm": 13
+  },
+  {
+   "id": "side1-grip-straight",
+   "kind": "grip",
+   "from": [
+    -26.69388,
+    -33.81253
+   ],
+   "to": [
+    -26.69388,
+    -39.81253
+   ],
+   "diameter_mm": 13,
+   "when": {
+    "neck-angle": [
+     "straight"
+    ]
+   }
+  },
+  {
+   "id": "side1-grip-angled",
+   "kind": "grip",
+   "from": [
+    -27.31191,
+    -33.71464
+   ],
+   "to": [
+    -29.16602,
+    -39.42098
+   ],
+   "diameter_mm": 13,
+   "when": {
+    "neck-angle": [
+     "angled"
+    ]
+   }
+  },
+  {
+   "id": "side2-grip-straight",
+   "kind": "grip",
+   "from": [
+    26.69388,
+    -33.81253
+   ],
+   "to": [
+    26.69388,
+    -39.81253
+   ],
+   "diameter_mm": 13,
+   "when": {
+    "neck-angle": [
+     "straight"
+    ]
+   }
+  },
+  {
+   "id": "side2-grip-angled",
+   "kind": "grip",
+   "from": [
+    27.31191,
+    -33.71464
+   ],
+   "to": [
+    29.16602,
+    -39.42098
+   ],
+   "diameter_mm": 13,
+   "when": {
+    "neck-angle": [
+     "angled"
+    ]
+   }
+  }
+ ],
+ "params": [
+  {
+   "id": "neck-angle",
+   "names": {
+    "en": "Side necks"
+   },
+   "kind": "states",
+   "default": "straight",
+   "states": [
+    {
+     "id": "straight",
+     "names": {
+      "en": "Straight"
+     }
+    },
+    {
+     "id": "angled",
+     "names": {
+      "en": "Angled"
+     }
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "control",
+   "param": "neck-angle",
+   "motion": {
+    "per_state": {
+     "straight": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "angled": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     31.14623,
+     -31.14623
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M 40.12831 0 L 39.97561 3.49741 L 39.51867 6.96821 L 38.76097 10.38597 L 37.70827 13.72469 L 36.3686 16.95895 L 34.75213 20.06415 L 32.87118 23.01665 L 30.74007 25.79398 L 28.375 28.375 L 25.79398 30.74007 L 23.01665 32.87118 L 20.06415 34.75213 L 16.95895 36.3686 L 13.72469 37.70827 L 10.38597 38.76097 L 6.96821 39.51867 L 3.49741 39.97561 L 0 40.12831 L -3.49741 39.97561 L -6.96821 39.51867 L -10.38597 38.76097 L -13.72469 37.70827 L -16.95895 36.3686 L -20.06415 34.75213 L -23.01665 32.87118 L -25.79398 30.74007 L -28.375 28.375 L -30.74007 25.79398 L -32.87118 23.01665 L -34.75213 20.06415 L -36.3686 16.95895 L -37.70827 13.72469 L -38.76097 10.38597 L -39.51867 6.96821 L -39.97561 3.49741 L -40.12831 0 L -39.97561 -3.49741 L -39.51867 -6.96821 L -38.76097 -10.38597 L -37.70827 -13.72469 L -36.3686 -16.95895 L -34.75213 -20.06415 L -32.87118 -23.01665 L -30.74007 -25.79398 L -28.375 -28.375 L -25.79398 -30.74007 L -23.01665 -32.87118 L -20.06415 -34.75213 L -16.95895 -36.3686 L -13.72469 -37.70827 L -10.38597 -38.76097 L -6.96821 -39.51867 L -3.49741 -39.97561 L 0 -40.12831 L 3.49741 -39.97561 L 6.96821 -39.51867 L 10.38597 -38.76097 L 13.72469 -37.70827 L 16.95895 -36.3686 L 20.06415 -34.75213 L 23.01665 -32.87118 L 25.79398 -30.74007 L 28.375 -28.375 L 30.74007 -25.79398 L 32.87118 -23.01665 L 34.75213 -20.06415 L 36.3686 -16.95895 L 37.70827 -13.72469 L 38.76097 -10.38597 L 39.51867 -6.96821 L 39.97561 -3.49741 Z"
+  }
+ ]
+}

@@ -1,0 +1,158 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/allihn-15",
+ "revision": 1,
+ "family": "allihn",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Allihn condenser",
+  "ja": "アリーン冷却管"
+ },
+ "category": "condenser",
+ "keywords": [
+  "allihn",
+  "condensers"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-5 -11.6L-5 -3.4L5 -3.4L5 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M5 -4L5 -203L-5 -203L-5 -4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M5 -16L12 -26L12 -166L5 -176L-5 -176L-12 -166L-12 -26L-5 -16Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M-6.5 -202.2L-6.5 -200L6.5 -200L6.5 -202.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M8 -34.6L20 -34.6L20 -33.3L24.5 -34.6L24.5 -33.3L29 -34.6L29 -33.4L33 -34.8L33 -41.2L29 -42.6L29 -41.4L24.5 -42.7L24.5 -41.4L20 -42.7L20 -41.4L8 -41.4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-6",
+   "path": "M8 -160.6L20 -160.6L20 -159.3L24.5 -160.6L24.5 -159.3L29 -160.6L29 -159.4L33 -160.8L33 -167.2L29 -168.6L29 -167.4L24.5 -168.7L24.5 -167.4L20 -168.7L20 -167.4L8 -167.4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-7",
+   "path": "M5 -176L5 -168.48A9 9 0 0 1 5 -153.52L5 -138.48A9 9 0 0 1 5 -123.52L5 -108.48A9 9 0 0 1 5 -93.52L5 -78.48A9 9 0 0 1 5 -63.52L5 -48.48A9 9 0 0 1 5 -33.52L5 -26"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-8",
+   "path": "M-5 -176L-5 -168.48A9 9 0 0 0 -5 -153.52L-5 -138.48A9 9 0 0 0 -5 -123.52L-5 -108.48A9 9 0 0 0 -5 -93.52L-5 -78.48A9 9 0 0 0 -5 -63.52L-5 -48.48A9 9 0 0 0 -5 -33.52L-5 -26"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "top",
+   "gender": "F",
+   "at": [
+    0,
+    -231
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "barb-1",
+   "gender": "M",
+   "at": [
+    33,
+    -38
+   ],
+   "dir": [
+    1,
+    0
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  },
+  {
+   "id": "barb-2",
+   "gender": "M",
+   "at": [
+    33,
+    -164
+   ],
+   "dir": [
+    1,
+    0
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  }
+ ],
+ "holds": [
+  {
+   "id": "jacket",
+   "kind": "grip",
+   "from": [
+    0,
+    -46
+   ],
+   "to": [
+    0,
+    -156
+   ],
+   "diameter_mm": 24
+  }
+ ]
+}

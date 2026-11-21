@@ -1,0 +1,55 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/kugelrohr-oven",
+ "revision": 1,
+ "family": "kugelrohr-oven",
+ "variant": {},
+ "names": {
+  "en": "Kugelrohr oven",
+  "ja": "クーゲルロール オーブン"
+ },
+ "category": "distillation",
+ "keywords": [
+  "kugelrohr oven",
+  "distillation"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "grounded": true,
+ "shapes": [
+  {
+   "layer": "front",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    154,
+    163,
+    170
+   ],
+   "id": "shape-1",
+   "path": "M-43 -44L43 -44A7 7 0 0 1 50 -37L50 37A7 7 0 0 1 43 44L-43 44A7 7 0 0 1 -50 37L-50 -37A7 7 0 0 1 -43 -44ZM-33 -30A5 5 0 0 0 -38 -25L-38 25A5 5 0 0 0 -33 30L33 30A5 5 0 0 0 38 25L38 -25A5 5 0 0 0 33 -30Z"
+  },
+  {
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-2",
+   "path": "M-35 -33L35 -33A6 6 0 0 1 41 -27L41 27A6 6 0 0 1 35 33L-35 33A6 6 0 0 1 -41 27L-41 -27A6 6 0 0 1 -35 -33Z"
+  },
+  {
+   "layer": "front",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    154,
+    163,
+    170
+   ],
+   "id": "shape-3",
+   "path": "M-48 44L48 44A2 2 0 0 1 50 46L50 52A2 2 0 0 1 48 54L-48 54A2 2 0 0 1 -50 52L-50 46A2 2 0 0 1 -48 44Z"
+  }
+ ]
+}

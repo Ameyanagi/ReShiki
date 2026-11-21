@@ -1,0 +1,122 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/still-head-15",
+ "revision": 1,
+ "family": "still-head",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Distillation head",
+  "ja": "蒸留ヘッド (ト字管)"
+ },
+ "category": "distillation",
+ "keywords": [
+  "still head",
+  "distillation"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-8 -11.6L-8 -3.4L8 -3.4L8 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M8 -3L8 -62L6.5 -68L6.5 -72L-6.5 -72L-6.5 -68L-8 -62L-8 -3Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M-6.5 -70.2L-6.5 -68L6.5 -68L6.5 -70.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M4.11 -36.17L58.21 -21.67L61.57 -34.23L7.48 -48.73Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M50.86 -23.64L58.78 -21.52L62.15 -34.08L54.23 -36.2Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "top",
+   "gender": "F",
+   "at": [
+    0,
+    -99
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "arm",
+   "gender": "M",
+   "at": [
+    63.7511,
+    -26.91794
+   ],
+   "dir": [
+    0.96593,
+    0.25882
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  }
+ ],
+ "holds": [
+  {
+   "id": "body",
+   "kind": "grip",
+   "from": [
+    0,
+    -10
+   ],
+   "to": [
+    0,
+    -60
+   ],
+   "diameter_mm": 16
+  }
+ ]
+}

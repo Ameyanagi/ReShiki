@@ -1,0 +1,114 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/vacuum-adapter-15",
+ "revision": 1,
+ "family": "vacuum-adapter",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Vacuum adapter",
+  "ja": "減圧アダプター (曲管)"
+ },
+ "category": "distillation",
+ "keywords": [
+  "vacuum adapter",
+  "distillation"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-6.5 -11.6L-6.5 -3.4L6.5 -3.4L6.5 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M6.5 -3L6.5 -42L-6.5 -42L-6.5 -3Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M6.5 -42A6.5 6.5 0 0 1 -6.5 -42A6.5 6.5 0 0 1 6.5 -42Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M1.68 -48.28L-27.3 -56.04L-30.66 -43.49L-1.68 -35.72Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M-28.92 -43.02L-26.8 -42.45L-23.43 -55.01L-25.56 -55.58Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-6",
+   "path": "M3.69 -41.6L11.69 -55.46L12.82 -54.81L13.94 -59.35L15.07 -58.7L16.19 -63.25L17.23 -62.65L18.02 -66.81L12.48 -70.01L9.27 -67.25L10.31 -66.65L6.93 -63.4L8.06 -62.75L4.68 -59.51L5.81 -58.86L-2.19 -45Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "inlet",
+   "gender": "F",
+   "at": [
+    -55.05777,
+    -56.75269
+   ],
+   "dir": [
+    -0.96593,
+    -0.25882
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "barb-1",
+   "gender": "M",
+   "at": [
+    15.25,
+    -68.41377
+   ],
+   "dir": [
+    0.5,
+    -0.86603
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  }
+ ]
+}

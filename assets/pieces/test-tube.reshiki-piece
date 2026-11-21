@@ -1,0 +1,67 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/test-tube",
+ "revision": 1,
+ "family": "test-tube",
+ "variant": {},
+ "names": {
+  "en": "Test tube",
+  "ja": "試験管"
+ },
+ "category": "vessel",
+ "keywords": [
+  "test tube",
+  "other"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-7 -2L7 -2A2 2 0 0 1 9 0L9 0A2 2 0 0 1 7 2L-7 2A2 2 0 0 1 -9 0L-9 0A2 2 0 0 1 -7 -2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M-8 -0.01L-8 0L-8 142A8 8 0 0 0 8 142L8 0L8 -0.01Z"
+  }
+ ],
+ "params": [
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M -6.8 -0.01 L -6.8 0 L -6.8 142 L -6.76275 142.71079 L -6.6514 143.4138 L -6.46718 144.10132 L -6.21211 144.76581 L -5.88897 145.4 L -5.50132 145.99694 L -5.05338 146.55009 L -4.55009 147.05338 L -3.99694 147.50132 L -3.4 147.88897 L -2.76581 148.21211 L -2.10132 148.46718 L -1.4138 148.6514 L -0.71079 148.76275 L 0 148.8 L 0.71079 148.76275 L 1.4138 148.6514 L 2.10132 148.46718 L 2.76581 148.21211 L 3.4 147.88897 L 3.99694 147.50132 L 4.55009 147.05338 L 5.05338 146.55009 L 5.50132 145.99694 L 5.88897 145.4 L 6.21211 144.76581 L 6.46718 144.10132 L 6.6514 143.4138 L 6.76275 142.71079 L 6.8 142 L 6.8 0 L 6.8 -0.01 Z"
+  }
+ ]
+}

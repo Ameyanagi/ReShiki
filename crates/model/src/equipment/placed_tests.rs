@@ -24,7 +24,10 @@ fn a_placed_piece_saves_at_version_40_with_its_definition_and_reopens_the_same()
     assert_eq!(json["graphics"][0]["kind"], "piece");
     assert_eq!(json["piece_definitions"][0]["id"], "reshiki/rbf-100-15");
     let key = json["graphics"][0]["piece"]["definition"].as_str().unwrap();
-    assert!(key.starts_with("reshiki/rbf-100-15@1#"), "{key}");
+    assert_eq!(
+        key,
+        placed::key(&builtin::find("reshiki/rbf-100-15").unwrap())
+    );
     let back = Document::from_json(&bytes).unwrap();
     // Read any other way (recovery drafts, templates, engine replies), pieces link too.
     let raw: Document = serde_json::from_slice(&bytes).unwrap();
@@ -42,10 +45,14 @@ fn a_placed_piece_saves_at_version_40_with_its_definition_and_reopens_the_same()
 fn a_drawing_without_the_definition_it_uses_does_not_open() {
     let doc = with_flask();
     let mut json: serde_json::Value = serde_json::from_slice(&doc.file_json().unwrap()).unwrap();
+    let key = json["graphics"][0]["piece"]["definition"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     json["piece_definitions"] = serde_json::json!([]);
     let error = Document::from_json(json.to_string().as_bytes()).unwrap_err();
     assert!(
-        error.starts_with("The drawing uses the equipment piece reshiki/rbf-100-15@1#")
+        error.starts_with(&format!("The drawing uses the equipment piece {key}"))
             && error.contains("but does not include it."),
         "{error}"
     );

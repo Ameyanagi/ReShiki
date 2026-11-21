@@ -2,7 +2,7 @@
 //! painted depth of an assembly, and joint clips.
 use super::builtin;
 use super::eval::Value;
-use super::format::HoldKind;
+use super::format::{Gender, HoldKind, Joint, PlugFamily};
 use super::placed;
 use super::solve::{self, JointRef, Offer, Port, ports, residual};
 use crate::document::{Document, Point};
@@ -34,17 +34,174 @@ fn the_fixed_support_ring_accepts_only_its_bore_and_still_mounts_on_a_rod() {
     let tube = add(&mut doc, "reshiki/jy-schlenk-tube", Point::default());
     let stand = add(&mut doc, "reshiki/stand", Point::default());
     let jaw = port(&doc, ring, "ring");
-    let mut grip = port(&doc, tube, "body");
-    assert!(!solve::mates(&jaw, &grip));
-    let solve::Kind::Hold(_, ref mut diameter) = grip.kind else {
-        panic!("expected a body grip");
-    };
-    *diameter = [63.4, 63.4];
-    assert!(solve::mates(&jaw, &grip));
+    assert!(!solve::mates(&jaw, &port(&doc, tube, "body")));
+    for id in ["reshiki/sep-funnel-15", "reshiki/sep-funnel-29"] {
+        let mut assembly = doc.clone();
+        let funnel = add(&mut assembly, id, Point::new(80., 100.));
+        solve::connect(
+            &mut assembly,
+            &[funnel],
+            &joint(ring, "ring"),
+            &joint(funnel, "ring-seat"),
+        )
+        .unwrap_or_else(|| panic!("{id} fits the support ring"));
+        assembly.validate().unwrap();
+        assert_eq!(assembly.seats.len(), 1);
+    }
     assert!(solve::mates(
         &port(&doc, ring, "boss"),
         &port(&doc, stand, "rod")
     ));
+}
+
+#[test]
+fn a_stir_bar_seats_in_the_built_in_flasks_that_have_a_stir_port() {
+    for definition in stir_flasks() {
+        for pt_per_mm in [0.4, 0.2] {
+            let (doc, flask, bar) = stir_assembly(definition, pt_per_mm);
+            assert_eq!(doc.seats.len(), 1, "{} at {pt_per_mm}", definition.id);
+            let (off, turn) = residual(&port(&doc, flask, "stir"), &port(&doc, bar, "seat"));
+            assert!(off < 0.01 && turn < 0.01, "{}", definition.id);
+            let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+            assert_eq!(back.seats, doc.seats, "{} at {pt_per_mm}", definition.id);
+        }
+    }
+}
+
+fn stir_flasks() -> impl Iterator<Item = &'static std::sync::Arc<super::format::Definition>> {
+    builtin::catalogue().iter().filter(|d| {
+        d.joints.iter().any(|j| {
+            matches!(
+                j,
+                Joint::Plug {
+                    family: PlugFamily::Stir,
+                    gender: Gender::F,
+                    ..
+                }
+            )
+        })
+    })
+}
+
+fn stir_assembly(
+    definition: &std::sync::Arc<super::format::Definition>,
+    pt_per_mm: f32,
+) -> (Document, u64, u64) {
+    let mut doc = Document::default();
+    let scale = placed::world_per_mm(&doc, pt_per_mm);
+    let flask = doc.next_id();
+    doc.graphics.push(placed::graphic(
+        flask,
+        definition.clone(),
+        Point::new(250., 300.),
+        scale,
+    ));
+    let bar = doc.next_id();
+    doc.graphics.push(placed::graphic(
+        bar,
+        builtin::find("reshiki/stir-bar").unwrap(),
+        Point::new(80., 120.),
+        scale,
+    ));
+    solve::connect(&mut doc, &[bar], &joint(flask, "stir"), &joint(bar, "seat"))
+        .unwrap_or_else(|| panic!("{} accepts the stir bar", definition.id));
+    (doc, flask, bar)
+}
+
+#[test]
+fn seated_stir_bar_bodies_and_spin_ink_clear_every_registered_flask_shell() {
+    use super::format::{Layer, Role};
+    use super::geometry::{Affine, Seg, distance_to_outline, flatten, inside, parse_path};
+    use crate::graphics::PathCommand;
+    use crate::scene::Primitive;
+
+    for definition in stir_flasks() {
+        // The main body precedes the necks and valve artwork. Its closed
+        // outline is the shell the stir bar must stay inside.
+        let body = definition
+            .shapes
+            .iter()
+            .find(|s| s.role == Role::Glass && s.layer == Layer::Body)
+            .unwrap();
+        let shell = flatten(&parse_path(&body.path).unwrap());
+        for pt_per_mm in [0.4, 0.2] {
+            let (mut doc, flask, bar) = stir_assembly(definition, pt_per_mm);
+            let g = graphic(&doc, flask);
+            let local = Affine([
+                f64::from(g.axis_x.x),
+                f64::from(g.axis_x.y),
+                f64::from(g.axis_y.x),
+                f64::from(g.axis_y.y),
+                f64::from(g.origin.x),
+                f64::from(g.origin.y),
+            ])
+            .inverse()
+            .unwrap();
+            let point = |p: Point| local.apply([f64::from(p.x), f64::from(p.y)]);
+            for spin in ["off", "on"] {
+                solve::adjust::set(&mut doc, bar, "spin", Value::State(spin.into())).unwrap();
+                for primitive in placed::primitives(graphic(&doc, bar), doc.canvas_theme) {
+                    let Primitive::Path {
+                        commands, style, ..
+                    } = primitive
+                    else {
+                        panic!("the stir bar paints as paths");
+                    };
+                    let path: Vec<_> = commands
+                        .iter()
+                        .map(|c| match *c {
+                            PathCommand::Move(p) => Seg::Move(point(p)),
+                            PathCommand::Line(p) => Seg::Line(point(p)),
+                            PathCommand::Cubic(a, b, p) => Seg::Cubic(point(a), point(b), point(p)),
+                            PathCommand::Close => Seg::Close,
+                        })
+                        .collect();
+                    // Native strokes stay the same point width when a setup
+                    // shrinks. Check the painted ink, not only path centres.
+                    let half_stroke = f64::from(style.width_pt / pt_per_mm) / 2.;
+                    for p in flatten(&path).into_iter().flat_map(|(points, _)| points) {
+                        let gap = distance_to_outline(p, &shell) - half_stroke;
+                        assert!(
+                            inside(p, &shell) && gap >= 0.05,
+                            "{} at {pt_per_mm}, spin {spin}: {p:?}, ink gap {gap} mm",
+                            definition.id
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn an_embedded_stir_seat_keeps_its_saved_height_when_the_catalogue_changes() {
+    let current = builtin::find("reshiki/jy-storage-flask-25").unwrap();
+    let mut earlier = (*current).clone();
+    let Joint::Plug { at, .. } = earlier
+        .joints
+        .iter_mut()
+        .find(|j| j.id() == "stir")
+        .unwrap()
+    else {
+        panic!("the flask has a stir plug");
+    };
+    at[1] = 16.53916;
+    assert_ne!(placed::key(&earlier), placed::key(&current));
+    let (doc, flask, bar) = stir_assembly(&std::sync::Arc::new(earlier), 0.4);
+    let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(back.seats, doc.seats);
+    assert_eq!(graphic(&back, bar).origin, graphic(&doc, bar).origin);
+    let saved = graphic(&back, flask)
+        .piece
+        .as_ref()
+        .unwrap()
+        .linked
+        .as_ref()
+        .unwrap();
+    assert_eq!(
+        saved.joints.iter().find(|j| j.id() == "stir").unwrap().at()[1],
+        16.53916
+    );
 }
 
 fn along(p: &Port, t: f64) -> [f64; 2] {

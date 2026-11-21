@@ -1,0 +1,136 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/claisen-adapter-29",
+ "revision": 1,
+ "family": "claisen-adapter",
+ "variant": {
+  "joint": "29/42"
+ },
+ "names": {
+  "en": "Claisen adapter",
+  "ja": "クライゼン管"
+ },
+ "category": "distillation",
+ "keywords": [
+  "claisen adapter",
+  "distillation"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-13 -11.6L-13 -3.4L13 -3.4L13 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M13 -3L13 -71L-13 -71L-13 -3Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M-13 -70.2L-13 -68L13 -68L13 -70.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M4.83 -9.93L49.83 -27.93L40.17 -52.07L-4.83 -34.07Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M58 -40A13 13 0 0 1 32 -40A13 13 0 0 1 58 -40Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-6",
+   "path": "M58 -40L58 -71L32 -71L32 -40Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-7",
+   "path": "M32 -70.2L32 -68L58 -68L58 -70.2Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  },
+  {
+   "id": "top1",
+   "gender": "F",
+   "at": [
+    0,
+    -116
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  },
+  {
+   "id": "top2",
+   "gender": "F",
+   "at": [
+    45,
+    -116
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  }
+ ],
+ "holds": [
+  {
+   "id": "body",
+   "kind": "grip",
+   "from": [
+    0,
+    -8
+   ],
+   "to": [
+    0,
+    -20
+   ],
+   "diameter_mm": 26
+  }
+ ]
+}

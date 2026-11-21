@@ -1,0 +1,328 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/dropping-funnel-29",
+ "revision": 1,
+ "family": "dropping-funnel",
+ "variant": {
+  "joint": "29/42"
+ },
+ "names": {
+  "en": "Pressure-equalizing dropping funnel",
+  "ja": "滴下ロート (圧力平衡管付き)"
+ },
+ "category": "addition",
+ "keywords": [
+  "dropping funnel",
+  "addition and gas"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-4.5 -11.6L-4.5 -3.4L4.5 -3.4L4.5 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M4 -3L4 -36L-4 -36L-4 -3Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M6.5 -22A6.5 6.5 0 0 1 -6.5 -22A6.5 6.5 0 0 1 6.5 -22Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-4",
+   "path": "M4.3 -22A4.3 4.3 0 0 1 -4.3 -22A4.3 4.3 0 0 1 4.3 -22Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-5",
+   "path": "M-13.5 -24.4L13.5 -24.4L13.5 -19.6L-13.5 -19.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "id": "shape-6",
+   "path": "M2 -22A2 2 0 0 1 -2 -22A2 2 0 0 1 2 -22Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-7",
+   "path": "M-4 -34L-19 -48L-19 -140Q-19 -148 -13 -151L13 -151Q19 -148 19 -140L19 -48L4 -34Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-8",
+   "path": "M13 -149L13 -155L-13 -155L-13 -149Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-9",
+   "path": "M-13 -152.2L-13 -150L13 -150L13 -152.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-10",
+   "path": "M12 -143.2L29 -143.2L29 -148.8L12 -148.8Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-11",
+   "path": "M31.8 -146A2.8 2.8 0 0 1 26.2 -146A2.8 2.8 0 0 1 31.8 -146Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-12",
+   "path": "M26.2 -146L26.2 -10L31.8 -10L31.8 -146Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-13",
+   "path": "M31.8 -10A2.8 2.8 0 0 1 26.2 -10A2.8 2.8 0 0 1 31.8 -10Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-14",
+   "path": "M29 -12.8L3 -12.8L3 -7.2L29 -7.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-15",
+   "path": "M-16 -60L-10 -60"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-16",
+   "path": "M-16 -70L-10 -70"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-17",
+   "path": "M-16 -80L-10 -80"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-18",
+   "path": "M-16 -90L-10 -90"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-19",
+   "path": "M-16 -100L-10 -100"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-20",
+   "path": "M-16 -110L-10 -110"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-21",
+   "path": "M-16 -120L-10 -120"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-22",
+   "path": "M-16 -130L-10 -130"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-23",
+   "path": "M-2.4 -8.5L-2.4 -35.5L2.4 -35.5L2.4 -8.5Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  },
+  {
+   "id": "top",
+   "gender": "F",
+   "at": [
+    0,
+    -198
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  }
+ ],
+ "holds": [
+  {
+   "id": "body",
+   "kind": "grip",
+   "from": [
+    0,
+    -60
+   ],
+   "to": [
+    0,
+    -130
+   ],
+   "diameter_mm": 38
+  }
+ ],
+ "params": [
+  {
+   "id": "valve",
+   "names": {
+    "en": "Valve"
+   },
+   "kind": "states",
+   "default": "closed",
+   "states": [
+    {
+     "id": "closed",
+     "names": {
+      "en": "Closed"
+     }
+    },
+    {
+     "id": "open",
+     "names": {
+      "en": "Open"
+     }
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "control",
+   "param": "valve",
+   "motion": {
+    "per_state": {
+     "closed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "open": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     -22
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M -3.55 -34 L -17.5 -48 L -17.5 -138.5 L -17.4505 -140.335 L -17.302 -142.04 L -17.0545 -143.615 L -16.708 -145.06 L -16.2625 -146.375 L -15.718 -147.56 L -15.0745 -148.615 L -14.332 -149.54 L -13.4905 -150.335 L -12.55 -151 L 12.55 -151 L 13.4905 -150.335 L 14.332 -149.54 L 15.0745 -148.615 L 15.718 -147.56 L 16.2625 -146.375 L 16.708 -145.06 L 17.0545 -143.615 L 17.302 -142.04 L 17.4505 -140.335 L 17.5 -138.5 L 17.5 -48 L 3.55 -34 Z"
+  }
+ ]
+}

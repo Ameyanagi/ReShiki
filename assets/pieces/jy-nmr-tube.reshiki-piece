@@ -1,0 +1,360 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/jy-nmr-tube",
+ "revision": 1,
+ "family": "jy-nmr-tube",
+ "variant": {},
+ "names": {
+  "en": "J. Young NMR tube",
+  "ja": "J. Young NMR 管"
+ },
+ "category": "nmr",
+ "keywords": [
+  "jy nmr tube",
+  "nmr"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-2.5 -0.01L-2.5 0L-2.5 175.5A2.5 2.5 0 0 0 2.5 175.5L2.5 0L2.5 -0.01Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M2.5 2L4.2 -2L4.2 -24L-4.2 -24L-4.2 -2L-2.5 2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-3",
+   "path": "M-4.2 -14L4.2 -14.9"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-4",
+   "path": "M-4.2 -15.8L4.2 -16.7"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-5",
+   "path": "M-4.2 -17.6L4.2 -18.5"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-6",
+   "path": "M-4.2 -19.4L4.2 -20.3"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-7",
+   "path": "M-4.2 -21.2L4.2 -22.1"
+  },
+  {
+   "layer": "inner",
+   "material": "ptfe",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-8",
+   "path": "M-0.5 -20L0.5 -20A1.2 1.2 0 0 1 1.7 -18.8L1.7 -1.2A1.2 1.2 0 0 1 0.5 0L-0.5 0A1.2 1.2 0 0 1 -1.7 -1.2L-1.7 -18.8A1.2 1.2 0 0 1 -0.5 -20Z"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "solid",
+   "color": [
+    244,
+    241,
+    234
+   ],
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-9",
+   "path": "M-3.4 -38L3.4 -38A2 2 0 0 1 5.4 -36L5.4 -25A2 2 0 0 1 3.4 -23L-3.4 -23A2 2 0 0 1 -5.4 -25L-5.4 -36A2 2 0 0 1 -3.4 -38Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-10",
+   "path": "M-3.2 -36L-3.2 -25"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-11",
+   "path": "M-1.6 -36L-1.6 -25"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-12",
+   "path": "M0 -36L0 -25"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-13",
+   "path": "M1.6 -36L1.6 -25"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-14",
+   "path": "M3.2 -36L3.2 -25"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-15",
+   "path": "M3.8 138L7 138",
+   "part": "sample-mark"
+  },
+  {
+   "layer": "inner",
+   "material": "ptfe",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-16",
+   "path": "M-0.5 -22.5L0.5 -22.5A1.2 1.2 0 0 1 1.7 -21.3L1.7 -3.7A1.2 1.2 0 0 1 0.5 -2.5L-0.5 -2.5A1.2 1.2 0 0 1 -1.7 -3.7L-1.7 -21.3A1.2 1.2 0 0 1 -0.5 -22.5Z"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "solid",
+   "color": [
+    244,
+    241,
+    234
+   ],
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-17",
+   "path": "M-3.4 -40.5L3.4 -40.5A2 2 0 0 1 5.4 -38.5L5.4 -27.5A2 2 0 0 1 3.4 -25.5L-3.4 -25.5A2 2 0 0 1 -5.4 -27.5L-5.4 -38.5A2 2 0 0 1 -3.4 -40.5Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-18",
+   "path": "M-3.2 -38.5L-3.2 -27.5"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-19",
+   "path": "M-1.6 -38.5L-1.6 -27.5"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-20",
+   "path": "M0 -38.5L0 -27.5"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-21",
+   "path": "M1.6 -38.5L1.6 -27.5"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-22",
+   "path": "M3.2 -38.5L3.2 -27.5"
+  }
+ ],
+ "params": [
+  {
+   "id": "valve",
+   "names": {
+    "en": "Valve"
+   },
+   "kind": "states",
+   "default": "closed",
+   "states": [
+    {
+     "id": "closed",
+     "names": {
+      "en": "Closed"
+     }
+    },
+    {
+     "id": "open",
+     "names": {
+      "en": "Open"
+     }
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "names": {
+    "en": "Sample height"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0.22727272727272727
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M -1.9 1.99 L -1.9 2 L -1.9 175.5 L -1.88959 175.6986 L -1.85848 175.89503 L -1.80701 176.08713 L -1.73574 176.2728 L -1.64545 176.45 L -1.53713 176.61679 L -1.41198 176.77135 L -1.27135 176.91198 L -1.11679 177.03713 L -0.95 177.14545 L -0.7728 177.23574 L -0.58713 177.30701 L -0.39503 177.35848 L -0.1986 177.38959 L 0 177.4 L 0.1986 177.38959 L 0.39503 177.35848 L 0.58713 177.30701 L 0.7728 177.23574 L 0.95 177.14545 L 1.11679 177.03713 L 1.27135 176.91198 L 1.41198 176.77135 L 1.53713 176.61679 L 1.64545 176.45 L 1.73574 176.2728 L 1.80701 176.08713 L 1.85848 175.89503 L 1.88959 175.6986 L 1.9 175.5 L 1.9 2 L 1.9 1.99 Z"
+  }
+ ],
+ "parts": [
+  {
+   "id": "sample-mark",
+   "param": "fill",
+   "motion": {
+    "translate": [
+     0,
+     -176
+    ]
+   },
+   "handle": {
+    "at": [
+     5.4,
+     138
+    ],
+    "gesture": "drag"
+   }
+  },
+  {
+   "id": "valve-handle",
+   "param": "valve",
+   "motion": {
+    "per_state": {
+     "closed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "open": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     -32
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ]
+}

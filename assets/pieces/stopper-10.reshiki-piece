@@ -1,0 +1,54 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/stopper-10",
+ "revision": 1,
+ "family": "stopper-10",
+ "variant": {},
+ "names": {
+  "en": "Stopper 10/18",
+  "ja": "共栓"
+ },
+ "category": "addition",
+ "keywords": [
+  "stopper 10",
+  "addition and gas"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-3 -11.6L-3 -3.4L3 -3.4L3 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M-5 -16.6L5 -16.6A3 3 0 0 1 8 -13.6L8 -10.6A3 3 0 0 1 5 -7.6L-5 -7.6A3 3 0 0 1 -8 -10.6L-8 -13.6A3 3 0 0 1 -5 -16.6Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "10/18",
+   "draw": "standard"
+  }
+ ]
+}

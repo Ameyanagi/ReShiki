@@ -1,0 +1,150 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/claisen-head-29",
+ "revision": 1,
+ "family": "claisen-head",
+ "variant": {
+  "joint": "29/42"
+ },
+ "names": {
+  "en": "Claisen distillation head",
+  "ja": "クライゼン蒸留ヘッド"
+ },
+ "category": "distillation",
+ "keywords": [
+  "claisen head",
+  "distillation"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-13 -11.6L-13 -3.4L13 -3.4L13 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M13 -3L13 -65L-13 -65L-13 -3Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M-13 -64.2L-13 -62L13 -62L13 -64.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M4.53 -7.82L47.53 -23.82L38.47 -48.18L-4.53 -32.18Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M56 -36A13 13 0 0 1 30 -36A13 13 0 0 1 56 -36Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-6",
+   "path": "M56 -36L56 -65L30 -65L30 -36Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-7",
+   "path": "M30 -64.2L30 -62L56 -62L56 -64.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-8",
+   "path": "M50.26 -34.6L84.07 -25.54L90.8 -50.65L56.99 -59.71Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-9",
+   "path": "M76.73 -27.5L84.65 -25.38L91.38 -50.5L83.46 -52.62Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  },
+  {
+   "id": "top1",
+   "gender": "F",
+   "at": [
+    0,
+    -110
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  },
+  {
+   "id": "top2",
+   "gender": "F",
+   "at": [
+    43,
+    -110
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  },
+  {
+   "id": "arm",
+   "gender": "M",
+   "at": [
+    91.29629,
+    -37.05905
+   ],
+   "dir": [
+    0.96593,
+    0.25882
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  }
+ ]
+}

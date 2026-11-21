@@ -1,0 +1,95 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/beaker",
+ "revision": 1,
+ "family": "beaker",
+ "variant": {},
+ "names": {
+  "en": "Beaker",
+  "ja": "ビーカー"
+ },
+ "category": "vessel",
+ "keywords": [
+  "beaker",
+  "other"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-30 -3Q-26 -2 -25 2L-25 66A4 4 0 0 0 -21 70L21 70A4 4 0 0 0 25 66L25 0Q26 -2 27 -2L27 0L-28 0Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-2",
+   "path": "M13 18L19 18"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-3",
+   "path": "M13 28L19 28"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-4",
+   "path": "M13 38L19 38"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-5",
+   "path": "M13 48L19 48"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-6",
+   "path": "M13 58L19 58"
+  }
+ ],
+ "params": [
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M -23.7 0 L -23.7 64.7 L -23.67809 65.11811 L -23.61259 65.53165 L -23.50423 65.93607 L -23.35418 66.32695 L -23.1641 66.7 L -22.93607 67.05114 L -22.67258 67.37652 L -22.37652 67.67258 L -22.05114 67.93607 L -21.7 68.1641 L -21.32695 68.35418 L -20.93607 68.50423 L -20.53165 68.61259 L -20.11811 68.67809 L -19.7 68.7 L 19.7 68.7 L 20.11811 68.67809 L 20.53165 68.61259 L 20.93607 68.50423 L 21.32695 68.35418 L 21.7 68.1641 L 22.05114 67.93607 L 22.37652 67.67258 L 22.67258 67.37652 L 22.93607 67.05114 L 23.1641 66.7 L 23.35418 66.32695 L 23.50423 65.93607 L 23.61259 65.53165 L 23.67809 65.11811 L 23.7 64.7 L 23.7 0 Z"
+  }
+ ]
+}

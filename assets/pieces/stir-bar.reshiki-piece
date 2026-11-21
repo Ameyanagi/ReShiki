@@ -1,0 +1,128 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/stir-bar",
+ "revision": 1,
+ "family": "stir-bar",
+ "variant": {},
+ "names": {
+  "en": "Stir bar",
+  "ja": "撹拌子"
+ },
+ "category": "other",
+ "keywords": [
+  "stir bar",
+  "magnetic stirrer",
+  "PTFE",
+  "24 mm",
+  "撹拌子",
+  "攪拌子"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "body",
+   "layer": "inner",
+   "material": "ptfe",
+   "role": "solid",
+   "path": "M-8.25 -7.5L8.25 -7.5A3.75 3.75 0 0 1 12 -3.75A3.75 3.75 0 0 1 8.25 0L-8.25 0A3.75 3.75 0 0 1 -12 -3.75A3.75 3.75 0 0 1 -8.25 -7.5Z"
+  },
+  {
+   "id": "seam",
+   "layer": "inner",
+   "material": "ink",
+   "role": "detail",
+   "path": "M0 -7.5L0 0"
+  },
+  {
+   "id": "spin-arrow-1",
+   "layer": "inner",
+   "material": "ink",
+   "role": "detail",
+   "path": "M-16.421 -7.612A17 7 0 0 1 -7.185 -12.144M-9.848 -10.105L-7.185 -12.144L-10.414 -13.052",
+   "part": "spin",
+   "when": {
+    "spin": [
+     "on"
+    ]
+   }
+  },
+  {
+   "id": "spin-arrow-2",
+   "layer": "inner",
+   "material": "ink",
+   "role": "detail",
+   "path": "M7.185 -12.144A17 7 0 0 1 16.421 -7.612M13.527 -9.308L16.421 -7.612L16.042 -10.944",
+   "part": "spin",
+   "when": {
+    "spin": [
+     "on"
+    ]
+   }
+  }
+ ],
+ "joints": [
+  {
+   "id": "seat",
+   "kind": "plug",
+   "family": "stir",
+   "gender": "M",
+   "size_mm": 24,
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ]
+  }
+ ],
+ "params": [
+  {
+   "id": "spin",
+   "names": {
+    "en": "Stirring",
+    "ja": "撹拌"
+   },
+   "kind": "states",
+   "states": [
+    {
+     "id": "off",
+     "names": {
+      "en": "Off",
+      "ja": "停止"
+     }
+    },
+    {
+     "id": "on",
+     "names": {
+      "en": "On",
+      "ja": "回転"
+     }
+    }
+   ],
+   "default": "on"
+  }
+ ],
+ "parts": [
+  {
+   "id": "spin",
+   "param": "spin",
+   "motion": {
+    "per_state": {}
+   },
+   "handle": {
+    "at": [
+     0,
+     -4
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ]
+}

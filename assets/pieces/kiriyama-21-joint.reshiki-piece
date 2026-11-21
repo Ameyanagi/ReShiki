@@ -1,0 +1,148 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/kiriyama-21-joint",
+  "revision": 1,
+  "family": "kiriyama",
+  "variant": {
+    "mount": "15/25 cone",
+    "filter_diameter": "21 mm"
+  },
+  "names": {
+    "en": "Kiriyama funnel",
+    "ja": "桐山ロート"
+  },
+  "category": "filtration",
+  "keywords": [
+    "kiriyama",
+    "filtration"
+  ],
+  "credits": {
+    "author": "ReShiki"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-1",
+      "path": "M-18.83 -26.05L-17.23 -23.05L-13.5 0Q-13.5 4.2 -4 7L4 7Q13.5 4.2 13.5 0L17.23 -23.05L18.83 -26.05Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "solid",
+      "id": "shape-2",
+      "path": "M17.23 -25.45A17.23 2.93 0 0 1 -17.23 -25.45A17.23 2.93 0 0 1 17.23 -25.45Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "solid",
+      "id": "shape-3",
+      "path": "M12.9 -1.2A12.9 2.19 0 0 1 -12.9 -1.2A12.9 2.19 0 0 1 12.9 -1.2Z"
+    },
+    {
+      "layer": "body",
+      "material": "paper",
+      "role": "solid",
+      "id": "shape-13",
+      "path": "M10.5 -2.1A10.5 1.79 0 0 1 -10.5 -2.1A10.5 1.79 0 0 1 10.5 -2.1Z"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-4",
+      "path": "M5.38 -1.06A5.42 1.2 0 0 1 4.16 -0.43"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-5",
+      "path": "M2.13 -0.1A5.42 1.2 0 0 1 -0.93 -0.02"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-6",
+      "path": "M-3.25 -0.24A5.42 1.2 0 0 1 -5.09 -0.79"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-7",
+      "path": "M9.61 -1A9.68 1.64 0 0 1 8.65 -0.46"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-8",
+      "path": "M7.09 -0.08A9.68 1.64 0 0 1 4.44 0.26"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-9",
+      "path": "M1.87 0.41A9.68 1.64 0 0 1 -1.46 0.43"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-10",
+      "path": "M-4.07 0.29A9.68 1.64 0 0 1 -6.8 -0.03"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-11",
+      "path": "M-8.45 -0.4A9.68 1.64 0 0 1 -9.55 -0.93"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "fill",
+      "id": "shape-12",
+      "path": "M1.4 -1.2A1.4 1.2 0 0 1 -1.4 -1.2A1.4 1.2 0 0 1 1.4 -1.2Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-14",
+      "path": "M-4 5.9L-4 8.1L4 8.1L4 5.9Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-15",
+      "path": "M-3.4 36.5L-3.4 55.1L3.4 49.1L3.4 36.5Z"
+    }
+  ],
+  "joints": [
+    {
+      "id": "joint",
+      "gender": "M",
+      "at": [
+        0,
+        11.5
+      ],
+      "dir": [
+        0,
+        1
+      ],
+      "kind": "taper",
+      "size": "15/25",
+      "draw": "standard"
+    }
+  ]
+}
