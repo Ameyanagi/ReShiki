@@ -71,6 +71,12 @@ impl MoleculeCanvas<'_> {
             state.last_click = None;
             return Some(if context.measuring {
                 Action::publish(Edit::EquipmentAuthoringPoint(p)).and_capture()
+            } else if context.trial.is_none() {
+                Action::publish(Edit::EquipmentAuthoringShape {
+                    at: p,
+                    reach: self.camera.world_len(PICK_RADIUS_PX),
+                })
+                .and_capture()
             } else {
                 Action::request_redraw().and_capture()
             });
