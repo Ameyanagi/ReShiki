@@ -57,6 +57,14 @@ impl App {
                     .equipment_authoring_action(super::equipment_authoring::Action::Point(point));
                 return;
             }
+            Edit::EquipmentAuthoringShape { at, reach } => {
+                let _ =
+                    self.equipment_authoring_action(super::equipment_authoring::Action::ShapeAt {
+                        at,
+                        reach,
+                    });
+                return;
+            }
             Edit::EquipmentAuthoringTestStart(epoch) => {
                 let _ = self.equipment_authoring_action(
                     super::equipment_authoring::Action::TestStart(epoch),
@@ -447,6 +455,7 @@ impl App {
             Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
             Edit::EquipmentAuthoringPoint(_)
+            | Edit::EquipmentAuthoringShape { .. }
             | Edit::EquipmentAuthoringTestStart(_)
             | Edit::EquipmentAuthoringTestCancel(_)
             | Edit::EquipmentAuthoringTest { .. } => return,

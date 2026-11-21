@@ -151,6 +151,56 @@ fn one_long_stroke_crossing_the_cell_still_erases_its_visible_bond() {
 }
 
 #[test]
+fn a_single_swept_stroke_erases_both_affine_cells_without_reaching_wrong_cell_overflow() {
+    for axis_x in [Point::new(200., 40.), Point::new(-200., -40.)] {
+        let mut doc = Document::default();
+        let mut graphic = table(vec![]);
+        graphic.origin = Point::new(30., 40.);
+        graphic.axis_x = axis_x;
+        graphic.axis_y = Point::new(35., 150.);
+        let frame = Frame::of(&graphic).unwrap();
+        let [a, b, c, d] = [(0.25, 0.25), (0.25, 0.75), (0.75, 0.25), (0.75, 0.75)]
+            .map(|(x, y)| doc.add_atom("C", frame.point(Point::new(x, y))));
+        let hidden = doc.add_atom("C", frame.point(Point::new(0.9, 0.5)));
+        doc.add_bond(a, b, 1, "plain");
+        doc.add_bond(c, d, 1, "plain");
+        let cells = &mut graphic.table.as_deref_mut().unwrap().cells;
+        cells[0].members = vec![a, b, hidden];
+        cells.push(Cell {
+            id: 2,
+            lo: Point::new(0.5, 0.),
+            hi: Point::new(1., 1.),
+            members: vec![c, d],
+            borders: vec![],
+        });
+        doc.graphics.push(graphic);
+        doc.validate().unwrap();
+        let before = doc.clone();
+        let from = frame.point(Point::new(-0.5, 0.5));
+        let to = frame.point(Point::new(1.5, 0.5));
+        stroke(&mut doc, from, to, 1.);
+        assert!(doc.bonds.is_empty());
+        assert_eq!(doc.atoms, before.atoms);
+        assert_eq!(doc.graphics, before.graphics);
+        doc.validate().unwrap();
+
+        // The identical unowned geometry keeps the ordinary eraser behavior:
+        // the atom on the sweep is reachable when its cell clip is removed.
+        let mut ordinary = before;
+        ordinary.graphics.clear();
+        stroke(&mut ordinary, from, to, 1.);
+        assert!(ordinary.bonds.is_empty());
+        assert!(ordinary.atom(hidden).is_none());
+        assert!(
+            [a, b, c, d]
+                .into_iter()
+                .all(|id| ordinary.atom(id).is_some())
+        );
+        ordinary.validate().unwrap();
+    }
+}
+
+#[test]
 fn wrapped_caption_rows_are_erasable_using_the_derived_cell_height() {
     let mut doc = Document::default();
     doc.annotations.push(Annotation {

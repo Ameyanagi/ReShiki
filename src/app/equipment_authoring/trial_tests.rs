@@ -84,6 +84,70 @@ fn target(app: &App) -> u64 {
 }
 
 #[test]
+fn shape_material_and_layer_refresh_the_trial_without_committing_trial_objects() {
+    let (mut app, edges) = joint_drawing();
+    let detail = app.tab.doc.next_id();
+    app.tab.doc.graphics.push(Graphic::dragged(
+        detail,
+        GraphicKind::Line,
+        Point::new(-5., 35.),
+        Point::new(5., 35.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    app.tab.selected.push(detail);
+    let before = app.tab.doc.clone();
+    begin(&mut app, edges);
+    let id = target(&app);
+    toward(&mut app, id, true);
+    let epoch = app
+        .tab
+        .equipment_authoring
+        .as_ref()
+        .unwrap()
+        .trial
+        .as_ref()
+        .unwrap()
+        .epoch;
+    send(&mut app, Action::SelectShape(shapes::Choice(1)));
+    send(&mut app, Action::ShapeLayer(Layer::Front));
+    send(&mut app, Action::ShapeMaterial(Material::Metal));
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert_ne!(state.trial.as_ref().unwrap().epoch, epoch);
+    assert!(state.trial.as_ref().unwrap().snap.is_some());
+    assert!(
+        state.measurement().shape.is_empty(),
+        "testing owns the overlay"
+    );
+    assert_eq!(state.base_preview.as_ref().unwrap().graphics.len(), 1);
+    assert!(app.display_document().graphics.len() > 1);
+    let canonical = state.base_preview.clone().unwrap();
+    let count = state.past.len();
+    let epoch = state.trial.as_ref().unwrap().epoch;
+    send(&mut app, Action::SelectShape(shapes::Choice(0)));
+    send(&mut app, Action::ShapeMaterial(Material::Rubber));
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(
+        state.notice.is_some(),
+        "a standard joint keeps its glass attachment"
+    );
+    assert_eq!(state.past.len(), count);
+    assert_eq!(state.trial.as_ref().unwrap().epoch, epoch);
+    assert_eq!(state.base_preview.as_ref(), Some(&canonical));
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    send(&mut app, Action::Accept);
+    assert_eq!(app.tab.doc, canonical);
+    assert_eq!(app.tab.doc.graphics.len(), 1);
+    assert_eq!(
+        app.tab.doc.piece_definitions[0].shapes[1].material,
+        Material::Metal
+    );
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+}
+
+#[test]
 fn equipment_trial_matching_scale_and_repeated_updates_use_a_clean_baseline() {
     let (mut app, edges) = joint_drawing();
     let before = app.tab.doc.clone();
