@@ -11,9 +11,9 @@ use reshiki::cycles::{Cycle, Role, steps};
 pub enum Action {
     /// Propose a cycle of the selection to review before it is made.
     Make,
-    /// Make the proposed cycle, as one Undo step.
+    /// Apply the proposed cycle edit, as one Undo step.
     MakeApply,
-    /// Drop the proposed cycle; the drawing stays as it was.
+    /// Drop the proposed cycle edit; the drawing stays as it was.
     MakeDiscard,
     /// Run the proposed cycle the other way.
     MakeReverse,
@@ -22,6 +22,8 @@ pub enum Action {
     /// Select every intermediate, reagent and product of the selected cycle.
     SelectStructures,
     Clockwise(bool),
+    /// Preview even spacing of the selected cycle and alignment of its side parts.
+    Tidy,
     Edit(Field, String),
     Apply(Field),
     Step(usize),
@@ -51,18 +53,34 @@ pub enum Field {
     Trail,
 }
 
-/// A cycle made on a copy of the drawing, shown until it is applied or
-/// discarded.
+/// A cycle edit on a copy of the drawing, shown until it is applied or discarded.
 #[derive(Debug, Clone)]
 pub(super) struct Proposal {
     /// What the drawing shows meanwhile.
     doc: reshiki::document::Document,
     cycle: u64,
-    /// Whether its parts leave ordinary reactions.
-    left: bool,
-    /// What it is made of, again on Apply from the drawing as it is then.
-    selected: Vec<u64>,
-    reversed: bool,
+    kind: ProposalKind,
+}
+
+#[derive(Debug, Clone)]
+enum ProposalKind {
+    Make {
+        /// Whether its parts leave ordinary reactions.
+        left: bool,
+        /// What it is made of, again on Apply from the drawing as it is then.
+        selected: Vec<u64>,
+        reversed: bool,
+    },
+    Tidy {
+        source: ProposalSource,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ProposalSource {
+    epoch: u64,
+    revision: u64,
+    labels: u64,
 }
 
 /// Part names keyed by part, at a drawing revision and computed-label generation.
@@ -71,7 +89,7 @@ type PartNames = ((u64, u64), std::collections::HashMap<Vec<u64>, String>);
 /// The cycle card's text fields and disclosures.
 #[derive(Debug, Clone, Default)]
 pub(super) struct Inputs {
-    /// Make catalytic cycle's proposal under review.
+    /// The cycle edit under review.
     pub(super) proposal: Option<Box<Proposal>>,
     /// The cycle right-clicked last, which the card and step tools use
     /// while it is selected, also among other selected cycles.
@@ -208,18 +226,30 @@ impl App {
             Action::Make => return self.propose_cycle(),
             Action::MakeApply => return self.apply_cycle_proposal(),
             Action::MakeDiscard => {
-                if self.tab.cycle_inputs.proposal.take().is_some() {
+                if let Some(proposal) = self.tab.cycle_inputs.proposal.take() {
                     self.error = false;
-                    self.status = "Catalytic cycle discarded".into();
+                    self.status = match proposal.kind {
+                        ProposalKind::Make { .. } => "Catalytic cycle discarded",
+                        ProposalKind::Tidy { .. } => "Cycle tidy discarded",
+                    }
+                    .into();
                 }
                 return super::focus_drawing();
             }
             Action::MakeReverse => {
                 if let Some(mut p) = self.tab.cycle_inputs.proposal.take() {
-                    p.reversed = !p.reversed;
-                    if let Ok((doc, cycle, left)) = proposed(&self.tab.doc, &p.selected, p.reversed)
+                    if let ProposalKind::Make {
+                        left,
+                        selected,
+                        reversed,
+                    } = &mut p.kind
                     {
-                        (p.doc, p.cycle, p.left) = (doc, cycle, left);
+                        *reversed = !*reversed;
+                        if let Ok((doc, cycle, leaves)) =
+                            proposed(&self.tab.doc, selected, *reversed)
+                        {
+                            (p.doc, p.cycle, *left) = (doc, cycle, leaves);
+                        }
                     }
                     self.tab.cycle_inputs.proposal = Some(p);
                 }
@@ -268,6 +298,7 @@ impl App {
                     self.edit_cycle(reshiki::cycles::reverse);
                 }
             }
+            Action::Tidy => return self.propose_cycle_tidy(),
             Action::Edit(field, value) => *self.tab.cycle_inputs.get_mut(field) = value,
             Action::Apply(field) => self.apply_cycle_field(field),
             Action::Step(step) => {
@@ -396,9 +427,11 @@ impl App {
                 self.tab.cycle_inputs.proposal = Some(Box::new(Proposal {
                     doc,
                     cycle,
-                    left,
-                    selected,
-                    reversed: false,
+                    kind: ProposalKind::Make {
+                        left,
+                        selected,
+                        reversed: false,
+                    },
                 }));
                 self.inspector_open = true;
                 self.inspector_tab = super::InspectorTab::Properties;
@@ -413,14 +446,109 @@ impl App {
         super::focus_drawing()
     }
 
-    /// Make the proposed cycle in the drawing, as one Undo step.
+    /// Tidy a copy so the drawing and its history stay untouched during review.
+    fn propose_cycle_tidy(&mut self) -> Task<Message> {
+        if self.tab.busy || self.tab.drawing_edit_active() {
+            self.error = true;
+            self.status = "Wait for the current task to finish".into();
+            return super::focus_drawing();
+        }
+        let Some((cycle, _)) = self.selected_cycle() else {
+            self.error = true;
+            self.status = "Select a catalytic cycle first".into();
+            return super::focus_drawing();
+        };
+        self.propose_cycle_tidy_for(cycle)
+    }
+
+    fn cycle_proposal_source(&self) -> ProposalSource {
+        ProposalSource {
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
+            labels: self.tab.label_generation,
+        }
+    }
+
+    /// Refresh the same target even if a completed import changed selection.
+    fn propose_cycle_tidy_for(&mut self, cycle: u64) -> Task<Message> {
+        if !self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .any(|g| g.id == cycle && g.cycle.is_some())
+        {
+            self.error = true;
+            self.status = "The catalytic cycle is no longer available".into();
+            return super::focus_drawing();
+        }
+        let mut doc = self.tab.doc.clone();
+        self.error = false;
+        if reshiki::cycles::tidy(&mut doc, cycle) {
+            for link in &mut doc.property_captions {
+                link.two_decimal_weight = self.appearance.two_decimal_weight;
+            }
+            reshiki::atom_labels::refresh::refresh_edited(&self.tab.doc, &mut doc);
+            let reconciled = match reshiki::transaction::reconcile(&mut doc, self.tab.doc.clone()) {
+                Ok(reconciled) => reconciled,
+                Err(rejection) => {
+                    self.error = true;
+                    self.status = rejection.message().into();
+                    return super::focus_drawing();
+                }
+            };
+            // Match Apply's computed-label invalidation without recording history.
+            if reconciled.outcome(&doc).chemistry_changed {
+                reshiki::atom_labels::clear_computed(&mut doc);
+            }
+            self.tab.cycle_inputs.proposal = Some(Box::new(Proposal {
+                doc,
+                cycle,
+                kind: ProposalKind::Tidy {
+                    source: self.cycle_proposal_source(),
+                },
+            }));
+            self.inspector_open = true;
+            self.inspector_tab = super::InspectorTab::Properties;
+            self.status = "Review cycle tidy · Enter applies · Esc discards".into();
+        } else {
+            self.status = "The cycle is already tidy".into();
+        }
+        super::focus_drawing()
+    }
+
+    /// Apply the proposed cycle edit in the drawing, as one Undo step.
     fn apply_cycle_proposal(&mut self) -> Task<Message> {
         let Some(proposal) = self.tab.cycle_inputs.proposal.take() else {
             return Task::none();
         };
+        if let ProposalKind::Tidy { source } = &proposal.kind
+            && *source != self.cycle_proposal_source()
+        {
+            // Background labels and names may change ink without a revision.
+            // Show their newly tidied result before accepting another Apply.
+            return self.propose_cycle_tidy_for(proposal.cycle);
+        }
         // Made again, so results that reached the drawing meanwhile stay.
         let before = self.tab.doc.clone();
-        let (cycle, left) = match reshiki::cycles::make(&mut self.tab.doc, &proposal.selected) {
+        let ProposalKind::Make {
+            left: _,
+            selected,
+            reversed,
+        } = proposal.kind
+        else {
+            self.error = false;
+            if reshiki::cycles::tidy(&mut self.tab.doc, proposal.cycle) {
+                self.changed(before);
+                if !self.error {
+                    self.status = "Tidied the cycle".into();
+                }
+            } else {
+                self.status = "The cycle is already tidy".into();
+            }
+            return super::focus_drawing();
+        };
+        let (cycle, left) = match reshiki::cycles::make(&mut self.tab.doc, &selected) {
             Ok(made) => made,
             Err(error) => {
                 self.tab.doc = before;
@@ -429,7 +557,7 @@ impl App {
                 return super::focus_drawing();
             }
         };
-        if proposal.reversed {
+        if reversed {
             reverse(&mut self.tab.doc, cycle);
         }
         let members = self
@@ -464,7 +592,7 @@ impl App {
     /// While a proposed cycle is under review, Enter applies it, Esc
     /// discards it and edits wait.
     pub(super) fn cycle_proposal_gate(&mut self, message: &Message) -> Option<Task<Message>> {
-        self.tab.cycle_inputs.proposal.as_ref()?;
+        let proposal = self.tab.cycle_inputs.proposal.as_ref()?;
         if matches!(message, Message::Escape) {
             return Some(self.cycle_action(Action::MakeDiscard));
         }
@@ -474,7 +602,7 @@ impl App {
         // Saving keeps the drawing as it is, without the proposed cycle.
         let allowed = matches!(
             message,
-            Message::Cycle(Action::MakeApply | Action::MakeDiscard | Action::MakeReverse)
+            Message::Cycle(Action::MakeApply | Action::MakeDiscard)
                 | Message::Save
                 | Message::SaveAs
                 | Message::SaveFormat(_)
@@ -483,12 +611,20 @@ impl App {
                 // from the drawing as it is then.
                 | Message::Imports(super::import::Action::Loaded(..))
                 | Message::Saved(..)
-        ) || super::gates::preview_passthrough(message)
+        ) || matches!(message, Message::Cycle(Action::MakeReverse))
+            && matches!(proposal.kind, ProposalKind::Make { .. })
+            || super::gates::preview_passthrough(message)
             || self.answers_save_dialog(message);
         if allowed {
             None
         } else {
-            self.status = "Review the catalytic cycle · Enter applies · Esc discards".into();
+            self.status = match proposal.kind {
+                ProposalKind::Make { .. } => {
+                    "Review the catalytic cycle · Enter applies · Esc discards"
+                }
+                ProposalKind::Tidy { .. } => "Review cycle tidy · Enter applies · Esc discards",
+            }
+            .into();
             Some(Task::none())
         }
     }
@@ -496,6 +632,31 @@ impl App {
     /// The proposed cycle's order, to apply or discard.
     pub(super) fn cycle_proposal_card(&self) -> Option<Element<'_, Message>> {
         let proposal = self.tab.cycle_inputs.proposal.as_deref()?;
+        if matches!(proposal.kind, ProposalKind::Tidy { .. }) {
+            return Some(
+                column![
+                    section("Tidy cycle"),
+                    text("Review the spacing and positions.")
+                        .size(11)
+                        .style(muted_text),
+                    row![
+                        accessible_command("cycle.tidy.apply", "Apply", "Apply")
+                            .padding([6, 14])
+                            .style(crate::appearance::primary)
+                            .on_press(Message::Cycle(Action::MakeApply)),
+                        accessible_command("cycle.tidy.discard", "Discard", "Discard")
+                            .on_press(Message::Cycle(Action::MakeDiscard)),
+                    ]
+                    .spacing(4)
+                    .align_y(Alignment::Center),
+                    text("Enter applies · Esc discards")
+                        .size(11)
+                        .style(muted_text),
+                ]
+                .spacing(6)
+                .into(),
+            );
+        }
         let g = proposal
             .doc
             .graphics
@@ -515,7 +676,7 @@ impl App {
         for (i, ids) in cycle.intermediates.iter().enumerate() {
             body = body.push(text(format!("{} · {}", i + 1, self.part_name(ids))).size(12));
         }
-        if proposal.left {
+        if matches!(proposal.kind, ProposalKind::Make { left: true, .. }) {
             body = body.push(
                 text("They leave their ordinary reactions")
                     .size(11)
@@ -913,6 +1074,7 @@ impl App {
                     "Switching direction runs the steps the other way: reagents become products",
                     iced::widget::tooltip::Position::Top,
                 ),
+                (!cycle.steps.is_empty()).then(|| panel_action("Tidy cycle", send(Action::Tidy))),
                 layout,
                 (!cycle.steps.is_empty()).then_some(rows),
                 text(hint).size(11).style(muted_text),

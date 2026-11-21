@@ -239,7 +239,12 @@ the gutters. Moving one item by itself leaves it where you put it.
    structures in cycle** to select every intermediate, reagent and product,
    for example to change their color or font.
 5. In **Properties → Catalytic cycle**, choose **Clockwise** or
-   **Counterclockwise**. Open **Layout** to set **Radius (pt)**, **Gap (pt)**
+   **Counterclockwise**. Choose **Tidy cycle** (also in the canvas menu and
+   as **Tidy catalytic cycle** in the command palette) to space the
+   intermediates evenly around the circle and line up each step's reagents
+   and products beside its arc. Review the drawing, then choose **Apply**
+   (Enter) or **Discard** (Esc). Applying makes one Undo step.
+   Open **Layout** to set **Radius (pt)**, **Gap (pt)**
    and **Center** text. Each row shows the step name or the intermediates'
    names, formulas or text. Choose a step to see its reagents under **In:**
    and its products under **Out:**. Set the step's **Name**, turn on
@@ -829,6 +834,12 @@ CDXML does not keep ReShiki's parametric shape type. External saves may split
 grouped bracket strokes, change stacking values and quantize colors/coordinates.
 A subsequent import keeps the supported visible paths but may have a different
 number of graphic objects. `.rsk` files keep ReShiki's exact model.
+
+Opaque compound paths keep their holes and overlapping fill regions in
+CDXML/CDX. They travel as one filled curve with separate original outlines,
+so a hole shows the artwork behind it. A filled curve with an explicit zero
+line width opens without an outline. Faded and shaded compound paths retain
+their existing separate-fill export; holes in those styles remain a limit.
 
 `.rsk`/SVG/PDF/PNG keep dots. SVG/PDF/EMF/PNG draw path arrowheads, and
 CDXML/CDX keep their editable head settings on open curves.
