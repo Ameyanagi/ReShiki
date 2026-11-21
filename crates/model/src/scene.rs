@@ -2237,13 +2237,30 @@ pub fn primitives_with_opacity(
     if raw.graphics.iter().any(|g| g.table.is_some()) {
         return table::primitives(raw);
     }
-    primitives_with_tables(raw, flat, opacity, &Default::default(), false)
+    primitives_with_tables(
+        raw,
+        flat,
+        opacity,
+        &Default::default(),
+        false,
+        Resolve::Scene,
+    )
 }
 
-fn primitives_in_cell(doc: &Document) -> Vec<Primitive> {
+fn primitives_in_cell(
+    doc: &Document,
+    backdrop: crate::canvas_theme::FillBackdrop<'_>,
+) -> Vec<Primitive> {
     let flat = crate::models3d::drawn(doc);
     let opacity = crate::rear_opacity::Paint::new(&flat);
-    primitives_with_tables(doc, &flat, &opacity, &Default::default(), true)
+    primitives_with_tables(
+        doc,
+        &flat,
+        &opacity,
+        &Default::default(),
+        true,
+        Resolve::SceneOn(backdrop),
+    )
 }
 
 fn primitives_with_tables(
@@ -2252,8 +2269,9 @@ fn primitives_with_tables(
     opacity: &crate::rear_opacity::Paint,
     tables: &std::collections::HashMap<u64, Vec<Primitive>>,
     cell_text: bool,
+    resolve: Resolve<'_>,
 ) -> Vec<Primitive> {
-    let inputs = BondInputs::prepare(flat, opacity, Resolve::Scene);
+    let inputs = BondInputs::prepare(flat, opacity, resolve);
     let doc = inputs.doc();
     let style = &doc.drawing_style;
     let mut out = vec![];
