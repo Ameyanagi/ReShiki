@@ -246,11 +246,11 @@ impl MoleculeCanvas<'_> {
                 // Its own statement, so the scene borrow ends before the hit test takes it again.
                 let plan = state.scene.borrow_mut().stretch(self.doc, fixed, moving);
                 if let Some(plan) = plan
-                    && crate::canvas::hit::hit_selection_with_orbital(
+                    && crate::canvas::hit::hit_selection_cached(
                         self.doc,
                         self.camera.world(p, bounds),
                         self.camera.world_len(PICK_RADIUS_PX),
-                        state.scene.borrow_mut().foreground_orbital(self.doc),
+                        &mut state.scene.borrow_mut(),
                     )
                     .iter()
                     .any(|id| plan.ids.contains(id))
