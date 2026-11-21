@@ -96,7 +96,8 @@ fn document_custom_styles_and_embedded_themes_keep_their_full_identity() {
     assert_eq!(app.status_journal(), document_styles::Choice::Custom);
     let mut theme = reshiki::theme_files::bundled().unwrap().remove(0);
     theme.id = "deleted-theme".into();
-    theme.name = "A long embedded theme with 日本語 and a family 👩‍👩‍👧‍👦".into();
+    let name = "A long embedded theme with 日本語 and a family 👩‍👩‍👧‍👦";
+    theme.name = name.into();
     theme.apply(&mut app.tab.doc).unwrap();
     let embedded = app.tab.doc.custom_theme.clone();
     let (choices, selected) = app.theme_choices();
@@ -104,7 +105,7 @@ fn document_custom_styles_and_embedded_themes_keep_their_full_identity() {
         !choices.contains(&selected),
         "Do not recreate a deleted library entry"
     );
-    assert_eq!(selected.to_string(), theme.name);
+    assert_eq!(selected.to_string(), name);
     let label = compact(&format!("Custom · {selected}"));
     assert!(label.ends_with('…'));
     assert!(super::super::workspace::text_width(&label, 11.) <= 184.);
