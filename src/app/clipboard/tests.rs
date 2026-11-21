@@ -1138,8 +1138,15 @@ fn copy_shortcut_runs_the_office_action_while_export_is_visible() {
         app.settings.open = settings;
         let original = app.tab.doc.clone();
         let task = app.update(copy());
-        assert_eq!(task.units() > 0, uses_office_copy);
-        assert_eq!(app.native_copy_busy, uses_office_copy);
+        let prepares_copy = uses_office_copy && reshiki::clipboard::available();
+        assert_eq!(app.native_copy_busy, prepares_copy);
+        assert_eq!(app.tab.clipboard_busy, prepares_copy);
+        if prepares_copy {
+            assert!(task.units() > 0);
+            assert_eq!(app.status, "Preparing clipboard…");
+        } else {
+            assert_eq!(app.status, "Select objects to copy");
+        }
         assert!(app.tab.selected.is_empty());
         assert_eq!(app.tab.doc, original);
         assert!(!app.tab.history.can_undo());
