@@ -717,3 +717,45 @@ fn table_rejected_adapter_snap_restores_released_seats_and_their_owned_clip() {
     assert_eq!(doc.seats[0].clip, Some(clip));
     assert!(doc.graphics.iter().any(|g| g.id == clip));
 }
+
+#[test]
+fn table_adapter_does_not_reuse_a_released_highest_id_clip() {
+    use crate::graphics::table::Membership;
+    let mut doc = Document::default();
+    let flask = add(&mut doc, "reshiki/rbf-300-29", Point::new(200., 300.));
+    let condenser = add(&mut doc, "reshiki/liebig-29", Point::new(400., 100.));
+    solve::connect(
+        &mut doc,
+        &[condenser],
+        &joint(flask, "neck"),
+        &joint(condenser, "bottom"),
+    )
+    .unwrap();
+    let other = add(&mut doc, "reshiki/rbf-100-15", Point::new(5000., 300.));
+    table_cells(&mut doc, [vec![], vec![flask, condenser, other]]);
+    assert_eq!(solve::add_clips(&mut doc, &[flask, condenser]), 1);
+    let clip = doc.seats[0].clip.unwrap();
+    assert_eq!(doc.object_ids().max(), Some(clip));
+    let target = port(&doc, &joint(other, "neck"));
+    let moving = port(&doc, &joint(condenser, "bottom"));
+    let exposure = 0.06 * 25. * target.mm;
+    doc.translate(
+        &[condenser],
+        (target.point[0] + target.dir[0] * exposure - moving.point[0]) as f32 + 3.,
+        (target.point[1] + target.dir[1] * exposure - moving.point[1]) as f32 + 3.,
+    );
+    let before = doc.clone();
+    let snap = solve::snap(&mut doc, &[condenser], 14., false).unwrap();
+    assert!(matches!(snap.offer, Offer::Adapter(_)));
+    let adapter = snap.added.unwrap();
+    assert_ne!(adapter, clip);
+    assert!(doc.graphics.iter().all(|g| g.id != clip));
+    let ownership = Membership::new(&doc).unwrap();
+    assert_eq!(ownership.cell_of(adapter), ownership.cell_of(other));
+    assert_eq!(ownership.cell_of(clip), None);
+    commit(&mut doc, before);
+    Document::from_json(&doc.file_json().unwrap())
+        .unwrap()
+        .validate()
+        .unwrap();
+}

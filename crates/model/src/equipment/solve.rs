@@ -761,7 +761,14 @@ fn adapter(s: &Port, m: &Port) -> Option<(Arc<Definition>, String, String)> {
 /// Seat the moving pieces on `s` through their joint `m`: directly, or
 /// through an inserted adapter. Further joints that now fit are seated too,
 /// and the moving pieces join the target's place in the stacking order.
-fn seat(doc: &mut Document, moving: &[u64], s: &Port, m: &Port, offer: &Offer) -> Snap {
+fn seat(
+    doc: &mut Document,
+    moving: &[u64],
+    s: &Port,
+    m: &Port,
+    offer: &Offer,
+    minimum_id: u64,
+) -> Snap {
     let mut ids: Vec<u64> = moving.to_vec();
     let mut snap = Snap {
         target: s.clone(),
@@ -780,7 +787,7 @@ fn seat(doc: &mut Document, moving: &[u64], s: &Port, m: &Port, offer: &Offer) -
     if let Offer::Adapter(d) = offer
         && let Some((_, near, far)) = adapter(s, m)
     {
-        let id = doc.next_id();
+        let id = doc.next_id().max(minimum_id);
         let mut g = placed::graphic(id, d.clone(), Point::default(), s.mm as f32);
         g.layer = target_layer;
         let joints = ports(&g);
@@ -886,7 +893,9 @@ fn fixed(doc: &Document, pieces: &BTreeSet<u64>) -> bool {
 /// dragged one must already point within 40°. A clip moved on its own goes
 /// onto the nearest seat of its size.
 pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Option<Snap> {
-    with_cell_ownership(doc, |doc| snap_inner(doc, ids, reach, any_angle))
+    with_cell_ownership(doc, |doc, minimum_id| {
+        snap_inner(doc, ids, reach, any_angle, minimum_id)
+    })
 }
 
 /// A snap can release seats before choosing a new target. Restore the whole
@@ -894,14 +903,17 @@ pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Opt
 /// swaps the target and moving sides.
 fn with_cell_ownership(
     doc: &mut Document,
-    edit: impl FnOnce(&mut Document) -> Option<Snap>,
+    edit: impl FnOnce(&mut Document, u64) -> Option<Snap>,
 ) -> Option<Snap> {
     let before = doc
         .graphics
         .iter()
         .any(|g| g.table.is_some())
         .then(|| doc.clone());
-    let snap = edit(doc);
+    // Releasing a highest-ID clip must not recycle its ID for an adapter:
+    // inheritance deliberately leaves objects from the snapshot untouched.
+    let minimum_id = before.as_ref().map_or(0, Document::next_id);
+    let snap = edit(doc, minimum_id);
     if let Some(before) = before {
         let inherited = match &snap {
             Some(Snap {
@@ -925,7 +937,13 @@ fn with_cell_ownership(
     snap
 }
 
-fn snap_inner(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Option<Snap> {
+fn snap_inner(
+    doc: &mut Document,
+    ids: &[u64],
+    reach: f32,
+    any_angle: bool,
+    minimum_id: u64,
+) -> Option<Snap> {
     let moving: BTreeSet<u64> = ids.iter().copied().collect();
     let pieces: Vec<&Graphic> = (doc.graphics.iter())
         .filter(|g| g.piece.is_some() && moving.contains(&g.id))
@@ -1004,7 +1022,7 @@ fn snap_inner(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> O
             added: None,
         });
     };
-    Some(seat(doc, &ids, &s, &m, &offer))
+    Some(seat(doc, &ids, &s, &m, &offer, minimum_id))
 }
 
 /// Put the clip `id` on the nearest seat of its size without a clip whose
@@ -1143,10 +1161,18 @@ pub fn options(doc: &Document, ids: &[u64]) -> Vec<(Port, Port, Offer)> {
 /// Connect the pieces `ids` through joint `m` to the fixed joint `s`, as a
 /// snap would. `None` when either joint is gone or taken.
 pub fn connect(doc: &mut Document, ids: &[u64], s: &JointRef, m: &JointRef) -> Option<Snap> {
-    with_cell_ownership(doc, |doc| connect_inner(doc, ids, s, m))
+    with_cell_ownership(doc, |doc, minimum_id| {
+        connect_inner(doc, ids, s, m, minimum_id)
+    })
 }
 
-fn connect_inner(doc: &mut Document, ids: &[u64], s: &JointRef, m: &JointRef) -> Option<Snap> {
+fn connect_inner(
+    doc: &mut Document,
+    ids: &[u64],
+    s: &JointRef,
+    m: &JointRef,
+    minimum_id: u64,
+) -> Option<Snap> {
     let moving = closure(doc, ids);
     let (s, m) = (port(doc, s)?, port(doc, m)?);
     let taken = |p: &Port| !p.shared() && doc.seats.iter().any(|x| x.holds(&p.at));
@@ -1163,7 +1189,7 @@ fn connect_inner(doc: &mut Document, ids: &[u64], s: &JointRef, m: &JointRef) ->
     } else {
         Offer::Adapter(adapter(&s, &m)?.0)
     };
-    Some(seat(doc, &moving, &s, &m, &offer))
+    Some(seat(doc, &moving, &s, &m, &offer, minimum_id))
 }
 
 /// Every moving piece stays within the scale limits when scaled by `k`.
