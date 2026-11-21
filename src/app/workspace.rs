@@ -284,9 +284,6 @@ impl App {
             body = body.push(background(self.inspector()));
         }
         content = content.push(body);
-        if self.view_open {
-            content = content.push(background(self.view_options()));
-        }
         content
             .push(background(self.status_bar()))
             .height(Length::Fill)
@@ -2789,124 +2786,6 @@ impl App {
             .into()
     }
 
-    /// Interface, canvas aids, data display and actions, set apart by wider
-    /// gaps. On a narrow window whole groups wrap to a second line rather than
-    /// run off the edge.
-    fn view_options(&self) -> Element<'_, Message> {
-        let group = |items: Vec<Element<'static, Message>>| -> Element<'static, Message> {
-            iced::widget::Row::with_children(items)
-                .spacing(10)
-                .align_y(Alignment::Center)
-                .into()
-        };
-        let interface = group(vec![
-            text("View").size(12).style(muted_text).into(),
-            text("Interface").size(12).style(muted_text).into(),
-            crate::appearance::pick_list(
-                crate::appearance::Mode::ALL,
-                Some(self.appearance.mode),
-                Message::Appearance,
-            )
-            .text_size(12)
-            .padding(5)
-            .width(132)
-            .into(),
-        ]);
-        let canvas = group(vec![
-            checkbox(self.grid)
-                .label("Grid")
-                .on_toggle(|_| Message::View(super::view_settings::Action::Grid))
-                .size(14)
-                .text_size(12)
-                .into(),
-            checkbox(self.guides.rulers)
-                .label("Rulers")
-                .on_toggle(|on| Message::View(super::view_settings::Action::Rulers(on)))
-                .size(14)
-                .text_size(12)
-                .into(),
-            checkbox(self.guides.crosshair)
-                .label("Crosshair")
-                .on_toggle(|on| Message::View(super::view_settings::Action::Crosshair(on)))
-                .size(14)
-                .text_size(12)
-                .into(),
-            text("Units").size(12).style(muted_text).into(),
-            crate::appearance::pick_list(
-                crate::canvas::guides::Unit::ALL,
-                Some(self.guides.unit),
-                |unit| Message::View(super::view_settings::Action::RulerUnit(unit)),
-            )
-            .text_size(12)
-            .padding(5)
-            .width(68)
-            .into(),
-            hover_hint(
-                checkbox(self.appearance.smart_guides)
-                    .label("Smart guides")
-                    .on_toggle(|on| Message::View(super::view_settings::Action::SmartGuides(on)))
-                    .size(14)
-                    .text_size(12),
-                format!(
-                    "Snap dragged objects to other objects' edges, centers and equal gaps · Hold {} to move freely",
-                    crate::platform::alt_key()
-                ),
-                tooltip::Position::Top,
-            )
-            .into(),
-            hover_hint(
-                checkbox(self.appearance.arrange_controls)
-                    .label("Arrange controls")
-                    .on_toggle(|visible| {
-                        Message::ObjectToolbar(super::object_toolbar::Action::Visible(visible))
-                    })
-                    .size(14)
-                    .text_size(12),
-                "Align, distribute, order, flip and rotate at the right end of the Select row",
-                tooltip::Position::Top,
-            )
-            .into(),
-        ]);
-        let data = group(vec![
-            hover_hint(
-                checkbox(self.appearance.two_decimal_weight)
-                    .label("2-decimal MW")
-                    .on_toggle(|on| {
-                        Message::View(super::view_settings::Action::TwoDecimalWeight(on))
-                    })
-                    .size(14)
-                    .text_size(12),
-                "Mol. Wt. with 2 decimal places instead of 3; a caption can set its own",
-                tooltip::Position::Top,
-            )
-            .into(),
-            hover_hint(
-                checkbox(self.appearance.name_typography)
-                    .label("Chemical name typography")
-                    .on_toggle(|on| Message::View(super::view_settings::Action::NameTypography(on)))
-                    .size(14)
-                    .text_size(12),
-                "Italic descriptors, primes and superscripts in name captions",
-                tooltip::Position::Top,
-            )
-            .into(),
-        ]);
-        let actions = group(vec![
-            command("Page setup…", Message::Pages(super::pages::Action::Show)).into(),
-            command("Done", Message::View(super::view_settings::Action::Toggle)).into(),
-        ]);
-        container(
-            row![interface, canvas, data, actions]
-                .spacing(24)
-                .wrap()
-                .vertical_spacing(4),
-        )
-        .padding([7, 14])
-        .width(Length::Fill)
-        .style(panel)
-        .into()
-    }
-
     fn status_bar(&self) -> Element<'_, Message> {
         let summary = self.status.lines().next().unwrap_or(&self.status);
         let error = self.error;
@@ -3032,11 +2911,7 @@ impl App {
             .align_y(Alignment::Center)
             .height(32)
             .push(divider())
-            .push(
-                accessible_command("status-view", "Drawing view options", "View")
-                    .on_press(Message::View(super::view_settings::Action::Toggle))
-                    .style(control(self.view_open)),
-            )
+            .push(self.view_menu())
             .push(
                 accessible_command("status-zoom-out", "Zoom out", "−").on_press(Message::Zoom(0.8)),
             )
@@ -3071,9 +2946,8 @@ impl App {
             .into()
     }
 
-    /// Journal preset, color theme and canvas light/dark: whole-document
-    /// settings, kept beside View and zoom.
-    fn document_settings(&self) -> [Element<'_, Message>; 3] {
+    /// Journal preset and color theme: whole-document settings beside View.
+    fn document_settings(&self) -> [Element<'_, Message>; 2] {
         use super::document_styles::Choice;
         use super::theme_files::Choice as ThemeChoice;
         use reshiki::document_styles::Preset;
@@ -3087,7 +2961,6 @@ impl App {
             .filter(|choice| **choice != ThemeChoice::Manage)
             .cloned()
             .collect();
-        let dark = self.tab.doc.canvas_theme.is_dark();
         [
             hover_hint(
                 // Manage styles… opens the inspector, so ↑ ↓ skip it.
@@ -3134,26 +3007,6 @@ impl App {
                     ),
                 ),
                 "Color theme",
-                tooltip::Position::Top,
-            )
-            .into(),
-            hover_hint(
-                reshiki::accessibility::button(
-                    "canvas-theme",
-                    "Dark canvas",
-                    iced::widget::canvas(Glyph(if dark { Icon::Moon } else { Icon::Sun }, true))
-                        .width(24)
-                        .height(24),
-                )
-                .padding(3)
-                .style(control(false))
-                .checked(dark)
-                .on_press(Message::CanvasTheme(self.tab.doc.canvas_theme.toggled())),
-                if dark {
-                    "Dark canvas · Switch to light · Remembered for new drawings"
-                } else {
-                    "Light canvas · Switch to dark · Remembered for new drawings"
-                },
                 tooltip::Position::Top,
             )
             .into(),

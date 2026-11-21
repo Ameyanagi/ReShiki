@@ -263,7 +263,7 @@ fn molecular_weight_precision_help_names_the_option_and_both_display_defaults() 
     for query in ["molecular weight precision", "MW rounding"] {
         let entry = top(query);
         assert_eq!(entry.name, "Molecular weight precision", "{query}");
-        assert_eq!(entry.keys, "View → 2-decimal MW");
+        assert_eq!(entry.keys, "Settings → Names & checks → Molecular weight");
         assert!(entry.description.contains("default 3"));
         assert!(entry.description.contains("exact mass keeps 5"));
         assert_eq!(entry.scope, registry::Scope::Anywhere);

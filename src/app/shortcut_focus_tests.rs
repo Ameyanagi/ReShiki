@@ -370,10 +370,10 @@ async fn tabs_style_buttons_and_canvas_theme_are_named_controls() {
     let bold = node("text-style-bold".into());
     assert_eq!((bold.role, bold.checked), (Role::ToggleButton, Some(false)));
     assert_eq!(node("text-style-size".into()).role, Role::TextInput);
-    let theme = node("canvas-theme".into());
+    let view = node("status-view".into());
     assert_eq!(
-        (theme.name.as_str(), theme.checked),
-        ("Dark canvas", Some(false))
+        (view.name.as_str(), view.expanded),
+        ("Drawing view options", Some(false))
     );
     for (id, name) in [
         ("text-style-font", "Font"),
@@ -2528,4 +2528,345 @@ async fn context_row_rotation_field_applies_a_typed_angle() {
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, drawing);
     assert!(!app.tab.history.can_undo());
+}
+
+/// Opening View overlays the paper; none of its controls takes canvas space.
+#[tokio::test]
+#[ignore = "Opt-in real View menu geometry, focus and activation check"]
+async fn view_menu_stays_above_its_anchor_without_resizing_the_canvas() {
+    use super::view_settings::Action as View;
+    struct Paper(Option<Rectangle>);
+    impl Operation for Paper {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+            if id == Some(&Id::new("atom-text-canvas")) {
+                self.0 = Some(bounds);
+            }
+        }
+    }
+    fn paper(ui: &mut Ui, app: &App) -> Rectangle {
+        let mut bounds = Paper(None);
+        ui.inspect(app, &mut bounds);
+        bounds.0.expect("the actual canvas container")
+    }
+    let ids = [
+        "view-grid",
+        "view-rulers",
+        "view-crosshair",
+        "view-smart-guides",
+        "view-arrange-controls",
+        "canvas-theme",
+        "view-page-setup",
+    ];
+    for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {
+        let mut ui = Ui::new().await;
+        ui.viewport = Rectangle::with_size(size);
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.fit_to_view = false;
+        app.appearance = crate::appearance::Settings::default();
+        app.guides = Default::default();
+        app.tab.doc.canvas_theme = reshiki::canvas_theme::CanvasTheme::Light;
+        let atom = app
+            .tab
+            .doc
+            .add_atom("C", reshiki::document::Point::default());
+        app.tab.selected = vec![atom];
+        app.tab.camera.center = reshiki::document::Point::new(85., -23.);
+        app.tab.camera.zoom = 1.4;
+        let canvas = paper(&mut ui, &app);
+        app.viewport = canvas.size();
+        let camera = app.tab.camera;
+        let drawing = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let dirty = app.tab.dirty();
+        let anchor = ui.bounds(&app, "status-view");
+        ui.focus_control(&mut app, "status-view").await;
+        ui.key(
+            &mut app,
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert!(app.view_open);
+        assert_eq!(paper(&mut ui, &app), canvas);
+        let snapshot = ui.semantics(&app);
+        assert_eq!(
+            snapshot
+                .nodes
+                .iter()
+                .map(|node| node.id.as_str())
+                .collect::<Vec<_>>(),
+            ids
+        );
+        for node in snapshot.nodes {
+            let visible = node.visible_bounds.expect("visible menu row");
+            assert!(node.bounds.width > 200. && node.bounds.height >= 25.);
+            assert_eq!(visible, node.bounds);
+            assert!(ui.viewport.contains(node.bounds.position()));
+            assert!(node.bounds.y + node.bounds.height <= anchor.y - 3.);
+        }
+        assert_eq!(ui.focused(&app), ["view-grid"]);
+        ui.key(
+            &mut app,
+            Key::Named(Named::ArrowDown),
+            Code::ArrowDown,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(ui.focused(&app), ["view-rulers"]);
+        ui.key(
+            &mut app,
+            Key::Named(Named::End),
+            Code::End,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(ui.focused(&app), ["view-page-setup"]);
+        ui.key(
+            &mut app,
+            Key::Named(Named::Home),
+            Code::Home,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        for expected in ids.iter().cycle().skip(1).take(ids.len()) {
+            ui.key(
+                &mut app,
+                Key::Named(Named::Tab),
+                Code::Tab,
+                Modifiers::empty(),
+                None,
+            )
+            .await;
+            assert_eq!(ui.focused(&app), [*expected]);
+        }
+        ui.key(
+            &mut app,
+            Key::Named(Named::Tab),
+            Code::Tab,
+            Modifiers::SHIFT,
+            None,
+        )
+        .await;
+        assert_eq!(ui.focused(&app), ["view-page-setup"]);
+        ui.key(
+            &mut app,
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert!(!app.view_open);
+        assert_eq!(ui.focused(&app), ["status-view"]);
+        assert_eq!(paper(&mut ui, &app), canvas);
+        assert_eq!(ui.bounds(&app, "status-view"), anchor);
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.dirty(), dirty);
+        assert_eq!(app.tab.selected, [atom]);
+        assert!(!app.tab.history.can_undo());
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+
+        // Every toggle releases its row back to the opener, including Dark canvas.
+        for (index, id) in ids.iter().take(6).enumerate() {
+            let at = ui.bounds(&app, "status-view").center();
+            let _ = ui.drag(&mut app, at, at).await;
+            let before = ui
+                .semantics(&app)
+                .nodes
+                .into_iter()
+                .find(|node| node.id == *id)
+                .unwrap()
+                .checked
+                .unwrap();
+            ui.focus_control(&mut app, id).await;
+            if index % 3 == 0 || *id == "canvas-theme" {
+                ui.key(
+                    &mut app,
+                    Key::Named(Named::Enter),
+                    Code::Enter,
+                    Modifiers::empty(),
+                    None,
+                )
+                .await;
+            } else if index % 3 == 1 {
+                for event in [
+                    press(
+                        Key::Named(Named::Space),
+                        Code::Space,
+                        Modifiers::empty(),
+                        Some(" "),
+                    ),
+                    Event::Keyboard(keyboard::Event::KeyReleased {
+                        key: Key::Named(Named::Space),
+                        modified_key: Key::Named(Named::Space),
+                        physical_key: Physical::Code(Code::Space),
+                        location: keyboard::Location::Standard,
+                        modifiers: Modifiers::empty(),
+                    }),
+                ] {
+                    let (_, messages) = ui.event(&app, event, mouse::Cursor::Unavailable);
+                    for message in messages {
+                        let task = app.update(message);
+                        ui.run_task(&mut app, task).await;
+                    }
+                }
+            } else {
+                let mut activate = reshiki::accessibility::Activate::new(*id);
+                ui.inspect(&app, &mut activate);
+                let message = activate.message().cloned().expect("native menu activation");
+                let task = app.update(message);
+                ui.run_task(&mut app, task).await;
+            }
+            assert!(!app.view_open);
+            assert_eq!(ui.focused(&app), ["status-view"]);
+            assert_eq!(paper(&mut ui, &app), canvas);
+            let task = app.update(Message::View(View::Toggle));
+            ui.run_task(&mut app, task).await;
+            let after = ui
+                .semantics(&app)
+                .nodes
+                .into_iter()
+                .find(|node| node.id == *id)
+                .unwrap()
+                .checked
+                .unwrap();
+            assert_eq!(after, !before, "{id} toggled once");
+            let task = app.update(Message::View(View::Close));
+            ui.run_task(&mut app, task).await;
+        }
+        let at = ui.bounds(&app, "status-view").center();
+        let _ = ui.drag(&mut app, at, at).await;
+        let before_grid = app.grid;
+        let at = ui.bounds(&app, "view-grid").center();
+        let _ = ui.drag(&mut app, at, at).await;
+        assert_eq!(app.grid, !before_grid);
+        assert!(!app.view_open);
+        assert_eq!(ui.focused(&app), ["status-view"]);
+        let task = app.update(Message::View(View::Toggle));
+        ui.run_task(&mut app, task).await;
+        let before_rulers = app.guides.rulers;
+        ui.key(
+            &mut app,
+            Key::Character(";".into()),
+            Code::Semicolon,
+            Modifiers::COMMAND,
+            None,
+        )
+        .await;
+        assert_eq!(app.guides.rulers, !before_rulers);
+        assert!(!app.view_open);
+        assert_eq!(ui.focused(&app), ["status-view"]);
+        let task = app.update(Message::View(View::Toggle));
+        ui.run_task(&mut app, task).await;
+        let before_crosshair = app.guides.crosshair;
+        ui.key(
+            &mut app,
+            Key::Character("x".into()),
+            Code::KeyX,
+            Modifiers::COMMAND | Modifiers::ALT,
+            None,
+        )
+        .await;
+        assert_eq!(app.guides.crosshair, !before_crosshair);
+        assert!(!app.view_open);
+        assert_eq!(ui.focused(&app), ["status-view"]);
+        let task = app.update(Message::View(View::Toggle));
+        ui.run_task(&mut app, task).await;
+        let drawing = app.tab.doc.clone();
+        let outside = canvas.center();
+        for event in [
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ] {
+            let pressed = matches!(&event, mouse::Event::ButtonPressed(_));
+            let (status, messages) =
+                ui.event(&app, Event::Mouse(event), mouse::Cursor::Available(outside));
+            if pressed {
+                assert_eq!(status, iced::event::Status::Captured);
+            }
+            for message in messages {
+                let task = app.update(message);
+                ui.run_task(&mut app, task).await;
+            }
+        }
+        assert!(!app.view_open);
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.tab.selected, [atom]);
+        assert_eq!(paper(&mut ui, &app), canvas);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+        assert!(!app.tab.history.can_undo());
+        // The menu forwards Page setup to the ordinary page inspector.
+        let task = app.update(Message::View(View::Toggle));
+        ui.run_task(&mut app, task).await;
+        let at = ui.bounds(&app, "view-page-setup").center();
+        let _ = ui.drag(&mut app, at, at).await;
+        assert!(!app.view_open);
+        assert_eq!(app.inspector_tab, InspectorTab::Pages);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real Settings search for moved View preferences"]
+async fn settings_search_keeps_ruler_units_separate_from_drawing_style_units() {
+    use super::settings_page::{Action, Section};
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.appearance = crate::appearance::Settings::default();
+    app.sync_ruler_unit();
+    let task = app.update(Message::Settings(Action::Open(Some(Section::Drawing))));
+    ui.run_task(&mut app, task).await;
+    for (query, prefix) in [
+        ("Interface", "settings-interface"),
+        ("Ruler units", "settings-ruler-units"),
+        ("Molecular weight", "settings-weight"),
+        ("Chemical name typography", "settings-name-typography"),
+    ] {
+        let task = app.update(Message::Settings(Action::Query(query.into())));
+        ui.run_task(&mut app, task).await;
+        let snapshot = ui.semantics(&app);
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|node| node.id.starts_with(prefix)),
+            "{query}"
+        );
+        if query == "Ruler units" {
+            assert!(
+                !snapshot
+                    .nodes
+                    .iter()
+                    .any(|node| node.id.starts_with("settings-units"))
+            );
+        }
+    }
+    let task = app.update(Message::Settings(Action::Query("units".into())));
+    ui.run_task(&mut app, task).await;
+    let snapshot = ui.semantics(&app);
+    assert!(
+        snapshot
+            .nodes
+            .iter()
+            .any(|node| node.id.starts_with("settings-units"))
+    );
+    assert!(
+        snapshot
+            .nodes
+            .iter()
+            .any(|node| node.id.starts_with("settings-ruler-units"))
+    );
 }

@@ -625,7 +625,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["guides", "view", "measure"],
         ),
         entry(
-            "View → 2-decimal MW",
+            "Settings → Names & checks → Molecular weight",
             "Molecular weight precision",
             "Show molecular weight with 2 decimal places instead of the default 3; exact mass keeps 5 in Properties. A caption can set its own places beside its pin",
             Anywhere,

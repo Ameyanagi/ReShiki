@@ -112,7 +112,7 @@ fn molecular_weight_precision_applies_to_status_and_summary_with_display_formula
     app.tab.doc.atom_mut(carbon).unwrap().isotope = 13;
     app.tab.analysis = Some(analysis("[13CH4]"));
     for (two_decimal_weight, weight) in [(false, "17.035"), (true, "17.04")] {
-        app.view_action(super::super::view_settings::Action::TwoDecimalWeight(
+        let _ = app.view_action(super::super::view_settings::Action::TwoDecimalWeight(
             two_decimal_weight,
         ));
         let _ = app.show_molecular_properties();

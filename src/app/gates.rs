@@ -255,6 +255,9 @@ impl App {
             self.commands.open = false;
             return Break(Task::none());
         }
+        if self.view_open && matches!(message, Message::Escape) {
+            return Break(self.view_action(view_settings::Action::Close));
+        }
         if let Message::ContextMenu(action) = message {
             return Break(self.context_action(action));
         }
@@ -474,6 +477,9 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
                     | view_settings::Action::Crosshair(_)
                     | view_settings::Action::RulerUnit(_)
                     | view_settings::Action::Toggle
+                    | view_settings::Action::Close
+                    | view_settings::Action::Choose(_)
+                    | view_settings::Action::Focus(_)
             )
             | Message::ObjectToolbar(object_toolbar::Action::Visible(_))
             | Message::Tick
