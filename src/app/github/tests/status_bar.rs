@@ -133,6 +133,207 @@ fn apply(app: &mut App, messages: Vec<Message>) {
     }
 }
 
+#[tokio::test]
+#[ignore = "Opt-in real renderer layout check"]
+async fn picker_repository_search_stays_above_the_repository_list_in_both_views() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let mut source = source_repo();
+    source.key.owner.make_ascii_uppercase();
+    source.key.repo.make_ascii_lowercase();
+    app.github.prefs.share(&alice());
+    picker_at(&mut app, Mode::Open, &["ring.rsk"]);
+    app.github.repos.push(source);
+    let _ = app.picker_listed();
+    let mut ui = Ui::new(Size::new(1040., 760.)).await;
+    for tree in [false, true] {
+        github(
+            &mut app,
+            Action::Picker(picker::Action::Search(String::new())),
+        );
+        github(&mut app, Action::Picker(picker::Action::View(tree)));
+        let opening = the_picker(&app).opening;
+        github(
+            &mut app,
+            Action::Picker(picker::Action::Whole(
+                opening,
+                Ok((
+                    vec![gh::Entry {
+                        name: "ring.rsk".into(),
+                        sha: sha('7'),
+                        folder: false,
+                    }],
+                    false,
+                )),
+            )),
+        );
+        let window = ui.pass(&app, None, &[]);
+        let search = window.node("github-search");
+        assert_eq!(search.name, "Search repositories or paste a GitHub URL");
+        assert!(!window.has("github-repo-2"));
+        assert!(window.node("github-repo-1").name.contains("read only"));
+        let repository = window.node("github-repo-0").bounds;
+        assert!(search.bounds.y + search.bounds.height <= repository.y);
+        assert!(search.bounds.x + search.bounds.width <= repository.x + repository.width + 1.);
+        assert!(search.bounds.width > 100. && search.bounds.width < 300.);
+        let buttons = [
+            "github-view-tree",
+            "github-new-drawing",
+            "github-new-folder",
+        ]
+        .map(|id| window.node(id).bounds.center());
+        assert!(buttons.windows(2).all(|pair| pair[0].x < pair[1].x));
+        assert!(
+            buttons
+                .iter()
+                .all(|point| (point.y - buttons[0].y).abs() < 2.)
+        );
+        assert_eq!(window.node("github-new-drawing").name, "New drawing");
+        assert_eq!(window.node("github-new-folder").name, "New folder");
+        let focus = window.node("github-focus-search").bounds;
+        assert!(focus.center().x < search.bounds.x);
+        assert!((focus.center().y - search.bounds.center().y).abs() < 2.);
+        assert!(window.stop("github-focus-search") < window.stop("github-search"));
+        assert!(window.stop("github-search") < window.stop("github-repo-0"));
+        // Search remains in the repository column at the narrower supported size.
+        ui.size.width = 800.;
+        let narrow = ui.pass(&app, None, &[]);
+        let search = narrow.node("github-search").bounds;
+        let repository = narrow.node("github-repo-0").bounds;
+        assert!(search.width > 100. && search.x >= 0.);
+        assert!(search.x + search.width <= repository.x + repository.width + 1.);
+        ui.size.width = 1040.;
+        github(
+            &mut app,
+            Action::Picker(picker::Action::Search("no match".into())),
+        );
+        let filtered = ui.pass(&app, None, &[]);
+        assert!(!filtered.has("github-repo-0"));
+        assert!(!filtered.has("github-repo-1"));
+        let clicked = ui.click(&app, focus.center());
+        assert!(clicked.iter().any(|message| matches!(
+            message,
+            Message::GitHub(Action::Picker(picker::Action::FocusSearch))
+        )));
+        apply(&mut app, clicked);
+        assert_eq!(the_picker(&app).search, "no match");
+        for (at, label) in [(buttons[1], "New drawing"), (buttons[2], "New folder")] {
+            let clicked = ui.click(&app, at);
+            apply(&mut app, clicked);
+            let naming = ui.pass(&app, None, &[]);
+            assert_eq!(naming.node("github-new-item").name, format!("{label} name"));
+            assert!(naming.has("github-search"));
+            assert!(!naming.has("github-create-item"));
+            assert!(!naming.has("github-cancel-item"));
+            github(&mut app, Action::Picker(picker::Action::CancelItem));
+            assert!(!ui.pass(&app, None, &[]).has("github-new-item"));
+        }
+    }
+    github(
+        &mut app,
+        Action::Picker(picker::Action::PickRepo(alice().key)),
+    );
+    picker_lists(&mut app, &[], &["shared.rsk"]);
+    let shared = ui.pass(&app, None, &[]);
+    assert!(!shared.has("github-new-drawing"));
+    assert!(!shared.has("github-new-folder"));
+    assert!(shared.has("github-search"));
+    let _ = shared.text("Read only");
+
+    picker_at(&mut app, Mode::SendTo, &["ring.rsk"]);
+    let sending = ui.pass(&app, None, &[]);
+    assert_eq!(
+        sending.node("github-search").name,
+        "Search or paste a GitHub URL"
+    );
+    assert!(sending.has("github-save-name"));
+    assert!(!sending.has("github-new-drawing"));
+    assert!(sending.has("github-new-folder"));
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer layout check"]
+async fn a_temporary_item_occupies_the_first_tile_or_its_nested_tree_parent() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    picker_at(&mut app, Mode::Open, &[]);
+    picker_lists(&mut app, &["sub"], &[]);
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Folder("sub".into())),
+    );
+    picker_lists(&mut app, &[], &["z.mol"]);
+    let mut ui = Ui::new(Size::new(1040., 760.)).await;
+    for folder in [false, true] {
+        github(&mut app, Action::Picker(picker::Action::NewItem(folder)));
+        let tiles = ui.pass(&app, None, &[]);
+        let name = tiles.node("github-new-item").bounds;
+        let existing = tiles.node("github-file-0").bounds;
+        assert!(
+            name.x < existing.x,
+            "the temporary tile comes first: {name:?} {existing:?}"
+        );
+        assert!(name.center_y() >= existing.y && name.center_y() <= existing.y + existing.height);
+        assert!(!tiles.has("github-create-item"));
+        assert!(!tiles.has("github-cancel-item"));
+        github(&mut app, Action::Picker(picker::Action::CancelItem));
+    }
+
+    github(&mut app, Action::Picker(picker::Action::View(true)));
+    let opening = the_picker(&app).opening;
+    let entries = ["sub/", "sub/deep/", "sub/deep/a.mol", "z.mol"]
+        .iter()
+        .map(|path| gh::Entry {
+            name: path.trim_end_matches('/').to_owned(),
+            sha: sha('7'),
+            folder: path.ends_with('/'),
+        })
+        .collect();
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Whole(opening, Ok((entries, false)))),
+    );
+    github(&mut app, Action::Picker(picker::Action::Row("sub".into())));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Row("sub/deep".into())),
+    );
+    for folder in [false, true] {
+        github(&mut app, Action::Picker(picker::Action::NewItem(folder)));
+        let tree = ui.pass(&app, None, &[]);
+        let name = tree.node("github-new-item").bounds;
+        let parent = tree
+            .nodes
+            .iter()
+            .find(|node| {
+                node.id.starts_with("github-row-") && node.name.starts_with("deep, folder")
+            })
+            .unwrap()
+            .bounds;
+        let sibling = tree
+            .nodes
+            .iter()
+            .find(|node| node.id.starts_with("github-row-") && node.name.starts_with("a.mol"))
+            .unwrap()
+            .bounds;
+        assert!(
+            name.y >= parent.y + parent.height - 1.,
+            "{name:?} below {parent:?}"
+        );
+        assert!(
+            name.y + name.height <= sibling.y + 1.,
+            "{name:?} before {sibling:?}"
+        );
+        assert!(
+            name.x > tree.text("deep").x,
+            "the input is indented inside its parent"
+        );
+        assert!(!tree.has("github-create-item"));
+        assert!(!tree.has("github-cancel-item"));
+        github(&mut app, Action::Picker(picker::Action::CancelItem));
+    }
+}
+
 /// Signed in, with an unsent drawing in front: the cloud is the status
 /// bar's first control, before the chip and the message, and the command
 /// bar has none. Tab goes from it to the chip. Its menu opens upward and its

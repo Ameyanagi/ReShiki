@@ -21,6 +21,7 @@ fn family(icon: Icon) -> &'static str {
         Icon::Ring(..) => "ring",
         Icon::Arrow(_) => "arrow",
         Icon::New => "new",
+        Icon::NewFolder => "new-folder",
         Icon::Open => "open",
         Icon::Save => "save",
         Icon::SaveAs => "save-as",
@@ -41,6 +42,7 @@ fn family(icon: Icon) -> &'static str {
         Icon::Cloud => "cloud",
         Icon::History => "history",
         Icon::Eye => "eye",
+        Icon::Search => "search",
         Icon::Tiles => "tiles",
         Icon::Tree => "tree",
         Icon::File => "file",
@@ -83,6 +85,7 @@ fn all_icons() -> Vec<(String, Icon)> {
         Icon::Sun,
         Icon::Moon,
         Icon::New,
+        Icon::NewFolder,
         Icon::Open,
         Icon::Save,
         Icon::SaveAs,
@@ -101,6 +104,7 @@ fn all_icons() -> Vec<(String, Icon)> {
         Icon::Cloud,
         Icon::History,
         Icon::Eye,
+        Icon::Search,
         Icon::Tiles,
         Icon::Tree,
         Icon::File,
@@ -208,6 +212,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
         "sun",
         "moon",
         "new",
+        "new-folder",
         "open",
         "save",
         "save-as",
@@ -225,6 +230,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
         "cloud",
         "history",
         "eye",
+        "search",
         "tiles",
         "tree",
         "file",
@@ -285,7 +291,7 @@ fn icon_fixtures_cover_every_variant() {
         *counts.entry(family(*icon)).or_insert(0) += 1;
     }
     assert_eq!(counts, expected_counts());
-    assert_eq!(icons.len(), 157);
+    assert_eq!(icons.len(), 159);
 }
 
 fn render(

@@ -176,6 +176,75 @@ fn inline_paragraph_controls_keep_local_undo_until_one_document_commit() {
     );
 }
 
+#[test]
+fn typed_yen_commands_replace_utf8_bytes_and_undo_restores_the_original_prefix() {
+    use iced::widget::text_editor::{Action, Cursor, Edit, Position};
+    for prefix in ["\\", "¥", "￥"] {
+        let mut app = selected_caption();
+        let original = "前文\n反応 AB";
+        let caption = &mut app.tab.doc.annotations[0];
+        caption.text = original.into();
+        caption.format.apply(
+            original,
+            Some(original.len() - 1..original.len()),
+            &StyleChange::Bold(true),
+        );
+        app.sync_typography();
+        let before = app.tab.doc.clone();
+        begin_inline(&mut app);
+        app.tab.caption_editor.move_to(Cursor {
+            position: Position {
+                line: 1,
+                column: "反応 A".len(),
+            },
+            selection: None,
+        });
+        let command = format!("{prefix}alpha");
+        for key in command.chars() {
+            let _ = app.update(Message::CaptionAction(Action::Edit(Edit::Insert(key))));
+        }
+        let expanded = "前文\n反応 AαB";
+        assert_eq!(app.tab.caption, expanded, "{prefix}");
+        assert_eq!(app.tab.caption_editor.cursor().position.line, 1);
+        assert_eq!(
+            app.tab.caption_editor.cursor().position.column,
+            "反応 Aα".len()
+        );
+        assert!(app.tab.caption_format.at(expanded.len() - 1).bold);
+        app.tab.caption_format.validate(&app.tab.caption).unwrap();
+        let format = app.tab.caption_format.clone();
+        assert_eq!(app.tab.doc, before, "The inline draft has not committed");
+        assert!(!app.tab.history.can_undo());
+
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.caption, format!("前文\n反応 A{command}B"));
+        app.tab.caption_format.validate(&app.tab.caption).unwrap();
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.caption, expanded);
+        assert_eq!(app.tab.caption_format, format);
+        let _ = app.update(Message::InlineText(inline_text::Action::Finish(true)));
+        assert_eq!(app.tab.doc.annotations[0].text, expanded);
+        assert_eq!(app.tab.doc.annotations[1], before.annotations[1]);
+        assert_document_undo_redo(&mut app, &before);
+    }
+}
+
+#[test]
+fn typed_caption_currency_and_unknown_yen_commands_stay_literal() {
+    use iced::widget::text_editor::{Action, Edit};
+    let mut app = selected_caption();
+    let before = app.tab.doc.clone();
+    begin_inline(&mut app);
+    let _ = app.update(Message::CaptionAction(Action::SelectAll));
+    let text = "価格 ¥500 / ￥３００ / ¥unknown / ￥unknown / \\unknown";
+    for key in text.chars() {
+        let _ = app.update(Message::CaptionAction(Action::Edit(Edit::Insert(key))));
+    }
+    assert_eq!(app.tab.caption, text);
+    assert_eq!(app.tab.doc, before);
+    app.tab.caption_format.validate(&app.tab.caption).unwrap();
+}
+
 mod rendered {
     use super::*;
     use iced::advanced::{

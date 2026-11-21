@@ -264,9 +264,9 @@ impl App {
             .into();
         let paper = self.with_drop_overlay(
             sensor(super::atom_text::canvas_anchor(self.with_context_menu(
-                self.with_inline_text(self.with_star_prompt(
-                    self.with_start(self.with_model_notice(drawing.map(Message::Canvas))),
-                )),
+                self.with_inline_text(
+                    self.with_star_prompt(self.with_model_notice(drawing.map(Message::Canvas))),
+                ),
             )))
             .on_show(Message::Viewport)
             .on_resize(Message::Viewport)
@@ -679,12 +679,7 @@ impl App {
                 reshiki::accessibility::button(
                     "header-search",
                     format!("Search commands, structures and names; {search_keys}"),
-                    row![
-                        text("Search…").size(12),
-                        super::help::chord(search_keys, 11),
-                    ]
-                    .spacing(8)
-                    .align_y(Alignment::Center),
+                    canvas(Glyph(Icon::Search, true)).width(16).height(16),
                 )
                 .height(36)
                 .padding([0, 10])
@@ -812,7 +807,6 @@ impl App {
             (Tool::Graphic(G::Table), "Table"),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
-            (Tool::Graphic(G::TlcPlate), "TLC plate"),
             (Tool::Equipment, super::equipment::INSERT),
             (Tool::Icons, "Icons"),
         ];

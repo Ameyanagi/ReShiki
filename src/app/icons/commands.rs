@@ -29,6 +29,24 @@ pub(super) fn new_document(f: &mut Frame<'_>, ink: Color) {
     line(f, ink, &[(13., 10.), (13., 16.)]);
 }
 
+pub(super) fn new_folder(f: &mut Frame<'_>, ink: Color) {
+    line(
+        f,
+        ink,
+        &[
+            (3., 20.),
+            (3., 5.),
+            (9., 5.),
+            (12., 8.),
+            (21., 8.),
+            (21., 20.),
+            (3., 20.),
+        ],
+    );
+    line(f, ink, &[(9., 14.), (15., 14.)]);
+    line(f, ink, &[(12., 11.), (12., 17.)]);
+}
+
 pub(super) fn open(f: &mut Frame<'_>, ink: Color) {
     line(
         f,

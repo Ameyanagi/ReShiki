@@ -82,9 +82,11 @@ pub use hit::{bond_text_at, hit_object};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 pub(crate) use paper::HINT_STRIP_HEIGHT_PX;
+#[cfg(any(not(target_arch = "wasm32"), test))]
+pub use previews::DrawingPreview;
 pub use previews::{
-    ArrowPreview, DrawingPreview, DrawingThumbnail, OwnedDrawingPreview, PalettePreview,
-    ScientificPreview, TemplateAnchorPreview, TemplateThumbnail,
+    ArrowPreview, DrawingThumbnail, OwnedDrawingPreview, PalettePreview, ScientificPreview,
+    TemplateAnchorPreview, TemplateThumbnail,
 };
 use reshiki::{
     arrow_anchors::Pick,

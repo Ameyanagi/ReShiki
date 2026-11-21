@@ -1330,7 +1330,14 @@ fn a_download_still_running_never_closes_a_new_folder() {
     let Some(Dialog::Picker(picker)) = &app.github.dialog else {
         panic!("the picker closed");
     };
-    assert_eq!(picker.trail, [("fresh".to_owned(), String::new())]);
+    assert!(picker.trail.is_empty());
+    assert!(
+        picker
+            .entries
+            .iter()
+            .flatten()
+            .any(|entry| entry.folder && entry.name == "fresh")
+    );
     assert!(!workcopy::working_path(dir.path(), &repo().key, "other.rsk").exists());
 }
 
@@ -2012,7 +2019,7 @@ fn back_from_choosing_repositories_the_open_picker_lists_them_again_once() {
 }
 
 #[test]
-fn a_new_folder_opens_at_once_and_is_empty() {
+fn a_new_folder_appears_in_the_current_folder_and_can_be_opened() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     picker_at(&mut app, Mode::Open, &["ring.rsk"]);
@@ -2022,6 +2029,12 @@ fn a_new_folder_opens_at_once_and_is_empty() {
         Action::Picker(picker::Action::NewItemName("scheme".into())),
     );
     github(&mut app, Action::Picker(picker::Action::CreateItem));
+    assert_eq!(picker_names(&app), ["scheme", "ring.rsk"]);
+    assert!(the_picker(&app).trail.is_empty());
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Folder("scheme".into())),
+    );
     let Some(Dialog::Picker(picker)) = &app.github.dialog else {
         panic!("no picker");
     };
@@ -2352,11 +2365,86 @@ fn alice() -> Repo {
 
 const LIGANDS: &str = "https://github.com/alice/ligands";
 
+fn source_repo() -> Repo {
+    Repo {
+        id: 31,
+        key: RepoKey {
+            owner: "Ameyanagi".into(),
+            repo: "ReShiki".into(),
+        },
+        private: false,
+        ..repo()
+    }
+}
+
 fn the_picker(app: &App) -> &picker::Picker {
     match &app.github.dialog {
         Some(Dialog::Picker(picker)) => picker,
         other => panic!("no picker: {other:?}"),
     }
+}
+
+/// Apply only focus operations to two real field IDs. Offline repository
+/// requests may finish, but their output is deliberately not routed here.
+async fn picker_field_focus(task: Task<Message>) -> [bool; 2] {
+    use iced::advanced::widget::{Id, operation};
+    use iced::futures::StreamExt;
+
+    #[derive(Default)]
+    struct Focus(bool);
+    impl operation::Focusable for Focus {
+        fn is_focused(&self) -> bool {
+            self.0
+        }
+        fn focus(&mut self) {
+            self.0 = true;
+        }
+        fn unfocus(&mut self) {
+            self.0 = false;
+        }
+    }
+
+    let mut search = Focus::default();
+    let mut save = Focus::default();
+    if let Some(mut stream) = iced_runtime::task::into_stream(task) {
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Widget(operation) = action {
+                let mut current = Some(operation);
+                while let Some(mut operation) = current.take() {
+                    operation.focusable(
+                        Some(&Id::from("github-search")),
+                        iced::Rectangle::default(),
+                        &mut search,
+                    );
+                    operation.focusable(
+                        Some(&Id::from("github-save-name")),
+                        iced::Rectangle::default(),
+                        &mut save,
+                    );
+                    if let operation::Outcome::Chain(next) = operation.finish() {
+                        current = Some(next);
+                    }
+                }
+            }
+        }
+    }
+    [search.0, save.0]
+}
+
+#[tokio::test]
+async fn picker_open_focuses_visible_search_and_send_to_keeps_save_name_focus() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    for (mode, expected) in [(Mode::Open, [true, false]), (Mode::SendTo, [false, true])] {
+        let task = app.picker_action(picker::Action::Show(mode));
+        assert_eq!(picker_field_focus(task).await, expected);
+    }
+    let _ = app.picker_action(picker::Action::Show(Mode::Open));
+    let _ = app.picker_action(picker::Action::Search(LIGANDS.into()));
+    let task = app.picker_action(picker::Action::FocusSearch);
+    assert_eq!(picker_field_focus(task).await, [true, false]);
+    assert_eq!(the_picker(&app).search, LIGANDS);
+    assert!(the_picker(&app).link.is_some());
 }
 
 /// A link followed in the picker, and GitHub's answer for its repository.
@@ -2395,7 +2483,7 @@ fn a_pasted_link_shows_one_row_and_enter_opens_its_folder() {
         Action::Picker(picker::Action::Search(link.into())),
     );
     // A repository listed here needs no request: Enter opens the folder.
-    github(&mut app, Action::Picker(picker::Action::Enter));
+    github(&mut app, Action::Picker(picker::Action::SearchEnter));
     let picker = the_picker(&app);
     assert_eq!(picker.repo.as_ref().map(|repo| repo.id), Some(repo().id));
     assert!(picker.link.is_none());
@@ -2461,6 +2549,86 @@ fn a_shared_repository_stays_listed_until_removed() {
     let picker = the_picker(&app);
     assert!(picker.repo.is_none());
     assert!(!picker.repos.iter().flatten().any(|r| r.id == alice().id));
+}
+
+#[test]
+fn the_source_repository_is_not_selected_by_default_but_an_explicit_link_opens_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let source = source_repo();
+    app.github.repos = vec![source.clone(), repo()];
+    app.github.prefs.last = Some(source.id);
+    github(&mut app, Action::Picker(picker::Action::Show(Mode::Open)));
+    assert_eq!(the_picker(&app).repo.as_ref(), Some(&repo()));
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Link(
+            "https://github.com/ameyanagi/reshiki/tree/main/docs".into(),
+        )),
+    );
+    assert_eq!(the_picker(&app).repo.as_ref(), Some(&source));
+    assert!(app.github.repos.contains(&source));
+}
+
+#[test]
+fn shared_repositories_need_an_installation_to_be_writable() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    let may_push = Repo {
+        push: true,
+        ..alice()
+    };
+    resolved(&mut app, LIGANDS, Ok(may_push.clone()));
+    assert_eq!(the_picker(&app).repo.as_ref(), Some(&alice()));
+
+    // Older preferences and working copies could cache the raw permission.
+    let mut old = serde_json::to_value(&app.github.prefs).unwrap();
+    old["shared"][0]["push"] = serde_json::json!(true);
+    app.github.prefs = serde_json::from_value(old).unwrap();
+    run_blocking(workcopy::persist(
+        dir.path(),
+        &may_push.key,
+        RepoState::new(&may_push),
+        7,
+    ))
+    .unwrap();
+    let mut signed_out = signed_out(dir.path());
+    signed_out.github.prefs = app.github.prefs.clone();
+    assert_eq!(
+        signed_out
+            .github_picker_repos()
+            .into_iter()
+            .find(|repo| repo.id == may_push.id),
+        Some(alice())
+    );
+    assert!(
+        !app.github_picker_repos()
+            .iter()
+            .find(|r| r.id == may_push.id)
+            .unwrap()
+            .push
+    );
+    assert!(app.github_state(&may_push.key).unwrap().read_only);
+
+    let generation = app.github.generation;
+    github(
+        &mut app,
+        Action::Access(generation, may_push.key.clone(), Ok(may_push.clone())),
+    );
+    assert!(app.github.read_only(&may_push.key));
+    github(
+        &mut app,
+        Action::Listed(
+            generation,
+            Ok(gh::Account {
+                login: "octo".into(),
+                repos: vec![may_push.clone()],
+            }),
+        ),
+    );
+    assert!(!app.github.read_only(&may_push.key));
+    assert!(!app.github.link_only(may_push.id));
+    assert_eq!(the_picker(&app).repo.as_ref(), Some(&may_push));
 }
 
 #[test]

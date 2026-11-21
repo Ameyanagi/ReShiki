@@ -25,6 +25,53 @@ fn every_shortcut_types_its_symbol() {
 }
 
 #[test]
+fn yen_prefixes_type_every_backslash_command_including_combined_symbols() {
+    for symbol in GROUPS.iter().flat_map(|group| group.symbols) {
+        if let Some(shortcut) = symbol.shortcut.filter(|shortcut| shortcut.contains('\\')) {
+            for prefix in ["¥", "￥"] {
+                let keys = shortcut.replace('\\', prefix);
+                assert_eq!(typed(&keys), symbol.text, "{keys}");
+            }
+        }
+    }
+}
+
+#[test]
+fn command_expansion_returns_the_actual_utf8_suffix_length() {
+    for prefix in ["\\", "¥", "￥"] {
+        let command = format!("{prefix}alpha");
+        let text = format!("反応 Δ: {command}");
+        let (len, symbol) = expand(&text).unwrap();
+        assert_eq!(len, command.len());
+        assert_eq!(symbol, "α");
+        assert_eq!(&text[text.len() - len..], command);
+        assert_eq!(typed(&format!("反応 Δ: {command}, B")), "反応 Δ: α, B");
+        assert_eq!(expand(&format!("{prefix}Alpha")), None, "case stays exact");
+    }
+}
+
+#[test]
+fn yen_currency_and_unknown_commands_stay_literal() {
+    for text in [
+        "¥",
+        "￥",
+        "価格 ¥500 / ￥３００",
+        "¥unknown",
+        "￥unknown",
+        "\\unknown",
+        "¥ alpha",
+        "￥ alpha",
+        "¥αλφα",
+        "￥ａｌｐｈａ",
+    ] {
+        assert_eq!(typed(text), text);
+        assert_eq!(expand(text), None);
+    }
+    assert_eq!(expand("¥alphabet"), None);
+    assert_eq!(expand("￥alphabet"), None);
+}
+
+#[test]
 fn longest_shortcut_wins_and_text_around_it_stays() {
     assert_eq!(typed("A <=> B"), "A ⇌ B");
     assert_eq!(typed("A --> B"), "A ⟶ B");

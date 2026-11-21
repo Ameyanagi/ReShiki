@@ -19,6 +19,12 @@ pub(super) enum Icon {
     Ring(u8, bool),
     Arrow(reshiki::arrows::Preset),
     New,
+    /// An outlined folder with a plus: create a GitHub folder.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser editor has no GitHub picker")
+    )]
+    NewFolder,
     Open,
     Save,
     SaveAs,
@@ -48,6 +54,7 @@ pub(super) enum Icon {
         expect(dead_code, reason = "The browser editor has no GitHub sign-in")
     )]
     Eye,
+    Search,
     /// Four squares, a list with branches and a page: the GitHub picker's
     /// Tiles and Tree views, and a file in its tree.
     #[cfg_attr(
@@ -147,6 +154,7 @@ impl Glyph {
                 }
             }
             Icon::New => commands::new_document(f, ink),
+            Icon::NewFolder => commands::new_folder(f, ink),
             Icon::Open => commands::open(f, ink),
             Icon::Save => commands::save(f, ink),
             Icon::SaveAs => commands::save_as(f, ink),
@@ -161,6 +169,7 @@ impl Glyph {
             Icon::Cloud => commands::cloud(f, ink),
             Icon::History => commands::history(f, ink),
             Icon::Eye => chrome::eye(f, ink),
+            Icon::Search => chrome::search(f, ink),
             Icon::Tiles => chrome::tiles(f, ink),
             Icon::Tree => chrome::tree(f, ink),
             Icon::File => chrome::file(f, ink),

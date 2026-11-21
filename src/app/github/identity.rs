@@ -68,7 +68,7 @@ impl From<&Repo> for Shared {
             repo: repo.key.repo.clone(),
             branch: repo.default_branch.clone(),
             private: repo.private,
-            push: repo.push,
+            push: false,
         }
     }
 }
@@ -83,7 +83,7 @@ impl From<&Shared> for Repo {
             },
             private: shared.private,
             default_branch: shared.branch.clone(),
-            push: shared.push,
+            push: false,
         }
     }
 }

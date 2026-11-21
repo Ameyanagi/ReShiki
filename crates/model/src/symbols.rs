@@ -144,11 +144,19 @@ fn shortcuts() -> impl Iterator<Item = (&'static str, &'static str)> {
 }
 
 /// The shortcut that `typed` ends with: its length in bytes and its symbol.
+/// Japanese keyboards may enter `¥` or `￥` for a command's leading `\`;
+/// the returned length covers the prefix's actual UTF-8 bytes.
 pub fn expand(typed: &str) -> Option<(usize, &'static str)> {
     shortcuts()
-        .filter(|(shortcut, _)| typed.ends_with(shortcut))
-        .max_by_key(|(shortcut, _)| shortcut.len())
-        .map(|(shortcut, text)| (shortcut.len(), text))
+        .filter_map(|(shortcut, text)| {
+            if typed.ends_with(shortcut) {
+                return Some((shortcut.len(), text));
+            }
+            let command = shortcut.strip_prefix('\\')?;
+            let prefix = typed.strip_suffix(command)?.chars().next_back()?;
+            matches!(prefix, '¥' | '￥').then_some((prefix.len_utf8() + command.len(), text))
+        })
+        .max_by_key(|(len, _)| *len)
 }
 
 /// The table's entry for `text`, so stored recents map back to it.

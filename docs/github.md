@@ -21,8 +21,12 @@ so drawings show on GitHub.
    or **Open**. Backspace goes up a folder; the parents in **lab-notes /
    scheme** go back too. Folders come first, then files, each by name; who
    changed each file last and when (**You** for your own changes) fills in
-   as GitHub answers, and nothing moves. With a repository open, the search
-   field filters its files.
+   as GitHub answers, and nothing moves. Type in **Search repositories or
+   paste URL** above the repository list to filter repositories. Use the
+   folder and drawing views on the right to browse the selected repository.
+   The search field starts focused, and the magnifier moves focus back to it.
+   The ReShiki source repository is omitted from the Open list. You can open
+   it explicitly by its GitHub link.
 4. Edit and save as usual. The status bar chip shows the repository, the
    folder and what is left: **● lab-notes / scheme · 1 unsent** with **Send**.
    Click the name to open the picker in that folder.
@@ -37,11 +41,14 @@ as **LN** for lab-notes, and the tab in front is underlined in that color; the
 window title names the repository. Right-click a GitHub tab and choose
 **Color** for another one.
 
-In the picker, **+ New repository** (the last row) makes a private
-repository, **+ New drawing** makes an empty drawing in the folder open there,
-and **+ New folder** opens a new folder, which reaches GitHub with the first
-drawing sent from it. A new drawing shows **not sent yet** until you send it.
-Neither shows in a repository you may only read.
+In the picker, **+ New repository** (the last repository row) makes a private
+repository. Beside **Tiles** and **Tree** in the header, the document-plus
+icon adds a temporary drawing and the folder-plus icon adds a temporary
+folder where it will appear. Type a name and press Enter to create it. Escape
+or an empty name discards the temporary item. A named drawing opens on an
+empty canvas and shows **not sent yet** until you send it. A folder reaches
+GitHub with the first drawing sent from it. Creation controls appear in
+writable repositories.
 
 ### Every chemistry file, and Insert
 
@@ -59,27 +66,26 @@ file's records land side by side. If they do not all fit in one drawing, the
 ones that fit open or are inserted, and the status bar says so in amber, such
 as **Opened 120 of 150 structures · The rest don't fit**.
 
-A folder shows its first 200 files by name, and says how many there are;
-the search field finds the others.
+Tiles shows the first 200 items in a folder. Choose **Show more** at the
+end of the list to load the next 200, or switch to **Tree**.
 
 ### Tiles or Tree
 
-The two buttons at the end of the folder path switch between **Tiles** and
+The two buttons in the header switch between **Tiles** and
 **Tree**. The picker opens in the tree the first time, then in the view you
 used last, in every repository.
 The tree lists the whole repository: click a folder or press → and ← to open
 and close it, ↑ and ↓ to move, Enter to open, Shift+Enter to insert. Each row
 shows the name, the format of a file that is not a drawing, and who changed
 it when. The pane on the right shows the selected file's preview, its path,
-and **Read only: Open makes a local copy** when it opens read only. Searching
-keeps the matches in the tree with their folders opened, across the whole
-repository. **+ New drawing** and **+ New folder** are the last rows; they go
-to the selected folder.
+and **Read only: Open makes a local copy** when it opens read only. In Tree,
+**New drawing** and **New folder** add a row inside the selected folder or
+beside the selected drawing. In Tiles, they add a tile in the open folder.
 
 ## Other people's repositories
 
-Paste a github.com link into the picker's search field (**Search or paste a
-GitHub link**). One row shows where it leads, such as **ligands / esters /
+Paste a github.com link into **Search repositories or paste URL**. One row
+shows where it leads, such as **ligands / esters /
 route.rsk**; press Enter to open it. A link to a repository or folder opens it
 in the picker; a link to a drawing opens the drawing in a tab. The same works
 when you paste a link with Cmd+V (Ctrl+V) while no text field has focus, drop
@@ -87,8 +93,9 @@ a `.webloc` or `.url` link file on the window, or type the link into the
 command palette (one row, **Open from GitHub: ligands/esters/route**).
 
 **+ Add public repository…**, the last row of the list, takes `owner/repo` or
-a link. A repository opened by link stays in the list, tagged **shared**,
-until you right-click it and choose **Remove from list**.
+a link. Repositories opened by link appear in the list as **shared** and
+**Read only** until ReShiki is given access through a GitHub installation.
+Right-click a shared repository and choose **Remove from list** to remove it.
 
 Each repository row ends in **↗** while the pointer is on it or it is
 selected; it opens the repository on GitHub in your browser. Right-click a
