@@ -1132,7 +1132,10 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
         action,
         Arrange::DistributeHorizontal | Arrange::DistributeVertical
     );
-    let groups = groups(doc, ids);
+    // The table moves its children, but supplies the only spacing/alignment
+    // reference even when selection expansion also lists those children.
+    let references = crate::graphics::table::reference_ids(doc, ids);
+    let groups = groups(doc, &references);
     if groups.is_empty() {
         return;
     }
