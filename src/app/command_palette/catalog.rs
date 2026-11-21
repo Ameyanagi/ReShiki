@@ -850,6 +850,14 @@ fn edits(app: &App) -> Vec<Command> {
         )
         .need(Need::MakeCycle),
         send(
+            "Tidy catalytic cycle",
+            Edit,
+            "Space the intermediates evenly and line up reagents and products beside their arcs.",
+            "tidy cycle clean up align space evenly layout",
+            Message::Cycle(cycles::Action::Tidy),
+        )
+        .need(Need::Cycle),
+        send(
             "Remove from cycle",
             Edit,
             "Take the selected parts out of their catalytic cycle.",

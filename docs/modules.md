@@ -690,6 +690,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.
 - `crates/model/src/cycles.rs`: Catalytic cycles.
+- `crates/model/src/cycles/label_placement.rs`: Place each step name on one side of the ring with space around the ink.
 - `crates/model/src/cycles/split.rs`: Keep inherited side parts beside the step that an insertion shortens.
 - `crates/model/src/cycles/steps.rs`: A catalytic cycle's steps as ordinary reactions.
 - `crates/model/src/depiction.rs`: Opt-in nitrogen charge separation using the same cleanup as analysis.

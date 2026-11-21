@@ -239,7 +239,12 @@ the gutters. Moving one item by itself leaves it where you put it.
    structures in cycle** to select every intermediate, reagent and product,
    for example to change their color or font.
 5. In **Properties → Catalytic cycle**, choose **Clockwise** or
-   **Counterclockwise**. Open **Layout** to set **Radius (pt)**, **Gap (pt)**
+   **Counterclockwise**. Choose **Tidy cycle** (also in the canvas menu and
+   as **Tidy catalytic cycle** in the command palette) to space the
+   intermediates evenly around the circle and line up each step's reagents
+   and products beside its arc. Review the drawing, then choose **Apply**
+   (Enter) or **Discard** (Esc). Applying makes one Undo step.
+   Open **Layout** to set **Radius (pt)**, **Gap (pt)**
    and **Center** text. Each row shows the step name or the intermediates'
    names, formulas or text. Choose a step to see its reagents under **In:**
    and its products under **Out:**. Set the step's **Name**, turn on
