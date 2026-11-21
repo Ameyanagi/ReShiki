@@ -21,6 +21,7 @@ explains how the crates and modules fit together.
 - `src/app.rs`
 - `src/app/abbreviations.rs`
 - `src/app/accessibility.rs`: Window lifecycle and a bounded, generation-checked native action queue.
+- `src/app/add_panel.rs`: Shared search for templates, chemical names and SMILES in the Add tab.
 - `src/app/arcs.rs`
 - `src/app/arrow_labels.rs`: Contextual controls for attached reaction-condition clearances.
 - `src/app/arrows.rs`

@@ -674,7 +674,11 @@ impl App {
             return false;
         }
         if beside {
-            self.commit_structure_insert(before, selected);
+            self.commit_structure_insert(
+                before,
+                selected,
+                super::engine_jobs::InsertPlacement::BesideDrawing,
+            );
         } else {
             self.tab.selected = selected;
             if !self.adopt_changed_document(before) {
