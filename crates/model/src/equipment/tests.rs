@@ -559,28 +559,34 @@ fn a_standard_socket_opens_the_nearby_authored_rim_without_changing_its_fill() {
     let mut def = fixture("rbf-300-29");
     let mut glass = def.shapes[0].clone();
     glass.id = "source-rim".into();
-    glass.path = "M-16 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80Z".into();
-    let path = super::geometry::parse_path(&glass.path).unwrap();
     def.shapes.push(glass);
-    let painted = plan(&def, Values::new());
     let scale = Affine::scale(SCALE, [0., 0.]);
-    assert!(
-        painted
-            .iter()
-            .any(|p| { p.pass == Pass::Glass && p.path == scale.map(&path) })
-    );
     let expected =
         super::geometry::parse_path("M16 -99.36L15 -80C5 -76 -5 -76 -15 -80L-16 -99.36").unwrap();
-    assert!(
-        painted
-            .iter()
-            .any(|p| { p.pass == Pass::Outline && p.path == scale.map(&expected) })
-    );
-    assert!(
-        !painted
-            .iter()
-            .any(|p| { p.pass == Pass::Outline && p.path == scale.map(&path) })
-    );
+    for source in [
+        "M-16 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80Z",
+        "M-16 -99.36L0 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80Z",
+        "M0 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80L-16 -99.36Z",
+    ] {
+        def.shapes.last_mut().unwrap().path = source.into();
+        let path = super::geometry::parse_path(source).unwrap();
+        let painted = plan(&def, Values::new());
+        assert!(
+            painted
+                .iter()
+                .any(|p| { p.pass == Pass::Glass && p.path == scale.map(&path) })
+        );
+        assert!(
+            painted
+                .iter()
+                .any(|p| { p.pass == Pass::Outline && p.path == scale.map(&expected) })
+        );
+        assert!(
+            !painted
+                .iter()
+                .any(|p| { p.pass == Pass::Outline && p.path == scale.map(&path) })
+        );
+    }
 }
 
 #[test]
