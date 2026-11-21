@@ -80,7 +80,7 @@ fn cell_clipped_tlc_rf_labels_keep_cached_and_uncached_whole_plate_selection() {
         doc.validate().unwrap();
         let p = World::new(99., 120.);
         assert!(doc.graphics[0].hit(p, 5.));
-        let expected = if offset == 60. { vec![1] } else { vec![] };
+        let expected = if offset == 60. { vec![1] } else { vec![1000] };
         assert_eq!(hit_selection(&doc, p, 5.), expected);
         let mut cache = crate::canvas::cache::SceneCache::default();
         assert_eq!(
@@ -89,8 +89,54 @@ fn cell_clipped_tlc_rf_labels_keep_cached_and_uncached_whole_plate_selection() {
         );
         assert!(hit_selection(&doc, World::new(110., 120.), 5.).is_empty());
         doc.graphics[0].tlc.as_deref_mut().unwrap().lanes[0].spots[0].show_rf = false;
-        assert!(hit_selection(&doc, p, 5.).is_empty());
+        assert_eq!(hit_selection(&doc, p, 5.), vec![1000]);
+        assert_eq!(
+            crate::canvas::hit::hit_selection_cached(&doc, p, 5., &mut cache),
+            vec![1000]
+        );
     }
+}
+
+#[test]
+fn blank_cell_surface_ignores_a_model_frame_clipped_to_another_cell() {
+    use reshiki::models3d::{Display, ForceField, Model3d, Placed};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(80., 65.));
+    let b = doc.add_atom("O", World::new(118., 65.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.models.push(Model3d::new(
+        &doc,
+        [(a, [-0.7, 0., 0.]), (b, [0.7, 0., 0.])]
+            .map(|(id, xyz)| Placed { id, xyz })
+            .to_vec(),
+        vec![],
+        ForceField::Mmff94s,
+    ));
+    reshiki::models3d::set_display(&mut doc, 0, Display::ThreeD);
+    let (lo, hi) = reshiki::models3d::frame(&doc, &doc.models[0]).unwrap();
+    let probe = lo.lerp(hi, 0.5);
+    let mut g = table(vec![]);
+    g.origin = probe.offset(-99., -100.);
+    g.table.as_mut().unwrap().cells.push(Cell {
+        id: 2,
+        lo: World::new(0.5, 0.),
+        hi: World::new(1., 1.),
+        members: vec![a, b],
+        borders: vec![],
+    });
+    doc.graphics.push(g);
+    doc.validate().unwrap();
+    assert!(reshiki::models3d::frame_hit(&doc, probe).is_some());
+    assert_eq!(hit_selection(&doc, probe, 3.), vec![1000]);
+    assert_eq!(
+        crate::canvas::hit::hit_selection_cached(
+            &doc,
+            probe,
+            3.,
+            &mut crate::canvas::cache::SceneCache::default(),
+        ),
+        vec![1000]
+    );
 }
 
 fn rectangle(id: u64, p: World, layer: i32) -> Graphic {

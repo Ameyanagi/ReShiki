@@ -333,9 +333,11 @@ pub(super) fn primitives(doc: &Document) -> Vec<Primitive> {
         return vec![];
     };
     let mut parts = partition(doc, &owners);
+    let ordinary = parts.remove(&None).unwrap_or_else(|| empty(doc));
+    let backdrops = crate::canvas_theme::FillBackdrops::new(&ordinary);
     let mut tables = HashMap::new();
-    let canonical = crate::canvas_theme::canonical_document(doc);
-    for g in &canonical.graphics {
+    let canonical = crate::canvas_theme::canonical_document(&ordinary);
+    for (index, g) in canonical.graphics.iter().enumerate() {
         let Some(table) = &g.table else {
             continue;
         };
@@ -352,7 +354,7 @@ pub(super) fn primitives(doc: &Document) -> Vec<Primitive> {
                 for a in &mut part.annotations {
                     wrap(frame, a);
                 }
-                super::primitives_in_cell(&part)
+                super::primitives_in_cell(&part, backdrops.before_graphic(index))
             } else {
                 vec![]
             };
@@ -370,11 +372,20 @@ pub(super) fn primitives(doc: &Document) -> Vec<Primitive> {
         }
         tables.insert(g.id, drawing);
     }
-    let ordinary = parts.remove(&None).unwrap_or_else(|| empty(doc));
     let flat = crate::models3d::drawn(&ordinary);
     let opacity = crate::rear_opacity::Paint::new(&flat);
-    super::primitives_with_tables(&ordinary, &flat, &opacity, &tables, false)
+    super::primitives_with_tables(
+        &ordinary,
+        &flat,
+        &opacity,
+        &tables,
+        false,
+        super::Resolve::Scene,
+    )
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod contrast_tests;

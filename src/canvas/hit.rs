@@ -369,6 +369,25 @@ fn hit_object_with_cycles(
                 None
             }
         })
+        .or_else(|| {
+            // Empty cell surfaces select their table only after actual ink.
+            // Keep bond/model targets ahead of this structural fallback too.
+            let table = doc
+                .graphics
+                .iter()
+                .enumerate()
+                .filter(|(_, g)| {
+                    reshiki::graphics::table::cell_frames(g).any(|frame| frame.contains(p))
+                })
+                .max_by_key(|(i, g)| (g.layer, *i))
+                .map(|(_, g)| g.id)?;
+            if nearest_bond_in_cells(doc, p, r * 0.7, clips).is_some()
+                || model_frame_hit(doc, p, clips).is_some()
+            {
+                return None;
+            }
+            Some(table)
+        })
 }
 
 pub(crate) fn nearest_atom(doc: &Document, p: World, r: f32) -> Option<u64> {

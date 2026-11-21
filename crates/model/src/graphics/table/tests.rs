@@ -495,3 +495,69 @@ fn move_and_attach_preserves_original_cell_membership_after_temporary_id_remappi
         );
     }
 }
+
+#[test]
+fn borderless_table_polygon_selection_uses_all_affine_cell_footprints() {
+    for zero_width in [false, true] {
+        for (degrees, reflected) in [(0., false), (37., false), (37., true)] {
+            let (mut doc, table, _) = fixture();
+            for cell in &mut doc.graphics[0].table.as_mut().unwrap().cells {
+                if zero_width {
+                    for border in &mut cell.borders {
+                        border.width_pt = 0.;
+                    }
+                } else {
+                    cell.borders.clear();
+                }
+            }
+            editing::transform_about(&mut doc, &[table], Point::default(), 1., degrees);
+            if reflected {
+                editing::transform(&mut doc, &[table], editing::Transform::FlipHorizontal);
+            }
+            let graphic = &doc.graphics[0];
+            assert!(
+                graphic.commands().is_empty(),
+                "Selection must not invent border ink"
+            );
+            let frame = Frame::of(graphic).unwrap();
+            let center = frame.point(Point::new(0.5, 0.5));
+            let polygon = frame.corners().map(|p| center.lerp(p, 1.05));
+            assert!(crate::selection_region::objects(&doc, &polygon).contains(&table));
+            let first = graphic.table.as_ref().unwrap().cells[0]
+                .frame(graphic)
+                .unwrap();
+            assert!(!crate::selection_region::objects(&doc, &first.corners()).contains(&table));
+            assert!(graphic.commands().is_empty());
+            doc.validate().unwrap();
+        }
+    }
+}
+
+#[test]
+fn borderless_table_polygon_selection_rejects_a_concave_cut_through_a_cell() {
+    let (mut doc, table, _) = fixture();
+    for cell in &mut doc.graphics[0].table.as_mut().unwrap().cells {
+        cell.borders.clear();
+    }
+    editing::transform_about(&mut doc, &[table], Point::default(), 1., 37.);
+    editing::transform(&mut doc, &[table], editing::Transform::FlipHorizontal);
+    let graphic = &doc.graphics[0];
+    let frame = Frame::of(graphic).unwrap();
+    let polygon = [
+        Point::new(-0.1, -0.1),
+        Point::new(1.1, -0.1),
+        Point::new(1.1, 0.4),
+        Point::new(0.8, 0.4),
+        Point::new(0.8, 0.6),
+        Point::new(1.1, 0.6),
+        Point::new(1.1, 1.1),
+        Point::new(-0.1, 1.1),
+    ]
+    .map(|p| frame.point(p));
+    assert!(
+        cell_frames(graphic)
+            .flat_map(Frame::corners)
+            .all(|point| crate::selection_region::contains(&polygon, point))
+    );
+    assert!(!crate::selection_region::objects(&doc, &polygon).contains(&table));
+}

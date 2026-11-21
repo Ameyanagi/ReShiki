@@ -129,6 +129,19 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         }
     }
     for g in &doc.graphics {
+        if g.table.is_some() {
+            let footprints: Vec<_> = crate::graphics::table::cell_frames(g)
+                .map(|frame| frame.corners())
+                .collect();
+            if !footprints.is_empty()
+                && footprints
+                    .iter()
+                    .all(|corners| encloses(polygon, corners, true))
+            {
+                result.push(g.id);
+            }
+            continue;
+        }
         if g.tlc.is_some() {
             let paths = flattened(&g.commands());
             let labels = g.tlc_labels();

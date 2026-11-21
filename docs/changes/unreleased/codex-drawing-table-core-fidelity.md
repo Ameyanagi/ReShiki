@@ -14,3 +14,5 @@ issues: []
 - Keep new callout captions, leaders, centroids and attachment points in the table cell of their targets.
 
 - Keep a cycle, its reaction legend, and equipment attachments in their shared table cell when creating or editing them.
+
+- Keep cell labels readable over filled shapes and make borderless tables selectable.

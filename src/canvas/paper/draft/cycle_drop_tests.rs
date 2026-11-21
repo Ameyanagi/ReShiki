@@ -61,6 +61,11 @@ fn dragging_onto_an_arc_lights_it_and_tags_below_the_piece() {
     };
     let mut draft = Draft::new(&doc);
     canvas.preview_move(&mut draft, &state, bounds);
+    assert_eq!(
+        reshiki::cycles::role_of(&draft.preview, free),
+        Some((cycle, reshiki::cycles::Role::Intermediate(1))),
+        "the preview drawing already contains the proposed intermediate"
+    );
     let target = draft.cycle_drop.expect("a drop target");
     assert_eq!(target.tag, "Insert between 1 and 2");
     assert_eq!(target.arc.len(), 1, "the arc from 1 to 2 lights up");

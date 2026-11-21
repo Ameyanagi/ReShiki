@@ -252,6 +252,16 @@ impl Cell {
     }
 }
 
+/// Structural selection uses the actual cell footprints, including unpainted
+/// cells, without inventing border ink or filling gaps in a sparse grid.
+pub fn cell_frames(graphic: &Graphic) -> impl Iterator<Item = Frame> + '_ {
+    graphic
+        .table
+        .iter()
+        .flat_map(|table| &table.cells)
+        .filter_map(move |cell| cell.frame(graphic))
+}
+
 impl Table {
     pub fn cell(&self, id: u32) -> Option<&Cell> {
         self.cells.iter().find(|cell| cell.id == id)
