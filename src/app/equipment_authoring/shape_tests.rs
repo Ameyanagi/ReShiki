@@ -1,5 +1,8 @@
 use super::*;
-use reshiki::equipment::authoring::ShapeStyle;
+use reshiki::equipment::{
+    authoring::ShapeStyle,
+    plan::{Ink, Pass, Weight},
+};
 
 #[test]
 fn material_fixture_authors_every_layer_and_round_trips_the_preview() {
@@ -10,13 +13,27 @@ fn material_fixture_authors_every_layer_and_round_trips_the_preview() {
     ))
     .unwrap();
     app.tab.doc.validate().unwrap();
-    app.tab.selected = vec![7];
+    app.tab.selected = app.tab.doc.click_selection(&[], &[1]);
+    assert_eq!(app.tab.selected, [1, 2, 3, 4, 5, 6]);
     let before = app.tab.doc.clone();
     send(&mut app, Action::Begin);
+    assert_eq!(
+        app.tab
+            .equipment_authoring
+            .as_ref()
+            .expect("a grouped-shape selection starts an equipment draft")
+            .current
+            .draft
+            .definition
+            .shapes
+            .len(),
+        before.graphics.len()
+    );
     send(&mut app, Action::Point(Point::new(-24., -100.)));
     send(&mut app, Action::Point(Point::new(24., -100.)));
     send(&mut app, Action::Length("16".into()));
     send(&mut app, Action::Calibrate);
+    assert!(app.tab.equipment_authoring.as_ref().unwrap().ready());
     for (index, layer, material) in [
         (2, Layer::Back, Material::Metal),
         (3, Layer::Back, Material::Metal),
@@ -29,14 +46,21 @@ fn material_fixture_authors_every_layer_and_round_trips_the_preview() {
     }
     let shown = app.display_document().clone();
     let plan = reshiki::equipment::placed::plan(&shown.graphics[0]);
-    for pass in [
-        reshiki::equipment::plan::Pass::Back,
-        reshiki::equipment::plan::Pass::Glass,
-        reshiki::equipment::plan::Pass::Inner,
-        reshiki::equipment::plan::Pass::Front,
-    ] {
-        assert!(plan.iter().any(|p| p.pass == pass));
-    }
+    let solid = Ink::FillStroke(Weight::Outline);
+    assert_eq!(
+        plan.iter()
+            .map(|p| (p.pass, p.material, p.ink))
+            .collect::<Vec<_>>(),
+        [
+            (Pass::Back, Material::Metal, solid),
+            (Pass::Back, Material::Metal, solid),
+            (Pass::Outline, Material::Glass, Ink::Stroke(Weight::Outline)),
+            (Pass::Glass, Material::Glass, Ink::Fill),
+            (Pass::Inner, Material::Metal, solid),
+            (Pass::Body, Material::Ink, Ink::Stroke(Weight::Outline)),
+            (Pass::Front, Material::Rubber, solid),
+        ]
+    );
     assert_eq!(app.tab.doc, before);
     send(&mut app, Action::Accept);
     assert_eq!(app.tab.doc, shown);
