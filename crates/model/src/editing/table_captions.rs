@@ -27,7 +27,8 @@ impl Positions {
         let annotations: Vec<_> = doc
             .annotations
             .iter()
-            .filter(|a| selected.contains(&a.id) && members.contains_key(&a.id))
+            .filter(|a| selected.contains(&a.id))
+            .filter_map(|a| Some((a, *members.get(&a.id)?)))
             .collect();
         if annotations.is_empty() {
             return Self(HashMap::new());
@@ -38,16 +39,9 @@ impl Positions {
             // every nonempty glyph quad must already fit its cell clip.
             annotations
                 .into_iter()
-                .filter_map(|a| {
-                    Ink::new(&cells, a).filter(Ink::fits).map(|ink| {
-                        (
-                            a.id,
-                            Caption {
-                                ink,
-                                frame: members[&a.id],
-                            },
-                        )
-                    })
+                .filter_map(|(a, frame)| {
+                    let ink = Ink::new(&cells, a).filter(Ink::fits)?;
+                    Some((a.id, Caption { ink, frame }))
                 })
                 .collect(),
         )

@@ -713,13 +713,15 @@ pub fn set_legend(
     shown: bool,
     format: crate::typography::TextFormat,
 ) -> Result<(), Refusal> {
-    let Some(index) = doc.reactions.iter().position(|r| r.arrow == arrow) else {
+    let Some((index, reaction)) = doc
+        .reactions
+        .iter()
+        .enumerate()
+        .find(|(_, r)| r.arrow == arrow)
+    else {
         return Err(Refusal::Roles);
     };
-    let current = doc
-        .reactions
-        .get(index)
-        .and_then(|r| r.colors.as_ref()?.legend);
+    let current = reaction.colors.as_ref().and_then(|colors| colors.legend);
     match (current, shown) {
         (Some(id), false) => {
             doc.delete(&[id]);
@@ -729,7 +731,7 @@ pub fn set_legend(
             Ok(())
         }
         (None, true) => {
-            let targets = doc.reactions[index].ids();
+            let targets = reaction.ids();
             let mut candidate = doc.clone();
             let id = candidate.next_id();
             candidate.annotations.push(Annotation {
