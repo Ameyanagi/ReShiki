@@ -2838,3 +2838,16 @@ fn save_as_has_one_name_on_every_surface() {
             .ends_with(&super::super::files::SAVE_AS.to_lowercase().replace('…', ""))
     );
 }
+
+#[test]
+fn tlc_plate_tool_is_discoverable_without_mutating_the_document() {
+    let mut app = app();
+    let before = app.tab.doc.clone();
+    run(&mut app, "TLC plate tool");
+    assert_eq!(
+        app.tool,
+        Tool::Graphic(reshiki::graphics::GraphicKind::TlcPlate)
+    );
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.history.frames(), 0);
+}

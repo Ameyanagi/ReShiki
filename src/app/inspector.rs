@@ -1043,7 +1043,11 @@ impl App {
                     .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
             });
         }
-        let styled_graphics = self.graphic_panel_visible();
+        let tlc = self.tlc_panel_visible();
+        let styled_graphics = self.graphic_panel_visible() && !tlc;
+        if tlc {
+            body = body.push(card(container(self.tlc_panel()).padding(12)));
+        }
         let cycle = self.cycle_card();
         let show_cycle = cycle.is_some();
         // A selected panel's title, fill and shadow come before the cards of

@@ -6,7 +6,7 @@ use crate::canvas::snapping::arrow_endpoint;
 use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, models3d, pick, tilt};
 use iced::{Point, Rectangle};
 use reshiki::arrows::ArrowHandle;
-use reshiki::graphics::{Graphic, GraphicKind};
+use reshiki::graphics::GraphicKind;
 use std::borrow::Cow;
 
 impl MoleculeCanvas<'_> {
@@ -148,7 +148,7 @@ impl MoleculeCanvas<'_> {
                     }
                 } else {
                     let id = preview.next_id();
-                    let mut graphic = Graphic::dragged(
+                    let mut graphic = crate::canvas::tlc::dragged(
                         id,
                         kind,
                         *start,

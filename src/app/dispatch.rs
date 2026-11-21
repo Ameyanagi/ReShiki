@@ -97,6 +97,7 @@ impl App {
             Message::InvertSelection => self.invert_selection(),
             Message::Arc(action) => self.update_arc(action),
             Message::Graphics(action) => self.graphic_action(action),
+            Message::Tlc(action) => self.tlc_action(action),
             Message::Figure(action) => {
                 let wrap = matches!(action, super::figure_panels::Action::Wrap);
                 self.figure_action(action);

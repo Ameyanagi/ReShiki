@@ -180,7 +180,10 @@ impl App {
         &self,
     ) -> impl Iterator<Item = &reshiki::graphics::Graphic> {
         self.tab.doc.graphics.iter().filter(|g| {
-            self.tab.selected.contains(&g.id) && g.picture.is_none() && g.piece.is_none()
+            self.tab.selected.contains(&g.id)
+                && g.picture.is_none()
+                && g.piece.is_none()
+                && g.tlc.is_none()
         })
     }
 
@@ -706,6 +709,7 @@ impl App {
     pub(super) fn sync_graphics(&mut self) {
         self.sync_pictures();
         self.sync_arc();
+        self.sync_tlc();
         if let Some(g) = self
             .tab
             .doc
@@ -795,7 +799,10 @@ impl App {
     pub(super) fn apply_graphic_style(&mut self, change: GraphicChange) {
         change.apply(&mut self.tab.graphic_style);
         let before = self.tab.doc.clone();
-        for g in self.selected_graphics_mut().filter(|g| g.picture.is_none()) {
+        for g in self
+            .selected_graphics_mut()
+            .filter(|g| g.picture.is_none() && g.tlc.is_none())
+        {
             // Symbols and orbitals draw no waves.
             if matches!(
                 change,

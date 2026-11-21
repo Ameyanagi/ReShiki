@@ -297,3 +297,137 @@ fn native_tlc_rotation_center_follows_its_convex_four_corner_frame() {
             < 0.001
     );
 }
+
+fn editable_spot() -> TlcSpot {
+    plate()
+        .tlc
+        .unwrap()
+        .lanes
+        .into_iter()
+        .next()
+        .unwrap()
+        .spots
+        .into_iter()
+        .next()
+        .unwrap()
+}
+
+#[test]
+fn rf_edit_keeps_native_precision_rich_style_and_physical_dimensions() {
+    let mut spot = editable_spot();
+    let label = spot.label.as_mut().unwrap();
+    label.text = "Rf = 0.280".into();
+    label.angle = 271.25;
+    label.format.style.italic = true;
+    label.format.alignment = crate::typography::TextAlign::Right;
+    label.format.width_pt = Some(100.);
+    label.format.name_breaks = true;
+    let numeric_style = crate::typography::TextStyle {
+        color: Color::Custom([17, 126, 108]),
+        bold: true,
+        ..label.format.style.clone()
+    };
+    label.format.spans.push(TextSpan {
+        start: 5,
+        end: label.text.len(),
+        style: numeric_style.clone(),
+    });
+    let before = spot.clone();
+    assert_eq!(spot.set_rf(0.51), Ok(true));
+    assert_eq!(spot.rf, 0.51);
+    let label = spot.label.as_ref().unwrap();
+    let old = before.label.as_ref().unwrap();
+    assert_eq!(label.text, "Rf = 0.510");
+    assert_eq!(label.format.at(1).script, Script::Subscript);
+    for position in 5..label.text.len() {
+        assert_eq!(label.format.at(position), &numeric_style);
+    }
+    assert_eq!(label.format.style, old.format.style);
+    assert_eq!(label.format.alignment, old.format.alignment);
+    assert_eq!(label.format.width_pt, old.format.width_pt);
+    assert_eq!(label.format.line_spacing, old.format.line_spacing);
+    assert_eq!(label.format.name_breaks, old.format.name_breaks);
+    assert_eq!(label.offset, old.offset);
+    assert_eq!(label.angle, old.angle);
+    assert_eq!(spot.width_pt.to_bits(), before.width_pt.to_bits());
+    assert_eq!(spot.height_pt.to_bits(), before.height_pt.to_bits());
+    assert_eq!(spot.style, before.style);
+    assert_eq!(spot.show_rf, before.show_rf);
+    label.format.validate(&label.text).unwrap();
+}
+
+#[test]
+fn rf_edit_updates_hidden_standard_labels_but_preserves_manual_text() {
+    let mut hidden = editable_spot();
+    hidden.show_rf = false;
+    assert_eq!(hidden.set_rf(0.77), Ok(true));
+    assert!(!hidden.show_rf);
+    assert_eq!(hidden.label.as_ref().unwrap().text, "Rf = 0.77");
+    for text in [
+        "sample A",
+        "Rf = 0.29",
+        "Rf = 0.2801",
+        "Rf = 2.80e-1",
+        "Rf = +0.28",
+        "Rf = .28",
+        "Rf = 0.28 ",
+    ] {
+        let mut spot = editable_spot();
+        spot.label.as_mut().unwrap().text = text.into();
+        let before = spot.clone();
+        assert_eq!(spot.set_rf(0.51), Ok(true));
+        assert_eq!(spot.label, before.label, "manual label {text}");
+        assert_eq!(spot.width_pt.to_bits(), before.width_pt.to_bits());
+        assert_eq!(spot.height_pt.to_bits(), before.height_pt.to_bits());
+    }
+}
+
+#[test]
+fn invalid_and_equal_rf_edits_leave_the_entire_spot_unchanged() {
+    let mut spot = editable_spot();
+    let before = spot.clone();
+    assert_eq!(spot.set_rf(before.rf), Ok(false));
+    assert_eq!(spot, before);
+    for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -0.0001, 1.0001] {
+        assert!(spot.set_rf(invalid).is_err());
+        assert_eq!(spot, before);
+    }
+    spot.label = None;
+    assert_eq!(spot.set_rf(0.), Ok(true));
+    assert_eq!(spot.label, None);
+    assert_eq!(spot.set_rf(1.), Ok(true));
+    assert_eq!(spot.label, None);
+}
+
+#[test]
+fn rf_edit_compares_displayed_precision_and_leaves_unchanged_labels_exact() {
+    let mut spot = editable_spot();
+    spot.rf = 0.2801;
+    spot.label.as_mut().unwrap().text = "Rf = 0.280".into();
+    let label = spot.label.clone();
+    assert_eq!(spot.set_rf(0.2802), Ok(true));
+    assert_eq!(spot.label, label);
+    assert_eq!(spot.set_rf(0.5101), Ok(true));
+    assert_eq!(spot.label.as_ref().unwrap().text, "Rf = 0.510");
+}
+
+#[test]
+fn rf_label_precision_is_bounded_by_the_existing_label_limit() {
+    let mut spot = editable_spot();
+    spot.rf = 0.;
+    let precision = crate::document::MAX_ANNOTATION_TEXT - "Rf = 0.".len();
+    spot.label.as_mut().unwrap().text = format!("Rf = 0.{}", "0".repeat(precision));
+    assert_eq!(spot.set_rf(1.), Ok(true));
+    let label = spot.label.as_ref().unwrap();
+    assert_eq!(label.text.len(), crate::document::MAX_ANNOTATION_TEXT);
+    assert!(label.text.starts_with("Rf = 1."));
+    label.format.validate(&label.text).unwrap();
+    spot.rf = 0.;
+    spot.label.as_mut().unwrap().text = format!("Rf = 0.{}", "0".repeat(precision + 1));
+    let before = spot.label.clone();
+    assert_eq!(spot.set_rf(0.5), Ok(true));
+    assert_eq!(
+        spot.label, before,
+        "oversized labels are not treated as standard generated text"
+    );
+}

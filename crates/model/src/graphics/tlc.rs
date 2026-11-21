@@ -37,6 +37,47 @@ pub struct TlcSpot {
     pub show_rf: bool,
     pub label: Option<TlcRfLabel>,
 }
+impl TlcSpot {
+    /// Move a spot without overwriting custom Rf text. A standard native label
+    /// follows the value at its existing precision, retaining its rich style.
+    pub fn set_rf(&mut self, value: f64) -> Result<bool, String> {
+        if !value.is_finite() || !(0. ..=1.).contains(&value) {
+            return Err("TLC Rf must be a finite value from 0 to 1".into());
+        }
+        if self.rf == value {
+            return Ok(false);
+        }
+        const PREFIX: &str = "Rf = ";
+        if let Some(label) = &mut self.label
+            && label.text.len() <= crate::document::MAX_ANNOTATION_TEXT
+            && let Some(decimal) = label.text.strip_prefix(PREFIX)
+        {
+            let (whole, fraction) = decimal
+                .split_once('.')
+                .map_or((decimal, None), |(a, b)| (a, Some(b)));
+            if !whole.is_empty()
+                && whole.bytes().all(|c| c.is_ascii_digit())
+                && fraction
+                    .is_none_or(|part| !part.is_empty() && part.bytes().all(|c| c.is_ascii_digit()))
+            {
+                let precision = fraction.map_or(0, str::len);
+                if decimal == format!("{:.*}", precision, self.rf) {
+                    let text = format!("{PREFIX}{value:.*}", precision);
+                    if text != label.text {
+                        let name_breaks = label.format.name_breaks;
+                        label
+                            .format
+                            .edited(&label.text, &text, PREFIX.len()..label.text.len());
+                        label.format.name_breaks = name_breaks;
+                        label.text = text;
+                    }
+                }
+            }
+        }
+        self.rf = value;
+        Ok(true)
+    }
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TlcRfLabel {
     pub text: String,

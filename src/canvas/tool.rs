@@ -125,6 +125,7 @@ impl Tool {
             Self::Graphic(GraphicKind::Orbital(_)) => format!(
                 "Click to place · Drag from the node for size and direction · Shift snaps to 15° · {alt} bypasses atom snapping"
             ),
+            Self::Graphic(GraphicKind::TlcPlate) => "Drag a plate frame · Edit lanes and spots in Properties · Esc cancels".into(),
             Self::Graphic(GraphicKind::Path) => {
                 "Drag the first segment · Click adds a line · Drag adds a curve · Click the first node to close · Esc cancels"
                     .into()

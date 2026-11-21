@@ -169,6 +169,8 @@ explains how the crates and modules fit together.
 - `src/app/template_style_evidence.rs`: Opt-in renderer snapshots through the real editor dispatch, usable on baseline too.
 - `src/app/theme_files.rs`: Theme picker and portable library, independent of journal drawing styles.
 - `src/app/theme_generator.rs`: A draft-only theme workbench
+- `src/app/tlc.rs`: TLC plate Properties, with explicit lane/spot targets and one edit per Apply.
+- `src/app/tlc/view.rs`: TLC lanes and spots, with plate settings one click away.
 - `src/app/tool_button.rs`: Direct selection with a delayed flyout and an explicit corner target.
 - `src/app/typography.rs`
 - `src/app/updates.rs`
@@ -231,6 +233,7 @@ explains how the crates and modules fit together.
 - `src/canvas/text_cache/glyphs.rs`: Share hinted glyphs between captions without changing Iced's shaping or size.
 - `src/canvas/text_cache/glyphs/variable.rs`
 - `src/canvas/tilt.rs`: Screen-space tilt gestures share the same projection as the inspector tilt fields.
+- `src/canvas/tlc.rs`: One TLC placement factory for the live gesture and its committed graphic.
 - `src/canvas/tool.rs`: Drawing tools and their usage hints.
 - `src/cli.rs`: `reshiki --cli`
 - `src/cli/analyze.rs`: `reshiki --cli analyze`
