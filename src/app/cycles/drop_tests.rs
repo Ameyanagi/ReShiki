@@ -145,8 +145,15 @@ fn moving_onto_an_elongated_painted_shape_inserts_with_captions_settings_and_one
         assert_eq!(c.shape, shape);
         assert_eq!(&c.intermediates[..4], old_cycle.intermediates.as_slice());
         assert_eq!(c.intermediates[4], atoms);
-        assert_eq!(&c.steps[..4], old_cycle.steps.as_slice());
-        assert_eq!(c.steps[4], cycles::Step::default());
+        let mut expected = old_cycle.steps.clone();
+        let trail = expected[3].trail_pt;
+        expected[3].trail_pt = 0.;
+        expected.push(cycles::Step {
+            trail_pt: trail,
+            ..Default::default()
+        });
+        assert_eq!(c.steps, expected);
+        assert_eq!(c.split_runs.len(), 1);
         assert!(
             app.tab.doc.groups.iter().any(|g| {
                 g.members.contains(&id) && atoms.iter().all(|a| g.members.contains(a))

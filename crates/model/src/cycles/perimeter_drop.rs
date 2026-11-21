@@ -20,7 +20,9 @@ struct Geometry<'a> {
     cycle: &'a Cycle,
     outline: Outline,
     ends: Vec<(f64, Option<Ink>)>,
+    #[cfg(test)]
     dir: f64,
+    layout: perimeter_arcs::fits::Layout<'a>,
 }
 
 struct Route {
@@ -34,7 +36,8 @@ impl<'a> Geometry<'a> {
         let cycle = graphic.cycle.as_deref()?;
         let n = cycle.intermediates.len();
         let bond = doc.drawing_style.bond_length_world;
-        if n > super::MAX_PARTS
+        if cycle.validate().is_err()
+            || n > super::MAX_PARTS
             || cycle.steps.len() != n
             || !bond.is_finite()
             || bond <= 0.
@@ -52,7 +55,7 @@ impl<'a> Geometry<'a> {
         let top = outline
             .project(center.offset(0., -2. * radius))
             .map_or(0., |p| p.s);
-        let ends = crate::scene::selections_bounds(doc, &cycle.intermediates)
+        let ends: Vec<_> = crate::scene::selections_bounds(doc, &cycle.intermediates)
             .into_iter()
             .enumerate()
             .map(|(i, ink)| {
@@ -66,17 +69,28 @@ impl<'a> Geometry<'a> {
                 (s, ink)
             })
             .collect();
+        let layout = perimeter_arcs::fits::Layout::new(doc, graphic, &outline, &ends);
         Some(Self {
             doc,
             graphic,
             cycle,
             outline,
             ends,
+            #[cfg(test)]
             dir,
+            layout,
         })
     }
 
     fn route(&self, setting: usize, first: usize, last: usize) -> Option<Route> {
+        if setting == first && last == (first + 1) % self.ends.len() {
+            let route = self.layout.steps.get(setting)?.as_ref()?;
+            return Some(Route {
+                arrows: route.arrows.clone(),
+                first: route.first,
+                span: route.span,
+            });
+        }
         let ends = [*self.ends.get(first)?, *self.ends.get(last)?];
         let (arrows, span) = perimeter_arcs::step_arrows(
             self.doc,
@@ -93,6 +107,7 @@ impl<'a> Geometry<'a> {
         })
     }
 
+    #[cfg(test)]
     fn splittable(&self, route: &Route, p: Point) -> bool {
         let Some(projected) = self.outline.project(p) else {
             return false;
@@ -148,9 +163,9 @@ pub(super) fn target(doc: &Document, graphic: &Graphic, p: Point) -> Drop {
                 continue;
             };
             if arrow.hit(p, 0.6 * bond)
-                && hit.is_none_or(|(_, distance)| projected.distance < distance)
+                && hit.is_none_or(|(_, _, distance)| projected.distance < distance)
             {
-                hit = Some((s, projected.distance));
+                hit = Some((s, lane, projected.distance));
             }
             if near.is_none_or(|(_, _, distance)| projected.distance < distance) {
                 let t = projected.s / shaft.length();
@@ -158,11 +173,21 @@ pub(super) fn target(doc: &Document, graphic: &Graphic, p: Point) -> Drop {
             }
         }
     }
-    if let Some((s, _)) = hit {
+    if let Some((s, lane, _)) = hit {
         let Some(route) = routes.into_iter().nth(s).flatten() else {
             return Drop::Miss;
         };
-        return if geometry.splittable(&route, p) {
+        return if route.first.is_finite()
+            && route.span.is_finite()
+            && route.span != 0.
+            && geometry
+                .layout
+                .insertion(s, lane, p)
+                .is_some_and(|station| {
+                    let mut cycle = geometry.cycle.clone();
+                    cycle.insert_intermediate(s + 1, vec![], Some(station))
+                })
+        {
             Drop::Target(Role::Intermediate(s + 1), route.arrows)
         } else {
             Drop::Blocked
@@ -205,6 +230,14 @@ pub(super) fn holds(doc: &Document, graphic: &Graphic, part: &[u64], point: Poin
         return false;
     };
     let reach = f64::from(4. * doc.drawing_style.bond_length_world);
+    if let Some((Role::Intermediate(slot), _)) = geometry
+        .cycle
+        .parts()
+        .find(|(_, ids)| ids.iter().any(|id| part.contains(id)))
+        && let Some(intersects) = geometry.layout.cut_intersects(slot)
+    {
+        return intersects;
+    }
     let Some((inside, projection)) = geometry.outline.locate(point) else {
         return false;
     };
@@ -250,6 +283,33 @@ pub(super) fn holds(doc: &Document, graphic: &Graphic, part: &[u64], point: Poin
         }
         _ => false,
     }
+}
+
+/// Station in the complete source profile, measured before head clipping.
+pub(super) fn insertion_station(
+    doc: &Document,
+    graphic: &Graphic,
+    step: usize,
+    point: Point,
+) -> Option<super::split_runs::SplitStation> {
+    let geometry = Geometry::new(doc, graphic)?;
+    let route = geometry.layout.steps.get(step)?.as_ref()?;
+    let mut best = None;
+    for (lane, arrow) in route.arrows.iter().enumerate() {
+        if !arrow.hit(point, 0.6 * doc.drawing_style.bond_length_world) {
+            continue;
+        }
+        let Some(shaft) = Shaft::from_arrow(arrow) else {
+            continue;
+        };
+        let Some(projected) = shaft.project(point) else {
+            continue;
+        };
+        if best.is_none_or(|(_, distance)| projected.distance < distance) {
+            best = Some((lane, projected.distance));
+        }
+    }
+    geometry.layout.insertion(step, best?.0, point)
 }
 
 pub(super) fn step_at(doc: &Document, graphic: &Graphic, p: Point) -> Option<usize> {

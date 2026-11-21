@@ -21,6 +21,9 @@ mod names;
 mod sides;
 pub(super) use frames::Frame;
 
+#[path = "perimeter_fit.rs"]
+pub(super) mod fits;
+
 pub(super) struct Step<'a> {
     pub lanes: &'a [Option<super::shapes::Shaft>],
     pub first: f64,
@@ -44,6 +47,38 @@ pub(super) fn step_arrows(
     ends: [(f64, Option<(Point, Point)>); 2],
     whole: bool,
 ) -> Option<(Vec<Arrow>, f64)> {
+    let p = parameters(doc, g, perimeter, step, ends, whole)?;
+    let style = arrow_style(g);
+    let arrows = if step.bow_pt == 0. && !step.reversible {
+        vec![path_arrow(g.id, perimeter, p.start, p.length, &style)?]
+    } else {
+        deform::arrows(
+            g.id,
+            perimeter,
+            p.start,
+            p.length,
+            f64::from(DEFAULT.world(step.bow_pt)),
+            step.reversible,
+            &style,
+        )?
+    };
+    Some((arrows, p.span))
+}
+
+pub(super) struct Parameters {
+    pub start: f64,
+    pub length: f64,
+    pub span: f64,
+}
+
+fn parameters(
+    doc: &Document,
+    g: &Graphic,
+    perimeter: &Outline,
+    step: &super::Step,
+    ends: [(f64, Option<(Point, Point)>); 2],
+    whole: bool,
+) -> Option<Parameters> {
     let cycle = g.cycle.as_deref()?;
     if ![cycle.gap_pt, step.lead_pt, step.trail_pt, step.bow_pt]
         .into_iter()
@@ -90,22 +125,11 @@ pub(super) fn step_arrows(
         from += extra;
         to -= extra;
     }
-    let (start, signed_length) = (first + dir * from, dir * (to - from));
-    let style = arrow_style(g);
-    let arrows = if step.bow_pt == 0. && !step.reversible {
-        vec![path_arrow(g.id, perimeter, start, signed_length, &style)?]
-    } else {
-        deform::arrows(
-            g.id,
-            perimeter,
-            start,
-            signed_length,
-            f64::from(DEFAULT.world(step.bow_pt)),
-            step.reversible,
-            &style,
-        )?
-    };
-    Some((arrows, dir * span))
+    Some(Parameters {
+        start: first + dir * from,
+        length: dir * (to - from),
+        span: dir * span,
+    })
 }
 
 fn arrow_style(g: &Graphic) -> ArrowStyle {
@@ -162,6 +186,9 @@ pub(super) fn resolve_owned(
     let Some(cycle) = g.cycle.as_deref() else {
         return;
     };
+    if cycle.validate().is_err() {
+        return;
+    }
     let style = arrow_style(g);
     owners.arrows.clear();
     owners.labels.clear();
@@ -194,12 +221,23 @@ pub(super) fn resolve_owned(
         })
         .collect();
     let gap = DEFAULT.world(cycle.gap_pt);
+    let fitted = (!cycle.split_runs.is_empty()).then(|| {
+        let ends: Vec<_> = anchors
+            .iter()
+            .enumerate()
+            .map(|(i, &s)| (s, bounds.get(i).copied().flatten()))
+            .collect();
+        fits::Layout::new(doc, g, perimeter, &ends)
+    });
     let arrows: Vec<_> = cycle
         .steps
         .iter()
         .enumerate()
         .take(n)
         .map(|(s, step)| {
+            if let Some(fitted) = &fitted {
+                return Some(fitted.steps.get(s)?.as_ref()?.arrows.clone());
+            }
             if step.hidden
                 && step.reagents.is_empty()
                 && step.products.is_empty()
@@ -237,12 +275,18 @@ pub(super) fn resolve_owned(
         if span == 0. && n == 1 {
             span = length;
         }
+        let (first, signed_span) = fitted
+            .as_ref()
+            .and_then(|fit| fit.steps.get(s)?.as_ref())
+            .map_or((first, dir * span), |resolved| {
+                (resolved.first, resolved.span)
+            });
         record(
             s,
             Step {
                 lanes: &shafts,
                 first,
-                span: dir * span,
+                span: signed_span,
             },
         );
         if !step.hidden {
@@ -292,10 +336,24 @@ pub(super) fn resolve_owned(
             name_steps.push(s);
         }
     }
-    owners.labels = names::place(doc, g, perimeter, names, &bounds, out)
-        .into_iter()
-        .filter_map(|i| name_steps.get(i).copied())
-        .collect();
+    let complete_bounds = (!cycle.split_runs.is_empty()).then(|| {
+        let parts: Vec<_> = cycle
+            .parts()
+            .map(|(_, ids)| crate::molecule_names::include_annotations(doc, ids))
+            .collect();
+        crate::scene::selections_bounds(doc, &parts)
+    });
+    owners.labels = names::place(
+        doc,
+        g,
+        perimeter,
+        names,
+        complete_bounds.as_deref().unwrap_or(&bounds),
+        out,
+    )
+    .into_iter()
+    .filter_map(|i| name_steps.get(i).copied())
+    .collect();
 }
 
 /// Clear the ink along distance, never by flattening the shaft. When an

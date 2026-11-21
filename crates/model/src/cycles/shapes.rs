@@ -10,6 +10,8 @@ use std::f64::consts::{FRAC_PI_2, TAU};
 
 mod shaft;
 pub(super) use shaft::Shaft;
+mod profile;
+pub(super) use profile::Profile;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -187,7 +187,7 @@ pub(super) fn dimensions(doc: &mut Document, id: u64, width: f32, height: f32) -
     apply(doc, id, &frame, moves)
 }
 
-fn rigid_bonds(doc: &Document, ids: &[u64], delta: Point) -> bool {
+pub(super) fn rigid_bonds(doc: &Document, ids: &[u64], delta: Point) -> bool {
     let ids = crate::shape_text::with_holders(doc, ids);
     let ids: std::collections::HashSet<_> = doc
         .expand_abbreviation_selection(&ids)
@@ -242,6 +242,11 @@ fn apply(doc: &mut Document, id: u64, frame: &Graphic, moves: Vec<(Vec<u64>, Poi
         g.origin = frame.origin;
         g.axis_x = frame.axis_x;
         g.axis_y = frame.axis_y;
+    }
+    // Fitted source families must be rebased on this complete resize
+    // candidate before ordinary validation checks their nominal children.
+    if super::perimeter_arcs::fits::edited(doc, &mut candidate, id, None).is_err() {
+        return false;
     }
     if candidate.validate().is_ok() {
         let changed = candidate != *doc;

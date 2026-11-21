@@ -82,6 +82,10 @@ enum ProposalKind {
     Tidy {
         source: ProposalSource,
     },
+    Refit {
+        source: ProposalSource,
+        baseline: Box<reshiki::document::Document>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,6 +93,7 @@ struct ProposalSource {
     epoch: u64,
     revision: u64,
     labels: u64,
+    two_decimal_weight: bool,
 }
 
 /// Part names keyed by part, at a drawing revision and computed-label generation.
@@ -291,8 +296,10 @@ impl App {
                     self.status = match proposal.kind {
                         ProposalKind::Make { .. } => "Catalytic cycle discarded",
                         ProposalKind::Tidy { .. } => "Cycle tidy discarded",
+                        ProposalKind::Refit { .. } => "Cycle layout discarded",
                     }
                     .into();
+                    self.sync_cycle();
                 }
                 return super::focus_drawing();
             }
@@ -551,6 +558,7 @@ impl App {
             epoch: self.tab.file_epoch,
             revision: self.tab.revision,
             labels: self.tab.label_generation,
+            two_decimal_weight: self.appearance.two_decimal_weight,
         }
     }
 
@@ -604,6 +612,21 @@ impl App {
             // Background labels and names may change ink without a revision.
             // Show their newly tidied result before accepting another Apply.
             return self.propose_cycle_tidy_for(proposal.cycle);
+        }
+        if let ProposalKind::Refit { source, baseline } = &proposal.kind {
+            if *source != self.cycle_proposal_source() || **baseline != self.tab.doc {
+                self.sync_cycle();
+                self.error = true;
+                self.status = "Drawing changed · apply the cycle setting again".into();
+                return super::focus_drawing();
+            }
+            self.error = false;
+            self.commit_prepared_cycle(proposal.doc);
+            self.sync_cycle();
+            if !self.error {
+                self.status = "Updated the cycle layout".into();
+            }
+            return super::focus_drawing();
         }
         // Made again, so results that reached the drawing meanwhile stay.
         let before = self.tab.doc.clone();
@@ -710,6 +733,7 @@ impl App {
                     "Review the catalytic cycle · Enter applies · Esc discards"
                 }
                 ProposalKind::Tidy { .. } => "Review cycle tidy · Enter applies · Esc discards",
+                ProposalKind::Refit { .. } => "Review cycle layout · Enter applies · Esc discards",
             }
             .into();
             Some(Task::none())
@@ -719,6 +743,31 @@ impl App {
     /// The proposed cycle's order, to apply or discard.
     pub(super) fn cycle_proposal_card(&self) -> Option<Element<'_, Message>> {
         let proposal = self.tab.cycle_inputs.proposal.as_deref()?;
+        if matches!(proposal.kind, ProposalKind::Refit { .. }) {
+            return Some(
+                column![
+                    section("Cycle layout"),
+                    text("Review the moved structures and cycle arrows.")
+                        .size(11)
+                        .style(muted_text),
+                    row![
+                        accessible_command("cycle.layout.apply", "Apply", "Apply")
+                            .padding([6, 14])
+                            .style(crate::appearance::primary)
+                            .on_press(Message::Cycle(Action::MakeApply)),
+                        accessible_command("cycle.layout.discard", "Discard", "Discard")
+                            .on_press(Message::Cycle(Action::MakeDiscard)),
+                    ]
+                    .spacing(4)
+                    .align_y(Alignment::Center),
+                    text("Enter applies · Esc discards")
+                        .size(11)
+                        .style(muted_text),
+                ]
+                .spacing(6)
+                .into(),
+            );
+        }
         if matches!(proposal.kind, ProposalKind::Tidy { .. }) {
             return Some(
                 column![
@@ -829,13 +878,15 @@ impl App {
     }
 
     fn edit_cycle(&mut self, edit: impl FnOnce(&mut Cycle)) {
+        self.edit_cycle_with_bow(None, edit);
+    }
+
+    fn edit_cycle_with_bow(&mut self, bow_step: Option<usize>, edit: impl FnOnce(&mut Cycle)) {
         let Some((id, _)) = self.selected_cycle() else {
             return;
         };
-        let before = self.tab.doc.clone();
-        if let Some(cycle) = self
-            .tab
-            .doc
+        let mut candidate = self.tab.doc.clone();
+        if let Some(cycle) = candidate
             .graphics
             .iter_mut()
             .find(|g| g.id == id)
@@ -843,8 +894,62 @@ impl App {
         {
             edit(cycle);
         }
-        self.changed(before);
-        self.sync_cycle();
+        self.finish_cycle_edit(candidate, id, bow_step);
+    }
+
+    /// Review edits that transport unselected cycle members before committing them.
+    fn finish_cycle_edit(
+        &mut self,
+        mut candidate: reshiki::document::Document,
+        cycle: u64,
+        bow_step: Option<usize>,
+    ) {
+        match reshiki::cycles::fit_edited(&self.tab.doc, &mut candidate, cycle, bow_step) {
+            Ok(true) => {
+                if let Err(error) = reconcile_preview(
+                    &mut candidate,
+                    &self.tab.doc,
+                    self.appearance.two_decimal_weight,
+                ) {
+                    self.error = true;
+                    self.status = error;
+                    return;
+                }
+                self.tab.cycle_inputs.proposal = Some(Box::new(Proposal {
+                    doc: candidate,
+                    cycle,
+                    kind: ProposalKind::Refit {
+                        source: self.cycle_proposal_source(),
+                        baseline: Box::new(self.tab.doc.clone()),
+                    },
+                }));
+                self.inspector_open = true;
+                self.inspector_tab = super::InspectorTab::Properties;
+                self.sync_cycle_proposal();
+                self.error = false;
+                self.status = "Review cycle layout · Enter applies · Esc discards".into();
+            }
+            Ok(false) => {
+                let before = std::mem::replace(&mut self.tab.doc, candidate);
+                self.changed(before);
+                self.sync_cycle();
+            }
+            Err(error) => {
+                self.error = true;
+                self.status = error;
+            }
+        }
+    }
+
+    /// Install a cycle candidate already normalized and validated against the live drawing.
+    pub(super) fn commit_prepared_cycle(&mut self, candidate: reshiki::document::Document) {
+        let changed = candidate != self.tab.doc;
+        if changed {
+            self.tab.erase_stroke = false;
+        }
+        self.prepare_document_change(changed);
+        let replacement = reshiki::transaction::replace(&mut self.tab.doc, candidate);
+        self.commit_changed(replacement, false);
     }
 
     fn edit_step(&mut self, edit: impl FnOnce(&mut reshiki::cycles::Step)) {
@@ -879,10 +984,9 @@ impl App {
                     let Some((id, _)) = self.selected_cycle() else {
                         return;
                     };
-                    let before = self.tab.doc.clone();
-                    reshiki::cycles::set_radius(&mut self.tab.doc, id, world(pt));
-                    self.changed(before);
-                    self.sync_cycle();
+                    let mut candidate = self.tab.doc.clone();
+                    reshiki::cycles::set_radius(&mut candidate, id, world(pt));
+                    self.finish_cycle_edit(candidate, id, None);
                 }
                 _ => invalid(self, "Enter a radius of 10–2000 pt"),
             },
@@ -892,7 +996,14 @@ impl App {
                 _ => invalid(self, "Enter a gap of 0–72 pt"),
             },
             Field::Bow => match number.or(value.is_empty().then_some(0.)) {
-                Some(pt) if (-720. ..=720.).contains(&pt) => self.edit_step(|s| s.bow_pt = pt),
+                Some(pt) if (-720. ..=720.).contains(&pt) => {
+                    let step = self.tab.cycle_inputs.step;
+                    self.edit_cycle_with_bow(Some(step), |cycle| {
+                        if let Some(s) = cycle.steps.get_mut(step) {
+                            s.bow_pt = pt;
+                        }
+                    });
+                }
                 _ => invalid(self, "Enter a bow of −720 to 720 pt"),
             },
             Field::Lead | Field::Trail => match number.or(value.is_empty().then_some(0.)) {
@@ -1243,5 +1354,7 @@ impl App {
     }
 }
 
+#[cfg(test)]
+mod refit_tests;
 #[cfg(test)]
 mod tests;

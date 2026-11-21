@@ -1,0 +1,870 @@
+use super::super::names::arrow_hits;
+use super::*;
+use crate::cycles::split_runs::SplitStation;
+use crate::{
+    cycles::{self, Cycle, Role, Shape, Step},
+    document::Annotation,
+    graphics::{GraphicKind, GraphicStyle},
+    typography::TextFormat,
+};
+
+fn fixture() -> (Document, Vec<u64>, u64) {
+    let doc = Document::from_native_file(include_bytes!(
+        "../../../../tests/fixtures/cycles/suzuki-rectangle-bow180-target.rsk"
+    ))
+    .unwrap();
+    let id = doc.graphics.iter().find(|g| g.cycle.is_some()).unwrap().id;
+    (doc, (137..=143).collect(), id)
+}
+
+fn graphic(doc: &Document, id: u64) -> &Graphic {
+    doc.graphics.iter().find(|g| g.id == id).unwrap()
+}
+fn center(doc: &Document, part: &[u64]) -> Point {
+    center_of(crate::scene::selection_bounds(doc, part).unwrap())
+}
+fn main_arrows(doc: &Document, id: u64, steps: &[usize]) -> Vec<Arrow> {
+    let drawn = cycles::drawn(doc, graphic(doc, id));
+    drawn
+        .arrows
+        .into_iter()
+        .zip(drawn.arcs)
+        .filter_map(|(a, s)| s.filter(|s| steps.contains(s)).map(|_| a))
+        .collect()
+}
+fn applied() -> (Document, Document, Vec<u64>, u64) {
+    let (before, part, id) = fixture();
+    let proposal = cycles::propose_drop(&before, &part)
+        .expect("captured bowed insertion must produce a clear candidate");
+    assert_eq!(proposal.target.role, Role::Intermediate(2));
+    assert_eq!(
+        proposal
+            .doc
+            .graphics
+            .iter()
+            .find(|g| g.id == id)
+            .unwrap()
+            .cycle
+            .as_ref()
+            .unwrap()
+            .split_runs
+            .len(),
+        1
+    );
+    (before, proposal.doc, part, id)
+}
+
+fn text_at(doc: &mut Document, at: Point, text: &str) -> u64 {
+    let id = doc.next_id();
+    let mut text = Annotation {
+        id,
+        position: Point::default(),
+        text: text.into(),
+        angle: 0.,
+        format: TextFormat {
+            style: doc.drawing_style.text_style(),
+            ..Default::default()
+        },
+    };
+    let (w, h) = text.size();
+    text.position = at.offset(-w * 0.5, -h * 0.5);
+    doc.annotations.push(text);
+    id
+}
+
+fn capture_station(doc: &Document, id: u64, step: usize, u: f64) -> SplitStation {
+    let g = graphic(doc, id);
+    let cycle = g.cycle.as_ref().unwrap();
+    let outline = cycles::outline(g).unwrap();
+    let bounds = crate::scene::selections_bounds(doc, &cycle.intermediates);
+    let end = |slot: usize| {
+        let ink = bounds[slot];
+        (outline.project(center_of(ink.unwrap())).unwrap().s, ink)
+    };
+    let p = super::parameters(
+        doc,
+        g,
+        &outline,
+        &cycle.steps[step],
+        [end(step), end((step + 1) % cycle.intermediates.len())],
+        cycle.intermediates.len() == 1,
+    )
+    .unwrap();
+    SplitStation {
+        u,
+        start: p.start.rem_euclid(outline.length()) / outline.length(),
+        span: p.length / outline.length(),
+    }
+}
+
+// A source consisting of one horizontal native edge makes the lane-only
+// miss independent of Bow curvature, text metrics and projection rounding.
+fn straight_split() -> (Document, u64, u64) {
+    let mut doc = Document::default();
+    let id = 1;
+    let mut g = Graphic::dragged(
+        id,
+        GraphicKind::Ellipse,
+        Point::new(-600., -200.),
+        Point::new(600., 200.),
+        GraphicStyle::default(),
+        Default::default(),
+        false,
+    );
+    g.cycle = Some(Box::new(Cycle {
+        shape: Shape::Rectangle,
+        ..Default::default()
+    }));
+    doc.graphics.push(g);
+    let a = text_at(&mut doc, Point::new(-400., -200.), "Pd");
+    let b = text_at(&mut doc, Point::new(400., -200.), "Pd");
+    let cut = text_at(&mut doc, Point::new(0., -200.), "X");
+    {
+        let cycle = doc.graphics[0].cycle.as_mut().unwrap();
+        cycle.intermediates = vec![vec![a], vec![b]];
+        cycle.steps = vec![
+            Step {
+                reversible: true,
+                ..Default::default()
+            },
+            Step::default(),
+        ];
+    }
+    let station = capture_station(&doc, id, 0, 0.5);
+    assert!(doc.graphics[0].cycle.as_mut().unwrap().insert_intermediate(
+        1,
+        vec![cut],
+        Some(station)
+    ));
+    doc.group_selection(&[id, a, b, cut]).unwrap();
+    assert!(valid(&doc, id));
+    doc.validate().unwrap();
+    (doc, cut, id)
+}
+
+fn forward_only_delta(doc: &Document, id: u64, cut: u64) -> Point {
+    let g = graphic(doc, id);
+    let cycle = g.cycle.as_ref().unwrap();
+    let layout = Layout::graphic(doc, g).unwrap();
+    let source = layout.sources[0].as_ref().unwrap();
+    let at = source.profiles.center.point(source.cuts[0]).unwrap();
+    let forward = source
+        .profiles
+        .forward
+        .as_ref()
+        .unwrap()
+        .point(source.cuts[0])
+        .unwrap();
+    let reverse = source
+        .profiles
+        .reverse
+        .as_ref()
+        .unwrap()
+        .point(source.cuts[0])
+        .unwrap();
+    assert!(forward.y < at.y && at.y < reverse.y);
+    let ink = crate::scene::selection_bounds(doc, &[cut]).unwrap();
+    // Put the grown ink's bottom edge strictly between the two source lanes.
+    Point::new(0., at.y - ink.1.y - DEFAULT.world(cycle.gap_pt))
+}
+
+fn far_off_split() -> (Document, u64, u64) {
+    let (mut doc, cut, id) = straight_split();
+    doc.translate(&[cut], 80., 2000.);
+    // This remains valid stored topology, but the actual member box misses
+    // the frozen lane regardless of its stored logical station.
+    doc.graphics[0].cycle.as_mut().unwrap().split_runs[0].cuts[0] = 0.25;
+    graphic(&doc, id)
+        .cycle
+        .as_ref()
+        .unwrap()
+        .validate()
+        .unwrap();
+    assert!(!valid(&doc, id));
+    (doc, cut, id)
+}
+
+fn outside_openings(doc: &Document, id: u64, p: Point) -> bool {
+    let c = graphic(doc, id).cycle.as_ref().unwrap();
+    c.intermediates.iter().all(|ids| {
+        crate::scene::selection_bounds(doc, ids).is_none_or(|ink| {
+            !crate::cycles::contains(grown(ink, DEFAULT.world(c.gap_pt + 12.)), p)
+        })
+    })
+}
+
+fn same_locus(original: &[Arrow], children: &[Arrow], doc: &Document, id: u64) {
+    let shafts: Vec<_> = children
+        .iter()
+        .filter_map(crate::cycles::shapes::Shaft::from_arrow)
+        .collect();
+    let mut checked = 0;
+    for old in original
+        .iter()
+        .filter_map(crate::cycles::shapes::Shaft::from_arrow)
+    {
+        for i in 1..80 {
+            let p = old.sample(old.length() * i as f64 / 80., false).unwrap().0;
+            if !outside_openings(doc, id, p) {
+                continue;
+            }
+            let distance = shafts
+                .iter()
+                .filter_map(|s| s.project(p))
+                .map(|p| p.distance)
+                .fold(f64::INFINITY, f64::min);
+            assert!(
+                distance < 0.05,
+                "parent point{p:?} left child ink by{distance}"
+            );
+            checked += 1;
+        }
+    }
+    assert!(
+        checked > 10,
+        "native curve comparison must exercise painted ink"
+    );
+}
+
+#[test]
+fn captured_bowed_forward_lane_is_cut_without_rebowing_and_clears_actual_member_ink() {
+    let (before, after, part, id) = applied();
+    let parent = main_arrows(&before, id, &[1]);
+    let children = main_arrows(&after, id, &[1, 2]);
+    same_locus(&parent[..1], &children, &after, id);
+    let body = crate::scene::selection_bounds(&after, &part).unwrap();
+    let gap = DEFAULT.world(graphic(&after, id).cycle.as_ref().unwrap().gap_pt);
+    let ink = grown(body, gap);
+    let first = main_arrows(&after, id, &[1]);
+    let next = main_arrows(&after, id, &[2]);
+    assert_eq!(first.len(), 2);
+    assert_eq!(next.len(), 1);
+    assert!(
+        first
+            .iter()
+            .all(|a| matches!(a.appearance().head, Head::Left | Head::Right))
+    );
+    assert!(
+        children.iter().any(|a| a.paths().iter().any(|p| p.filled)),
+        "actual arrowhead ink must be checked"
+    );
+    for arrow in &children {
+        assert!(
+            !arrow_hits(arrow, body, (gap - 0.05).max(0.)),
+            "painted shaft or head wing enters the requested member gap"
+        );
+    }
+    for (p, arrow) in [(first[0].end, &first[0]), (next[0].start, &next[0])] {
+        let style = arrow.appearance();
+        let head_envelope = DEFAULT
+            .world(style.head_length_pt)
+            .hypot(DEFAULT.world(style.head_width_pt))
+            + DEFAULT.world(style.width_pt);
+        assert!(
+            crate::cycles::contains(grown(ink, head_envelope + 0.05), p),
+            "stroke-safe child crop moved beyond its local head envelope"
+        );
+        assert!(
+            !crate::cycles::contains(grown(ink, -0.05), p),
+            "child centerline enters the requested gap"
+        );
+    }
+    assert_eq!(after.atoms.len(), before.atoms.len());
+    assert_eq!(after.bonds, before.bonds);
+    assert_eq!(center(&after, &part), center(&before, &part));
+}
+
+#[test]
+fn cut_holds_requires_every_lane_on_both_adjacent_children() {
+    let (source, cut, id) = straight_split();
+    let delta = forward_only_delta(&source, id, cut);
+    for incoming_reversible in [true, false] {
+        let mut doc = source.clone();
+        let cycle = doc.graphics[0].cycle.as_mut().unwrap();
+        cycle.steps[0].reversible = incoming_reversible;
+        cycle.steps[1].reversible = !incoming_reversible;
+        doc.translate(&[cut], delta.x, delta.y);
+        let layout = Layout::graphic(&doc, graphic(&doc, id)).unwrap();
+        let opening = &layout.sources[0].as_ref().unwrap().openings[0];
+        assert!(
+            opening[1].is_some(),
+            "the displayed forward lane still meets the cut"
+        );
+        assert!(
+            opening[2].is_none(),
+            "the required reverse lane must actually miss"
+        );
+        assert_eq!(
+            layout.cut_intersects(1),
+            Some(false),
+            "either adjacent reversible child requires both openings"
+        );
+        assert!(!cycles::holds(&doc, id, &[cut]));
+    }
+}
+
+#[test]
+fn a_sideways_drag_that_only_meets_one_lane_takes_out_and_coalesces() {
+    let (before, cut, id) = straight_split();
+    let delta = forward_only_delta(&before, id, cut);
+    let mut after = before.clone();
+    after.translate(&[cut], delta.x, delta.y);
+    cycles::fit_moved(&before, &mut after, &[cut]);
+    assert!(
+        after
+            .take_out(&[cut], delta)
+            .contains(&crate::grouping::Container::Cycle)
+    );
+    assert!(cycles::role_of(&after, cut).is_none());
+    let cycle = graphic(&after, id).cycle.as_ref().unwrap();
+    assert!(cycle.split_runs.is_empty());
+    assert_eq!(cycle.steps.len(), 2);
+    assert!(cycle.steps[0].reversible);
+    assert_eq!(main_arrows(&after, id, &[0]).len(), 2);
+    assert_eq!(main_arrows(&after, id, &[1]).len(), 1);
+    for arrow in main_arrows(&after, id, &[0, 1]) {
+        assert!(arrow.validate().is_ok());
+        assert!(
+            crate::cycles::shapes::Shaft::from_arrow(&arrow)
+                .unwrap()
+                .length()
+                > 1.
+        );
+    }
+    let moved = center(&after, &[cut]);
+    let from = center(&before, &[cut]);
+    assert!(
+        moved.distance(from.offset(delta.x, delta.y)) < 0.01,
+        "a detached member keeps the user's drag position"
+    );
+    after.validate().unwrap();
+}
+
+#[test]
+fn intersecting_openings_do_not_hold_a_cut_after_either_child_loses_positive_length() {
+    for incoming in [true, false] {
+        let (mut doc, _, id) = straight_split();
+        let cycle = doc.graphics[0].cycle.as_mut().unwrap();
+        if incoming {
+            cycle.steps[0].trail_pt = 720.;
+        } else {
+            cycle.steps[1].lead_pt = 720.;
+        }
+        let layout = Layout::graphic(&doc, graphic(&doc, id)).unwrap();
+        let opening = &layout.sources[0].as_ref().unwrap().openings[0];
+        assert!(opening[1].is_some() && opening[2].is_some());
+        assert!(
+            layout.steps[usize::from(!incoming)].is_none(),
+            "the chosen adjacent child must be exhausted"
+        );
+        assert_eq!(
+            layout.cut_intersects(1),
+            Some(false),
+            "a cut needs positive native arrows on both sides"
+        );
+        assert!(!valid(&doc, id));
+    }
+}
+
+#[test]
+fn schema_valid_far_off_cut_rejects_load_and_reconcile_retires_and_reflows_it() {
+    let (mut doc, cut, id) = far_off_split();
+    let anchors: Vec<_> = doc
+        .annotations
+        .iter()
+        .filter(|a| a.id != cut)
+        .cloned()
+        .collect();
+    let error = Document::from_json(&doc.file_json().unwrap())
+        .unwrap_err()
+        .to_ascii_lowercase();
+    assert!(
+        error.contains("cycle") && error.contains("fitted") && error.contains("route"),
+        "load must explain the undrawable fitted route: {error}"
+    );
+    cycles::reconcile(&mut doc);
+    let cycle = graphic(&doc, id).cycle.as_ref().unwrap();
+    assert!(cycle.split_runs.is_empty());
+    assert_eq!(cycle.intermediates.len(), 3);
+    assert_eq!(
+        cycles::role_of(&doc, cut),
+        Some((id, Role::Intermediate(1)))
+    );
+    assert!(
+        cycles::outline(graphic(&doc, id))
+            .unwrap()
+            .project(center(&doc, &[cut]))
+            .unwrap()
+            .distance
+            < 0.05
+    );
+    for anchor in anchors {
+        assert_eq!(
+            doc.annotations.iter().find(|a| a.id == anchor.id),
+            Some(&anchor)
+        );
+    }
+    for step in 0..3 {
+        let arrows = main_arrows(&doc, id, &[step]);
+        assert_eq!(
+            arrows.len(),
+            if step == 0 { 2 } else { 1 },
+            "retirement cannot leave an invisible child step"
+        );
+        for arrow in arrows {
+            assert!(
+                crate::cycles::shapes::Shaft::from_arrow(&arrow)
+                    .unwrap()
+                    .length()
+                    > 1.
+            );
+        }
+    }
+    doc.validate().unwrap();
+    assert!(Document::from_json(&doc.file_json().unwrap()).is_ok());
+}
+
+#[test]
+fn an_exhausted_child_edit_declines_without_partial_member_or_station_updates() {
+    let (_, before, _, id) = applied();
+    let mut doc = before.clone();
+    doc.graphics
+        .iter_mut()
+        .find(|g| g.id == id)
+        .unwrap()
+        .cycle
+        .as_mut()
+        .unwrap()
+        .steps[2]
+        .lead_pt = 720.;
+    assert!(cycles::fit_edited(&before, &mut doc, id, None).is_err());
+    assert_eq!(
+        doc, before,
+        "an impossible edit must not partially move members or rewrite stored source stations"
+    );
+}
+
+#[test]
+fn no_op_child_bow_or_lane_setting_keeps_the_fitted_source_exact() {
+    let (_, before, _, id) = applied();
+    for bow in [None, Some(1), Some(2)] {
+        let mut after = before.clone();
+        assert!(!cycles::fit_edited(&before, &mut after, id, bow).unwrap());
+        assert_eq!(after, before);
+    }
+}
+
+#[test]
+fn computed_label_lifecycle_keeps_frozen_source_and_nominal_children_valid() {
+    use crate::atom_labels::{Number, Owner, clear_computed, refresh::Refresh};
+
+    let molecule = Document::from_json(include_bytes!(
+        "../../../../tests/fixtures/chemical-naming-rust/r-lactic-rust-native.rsk"
+    ))
+    .unwrap();
+    let mut doc = Document::default();
+    let id = 1;
+    let mut g = Graphic::dragged(
+        id,
+        GraphicKind::Ellipse,
+        Point::new(-1200., -700.),
+        Point::new(1200., 700.),
+        GraphicStyle::default(),
+        Default::default(),
+        false,
+    );
+    g.cycle = Some(Box::new(Cycle {
+        shape: Shape::Rectangle,
+        ..Default::default()
+    }));
+    doc.graphics.push(g);
+    let outer = crate::editing::append_preserving_layout(&mut doc, &molecule, Point::default());
+    let cut = crate::editing::append_preserving_layout(&mut doc, &molecule, Point::new(0., 1400.));
+    assert_eq!(outer.len(), molecule.atoms.len());
+    assert_eq!(cut.len(), molecule.atoms.len());
+    let remap = |ids: &[u64], original| {
+        molecule
+            .all_ids()
+            .into_iter()
+            .zip(ids.iter().copied())
+            .find(|(id, _)| *id == original)
+            .unwrap()
+            .1
+    };
+    let centres = [remap(&outer, 2), remap(&cut, 2)];
+    let explicit_h = [remap(&outer, 3), remap(&cut, 3)];
+    doc.atom_labels.stereo = true;
+    doc.atom_labels.mark_undefined_stereocentres = true;
+    doc.atom_labels.undefined_xi = true;
+    for (i, &centre) in centres.iter().enumerate() {
+        let atom = doc.atom_mut(centre).unwrap();
+        atom.display.stereo.show = Some(true);
+        atom.display.stereo.offset =
+            Some(Point::new(150. - 30. * i as f32, -100. - 60. * i as f32));
+        atom.display.number = Some(Number {
+            text: format!("{}", i + 7),
+            offset: Some(Point::new(-15., 0.)),
+            style: crate::atom_labels::number_style(),
+        });
+    }
+    for atom in explicit_h {
+        doc.atom_mut(atom).unwrap().explicit_h = 1;
+    }
+    let from = center_of(crate::scene::selection_bounds(&nominal_document(&doc), &outer).unwrap());
+    doc.translate(&outer, -600. - from.x, -700. - from.y);
+    let last = text_at(&mut doc, Point::new(600., -700.), "Pd");
+    {
+        let cycle = doc.graphics[0].cycle.as_mut().unwrap();
+        cycle.intermediates = vec![outer.clone(), vec![last]];
+        cycle.steps = vec![
+            Step {
+                reversible: true,
+                bow_pt: 180.,
+                ..Default::default()
+            },
+            Step::default(),
+        ];
+    }
+    // Both initial R labels come from real chemistry, not a fabricated cache.
+    Refresh::calculate(&doc, &Refresh::default())
+        .unwrap()
+        .apply(&mut doc);
+    for centre in centres {
+        assert_eq!(doc.atom(centre).unwrap().cip_label.as_deref(), Some("R"));
+        assert!(
+            crate::atom_labels::indicators(&doc)
+                .iter()
+                .any(|i| i.owner == Owner::AtomStereo(centre))
+        );
+    }
+    assert_ne!(
+        crate::scene::selection_bounds(&doc, &outer),
+        crate::scene::selection_bounds(&nominal_document(&doc), &outer),
+        "the regression must exercise real computed ink changing an outer box"
+    );
+    // Capture the currently displayed outer trim before the cut is inserted.
+    let station = capture_station(&doc, id, 0, 0.5);
+    let target = {
+        let g = graphic(&doc, id);
+        let outline = cycles::outline(g).unwrap();
+        deform::profiles(
+            id,
+            &outline,
+            station.start * outline.length(),
+            station.span * outline.length(),
+            f64::from(DEFAULT.world(180.)),
+            true,
+            &arrow_style(g),
+        )
+        .unwrap()
+        .center
+        .point(station.u)
+        .unwrap()
+    };
+    let from = center_of(crate::scene::selection_bounds(&nominal_document(&doc), &cut).unwrap());
+    doc.translate(&cut, target.x - from.x, target.y - from.y);
+    assert!(doc.graphics[0].cycle.as_mut().unwrap().insert_intermediate(
+        1,
+        cut.clone(),
+        Some(station)
+    ));
+    let mut held = vec![id, last];
+    held.extend(&outer);
+    held.extend(&cut);
+    doc.group_selection(&held).unwrap();
+
+    let runs = graphic(&doc, id).cycle.as_ref().unwrap().split_runs.clone();
+    let source_sample = |doc: &Document| {
+        let layout = Layout::graphic(doc, graphic(doc, id)).unwrap();
+        let source = layout.sources[0].as_ref().unwrap();
+        let points: Vec<_> = (0..3)
+            .flat_map(|lane| {
+                [0., 0.125, 0.35, 0.5, 0.7, 0.875, 1.]
+                    .map(|u| source.lane(lane).unwrap().point(u).unwrap())
+            })
+            .collect();
+        ((source.first, source.span), source.cuts.clone(), points)
+    };
+    let frozen = source_sample(&doc);
+    let authored_atoms = doc.atoms.clone();
+    let authored_bonds = doc.bonds.clone();
+    let check = |doc: &Document| {
+        assert_eq!(graphic(doc, id).cycle.as_ref().unwrap().split_runs, runs);
+        assert_eq!(
+            source_sample(doc),
+            frozen,
+            "passive labels changed the saved source or logical cuts"
+        );
+        let layout = Layout::graphic(doc, graphic(doc, id)).unwrap();
+        for step in 0..3 {
+            let arrows = &layout.steps[step]
+                .as_ref()
+                .expect("every nominal child remains visible")
+                .arrows;
+            assert_eq!(arrows.len(), if step == 0 { 2 } else { 1 });
+            assert_eq!(
+                main_arrows(doc, id, &[step]).len(),
+                arrows.len(),
+                "computed display clearance cannot hide a nominal child"
+            );
+            for arrow in arrows {
+                assert!(
+                    crate::cycles::shapes::Shaft::from_arrow(arrow)
+                        .unwrap()
+                        .length()
+                        > 1.
+                );
+            }
+        }
+        doc.validate().unwrap();
+        for old in &authored_atoms {
+            let mut now = doc.atom(old.id).unwrap().clone();
+            now.label_h = old.label_h;
+            now.cip_label = old.cip_label.clone();
+            now.steroid_label = old.steroid_label.clone();
+            now.undefined_stereo = old.undefined_stereo;
+            now.undefined_pseudoasymmetric = old.undefined_pseudoasymmetric;
+            assert_eq!(
+                &now, old,
+                "authored explicit H, number, stereo display and geometry must survive passive refresh"
+            );
+        }
+        for old in &authored_bonds {
+            let mut now = doc
+                .bonds
+                .iter()
+                .find(|b| b.a == old.a && b.b == old.b)
+                .unwrap()
+                .clone();
+            now.cip_label = old.cip_label.clone();
+            now.undefined_stereo = old.undefined_stereo;
+            assert_eq!(&now, old);
+        }
+    };
+    check(&doc);
+    Refresh::calculate(&doc, &Refresh::default())
+        .unwrap()
+        .apply(&mut doc);
+    check(&doc);
+    clear_computed(&mut doc);
+    check(&doc);
+    cycles::reconcile(&mut doc);
+    check(&doc);
+    for atom in &mut doc.atoms {
+        atom.label_h += 2;
+    }
+    for (i, centre) in centres.into_iter().enumerate() {
+        let atom = doc.atom_mut(centre).unwrap();
+        atom.cip_label = (i == 1).then(|| "S".into());
+        atom.steroid_label = Some("7α".into());
+        atom.undefined_stereo = true;
+        atom.undefined_pseudoasymmetric = true;
+    }
+    doc.bonds[0].cip_label = Some("E".into());
+    doc.bonds[0].undefined_stereo = true;
+    assert!(
+        crate::atom_labels::indicators(&doc)
+            .iter()
+            .any(|i| i.text.contains('ξ'))
+    );
+    check(&doc);
+    cycles::reconcile(&mut doc);
+    check(&doc);
+    let bytes = doc.file_json().unwrap();
+    check(&Document::from_json(&bytes).unwrap());
+    let mut reopened = Document::from_native_file(&bytes).unwrap();
+    assert!(reopened.atoms.iter().all(|a| a.cip_label.is_none()));
+    check(&reopened);
+    Refresh::calculate(&reopened, &Refresh::default())
+        .unwrap()
+        .apply(&mut reopened);
+    check(&reopened);
+    check(&Document::from_native_file(&reopened.file_json().unwrap()).unwrap());
+}
+
+#[test]
+fn fitted_routes_roundtrip_reverse_and_full_copy_as_native_geometry() {
+    let (_, mut after, _, id) = applied();
+    let saved = after.file_json().unwrap();
+    let reopened = Document::from_json(&saved).unwrap();
+    let rendered = cycles::drawn(&after, graphic(&after, id));
+    let read = cycles::drawn(&reopened, graphic(&reopened, id));
+    assert_eq!(rendered.arrows, read.arrows);
+    assert_eq!(rendered.labels, read.labels);
+    let all = main_arrows(&after, id, &[1, 2]);
+    cycles::reverse(
+        after
+            .graphics
+            .iter_mut()
+            .find(|g| g.id == id)
+            .unwrap()
+            .cycle
+            .as_mut()
+            .unwrap(),
+    );
+    let run = graphic(&after, id).cycle.as_ref().unwrap().split_runs[0].clone();
+    let n = graphic(&after, id).cycle.as_ref().unwrap().steps.len();
+    let steps: Vec<_> = (0..=run.cuts.len())
+        .map(|i| (run.first_step + i) % n)
+        .collect();
+    same_locus(&all, &main_arrows(&after, id, &steps), &after, id);
+    let mut copied = Document::default();
+    crate::editing::append(&mut copied, &reopened, Point::new(50., -20.));
+    let g = copied.graphics.iter().find(|g| g.cycle.is_some()).unwrap();
+    assert_eq!(
+        g.cycle.as_ref().unwrap().split_runs,
+        graphic(&reopened, id).cycle.as_ref().unwrap().split_runs
+    );
+    assert!(valid(&copied, g.id));
+    let (visible, written) = cycles::materialized(&reopened);
+    assert!(visible.graphics.iter().all(|g| g.cycle.is_none()));
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].graphic.cycle, graphic(&reopened, id).cycle);
+    for (_, arrow_id) in &written[0].arcs {
+        assert!(
+            visible
+                .arrows
+                .iter()
+                .find(|a| a.id == *arrow_id)
+                .unwrap()
+                .validate()
+                .is_ok()
+        );
+    }
+}
+
+#[test]
+fn an_away_drag_coalesces_the_source_instead_of_leaving_a_detached_member() {
+    let (_, mut after, part, id) = applied();
+    let before = after.clone();
+    let from = center(&after, &part);
+    let target = Point::new(0., 0.);
+    let delta = Point::new(target.x - from.x, target.y - from.y);
+    after.translate(&part, delta.x, delta.y);
+    cycles::fit_moved(&before, &mut after, &part);
+    assert!(
+        after
+            .take_out(&part, delta)
+            .contains(&crate::grouping::Container::Cycle)
+    );
+    assert!(cycles::role_of(&after, part[0]).is_none());
+    let c = graphic(&after, id).cycle.as_ref().unwrap();
+    assert!(c.split_runs.is_empty());
+    assert_eq!(c.steps.len(), 3);
+    assert_eq!(c.steps[1].bow_pt, 180.);
+    assert!(c.steps[1].reversible);
+    after.validate().unwrap();
+}
+
+#[test]
+fn resize_and_circle_switch_rebase_or_retire_runs_and_tidy_retires_only_on_candidate() {
+    let (_, mut after, part, id) = applied();
+    let original = after.clone();
+    let g = graphic(&after, id);
+    let (w, h) = (
+        g.axis_x.distance(Point::default()),
+        g.axis_y.distance(Point::default()),
+    );
+    assert!(cycles::set_dimensions(&mut after, id, w * 1.15, h * 0.9));
+    assert!(valid(&after, id));
+    let resized = after.clone();
+    after
+        .graphics
+        .iter_mut()
+        .find(|g| g.id == id)
+        .unwrap()
+        .cycle
+        .as_mut()
+        .unwrap()
+        .shape = crate::cycles::Shape::Circle;
+    assert!(cycles::fit_edited(&resized, &mut after, id, None).unwrap());
+    assert!(
+        graphic(&after, id)
+            .cycle
+            .as_ref()
+            .unwrap()
+            .split_runs
+            .is_empty()
+    );
+    let outline = cycles::outline(graphic(&after, id)).unwrap();
+    assert!(outline.project(center(&after, &part)).unwrap().distance < 0.05);
+    let mut tidy = original.clone();
+    assert!(cycles::tidy(&mut tidy, id));
+    assert!(
+        graphic(&tidy, id)
+            .cycle
+            .as_ref()
+            .unwrap()
+            .split_runs
+            .is_empty()
+    );
+    assert!(
+        !graphic(&original, id)
+            .cycle
+            .as_ref()
+            .unwrap()
+            .split_runs
+            .is_empty()
+    );
+}
+
+#[test]
+fn independent_reversible_edit_retires_plain_source_then_new_plain_child_keeps_displayed_outer_lane()
+ {
+    let (mut before, part, id) = fixture();
+    before
+        .graphics
+        .iter_mut()
+        .find(|g| g.id == id)
+        .unwrap()
+        .cycle
+        .as_mut()
+        .unwrap()
+        .steps[1]
+        .reversible = false;
+    let mut fitted = cycles::propose_drop(&before, &part).unwrap().doc;
+    assert!(!graphic(&fitted, id).cycle.as_ref().unwrap().split_runs[0].source_reversible);
+    let old = fitted.clone();
+    fitted
+        .graphics
+        .iter_mut()
+        .find(|g| g.id == id)
+        .unwrap()
+        .cycle
+        .as_mut()
+        .unwrap()
+        .steps[2]
+        .reversible = true;
+    assert!(cycles::fit_edited(&old, &mut fitted, id, None).unwrap());
+    assert!(
+        graphic(&fitted, id)
+            .cycle
+            .as_ref()
+            .unwrap()
+            .split_runs
+            .is_empty()
+    );
+    let parent = main_arrows(&fitted, id, &[2]);
+    let at = parent[0].point(0.5);
+    let next = fitted.next_id();
+    let mut text = Annotation {
+        id: next,
+        position: Point::default(),
+        text: "Pd".into(),
+        angle: 0.,
+        format: TextFormat::default(),
+    };
+    let (w, h) = text.size();
+    text.position = at.offset(-w * 0.5, -h * 0.5);
+    fitted.annotations.push(text);
+    let after = cycles::propose_drop(&fitted, &[next]).unwrap().doc;
+    let run = graphic(&after, id)
+        .cycle
+        .as_ref()
+        .unwrap()
+        .split_runs
+        .last()
+        .unwrap();
+    assert!(run.source_reversible);
+    same_locus(&parent[..1], &main_arrows(&after, id, &[2, 3]), &after, id);
+}

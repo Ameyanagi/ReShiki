@@ -20,11 +20,13 @@ mod perimeter_drop;
 mod resize;
 mod shapes;
 mod split;
+mod split_runs;
 pub mod steps;
 mod tidy_phase;
 mod tidy_shape;
 
 pub use shapes::{Outline, Projection, Shape, Tangents};
+pub use split_runs::SplitRun;
 
 /// Clear space between an arc's end and a part's ink, in points.
 pub const GAP_PT: f32 = 6.;
@@ -45,6 +47,9 @@ pub struct Cycle {
     pub intermediates: Vec<Vec<u64>>,
     /// Step i runs from intermediate i to the next; one per intermediate.
     pub steps: Vec<Step>,
+    /// Child steps retaining one complete source curve after insertion.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub split_runs: Vec<SplitRun>,
     /// Clear space between an arc's ends and an intermediate's ink, in points.
     pub gap_pt: f32,
     /// Text in the middle of the cycle.
@@ -58,6 +63,7 @@ impl Default for Cycle {
             counterclockwise: false,
             intermediates: vec![],
             steps: vec![],
+            split_runs: vec![],
             gap_pt: GAP_PT,
             label: String::new(),
         }
@@ -147,7 +153,7 @@ impl Cycle {
         {
             return Err("Cycle labels and step names have at most 200 characters".into());
         }
-        Ok(())
+        self.validate_split_runs()
     }
     /// Every part with its role, intermediates first.
     pub fn parts(&self) -> impl Iterator<Item = (Role, &Vec<u64>)> {
@@ -181,25 +187,6 @@ impl Cycle {
         self.parts()
             .find(|(_, ids)| ids.contains(&id))
             .map(|(role, _)| role)
-    }
-    /// Drop intermediate `i`. The steps on either side become one, which
-    /// keeps the earlier step's settings and both steps' side parts.
-    fn remove_intermediate(&mut self, i: usize) {
-        self.intermediates.remove(i);
-        let gone = self.steps.remove(i);
-        if let Some(before) = self
-            .steps
-            .len()
-            .checked_sub(1)
-            .map(|last| if i == 0 { last } else { i - 1 })
-            && let Some(step) = self.steps.get_mut(before)
-        {
-            step.reagents.extend(gone.reagents);
-            step.products.extend(gone.products);
-            if step.name.trim().is_empty() {
-                step.name = gone.name;
-            }
-        }
     }
 }
 
@@ -1069,6 +1056,171 @@ pub struct Target {
     pub tag: String,
 }
 
+/// The complete document shown during a cycle drop and committed on release.
+pub struct DropProposal {
+    pub doc: Document,
+    pub target: Target,
+    pub left_reaction: bool,
+}
+
+pub fn propose_drop(doc: &Document, moved: &[u64]) -> Option<DropProposal> {
+    propose_drop_from(doc, doc, moved, None)
+}
+
+/// Prepare a complete drag result from its unchanged press/revision baseline.
+/// The caller may install this validated snapshot directly, without running
+/// caption/endpoint repair a second time at commit.
+pub fn propose_drop_from(
+    before: &Document,
+    doc: &Document,
+    moved: &[u64],
+    two_decimal_weight: Option<bool>,
+) -> Option<DropProposal> {
+    let mut target = drop_target(doc, moved)?;
+    let mut candidate = doc.clone();
+    if let Some(precision) = two_decimal_weight {
+        for link in &mut candidate.property_captions {
+            link.two_decimal_weight = precision;
+        }
+    }
+    let left_reaction = assign(&mut candidate, &target);
+    if !target
+        .part
+        .iter()
+        .all(|id| role_of(&candidate, *id) == Some((target.cycle, target.role)))
+    {
+        return None;
+    }
+    crate::atom_labels::refresh::refresh_edited(before, &mut candidate);
+    let reconciled = crate::transaction::reconcile(&mut candidate, before.clone()).ok()?;
+    if reconciled.outcome(&candidate).chemistry_changed {
+        crate::atom_labels::clear_computed(&mut candidate);
+    }
+    // Layout/label normalization can change outer ink after the transaction's
+    // first cycle pass. Fit it before this snapshot is shown or committed.
+    reconcile(&mut candidate);
+    if candidate.validate().is_err() {
+        return None;
+    }
+    let host = candidate.graphics.iter().find(|g| g.id == target.cycle)?;
+    let host_cycle = host.cycle.as_deref()?;
+    if host_cycle.shape != Shape::Circle
+        && let Role::Intermediate(i) = target.role
+        && doc
+            .graphics
+            .iter()
+            .find(|g| g.id == target.cycle)
+            .and_then(|g| g.cycle.as_deref())
+            .is_some_and(|c| !c.intermediates.is_empty())
+        && host_cycle
+            .split_run((i + host_cycle.steps.len() - 1) % host_cycle.steps.len())
+            .is_none()
+    {
+        // Normalization must not silently retire the source and move the
+        // just-dropped member back onto the undeformed base outline.
+        return None;
+    }
+    if host_cycle.shape != Shape::Circle && !perimeter_arcs::fits::accepted(&candidate, &target) {
+        return None;
+    }
+    target.ink = crate::scene::selection_bounds(&candidate, &target.part)?;
+    if host_cycle.shape != Shape::Circle {
+        let n = host_cycle.intermediates.len();
+        let steps = match target.role {
+            Role::Intermediate(i) => vec![(i + n - 1) % n, i],
+            Role::Reagent(s) | Role::Product(s) => vec![s],
+        };
+        let drawn = drawn(&candidate, host);
+        let bond = candidate.drawing_style.bond_length_world;
+        target.arc = drawn
+            .arrows
+            .iter()
+            .zip(&drawn.arcs)
+            .filter(|(_, s)| s.is_some_and(|s| steps.contains(&s)))
+            .map(|(arrow, _)| {
+                let (lo, hi) = arrow.bounds();
+                let raw = (4. * lo.distance(hi) / bond).clamp(16., 720.) as usize;
+                let pieces = arrow.nodes.len() + 1;
+                let count = raw.div_ceil(pieces) * pieces;
+                (0..=count)
+                    .map(|k| arrow.point(k as f32 / count as f32))
+                    .collect()
+            })
+            .collect();
+    }
+    Some(DropProposal {
+        doc: candidate,
+        target,
+        left_reaction,
+    })
+}
+
+/// Slide/rebase fitted members before the ordinary drag take-out test.
+pub fn fit_moved(before: &Document, after: &mut Document, moved: &[u64]) -> bool {
+    perimeter_arcs::fits::moved(before, after, moved)
+}
+
+/// Preserve or explicitly reflow fitted members for a reviewed layout edit.
+pub fn fit_edited(
+    before: &Document,
+    after: &mut Document,
+    id: u64,
+    bow_step: Option<usize>,
+) -> Result<bool, String> {
+    perimeter_arcs::fits::edited(before, after, id, bow_step)
+}
+
+pub(crate) fn has_fits(doc: &Document) -> bool {
+    doc.graphics
+        .iter()
+        .any(|g| g.cycle.as_deref().is_some_and(|c| !c.split_runs.is_empty()))
+}
+
+/// Transform preview and commit both rebase fixed-point Bow/gap settings on
+/// the transformed host before the normal transaction reconciliation runs.
+pub(crate) fn fit_transformed(before: &Document, after: &mut Document, ids: &[u64]) {
+    let hosts: Vec<_> = before
+        .graphics
+        .iter()
+        .filter(|g| g.cycle.as_deref().is_some_and(|c| !c.split_runs.is_empty()))
+        .map(|g| g.id)
+        .collect();
+    perimeter_arcs::fits::moved(before, after, ids);
+    let mut gone = vec![];
+    for g in after
+        .graphics
+        .iter()
+        .filter(|g| hosts.contains(&g.id) && !ids.contains(&g.id))
+    {
+        let Some(c) = g.cycle.as_deref() else {
+            continue;
+        };
+        for run in &c.split_runs {
+            for cut in 0..run.cuts.len() {
+                let Some(part) = c
+                    .intermediates
+                    .get((run.first_step + cut + 1) % c.intermediates.len())
+                else {
+                    continue;
+                };
+                if part.iter().any(|id| ids.contains(id)) && !holds(after, g.id, part) {
+                    gone.extend(part);
+                }
+            }
+        }
+    }
+    if !gone.is_empty() {
+        let freed = leave(after, &gone);
+        ungroup_freed(after, &freed);
+    }
+    for id in hosts {
+        if !perimeter_arcs::fits::valid(after, id) {
+            *after = before.clone();
+            return;
+        }
+    }
+}
+
 /// The drop target for `moved`, one molecule or one text that belongs to no
 /// cycle, where it now sits: on a circle it becomes an intermediate in angle
 /// order; beside the first half of a step's arc a reagent, beside the
@@ -1285,6 +1437,38 @@ pub fn holds(doc: &Document, cycle: u64, part: &[u64]) -> bool {
 /// Give the target's part its role, and group it with the cycle. It leaves
 /// any ordinary reaction; returns whether it had a role there.
 pub fn assign(doc: &mut Document, target: &Target) -> bool {
+    let host = doc.graphics.iter().find(|g| g.id == target.cycle);
+    let native = host
+        .and_then(|g| g.cycle.as_deref())
+        .is_some_and(|c| c.shape != Shape::Circle);
+    let baseline = (native && matches!(target.role, Role::Intermediate(_))).then(|| doc.clone());
+    let planned = if let Role::Intermediate(i) = target.role {
+        let Some(g) = host else {
+            return false;
+        };
+        let Some(cycle) = g.cycle.as_deref() else {
+            return false;
+        };
+        let n = cycle.intermediates.len();
+        let station = if native && n > 0 {
+            let donor = (i + n - 1) % n;
+            let Some(station) =
+                perimeter_drop::insertion_station(doc, g, donor, center_of(target.ink))
+            else {
+                return false;
+            };
+            Some(station)
+        } else {
+            None
+        };
+        let mut cycle = cycle.clone();
+        if !cycle.insert_intermediate(i, target.part.clone(), station) {
+            return false;
+        }
+        Some(cycle)
+    } else {
+        None
+    };
     let split = split::prepare(doc, target);
     let left = leave_reactions(doc, &target.part);
     let Some(cycle) = doc
@@ -1297,12 +1481,10 @@ pub fn assign(doc: &mut Document, target: &Target) -> bool {
     };
     let part = target.part.clone();
     match target.role {
-        Role::Intermediate(i) => {
-            let i = i.min(cycle.intermediates.len());
-            cycle.intermediates.insert(i, part);
-            // The step it splits keeps its settings and side parts before
-            // the new intermediate; the new step starts plain.
-            cycle.steps.insert(i, Step::default());
+        Role::Intermediate(_) => {
+            if let Some(planned) = planned {
+                *cycle = planned;
+            }
         }
         Role::Reagent(s) => {
             if let Some(step) = cycle.steps.get_mut(s) {
@@ -1337,6 +1519,14 @@ pub fn assign(doc: &mut Document, target: &Target) -> bool {
     if let Some(split) = split {
         split::apply(doc, split);
     }
+    if let Some(baseline) = baseline {
+        if !perimeter_arcs::fits::finish_split(&baseline, doc, target)
+            || !perimeter_arcs::fits::valid(doc, target.cycle)
+        {
+            *doc = baseline;
+            return false;
+        }
+    }
     left
 }
 
@@ -1354,6 +1544,7 @@ pub fn remove(doc: &mut Document, ids: &[u64]) -> usize {
 pub(crate) fn leave(doc: &mut Document, ids: &[u64]) -> HashSet<u64> {
     let held = part_ids(doc);
     let hit = |part: &Vec<u64>| part.iter().any(|id| ids.contains(id));
+    let mut reflow = vec![];
     for g in &mut doc.graphics {
         let Some(cycle) = &mut g.cycle else {
             continue;
@@ -1366,12 +1557,25 @@ pub(crate) fn leave(doc: &mut Document, ids: &[u64]) -> HashSet<u64> {
             .map(|(i, _)| i)
             .collect();
         for i in gone.into_iter().rev() {
-            cycle.remove_intermediate(i);
+            for cut in cycle.remove_intermediate(i) {
+                if let Some(part) = cycle.intermediates.get(cut.index) {
+                    reflow.push((g.id, part.clone(), cut.u));
+                }
+            }
         }
         for step in &mut cycle.steps {
             step.reagents.retain(|part| !hit(part));
             step.products.retain(|part| !hit(part));
         }
+    }
+    let hosts: HashSet<_> = reflow.iter().map(|(id, _, _)| *id).collect();
+    for id in hosts {
+        let parts: Vec<_> = reflow
+            .iter()
+            .filter(|(host, _, _)| *host == id)
+            .map(|(_, part, u)| (part.clone(), *u))
+            .collect();
+        let _ = perimeter_arcs::fits::reflow_native(doc, id, &parts);
     }
     // Side parts of a cycle left with no steps go too.
     held.difference(&part_ids(doc)).copied().collect()
@@ -1401,6 +1605,43 @@ pub fn tidy(doc: &mut Document, id: u64) -> bool {
     let Some(cycle) = g.cycle.as_deref().cloned() else {
         return false;
     };
+    if !cycle.split_runs.is_empty() {
+        let mut candidate = doc.clone();
+        let n = cycle.intermediates.len();
+        let parts: Vec<_> = cycle
+            .split_runs
+            .iter()
+            .flat_map(|run| {
+                run.cuts.iter().enumerate().filter_map(|(cut, &u)| {
+                    Some((
+                        cycle
+                            .intermediates
+                            .get((run.first_step + cut + 1) % n)?
+                            .clone(),
+                        u,
+                    ))
+                })
+            })
+            .collect();
+        if let Some(c) = candidate
+            .graphics
+            .iter_mut()
+            .find(|g| g.id == id)
+            .and_then(|g| g.cycle.as_deref_mut())
+        {
+            c.split_runs.clear();
+        }
+        if !perimeter_arcs::fits::reflow_native(&mut candidate, id, &parts) {
+            return false;
+        }
+        let _ = tidy(&mut candidate, id);
+        if candidate.validate().is_err() {
+            return false;
+        }
+        let changed = *doc != candidate;
+        *doc = candidate;
+        return changed;
+    }
     if cycle.shape != Shape::Circle {
         return tidy_shape::tidy(doc, id);
     }
@@ -1503,6 +1744,7 @@ pub fn reverse(cycle: &mut Cycle) {
         std::mem::swap(&mut step.reagents, &mut step.products);
         std::mem::swap(&mut step.lead_pt, &mut step.trail_pt);
     }
+    cycle.reverse_split_runs();
     cycle.counterclockwise = !cycle.counterclockwise;
 }
 
@@ -1711,6 +1953,7 @@ pub fn reconcile(doc: &mut Document) {
         used.extend(part.iter().copied());
         part
     };
+    let mut reflow = vec![];
     let fixed: Vec<Option<Box<Cycle>>> = doc
         .graphics
         .iter()
@@ -1721,7 +1964,11 @@ pub fn reconcile(doc: &mut Document) {
             }
             for i in (0..cycle.intermediates.len()).rev() {
                 if cycle.intermediates.get(i).is_some_and(Vec::is_empty) {
-                    cycle.remove_intermediate(i);
+                    for cut in cycle.remove_intermediate(i) {
+                        if let Some(part) = cycle.intermediates.get(cut.index) {
+                            reflow.push((g.id, part.clone(), cut.u));
+                        }
+                    }
                 }
             }
             for step in &mut cycle.steps {
@@ -1737,9 +1984,32 @@ pub fn reconcile(doc: &mut Document) {
             g.cycle = cycle;
         }
     }
+    let hosts: HashSet<_> = reflow.iter().map(|(id, _, _)| *id).collect();
+    for id in hosts {
+        let parts: Vec<_> = reflow
+            .iter()
+            .filter(|(host, _, _)| *host == id)
+            .map(|(_, part, u)| (part.clone(), *u))
+            .collect();
+        let _ = perimeter_arcs::fits::reflow_native(doc, id, &parts);
+    }
+    perimeter_arcs::fits::repair(doc);
     // A side part whose step went with its intermediate is free again.
     let freed: HashSet<u64> = held.difference(&part_ids(doc)).copied().collect();
     ungroup_freed(doc, &freed);
+}
+
+/// Fitted runs must resolve all their native children. Ordinary legacy
+/// cycles deliberately retain their existing permissive layout behavior.
+pub(crate) fn validate_fits(doc: &Document) -> Result<(), String> {
+    for g in &doc.graphics {
+        if g.cycle.as_deref().is_some_and(|c| !c.split_runs.is_empty())
+            && !perimeter_arcs::fits::valid(doc, g.id)
+        {
+            return Err("A cycle fitted route does not meet its ordered intermediate ink".into());
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

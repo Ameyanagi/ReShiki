@@ -113,7 +113,7 @@ pub(super) fn tidy(doc: &mut Document, id: u64) -> bool {
     moved
 }
 
-fn place(
+pub(super) fn place(
     frame: perimeter_arcs::Frame,
     outline: &Outline,
     (w, h): (f32, f32),

@@ -1139,6 +1139,10 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         joining: None,
         hidden_annotation: None,
         doc,
+        two_decimal_weight: doc
+            .property_captions
+            .first()
+            .is_some_and(|link| link.two_decimal_weight),
         selected: &[],
         tool: Tool::Chain(mode),
         camera: Camera {

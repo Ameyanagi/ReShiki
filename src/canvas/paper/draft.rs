@@ -10,6 +10,62 @@ use reshiki::graphics::{Graphic, GraphicKind};
 use std::borrow::Cow;
 
 impl MoleculeCanvas<'_> {
+    /// The document shown by a normal Select drag and the edit its release emits.
+    #[cfg(test)]
+    pub(crate) fn select_drag_candidate(
+        doc: &reshiki::document::Document,
+        ids: &[u64],
+        from: World,
+        to: World,
+        zoom: f32,
+        two_decimal_weight: bool,
+    ) -> (
+        reshiki::document::Document,
+        Option<reshiki::cycles::Target>,
+        crate::canvas::Edit,
+    ) {
+        use iced::widget::canvas::Program;
+        use iced::{Event, Size, Vector, mouse};
+
+        let mut canvas =
+            crate::canvas::tests::chain_canvas(doc, crate::canvas::ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        canvas.selected = ids;
+        canvas.smart_guides = false;
+        canvas.two_decimal_weight = two_decimal_weight;
+        canvas.camera.center = from.lerp(to, 0.5);
+        canvas.camera.zoom = zoom;
+        let bounds = Rectangle::new(
+            Point::new(20., 30.),
+            Size::new(
+                ((to.x - from.x).abs() + 1000.) * zoom,
+                ((to.y - from.y).abs() + 1000.) * zoom,
+            ),
+        );
+        let end = canvas.camera.screen(to, bounds) + Vector::new(bounds.x, bounds.y);
+        let mut state = State {
+            gesture: Some(Gesture::Move {
+                start: from,
+                ids: ids.to_vec(),
+                clicked: ids.to_vec(),
+            }),
+            cursor: Some(end),
+            ..Default::default()
+        };
+        let mut draft = Draft::new(doc);
+        canvas.preview_move(&mut draft, &state, bounds);
+        let edit = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(end),
+            )
+            .and_then(|action| action.into_inner().0)
+            .expect("a normal Select drag releases one edit");
+        (draft.preview.into_owned(), draft.cycle_drop, edit)
+    }
+
     pub(super) fn preview_tilt(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
         let Draft {
             preview,
@@ -418,8 +474,16 @@ impl MoleculeCanvas<'_> {
                 // Moving every object cannot change their relative geometry,
                 // chemical labels, crossing gaps or ring attachment targets.
                 preview.to_mut().translate(ids, delta.x, delta.y);
+                reshiki::cycles::fit_moved(self.doc, preview.to_mut(), ids);
                 *ring_selection = Some(ids.clone());
-                *translation = Some(delta);
+                // Fitted runs reproject ink and stations even on a rigid move;
+                // render their actual candidate rather than shifting old curves.
+                *translation = (!self
+                    .doc
+                    .graphics
+                    .iter()
+                    .any(|g| g.cycle.as_ref().is_some_and(|c| !c.split_runs.is_empty())))
+                .then_some(delta);
             } else if let Some(snapped) =
                 reshiki::editing::snap_ring(preview.to_mut(), ids, delta, 14.0 / self.camera.zoom)
             {
@@ -439,15 +503,22 @@ impl MoleculeCanvas<'_> {
                         }
                     }
                 }
+                reshiki::cycles::fit_moved(self.doc, preview.to_mut(), ids);
                 // The drawing shows what releasing here takes the piece out of.
                 let left = preview.to_mut().take_out(ids, delta);
                 if let Some(names) = reshiki::grouping::Container::names(&left) {
                     *chain_badge = Some((p, format!("Release to take it out of {names}"), true));
                 }
-                // Say what a drop here would make the part in a cycle.
-                if let Some(target) = reshiki::cycles::drop_target(preview, ids) {
-                    *chain_badge = Some((p, target.tag.clone(), true));
-                    *cycle_drop = Some(target);
+                // Show the complete candidate, including its refitted cycle.
+                if let Some(proposal) = reshiki::cycles::propose_drop_from(
+                    self.doc,
+                    preview,
+                    ids,
+                    Some(self.two_decimal_weight),
+                ) {
+                    *preview = Cow::Owned(proposal.doc);
+                    *chain_badge = Some((p, proposal.target.tag.clone(), true));
+                    *cycle_drop = Some(proposal.target);
                 }
                 // The tag sits below the dragged piece, clear of its bonds.
                 if let Some((at, ..)) = chain_badge

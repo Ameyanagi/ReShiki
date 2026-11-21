@@ -2,7 +2,10 @@
 //! perimeter arclength knots. This deliberately is not an exact offset curve.
 use crate::{
     arrows::{ArrowStyle, Head, Preset},
-    cycles::{Outline, shapes::CubicSection},
+    cycles::{
+        Outline,
+        shapes::{CubicSection, Profile},
+    },
     document::{Arrow, ArrowNode, Point},
     graphics::PathNodeType,
     style::DEFAULT,
@@ -12,6 +15,14 @@ type V = [f64; 2];
 
 #[derive(Clone, Debug)]
 struct Path(Vec<CubicSection>);
+
+pub(super) fn native_arrow(
+    id: u64,
+    sections: Vec<CubicSection>,
+    style: ArrowStyle,
+) -> Option<Arrow> {
+    Path(sections).arrow(id, style)
+}
 
 impl Path {
     fn normals(&self, dir: f64) -> Option<Vec<V>> {
@@ -168,35 +179,92 @@ pub(super) fn arrows(
     if bow == 0. && !reversible {
         return Some(vec![super::path_arrow(id, outline, start, length, style)?]);
     }
+    let (_, _, arrows) = source_path(id, outline, start, length, bow, reversible, style)?;
+    Some(arrows)
+}
+
+/// Native lanes before heads are clipped. All three retain forward logical
+/// source order; a reverse arrow changes traversal only when it is emitted.
+#[derive(Clone)]
+pub(super) struct Profiles {
+    pub center: Profile,
+    pub forward: Option<Profile>,
+    pub reverse: Option<Profile>,
+}
+
+pub(super) fn profiles(
+    id: u64,
+    outline: &Outline,
+    start: f64,
+    length: f64,
+    bow: f64,
+    reversible: bool,
+    style: &ArrowStyle,
+) -> Option<Profiles> {
+    let (baseline, path, _) = source_path(id, outline, start, length, bow, reversible, style)?;
+    let half = f64::from(DEFAULT.world(style.gap_pt.max(2.)) * 0.75);
+    let offset = |distance| {
+        let painted = path.offset(distance, length.signum())?;
+        Profile::new(&baseline.0, &painted.0)
+    };
+    Some(Profiles {
+        center: Profile::new(&baseline.0, &path.0)?,
+        forward: offset(half),
+        reverse: offset(-half),
+    })
+}
+
+fn source_path(
+    id: u64,
+    outline: &Outline,
+    start: f64,
+    length: f64,
+    bow: f64,
+    reversible: bool,
+    style: &ArrowStyle,
+) -> Option<(Path, Path, Vec<Arrow>)> {
     let dir = length.signum();
     let baseline = Path(outline.cubic_sections(start, length)?);
     let bowed = baseline.bowed(bow, dir).unwrap_or_else(|| baseline.clone());
-    let render = |path: &Path| {
-        if !reversible {
-            return Some(vec![path.arrow(id, style.clone())?]);
-        }
-        let half = f64::from(DEFAULT.world(style.gap_pt.max(2.)) * 0.75);
-        let normals = path.normals(dir)?;
-        let forward = path.offset(half, dir)?;
-        let backward = path.offset(-half, dir)?.reversed();
-        let outside = *normals.last()?;
-        let inside = mul(*normals.first()?, -1.);
-        let forward_style = ArrowStyle {
-            head: forward.half_head(outside)?,
-            ..style.clone()
-        };
-        let backward_style = ArrowStyle {
-            head: backward.half_head(inside)?,
-            ..style.clone()
-        };
-        Some(vec![
-            forward.arrow(id, forward_style)?,
-            backward.arrow(id, backward_style)?,
-        ])
+    // Use the same representability decision as ordinary drawing. A fitted
+    // source must never preserve an invisible, failed deformation instead.
+    let (path, arrows) = if let Some(arrows) = render(id, &bowed, dir, reversible, style) {
+        (bowed, arrows)
+    } else {
+        let arrows = render(id, &baseline, dir, reversible, style)?;
+        (baseline.clone(), arrows)
     };
-    // If the requested deformation cannot be represented by native points,
-    // retain the undeformed perimeter rather than losing the entire step.
-    render(&bowed).or_else(|| render(&baseline))
+    Some((baseline, path, arrows))
+}
+
+fn render(
+    id: u64,
+    path: &Path,
+    dir: f64,
+    reversible: bool,
+    style: &ArrowStyle,
+) -> Option<Vec<Arrow>> {
+    if !reversible {
+        return Some(vec![path.arrow(id, style.clone())?]);
+    }
+    let half = f64::from(DEFAULT.world(style.gap_pt.max(2.)) * 0.75);
+    let normals = path.normals(dir)?;
+    let forward = path.offset(half, dir)?;
+    let backward = path.offset(-half, dir)?.reversed();
+    let outside = *normals.last()?;
+    let inside = mul(*normals.first()?, -1.);
+    let forward_style = ArrowStyle {
+        head: forward.half_head(outside)?,
+        ..style.clone()
+    };
+    let backward_style = ArrowStyle {
+        head: backward.half_head(inside)?,
+        ..style.clone()
+    };
+    Some(vec![
+        forward.arrow(id, forward_style)?,
+        backward.arrow(id, backward_style)?,
+    ])
 }
 
 fn add(a: V, b: V) -> V {

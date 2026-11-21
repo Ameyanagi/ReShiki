@@ -89,7 +89,7 @@ pub(super) fn prepare(doc: &Document, target: &Target) -> Option<Split> {
     })
 }
 
-fn points(a: &Arrow) -> Vec<Point> {
+pub(super) fn points(a: &Arrow) -> Vec<Point> {
     (0..=96).map(|i| a.point(i as f32 / 96.)).collect()
 }
 
@@ -144,7 +144,7 @@ fn path_bounds(path: &[Point]) -> Option<Ink> {
     }))
 }
 
-fn crossing(a: &[Point], b: &[Point], clear: f32) -> bool {
+pub(super) fn crossing(a: &[Point], b: &[Point], clear: f32) -> bool {
     let Some((a_bounds, b_bounds)) = path_bounds(a).zip(path_bounds(b)) else {
         return false;
     };
@@ -179,7 +179,7 @@ fn translated(b: Ink, delta: Point) -> Ink {
     (b.0.offset(delta.x, delta.y), b.1.offset(delta.x, delta.y))
 }
 
-fn label_ink((origin, text, format): &(Point, String, TextFormat)) -> Ink {
+pub(super) fn label_ink((origin, text, format): &(Point, String, TextFormat)) -> Ink {
     let layout = crate::typography::layout(text, format);
     (*origin, origin.offset(layout.width, layout.height))
 }

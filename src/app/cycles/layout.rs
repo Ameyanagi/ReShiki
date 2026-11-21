@@ -357,9 +357,9 @@ impl App {
             self.status.clear();
             return true;
         }
-        let before = self.tab.doc.clone();
+        let mut candidate = self.tab.doc.clone();
         if field == Field::Corner {
-            if let Some(g) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id) {
+            if let Some(g) = candidate.graphics.iter_mut().find(|g| g.id == id) {
                 g.style.corner_pt = corner;
             }
         } else if let Some(world) = world {
@@ -368,7 +368,7 @@ impl App {
             } else {
                 (width, world)
             };
-            if !reshiki::cycles::set_dimensions(&mut self.tab.doc, id, w, h)
+            if !reshiki::cycles::set_dimensions(&mut candidate, id, w, h)
                 && (w != width || h != height)
             {
                 self.error = true;
@@ -376,8 +376,7 @@ impl App {
                 return true;
             }
         }
-        self.changed(before);
-        self.sync_cycle();
+        self.finish_cycle_edit(candidate, id, None);
         true
     }
 }

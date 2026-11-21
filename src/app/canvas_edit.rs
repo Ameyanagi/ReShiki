@@ -4,6 +4,8 @@ use crate::canvas::{Edit, Tool};
 use reshiki::document::{Arrow, Point};
 use reshiki::editing;
 pub(super) mod click;
+#[cfg(test)]
+mod cycle_drop_preview_tests;
 mod placement;
 
 const BOND_TEXT_HINT: &str = "Drag to bond; this text becomes an atom label";
@@ -130,6 +132,7 @@ impl App {
         // A role a drop gave a part, said after the edit's own status.
         let mut joined = None;
         let mut snapped = None;
+        let mut prepared_cycle = false;
         if matches!(edit, Edit::Bond(..) | Edit::TextBond { .. }) {
             self.tab.arrows.cancel_source();
         }
@@ -359,18 +362,25 @@ impl App {
                     } else if self.tab.doc.seats.len() < seats {
                         joined = Some("Pulled out of its assembly".into());
                     }
+                    reshiki::cycles::fit_moved(&before, &mut self.tab.doc, &moved);
                     // A piece dragged out of its cycle, panel or group leaves it.
                     let left = self.tab.doc.take_out(&moved, Point::new(dx, dy));
                     if let Some(names) = reshiki::grouping::Container::names(&left) {
                         joined = Some(format!("Took it out of {names}"));
                     }
-                    // The drop target the drag showed gives the part its role.
-                    if let Some(target) = reshiki::cycles::drop_target(&self.tab.doc, &ids) {
-                        let left = reshiki::cycles::assign(&mut self.tab.doc, &target);
-                        joined = Some(if left {
-                            format!("Now {} · it left its reaction", target.role)
+                    // Commit the same candidate geometry the drag showed.
+                    if let Some(proposal) = reshiki::cycles::propose_drop_from(
+                        &before,
+                        &self.tab.doc,
+                        &ids,
+                        Some(self.appearance.two_decimal_weight),
+                    ) {
+                        self.tab.doc = proposal.doc;
+                        prepared_cycle = true;
+                        joined = Some(if proposal.left_reaction {
+                            format!("Now {} · it left its reaction", proposal.target.role)
                         } else {
-                            format!("Added to the cycle as {}", target.role)
+                            format!("Added to the cycle as {}", proposal.target.role)
                         });
                     }
                     self.tab.selected = ids;
@@ -409,7 +419,12 @@ impl App {
                 return self.set_piece_param(id, &param, value, before);
             }
         }
-        self.changed(before);
+        if prepared_cycle {
+            let candidate = std::mem::replace(&mut self.tab.doc, before);
+            self.commit_prepared_cycle(candidate);
+        } else {
+            self.changed(before);
+        }
         if let Some(joined) = joined.filter(|_| !self.error) {
             self.status = joined;
         }

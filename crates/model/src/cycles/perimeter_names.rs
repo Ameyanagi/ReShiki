@@ -43,6 +43,17 @@ struct Ink {
     filled: bool,
 }
 
+pub(super) fn arrow_hits(arrow: &crate::document::Arrow, ink: Box, gap: f32) -> bool {
+    arrow.paths().iter().any(|path| {
+        Ink::new(
+            &path.commands,
+            DEFAULT.world(path.style.width_pt),
+            path.filled,
+        )
+        .hits(ink, gap)
+    })
+}
+
 impl Ink {
     fn new(commands: &[PathCommand], width: f32, filled: bool) -> Self {
         let mut path = BezPath::new();

@@ -676,6 +676,8 @@ pub struct MoleculeCanvas<'a> {
     pub bond_drawing: BondDrawing,
     pub chain_drawing: ChainDrawing,
     pub doc: &'a Document,
+    /// Caption policy used to normalize a cycle drop before showing it.
+    pub(crate) two_decimal_weight: bool,
     pub element: &'a str,
     /// The label the Atom tool gives each new atom: `R` on an R group's `*`.
     pub atom_label: Option<&'a str>,
@@ -737,6 +739,10 @@ impl<'a> MoleculeCanvas<'a> {
             bond_drawing: styles.bond_drawing,
             chain_drawing: styles.chain_drawing,
             doc,
+            two_decimal_weight: doc
+                .property_captions
+                .first()
+                .is_some_and(|link| link.two_decimal_weight),
             element: "C",
             atom_label: None,
             selected,

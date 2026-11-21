@@ -695,13 +695,18 @@ explains how the crates and modules fit together.
 - `crates/model/src/cycles/perimeter_arcs.rs`: Noncircle step shafts and side contacts on their resolved native geometry.
 - `crates/model/src/cycles/perimeter_deform.rs`: Tangent-preserving Bow and reversible lanes, built from original perimeter arclength knots.
 - `crates/model/src/cycles/perimeter_drop.rs`: Noncircle drops and ownership follow native painted lanes, not a mean circle.
+- `crates/model/src/cycles/perimeter_fit.rs`: A split run keeps one native source profile and clips its ordered children.
+- `crates/model/src/cycles/perimeter_fit_edit.rs`: Explicit mutation of fitted source families, before a candidate is shown.
+- `crates/model/src/cycles/perimeter_fit_sides.rs`: Bounded relocation of inherited side ink after a fitted child is shortened.
 - `crates/model/src/cycles/perimeter_frames.rs`: Shared painted-lane tangent and corner frames for noncircle names and roles.
 - `crates/model/src/cycles/perimeter_names.rs`: Noncircle names follow the final forward shaft, with actual painted ink deciding between inside, outside and nearby positions.
 - `crates/model/src/cycles/perimeter_sides.rs`: Side contacts on the resolved, open, painted step shafts.
 - `crates/model/src/cycles/resize.rs`: Resize an explicit cycle shape without replacing its retained affine frame.
 - `crates/model/src/cycles/shapes.rs`: Cycle-local perimeter geometry.
+- `crates/model/src/cycles/shapes/profile.rs`: Native geometry for one deformed, open cycle lane.
 - `crates/model/src/cycles/shapes/shaft.rs`: Open geometry read from the native shaft after Bow, lanes and head trim.
 - `crates/model/src/cycles/split.rs`: Keep inherited side parts beside the step that an insertion shortens.
+- `crates/model/src/cycles/split_runs.rs`: Relative topology of child steps cut from one undeformed source span.
 - `crates/model/src/cycles/steps.rs`: A catalytic cycle's steps as ordinary reactions.
 - `crates/model/src/cycles/tidy_phase.rs`: Least-motion phase on a noncircular, world-arclength perimeter.
 - `crates/model/src/cycles/tidy_shape.rs`: Noncircle Tidy preserves ordered roles on equal perimeter distances.

@@ -108,7 +108,7 @@ fn native_tip_drops_use_visible_unnamed_shafts_in_both_directions_and_reflection
 }
 
 #[test]
-fn actual_sharp_corners_and_arrowheads_are_insert_targets() {
+fn actual_sharp_corners_are_targets_but_an_endpoint_without_child_room_is_declined() {
     let mut doc = fixture(Shape::Rectangle, 2, true, true);
     let geometry = Geometry::new(&doc, &doc.graphics[0]).unwrap();
     let route = geometry.route(0, 0, 1).unwrap();
@@ -125,10 +125,7 @@ fn actual_sharp_corners_and_arrowheads_are_insert_targets() {
         Role::Intermediate(1)
     );
     place(&mut doc, free, tip);
-    assert_eq!(
-        cycles::drop_target(&doc, &[free]).unwrap().role,
-        Role::Intermediate(1)
-    );
+    assert!(cycles::drop_target(&doc, &[free]).is_none());
 }
 
 #[test]
@@ -237,7 +234,7 @@ fn bridge_full_lap_depends_on_endpoint_identity_not_coincident_projections() {
 }
 
 #[test]
-fn far_bowed_insert_preserves_ownership_steps_and_inherited_side_positions_after_reverse() {
+fn far_bowed_insert_preserves_ownership_steps_and_keeps_inherited_sides_clear_after_reverse() {
     for shape in [Shape::Ellipse, Shape::RoundedRectangle, Shape::Rectangle] {
         for reversible in [false, true] {
             let mut doc = fixture(shape, 2, false, false);
@@ -264,9 +261,28 @@ fn far_bowed_insert_preserves_ownership_steps_and_inherited_side_positions_after
             let target = cycles::drop_target(&doc, &[free]).unwrap();
             assert_eq!(target.role, Role::Intermediate(1));
             cycles::assign(&mut doc, &target);
+            let retained = doc.annotations.iter().find(|a| a.id == side).unwrap();
             assert_eq!(
-                doc.annotations.iter().find(|a| a.id == side).unwrap(),
-                &side_before
+                (
+                    retained.id,
+                    &retained.text,
+                    &retained.format,
+                    retained.angle
+                ),
+                (
+                    side_before.id,
+                    &side_before.text,
+                    &side_before.format,
+                    side_before.angle
+                )
+            );
+            assert_eq!(
+                cycles::role_of(&doc, free),
+                Some((1, Role::Intermediate(1)))
+            );
+            assert!(
+                perimeter_arcs::fits::accepted(&doc, &target),
+                "{shape:?}/{reversible}"
             );
             let c = doc.graphics[0].cycle.as_mut().unwrap();
             c.steps[1].name = "Preserve the inserted outgoing step".into();
@@ -300,7 +316,7 @@ fn far_bowed_insert_preserves_ownership_steps_and_inherited_side_positions_after
 }
 
 #[test]
-fn inward_bow_cannot_split_outside_its_directed_native_interval_or_fall_through() {
+fn inward_bow_uses_source_station_instead_of_the_unrelated_native_projection() {
     let mut doc = fixture(Shape::Rectangle, 4, false, false);
     doc.graphics[0].cycle.as_mut().unwrap().steps[0].bow_pt = -720.;
     let geometry = Geometry::new(&doc, &doc.graphics[0]).unwrap();
@@ -309,15 +325,22 @@ fn inward_bow_cannot_split_outside_its_directed_native_interval_or_fall_through(
         .map(|i| route.arrows[0].point(i as f32 / 100.))
         .find(|p| !geometry.splittable(&route, *p))
         .expect("strong inward Bow must cross native donor interval");
-    let mut behind = doc.graphics[0].clone();
-    behind.id = 100;
-    doc.graphics.insert(0, behind);
     let free = text(&mut doc, point, "Pd");
-    assert!(cycles::drop_target(&doc, &[free]).is_none());
-    assert_eq!(
-        doc.graphics[1].cycle.as_ref().unwrap().intermediates.len(),
-        4
+    let target = cycles::drop_target(&doc, &[free]).unwrap();
+    assert_eq!(target.role, Role::Intermediate(1));
+    assert!(
+        insertion_station(&doc, &doc.graphics[0], 0, point).is_some_and(|s| 0. < s.u && s.u < 1.)
     );
+    // A complete candidate may still decline an unusable ink intersection.
+    // Neither outcome rewrites the unchanged drop baseline or adds a lap.
+    let before = doc.clone();
+    if let Some(proposal) = cycles::propose_drop(&doc, &[free]) {
+        let run = &proposal.doc.graphics[0].cycle.as_ref().unwrap().split_runs[0];
+        assert_eq!(run.cuts.len(), 1);
+        assert_eq!(run.source_bow_pt, -720.);
+        proposal.doc.validate().unwrap();
+    }
+    assert_eq!(doc, before);
 }
 
 #[test]
@@ -413,7 +436,7 @@ fn finite_large_native_frames_do_not_depend_on_the_overflowing_legacy_radius_see
 }
 
 #[test]
-fn remote_zero_bow_reversible_corner_keeps_the_inserted_member_after_nudge_and_reverse() {
+fn remote_reversible_miter_declines_when_the_member_cannot_clip_both_lanes() {
     for mirrored in [false, true] {
         let mut doc = fixture(Shape::Rectangle, 2, false, false);
         let g = &mut doc.graphics[0];
@@ -451,13 +474,14 @@ fn remote_zero_bow_reversible_corner_keeps_the_inserted_member_after_nudge_and_r
         let free = text(&mut doc, point, "Pd insert");
         let target = cycles::drop_target(&doc, &[free]).unwrap();
         assert_eq!(target.role, Role::Intermediate(1));
+        let unchanged = doc.clone();
         cycles::assign(&mut doc, &target);
-        let delta = Point::new(0.125, -0.0625);
-        doc.translate(&[free], delta.x, delta.y);
-        assert!(doc.take_out(&[free], delta).is_empty());
-        assert!(cycles::holds(&doc, 1, &[free]));
-        cycles::reverse(doc.graphics[0].cycle.as_mut().unwrap());
-        assert!(cycles::holds(&doc, 1, &[free]));
+        assert_eq!(
+            doc, unchanged,
+            "a remote one-lane hit cannot hide the other lane"
+        );
+        assert!(cycles::propose_drop(&doc, &[free]).is_none());
+        assert!(cycles::role_of(&doc, free).is_none());
         doc.validate().unwrap();
     }
 }
