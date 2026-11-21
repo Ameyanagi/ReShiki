@@ -39,6 +39,14 @@ impl App {
             }
         } else {
             self.inspector_pages.previous.clear();
+            // A nested page can return to its editor. An ordinary destination
+            // abandons unrelated drafts, just like a direct tab activation.
+            if tab != InspectorTab::ThemeGenerator {
+                self.theme_library.editor = None;
+            }
+            if tab != InspectorTab::DrawingStyle {
+                self.tab.styles.editor = None;
+            }
         }
         if tab == InspectorTab::Names {
             self.inspector_pages.structure_first = self
@@ -96,8 +104,8 @@ impl App {
     /// that assign IDs directly. A document-tab switch retains its page routing.
     pub(super) fn sync_inspector_page_selection(&mut self) -> Task<Message> {
         if !self.inspector_open || !is_page(self.inspector_tab) {
-            if !is_page(self.inspector_tab) {
-                self.inspector_pages.previous.clear();
+            if !is_page(self.inspector_tab) && !self.inspector_pages.previous.is_empty() {
+                self.enter_inspector_page(self.inspector_tab);
             }
             self.inspector_pages.selection = None;
             return Task::none();
@@ -125,9 +133,7 @@ impl App {
         {
             return Task::none();
         }
-        self.assistant.menu = None;
-        self.inspector_pages.selection = None;
-        self.inspector_pages.previous.clear();
+        self.enter_inspector_page(InspectorTab::Properties);
         self.inspector_tab = InspectorTab::Properties;
         Task::batch([
             super::focus_drawing(),

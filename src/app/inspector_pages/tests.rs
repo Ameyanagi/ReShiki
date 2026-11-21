@@ -350,6 +350,106 @@ fn names_from_catalog(app: &mut App) {
     assert_eq!(app.inspector_tab, InspectorTab::Names);
 }
 
+fn open_style_draft(app: &mut App, tab: InspectorTab) {
+    use crate::app::{document_styles, theme_generator};
+    let (open, edit) = match tab {
+        InspectorTab::DrawingStyle => (
+            Message::DrawingStyle(document_styles::Action::Open),
+            Message::DrawingStyle(document_styles::Action::Name("Unfinished style".into())),
+        ),
+        InspectorTab::ThemeGenerator => (
+            Message::ThemeGenerator(theme_generator::Action::Open),
+            Message::ThemeGenerator(theme_generator::Action::Name("Unfinished theme".into())),
+        ),
+        _ => unreachable!(),
+    };
+    let _ = app.update(open);
+    let _ = app.update(edit);
+    assert_eq!(app.inspector_tab, tab);
+}
+
+#[test]
+fn nested_inspector_pages_keep_deliberate_draft_discard_routes() {
+    use crate::app::{context_menu, document_styles, pages, theme_generator};
+
+    for editor in [InspectorTab::DrawingStyle, InspectorTab::ThemeGenerator] {
+        for route in 0..6 {
+            let mut app = drawing();
+            app.tab.selected.clear();
+            let drawing = app.tab.doc.clone();
+            open_style_draft(&mut app, editor);
+            names_from_catalog(&mut app);
+            let _ = app.update(Message::Inspector(InspectorTab::Assistant));
+            let abandon = match route {
+                0 => Message::Inspector(InspectorTab::Predict),
+                1 => Message::SelectAll,
+                2 => Message::ContextMenu(context_menu::Action::Properties(true)),
+                3 => Message::Pages(pages::Action::Open),
+                _ => {
+                    for expected in [InspectorTab::Names, editor] {
+                        let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+                        assert_eq!(app.inspector_tab, expected);
+                    }
+                    if route == 4 {
+                        Message::Escape
+                    } else if editor == InspectorTab::DrawingStyle {
+                        Message::DrawingStyle(document_styles::Action::Cancel)
+                    } else {
+                        Message::ThemeGenerator(theme_generator::Action::Back)
+                    }
+                }
+            };
+            let _ = app.update(abandon);
+            assert!(app.tab.styles.editor.is_none(), "{editor:?}, route {route}");
+            assert!(
+                app.theme_library.editor.is_none(),
+                "{editor:?}, route {route}"
+            );
+            assert!(app.inspector_pages.previous.is_empty());
+            let destination = app.inspector_tab;
+            let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+            assert_eq!(
+                app.inspector_tab, destination,
+                "abandoned pages cannot return"
+            );
+            assert_eq!(app.tab.doc, drawing);
+            assert!(!app.tab.history.can_undo());
+        }
+    }
+}
+
+#[test]
+fn nested_inspector_pages_keep_draft_document_ownership() {
+    use crate::app::tabs;
+
+    for editor in [InspectorTab::DrawingStyle, InspectorTab::ThemeGenerator] {
+        let mut app = drawing();
+        let original = app.tab.id;
+        let drawing = app.tab.doc.clone();
+        open_style_draft(&mut app, editor);
+        names_from_catalog(&mut app);
+        let _ = app.update(Message::New);
+        assert_ne!(app.tab.id, original);
+        assert!(app.tab.styles.editor.is_none());
+        assert!(app.theme_library.editor.is_none());
+        let _ = app.update(Message::Tabs(tabs::Action::Select(original)));
+        assert_eq!(app.inspector_tab, InspectorTab::Names);
+        let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+        assert_eq!(app.inspector_tab, editor);
+        assert_eq!(
+            app.tab.styles.editor.is_some(),
+            editor == InspectorTab::DrawingStyle,
+            "Drawing style drafts belong to their document tab"
+        );
+        assert!(
+            app.theme_library.editor.is_none(),
+            "the shared theme editor is discarded on document activation"
+        );
+        assert_eq!(app.tab.doc, drawing);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
 #[test]
 fn names_from_publication_catalog_returns_to_the_exact_page_and_its_draft() {
     use crate::app::pages;

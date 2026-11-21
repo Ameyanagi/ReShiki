@@ -1,6 +1,96 @@
 use super::*;
 
 #[test]
+fn drawing_style_draft_survives_nested_inspector_pages() {
+    use crate::app::{assistant, command_palette, inspector};
+
+    for commands in [false, true] {
+        for pages in [
+            [InspectorTab::Names, InspectorTab::Assistant],
+            [InspectorTab::Assistant, InspectorTab::Names],
+        ] {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            let drawing = app.tab.doc.clone();
+            send(&mut app, Action::Open);
+            send(&mut app, Action::Name("Unfinished style  ".into()));
+            send(&mut app, Action::Input(Field::FontSize, "19.5".into()));
+            send(&mut app, Action::Input(Field::Bond, "1e-".into()));
+            let snapshot = |app: &App| {
+                let editor = app
+                    .tab
+                    .styles
+                    .editor
+                    .as_ref()
+                    .expect("retained style draft");
+                (
+                    editor.name.clone(),
+                    editor.display_unit,
+                    editor
+                        .inputs
+                        .iter()
+                        .map(|(field, input)| {
+                            (
+                                *field,
+                                input.text.clone(),
+                                input.rendered.clone(),
+                                input.accepted,
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                    editor.candidate(),
+                )
+            };
+            let draft = snapshot(&app);
+            assert!(
+                draft.3.is_err(),
+                "unfinished dimensions are retained verbatim"
+            );
+            for page in pages {
+                if commands && (page == InspectorTab::Names || !cfg!(target_arch = "wasm32")) {
+                    let name = if page == InspectorTab::Names {
+                        "Chemical names panel"
+                    } else {
+                        "Assistant panel"
+                    };
+                    let _ = app.update(Message::Commands(command_palette::Action::Open));
+                    let _ = app.update(Message::Commands(command_palette::Action::Query(
+                        name.into(),
+                    )));
+                    assert_eq!(app.commands.current().unwrap().name, name);
+                    let _ = app.update(Message::Commands(command_palette::Action::Submit));
+                    assert!(!app.commands.open);
+                } else {
+                    let _ = app.update(if page == InspectorTab::Assistant {
+                        Message::Assistant(assistant::Action::Open)
+                    } else {
+                        Message::Inspector(page)
+                    });
+                }
+                assert_eq!(app.inspector_tab, page);
+                assert_eq!(snapshot(&app), draft);
+            }
+            for previous in [pages[0], InspectorTab::DrawingStyle] {
+                let _ = app.update(if commands {
+                    Message::InspectorAction(inspector::Action::BackPage)
+                } else {
+                    Message::Escape
+                });
+                assert_eq!(app.inspector_tab, previous);
+                assert_eq!(snapshot(&app), draft);
+            }
+            assert_eq!(app.tab.doc, drawing);
+            assert!(!app.tab.history.can_undo());
+            send(&mut app, Action::Input(Field::Bond, "25 pt".into()));
+            let restored = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
+            assert_eq!(restored.name, "Unfinished style");
+            assert_eq!(restored.font_size_pt, 19.5);
+            assert_eq!(restored.bond_length_pt, 25.);
+        }
+    }
+}
+
+#[test]
 fn hydrogen_isotope_modes_preview_cancel_apply_and_undo_without_changing_atoms() {
     use reshiki::document::Point;
 
