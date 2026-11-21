@@ -1661,12 +1661,17 @@ pub(crate) fn selections_bounds_in_axes(
             grow(first, &mut [lo, hi].into_iter());
         }
     }
+    let cells = table::Layout::selected_annotations(doc, |id| owners.contains_key(&id));
     for a in doc
         .annotations
         .iter()
         .filter(|a| owners.contains_key(&a.id))
     {
-        grow(a.id, &mut a.corners().into_iter());
+        if let Some(polygon) = cells.as_ref().and_then(|cells| cells.annotation_polygon(a)) {
+            grow(a.id, &mut polygon.into_iter());
+        } else {
+            grow(a.id, &mut a.corners().into_iter());
+        }
     }
     for a in doc.arrows.iter().filter(|a| owners.contains_key(&a.id)) {
         let (lo, hi) = a.bounds();

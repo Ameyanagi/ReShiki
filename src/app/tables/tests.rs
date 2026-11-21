@@ -519,6 +519,12 @@ async fn manual_table_editor_renderer_evidence() -> anyhow::Result<()> {
         CellAction::Text("Original editable text wraps within its owning cell".into()),
     );
     edit_cell(&mut app, CellAction::AddText);
+    capture(
+        &mut app,
+        &mut renderer,
+        "table-wrapped-caption.png",
+        iced::Size::new(1280., 820.),
+    );
     let mut ring = Vec::new();
     for i in 0..6 {
         let angle = i as f32 * std::f32::consts::TAU / 6.;
@@ -558,5 +564,29 @@ async fn manual_table_editor_renderer_evidence() -> anyhow::Result<()> {
         output.join("table-editor.rsk"),
         app.tab.doc.file_json().map_err(anyhow::Error::msg)?,
     )?;
+    let frame = {
+        let g = app
+            .tab
+            .doc
+            .graphics
+            .iter_mut()
+            .find(|g| g.id == table)
+            .unwrap();
+        g.axis_y = Point::new(100., 400.);
+        g.axis_x = Point::new(600., 0.);
+        g.table.as_ref().unwrap().cells[0].frame(g).unwrap()
+    };
+    let caption = app.tab.doc.annotations.first_mut().unwrap();
+    caption.text = "Reaction conditions and solvent".into();
+    caption.position = frame.point(Point::new(0.05, 0.05));
+    caption.angle = 25.;
+    let caption = caption.id;
+    app.set_selection(vec![caption]);
+    capture(
+        &mut app,
+        &mut renderer,
+        "table-caption-affine-clip.png",
+        iced::Size::new(1280., 820.),
+    );
     Ok(())
 }
