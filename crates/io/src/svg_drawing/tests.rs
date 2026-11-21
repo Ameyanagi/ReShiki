@@ -27,6 +27,27 @@ fn normal_paths_are_editable_grouped_and_survive_native_roundtrip() {
     );
 }
 
+#[test]
+fn css_fills_and_outlined_svg_strokes_can_enter_equipment_authoring() {
+    let imported = read_svg(
+        r##"<style>.body { fill: #305080; } .rim { fill: none; stroke: #b43237; stroke-width: 2; }</style><path class="body" d="M0 0H20V30H0Z"/><path class="rim" d="M0 0H20"/>"##,
+    );
+    let doc = imported.drawing;
+    assert_eq!(doc.graphics.len(), 2);
+    let before = doc.clone();
+    let draft =
+        crate::equipment::authoring::Draft::from_selection(&doc, &[doc.graphics[0].id]).unwrap();
+    assert_eq!(draft.definition.shapes.len(), 2);
+    assert!(
+        draft
+            .definition
+            .shapes
+            .iter()
+            .all(|shape| shape.role == crate::equipment::format::Role::Glass)
+    );
+    assert_eq!(doc, before);
+}
+
 fn rendered(drawing: &Document) -> tiny_skia::Pixmap {
     let svg = crate::export::drawing(drawing, "svg").unwrap();
     let tree = usvg::Tree::from_data(&svg, &Default::default()).unwrap();

@@ -711,6 +711,7 @@ impl App {
         self.sync_pictures();
         self.sync_arc();
         self.sync_tlc();
+        let mut selected_width = None;
         if let Some(g) = self
             .tab
             .doc
@@ -720,7 +721,13 @@ impl App {
         {
             // A condition icon's paper disc stays with the icon, not the next shape.
             let fill = self.tab.graphic_style.fill;
+            selected_width = Some(g.style.width_pt);
             self.tab.graphic_style = g.style.clone();
+            // Borderless imported paths keep zero on the object, while the
+            // next ordinary line or shape still needs a visible outline.
+            if g.is_fill_only_path() {
+                self.tab.graphic_style.width_pt = 0.1;
+            }
             if g.is_icon() {
                 self.tab.graphic_style.fill = fill;
             }
@@ -760,7 +767,8 @@ impl App {
             self.tab.bracket_superscript = Superscript::of(bracket.superscript.as_deref());
             self.tab.bracket_superscript_input = bracket.superscript.clone().unwrap_or_default();
         }
-        self.tab.graphic_width_input = points(self.tab.graphic_style.width_pt);
+        self.tab.graphic_width_input =
+            points(selected_width.unwrap_or(self.tab.graphic_style.width_pt));
         self.tab.graphic_corner_input = self
             .tab
             .graphic_style

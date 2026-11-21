@@ -71,6 +71,9 @@ PROPERTIES[0xA39] = ("Closed", "CDXBooleanImplied", {})
 for code in (0xAA2, 0xAA3, 0xAA4, 0xAA5, 0xAB2):
     name, _, enum = PROPERTIES[code]
     PROPERTIES[code] = name, "CDXBooleanImplied", enum
+# ChemDraw 26 writes Dipole as an empty flag. A one-byte Boolean payload
+# makes its CDX reader reject the drawing, although CDXML accepts Dipole=yes.
+PROPERTIES[0xA3A] = ("Dipole", "CDXBooleanImplied", {})
 # Native ChemDraw document annotations accompany clipboard ring-fill drawings.
 PROPERTIES[0x1500] = ("Keyword", "CDXString", {})
 PROPERTIES[0x1501] = ("Content", "CDXString", {})

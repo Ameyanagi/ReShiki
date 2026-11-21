@@ -80,6 +80,9 @@ impl MoleculeCanvas<'_> {
         state: &State,
         bounds: Rectangle,
     ) {
+        if self.equipment_authoring.is_some() {
+            return;
+        }
         let Draft {
             preview,
             ring_selection,
