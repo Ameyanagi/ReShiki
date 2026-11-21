@@ -57,6 +57,7 @@ explains how the crates and modules fit together.
 - `src/app/color_popover.rs`: Style bar menus
 - `src/app/command_palette.rs`: The command palette
 - `src/app/command_palette/catalog.rs`: The palette's commands
+- `src/app/compound_numbers.rs`: Compound numbering uses the normal caption transaction and text editor.
 - `src/app/context_menu.rs`: Commands for the object under a secondary click, or the current selection.
 - `src/app/context_menu/cascade.rs`: Cascading context panels share one event boundary and use laid-out rows as anchors.
 - `src/app/depth_appearance.rs`
@@ -104,6 +105,7 @@ explains how the crates and modules fit together.
 - `src/app/import.rs`: The Import tab, and structure or picture files chosen or dropped on the window.
 - `src/app/inline_text.rs`: In-place caption drafts.
 - `src/app/inspector.rs`: Selection-focused properties and task-based export controls.
+- `src/app/inspector/identity.rs`: One-click molecular identity, using the Properties analysis and naming caches.
 - `src/app/joining.rs`
 - `src/app/keyboard_drawing.rs`: Application routing for the pointer-independent drawing hotspot.
 - `src/app/label_refresh.rs`: A single label calculation in flight, with exact snapshot identity checks.
@@ -668,6 +670,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/compare/chemistry.rs`: One molecule as chemistry, for comparing
 - `crates/model/src/compare/fit.rs`: The 2D fit (Kabsch) that best carries one set of points onto another, with what is left over
 - `crates/model/src/compare/structure.rs`: Molecules matched by structure
+- `crates/model/src/compound_numbers.rs`: Compound numbers are ordinary bold text, linked to atom instances rather than chemical identity.
 - `crates/model/src/crossings.rs`: Drawing depth at crossings; never changes chemical connectivity.
 - `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.

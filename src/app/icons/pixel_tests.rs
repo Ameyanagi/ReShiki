@@ -28,6 +28,7 @@ fn family(icon: Icon) -> &'static str {
         Icon::Check => "check",
         Icon::Cleanup => "cleanup",
         Icon::Trash => "trash",
+        Icon::Copy => "copy",
         Icon::Undo => "undo",
         Icon::Redo => "redo",
         Icon::Import => "import",
@@ -86,6 +87,7 @@ fn all_icons() -> Vec<(String, Icon)> {
         Icon::Check,
         Icon::Cleanup,
         Icon::Trash,
+        Icon::Copy,
         Icon::Undo,
         Icon::Redo,
         Icon::Import,
@@ -208,6 +210,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
         "check",
         "cleanup",
         "trash",
+        "copy",
         "undo",
         "redo",
         "import",
@@ -276,7 +279,7 @@ fn icon_fixtures_cover_every_variant() {
         *counts.entry(family(*icon)).or_insert(0) += 1;
     }
     assert_eq!(counts, expected_counts());
-    assert_eq!(icons.len(), 147);
+    assert_eq!(icons.len(), 148);
 }
 
 fn render(

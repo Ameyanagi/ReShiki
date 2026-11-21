@@ -227,3 +227,16 @@ pub(super) fn history(f: &mut Frame<'_>, ink: Color) {
     f.stroke(&face, Stroke::default().with_width(1.6).with_color(ink));
     line(f, ink, &[(7., 3.8), (7., 7.), (9.4, 8.4)]);
 }
+
+pub(super) fn copy(f: &mut Frame<'_>, ink: Color) {
+    line(
+        f,
+        ink,
+        &[(6., 13.), (3., 13.), (3., 3.), (13., 3.), (13., 6.)],
+    );
+    line(
+        f,
+        ink,
+        &[(7., 7.), (18., 7.), (18., 18.), (7., 18.), (7., 7.)],
+    );
+}

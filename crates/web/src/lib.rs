@@ -1,12 +1,13 @@
 #![forbid(unsafe_code)]
 //! Headless ReShiki for the browser: structure import and export, figures and
 //! previews, through wasm-bindgen. Each call reads and writes as the CLI and
-//! the MCP tools do, so the results match the desktop's. packages/editor
+//! the MCP tools do, so the results match the desktop's. packages/headless
 //! wraps and tests these exports.
 use reshiki_io::{
     engine::LocalEngine,
     export,
     formats::{self, EXPORT_PNG_PIXELS, SvgText},
+    nmr::{self, Nucleus},
     preview,
 };
 use reshiki_model::{document::Document, scene};
@@ -170,6 +171,20 @@ pub async fn smiles(data: Vec<u8>, format: String) -> Result<String, Error> {
 pub async fn inchi(data: Vec<u8>, format: String) -> Result<String, Error> {
     let doc = document(data, &format).await?;
     text(formats::write(doc, "inchi").await.map_err(failed)?)
+}
+
+/// Predict one molecule's NMR shifts, serialized as the CLI's result without
+/// its session revision. The JS wrapper parses this into an ordinary object.
+#[wasm_bindgen(js_name = predictNmr)]
+pub async fn predict_nmr(data: Vec<u8>, format: String, nucleus: JsValue) -> Result<String, Error> {
+    let nucleus = nucleus
+        .as_string()
+        .as_deref()
+        .and_then(Nucleus::from_code)
+        .ok_or_else(|| invalid("nucleus must be 1H or 13C".to_owned()))?;
+    let doc = document(data, &format).await?;
+    let shifts = nmr::predict_drawing(&doc, None, nucleus).map_err(failed)?;
+    serde_json::to_string(&shifts).map_err(|error| failed(error.to_string()))
 }
 
 /// Add a TrueType or OpenType font (or collection) for figures and previews.

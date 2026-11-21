@@ -106,10 +106,12 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
     .unwrap();
     for selected in [vec![], vec![potassium]] {
         app.tab.selected = selected;
+        assert!(app.special_molecular_scope());
         assert!(app.next_property_request().is_none());
         for expanded in [false, true] {
             app.tab.inspector_ui.seed_molecular(Some(expanded));
             let text = panel_text(&app, &mut renderer);
+            assert!(text.contains("Molecular properties"), "{text}");
             assert!(
                 text.contains("Whole drawing · Cl₄KNa₃ · 249.880\u{a0}g/\u{2060}mol"),
                 "{text}"
@@ -149,13 +151,22 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
             .execute(Request::molecule("analyze", app.property_document(&key)))
             .await
             .unwrap();
-        let _ = app.inspector_action(Action::PropertiesCalculated(
-            key,
-            Box::new(Ok(response.analysis.unwrap())),
-        ));
+        let analysis = response.analysis.unwrap();
+        let formula = app.shown_formula(&analysis.display_formula);
+        let weight = format!(
+            "{} g/mol",
+            molecular_weight(analysis.mass, app.appearance.two_decimal_weight)
+        );
+        let smiles = analysis.smiles.clone();
+        let _ = app.inspector_action(Action::PropertiesCalculated(key, Box::new(Ok(analysis))));
+        assert!(!app.special_molecular_scope());
         let text = panel_text(&app, &mut renderer);
-        assert!(text.contains("Weight (g/mol)"), "{text}");
-        assert!(text.contains("Canonical SMILES"), "{text}");
+        assert!(text.lines().any(|line| line == "Identity"), "{text}");
+        assert!(text.contains("Mol. Wt."), "{text}");
+        assert!(text.lines().any(|line| line == weight), "{text}");
+        assert!(text.lines().any(|line| line == formula), "{text}");
+        assert!(text.contains("SMILES"), "{text}");
+        assert!(text.lines().any(|line| line == smiles), "{text}");
         assert!(!text.contains("Crystal structure"));
         assert!(!text.contains("Calculating"));
     }
@@ -1289,4 +1300,148 @@ fn stereo_group_renumber_preserves_shared_groups_across_molecules() {
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, after);
     app.tab.doc.validate().unwrap();
+}
+
+#[test]
+fn export_notice_uses_cached_findings_and_review_does_not_check_again() {
+    use reshiki::chemistry::stereo_lint::{Kind, Note};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Default::default());
+    assert_eq!(app.export_findings_summary(), None);
+    app.tab.stereo_notes.push(Note {
+        kind: Kind::Undefined,
+        atoms: vec![a],
+        bonds: vec![],
+        message: "1 undefined stereocenter (C1)".into(),
+    });
+    assert_eq!(
+        app.export_findings_summary().as_deref(),
+        Some("1 undefined stereocenter")
+    );
+    let drawing = app.tab.doc.clone();
+    let notes = app.tab.stereo_notes.clone();
+    let _ = app.update(Message::Inspector(InspectorTab::Export));
+    let _ = app.export_panel();
+    assert_eq!(app.tab.stereo_notes, notes);
+    let _ = app.update(Message::Stereo(super::super::stereo::Action::Results(true)));
+    assert!(app.check_results);
+    assert!(!app.tab.busy);
+    assert_eq!(app.tab.doc, drawing);
+    assert!(!app.tab.history.can_undo());
+    let before = app.tab.doc.clone();
+    app.tab
+        .doc
+        .add_atom("O", reshiki::document::Point::new(100., 0.));
+    app.changed(before);
+    assert_eq!(app.export_findings_summary(), None);
+}
+
+#[tokio::test]
+#[ignore = "Opt-in destination Export layout and action wiring"]
+async fn export_destinations_are_visible_without_opening_sections_and_keep_their_routes() {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    let mut renderer =
+        <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
+            .await
+            .unwrap();
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc.add_atom("O", Default::default());
+    let size = iced::Size::new(296., 700.);
+    let mut ui = iced_runtime::UserInterface::build(
+        app.export_panel(),
+        size,
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+    ui.operate(&renderer, &mut operation::black_box(&mut collect));
+    let nodes = &collect.snapshot().nodes;
+    for id in [
+        "export-copy-office",
+        "export-figure-format",
+        "export-figure",
+        "export-chemical-format",
+        "export-copy-chemical",
+        "export-chemical",
+        "export-pages",
+    ] {
+        let node = nodes
+            .iter()
+            .find(|node| node.id == id)
+            .unwrap_or_else(|| panic!("Missing {id}"));
+        assert!(
+            node.bounds.width > 0. && node.bounds.height > 0.,
+            "{id}: {:?}",
+            node.bounds
+        );
+        assert!(
+            node.bounds.x >= 0. && node.bounds.x + node.bounds.width <= size.width + 0.1,
+            "{id}: {:?}",
+            node.bounds
+        );
+        assert!(
+            node.bounds.y + node.bounds.height < 330.,
+            "Destination below the options: {id}"
+        );
+    }
+    assert!(
+        !nodes
+            .iter()
+            .any(|node| node.id == "export-copy-image" || node.name.contains("Save as"))
+    );
+    let activate = |ui: &mut iced_runtime::UserInterface<'_, _, _, _>, id: &str| {
+        let mut action = reshiki::accessibility::Activate::<Message>::new(id);
+        ui.operate(&renderer, &mut operation::black_box(&mut action));
+        action.message().cloned()
+    };
+    if reshiki::clipboard::available() {
+        assert!(matches!(
+            activate(&mut ui, "export-copy-office"),
+            Some(Message::CopyForOffice)
+        ));
+    }
+    assert!(matches!(
+        activate(&mut ui, "export-figure"),
+        Some(Message::ExportFigure("pdf", true))
+    ));
+    assert!(matches!(
+        activate(&mut ui, "export-copy-chemical"),
+        Some(Message::CopyAs(reshiki::clipboard::CopyFormat::Mol))
+    ));
+    assert!(matches!(
+        activate(&mut ui, "export-chemical"),
+        Some(Message::Export("mol"))
+    ));
+    assert!(matches!(
+        activate(&mut ui, "export-pages"),
+        Some(Message::Pages(super::super::pages::Action::Show))
+    ));
+    drop(ui);
+    for (format, expected) in [
+        (ChemicalFormat::Mol, reshiki::clipboard::CopyFormat::Mol),
+        (
+            ChemicalFormat::Smiles,
+            reshiki::clipboard::CopyFormat::Smiles,
+        ),
+        (ChemicalFormat::Inchi, reshiki::clipboard::CopyFormat::Inchi),
+        (ChemicalFormat::Cdxml, reshiki::clipboard::CopyFormat::Cdxml),
+    ] {
+        app.tab.inspector_ui.update(Action::Chemical(format));
+        let mut ui = iced_runtime::UserInterface::build(
+            app.export_panel(),
+            size,
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut copy = reshiki::accessibility::Activate::<Message>::new("export-copy-chemical");
+        ui.operate(&renderer, &mut operation::black_box(&mut copy));
+        assert!(matches!(copy.message(), Some(Message::CopyAs(actual)) if *actual == expected));
+        let mut file = reshiki::accessibility::Activate::<Message>::new("export-chemical");
+        ui.operate(&renderer, &mut operation::black_box(&mut file));
+        assert!(
+            matches!(file.message(), Some(Message::Export(actual)) if *actual == format.code())
+        );
+    }
 }

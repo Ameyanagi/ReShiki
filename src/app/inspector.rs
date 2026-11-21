@@ -44,6 +44,9 @@ struct CompositionCache {
 /// The pin beside a property row.
 const PIN: f32 = 20.;
 
+mod identity;
+pub use identity::{IdentityCopyKey, IdentityField};
+
 /// Decimal places, shown as the pattern they write, such as 0.0000.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Places(u8);
@@ -119,14 +122,12 @@ pub enum Section {
     Transform,
     Groups,
     Molecule,
+    Descriptors,
+    NameOptions,
     Chemistry,
     DrawingStyle,
     ProjectionAppearance,
     ArrowGeometry,
-    ExportFigure,
-    ExportChemical,
-    ExportPages,
-    ExportNative,
     RepeatingUnit,
     GenericStructure,
     AtomMaps,
@@ -216,6 +217,15 @@ impl ChemicalFormat {
             Self::Cdxml => "cdxml",
         }
     }
+    fn copy_format(self) -> reshiki::clipboard::CopyFormat {
+        use reshiki::clipboard::CopyFormat;
+        match self {
+            Self::Mol => CopyFormat::Mol,
+            Self::Smiles => CopyFormat::Smiles,
+            Self::Inchi => CopyFormat::Inchi,
+            Self::Cdxml => CopyFormat::Cdxml,
+        }
+    }
     fn description(self) -> &'static str {
         match self {
             Self::Mol => "Molecular structure and coordinates for chemistry software.",
@@ -237,6 +247,10 @@ impl std::fmt::Display for ChemicalFormat {
 }
 #[derive(Debug, Clone)]
 pub enum Action {
+    CopyIdentity(IdentityField),
+    IdentityCopied(IdentityCopyKey, Result<(), String>),
+    NameIdentity,
+    AddIdentityName,
     Section(Section, bool),
     ModelControls(bool),
     Figure(FigureFormat),
@@ -247,6 +261,8 @@ pub enum Action {
     /// Include the editable drawing in exports from the Export tab; `None`
     /// follows the Settings default.
     ExportEditable(Option<bool>),
+    /// A panel-only choice shared by Office and picture file output.
+    ExportBackground(Option<crate::appearance::Background>),
     Chemical(ChemicalFormat),
     ChemicalMenu(bool),
     RefreshProperties,
@@ -346,6 +362,7 @@ pub(super) struct State {
     whole_properties: Option<(PropertyKey, Result<Analysis, String>)>,
     classes: RefCell<ClassCache>,
     composition: RefCell<CompositionCache>,
+    identity_scope: RefCell<identity::ScopeCache>,
     arrow_hints: Option<(u64, u64, Vec<reshiki::reactions::ArrowSemanticsHint>)>,
 }
 impl State {
@@ -431,7 +448,8 @@ impl State {
                 self.close_menu();
                 self.chemical_menu = open;
             }
-            Action::RefreshProperties
+            Action::ExportBackground(_)
+            | Action::RefreshProperties
             | Action::RefreshPropertiesFor(..)
             | Action::PropertiesCalculated(..)
             | Action::Centroid
@@ -440,7 +458,11 @@ impl State {
             | Action::StereoGroup(_)
             | Action::RenumberStereoGroups
             | Action::DepthBonds
-            | Action::ExportEditable(_) => {}
+            | Action::ExportEditable(_)
+            | Action::CopyIdentity(_)
+            | Action::IdentityCopied(..)
+            | Action::NameIdentity
+            | Action::AddIdentityName => {}
         }
     }
 }
@@ -675,6 +697,13 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::CopyIdentity(field) => self.copy_identity(field),
+            Action::IdentityCopied(key, result) => {
+                self.identity_copied(key, result);
+                Task::none()
+            }
+            Action::NameIdentity => self.name_identity(),
+            Action::AddIdentityName => self.add_identity_name(),
             Action::ModelControls(open) => {
                 if open && !self.selected_visible_model() {
                     return Task::none();
@@ -836,6 +865,10 @@ impl App {
                         self.tab.inspector_ui.properties = Some((key, *result));
                     }
                 }
+                Task::none()
+            }
+            Action::ExportBackground(background) => {
+                self.export_tab_background = background;
                 Task::none()
             }
             Action::ExportEditable(editable) => {
@@ -1256,17 +1289,39 @@ impl App {
     }
 
     fn molecular_section(&self, opened: Option<Section>) -> Element<'_, Message> {
-        self.inspector_section_lazy(
-            Section::Molecule,
-            "Molecular properties",
-            self.property_summary(),
-            opened == Some(Section::Molecule),
-            || self.molecular_properties(),
-        )
+        let special = self.special_molecular_scope();
+        column![
+            self.inspector_section_lazy(
+                Section::Molecule,
+                if special {
+                    "Molecular properties"
+                } else {
+                    "Identity"
+                },
+                self.property_summary(),
+                opened == Some(Section::Molecule),
+                || self.molecular_properties(),
+            ),
+            (!special && self.property_analysis().is_some()).then(|| {
+                self.inspector_section_lazy(Section::Descriptors, "Descriptors", "", false, || {
+                    self.descriptor_properties()
+                })
+            }),
+        ]
+        .spacing(10)
+        .into()
     }
 
     /// Show this property under the selected molecule, or hide it.
     fn property_pin(&self, property: reshiki::linked_properties::Property) -> Element<'_, Message> {
+        self.property_pin_enabled(property, true)
+    }
+
+    fn property_pin_enabled(
+        &self,
+        property: reshiki::linked_properties::Property,
+        allowed: bool,
+    ) -> Element<'_, Message> {
         use super::icons::{Glyph, Icon};
         let target = self.property_target(&[]);
         let available = target.is_some();
@@ -1284,8 +1339,14 @@ impl App {
             .padding(0)
             .checked(shown)
             .style(control(shown))
-            .on_press_maybe(target.map(|atoms| Message::ToggleProperty(atoms, property))),
-            if shown {
+            .on_press_maybe(
+                target
+                    .filter(|_| allowed)
+                    .map(|atoms| Message::ToggleProperty(atoms, property)),
+            ),
+            if !allowed {
+                "Select a complete molecule for automatic names"
+            } else if shown {
                 "Hide from the molecule"
             } else if available {
                 "Show under the molecule"
@@ -1328,7 +1389,7 @@ impl App {
 
     /// The molecule's name at the top of Molecular properties: empty shows
     /// the automatic name, typing and Return sets a custom one, ↺ goes back.
-    fn molecule_name(&self, atoms: Vec<u64>) -> Element<'_, Message> {
+    fn molecule_name(&self, atoms: Vec<u64>, automatic_allowed: bool) -> Element<'_, Message> {
         use super::naming::Action;
         use reshiki::linked_properties::{Property, caption};
         let link = caption(&self.tab.doc, &atoms);
@@ -1361,51 +1422,51 @@ impl App {
         } else {
             "Automatic (IUPAC) · type a name, then Return".into()
         };
-        let mut field =
-            column![
-                text("Name").size(11).style(muted_text),
-                row![
-                    reshiki::accessibility::text_input(
-                        "molecule-name",
-                        "Molecule name",
-                        placeholder,
-                        value
-                    )
-                    .on_input({
-                        let atoms = atoms.clone();
-                        move |name| Message::Naming(Action::NameDraft(atoms.clone(), name))
-                    })
-                    .on_submit(Message::Naming(Action::Rename(
-                        atoms.clone(),
-                        value.to_owned()
-                    )))
-                    .size(12)
-                    .padding(6)
-                    .style(crate::appearance::input_style),
-                    hover_hint(
-                        reshiki::accessibility::button(
-                            "molecule-name-automatic",
-                            "Use the automatic name",
-                            text("↺").size(13),
-                        )
-                        .padding([3, 6])
-                        .style(control(false))
-                        .on_press_maybe((!custom.is_empty()).then(|| {
-                            Message::Naming(Action::Rename(atoms.clone(), String::new()))
-                        })),
+        let mut field = column![
+            text("Name").size(11).style(muted_text),
+            row![
+                reshiki::accessibility::text_input(
+                    "molecule-name",
+                    "Molecule name",
+                    placeholder,
+                    value
+                )
+                .on_input({
+                    let atoms = atoms.clone();
+                    move |name| Message::Naming(Action::NameDraft(atoms.clone(), name))
+                })
+                .on_submit_maybe((automatic_allowed || !value.trim().is_empty()).then_some(
+                    Message::Naming(Action::Rename(atoms.clone(), value.to_owned()))
+                ))
+                .size(12)
+                .padding(6)
+                .style(crate::appearance::input_style),
+                hover_hint(
+                    reshiki::accessibility::button(
+                        "molecule-name-automatic",
                         "Use the automatic name",
-                        tooltip::Position::Left,
+                        text("↺").size(13),
+                    )
+                    .padding([3, 6])
+                    .style(control(false))
+                    .on_press_maybe(
+                        (automatic_allowed && !custom.is_empty()).then(|| {
+                            Message::Naming(Action::Rename(atoms.clone(), String::new()))
+                        })
                     ),
-                    self.property_pin(Property::Name),
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-                text(source)
-                    .size(11)
-                    .style(muted_text)
-                    .wrapping(text::Wrapping::WordOrGlyph),
+                    "Use the automatic name",
+                    tooltip::Position::Left,
+                ),
+                self.property_pin_enabled(Property::Name, automatic_allowed),
             ]
-            .spacing(4);
+            .spacing(6)
+            .align_y(Alignment::Center),
+            text(source)
+                .size(11)
+                .style(muted_text)
+                .wrapping(text::Wrapping::WordOrGlyph),
+        ]
+        .spacing(4);
         if link.is_some_and(|link| link.renamed_structure_changed()) {
             field = field.push(
                 text("Structure changed since you named it.")
@@ -1511,15 +1572,11 @@ impl App {
             (self.tab.doc.atoms.len(), self.tab.doc.bonds.len())
         };
         // A selection's counts are already the panel's summary.
-        let mut body = column![
-            self.property_target(&[])
-                .map(|atoms| self.molecule_name(atoms)),
-            key.is_none().then(|| {
-                text(super::workspace::atom_bond_counts(atoms, bonds))
-                    .size(11)
-                    .style(muted_text)
-            })
-        ]
+        let mut body = column![key.is_none().then(|| {
+            text(super::workspace::atom_bond_counts(atoms, bonds))
+                .size(11)
+                .style(muted_text)
+        })]
         .spacing(8);
         for hint in self.checked_arrow_hints() {
             body = body.push(text(hint.kind.message()).size(11).style(muted_text));
@@ -1543,104 +1600,7 @@ impl App {
             );
         }
         if let Some(a) = self.property_analysis() {
-            use reshiki::linked_properties::Property;
-            let unpaired = unpaired_electrons(&self.tab.doc, a, key.as_ref().map(|_| &ids));
-            let rows =
-                std::iter::once(("Formula", None, self.shown_formula(&a.display_formula))).chain(
-                    property_rows(a, self.appearance.two_decimal_weight, unpaired),
-                );
-            let pins = [
-                Some(Property::Formula),
-                Some(Property::Weight),
-                Some(Property::ExactMass),
-                Some(Property::LogP),
-                Some(Property::Tpsa),
-            ];
-            for ((label, hint, value), pin) in
-                rows.zip(pins.into_iter().chain(std::iter::repeat(None)))
-            {
-                let label = text(label).size(11).style(muted_text).width(Length::Fill);
-                let label: Element<'_, Message> = if let Some(hint) = hint {
-                    hover_hint(label, hint, tooltip::Position::Top).into()
-                } else {
-                    label.into()
-                };
-                let mut line = row![label, text(value).size(12)]
-                    .spacing(6)
-                    .align_y(Alignment::Center);
-                if let Some(property) = pin {
-                    if let Some(places) = self.property_places(property) {
-                        line = line.push(places);
-                    }
-                    line = line.push(self.property_pin(property));
-                }
-                body = body.push(line);
-            }
-            let elemental = self.elemental_analysis(a);
-            if let Some(analysis) = &elemental {
-                body = body
-                    .push(
-                        row![
-                            text("Elemental analysis")
-                                .size(11)
-                                .style(muted_text)
-                                .width(Length::Fill),
-                            self.property_pin(Property::Analysis)
-                        ]
-                        .align_y(Alignment::Center),
-                    )
-                    .push(
-                        text(analysis.replace(", ", ",\u{a0}"))
-                            .size(12)
-                            .wrapping(text::Wrapping::WordOrGlyph),
-                    );
-            }
-            let classes = self.property_classes();
-            if !classes.is_empty() {
-                body = body.push(
-                    column![
-                        text("Classes").size(11).style(muted_text),
-                        row(classes.into_iter().map(|class| {
-                            hover_hint(
-                                container(text(class.term).size(11))
-                                    .padding([3, 7])
-                                    .style(container::rounded_box),
-                                class.tooltip,
-                                tooltip::Position::Top,
-                            )
-                            .into()
-                        }))
-                        .spacing(4)
-                        .wrap(),
-                    ]
-                    .spacing(4),
-                );
-            }
-            body = body
-                .push(text("Canonical SMILES").size(12))
-                .push(
-                    text(if a.smiles.is_empty() {
-                        "SMILES cannot represent these hydrogen or partial bonds."
-                    } else {
-                        &a.smiles
-                    })
-                    .size(11)
-                    .wrapping(text::Wrapping::Glyph),
-                )
-                .push(a.smiles_notice.as_deref().map(|notice| {
-                    text(notice)
-                        .size(11)
-                        .style(muted_text)
-                        .wrapping(text::Wrapping::WordOrGlyph)
-                }))
-                .push(
-                    row![
-                        panel_action("Copy SMILES", Message::CopySmiles)
-                            .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),
-                        elemental.map(|_| panel_action("Copy analysis", Message::CopyAnalysis)),
-                    ]
-                    .spacing(6),
-                );
+            body = body.push(self.identity_content(a));
         } else if atoms == 0 {
             return body
                 .push(
@@ -1672,32 +1632,40 @@ impl App {
                 .style(muted_text),
             );
         }
-        body.push(
-            column![
-                reshiki::accessibility::button(
-                    "nmr.open",
-                    "Predict NMR shifts for the selected molecule",
-                    text("Predict NMR…").size(12).width(Length::Fill).center(),
-                )
-                .padding([6, 8])
-                .width(Length::Fill)
-                .on_press(Message::Nmr(super::nmr::Action::Open))
-                .style(crate::appearance::secondary),
-                panel_action(
-                    if key.is_some() {
-                        "Recalculate selection"
-                    } else {
-                        "Recalculate"
-                    },
-                    Message::InspectorAction(Action::RefreshProperties),
-                )
-                .on_press_maybe(
-                    (!self.tab.busy && self.tab.inspector_ui.pending.is_none())
-                        .then_some(Message::InspectorAction(Action::RefreshProperties)),
-                ),
-            ]
-            .spacing(6),
-        )
+        if self.property_analysis().is_some() {
+            return body.into();
+        }
+        body.push(self.identity_name_options())
+            .push(self.molecular_actions())
+            .into()
+    }
+
+    fn molecular_actions(&self) -> Element<'_, Message> {
+        let key = self.property_key();
+        column![
+            reshiki::accessibility::button(
+                "nmr.open",
+                "Predict NMR shifts for the selected molecule",
+                text("Predict NMR…").size(12).width(Length::Fill).center(),
+            )
+            .padding([6, 8])
+            .width(Length::Fill)
+            .on_press(Message::Nmr(super::nmr::Action::Open))
+            .style(crate::appearance::secondary),
+            panel_action(
+                if key.is_some() {
+                    "Recalculate selection"
+                } else {
+                    "Recalculate"
+                },
+                Message::InspectorAction(Action::RefreshProperties),
+            )
+            .on_press_maybe(
+                (!self.tab.busy && self.tab.inspector_ui.pending.is_none())
+                    .then_some(Message::InspectorAction(Action::RefreshProperties)),
+            ),
+        ]
+        .spacing(6)
         .into()
     }
 
@@ -2287,9 +2255,7 @@ impl App {
             "export-figure-format",
             format!("Figure format: {figure}"),
             row![
-                text(format!("{} · {figure}", figure.kind()))
-                    .size(12)
-                    .width(Length::Fill),
+                text(figure.to_string()).size(12).width(Length::Fill),
                 super::workspace::caret(9.)
             ]
             .align_y(Alignment::Center),
@@ -2420,7 +2386,7 @@ impl App {
         let anchor = super::popover::choice_anchor(
             "export-chemical-format",
             format!("Structure format: {chemical}"),
-            chemical.to_string(),
+            chemical.copy_format().label().to_owned(),
             12.,
             8,
             open,
@@ -2431,7 +2397,7 @@ impl App {
                 reshiki::accessibility::button(
                     format!("chemical-format-{}", format.code()),
                     format.to_string(),
-                    text(format.to_string()).size(12),
+                    text(format.copy_format().label()).size(12),
                 )
                 .checked(format == chemical)
                 .width(Length::Fill)
@@ -2490,252 +2456,283 @@ impl App {
             .unwrap_or(self.appearance.export_editable_drawing)
     }
 
+    /// A file picture keeps its Settings default until a panel swatch is chosen.
+    pub(super) fn export_picture_background(&self) -> crate::appearance::Background {
+        self.export_tab_background
+            .unwrap_or(self.appearance.export_background)
+    }
+
+    fn export_findings_summary(&self) -> Option<String> {
+        use reshiki::chemistry::stereo_lint::Kind;
+        let notes = &self.tab.stereo_notes;
+        if notes.is_empty() {
+            return None;
+        }
+        if notes
+            .iter()
+            .all(|n| n.kind == Kind::Undefined && n.bonds.is_empty())
+        {
+            let centers: usize = notes.iter().map(|n| n.atoms.len()).sum();
+            if centers > 0 {
+                return Some(format!(
+                    "{centers} undefined stereocenter{}",
+                    if centers == 1 { "" } else { "s" }
+                ));
+            }
+        }
+        Some(format!(
+            "{} Check drawing finding{}",
+            notes.len(),
+            if notes.len() == 1 { "" } else { "s" }
+        ))
+    }
+
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
         let figure = self.tab.inspector_ui.figure;
         let chemical = self.tab.inspector_ui.chemical;
         let editable = self.export_editable();
-        let settings_link = reshiki::accessibility::button(
-            "export-background-settings",
-            "Open Settings at Copy & export",
-            text("Settings → Copy & export").size(11),
-        )
-        .padding(0)
-        .style(|theme: &iced::Theme, status| iced::widget::button::Style {
-            text_color: if status == iced::widget::button::Status::Hovered {
-                theme.palette().text
-            } else {
-                theme.palette().primary
-            },
-            ..Default::default()
-        })
-        .on_press(Message::Settings(super::settings_page::Action::Open(Some(
-            super::settings_page::Section::CopyExport,
-        ))));
-        let mut figures = column![
-            self.figure_menu(figure),
-            text(figure.description()).size(12).style(muted_text),
-            (figure == FigureFormat::Png).then(|| self.resolution_menu()),
-            column![
-                text(format!(
-                    "Background · {}",
-                    self.appearance.export_background.label()
-                ))
-                .size(12),
-                super::settings_page::background_choices(
-                    "export-background",
-                    self.appearance.export_background,
-                    self.appearance.custom_background,
-                    |background| Message::Settings(super::settings_page::Action::ExportBackground(
-                        background
-                    )),
-                    true,
-                ),
+        let clipboard = reshiki::clipboard::available() && !self.clipboard_working();
+        let mut body = column![text("Export").size(18)].spacing(12);
+        if let Some(summary) = self.export_findings_summary() {
+            body = body.push(
                 row![
-                    text("ReShiki remembers this for exported files.")
+                    text(summary)
                         .size(11)
-                        .style(muted_text),
-                    settings_link,
+                        .width(Length::Fill)
+                        .style(crate::appearance::text_color(Color::from_rgb8(161, 98, 7))),
+                    reshiki::accessibility::button(
+                        "export-review-findings",
+                        "Review Check drawing findings",
+                        text("Review").size(11)
+                    )
+                    .padding([3, 5])
+                    .style(button::text)
+                    .on_press(Message::Stereo(super::stereo::Action::Results(true))),
                 ]
                 .spacing(4)
-                .wrap(),
+                .align_y(Alignment::Center),
+            );
+        }
+        if let Some(recent) = self.repeat_export() {
+            let label = recent.label();
+            body = body.push(
+                reshiki::accessibility::button("export-again", label.clone(), text(label).size(12))
+                    .width(Length::Fill)
+                    .padding([8, 10])
+                    .on_press_maybe(
+                        (!self.tab.busy && !self.figure_exporting).then_some(Message::ExportAgain),
+                    ),
+            );
+        }
+        let destinations = column![
+            row![
+                text("Copy for Word & PowerPoint")
+                    .size(12)
+                    .width(Length::Fill),
+                reshiki::accessibility::button(
+                    "export-copy-office",
+                    "Copy for Word & PowerPoint",
+                    text(super::workspace::keyed("Copy", &Message::Copy(false))).size(12)
+                )
+                .padding([7, 9])
+                .style(crate::appearance::primary)
+                .on_press_maybe(
+                    (clipboard && self.tab.doc.object_ids().next().is_some())
+                        .then_some(Message::CopyForOffice)
+                ),
             ]
-            .spacing(6),
-            self.export_picture(figure),
+            .spacing(6)
+            .align_y(Alignment::Center),
+            row![
+                text("Picture file").size(12),
+                self.figure_menu(figure),
+                reshiki::accessibility::button(
+                    "export-figure",
+                    format!("Export {figure} figure"),
+                    text(if self.figure_exporting {
+                        "Exporting…"
+                    } else {
+                        "Export…"
+                    })
+                    .size(12)
+                )
+                .padding([7, 9])
+                .style(crate::appearance::secondary)
+                .on_press_maybe(
+                    (!self.tab.busy && !self.figure_exporting)
+                        .then_some(Message::ExportFigure(figure.code(), editable))
+                ),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
+            row![
+                text("Structure").size(12),
+                hover_hint(
+                    self.chemical_menu(chemical),
+                    chemical.description(),
+                    tooltip::Position::Bottom
+                ),
+                reshiki::accessibility::button(
+                    "export-copy-chemical",
+                    format!("Copy {} structure", chemical.copy_format().label()),
+                    text("Copy").size(12)
+                )
+                .padding([7, 8])
+                .style(super::workspace::control(false))
+                .on_press_maybe(
+                    (!self.clipboard_working()).then_some(Message::CopyAs(chemical.copy_format()))
+                ),
+                reshiki::accessibility::button(
+                    "export-chemical",
+                    format!("Export {} structure", chemical.copy_format().label()),
+                    text("Export…").size(12)
+                )
+                .padding([7, 9])
+                .style(super::workspace::control(false))
+                .on_press_maybe((!self.tab.busy).then_some(Message::Export(chemical.code()))),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
             reshiki::accessibility::button(
-                "export-figure",
-                format!("Export {figure} figure"),
-                text(if self.figure_exporting {
-                    "Exporting…".into()
-                } else {
-                    format!("Export {figure}…")
-                })
-                .size(13)
+                "export-pages",
+                "Pages & printing",
+                row![
+                    text("Pages & printing").size(12).width(Length::Fill),
+                    text("›").size(16),
+                ]
+                .align_y(Alignment::Center)
             )
-            .padding(10)
+            .padding([7, 0])
             .width(Length::Fill)
-            .on_press_maybe(
-                (!self.tab.busy && !self.figure_exporting)
-                    .then_some(Message::ExportFigure(figure.code(), editable))
-            ),
+            .style(button::text)
+            .on_press(Message::Pages(super::pages::Action::Show)),
         ]
         .spacing(9);
-        if figure == FigureFormat::Svg {
-            figures = figures.push(
-                column![
-                    checkbox(self.appearance.export_svg_live_text)
-                        .label("Keep text editable")
-                        .on_toggle(|enabled| Message::View(
-                            super::view_settings::Action::ExportSvgLiveText(enabled)
-                        ))
-                        .text_size(12),
-                    text(
-                        "Off: text becomes outlines and looks the same in every app. On: text stays text and each app substitutes its own fonts."
-                    )
-                    .size(11)
-                    .style(muted_text),
-                ]
-                .spacing(4),
-            );
-        }
-        if matches!(
-            figure,
-            FigureFormat::Png | FigureFormat::Svg | FigureFormat::SvgOffice | FigureFormat::Pdf
-        ) {
-            let default = self.appearance.export_editable_drawing;
-            figures = figures.push(
-                column![
-                    row![
-                        checkbox(editable)
-                            .label("Include editable drawing")
-                            .on_toggle(|enabled| Message::InspectorAction(Action::ExportEditable(
-                                Some(enabled)
-                            )))
-                            .text_size(12)
-                            .width(Length::Fill),
-                        (editable != default).then(|| super::settings_page::text_button(
-                            "export-editable-restore",
-                            "Restore the default for Include editable drawing",
-                            "Restore default",
-                            Some(Message::InspectorAction(Action::ExportEditable(None))),
-                        )),
-                    ]
-                    .align_y(Alignment::Center),
-                    text(format!(
-                        "Default: {} · Settings → Copy & export",
-                        if default { "on" } else { "off" }
-                    ))
-                    .size(11)
-                    .style(muted_text),
-                ]
-                .spacing(4),
-            );
-        }
-        if reshiki::clipboard::available() {
-            figures = figures
-                .push(
-                    reshiki::accessibility::button(
-                        "export-copy-image",
-                        "Copy image",
-                        text(super::workspace::keyed("Copy image", &Message::CopyImage)).size(12),
-                    )
-                    .padding([7, 9])
-                    .style(super::workspace::control(false))
-                    .on_press_maybe((!self.tab.clipboard_busy).then_some(Message::CopyImage))
-                    .width(Length::Fill),
-                )
-                .push(
-                    text(if self.tab.selected.is_empty() {
-                        "Copy image uses the full drawing."
-                    } else {
-                        "Copy image uses the selected objects."
-                    })
-                    .size(11)
-                    .style(muted_text),
-                );
-        }
-        let mut body = column![
-            text("Export").size(18),
-            text("File exports use the full drawing.")
-                .size(12)
+        body = body
+            .push(destinations)
+            .push(
+                text(if self.tab.selected.is_empty() {
+                    "Copy and file exports use the full drawing."
+                } else {
+                    "Copy uses the selection · Files use the full drawing."
+                })
+                .size(11)
                 .style(muted_text),
-            self.inspector_section(
-                Section::ExportFigure,
-                "Figure",
-                &self.tab.doc.drawing_style.name,
-                true,
-                figures
-            ),
-            self.inspector_section(
-                Section::ExportChemical,
-                "Structure & exchange",
-                "MOL · SMILES · InChI · CDXML",
-                false,
-                column![
-                    self.chemical_menu(chemical),
-                    text(chemical.description()).size(12).style(muted_text),
-                    reshiki::accessibility::button(
-                        "export-chemical",
-                        format!("Export {} structure", chemical.code().to_uppercase()),
-                        text(format!("Export {}…", chemical.code().to_uppercase())).size(13)
-                    )
-                    .padding(10)
-                    .width(Length::Fill)
-                    .on_press_maybe((!self.tab.busy).then_some(Message::Export(chemical.code()))),
+            )
+            .push(
+                container(
                     panel_action(
                         "Reaction roles & export…",
-                        Message::Reaction(super::reactions::Action::Open)
-                    ),
-                ]
-                .spacing(9)
-            ),
-        ]
-        .spacing(10);
-        let mut pages = column![panel_action(
-            "Page setup…",
-            Message::Pages(super::pages::Action::Show)
-        )]
-        .spacing(6);
-        if self.tab.doc.page_layout.is_some() {
-            pages = pages.push(
-                panel_action(
-                    "PDF · all pages",
-                    Message::Pages(super::pages::Action::Export),
-                )
-                .on_press_maybe(
-                    (!self.figure_exporting)
-                        .then_some(Message::Pages(super::pages::Action::Export)),
-                ),
-            );
-        }
-        if reshiki::printing::available() {
-            pages = pages.push(
-                keyed_command(
-                    "Print…",
-                    Message::Printing(super::printing::Action::Start(
-                        reshiki::printing::Scope::Document,
-                    )),
-                )
-                .on_press_maybe(self.printing.active.is_none().then_some(Message::Printing(
-                    super::printing::Action::Start(reshiki::printing::Scope::Document),
-                )))
-                .width(Length::Fill)
-                .style(crate::appearance::secondary),
-            );
-            if !self.tab.selected.is_empty() {
-                pages = pages.push(
-                    panel_action(
-                        "Print selection…",
-                        Message::Printing(super::printing::Action::Start(
-                            reshiki::printing::Scope::Selection,
-                        )),
+                        Message::Reaction(super::reactions::Action::Open),
                     )
-                    .on_press_maybe(self.printing.active.is_none().then_some(Message::Printing(
-                        super::printing::Action::Start(reshiki::printing::Scope::Selection),
-                    )))
+                    .padding([3, 0])
+                    .style(button::text),
+                )
+                .align_right(Length::Fill),
+            );
+        let background = self.export_tab_background;
+        let default = self.appearance.export_editable_drawing;
+        let mut options = column![
+            super::workspace::horizontal_line(),
+            row![
+                text("Background").size(12).width(Length::Fill),
+                reshiki::accessibility::button(
+                    "export-background-default",
+                    "Use Settings background defaults",
+                    text("Settings defaults").size(11)
+                )
+                .checked(background.is_none())
+                .padding([4, 6])
+                .style(super::workspace::control(background.is_none()))
+                .on_press(Message::InspectorAction(Action::ExportBackground(None))),
+            ]
+            .align_y(Alignment::Center),
+            text(background.map_or_else(
+                || format!(
+                    "Copy: {} · Picture: {}",
+                    self.appearance.copy_background.label(),
+                    self.appearance.export_background.label()
+                ),
+                |chosen| format!("{} · Copy and picture files", chosen.label()),
+            ))
+            .size(11)
+            .style(muted_text),
+            super::settings_page::background_choices(
+                "export-background",
+                background,
+                self.appearance.custom_background,
+                |background| Message::InspectorAction(Action::ExportBackground(Some(background))),
+                true
+            ),
+            (figure == FigureFormat::Png).then(|| self.resolution_menu()),
+            row![
+                checkbox(editable)
+                    .label("Include editable drawing")
+                    .on_toggle(
+                        |enabled| Message::InspectorAction(Action::ExportEditable(Some(enabled)))
+                    )
+                    .text_size(12)
                     .width(Length::Fill),
-                );
-            }
+                (editable != default).then(|| super::settings_page::text_button(
+                    "export-editable-restore",
+                    "Restore the default for Include editable drawing",
+                    "Restore default",
+                    Some(Message::InspectorAction(Action::ExportEditable(None))),
+                )),
+            ]
+            .align_y(Alignment::Center),
+            text(format!(
+                "Default: {} · Settings → Copy & export",
+                if default { "on" } else { "off" }
+            ))
+            .size(11)
+            .style(muted_text),
+        ]
+        .spacing(6);
+        if figure == FigureFormat::Svg {
+            options = options.push(
+                checkbox(self.appearance.export_svg_live_text)
+                    .label("Keep text editable")
+                    .on_toggle(|enabled| {
+                        Message::View(super::view_settings::Action::ExportSvgLiveText(enabled))
+                    })
+                    .text_size(12),
+            );
         }
-        body = body.push(self.inspector_section(
-            Section::ExportPages,
-            "Pages & printing",
-            "",
-            self.tab.doc.page_layout.is_some(),
-            pages,
-        ));
-        body.push(self.inspector_section(
-            Section::ExportNative,
-            "Editable document",
-            ".rsk · retains the complete drawing",
-            true,
-            panel_action(super::files::SAVE_AS, Message::SaveAs).width(Length::Fill),
-        ))
-        .into()
+        #[cfg(windows)]
+        if figure == FigureFormat::Emf {
+            options = options.push(
+                text("Editable drawing applies to Copy; EMF files contain a picture only.")
+                    .size(11)
+                    .style(muted_text),
+            );
+        }
+        body.push(options)
+            .push(text(figure.description()).size(11).style(muted_text))
+            .push(self.export_picture(figure))
+            .push(
+                reshiki::accessibility::button(
+                    "export-background-settings",
+                    "Open Settings at Copy & export",
+                    text("Settings → Copy & export").size(11),
+                )
+                .padding(0)
+                .style(button::text)
+                .on_press(Message::Settings(super::settings_page::Action::Open(Some(
+                    super::settings_page::Section::CopyExport,
+                )))),
+            )
+            .into()
     }
+    pub(super) fn reset_export_panel_options(&mut self) {
+        self.export_tab_editable = None;
+        self.export_tab_background = None;
+    }
+
     pub(super) fn toggle_inspector(&mut self) -> Task<Message> {
         self.inspector_open = !self.inspector_open;
         self.templates.add_menu_open = false;
-        self.export_tab_editable = None;
+        self.reset_export_panel_options();
         if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
             return self.assistant_action(super::assistant::Action::Open);
         }
@@ -2774,7 +2771,7 @@ impl App {
             };
         }
         // The Export tab starts at the default each time it opens.
-        self.export_tab_editable = None;
+        self.reset_export_panel_options();
         self.templates.add_menu_open = false;
         self.inspector_tab = tab;
         self.inspector_open = true;

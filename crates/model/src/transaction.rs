@@ -297,6 +297,7 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
     crate::arrow_anchors::reconcile(doc);
     crate::molecule_names::reconcile(doc, &before);
     crate::linked_properties::reconcile(doc, &before);
+    crate::compound_numbers::reconcile(doc, &before);
     crate::arrow_labels::reconcile(doc, &before);
     crate::models3d::reconcile(doc, &before);
     if *doc != before {

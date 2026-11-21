@@ -4251,6 +4251,7 @@ dependencies = [
  "js-sys",
  "reshiki-io",
  "reshiki-model",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
