@@ -1,5 +1,5 @@
 //! Chemical names and Assistant are pages within the ordinary inspector tabs.
-use super::{App, InspectorTab, Message, document_tab::TabId, inspector};
+use super::{App, InspectorTab, Message, document_tab::TabId};
 use iced::Task;
 use std::collections::HashSet;
 

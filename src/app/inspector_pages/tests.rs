@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::inspector;
 use crate::app::{assistant, naming};
 use crate::canvas::Edit;
 use reshiki::document::Point;
