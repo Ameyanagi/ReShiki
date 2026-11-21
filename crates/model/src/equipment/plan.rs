@@ -134,6 +134,8 @@ impl Default for Settings {
 
 /// How far a hose pushed onto a barb reaches past the barb's tip, over its ribs.
 const HOSE_CUFF_MM: f64 = 12.;
+pub(super) const GLASS_OUTLINE_PT: f32 = 0.6;
+const SOCKET_GROUND_START_MM: f64 = 1.2;
 
 /// The paint plan of one compositing group, in paint order.
 pub fn paint_plan(group: &[Instance], settings: Settings) -> Result<Vec<PlanPath>, String> {
@@ -203,6 +205,10 @@ fn piece(
     };
     // Glass on the body layer joins one silhouette: outlines, then fills.
     let mut glass: Vec<GlassPath> = Vec::new();
+    // A source edge within half the outline width can show through at the
+    // mouth. Stop at the ground zone so deeper glass details stay intact.
+    let cap_depth = (f64::from(GLASS_OUTLINE_PT) / (mm * settings.points_per_world))
+        .clamp(RIM_TOLERANCE_MM, SOCKET_GROUND_START_MM);
     let socket_mouths: Vec<_> = e
         .joints
         .iter()
@@ -216,6 +222,7 @@ fn piece(
                 axis: normalize(j.dir),
                 bore: t.d / 2.,
                 lip: t.bead_radius(),
+                cap_depth,
             })
         })
         .collect();
@@ -359,25 +366,59 @@ struct SocketMouth {
     axis: Xy,
     bore: f64,
     lip: f64,
+    cap_depth: f64,
 }
 
+const RIM_TOLERANCE_MM: f64 = 0.5;
+
 impl SocketMouth {
-    fn spans_bore(&self, a: Xy, b: Xy) -> bool {
-        // The two rim marks can sit slightly outside the original straight edge.
-        const TOLERANCE_MM: f64 = 0.5;
-        let [a, b] = [sub(a, self.at), sub(b, self.at)];
-        if dot(a, self.axis).abs().max(dot(b, self.axis).abs()) > TOLERANCE_MM {
-            return false;
-        }
+    fn at_lip(&self, point: Xy) -> bool {
+        // Rim marks can sit slightly outside the authored edge.
+        let local = sub(point, self.at);
+        (-self.cap_depth..=RIM_TOLERANCE_MM).contains(&dot(local, self.axis))
+            && dot(local, perp(self.axis)).abs() <= self.lip + RIM_TOLERANCE_MM
+    }
+
+    fn open_outline(&self, edges: &mut [OutlineEdge]) {
+        let at_lip = |edge: &OutlineEdge| {
+            matches!(edge.command, Seg::Line(_)) && self.at_lip(edge.from) && self.at_lip(edge.to)
+        };
+        let Some(seam) = edges.iter().position(|edge| !at_lip(edge)) else {
+            return;
+        };
+        let (before, after) = edges.split_at_mut(seam + 1);
         let across = perp(self.axis);
-        let (a, b) = (dot(a, across), dot(b, across));
-        a.abs().max(b.abs()) <= self.lip + TOLERANCE_MM
-            && a.min(b) <= -self.bore + TOLERANCE_MM
-            && a.max(b) >= self.bore - TOLERANCE_MM
+        let mut lip: Vec<&mut OutlineEdge> = Vec::new();
+        for edge in after.iter_mut().chain(before) {
+            if at_lip(edge) {
+                lip.push(edge);
+                continue;
+            }
+            if let Some((first, last)) = lip.first().zip(lip.last()) {
+                let a = dot(sub(first.from, self.at), across);
+                let b = dot(sub(last.to, self.at), across);
+                if a.min(b) <= -self.bore + RIM_TOLERANCE_MM
+                    && a.max(b) >= self.bore - RIM_TOLERANCE_MM
+                {
+                    for edge in &mut lip {
+                        edge.open = true;
+                    }
+                }
+            }
+            lip.clear();
+        }
     }
 }
 
-/// Open the ink of a straight source rim while preserving the glass fill.
+struct OutlineEdge {
+    command: Seg,
+    from: Xy,
+    to: Xy,
+    open: bool,
+}
+
+/// Open the ink of a straight source rim, possibly split into several edges,
+/// while preserving the glass fill.
 /// Leave authored curves, open outlines and the rest of each contour alone.
 fn open_socket_mouths(path: &[Seg], mouths: &[SocketMouth]) -> Vec<Seg> {
     if mouths.is_empty() {
@@ -390,24 +431,41 @@ fn open_socket_mouths(path: &[Seg], mouths: &[SocketMouth]) -> Vec<Seg> {
             continue;
         };
         let mut previous = *start;
-        let edges: Vec<_> = contour
+        let mut edges: Vec<_> = contour
             .iter()
             .skip(1)
             .map(|&command| {
-                let (command, end, straight) = match command {
-                    Seg::Move(p) | Seg::Line(p) => (command, p, true),
-                    Seg::Cubic(_, _, p) => (command, p, false),
-                    Seg::Close => (Seg::Line(*start), *start, true),
+                let (command, end) = match command {
+                    Seg::Move(p) | Seg::Line(p) | Seg::Cubic(_, _, p) => (command, p),
+                    Seg::Close => (Seg::Line(*start), *start),
                 };
-                let gap = straight && mouths.iter().any(|mouth| mouth.spans_bore(previous, end));
+                let edge = OutlineEdge {
+                    command,
+                    from: previous,
+                    to: end,
+                    open: false,
+                };
                 previous = end;
-                if gap { Seg::Move(end) } else { command }
+                edge
             })
             .collect();
-        if let Some(gap) = edges.iter().position(|step| matches!(step, Seg::Move(_))) {
-            outline.extend(edges.iter().cycle().skip(gap).take(edges.len()).copied());
-        } else {
+        for mouth in mouths {
+            mouth.open_outline(&mut edges);
+        }
+        let Some(gap) = edges.iter().position(|edge| edge.open) else {
             outline.extend_from_slice(contour);
+            continue;
+        };
+        let mut resume_at = None;
+        for edge in edges.iter().cycle().skip(gap).take(edges.len()) {
+            if edge.open {
+                resume_at = Some(edge.to);
+            } else {
+                if let Some(p) = resume_at.take() {
+                    outline.push(Seg::Move(p));
+                }
+                outline.push(edge.command);
+            }
         }
     }
     outline
@@ -499,7 +557,14 @@ fn standard_joint(
             );
             glass.push((polygon(&body, true), polygon(&body, false), None, None));
             ground(
-                axial(at, u, &[(1.2, ri(1.2)), (t.l - 0.6, ri(t.l - 0.6))]),
+                axial(
+                    at,
+                    u,
+                    &[
+                        (SOCKET_GROUND_START_MM, ri(SOCKET_GROUND_START_MM)),
+                        (t.l - 0.6, ri(t.l - 0.6)),
+                    ],
+                ),
                 false,
                 details,
             );
