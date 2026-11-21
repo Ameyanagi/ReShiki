@@ -18,6 +18,7 @@ impl App {
 
     pub(super) fn dispatch_message(&mut self, message: Message) -> Option<Task<Message>> {
         match message {
+            Message::Start(action) => return Some(self.start_action(action)),
             // Routed by the gates or update_front before dispatch.
             // Autosaved: handled before editor/modal guards.
             Message::Accessibility(_)

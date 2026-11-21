@@ -445,6 +445,8 @@ impl App {
                 self.fit();
             }
             if let Job::ImportFile(path) = &kind {
+                #[cfg(not(target_arch = "wasm32"))]
+                self.remember_start_file(path);
                 self.tab.keep_format = false;
                 if !cfg!(target_arch = "wasm32") && super::files::kept_format(path).is_some() {
                     // A ChemDraw or MOL file opens as itself: unchanged, with
@@ -466,6 +468,8 @@ impl App {
                     self.tab.mark_saved(Document::default());
                 }
                 self.begin_file_epoch();
+                #[cfg(target_arch = "wasm32")]
+                self.remember_start_browser_tab();
             }
         }
         self.tab.analysis = response.analysis;
