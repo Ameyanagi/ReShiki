@@ -120,6 +120,9 @@ impl Graphic {
 
     /// Arc endpoints stay parametric; other graphics expose their Bézier points.
     pub fn edit_points(&self) -> Vec<Point> {
+        if self.kind == GraphicKind::TlcPlate {
+            return vec![];
+        }
         if self.kind == GraphicKind::Arc {
             let arc = self.arc.unwrap_or_default();
             let start = arc.start_degrees.rem_euclid(360.);

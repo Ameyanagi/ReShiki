@@ -185,7 +185,13 @@ fn valid_target(
         "ReactionStepObjectsAboveArrow" | "ReactionStepObjectsBelowArrow" => {
             matches!(
                 node.tag.as_str(),
-                "fragment" | "group" | "graphic" | "curve" | "arrow" | "embeddedobject"
+                "fragment"
+                    | "group"
+                    | "graphic"
+                    | "curve"
+                    | "arrow"
+                    | "embeddedobject"
+                    | "tlcplate"
             ) || caption
         }
         _ => false,

@@ -81,6 +81,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("reshiki-io", "passive_drawing_geometry"): 0,
     ("reshiki-io", "pdf_gradients"): 0,
     ("reshiki-io", "spacefill_seams"): 0,
+    ("reshiki-io", "tlc_plate"): 0,
     ("reshiki-macos", "native_print"): 0,
     ("reshiki-geometry", "c60"): 0,
     ("reshiki-geometry", "embedding"): 0,

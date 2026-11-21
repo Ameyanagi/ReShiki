@@ -561,6 +561,9 @@ impl Graphic {
             || matches!(self.kind, GraphicKind::Symbol(kind) if kind.is_condition())
     }
     pub fn parts(&self) -> Vec<Part> {
+        if self.kind == GraphicKind::TlcPlate {
+            return self.tlc.as_deref().map_or_else(Vec::new, |t| t.parts(self));
+        }
         if self.kind == GraphicKind::Piece {
             return crate::equipment::placed::parts(self);
         }
