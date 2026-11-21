@@ -30,6 +30,7 @@ pub(super) fn keeps_open(message: &Message) -> bool {
                     crate::canvas::Edit::Hover(_) | crate::canvas::Edit::PointerHover(_)
                 )
                 | Message::Nmr(super::nmr::Action::RenderedSize(_))
+                | Message::Stereo(super::stereo::Action::Pulse)
                 | Message::InspectorAction(super::inspector::Action::RefreshPropertiesFor(_))
                 | Message::Updates(
                     super::updates::Action::Poll | super::updates::Action::Check(false)

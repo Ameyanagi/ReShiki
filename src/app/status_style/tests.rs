@@ -97,7 +97,8 @@ fn document_custom_styles_and_embedded_themes_keep_their_full_identity() {
     let mut theme = reshiki::theme_files::bundled().unwrap().remove(0);
     theme.id = "deleted-theme".into();
     theme.name = "A long embedded theme with 日本語 and a family 👩‍👩‍👧‍👦".into();
-    app.tab.doc.custom_theme = Some(Box::new(theme.clone()));
+    theme.apply(&mut app.tab.doc).unwrap();
+    let embedded = app.tab.doc.custom_theme.clone();
     let (choices, selected) = app.theme_choices();
     assert!(
         !choices.contains(&selected),
@@ -111,9 +112,9 @@ fn document_custom_styles_and_embedded_themes_keep_their_full_identity() {
     let _ = app.update(Message::QuickDrawingStyle(
         document_styles::Choice::Journal(Preset::Jacs),
     ));
-    assert_eq!(app.tab.doc.custom_theme.as_deref(), Some(&theme));
+    assert!(app.tab.doc.custom_theme == embedded);
     let _ = app.update(Message::ThemeFile(theme_files::Action::Choose(selected)));
-    assert_eq!(app.tab.doc.custom_theme.as_deref(), Some(&theme));
+    assert!(app.tab.doc.custom_theme == embedded);
     let _ = app.update(Message::ThemeFile(theme_files::Action::Choose(
         theme_files::Choice::Builtin(ColorTheme::Publication),
     )));
@@ -153,6 +154,31 @@ fn style_chooser_survives_background_work_and_closes_for_front_replacements() {
     ));
     assert!(!app.status_style_open);
     assert!(app.settings.open);
+}
+
+#[test]
+fn the_chooser_stays_open_while_stereo_pulses_advance_and_end() {
+    use super::super::stereo;
+    let mut app = ready();
+    let atom = app.tab.doc.add_atom("C", Point::new(120., 35.));
+    let drawing = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let _ = app.update(Message::StatusStyle(Action::Toggle));
+    for expired in [false, true] {
+        let age = if expired {
+            std::time::Duration::from_secs(2)
+        } else {
+            std::time::Duration::ZERO
+        };
+        app.tab.pulse = Some((vec![atom], iced::time::Instant::now() - age));
+        let _ = app.update(Message::Stereo(stereo::Action::Pulse));
+        assert!(app.status_style_open);
+        assert_eq!(app.tab.pulse.is_none(), expired);
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.tab.revision, revision);
+    }
+    let _ = app.update(Message::Stereo(stereo::Action::Results(true)));
+    assert!(!app.status_style_open);
 }
 
 #[test]
