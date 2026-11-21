@@ -35,18 +35,16 @@ pub enum Item {
     Crosshair,
     SmartGuides,
     ArrangeControls,
-    DarkCanvas,
     PageSetup,
 }
 
 impl Item {
-    const ALL: [Self; 7] = [
+    const ALL: [Self; 6] = [
         Self::Grid,
         Self::Rulers,
         Self::Crosshair,
         Self::SmartGuides,
         Self::ArrangeControls,
-        Self::DarkCanvas,
         Self::PageSetup,
     ];
 
@@ -57,7 +55,6 @@ impl Item {
             Self::Crosshair => "view-crosshair",
             Self::SmartGuides => "view-smart-guides",
             Self::ArrangeControls => "view-arrange-controls",
-            Self::DarkCanvas => "canvas-theme",
             Self::PageSetup => "view-page-setup",
         }
     }
@@ -69,7 +66,6 @@ impl Item {
             Self::Crosshair => "Crosshair",
             Self::SmartGuides => "Smart guides",
             Self::ArrangeControls => "Arrange controls",
-            Self::DarkCanvas => "Dark canvas",
             Self::PageSetup => "Page setup…",
         }
     }
@@ -81,7 +77,6 @@ impl Item {
             Self::Crosshair => app.guides.crosshair,
             Self::SmartGuides => app.appearance.smart_guides,
             Self::ArrangeControls => app.appearance.arrange_controls,
-            Self::DarkCanvas => app.tab.doc.canvas_theme.is_dark(),
             Self::PageSetup => return None,
         })
     }
@@ -95,7 +90,6 @@ impl Item {
             Self::ArrangeControls => Message::ObjectToolbar(
                 super::object_toolbar::Action::Visible(!app.appearance.arrange_controls),
             ),
-            Self::DarkCanvas => Message::CanvasTheme(app.tab.doc.canvas_theme.toggled()),
             Self::PageSetup => Message::Pages(super::pages::Action::Show),
         }
     }
@@ -239,11 +233,8 @@ impl App {
                 }
                 self.view_open = false;
                 let message = item.message(self);
-                let canvas = self.tab.doc.canvas_theme;
                 let task = self.update(message);
-                return if matches!(item, Item::PageSetup)
-                    || (matches!(item, Item::DarkCanvas) && self.tab.doc.canvas_theme == canvas)
-                {
+                return if matches!(item, Item::PageSetup) {
                     task
                 } else {
                     Task::batch([task, focus("status-view")])
@@ -279,7 +270,7 @@ impl App {
         let popup = self.view_open.then(|| {
             let mut items = column![].spacing(1);
             for item in Item::ALL {
-                if matches!(item, Item::DarkCanvas | Item::PageSetup) {
+                if matches!(item, Item::PageSetup) {
                     items = items.push(horizontal_line());
                 }
                 let shortcut = match item {

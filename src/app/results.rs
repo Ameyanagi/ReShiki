@@ -804,6 +804,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::BracketIon
         | Message::DrawChargeSeparated(_)
         | Message::NormalizeDepiction
+        | Message::StatusStyle(..)
         | Message::View(..)
         | Message::Appearance(..)
         | Message::CanvasTheme(..)

@@ -280,6 +280,7 @@ impl App {
     pub(super) fn reset_tab(&mut self) {
         if self.tabs.temporary_depth == 0 {
             self.view_open = false;
+            self.status_style_open = false;
         }
         self.sync_drawing_panel_context();
         // An Office tab still owns its host session and any pending writes.
@@ -406,6 +407,7 @@ impl App {
     fn replace_front(&mut self, next: DocumentTab) -> DocumentTab {
         if self.tabs.temporary_depth == 0 {
             self.view_open = false;
+            self.status_style_open = false;
         }
         let mut previous = std::mem::replace(&mut self.tab, next);
         previous.status = std::mem::replace(&mut self.status, std::mem::take(&mut self.tab.status));

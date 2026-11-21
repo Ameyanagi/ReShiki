@@ -122,7 +122,7 @@ The sections cover common groups; elements, variables and charges; atom growth; 
 
 [View all nine example sections and the drawing gestures](changes/shortcut-help.md).
 
-The canvas fills the drawing area. Rulers reserve only their top and left gutters when enabled; the crosshair is an overlay. **View → Page setup…** is optional and is intended for printing and multipage PDF export.
+The canvas fills the drawing area. The **Sun/Moon** button in the bottom status bar switches canvas brightness; view aids stay in **View**. Rulers reserve only their top and left gutters when enabled; the crosshair is an overlay. **View → Page setup…** is optional and is intended for printing and multipage PDF export.
 
 ## How to read the keys
 

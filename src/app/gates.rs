@@ -247,6 +247,9 @@ impl App {
     }
 
     fn overlay_escape_gate(&mut self, message: Message) -> Gate {
+        if self.status_style_open && matches!(message, Message::Escape) {
+            return Break(self.status_style_action(super::status_style::Action::Close));
+        }
         if self.help_open && matches!(message, Message::Escape | Message::ToggleHelp) {
             self.help_open = false;
             return Break(Task::none());
@@ -466,6 +469,7 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
             | Message::ToggleInspector
             | Message::Inspector(_)
             | Message::Appearance(_)
+            | Message::StatusStyle(_)
             | Message::View(
                 view_settings::Action::Grid
                     | view_settings::Action::SmartGuides(_)

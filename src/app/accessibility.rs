@@ -68,7 +68,7 @@ struct Context {
         super::InspectorTab,
         crate::canvas::Tool,
         // Tuples compare up to twelve fields.
-        [bool; 11],
+        [bool; 12],
         u8,
     ),
 }
@@ -198,6 +198,7 @@ impl App {
             self.inspector_tab,
             self.tool,
             [
+                self.status_style_open,
                 self.help_open,
                 self.settings.open,
                 self.commands.open,

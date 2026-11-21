@@ -105,6 +105,7 @@ mod shortcut_focus_tests;
 mod shortcuts;
 mod star_prompt;
 mod startup;
+mod status_style;
 mod stereo;
 mod tabs;
 mod template_library;
@@ -285,6 +286,7 @@ pub enum Message {
     DrawChargeSeparated(Vec<u64>),
     NormalizeDepiction,
     View(view_settings::Action),
+    StatusStyle(status_style::Action),
     Appearance(crate::appearance::Mode),
     CanvasTheme(reshiki::canvas_theme::CanvasTheme),
     ColorTheme(reshiki::canvas_theme::ColorTheme),
@@ -467,6 +469,7 @@ pub struct App {
     grid: bool,
     guides: canvas::guides::Guides,
     view_open: bool,
+    status_style_open: bool,
     /// The list of Check drawing findings is open.
     check_results: bool,
     /// The Clean up options menu is open.
@@ -539,6 +542,7 @@ impl App {
     pub(super) fn begin_file_epoch(&mut self) {
         if self.tabs.temporary_depth == 0 {
             self.view_open = false;
+            self.status_style_open = false;
         }
         self.sync_drawing_panel_context();
         self.cancel_engine_job();
@@ -603,6 +607,7 @@ impl App {
             grid: false,
             guides: Default::default(),
             view_open: false,
+            status_style_open: false,
             check_results: false,
             cleanup_menu: false,
             cleanup_options: reshiki::cleanup::Options {
@@ -1276,6 +1281,9 @@ impl App {
     fn update_front(&mut self, message: Message, background: bool) -> Task<Message> {
         if !background && !view_settings::keeps_open(&message) {
             self.view_open = false;
+        }
+        if !background && !status_style::keeps_open(&message) {
+            self.status_style_open = false;
         }
         let message = match self.update_ungated(message) {
             ControlFlow::Break(task) => return task,

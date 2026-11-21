@@ -132,9 +132,9 @@ fn view_menu_stays_open_while_stereo_pulses_advance_and_end() {
 }
 
 #[test]
-fn view_menu_routes_page_and_canvas_choices_through_caption_commits() {
+fn page_setup_and_bottom_canvas_toggle_reenter_caption_commit_gates() {
     use super::super::inline_text;
-    for item in [Item::DarkCanvas, Item::PageSetup] {
+    for from_view in [false, true] {
         let mut app = ready();
         app.tab.doc = Document::default();
         let _ = app.update(Message::InlineText(inline_text::Action::Begin(
@@ -144,10 +144,14 @@ fn view_menu_routes_page_and_canvas_choices_through_caption_commits() {
         let _ = app.update(Message::InlineText(inline_text::Action::ReplaceText(
             "note".into(),
         )));
-        let _ = app.update(Message::View(Action::Toggle));
         assert!(app.tab.inline_text.is_some());
         assert!(app.tab.doc.annotations.is_empty());
-        let _ = app.update(Message::View(Action::Choose(item)));
+        if from_view {
+            let _ = app.update(Message::View(Action::Toggle));
+            let _ = app.update(Message::View(Action::Choose(Item::PageSetup)));
+        } else {
+            let _ = app.update(Message::CanvasTheme(app.tab.doc.canvas_theme.toggled()));
+        }
         assert!(app.tab.inline_text.is_none());
         assert!(!app.view_open);
         assert_eq!(app.tab.doc.annotations.len(), 1);
@@ -179,5 +183,23 @@ fn view_menu_closes_for_front_replacements_but_not_background_epochs() {
     assert!(!app.view_open);
     let _ = app.update(Message::View(Action::Toggle));
     app.reset_tab();
+    assert!(!app.view_open);
+}
+
+#[test]
+fn view_and_styles_choosers_keep_independent_foreground_lifecycles() {
+    use super::super::status_style;
+    let mut app = ready();
+    let _ = app.update(Message::StatusStyle(status_style::Action::Toggle));
+    assert!(app.status_style_open);
+    assert!(!app.view_open);
+    let _ = app.update(Message::View(Action::Toggle));
+    assert!(app.view_open);
+    assert!(!app.status_style_open);
+    let _ = app.update(Message::StatusStyle(status_style::Action::Toggle));
+    assert!(app.status_style_open);
+    assert!(!app.view_open);
+    app.begin_file_epoch();
+    assert!(!app.status_style_open);
     assert!(!app.view_open);
 }

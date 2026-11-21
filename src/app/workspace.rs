@@ -2974,67 +2974,28 @@ impl App {
             .into()
     }
 
-    /// Journal preset and color theme: whole-document settings beside View.
+    /// The combined style chooser and the canvas light/dark control.
     fn document_settings(&self) -> [Element<'_, Message>; 2] {
-        use super::document_styles::Choice;
-        use super::theme_files::Choice as ThemeChoice;
-        use reshiki::document_styles::Preset;
-        let current = Preset::ALL
-            .into_iter()
-            .find(|p| p.style() == self.tab.doc.drawing_style)
-            .map(Choice::Journal)
-            .unwrap_or(Choice::Custom);
-        let (themes, theme) = self.theme_choices();
-        let themes_only: Vec<_> = (themes.iter())
-            .filter(|choice| **choice != ThemeChoice::Manage)
-            .cloned()
-            .collect();
+        let dark = self.tab.doc.canvas_theme.is_dark();
         [
+            self.status_style(),
             hover_hint(
-                // Manage styles… opens the inspector, so ↑ ↓ skip it.
-                reshiki::accessibility::select(
-                    "journal-preset",
-                    "Journal preset",
-                    Preset::ALL.to_vec(),
-                    current.to_string(),
-                    |preset| Message::QuickDrawingStyle(Choice::Journal(preset)),
-                    crate::appearance::close_on_escape(
-                        crate::appearance::pick_list(
-                            Preset::ALL
-                                .into_iter()
-                                .map(Choice::Journal)
-                                .chain([Choice::Details])
-                                .collect::<Vec<_>>(),
-                            Some(current),
-                            Message::QuickDrawingStyle,
-                        )
-                        .text_size(11)
-                        .padding([4, 8]),
-                    ),
-                ),
-                "Journal preset · Bond length, line widths and label font",
-                tooltip::Position::Top,
-            )
-            .into(),
-            hover_hint(
-                // Manage themes… opens the theme editor, so ↑ ↓ skip it.
-                reshiki::accessibility::select(
-                    "color-theme",
-                    "Color theme",
-                    themes_only,
-                    theme.to_string(),
-                    |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
-                    crate::appearance::close_on_escape(
-                        crate::appearance::pick_list(themes, Some(theme.clone()), |choice| {
-                            Message::ThemeFile(super::theme_files::Action::Choose(choice))
-                        })
-                        // Sizes the list for an embedded theme's name, which is not an option.
-                        .placeholder(theme.to_string())
-                        .text_size(11)
-                        .padding([4, 8]),
-                    ),
-                ),
-                "Color theme",
+                reshiki::accessibility::button(
+                    "canvas-theme",
+                    "Dark canvas",
+                    iced::widget::canvas(Glyph(if dark { Icon::Moon } else { Icon::Sun }, true))
+                        .width(24)
+                        .height(24),
+                )
+                .padding(3)
+                .style(control(false))
+                .checked(dark)
+                .on_press(Message::CanvasTheme(self.tab.doc.canvas_theme.toggled())),
+                if dark {
+                    "Dark canvas · Switch to light · Remembered for new drawings"
+                } else {
+                    "Light canvas · Switch to dark · Remembered for new drawings"
+                },
                 tooltip::Position::Top,
             )
             .into(),

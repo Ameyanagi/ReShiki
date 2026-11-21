@@ -12,6 +12,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// all_icons() and expected_counts() too.
 fn family(icon: Icon) -> &'static str {
     match icon {
+        Icon::Sun => "sun",
+        Icon::Moon => "moon",
         Icon::ColorTiles(_) => "color-tiles",
         Icon::TextAlign(_) => "text-align",
         Icon::LabelAlign(_) => "label-align",
@@ -76,6 +78,8 @@ fn tool_family(tool: Tool) -> &'static str {
 
 fn all_icons() -> Vec<(String, Icon)> {
     let mut icons: Vec<(String, Icon)> = [
+        Icon::Sun,
+        Icon::Moon,
         Icon::New,
         Icon::Open,
         Icon::Save,
@@ -197,6 +201,8 @@ fn all_icons() -> Vec<(String, Icon)> {
 
 fn expected_counts() -> BTreeMap<&'static str, usize> {
     let mut counts: BTreeMap<&'static str, usize> = [
+        "sun",
+        "moon",
         "new",
         "open",
         "save",

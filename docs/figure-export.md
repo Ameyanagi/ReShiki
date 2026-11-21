@@ -10,7 +10,7 @@ Open **Export → Figure**, choose a format from the menu (**Vector**: **SVG**, 
 | PNG                      | An opaque image at the chosen resolution (1200 dpi by default), with physical resolution metadata.          |
 | EMF for Office (Windows) | Vector picture for Microsoft Office at the drawing's physical size. Text becomes vector outlines.           |
 
-By default, file exports in all formats include the document’s canvas colors and background, and copied pictures use a transparent background, preserving the visible ink for slides and other documents. With **View → Dark canvas** enabled, exports use white bonds and labels on black paper; **Settings → Appearance → Interface** changes only the surrounding UI. To change either default, see [Background](#background).
+By default, file exports in all formats include the document’s canvas colors and background, and copied pictures use a transparent background, preserving the visible ink for slides and other documents. With the bottom **Sun/Moon** control set to a dark canvas, exports use white bonds and labels on black paper; **Settings → Appearance → Interface** changes only the surrounding UI. To change either default, see [Background](#background).
 
 Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Export pages as PDF** uses an explicitly configured publication layout; ordinary figure export crops to the artwork. See [publication pages](publication-pages.md).
 

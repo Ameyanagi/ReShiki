@@ -15,6 +15,8 @@ use iced::keyboard::{
 use iced::{Event, Rectangle, Size};
 
 mod review_close;
+mod style_status;
+mod view_footer;
 
 struct Ui {
     renderer: iced::Renderer,
@@ -169,9 +171,9 @@ impl Ui {
         collect.snapshot().clone()
     }
 
-    fn text(&mut self, app: &App, target: &'static str) -> Rectangle {
-        struct Find(&'static str, Option<Rectangle>);
-        impl Operation for Find {
+    fn text(&mut self, app: &App, target: &str) -> Rectangle {
+        struct Find<'a>(&'a str, Option<Rectangle>);
+        impl Operation for Find<'_> {
             fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
                 operate(self);
             }
@@ -375,15 +377,17 @@ async fn tabs_style_buttons_and_canvas_theme_are_named_controls() {
         (view.name.as_str(), view.expanded),
         ("Drawing view options", Some(false))
     );
-    for (id, name) in [
-        ("text-style-font", "Font"),
-        ("journal-preset", "Journal preset"),
-        ("color-theme", "Color theme"),
-    ] {
-        let select = node(id.into());
-        assert_eq!((select.name.as_str(), select.role), (name, Role::ComboBox));
-        assert!(select.value.as_ref().is_some_and(|v| !v.is_empty()), "{id}");
-    }
+    let font = node("text-style-font".into());
+    assert_eq!((font.name.as_str(), font.role), ("Font", Role::ComboBox));
+    assert!(font.value.as_ref().is_some_and(|v| !v.is_empty()));
+    assert_eq!(node("status-style".into()).expanded, Some(false));
+    assert!(
+        !snapshot
+            .nodes
+            .iter()
+            .any(|node| node.id == "journal-preset")
+    );
+    assert!(!snapshot.nodes.iter().any(|node| node.id == "color-theme"));
 }
 
 /// The journal preset and color theme choose options from the keyboard and
@@ -414,17 +418,19 @@ async fn style_lists_choose_options_by_keyboard_and_by_name() {
             _ => None,
         }
     };
+    let family = reshiki::style::font_families()[0];
+    assert!(matches!(
+        message(&mut ui, &app, "text-style-font", family),
+        Some(Message::TextStyle(reshiki::typography::StyleChange::Family(f))) if f == family
+    ));
+    let task = app.update(Message::StatusStyle(super::status_style::Action::Toggle));
+    ui.run_task(&mut app, task).await;
     // By name: an option name chooses it; any other name does nothing.
     let chosen = message(&mut ui, &app, "journal-preset", &first).expect("a preset");
     apply(&mut app, vec![chosen]);
     assert_eq!(value(&mut ui, &app, "journal-preset"), first);
     assert!(message(&mut ui, &app, "journal-preset", "Manage styles…").is_none());
     assert!(message(&mut ui, &app, "color-theme", "Manage themes…").is_none());
-    let family = reshiki::style::font_families()[0];
-    assert!(matches!(
-        message(&mut ui, &app, "text-style-font", family),
-        Some(Message::TextStyle(reshiki::typography::StyleChange::Family(f))) if f == family
-    ));
 
     // Keyboard: ↓ and ↑ choose the next and previous preset.
     ui.focus_control(&mut app, "journal-preset").await;
@@ -2472,7 +2478,6 @@ async fn view_menu_stays_above_its_anchor_without_resizing_the_canvas() {
         "view-crosshair",
         "view-smart-guides",
         "view-arrange-controls",
-        "canvas-theme",
         "view-page-setup",
     ];
     for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {
@@ -2595,8 +2600,8 @@ async fn view_menu_stays_above_its_anchor_without_resizing_the_canvas() {
         assert_eq!(app.tab.camera.center, camera.center);
         assert_eq!(app.tab.camera.zoom, camera.zoom);
 
-        // Every toggle releases its row back to the opener, including Dark canvas.
-        for (index, id) in ids.iter().take(6).enumerate() {
+        // Every View toggle releases its row back to the opener.
+        for (index, id) in ids.iter().take(5).enumerate() {
             let at = ui.bounds(&app, "status-view").center();
             let _ = ui.drag(&mut app, at, at).await;
             let before = ui
@@ -2608,7 +2613,7 @@ async fn view_menu_stays_above_its_anchor_without_resizing_the_canvas() {
                 .checked
                 .unwrap();
             ui.focus_control(&mut app, id).await;
-            if index % 3 == 0 || *id == "canvas-theme" {
+            if index % 3 == 0 {
                 ui.key(
                     &mut app,
                     Key::Named(Named::Enter),
