@@ -278,6 +278,9 @@ impl App {
     /// Starts the front tab over as a new drawing. Late results for its old
     /// drawing meet a new epoch and revision.
     pub(super) fn reset_tab(&mut self) {
+        if self.tabs.temporary_depth == 0 {
+            self.status_style_open = false;
+        }
         self.sync_drawing_panel_context();
         // An Office tab still owns its host session and any pending writes.
         // Replacing its drawing must instead use a separate ordinary tab.
@@ -401,6 +404,9 @@ impl App {
     }
 
     fn replace_front(&mut self, next: DocumentTab) -> DocumentTab {
+        if self.tabs.temporary_depth == 0 {
+            self.status_style_open = false;
+        }
         let mut previous = std::mem::replace(&mut self.tab, next);
         previous.status = std::mem::replace(&mut self.status, std::mem::take(&mut self.tab.status));
         previous.error = std::mem::replace(&mut self.error, self.tab.error);

@@ -193,6 +193,7 @@ impl App {
             Message::ThemeGenerator(action) => return Some(self.theme_generator_action(action)),
             Message::QuickDrawingStyle(choice) => return Some(self.quick_drawing_style(choice)),
             Message::View(action) => self.view_action(action),
+            Message::StatusStyle(action) => return Some(self.status_style_action(action)),
             Message::ObjectToolbar(action) => self.object_toolbar_action(action),
             Message::Fit => self.fit(),
             Message::Zoom(factor) => self.zoom_by(factor),
