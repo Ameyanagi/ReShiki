@@ -351,9 +351,10 @@ and joint clips for 15/25 and 29/42.
    the pieces.
 2. Search by name or keyword in English or Japanese (`round`, `Liebig`,
    `ナス`, `丸底`, `29/42`), or pick a category.
-3. Click a size such as **100 mL · 15/25**. The piece follows the pointer;
-   click to place it. With **Keep placing** on, each click adds another copy;
-   press Esc to stop. **Done** returns to Properties.
+3. Click a size such as **100 mL · 15/25**. The piece follows the pointer.
+   Click to place it and return to **Select** and **Properties**, with the
+   piece selected. Turn on **Keep placing** to place several copies, then
+   press Esc to stop.
 
 A placed piece is one object. Drag it to move it, turn it with the rotation
 handle, and scale it from a corner; it never stretches, so there are no side

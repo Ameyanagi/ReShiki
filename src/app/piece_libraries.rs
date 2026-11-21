@@ -7,9 +7,11 @@ use super::workspace::{command, horizontal_line, hover_hint, muted_text, section
 use super::{App, Message};
 use iced::widget::{column, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
-use reshiki::equipment::{builtin, format::Definition, placed::key, revise};
+use reshiki::canvas_theme::CanvasTheme;
+use reshiki::document::{Document, Point};
+use reshiki::equipment::{builtin, format::Definition, placed, placed::key, revise};
 use reshiki::piece_library::{self as library, Change, Folder};
-use std::{path::PathBuf, sync::Arc};
+use std::{cell::OnceCell, path::PathBuf, sync::Arc};
 
 pub(super) mod loading;
 #[cfg(not(target_arch = "wasm32"))]
@@ -45,12 +47,46 @@ pub struct Entry {
     pub key: String,
     /// Other libraries that hold the same piece.
     pub also: Vec<Source>,
+    /// Prepared drawings, populated only for tiles the browser shows. Reindexing
+    /// replaces entries, so changed or removed definitions cannot leave stale tiles.
+    thumbnails: [OnceCell<Document>; 2],
 }
 
 impl Entry {
     /// The piece is in this library.
     pub fn in_library(&self, source: Source) -> bool {
         self.source == source || self.also.contains(&source)
+    }
+
+    /// The immutable drawing behind this tile, retained across hover-driven views.
+    pub fn thumbnail(&self, theme: CanvasTheme) -> &Document {
+        let [light, dark] = &self.thumbnails;
+        let slot = match theme {
+            CanvasTheme::Light => light,
+            CanvasTheme::Dark => dark,
+        };
+        slot.get_or_init(|| {
+            let mut doc = Document {
+                canvas_theme: theme,
+                ..Document::default()
+            };
+            let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+            doc.graphics.push(placed::graphic_keyed(
+                1,
+                self.definition.clone(),
+                self.key.clone(),
+                Point::default(),
+                scale,
+            ));
+            doc
+        })
+    }
+
+    #[cfg(test)]
+    pub(super) fn clear_thumbnails(&mut self) {
+        self.thumbnails.iter_mut().for_each(|slot| {
+            let _ = slot.take();
+        });
     }
 }
 
@@ -118,6 +154,7 @@ impl Libraries {
                         source,
                         key: k,
                         also: Vec::new(),
+                        thumbnails: Default::default(),
                     }),
                 }
             }

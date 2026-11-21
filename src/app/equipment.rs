@@ -1,5 +1,5 @@
 //! The Equipment browser: lab apparatus to place on the drawing. Choosing a
-//! size arms it, and each click on the drawing places one copy.
+//! size arms one placement; Keep placing leaves it armed for more copies.
 use super::piece_libraries::{Entry, Libraries, Shelf, Source};
 use super::workspace::{
     command, control, horizontal_line, hover_hint, muted_text, section, segment, segment_track,
@@ -149,7 +149,7 @@ impl Default for State {
             query: String::new(),
             category: Filter::default(),
             armed: None,
-            repeat: true,
+            repeat: false,
             shelf: None,
             libraries: Libraries::load(),
         }
@@ -389,23 +389,6 @@ pub fn matches(d: &Definition, query: &str) -> bool {
         .to_lowercase()
         .split_whitespace()
         .all(|word| fields.iter().any(|field| field.contains(word)))
-}
-
-/// A drawing holding only the piece, for its thumbnail.
-fn thumbnail(e: &Entry, theme: reshiki::canvas_theme::CanvasTheme) -> Document {
-    let mut doc = Document {
-        canvas_theme: theme,
-        ..Document::default()
-    };
-    let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
-    doc.graphics.push(placed::graphic_keyed(
-        1,
-        e.definition.clone(),
-        e.key.clone(),
-        Point::default(),
-        scale,
-    ));
-    doc
 }
 
 impl App {
@@ -685,9 +668,6 @@ impl App {
         self.tab.selected = vec![id];
         let reach = solve::REACH_PX / self.tab.camera.zoom;
         let snap = solve::snap(&mut self.tab.doc, &[id], reach, true);
-        if !self.equipment.repeat {
-            self.tool = Tool::Select;
-        }
         if snap
             .as_ref()
             .is_some_and(|s| !matches!(s.offer, Offer::Mismatch))
@@ -695,7 +675,14 @@ impl App {
             self.tab.selected = solve::closure(&self.tab.doc, &[id]);
         }
         self.changed(before);
-        if let Some(snap) = snap.filter(|_| !self.error) {
+        if self.error {
+            return;
+        }
+        if !self.equipment.repeat {
+            self.select_tool(Tool::Select);
+            self.inspector_tab = InspectorTab::Properties;
+        }
+        if let Some(snap) = snap {
             self.snapped(&snap);
         }
     }
@@ -711,14 +698,16 @@ impl App {
         let reach = f64::from(solve::REACH_PX / self.tab.camera.zoom);
         let (id, barbs) =
             solve::hose::place_hose(&mut self.tab.doc, definition, xy(from), xy(to), reach);
-        if !self.equipment.repeat {
-            self.tool = Tool::Select;
-        }
         self.tab.selected = solve::closure(&self.tab.doc, &[id]);
         self.changed(before);
-        if !self.error {
-            self.status = hose_text(&self.tab.doc, &barbs);
+        if self.error {
+            return;
         }
+        if !self.equipment.repeat {
+            self.select_tool(Tool::Select);
+            self.inspector_tab = InspectorTab::Properties;
+        }
+        self.status = hose_text(&self.tab.doc, &barbs);
     }
 
     /// Drag a hose's end or middle, as one Undo step.
@@ -914,11 +903,13 @@ impl App {
         for (first, sizes) in &families {
             let shown = sizes.iter().copied().find(|e| armed(e)).unwrap_or(*first);
             let d = &shown.definition;
-            let preview: Element<'_, Message> =
-                canvas(crate::canvas::DrawingThumbnail(thumbnail(shown, theme)))
-                    .width(44)
-                    .height(44)
-                    .into();
+            let preview: Element<'_, Message> = canvas(crate::canvas::TemplateThumbnail(
+                shown.thumbnail(theme),
+                None,
+            ))
+            .width(44)
+            .height(44)
+            .into();
             let tile = hover_hint(
                 reshiki::accessibility::button(
                     format!("equipment-{}", shown.key),

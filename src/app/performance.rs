@@ -3,6 +3,7 @@ use super::*;
 use reshiki::engine::ChemistryEngine;
 use std::{hint::black_box, time::Instant};
 
+mod equipment;
 mod hover;
 mod redraw;
 

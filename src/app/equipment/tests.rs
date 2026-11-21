@@ -44,6 +44,7 @@ fn arming_and_placing_a_piece_adds_one_graphic_in_one_undo_step() {
     let _ = app.update(Message::Tool(Tool::Equipment));
     assert!(app.inspector_open);
     assert_eq!(app.inspector_tab, InspectorTab::Equipment);
+    assert!(!app.equipment.repeat, "Keep placing is opt-in");
     let before = app.tab.doc.clone();
     let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/rbf-100-15"))));
     assert_eq!(app.tool, Tool::Equipment);
@@ -60,12 +61,22 @@ fn arming_and_placing_a_piece_adds_one_graphic_in_one_undo_step() {
     let mid = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
     assert!(mid.distance(at) < 0.01, "{mid:?}");
     assert_eq!(app.tab.doc.piece_definitions.len(), 1);
-    // Keep placing is on: the tool stays armed for the next copy.
-    assert_eq!(app.tool, Tool::Equipment);
+    assert_eq!(app.tool, Tool::Select);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert!(app.armed_piece().is_none(), "the placement preview is gone");
     let placed = app.tab.doc.clone();
+    let _ = app.update(Message::Canvas(Edit::Piece(at.offset(100., 0.))));
+    assert_eq!(app.tab.doc, placed, "another click cannot place a copy");
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, placed);
+    assert_eq!(app.tool, Tool::Select);
+    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/rbf-100-15"))));
+    let _ = app.update(Message::Canvas(Edit::Piece(at.offset(300., 0.))));
+    assert_eq!(app.tab.doc.graphics.len(), 2, "arming again adds one copy");
+    assert_eq!(app.tool, Tool::Select);
+    let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, placed);
 }
 
@@ -88,6 +99,8 @@ fn hanging_a_hose_and_bending_it_are_separate_undo_steps() {
     assert_eq!(app.tab.doc.graphics.len(), before.graphics.len() + 1);
     assert_eq!(app.tab.doc.seats.len(), before.seats.len() + 1);
     assert_eq!(app.status, "Hose on the condenser water in");
+    assert_eq!(app.tool, Tool::Select);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
     let hose = app
         .tab
         .doc
@@ -96,14 +109,16 @@ fn hanging_a_hose_and_bending_it_are_separate_undo_steps() {
         .find(|g| g.id != water_in.at.piece)
         .unwrap();
     let id = hose.id;
+    assert_eq!(app.tab.selected, solve::closure(&app.tab.doc, &[id]));
     let line = hose.piece.as_ref().unwrap().centre_line.clone();
     let hung = app.tab.doc.clone();
+    let _ = app.update(Message::Canvas(Edit::Hose(p, p.offset(100., 100.))));
+    assert_eq!(app.tab.doc, hung, "a second gesture cannot place a hose");
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, hung);
 
-    let _ = app.update(Message::Tool(Tool::Select));
     app.set_selection(vec![id]);
     let _ = app.update(Message::Canvas(Edit::HoseGrip {
         id,
@@ -127,8 +142,9 @@ fn opening_the_schlenk_tube_valve_is_one_undo_step() {
     ))));
     let _ = app.update(Message::Canvas(Edit::Piece(Point::new(120., 80.))));
     let id = app.tab.doc.graphics[0].id;
-    let _ = app.update(Message::Tool(Tool::Select));
-    app.set_selection(vec![id]);
+    assert_eq!(app.tool, Tool::Select);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert_eq!(app.tab.selected, [id]);
 
     let open = Value::State("open".into());
     let _ = app.update(Message::Equipment(Action::Param {
@@ -164,14 +180,67 @@ fn escape_disarms_and_a_click_then_places_nothing() {
 }
 
 #[test]
-fn without_keep_placing_one_click_returns_to_select() {
-    let (mut app, _) = App::new();
-    app.tab.busy = false;
-    let _ = app.update(Message::Equipment(Action::Repeat(false)));
-    let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/stopper-15"))));
-    let _ = app.update(Message::Canvas(Edit::Piece(Point::default())));
-    assert_eq!(app.tab.doc.graphics.len(), 1);
-    assert_eq!(app.tool, Tool::Select);
+fn keep_placing_explicitly_repeats_pieces_and_hoses_until_switched_off() {
+    for (piece, hose) in [("reshiki/stopper-15", false), ("reshiki/hose-7", true)] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let _ = app.update(Message::Tool(Tool::Equipment));
+        let _ = app.update(Message::Equipment(Action::Repeat(true)));
+        let _ = app.update(Message::Equipment(Action::Arm(k(piece))));
+        let edit = |x| {
+            let at = Point::new(x, 0.);
+            Message::Canvas(if hose {
+                Edit::Hose(at, at.offset(80., 40.))
+            } else {
+                Edit::Piece(at)
+            })
+        };
+        for count in 1..=2 {
+            let _ = app.update(edit(count as f32 * 500.));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.tab.doc.graphics.len(), count);
+            assert_eq!(app.tool, Tool::Equipment);
+            assert!(app.armed_piece().is_some());
+            assert_eq!(app.inspector_tab, InspectorTab::Equipment);
+        }
+        let _ = app.update(Message::Equipment(Action::Repeat(false)));
+        let _ = app.update(edit(1500.));
+        assert_eq!(app.tab.doc.graphics.len(), 3);
+        assert_eq!(app.tool, Tool::Select);
+        assert_eq!(app.inspector_tab, InspectorTab::Properties);
+        let placed = app.tab.doc.clone();
+        let _ = app.update(edit(2000.));
+        assert_eq!(app.tab.doc, placed);
+    }
+}
+
+#[test]
+fn rejected_placement_stays_armed_and_can_be_retried() {
+    for (piece, hose) in [("reshiki/stopper-15", false), ("reshiki/hose-7", true)] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let _ = app.update(Message::Tool(Tool::Equipment));
+        let _ = app.update(Message::Equipment(Action::Arm(k(piece))));
+        let edit = |at| {
+            Message::Canvas(if hose {
+                Edit::Hose(at, Point::new(80., 40.))
+            } else {
+                Edit::Piece(at)
+            })
+        };
+        let before = app.tab.doc.clone();
+        let _ = app.update(edit(Point::new(f32::NAN, 0.)));
+        assert!(app.error, "an invalid placement is rejected");
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        assert_eq!(app.tool, Tool::Equipment);
+        assert_eq!(app.inspector_tab, InspectorTab::Equipment);
+        assert!(app.armed_piece().is_some());
+        let _ = app.update(edit(Point::default()));
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.graphics.len(), 1);
+        assert_eq!(app.tool, Tool::Select);
+    }
 }
 
 /// A flask placed at `at`, and where a piece's joint seats on its neck.
@@ -205,6 +274,14 @@ fn a_stopper_placed_by_the_neck_seats_and_undo_takes_it_off_in_one_step() {
     let _ = app.update(Message::Canvas(Edit::Piece(click)));
     assert_eq!(app.tab.doc.seats.len(), 1, "{}", app.status);
     assert_eq!(app.status, "Seated the stopper bottom on the flask neck");
+    let stopper = app.tab.doc.graphics[1].id;
+    assert_eq!(app.tab.selected, solve::closure(&app.tab.doc, &[stopper]));
+    assert_eq!(
+        app.tab.selected.len(),
+        2,
+        "the seated assembly stays selected"
+    );
+    assert_eq!(app.tool, Tool::Select);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
 }
