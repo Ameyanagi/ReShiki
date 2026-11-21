@@ -401,6 +401,12 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
             "Next graphic",
             "GRAPHIC DEFAULTS",
         ),
+        (Tool::Graphic(GraphicKind::Table), "Next table", "Rows"),
+        (
+            Tool::Graphic(GraphicKind::TlcPlate),
+            "Next TLC plate",
+            "TLC PLATE",
+        ),
         (Tool::Text, "Next text", "TEXT LABELS"),
         (Tool::Ring, "Next ring", "Size"),
         (
@@ -414,6 +420,12 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
         let shown = words.join("\n");
         assert_eq!(words.first().map(String::as_str), Some(heading));
         assert!(shown.contains(control), "{shown}");
+        if matches!(
+            tool,
+            Tool::Graphic(GraphicKind::Table | GraphicKind::TlcPlate)
+        ) {
+            assert!(!shown.contains("GRAPHIC DEFAULTS"), "{shown}");
+        }
         for forbidden in [
             "Identity",
             "Labels & chemistry",
@@ -434,6 +446,8 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
         Tool::Chain(reshiki::chains::ChainMode::Straight),
         Tool::Atom,
         Tool::Arrow,
+        Tool::Graphic(GraphicKind::Table),
+        Tool::Graphic(GraphicKind::TlcPlate),
     ] {
         app.tool = tool;
         let size = iced::Size::new(1280., 820.);
@@ -489,6 +503,22 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
                 if role.takes_value() {
                     assert!(node.value.is_some(), "{id}");
                 }
+            }
+        }
+        if tool == Tool::Graphic(GraphicKind::Table) {
+            for (id, role) in [
+                ("table-rows", Role::TextInput),
+                ("table-columns", Role::TextInput),
+                ("table-grid-apply", Role::Button),
+            ] {
+                let node = collect
+                    .snapshot()
+                    .nodes
+                    .iter()
+                    .find(|node| node.id == id)
+                    .unwrap_or_else(|| panic!("missing {id}"));
+                assert_eq!(node.role, role, "{id}");
+                assert!(node.enabled, "{id}");
             }
         }
     }

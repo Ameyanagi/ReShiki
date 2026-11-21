@@ -12,6 +12,35 @@ pub struct Layout {
 }
 
 impl Layout {
+    /// Only selected, table-owned captions need derived decoration geometry.
+    /// Retained editor markers and selection frames avoid indexing every atom.
+    pub fn selected_annotations(doc: &Document, selected: impl Fn(u64) -> bool) -> Option<Self> {
+        if !doc.graphics.iter().any(|g| g.table.is_some()) {
+            return None;
+        }
+        let ids: std::collections::HashSet<_> = doc
+            .annotations
+            .iter()
+            .filter(|a| selected(a.id))
+            .map(|a| a.id)
+            .collect();
+        if ids.is_empty() {
+            return None;
+        }
+        let mut frames = HashMap::new();
+        for g in &doc.graphics {
+            if let Some(table) = &g.table {
+                for cell in &table.cells {
+                    let frame = cell.frame(g);
+                    for &id in cell.members.iter().filter(|id| ids.contains(id)) {
+                        frames.insert(id, frame);
+                    }
+                }
+            }
+        }
+        (!frames.is_empty()).then_some(Self { frames })
+    }
+
     pub(crate) fn frame(&self, id: u64) -> Option<Frame> {
         self.frames.get(&id).copied().flatten()
     }
@@ -47,6 +76,30 @@ impl Layout {
         let mut effective = annotation.clone();
         wrap(*frame, &mut effective);
         Cow::Owned(effective)
+    }
+
+    /// The same wrapped box and rotation pivot used to paint cell text, then
+    /// clipped in the affine cell. Ordinary captions keep their canonical box;
+    /// an owned caption with no visible box returns an empty polygon.
+    pub fn annotation_polygon(
+        &self,
+        annotation: &crate::document::Annotation,
+    ) -> Option<Vec<Point>> {
+        let frame = self.frames.get(&annotation.id)?;
+        let Some(frame) = frame else {
+            return Some(vec![]);
+        };
+        let layout = annotation_layout(annotation, *frame);
+        let p = annotation.position;
+        let pivot = p.offset(layout.width / 2., layout.height / 2.);
+        let corners = [
+            p,
+            p.offset(layout.width, 0.),
+            p.offset(layout.width, layout.height),
+            p.offset(0., layout.height),
+        ]
+        .map(|p| p.turned(pivot, annotation.angle));
+        Some(self.polygon(annotation.id, &corners))
     }
 
     /// Clip in the cell's affine coordinates, rather than its world AABB.
@@ -272,8 +325,8 @@ fn available(frame: Frame, position: Point, angle: f32) -> Option<f32> {
 }
 
 /// The derived text layout inside an affine cell, shared by painting and
-/// geometry queries. Canonical text, formatting and child geometry stay whole.
-pub(crate) fn annotation_layout(
+/// pointer hits. Canonical text, formatting and child geometry stay untouched.
+pub fn annotation_layout(
     annotation: &crate::document::Annotation,
     frame: Frame,
 ) -> crate::typography::Layout {

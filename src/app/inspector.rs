@@ -1087,6 +1087,9 @@ impl App {
             ));
         }
         let styled_graphics = self.selected_styled_graphics().next().is_some();
+        if let Some(table) = self.table_card() {
+            body = body.push(card(container(table).padding(12)));
+        }
         if self
             .tab
             .doc
@@ -1158,7 +1161,7 @@ impl App {
         if let Some(piece) = self.piece_card() {
             body = body.push(piece);
         }
-        // Pieces and TLC plates own their paint; a cycle's host style still
+        // Pieces, tables and TLC plates own their paint; a cycle's host style still
         // styles its arrows, including when it is held by a figure panel.
         if styled_graphics && (!panel_first || show_cycle) {
             body = body.push(card(container(self.graphic_panel()).padding(12)));

@@ -232,6 +232,7 @@ impl App {
             Tool::Template => "Next template",
             Tool::Arrow => "Next arrow",
             Tool::Text => "Next text",
+            Tool::Graphic(reshiki::graphics::GraphicKind::Table) => "Next table",
             Tool::Graphic(reshiki::graphics::GraphicKind::TlcPlate) => "Next TLC plate",
             Tool::Graphic(_) => "Next graphic",
             Tool::Equipment => "Next equipment",
@@ -248,6 +249,11 @@ impl App {
             body = body.push(card(container(column(options).spacing(8)).padding(12)));
         }
         match self.tool {
+            Tool::Graphic(reshiki::graphics::GraphicKind::Table) => {
+                if let Some(table) = self.table_card() {
+                    body = body.push(card(container(table).padding(12)));
+                }
+            }
             Tool::Graphic(reshiki::graphics::GraphicKind::TlcPlate) => {
                 body = body.push(card(container(self.tlc_panel()).padding(12)));
             }

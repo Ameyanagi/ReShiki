@@ -96,6 +96,38 @@ impl Ui {
         activate.finish()
     }
 
+    fn click(&mut self, app: &App, id: &str) -> Vec<Message> {
+        self.focus(app, id);
+        let snapshot = self.snapshot(app);
+        let point = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == id)
+            .and_then(|node| node.visible_bounds)
+            .expect("the focused button must be visible")
+            .center();
+        let mut ui = UserInterface::build(
+            app.view(),
+            self.size,
+            std::mem::take(&mut self.cache),
+            &mut self.renderer,
+        );
+        let mut messages = Vec::new();
+        let (_, statuses) = ui.update(
+            &[
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            ],
+            mouse::Cursor::Available(point),
+            &mut self.renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut messages,
+        );
+        assert!(statuses.iter().all(|s| *s == iced::event::Status::Captured));
+        self.cache = ui.into_cache();
+        messages
+    }
+
     fn set_value(&mut self, app: &App, id: &str, value: &str) -> operation::Outcome<Message> {
         let mut ui = UserInterface::build(
             app.view(),
@@ -380,6 +412,124 @@ fn selected_graphic(kind: GraphicKind, size: Size) -> App {
     assert_eq!(app.tab.selected.len(), 1);
     assert_eq!(app.tab.doc.graphics[0].kind, kind);
     app
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real table Properties accessibility and Undo regression"]
+async fn table_cell_controls_publish_native_actions_and_keep_the_explicit_target() {
+    use crate::app::tables::{Action, CellAction};
+    use reshiki::graphics::table::Membership;
+    let size = Size::new(1280., 820.);
+    let mut ui = Ui::new(size).await;
+    let mut app = selected_graphic(GraphicKind::Table, size);
+    let snapshot = ui.snapshot(&app);
+    let cell = snapshot
+        .nodes
+        .iter()
+        .find(|n| n.id == "table-active-cell")
+        .unwrap();
+    assert_eq!(cell.value.as_deref(), Some("1"));
+    let operation::Outcome::Some(message) = ui.set_value(&app, "table-active-cell", "2") else {
+        panic!("The native cell selector must accept a cell value");
+    };
+    assert!(matches!(
+        message,
+        Message::Table(Action::Edit(_, CellAction::Cell(2)))
+    ));
+    let _ = app.update(message);
+    let before = app.tab.doc.clone();
+    let operation::Outcome::Some(message) = ui.set_value(&app, "table-cell-text", "Editable cell")
+    else {
+        panic!("The cell text control must accept text");
+    };
+    let _ = app.update(message);
+    assert_eq!(app.tab.doc, before);
+    let operation::Outcome::Some(message) = ui.activate(&app, "table-cell-add-text") else {
+        panic!("Add text must have a native action");
+    };
+    let _ = app.update(message);
+    let caption = app.tab.doc.annotations.last().unwrap();
+    assert_eq!(
+        Membership::new(&app.tab.doc)
+            .unwrap()
+            .cell_of(caption.id)
+            .unwrap()
+            .cell,
+        2
+    );
+    ui.undo(&mut app);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real table Apply pointer/native action after an inline caption edit"]
+async fn table_apply_mouse_and_native_action_finish_the_caption_and_apply_in_one_activation() {
+    use crate::app::{
+        inline_text,
+        tables::{Action, CellAction},
+    };
+    for pointer in [false, true] {
+        let size = Size::new(1280., 820.);
+        let mut ui = Ui::new(size).await;
+        let mut app = selected_graphic(GraphicKind::Table, size);
+        let target = app.table_target().unwrap();
+        let _ = app.update(Message::Table(Action::Edit(
+            target,
+            CellAction::Text("Cell".into()),
+        )));
+        let _ = app.update(Message::Table(Action::Edit(target, CellAction::AddText)));
+        let caption = app.tab.doc.annotations.last().unwrap().id;
+        let operation::Outcome::Some(message) = ui.set_value(&app, "table-cell-width", "1.2")
+        else {
+            panic!("The actual border-width input must accept text");
+        };
+        let _ = app.update(message);
+        let _ = app.update(Message::Canvas(Edit::BeginText(caption)));
+        let _ = app.update(Message::InlineText(inline_text::Action::ReplaceText(
+            "Changed cell".into(),
+        )));
+        assert!(app.tab.inline_changed());
+        let before = app.tab.doc.clone();
+        let caption_only = app.inline_candidate().unwrap();
+        let frames = app.tab.history.frames();
+        ui.focus(&app, "table-cell-width-apply");
+        let messages = if pointer {
+            ui.click(&app, "table-cell-width-apply")
+        } else {
+            let operation::Outcome::Some(message) = ui.activate(&app, "table-cell-width-apply")
+            else {
+                panic!("The actual Apply button must publish a native action");
+            };
+            vec![message]
+        };
+        assert_eq!(messages.len(), 1);
+        assert!(matches!(
+            messages[0],
+            Message::Table(Action::Edit(_, CellAction::ApplyWidth))
+        ));
+        for message in messages {
+            let _ = app.update(message);
+        }
+        assert!(!app.error, "{}", app.status);
+        assert!(app.tab.inline_text.is_none());
+        assert_eq!(app.tab.history.frames(), frames + 2);
+        assert_eq!(app.tab.doc.annotations.last().unwrap().text, "Changed cell");
+        assert!(
+            app.tab.doc.graphics[0]
+                .table
+                .as_ref()
+                .unwrap()
+                .cell(1)
+                .unwrap()
+                .borders
+                .iter()
+                .all(|b| b.width_pt == 1.2)
+        );
+        ui.undo(&mut app);
+        assert_eq!(app.tab.doc, caption_only);
+        ui.undo(&mut app);
+        assert_eq!(app.tab.doc, before);
+    }
 }
 
 #[tokio::test]

@@ -19,7 +19,7 @@ mod occlusion;
 pub(crate) mod projected_bonds;
 mod svg;
 pub mod table;
-pub(crate) use table::annotation_layout as table_annotation_layout;
+pub use table::annotation_layout as table_annotation_layout;
 
 #[derive(Debug, Clone)]
 pub enum Primitive {
@@ -290,6 +290,18 @@ pub(crate) fn participant_indicator_ink_boxes(
 /// The atom owning a visible label, including its hydrogens, isotope and charge.
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
+    atom_label_hit_where(doc, point, radius, |_| true)
+}
+
+/// Label picking with candidate filtering before overlapping labels compete.
+/// This lets clipped drawing scopes reject hidden ink without masking labels
+/// beneath it. The predicate is called only after the conservative reach cull.
+pub fn atom_label_hit_where(
+    doc: &Document,
+    point: Point,
+    radius: f32,
+    allowed: impl Fn(u64) -> bool,
+) -> Option<u64> {
     let drawn = doc.abbreviation_render_copy();
     let doc = drawn.as_ref();
     let reach = LabelReach::new(doc);
@@ -302,6 +314,7 @@ pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> 
         if (atom.position.x - point.x).abs() > limit
             || (atom.position.y - point.y).abs() > limit
             || crate::models3d::hides(doc, atom.id)
+            || !allowed(atom.id)
             || !cells.contains(atom.id, point)
         {
             continue;
@@ -333,11 +346,20 @@ pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> 
 /// box. Cull it with the same conservative glyph/advance reach before laying
 /// it out; retain the exact box, margin and reverse group-order hit priority.
 pub(crate) fn abbreviation_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
+    abbreviation_label_hit_where(doc, point, radius, |_| true)
+}
+
+pub(crate) fn abbreviation_label_hit_where(
+    doc: &Document,
+    point: Point,
+    radius: f32,
+    allowed: impl Fn(u64) -> bool,
+) -> Option<u64> {
     if doc.abbreviations.is_empty() {
         return None;
     }
     let drawn = doc.abbreviation_render_copy();
-    abbreviation_label_hit_prepared(&drawn, point, radius)
+    abbreviation_label_hit_prepared_where(&drawn, point, radius, allowed)
 }
 
 /// Label picking in an already prepared render view.
@@ -345,6 +367,37 @@ pub(crate) fn abbreviation_label_hit_prepared(
     doc: &Document,
     point: Point,
     radius: f32,
+) -> Option<u64> {
+    abbreviation_label_hit_prepared_where(doc, point, radius, |_| true)
+}
+
+fn abbreviation_label_hit_prepared_where(
+    doc: &Document,
+    point: Point,
+    radius: f32,
+    allowed: impl Fn(u64) -> bool,
+) -> Option<u64> {
+    abbreviation_label_hit_prepared_in(doc, point, radius, |id, _, _| allowed(id))
+}
+
+pub(crate) fn abbreviation_label_hit_in(
+    doc: &Document,
+    point: Point,
+    radius: f32,
+    bounds: impl Fn(u64, Point, Point) -> bool,
+) -> Option<u64> {
+    if doc.abbreviations.is_empty() {
+        return None;
+    }
+    let drawn = doc.abbreviation_render_copy();
+    abbreviation_label_hit_prepared_in(&drawn, point, radius, bounds)
+}
+
+fn abbreviation_label_hit_prepared_in(
+    doc: &Document,
+    point: Point,
+    radius: f32,
+    bounds: impl Fn(u64, Point, Point) -> bool,
 ) -> Option<u64> {
     let reach = LabelReach::new(doc);
     let cells = table::Layout::new(doc);
@@ -365,7 +418,9 @@ pub(crate) fn abbreviation_label_hit_prepared(
             && point.x <= hi.x + radius
             && point.y >= lo.y - radius
             && point.y <= hi.y + radius)
-            .then_some(group.anchor)
+            .then(|| bounds(group.anchor, lo, hi))
+            .filter(|allowed| *allowed)
+            .map(|_| group.anchor)
     })
 }
 
@@ -432,7 +487,7 @@ impl LabelReach {
     }
 }
 
-pub(crate) fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Point)> {
+pub fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Point)> {
     label_ink_boxes(&atom_label(a, doc))
 }
 
@@ -1651,12 +1706,17 @@ fn selections_bounds_with_indicators(
             grow(first, &mut [lo, hi].into_iter());
         }
     }
+    let cells = table::Layout::selected_annotations(doc, |id| owners.contains_key(&id));
     for a in doc
         .annotations
         .iter()
         .filter(|a| owners.contains_key(&a.id))
     {
-        grow(a.id, &mut a.corners().into_iter());
+        if let Some(polygon) = cells.as_ref().and_then(|cells| cells.annotation_polygon(a)) {
+            grow(a.id, &mut polygon.into_iter());
+        } else {
+            grow(a.id, &mut a.corners().into_iter());
+        }
     }
     for a in doc.arrows.iter().filter(|a| owners.contains_key(&a.id)) {
         let (lo, hi) = a.bounds();

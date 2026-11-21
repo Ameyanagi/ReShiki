@@ -1,5 +1,6 @@
 //! Where a pointer gesture lands (move deltas under bond constraints and smart guides, arrow ends, ring/template anchors, chain plans), shared by event handling and the drag preview so a preview equals the committed edit.
 
+use super::hit::{nearest_atom, nearest_bond};
 use super::pick::PICK_RADIUS_PX;
 use super::smart_guides::{self, Axis, Guide};
 use super::{Edit, MoleculeCanvas, State, Tool, World, command_held, movement};
@@ -137,17 +138,15 @@ impl MoleculeCanvas<'_> {
         let radius = self.camera.world_len(PICK_RADIUS_PX);
         if !attached
             && self.tool == Tool::Ring
-            && (self.doc.nearest(end, radius).is_some()
-                || reshiki::editing::nearest_bond(self.doc, end, radius).is_some())
+            && (nearest_atom(self.doc, end, radius).is_some()
+                || nearest_bond(self.doc, end, radius).is_some())
         {
             return (end, None);
         }
         if start.distance(end) <= radius {
             return (start, None);
         }
-        let atom = self
-            .doc
-            .nearest(start, radius)
+        let atom = nearest_atom(self.doc, start, radius)
             .and_then(|id| self.doc.atom(id))
             .map(|a| a.position);
         if attached && atom.is_none() {
@@ -182,8 +181,7 @@ impl MoleculeCanvas<'_> {
         if !(modifiers.shift() || crate::platform::control(modifiers)) || modifiers.alt() {
             return (anchor, direction);
         }
-        let origin = doc
-            .nearest(anchor, 10. / self.camera.zoom)
+        let origin = nearest_atom(doc, anchor, 10. / self.camera.zoom)
             .and_then(|id| self.doc.atom(id))
             .map(|a| a.position)
             .unwrap_or(anchor);
@@ -269,8 +267,7 @@ impl MoleculeCanvas<'_> {
         let target = if click || points.len() < 2 {
             None
         } else {
-            self.doc
-                .nearest(cursor, 12.0 / self.camera.zoom)
+            nearest_atom(self.doc, cursor, 12.0 / self.camera.zoom)
                 .filter(|id| Some(*id) != source || points.len() > 3)
                 .filter(|id| {
                     self.doc

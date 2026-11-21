@@ -183,12 +183,13 @@ impl App {
             self.tab.selected.contains(&g.id)
                 && g.picture.is_none()
                 && g.piece.is_none()
+                && g.table.is_none()
                 && g.tlc.is_none()
         })
     }
 
     pub(super) fn graphic_panel_visible(&self) -> bool {
-        matches!(self.tool, Tool::Graphic(kind) if kind != GraphicKind::TlcPlate)
+        matches!(self.tool, Tool::Graphic(kind) if !matches!(kind, GraphicKind::Table | GraphicKind::TlcPlate))
             || self.selected_styled_graphics().next().is_some()
     }
 
@@ -708,6 +709,7 @@ impl App {
     }
 
     pub(super) fn sync_graphics(&mut self) {
+        self.sync_tables();
         self.sync_pictures();
         self.sync_arc();
         self.sync_tlc();
@@ -811,7 +813,7 @@ impl App {
         let before = self.tab.doc.clone();
         for g in self
             .selected_graphics_mut()
-            .filter(|g| g.picture.is_none() && g.tlc.is_none())
+            .filter(|g| g.picture.is_none() && g.table.is_none() && g.tlc.is_none())
         {
             // Symbols and orbitals draw no waves.
             if matches!(

@@ -64,6 +64,7 @@ struct Context {
     optimization: Option<super::optimization::AccessibilityContext>,
     recovery: super::recovery_manager::AccessibilityContext,
     inline_session: Option<iced::widget::Id>,
+    table_target: Option<(reshiki::graphics::table::CellRef, u64)>,
     tlc_target: Option<(u64, usize, Option<usize>)>,
     surface: (
         super::InspectorTab,
@@ -227,6 +228,9 @@ impl App {
             .as_ref()
             .map(super::optimization::Session::accessibility_context);
         let recovery = self.recovery_accessibility_context();
+        let table_target = self
+            .table_target()
+            .map(super::tables::Target::accessibility_identity);
         let tlc_target = self
             .tlc_target()
             .map(super::tlc::Target::accessibility_identity);
@@ -238,6 +242,7 @@ impl App {
                 || context.optimization != optimization
                 || context.recovery != recovery
                 || context.inline_session != inline_session
+                || context.table_target != table_target
                 || context.tlc_target != tlc_target
                 || context.surface != surface
         });
@@ -249,6 +254,7 @@ impl App {
                 optimization,
                 recovery,
                 inline_session,
+                table_target,
                 tlc_target,
                 surface,
             });

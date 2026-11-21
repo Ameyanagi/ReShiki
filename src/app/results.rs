@@ -796,6 +796,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Tlc(..)
         | Message::Figure(..)
         | Message::Cycle(..)
+        | Message::Table(..)
         | Message::RemoveMark(..)
         | Message::RotateMark(..)
         | Message::AtomRadical(..)

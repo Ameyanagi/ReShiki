@@ -428,7 +428,7 @@ impl App {
         Continue(message)
     }
 
-    fn inline_text_gate(&mut self, message: Message) -> Gate {
+    fn inline_text_gate(&mut self, mut message: Message) -> Gate {
         if self.tab.inline_text.is_some() && matches!(message, Message::Undo | Message::Redo) {
             return Break(
                 self.inline_action(inline_text::Action::Undo(matches!(message, Message::Redo))),
@@ -447,11 +447,15 @@ impl App {
                 .filter(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id));
             return Break(self.inline_action(inline_text::Action::Begin(id, p)));
         }
-        if inline_text::commits_draft(&message)
-            && !self.opens_symbols(&message)
-            && !self.finish_inline(true)
-        {
-            return Break(Task::none());
+        if inline_text::commits_draft(&message) && !self.opens_symbols(&message) {
+            if let Message::Table(super::tables::Action::Edit(target, _)) = &mut message {
+                let Some(current) = self.finish_table_inline(*target) else {
+                    return Break(Task::none());
+                };
+                *target = current;
+            } else if !self.finish_inline(true) {
+                return Break(Task::none());
+            }
         }
         Continue(message)
     }
