@@ -574,7 +574,7 @@ pub(crate) fn remap_join(doc: &mut Document, mapping: &HashMap<u64, u64>) {
 /// A newly inserted fragment inherits its explicit chemical attachment's cell.
 /// Existing objects never change owners here; moving existing fragments checks
 /// their original ownership before using the template attachment pipeline.
-pub(crate) fn inherit_attachment(
+pub fn inherit_attachment(
     before: &Document,
     after: &mut Document,
     inserted: &[u64],
@@ -730,3 +730,6 @@ pub fn relink(doc: &mut Document, destination: Option<CellRef>, ids: &[u64]) -> 
 mod paint_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod growth_tests;

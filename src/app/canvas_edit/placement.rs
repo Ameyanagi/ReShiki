@@ -414,6 +414,8 @@ impl App {
         } else if self.tool == Tool::Arrow {
             self.place_arrow(start, end);
         } else {
+            let source = self.tab.doc.clone();
+            let targets: Vec<_> = a.into_iter().chain(b).collect();
             let a = a.unwrap_or_else(|| self.tab.doc.add_atom("C", start));
             let b = b.unwrap_or_else(|| self.tab.doc.add_atom("C", end));
             if let Some(preset) = self.tool.bond_preset() {
@@ -421,6 +423,17 @@ impl App {
             } else {
                 let (order, display) = self.bond_style();
                 self.tab.doc.add_bond(a, b, order, display);
+            }
+            if let Err(error) = reshiki::graphics::table::inherit_attachment(
+                &source,
+                &mut self.tab.doc,
+                &[a, b],
+                &targets,
+            ) {
+                self.tab.doc = before;
+                self.status = error;
+                self.error = true;
+                return;
             }
             self.tab.selected = vec![b];
         }

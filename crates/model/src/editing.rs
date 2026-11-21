@@ -44,6 +44,8 @@ pub fn add_bonded_atom(
         doc.invalidate_chemistry(&[start, id]);
         doc.add_bond(start, id, 1, "plain");
     }
+    let targets: Vec<_> = std::iter::once(start).chain(target).collect();
+    crate::graphics::table::inherit_attachment(source, &mut doc, &[id], &targets)?;
     crate::reactions::reconcile(&mut doc)?;
     doc.validate()?;
     Ok((doc, id))
@@ -1896,6 +1898,18 @@ fn check_ring_candidate(
             ));
         }
     }
+    let targets: Vec<_> = ids
+        .iter()
+        .copied()
+        .filter(|id| doc.atom(*id).is_some())
+        .collect();
+    crate::graphics::table::inherit_attachment(doc, &mut result, &ids, &targets).map_err(|_| {
+        reject(
+            "A ring cannot join different table cells.",
+            "Different table cells",
+            None,
+        )
+    })?;
     result.reconcile_molecule_groups();
     crate::reactions::reconcile(&mut result).map_err(|_| {
         reject(

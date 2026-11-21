@@ -259,6 +259,8 @@ pub fn place(
         }
         selected.push(id);
     }
+    let targets: Vec<_> = source.into_iter().chain(target).collect();
+    crate::graphics::table::inherit_attachment(doc, &mut candidate, &selected, &targets)?;
     candidate.reconcile_molecule_groups();
     crate::reactions::reconcile(&mut candidate)?;
     candidate.validate()?;

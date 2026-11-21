@@ -69,6 +69,8 @@ SHARD_SECONDS = {0: 1700}
 # assignment explicit so a new workspace test can never silently disappear.
 # Shard 0 exists for every --count, so an assignment can never fall outside it.
 WORKSPACE_TARGET_SHARDS = {
+    ("reshiki-io", "chemdraw_tables"): 0,
+    ("reshiki-io", "chemdraw_table_grid"): 0,
     ("reshiki-io", "chemdraw_clipboard_layout"): 0,
     ("reshiki-io", "chemdraw_import_semantics"): 0,
     ("reshiki-io", "chemdraw_drawing_elements"): 0,
