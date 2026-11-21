@@ -302,12 +302,17 @@ impl App {
                 .unwrap_or_else(|| self.naming_canvas_highlight()),
             reaction_preview: self.reaction_preview(),
             optimizer: self.optimization_canvas(),
+            equipment_authoring: self
+                .tab
+                .equipment_authoring
+                .as_ref()
+                .map(|s| s.measurement()),
             keyboard_target: if self.keyboard_drawing_active() {
                 self.tab.keyboard_drawing.point(self.display_document())
             } else {
                 None
             },
-            keyboard_marker: self.tab.keyboard_drawing.shown(),
+            keyboard_marker: self.keyboard_drawing_active() && self.tab.keyboard_drawing.shown(),
             morph: self.model_morph(),
             model_generation: self.model_generation(),
             element: self.atom_tool_element(),
@@ -344,7 +349,7 @@ impl App {
             },
             doc: self.display_document(),
             reviewing_pair: self.tab.mapping.review_pair.is_some() && self.tool.selects(),
-            selected: if self.tab.inline_text.is_some() {
+            selected: if self.tab.inline_text.is_some() || self.tab.equipment_authoring.is_some() {
                 &[]
             } else {
                 &self.tab.selected
@@ -1064,6 +1069,14 @@ impl App {
             commands.extend(self.keyboard_drawing_commands());
         }
         if !self.tab.selected.is_empty() {
+            if self.can_define_equipment() {
+                commands.push(RowCommand {
+                    label: super::equipment_authoring::DEFINE,
+                    menu: super::equipment_authoring::DEFINE,
+                    message: Message::EquipmentAuthoring(super::equipment_authoring::Action::Begin),
+                    enabled: true,
+                });
+            }
             commands.extend(self.selected_join_commands());
             commands.extend(self.selected_attach_commands());
             commands.extend(self.path_head_commands());
@@ -1943,6 +1956,7 @@ impl App {
         .spacing(HISTORY_GAP)
         .align_y(iced::Alignment::Center);
         let body = match self.inspector_tab {
+            _ if self.tab.equipment_authoring.is_some() => self.equipment_authoring_panel(),
             InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),
             InspectorTab::Pages => self.pages_panel(),
@@ -1972,6 +1986,10 @@ impl App {
                 .on_scroll(|viewport| Message::InspectorScroll(viewport.absolute_offset().y))
                 .height(Length::Fill)
         ];
+        if self.tab.equipment_authoring.is_some() {
+            content = content.push(container(self.equipment_authoring_footer()).padding([10, 16]));
+            return self.inspector_frame(reshiki::accessibility::focus_scope(content));
+        }
         if self.inspector_tab == InspectorTab::Properties && self.tab.optimization.is_some() {
             content = content.push(container(self.optimization_footer()).padding([10, 16]));
             // The 3D preview is modal: Tab cycles its controls, Cancel and Apply last.

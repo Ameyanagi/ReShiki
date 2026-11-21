@@ -66,6 +66,9 @@ PROPERTIES[0x44B] = ("ExternalConnectionNum", "INT8", {})
 # 0xA39 with an empty payload; 0xA38 is the numeric CurveSpacing property.
 PROPERTIES[0xA38] = ("CurveSpacing", "UINT16", {})
 PROPERTIES[0xA39] = ("Closed", "CDXBooleanImplied", {})
+# ChemDraw 26 writes Dipole as an empty flag. A one-byte Boolean payload
+# makes its CDX reader reject the drawing, although CDXML accepts Dipole=yes.
+PROPERTIES[0xA3A] = ("Dipole", "CDXBooleanImplied", {})
 # Native ChemDraw document annotations accompany clipboard ring-fill drawings.
 PROPERTIES[0x1500] = ("Keyword", "CDXString", {})
 PROPERTIES[0x1501] = ("Content", "CDXString", {})

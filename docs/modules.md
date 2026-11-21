@@ -68,6 +68,7 @@ explains how the crates and modules fit together.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
+- `src/app/equipment_authoring.rs`: A detached equipment draft, measured and reviewed on the ordinary canvas.
 - `src/app/event_slot.rs`: Native event receivers are installed before their subscription takes ownership.
 - `src/app/figure_export.rs`: Figure export preserves drawable content independently of molecular validation.
 - `src/app/figure_panels.rs`: Figure panels (Wrap in panel, titles, dividers) and lasting row, column and grid layouts.
@@ -589,6 +590,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/exchange/decode.rs`
 - `crates/io/src/exchange/drawing.rs`: Editable document serialization.
 - `crates/io/src/exchange/drawing/clipboard.rs`: Explicitly lossy presentation conversion for an external clipboard copy.
+- `crates/io/src/exchange/drawing/compound_fill.rs`: Exact compound fills joined by cancelling bridges for editable exchange.
 - `crates/io/src/exchange/drawing/cycles.rs`: A catalytic cycle's ChemDraw steps and the data ReShiki reopens it from.
 - `crates/io/src/exchange/drawing/generic.rs`: ChemDraw generic properties are attached to their actual atom and bracket IDs.
 - `crates/io/src/exchange/drawing/groups.rs`
@@ -694,6 +696,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.
 - `crates/model/src/cycles.rs`: Catalytic cycles.
+- `crates/model/src/cycles/label_placement.rs`: Place each step name on one side of the ring with space around the ink.
 - `crates/model/src/cycles/split.rs`: Keep inherited side parts beside the step that an insertion shortens.
 - `crates/model/src/cycles/steps.rs`: A catalytic cycle's steps as ordinary reactions.
 - `crates/model/src/depiction.rs`: Opt-in nitrogen charge separation using the same cleanup as analysis.
@@ -703,6 +706,8 @@ explains how the crates and modules fit together.
 - `crates/model/src/editing/reference.rs`: Exact drawing orientation and single-bond stretching.
 - `crates/model/src/editing/rotation.rs`: Reference sites that follow rotation, unlike axis-aligned drawing bounds.
 - `crates/model/src/equipment.rs`: Lab apparatus
+- `crates/model/src/equipment/authoring.rs`: A piece-editor draft.
+- `crates/model/src/equipment/authoring_artwork.rs`: A bounded certificate for filled artwork without independent stroke-only traces.
 - `crates/model/src/equipment/builtin.rs`: The built-in catalogue
 - `crates/model/src/equipment/eval.rs`: Evaluates a definition at parameter values
 - `crates/model/src/equipment/format.rs`: The `.reshiki-piece` format

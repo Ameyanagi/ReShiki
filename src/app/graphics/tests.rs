@@ -50,6 +50,47 @@ fn assert_undo_redo(app: &mut App, before: &Document) {
 }
 
 #[test]
+fn clearing_fill_on_a_borderless_path_applies_to_the_whole_selection() {
+    use reshiki::{graphics::PathCommand, palette::Color};
+    let mut borderless = shape(1, GraphicKind::Path);
+    borderless.node_types.clear();
+    borderless.path = vec![
+        PathCommand::Move(Point::new(0., 0.)),
+        PathCommand::Line(Point::new(1., 0.)),
+        PathCommand::Line(Point::new(1., 1.)),
+        PathCommand::Close,
+    ];
+    borderless.style.fill = Some(Color::Ink);
+    borderless.style.width_pt = 0.;
+    borderless.validate().unwrap();
+    let mut outlined = shape(2, GraphicKind::Rectangle);
+    outlined.style.fill = Some(Color::Paper);
+    outlined.style.width_pt = 2.5;
+    let untouched = shape(3, GraphicKind::Ellipse);
+    let mut app = ready(vec![borderless, outlined, untouched.clone()], vec![1, 2]);
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+
+    let _ = app.update(Message::Graphics(Action::Style(GraphicChange::Fill(None))));
+
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.revision, revision + 1);
+    assert_eq!(app.tab.selected, [1, 2]);
+    for graphic in &app.tab.doc.graphics[..2] {
+        assert_eq!(graphic.style.fill, None);
+        graphic.validate().unwrap();
+    }
+    assert_eq!(
+        app.tab.doc.graphics[0].style.width_pt,
+        GraphicStyle::default().width_pt
+    );
+    assert_eq!(app.tab.doc.graphics[0].path, before.graphics[0].path);
+    assert_eq!(app.tab.doc.graphics[1].style.width_pt, 2.5);
+    assert_eq!(app.tab.doc.graphics[2], untouched);
+    assert_undo_redo(&mut app, &before);
+}
+
+#[test]
 fn invalid_graphic_inputs_preserve_drafts_document_and_redo() {
     let mut app = ready(vec![shape(1, GraphicKind::Rectangle)], vec![1]);
     let _ = app.update(Message::Graphics(Action::Width("2".into())));
@@ -625,4 +666,52 @@ fn a_condition_icon_keeps_its_disc_and_lends_it_to_no_other_shape() {
         GraphicKind::Symbol(SymbolKind::Cold),
     )));
     assert_eq!(app.tab.doc.graphics[1].style.fill, paper);
+}
+
+#[test]
+fn fill_only_path_selection_keeps_visible_width_for_the_next_drawing() {
+    use reshiki::{
+        document::Point,
+        graphics::{Graphic, GraphicKind, GraphicStyle, PathCommand},
+        palette::Color,
+    };
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let mut g = Graphic::dragged(
+        1,
+        GraphicKind::Path,
+        Point::default(),
+        Point::new(1., 1.),
+        GraphicStyle {
+            fill: Some(Color::Ink),
+            ..Default::default()
+        },
+        Default::default(),
+        false,
+    );
+    g.node_types.clear();
+    g.style.width_pt = 0.;
+    g.path = vec![
+        PathCommand::Move(Point::new(0., 0.)),
+        PathCommand::Line(Point::new(10., 0.)),
+        PathCommand::Line(Point::new(10., 10.)),
+        PathCommand::Close,
+    ];
+    app.tab.doc.graphics.push(g);
+    app.set_selection(vec![1]);
+    assert_eq!(app.tab.doc.graphics[0].style.width_pt, 0.);
+    assert_eq!(app.tab.graphic_width_input.parse::<f32>().unwrap(), 0.);
+    assert_eq!(app.tab.graphic_style.width_pt, 0.1);
+    for kind in [GraphicKind::Line, GraphicKind::Rectangle] {
+        let drawn = Graphic::dragged(
+            2,
+            kind,
+            Point::default(),
+            Point::new(10., 10.),
+            app.tab.graphic_style.clone(),
+            Default::default(),
+            false,
+        );
+        drawn.validate().unwrap();
+    }
 }

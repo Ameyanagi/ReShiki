@@ -150,6 +150,7 @@ impl App {
             || self.assistant.viewed_image.is_some()
             || self.tab.atom_text.is_some()
             || self.tab.inline_text.is_some()
+            || self.tab.equipment_authoring.is_some()
             || self.tab.optimization.is_some()
             || self.tab.joining.is_some()
             || self.tab.busy

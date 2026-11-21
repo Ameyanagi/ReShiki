@@ -1043,6 +1043,12 @@ impl App {
                     .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
             });
         }
+        if self.can_define_equipment() {
+            body = body.push(super::workspace::command(
+                super::equipment_authoring::DEFINE,
+                Message::EquipmentAuthoring(super::equipment_authoring::Action::Begin),
+            ));
+        }
         let styled_graphics = self.graphic_panel_visible();
         if let Some(table) = self.table_card() {
             body = body.push(card(container(table).padding(12)));

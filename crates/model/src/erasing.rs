@@ -308,7 +308,17 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
                             .any(|(lo, hi)| box_hit(lo, hi, from, to, radius))
                     })
                     || g.parts().iter().any(|part| {
-                        path_hit(&part.commands, from, to, radius + part.style.width() / 2.)
+                        if g.is_fill_only_path() {
+                            crate::graphics::fill_boundaries(&part.commands)
+                                .iter()
+                                .any(|path| {
+                                    path.windows(2).any(|pair| {
+                                        matches!(pair, [a, b] if crossed(from, to, *a, *b, radius))
+                                    })
+                                })
+                        } else {
+                            path_hit(&part.commands, from, to, radius + part.style.width() / 2.)
+                        }
                     })
             })
             .map(|g| g.id),

@@ -388,8 +388,8 @@ fn commands(path: &[Seg]) -> Vec<PathCommand> {
 /// Stroke widths in points: outlines stay 0.6 pt however a setup is scaled.
 fn width_pt(weight: Weight, pass: Pass) -> f32 {
     match weight {
-        Weight::Outline if pass == Pass::Outline => 1.2,
-        Weight::Outline => 0.6,
+        Weight::Outline if pass == Pass::Outline => super::plan::GLASS_OUTLINE_PT * 2.,
+        Weight::Outline => super::plan::GLASS_OUTLINE_PT,
         Weight::Detail => 0.4,
         Weight::Hatch => 0.25,
     }

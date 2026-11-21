@@ -86,6 +86,12 @@ impl MoleculeCanvas<'_> {
                         );
                     }
                     state.touch.pending = None;
+                    // A measurement commits on a tap. A dragged first finger
+                    // may become a pinch, so it must not record a point yet.
+                    if self.equipment_authoring.is_some() {
+                        state.touch.navigating = true;
+                        return Some(Action::capture());
+                    }
                     state.touch.mouse_down = true;
                     return Some(self.touch_mouse(
                         state,
