@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    cycles::{Cycle, Shape, Step, set_radius},
+    cycles::{Cycle, Shape, Step, set_dimensions, set_radius},
     document::Annotation,
     graphics::{Graphic, GraphicKind},
     typography::TextFormat,
@@ -460,5 +460,274 @@ fn ordinary_circle_resize_keeps_the_legacy_axis_reset_and_reflection() {
         assert_eq!(g.axis_y, Point::new(0., if mirror { -800. } else { 800. }));
         assert_eq!(g.cycle_counterclockwise(), !mirror);
         number(f64::from(g.cycle_circle().1), 400.);
+    }
+}
+
+#[test]
+fn dimensions_keep_the_affine_frame_and_translate_whole_parts_with_their_captions() {
+    for shape in [Shape::Ellipse, Shape::RoundedRectangle, Shape::Rectangle] {
+        for mirror in [false, true] {
+            let mut doc = fixture(shape, 37., mirror, true, true);
+            doc.graphics[0].style.corner_pt = Some(12.);
+            let old_frame = doc.graphics[0].clone();
+            let center = old_frame.cycle_circle().0;
+            let at = |u: f32, v: f32| {
+                center.offset(
+                    u * old_frame.axis_x.x + v * old_frame.axis_y.x,
+                    u * old_frame.axis_x.y + v * old_frame.axis_y.y,
+                )
+            };
+            let body = at(0.3, -0.2);
+            let a = doc.add_atom("C", body.offset(-21., -5.));
+            let b = doc.add_atom("C", body.offset(21., 5.));
+            doc.add_bond(a, b, 1, "plain");
+            let atoms = vec![a, b];
+            let identity = crate::molecule_names::identity(&doc, &atoms).unwrap();
+            let name = crate::molecule_names::show(
+                &mut doc,
+                &atoms,
+                "ethane".into(),
+                identity,
+                Default::default(),
+                false,
+            )
+            .unwrap();
+            crate::linked_properties::toggle(
+                &mut doc,
+                &atoms,
+                crate::linked_properties::Property::Formula,
+                Default::default(),
+                false,
+            )
+            .unwrap();
+            let property = doc.property_captions[0].annotation;
+            let second = text(&mut doc, at(-0.25, 0.1), "Pd");
+            let reagent = text(&mut doc, at(0.7, -0.7), "Ar–X");
+            let product = text(&mut doc, at(-0.8, 0.6), "X−");
+            let unrelated = text(&mut doc, Point::new(1700., -80.), "Unrelated");
+            let c = doc.graphics[0].cycle.as_mut().unwrap();
+            c.label = "Catalytic cycle".into();
+            c.intermediates = vec![atoms.clone(), vec![second]];
+            c.steps = vec![Step::default(); 2];
+            c.steps[0].reagents.push(vec![reagent]);
+            c.steps[0].products.push(vec![product]);
+            c.steps[0].name = "OA".into();
+            c.steps[0].reversible = true;
+            c.steps[0].hidden = true;
+            c.steps[0].bow_pt = -19.;
+            c.steps[0].lead_pt = 7.;
+            c.steps[0].trail_pt = 11.;
+            doc.validate().unwrap();
+            let before = doc.clone();
+            let (width, height) = (
+                (norm(old_frame.axis_x) * 1.6) as f32,
+                (norm(old_frame.axis_y) * 0.55) as f32,
+            );
+            assert!(set_dimensions(&mut doc, 1, width, height));
+            let frame = &doc.graphics[0];
+            near(frame.cycle_circle().0, center);
+            number(norm(frame.axis_x), f64::from(width));
+            number(norm(frame.axis_y), f64::from(height));
+            assert_eq!(frame.cycle, before.graphics[0].cycle);
+            assert_eq!(frame.style, before.graphics[0].style);
+            assert_eq!(
+                frame.cycle_counterclockwise(),
+                old_frame.cycle_counterclockwise()
+            );
+            for (old, new) in [
+                (old_frame.axis_x, frame.axis_x),
+                (old_frame.axis_y, frame.axis_y),
+            ] {
+                let cross =
+                    f64::from(old.x) * f64::from(new.y) - f64::from(old.y) * f64::from(new.x);
+                assert!(dot(old, new) > 0.);
+                assert!(cross.atan2(dot(old, new)).abs() < 1e-6);
+            }
+            // Known affine coordinates independently predict the new centers.
+            for (ids, u, v) in [
+                (atoms.as_slice(), 0.3, -0.2),
+                ([second].as_slice(), -0.25, 0.1),
+                ([reagent].as_slice(), 0.7, -0.7),
+                ([product].as_slice(), -0.8, 0.6),
+            ] {
+                near(
+                    center_of(crate::scene::selection_bounds(&doc, ids).unwrap()),
+                    center.offset(
+                        u * frame.axis_x.x + v * frame.axis_y.x,
+                        u * frame.axis_x.y + v * frame.axis_y.y,
+                    ),
+                );
+            }
+            let delta = Point::new(
+                doc.atom(a).unwrap().position.x - before.atom(a).unwrap().position.x,
+                doc.atom(a).unwrap().position.y - before.atom(a).unwrap().position.y,
+            );
+            near(
+                doc.atom(b).unwrap().position,
+                before.atom(b).unwrap().position.offset(delta.x, delta.y),
+            );
+            assert_eq!(doc.bonds, before.bonds);
+            assert_eq!(doc.molecule_names, before.molecule_names);
+            assert_eq!(doc.property_captions, before.property_captions);
+            for id in [name, property] {
+                let old = before.annotations.iter().find(|a| a.id == id).unwrap();
+                let new = doc.annotations.iter().find(|a| a.id == id).unwrap();
+                near(new.position, old.position.offset(delta.x, delta.y));
+                assert_eq!(new.format, old.format);
+                assert_eq!(new.size(), old.size());
+            }
+            assert_eq!(
+                doc.annotations.iter().find(|a| a.id == unrelated),
+                before.annotations.iter().find(|a| a.id == unrelated)
+            );
+            doc.validate().unwrap();
+            let saved = doc.file_json().unwrap();
+            assert_eq!(
+                Document::from_json(&saved).unwrap().file_json().unwrap(),
+                saved
+            );
+        }
+    }
+}
+
+#[test]
+fn dimension_current_values_are_noops_and_an_unchanged_axis_is_retained_exactly() {
+    let mut doc = fixture(Shape::Ellipse, 37., true, true, false);
+    let old = doc.graphics[0].clone();
+    let (width, height) = (norm(old.axis_x) as f32, norm(old.axis_y) as f32);
+    let before = snapshot(&doc);
+    assert!(!set_dimensions(&mut doc, 1, width, height));
+    assert_eq!(snapshot(&doc), before);
+    assert!(set_dimensions(&mut doc, 1, width, height * 1.4));
+    assert_eq!(doc.graphics[0].axis_x, old.axis_x);
+    near(doc.graphics[0].cycle_circle().0, old.cycle_circle().0);
+    let before = snapshot(&doc);
+    let g = &doc.graphics[0];
+    let (width, height) = (norm(g.axis_x) as f32, norm(g.axis_y) as f32);
+    assert!(!set_dimensions(&mut doc, 1, width, height));
+    assert_eq!(snapshot(&doc), before);
+
+    let mut tiny = fixture(Shape::Ellipse, 0., false, false, false);
+    tiny.graphics[0].origin = Point::default();
+    tiny.graphics[0].axis_x = Point::new(6e-30, 0.);
+    tiny.graphics[0].axis_y = Point::new(0., 2e-30);
+    assert_eq!(tiny.graphics[0].cycle_circle().1, 0.);
+    assert!(set_dimensions(&mut tiny, 1, 600., 200.));
+    number(norm(tiny.graphics[0].axis_x), 600.);
+    number(norm(tiny.graphics[0].axis_y), 200.);
+}
+
+#[test]
+fn invalid_dimensions_circle_requests_and_later_overflow_are_atomic() {
+    for shape in [Shape::Ellipse, Shape::RoundedRectangle, Shape::Rectangle] {
+        for (width, height) in [
+            (0., 100.),
+            (-1., 100.),
+            (100., 0.),
+            (100., f32::NAN),
+            (f32::INFINITY, 100.),
+            (100., f32::NEG_INFINITY),
+            (f32::MAX, 100.),
+            (f32::from_bits(1), 100.),
+        ] {
+            let mut doc = fixture(shape, 70., true, true, false);
+            let before = snapshot(&doc);
+            assert!(
+                !set_dimensions(&mut doc, 1, width, height),
+                "{shape:?}/{width}/{height}"
+            );
+            assert_eq!(snapshot(&doc), before);
+        }
+        let mut doc = fixture(shape, 0., false, false, false);
+        let first = text(&mut doc, Point::new(300., 100.), "Pd");
+        let later = text(&mut doc, Point::new(3e38, 0.), "X");
+        let c = doc.graphics[0].cycle.as_mut().unwrap();
+        c.intermediates = vec![vec![first]];
+        c.steps = vec![Step::default()];
+        c.steps[0].products.push(vec![later]);
+        doc.validate().unwrap();
+        let before = snapshot(&doc);
+        assert!(!set_dimensions(&mut doc, 1, 900., 100.));
+        assert_eq!(
+            snapshot(&doc),
+            before,
+            "a bad later part must not move an earlier one"
+        );
+    }
+    let mut circle = fixture(Shape::Circle, 37., true, true, false);
+    let before = snapshot(&circle);
+    assert!(!set_dimensions(&mut circle, 1, 900., 100.));
+    assert!(!set_dimensions(&mut circle, 999, 900., 100.));
+    assert_eq!(snapshot(&circle), before);
+
+    let mut tiny = fixture(Shape::Ellipse, 0., true, false, false);
+    tiny.graphics[0].origin = Point::default();
+    tiny.graphics[0].axis_x = Point::new(-1e-18, 0.);
+    tiny.graphics[0].axis_y = Point::new(0., 1e-21);
+    assert!(tiny.graphics[0].cycle_counterclockwise());
+    let before = snapshot(&tiny);
+    assert!(!set_dimensions(&mut tiny, 1, 1e-23, 1e-23));
+    assert_eq!(
+        snapshot(&tiny),
+        before,
+        "underflow must not reverse effective travel"
+    );
+}
+
+#[test]
+fn dimensions_reject_finite_bond_collapse_and_distortion_but_allow_translation_roundoff() {
+    for width in [6e-30, 6e-5] {
+        let mut doc = fixture(Shape::Ellipse, 0., false, false, false);
+        doc.graphics[0].origin = Point::default();
+        doc.graphics[0].axis_x = Point::new(width, 0.);
+        doc.graphics[0].axis_y = Point::new(0., width / 3.);
+        let a = doc.add_atom("C", Point::new(1., 0.));
+        let b = doc.add_atom("C", Point::new(43., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let c = doc.graphics[0].cycle.as_mut().unwrap();
+        c.intermediates = vec![vec![a, b]];
+        c.steps = vec![Step::default()];
+        doc.validate().unwrap();
+        let before = snapshot(&doc);
+        // UI-sized dimensions on a tiny loaded frame can translate this
+        // ordinary 42-world-unit bond far enough to collapse or distort it.
+        assert!(!set_dimensions(&mut doc, 1, 600., 200.), "width {width}");
+        assert_eq!(snapshot(&doc), before);
+    }
+
+    let mut doc = fixture(Shape::Ellipse, 0., false, false, false);
+    let a = doc.add_atom("C", Point::new(99_979.02, 99_995.));
+    let b = doc.add_atom("C", Point::new(100_021.03, 100_005.));
+    doc.add_bond(a, b, 1, "plain");
+    let c = doc.graphics[0].cycle.as_mut().unwrap();
+    c.intermediates = vec![vec![a, b]];
+    c.steps = vec![Step::default()];
+    let before = doc.clone();
+    assert!(set_dimensions(&mut doc, 1, 900., 100.));
+    let vector = |doc: &Document| {
+        let a = doc.atom(a).unwrap().position;
+        let b = doc.atom(b).unwrap().position;
+        (
+            f64::from(b.x) - f64::from(a.x),
+            f64::from(b.y) - f64::from(a.y),
+        )
+    };
+    let (x, y) = vector(&before);
+    let (next_x, next_y) = vector(&doc);
+    assert!((next_x - x).hypot(next_y - y) < x.hypot(y) * 0.001);
+}
+
+#[test]
+fn dimensions_reject_axes_swallowed_by_native_command_translation() {
+    for shape in [Shape::Ellipse, Shape::RoundedRectangle, Shape::Rectangle] {
+        let mut doc = fixture(shape, 0., false, false, false);
+        doc.graphics[0].origin = Point::new(1e8, 1e8);
+        doc.validate().unwrap();
+        let before = snapshot(&doc);
+        // The requested axis remains positive and independent in the retained
+        // frame, but its width is below one origin ULP. All painted commands
+        // would have the same x, so this is not a drawable convex cycle.
+        assert!(!set_dimensions(&mut doc, 1, 1., 100.), "{shape:?}");
+        assert_eq!(snapshot(&doc), before);
     }
 }

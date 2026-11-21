@@ -1507,6 +1507,14 @@ pub fn set_radius(doc: &mut Document, id: u64, radius: f32) {
     }
 }
 
+/// Change an explicit noncircle cycle's local width and height in world units.
+/// Retain its center and affine axis directions; translate whole parts and
+/// their linked captions without scaling their ink. Invalid or unchanged
+/// dimensions, missing cycles, and legacy Circles return `false` unchanged.
+pub fn set_dimensions(doc: &mut Document, id: u64, width: f32, height: f32) -> bool {
+    resize::dimensions(doc, id, width, height)
+}
+
 /// A cycle as [`materialized`] wrote it.
 #[derive(Debug, Clone)]
 pub struct Materialized {

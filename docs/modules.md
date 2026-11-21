@@ -59,6 +59,7 @@ explains how the crates and modules fit together.
 - `src/app/context_menu.rs`: Commands for the object under a secondary click, or the current selection.
 - `src/app/context_menu/cascade.rs`: Cascading context panels share one event boundary and use laid-out rows as anchors.
 - `src/app/cycles.rs`: Catalytic cycles
+- `src/app/cycles/layout.rs`: Explicit cycle shapes and their dimensions in Properties and Make review.
 - `src/app/depth_appearance.rs`
 - `src/app/desktop.rs`: UI-side ownership acknowledgement; the transport cannot accept a request merely because it queued bytes.
 - `src/app/dispatch.rs`: The message dispatch table
