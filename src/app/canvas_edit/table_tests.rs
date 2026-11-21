@@ -271,6 +271,41 @@ fn table_command_and_numeric_half_turns_keep_the_frame_center_with_off_center_ca
     use reshiki::document::Annotation;
     use reshiki::editing::Transform;
     use reshiki::graphics::table::Frame;
+    use reshiki::scene::{self, Primitive};
+
+    let caption_center = |doc: &Document, caption: &Annotation, cell: usize| {
+        let drawing = scene::primitives(doc);
+        let children = drawing
+            .iter()
+            .filter_map(|primitive| match primitive {
+                Primitive::Clip { primitives, .. } => Some(primitives),
+                _ => None,
+            })
+            .nth(cell)
+            .unwrap();
+        let runs: Vec<_> = children
+            .iter()
+            .filter(|p| matches!(p, Primitive::Text { text, .. } if text == &caption.text))
+            .cloned()
+            .collect();
+        let layout = scene::table::Layout::new(doc);
+        let (lo, hi) = scene::label_ink_boxes(&runs)
+            .into_iter()
+            .inspect(|(lo, hi)| {
+                for point in [*lo, Point::new(hi.x, lo.y), *hi, Point::new(lo.x, hi.y)] {
+                    assert!(layout.contains(caption.id, point));
+                }
+            })
+            .reduce(|(lo, hi), (next_lo, next_hi)| {
+                (
+                    Point::new(lo.x.min(next_lo.x), lo.y.min(next_lo.y)),
+                    Point::new(hi.x.max(next_hi.x), hi.y.max(next_hi.y)),
+                )
+            })
+            .expect("the caption paints in its cell");
+        lo.lerp(hi, 0.5)
+    };
+
     for numeric in [false, true] {
         for overflow in [false, true] {
             let (mut app, atom, _) = app();
@@ -299,7 +334,7 @@ fn table_command_and_numeric_half_turns_keep_the_frame_center_with_off_center_ca
                 app.tab.doc.annotations.push(Annotation {
                     id,
                     position,
-                    text: "off-center caption".into(),
+                    text: if cell == 0 { "Entry" } else { "Solvent" }.into(),
                     angle: 0.,
                     format: Default::default(),
                 });
@@ -332,13 +367,22 @@ fn table_command_and_numeric_half_turns_keep_the_frame_center_with_off_center_ca
                     < 1e-4
             );
             assert_eq!(app.tab.doc.graphics[0].table, before.graphics[0].table);
-            for (old, new) in before.annotations.iter().zip(&app.tab.doc.annotations) {
-                assert!(
-                    new.position.distance(Point::new(
-                        2. * center.x - old.position.x,
-                        2. * center.y - old.position.y
-                    )) < 0.001
-                );
+            for (cell, (old, new)) in before
+                .annotations
+                .iter()
+                .zip(&app.tab.doc.annotations)
+                .enumerate()
+            {
+                assert_eq!(new.text, old.text);
+                assert_eq!(new.format, old.format);
+                assert_eq!(new.angle, old.angle);
+                if overflow && cell == 1 {
+                    let expected = old.position.turned(center, 180.);
+                    assert!(new.position.distance(expected) < 0.001);
+                } else {
+                    let expected = caption_center(&before, old, cell).turned(center, 180.);
+                    assert!(caption_center(&app.tab.doc, new, cell).distance(expected) < 0.001);
+                }
             }
             assert_eq!(app.tab.history.undo_frames().len(), 1);
             let after = app.tab.doc.clone();
