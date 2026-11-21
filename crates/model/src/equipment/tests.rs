@@ -686,6 +686,14 @@ fn ground_glass_hatch_ink_stays_inside_the_frosted_zone() {
                     .flat_map(|path| flatten(&path.path))
                     .map(|(contour, _)| contour)
                     .collect();
+                let boundary_edges: Vec<_> = ground
+                    .clone()
+                    .filter(|path| path.ink == Ink::Stroke(Weight::Hatch) && path.style.is_none())
+                    .flat_map(|path| flatten(&path.path))
+                    .flat_map(|(contour, closed)| {
+                        super::geometry::edges(&contour, closed).collect::<Vec<_>>()
+                    })
+                    .collect();
                 let strokes: Vec<_> = ground
                     .filter(|path| path.style == Some(StyleKind::Line))
                     .collect();
@@ -709,11 +717,16 @@ fn ground_glass_hatch_ink_stays_inside_the_frosted_zone() {
                                 corners.iter().all(|point| {
                                     super::geometry::edges(outline, true).all(|(start, end)| {
                                         let inward = mul(normalize(perp(sub(end, start))), winding);
-                                        dot(inward, sub(*point, start)) >= -1e-8
+                                        let inset = if boundary_edges.contains(&(start, end)) {
+                                            radius
+                                        } else {
+                                            0.
+                                        };
+                                        dot(inward, sub(*point, start)) >= inset - 1e-8
                                     })
                                 })
                             }),
-                            "{name} at {scale}, seated {seated}: {corners:?} escapes the frosted zone"
+                            "{name} at {scale}, seated {seated}: {corners:?} reaches beyond the hatch area"
                         );
                     }
                 }

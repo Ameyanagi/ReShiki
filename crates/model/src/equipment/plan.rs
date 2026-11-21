@@ -531,7 +531,9 @@ fn standard_joint(
     let ground = |points: Vec<Xy>, cut: bool, details: &mut Vec<Detail>| {
         let filled = polygon(&points, true);
         details.push((Material::Frosted, None, Ink::Fill, None, filled, false));
-        let lines = hatch(&points, hatch_mm, hatch_radius_mm);
+        // The second edge is the exposed end of the taper at the socket mouth.
+        let open_edge = cut.then_some(1);
+        let lines = hatch(&points, hatch_mm, hatch_radius_mm, open_edge);
         if !lines.is_empty() {
             details.push((
                 Material::Frosted,
@@ -543,8 +545,8 @@ fn standard_joint(
             ));
         }
         let mut boundary = points;
-        if cut {
-            boundary.rotate_left(2);
+        if let Some(edge) = open_edge {
+            boundary.rotate_left(edge + 1);
         }
         details.push((
             Material::Frosted,
@@ -654,7 +656,7 @@ fn standard_joint(
 }
 
 /// 45° flat-ended hatch strokes inside a convex polygon, `h` apart.
-fn hatch(points: &[Xy], h: f64, radius: f64) -> Vec<Seg> {
+fn hatch(points: &[Xy], h: f64, radius: f64, open_edge: Option<usize>) -> Vec<Seg> {
     let n = [
         std::f64::consts::FRAC_1_SQRT_2,
         -std::f64::consts::FRAC_1_SQRT_2,
@@ -674,13 +676,15 @@ fn hatch(points: &[Xy], h: f64, radius: f64) -> Vec<Seg> {
         return out;
     }
     let winding = area(points).signum();
-    // Inset each clipping plane by the pen's crosswise extent on its normal.
-    // The clipped centerline's stroke rectangle then fits inside the patch.
+    // Allow for the hatch pen's crosswise extent and for any boundary stroke.
+    // Their translucent ink should meet without layering at hatch endpoints.
     let planes: Vec<_> = super::geometry::edges(points, true)
-        .filter(|(a, b)| a != b)
-        .map(|(a, b)| {
+        .enumerate()
+        .filter(|(_, (a, b))| a != b)
+        .map(|(edge, (a, b))| {
             let inward = mul(normalize(perp(sub(b, a))), winding);
-            let limit = dot(inward, a) + radius * dot(inward, n).abs();
+            let boundary_inset = if Some(edge) == open_edge { 0. } else { radius };
+            let limit = dot(inward, a) + radius * dot(inward, n).abs() + boundary_inset;
             (inward, limit, dot(inward, along))
         })
         .collect();
