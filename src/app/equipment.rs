@@ -680,6 +680,7 @@ impl App {
         }
         if !self.equipment.repeat {
             self.select_tool(Tool::Select);
+            self.inspector_open = true;
             self.inspector_tab = InspectorTab::Properties;
         }
         if let Some(snap) = snap {
@@ -705,6 +706,7 @@ impl App {
         }
         if !self.equipment.repeat {
             self.select_tool(Tool::Select);
+            self.inspector_open = true;
             self.inspector_tab = InspectorTab::Properties;
         }
         self.status = hose_text(&self.tab.doc, &barbs);

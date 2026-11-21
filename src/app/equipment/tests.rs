@@ -49,6 +49,8 @@ fn arming_and_placing_a_piece_adds_one_graphic_in_one_undo_step() {
     let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/rbf-100-15"))));
     assert_eq!(app.tool, Tool::Equipment);
     assert_eq!(app.tab.doc, before, "arming changes nothing");
+    let _ = app.update(Message::ToggleInspector);
+    assert!(!app.inspector_open);
     let at = Point::new(120., 80.);
     let _ = app.update(Message::Canvas(Edit::Piece(at)));
     assert!(!app.error, "{}", app.status);
@@ -62,6 +64,7 @@ fn arming_and_placing_a_piece_adds_one_graphic_in_one_undo_step() {
     assert!(mid.distance(at) < 0.01, "{mid:?}");
     assert_eq!(app.tab.doc.piece_definitions.len(), 1);
     assert_eq!(app.tool, Tool::Select);
+    assert!(app.inspector_open, "the placed piece is ready to adjust");
     assert_eq!(app.inspector_tab, InspectorTab::Properties);
     assert!(app.armed_piece().is_none(), "the placement preview is gone");
     let placed = app.tab.doc.clone();
@@ -94,12 +97,15 @@ fn hanging_a_hose_and_bending_it_are_separate_undo_steps() {
     let p = Point::new(water_in.point[0] as f32, water_in.point[1] as f32);
 
     let _ = app.update(Message::Equipment(Action::Arm(k("reshiki/hose-7"))));
+    let _ = app.update(Message::ToggleInspector);
+    assert!(!app.inspector_open);
     let _ = app.update(Message::Canvas(Edit::Hose(p, p)));
     assert!(!app.error, "{}", app.status);
     assert_eq!(app.tab.doc.graphics.len(), before.graphics.len() + 1);
     assert_eq!(app.tab.doc.seats.len(), before.seats.len() + 1);
     assert_eq!(app.status, "Hose on the condenser water in");
     assert_eq!(app.tool, Tool::Select);
+    assert!(app.inspector_open, "the placed hose is ready to adjust");
     assert_eq!(app.inspector_tab, InspectorTab::Properties);
     let hose = app
         .tab
@@ -187,6 +193,8 @@ fn keep_placing_explicitly_repeats_pieces_and_hoses_until_switched_off() {
         let _ = app.update(Message::Tool(Tool::Equipment));
         let _ = app.update(Message::Equipment(Action::Repeat(true)));
         let _ = app.update(Message::Equipment(Action::Arm(k(piece))));
+        let _ = app.update(Message::ToggleInspector);
+        assert!(!app.inspector_open);
         let edit = |x| {
             let at = Point::new(x, 0.);
             Message::Canvas(if hose {
@@ -201,12 +209,14 @@ fn keep_placing_explicitly_repeats_pieces_and_hoses_until_switched_off() {
             assert_eq!(app.tab.doc.graphics.len(), count);
             assert_eq!(app.tool, Tool::Equipment);
             assert!(app.armed_piece().is_some());
+            assert!(!app.inspector_open, "Keep placing leaves the panel closed");
             assert_eq!(app.inspector_tab, InspectorTab::Equipment);
         }
         let _ = app.update(Message::Equipment(Action::Repeat(false)));
         let _ = app.update(edit(1500.));
         assert_eq!(app.tab.doc.graphics.len(), 3);
         assert_eq!(app.tool, Tool::Select);
+        assert!(app.inspector_open);
         assert_eq!(app.inspector_tab, InspectorTab::Properties);
         let placed = app.tab.doc.clone();
         let _ = app.update(edit(2000.));
@@ -221,6 +231,8 @@ fn rejected_placement_stays_armed_and_can_be_retried() {
         app.tab.busy = false;
         let _ = app.update(Message::Tool(Tool::Equipment));
         let _ = app.update(Message::Equipment(Action::Arm(k(piece))));
+        let _ = app.update(Message::ToggleInspector);
+        assert!(!app.inspector_open);
         let edit = |at| {
             Message::Canvas(if hose {
                 Edit::Hose(at, Point::new(80., 40.))
@@ -234,12 +246,17 @@ fn rejected_placement_stays_armed_and_can_be_retried() {
         assert_eq!(app.tab.doc, before);
         assert!(!app.tab.history.can_undo());
         assert_eq!(app.tool, Tool::Equipment);
+        assert!(
+            !app.inspector_open,
+            "a rejected placement keeps the panel closed"
+        );
         assert_eq!(app.inspector_tab, InspectorTab::Equipment);
         assert!(app.armed_piece().is_some());
         let _ = app.update(edit(Point::default()));
         assert!(!app.error, "{}", app.status);
         assert_eq!(app.tab.doc.graphics.len(), 1);
         assert_eq!(app.tool, Tool::Select);
+        assert!(app.inspector_open);
     }
 }
 
