@@ -1,1 +1,6 @@
-Chemical names and Assistant keep the inspector tabs visible. Back, Close, or Escape outside a text field returns to the preceding page; a new selection returns to Properties. Chemical names opened for a structure puts Structure → Name first, and closing Assistant keeps the inspector open.
+---
+section: Changes
+issues: []
+---
+
+- Chemical names and Assistant keep the inspector tabs visible. Back, Close, or Esc outside a text field returns to the preceding page. A new selection returns to Properties. Chemical names puts Structure → Name first for a selected structure.
