@@ -134,6 +134,8 @@ impl Default for Settings {
 
 /// How far a hose pushed onto a barb reaches past the barb's tip, over its ribs.
 const HOSE_CUFF_MM: f64 = 12.;
+pub(super) const GLASS_OUTLINE_PT: f32 = 0.6;
+const SOCKET_GROUND_START_MM: f64 = 1.2;
 
 /// The paint plan of one compositing group, in paint order.
 pub fn paint_plan(group: &[Instance], settings: Settings) -> Result<Vec<PlanPath>, String> {
@@ -203,6 +205,10 @@ fn piece(
     };
     // Glass on the body layer joins one silhouette: outlines, then fills.
     let mut glass: Vec<GlassPath> = Vec::new();
+    // A source edge within half the outline width can show through at the
+    // mouth. Stop at the ground zone so deeper glass details stay intact.
+    let cap_depth = (f64::from(GLASS_OUTLINE_PT) / (mm * settings.points_per_world))
+        .clamp(RIM_TOLERANCE_MM, SOCKET_GROUND_START_MM);
     let socket_mouths: Vec<_> = e
         .joints
         .iter()
@@ -216,6 +222,7 @@ fn piece(
                 axis: normalize(j.dir),
                 bore: t.d / 2.,
                 lip: t.bead_radius(),
+                cap_depth,
             })
         })
         .collect();
@@ -359,6 +366,7 @@ struct SocketMouth {
     axis: Xy,
     bore: f64,
     lip: f64,
+    cap_depth: f64,
 }
 
 const RIM_TOLERANCE_MM: f64 = 0.5;
@@ -367,7 +375,7 @@ impl SocketMouth {
     fn at_lip(&self, point: Xy) -> bool {
         // Rim marks can sit slightly outside the authored edge.
         let local = sub(point, self.at);
-        dot(local, self.axis).abs() <= RIM_TOLERANCE_MM
+        (-self.cap_depth..=RIM_TOLERANCE_MM).contains(&dot(local, self.axis))
             && dot(local, perp(self.axis)).abs() <= self.lip + RIM_TOLERANCE_MM
     }
 
@@ -549,7 +557,14 @@ fn standard_joint(
             );
             glass.push((polygon(&body, true), polygon(&body, false), None, None));
             ground(
-                axial(at, u, &[(1.2, ri(1.2)), (t.l - 0.6, ri(t.l - 0.6))]),
+                axial(
+                    at,
+                    u,
+                    &[
+                        (SOCKET_GROUND_START_MM, ri(SOCKET_GROUND_START_MM)),
+                        (t.l - 0.6, ri(t.l - 0.6)),
+                    ],
+                ),
                 false,
                 details,
             );

@@ -560,17 +560,41 @@ fn a_standard_socket_opens_the_nearby_authored_rim_without_changing_its_fill() {
     let mut glass = def.shapes[0].clone();
     glass.id = "source-rim".into();
     def.shapes.push(glass);
-    let scale = Affine::scale(SCALE, [0., 0.]);
-    let expected =
-        super::geometry::parse_path("M16 -99.36L15 -80C5 -76 -5 -76 -15 -80L-16 -99.36").unwrap();
-    for source in [
-        "M-16 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80Z",
-        "M-16 -99.36L0 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80Z",
-        "M0 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80L-16 -99.36Z",
+    // Match the scale of an authored socket; its outline reaches 0.58 mm
+    // past the centerline. A rim 0.53 mm inside it still shows through.
+    let scale = Affine::scale(3.01, [0., 0.]);
+    for (source, rim, opens) in [
+        (
+            "M-16 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80Z",
+            "-99.36",
+            true,
+        ),
+        (
+            "M-16 -99.36L0 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80Z",
+            "-99.36",
+            true,
+        ),
+        (
+            "M0 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80L-16 -99.36Z",
+            "-99.36",
+            true,
+        ),
+        ("M-16 -99L16 -99L15 -80C5 -76 -5 -76 -15 -80Z", "-99", true),
+        (
+            "M-16 -98.75L16 -98.75L15 -80C5 -76 -5 -76 -15 -80Z",
+            "-98.75",
+            false,
+        ),
     ] {
         def.shapes.last_mut().unwrap().path = source.into();
         let path = super::geometry::parse_path(source).unwrap();
-        let painted = plan(&def, Values::new());
+        let expected = if opens {
+            super::geometry::parse_path(&format!("M16 {rim}L15 -80C5 -76 -5 -76 -15 -80L-16 {rim}"))
+                .unwrap()
+        } else {
+            path.clone()
+        };
+        let painted = paint_plan(&[Instance::new(&def, scale)], Settings::default()).unwrap();
         assert!(
             painted
                 .iter()
@@ -580,11 +604,6 @@ fn a_standard_socket_opens_the_nearby_authored_rim_without_changing_its_fill() {
             painted
                 .iter()
                 .any(|p| { p.pass == Pass::Outline && p.path == scale.map(&expected) })
-        );
-        assert!(
-            !painted
-                .iter()
-                .any(|p| { p.pass == Pass::Outline && p.path == scale.map(&path) })
         );
     }
 }
