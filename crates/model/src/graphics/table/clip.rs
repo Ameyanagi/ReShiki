@@ -13,6 +13,19 @@ use i_overlay::{
     float::overlay::FloatOverlay,
 };
 
+/// Pick actual border ink, including the interior of filled affine miters.
+pub fn border_hit(graphic: &super::Graphic, point: Point, radius: f32) -> bool {
+    graphic.parts().iter().any(|part| {
+        let paths = flattened(&part.commands);
+        (part.filled && part.style.fill.is_some() && crate::graphics::fills(point, &paths))
+            || paths.iter().any(|path| {
+                path.windows(2).any(|pair| {
+                    matches!(pair, [a, b] if segment_distance(point, *a, *b) < radius + part.style.width() * 0.5)
+                })
+            })
+    })
+}
+
 pub fn segment(frame: Frame, from: Point, to: Point) -> Option<(Point, Point)> {
     let a = frame.local(from)?;
     let b = frame.local(to)?;

@@ -33,6 +33,63 @@ fn cell(id: u32, lo: f32, hi: f32, members: Vec<u64>) -> Cell {
 }
 
 #[test]
+fn newly_placed_affine_text_uses_one_effective_layout_for_creation_scope_and_paint() {
+    for (axis_x, axis_y) in [
+        (Point::new(0., 600.), Point::new(-400., 0.)),
+        (Point::new(-600., 0.), Point::new(0., 400.)),
+        (Point::new(600., 0.), Point::new(5000., 1000.)),
+    ] {
+        let mut doc = Document::default();
+        let mut g = table(vec![cell(37, 0., 1., vec![1])]);
+        g.origin = Point::new(2000., 2000.);
+        g.axis_x = axis_x;
+        g.axis_y = axis_y;
+        let frame = g.table.as_ref().unwrap().cells[0].frame(&g).unwrap();
+        let a = crate::graphics::table::editor::new_text(
+            1,
+            frame,
+            "Product".into(),
+            Default::default(),
+        )
+        .unwrap();
+        let layout = annotation_layout(&a, frame);
+        doc.annotations.push(a.clone());
+        doc.graphics.push(g);
+        let scope = Layout::new(&doc);
+        let effective = scope.annotation(&a);
+        let scoped = crate::typography::cell_layout(&effective.text, &effective.format);
+        assert_eq!((layout.width, layout.height), (scoped.width, scoped.height));
+        let expected = layout
+            .fragments
+            .iter()
+            .map(|f| {
+                (
+                    f.text.clone(),
+                    a.position.offset(f.position.x, f.position.y),
+                )
+            })
+            .collect::<Vec<_>>();
+        let scene = super::super::primitives(&doc);
+        let Primitive::Clip { primitives, .. } = &scene[0] else {
+            panic!("Cell clip")
+        };
+        let painted = primitives
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Text { text, position, .. } => Some((text.clone(), *position)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(painted, expected);
+        assert_eq!(
+            doc.annotations,
+            [a],
+            "Derived layout must not rewrite new cell text"
+        );
+    }
+}
+
+#[test]
 fn region_selection_encloses_only_the_visible_tlc_plate_and_rf_label_in_a_cell() {
     use crate::graphics::{TlcLane, TlcPlate, TlcRfLabel, TlcSpot};
     let mut doc = Document::default();
@@ -503,4 +560,54 @@ fn transparent_cell_halo_knocks_out_previous_ink_only_inside_its_affine_clip() {
         "Transparent export must remove prior cells' ink under this cell's halo"
     );
     assert_eq!(pix.pixel(108, 30).unwrap().alpha(), 255);
+}
+
+#[test]
+fn public_cell_annotation_layout_matches_native_hard_wrapped_scene_runs() {
+    let mut doc = Document::default();
+    doc.annotations.push(Annotation {
+        id: 1,
+        position: Point::new(5., 5.),
+        text: "CompleteUnbrokenCaption".into(),
+        angle: 0.,
+        format: Default::default(),
+    });
+    let graphic = table(vec![cell(1, 0., 0.2, vec![1])]);
+    let frame = graphic.table.as_ref().unwrap().cells[0]
+        .frame(&graphic)
+        .unwrap();
+    let expected = super::super::table_annotation_layout(&doc.annotations[0], frame);
+    doc.graphics.push(graphic);
+    let before = doc.annotations.clone();
+    let scene = super::super::primitives(&doc);
+    let Primitive::Clip { primitives, .. } = &scene[0] else {
+        panic!("Missing cell clip")
+    };
+    let actual: Vec<_> = primitives
+        .iter()
+        .filter_map(|primitive| match primitive {
+            Primitive::Text { position, text, .. } => Some((*position, text.as_str())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        actual,
+        expected
+            .fragments
+            .iter()
+            .map(|fragment| (
+                doc.annotations[0]
+                    .position
+                    .offset(fragment.position.x, fragment.position.y),
+                fragment.text.as_str(),
+            ))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        expected
+            .fragments
+            .iter()
+            .any(|fragment| fragment.position.y > 0.)
+    );
+    assert_eq!(doc.annotations, before);
 }

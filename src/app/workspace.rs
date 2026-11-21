@@ -323,6 +323,8 @@ impl App {
             bond_drawing: self.tab.bond_drawing,
             chain_drawing: self.tab.chain_drawing,
             graphics: GraphicOptions {
+                table_grid: self.tab.table_inputs.grid,
+                table_cell: self.active_table_cell(),
                 constrain: self.toolbar.graphic(self.tool).is_some_and(|p| p.constrain),
                 arc: self.tab.arc_editor.geometry,
                 style: &self.tab.graphic_style,
@@ -767,6 +769,7 @@ impl App {
             ),
             (Tool::Graphic(self.toolbar.ellipse.kind), ellipse.as_str()),
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
+            (Tool::Graphic(G::Table), "Table"),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
             (Tool::Graphic(G::TlcPlate), "TLC plate"),
@@ -851,12 +854,12 @@ impl App {
             active: self.tool == tool,
             opens_on_click: family == Some(super::palettes::Family::Bonds),
         })
-        .width(TOOL_BUTTON)
-        .height(TOOL_BUTTON);
+        .width(TOOL_BUTTON_WIDTH)
+        .height(TOOL_BUTTON_HEIGHT);
         let item = reshiki::accessibility::button(format!("tool-{tool:?}"), hint.to_owned(), item)
             .padding(0)
-            .width(TOOL_BUTTON)
-            .height(TOOL_BUTTON)
+            .width(TOOL_BUTTON_WIDTH)
+            .height(TOOL_BUTTON_HEIGHT)
             .checked(self.tool == tool)
             .style(|_, _| iced::widget::button::Style::default())
             .on_press(if family == Some(super::palettes::Family::Bonds) {
@@ -1651,6 +1654,16 @@ impl App {
         kind: reshiki::graphics::GraphicKind,
     ) -> Vec<Element<'_, Message>> {
         use reshiki::graphics::GraphicKind as G;
+        if kind == G::Table {
+            return vec![
+                text(format!(
+                    "{} × {} cells",
+                    self.tab.table_inputs.grid[0], self.tab.table_inputs.grid[1]
+                ))
+                .size(12)
+                .into(),
+            ];
+        }
         let chooser: Element<'_, Message> = match kind {
             G::TlcPlate => text("TLC plate").size(12).into(),
             G::Symbol(k) => {
@@ -3329,9 +3342,10 @@ const HISTORY_GAP: f32 = 4.;
 fn segment_portion(label: &str) -> u16 {
     text_width(label, 12.).ceil() as u16 + 6
 }
-/// Tool buttons and the gap between their rows: a 34 px pitch.
-const TOOL_BUTTON: f32 = 32.;
-const TOOL_GAP: f32 = 2.;
+const TOOL_BUTTON_WIDTH: f32 = 32.;
+/// Leave room for the atom rows below the drawing tools at the default height.
+const TOOL_BUTTON_HEIGHT: f32 = 28.;
+const TOOL_GAP: f32 = 1.;
 /// The scrolled tools and atoms fade out this far above the Help button.
 const PALETTE_FADE: f32 = 16.;
 const ATOM_BUTTON: f32 = 28.;

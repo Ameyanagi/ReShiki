@@ -1020,6 +1020,38 @@ impl MoleculeCanvas<'_> {
             translation: cached,
             ink: rotation_ink,
         } = selection;
+        if let Some(target) = self.graphics.table_cell
+            && let Some(graphic) = preview.graphics.iter().find(|g| g.id == target.table)
+            && let Some(cell) = graphic
+                .table
+                .as_ref()
+                .and_then(|table| table.cell(target.cell))
+            && let Some(cell_frame) = cell.frame(graphic)
+        {
+            let offset = cached
+                .filter(|_| selected.contains(&target.table))
+                .unwrap_or_default();
+            let corners = cell_frame
+                .corners()
+                .map(|p| self.camera.screen(p.offset(offset.x, offset.y), bounds));
+            let path = Path::new(|p| {
+                p.move_to(corners[0]);
+                for corner in &corners[1..] {
+                    p.line_to(*corner);
+                }
+                p.close();
+            });
+            frame.stroke(
+                &path,
+                Stroke {
+                    line_dash: canvas::LineDash {
+                        segments: &[4., 3.],
+                        offset: 0,
+                    },
+                    ..Stroke::default().with_width(1.5).with_color(ACCENT)
+                },
+            );
+        }
         if self.reviewing_pair {
             let drawn = preview.abbreviation_render_copy();
             for atom in selected.iter().filter_map(|id| preview.atom(*id)) {

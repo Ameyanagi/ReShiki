@@ -44,7 +44,7 @@ async fn every_atom_button_is_visible_at_the_default_window_size() -> Result<(),
     .ok_or("No renderer")?;
     let (app, _) = App::new();
     // Shorter windows scroll to the atoms; see the next test.
-    let size = iced::Size::new(1280., 848.);
+    let size = iced::Size::new(1280., 820.);
     let mut ui = iced_runtime::UserInterface::build(
         app.view(),
         size,
@@ -59,13 +59,28 @@ async fn every_atom_button_is_visible_at_the_default_window_size() -> Result<(),
         .filter(|node| node.id.starts_with("element-"))
         .collect();
     assert_eq!(atoms.len(), 11);
-    let hidden: Vec<_> = atoms
+    let hidden: Vec<_> = nodes
         .iter()
+        .filter(|node| node.id.starts_with("element-") || node.id.starts_with("tool-"))
         .filter(|node| node.visible_bounds != Some(node.bounds))
         .map(|node| &node.id)
         .collect();
     assert!(hidden.is_empty(), "{hidden:?}");
-    assert!(nodes.iter().any(|node| node.id == "help-open"));
+    assert!(nodes.iter().any(|node| node.id == "tool-Graphic(Table)"));
+    let help = nodes
+        .iter()
+        .find(|node| node.id == "help-open")
+        .ok_or("No Help button")?;
+    assert_eq!(help.visible_bounds, Some(help.bounds));
+    let bottom = atoms
+        .iter()
+        .map(|node| node.bounds.y + node.bounds.height)
+        .fold(0., f32::max);
+    assert!(
+        bottom + PALETTE_FADE <= help.bounds.y - 10.,
+        "atoms end at {bottom}, Help starts at {}",
+        help.bounds.y
+    );
     Ok(())
 }
 

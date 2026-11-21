@@ -12,6 +12,52 @@ fn app() -> App {
 }
 
 #[test]
+fn pointer_hotspot_ignores_clipped_table_atoms_and_bonds() {
+    use reshiki::graphics::{
+        Graphic, GraphicKind,
+        table::{Cell, Table},
+    };
+    let mut app = app();
+    let mut doc = Document::default();
+    let point = Point::new(140., 50.);
+    let hidden = doc.add_atom("N", point);
+    let visible = doc.add_atom("N", point);
+    let mut graphic = Graphic::dragged(
+        1000,
+        GraphicKind::Rectangle,
+        Point::default(),
+        Point::new(200., 100.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    graphic.kind = GraphicKind::Table;
+    graphic.table = Some(Box::new(Table {
+        cells: vec![Cell {
+            id: 1,
+            lo: Point::default(),
+            hi: Point::new(0.5, 1.),
+            members: vec![hidden],
+            borders: vec![],
+        }],
+    }));
+    doc.graphics.push(graphic);
+    app.tab.doc = doc;
+    assert_eq!(app.keyboard_target_at(point), Target::Atom(visible));
+    app.tab.doc.atoms.retain(|atom| atom.id != visible);
+    assert_eq!(app.keyboard_target_at(point), Target::Blank(point));
+
+    let a = app.tab.doc.add_atom("C", Point::new(110., 80.));
+    let b = app.tab.doc.add_atom("C", Point::new(170., 80.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.doc.graphics[0].table.as_mut().unwrap().cells[0]
+        .members
+        .extend([a, b]);
+    let point = Point::new(140., 80.);
+    assert_eq!(app.keyboard_target_at(point), Target::Blank(point));
+}
+
+#[test]
 fn blank_letters_and_growth_do_not_need_hover_and_restore_cursor_with_history() {
     let mut app = app();
     assert!(

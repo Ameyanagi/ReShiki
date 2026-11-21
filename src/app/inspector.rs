@@ -1051,6 +1051,9 @@ impl App {
         }
         let tlc = self.tlc_panel_visible();
         let styled_graphics = self.graphic_panel_visible();
+        if let Some(table) = self.table_card() {
+            body = body.push(card(container(table).padding(12)));
+        }
         if tlc {
             body = body.push(card(container(self.tlc_panel()).padding(12)));
         }
