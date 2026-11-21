@@ -122,6 +122,22 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         }
     }
     for g in &doc.graphics {
+        if g.tlc.is_some() {
+            let paths = flattened(&g.commands());
+            let labels = g.tlc_labels();
+            let visible: Vec<_> = paths
+                .iter()
+                .filter_map(|path| visible_path(g.id, path))
+                .chain(labels.iter().filter_map(|label| {
+                    let corners = cells.polygon(g.id, &label.corners());
+                    (!corners.is_empty()).then(|| encloses(polygon, &corners, true))
+                }))
+                .collect();
+            if !visible.is_empty() && visible.into_iter().all(|inside| inside) {
+                result.push(g.id);
+            }
+            continue;
+        }
         let commands = g.commands();
         let fill_only = g.is_fill_only_path();
         let paths = if fill_only {

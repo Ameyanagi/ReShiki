@@ -33,6 +33,63 @@ fn cell(id: u32, lo: f32, hi: f32, members: Vec<u64>) -> Cell {
 }
 
 #[test]
+fn region_selection_encloses_only_the_visible_tlc_plate_and_rf_label_in_a_cell() {
+    use crate::graphics::{TlcLane, TlcPlate, TlcRfLabel, TlcSpot};
+    let mut doc = Document::default();
+    let id = 50;
+    let mut plate = Graphic::dragged(
+        id,
+        GraphicKind::TlcPlate,
+        Point::new(20., 10.),
+        Point::new(180., 90.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    plate.tlc = Some(Box::new(TlcPlate {
+        lanes: vec![TlcLane {
+            spots: vec![TlcSpot {
+                rf: 0.5,
+                width_pt: 6.,
+                height_pt: 4.,
+                style: Default::default(),
+                show_rf: true,
+                label: Some(TlcRfLabel {
+                    text: "Rf".into(),
+                    format: Default::default(),
+                    offset: Point::new(160., 0.),
+                    angle: 0.,
+                }),
+            }],
+        }],
+        ..Default::default()
+    }));
+    doc.graphics.push(plate);
+    let region = [
+        Point::default(),
+        Point::new(100., 0.),
+        Point::new(100., 100.),
+        Point::new(0., 100.),
+    ];
+    assert!(!crate::selection_region::objects(&doc, &region).contains(&id));
+    doc.graphics.push(table(vec![
+        cell(1, 0., 0.5, vec![id]),
+        cell(2, 0.5, 1., vec![]),
+    ]));
+    doc.validate().unwrap();
+    let before = doc.clone();
+    assert!(crate::selection_region::objects(&doc, &region).contains(&id));
+    let hidden = [
+        Point::new(110., 0.),
+        Point::new(200., 0.),
+        Point::new(200., 100.),
+        Point::new(110., 100.),
+    ];
+    assert!(!crate::selection_region::objects(&doc, &hidden).contains(&id));
+    assert_eq!(doc, before);
+}
+
+#[test]
 fn picking_uses_affine_cell_clips_without_changing_raw_geometry() {
     for reflected in [false, true] {
         let mut doc = Document::default();

@@ -6,6 +6,7 @@ pub mod panel;
 mod path;
 mod superscript;
 pub mod table;
+mod tlc;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
 pub(crate) use effects::bounding_frame;
@@ -18,11 +19,14 @@ pub use panel::{Divider, Panel, TitlePlace};
 pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
 use serde::{Deserialize, Serialize};
 pub use superscript::GraphicLabel;
+pub use tlc::{MAX_TLC_LANES, MAX_TLC_SPOTS, TlcLane, TlcPlate, TlcRfLabel, TlcSpot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GraphicKind {
     Picture,
+    /// An editable thin-layer chromatography plate with owned lanes and spots.
+    TlcPlate,
     /// Lab equipment drawn from a piece definition; see [`crate::equipment`].
     Piece,
     Symbol(crate::scientific::SymbolKind),
@@ -81,6 +85,7 @@ impl std::fmt::Display for GraphicKind {
             Self::Curve => "Bézier curve",
             Self::Path => "Pen path",
             Self::Picture => "Picture",
+            Self::TlcPlate => "TLC plate",
             Self::Piece => "Equipment piece",
             Self::Icon => "Icon",
             Self::Table => "Table",
@@ -355,6 +360,9 @@ pub struct Graphic {
     /// An icon's name and drawing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<Box<crate::line_icons::Icon>>,
+    /// TLC lanes, spot dimensions and Rf labels, in the graphic frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tlc: Option<Box<TlcPlate>>,
     pub id: u64,
     pub kind: GraphicKind,
     pub origin: Point,
@@ -495,6 +503,7 @@ impl Graphic {
                 picture: None,
                 piece: None,
                 icon: None,
+                tlc: None,
                 id,
                 kind,
                 origin: start,
@@ -550,6 +559,7 @@ impl Graphic {
             picture: None,
             piece: None,
             icon: None,
+            tlc: None,
             id,
             kind,
             origin,
@@ -598,6 +608,7 @@ impl Graphic {
             GraphicKind::Symbol(_)
                 | GraphicKind::Orbital(_)
                 | GraphicKind::Piece
+                | GraphicKind::TlcPlate
                 | GraphicKind::Icon
                 | GraphicKind::Table
         ) {
@@ -728,7 +739,8 @@ impl Graphic {
             .into_iter()
             .chain(self.panel_titles(text_style))
             .flat_map(|label| label.ink_boxes());
-        for (a, b) in extras.chain(titles) {
+        let tlc = self.tlc_labels().into_iter().map(|a| a.bounds());
+        for (a, b) in extras.chain(titles).chain(tlc) {
             lo.x = lo.x.min(a.x);
             lo.y = lo.y.min(a.y);
             hi.x = hi.x.max(b.x);
@@ -762,6 +774,11 @@ impl Graphic {
             hi.y = hi.y.max(p.y);
         }
         let pad = match self.kind {
+            GraphicKind::TlcPlate => self
+                .parts()
+                .iter()
+                .map(|p| p.style.width() * 0.5)
+                .fold(0., f32::max),
             GraphicKind::Picture => 0.,
             // A piece's outline is painted twice as wide as its style says.
             GraphicKind::Piece => self.style.width(),
@@ -794,6 +811,12 @@ impl Graphic {
         r: f32,
         text_style: &crate::typography::TextStyle,
     ) -> bool {
+        if self.tlc_labels().iter().any(|a| {
+            let (lo, hi) = a.bounds();
+            p.x >= lo.x - r && p.x <= hi.x + r && p.y >= lo.y - r && p.y <= hi.y + r
+        }) {
+            return true;
+        }
         if self
             .superscript_label(text_style)
             .into_iter()
@@ -830,7 +853,7 @@ impl Graphic {
             return boundary_fill_contains(p, &fill_boundaries(&self.commands()));
         }
         // A piece's parts carry their own stroke widths.
-        let piece = self.kind == GraphicKind::Piece;
+        let piece = matches!(self.kind, GraphicKind::Piece | GraphicKind::TlcPlate);
         self.parts().iter().any(|part| {
             let half = if piece {
                 part.style.width()
@@ -849,6 +872,9 @@ impl Graphic {
     pub fn edit_point(&mut self, index: usize, p: Point) -> Result<(), String> {
         if self.table.is_some() {
             return Err("Resize table cells with their table controls".into());
+        }
+        if self.kind == GraphicKind::TlcPlate {
+            return Ok(());
         }
         // Dragging a callout leader's end releases it from its target, and
         // the leader stays a line.
@@ -915,6 +941,12 @@ impl Graphic {
             self.style.validate()?;
         }
         table::validate_graphic(self)?;
+        if (self.kind == GraphicKind::TlcPlate) != self.tlc.is_some() {
+            return Err("TLC data does not match the graphic kind".into());
+        }
+        if let Some(tlc) = &self.tlc {
+            tlc.validate(self)?;
+        }
         if self.superscript.is_some() && !self.kind.brackets() {
             return Err("A superscript requires a bracket graphic".into());
         }

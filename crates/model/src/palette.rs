@@ -453,6 +453,9 @@ pub fn for_each_color_mut(doc: &mut Document, mut visit: impl FnMut(&mut Color))
                 visit(&mut border.color);
             }
         }
+        if let Some(tlc) = &mut graphic.tlc {
+            tlc.for_each_color_mut(&mut visit);
+        }
         visit(&mut graphic.style.stroke);
         if let Some(fill) = &mut graphic.style.fill {
             visit(fill);
@@ -511,6 +514,7 @@ pub fn any_color(doc: &Document, test: impl Fn(Color) -> bool) -> bool {
                     .iter()
                     .flat_map(|cell| cell.borders.iter().map(|border| border.color))
             }))
+            .chain(g.tlc.iter().flat_map(|t| t.colors()))
     });
     let fills = doc.ring_fills.iter().map(|f| f.color);
     let abbreviations = doc.abbreviations.iter().flat_map(|g| {
