@@ -183,8 +183,8 @@ pub(super) fn primitives(doc: &Document) -> Vec<Primitive> {
                 corners: frame.corners(),
                 primitives: content,
             });
-            // Paint each source cell and each source border in order. Adjacent
-            // edges intentionally overlap, including different colors/widths.
+            // Paint each source cell in order, with native vertical/horizontal
+            // border overpaint. Adjacent cell edges intentionally overlap.
             drawing.extend(cell.border_parts(g).into_iter().map(|p| Primitive::Path {
                 commands: p.commands,
                 style: p.style,

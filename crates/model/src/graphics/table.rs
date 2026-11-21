@@ -138,26 +138,82 @@ impl Cell {
         frame.valid().then_some(frame)
     }
 
-    /// Border strokes remain outside the content clip and retain source order.
+    /// Borders remain outside the content clip. Native tables paint vertical
+    /// bands before horizontal bands, including their shared corner coverage.
     pub fn border_parts(&self, graphic: &Graphic) -> Vec<crate::scientific::Part> {
-        let Some(frame) = self.frame(graphic) else {
+        let Some(parent) = Frame::of(graphic).filter(|_| self.frame(graphic).is_some()) else {
             return vec![];
         };
-        self.borders
-            .iter()
+        [Side::Left, Side::Right, Side::Top, Side::Bottom]
+            .into_iter()
+            .filter_map(|side| self.borders.iter().find(|border| border.side == side))
             .filter(|b| b.width_pt > 0.)
-            .map(|border| {
+            .filter_map(|border| {
                 let (a, b) = match border.side {
-                    Side::Left => (Point::new(0., 0.), Point::new(0., 1.)),
-                    Side::Top => (Point::new(0., 0.), Point::new(1., 0.)),
-                    Side::Bottom => (Point::new(0., 1.), Point::new(1., 1.)),
-                    Side::Right => (Point::new(1., 0.), Point::new(1., 1.)),
+                    Side::Left => (self.lo, Point::new(self.lo.x, self.hi.y)),
+                    Side::Top => (self.lo, Point::new(self.hi.x, self.lo.y)),
+                    Side::Bottom => (Point::new(self.lo.x, self.hi.y), self.hi),
+                    Side::Right => (Point::new(self.hi.x, self.lo.y), self.hi),
                 };
-                crate::scientific::Part {
-                    commands: vec![
-                        PathCommand::Move(frame.point(a)),
-                        PathCommand::Line(frame.point(b)),
-                    ],
+                let (a, b) = (parent.point(a), parent.point(b));
+                // Native solid grid edges end at the intersection, without a
+                // round cap. A filled band uses the existing shared vector
+                // path everywhere, including SVG and Windows print fallback.
+                if border.pattern == LinePattern::Solid {
+                    let (dx, dy) = (b.x - a.x, b.y - a.y);
+                    let length = dx.hypot(dy);
+                    if !length.is_finite() || length <= 0. {
+                        return None;
+                    }
+                    let half = crate::style::DEFAULT.world(border.width_pt) * 0.5;
+                    let (ux, uy) = (dx / length, dy / length);
+                    let (nx, ny) = (-uy, ux);
+                    let (start, end, adjacent) = match border.side {
+                        Side::Left | Side::Right => (Side::Top, Side::Bottom, parent.axis_x),
+                        Side::Top | Side::Bottom => (Side::Left, Side::Right, parent.axis_y),
+                    };
+                    let join = |at: Point, side, sign: f32, offset: f32| {
+                        let width = self
+                            .borders
+                            .iter()
+                            .find(|b| b.side == side)
+                            .map_or(0., |b| crate::style::DEFAULT.world(b.width_pt) * 0.5);
+                        if width == 0. {
+                            return at.offset(nx * offset, ny * offset);
+                        }
+                        // Intersect the band's two supporting lines with the
+                        // adjacent border's outside edge. This is also a closed
+                        // miter on rotated, reflected and sheared RSK frames.
+                        let adjacent_length = adjacent.x.hypot(adjacent.y);
+                        let (ax, ay) =
+                            (-adjacent.y / adjacent_length, adjacent.x / adjacent_length);
+                        let across = ax * ux + ay * uy;
+                        if !across.is_finite() || across.abs() < 1e-7 {
+                            return at.offset(nx * offset, ny * offset);
+                        }
+                        let along = (sign * width * across.signum() - (ax * nx + ay * ny) * offset)
+                            / across;
+                        at.offset(nx * offset + ux * along, ny * offset + uy * along)
+                    };
+                    return Some(crate::scientific::Part {
+                        commands: vec![
+                            PathCommand::Move(join(a, start, -1., half)),
+                            PathCommand::Line(join(b, end, 1., half)),
+                            PathCommand::Line(join(b, end, 1., -half)),
+                            PathCommand::Line(join(a, start, -1., -half)),
+                            PathCommand::Close,
+                        ],
+                        style: GraphicStyle {
+                            stroke: border.color,
+                            fill: Some(border.color),
+                            width_pt: 0.,
+                            ..Default::default()
+                        },
+                        filled: true,
+                    });
+                }
+                Some(crate::scientific::Part {
+                    commands: vec![PathCommand::Move(a), PathCommand::Line(b)],
                     style: GraphicStyle {
                         stroke: border.color,
                         width_pt: border.width_pt,
@@ -165,7 +221,7 @@ impl Cell {
                         ..Default::default()
                     },
                     filled: false,
-                }
+                })
             })
             .collect()
     }
@@ -558,12 +614,6 @@ pub fn with_contents(doc: &Document, ids: &[u64]) -> Vec<u64> {
 pub fn bounds(graphic: &Graphic) -> Option<(Point, Point)> {
     let frame = Frame::of(graphic)?;
     let table = graphic.table.as_ref()?;
-    let pad = table
-        .cells
-        .iter()
-        .flat_map(|cell| &cell.borders)
-        .map(|border| crate::style::DEFAULT.world(border.width_pt) * 0.5)
-        .fold(0., f32::max);
     let corners = frame.corners();
     let mut lo = frame.origin;
     let mut hi = lo;
@@ -571,7 +621,18 @@ pub fn bounds(graphic: &Graphic) -> Option<(Point, Point)> {
         lo = Point::new(lo.x.min(point.x), lo.y.min(point.y));
         hi = Point::new(hi.x.max(point.x), hi.y.max(point.y));
     }
-    Some((lo.offset(-pad, -pad), hi.offset(pad, pad)))
+    for cell in &table.cells {
+        for part in cell.border_parts(graphic) {
+            let pad = part.style.width() * 0.5;
+            for point in part.commands.iter().flat_map(PathCommand::iter_points) {
+                lo.x = lo.x.min(point.x - pad);
+                lo.y = lo.y.min(point.y - pad);
+                hi.x = hi.x.max(point.x + pad);
+                hi.y = hi.y.max(point.y + pad);
+            }
+        }
+    }
+    Some((lo, hi))
 }
 
 pub(crate) fn prune(doc: &mut Document) {
@@ -643,5 +704,7 @@ pub fn relink(doc: &mut Document, destination: Option<CellRef>, ids: &[u64]) -> 
     Ok(())
 }
 
+#[cfg(test)]
+mod paint_tests;
 #[cfg(test)]
 mod tests;
