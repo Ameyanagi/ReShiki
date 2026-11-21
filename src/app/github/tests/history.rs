@@ -2,6 +2,22 @@
 //! shows, and kept for the session.
 use super::*;
 
+#[test]
+fn assistant_returns_to_history_and_selection_keeps_its_existing_route() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    github(&mut app, Action::ShowVersions);
+    let _ = app.update(Message::Inspector(InspectorTab::Assistant));
+    assert_eq!(app.inspector_parent_tab(), InspectorTab::Versions);
+    let _ = app.update(Message::Escape);
+    assert_eq!(app.inspector_tab, InspectorTab::Versions);
+    assert!(app.inspector_open);
+    let atom = app.tab.doc.atoms[0].id;
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![atom])));
+    assert_eq!(app.inspector_tab, InspectorTab::Versions);
+    assert!(app.inspector_page_header().is_none());
+}
+
 fn version(c: char) -> api::RemoteVersion {
     api::RemoteVersion {
         commit: sha(c),

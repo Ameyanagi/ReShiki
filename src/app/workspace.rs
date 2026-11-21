@@ -1825,30 +1825,16 @@ impl App {
     }
 
     fn inspector(&self) -> Element<'_, Message> {
-        if self.inspector_tab == InspectorTab::Names {
-            return self.inspector_frame(self.naming_inspector());
-        }
         if self.inspector_tab == InspectorTab::Reactions {
             return self.reactions_inspector();
         }
         if self.inspector_tab == InspectorTab::DrawingStyle {
             return self.inspector_frame(self.drawing_style_panel());
         }
-        if self.inspector_tab == InspectorTab::Assistant {
-            return self.inspector_frame(self.assistant_panel());
-        }
+        let parent = self.inspector_parent_tab();
         let mut tabs = row![];
         for (label, tab) in INSPECTOR_TABS {
-            let selected = self.inspector_tab == tab
-                || (tab == InspectorTab::Properties
-                    && matches!(
-                        self.inspector_tab,
-                        InspectorTab::Reactions
-                            | InspectorTab::Labels
-                            | InspectorTab::Abbreviations
-                            | InspectorTab::Pages
-                            | InspectorTab::DrawingStyle
-                    ));
+            let selected = parent == tab;
             tabs = tabs.push(
                 reshiki::accessibility::button(
                     format!("inspector-tab-{tab:?}"),
@@ -1870,7 +1856,7 @@ impl App {
             .locate(self.tab.path.as_deref())
             .is_some()
             .then(|| {
-                let selected = self.inspector_tab == InspectorTab::Versions;
+                let selected = parent == InspectorTab::Versions;
                 hover_hint(
                     reshiki::accessibility::button(
                         "inspector-history",
@@ -1919,13 +1905,22 @@ impl App {
             #[cfg(target_arch = "wasm32")]
             InspectorTab::Versions => Space::new().into(),
         };
-        let mut content = column![
-            container(header).padding([6., SEGMENT_MARGIN]),
-            scrollable(container(body).padding([8, 16]))
-                .id("inspector-content")
-                .on_scroll(|viewport| Message::InspectorScroll(viewport.absolute_offset().y))
-                .height(Length::Fill)
-        ];
+        let mut content = column![container(header).padding([6., SEGMENT_MARGIN])];
+        if let Some(page_header) = self.inspector_page_header() {
+            content = content.push(container(page_header).padding([4, 16]));
+        }
+        // Assistant owns its chat scroll and fixed composer. Other pages use
+        // the inspector's ordinary scrolling body beneath the shared chrome.
+        content = if self.inspector_tab == InspectorTab::Assistant {
+            content.push(body)
+        } else {
+            content.push(
+                scrollable(container(body).padding([8, 16]))
+                    .id("inspector-content")
+                    .on_scroll(|viewport| Message::InspectorScroll(viewport.absolute_offset().y))
+                    .height(Length::Fill),
+            )
+        };
         if self.inspector_tab == InspectorTab::Properties && self.tab.optimization.is_some() {
             content = content.push(container(self.optimization_footer()).padding([10, 16]));
             // The 3D preview is modal: Tab cycles its controls, Cancel and Apply last.

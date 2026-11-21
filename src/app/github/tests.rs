@@ -2302,6 +2302,16 @@ async fn the_history_clock_follows_the_tab_track_on_github_drawings() -> Result<
     assert_eq!(clock.id, "inspector-history");
     assert_eq!(clock.checked, Some(true));
 
+    let _ = app.update(Message::Inspector(InspectorTab::Assistant));
+    let (nodes, ..) = tree(&app, None);
+    assert_eq!(header(&nodes)[5].checked, Some(true));
+    assert!(nodes.iter().any(|node| node.id == "inspector-page-close"));
+    let _ = app.update(Message::InspectorAction(
+        crate::app::inspector::Action::BackPage,
+    ));
+    assert_eq!(app.inspector_tab, InspectorTab::Versions);
+    assert!(app.inspector_open);
+
     app.add_tab();
     app.inspector_tab = InspectorTab::Properties;
     let (nodes, ..) = tree(&app, None);

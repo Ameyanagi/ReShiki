@@ -1,6 +1,6 @@
 //! The assistant panel: conversation, activity, draft and result cards, composer and footer.
 use super::{Action, ChatMessage, Draft, Menu, action, card, surface};
-use crate::app::{App, InspectorTab, Message, document_tab::TabId};
+use crate::app::{App, Message, document_tab::TabId};
 use crate::canvas::layered::canvas;
 use iced::widget::{
     Space, button, column, container, mouse_area, opaque, row, scrollable, stack, text,
@@ -17,12 +17,10 @@ impl App {
             return self.assistant_elsewhere(id);
         }
         let chat = self.assistant_chat();
-        let header = panel_header();
         let footer = self.assistant_footer();
         let result_navigation = self.assistant_result_navigation();
         let base: Element<'_, Message> = container(
             column![
-                header,
                 scrollable(chat)
                     .id("assistant-chat")
                     .height(Length::Fill)
@@ -436,7 +434,11 @@ impl App {
                 if !matches!(key.status, text_editor::Status::Focused { .. }) {
                     return text_editor::Binding::from_key_press(key);
                 }
-                if key.modifiers.command()
+                if key.key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) {
+                    // A bare Unfocus deliberately bubbles in Iced. Consume
+                    // this field's Escape before the page's back shortcut.
+                    Some(text_editor::Binding::Sequence(vec![text_editor::Binding::Unfocus]))
+                } else if key.modifiers.command()
                     && key.key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter)
                 {
                     Some(text_editor::Binding::Custom(Message::Assistant(
@@ -590,34 +592,5 @@ fn codex_reply(reply: &str) -> Element<'_, Message> {
         text(reply).size(13).width(Length::Fill)
     ]
     .spacing(6)
-    .into()
-}
-fn panel_header<'a>() -> Element<'a, Message> {
-    row![
-        super::super::workspace::hover_hint(
-            button(text("‹").size(18))
-                .padding([3, 8])
-                .style(super::super::workspace::control(false))
-                .on_press(Message::Inspector(InspectorTab::Properties)),
-            "Back to inspector",
-            tooltip::Position::Bottom
-        ),
-        text("Assistant").size(16),
-        Space::new().width(Length::Fill),
-        super::super::workspace::hover_hint(
-            action("＋", Action::Reset),
-            "New conversation",
-            tooltip::Position::Bottom
-        ),
-        super::super::workspace::hover_hint(
-            button(text("×").size(18))
-                .padding([3, 8])
-                .style(super::super::workspace::control(false))
-                .on_press(Message::ToggleInspector),
-            "Close assistant",
-            tooltip::Position::Bottom
-        )
-    ]
-    .align_y(Alignment::Center)
     .into()
 }

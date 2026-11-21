@@ -1,9 +1,9 @@
 //! Per-document local name parsing, editable previews and rule-based name generation.
-use super::workspace::{accessible_checkbox, accessible_command, command, muted_text, section};
+use super::workspace::{accessible_checkbox, accessible_command, muted_text, section};
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use crate::canvas::{Camera, Edit, MoleculeCanvas, PreviewStyles, Tool};
-use iced::widget::{Space, column, container, row, scrollable, text};
+use iced::widget::{Space, column, container, row, text};
 mod aliases;
 mod import_dock;
 mod online;
@@ -1060,36 +1060,7 @@ impl App {
         }
     }
 
-    /// The Chemical names inspector, opened from a molecule's right-click
-    /// menu: a fixed header above the scrolling panel.
-    pub(super) fn naming_inspector(&self) -> Element<'_, Message> {
-        let header = column![
-            row![
-                command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
-                Space::new().width(Length::Fill),
-                accessible_command("naming.import", "Open SMILES import", "Import")
-                    .on_press(Message::Inspector(InspectorTab::Import)),
-            ]
-            .align_y(iced::Alignment::Center),
-            text("Chemical names").size(20),
-            text(PANEL_INTRO).size(11).style(muted_text),
-        ]
-        .spacing(8);
-        column![
-            container(header).padding([12, 16]),
-            scrollable(container(self.naming_panel()).padding(iced::Padding {
-                top: 0.,
-                right: 16.,
-                bottom: 16.,
-                left: 16.,
-            }))
-            .id("inspector-content")
-            .height(Length::Fill),
-        ]
-        .into()
-    }
-
-    /// Name → structure, then structure → name for the selection.
+    /// A structure entry point presents its selected-molecule operation first.
     pub(super) fn naming_panel(&self) -> Element<'_, Message> {
         let state = &self.tab.naming;
         let idle = state.pending.is_none();
@@ -1165,7 +1136,17 @@ impl App {
             self.generated_name_controls(),
         ]
         .spacing(10);
-        column![name, structure].spacing(24).into()
+        let sections = if self.inspector_pages.structure_first {
+            column![structure, name]
+        } else {
+            column![name, structure]
+        };
+        column![
+            text(PANEL_INTRO).size(11).style(muted_text),
+            sections.spacing(24)
+        ]
+        .spacing(16)
+        .into()
     }
 
     /// The parsed name's editable preview, its SMILES and the insertion.

@@ -358,6 +358,7 @@ impl App {
         chat_scroll(scroll)
     }
     fn assistant_open(&mut self) -> Task<Message> {
+        self.enter_inspector_page(InspectorTab::Assistant);
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Assistant;
         self.palette = None;

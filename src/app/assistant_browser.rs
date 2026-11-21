@@ -1,7 +1,7 @@
 //! The assistant drives the Codex app-server, a desktop process. The browser
 //! build keeps its panel and explains that it needs the desktop app.
 use super::{App, InspectorTab, Message, document_tab::TabId};
-use iced::widget::{button, column, row, text};
+use iced::widget::{column, text};
 use iced::{Element, Length, Task};
 
 #[derive(Debug, Clone)]
@@ -52,6 +52,7 @@ impl App {
     pub(super) fn assistant_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Open => {
+                self.enter_inspector_page(InspectorTab::Assistant);
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Assistant;
                 self.palette = None;
@@ -63,21 +64,11 @@ impl App {
     }
 
     pub(in crate::app) fn assistant_panel(&self) -> Element<'_, Message> {
-        column![
-            row![
-                button(text("‹").size(18))
-                    .padding([3, 8])
-                    .style(super::workspace::control(false))
-                    .on_press(Message::Inspector(InspectorTab::Properties)),
-                text("Assistant").size(16),
-            ]
-            .spacing(8),
-            text("The assistant needs the ReShiki desktop app.").size(13),
-        ]
-        .spacing(12)
-        .padding(12)
-        .width(Length::Fill)
-        .into()
+        column![text("The assistant needs the ReShiki desktop app.").size(13),]
+            .spacing(12)
+            .padding(12)
+            .width(Length::Fill)
+            .into()
     }
 
     pub(in crate::app) fn with_assistant_image<'a>(

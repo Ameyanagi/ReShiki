@@ -62,6 +62,7 @@ mod icons;
 mod import;
 mod inline_text;
 mod inspector;
+mod inspector_pages;
 mod joining;
 mod keyboard_drawing;
 mod label_refresh;
@@ -507,6 +508,7 @@ pub struct App {
     exit: autosave::Exit,
     inspector_open: bool,
     inspector_tab: InspectorTab,
+    inspector_pages: inspector_pages::State,
     /// The Export tab's Include editable drawing choice; `None` follows the
     /// Settings default.
     export_tab_editable: Option<bool>,
@@ -642,6 +644,7 @@ impl App {
             exit: autosave::Exit::default(),
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
+            inspector_pages: Default::default(),
             export_tab_editable: None,
             export_tab_background: None,
             help_open: false,
@@ -1106,6 +1109,7 @@ impl App {
         self.sync_drawing_panel_context();
         let document = (self.tab.id, self.tab.file_epoch);
         let mut task = self.handle(message);
+        task = Task::batch([task, self.sync_inspector_page_selection()]);
         self.sync_drawing_panel_context();
         task = Task::batch([task, self.render_png_preview()]);
         // Any message may change the drawing, some (previews, background

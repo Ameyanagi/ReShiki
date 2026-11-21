@@ -265,6 +265,7 @@ pub enum Action {
     ExportBackground(Option<crate::appearance::Background>),
     Chemical(ChemicalFormat),
     ChemicalMenu(bool),
+    BackPage,
     RefreshProperties,
     RefreshPropertiesFor(PropertyKey),
     Centroid,
@@ -448,7 +449,8 @@ impl State {
                 self.close_menu();
                 self.chemical_menu = open;
             }
-            Action::ExportBackground(_)
+            Action::BackPage
+            | Action::ExportBackground(_)
             | Action::RefreshProperties
             | Action::RefreshPropertiesFor(..)
             | Action::PropertiesCalculated(..)
@@ -697,6 +699,7 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::BackPage => self.close_inspector_page(),
             Action::CopyIdentity(field) => self.copy_identity(field),
             Action::IdentityCopied(key, result) => {
                 self.identity_copied(key, result);
@@ -2740,6 +2743,7 @@ impl App {
     /// Returns the Import tab's focus task. `None` lets update_inner's
     /// inspector reveal apply.
     pub(super) fn show_inspector_tab(&mut self, tab: InspectorTab) -> Option<Task<Message>> {
+        self.enter_inspector_page(tab);
         if tab != InspectorTab::ThemeGenerator {
             self.theme_library.editor = None;
         }

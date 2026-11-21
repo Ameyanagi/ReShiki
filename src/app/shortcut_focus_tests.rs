@@ -14,6 +14,7 @@ use iced::keyboard::{
 };
 use iced::{Event, Rectangle, Size};
 
+mod inspector_pages;
 mod review_close;
 mod style_status;
 
