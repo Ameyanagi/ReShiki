@@ -353,6 +353,26 @@ fn hit_object_with_cycles(
                 None
             }
         })
+        .or_else(|| {
+            // Empty cell surfaces select their table only after actual ink.
+            // Keep bond/model targets ahead of this structural fallback too.
+            let table = doc
+                .graphics
+                .iter()
+                .enumerate()
+                .filter(|(_, g)| {
+                    reshiki::graphics::table::cell_frames(g).any(|frame| frame.contains(p))
+                })
+                .max_by_key(|(i, g)| (g.layer, *i))
+                .map(|(_, g)| g.id)?;
+            if reshiki::editing::nearest_bond(doc, p, r * 0.7).is_some()
+                || reshiki::models3d::frame_hit(doc, p)
+                    .is_some_and(|ids| ids.first().is_none_or(|id| cells.contains(*id, p)))
+            {
+                return None;
+            }
+            Some(table)
+        })
 }
 pub fn distance_to_segment(p: World, a: World, b: World) -> f32 {
     let v = Vector::new(b.x - a.x, b.y - a.y);
