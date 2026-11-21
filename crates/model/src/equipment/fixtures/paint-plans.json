@@ -1,11 +1,11 @@
 {
   "architecture-example default": {
     "bounds": [-35.56, -128.33, 84.0, 33.79],
-    "moment": [123115.9, -611263.21],
-    "order": "18066fe0e509b7f1",
+    "moment": [121495.08, -634629.32],
+    "order": "110cc07418d473ca",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 4,
       "Front/Plastic/FillStroke(Outline)": 1,
       "Glass/Glass/Fill": 6,
@@ -13,16 +13,16 @@
       "Inner/Rubber/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 6
     },
-    "points": 128,
-    "sum": [2334.83, -8852.09]
+    "points": 130,
+    "sum": [2317.89, -9028.48]
   },
   "architecture-example fill=0": {
     "bounds": [-35.56, -128.33, 84.0, 33.79],
-    "moment": [123115.9, -611263.21],
-    "order": "18066fe0e509b7f1",
+    "moment": [121495.08, -634629.32],
+    "order": "110cc07418d473ca",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 4,
       "Front/Plastic/FillStroke(Outline)": 1,
       "Glass/Glass/Fill": 6,
@@ -30,16 +30,16 @@
       "Inner/Rubber/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 6
     },
-    "points": 128,
-    "sum": [2334.83, -8852.09]
+    "points": 130,
+    "sum": [2317.89, -9028.48]
   },
   "architecture-example fill=0.5": {
     "bounds": [-35.56, -128.33, 84.0, 33.79],
-    "moment": [110905.26, -714429.5],
-    "order": "6d0001752412eca2",
+    "moment": [107031.34, -761255.02],
+    "order": "a9c61b270b5c88a4",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 4,
       "Front/Plastic/FillStroke(Outline)": 1,
       "Glass/Glass/Fill": 6,
@@ -49,16 +49,16 @@
       "Liquid/Liquid/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 6
     },
-    "points": 261,
-    "sum": [2334.83, -6222.85]
+    "points": 263,
+    "sum": [2317.89, -6399.24]
   },
   "architecture-example fill=1": {
     "bounds": [-35.56, -128.33, 84.0, 33.79],
-    "moment": [305504.53, -1247477.97],
-    "order": "3b3955329cfb0317",
+    "moment": [299546.92, -1315999.04],
+    "order": "6313ba4d6637fe6a",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 4,
       "Front/Plastic/FillStroke(Outline)": 1,
       "Glass/Glass/Fill": 6,
@@ -67,16 +67,16 @@
       "Liquid/Liquid/Fill": 1,
       "Outline/Glass/Stroke(Outline)": 6
     },
-    "points": 384,
-    "sum": [2334.83, -8852.09]
+    "points": 386,
+    "sum": [2317.89, -9028.48]
   },
   "architecture-example valve=closed": {
     "bounds": [-35.56, -128.33, 84.0, 33.79],
-    "moment": [123115.9, -611263.21],
-    "order": "18066fe0e509b7f1",
+    "moment": [121495.08, -634629.32],
+    "order": "110cc07418d473ca",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 4,
       "Front/Plastic/FillStroke(Outline)": 1,
       "Glass/Glass/Fill": 6,
@@ -84,16 +84,16 @@
       "Inner/Rubber/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 6
     },
-    "points": 128,
-    "sum": [2334.83, -8852.09]
+    "points": 130,
+    "sum": [2317.89, -9028.48]
   },
   "architecture-example valve=open": {
     "bounds": [-35.56, -134.17, 84.0, 33.79],
-    "moment": [123115.9, -618992.38],
-    "order": "18066fe0e509b7f1",
+    "moment": [121495.08, -642405.16],
+    "order": "110cc07418d473ca",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 4,
       "Front/Plastic/FillStroke(Outline)": 1,
       "Glass/Glass/Fill": 6,
@@ -101,8 +101,8 @@
       "Inner/Rubber/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 6
     },
-    "points": 128,
-    "sum": [2334.83, -8927.92]
+    "points": 130,
+    "sum": [2317.89, -9104.31]
   },
   "balloon default": {
     "bounds": [-31.03, -132.83, 31.03, 11.67],
@@ -226,59 +226,59 @@
   },
   "cow-15 default": {
     "bounds": [-63.35, -57.17, 63.35, 65.33],
-    "moment": [102469.3, 744596.27],
-    "order": "0cf61eaa52d85e57",
+    "moment": [119712.42, 903594.1],
+    "order": "8f6fef86f8f922c7",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 4,
-      "Body/Frosted/Stroke(Hatch)": 4,
+      "Body/Frosted/Fill": 4,
+      "Body/Frosted/Stroke(Hatch)": 8,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 14,
       "Outline/Glass/Stroke(Outline)": 14
     },
-    "points": 316,
-    "sum": [608.61, 3747.24]
+    "points": 332,
+    "sum": [609.59, 4168.68]
   },
   "cow-15 turn=r1": {
     "bounds": [-53.64, -57.17, 53.64, 65.33],
-    "moment": [91558.3, 691324.96],
-    "order": "3da90c5a42329355",
+    "moment": [105956.88, 849060.65],
+    "order": "c289dfadc3bbd67d",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 4,
-      "Body/Frosted/Stroke(Hatch)": 4,
+      "Body/Frosted/Fill": 4,
+      "Body/Frosted/Stroke(Hatch)": 8,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 14,
       "Outline/Glass/Stroke(Outline)": 14
     },
-    "points": 314,
-    "sum": [699.27, 3677.03]
+    "points": 330,
+    "sum": [700.25, 4098.47]
   },
   "cow-15 turn=r2": {
     "bounds": [-63.35, -57.17, 63.35, 65.33],
-    "moment": [102469.3, 744596.27],
-    "order": "0cf61eaa52d85e57",
+    "moment": [119712.42, 903594.1],
+    "order": "8f6fef86f8f922c7",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 4,
-      "Body/Frosted/Stroke(Hatch)": 4,
+      "Body/Frosted/Fill": 4,
+      "Body/Frosted/Stroke(Hatch)": 8,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 14,
       "Outline/Glass/Stroke(Outline)": 14
     },
-    "points": 316,
-    "sum": [608.61, 3747.24]
+    "points": 332,
+    "sum": [609.59, 4168.68]
   },
   "cow-15 turn=r3": {
     "bounds": [-53.64, -57.17, 53.64, 65.33],
-    "moment": [91558.3, 691324.96],
-    "order": "3da90c5a42329355",
+    "moment": [105956.88, 849060.65],
+    "order": "c289dfadc3bbd67d",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 4,
-      "Body/Frosted/Stroke(Hatch)": 4,
+      "Body/Frosted/Fill": 4,
+      "Body/Frosted/Stroke(Hatch)": 8,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 14,
       "Outline/Glass/Stroke(Outline)": 14
     },
-    "points": 314,
-    "sum": [699.27, 3677.03]
+    "points": 330,
+    "sum": [700.25, 4098.47]
   },
   "hose-7 default": {
     "bounds": [-1.66, -4.98, 71.66, 17.2],
@@ -414,76 +414,76 @@
   },
   "kugelrohr-bulb-10 default": {
     "bounds": [-63.0, -24.5, 57.17, 24.5],
-    "moment": [41444.04, -781.16],
-    "order": "b8d6aa0dc48c0f1a",
+    "moment": [46162.15, -777.02],
+    "order": "08cb99b1f3d93c0e",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 7,
       "Outline/Glass/Stroke(Outline)": 7
     },
-    "points": 132,
-    "sum": [263.41, -4.38]
+    "points": 140,
+    "sum": [244.88, -4.71]
   },
   "kugelrohr-bulb-10 fill=0": {
     "bounds": [-63.0, -24.5, 57.17, 24.5],
-    "moment": [41444.04, -781.16],
-    "order": "b8d6aa0dc48c0f1a",
+    "moment": [46162.15, -777.02],
+    "order": "08cb99b1f3d93c0e",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 7,
       "Outline/Glass/Stroke(Outline)": 7
     },
-    "points": 132,
-    "sum": [263.41, -4.38]
+    "points": 140,
+    "sum": [244.88, -4.71]
   },
   "kugelrohr-bulb-10 fill=0.5": {
     "bounds": [-63.0, -24.5, 57.17, 24.5],
-    "moment": [39605.1, 63642.89],
-    "order": "be7b788082f992f9",
+    "moment": [43563.29, 63633.31],
+    "order": "c1f8c461f881af4c",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 7,
       "Liquid/Liquid/Fill": 1,
       "Liquid/Liquid/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 7
     },
-    "points": 173,
-    "sum": [263.41, 521.53]
+    "points": 181,
+    "sum": [244.88, 521.2]
   },
   "kugelrohr-bulb-10 fill=1": {
     "bounds": [-63.0, -24.5, 57.17, 24.5],
-    "moment": [48908.06, 17710.12],
-    "order": "bcd06a6a0feadd20",
+    "moment": [52291.67, 17690.17],
+    "order": "0ad3da24c57b1a86",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 7,
       "Liquid/Liquid/Fill": 1,
       "Outline/Glass/Stroke(Outline)": 7
     },
-    "points": 204,
-    "sum": [263.41, -4.38]
+    "points": 212,
+    "sum": [244.88, -4.71]
   },
   "liebig-29 default": {
     "bounds": [-21.58, -359.33, 42.0, 50.63],
-    "moment": [125869.11, -4130962.39],
-    "order": "fc936485313c423a",
+    "moment": [131547.71, -4315709.3],
+    "order": "ebaea50d4b5dde2c",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 4,
       "Glass/Glass/Fill": 8,
       "Outline/Glass/Stroke(Outline)": 8
     },
-    "points": 216,
-    "sum": [1972.11, -35014.83]
+    "points": 222,
+    "sum": [2001.48, -35631.42]
   },
   "nmr-tube default": {
     "bounds": [-4.67, -12.83, 8.17, 207.67],
@@ -544,163 +544,133 @@
   },
   "rbf-300-29 default": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
-    "moment": [2592.73, -391064.16],
-    "order": "00f7c2e05223641d",
+    "moment": [2700.82, -442292.87],
+    "order": "30b8c83d08e4d92e",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 4,
       "Liquid/Liquid/Fill": 1,
       "Liquid/Liquid/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 4
     },
-    "points": 137,
-    "sum": [113.28, -5372.14]
+    "points": 141,
+    "sum": [113.67, -5736.82]
   },
   "rbf-300-29 fill=0": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
-    "moment": [8696.81, -366840.62],
-    "order": "3d2705dcf68b7902",
+    "moment": [8790.6, -404576.26],
+    "order": "c7c1999081b2fc53",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 4,
       "Outline/Glass/Stroke(Outline)": 4
     },
-    "points": 100,
-    "sum": [113.28, -6486.28]
+    "points": 104,
+    "sum": [113.67, -6850.96]
   },
   "rbf-300-29 fill=0.5": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
-    "moment": [-1716.0, -410697.01],
-    "order": "f9f75284ff1e0278",
+    "moment": [-1605.59, -464113.78],
+    "order": "554e64debf21f036",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 4,
       "Liquid/Liquid/Fill": 1,
       "Liquid/Liquid/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 4
     },
-    "points": 143,
-    "sum": [113.28, -5414.5]
+    "points": 147,
+    "sum": [113.67, -5779.18]
   },
   "rbf-300-29 fill=1": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
-    "moment": [14919.19, -559874.92],
-    "order": "eb2df2e86af1f58b",
+    "moment": [15040.81, -623867.35],
+    "order": "2933bfe1671f4386",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 2,
       "Glass/Glass/Fill": 4,
       "Liquid/Liquid/Fill": 1,
       "Outline/Glass/Stroke(Outline)": 4
     },
-    "points": 172,
-    "sum": [113.28, -6486.28]
+    "points": 176,
+    "sum": [113.67, -6850.96]
   },
   "rbf2-300-29-angled default": {
     "bounds": [-48.45, -116.12, 56.69, 48.45],
-    "moment": [242019.73, -928955.73],
-    "order": "0e9b44ab998999bf",
+    "moment": [278400.38, -1052010.4],
+    "order": "88b80a65d28ff7b4",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 4,
       "Glass/Glass/Fill": 7,
       "Liquid/Liquid/Fill": 1,
       "Liquid/Liquid/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 7
     },
-    "points": 197,
-    "sum": [2521.39, -9121.31]
+    "points": 205,
+    "sum": [2681.8, -9741.31]
   },
   "rbf2-300-29-angled fill=0": {
     "bounds": [-48.45, -116.12, 56.69, 48.45],
-    "moment": [215379.66, -903335.29],
-    "order": "1ec0d2d3d6c0754a",
+    "moment": [246145.91, -1004690.29],
+    "order": "afc59c921a25eb54",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 4,
       "Glass/Glass/Fill": 7,
       "Outline/Glass/Stroke(Outline)": 7
     },
-    "points": 162,
-    "sum": [2521.39, -10234.18]
+    "points": 170,
+    "sum": [2681.8, -10854.17]
   },
   "rbf2-300-29-angled fill=0.5": {
     "bounds": [-48.45, -116.12, 56.69, 48.45],
-    "moment": [243732.73, -967122.13],
-    "order": "affcb4e599b903b4",
+    "moment": [281396.67, -1095136.73],
+    "order": "7fbca3263b7b556a",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 4,
       "Glass/Glass/Fill": 7,
       "Liquid/Liquid/Fill": 1,
       "Liquid/Liquid/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 7
     },
-    "points": 205,
-    "sum": [2521.39, -9162.41]
+    "points": 213,
+    "sum": [2681.8, -9782.4]
   },
   "rbf2-300-29-angled fill=1": {
     "bounds": [-48.45, -116.12, 56.69, 48.45],
-    "moment": [286512.35, -1201525.43],
-    "order": "b11bb1aff6ad6c09",
+    "moment": [328828.22, -1347519.77],
+    "order": "862ed7dc784b051b",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 4,
       "Glass/Glass/Fill": 7,
       "Liquid/Liquid/Fill": 1,
       "Outline/Glass/Stroke(Outline)": 7
     },
-    "points": 234,
-    "sum": [2521.39, -10234.18]
+    "points": 242,
+    "sum": [2681.8, -10854.17]
   },
   "rbf2-300-29-straight default": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
-    "moment": [191662.9, -939152.55],
-    "order": "0e9b44ab998999bf",
+    "moment": [220004.53, -1063602.38],
+    "order": "88b80a65d28ff7b4",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
-      "Body/Glass/Stroke(Detail)": 4,
-      "Glass/Glass/Fill": 7,
-      "Liquid/Liquid/Fill": 1,
-      "Liquid/Liquid/Stroke(Detail)": 1,
-      "Outline/Glass/Stroke(Outline)": 7
-    },
-    "points": 197,
-    "sum": [2057.15, -9191.9]
-  },
-  "rbf2-300-29-straight fill=0": {
-    "bounds": [-48.45, -116.12, 48.45, 48.45],
-    "moment": [172138.54, -911928.97],
-    "order": "1ec0d2d3d6c0754a",
-    "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
-      "Body/Glass/Stroke(Detail)": 4,
-      "Glass/Glass/Fill": 7,
-      "Outline/Glass/Stroke(Outline)": 7
-    },
-    "points": 162,
-    "sum": [2057.15, -10304.76]
-  },
-  "rbf2-300-29-straight fill=0.5": {
-    "bounds": [-48.45, -116.12, 48.45, 48.45],
-    "moment": [191749.45, -977685.39],
-    "order": "affcb4e599b903b4",
-    "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 4,
       "Glass/Glass/Fill": 7,
       "Liquid/Liquid/Fill": 1,
@@ -708,65 +678,95 @@
       "Outline/Glass/Stroke(Outline)": 7
     },
     "points": 205,
-    "sum": [2057.15, -9232.99]
+    "sum": [2182.34, -9817.74]
+  },
+  "rbf2-300-29-straight fill=0": {
+    "bounds": [-48.45, -116.12, 48.45, 48.45],
+    "moment": [196098.54, -1014474.38],
+    "order": "afc59c921a25eb54",
+    "passes": {
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
+      "Body/Glass/Stroke(Detail)": 4,
+      "Glass/Glass/Fill": 7,
+      "Outline/Glass/Stroke(Outline)": 7
+    },
+    "points": 170,
+    "sum": [2182.34, -10930.6]
+  },
+  "rbf2-300-29-straight fill=0.5": {
+    "bounds": [-48.45, -116.12, 48.45, 48.45],
+    "moment": [221092.6, -1107141.93],
+    "order": "7fbca3263b7b556a",
+    "passes": {
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
+      "Body/Glass/Stroke(Detail)": 4,
+      "Glass/Glass/Fill": 7,
+      "Liquid/Liquid/Fill": 1,
+      "Liquid/Liquid/Stroke(Detail)": 1,
+      "Outline/Glass/Stroke(Outline)": 7
+    },
+    "points": 213,
+    "sum": [2182.34, -9858.83]
   },
   "rbf2-300-29-straight fill=1": {
     "bounds": [-48.45, -116.12, 48.45, 48.45],
-    "moment": [228633.19, -1213417.01],
-    "order": "b11bb1aff6ad6c09",
+    "moment": [261606.85, -1361022.93],
+    "order": "862ed7dc784b051b",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 2,
+      "Body/Frosted/Fill": 2,
+      "Body/Frosted/Stroke(Hatch)": 4,
       "Body/Glass/Stroke(Detail)": 4,
       "Glass/Glass/Fill": 7,
       "Liquid/Liquid/Fill": 1,
       "Outline/Glass/Stroke(Outline)": 7
     },
-    "points": 234,
-    "sum": [2057.15, -10304.76]
+    "points": 242,
+    "sum": [2182.34, -10930.6]
   },
   "schlenk-tube-15 default": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
-    "moment": [3400616.43, -412275.86],
-    "order": "9089aba351b88080",
+    "moment": [3393489.41, -435193.54],
+    "order": "a040d41745401d0e",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/FillStroke(Outline)": 1,
       "Body/Glass/Stroke(Detail)": 2,
       "Body/Ink/Fill": 2,
       "Glass/Glass/Fill": 15,
       "Outline/Glass/Stroke(Outline)": 15
     },
-    "points": 428,
-    "sum": [17565.47, -1485.0]
+    "points": 430,
+    "sum": [17548.57, -1537.76]
   },
   "schlenk-tube-15 fill=0": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
-    "moment": [3400616.43, -412275.86],
-    "order": "9089aba351b88080",
+    "moment": [3393489.41, -435193.54],
+    "order": "a040d41745401d0e",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/FillStroke(Outline)": 1,
       "Body/Glass/Stroke(Detail)": 2,
       "Body/Ink/Fill": 2,
       "Glass/Glass/Fill": 15,
       "Outline/Glass/Stroke(Outline)": 15
     },
-    "points": 428,
-    "sum": [17565.47, -1485.0]
+    "points": 430,
+    "sum": [17548.57, -1537.76]
   },
   "schlenk-tube-15 fill=0.5": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
-    "moment": [3445122.76, 1195793.62],
-    "order": "44f387bdef36c6e5",
+    "moment": [3437370.43, 1170923.95],
+    "order": "4fc633d84eb1211f",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/FillStroke(Outline)": 1,
       "Body/Glass/Stroke(Detail)": 2,
       "Body/Ink/Fill": 2,
@@ -775,17 +775,17 @@
       "Liquid/Liquid/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 15
     },
-    "points": 465,
-    "sum": [17565.47, 2613.24]
+    "points": 467,
+    "sum": [17548.57, 2560.49]
   },
   "schlenk-tube-15 fill=1": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
-    "moment": [3439954.65, 1049697.78],
-    "order": "af5be3e8f18ef098",
+    "moment": [3432269.91, 1025039.14],
+    "order": "8c7d24ccd28cb54b",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/FillStroke(Outline)": 1,
       "Body/Glass/Stroke(Detail)": 2,
       "Body/Ink/Fill": 2,
@@ -793,88 +793,87 @@
       "Liquid/Liquid/Fill": 1,
       "Outline/Glass/Stroke(Outline)": 15
     },
-    "points": 461,
-    "sum": [17565.47, 2244.13]
+    "points": 463,
+    "sum": [17548.57, 2191.38]
   },
   "schlenk-tube-15 stopcock=all": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
-    "moment": [3503628.99, -421977.65],
-    "order": "6ec9bdec12e5bcb6",
+    "moment": [3496434.36, -445106.35],
+    "order": "ba4531d405288662",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/FillStroke(Outline)": 1,
       "Body/Glass/Stroke(Detail)": 2,
       "Body/Ink/Fill": 3,
       "Glass/Glass/Fill": 15,
       "Outline/Glass/Stroke(Outline)": 15
     },
-    "points": 432,
-    "sum": [17817.47, -1499.47]
+    "points": 434,
+    "sum": [17800.57, -1552.22]
   },
   "schlenk-tube-15 stopcock=closed": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
-    "moment": [3530229.43, -433820.01],
-    "order": "d384d687ecc29f2b",
+    "moment": [3523017.91, -457001.47],
+    "order": "8843e56e2c39b109",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/FillStroke(Outline)": 1,
       "Body/Glass/Stroke(Detail)": 2,
       "Body/Ink/Fill": 1,
       "Glass/Glass/Fill": 15,
       "Outline/Glass/Stroke(Outline)": 15
     },
-    "points": 433,
-    "sum": [17882.69, -1525.83]
+    "points": 435,
+    "sum": [17865.79, -1578.59]
   },
   "schlenk-tube-15 stopcock=down": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
-    "moment": [3395910.52, -405810.43],
-    "order": "4afd318ae3a9c266",
+    "moment": [3388783.49, -428728.1],
+    "order": "c636d6179633164c",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/FillStroke(Outline)": 1,
       "Body/Glass/Stroke(Detail)": 2,
       "Body/Ink/Fill": 2,
       "Glass/Glass/Fill": 15,
       "Outline/Glass/Stroke(Outline)": 15
     },
-    "points": 428,
-    "sum": [17553.81, -1466.8]
+    "points": 430,
+    "sum": [17536.91, -1519.56]
   },
   "schlenk-tube-15 stopcock=side": {
     "bounds": [-18.67, -54.83, 103.83, 128.33],
-    "moment": [3400616.43, -412275.86],
-    "order": "9089aba351b88080",
+    "moment": [3393489.41, -435193.54],
+    "order": "a040d41745401d0e",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
       "Body/Frosted/FillStroke(Outline)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/FillStroke(Outline)": 1,
       "Body/Glass/Stroke(Detail)": 2,
       "Body/Ink/Fill": 2,
       "Glass/Glass/Fill": 15,
       "Outline/Glass/Stroke(Outline)": 15
     },
-    "points": 428,
-    "sum": [17565.47, -1485.0]
+    "points": 430,
+    "sum": [17548.57, -1537.76]
   },
   "setup reflux": {
     "bounds": [-155.17, -478.39, 48.45, 48.45],
-    "moment": [-1415988.55, -33713705.86],
-    "order": "d54060da40707236",
+    "moment": [-1418636.46, -34532828.59],
+    "order": "7a99ea5be93695f4",
     "passes": {
       "Back/Cork/FillStroke(Outline)": 2,
       "Back/Metal/FillStroke(Outline)": 9,
       "Back/Plastic/FillStroke(Outline)": 2,
-      "Body/Frosted/Fill": 1,
-      "Body/Frosted/FillStroke(Hatch)": 2,
-      "Body/Frosted/Stroke(Hatch)": 4,
+      "Body/Frosted/Fill": 3,
+      "Body/Frosted/Stroke(Hatch)": 6,
       "Body/Glass/Stroke(Detail)": 6,
       "Front/Metal/FillStroke(Outline)": 3,
       "Front/Plastic/FillStroke(Outline)": 3,
@@ -883,8 +882,8 @@
       "Liquid/Liquid/Stroke(Detail)": 1,
       "Outline/Glass/Stroke(Outline)": 12
     },
-    "points": 624,
-    "sum": [-12890.67, -90042.66]
+    "points": 630,
+    "sum": [-12861.29, -91360.42]
   },
   "stand default": {
     "bounds": [-46.67, -723.33, 221.67, 16.33],
@@ -934,17 +933,17 @@
   },
   "thermometer-adapter-15 default": {
     "bounds": [-12.25, -46.67, 12.25, 30.8],
-    "moment": [259.2, -42798.98],
-    "order": "abe8fdae9fdc291d",
+    "moment": [310.41, -37327.15],
+    "order": "cfbd61336d2a4873",
     "passes": {
-      "Body/Frosted/FillStroke(Hatch)": 1,
-      "Body/Frosted/Stroke(Hatch)": 1,
+      "Body/Frosted/Fill": 1,
+      "Body/Frosted/Stroke(Hatch)": 2,
       "Body/Glass/Stroke(Detail)": 6,
       "Body/Plastic/FillStroke(Outline)": 1,
       "Glass/Glass/Fill": 3,
       "Outline/Glass/Stroke(Outline)": 3
     },
-    "points": 91,
-    "sum": [1.23, -945.88]
+    "points": 95,
+    "sum": [1.46, -887.32]
   }
 }
