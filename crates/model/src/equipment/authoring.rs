@@ -11,6 +11,10 @@ use crate::{
     document::{Document, Point},
     graphics::{Graphic, GraphicKind, LinePattern, PathCommand},
 };
+use i_overlay::{
+    core::{fill_rule::FillRule, overlay_rule::OverlayRule},
+    float::overlay::FloatOverlay,
+};
 use std::{collections::BTreeMap, sync::Arc};
 
 #[cfg(test)]
@@ -47,6 +51,24 @@ pub enum JointKind {
         gender: Gender,
         size_mm: f64,
     },
+}
+
+/// Paint and stacking for one authored shape. Geometry and identity stay put.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShapeStyle {
+    pub layer: Layer,
+    pub material: Material,
+    pub role: Role,
+}
+
+impl From<&Shape> for ShapeStyle {
+    fn from(shape: &Shape) -> Self {
+        Self {
+            layer: shape.layer,
+            material: shape.material,
+            role: shape.role,
+        }
+    }
 }
 
 impl JointKind {
@@ -278,6 +300,92 @@ impl Draft {
     }
     pub fn calibrated(&self) -> bool {
         self.calibrated
+    }
+
+    /// Change one shape transactionally. Open paths remain strokes, and the
+    /// glass silhouette uses glass paint. Full validation also protects joints
+    /// and liquid regions that depend on that silhouette.
+    pub fn set_shape_style(&mut self, id: &str, style: ShapeStyle) -> Result<(), String> {
+        let mut next = self.clone();
+        let shape = next
+            .definition
+            .shapes
+            .iter_mut()
+            .find(|s| s.id == id)
+            .ok_or("Select a shape in the equipment draft.")?;
+        if style.role == Role::Glass && style.material != Material::Glass {
+            return Err(
+                "Joined glass needs the Glass material. Choose Solid for another material.".into(),
+            );
+        }
+        if style.role.filled() && !closed_shape(shape)? {
+            return Err(
+                "A filled shape needs a closed outline. Use Detail or Outline for an open path."
+                    .into(),
+            );
+        }
+        shape.layer = style.layer;
+        shape.material = style.material;
+        shape.role = style.role;
+        validate::validate(&next.definition)?;
+        *self = next;
+        Ok(())
+    }
+
+    /// Evaluated shape geometry in drawing coordinates, shared by the draft's
+    /// selection highlight and hit test rather than its source bounding box.
+    pub fn shape_path(&self, id: &str) -> Result<Vec<Seg>, String> {
+        let values = eval::resolve(&self.definition, &Values::new())?;
+        let evaluated = eval::evaluate(&self.definition, &values)?;
+        let shape = evaluated
+            .shapes
+            .iter()
+            .find(|s| s.shape.id == id)
+            .ok_or("Select a visible shape in the equipment draft.")?;
+        Ok(self.frame.map(&shape.path))
+    }
+
+    /// Pick the visible shape on top. Body glass follows the paint plan's
+    /// area order; the other layers follow depth and stable drawing order.
+    /// Filled interiors follow the painted path's nonzero winding rule.
+    pub fn shape_at(&self, point: Point, reach: f32) -> Option<&str> {
+        if !point.x.is_finite() || !point.y.is_finite() || !reach.is_finite() || reach <= 0. {
+            return None;
+        }
+        let values = eval::resolve(&self.definition, &Values::new()).ok()?;
+        let evaluated = eval::evaluate(&self.definition, &values).ok()?;
+        let mut shapes: Vec<_> = evaluated.shapes.iter().collect();
+        let pass = |s: &eval::Drawn<'_>| {
+            if s.shape.role == Role::Glass && s.shape.layer == Layer::Body {
+                plan::Pass::Glass
+            } else {
+                plan::layer_pass(s.shape.layer)
+            }
+        };
+        shapes.sort_by(|a, b| {
+            pass(a).cmp(&pass(b)).then_with(|| {
+                if pass(a) == plan::Pass::Glass {
+                    plan::fill_area(&a.path).total_cmp(&plan::fill_area(&b.path))
+                } else {
+                    a.shape.depth.cmp(&b.shape.depth)
+                }
+            })
+        });
+        let point = [f64::from(point.x), f64::from(point.y)];
+        for shape in shapes.into_iter().rev() {
+            let outline = geom::flatten(&self.frame.map(&shape.path));
+            if (shape.shape.role.filled() && filled_shape_contains(point, &outline))
+                || geom::distance_to_outline(point, &outline) <= f64::from(reach)
+            {
+                return self
+                    .definition
+                    .shapes
+                    .iter()
+                    .find(|s| s.id == shape.shape.id)
+                    .map(|s| s.id.as_str());
+            }
+        }
+        None
     }
 
     /// The first confirmed measurement sets the physical scale, preserving
@@ -558,6 +666,51 @@ impl Draft {
             revision,
         })
     }
+}
+
+/// Filled paths close every contour and keep same-winding overlaps filled.
+fn filled_shape_contains(point: Xy, outline: &[(Vec<Xy>, bool)]) -> bool {
+    let mut winding = 0;
+    for (points, _) in outline {
+        for (a, b) in geom::edges(points, true) {
+            if (a[1] > point[1]) != (b[1] > point[1])
+                && point[0] < a[0] + (point[1] - a[1]) * (b[0] - a[0]) / (b[1] - a[1])
+            {
+                winding += if b[1] > a[1] { 1 } else { -1 };
+            }
+        }
+    }
+    winding != 0
+}
+
+/// Whether all contours close and together paint a nonzero filled region.
+/// Signed areas can cancel across a bowtie's lobes without canceling its fill.
+pub fn closed_shape(shape: &Shape) -> Result<bool, String> {
+    let segs = geom::parse_path(&shape.path)?;
+    if segs.len() > validate::MAX_PATH_COMMANDS {
+        return Err("Simplify the shape to the equipment path command limit.".into());
+    }
+    // The existing command limit and at most 64 samples per cubic bound
+    // flattening; do not impose a smaller limit on valid authored outlines.
+    let contours = geom::flatten(&segs);
+    if contours.is_empty() || contours.iter().any(|(_, closed)| !closed) {
+        return Ok(false);
+    }
+    if let [(points, _)] = contours.as_slice()
+        && geom::area(points).abs() > 1e-10
+    {
+        // A nonzero winding integral proves some fill exists. Most ordinary
+        // single contours need no overlay, even if their outline is complex.
+        return Ok(true);
+    }
+    // Preserve contour directions: opposite duplicate contours paint nothing,
+    // while same-winding overlaps, holes and self-intersections use NonZero.
+    let subject: Vec<_> = contours.into_iter().map(|(points, _)| points).collect();
+    Ok(FloatOverlay::with_subj(&subject)
+        .overlay(OverlayRule::Subject, FillRule::NonZero)
+        .iter()
+        .flatten()
+        .any(|points| geom::area(points).abs() > 1e-10))
 }
 
 fn supported(g: &Graphic) -> Result<(), String> {

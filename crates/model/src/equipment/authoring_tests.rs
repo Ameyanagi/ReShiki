@@ -861,3 +861,313 @@ fn outline_role_stays_unfilled_in_geometry_preview_save_and_materialization() {
     invalid.shapes[0].role = Role::Detail;
     validate::validate(&invalid).unwrap();
 }
+
+#[test]
+fn shape_style_changes_are_typed_transactional_and_keep_geometry() {
+    let (mut doc, body, edges) = vessel();
+    let line = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        line,
+        GraphicKind::Line,
+        Point::new(-5., 20.),
+        Point::new(5., 20.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    let original = doc.clone();
+    let mut draft = Draft::from_selection(&doc, &[body, line]).unwrap();
+    draft.calibrate(edges, 10.).unwrap();
+    let paths = world_paths(&draft);
+    let body_id = draft.definition.shapes[0].id.clone();
+    let line_id = draft.definition.shapes[1].id.clone();
+    let style = ShapeStyle {
+        layer: Layer::Front,
+        material: Material::Metal,
+        role: Role::Solid,
+    };
+    draft.set_shape_style(&body_id, style).unwrap();
+    assert_eq!(ShapeStyle::from(&draft.definition.shapes[0]), style);
+    assert_eq!(draft.definition.shapes[1].role, Role::Outline);
+    same_paths(&world_paths(&draft), &paths);
+    let before = draft.clone();
+    for (id, style) in [
+        (
+            &body_id,
+            ShapeStyle {
+                role: Role::Glass,
+                ..style
+            },
+        ),
+        (&line_id, style),
+        (&"missing".into(), style),
+    ] {
+        assert!(draft.set_shape_style(id, style).is_err());
+        assert_eq!(draft, before);
+    }
+    let accepted = draft.accept(&doc, "lab/metal-body").unwrap();
+    assert_eq!(doc, original);
+    let saved = Document::from_json(&accepted.document.file_json().unwrap()).unwrap();
+    assert_eq!(saved.piece_definitions[0].format_version, PREVIEW_VERSION);
+    assert_eq!(
+        ShapeStyle::from(&saved.piece_definitions[0].shapes[0]),
+        style
+    );
+    let plan = placed::plan(&saved.graphics[0]);
+    assert!(plan.iter().any(|p| p.pass == plan::Pass::Front
+        && p.material == Material::Metal
+        && p.ink == plan::Ink::FillStroke(plan::Weight::Outline)));
+}
+
+#[test]
+fn filled_style_eligibility_uses_nonzero_paint_instead_of_signed_area() {
+    let (doc, body, _) = vessel();
+    let source = Draft::from_selection(&doc, &[body]).unwrap();
+    let style = ShapeStyle {
+        layer: Layer::Front,
+        material: Material::Metal,
+        role: Role::Solid,
+    };
+    for (path, painted) in [
+        ("M0 0H10V10H0Z", true),
+        ("M0 0L10 10L0 10L10 0Z", true), // bowtie: signed area is zero
+        ("M0 0L10 0L0 10L10 10Z", true), // opposite winding
+        ("M0 0L10 0L20 0Z", false),
+        ("M0 0H10V10H0V0V10H10V0Z", false),     // retraced contour
+        ("M0 0H10V10H0Z M0 0V10H10V0Z", false), // opposite duplicates cancel
+        ("M0 0H10V10H0Z M0 0H10V10H0Z", true),  // same winding stays filled
+        ("M0 0H10V10H0Z M20 0V10H30V0Z", true), // disjoint, zero signed sum
+        ("M0 0H10V10H0Z M2 2V8H8V2Z", true),    // a hole leaves a painted rim
+        ("M0 0H10V10H0Z M20 0L30 0Z", true),    // a closed degenerate contour
+        ("M0 0L10 10L0 10L10 0", false),
+        ("M0 0H10V10H0Z M20 0L30 0", false), // preserve open-path filtering
+    ] {
+        let mut draft = source.clone();
+        draft.definition.shapes[0].path = path.into();
+        let before = draft.clone();
+        let shape = &draft.definition.shapes[0];
+        assert_eq!(closed_shape(shape).unwrap(), painted, "{path}");
+        let id = shape.id.clone();
+        let result = draft.set_shape_style(&id, style);
+        if painted {
+            result.unwrap();
+            let mut expected = before.definition.shapes[0].clone();
+            expected.layer = style.layer;
+            expected.material = style.material;
+            expected.role = style.role;
+            assert_eq!(draft.definition.shapes[0], expected, "{path}");
+        } else {
+            assert!(result.unwrap_err().contains("closed outline"), "{path}");
+            assert_eq!(draft, before, "rejected edits are transactional: {path}");
+        }
+    }
+}
+
+#[test]
+fn filled_compound_outlines_keep_the_existing_path_budget() {
+    let (doc, body, _) = vessel();
+    let mut draft = Draft::from_selection(&doc, &[body]).unwrap();
+    let shape = &mut draft.definition.shapes[0];
+    // Retraced curves add no ink. The rectangle and its hole still fill a rim,
+    // even when flattening a legal command count produces more sampled points.
+    shape.path = format!(
+        "M0 0{}H10V10H0Z M2 2V8H8V2Z",
+        "C0 1 1 1 1 0C1 1 0 1 0 0".repeat(2000)
+    );
+    let segs = geom::parse_path(&shape.path).unwrap();
+    assert!(segs.len() < validate::MAX_PATH_COMMANDS);
+    assert!(
+        geom::flatten(&segs)
+            .iter()
+            .map(|(points, _)| points.len())
+            .sum::<usize>()
+            > validate::MAX_PATH_COMMANDS
+    );
+    assert!(closed_shape(shape).unwrap());
+    let id = shape.id.clone();
+    validate::validate(&draft.definition).unwrap();
+    draft
+        .set_shape_style(
+            &id,
+            ShapeStyle {
+                layer: Layer::Front,
+                material: Material::Glass,
+                role: Role::Glass,
+            },
+        )
+        .unwrap();
+}
+
+#[test]
+fn shape_picking_follows_paint_order_and_never_fills_an_open_stroke() {
+    let (mut doc, body, _) = vessel();
+    let overlapping = rectangle(&mut doc, Point::new(-5., 10.), Point::new(5., 30.), true);
+    let line = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        line,
+        GraphicKind::Line,
+        Point::new(-4., 20.),
+        Point::new(4., 20.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    let mut draft = Draft::from_selection(&doc, &[body, overlapping, line]).unwrap();
+    let ids: Vec<_> = draft
+        .definition
+        .shapes
+        .iter()
+        .map(|s| s.id.clone())
+        .collect();
+    assert_eq!(
+        draft.shape_at(Point::new(0., 20.), 0.1),
+        Some(ids[2].as_str())
+    );
+    // Body glass paints small fills before large ones, unlike source z-order.
+    assert_eq!(
+        draft.shape_at(Point::new(0., 25.), 0.1),
+        Some(ids[0].as_str())
+    );
+    let style = ShapeStyle {
+        layer: Layer::Front,
+        material: Material::Rubber,
+        role: Role::Solid,
+    };
+    draft.set_shape_style(&ids[1], style).unwrap();
+    assert_eq!(
+        draft.shape_at(Point::new(0., 20.), 0.1),
+        Some(ids[1].as_str())
+    );
+    draft
+        .set_shape_style(
+            &ids[1],
+            ShapeStyle {
+                layer: Layer::Back,
+                ..style
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        draft.shape_at(Point::new(0., 20.), 0.1),
+        Some(ids[2].as_str())
+    );
+    assert_eq!(
+        draft.shape_at(Point::new(0., 25.), 0.1),
+        Some(ids[0].as_str())
+    );
+    assert_eq!(draft.shape_at(Point::new(100., 100.), 0.1), None);
+    assert_eq!(draft.shape_at(Point::new(f32::NAN, 0.), 0.1), None);
+    let p = draft.shape_path(&ids[2]).unwrap();
+    same_paths(&[p], &[commands(&doc.graphics[2].commands())]);
+}
+
+#[test]
+fn compound_shape_picking_keeps_same_winding_fills_and_opposite_winding_holes() {
+    use PathCommand::{Close, Line, Move};
+
+    let contour = |points: [Point; 4]| {
+        std::iter::once(Move(points[0]))
+            .chain(points.into_iter().skip(1).map(Line))
+            .chain([Close])
+    };
+    for (nested, imported_fill) in [(false, false), (true, false), (true, true)] {
+        for hole in [false, true] {
+            let mut doc = Document::default();
+            let behind = rectangle(&mut doc, Point::new(60., 30.), Point::new(90., 70.), true);
+            let compound = rectangle(&mut doc, Point::default(), Point::new(150., 100.), true);
+            let outer_right = if nested { 150. } else { 100. };
+            let outer = [
+                Point::default(),
+                Point::new(outer_right, 0.),
+                Point::new(outer_right, 100.),
+                Point::new(0., 100.),
+            ];
+            let mut inner = if nested {
+                [
+                    Point::new(50., 20.),
+                    Point::new(100., 20.),
+                    Point::new(100., 80.),
+                    Point::new(50., 80.),
+                ]
+            } else {
+                [
+                    Point::new(50., 0.),
+                    Point::new(150., 0.),
+                    Point::new(150., 100.),
+                    Point::new(50., 100.),
+                ]
+            };
+            if hole {
+                inner.reverse();
+            }
+            let shape = &mut doc.graphics[1];
+            shape.kind = GraphicKind::Path;
+            shape.origin = Point::default();
+            shape.axis_x = Point::new(1., 0.);
+            shape.axis_y = Point::new(0., 1.);
+            shape.path = contour(outer).chain(contour(inner)).collect();
+            if imported_fill {
+                // The SVG fill route also certifies these disjoint boundaries.
+                shape.style.fill = Some(Color::Ink);
+                shape.style.width_pt = 0.1;
+            }
+            let source = doc.clone();
+            let mut draft = Draft::from_selection(&doc, &[behind, compound]).unwrap();
+            draft
+                .calibrate([Point::default(), Point::new(100., 0.)], 30.)
+                .unwrap();
+            let compound_id = format!("shape-{compound}");
+            let expected = format!("shape-{}", if hole { behind } else { compound });
+            assert_eq!(
+                draft.shape_at(Point::new(75., 50.), 1.),
+                Some(expected.as_str()),
+                "nested={nested}, imported_fill={imported_fill}, hole={hole}"
+            );
+            assert_eq!(
+                draft.shape_at(Point::new(25., 50.), 1.),
+                Some(compound_id.as_str()),
+                "the outer filled region remains pickable"
+            );
+            assert_eq!(doc, source);
+        }
+    }
+}
+
+#[test]
+fn changing_joint_glass_to_solid_is_rejected_without_losing_the_port() {
+    let (doc, body, edges) = vessel();
+    let mut draft = Draft::from_selection(&doc, &[body]).unwrap();
+    draft
+        .add_joint(
+            "mouth",
+            edges,
+            JointKind::Taper {
+                size: "10/18".into(),
+                gender: Gender::M,
+                draw: JointDraw::Standard,
+            },
+            false,
+        )
+        .unwrap();
+    let before = draft.clone();
+    let id = draft.definition.shapes[0].id.clone();
+    let error = draft
+        .set_shape_style(
+            &id,
+            ShapeStyle {
+                layer: Layer::Body,
+                material: Material::Rubber,
+                role: Role::Solid,
+            },
+        )
+        .unwrap_err();
+    assert!(
+        error.contains("outline") || error.contains("glass"),
+        "{error}"
+    );
+    assert_eq!(draft, before);
+    assert_eq!(
+        super::super::solve::ports(&draft.preview_graphic(42).unwrap()).len(),
+        1
+    );
+}
