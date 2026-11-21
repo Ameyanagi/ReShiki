@@ -6,13 +6,40 @@ import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from engine.cdx_exchange import from_cdx, property_bytes, to_cdx
+from engine.cdx_exchange import PROPERTIES, from_cdx, numeric, property_bytes, to_cdx
 from engine.worker import handle
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class BinaryDrawingTests(unittest.TestCase):
+    def test_unknown_atom_stereo_matches_native_cdx_without_inventing_assignment(self):
+        data = (ROOT / "tests/fixtures/chemdraw-unknown-atom-stereo/native.cdx").read_bytes()
+        decoded = from_cdx(data)
+        atom = ET.fromstring(decoded).find(".//n[@id='4']")
+        self.assertEqual(atom.get("AS"), "?")
+        restored = ET.fromstring(from_cdx(to_cdx(decoded)))
+        self.assertEqual(restored.find(".//n[@id='4']").get("AS"), "?")
+        name, kind, enum = PROPERTIES[0x437]
+        for value, number in [
+            ("U", 0),
+            ("N", 1),
+            ("R", 2),
+            ("S", 3),
+            ("r", 4),
+            ("s", 5),
+            ("u", 6),
+            ("?", 12),
+        ]:
+            with self.subTest(value=value):
+                payload = bytes([number])
+                self.assertEqual(numeric(name, kind, enum, value), payload)
+                self.assertEqual(numeric(name, kind, enum, payload, False), value)
+        with self.assertRaisesRegex(ValueError, "Unsupported binary enumeration: AS"):
+            numeric(name, kind, enum, b"\x09", False)
+        with self.assertRaisesRegex(ValueError, "Unsupported drawing value: AS"):
+            numeric(name, kind, enum, "unknown")
+
     def test_native_clipboard_fixture_has_expected_structure(self):
         data = (ROOT / "tests/fixtures/native-ethyl-clipboard.cdx").read_bytes()
         result = handle(

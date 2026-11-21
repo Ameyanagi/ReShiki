@@ -431,6 +431,7 @@ pub(super) const PROPERTIES: &[Property] = &[
             ("r", 4),
             ("s", 5),
             ("u", 6),
+            ("?", 12),
         ],
     },
     Property {
