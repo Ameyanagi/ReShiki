@@ -1117,6 +1117,36 @@ fn office_destination_uses_rich_copy_for_selection_or_drawing_without_mutating_e
 }
 
 #[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn copy_shortcut_runs_the_office_action_while_export_is_visible() {
+    use iced::keyboard::{Key, Modifiers};
+
+    let key = Key::Character("c".into());
+    let copy = || super::super::shortcuts::key_message(&key, &key, Modifiers::COMMAND).unwrap();
+    for (tab, open, settings, uses_office_copy) in [
+        (InspectorTab::Export, true, false, true),
+        (InspectorTab::Export, false, false, false),
+        (InspectorTab::Export, true, true, false),
+        (InspectorTab::Properties, true, false, false),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = Document::default();
+        app.tab.doc.add_atom("O", Point::default());
+        app.inspector_tab = tab;
+        app.inspector_open = open;
+        app.settings.open = settings;
+        let original = app.tab.doc.clone();
+        let task = app.update(copy());
+        assert_eq!(task.units() > 0, uses_office_copy);
+        assert_eq!(app.native_copy_busy, uses_office_copy);
+        assert!(app.tab.selected.is_empty());
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
 fn office_destination_payload_choice_does_not_change_regular_copy_options() {
     use crate::app::inspector::Action;
     let (mut app, _) = App::new();

@@ -1,4 +1,4 @@
-use super::{App, Document, Job, Message, Point, Tool, editing, input_request};
+use super::{App, Document, InspectorTab, Job, Message, Point, Tool, editing, input_request};
 use iced::{Subscription, Task, time::Instant, window};
 use reshiki::clipboard::{CopyFormat, CopyOutcome, PasteOutcome, PreparedCopy};
 
@@ -690,6 +690,13 @@ impl App {
             return Task::none();
         }
         if reshiki::clipboard::available() {
+            if !cut
+                && self.inspector_open
+                && self.inspector_tab == InspectorTab::Export
+                && !self.settings.open
+            {
+                return self.copy_for_office();
+            }
             return self.copy_native(cut, false, None);
         }
         if self.tab.selected.is_empty() {
