@@ -12,6 +12,10 @@ pub struct Layout {
 }
 
 impl Layout {
+    pub(crate) fn frame(&self, id: u64) -> Option<Frame> {
+        self.frames.get(&id).copied().flatten()
+    }
+
     pub fn new(doc: &Document) -> Self {
         let mut frames = HashMap::new();
         for g in &doc.graphics {

@@ -169,7 +169,7 @@ pub fn arrow_hit(
 /// Resolve the complete nonzero fill before intersecting the cell. Clipping
 /// each contour independently would turn a hole into a filled contour and
 /// invent cell-edge ink when the cell lies entirely inside that hole.
-fn fill_hit(frame: Frame, paths: &[Vec<Point>], from: Point, to: Point, radius: f32) -> bool {
+pub fn fill_contours(frame: Frame, paths: &[Vec<Point>]) -> Vec<Vec<Point>> {
     let Some(subject): Option<Vec<Vec<[f64; 2]>>> = paths
         .iter()
         .filter(|path| path.len() >= 3)
@@ -180,32 +180,51 @@ fn fill_hit(frame: Frame, paths: &[Vec<Point>], from: Point, to: Point, radius: 
         })
         .collect()
     else {
-        return false;
+        return vec![];
     };
     if subject.is_empty() {
-        return false;
+        return vec![];
     }
     let cell = vec![[0., 0.], [1., 0.], [1., 1.], [0., 1.]];
     FloatOverlay::with_subj_and_clip(&subject, &cell)
         .overlay(OverlayRule::Intersect, FillRule::NonZero)
         .into_iter()
-        .any(|shape| {
-            let contours: Vec<Vec<Point>> = shape
+        .flatten()
+        .map(|contour| {
+            contour
                 .into_iter()
-                .map(|contour| {
-                    contour
-                        .into_iter()
-                        .map(|p| frame.point(Point::new(p[0] as f32, p[1] as f32)))
-                        .collect()
-                })
-                .collect();
-            crate::graphics::fills(from, &contours)
-                || crate::graphics::fills(to, &contours)
-                || contours.iter().any(|contour| {
-                    crate::polygon::closed_edges(contour)
-                        .any(|(a, b)| crossed(from, to, a, b, radius))
-                })
+                .map(|p| frame.point(Point::new(p[0] as f32, p[1] as f32)))
+                .collect()
         })
+        .collect()
+}
+
+fn fill_hit(frame: Frame, paths: &[Vec<Point>], from: Point, to: Point, radius: f32) -> bool {
+    let contours = fill_contours(frame, paths);
+    crate::graphics::fills(from, &contours)
+        || crate::graphics::fills(to, &contours)
+        || contours.iter().any(|contour| {
+            crate::polygon::closed_edges(contour).any(|(a, b)| crossed(from, to, a, b, radius))
+        })
+}
+
+/// Visible stroke polygons, including width that enters the clip while its
+/// centreline stays outside. Shares caps/joins with ordinary clipped picking.
+pub fn stroke_contours(
+    frame: Frame,
+    paths: &[Vec<Point>],
+    half: f32,
+    round: bool,
+) -> Vec<Vec<Point>> {
+    let mut contours = vec![];
+    stroke_shapes(paths, half, round, |points| {
+        let points = polygon(frame, points);
+        if points.len() >= 3 && crate::polygon::signed_area(&points).abs() >= 1e-10 {
+            contours.push(points);
+        }
+        false
+    });
+    contours
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -223,6 +242,17 @@ pub fn path_hit(
     if filled && fill_hit(frame, &paths, from, to, radius) {
         return true;
     }
+    stroke_shapes(&paths, half, round, |points| {
+        polygon_hit(frame, points, from, to, radius)
+    })
+}
+
+fn stroke_shapes(
+    paths: &[Vec<Point>],
+    half: f32,
+    round: bool,
+    mut visit: impl FnMut(&[Point]) -> bool,
+) -> bool {
     paths.iter().any(|path| {
         if half <= 0. {
             return false;
@@ -236,18 +266,12 @@ pub fn path_hit(
                 return false;
             }
             let (dx, dy) = ((b.x - a.x) / length * half, (b.y - a.y) / length * half);
-            polygon_hit(
-                frame,
-                &[
-                    a.offset(-dy, dx),
-                    b.offset(-dy, dx),
-                    b.offset(dy, -dx),
-                    a.offset(dy, -dx),
-                ],
-                from,
-                to,
-                radius,
-            )
+            visit(&[
+                a.offset(-dy, dx),
+                b.offset(-dy, dx),
+                b.offset(dy, -dx),
+                a.offset(dy, -dx),
+            ])
         }) {
             return true;
         }
@@ -261,7 +285,7 @@ pub fn path_hit(
                     p.offset(half * angle.cos(), half * angle.sin())
                 })
                 .collect();
-            polygon_hit(frame, &circle, from, to, radius)
+            visit(&circle)
         })
     })
 }
