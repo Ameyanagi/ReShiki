@@ -11,10 +11,17 @@ use i_overlay::core::overlay_rule::OverlayRule;
 use i_overlay::float::overlay::FloatOverlay;
 use std::collections::BTreeSet;
 
-/// A joint drawing's extra paths: material, colour, ink, style and path.
-type Detail = (Material, Option<Rgb>, Ink, Option<StyleKind>, Vec<Seg>);
-/// A piece's glass: fill path, outline path (open where a cut is not stroked), colour and style.
-type GlassPath = (Vec<Seg>, Vec<Seg>, Option<Rgb>, Option<StyleKind>);
+/// A joint detail's material, colour, ink, style, path and flat-cap policy.
+type Detail = (
+    Material,
+    Option<Rgb>,
+    Ink,
+    Option<StyleKind>,
+    Vec<Seg>,
+    bool,
+);
+/// A piece's glass fill and outline, colour, style and whether the outline was cut.
+type GlassPath = (Vec<Seg>, Vec<Seg>, Option<Rgb>, Option<StyleKind>, bool);
 
 /// One placed piece.
 #[derive(Debug, Clone)]
@@ -86,6 +93,9 @@ pub struct PlanPath {
     /// The shape's depth within its layer, across an assembly.
     #[serde(skip)]
     pub depth: i8,
+    /// Open strokes clipped at a physical boundary end at their endpoints.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flat_caps: bool,
     /// World units.
     #[serde(serialize_with = "segs")]
     pub path: Vec<Seg>,
@@ -135,6 +145,7 @@ impl Default for Settings {
 /// How far a hose pushed onto a barb reaches past the barb's tip, over its ribs.
 const HOSE_CUFF_MM: f64 = 12.;
 pub(super) const GLASS_OUTLINE_PT: f32 = 0.6;
+pub(super) const JOINT_HATCH_PT: f32 = 0.25;
 const SOCKET_GROUND_START_MM: f64 = 1.2;
 
 /// The paint plan of one compositing group, in paint order.
@@ -191,7 +202,8 @@ fn piece(
                 color: Option<Rgb>,
                 ink: Ink,
                 style: Option<StyleKind>,
-                path: &[Seg]| {
+                path: &[Seg],
+                flat_caps: bool| {
         items.push(PlanPath {
             owner,
             pass,
@@ -200,6 +212,7 @@ fn piece(
             ink,
             style,
             depth,
+            flat_caps,
             path: t.map(path),
         })
     };
@@ -230,13 +243,14 @@ fn piece(
         let s = d.shape;
         if s.role == Role::Glass && s.layer == Layer::Body {
             let outline = open_socket_mouths(&d.path, &socket_mouths);
-            glass.push((d.path.clone(), outline, s.color, s.style));
+            let cut = outline != d.path;
+            glass.push((d.path.clone(), outline, s.color, s.style, cut));
             continue;
         }
         let ink = match (s.role, s.material) {
             (Role::Detail, _) => Ink::Stroke(Weight::Detail),
             (Role::Outline, _) => Ink::Stroke(Weight::Outline),
-            (_, Material::Ink) => Ink::Fill,
+            (Role::Fill, _) | (_, Material::Ink) => Ink::Fill,
             _ => Ink::FillStroke(Weight::Outline),
         };
         push(
@@ -248,9 +262,12 @@ fn piece(
             ink,
             s.style,
             &d.path,
+            false,
         );
     }
-    let hatch_mm = settings.hatch_pt / (mm * settings.points_per_world);
+    let points_per_mm = mm * settings.points_per_world;
+    let hatch_mm = settings.hatch_pt / points_per_mm;
+    let hatch_radius_mm = f64::from(JOINT_HATCH_PT) / (2. * points_per_mm);
     let mut details: Vec<Detail> = Vec::new();
     for j in &e.joints {
         let Some(size) = j.joint.standard() else {
@@ -264,12 +281,13 @@ fn piece(
             j.dir,
             seated,
             hatch_mm,
+            hatch_radius_mm,
             &mut glass,
             &mut details,
         );
     }
     glass.sort_by(|a, b| fill_area(&a.0).total_cmp(&fill_area(&b.0)));
-    for (_, outline, _, style) in &glass {
+    for (_, outline, _, style, cut) in &glass {
         push(
             items,
             Pass::Outline,
@@ -279,9 +297,10 @@ fn piece(
             Ink::Stroke(Weight::Outline),
             *style,
             outline,
+            *cut,
         );
     }
-    for (fill, _, color, style) in &glass {
+    for (fill, _, color, style, _) in &glass {
         push(
             items,
             Pass::Glass,
@@ -291,10 +310,21 @@ fn piece(
             Ink::Fill,
             *style,
             fill,
+            false,
         );
     }
-    for (material, color, ink, style, path) in details {
-        push(items, Pass::Body, 0, material, color, ink, style, &path);
+    for (material, color, ink, style, path, flat_caps) in details {
+        push(
+            items,
+            Pass::Body,
+            0,
+            material,
+            color,
+            ink,
+            style,
+            &path,
+            flat_caps,
+        );
     }
     if let Some(tube) = &instance.definition.tube
         && instance.centre_line.len() >= 2
@@ -329,6 +359,7 @@ fn piece(
             Ink::FillStroke(Weight::Outline),
             None,
             &path,
+            false,
         );
     }
     for l in &e.liquids {
@@ -347,6 +378,7 @@ fn piece(
                 ink: path.0,
                 style: None,
                 depth: 0,
+                flat_caps: false,
                 path: path.1,
             });
         }
@@ -490,39 +522,18 @@ fn standard_joint(
     dir: Xy,
     seated: bool,
     hatch_mm: f64,
+    hatch_radius_mm: f64,
     glass: &mut Vec<GlassPath>,
     details: &mut Vec<Detail>,
 ) {
     let (big, small) = (t.d / 2., t.d / 2. - t.l / 20.);
-    // A ground zone: frosted fill, its outline (open across a cut) and, in line style, hatching.
+    // Draw the hatch within the frosted fill before drawing its boundary.
     let ground = |points: Vec<Xy>, cut: bool, details: &mut Vec<Detail>| {
-        if cut {
-            let mut open = points.clone();
-            open.rotate_left(2);
-            details.push((
-                Material::Frosted,
-                None,
-                Ink::Fill,
-                None,
-                polygon(&points, true),
-            ));
-            details.push((
-                Material::Frosted,
-                None,
-                Ink::Stroke(Weight::Hatch),
-                None,
-                polygon(&open, false),
-            ));
-        } else {
-            details.push((
-                Material::Frosted,
-                None,
-                Ink::FillStroke(Weight::Hatch),
-                None,
-                polygon(&points, true),
-            ));
-        }
-        let lines = hatch(&points, hatch_mm);
+        let filled = polygon(&points, true);
+        details.push((Material::Frosted, None, Ink::Fill, None, filled, false));
+        // The second edge is the exposed end of the taper at the socket mouth.
+        let open_edge = cut.then_some(1);
+        let lines = hatch(&points, hatch_mm, hatch_radius_mm, open_edge);
         if !lines.is_empty() {
             details.push((
                 Material::Frosted,
@@ -530,8 +541,21 @@ fn standard_joint(
                 Ink::Stroke(Weight::Hatch),
                 Some(StyleKind::Line),
                 lines,
+                true,
             ));
         }
+        let mut boundary = points;
+        if let Some(edge) = open_edge {
+            boundary.rotate_left(edge + 1);
+        }
+        details.push((
+            Material::Frosted,
+            None,
+            Ink::Stroke(Weight::Hatch),
+            None,
+            polygon(&boundary, !cut),
+            cut,
+        ));
     };
     match gender {
         Gender::F => {
@@ -555,7 +579,13 @@ fn standard_joint(
                     (t.l + 4., t.neck / 2.),
                 ],
             );
-            glass.push((polygon(&body, true), polygon(&body, !seated), None, None));
+            glass.push((
+                polygon(&body, true),
+                polygon(&body, !seated),
+                None,
+                None,
+                seated,
+            ));
             ground(
                 axial(
                     at,
@@ -575,6 +605,7 @@ fn standard_joint(
                     Ink::Stroke(Weight::Detail),
                     None,
                     polygon(&[rim(2.8, side * rb), rim(2.8, side * ri(2.8))], false),
+                    true,
                 ));
             }
         }
@@ -591,7 +622,13 @@ fn standard_joint(
                 // Start after the cut edge so the open outline leaves it out.
                 let mut outline = body.clone();
                 outline.rotate_left(half.len());
-                glass.push((polygon(&body, true), polygon(&outline, false), None, None));
+                glass.push((
+                    polygon(&body, true),
+                    polygon(&outline, false),
+                    None,
+                    None,
+                    true,
+                ));
                 ground(axial(at, u, &[(0., big), (e, r(e))]), true, details);
             } else {
                 let body = axial(
@@ -605,15 +642,21 @@ fn standard_joint(
                         (t.l + 1.4, small - 0.7),
                     ],
                 );
-                glass.push((polygon(&body, true), polygon(&body, true), None, None));
+                glass.push((
+                    polygon(&body, true),
+                    polygon(&body, true),
+                    None,
+                    None,
+                    false,
+                ));
                 ground(axial(at, u, &[(0., big), (t.l, small)]), false, details);
             }
         }
     }
 }
 
-/// 45° hatch lines inside a convex polygon, `h` apart.
-fn hatch(points: &[Xy], h: f64) -> Vec<Seg> {
+/// 45° flat-ended hatch strokes inside a convex polygon, `h` apart.
+fn hatch(points: &[Xy], h: f64, radius: f64, open_edge: Option<usize>) -> Vec<Seg> {
     let n = [
         std::f64::consts::FRAC_1_SQRT_2,
         -std::f64::consts::FRAC_1_SQRT_2,
@@ -629,29 +672,43 @@ fn hatch(points: &[Xy], h: f64) -> Vec<Seg> {
             (a.min(t), b.max(t))
         });
     let mut out = Vec::new();
-    if h.is_nan() || h <= 0. || (t1 - t0) / h > 10_000. {
+    if h.is_nan() || h <= 0. || !radius.is_finite() || (t1 - t0) / h > 10_000. {
         return out;
     }
-    let first = (t0 / h).ceil();
+    let winding = area(points).signum();
+    // Allow for the hatch pen's crosswise extent and for any boundary stroke.
+    // Their translucent ink should meet without layering at hatch endpoints.
+    let planes: Vec<_> = super::geometry::edges(points, true)
+        .enumerate()
+        .filter(|(_, (a, b))| a != b)
+        .map(|(edge, (a, b))| {
+            let inward = mul(normalize(perp(sub(b, a))), winding);
+            let boundary_inset = if Some(edge) == open_edge { 0. } else { radius };
+            let limit = dot(inward, a) + radius * dot(inward, n).abs() + boundary_inset;
+            (inward, limit, dot(inward, along))
+        })
+        .collect();
+    // Center the pattern in the patch so a narrow taper can still show a hatch.
+    let center = t0.midpoint(t1);
+    let first = ((t0 - center) / h).ceil();
     // A counted loop: t + h may not advance t when the coordinates are huge.
-    for k in 0..((t1 / h - first).ceil().max(0.) as usize) {
-        let t = (first + k as f64) * h;
-        let mut hits = Vec::new();
-        for (a, b) in super::geometry::edges(points, true) {
-            let (da, db) = (dot(a, n) - t, dot(b, n) - t);
-            if (da <= 0. && db > 0.) || (da > 0. && db <= 0.) {
-                hits.push(dot(add(a, mul(sub(b, a), da / (da - db))), along));
+    for k in 0..(((t1 - center) / h - first).ceil().max(0.) as usize) {
+        let base = mul(n, center + (first + k as f64) * h);
+        let (mut start, mut end) = (f64::NEG_INFINITY, f64::INFINITY);
+        for &(normal, limit, slope) in &planes {
+            let distance = limit - dot(normal, base);
+            if slope > 1e-12 {
+                start = start.max(distance / slope);
+            } else if slope < -1e-12 {
+                end = end.min(distance / slope);
+            } else if distance > 0. {
+                end = f64::NEG_INFINITY;
+                break;
             }
         }
-        if hits.len() >= 2 {
-            let (s0, s1) = hits
-                .iter()
-                .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &s| {
-                    (a.min(s), b.max(s))
-                });
-            let base = mul(n, t);
-            out.push(Seg::Move(add(base, mul(along, s0))));
-            out.push(Seg::Line(add(base, mul(along, s1))));
+        if start < end && start.is_finite() && end.is_finite() {
+            out.push(Seg::Move(add(base, mul(along, start))));
+            out.push(Seg::Line(add(base, mul(along, end))));
         }
     }
     out

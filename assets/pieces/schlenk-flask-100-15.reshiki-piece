@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/schlenk-flask-100-15",
- "revision": 1,
+ "revision": 2,
  "family": "schlenk-flask",
  "variant": {
   "volume_ml": "100",
@@ -51,7 +51,7 @@
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "path": "M3.5 -51.29L10 -51.29L10 -58.29L3.5 -58.29Z"
+   "path": "M3.5 -51.29L12 -51.29L12 -58.29L3.5 -58.29Z"
   },
   {
    "id": "s4",

@@ -90,6 +90,9 @@ pub struct Port {
     pub mm: f64,
     /// A hold's length in world units; 0 for a joint.
     pub length: f64,
+    /// Axial span that must lie inside the receiving grip, in world units.
+    /// Zero retains the original centre-only hold semantics.
+    pub contact_length: f64,
 }
 
 impl Port {
@@ -116,9 +119,10 @@ impl Port {
     fn centre(&self) -> [f64; 2] {
         add(self.point, mul(self.dir, self.length / 2.))
     }
-    /// The point of a hold nearest `p`.
-    fn nearest(&self, p: [f64; 2]) -> [f64; 2] {
-        let t = dot(sub(p, self.point), self.dir).clamp(0., self.length);
+    /// The nearest centre where `holder`'s whole contact span fits this hold.
+    fn nearest(&self, holder: &Port, p: [f64; 2]) -> [f64; 2] {
+        let inset = (holder.contact_length * self.mm / holder.mm / 2.).min(self.length / 2.);
+        let t = dot(sub(p, self.point), self.dir).clamp(inset, self.length - inset);
         add(self.point, mul(self.dir, t))
     }
     /// Where the seated pieces touch: the male shoulder sits 0.06 L outside
@@ -181,6 +185,7 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             dir: t.apply_dir(j.dir),
             mm: t.scale_factor(),
             length: 0.,
+            contact_length: 0.,
         })
         .collect();
     // A hose's ends are where its centre line ends.
@@ -196,11 +201,11 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
         let (from, to) = (t.apply(h.from), t.apply(h.to));
         let length = len(sub(to, from));
         // A part's motion can squash a hold to nothing; it holds nothing then.
-        let d = sub(to, from);
+        let delta = sub(to, from);
         (length.is_finite()
             && length > 0.
-            && (d[0] / length).is_finite()
-            && (d[1] / length).is_finite())
+            && (delta[0] / length).is_finite()
+            && (delta[1] / length).is_finite())
         .then(|| Port {
             at: at(&h.hold.id),
             kind: Kind::Hold(h.hold.kind, h.hold.diameter_mm.range()),
@@ -210,9 +215,21 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
                 Gender::M
             },
             point: from,
-            dir: [d[0] / length, d[1] / length],
+            dir: [delta[0] / length, delta[1] / length],
             mm: t.scale_factor(),
             length,
+            // Revision 3's pad contacts require the advertised jaw span.
+            // Older embedded built-ins and authored holds keep their original
+            // centre-only attachment behavior when read or manipulated.
+            contact_length: if d.id == "reshiki/clamp-3finger"
+                && d.revision >= 3
+                && h.hold.id == "jaw"
+                && h.hold.kind == HoldKind::Jaw
+            {
+                length
+            } else {
+                0.
+            },
         })
     }));
     out
@@ -228,7 +245,9 @@ pub fn mates(a: &Port, b: &Port) -> bool {
             (Kind::Hold(x, dx), Kind::Hold(y, dy)) if x.mate() == *y => {
                 let (held, holder) = if x.held() { (dx, dy) } else { (dy, dx) };
                 let d = (held[0] + held[1]) / 2.;
+                let (f, m) = sides(a, b);
                 (holder[0]..=holder[1]).contains(&d)
+                    && f.length / f.mm + 1e-6 >= m.contact_length / m.mm
             }
             _ => false,
         }
@@ -272,7 +291,7 @@ fn misalign(a: &Port, b: &Port) -> f64 {
 pub fn residual(a: &Port, b: &Port) -> (f64, f64) {
     let (f, m) = sides(a, b);
     let off = if f.hold().is_some() {
-        len(sub(m.centre(), f.nearest(m.centre())))
+        len(sub(m.centre(), f.nearest(m, m.centre())))
     } else {
         len(sub(m.point, f.contact()))
     } / f.mm;
@@ -290,7 +309,7 @@ pub fn residual(a: &Port, b: &Port) -> (f64, f64) {
 fn gap(a: &Port, b: &Port) -> f64 {
     let (f, m) = sides(a, b);
     if f.hold().is_some() {
-        return len(sub(m.centre(), f.nearest(m.centre())));
+        return len(sub(m.centre(), f.nearest(m, m.centre())));
     }
     let length = match (&m.kind, m.gender) {
         (Kind::Taper(size), Gender::M) => taper(size).map_or(0., |t| t.l) * m.mm,
@@ -653,9 +672,9 @@ fn seating(s: &Port, m: &Port) -> (f64, f64, [f64; 2], [f64; 2]) {
     }
     let turn = (angle(s.dir) - angle(m.dir) + 90.).rem_euclid(180.) - 90.;
     if m.gender == Gender::F {
-        (turn, k, m.nearest(s.centre()), s.centre())
+        (turn, k, m.nearest(s, s.centre()), s.centre())
     } else {
-        (turn, k, m.centre(), s.nearest(m.centre()))
+        (turn, k, m.centre(), s.nearest(m, m.centre()))
     }
 }
 
@@ -742,6 +761,7 @@ fn adapter(s: &Port, m: &Port) -> Option<(Arc<Definition>, String, String)> {
             } => Kind::Plug(*family, *size_mm),
         },
         gender: j.gender(),
+        contact_length: 0.,
         ..like.clone()
     };
     builtin::catalogue()

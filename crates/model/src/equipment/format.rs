@@ -143,6 +143,8 @@ pub enum Role {
     Glass,
     /// Filled and outlined on its own.
     Solid,
+    /// Material fill with separately authored visible edges.
+    Fill,
     /// A stroke only.
     Detail,
     /// A stroke only, at the ordinary 0.6 pt outline weight (preview format 0).
@@ -152,7 +154,7 @@ pub enum Role {
 impl Role {
     /// Whether the shape contributes a filled body rather than only a stroke.
     pub fn filled(self) -> bool {
-        matches!(self, Self::Glass | Self::Solid)
+        matches!(self, Self::Glass | Self::Solid | Self::Fill)
     }
 }
 

@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/keck-clip-29",
- "revision": 1,
+ "revision": 2,
  "family": "keck-clip",
  "variant": {
   "joint": "29/42"
@@ -31,7 +31,7 @@
    "id": "s0",
    "layer": "back",
    "material": "plastic",
-   "role": "solid",
+   "role": "fill",
    "color": [
     224,
     162,
@@ -43,7 +43,7 @@
    "id": "s1",
    "layer": "front",
    "material": "plastic",
-   "role": "solid",
+   "role": "fill",
    "color": [
     224,
     162,
@@ -55,7 +55,7 @@
    "id": "s2",
    "layer": "back",
    "material": "plastic",
-   "role": "solid",
+   "role": "fill",
    "color": [
     224,
     162,
@@ -67,7 +67,7 @@
    "id": "s3",
    "layer": "front",
    "material": "plastic",
-   "role": "solid",
+   "role": "fill",
    "color": [
     224,
     162,
@@ -79,13 +79,27 @@
    "id": "s4",
    "layer": "front",
    "material": "plastic",
-   "role": "solid",
+   "role": "fill",
    "color": [
     224,
     162,
     27
    ],
    "path": "M17.7 6L15.7 -4.92L18.3 -4.92L20.5 6Z"
+  },
+  {
+   "id": "visible-back-edges",
+   "layer": "back",
+   "material": "plastic",
+   "role": "outline",
+   "path": "M -19.1,3.4 A 19.1,3.82 0 0,1 16.89766,1.61922 M 17.41247,4.43008 A 19.1,3.82 0 0,0 -19.1,6 M -19.1,6 L -19.1,3.4 M -16.1,-5.92 A 16.1,3.22 0 0,1 16.1,-5.92 M 16.1,-5.92 L 16.1,-4.92 M 15.12992,-4.82083 A 16.1,3.22 0 0,0 -16.1,-3.72 M -16.1,-3.72 L -16.1,-5.92"
+  },
+  {
+   "id": "visible-front-edges",
+   "layer": "front",
+   "material": "plastic",
+   "role": "outline",
+   "path": "M 17.50345,4.92683 A 19.1,3.82 0 0,1 -15.05,5.75 M -15.05,5.75 L -15.05,8.35 M -15.05,8.35 A 19.1,3.82 0 0,0 19.1,6 M 19.1,6 L 20.5,6 L 18.3,-4.92 L 16.1,-4.92 M 16.1,-4.92 L 16.1,-5.92 M 15.12992,-4.82083 A 16.1,3.22 0 0,1 -12.69,-3.94 M -12.69,-3.94 L -12.69,-1.74 M -12.69,-1.74 A 16.1,3.22 0 0,0 15.9887,-3.34369 M 15.9887,-3.34369 L 16.89766,1.61922 M 17.50345,4.92683 L 17.41247,4.43008"
   }
  ]
 }

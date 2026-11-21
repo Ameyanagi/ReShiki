@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/septum-15",
- "revision": 1,
+ "revision": 2,
  "family": "septum",
  "variant": {
   "joint": "15/25"
@@ -46,47 +46,35 @@
     47,
     42
    ],
-   "path": "M-11.2 1L-11.2 -4Q-11.2 -8 -7.8 -8Q0 -9.6 7.8 -8Q11.2 -8 11.2 -4L11.2 1Z"
-  },
-  {
-   "id": "s2",
-   "layer": "front",
-   "material": "rubber",
-   "role": "solid",
-   "color": [
-    138,
-    47,
-    42
-   ],
-   "path": "M-11.8 0L11.8 0L13.4 12Q0 13.6 -13.4 12Z"
+   "path": "M-11.8 0H-11.2V-4Q-11.2 -8 -7.8 -8Q0 -9.6 7.8 -8Q11.2 -8 11.2 -4V0H11.8L13.4 12Q0 13.6 -13.4 12Z"
   },
   {
    "id": "s3",
    "layer": "front",
    "material": "glass",
    "role": "detail",
-   "path": "M-10.8 0.4Q0 2 10.8 0.4"
+   "path": "M-11.8 0Q0 2 11.8 0"
   },
   {
    "id": "s4",
    "layer": "front",
    "material": "glass",
    "role": "detail",
-   "path": "M-6.49 3.5L-6.75 11.5"
+   "path": "M-6.49 3.5L-6.72 10.5"
   },
   {
    "id": "s5",
    "layer": "front",
    "material": "glass",
    "role": "detail",
-   "path": "M0 3.5L0 11.5"
+   "path": "M0 3.5L0 10.5"
   },
   {
    "id": "s6",
    "layer": "front",
    "material": "glass",
    "role": "detail",
-   "path": "M6.49 3.5L6.75 11.5"
+   "path": "M6.49 3.5L6.72 10.5"
   },
   {
    "id": "s7",

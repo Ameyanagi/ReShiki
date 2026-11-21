@@ -27,6 +27,26 @@ fn port(doc: &Document, piece: u64, name: &str) -> Port {
     ports(g).into_iter().find(|p| p.at.joint == name).unwrap()
 }
 
+#[test]
+fn the_fixed_support_ring_accepts_only_its_bore_and_still_mounts_on_a_rod() {
+    let mut doc = Document::default();
+    let ring = add(&mut doc, "reshiki/ring", Point::default());
+    let tube = add(&mut doc, "reshiki/jy-schlenk-tube", Point::default());
+    let stand = add(&mut doc, "reshiki/stand", Point::default());
+    let jaw = port(&doc, ring, "ring");
+    let mut grip = port(&doc, tube, "body");
+    assert!(!solve::mates(&jaw, &grip));
+    let solve::Kind::Hold(_, ref mut diameter) = grip.kind else {
+        panic!("expected a body grip");
+    };
+    *diameter = [63.4, 63.4];
+    assert!(solve::mates(&jaw, &grip));
+    assert!(solve::mates(
+        &port(&doc, ring, "boss"),
+        &port(&doc, stand, "rod")
+    ));
+}
+
 fn along(p: &Port, t: f64) -> [f64; 2] {
     [
         p.point[0] + p.dir[0] * p.length * t,
@@ -86,6 +106,121 @@ fn a_clamp_brought_to_a_neck_holds_it_and_closes_its_fingers_on_it() {
     assert_eq!(doc.seats.len(), 1);
     let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(back.seats, doc.seats);
+}
+
+#[test]
+fn new_clamp_contacts_fit_inside_supported_necks_at_both_ends() {
+    for piece in [
+        "reshiki/rbf-50-15",
+        "reshiki/rbf-100-15",
+        "reshiki/rbf-100-29",
+        "reshiki/rbf-300-29",
+        "reshiki/rbf-500-29",
+        "reshiki/schlenk-flask-100-15",
+        "reshiki/jy-schlenk-tube",
+    ] {
+        let mut doc = Document::default();
+        let held = add(&mut doc, piece, Point::new(300., 400.));
+        let clamp = add(&mut doc, "reshiki/clamp-3finger", Point::new(100., 100.));
+        let name = if piece == "reshiki/jy-schlenk-tube" {
+            "neck"
+        } else {
+            "neck-grip"
+        };
+        let grip = port(&doc, held, name);
+        let held_at = graphic(&doc, held).origin;
+        for end in [0., 1.] {
+            // A drag near either end must leave room for both jaw contacts.
+            let jaw = port(&doc, clamp, "jaw");
+            let at = along(&grip, end);
+            let centre = along(&jaw, 0.5);
+            doc.translate(
+                &[clamp],
+                (at[0] - centre[0]) as f32 + 2.,
+                (at[1] - centre[1]) as f32,
+            );
+            let snap = solve::snap(&mut doc, &[clamp], 14., false).unwrap();
+            assert!(matches!(snap.offer, Offer::Seat), "{piece}");
+            assert_eq!(snap.target.at, joint(held, name));
+            let jaw = port(&doc, clamp, "jaw");
+            assert!((jaw.contact_length / jaw.mm - 8.).abs() < 1e-6);
+            let centre = along(&jaw, 0.5);
+            let t = ((centre[0] - grip.point[0]) * grip.dir[0]
+                + (centre[1] - grip.point[1]) * grip.dir[1])
+                / grip.mm;
+            assert!(t >= 4. - 1e-4, "{piece}: {t}");
+            assert!(t <= grip.length / grip.mm - 4. + 1e-4, "{piece}: {t}");
+            assert_eq!(doc.seats.len(), 1);
+            assert_eq!(graphic(&doc, held).origin, held_at);
+        }
+        let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+        assert_eq!(back.seats, doc.seats, "{piece}");
+    }
+}
+
+#[test]
+fn new_clamp_rejects_short_top_edges_in_snap_connect_and_jaw_closing() {
+    for (piece, name) in [
+        ("reshiki/liebig-15", "top-neck"),
+        ("reshiki/liebig-29", "top-neck"),
+        ("reshiki/schlenk-tube-15", "neck-grip"),
+        ("reshiki/cow-15", "inlet-neck"),
+        ("reshiki/exp-15-29", "top-neck"),
+        ("reshiki/red-29-15", "top-neck"),
+    ] {
+        let mut doc = Document::default();
+        let held = add(&mut doc, piece, Point::new(300., 400.));
+        let clamp = add(&mut doc, "reshiki/clamp-3finger", Point::new(100., 100.));
+        let grip = port(&doc, held, name);
+        let jaw = port(&doc, clamp, "jaw");
+        assert!(!solve::mates(&grip, &jaw), "{piece}");
+        assert!(
+            solve::options(&doc, &[clamp])
+                .iter()
+                .all(|(s, _, _)| s.at != grip.at)
+        );
+        assert!(solve::connect(&mut doc, &[clamp], &grip.at, &jaw.at).is_none());
+        let at = along(&grip, 0.5);
+        bring(&mut doc, clamp, "jaw", at, (0., 0.));
+        let mut snapped = doc.clone();
+        solve::snap(&mut snapped, &[clamp], 1., false);
+        assert!(solve::partner(&snapped, &grip.at).is_none(), "{piece}");
+        solve::adjust::set(&mut doc, clamp, "jaw", Value::State("open".into())).unwrap();
+        solve::adjust::set(&mut doc, clamp, "jaw", Value::State("closed".into())).unwrap();
+        assert!(solve::partner(&doc, &grip.at).is_none(), "{piece}");
+    }
+}
+
+#[test]
+fn legacy_clamps_and_authored_jaws_keep_their_saved_hold_semantics() {
+    let original =
+        super::format::parse(include_str!("fixtures/clamp-3finger.reshiki-piece")).unwrap();
+    for (id, revision) in [
+        ("reshiki/clamp-3finger", 1),
+        ("reshiki/clamp-3finger", 2),
+        ("lab/clamp", 3),
+    ] {
+        let mut doc = Document::default();
+        let held = add(&mut doc, "reshiki/liebig-29", Point::new(300., 400.));
+        let mut definition = original.clone();
+        definition.id = id.into();
+        definition.revision = revision;
+        let clamp = doc.next_id();
+        let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+        doc.graphics.push(placed::graphic(
+            clamp,
+            std::sync::Arc::new(definition),
+            Point::new(100., 100.),
+            scale,
+        ));
+        let grip = port(&doc, held, "top-neck");
+        let jaw = port(&doc, clamp, "jaw");
+        assert_eq!(jaw.contact_length, 0.);
+        solve::connect(&mut doc, &[clamp], &grip.at, &jaw.at).unwrap();
+        assert_eq!(doc.seats.len(), 1);
+        let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+        assert_eq!(back.seats, doc.seats, "{id}@{revision}");
+    }
 }
 
 #[test]
@@ -210,10 +345,10 @@ fn an_assembly_paints_the_fingers_around_the_neck_and_hits_what_shows() {
             (c[1] + jaw.dir[1] * mm * jaw.mm) as f32,
         )
     };
-    assert!(placed::on_top(&doc, clamp, at(5.), 0.05));
-    assert!(!placed::on_top(&doc, flask, at(5.), 0.05));
-    assert!(placed::on_top(&doc, flask, at(-7.5), 0.05));
-    assert!(!placed::on_top(&doc, clamp, at(-7.5), 0.05));
+    assert!(placed::on_top(&doc, clamp, at(3.), 0.05));
+    assert!(!placed::on_top(&doc, flask, at(3.), 0.05));
+    assert!(placed::on_top(&doc, flask, at(-3.), 0.05));
+    assert!(!placed::on_top(&doc, clamp, at(-3.), 0.05));
 }
 
 /// A 300 mL flask with a 29/42 condenser seated in it.

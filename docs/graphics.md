@@ -424,6 +424,7 @@ keep that order.
 A rod holds any number of clamps. **Properties → Equipment** lists each clamp
 on the rod with its height along the rod, for example **Holds the clamp at
 280 mm**, and **Detach**. The support ring mounts on a rod the same way.
+Its fixed opening seats a grip with a matching 63.4 mm diameter.
 
 Joint clips go on seated ground-glass joints. Select an assembly and click
 **Add clips to all joints** in Properties, or pick a clip in the Equipment
@@ -522,8 +523,10 @@ outlines must use **Ink** at **0.6 pt**. Open artwork keeps **0.6 pt**
 outlines or **0.4 pt** details. Change unsupported stroke colors or widths in
 Properties before defining the piece; conversion refuses them. General
 stroke styling belongs to the later material and layer editor.
-Filled SVG artwork can enter without a separate stroke. Complex or
-overlapping filled paths may need simplifying or separating first.
+Filled SVG artwork can enter without a separate stroke. In the material
+editor, use **Fill only** for a surface and separate **Outline** paths for
+its visible edges. Complex or overlapping filled paths may need simplifying
+or separating first.
 Other drawing commands wait for **Accept** or
 **Discard**.
 

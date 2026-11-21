@@ -391,7 +391,7 @@ fn width_pt(weight: Weight, pass: Pass) -> f32 {
         Weight::Outline if pass == Pass::Outline => super::plan::GLASS_OUTLINE_PT * 2.,
         Weight::Outline => super::plan::GLASS_OUTLINE_PT,
         Weight::Detail => 0.4,
-        Weight::Hatch => 0.25,
+        Weight::Hatch => super::plan::JOINT_HATCH_PT,
     }
 }
 
@@ -432,6 +432,7 @@ pub(crate) fn parts(g: &Graphic) -> Vec<Part> {
                 style: GraphicStyle {
                     width_pt: width.max(0.1),
                     fill: filled.then_some(Color::Ink),
+                    flat_caps: p.flat_caps,
                     ..GraphicStyle::default()
                 },
                 filled,
@@ -534,6 +535,7 @@ fn paint(plan: &[PlanPath], owners: &[&Graphic], theme: CanvasTheme) -> Vec<Prim
                     stroke,
                     fill: filled.then_some(fill),
                     width_pt,
+                    flat_caps: p.flat_caps,
                     ..GraphicStyle::default()
                 },
                 filled,

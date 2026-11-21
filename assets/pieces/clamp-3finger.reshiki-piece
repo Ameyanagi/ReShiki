@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/clamp-3finger",
- "revision": 2,
+ "revision": 3,
  "family": "clamp-3finger",
  "variant": {},
  "names": {
@@ -71,6 +71,84 @@
    }
   },
   {
+   "id": "s7",
+   "layer": "back",
+   "material": "metal",
+   "role": "fill",
+   "path": "M-17.6 -10.5C-8 -15 5 -3.8 8 -3.8L17.6 -3.8L17.6 -0.8L8 -0.8C5 -0.8 -8 -12 -17.6 -7.5Z",
+   "part": "fingers",
+   "when": {
+    "jaw": [
+     "closed"
+    ]
+   }
+  },
+  {
+   "id": "s7-edges",
+   "layer": "back",
+   "material": "metal",
+   "role": "outline",
+   "path": "M-17.6 -10.5C-8 -15 5 -3.8 8 -3.8L17.6 -3.8M17.6 -0.8L8 -0.8C5 -0.8 -8 -12 -17.6 -7.5",
+   "part": "fingers",
+   "when": {
+    "jaw": [
+     "closed"
+    ]
+   }
+  },
+  {
+   "id": "s8",
+   "layer": "back",
+   "material": "cork",
+   "role": "solid",
+   "path": "M13.6 -4L17 -4A0.6 0.6 0 0 1 17.6 -3.4L17.6 -1.2A0.6 0.6 0 0 1 17 -0.6L13.6 -0.6A0.6 0.6 0 0 1 13 -1.2L13 -3.4A0.6 0.6 0 0 1 13.6 -4Z",
+   "part": "pads",
+   "when": {
+    "jaw": [
+     "closed"
+    ]
+   }
+  },
+  {
+   "id": "s9",
+   "layer": "back",
+   "material": "metal",
+   "role": "fill",
+   "path": "M-17.6 3.5C-9 -1 5 0.8 8 0.8L17.6 0.8L17.6 3.8L8 3.8C5 3.8 -9 2 -17.6 6.5Z",
+   "part": "fingers",
+   "when": {
+    "jaw": [
+     "closed"
+    ]
+   }
+  },
+  {
+   "id": "s9-edges",
+   "layer": "back",
+   "material": "metal",
+   "role": "outline",
+   "path": "M-17.6 3.5C-9 -1 5 0.8 8 0.8L17.6 0.8M17.6 3.8L8 3.8C5 3.8 -9 2 -17.6 6.5",
+   "part": "fingers",
+   "when": {
+    "jaw": [
+     "closed"
+    ]
+   }
+  },
+  {
+   "id": "s10",
+   "layer": "back",
+   "material": "cork",
+   "role": "solid",
+   "path": "M13.6 0.6L17 0.6A0.6 0.6 0 0 1 17.6 1.2L17.6 3.4A0.6 0.6 0 0 1 17 4L13.6 4A0.6 0.6 0 0 1 13 3.4L13 1.2A0.6 0.6 0 0 1 13.6 0.6Z",
+   "part": "pads",
+   "when": {
+    "jaw": [
+     "closed"
+    ]
+   }
+  },
+  {
    "id": "s6",
    "layer": "back",
    "material": "metal",
@@ -84,63 +162,24 @@
    }
   },
   {
-   "id": "s7",
-   "layer": "back",
-   "material": "metal",
-   "role": "solid",
-   "path": "M-17.6 -10.3A17.6 4.35 0 0 1 17.6 -7.5L17.6 -4.7A14.1 2.85 0 0 0 -14.1 -4.7Z",
-   "part": "fingers",
-   "when": {
-    "jaw": [
-     "closed"
-    ]
-   }
-  },
-  {
-   "id": "s8",
-   "layer": "back",
-   "material": "cork",
-   "role": "solid",
-   "path": "M14.3 -10.7L16.4 -10.7A1.2 1.2 0 0 1 17.6 -9.5L17.6 -5.5A1.2 1.2 0 0 1 16.4 -4.3L14.3 -4.3A1.2 1.2 0 0 1 13.1 -5.5L13.1 -9.5A1.2 1.2 0 0 1 14.3 -10.7Z",
-   "part": "pads",
-   "when": {
-    "jaw": [
-     "closed"
-    ]
-   }
-  },
-  {
-   "id": "s9",
-   "layer": "back",
-   "material": "metal",
-   "role": "solid",
-   "path": "M-17.6 4.7A17.6 4.35 0 0 1 17.6 7.5L17.6 10.3A14.1 2.85 0 0 0 -14.1 10.3Z",
-   "part": "fingers",
-   "when": {
-    "jaw": [
-     "closed"
-    ]
-   }
-  },
-  {
-   "id": "s10",
-   "layer": "back",
-   "material": "cork",
-   "role": "solid",
-   "path": "M14.3 4.3L16.4 4.3A1.2 1.2 0 0 1 17.6 5.5L17.6 9.5A1.2 1.2 0 0 1 16.4 10.7L14.3 10.7A1.2 1.2 0 0 1 13.1 9.5L13.1 5.5A1.2 1.2 0 0 1 14.3 4.3Z",
-   "part": "pads",
-   "when": {
-    "jaw": [
-     "closed"
-    ]
-   }
-  },
-  {
    "id": "s11",
    "layer": "front",
    "material": "metal",
-   "role": "solid",
-   "path": "M-17.6 -3A17.6 5.35 0 0 0 17.6 -3L18.6 3A15.1 4.35 0 0 1 -15.1 3Z",
+   "role": "fill",
+   "path": "M-17.6 -1.2A17.6 2 0 0 0 17.6 -1.2L17.6 0.8A17.6 3.2 0 0 1 -17.6 0.8Z",
+   "part": "fingers",
+   "when": {
+    "jaw": [
+     "closed"
+    ]
+   }
+  },
+  {
+   "id": "s11-edges",
+   "layer": "front",
+   "material": "metal",
+   "role": "outline",
+   "path": "M-16.6 -0.535446A17.6 2 0 0 0 17.6 -1.2M17.6 0.8A17.6 3.2 0 0 1 -16.6 1.863287",
    "part": "fingers",
    "when": {
     "jaw": [
@@ -188,6 +227,84 @@
    }
   },
   {
+   "id": "s16",
+   "layer": "back",
+   "material": "metal",
+   "role": "fill",
+   "path": "M-24.6 -4A24.6 4.5 0 0 1 24.6 -4L24.6 -2.6A24.6 3 0 0 0 -24.6 -2.6Z",
+   "part": "fingers-open",
+   "when": {
+    "jaw": [
+     "open"
+    ]
+   }
+  },
+  {
+   "id": "s16-edges",
+   "layer": "back",
+   "material": "metal",
+   "role": "outline",
+   "path": "M-24.6 -4A24.6 4.5 0 0 1 24.6 -4M24.6 -2.6A24.6 3 0 0 0 -24.6 -2.6",
+   "part": "fingers-open",
+   "when": {
+    "jaw": [
+     "open"
+    ]
+   }
+  },
+  {
+   "id": "s17",
+   "layer": "back",
+   "material": "cork",
+   "role": "solid",
+   "path": "M20.6 -6L24 -6A0.6 0.6 0 0 1 24.6 -5.4L24.6 -3.2A0.6 0.6 0 0 1 24 -2.6L20.6 -2.6A0.6 0.6 0 0 1 20 -3.2L20 -5.4A0.6 0.6 0 0 1 20.6 -6Z",
+   "part": "pads",
+   "when": {
+    "jaw": [
+     "open"
+    ]
+   }
+  },
+  {
+   "id": "s18",
+   "layer": "back",
+   "material": "metal",
+   "role": "fill",
+   "path": "M-24.6 2.6A24.6 3 0 0 1 24.6 2.6L24.6 4A24.6 1.5 0 0 0 -24.6 4Z",
+   "part": "fingers-open",
+   "when": {
+    "jaw": [
+     "open"
+    ]
+   }
+  },
+  {
+   "id": "s18-edges",
+   "layer": "back",
+   "material": "metal",
+   "role": "outline",
+   "path": "M-24.6 2.6A24.6 3 0 0 1 24.6 2.6M24.6 4A24.6 1.5 0 0 0 -24.6 4",
+   "part": "fingers-open",
+   "when": {
+    "jaw": [
+     "open"
+    ]
+   }
+  },
+  {
+   "id": "s19",
+   "layer": "back",
+   "material": "cork",
+   "role": "solid",
+   "path": "M20.6 2.6L24 2.6A0.6 0.6 0 0 1 24.6 3.2L24.6 5.4A0.6 0.6 0 0 1 24 6L20.6 6A0.6 0.6 0 0 1 20 5.4L20 3.2A0.6 0.6 0 0 1 20.6 2.6Z",
+   "part": "pads",
+   "when": {
+    "jaw": [
+     "open"
+    ]
+   }
+  },
+  {
    "id": "s15",
    "layer": "back",
    "material": "metal",
@@ -201,63 +318,24 @@
    }
   },
   {
-   "id": "s16",
-   "layer": "back",
-   "material": "metal",
-   "role": "solid",
-   "path": "M-24.6 -10.3A24.6 6.59 0 0 1 24.6 -7.5L24.6 -4.7A21.1 5.09 0 0 0 -21.1 -4.7Z",
-   "part": "fingers-open",
-   "when": {
-    "jaw": [
-     "open"
-    ]
-   }
-  },
-  {
-   "id": "s17",
-   "layer": "back",
-   "material": "cork",
-   "role": "solid",
-   "path": "M21.3 -10.7L23.4 -10.7A1.2 1.2 0 0 1 24.6 -9.5L24.6 -5.5A1.2 1.2 0 0 1 23.4 -4.3L21.3 -4.3A1.2 1.2 0 0 1 20.1 -5.5L20.1 -9.5A1.2 1.2 0 0 1 21.3 -10.7Z",
-   "part": "pads",
-   "when": {
-    "jaw": [
-     "open"
-    ]
-   }
-  },
-  {
-   "id": "s18",
-   "layer": "back",
-   "material": "metal",
-   "role": "solid",
-   "path": "M-24.6 4.7A24.6 6.59 0 0 1 24.6 7.5L24.6 10.3A21.1 5.09 0 0 0 -21.1 10.3Z",
-   "part": "fingers-open",
-   "when": {
-    "jaw": [
-     "open"
-    ]
-   }
-  },
-  {
-   "id": "s19",
-   "layer": "back",
-   "material": "cork",
-   "role": "solid",
-   "path": "M21.3 4.3L23.4 4.3A1.2 1.2 0 0 1 24.6 5.5L24.6 9.5A1.2 1.2 0 0 1 23.4 10.7L21.3 10.7A1.2 1.2 0 0 1 20.1 9.5L20.1 5.5A1.2 1.2 0 0 1 21.3 4.3Z",
-   "part": "pads",
-   "when": {
-    "jaw": [
-     "open"
-    ]
-   }
-  },
-  {
    "id": "s20",
    "layer": "front",
    "material": "metal",
-   "role": "solid",
-   "path": "M-24.6 -3A24.6 7.59 0 0 0 24.6 -3L25.6 3A22.1 6.59 0 0 1 -22.1 3Z",
+   "role": "fill",
+   "path": "M-24.6 -1.5A24.6 4 0 0 0 24.6 -1.5L24.6 1.5A24.6 5 0 0 1 -24.6 1.5Z",
+   "part": "fingers-open",
+   "when": {
+    "jaw": [
+     "open"
+    ]
+   }
+  },
+  {
+   "id": "s20-edges",
+   "layer": "front",
+   "material": "metal",
+   "role": "outline",
+   "path": "M-23.6 -0.371118A24.6 4 0 0 0 24.6 -1.5M24.6 1.5A24.6 5 0 0 1 -23.6 2.911102",
    "part": "fingers-open",
    "when": {
     "jaw": [
@@ -314,11 +392,11 @@
    "kind": "jaw",
    "from": [
     0,
-    -12
+    -4
    ],
    "to": [
     0,
-    12
+    4
    ],
    "diameter_mm": [
     8,
