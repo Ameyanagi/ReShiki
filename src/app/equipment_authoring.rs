@@ -1,4 +1,5 @@
 //! A detached equipment draft, measured and reviewed on the ordinary canvas.
+mod metadata;
 mod shapes;
 mod trial;
 use super::workspace::{accessible_command, command, muted_text, section};
@@ -19,6 +20,7 @@ pub enum Action {
     Point(Point),
     Length(String),
     Name(String),
+    Metadata(metadata::Action),
     SelectShape(shapes::Choice),
     ShapeAt {
         at: Point,
@@ -91,6 +93,7 @@ struct Snapshot {
     length: String,
     measured_length: Option<String>,
     name: String,
+    metadata: metadata::Metadata,
     measuring: bool,
     joint: Option<JointEdit>,
 }
@@ -120,13 +123,17 @@ impl State {
         self.future.clear();
     }
 
-    fn named_draft(&self) -> Draft {
+    fn named_draft(&self) -> Result<Draft, String> {
         let mut draft = (*self.current.draft).clone();
+        if self.current.name.trim().is_empty() {
+            return Err("Enter an English name for the piece.".into());
+        }
         draft
             .definition
             .names
             .insert("en".into(), self.current.name.trim().into());
-        draft
+        self.current.metadata.apply(&mut draft.definition)?;
+        Ok(draft)
     }
 
     fn is_measuring(&self) -> bool {
@@ -145,7 +152,13 @@ impl State {
         }
         self.joint_candidate = None;
         self.direction = None;
-        let mut draft = self.named_draft();
+        let mut draft = match self.named_draft() {
+            Ok(draft) => draft,
+            Err(error) => {
+                self.notice = Some(error);
+                return;
+            }
+        };
         if let Some(edit) = &self.current.joint
             && let [a, b] = edit.points.as_slice()
         {
@@ -335,6 +348,7 @@ impl App {
                     break candidate;
                 }
             };
+            let metadata = metadata::Metadata::from_definition(&draft.definition);
             self.tab.equipment_authoring = Some(State {
                 current: Snapshot {
                     draft: Arc::new(draft),
@@ -342,6 +356,7 @@ impl App {
                     length: String::new(),
                     measured_length: None,
                     name: "New equipment piece".into(),
+                    metadata,
                     measuring: true,
                     joint: None,
                 },
@@ -380,7 +395,9 @@ impl App {
             let Some(state) = self.tab.equipment_authoring.as_ref().filter(|s| s.ready()) else {
                 return Task::none();
             };
-            let accepted = state.named_draft().accept(&self.tab.doc, &state.identity);
+            let accepted = state
+                .named_draft()
+                .and_then(|draft| draft.accept(&self.tab.doc, &state.identity));
             let result = accepted.and_then(|accepted| {
                 self.try_replace_document(accepted.document, vec![accepted.piece_id])
             });
@@ -565,6 +582,7 @@ impl App {
                 | Action::CancelJoint
         );
         match action {
+            Action::Metadata(action) => state.edit_metadata(action),
             Action::ShapeLayer(_) | Action::ShapeMaterial(_) | Action::ShapeRole(_) => {
                 if let Err(error) = state.edit_shape(action) {
                     state.notice = Some(error);
@@ -798,14 +816,21 @@ impl App {
         let current = &state.current;
         let mut body = column![
             section("Define equipment"),
-            text("Name").size(12),
-            crate::appearance::text_input("Piece name", &current.name)
-                .on_input(|value| Message::EquipmentAuthoring(Action::Name(value)))
-                .on_submit(Message::ContextKey("Enter".into()))
-                .padding(7)
-                .size(12),
+            text("English name").size(12),
+            reshiki::accessibility::text_input(
+                "equipment-piece-name",
+                "English equipment name",
+                "Piece name",
+                &current.name,
+            )
+            .style(crate::appearance::input_style)
+            .on_input(|value| Message::EquipmentAuthoring(Action::Name(value)))
+            .on_submit(Message::ContextKey("Enter".into()))
+            .padding(7)
+            .size(12),
         ]
         .spacing(10);
+        body = body.push(state.metadata_panel());
         body = body.push(state.shapes_panel());
         if let Some(trial) = &state.trial {
             body = body
