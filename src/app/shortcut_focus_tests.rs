@@ -2484,6 +2484,17 @@ async fn add_name_completion_keeps_help_search_focus() {
     )
     .await;
     assert_eq!(ui.input_value(&app, "help-search"), "b");
+    // Help deliberately masks its inert background from widget operations.
+    // Check the retained Add draft only after returning to that surface.
+    ui.key(
+        &mut app,
+        Key::Named(Named::Escape),
+        Code::Escape,
+        Modifiers::empty(),
+        None,
+    )
+    .await;
+    assert!(!app.help_open);
     assert_eq!(ui.input_value(&app, "add-search"), "ethanol");
     assert!(app.tab.history.can_undo());
 }
@@ -2536,7 +2547,6 @@ async fn add_smiles_completion_releases_only_add_focus_on_success() {
             assert_eq!(app.error, failure, "{}", app.status);
             assert_eq!(app.tab.doc.atoms.len(), if failure { 0 } else { 3 });
             assert_eq!(app.tab.history.can_undo(), !failure);
-            assert_eq!(ui.input_value(&app, "add-search"), "CCO");
             if help {
                 assert!(app.help_open);
                 assert_eq!(app.inspector_tab, InspectorTab::Templates);
@@ -2550,6 +2560,15 @@ async fn add_smiles_completion_releases_only_add_focus_on_success() {
                 )
                 .await;
                 assert_eq!(ui.input_value(&app, "help-search"), "b");
+                ui.key(
+                    &mut app,
+                    Key::Named(Named::Escape),
+                    Code::Escape,
+                    Modifiers::empty(),
+                    None,
+                )
+                .await;
+                assert!(!app.help_open);
             } else if failure {
                 assert!(
                     ui.input(&app, "add-search").1,
@@ -2569,8 +2588,8 @@ async fn add_smiles_completion_releases_only_add_focus_on_success() {
                     app.tab.doc.atoms.is_empty(),
                     "Backspace reaches the drawing"
                 );
-                assert_eq!(ui.input_value(&app, "add-search"), "CCO");
             }
+            assert_eq!(ui.input_value(&app, "add-search"), "CCO");
         }
     }
 }
