@@ -18,8 +18,6 @@ pub(super) mod registry;
 pub(super) mod search;
 
 use registry::Entry;
-#[cfg(test)]
-use registry::Example;
 
 pub(super) const SEARCH: &str = "help-search";
 pub(super) const RESULTS: &str = "help-results";
