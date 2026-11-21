@@ -1,7 +1,7 @@
 use super::eval::{Value, Values, evaluate, resolve};
-use super::format::{Definition, Param, content_hash, parse, taper};
+use super::format::{Definition, Material, Param, content_hash, parse, taper};
 use super::geometry::{Affine, Seg, area, flatten, len, sub};
-use super::plan::{Ink, Instance, Pass, PlanPath, Settings, mating_transform, paint_plan};
+use super::plan::{Ink, Instance, Pass, PlanPath, Settings, Weight, mating_transform, paint_plan};
 use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
 
@@ -507,6 +507,79 @@ fn limits_hold_at_the_boundary() {
         parse(&value.to_string())
             .unwrap_err()
             .contains("at most 200 characters")
+    );
+}
+
+#[test]
+fn a_standard_socket_leaves_the_side_view_mouth_open() {
+    let def = fixture("rbf-300-29");
+    let mut instance = Instance::new(&def, Affine::IDENTITY);
+    let free = paint_plan(std::slice::from_ref(&instance), Settings::default()).unwrap();
+    instance.seated.insert("neck".into());
+    let seated = paint_plan(&[instance], Settings::default()).unwrap();
+    assert_eq!(
+        free, seated,
+        "the socket rim does not change when a cone seats"
+    );
+
+    let mouth = -99.528;
+    let taper = taper("29/42").unwrap();
+    let radius = taper.d / 2.;
+    assert!(free.iter().any(|p| {
+        p.pass == Pass::Outline
+            && flatten(&p.path).iter().any(|(points, closed)| {
+                !closed
+                    && points.first().zip(points.last()).is_some_and(|(a, b)| {
+                        (a[1] - mouth).abs() < 1e-6
+                            && (b[1] - mouth).abs() < 1e-6
+                            && (a[0] + b[0]).abs() < 1e-6
+                            && (a[0].abs() - radius).abs() < 1e-6
+                    })
+            })
+    }));
+    assert!(
+        free.iter()
+            .filter(|p| p.material == Material::Glass)
+            .all(|p| {
+                p.color.is_none()
+                    && flatten(&p.path)
+                        .iter()
+                        .flat_map(|(points, _)| points)
+                        .all(|p| p[1] >= mouth - 1e-6)
+            })
+    );
+    assert!(
+        free.iter()
+            .any(|p| { p.material == Material::Frosted && p.ink == Ink::Stroke(Weight::Hatch) })
+    );
+}
+
+#[test]
+fn a_standard_socket_opens_the_nearby_authored_rim_without_changing_its_fill() {
+    let mut def = fixture("rbf-300-29");
+    let mut glass = def.shapes[0].clone();
+    glass.id = "source-rim".into();
+    glass.path = "M-16 -99.36L16 -99.36L15 -80C5 -76 -5 -76 -15 -80Z".into();
+    let path = super::geometry::parse_path(&glass.path).unwrap();
+    def.shapes.push(glass);
+    let painted = plan(&def, Values::new());
+    let scale = Affine::scale(SCALE, [0., 0.]);
+    assert!(
+        painted
+            .iter()
+            .any(|p| { p.pass == Pass::Glass && p.path == scale.map(&path) })
+    );
+    let expected =
+        super::geometry::parse_path("M16 -99.36L15 -80C5 -76 -5 -76 -15 -80L-16 -99.36").unwrap();
+    assert!(
+        painted
+            .iter()
+            .any(|p| { p.pass == Pass::Outline && p.path == scale.map(&expected) })
+    );
+    assert!(
+        !painted
+            .iter()
+            .any(|p| { p.pass == Pass::Outline && p.path == scale.map(&path) })
     );
 }
 

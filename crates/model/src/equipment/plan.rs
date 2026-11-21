@@ -134,7 +134,6 @@ impl Default for Settings {
 
 /// How far a hose pushed onto a barb reaches past the barb's tip, over its ribs.
 const HOSE_CUFF_MM: f64 = 12.;
-const BORE: Rgb = [201, 213, 220];
 
 /// The paint plan of one compositing group, in paint order.
 pub fn paint_plan(group: &[Instance], settings: Settings) -> Result<Vec<PlanPath>, String> {
@@ -204,10 +203,27 @@ fn piece(
     };
     // Glass on the body layer joins one silhouette: outlines, then fills.
     let mut glass: Vec<GlassPath> = Vec::new();
+    let socket_mouths: Vec<_> = e
+        .joints
+        .iter()
+        .filter_map(|j| {
+            let t = j
+                .joint
+                .standard()
+                .filter(|_| j.joint.gender() == Gender::F)?;
+            Some(SocketMouth {
+                at: j.at,
+                axis: normalize(j.dir),
+                bore: t.d / 2.,
+                lip: t.bead_radius(),
+            })
+        })
+        .collect();
     for d in &e.shapes {
         let s = d.shape;
         if s.role == Role::Glass && s.layer == Layer::Body {
-            glass.push((d.path.clone(), d.path.clone(), s.color, s.style));
+            let outline = open_socket_mouths(&d.path, &socket_mouths);
+            glass.push((d.path.clone(), outline, s.color, s.style));
             continue;
         }
         let ink = match (s.role, s.material) {
@@ -338,6 +354,65 @@ fn fill_area(path: &[Seg]) -> f64 {
         .sum()
 }
 
+struct SocketMouth {
+    at: Xy,
+    axis: Xy,
+    bore: f64,
+    lip: f64,
+}
+
+impl SocketMouth {
+    fn spans_bore(&self, a: Xy, b: Xy) -> bool {
+        // The two rim marks can sit slightly outside the original straight edge.
+        const TOLERANCE_MM: f64 = 0.5;
+        let [a, b] = [sub(a, self.at), sub(b, self.at)];
+        if dot(a, self.axis).abs().max(dot(b, self.axis).abs()) > TOLERANCE_MM {
+            return false;
+        }
+        let across = perp(self.axis);
+        let (a, b) = (dot(a, across), dot(b, across));
+        a.abs().max(b.abs()) <= self.lip + TOLERANCE_MM
+            && a.min(b) <= -self.bore + TOLERANCE_MM
+            && a.max(b) >= self.bore - TOLERANCE_MM
+    }
+}
+
+/// Open the ink of a straight source rim while preserving the glass fill.
+/// Leave authored curves, open outlines and the rest of each contour alone.
+fn open_socket_mouths(path: &[Seg], mouths: &[SocketMouth]) -> Vec<Seg> {
+    if mouths.is_empty() {
+        return path.to_vec();
+    }
+    let mut outline = Vec::with_capacity(path.len());
+    for contour in path.chunk_by(|_, next| !matches!(next, Seg::Move(_))) {
+        let [Seg::Move(start), .., Seg::Close] = contour else {
+            outline.extend_from_slice(contour);
+            continue;
+        };
+        let mut previous = *start;
+        let edges: Vec<_> = contour
+            .iter()
+            .skip(1)
+            .map(|&command| {
+                let (command, end, straight) = match command {
+                    Seg::Move(p) | Seg::Line(p) => (command, p, true),
+                    Seg::Cubic(_, _, p) => (command, p, false),
+                    Seg::Close => (Seg::Line(*start), *start, true),
+                };
+                let gap = straight && mouths.iter().any(|mouth| mouth.spans_bore(previous, end));
+                previous = end;
+                if gap { Seg::Move(end) } else { command }
+            })
+            .collect();
+        if let Some(gap) = edges.iter().position(|step| matches!(step, Seg::Move(_))) {
+            outline.extend(edges.iter().cycle().skip(gap).take(edges.len()).copied());
+        } else {
+            outline.extend_from_slice(contour);
+        }
+    }
+    outline
+}
+
 /// A shape symmetric about an axis: profile of (distance along `u`, radius) pairs.
 fn axial(p: Xy, u: Xy, profile: &[(f64, f64)]) -> Vec<Xy> {
     let v = perp(u);
@@ -403,13 +478,18 @@ fn standard_joint(
     match gender {
         Gender::F => {
             let u = mul(normalize(dir), -1.);
+            let v = perp(u);
+            let rim = |s: f64, r: f64| add(add(at, mul(u, s)), mul(v, r));
             let ri = |s: f64| big - s / 20.;
             let ro = |s: f64| ri(s) + t.socket_wall;
             let rb = t.bead_radius();
+            // The side view leaves the bore open between the two ends of the lip.
+            // Only the glass fill closes across the mouth.
             let body = axial(
                 at,
                 u,
                 &[
+                    (0., big),
                     (0., rb),
                     (2.8, rb),
                     (3.6, ro(3.6)),
@@ -417,48 +497,19 @@ fn standard_joint(
                     (t.l + 4., t.neck / 2.),
                 ],
             );
-            glass.push((polygon(&body, true), polygon(&body, true), None, None));
+            glass.push((polygon(&body, true), polygon(&body, false), None, None));
             ground(
                 axial(at, u, &[(1.2, ri(1.2)), (t.l - 0.6, ri(t.l - 0.6))]),
                 false,
                 details,
             );
-            let v = perp(u);
-            let rim = |s: f64, r: f64| add(add(at, mul(u, s)), mul(v, r));
-            details.push((
-                Material::Glass,
-                None,
-                Ink::Stroke(Weight::Detail),
-                None,
-                polygon(&[rim(2.8, rb), rim(2.8, -rb)], false),
-            ));
-            // The mouth, seen slightly from above: open while free, its front rim once seated.
-            let ry = (t.d * 0.11).max(1.);
-            let ellipse = |t0: f64, t1: f64| -> Vec<Xy> {
-                (0..=24)
-                    .map(|i| {
-                        let a = t0 + (t1 - t0) * f64::from(i) / 24.;
-                        add(add(at, mul(v, big * a.cos())), mul(u, ry * a.sin()))
-                    })
-                    .collect()
-            };
-            if seated {
+            for side in [-1., 1.] {
                 details.push((
                     Material::Glass,
                     None,
                     Ink::Stroke(Weight::Detail),
                     None,
-                    polygon(&ellipse(0., std::f64::consts::PI), false),
-                ));
-            } else {
-                let mut e = ellipse(0., std::f64::consts::TAU);
-                e.pop();
-                details.push((
-                    Material::Glass,
-                    Some(BORE),
-                    Ink::FillStroke(Weight::Detail),
-                    None,
-                    polygon(&e, true),
+                    polygon(&[rim(2.8, side * rb), rim(2.8, side * ri(2.8))], false),
                 ));
             }
         }
