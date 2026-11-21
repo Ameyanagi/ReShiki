@@ -889,6 +889,7 @@ fn distributing_a_reaction_keeps_its_groups_together() {
             id,
             members,
             integral: false,
+            layout: None,
         });
         let all = doc.all_ids();
         let before = doc.clone();
