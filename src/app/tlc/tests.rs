@@ -436,6 +436,84 @@ fn mixed_graphic_selection_keeps_generic_properties_and_edits_only_the_rectangle
     assert!(!app.graphic_panel_visible());
 }
 
+#[test]
+fn mixed_graphic_selection_syncs_generic_fields_from_the_first_ordinary_graphic() {
+    use super::super::graphics::Action as Graphics;
+    let mut source = plate();
+    source.style.width_pt = 0.8;
+    source.style.stroke = Color::Custom([0xb1, 0x23, 0x45]);
+    let mut app = ready(source);
+    let target = key(&app);
+    let _ = app.update(Message::Tlc(Action::Lane(target, 1)));
+    let target = key(&app);
+    let _ = app.update(Message::Tlc(Action::Details(target, true)));
+    let fields = app.tab.tlc.fields.clone();
+    app.sync_graphics();
+    assert_eq!(key(&app), target);
+    assert_eq!(app.tab.tlc.fields, fields);
+    assert!(app.tab.tlc.plate_settings);
+    assert_eq!(app.tab.tlc.input(Field::Line), "0.8");
+    assert_eq!(app.tab.tlc.input(Field::PlateColor), "#B12345");
+    assert_eq!(app.tab.graphic_style, app.tab.doc.graphics[0].style);
+
+    let mut rectangle = Graphic::dragged(
+        2,
+        GraphicKind::Rectangle,
+        Point::new(200., 0.),
+        Point::new(300., 100.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    rectangle.style.width_pt = 2.5;
+    rectangle.style.stroke = Color::Custom([0x11, 0x7e, 0x6c]);
+    rectangle.style.fill = Some(Color::Custom([0xdc, 0xef, 0xe9]));
+    let style = rectangle.style.clone();
+    // The protected plate leads both document and selection order.
+    app.tab.doc.graphics.push(rectangle);
+    app.tab.selected.push(2);
+    app.sync_graphics();
+    assert!(app.tlc_panel_visible() && app.graphic_panel_visible());
+    assert!(app.tlc_target().is_none());
+    assert_eq!(app.tab.graphic_style, style);
+    assert_eq!(app.tab.graphic_width_input, "2.5");
+    assert_eq!(app.tab.graphic_stroke_input, "#117E6C");
+    assert_eq!(app.tab.graphic_fill_input, "#DCEFE9");
+
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let _ = app.update(Message::Graphics(Graphics::ApplyWidth));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(
+        app.tab.doc, before,
+        "Unchanged Apply keeps the rectangle's width"
+    );
+    assert_eq!(app.tab.revision, revision);
+    for (draft, apply) in [
+        (Graphics::Width("3.25".into()), Graphics::ApplyWidth),
+        (Graphics::Stroke("#224466".into()), Graphics::ApplyStroke),
+    ] {
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Graphics(draft));
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Graphics(apply));
+        assert_eq!(app.tab.doc.graphics[0], before.graphics[0]);
+        assert_eq!(app.tab.graphic_style, app.tab.doc.graphics[1].style);
+        assert_eq!(app.tab.graphic_width_input, "3.25");
+        one_undo(&mut app, &before);
+    }
+    assert_eq!(app.tab.doc.graphics[1].style.width_pt, 3.25);
+    assert_eq!(app.tab.graphic_stroke_input, "#224466");
+    assert_eq!(app.tab.graphic_fill_input, "#DCEFE9");
+    app.tab.selected = vec![1];
+    app.sync_graphics();
+    assert!(app.tlc_panel_visible() && !app.graphic_panel_visible());
+    assert_eq!(key(&app).graphic, 1);
+    assert_eq!(app.tab.tlc.input(Field::Line), "0.8");
+    assert_eq!(app.tab.tlc.input(Field::PlateColor), "#B12345");
+    assert_eq!(app.tab.graphic_style, app.tab.doc.graphics[0].style);
+}
+
 #[tokio::test]
 #[ignore = "Opt-in real TLC widget metadata and native action regression"]
 async fn native_lane_spot_and_toggle_controls_expose_values_and_edit_the_chosen_part() {
