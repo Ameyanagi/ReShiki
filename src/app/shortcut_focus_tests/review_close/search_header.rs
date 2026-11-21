@@ -133,9 +133,40 @@ async fn search_header_fits_and_opens_a_focused_palette() {
                 );
                 previous_right = node.bounds.x + node.bounds.width;
             }
-            for id in ["inspector-tab-Import", "inspector-tab-Export"] {
-                assert!(snapshot.nodes.iter().any(|node| node.id == id));
+            for id in ["inspector-tab-Templates", "inspector-tab-Export"] {
+                let node = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
+                assert_fully_visible(node);
             }
+            assert!(
+                snapshot
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == "inspector-tab-Templates" && node.name == "Add tab")
+            );
+            assert!(
+                !snapshot
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == "inspector-tab-Import")
+            );
+            click_running_tasks(&mut ui, &mut app, "inspector-tab-Templates").await;
+            assert!(
+                ui.semantics(&app)
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == "add-search"
+                        && node.role == reshiki::accessibility::Role::TextInput)
+            );
+            click_running_tasks(&mut ui, &mut app, "add-more").await;
+            click_running_tasks(&mut ui, &mut app, "add-advanced-import").await;
+            assert_eq!(app.inspector_tab, InspectorTab::Import);
+            assert!(
+                ui.semantics(&app)
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == "import-input"
+                        && node.role == reshiki::accessibility::Role::TextArea)
+            );
             click_running_tasks(&mut ui, &mut app, "header-search").await;
             assert!(app.commands.open);
             assert!(ui.input(&app, "command-palette-search").1);

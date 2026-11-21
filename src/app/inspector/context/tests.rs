@@ -222,13 +222,13 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
             Tool::Graphic(GraphicKind::Ellipse),
             vec![graphic],
             "Rectangle",
-            "Arrow tool",
+            "ARROW TOOL",
         ),
         (
             Tool::Graphic(GraphicKind::Rectangle),
             vec![arrow],
-            "Arrow properties",
-            "Graphic style",
+            "ARROW PROPERTIES",
+            "GRAPHIC STYLE",
         ),
     ] {
         app.tool = tool;
@@ -249,7 +249,17 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
         );
         assert!(controls.nodes.iter().any(|n| n.id == "selection-delete"));
         if app.tab.selected == [atoms[0]] {
-            assert!(shown.contains("Edit atom label…") && shown.contains("Attachment points"));
+            // The shortcut label is rich text, which Iced does not report
+            // through Operation::text. Check the actual named button instead.
+            let edit = controls
+                .nodes
+                .iter()
+                .find(|node| node.id == "properties-edit-atom-label")
+                .expect("the selected atom exposes its label editor");
+            assert_eq!(edit.name, "Edit atom label");
+            assert_eq!(edit.role, reshiki::accessibility::Role::Button);
+            assert!(edit.enabled && edit.visible_bounds.is_some());
+            assert!(shown.contains("Attachment points"), "{shown}");
         }
     }
     app.tool = Tool::Select;
@@ -293,8 +303,8 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
     app.tool = Tool::Text;
     app.set_selection(vec![caption]);
     let (words, _) = snapshot(&app, &mut renderer);
-    assert!(words.iter().any(|s| s == "Edit text"));
-    assert!(!words.iter().any(|s| s == "Text labels"));
+    assert!(words.iter().any(|s| s == "EDIT TEXT"), "{words:?}");
+    assert!(!words.iter().any(|s| s == "TEXT LABELS"));
     assert_eq!(words.last().map(String::as_str), Some("Delete selection"));
 
     app.tool = Tool::Select;
@@ -302,7 +312,7 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
     let (words, controls) = snapshot(&app, &mut renderer);
     for heading in [
         "Nothing selected",
-        "Drawing",
+        "DRAWING",
         "Labels & chemistry",
         "Drawing style",
     ] {
@@ -312,13 +322,13 @@ async fn rendered_properties_follow_selection_and_tool_defaults() -> Result<(), 
     assert!(!controls.nodes.iter().any(|n| n.id == "selection-delete"));
     for (tool, heading, control) in [
         (Tool::Bond(1), "Next bond", "Length"),
-        (Tool::Arrow, "Next arrow", "Arrow tool"),
+        (Tool::Arrow, "Next arrow", "ARROW TOOL"),
         (
             Tool::Graphic(GraphicKind::Rectangle),
             "Next graphic",
-            "Graphic defaults",
+            "GRAPHIC DEFAULTS",
         ),
-        (Tool::Text, "Next text", "Text labels"),
+        (Tool::Text, "Next text", "TEXT LABELS"),
         (Tool::Ring, "Next ring", "Size"),
         (
             Tool::RingPreset(reshiki::rings::Preset::Benzene),

@@ -288,7 +288,7 @@ impl App {
             match preset {
                 Preset::Benzene | Preset::Cyclopentadiene => "Hold Shift to move the double bonds.",
                 Preset::HaworthFive | Preset::HaworthSix =>
-                    "Haworth outlines have a bold front edge. Templates → Carbohydrates contains oxygen scaffolds and defined α/β sugars. These blank outlines do not assign stereochemistry.",
+                    "Haworth outlines have a bold front edge. Add → Carbohydrates contains oxygen scaffolds and defined α/β sugars. These blank outlines do not assign stereochemistry.",
                 _ =>
                     "Chair projections do not assign stereochemistry. Cleanup may redraw them as regular hexagons.",
             },

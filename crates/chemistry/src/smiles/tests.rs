@@ -8,6 +8,21 @@ fn binol(wedges: &str) -> String {
 }
 
 #[test]
+fn import_graph_recognition_shares_the_readers_name_and_cx_boundary() -> anyhow::Result<()> {
+    for input in ["CCO ethanol", "CCO\tethanol", "CCO |u:0| ethanol"] {
+        assert!(super::parse_for_import(input).is_err(), "{input}");
+        let parsed = super::parse_input_for_import(input)?;
+        assert_eq!(parsed.graph.atoms.len(), 3, "{input}");
+        let imported = super::read_partial(input)?;
+        assert_eq!(imported.prepared.state.graph.atoms.len(), 3, "{input}");
+        assert_eq!(imported.name.as_deref(), Some("ethanol"), "{input}");
+    }
+    assert!(super::parse_input_for_import("ethanol").is_err());
+    assert!(super::parse_input_for_import("not-a-smiles ethanol").is_err());
+    Ok(())
+}
+
+#[test]
 fn strict_reading_rejects_implicit_cx_star_queries() -> anyhow::Result<()> {
     for text in [
         "* |(0,0,)|",

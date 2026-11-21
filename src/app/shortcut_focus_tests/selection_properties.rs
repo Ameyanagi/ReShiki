@@ -68,7 +68,7 @@ async fn property_defaults_support_keyboard_and_native_values_without_drawing_ed
     use iced::advanced::widget::operation;
     use reshiki::accessibility::{Activate, Role, SetValue};
     let mut ui = Ui::new().await;
-    let (mut app, _) = drawing();
+    let (mut app, atoms) = drawing();
     let original = app.tab.doc.clone();
     let _ = app.update(Message::Tool(Tool::Ring));
     let before = app.ring_size;
@@ -114,6 +114,26 @@ async fn property_defaults_support_keyboard_and_native_values_without_drawing_ed
     let _ = app.update(message);
     assert_eq!(app.tab.bond_drawing.fixed_angles, !before);
     assert!(app.tab.selected.is_empty());
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+
+    let _ = app.update(Message::Tool(Tool::Select));
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![atoms[0]])));
+    ui.focus_control(&mut app, "properties-edit-atom-label")
+        .await;
+    assert_eq!(ui.focused(&app), ["properties-edit-atom-label"]);
+    ui.key(
+        &mut app,
+        Key::Named(Named::Enter),
+        Code::Enter,
+        Modifiers::empty(),
+        None,
+    )
+    .await;
+    assert!(
+        app.tab.atom_text.is_some(),
+        "the visible command opens the atom label editor"
+    );
     assert_eq!(app.tab.doc, original);
     assert!(!app.tab.history.can_undo());
 }

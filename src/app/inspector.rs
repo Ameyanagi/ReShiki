@@ -1715,13 +1715,21 @@ impl App {
             .collect();
         let mut body = column![].spacing(10);
         if self.atom_text_target().is_some() {
+            let message = Message::AtomText(super::atom_text::Action::Begin(None));
             body = body.push(
-                keyed_command(
-                    "Edit atom label…",
-                    Message::AtomText(super::atom_text::Action::Begin(None)),
+                reshiki::accessibility::button(
+                    "properties-edit-atom-label",
+                    "Edit atom label",
+                    super::workspace::keyed_text(
+                        "Edit atom label…",
+                        super::shortcuts::label(&message),
+                        "",
+                    ),
                 )
+                .padding([7, 9])
                 .width(Length::Fill)
-                .style(crate::appearance::secondary),
+                .style(crate::appearance::secondary)
+                .on_press(message),
             );
         }
         if let Some(first) = bonds.first() {
@@ -2618,6 +2626,7 @@ impl App {
 
     pub(super) fn toggle_inspector(&mut self) -> Task<Message> {
         self.inspector_open = !self.inspector_open;
+        self.templates.add_menu_open = false;
         self.reset_export_panel_options();
         if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
             return self.assistant_action(super::assistant::Action::Open);
@@ -2658,6 +2667,7 @@ impl App {
         }
         // The Export tab starts at the default each time it opens.
         self.reset_export_panel_options();
+        self.templates.add_menu_open = false;
         self.inspector_tab = tab;
         self.inspector_open = true;
         if tab == InspectorTab::Import {

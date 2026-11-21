@@ -10,4 +10,5 @@ issues: []
 - Explicit analysis stays open while its property captions are pinned or
   edited. Close analysis or Escape returns focus to the drawing; a new target
   ends the request. Next-object defaults support keyboard and native
-  accessibility actions independently of the context row.
+  accessibility actions independently of the context row, as does the selected
+  atom's Edit atom label command.
