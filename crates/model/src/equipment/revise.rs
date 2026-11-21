@@ -85,6 +85,7 @@ mod tests {
     fn setup() -> (Document, u64, Arc<Definition>) {
         let mut d = (*builtin::find("reshiki/rbf-100-15").unwrap()).clone();
         d.id = "lab/flask".into();
+        d.revision = 1;
         let mut doc = Document::default();
         let flask = place(&mut doc, Arc::new(d.clone()), Point::new(200., 300.));
         let stopper = place(

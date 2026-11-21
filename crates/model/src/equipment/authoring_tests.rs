@@ -343,6 +343,7 @@ fn accept_replaces_sources_only_after_confirmation_and_round_trips() {
 #[test]
 fn user_revision_and_builtin_copy_leave_other_placed_copies_unchanged() {
     let built_in = super::super::builtin::find("reshiki/rbf-100-15").unwrap();
+    let built_in_revision = built_in.revision;
     let mut user = (*built_in).clone();
     user.id = "lab/flask".into();
     user.revision = 7;
@@ -384,7 +385,7 @@ fn user_revision_and_builtin_copy_leave_other_placed_copies_unchanged() {
             .contains("new piece")
     );
     assert_eq!(draft.finish("lab/my-flask").unwrap().revision, 1);
-    assert_eq!(built_in.revision, 1);
+    assert_eq!(built_in.revision, built_in_revision);
 }
 
 #[test]

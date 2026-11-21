@@ -1,0 +1,43 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/dewar",
+ "revision": 1,
+ "family": "dewar",
+ "variant": {},
+ "names": {
+  "en": "Dewar flask",
+  "ja": "デュワー瓶"
+ },
+ "category": "heating",
+ "keywords": [
+  "dewar",
+  "heating and cooling"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "grounded": true,
+ "shapes": [
+  {
+   "layer": "front",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    184,
+    195,
+    202
+   ],
+   "id": "shape-1",
+   "path": "M-40 0L-40 120A10 10 0 0 0 -30 130L30 130A10 10 0 0 0 40 120L40 0Z"
+  },
+  {
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-2",
+   "path": "M-35 4L-35 122L35 122L35 4"
+  }
+ ]
+}

@@ -1,0 +1,216 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/short-path-15",
+  "revision": 1,
+  "family": "short-path",
+  "variant": {
+    "joint": "15/25"
+  },
+  "names": {
+    "en": "Short-path distillation head",
+    "ja": "ショートパス蒸留ヘッド"
+  },
+  "category": "distillation",
+  "keywords": [
+    "short path",
+    "distillation"
+  ],
+  "credits": {
+    "author": "ReShiki"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-1",
+      "path": "M-7.5 -11.6L-7.5 -3.4L7.5 -3.4L7.5 -11.6Z"
+    },
+    {
+      "id": "integrated-head",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-6.5 -58 L6.5 -58 L6.5 -54 C6.5 -49 7.5 -46.2 12 -45.3 L132 -19.8 C138.8 -18.4 142.44 -14.8 142.44 -7.8 L142.44 5.71 L131.44 5.71 L131.44 -6.7 C131.44 -8.5 130.2 -9.6 127 -10.3 L14 -34.3 Q9.2 -35.3 7.5 -34.3 L7.5 -3 L-7.5 -3 L-7.5 -50 L-6.5 -55 Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-3",
+      "path": "M-6.5 -56.2L-6.5 -54L6.5 -54L6.5 -56.2Z"
+    },
+    {
+      "id": "rounded-water-jacket",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M23.207 -42.973 C21.459 -49.173 28.305 -47.716 33.196 -46.675 L117.59 -28.721 Q126.393 -26.848 125.207 -21.273 L122.793 -9.927 Q121.607 -4.352 112.804 -6.225 L28.41 -24.179 C23.519 -25.219 16.673 -26.676 20.793 -31.627 Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-6",
+      "path": "M34.42 -42.54L34.42 -50.54L35.72 -50.54L34.42 -55.04L35.72 -55.04L34.42 -59.54L35.62 -59.54L34.22 -63.54L28.62 -63.54L27.22 -59.54L28.42 -59.54L27.12 -55.04L28.42 -55.04L27.12 -50.54L28.42 -50.54L28.42 -42.54Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-7",
+      "path": "M120.5 -24.25L120.5 -32.25L121.8 -32.25L120.5 -36.75L121.8 -36.75L120.5 -41.25L121.7 -41.25L120.3 -45.25L114.7 -45.25L113.3 -41.25L114.5 -41.25L113.2 -36.75L114.5 -36.75L113.2 -32.25L114.5 -32.25L114.5 -24.25Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-10",
+      "path": "M131.44 -2.49L131.44 5.71L142.44 5.71L142.44 -2.49Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-11",
+      "path": "M140.31 -11.67L146.74 -19.33L147.73 -18.49L149.63 -22.77L150.63 -21.94L152.52 -26.22L153.44 -25.45L154.94 -29.41L150.65 -33.01L147.01 -30.85L147.93 -30.08L144.04 -27.47L145.03 -26.63L141.15 -24.02L142.14 -23.18L135.71 -15.52Z"
+    },
+    {
+      "id": "vapour-bore-1",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M22.673 -41.448 L125.873 -19.508"
+    },
+    {
+      "id": "vapour-bore-2",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M20.927 -33.232 L124.127 -11.292"
+    },
+    {
+      "id": "swept-head-bore",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M3.6 -40 Q8 -39.6 16.5 -37.8"
+    },
+    {
+      "id": "receiver-bend-bore",
+      "layer": "body",
+      "material": "glass",
+      "role": "detail",
+      "path": "M127 -15.9 C135 -14.4 136.94 -10.6 136.94 -3.3"
+    }
+  ],
+  "joints": [
+    {
+      "id": "bottom",
+      "gender": "M",
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        0,
+        1
+      ],
+      "kind": "taper",
+      "size": "15/25",
+      "draw": "standard"
+    },
+    {
+      "id": "top",
+      "gender": "F",
+      "at": [
+        0,
+        -85
+      ],
+      "dir": [
+        0,
+        -1
+      ],
+      "kind": "taper",
+      "size": "15/25",
+      "draw": "standard"
+    },
+    {
+      "id": "outlet",
+      "gender": "M",
+      "at": [
+        136.94066,
+        9.10764
+      ],
+      "dir": [
+        0,
+        1
+      ],
+      "kind": "taper",
+      "size": "15/25",
+      "draw": "standard"
+    },
+    {
+      "id": "barb-1",
+      "gender": "M",
+      "at": [
+        31.42354,
+        -63.54413
+      ],
+      "dir": [
+        0,
+        -1
+      ],
+      "kind": "plug",
+      "family": "hose",
+      "size_mm": 7
+    },
+    {
+      "id": "barb-2",
+      "gender": "M",
+      "at": [
+        117.50053,
+        -45.2479
+      ],
+      "dir": [
+        0,
+        -1
+      ],
+      "kind": "plug",
+      "family": "hose",
+      "size_mm": 7
+    },
+    {
+      "id": "barb-3",
+      "gender": "M",
+      "at": [
+        152.79642,
+        -31.21325
+      ],
+      "dir": [
+        0.64279,
+        -0.76604
+      ],
+      "kind": "plug",
+      "family": "hose",
+      "size_mm": 7
+    }
+  ],
+  "holds": [
+    {
+      "id": "body",
+      "kind": "grip",
+      "from": [
+        0,
+        -8
+      ],
+      "to": [
+        0,
+        -36
+      ],
+      "diameter_mm": 15
+    }
+  ]
+}

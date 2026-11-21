@@ -1,0 +1,134 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/bubbler",
+ "revision": 1,
+ "family": "bubbler",
+ "variant": {},
+ "names": {
+  "en": "Oil bubbler",
+  "ja": "バブラー"
+ },
+ "category": "addition",
+ "keywords": [
+  "bubbler",
+  "addition and gas"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-11 -70L-11 40A11 11 0 0 0 11 40L11 -70Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M11 -69L4 -76L4 -84L-4 -84L-4 -76L-11 -69Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M3.4 -81L3.4 -91L4.7 -91L3.4 -95.5L4.7 -95.5L3.4 -100L4.6 -100L3.2 -104L-3.2 -104L-4.6 -100L-3.4 -100L-4.7 -95.5L-3.4 -95.5L-4.7 -91L-3.4 -91L-3.4 -81Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M-9 -57.6L-22 -57.6L-22 -50.4L-9 -50.4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M-19 -57.4L-29 -57.4L-29 -58.7L-33.5 -57.4L-33.5 -58.7L-38 -57.4L-38 -58.6L-42 -57.2L-42 -50.8L-38 -49.4L-38 -50.6L-33.5 -49.3L-33.5 -50.6L-29 -49.3L-29 -50.6L-19 -50.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-6",
+   "path": "M-2.6 -54L-2.6 42"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-7",
+   "path": "M2.6 -54L2.6 42"
+  }
+ ],
+ "joints": [
+  {
+   "id": "barb-1",
+   "gender": "M",
+   "at": [
+    0,
+    -104
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  },
+  {
+   "id": "barb-2",
+   "gender": "M",
+   "at": [
+    -42,
+    -54
+   ],
+   "dir": [
+    -1,
+    0
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  }
+ ],
+ "params": [
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M -9.7 -70 L -9.7 38.7 L -9.64686 39.71393 L -9.48803 40.71674 L -9.22525 41.69746 L -8.86139 42.64535 L -8.40045 43.55 L -7.84746 44.40152 L -7.2085 45.19057 L -6.49057 45.9085 L -5.70152 46.54746 L -4.85 47.10045 L -3.94535 47.56139 L -2.99746 47.92525 L -2.01674 48.18803 L -1.01393 48.34686 L 0 48.4 L 1.01393 48.34686 L 2.01674 48.18803 L 2.99746 47.92525 L 3.94535 47.56139 L 4.85 47.10045 L 5.70152 46.54746 L 6.49057 45.9085 L 7.2085 45.19057 L 7.84746 44.40152 L 8.40045 43.55 L 8.86139 42.64535 L 9.22525 41.69746 L 9.48803 40.71674 L 9.64686 39.71393 L 9.7 38.7 L 9.7 -70 Z"
+  }
+ ]
+}

@@ -1,0 +1,81 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/rubber-stopper",
+ "revision": 1,
+ "family": "rubber-stopper",
+ "variant": {},
+ "names": {
+  "en": "Rubber stopper, holed",
+  "ja": "ゴム栓 (穴あき)"
+ },
+ "category": "filtration",
+ "keywords": [
+  "rubber stopper",
+  "filtration"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "inner",
+   "material": "rubber",
+   "role": "solid",
+   "color": [
+    138,
+    47,
+    42
+   ],
+   "id": "shape-1",
+   "path": "M-17 -8L17 -8L14 16L-14 16Z"
+  },
+  {
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-2",
+   "path": "M-4 -8L-4 16"
+  },
+  {
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-3",
+   "path": "M4 -8L4 16"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "plug",
+   "family": "stopper",
+   "size_mm": 38
+  },
+  {
+   "id": "top",
+   "gender": "F",
+   "at": [
+    0,
+    -8
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "plug",
+   "family": "stopper",
+   "size_mm": 8
+  }
+ ]
+}

@@ -1,0 +1,92 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/bend-120-29",
+ "revision": 1,
+ "family": "bend-120",
+ "variant": {
+  "joint": "29/42"
+ },
+ "names": {
+  "en": "120° joint",
+  "ja": "120°ジョイント"
+ },
+ "category": "distillation",
+ "keywords": [
+  "bend 120",
+  "distillation"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M6.93 -11.01L-47.19 -42.26L-60.19 -19.74L-6.07 11.51Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M13 0A13 13 0 0 1 -13 0A13 13 0 0 1 13 0Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M-13 -0.5L-13 18L13 18L13 -0.5Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M-45.81 -41.46L-47.71 -42.56L-60.71 -20.04L-58.81 -18.94Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M-13 16.4L-13 18.6L13 18.6L13 16.4Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "a",
+   "gender": "M",
+   "at": [
+    -57.15768,
+    -33
+   ],
+   "dir": [
+    -0.86603,
+    -0.5
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  },
+  {
+   "id": "b",
+   "gender": "M",
+   "at": [
+    0,
+    22
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  }
+ ]
+}

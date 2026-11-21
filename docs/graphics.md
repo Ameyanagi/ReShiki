@@ -339,12 +339,11 @@ colors. ChemDraw gets it as curves, unless its line is dotted (see [Limits](#lim
 
 ### Place lab equipment
 
-Lab equipment is a preview in this build. The catalogue has round-bottom
-flasks (50 and 100 mL with 15/25 joints; 100, 300 and 500 mL with 29/42),
-Liebig condensers, glass stoppers, rubber septa, a rubber hose, a reducing
-and an expansion adapter, a cow receiver adapter, a thermometer and its adapter,
-a balloon on a needle, a lab stand, a three-finger clamp, a support ring
-and joint clips for 15/25 and 29/42.
+The equipment catalogue includes common flasks and condensers, Schlenk and
+J. Young glassware, distillation and Kugelrohr pieces, filtration and
+separation equipment, NMR tubes, and bench hardware. Select a piece to see
+its sizes and joint options. You can connect matching 10/18, 15/25 and 29/42
+ground-glass joints, or use an adapter to connect two sizes.
 
 1. Click **Insert equipment…** (the flask in the last row of the tools palette), or
    choose **Insert equipment…** in the command palette. The side panel lists
@@ -423,7 +422,7 @@ keep that order.
 A rod holds any number of clamps. **Properties → Equipment** lists each clamp
 on the rod with its height along the rod, for example **Holds the clamp at
 280 mm**, and **Detach**. The support ring mounts on a rod the same way.
-Its fixed opening seats a grip with a matching 63.4 mm diameter.
+Its fixed opening seats a matching 63.4 mm grip on a separatory funnel.
 
 Joint clips go on seated ground-glass joints. Select an assembly and click
 **Add clips to all joints** in Properties, or pick a clip in the Equipment
@@ -433,12 +432,12 @@ detached; click it a second time to select it alone and delete it.
 
 ### Move parts and set liquid levels
 
-The built-in **Schlenk flask, 100 mL** and **Schlenk tube, 15/25** have
-three-way stopcocks. The **J. Young storage flask, 100 mL** and **J. Young
-Schlenk tube** have J. Young valves. Round-bottom flasks, Schlenk ware and
-J. Young ware can hold liquid. The **Cow receiver adapter, 15/25** turns
-between receivers. The **Thermometer** slides through the **Thermometer
-adapter, 15/25**, and the **Balloon** on its needle inflates and deflates.
+Schlenk pieces with glass stopcocks switch between flow settings. J. Young
+valves toggle between open and closed. Many flasks, funnels and NMR tubes
+have movable liquid levels. The **Cow receiver adapter** turns between
+receivers, the **Thermometer** slides through its adapter, and the
+**Balloon** on its needle inflates and deflates. The **Stir bar** seats in a
+compatible flask and can display motion arrows.
 
 1. Click a piece to select its whole assembly and show handles for movable
    parts. Hover over a handle to see its setting and value, for example
@@ -640,10 +639,8 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   check.
 - Color by origin on a cycle uses the default hues and has no legend; its
   settings are not kept. Undo removes it.
-- The liquid level, a clamp's tilt and other parameters cannot be changed
-  yet. Nothing sits in a support ring until pieces with a place for it come.
-  ChemDraw gets each piece as a group of curves; opening that file again
-  gives those curves, not a piece.
+- ChemDraw gets each equipment piece as a group of curves. Opening that
+  file again gives you editable curves.
 - A drawing with equipment saves as document version 40 and carries the
   definition of every piece it uses, so it opens the same way on another
   computer.

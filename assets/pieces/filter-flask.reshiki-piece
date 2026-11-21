@@ -1,0 +1,135 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/filter-flask",
+ "revision": 1,
+ "family": "filter-flask",
+ "variant": {},
+ "names": {
+  "en": "Suction flask",
+  "ja": "吸引瓶"
+ },
+ "category": "filtration",
+ "keywords": [
+  "filter flask",
+  "filtration"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-20.5 -6L20.5 -6A2.5 2.5 0 0 1 23 -3.5L23 -0.5A2.5 2.5 0 0 1 20.5 2L-20.5 2A2.5 2.5 0 0 1 -23 -0.5L-23 -3.5A2.5 2.5 0 0 1 -20.5 -6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M-19 -2L-19 30L-52 160L52 160L19 30L19 -2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-3",
+   "path": "M-16.5 2L-16.5 30.6L-49 157.2L49 157.2L16.5 30.6L16.5 2"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M15 18.5L27 18.5L27 9.5L15 9.5Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M24 18L34 18L34 19.3L38.5 18L38.5 19.3L43 18L43 19.2L47 17.8L47 10.2L43 8.8L43 10L38.5 8.7L38.5 10L34 8.7L34 10L24 10Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "mouth",
+   "gender": "F",
+   "at": [
+    0,
+    -6
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "plug",
+   "family": "stopper",
+   "size_mm": 38
+  },
+  {
+   "id": "barb-1",
+   "gender": "M",
+   "at": [
+    47,
+    14
+   ],
+   "dir": [
+    1,
+    0
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  }
+ ],
+ "holds": [
+  {
+   "id": "neck-grip",
+   "kind": "grip",
+   "from": [
+    0,
+    2
+   ],
+   "to": [
+    0,
+    26
+   ],
+   "diameter_mm": 38
+  }
+ ],
+ "params": [
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M -16 -2 L -16 30 L -49 157 L 49 157 L 16 30 L 16 -2 Z"
+  }
+ ]
+}

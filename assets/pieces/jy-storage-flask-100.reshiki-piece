@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/jy-storage-flask-100",
- "revision": 1,
+ "revision": 2,
  "family": "jy-storage-flask",
  "variant": {
   "volume_ml": "100"
@@ -244,6 +244,21 @@
    "dir": [
     1,
     0
+   ]
+  },
+  {
+   "id": "stir",
+   "kind": "plug",
+   "family": "stir",
+   "gender": "F",
+   "size_mm": 24,
+   "at": [
+    0,
+    27.194
+   ],
+   "dir": [
+    0,
+    -1
    ]
   }
  ],

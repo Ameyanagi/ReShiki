@@ -1,0 +1,76 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/exp-10-15",
+ "revision": 1,
+ "family": "exp-10-15",
+ "variant": {},
+ "names": {
+  "en": "Expansion adapter 10/18 → 15/25",
+  "ja": "変換アダプター"
+ },
+ "category": "adapter",
+ "keywords": [
+  "exp 10 15",
+  "adapters"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-4.5 -11.6L-4.5 -3.4L4.5 -3.4L4.5 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M4.5 -3L4.5 -12L6.5 -20L6.5 -24L-6.5 -24L-6.5 -20L-4.5 -12L-4.5 -3Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M-6.5 -22.2L-6.5 -20L6.5 -20L6.5 -22.2Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "10/18",
+   "draw": "standard"
+  },
+  {
+   "id": "top",
+   "gender": "F",
+   "at": [
+    0,
+    -51
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  }
+ ]
+}

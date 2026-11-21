@@ -1,0 +1,36 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/heating-mantle",
+ "revision": 1,
+ "family": "heating-mantle",
+ "variant": {},
+ "names": {
+  "en": "Heating mantle",
+  "ja": "マントルヒーター"
+ },
+ "category": "heating",
+ "keywords": [
+  "heating mantle",
+  "heating and cooling"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "grounded": true,
+ "shapes": [
+  {
+   "layer": "front",
+   "material": "plastic",
+   "role": "solid",
+   "color": [
+    201,
+    193,
+    176
+   ],
+   "id": "shape-1",
+   "path": "M-57.53 -5.22L-57.53 19.59Q-57.53 59.53 0 59.53Q57.53 59.53 57.53 19.59L57.53 -5.22L44.72 -5.22A45.03 45.03 0 1 1 -44.72 -5.22Z"
+  }
+ ]
+}

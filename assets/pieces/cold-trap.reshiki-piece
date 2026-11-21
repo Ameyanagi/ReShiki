@@ -1,0 +1,158 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/cold-trap",
+ "revision": 1,
+ "family": "cold-trap",
+ "variant": {},
+ "names": {
+  "en": "Cold trap",
+  "ja": "コールドトラップ"
+ },
+ "category": "addition",
+ "keywords": [
+  "cold trap",
+  "addition and gas"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-15 -40L-15 120A15 15 0 0 0 15 120L15 -40Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M-16 -50L16 -50A3 3 0 0 1 19 -47L19 -41A3 3 0 0 1 16 -38L-16 -38A3 3 0 0 1 -19 -41L-19 -47A3 3 0 0 1 -16 -50Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M4 -48L4 -68L-4 -68L-4 -48Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M4 -68A4 4 0 0 1 -4 -68A4 4 0 0 1 4 -68Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M0 -72L-16 -72L-16 -64L0 -64Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-6",
+   "path": "M-13 -71.4L-23 -71.4L-23 -72.7L-27.5 -71.4L-27.5 -72.7L-32 -71.4L-32 -72.6L-36 -71.2L-36 -64.8L-32 -63.4L-32 -64.6L-27.5 -63.3L-27.5 -64.6L-23 -63.3L-23 -64.6L-13 -64.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-7",
+   "path": "M14 -48L14 -62L6 -62L6 -48Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-8",
+   "path": "M14 -62A4 4 0 0 1 6 -62A4 4 0 0 1 14 -62Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-9",
+   "path": "M10 -58L22 -58L22 -66L10 -66Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-10",
+   "path": "M19 -58.6L29 -58.6L29 -57.3L33.5 -58.6L33.5 -57.3L38 -58.6L38 -57.4L42 -58.8L42 -65.2L38 -66.6L38 -65.4L33.5 -66.7L33.5 -65.4L29 -66.7L29 -65.4L19 -65.4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-11",
+   "path": "M-2.6 -38L-2.6 128"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-12",
+   "path": "M2.6 -38L2.6 128"
+  },
+  {
+   "layer": "front",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    184,
+    195,
+    202
+   ],
+   "id": "shape-13",
+   "path": "M-30 -10L-30 136A8 8 0 0 0 -22 144L22 144A8 8 0 0 0 30 136L30 -10Z"
+  },
+  {
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-14",
+   "path": "M-26 -6L-26 134L26 134L26 -6"
+  }
+ ],
+ "joints": [
+  {
+   "id": "barb-1",
+   "gender": "M",
+   "at": [
+    -36,
+    -68
+   ],
+   "dir": [
+    -1,
+    0
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  },
+  {
+   "id": "barb-2",
+   "gender": "M",
+   "at": [
+    42,
+    -62
+   ],
+   "dir": [
+    1,
+    0
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  }
+ ]
+}

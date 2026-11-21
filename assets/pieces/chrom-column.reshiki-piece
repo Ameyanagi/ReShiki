@@ -1,0 +1,232 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/chrom-column",
+ "revision": 1,
+ "family": "chrom-column",
+ "variant": {},
+ "names": {
+  "en": "Chromatography column",
+  "ja": "クロマトカラム"
+ },
+ "category": "chromatography",
+ "keywords": [
+  "chrom column",
+  "other"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M26 -18A26 26 0 0 1 -26 -18A26 26 0 0 1 26 -18Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M13 -40L13 -48L-13 -48L-13 -40Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M-13 -44.2L-13 -42L13 -42L13 -44.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M-15 0L-15 260L-3.6 272L-3.6 300L3.6 300L3.6 272L15 260L15 0Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M6.5 282A6.5 6.5 0 0 1 -6.5 282A6.5 6.5 0 0 1 6.5 282Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-6",
+   "path": "M4.3 282A4.3 4.3 0 0 1 -4.3 282A4.3 4.3 0 0 1 4.3 282Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-7",
+   "path": "M-13.5 279.6L13.5 279.6L13.5 284.4L-13.5 284.4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "id": "shape-8",
+   "path": "M2 282A2 2 0 0 1 -2 282A2 2 0 0 1 2 282Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-9",
+   "path": "M-3.6 298L3.6 298L3.6 312L-3.6 306Z"
+  },
+  {
+   "layer": "inner",
+   "material": "liquid",
+   "role": "fill",
+   "color": [
+    79,
+    143,
+    208
+   ],
+   "id": "shape-10",
+   "path": "M-13.6 20L13.6 20A0 0 0 0 1 13.6 20L13.6 50A0 0 0 0 1 13.6 50L-13.6 50A0 0 0 0 1 -13.6 50L-13.6 20A0 0 0 0 1 -13.6 20Z"
+  },
+  {
+   "layer": "inner",
+   "material": "sand",
+   "role": "fill",
+   "id": "shape-11",
+   "path": "M-13.6 50L13.6 50A0 0 0 0 1 13.6 50L13.6 58A0 0 0 0 1 13.6 58L-13.6 58A0 0 0 0 1 -13.6 58L-13.6 50A0 0 0 0 1 -13.6 50Z"
+  },
+  {
+   "layer": "inner",
+   "material": "silica",
+   "role": "fill",
+   "id": "shape-12",
+   "path": "M-13.6 58L13.6 58A0 0 0 0 1 13.6 58L13.6 238A0 0 0 0 1 13.6 238L-13.6 238A0 0 0 0 1 -13.6 238L-13.6 58A0 0 0 0 1 -13.6 58Z"
+  },
+  {
+   "layer": "inner",
+   "material": "sand",
+   "role": "fill",
+   "id": "shape-13",
+   "path": "M-13.6 238L13.6 238A0 0 0 0 1 13.6 238L13.6 246A0 0 0 0 1 13.6 246L-13.6 246A0 0 0 0 1 -13.6 246L-13.6 238A0 0 0 0 1 -13.6 238Z"
+  },
+  {
+   "layer": "inner",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-14",
+   "path": "M-13.4 252Q-6 246 0 252Q6 246 13.4 252"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-15",
+   "path": "M-2.4 295.5L-2.4 268.5L2.4 268.5L2.4 295.5Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "top",
+   "gender": "F",
+   "at": [
+    0,
+    -90
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  }
+ ],
+ "holds": [
+  {
+   "id": "column",
+   "kind": "grip",
+   "from": [
+    0,
+    20
+   ],
+   "to": [
+    0,
+    240
+   ],
+   "diameter_mm": 30
+  }
+ ],
+ "params": [
+  {
+   "id": "valve",
+   "names": {
+    "en": "Valve"
+   },
+   "kind": "states",
+   "default": "closed",
+   "states": [
+    {
+     "id": "closed",
+     "names": {
+      "en": "Closed"
+     }
+    },
+    {
+     "id": "open",
+     "names": {
+      "en": "Open"
+     }
+    }
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "control",
+   "param": "valve",
+   "motion": {
+    "per_state": {
+     "closed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "open": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     282
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ]
+}

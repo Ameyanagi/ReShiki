@@ -1,0 +1,79 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/hotplate",
+ "revision": 1,
+ "family": "hotplate",
+ "variant": {},
+ "names": {
+  "en": "Stirrer hotplate",
+  "ja": "ホットスターラー"
+ },
+ "category": "heating",
+ "keywords": [
+  "hotplate",
+  "heating and cooling"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "grounded": true,
+ "shapes": [
+  {
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    215,
+    220,
+    224
+   ],
+   "id": "shape-1",
+   "path": "M-78 0L78 0A2 2 0 0 1 80 2L80 8A2 2 0 0 1 78 10L-78 10A2 2 0 0 1 -80 8L-80 2A2 2 0 0 1 -78 0Z"
+  },
+  {
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    154,
+    163,
+    170
+   ],
+   "id": "shape-2",
+   "path": "M-81 10L81 10A5 5 0 0 1 86 15L86 67A5 5 0 0 1 81 72L-81 72A5 5 0 0 1 -86 67L-86 15A5 5 0 0 1 -81 10Z"
+  },
+  {
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    215,
+    220,
+    224
+   ],
+   "id": "shape-3",
+   "path": "M-41 42A9 9 0 0 1 -59 42A9 9 0 0 1 -41 42Z"
+  },
+  {
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    215,
+    220,
+    224
+   ],
+   "id": "shape-4",
+   "path": "M59 42A9 9 0 0 1 41 42A9 9 0 0 1 59 42Z"
+  },
+  {
+   "layer": "back",
+   "material": "ink",
+   "role": "solid",
+   "id": "shape-5",
+   "path": "M-20 30L20 30A2 2 0 0 1 22 32L22 50A2 2 0 0 1 20 52L-20 52A2 2 0 0 1 -22 50L-22 32A2 2 0 0 1 -20 30Z"
+  }
+ ]
+}

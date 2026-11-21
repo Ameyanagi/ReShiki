@@ -1,0 +1,150 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/claisen-head-15",
+ "revision": 1,
+ "family": "claisen-head",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Claisen distillation head",
+  "ja": "クライゼン蒸留ヘッド"
+ },
+ "category": "distillation",
+ "keywords": [
+  "claisen head",
+  "distillation"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-6.5 -11.6L-6.5 -3.4L6.5 -3.4L6.5 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M6.5 -3L6.5 -65L-6.5 -65L-6.5 -3Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M-6.5 -64.2L-6.5 -62L6.5 -62L6.5 -64.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M3.14 -14.31L32.14 -30.31L25.86 -41.69L-3.14 -25.69Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M35.5 -36A6.5 6.5 0 0 1 22.5 -36A6.5 6.5 0 0 1 35.5 -36Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-6",
+   "path": "M35.5 -36L35.5 -65L22.5 -65L22.5 -36Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-7",
+   "path": "M22.5 -64.2L22.5 -62L35.5 -62L35.5 -64.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-8",
+   "path": "M31.66 -42.56L71.75 -31.82L75.11 -44.37L35.03 -55.11Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-9",
+   "path": "M64.41 -33.78L72.33 -31.66L75.69 -44.22L67.77 -46.34Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "top1",
+   "gender": "F",
+   "at": [
+    0,
+    -93
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "top2",
+   "gender": "F",
+   "at": [
+    29,
+    -93
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "arm",
+   "gender": "M",
+   "at": [
+    77.29629,
+    -37.05905
+   ],
+   "dir": [
+    0.96593,
+    0.25882
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  }
+ ]
+}

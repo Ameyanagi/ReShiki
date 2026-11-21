@@ -34,17 +34,45 @@ fn the_fixed_support_ring_accepts_only_its_bore_and_still_mounts_on_a_rod() {
     let tube = add(&mut doc, "reshiki/jy-schlenk-tube", Point::default());
     let stand = add(&mut doc, "reshiki/stand", Point::default());
     let jaw = port(&doc, ring, "ring");
-    let mut grip = port(&doc, tube, "body");
-    assert!(!solve::mates(&jaw, &grip));
-    let solve::Kind::Hold(_, ref mut diameter) = grip.kind else {
-        panic!("expected a body grip");
-    };
-    *diameter = [63.4, 63.4];
-    assert!(solve::mates(&jaw, &grip));
+    assert!(!solve::mates(&jaw, &port(&doc, tube, "body")));
+    for id in ["reshiki/sep-funnel-15", "reshiki/sep-funnel-29"] {
+        let mut assembly = doc.clone();
+        let funnel = add(&mut assembly, id, Point::new(80., 100.));
+        solve::connect(
+            &mut assembly,
+            &[funnel],
+            &joint(ring, "ring"),
+            &joint(funnel, "ring-seat"),
+        )
+        .unwrap_or_else(|| panic!("{id} fits the support ring"));
+        assembly.validate().unwrap();
+        assert_eq!(assembly.seats.len(), 1);
+    }
     assert!(solve::mates(
         &port(&doc, ring, "boss"),
         &port(&doc, stand, "rod")
     ));
+}
+
+#[test]
+fn a_stir_bar_seats_in_the_built_in_flasks_that_have_a_stir_port() {
+    for id in [
+        "reshiki/rbf-50-15",
+        "reshiki/rbf-100-15",
+        "reshiki/rbf-100-29",
+        "reshiki/rbf-300-29",
+        "reshiki/rbf-500-29",
+        "reshiki/schlenk-flask-100-15",
+        "reshiki/jy-storage-flask-100",
+    ] {
+        let mut doc = Document::default();
+        let flask = add(&mut doc, id, Point::new(250., 300.));
+        let bar = add(&mut doc, "reshiki/stir-bar", Point::new(80., 120.));
+        solve::connect(&mut doc, &[bar], &joint(flask, "stir"), &joint(bar, "seat"))
+            .unwrap_or_else(|| panic!("{id} accepts the stir bar"));
+        let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+        assert_eq!(back.seats, doc.seats);
+    }
 }
 
 fn along(p: &Port, t: f64) -> [f64; 2] {

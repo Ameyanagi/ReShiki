@@ -1,0 +1,76 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/exp-10-29",
+ "revision": 1,
+ "family": "exp-10-29",
+ "variant": {},
+ "names": {
+  "en": "Expansion adapter 10/18 → 29/42",
+  "ja": "変換アダプター"
+ },
+ "category": "adapter",
+ "keywords": [
+  "exp 10 29",
+  "adapters"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-4.5 -11.6L-4.5 -3.4L4.5 -3.4L4.5 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M4.5 -3L4.5 -12L13 -20L13 -24L-13 -24L-13 -20L-4.5 -12L-4.5 -3Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M-13 -22.2L-13 -20L13 -20L13 -22.2Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "10/18",
+   "draw": "standard"
+  },
+  {
+   "id": "top",
+   "gender": "F",
+   "at": [
+    0,
+    -68
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  }
+ ]
+}

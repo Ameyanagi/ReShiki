@@ -1,0 +1,589 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/jy-storage-flask-250-cone",
+ "revision": 1,
+ "family": "jy-storage-flask",
+ "variant": {
+  "volume_ml": "250",
+  "outlet": "Level 15/25 cone"
+ },
+ "names": {
+  "en": "J. Young storage flask",
+  "ja": "J. Young 貯蔵フラスコ"
+ },
+ "category": "schlenk",
+ "keywords": [
+  "jy storage flask",
+  "schlenk"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M39.08 0A39.08 39.08 0 0 1 -39.08 0A39.08 39.08 0 0 1 39.08 0Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M4 -37.08L4 -47.08L-4 -47.08L-4 -37.08Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M3.5 -46.08L3.5 -50.08L6.5 -55.08L6.5 -79.08L7.2 -79.08L7.2 -85.08L-7.2 -85.08L-7.2 -79.08L-6.5 -79.08L-6.5 -55.08L-3.5 -50.08L-3.5 -46.08Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M5 -55.68L12 -55.68L12 -62.48L5 -62.48Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-5",
+   "path": "M-5.2 -55.08L-1.6 -52.38"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-6",
+   "path": "M5.2 -55.08L1.6 -52.38"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-7",
+   "path": "M-7.2 -79.68L7.2 -80.58"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-8",
+   "path": "M-7.2 -81.58L7.2 -82.48"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-9",
+   "path": "M-7.2 -83.48L7.2 -84.38"
+  },
+  {
+   "layer": "inner",
+   "material": "ptfe",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-10",
+   "path": "M1.4 -52.48L3.9 -54.68L3.9 -98.08L-3.9 -98.08L-3.9 -54.68L-1.4 -52.48Z"
+  },
+  {
+   "layer": "inner",
+   "material": "rubber",
+   "role": "fill",
+   "color": [
+    58,
+    63,
+    68
+   ],
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-11",
+   "path": "M-3.9 -55.18L-3.9 -56.38L3.9 -56.38L3.9 -55.18Z"
+  },
+  {
+   "layer": "inner",
+   "material": "rubber",
+   "role": "fill",
+   "color": [
+    58,
+    63,
+    68
+   ],
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-12",
+   "path": "M-5.3 -63.58L-5.3 -64.98L5.3 -64.98L5.3 -63.58Z"
+  },
+  {
+   "layer": "inner",
+   "material": "rubber",
+   "role": "fill",
+   "color": [
+    58,
+    63,
+    68
+   ],
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-13",
+   "path": "M-5.3 -66.58L-5.3 -67.98L5.3 -67.98L5.3 -66.58Z"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "solid",
+   "color": [
+    238,
+    182,
+    32
+   ],
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-14",
+   "path": "M-7.15 -81.08L7.15 -81.08L8.97 -81.86L9.75 -83.68L9.75 -98.48L8.97 -100.3L7.15 -101.08L-7.15 -101.08L-8.97 -100.3L-9.75 -98.48L-9.75 -83.68L-8.97 -81.86Z"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "detail",
+   "color": [
+    168,
+    122,
+    12
+   ],
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-15",
+   "path": "M-6.6 -83.08L-6.6 -99.08"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "detail",
+   "color": [
+    168,
+    122,
+    12
+   ],
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-16",
+   "path": "M-3.3 -83.08L-3.3 -99.08"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "detail",
+   "color": [
+    168,
+    122,
+    12
+   ],
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-17",
+   "path": "M0 -83.08L0 -99.08"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "detail",
+   "color": [
+    168,
+    122,
+    12
+   ],
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-18",
+   "path": "M3.3 -83.08L3.3 -99.08"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "detail",
+   "color": [
+    168,
+    122,
+    12
+   ],
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-19",
+   "path": "M6.6 -83.08L6.6 -99.08"
+  },
+  {
+   "layer": "body",
+   "material": "ptfe",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "id": "shape-20",
+   "path": "M-3.1 -101.08L3.1 -101.08L4.08 -101.5L4.5 -102.48L4.5 -105.68L4.08 -106.66L3.1 -107.08L-3.1 -107.08L-4.08 -106.66L-4.5 -105.68L-4.5 -102.48L-4.08 -101.5Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-21",
+   "path": "M11 -55.68L17 -55.68L17 -62.48L11 -62.48Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-22",
+   "path": "M13 -55.68L17.2 -55.68L17.2 -62.48L13 -62.48Z"
+  },
+  {
+   "layer": "inner",
+   "material": "ptfe",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-23",
+   "path": "M1.4 -59.48L3.9 -61.68L3.9 -105.08L-3.9 -105.08L-3.9 -61.68L-1.4 -59.48Z"
+  },
+  {
+   "layer": "inner",
+   "material": "rubber",
+   "role": "fill",
+   "color": [
+    58,
+    63,
+    68
+   ],
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-24",
+   "path": "M-3.9 -62.18L-3.9 -63.38L3.9 -63.38L3.9 -62.18Z"
+  },
+  {
+   "layer": "inner",
+   "material": "rubber",
+   "role": "fill",
+   "color": [
+    58,
+    63,
+    68
+   ],
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-25",
+   "path": "M-5.3 -70.58L-5.3 -71.98L5.3 -71.98L5.3 -70.58Z"
+  },
+  {
+   "layer": "inner",
+   "material": "rubber",
+   "role": "fill",
+   "color": [
+    58,
+    63,
+    68
+   ],
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-26",
+   "path": "M-5.3 -73.58L-5.3 -74.98L5.3 -74.98L5.3 -73.58Z"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "solid",
+   "color": [
+    238,
+    182,
+    32
+   ],
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-27",
+   "path": "M-7.15 -88.08L7.15 -88.08L8.97 -88.86L9.75 -90.68L9.75 -105.48L8.97 -107.3L7.15 -108.08L-7.15 -108.08L-8.97 -107.3L-9.75 -105.48L-9.75 -90.68L-8.97 -88.86Z"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "detail",
+   "color": [
+    168,
+    122,
+    12
+   ],
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-28",
+   "path": "M-6.6 -90.08L-6.6 -106.08"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "detail",
+   "color": [
+    168,
+    122,
+    12
+   ],
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-29",
+   "path": "M-3.3 -90.08L-3.3 -106.08"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "detail",
+   "color": [
+    168,
+    122,
+    12
+   ],
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-30",
+   "path": "M0 -90.08L0 -106.08"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "detail",
+   "color": [
+    168,
+    122,
+    12
+   ],
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-31",
+   "path": "M3.3 -90.08L3.3 -106.08"
+  },
+  {
+   "layer": "body",
+   "material": "plastic",
+   "role": "detail",
+   "color": [
+    168,
+    122,
+    12
+   ],
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-32",
+   "path": "M6.6 -90.08L6.6 -106.08"
+  },
+  {
+   "layer": "body",
+   "material": "ptfe",
+   "role": "solid",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "id": "shape-33",
+   "path": "M-3.1 -108.08L3.1 -108.08L4.08 -108.5L4.5 -109.48L4.5 -112.68L4.08 -113.66L3.1 -114.08L-3.1 -114.08L-4.08 -113.66L-4.5 -112.68L-4.5 -109.48L-4.08 -108.5Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "stir",
+   "gender": "F",
+   "at": [
+    0,
+    37.47963
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "plug",
+   "family": "stir",
+   "size_mm": 24
+  },
+  {
+   "id": "outlet",
+   "gender": "M",
+   "at": [
+    20.6,
+    -59.07963
+   ],
+   "dir": [
+    1,
+    0
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  }
+ ],
+ "holds": [
+  {
+   "id": "neck",
+   "kind": "grip",
+   "from": [
+    0,
+    -38.07963
+   ],
+   "to": [
+    0,
+    -46.07963
+   ],
+   "diameter_mm": 8
+  }
+ ],
+ "params": [
+  {
+   "id": "valve",
+   "names": {
+    "en": "Valve"
+   },
+   "kind": "states",
+   "default": "closed",
+   "states": [
+    {
+     "id": "closed",
+     "names": {
+      "en": "Closed"
+     }
+    },
+    {
+     "id": "open",
+     "names": {
+      "en": "Open"
+     }
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "control",
+   "param": "valve",
+   "motion": {
+    "per_state": {
+     "closed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "open": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     -91.07963
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M 37.67963 0 L 37.53625 3.284 L 37.10719 6.543 L 36.39573 9.75221 L 35.40727 12.88719 L 34.14934 15.9241 L 32.63152 18.83982 L 30.86535 21.61215 L 28.86427 24.22 L 26.64352 26.64352 L 24.22 28.86427 L 21.61215 30.86535 L 18.83982 32.63152 L 15.9241 34.14934 L 12.88719 35.40727 L 9.75221 36.39573 L 6.543 37.10719 L 3.284 37.53625 L 0 37.67963 L -3.284 37.53625 L -6.543 37.10719 L -9.75221 36.39573 L -12.88719 35.40727 L -15.9241 34.14934 L -18.83982 32.63152 L -21.61215 30.86535 L -24.22 28.86427 L -26.64352 26.64352 L -28.86427 24.22 L -30.86535 21.61215 L -32.63152 18.83982 L -34.14934 15.9241 L -35.40727 12.88719 L -36.39573 9.75221 L -37.10719 6.543 L -37.53625 3.284 L -37.67963 0 L -37.53625 -3.284 L -37.10719 -6.543 L -36.39573 -9.75221 L -35.40727 -12.88719 L -34.14934 -15.9241 L -32.63152 -18.83982 L -30.86535 -21.61215 L -28.86427 -24.22 L -26.64352 -26.64352 L -24.22 -28.86427 L -21.61215 -30.86535 L -18.83982 -32.63152 L -15.9241 -34.14934 L -12.88719 -35.40727 L -9.75221 -36.39573 L -6.543 -37.10719 L -3.284 -37.53625 L 0 -37.67963 L 3.284 -37.53625 L 6.543 -37.10719 L 9.75221 -36.39573 L 12.88719 -35.40727 L 15.9241 -34.14934 L 18.83982 -32.63152 L 21.61215 -30.86535 L 24.22 -28.86427 L 26.64352 -26.64352 L 28.86427 -24.22 L 30.86535 -21.61215 L 32.63152 -18.83982 L 34.14934 -15.9241 L 35.40727 -12.88719 L 36.39573 -9.75221 L 37.10719 -6.543 L 37.53625 -3.284 Z"
+  }
+ ]
+}

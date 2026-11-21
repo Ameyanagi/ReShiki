@@ -1,0 +1,67 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/erlenmeyer",
+ "revision": 1,
+ "family": "erlenmeyer",
+ "variant": {},
+ "names": {
+  "en": "Erlenmeyer flask",
+  "ja": "三角フラスコ"
+ },
+ "category": "vessel",
+ "keywords": [
+  "erlenmeyer",
+  "other"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-11 -5L11 -5A2 2 0 0 1 13 -3L13 -1A2 2 0 0 1 11 1L-11 1A2 2 0 0 1 -13 -1L-13 -3A2 2 0 0 1 -11 -5Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M-11 -2L-11 24L-32 100L32 100L11 24L11 -2Z"
+  }
+ ],
+ "params": [
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M -9.7 -2 L -9.7 24 L -30.7 98.7 L 30.7 98.7 L 9.7 24 L 9.7 -2 Z"
+  }
+ ]
+}

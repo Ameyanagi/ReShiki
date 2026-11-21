@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/rbf-300-29",
- "revision": 1,
+ "revision": 2,
  "family": "rbf",
  "variant": {
   "volume_ml": "300",
@@ -63,6 +63,21 @@
     -1
    ],
    "draw": "standard"
+  },
+  {
+   "id": "stir",
+   "kind": "plug",
+   "family": "stir",
+   "gender": "F",
+   "size_mm": 24,
+   "at": [
+    0,
+    39.928
+   ],
+   "dir": [
+    0,
+    -1
+   ]
   }
  ],
  "holds": [

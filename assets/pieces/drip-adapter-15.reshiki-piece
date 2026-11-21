@@ -1,0 +1,56 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/drip-adapter-15",
+ "revision": 1,
+ "family": "drip-adapter",
+ "variant": {
+  "joint": "15/25"
+ },
+ "names": {
+  "en": "Receiver adapter, straight",
+  "ja": "アダプター (受器用)"
+ },
+ "category": "distillation",
+ "keywords": [
+  "drip adapter",
+  "distillation"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-6.5 -4.2L-6.5 -2L6.5 -2L6.5 -4.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M-6.5 -7L-6.5 6L-3 40L-3 52L3 46L3 40L6.5 6L6.5 -7Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "top",
+   "gender": "F",
+   "at": [
+    0,
+    -33
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  }
+ ]
+}

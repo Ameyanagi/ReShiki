@@ -1,0 +1,158 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/allihn-29",
+ "revision": 1,
+ "family": "allihn",
+ "variant": {
+  "joint": "29/42"
+ },
+ "names": {
+  "en": "Allihn condenser",
+  "ja": "アリーン冷却管"
+ },
+ "category": "condenser",
+ "keywords": [
+  "allihn",
+  "condensers"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-7 -11.6L-7 -3.4L7 -3.4L7 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M7 -4L7 -263L-7 -263L-7 -4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M7 -16L15 -26L15 -226L7 -236L-7 -236L-15 -226L-15 -26L-7 -16Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M-13 -262.2L-13 -260L13 -260L13 -262.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M11 -34.6L23 -34.6L23 -33.3L27.5 -34.6L27.5 -33.3L32 -34.6L32 -33.4L36 -34.8L36 -41.2L32 -42.6L32 -41.4L27.5 -42.7L27.5 -41.4L23 -42.7L23 -41.4L11 -41.4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-6",
+   "path": "M11 -220.6L23 -220.6L23 -219.3L27.5 -220.6L27.5 -219.3L32 -220.6L32 -219.4L36 -220.8L36 -227.2L32 -228.6L32 -227.4L27.5 -228.7L27.5 -227.4L23 -228.7L23 -227.4L11 -227.4Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-7",
+   "path": "M7 -236L7 -224.75A12 12 0 0 1 7 -205.25L7 -182.75A12 12 0 0 1 7 -163.25L7 -140.75A12 12 0 0 1 7 -121.25L7 -98.75A12 12 0 0 1 7 -79.25L7 -56.75A12 12 0 0 1 7 -37.25L7 -26"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "id": "shape-8",
+   "path": "M-7 -236L-7 -224.75A12 12 0 0 0 -7 -205.25L-7 -182.75A12 12 0 0 0 -7 -163.25L-7 -140.75A12 12 0 0 0 -7 -121.25L-7 -98.75A12 12 0 0 0 -7 -79.25L-7 -56.75A12 12 0 0 0 -7 -37.25L-7 -26"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  },
+  {
+   "id": "top",
+   "gender": "F",
+   "at": [
+    0,
+    -308
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  },
+  {
+   "id": "barb-1",
+   "gender": "M",
+   "at": [
+    36,
+    -38
+   ],
+   "dir": [
+    1,
+    0
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  },
+  {
+   "id": "barb-2",
+   "gender": "M",
+   "at": [
+    36,
+    -224
+   ],
+   "dir": [
+    1,
+    0
+   ],
+   "kind": "plug",
+   "family": "hose",
+   "size_mm": 7
+  }
+ ],
+ "holds": [
+  {
+   "id": "jacket",
+   "kind": "grip",
+   "from": [
+    0,
+    -46
+   ],
+   "to": [
+    0,
+    -216
+   ],
+   "diameter_mm": 30
+  }
+ ]
+}

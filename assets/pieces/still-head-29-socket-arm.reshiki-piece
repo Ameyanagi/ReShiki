@@ -1,0 +1,123 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/still-head-29-socket-arm",
+ "revision": 1,
+ "family": "still-head",
+ "variant": {
+  "joint": "29/42",
+  "arm": "Socket"
+ },
+ "names": {
+  "en": "Distillation head",
+  "ja": "蒸留ヘッド (ト字管)"
+ },
+ "category": "distillation",
+ "keywords": [
+  "still head",
+  "distillation"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-1",
+   "path": "M-13 -11.6L-13 -3.4L13 -3.4L13 -11.6Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-2",
+   "path": "M13 -3L13 -62L6.5 -68L6.5 -72L-6.5 -72L-6.5 -68L-13 -62L-13 -3Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-3",
+   "path": "M-6.5 -70.2L-6.5 -68L6.5 -68L6.5 -70.2Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-4",
+   "path": "M7.26 -28.6L17.89 -25.75L24.62 -50.86L13.99 -53.71Z"
+  },
+  {
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "id": "shape-5",
+   "path": "M22.88 -51.33L20.75 -51.9L14.02 -26.78L16.15 -26.21Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "bottom",
+   "gender": "M",
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  },
+  {
+   "id": "top",
+   "gender": "F",
+   "at": [
+    0,
+    -99
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "kind": "taper",
+   "size": "15/25",
+   "draw": "standard"
+  },
+  {
+   "id": "arm",
+   "gender": "F",
+   "at": [
+    63.7511,
+    -26.91794
+   ],
+   "dir": [
+    0.96593,
+    0.25882
+   ],
+   "kind": "taper",
+   "size": "29/42",
+   "draw": "standard"
+  }
+ ],
+ "holds": [
+  {
+   "id": "body",
+   "kind": "grip",
+   "from": [
+    0,
+    -10
+   ],
+   "to": [
+    0,
+    -60
+   ],
+   "diameter_mm": 26
+  }
+ ]
+}

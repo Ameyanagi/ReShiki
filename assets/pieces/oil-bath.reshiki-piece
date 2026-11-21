@@ -1,0 +1,48 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/oil-bath",
+ "revision": 1,
+ "family": "oil-bath",
+ "variant": {},
+ "names": {
+  "en": "Oil bath",
+  "ja": "オイルバス"
+ },
+ "category": "heating",
+ "keywords": [
+  "oil bath",
+  "heating and cooling"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "grounded": true,
+ "shapes": [
+  {
+   "layer": "front",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    154,
+    163,
+    170
+   ],
+   "id": "shape-1",
+   "path": "M-62 0L-58 0L-58 58Q-58 64 -52 64L52 64Q58 64 58 58L58 0L62 0L62 4L-62 4Z"
+  },
+  {
+   "layer": "front",
+   "material": "liquid",
+   "role": "fill",
+   "color": [
+    231,
+    184,
+    90
+   ],
+   "id": "shape-2",
+   "path": "M-56 6L56 6A0 0 0 0 1 56 6L56 12A0 0 0 0 1 56 12L-56 12A0 0 0 0 1 -56 12L-56 6A0 0 0 0 1 -56 6Z"
+  }
+ ]
+}

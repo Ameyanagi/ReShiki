@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/schlenk-flask-100-15",
- "revision": 2,
+ "revision": 3,
  "family": "schlenk-flask",
  "variant": {
   "volume_ml": "100",
@@ -250,6 +250,21 @@
    "dir": [
     0,
     1
+   ]
+  },
+  {
+   "id": "stir",
+   "kind": "plug",
+   "family": "stir",
+   "gender": "F",
+   "size_mm": 24,
+   "at": [
+    0,
+    27.194
+   ],
+   "dir": [
+    0,
+    -1
    ]
   }
  ],

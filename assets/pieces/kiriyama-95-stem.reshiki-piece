@@ -1,0 +1,148 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/kiriyama-95-stem",
+  "revision": 1,
+  "family": "kiriyama",
+  "variant": {
+    "mount": "Stopper stem",
+    "filter_diameter": "95 mm"
+  },
+  "names": {
+    "en": "Kiriyama funnel",
+    "ja": "桐山ロート"
+  },
+  "category": "filtration",
+  "keywords": [
+    "kiriyama",
+    "filtration"
+  ],
+  "credits": {
+    "author": "ReShiki"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-1",
+      "path": "M-72.47 -103.75L-70.87 -100.75L-50.5 0Q-50.5 11.4 -5.7 19L5.7 19Q50.5 11.4 50.5 0L70.88 -100.75L72.47 -103.75Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "solid",
+      "id": "shape-2",
+      "path": "M70.88 -103.15A70.88 12.05 0 0 1 -70.87 -103.15A70.88 12.05 0 0 1 70.88 -103.15Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "solid",
+      "id": "shape-3",
+      "path": "M49.9 -1.2A49.9 8.48 0 0 1 -49.9 -1.2A49.9 8.48 0 0 1 49.9 -1.2Z"
+    },
+    {
+      "layer": "body",
+      "material": "paper",
+      "role": "solid",
+      "id": "shape-13",
+      "path": "M47.5 -2.1A47.5 8.08 0 0 1 -47.5 -2.1A47.5 8.08 0 0 1 47.5 -2.1Z"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-4",
+      "path": "M20.81 -0.77A20.96 3.56 0 0 1 16.08 1.08"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-5",
+      "path": "M8.23 2.08A20.96 3.56 0 0 1 -3.59 2.31"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-6",
+      "path": "M-12.58 1.65A20.96 3.56 0 0 1 -19.68 0.03"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-7",
+      "path": "M37.16 -0.44A37.42 6.36 0 0 1 33.44 1.66"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-8",
+      "path": "M27.43 3.13A37.42 6.36 0 0 1 17.18 4.45"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-9",
+      "path": "M7.22 5.04A37.42 6.36 0 0 1 -5.65 5.09"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-10",
+      "path": "M-15.74 4.57A37.42 6.36 0 0 1 -26.31 3.32"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "id": "shape-11",
+      "path": "M-32.69 1.9A37.42 6.36 0 0 1 -36.93 -0.17"
+    },
+    {
+      "layer": "body",
+      "material": "ink",
+      "role": "fill",
+      "id": "shape-12",
+      "path": "M1.4 -1.2A1.4 1.2 0 0 1 -1.4 -1.2A1.4 1.2 0 0 1 1.4 -1.2Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-14",
+      "path": "M-5.7 18L-5.7 24L5.7 24L5.7 18Z"
+    },
+    {
+      "layer": "inner",
+      "material": "glass",
+      "role": "solid",
+      "id": "shape-15",
+      "path": "M-5.7 23L-5.7 160L5.7 164L5.7 23Z"
+    }
+  ],
+  "joints": [
+    {
+      "id": "stem",
+      "gender": "M",
+      "at": [
+        0,
+        29
+      ],
+      "dir": [
+        0,
+        1
+      ],
+      "kind": "plug",
+      "family": "stopper",
+      "size_mm": 8
+    }
+  ]
+}

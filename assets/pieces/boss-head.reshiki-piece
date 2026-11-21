@@ -1,0 +1,101 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/boss-head",
+ "revision": 1,
+ "family": "boss-head",
+ "variant": {},
+ "names": {
+  "en": "Boss head",
+  "ja": "ムッフ"
+ },
+ "category": "holding",
+ "keywords": [
+  "boss head",
+  "holding"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    154,
+    163,
+    170
+   ],
+   "id": "shape-1",
+   "path": "M-10 -15L10 -15A3 3 0 0 1 13 -12L13 12A3 3 0 0 1 10 15L-10 15A3 3 0 0 1 -13 12L-13 -12A3 3 0 0 1 -10 -15Z"
+  },
+  {
+   "layer": "back",
+   "material": "metal",
+   "role": "fill",
+   "color": [
+    154,
+    163,
+    170
+   ],
+   "id": "shape-2",
+   "path": "M0.01 -15A0.01 0.01 0 0 1 -0.01 -15A0.01 0.01 0 0 1 0.01 -15Z"
+  },
+  {
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    154,
+    163,
+    170
+   ],
+   "id": "shape-3",
+   "path": "M-2.5 -27L2.5 -27A1.5 1.5 0 0 1 4 -25.5L4 -16.5A1.5 1.5 0 0 1 2.5 -15L-2.5 -15A1.5 1.5 0 0 1 -4 -16.5L-4 -25.5A1.5 1.5 0 0 1 -2.5 -27Z"
+  },
+  {
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    154,
+    163,
+    170
+   ],
+   "id": "shape-4",
+   "path": "M-7 -31L7 -31A2 2 0 0 1 9 -29L9 -28A2 2 0 0 1 7 -26L-7 -26A2 2 0 0 1 -9 -28L-9 -29A2 2 0 0 1 -7 -31Z"
+  },
+  {
+   "layer": "back",
+   "material": "metal",
+   "role": "solid",
+   "color": [
+    154,
+    163,
+    170
+   ],
+   "id": "shape-5",
+   "path": "M14.5 -4L21.5 -4A1.5 1.5 0 0 1 23 -2.5L23 2.5A1.5 1.5 0 0 1 21.5 4L14.5 4A1.5 1.5 0 0 1 13 2.5L13 -2.5A1.5 1.5 0 0 1 14.5 -4Z"
+  }
+ ],
+ "holds": [
+  {
+   "id": "stand-rod",
+   "kind": "slider",
+   "from": [
+    0,
+    -6
+   ],
+   "to": [
+    0,
+    6
+   ],
+   "diameter_mm": [
+    8,
+    16
+   ]
+  }
+ ]
+}

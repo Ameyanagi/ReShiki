@@ -1,0 +1,59 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/buchner",
+ "revision": 1,
+ "family": "buchner",
+ "variant": {},
+ "names": {
+  "en": "Büchner funnel",
+  "ja": "ブフナーロート"
+ },
+ "category": "filtration",
+ "keywords": [
+  "buchner",
+  "filtration"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "layer": "body",
+   "material": "porcelain",
+   "role": "solid",
+   "id": "shape-1",
+   "path": "M-42 -46L-40 -42L-40 0Q-40 6 -30 8L-7 14L-7 56L-5 62L5 62L7 56L7 14L30 8Q40 6 40 0L40 -42L42 -46Z"
+  },
+  {
+   "layer": "body",
+   "material": "porcelain",
+   "role": "fill",
+   "color": [
+    84,
+    76,
+    65
+   ],
+   "id": "shape-3",
+   "path": "M-37 -10.6H37V-9.4H-37Z"
+  }
+ ],
+ "joints": [
+  {
+   "id": "stem",
+   "gender": "M",
+   "at": [
+    0,
+    22
+   ],
+   "dir": [
+    0,
+    1
+   ],
+   "kind": "plug",
+   "family": "stopper",
+   "size_mm": 8
+  }
+ ]
+}
