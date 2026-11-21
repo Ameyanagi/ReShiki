@@ -68,6 +68,84 @@ fn binary_arrows_use_chemdraw_code_and_migrate_legacy_files() -> anyhow::Result<
 }
 
 #[test]
+fn binary_dipole_flag_uses_implied_boolean_and_reads_legacy_byte_flags() -> anyhow::Result<()> {
+    let xml = |flag: &str| format!("<CDXML><page id='1'><arrow id='2'{flag}/></page></CDXML>");
+    let plain = to_cdx(&xml("")).map_err(anyhow::Error::msg)?;
+    // After the 22-byte header and three object headers, the native flag
+    // is 0x0a3a with a zero-length payload. ChemDraw rejects length 1.
+    assert_eq!(plain.len(), 48);
+    let mut expected = plain.clone();
+    expected.splice(40..40, [0x3a, 0x0a, 0, 0]);
+    assert_eq!(
+        to_cdx(&xml(" Dipole='yes'")).map_err(anyhow::Error::msg)?,
+        expected
+    );
+    assert_eq!(
+        to_cdx(&xml(" Dipole='no'")).map_err(anyhow::Error::msg)?,
+        plain
+    );
+
+    for (payload, flag) in [(vec![], "yes"), (vec![1], "yes"), (vec![0], "no")] {
+        let mut binary = plain.clone();
+        let mut property = vec![0x3a, 0x0a, payload.len() as u8, 0];
+        property.extend(payload);
+        binary.splice(40..40, property);
+        let decoded = from_cdx(&binary).map_err(anyhow::Error::msg)?;
+        let tree = presentation::parse(&decoded)?;
+        let arrow = tree
+            .descendants()
+            .find(|n| n.has_tag_name("arrow"))
+            .context("Lost dipole arrow")?;
+        assert_eq!(arrow.attribute("Dipole"), Some(flag));
+        // Old ReShiki bytes stay readable, but all later writes are canonical.
+        assert_eq!(
+            &to_cdx(&decoded).map_err(anyhow::Error::msg)?,
+            if flag == "yes" { &expected } else { &plain }
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn genuine_chemdraw_dipole_keeps_meaning_and_geometry_in_binary_exchange() -> anyhow::Result<()> {
+    let source = include_str!("fixtures/chemdraw-dipole-arrow/source.cdxml");
+    let native = from_cdx(include_bytes!("fixtures/chemdraw-dipole-arrow/native.cdx"))
+        .map_err(anyhow::Error::msg)?;
+    let rewritten =
+        from_cdx(&to_cdx(&native).map_err(anyhow::Error::msg)?).map_err(anyhow::Error::msg)?;
+    for xml in [source, &native, &rewritten] {
+        let tree = presentation::parse(xml)?;
+        let elements: Vec<_> = tree.descendants().filter(|n| n.is_element()).collect();
+        let index = elements
+            .iter()
+            .position(|n| n.has_tag_name("arrow"))
+            .context("Lost dipole arrow")?;
+        assert_eq!(
+            elements.iter().filter(|n| n.has_tag_name("arrow")).count(),
+            1
+        );
+        let palette = presentation::palette(tree.root_element())?;
+        let arrow = ArrowReader::new(xml)?.read(index, 1., &palette.colors, 1)?;
+        assert!(arrow.style.dipole);
+        assert_eq!(arrow.style.head, Head::Full);
+        assert_eq!(arrow.style.tail, Head::None);
+        assert!(
+            arrow
+                .start
+                .distance(reshiki::document::Point::new(130., 265.))
+                < 1e-5
+        );
+        assert!(
+            arrow
+                .end
+                .distance(reshiki::document::Point::new(205., 265.))
+                < 1e-5
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn genuine_chemdraw_file_retains_arrow_geometry_style_and_references() -> anyhow::Result<()> {
     let decoded = from_cdx(include_bytes!("fixtures/chemdraw-arrows/numeric.cdx"))
         .map_err(anyhow::Error::msg)?;
