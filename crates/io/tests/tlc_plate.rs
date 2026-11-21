@@ -188,6 +188,96 @@ async fn native_wide_reaction_plate_geometry_and_authored_rf_anchor_survive_norm
 }
 
 #[tokio::test]
+async fn native_low_size_authored_rf_caption_uses_common_fallback_and_survives_exchange() {
+    fn baseline(label: &reshiki_model::document::Annotation) -> Point {
+        let layout = reshiki_model::typography::layout(&label.text, &label.format);
+        let first = &layout.fragments[0];
+        label.position.offset(
+            first.position.x,
+            first.position.y + reshiki_model::style::text_ascent(&first.style),
+        )
+    }
+    let engine = LocalEngine::in_process();
+    let scale = 42. / 14.4;
+    // An explicit run size and every inherited caption-size location use the
+    // same nearest supported size as an ordinary caption in the same file.
+    for (root, page, text, run) in [
+        ("", "", "", "size='3'"),
+        ("", "", "CaptionSize='3'", ""),
+        ("", "CaptionSize='3'", "", ""),
+        ("CaptionSize='3'", "", "", ""),
+    ] {
+        for shown in ["yes", "no"] {
+            let runs = format!(
+                "<s {run} face='1' color='4'>Product </s><s {run} face='32' color='5'>A</s>"
+            );
+            let source = format!(
+                "<CDXML {root}><colortable><color r='1' g='1' b='1'/><color/><color r='1'/><color b='1'/></colortable><page id='1' {page}><tlcplate id='2' TopLeft='0 0' TopRight='100 0' BottomRight='100 200' BottomLeft='0 200' OriginFraction='0.1' SolventFrontFraction='0.1' ShowBorders='yes' ShowOrigin='yes' ShowSolventFront='yes'><tlclane id='3'><tlcspot id='4' Rf='0.28' Width='458752' Height='458752' ShowRf='{shown}'><objecttag id='5' Name='rf'><t id='6' p='60 80' {text}>{runs}</t></objecttag></tlcspot></tlclane></tlcplate><t id='7' p='60 250' InterpretChemically='no' {text}>{runs}</t></page></CDXML>"
+            );
+            for (format, input) in [
+                ("cdxml", source.as_bytes().to_vec()),
+                ("cdx", reshiki_io::exchange::to_cdx(&source).unwrap()),
+            ] {
+                let (doc, warnings) = formats::read_with_warnings(input, format, &engine)
+                    .await
+                    .unwrap();
+                assert!(
+                    warnings.iter().any(|w| w.contains("text size")),
+                    "{warnings:?}"
+                );
+                assert!(
+                    warnings.iter().all(|w| !w.contains("supported Rf labels")),
+                    "{warnings:?}"
+                );
+                let g = &doc.graphics[0];
+                let t = g.tlc.as_deref().unwrap();
+                let spot = &t.lanes[0].spots[0];
+                assert_eq!(spot.show_rf, shown == "yes");
+                assert_eq!(t.labels(g).len(), usize::from(shown == "yes"));
+                let label = t.label_annotation(g, 0, spot).unwrap();
+                assert_eq!(label.text, "Product A");
+                assert_eq!(label.format.style.size_pt, 4.);
+                assert!(label.format.style.bold);
+                assert_eq!(label.format.style.color.rgb(), [255, 0, 0]);
+                assert_eq!(label.format.at(8).script, Script::Subscript);
+                assert_eq!(label.format.at(8).color.rgb(), [0, 0, 255]);
+                assert!(baseline(&label).distance(Point::new(60. * scale, 80. * scale)) < 0.002);
+                assert_eq!(doc.annotations.len(), 1);
+                let plain = &doc.annotations[0];
+                assert_eq!(plain.text, label.text);
+                assert_eq!(plain.format, label.format);
+                assert!(baseline(plain).distance(Point::new(60. * scale, 250. * scale)) < 0.002);
+                let anchor = baseline(&label).offset(-g.origin.x, -g.origin.y);
+                for target in ["rsk", "cdxml", "cdx"] {
+                    let output = formats::write_with_engine(doc.clone(), target, &engine)
+                        .await
+                        .unwrap();
+                    let (back, warnings) = formats::read_with_warnings(output, target, &engine)
+                        .await
+                        .unwrap();
+                    assert!(warnings.is_empty(), "{format} to {target}: {warnings:?}");
+                    let g = &back.graphics[0];
+                    let t = g.tlc.as_deref().unwrap();
+                    let spot = &t.lanes[0].spots[0];
+                    assert_eq!(spot.show_rf, shown == "yes");
+                    let restored = t.label_annotation(g, 0, spot).unwrap();
+                    assert_eq!(restored.text, label.text);
+                    assert_eq!(restored.format, label.format);
+                    assert!(
+                        baseline(&restored)
+                            .offset(-g.origin.x, -g.origin.y)
+                            .distance(anchor)
+                            < 0.002
+                    );
+                    assert_eq!(back.annotations[0].text, plain.text);
+                    assert_eq!(back.annotations[0].format, plain.format);
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn native_tlc_ten_point_margin_boundary_stays_stable_after_coordinate_rounding() {
     let engine = LocalEngine::in_process();
     for width in [9.99, 10., 10.000001, 10.01] {
