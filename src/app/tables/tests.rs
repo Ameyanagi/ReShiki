@@ -196,6 +196,125 @@ fn mixed_table_and_rectangle_properties_style_only_the_rectangle_in_one_undo() {
 }
 
 #[test]
+fn mixed_table_tlc_and_rectangle_keep_generic_appearance_edits_on_the_rectangle() {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicChange, GraphicStyle};
+    let (mut app, _) = App::new();
+    let table = draw(&mut app);
+    let plate = crate::canvas::tlc::dragged(
+        2,
+        GraphicKind::TlcPlate,
+        Point::new(400., 20.),
+        Point::new(540., 420.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    let rectangle = Graphic::dragged(
+        3,
+        GraphicKind::Rectangle,
+        Point::new(600., 20.),
+        Point::new(700., 120.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    app.tab.doc.graphics.extend([plate, rectangle]);
+    app.set_selection(vec![table, 2, 3]);
+    app.sync_graphics();
+    assert!(app.table_card().is_some());
+    assert!(app.tlc_panel_visible());
+    assert!(app.tlc_target().is_none());
+    assert!(app.graphic_panel_visible());
+    assert_eq!(
+        app.selected_styled_graphics()
+            .map(|g| g.id)
+            .collect::<Vec<_>>(),
+        [3]
+    );
+    let before = app.tab.doc.clone();
+    let frames = app.tab.history.frames();
+    let color = Color::Custom([17, 126, 108]);
+    let _ = app.update(Message::Graphics(super::super::graphics::Action::Style(
+        GraphicChange::Fill(Some(color)),
+    )));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.graphics[0], before.graphics[0]);
+    assert_eq!(app.tab.doc.graphics[1], before.graphics[1]);
+    assert_eq!(app.tab.doc.graphics[2].style.fill, Some(color));
+    assert_eq!(app.tab.history.frames(), frames + 1);
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+}
+
+#[test]
+fn owned_tlc_and_table_border_controllers_keep_separate_targets_and_undo() {
+    use super::super::tlc::{Action as TlcAction, Field};
+    let (mut app, _) = App::new();
+    let table = draw(&mut app);
+    let cell = CellRef { table, cell: 1 };
+    app.tab.doc.graphics.push(crate::canvas::tlc::dragged(
+        2,
+        GraphicKind::TlcPlate,
+        Point::new(40., 28.),
+        Point::new(110., 84.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    app.set_selection(vec![2]);
+    edit_cell(&mut app, CellAction::AssignSelection);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(
+        Membership::new(&app.tab.doc).unwrap().cell_of(2),
+        Some(cell)
+    );
+    assert!(app.table_card().is_some() && app.tlc_panel_visible());
+    assert!(!app.graphic_panel_visible());
+    let before = app.tab.doc.clone();
+    let target = app.tlc_target().unwrap();
+    let _ = app.update(Message::Tlc(TlcAction::Draft(
+        target,
+        Field::Rf,
+        "0.7".into(),
+    )));
+    let _ = app.update(Message::Tlc(TlcAction::Apply(target, Field::Rf)));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.graphics[0], before.graphics[0]);
+    assert_eq!(
+        Membership::new(&app.tab.doc).unwrap().cell_of(2),
+        Some(cell)
+    );
+    assert_eq!(
+        app.tab.doc.graphics[1].tlc.as_deref().unwrap().lanes[0].spots[0].rf,
+        0.7
+    );
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+
+    let before = app.tab.doc.clone();
+    edit_cell(&mut app, CellAction::Width("1.2".into()));
+    edit_cell(&mut app, CellAction::ApplyWidth);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.graphics[1], before.graphics[1]);
+    assert!(app.tlc_target().is_some());
+    assert_eq!(
+        Membership::new(&app.tab.doc).unwrap().cell_of(2),
+        Some(cell)
+    );
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+}
+
+#[test]
 fn stale_cell_actions_cannot_cross_cells_selection_history_epoch_or_tabs() {
     let (mut app, _) = App::new();
     draw(&mut app);
@@ -374,6 +493,19 @@ async fn manual_table_editor_renderer_evidence() -> anyhow::Result<()> {
             Some(&output.join(file)),
         );
     };
+    let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::TlcPlate)));
+    capture(
+        &mut app,
+        &mut renderer,
+        "tlc-tool.png",
+        iced::Size::new(1280., 820.),
+    );
+    capture(
+        &mut app,
+        &mut renderer,
+        "tlc-tool-minimum.png",
+        iced::Size::new(1040., 680.),
+    );
     let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Table)));
     capture(
         &mut app,

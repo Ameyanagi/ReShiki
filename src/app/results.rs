@@ -759,6 +759,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::ApplyBondColor
         | Message::Arc(..)
         | Message::Graphics(..)
+        | Message::Tlc(..)
         | Message::Figure(..)
         | Message::Cycle(..)
         | Message::Table(..)

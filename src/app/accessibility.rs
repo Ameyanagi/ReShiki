@@ -65,6 +65,7 @@ struct Context {
     recovery: super::recovery_manager::AccessibilityContext,
     inline_session: Option<iced::widget::Id>,
     table_target: Option<(reshiki::graphics::table::CellRef, u64)>,
+    tlc_target: Option<(u64, usize, Option<usize>)>,
     surface: (
         super::InspectorTab,
         crate::canvas::Tool,
@@ -228,6 +229,9 @@ impl App {
         let table_target = self
             .table_target()
             .map(super::tables::Target::accessibility_identity);
+        let tlc_target = self
+            .tlc_target()
+            .map(super::tlc::Target::accessibility_identity);
         let state = &mut self.accessibility;
         let identity_changed = state.context.as_ref().is_none_or(|context| {
             (context.document.0, context.document.1) != (document.0, document.1)
@@ -237,6 +241,7 @@ impl App {
                 || context.recovery != recovery
                 || context.inline_session != inline_session
                 || context.table_target != table_target
+                || context.tlc_target != tlc_target
                 || context.surface != surface
         });
         if identity_changed {
@@ -248,6 +253,7 @@ impl App {
                 recovery,
                 inline_session,
                 table_target,
+                tlc_target,
                 surface,
             });
             state.context_version = state.context_version.wrapping_add(1);

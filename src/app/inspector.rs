@@ -1049,9 +1049,13 @@ impl App {
                 Message::EquipmentAuthoring(super::equipment_authoring::Action::Begin),
             ));
         }
+        let tlc = self.tlc_panel_visible();
         let styled_graphics = self.graphic_panel_visible();
         if let Some(table) = self.table_card() {
             body = body.push(card(container(table).padding(12)));
+        }
+        if tlc {
+            body = body.push(card(container(self.tlc_panel()).padding(12)));
         }
         let cycle = self.cycle_card();
         let show_cycle = cycle.is_some();

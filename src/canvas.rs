@@ -49,6 +49,7 @@ mod smart_guides;
 mod snapping;
 mod text_cache;
 pub(crate) mod tilt;
+pub(crate) mod tlc;
 mod tool;
 
 #[cfg(test)]

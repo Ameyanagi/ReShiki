@@ -184,11 +184,12 @@ impl App {
                 && g.picture.is_none()
                 && g.piece.is_none()
                 && g.table.is_none()
+                && g.tlc.is_none()
         })
     }
 
     pub(super) fn graphic_panel_visible(&self) -> bool {
-        matches!(self.tool, Tool::Graphic(kind) if kind != GraphicKind::Table)
+        matches!(self.tool, Tool::Graphic(kind) if !matches!(kind, GraphicKind::Table | GraphicKind::TlcPlate))
             || self.selected_styled_graphics().next().is_some()
     }
 
@@ -711,13 +712,15 @@ impl App {
         self.sync_tables();
         self.sync_pictures();
         self.sync_arc();
+        self.sync_tlc();
+        // Read generic inputs from the first graphic those inputs can edit.
+        // Keep dedicated selection synchronization when no ordinary graphic is selected.
+        let style_source = self.selected_styled_graphics().next().map(|g| g.id);
         let mut selected_width = None;
-        if let Some(g) = self
-            .tab
-            .doc
-            .graphics
-            .iter()
-            .find(|g| self.tab.selected.contains(&g.id))
+        if let Some(g) =
+            self.tab.doc.graphics.iter().find(|g| {
+                self.tab.selected.contains(&g.id) && style_source.is_none_or(|id| g.id == id)
+            })
         {
             // A condition icon's paper disc stays with the icon, not the next shape.
             let fill = self.tab.graphic_style.fill;
@@ -810,7 +813,7 @@ impl App {
         let before = self.tab.doc.clone();
         for g in self
             .selected_graphics_mut()
-            .filter(|g| g.picture.is_none() && g.table.is_none())
+            .filter(|g| g.picture.is_none() && g.table.is_none() && g.tlc.is_none())
         {
             // Symbols and orbitals draw no waves.
             if matches!(

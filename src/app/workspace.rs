@@ -771,6 +771,7 @@ impl App {
             (Tool::Graphic(G::Table), "Table"),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
+            (Tool::Graphic(G::TlcPlate), "TLC plate"),
             (Tool::Equipment, super::equipment::INSERT),
             (Tool::Icons, "Icons"),
         ];
@@ -1663,6 +1664,7 @@ impl App {
             ];
         }
         let chooser: Element<'_, Message> = match kind {
+            G::TlcPlate => text("TLC plate").size(12).into(),
             G::Symbol(k) => {
                 crate::appearance::pick_list(reshiki::scientific::SymbolKind::ALL, Some(k), |k| {
                     Message::Graphics(super::graphics::Action::ScientificKind(G::Symbol(k)))
