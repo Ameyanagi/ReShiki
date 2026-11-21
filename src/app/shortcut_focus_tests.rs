@@ -2278,27 +2278,50 @@ async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
     let mut ui = Ui::new().await;
     let (mut app, _) = App::new();
     app.tab.busy = false;
+    let atom = app
+        .tab
+        .doc
+        .add_atom("C", reshiki::document::Point::default());
     let _ = app.update(Message::Commands(Action::Open));
-    let _ = app.update(Message::Commands(Action::Query("bond".into())));
+    let _ = app.update(Message::Commands(Action::Query("select al".into())));
     let field = ui.input(&app, "command-palette-search").0;
     ui.click(&mut app, field.center());
     click_running_tasks(&mut ui, &mut app, "command-palette-filter-edit").await;
     assert_eq!(app.commands.filter.map(|c| c.label()), Some("Edit"));
-    for (key, code, text) in [
-        (Key::Character("s".into()), Code::KeyS, Some("s")),
-        (Key::Named(Named::Enter), Code::Enter, None),
-    ] {
-        let (_, messages) = ui.event(
-            &app,
-            press(key, code, Modifiers::empty(), text),
-            mouse::Cursor::Unavailable,
-        );
-        apply(&mut app, messages);
-        if text.is_some() {
-            assert_eq!(app.commands.query, "bonds");
-        }
-    }
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Character("l".into()),
+            Code::KeyL,
+            Modifiers::empty(),
+            Some("l"),
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert_eq!(app.commands.query, "select all");
+    let ranked = app.commands.ranked();
+    assert_eq!(
+        ranked.first().map(|command| command.name.as_str()),
+        Some("Select all")
+    );
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Commands(Action::Submit)]
+    ));
+    apply(&mut app, messages);
     assert!(!app.commands.open, "Enter ran the selected command");
+    assert_eq!(app.tab.selected, vec![atom]);
 }
 
 /// Clicking a row that cannot run keeps the palette open with typing in the
