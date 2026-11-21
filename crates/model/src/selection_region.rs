@@ -57,19 +57,47 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
     if polygon.len() < 3 {
         return vec![];
     }
+    let cells = crate::scene::table::Layout::new(doc);
+    let visible_path = |id, points: &[Point]| -> Option<bool> {
+        if points.len() > 2 && points.first() == points.last() {
+            let clipped = cells.polygon(id, points);
+            return (!clipped.is_empty()).then(|| encloses(polygon, &clipped, true));
+        }
+        let segments: Vec<_> = points
+            .windows(2)
+            .filter_map(|pair| {
+                let &[a, b] = pair else { return None };
+                cells.segment(id, a, b)
+            })
+            .collect();
+        (!segments.is_empty()).then(|| {
+            segments
+                .iter()
+                .all(|(a, b)| encloses(polygon, &[*a, *b], false))
+        })
+    };
     let mut result: Vec<_> = doc
         .atoms
         .iter()
-        .filter(|a| doc.atom_drawn(a.id) && contains(polygon, a.position))
+        .filter(|a| {
+            doc.atom_drawn(a.id)
+                && cells.contains(a.id, a.position)
+                && contains(polygon, a.position)
+        })
         .map(|a| a.id)
         .collect();
     // A 3D model inside the region selects its molecule.
     for model in &doc.models {
+        let ids = model.linked_ids(doc);
         if model.display != crate::models3d::Display::TwoD
-            && crate::models3d::frame_corners(doc, model)
-                .is_some_and(|corners| encloses(polygon, &corners, true))
+            && crate::models3d::frame_corners(doc, model).is_some_and(|corners| {
+                let corners = ids
+                    .first()
+                    .map_or_else(|| corners.to_vec(), |id| cells.polygon(*id, &corners));
+                !corners.is_empty() && encloses(polygon, &corners, true)
+            })
         {
-            for id in model.linked_ids(doc) {
+            for id in ids {
                 if !result.contains(&id) {
                     result.push(id);
                 }
@@ -77,16 +105,19 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         }
     }
     for a in &doc.annotations {
-        if encloses(polygon, &a.corners(), true) {
+        let corners = cells.polygon(a.id, &cells.annotation(a).corners());
+        if !corners.is_empty() && encloses(polygon, &corners, true) {
             result.push(a.id);
         }
     }
     for a in &doc.arrows {
-        if a.paths().iter().all(|part| {
-            flattened(&part.commands)
-                .iter()
-                .all(|points| encloses(polygon, points, false))
-        }) {
+        let visible: Vec<_> = a
+            .paths()
+            .iter()
+            .flat_map(|part| flattened(&part.commands))
+            .filter_map(|points| visible_path(a.id, &points))
+            .collect();
+        if !visible.is_empty() && visible.into_iter().all(|inside| inside) {
             result.push(a.id);
         }
     }
@@ -98,11 +129,11 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         } else {
             flattened(&commands)
         };
-        if (!fill_only || !paths.is_empty())
-            && paths
-                .iter()
-                .all(|path| !path.is_empty() && encloses(polygon, path, false))
-        {
+        let visible: Vec<_> = paths
+            .iter()
+            .filter_map(|path| visible_path(g.id, path))
+            .collect();
+        if !visible.is_empty() && visible.into_iter().all(|inside| inside) {
             result.push(g.id);
         }
     }

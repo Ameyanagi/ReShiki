@@ -149,3 +149,137 @@ fn first_linked_formula_caption_on_imported_cell_molecule_has_one_undo() {
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, after);
 }
+
+#[test]
+fn bonds_and_chains_from_cell_captions_keep_membership_in_one_undo_step() {
+    for mode in 0..4 {
+        let (mut app, atom, cell) = app();
+        let text = app.tab.doc.next_id();
+        app.tab.doc.annotations.push(reshiki::document::Annotation {
+            id: text,
+            position: Point::new(90., 80.),
+            text: "N".into(),
+            angle: 0.,
+            format: Default::default(),
+        });
+        app.tab.doc.graphics[0].table.as_mut().unwrap().cells[0]
+            .members
+            .push(text);
+        let before = app.tab.doc.clone();
+        let start = reshiki::atom_text::text_atom_position(&before, text).unwrap();
+        app.tool = Tool::Bond(1);
+        let edit = if mode == 3 {
+            Edit::Chain {
+                points: vec![start, start.offset(30., 0.), start.offset(45., 26.)],
+                source: None,
+                source_text: Some(text),
+                target: None,
+            }
+        } else {
+            Edit::TextBond {
+                source: None,
+                source_text: Some(text),
+                start,
+                end: match mode {
+                    0 => None,
+                    1 => Some(start.offset(40., 0.)),
+                    _ => Some(before.atom(atom).unwrap().position),
+                },
+                target: (mode == 2).then_some(atom),
+                target_text: None,
+            }
+        };
+        let frames = app.tab.history.undo_frames().len();
+        let _ = app.update(Message::Canvas(edit));
+        assert!(!app.error, "mode {mode}: {}", app.status);
+        assert!(app.tab.doc.annotations.iter().all(|a| a.id != text));
+        assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+        check_history(&mut app, before, cell);
+    }
+}
+
+#[test]
+fn normal_inline_shape_and_arrow_captions_inherit_the_holder_cell() {
+    use crate::app::inline_text;
+    for shape_text in [false, true] {
+        let (mut app, _, cell) = app();
+        let holder = app.tab.doc.next_id();
+        if shape_text {
+            app.tab.doc.graphics.push(Graphic::dragged(
+                holder,
+                GraphicKind::Rectangle,
+                Point::new(20., 90.),
+                Point::new(130., 160.),
+                Default::default(),
+                Default::default(),
+                false,
+            ));
+        } else {
+            app.tab.doc.arrows.push(reshiki::document::Arrow::new(
+                holder,
+                Point::new(20., 130.),
+                Point::new(130., 130.),
+                Default::default(),
+                Default::default(),
+            ));
+        }
+        app.tab.doc.graphics[0].table.as_mut().unwrap().cells[0]
+            .members
+            .push(holder);
+        let before = app.tab.doc.clone();
+        let frames = app.tab.history.undo_frames().len();
+        if shape_text {
+            let _ = app.update(Message::Canvas(Edit::BeginText(holder)));
+        } else {
+            let _ = app.update(Message::InlineText(inline_text::Action::Begin(
+                None,
+                Point::new(50., 95.),
+            )));
+        }
+        let _ = app.update(Message::InlineText(inline_text::Action::ReplaceText(
+            "heat".into(),
+        )));
+        assert!(
+            app.inline_candidate().is_ok(),
+            "the draft is valid before commit"
+        );
+        assert_eq!(
+            app.tab.doc, before,
+            "a caption draft does not edit the source"
+        );
+        let _ = app.update(Message::InlineText(inline_text::Action::Finish(true)));
+        assert!(!app.error, "{}", app.status);
+        app.tab.doc.validate().unwrap();
+        let text = app.tab.doc.annotations.last().unwrap().id;
+        assert_eq!(
+            Membership::new(&app.tab.doc).unwrap().cell_of(text),
+            Some(cell)
+        );
+        if shape_text {
+            assert_eq!(
+                app.tab
+                    .doc
+                    .graphics
+                    .iter()
+                    .find(|g| g.id == holder)
+                    .unwrap()
+                    .text,
+                Some(text)
+            );
+        } else {
+            assert!(
+                app.tab
+                    .doc
+                    .arrow_labels
+                    .iter()
+                    .any(|l| l.arrow == holder && l.annotation == text)
+            );
+        }
+        assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
+        let after = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+    }
+}

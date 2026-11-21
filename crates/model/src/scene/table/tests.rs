@@ -31,6 +31,101 @@ fn cell(id: u32, lo: f32, hi: f32, members: Vec<u64>) -> Cell {
         borders: vec![],
     }
 }
+
+#[test]
+fn newly_placed_affine_text_uses_one_effective_layout_for_creation_scope_and_paint() {
+    for (axis_x, axis_y) in [
+        (Point::new(0., 600.), Point::new(-400., 0.)),
+        (Point::new(-600., 0.), Point::new(0., 400.)),
+        (Point::new(600., 0.), Point::new(5000., 1000.)),
+    ] {
+        let mut doc = Document::default();
+        let mut g = table(vec![cell(37, 0., 1., vec![1])]);
+        g.origin = Point::new(2000., 2000.);
+        g.axis_x = axis_x;
+        g.axis_y = axis_y;
+        let frame = g.table.as_ref().unwrap().cells[0].frame(&g).unwrap();
+        let a = crate::graphics::table::editor::new_text(
+            1,
+            frame,
+            "Product".into(),
+            Default::default(),
+        )
+        .unwrap();
+        let layout = annotation_layout(&a, frame);
+        doc.annotations.push(a.clone());
+        doc.graphics.push(g);
+        let scope = Layout::new(&doc);
+        let effective = scope.annotation(&a);
+        let scoped = crate::typography::cell_layout(&effective.text, &effective.format);
+        assert_eq!((layout.width, layout.height), (scoped.width, scoped.height));
+        let expected = layout
+            .fragments
+            .iter()
+            .map(|f| {
+                (
+                    f.text.clone(),
+                    a.position.offset(f.position.x, f.position.y),
+                )
+            })
+            .collect::<Vec<_>>();
+        let scene = super::super::primitives(&doc);
+        let Primitive::Clip { primitives, .. } = &scene[0] else {
+            panic!("Cell clip")
+        };
+        let painted = primitives
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Text { text, position, .. } => Some((text.clone(), *position)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(painted, expected);
+        assert_eq!(
+            doc.annotations,
+            [a],
+            "Derived layout must not rewrite new cell text"
+        );
+    }
+}
+
+#[test]
+fn picking_uses_affine_cell_clips_without_changing_raw_geometry() {
+    for reflected in [false, true] {
+        let mut doc = Document::default();
+        let mut g = table(vec![cell(1, 0., 0.5, vec![1, 2])]);
+        g.origin = Point::new(40., 30.);
+        g.axis_x = Point::new(if reflected { -200. } else { 200. }, 60.);
+        g.axis_y = Point::new(50., 150.);
+        let frame = g.table.as_ref().unwrap().cells[0].frame(&g).unwrap();
+        let a = doc.add_atom("C", frame.point(Point::new(0.2, 0.5)));
+        let b = doc.add_atom("C", frame.point(Point::new(1.4, 0.5)));
+        doc.add_bond(a, b, 1, "plain");
+        doc.graphics.push(g);
+        let before = doc.file_json().unwrap();
+        let view = Layout::new(&doc);
+        let outside = frame.point(Point::new(1.1, 0.5));
+        assert!(!view.contains(a, outside));
+        assert_eq!(doc.nearest(doc.atom(b).unwrap().position, 2.), None);
+        let (_, end) = view
+            .segment(
+                a,
+                doc.atom(a).unwrap().position,
+                doc.atom(b).unwrap().position,
+            )
+            .unwrap();
+        assert!(end.distance(frame.point(Point::new(1., 0.5))) < 0.001);
+        assert_eq!(crate::editing::nearest_bond(&doc, outside, 2.), None);
+        let enclosing = [
+            Point::new(-1000., -1000.),
+            Point::new(1000., -1000.),
+            Point::new(1000., 1000.),
+            Point::new(-1000., 1000.),
+        ];
+        assert!(!crate::selection_region::objects(&doc, &enclosing).contains(&b));
+        assert_eq!(doc.file_json().unwrap(), before);
+    }
+}
 fn pixels(drawing: &[Primitive], lo: Point, hi: Point) -> resvg::tiny_skia::Pixmap {
     let svg = super::super::svg_part(drawing, lo, hi);
     let options = resvg::usvg::Options {

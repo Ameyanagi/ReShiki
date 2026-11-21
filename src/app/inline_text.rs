@@ -156,6 +156,14 @@ impl App {
                 if let Some(shape) = doc.graphics.iter_mut().find(|g| Some(g.id) == state.shape) {
                     shape.text = Some(id);
                 }
+                if let Some(shape) = state.shape {
+                    reshiki::graphics::table::inherit_attachment(
+                        &self.tab.doc,
+                        &mut doc,
+                        &[id],
+                        &[shape],
+                    )?;
+                }
             }
             (None, true) => {}
         }

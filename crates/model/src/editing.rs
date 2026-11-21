@@ -1171,6 +1171,7 @@ pub fn nearest_bond_where(
     }
     let drawn = doc.abbreviation_render_copy();
     let doc = drawn.as_ref();
+    let cells = crate::scene::table::Layout::new(doc);
     // One index per query replaces two linear atom searches for every bond.
     // Reversed insertion retains Document::atom's first-ID behavior even for
     // an unvalidated document containing duplicate IDs.
@@ -1187,6 +1188,10 @@ pub fn nearest_bond_where(
         .filter_map(|(i, b)| {
             let (a_id, z_id) = (b.a, b.b);
             let (a, z) = (*positions.get(&a_id)?, *positions.get(&z_id)?);
+            if !cells.contains(a_id, p) {
+                return None;
+            }
+            let (a, z) = cells.segment(a_id, a, z)?;
             let distance = crate::graphics::segment_distance(p, a, z);
             if !(distance < r && doc.bond_drawn(b.a, b.b) && allowed(b.a, b.b, a, z)) {
                 return None;
@@ -1197,6 +1202,7 @@ pub fn nearest_bond_where(
                         .is_some_and(|group| group.exit.is_some())
                 }) {
                 let (a, z) = crate::scene::bond_segment(doc, b, None)?;
+                let (a, z) = cells.segment(a_id, a, z)?;
                 crate::graphics::segment_distance(p, a, z)
             } else {
                 distance

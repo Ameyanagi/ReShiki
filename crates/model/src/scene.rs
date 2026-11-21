@@ -18,7 +18,7 @@ pub(crate) use group_labels::clearer_orientation;
 mod occlusion;
 pub(crate) mod projected_bonds;
 mod svg;
-mod table;
+pub mod table;
 pub use table::annotation_layout as table_annotation_layout;
 
 #[derive(Debug, Clone)]
@@ -279,6 +279,7 @@ pub fn atom_label_hit_where(
     let doc = drawn.as_ref();
     let reach = LabelReach::new(doc);
     let isotopes = HydrogenIsotopeLabels::new(doc);
+    let cells = table::Layout::new(doc);
     let mut best: Option<(bool, f32, u64)> = None;
     for atom in doc.atoms.iter().rev() {
         // Laying out a label is costly, so skip atoms it cannot reach from.
@@ -287,6 +288,7 @@ pub fn atom_label_hit_where(
             || (atom.position.y - point.y).abs() > limit
             || crate::models3d::hides(doc, atom.id)
             || !allowed(atom.id)
+            || !cells.contains(atom.id, point)
         {
             continue;
         }
@@ -371,6 +373,7 @@ fn abbreviation_label_hit_prepared_in(
     bounds: impl Fn(u64, Point, Point) -> bool,
 ) -> Option<u64> {
     let reach = LabelReach::new(doc);
+    let cells = table::Layout::new(doc);
     let atoms: std::collections::HashMap<_, _> =
         doc.atoms.iter().rev().map(|atom| (atom.id, atom)).collect();
     doc.abbreviations.iter().rev().find_map(|group| {
@@ -379,6 +382,7 @@ fn abbreviation_label_hit_prepared_in(
         if (atom.position.x - point.x).abs() > limit
             || (atom.position.y - point.y).abs() > limit
             || crate::models3d::hides(doc, group.anchor)
+            || !cells.contains(group.anchor, point)
         {
             return None;
         }

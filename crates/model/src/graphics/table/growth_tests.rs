@@ -48,6 +48,109 @@ fn assert_owned(doc: &Document, ids: &[u64], target: CellRef) {
     let membership = Membership::new(doc).unwrap();
     assert!(ids.iter().all(|id| membership.cell_of(*id) == Some(target)));
 }
+
+#[test]
+fn converting_cell_captions_transfers_every_replacement_atom_before_deletion() {
+    for label in ["N", "Et", "NC"] {
+        let (mut doc, atom, target) = owned_atom();
+        let text = doc.next_id();
+        doc.annotations.push(crate::document::Annotation {
+            id: text,
+            position: Point::new(90., 70.),
+            text: label.into(),
+            angle: 0.,
+            format: Default::default(),
+        });
+        doc.graphics[0].table.as_mut().unwrap().cells[0]
+            .members
+            .push(text);
+        let before = doc.clone();
+        let (converted, anchor) =
+            crate::atom_text::text_to_atom_toward(&doc, text, Some(Point::new(120., 70.))).unwrap();
+        assert_eq!(doc, before);
+        assert!(converted.annotations.iter().all(|a| a.id != text));
+        let added: Vec<_> = converted
+            .atoms
+            .iter()
+            .filter(|a| a.id != atom)
+            .map(|a| a.id)
+            .collect();
+        assert!(added.contains(&anchor));
+        assert_owned(&converted, &added, target);
+        let (joined, _) = editing::add_bonded_atom(
+            &converted,
+            anchor,
+            converted.atom(atom).unwrap().position,
+            Some(atom),
+            "C",
+        )
+        .unwrap();
+        joined.validate().unwrap();
+    }
+}
+
+#[test]
+fn typed_arrow_labels_inherit_cells_but_existing_cross_cell_text_does_not() {
+    use crate::document::{Annotation, Arrow};
+    for existing in [false, true] {
+        for other_cell in [false, true] {
+            let (mut doc, _, target) = owned_atom();
+            let arrow = doc.next_id();
+            doc.arrows.push(Arrow::new(
+                arrow,
+                Point::new(20., 130.),
+                Point::new(130., 130.),
+                Default::default(),
+                Default::default(),
+            ));
+            doc.graphics[0].table.as_mut().unwrap().cells[0]
+                .members
+                .push(arrow);
+            let text = doc.next_id();
+            let mut caption = Annotation {
+                id: text,
+                position: Point::new(60., 20.),
+                text: "heat".into(),
+                angle: 0.,
+                format: Default::default(),
+            };
+            if existing || other_cell {
+                doc.annotations.push(caption.clone());
+            }
+            if other_cell {
+                doc.graphics[0].table.as_mut().unwrap().cells[1]
+                    .members
+                    .push(text);
+            }
+            let before = doc.clone();
+            let (w, h) = caption.size();
+            caption.position = Point::new(75. - w * 0.5, 118. - h * 0.5);
+            if existing || other_cell {
+                *doc.annotations.iter_mut().find(|a| a.id == text).unwrap() = caption;
+            } else {
+                doc.annotations.push(caption);
+            }
+            crate::transaction::reconcile(&mut doc, before).unwrap();
+            doc.validate().unwrap();
+            if !existing && !other_cell {
+                assert_eq!(doc.arrow_labels[0].annotation, text);
+                assert_owned(&doc, &[arrow, text], target);
+            } else {
+                assert!(
+                    doc.arrow_labels.is_empty(),
+                    "existing text never changes cells automatically"
+                );
+                assert_eq!(
+                    Membership::new(&doc).unwrap().cell_of(text),
+                    other_cell.then_some(CellRef {
+                        table: 100,
+                        cell: 2
+                    })
+                );
+            }
+        }
+    }
+}
 #[test]
 fn ordinary_bond_atom_chain_and_ring_growth_inherit_only_the_attachment_cell() {
     let (doc, atom, target) = owned_atom();

@@ -195,11 +195,8 @@ impl<'a> CellClips<'a> {
         if !self.is_empty() && self.owners().contains_key(&annotation.id) {
             return self.annotation_contains(annotation, p);
         }
-        // Preserve the ordinary held-text hit box; cell text additionally
-        // needs its derived dimensions, pivot and affine content boundary.
-        let (width, height) = annotation.size();
-        (annotation.position.x..annotation.position.x + width).contains(&p.x)
-            && (annotation.position.y..annotation.position.y + height).contains(&p.y)
+        // Keep the core's turned-caption hit convention outside cells too.
+        annotation.contains(p)
     }
 
     pub(super) fn annotation_ink_contains(&self, annotation: &Annotation, p: World) -> bool {
