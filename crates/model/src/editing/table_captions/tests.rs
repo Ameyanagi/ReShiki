@@ -6,6 +6,7 @@ use crate::{
         table::{Cell, Frame, Membership, Table},
     },
     scene::Primitive,
+    typography::TextAlign,
 };
 
 // Native QA geometry: three columns and two rows, with the existing Entry and
@@ -278,4 +279,183 @@ fn raw_owned_overflow_keeps_its_existing_insertion_point_transform() {
             1
         );
     }
+}
+
+fn left(frame: Frame) -> f32 {
+    frame
+        .corners()
+        .iter()
+        .map(|p| p.x)
+        .fold(f32::INFINITY, f32::min)
+}
+
+#[test]
+fn auto_right_and_center_keep_semantic_insets_and_complete_glyphs_when_centres_are_unattainable() {
+    for alignment in [TextAlign::Right, TextAlign::Center] {
+        for transform in [
+            Transform::Rotate(180.),
+            Transform::FlipHorizontal,
+            Transform::FlipVertical,
+        ] {
+            let mut doc = drawing();
+            for a in &mut doc.annotations {
+                a.format.alignment = alignment;
+            }
+            assert_visible(&doc);
+            let before = doc.clone();
+            editing::transform(&mut doc, &[1], transform);
+            assert_visible(&doc);
+            for i in 0..3 {
+                assert_eq!(doc.annotations[i].format, before.annotations[i].format);
+                assert_eq!(doc.annotations[i].angle, 0.);
+                let old_inset = before.annotations[i].position.x - left(frame(&before, i));
+                let inset = doc.annotations[i].position.x - left(frame(&doc, i));
+                assert!((inset - old_inset).abs() < 0.001);
+                let old_centre = centre(&cell_ink(&before, i)).x - left(frame(&before, i));
+                let new_centre = centre(&cell_ink(&doc, i)).x - left(frame(&doc, i));
+                assert!((new_centre - old_centre).abs() < 0.001);
+            }
+            let after = doc.clone();
+            let mut history = crate::document::History::default();
+            assert!(history.commit(before.clone(), &doc));
+            assert!(history.undo(&mut doc));
+            assert_eq!(doc, before);
+            assert!(history.redo(&mut doc));
+            assert_eq!(doc, after);
+            // Keeping the source Auto width also retains the original wraps
+            // and makes a second reflection/half-turn restore the raw inset.
+            editing::transform(&mut doc, &[1], transform);
+            assert_visible(&doc);
+            for (a, old) in doc.annotations.iter().zip(&before.annotations) {
+                assert!(a.position.distance(old.position) < 0.001);
+                assert_eq!(a.format, old.format);
+            }
+        }
+    }
+}
+
+#[test]
+fn aligned_auto_wrap_survives_a_mirrored_font_bearing_at_the_cell_edge() {
+    for alignment in [TextAlign::Right, TextAlign::Center] {
+        let mut doc = drawing();
+        for i in 0..3 {
+            doc.annotations[i].format.alignment = alignment;
+            let raw = doc.annotations[i].position;
+            let bottom = frame(&doc, i)
+                .corners()
+                .iter()
+                .map(|p| p.y)
+                .fold(f32::NEG_INFINITY, f32::max);
+            let ink_bottom = cell_ink(&doc, i)
+                .iter()
+                .flatten()
+                .map(|p| p.y - raw.y)
+                .fold(f32::NEG_INFINITY, f32::max);
+            doc.annotations[i].position.y = bottom - ink_bottom - 0.1;
+        }
+        assert_visible(&doc);
+        let formats: Vec<_> = doc.annotations.iter().map(|a| a.format.clone()).collect();
+        editing::transform(&mut doc, &[1], Transform::Rotate(180.));
+        assert_visible(&doc);
+        for (i, a) in doc.annotations.iter().enumerate() {
+            let p = frame(&doc, i).local(a.position).unwrap();
+            assert!((0. ..1.).contains(&p.x) && (0. ..1.).contains(&p.y));
+            assert_eq!(a.format, formats[i]);
+        }
+    }
+}
+
+#[test]
+fn explicit_width_right_and_center_use_fully_visible_exact_centres_when_attainable() {
+    for alignment in [TextAlign::Right, TextAlign::Center] {
+        let mut doc = drawing();
+        for a in &mut doc.annotations {
+            a.format.alignment = alignment;
+            a.format.width_pt = Some(55.);
+        }
+        assert_visible(&doc);
+        let before = doc.clone();
+        let centres: Vec<_> = (0..3).map(|i| centre(&cell_ink(&doc, i))).collect();
+        let pivot = editing::rotation_center(&doc, &[1]).unwrap();
+        editing::transform(&mut doc, &[1], Transform::Rotate(180.));
+        assert_visible(&doc);
+        for (i, old) in centres.iter().enumerate() {
+            assert!(centre(&cell_ink(&doc, i)).distance(old.turned(pivot, 180.)) < 0.001);
+            assert_eq!(doc.annotations[i].format, before.annotations[i].format);
+        }
+    }
+}
+
+#[test]
+fn partial_overflow_is_never_captured_and_keeps_the_identical_raw_transform() {
+    use std::collections::HashSet;
+    for angle in [0., 15.] {
+        for transform in [
+            Transform::Rotate(180.),
+            Transform::FlipHorizontal,
+            Transform::FlipVertical,
+        ] {
+            let mut doc = drawing();
+            doc.annotations[0].text = "Entry\nEntry".into();
+            doc.annotations[0].position = frame(&doc, 0).point(Point::new(0.05, 0.7));
+            doc.annotations[0].angle = angle;
+            let cells = crate::scene::table::Layout::new(&doc);
+            let old_ink = super::Ink::new(&cells, &doc.annotations[0]).unwrap();
+            assert!(old_ink.visible > 0 && old_ink.visible < old_ink.total);
+            let ids: HashSet<_> = crate::graphics::table::with_contents(&doc, &[1])
+                .into_iter()
+                .collect();
+            let captured = super::Positions::new(&doc, &ids);
+            assert!(captured.get(2).is_none());
+            assert!(captured.get(3).is_some());
+            let old = doc.annotations[0].clone();
+            let references = crate::graphics::table::reference_ids(&doc, &[1]);
+            let pivot = if matches!(transform, Transform::Rotate(_)) {
+                editing::rotation_center(&doc, &[1]).unwrap()
+            } else {
+                editing::center(&doc, &references)
+            };
+            let vector = |p: Point| match transform {
+                Transform::FlipHorizontal => Point::new(-p.x, p.y),
+                Transform::FlipVertical => Point::new(p.x, -p.y),
+                _ => {
+                    let (s, c) = 180f32.to_radians().sin_cos();
+                    Point::new(p.x * c - p.y * s, p.x * s + p.y * c)
+                }
+            };
+            let convert = |p: Point| {
+                let p = vector(Point::new(p.x - pivot.x, p.y - pivot.y));
+                pivot.offset(p.x, p.y)
+            };
+            let mut expected = old.clone();
+            if angle == 0. {
+                expected.position = convert(old.position);
+            } else {
+                let (w, h) = old.size();
+                let centre = convert(old.position.offset(w / 2., h / 2.));
+                let (s, c) = angle.to_radians().sin_cos();
+                expected.angle = crate::document::text_angle(
+                    vector(Point::new(c, s)),
+                    vector(Point::new(-s, c)),
+                );
+                expected.position = centre.offset(-w / 2., -h / 2.);
+            }
+            editing::transform(&mut doc, &[1], transform);
+            assert_eq!(doc.annotations[0], expected);
+        }
+    }
+}
+
+#[test]
+fn empty_or_noncaptured_selections_need_no_post_transform_cell_layout() {
+    use std::collections::HashSet;
+    let mut doc = drawing();
+    assert!(super::Positions::new(&doc, &HashSet::from([2])).is_empty());
+    for a in &mut doc.annotations {
+        a.text = " \n ".into();
+    }
+    let selected = HashSet::from([1, 2, 3, 4]);
+    assert!(super::Positions::new(&doc, &selected).is_empty());
+    doc.graphics.clear();
+    assert!(super::Positions::new(&doc, &selected).is_empty());
 }

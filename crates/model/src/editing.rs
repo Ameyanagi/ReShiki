@@ -984,12 +984,12 @@ fn map_positions(
     let turns = only_text(doc, &ids)
         && crate::document::text_angle(vector(Point::new(1., 0.)), vector(Point::new(0., 1.)))
             != 0.;
-    let cells = crate::scene::table::Layout::new(doc);
+    let cells = (!captions.is_empty()).then(|| crate::scene::table::Layout::new(doc));
     for a in &mut doc.annotations {
         if !ids.contains(&a.id) {
             continue;
         }
-        if let Some(position) = captions.get(a.id) {
+        if let (Some(position), Some(cells)) = (captions.get(a.id), cells.as_ref()) {
             if a.angle != 0. || turns {
                 let (s, c) = a.angle.to_radians().sin_cos();
                 a.angle = crate::document::text_angle(
@@ -997,7 +997,7 @@ fn map_positions(
                     vector(Point::new(-s, c)),
                 );
             }
-            position.place(a, &cells, &convert);
+            position.place(a, cells, &convert, &vector);
         } else if a.angle == 0. && !turns {
             a.position = convert(a.position);
         } else {
