@@ -191,13 +191,13 @@ impl App {
             .iter()
             .filter(|g| self.tab.selected.contains(&g.id) && g.picture.is_none())
             .collect();
-        let kind = match self.tool {
-            Tool::Graphic(k) => k,
-            _ => selected
-                .first()
-                .map(|g| g.kind)
-                .unwrap_or(GraphicKind::Rectangle),
-        };
+        let kind = selected.first().map(|g| g.kind).unwrap_or_else(|| {
+            if let Tool::Graphic(kind) = self.tool {
+                kind
+            } else {
+                GraphicKind::Rectangle
+            }
+        });
         // The same palette rows as the color popover, on the canvas color.
         let palette = Palette::of(&self.tab.doc);
         let hues = reshiki::palette::Hues::of(&self.tab.doc);
@@ -223,7 +223,7 @@ impl App {
             };
         let mut panel = column![
             section(if selected.is_empty() {
-                "Drawing style"
+                "Graphic defaults"
             } else {
                 "Graphic style"
             }),

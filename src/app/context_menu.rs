@@ -1058,10 +1058,8 @@ impl App {
             Action::Properties(molecular) => {
                 self.context_menu = None;
                 if molecular {
-                    self.tab.inspector_ui.update(inspector::Action::Section(
-                        inspector::Section::Molecule,
-                        true,
-                    ));
+                    self.tool = Tool::Select;
+                    self.tab.inspector_ui.request_molecule();
                 }
                 return self.update(Message::Inspector(InspectorTab::Properties));
             }

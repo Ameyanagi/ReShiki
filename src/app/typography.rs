@@ -769,7 +769,11 @@ impl App {
             .spacing(10)
             .into();
         }
-        if self.tool == Tool::Text {
+        let selected = self
+            .tab
+            .caption_target
+            .is_some_and(|id| self.tab.selected.contains(&id));
+        if self.tool == Tool::Text && !selected {
             let mut body = column![
                 section("Text labels"),
                 text(
@@ -805,10 +809,6 @@ impl App {
             }
             return body.into();
         }
-        let selected = self
-            .tab
-            .caption_target
-            .is_some_and(|id| self.tab.selected.contains(&id));
         column![
             section(if selected { "Edit text" } else { "New text" }),
             text(if selected {

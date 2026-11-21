@@ -10,6 +10,9 @@ use reshiki::{
 impl App {
     /// Replaces the selection and refreshes its cached inspector controls.
     pub(super) fn set_selection(&mut self, ids: Vec<u64>) {
+        if self.tab.selected != ids {
+            self.tab.inspector_ui.clear_requested_molecule();
+        }
         self.tab.selected = ids;
         self.sync_typography();
         self.sync_graphics();

@@ -877,6 +877,7 @@ impl App {
     }
     fn prepare_document_change(&mut self, changed: bool) {
         if changed {
+            self.tab.inspector_ui.clear_requested_molecule();
             self.tab.arrows.cancel_source();
         }
     }

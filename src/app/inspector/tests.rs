@@ -112,8 +112,9 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
             app.tab.inspector_ui.seed_molecular(Some(expanded));
             let text = panel_text(&app, &mut renderer);
             assert!(text.contains("Molecular properties"), "{text}");
-            assert!(
+            assert_eq!(
                 text.contains("Whole drawing · Cl₄KNa₃ · 249.880\u{a0}g/\u{2060}mol"),
+                app.tab.selected.is_empty(),
                 "{text}"
             );
             assert_eq!(
@@ -121,11 +122,7 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
                 !app.tab.selected.is_empty(),
                 "{text}"
             );
-            assert_eq!(
-                text.matches("\u{a0}g/\u{2060}mol").count(),
-                if app.tab.selected.is_empty() { 1 } else { 2 },
-                "{text}"
-            );
+            assert_eq!(text.matches("\u{a0}g/\u{2060}mol").count(), 1, "{text}");
             assert_eq!(
                 text.contains(reshiki::models3d::crystal::ANALYSIS_NOTICE),
                 expanded,

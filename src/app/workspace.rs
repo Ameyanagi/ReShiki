@@ -1420,6 +1420,20 @@ impl App {
         hover_hint(anchor, hint, tooltip::Position::Bottom).into()
     }
 
+    /// Inspector defaults reuse context controls that have no row-specific IDs.
+    /// Graphics keep their dedicated panel (including its own arc preset IDs).
+    pub(super) fn property_tool_options(
+        &self,
+    ) -> (Vec<Element<'_, Message>>, std::borrow::Cow<'static, str>) {
+        match self.tool {
+            tool if tool.bond_preset().is_some() => self.tool_options(false),
+            Tool::Chain(_) | Tool::Atom | Tool::Ring | Tool::RingPreset(_) | Tool::Arrow => {
+                self.tool_options(false)
+            }
+            _ => (vec![], self.tool.hint().into()),
+        }
+    }
+
     /// Options for the current tool, and the usage hint shown on the tool
     /// name (`Tool::hint`). `summary` shows the selection summary of the
     /// selection tools.

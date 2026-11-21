@@ -44,6 +44,7 @@ struct CompositionCache {
 /// The pin beside a property row.
 const PIN: f32 = 20.;
 
+mod context;
 mod identity;
 pub use identity::{IdentityCopyKey, IdentityField};
 
@@ -122,6 +123,8 @@ pub enum Section {
     Transform,
     Groups,
     Molecule,
+    /// An explicitly requested fragment/whole analysis; cleared with selection.
+    RequestedMolecule,
     Descriptors,
     NameOptions,
     Chemistry,
@@ -382,6 +385,15 @@ impl State {
         }
     }
 
+    pub(super) fn request_molecule(&mut self) {
+        self.expanded.insert(Section::Molecule, true);
+        self.expanded.insert(Section::RequestedMolecule, true);
+    }
+
+    pub(super) fn clear_requested_molecule(&mut self) {
+        self.expanded.remove(&Section::RequestedMolecule);
+    }
+
     pub(super) fn seed_molecular(&mut self, expanded: Option<bool>) {
         if let Some(expanded) = expanded {
             self.expanded.insert(Section::Molecule, expanded);
@@ -492,9 +504,8 @@ impl App {
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Properties;
         self.tab.inspector_ui.model_controls = false;
-        self.tab
-            .inspector_ui
-            .update(Action::Section(Section::Molecule, true));
+        self.tool = Tool::Select;
+        self.tab.inspector_ui.request_molecule();
 
         let key = self.property_request_key();
         let properties = if key.atoms.is_empty() {
@@ -531,7 +542,7 @@ impl App {
             }
         }
         iced::advanced::widget::operate(reshiki::accessibility::FocusControl::reveal(
-            "inspector-section-Molecule",
+            "inspector-section-RequestedMolecule",
         ))
         .discard()
     }
@@ -1020,36 +1031,12 @@ impl App {
     fn ordinary_properties_panel(&self) -> Element<'_, Message> {
         let selected: HashSet<_> = self.tab.selected.iter().copied().collect();
         let opened = self.opened_section();
-        let mut body = column![
-            text(if self.tab.selected.is_empty() {
-                if self.tool.selects() {
-                    "Select an object to edit its properties."
-                } else {
-                    "Settings apply to the next object you draw."
-                }
-                .into()
-            } else {
-                self.selection_summary()
-            })
-            .size(12)
-            .style(muted_text)
-        ]
-        .spacing(10);
-        if let Some(error) = self
-            .tab
-            .chemistry_notice
-            .as_deref()
-            .filter(|notice| *notice != reshiki::atom_labels::refresh::GENERIC_NOTICE)
-        {
-            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
-                text(notice).size(12).style(muted_text)
-            } else {
-                text(error)
-                    .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
-            });
+        if selected.is_empty() {
+            return self.unselected_properties_panel();
         }
         let model = self.selected_existing_model();
+        let molecular = self.properties_molecular_selection(&selected, model.is_some());
+        let mut body = column![text(self.properties_selection_summary()).size(14)].spacing(10);
         let crystal_first = model.is_some_and(|model| {
             model.cell.is_some() && model.display == reshiki::models3d::Display::TwoD
         });
@@ -1068,77 +1055,12 @@ impl App {
                 .on_press(Message::InspectorAction(Action::ModelControls(true))),
             );
         }
-        let color_issues = reshiki::canvas_theme::label_contrast_issues(&self.tab.doc);
-        if !color_issues.is_empty() {
-            body = body.push(hover_hint(
-                text(match color_issues.len() {
-                    1 => "1 label has low contrast".into(),
-                    n => format!("{n} labels have low contrast"),
-                })
-                .size(11)
-                .style(muted_text),
-                "Against the canvas or a ring fill · Change the label or fill color",
-                tooltip::Position::Bottom,
-            ));
-        }
-        let molecular_first = self.tab.selected.is_empty()
-            || self.property_key().is_some_and(|key| !key.atoms.is_empty());
-        // Keep the active ring tool's placement card visible above the expanded values.
-        let ring_tool = matches!(self.tool, Tool::RingPreset(_));
-        if molecular_first && !ring_tool {
-            body = body.push(self.molecular_section(opened));
-        }
-        if let Tool::RingPreset(preset) = self.tool {
-            use reshiki::rings::Preset;
-            let details = format!(
-                "{} {} on an atom connects the ring with a new bond. Each placement is one Undo step. {}",
-                if preset == Preset::Benzene {
-                    "Click an aromatic carbon to attach a phenyl group, or a bond to fuse. Terminal carbons become part of the ring. Drag to choose the direction."
-                } else {
-                    "Click to place. Drag to rotate or choose an attachment side. Click an atom to share it, or a bond to fuse."
-                },
-                crate::platform::alt_key(),
-                match preset {
-                    Preset::Benzene | Preset::Cyclopentadiene =>
-                        "Hold Shift to move the double bonds.",
-                    Preset::HaworthFive | Preset::HaworthSix =>
-                        "Haworth outlines have a bold front edge. Templates → Carbohydrates contains oxygen scaffolds and defined α/β sugars. These blank outlines do not assign stereochemistry.",
-                    _ =>
-                        "Chair projections do not assign stereochemistry. Cleanup may redraw them as regular hexagons.",
-                }
-            );
-            body = body.push(card(
-                container(
-                    column![
-                        text(preset.to_string()).size(14),
-                        hover_hint(
-                            crate::canvas::layered::canvas(crate::canvas::DrawingThumbnail(
-                                preset.document(self.tab.bond_drawing.length, false)
-                            ))
-                            .width(Length::Fill)
-                            .height(90),
-                            details,
-                            tooltip::Position::Left,
-                        ),
-                        text("Click to place · Click a bond to fuse.")
-                            .size(11)
-                            .style(muted_text),
-                    ]
-                    .spacing(8),
-                )
-                .padding(12),
-            ));
-        }
-        if molecular_first && ring_tool {
-            body = body.push(self.molecular_section(opened));
-        }
-        if matches!(self.tool, Tool::Graphic(_))
-            || self
-                .tab
-                .doc
-                .graphics
-                .iter()
-                .any(|g| selected.contains(&g.id) && g.picture.is_none())
+        if self
+            .tab
+            .doc
+            .graphics
+            .iter()
+            .any(|g| selected.contains(&g.id) && g.picture.is_none())
         {
             body = body.push(card(container(self.graphic_panel()).padding(12)));
         }
@@ -1154,108 +1076,47 @@ impl App {
         {
             body = body.push(card(container(self.picture_panel()).padding(12)));
         }
-        if self.tool == Tool::Arrow || self.tab.doc.arrows.iter().any(|a| selected.contains(&a.id))
-        {
+        if self.tab.doc.arrows.iter().any(|a| selected.contains(&a.id)) {
             body = body.push(card(container(self.arrow_panel()).padding(12)));
         }
         if let Some(panel) = self.arrow_label_gap_panel() {
             body = body.push(panel);
         }
-        if self.tool == Tool::Text
-            || (self.tab.selected.len() == 1
-                && self
-                    .tab
-                    .caption_target
-                    .is_some_and(|id| self.tab.selected.contains(&id)))
+        if self.tab.selected.len() == 1
+            && self
+                .tab
+                .caption_target
+                .is_some_and(|id| selected.contains(&id))
         {
             body = body.push(card(container(self.text_panel()).padding(12)));
         }
-        if !self.tab.selected.is_empty() {
-            body = body.push(self.selection_panel(&selected, opened));
-        }
-        // The card replaces the informational notice of a generic drawing.
-        if let Some(section) = self.generic_structure_section() {
-            body = body.push(section);
-        }
-        if !molecular_first {
+        if molecular {
             body = body.push(self.molecular_section(opened));
         }
-        if !self.tab.stereo_notes.is_empty() {
-            body = body.push(card(
-                container(self.stereo_note_lines(
-                    column![super::workspace::section("Stereochemistry")].spacing(5),
-                    "stereo",
-                ))
-                .padding(12),
-            ));
+        body = body.push(self.selection_panel(&selected, opened));
+        if self.properties_generic_selection()
+            && let Some(section) = self.generic_structure_section()
+        {
+            body = body.push(section);
         }
-        body = body.push(self.inspector_section_lazy(
-            Section::Chemistry,
-            "Labels & chemistry",
-            "",
-            false,
-            || {
-                let chemistry = column![
-                    panel_action("Normalize depiction", Message::NormalizeDepiction),
-                    panel_action(
-                        "Reaction roles…",
-                        Message::Reaction(super::reactions::Action::Open)
-                    ),
-                    panel_action(
-                        "Atom labels & numbering…",
-                        Message::Inspector(InspectorTab::Labels)
-                    ),
-                    panel_action(
-                        "Chemical abbreviations…",
-                        Message::Inspector(InspectorTab::Abbreviations)
-                    ),
-                ]
-                .spacing(3);
-                if self.tab.doc.atoms.iter().any(|a| selected.contains(&a.id)) {
-                    chemistry.push(self.attachment_points())
-                } else {
-                    chemistry
-                }
-            },
-        ));
-        // A 2D crystal keeps Repeat and Look along first; other model controls follow chemistry.
-        if !crystal_first && let Some(section) = self.structure_section() {
+        // A 2D crystal keeps Repeat and Look along first; other selected model
+        // controls follow the selection's chemistry and appearance.
+        if molecular
+            && !crystal_first
+            && let Some(section) = self.structure_section()
+        {
             body = body.push(section);
         }
         if let Some(section) = self.model_section() {
             body = body.push(section);
         }
-        if let Some(section) = self.rear_opacity_section(self.depth_ids()) {
+        if molecular && let Some(section) = self.rear_opacity_section(self.depth_ids()) {
             body = body.push(section);
         }
-        body = body.push(
-            self.inspector_section(
-                Section::DrawingStyle,
-                "Drawing style",
-                &self.tab.doc.drawing_style.name,
-                false,
-                column![
-                    text(format!(
-                        "{} {} pt\nBonds {} pt · Lines {} pt\nPNG files at {} dpi",
-                        self.tab.doc.drawing_style.font_family,
-                        self.tab.doc.drawing_style.font_size_pt,
-                        self.tab.doc.drawing_style.bond_length_pt,
-                        self.tab.doc.drawing_style.line_width_pt,
-                        self.appearance.export_dpi.get()
-                    ))
-                    .size(12)
-                    .style(muted_text),
-                    panel_action(
-                        "Edit drawing style…",
-                        Message::DrawingStyle(super::document_styles::Action::Open)
-                    ),
-                ]
-                .spacing(8),
-            ),
-        );
-        if self.tab.selected.is_empty() {
-            return body.into();
+        if let Some(notice) = self.properties_contrast_notice(Some(&selected)) {
+            body = body.push(notice);
         }
+        // Keep this the final control for every ordinary selection context.
         body.push(
             reshiki::accessibility::button(
                 "selection-delete",
@@ -1278,16 +1139,27 @@ impl App {
 
     fn molecular_section(&self, opened: Option<Section>) -> Element<'_, Message> {
         let special = self.special_molecular_scope();
+        let section = if self.requested_molecular_properties() {
+            Section::RequestedMolecule
+        } else {
+            Section::Molecule
+        };
+        let summary = self.property_summary();
+        let summary = if self.tab.selected.is_empty() {
+            summary
+        } else {
+            summary.rsplit('\n').next().unwrap_or("").to_owned()
+        };
         column![
             self.inspector_section_lazy(
-                Section::Molecule,
+                section,
                 if special {
                     "Molecular properties"
                 } else {
                     "Identity"
                 },
-                self.property_summary(),
-                opened == Some(Section::Molecule),
+                summary,
+                opened == Some(section) || section == Section::RequestedMolecule,
                 || self.molecular_properties(),
             ),
             (!special && self.property_analysis().is_some()).then(|| {
@@ -1566,7 +1438,11 @@ impl App {
                 .style(muted_text)
         })]
         .spacing(8);
-        for hint in self.checked_arrow_hints() {
+        for hint in self
+            .checked_arrow_hints()
+            .iter()
+            .filter(|hint| self.tab.selected.is_empty() || self.tab.selected.contains(&hint.arrow))
+        {
             body = body.push(text(hint.kind.message()).size(11).style(muted_text));
         }
         let selected: Vec<_> = ids.iter().copied().collect();
@@ -1869,6 +1745,9 @@ impl App {
                 opened == Some(Section::Atoms),
                 || self.atom_detail_controls(first, &atoms),
             ));
+        }
+        if !atoms.is_empty() {
+            body = body.push(card(container(self.attachment_points()).padding(12)));
         }
         if let Some(section) = self.stereo_group_section(&atoms) {
             body = body.push(section);
