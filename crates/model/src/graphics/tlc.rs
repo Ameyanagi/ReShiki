@@ -116,7 +116,7 @@ impl TlcPlate {
                 || !(0. ..=1.).contains(&spot.rf)
                 || ![spot.width_pt, spot.height_pt]
                     .into_iter()
-                    .all(|n| n.is_finite() && n >= 1. / 65536. && n <= 32767.)
+                    .all(|n| n.is_finite() && (1. / 65536. ..=32767.).contains(&n))
             {
                 return Err("Invalid TLC spot fraction or physical dimensions".into());
             }
