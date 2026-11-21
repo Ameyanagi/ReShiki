@@ -112,6 +112,7 @@ impl App {
         let g = graphics.next()?;
         (graphics.next().is_none() && g.tlc.is_some()).then_some(g)
     }
+    #[cfg(test)]
     pub(super) fn tlc_panel_visible(&self) -> bool {
         self.tool == crate::canvas::Tool::Graphic(reshiki::graphics::GraphicKind::TlcPlate)
             || self
