@@ -36,11 +36,11 @@ fn type_into(doc: &mut Document, text: &str) -> u64 {
             ..Default::default()
         };
         doc.annotations.push(Annotation {
-            angle: 0.,
             id,
             position: start(&g, &format),
             text: text.into(),
             format,
+            angle: 0.,
         });
         doc.graphics[0].text = Some(id);
     });
@@ -126,18 +126,58 @@ fn dragging_the_text_drags_its_shape() {
 }
 
 #[test]
-fn a_rotated_shape_wraps_text_to_its_horizontal_chord() {
-    // A 80 × 40 rectangle turned a quarter: 40 wide on the page.
-    let mut doc = shape(
-        GraphicKind::Rectangle,
-        Point::new(0., 0.),
-        Point::new(80., 40.),
-    );
-    doc.graphics[0].axis_x = Point::new(0., 80.);
-    doc.graphics[0].axis_y = Point::new(-40., 0.);
+fn text_turns_with_its_shape_and_wraps_along_it() {
+    // A 80 × 40 rectangle turned a quarter clockwise.
+    let mut doc = shape_with("hν");
+    let id = doc.graphics[0].text.unwrap();
+    edit(&mut doc, |doc| {
+        let g = &mut doc.graphics[0];
+        g.origin = Point::new(0., 0.);
+        g.axis_x = Point::new(0., 80.);
+        g.axis_y = Point::new(-40., 0.);
+    });
     let (centre, width) = inner(&doc.graphics[0]);
     assert!(near(centre, Point::new(-20., 40.)));
-    assert!((width - 40. * 0.85).abs() < 1e-3);
+    assert!((width - 80. * 0.85).abs() < 1e-3, "{width}");
+    let a = text(&doc, id);
+    assert!((a.angle - 90.).abs() < 1e-3, "{}", a.angle);
+    assert!(near(centre_of(a), centre));
+
+    // A mirrored shape keeps its text readable, not upside down.
+    edit(&mut doc, |doc| {
+        let g = &mut doc.graphics[0];
+        g.axis_x = Point::new(-80., 0.);
+        g.axis_y = Point::new(0., 40.);
+    });
+    assert_eq!(text(&doc, id).angle, 0.);
+}
+
+#[test]
+fn legacy_caption_keeps_its_saved_placement_until_edited() {
+    let mut legacy = shape_with("Held caption from an older drawing");
+    let id = legacy.graphics[0].text.unwrap();
+    legacy.graphics[0].axis_x = Point::new(0., 200.);
+    legacy.graphics[0].axis_y = Point::new(-80., 0.);
+    let centre = inner(&legacy.graphics[0]).0;
+    place(&mut legacy.annotations[0], centre, 22., 0.);
+    let json = serde_json::to_string(&legacy.current()).unwrap();
+    let mut doc: Document = serde_json::from_str(&json).unwrap();
+    let saved = text(&doc, id).clone();
+
+    edit(&mut doc, |_| {});
+    assert_eq!(text(&doc, id), &saved);
+    edit(&mut doc, |doc| {
+        doc.add_atom("O", Point::new(300., 300.));
+    });
+    assert_eq!(text(&doc, id), &saved);
+
+    edit(&mut doc, |doc| {
+        doc.annotations[0].text.push('!');
+    });
+    let updated = text(&doc, id);
+    assert_eq!(updated.angle, 90.);
+    assert_eq!(updated.format.width_pt, Some(width_pt(&doc.graphics[0])));
+    assert!(near(centre_of(updated), centre));
 }
 
 #[test]

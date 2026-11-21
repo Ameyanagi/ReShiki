@@ -92,15 +92,19 @@ impl<'d> Draft<'d> {
     }
 }
 
+fn reconcile_preview(doc: &mut Document, base: &Document) {
+    reshiki::arrow_anchors::reconcile(doc);
+    reshiki::arrow_labels::reconcile(doc, base);
+    reshiki::shape_text::reconcile_changes(doc, base);
+}
+
 impl MoleculeCanvas<'_> {
     #[cfg(test)]
     pub(super) fn pointer_preview_document(&self, state: &State, bounds: Rectangle) -> Document {
         let mut draft = Draft::new(self.doc);
         self.preview_pointer_edits(&mut draft, state, bounds);
         let mut doc = draft.preview.into_owned();
-        reshiki::arrow_anchors::reconcile(&mut doc);
-        reshiki::arrow_labels::reconcile(&mut doc, self.doc);
-        reshiki::shape_text::reconcile(&mut doc);
+        reconcile_preview(&mut doc, self.doc);
         doc
     }
 
@@ -152,11 +156,7 @@ impl MoleculeCanvas<'_> {
         self.preview_bonded_atom(&mut draft, state, bounds);
         self.preview_bond(&mut draft, frame, state, bounds);
         if let Cow::Owned(doc) = &mut draft.preview {
-            reshiki::arrow_anchors::reconcile(doc);
-            // Show condition labels and the length clamp as the commit will.
-            reshiki::arrow_labels::reconcile(doc, base);
-            // Text in a shape follows it, as the commit will place it.
-            reshiki::shape_text::reconcile(doc);
+            reconcile_preview(doc, base);
         }
         let Draft {
             mut preview,
