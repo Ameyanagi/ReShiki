@@ -267,6 +267,41 @@ fn equipment_trial_pose_is_retained_but_accept_save_and_undo_never_keep_trial_ob
 }
 
 #[test]
+fn adding_a_joint_while_testing_returns_the_canvas_to_rim_measurement() {
+    let (mut app, edges) = joint_drawing();
+    let original = app.tab.doc.clone();
+    begin(&mut app, edges);
+    let id = target(&app);
+    let _ = toward(&mut app, id, false);
+
+    send(&mut app, Action::BeginJoint);
+    send(&mut app, Action::TestSnapping); // Ignore an older queued button press.
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.trial.is_none());
+    assert!(state.measurement().measuring);
+    assert!(state.measurement().points.is_empty());
+    assert_eq!(app.display_document(), state.base_preview.as_ref().unwrap());
+
+    for point in edges {
+        let _ = app.update(Message::Canvas(Edit::EquipmentAuthoringPoint(point)));
+    }
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert_eq!(state.measurement().points, &edges);
+    send(&mut app, Action::CancelJoint);
+    send(&mut app, Action::TestSnapping);
+    assert!(
+        app.tab
+            .equipment_authoring
+            .as_ref()
+            .unwrap()
+            .trial
+            .is_some()
+    );
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
 fn equipment_trial_draft_history_and_invalid_joints_remove_stale_paint() {
     let (mut app, edges) = joint_drawing();
     let before = app.tab.doc.clone();
@@ -285,9 +320,8 @@ fn equipment_trial_draft_history_and_invalid_joints_remove_stale_paint() {
     let _ = app.update(Message::Undo); // pending joint again
     send(&mut app, Action::FlipJoint);
     let state = app.tab.equipment_authoring.as_ref().unwrap();
-    let trial = state.trial.as_ref().unwrap();
-    assert_ne!(trial.epoch, old_epoch);
-    assert!(trial.snap.is_none() && trial.id.is_none());
+    assert!(state.trial.is_none());
+    assert!(state.measurement().measuring);
     assert!(state.preview.is_none() && state.base_preview.is_none());
     assert!(!state.ready());
     send(

@@ -117,11 +117,17 @@ impl State {
         draft
     }
 
+    fn is_measuring(&self) -> bool {
+        self.current.measuring || self.current.joint.is_some()
+    }
+
     fn refresh(&mut self, doc: &Document) {
         self.preview = None;
         self.base_preview = None;
         self.preview_piece = None;
-        if let Some(trial) = &mut self.trial {
+        if self.is_measuring() {
+            self.trial = None;
+        } else if let Some(trial) = &mut self.trial {
             trial.invalidate();
         }
         self.joint_candidate = None;
@@ -212,10 +218,7 @@ impl State {
     }
 
     fn ready(&self) -> bool {
-        !self.current.measuring
-            && self.current.joint.is_none()
-            && !self.current.name.trim().is_empty()
-            && self.preview.is_some()
+        !self.is_measuring() && !self.current.name.trim().is_empty() && self.preview.is_some()
     }
 
     pub(super) fn measurement(&self) -> EquipmentAuthoring<'_> {
@@ -228,8 +231,7 @@ impl State {
                     .as_ref()
                     .map_or(&self.current.points, |j| &j.points)
             },
-            measuring: self.trial.is_none()
-                && (self.current.measuring || self.current.joint.is_some()),
+            measuring: self.is_measuring(),
             direction: self.direction.filter(|_| self.trial.is_none()),
             trial: self.trial.as_ref().and_then(|t| {
                 let id = t.id?;
@@ -390,7 +392,8 @@ impl App {
         };
         match &action {
             Action::TestSnapping => {
-                if let Some(base) = &state.base_preview
+                if !state.is_measuring()
+                    && let Some(base) = &state.base_preview
                     && let Some(piece) = base
                         .graphics
                         .iter()
@@ -894,7 +897,8 @@ impl App {
                 Message::EquipmentAuthoring(Action::BeginJoint),
             ));
         }
-        if state.trial.is_none()
+        if !state.is_measuring()
+            && state.trial.is_none()
             && state.base_preview.as_ref().is_some_and(|doc| {
                 doc.graphics
                     .iter()
