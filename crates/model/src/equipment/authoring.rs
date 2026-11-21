@@ -331,7 +331,8 @@ impl Draft {
     /// Evaluated shape geometry in drawing coordinates, shared by the draft's
     /// selection highlight and hit test rather than its source bounding box.
     pub fn shape_path(&self, id: &str) -> Result<Vec<Seg>, String> {
-        let evaluated = eval::evaluate(&self.definition, &Values::new())?;
+        let values = eval::resolve(&self.definition, &Values::new())?;
+        let evaluated = eval::evaluate(&self.definition, &values)?;
         let shape = evaluated
             .shapes
             .iter()
@@ -348,7 +349,8 @@ impl Draft {
         if !point.x.is_finite() || !point.y.is_finite() || !reach.is_finite() || reach <= 0. {
             return None;
         }
-        let evaluated = eval::evaluate(&self.definition, &Values::new()).ok()?;
+        let values = eval::resolve(&self.definition, &Values::new()).ok()?;
+        let evaluated = eval::evaluate(&self.definition, &values).ok()?;
         let mut shapes: Vec<_> = evaluated.shapes.iter().collect();
         let pass = |s: &eval::Drawn<'_>| {
             if s.shape.role == Role::Glass && s.shape.layer == Layer::Body {
