@@ -1,55 +1,9 @@
-//! Explicit cycle shapes and their dimensions in Properties and Make review.
-use super::{Action, App, Field, Inputs, Message, Proposal, ProposalKind, Shape};
+//! Explicit cycle shapes and their dimensions in Properties.
+use super::{Action, App, Field, Inputs, Message, Shape};
 use crate::canvas::layered::canvas;
 use iced::widget::{column, row, text};
 use iced::{Alignment, Element, Length};
-use reshiki::{
-    document::Document,
-    graphics::{Graphic, GraphicKind},
-};
-
-#[derive(Debug, Clone, Copy, Default)]
-pub(super) struct MakeLayout {
-    shape: Shape,
-    size: Option<[f32; 2]>,
-    corner: Option<f32>,
-}
-
-impl MakeLayout {
-    pub(super) fn apply(self, doc: &mut Document, id: u64) -> Result<(), String> {
-        let g = doc
-            .graphics
-            .iter_mut()
-            .find(|g| g.id == id)
-            .ok_or("Cycle is unavailable")?;
-        g.cycle.as_mut().ok_or("Cycle is unavailable")?.shape = self.shape;
-        g.style.corner_pt = self.corner;
-        if let Some([width, height]) = self.size {
-            if self.shape == Shape::Circle {
-                reshiki::cycles::set_radius(doc, id, (width + height) * 0.25);
-            } else {
-                let current = dimensions(g);
-                if current != [width, height]
-                    && !reshiki::cycles::set_dimensions(doc, id, width, height)
-                {
-                    return Err("Could not resize the cycle with those dimensions".into());
-                }
-            }
-        }
-        let g = doc
-            .graphics
-            .iter()
-            .find(|g| g.id == id)
-            .ok_or("Cycle is unavailable")?;
-        if reshiki::cycles::outline(g).is_none() {
-            return Err("Resize the cycle before choosing this shape".into());
-        }
-        if self.shape != Shape::Circle {
-            reshiki::cycles::tidy(doc, id);
-        }
-        doc.validate()
-    }
-}
+use reshiki::graphics::{Graphic, GraphicKind};
 
 pub(super) fn dimensions(g: &Graphic) -> [f32; 2] {
     [g.axis_x, g.axis_y].map(|p| f64::from(p.x).hypot(f64::from(p.y)) as f32)
@@ -202,49 +156,7 @@ impl App {
             (radius, width, height, corner);
     }
 
-    fn change_make_layout(&mut self, edit: impl FnOnce(&mut MakeLayout)) -> bool {
-        let Some(p) = self.tab.cycle_inputs.proposal.as_deref() else {
-            return false;
-        };
-        let ProposalKind::Make {
-            selected,
-            reversed,
-            layout,
-            ..
-        } = &p.kind
-        else {
-            return false;
-        };
-        let (selected, reversed, mut layout) = (selected.clone(), *reversed, *layout);
-        edit(&mut layout);
-        match super::proposed(&self.tab.doc, &selected, reversed, layout) {
-            Ok((doc, cycle, left)) => {
-                self.tab.cycle_inputs.proposal = Some(Box::new(Proposal {
-                    doc,
-                    cycle,
-                    kind: ProposalKind::Make {
-                        left,
-                        selected,
-                        reversed,
-                        layout,
-                    },
-                }));
-                self.sync_cycle_proposal();
-                self.error = false;
-                self.status = "Review the catalytic cycle · Enter applies · Esc discards".into();
-            }
-            Err(error) => {
-                self.error = true;
-                self.status = error;
-            }
-        }
-        true
-    }
-
     pub(super) fn change_cycle_shape(&mut self, shape: Shape) {
-        if self.change_make_layout(|layout| layout.shape = shape) {
-            return;
-        }
         let Some(g) = self.selected_cycle_graphic() else {
             return;
         };
@@ -264,28 +176,14 @@ impl App {
         self.tab.cycle_inputs.layout_open = true;
     }
 
-    /// Return whether this is a dimension edit, including Make review edits.
+    /// Return whether this is a dimension edit.
     pub(super) fn apply_cycle_layout_field(
         &mut self,
         field: Field,
         value: &str,
         number: Option<f32>,
     ) -> bool {
-        let making = self
-            .tab
-            .cycle_inputs
-            .proposal
-            .as_ref()
-            .is_some_and(|p| matches!(p.kind, ProposalKind::Make { .. }));
-        let g = if making {
-            self.tab
-                .cycle_inputs
-                .proposal
-                .as_ref()
-                .and_then(|p| p.doc.graphics.iter().find(|g| g.id == p.cycle))
-        } else {
-            self.selected_cycle_graphic()
-        };
+        let g = self.selected_cycle_graphic();
         let Some(g) = g else {
             return true;
         };
@@ -296,12 +194,12 @@ impl App {
         {
             return true;
         }
-        if field == Field::Radius && !making {
+        if field == Field::Radius {
             return false;
         }
         let id = g.id;
         let [width, height] = dimensions(g);
-        if !making && matches!(field, Field::Width | Field::Height) {
+        if matches!(field, Field::Width | Field::Height) {
             let current = if field == Field::Width { width } else { height };
             if super::points(current, &self.tab.doc).parse::<f32>().ok() == number {
                 self.sync_cycle();
@@ -311,7 +209,6 @@ impl App {
             }
         }
         let valid = match field {
-            Field::Radius => number.is_some_and(|v| (10. ..=2000.).contains(&v)),
             Field::Width | Field::Height => number.is_some_and(|v| (10. ..=4000.).contains(&v)),
             Field::Corner => {
                 value.is_empty()
@@ -322,7 +219,6 @@ impl App {
         if !valid {
             self.error = true;
             self.status = match field {
-                Field::Radius => "Enter a radius of 10–2000 pt",
                 Field::Width | Field::Height => "Enter a width or height of 10–4000 pt",
                 _ => "Corner radius must be 0–1000 pt",
             }
@@ -331,16 +227,6 @@ impl App {
         }
         let world = number.map(|v| reshiki::style::DEFAULT.world(v));
         let corner = (!value.is_empty()).then_some(number).flatten();
-        if making {
-            self.change_make_layout(|layout| match field {
-                Field::Radius => layout.size = world.map(|r| [2. * r, 2. * r]),
-                Field::Width => layout.size = world.map(|w| [w, height]),
-                Field::Height => layout.size = world.map(|h| [width, h]),
-                Field::Corner => layout.corner = corner,
-                _ => {}
-            });
-            return true;
-        }
         if field == Field::Corner
             && self
                 .selected_cycle_graphic()
@@ -378,43 +264,6 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn make_configuration_propagates_a_rejected_size_instead_of_using_the_old_frame() {
-        use reshiki::{cycles::Cycle, document::Point};
-        let mut doc = Document::default();
-        let a = doc.add_atom("C", Point::default());
-        let b = doc.add_atom("C", Point::new(42., 0.));
-        doc.add_bond(a, b, 1, "plain");
-        let id = doc.next_id();
-        let mut g = Graphic::dragged(
-            id,
-            GraphicKind::Ellipse,
-            Point::default(),
-            Point::new(1., 1.),
-            Default::default(),
-            Default::default(),
-            false,
-        );
-        g.axis_x = Point::new(6e-5, 0.);
-        g.axis_y = Point::new(0., 6e-5);
-        g.cycle = Some(Box::new(Cycle {
-            shape: Shape::Ellipse,
-            intermediates: vec![vec![a, b]],
-            steps: vec![Default::default()],
-            ..Default::default()
-        }));
-        doc.graphics.push(g);
-        doc.validate().unwrap();
-        let before = doc.clone();
-        let layout = MakeLayout {
-            shape: Shape::Ellipse,
-            size: Some([600., 200.]),
-            corner: None,
-        };
-        assert!(layout.apply(&mut doc, id).is_err());
-        assert_eq!(doc, before);
-    }
 
     #[tokio::test]
     #[ignore = "Opt-in cycle controls with the app renderer"]

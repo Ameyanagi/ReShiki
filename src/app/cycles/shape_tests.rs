@@ -59,7 +59,7 @@ fn evidence(shape: Shape, before: &Document, preview: &Document) {
 }
 
 #[test]
-fn all_four_make_shapes_keep_size_and_corner_through_review_reverse_apply_and_undo() {
+fn a_made_cycle_can_change_shape_dimensions_and_direction_with_undo() {
     for shape in [
         Shape::Circle,
         Shape::Ellipse,
@@ -71,6 +71,8 @@ fn all_four_make_shapes_keep_size_and_corner_through_review_reverse_apply_and_un
         app.tab.selected = app.tab.doc.all_ids();
         let before = app.tab.doc.clone();
         let _ = app.update(Message::Cycle(Action::Make));
+        assert!(app.tab.cycle_inputs.proposal.is_none());
+        assert_eq!(app.tab.history.undo_frames().len(), 1);
         let _ = app.update(Message::Cycle(Action::Shape(shape)));
         if shape == Shape::Circle {
             field(&mut app, Field::Radius, "180");
@@ -82,9 +84,8 @@ fn all_four_make_shapes_keep_size_and_corner_through_review_reverse_apply_and_un
             }
         }
         assert!(!app.error, "{shape:?}: {}", app.status);
-        assert_eq!(app.tab.doc, before);
-        assert!(!app.tab.history.can_undo());
-        let _ = app.update(Message::Cycle(Action::MakeReverse));
+        assert!(app.tab.cycle_inputs.proposal.is_none());
+        let _ = app.update(Message::Cycle(Action::Clockwise(false)));
         let shown = app.display_document().clone();
         let g = frame(&shown);
         assert_eq!(
@@ -106,71 +107,46 @@ fn all_four_make_shapes_keep_size_and_corner_through_review_reverse_apply_and_un
             g.style.corner_pt,
             (shape == Shape::RoundedRectangle).then_some(12.)
         );
-        assert!(app.cycle_proposal_card().is_some());
+        assert!(app.cycle_proposal_card().is_none());
         evidence(shape, &before, &shown);
-        let _ = app.update(Message::ContextKey("Enter".into()));
-        assert!(!app.error, "{shape:?}: {}", app.status);
-        assert_eq!(
-            app.tab.doc, shown,
-            "Apply must use exactly the reviewed shape and size"
-        );
-        assert_eq!(app.tab.history.undo_frames().len(), 1);
+        let frames = app.tab.history.undo_frames().len();
+        assert!(frames > 1);
         let saved = app.tab.doc.file_json().unwrap();
         assert_eq!(
             Document::from_json(&saved).unwrap().file_json().unwrap(),
             saved
         );
-        let _ = app.update(Message::Undo);
+        for _ in 0..frames {
+            let _ = app.update(Message::Undo);
+        }
         assert_eq!(app.tab.doc, before);
-        let _ = app.update(Message::Redo);
+        for _ in 0..frames {
+            let _ = app.update(Message::Redo);
+        }
         assert_eq!(app.tab.doc, shown);
     }
 }
 
 #[test]
-fn make_shape_configuration_discards_without_source_edits_and_rejects_invalid_fields() {
+fn a_made_cycle_rejects_invalid_dimensions_without_history_or_source_edits() {
     let (mut app, _) = App::new();
     app.tab.selected = vec![
         text(&mut app, -120., 0., "A"),
         text(&mut app, 120., 0., "B"),
     ];
-    let before = app.tab.doc.clone();
     let _ = app.update(Message::Cycle(Action::Make));
     let _ = app.update(Message::Cycle(Action::Shape(Shape::Ellipse)));
     field(&mut app, Field::Width, "280");
-    let shown = app.display_document().clone();
+    let shown = app.tab.doc.clone();
+    let frames = app.tab.history.undo_frames().len();
     for value in ["NaN", "0", "-1", "4001"] {
         field(&mut app, Field::Height, value);
         assert!(app.error);
         assert_eq!(app.display_document(), &shown);
-        assert_eq!(app.tab.doc, before);
-        assert!(!app.tab.history.can_undo());
+        assert_eq!(app.tab.doc, shown);
+        assert!(app.tab.cycle_inputs.proposal.is_none());
+        assert_eq!(app.tab.history.undo_frames().len(), frames);
     }
-    let _ = app.update(Message::Escape);
-    assert_eq!(app.tab.doc, before);
-    assert!(!app.tab.history.can_undo());
-}
-
-#[test]
-fn failed_make_reverse_retains_the_reviewed_direction_and_configuration() {
-    let (mut app, _) = App::new();
-    let a = text(&mut app, -120., 0., "A");
-    let b = text(&mut app, 120., 0., "B");
-    app.tab.selected = vec![a, b];
-    let _ = app.update(Message::Cycle(Action::Make));
-    let _ = app.update(Message::Cycle(Action::Shape(Shape::Ellipse)));
-    field(&mut app, Field::Width, "240");
-    let shown = app.display_document().clone();
-    // A changed source may no longer contain enough parts to remake a cycle.
-    app.tab.doc.annotations.retain(|a| a.id != b);
-    let _ = app.update(Message::Cycle(Action::MakeReverse));
-    assert!(app.error);
-    assert_eq!(app.display_document(), &shown);
-    let proposal = app.tab.cycle_inputs.proposal.as_ref().unwrap();
-    let super::super::ProposalKind::Make { reversed, .. } = proposal.kind else {
-        panic!("Make proposal");
-    };
-    assert!(!reversed);
 }
 
 #[test]
@@ -249,7 +225,7 @@ fn loaded_explicit_shapes_keep_their_frame_and_parts_and_each_change_is_one_undo
 }
 
 #[test]
-fn make_preview_matches_apply_for_visible_stereo_and_linked_caption_precision() {
+fn make_immediately_reconciles_stereo_and_keeps_linked_caption_precision() {
     for two_decimal_weight in [false, true] {
         for custom_places in [false, true] {
             let (mut app, _) = App::new();
@@ -308,19 +284,16 @@ fn make_preview_matches_apply_for_visible_stereo_and_linked_caption_precision() 
             let before = app.tab.doc.clone();
             let frames = app.tab.history.undo_frames().len();
             let _ = app.update(Message::Cycle(Action::Make));
-            let _ = app.update(Message::Cycle(Action::Shape(Shape::Ellipse)));
-            field(&mut app, Field::Width, "300");
-            field(&mut app, Field::Height, "160");
             assert!(!app.error, "{}", app.status);
             let preview = app.display_document().clone();
-            assert_eq!(app.tab.doc, before);
+            assert_ne!(app.tab.doc, before);
+            assert!(app.tab.cycle_inputs.proposal.is_none());
             assert!(preview.atoms.iter().all(|a| a.cip_label.is_none()));
             assert!(preview.bonds.iter().all(|b| b.cip_label.is_none()));
             assert_eq!(
                 preview.property_captions, before.property_captions,
-                "A cycle review preserves each imported or explicitly chosen mass precision"
+                "Making a cycle preserves each imported or explicitly chosen mass precision"
             );
-            let _ = app.update(Message::ContextKey("Enter".into()));
             assert!(!app.error, "{}", app.status);
             assert_eq!(app.tab.doc, preview);
             assert_eq!(app.tab.history.undo_frames().len(), frames + 1);

@@ -3,8 +3,8 @@ section: Changes
 issues: []
 ---
 
-- **Tidy a catalytic cycle** with **Tidy cycle**. Preview evenly spaced
-  intermediates and reagents and products lined up beside their arcs, then
-  apply the layout in one Undo step or discard it.
+- **Tidy a catalytic cycle** with **Clean up ▾ → Clean up cycle**. It spaces
+  intermediates evenly and lines up reagents and products beside their arcs
+  immediately, as one Undo step.
 - Side arrows meet the visible line of a reversible step, with room between
   nearby joins.

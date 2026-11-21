@@ -216,17 +216,16 @@ the gutters. Moving one item by itself leaves it where you put it.
 
 1. Draw the intermediates as structures or text, roughly in a circle.
 2. Select them and choose **Make catalytic cycle** from the canvas menu or
-   the command palette. The drawing shows them on a circle through them,
-   ordered clockwise from the top, with an arc arrow from each to the next,
-   and **Properties → Make catalytic cycle** lists the order. Choose **Circle**,
-   **Ellipse**, **Rounded rectangle** or **Rectangle** under **Shape**.
-   Set **Radius (pt)** for a circle or **Width (pt)** and **Height (pt)** for
-   the other shapes. **Rounded rectangle** also has **Corner (pt)**; leave
-   it empty for automatic rounding. Choose **Reverse order** to run it the
-   other way, then **Make catalytic cycle**
-   or Enter to make it, or **Discard** or Esc to leave the drawing as it was.
-   To start from an empty circle instead, choose **Catalytic cycle** in the
-   command palette's insert commands.
+   the command palette. The cycle is made immediately as one Undo step:
+   the parts sit on a circle through them, ordered clockwise from the top,
+   with an arc arrow from each to the next. In **Properties → Catalytic cycle**,
+   choose **Clockwise** or **Counterclockwise** to change its direction.
+   Open **Layout** to choose **Circle**, **Ellipse**, **Rounded rectangle** or
+   **Rectangle** under **Shape**. Set **Radius (pt)** for a circle or
+   **Width (pt)** and **Height (pt)** for the other shapes.
+   **Rounded rectangle** also has **Corner (pt)**; leave it empty for automatic
+   rounding. To start from an empty circle instead, choose **Catalytic cycle**
+   in the command palette's insert commands.
 3. To add a part, drag a structure or text that is not in a cycle. Dropped
    on an arc, it becomes a new intermediate between that arc's two
    intermediates; beside the first half of a step's arc it becomes a reagent
@@ -244,14 +243,15 @@ the gutters. Moving one item by itself leaves it where you put it.
    structures in cycle** to select every intermediate, reagent and product,
    for example to change their color or font.
 5. In **Properties → Catalytic cycle**, choose **Clockwise** or
-   **Counterclockwise**. Choose **Tidy cycle** (also in the canvas menu and
-   as **Tidy catalytic cycle** in the command palette) to space the
-   intermediates evenly around the outline and line up each step's reagents
-   and products beside its arc. Review the drawing, then choose **Apply**
-   (Enter) or **Discard** (Esc). Applying makes one Undo step.
+   **Counterclockwise**. With the cycle selected, choose **Clean up cycle**
+   in the toolbar's **Clean up ▾** menu to space the intermediates evenly
+   around the outline and line up each step's reagents and products beside
+   its arc. It applies immediately as one Undo step. The same action is
+   available as **Tidy cycle** in Properties and **Tidy catalytic cycle** in
+   the command palette.
    Open **Layout** to change **Shape**, its dimensions, **Gap (pt)**
    and **Center** text. Changing the shape keeps the parts where they are;
-   **Tidy cycle** previews their alignment on the new outline. Width and height
+   **Clean up cycle** aligns them on the new outline. Width and height
    follow the shape's own directions, including after rotation, and move the
    parts without changing their bond lengths or text sizes.
    Each row shows the step name or the intermediates'

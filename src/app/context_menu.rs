@@ -363,11 +363,11 @@ impl App {
         if let Some((_, cycle)) = self.selected_cycle() {
             let steps = self.cycle_step().is_some();
             let parts = cycle.parts().next().is_some();
-            return [
-                ("Select structures in cycle", Action::SelectStructures),
-                ("Tidy cycle", Action::Tidy),
-            ]
-            .map(|(label, action)| Entry::command(label, Message::Cycle(action), parts))
+            return [Entry::command(
+                "Select structures in cycle",
+                Message::Cycle(Action::SelectStructures),
+                parts,
+            )]
             .into_iter()
             .chain(
                 [

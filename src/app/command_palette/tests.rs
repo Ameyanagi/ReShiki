@@ -2925,6 +2925,7 @@ fn drawing_commands_have_unique_palette_names() {
     for name in [
         "Figure layouts",
         "Make catalytic cycle",
+        "Tidy catalytic cycle",
         "Remove from cycle",
         "Cycle: Clockwise",
         "Cycle: Counterclockwise",
@@ -3033,6 +3034,11 @@ fn drawing_commands_send_the_same_actions_as_their_controls() {
             "Make catalytic cycle",
             Message::Cycle(cycles::Action::Make),
             Need::MakeCycle,
+        ),
+        (
+            "Tidy catalytic cycle",
+            Message::Cycle(cycles::Action::Tidy),
+            Need::Cycle,
         ),
         (
             "Define as equipment piece…",

@@ -204,7 +204,7 @@ fn a_width_edit_with_a_fitted_cut_reviews_and_applies_the_exact_snapshot_once() 
         .proposal
         .as_ref()
         .expect("review moved cuts");
-    assert!(matches!(proposal.kind, ProposalKind::Refit { .. }));
+    assert_eq!(*proposal.baseline, before);
     let preview = app.display_document().clone();
     assert_ne!(preview.atoms, before.atoms);
     assert!(app.cycle_proposal_card().is_some());
