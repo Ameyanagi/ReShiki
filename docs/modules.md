@@ -157,6 +157,7 @@ explains how the crates and modules fit together.
 - `src/app/shortcuts.rs`
 - `src/app/star_prompt.rs`: The "Like ReShiki?" toast, which asks for a GitHub star after use or the first GitHub sign-in.
 - `src/app/startup.rs`
+- `src/app/status_style.rs`: Journal dimensions and color theme share one status-bar chooser.
 - `src/app/stereo.rs`: Advisory drawing checks and explicit, undoable stereobond fixes.
 - `src/app/tabs.rs`: Document tabs
 - `src/app/template_library.rs`
