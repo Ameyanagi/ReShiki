@@ -346,6 +346,7 @@ impl App {
                 arc: self.tab.arrows.arc,
             },
             doc: self.display_document(),
+            two_decimal_weight: self.appearance.two_decimal_weight,
             reviewing_pair: self.tab.mapping.review_pair.is_some() && self.tool.selects(),
             selected: if self.tab.inline_text.is_some() || self.tab.equipment_authoring.is_some() {
                 &[]

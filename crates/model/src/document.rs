@@ -1284,6 +1284,7 @@ impl Document {
         }
         crate::arrow_anchors::validate(self)?;
         crate::leaders::validate(self)?;
+        crate::cycles::validate_fits(self)?;
         Ok(())
     }
     pub fn bounds(&self) -> (Point, Point) {

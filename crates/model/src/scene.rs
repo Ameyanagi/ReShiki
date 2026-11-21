@@ -244,6 +244,18 @@ pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point,
             }))
         })
         .collect();
+    ink.extend(participant_indicator_ink_boxes(doc, atoms));
+    ink
+}
+
+/// Owned number, mapping and stereo decoration boxes, separate from the
+/// primary atom glyph. Fitted cycle routes keep their passive caches out of
+/// source parameterization while still checking their displayed ink.
+pub(crate) fn participant_indicator_ink_boxes(
+    doc: &Document,
+    atoms: &[u64],
+) -> Vec<(Point, Point)> {
+    let mut ink = vec![];
     for indicator in crate::atom_labels::indicators_with_geometry(doc, doc) {
         if indicator.owner.selected(atoms) && indicator.owner.drawn(doc) {
             ink.extend(label_ink_boxes(&indicator.primitives()));
@@ -1422,6 +1434,22 @@ pub(crate) fn selections_bounds_in_axes(
     selections: &[Vec<u64>],
     axes: Option<(Point, f32)>,
 ) -> Vec<Option<(Point, Point)>> {
+    selections_bounds_with_indicators(doc, selections, axes, true)
+}
+
+pub(crate) fn primary_selections_bounds(
+    doc: &Document,
+    selections: &[Vec<u64>],
+) -> Vec<Option<(Point, Point)>> {
+    selections_bounds_with_indicators(doc, selections, None, false)
+}
+
+fn selections_bounds_with_indicators(
+    doc: &Document,
+    selections: &[Vec<u64>],
+    axes: Option<(Point, f32)>,
+    indicators: bool,
+) -> Vec<Option<(Point, Point)>> {
     use crate::atom_labels::Owner;
     let drawn = doc.abbreviation_render_copy();
     let doc = drawn.as_ref();
@@ -1468,20 +1496,22 @@ pub(crate) fn selections_bounds_in_axes(
             }
         }
     };
-    for label in crate::atom_labels::indicators_with_geometry(doc, doc) {
-        let id = match label.owner {
-            Owner::Number(id)
-            | Owner::Mapping(id)
-            | Owner::AtomStereo(id)
-            | Owner::StereoGroup(id) => id,
-            Owner::BondStereo(a, b) if owners.get(&a) == owners.get(&b) => a,
-            Owner::BondStereo(..) => continue,
-        };
-        if crate::models3d::hides(doc, id) {
-            continue;
+    if indicators {
+        for label in crate::atom_labels::indicators_with_geometry(doc, doc) {
+            let id = match label.owner {
+                Owner::Number(id)
+                | Owner::Mapping(id)
+                | Owner::AtomStereo(id)
+                | Owner::StereoGroup(id) => id,
+                Owner::BondStereo(a, b) if owners.get(&a) == owners.get(&b) => a,
+                Owner::BondStereo(..) => continue,
+            };
+            if crate::models3d::hides(doc, id) {
+                continue;
+            }
+            let corner = label.origin.offset(label.width, label.height);
+            grow(id, &mut [label.origin, corner].into_iter());
         }
-        let corner = label.origin.offset(label.width, label.height);
-        grow(id, &mut [label.origin, corner].into_iter());
     }
     // Only selected objects are measured, so one small selection stays cheap.
     for g in doc.graphics.iter().filter(|g| owners.contains_key(&g.id)) {

@@ -2,6 +2,8 @@ use super::*;
 use crate::canvas::Edit;
 use reshiki::document::{Annotation, Document, Point};
 
+#[path = "drop_tests.rs"]
+mod drops;
 #[path = "shape_tests.rs"]
 mod shapes;
 
