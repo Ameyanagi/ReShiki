@@ -305,6 +305,7 @@ pub enum Edit {
         reach: f32,
     },
     EquipmentAuthoringTestStart(u64),
+    EquipmentAuthoringTestCancel(u64),
     EquipmentAuthoringTest {
         at: World,
         epoch: u64,

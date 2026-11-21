@@ -738,10 +738,10 @@ fn equipment_trial_touch_drag_cancels_for_pinch_or_lost_finger_without_resuming(
                 }
             };
             let cancelled = send(&canvas, &mut state, bounds, event);
-            assert!(
-                matches!(cancelled.as_slice(), [Edit::EquipmentAuthoringTest {
-                at, epoch: 41, finish: false, .. }, Edit::Hover(None)] if *at == World::default())
-            );
+            assert!(matches!(
+                cancelled.as_slice(),
+                [Edit::EquipmentAuthoringTestCancel(41), Edit::Hover(None)]
+            ));
             assert!(state.equipment_trial.is_none());
             if scenario == "pinch" {
                 assert!(matches!(

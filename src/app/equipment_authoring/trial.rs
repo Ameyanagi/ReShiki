@@ -48,6 +48,17 @@ pub(super) struct Trial {
     pub epoch: u64,
     pub id: Option<u64>,
     pub snap: Option<solve::Snap>,
+    drag_start: Option<DragStart>,
+}
+
+struct DragStart {
+    at: Point,
+    turn: f32,
+    scale: f32,
+    reach: f32,
+    id: Option<u64>,
+    snap: Option<solve::Snap>,
+    shown: Document,
 }
 
 impl Trial {
@@ -62,14 +73,46 @@ impl Trial {
             epoch: 0,
             id: None,
             snap: None,
+            drag_start: None,
         };
         trial.invalidate();
         trial
     }
 
+    /// A cancellation restores the visible fit, including an adapter whose
+    /// stopper pose alone may no longer reach the original target.
+    pub fn begin_drag(&mut self, shown: &Document) {
+        self.drag_start = Some(DragStart {
+            at: self.at,
+            turn: self.turn,
+            scale: self.scale,
+            reach: self.reach,
+            id: self.id,
+            snap: self.snap.clone(),
+            shown: shown.clone(),
+        });
+        self.keep_pose(shown);
+    }
+
+    pub fn finish_drag(&mut self, shown: &Document) {
+        self.keep_pose(shown);
+        self.drag_start = None;
+    }
+
+    pub fn cancel_drag(&mut self) -> Option<Document> {
+        let start = self.drag_start.take()?;
+        self.at = start.at;
+        self.turn = start.turn;
+        self.scale = start.scale;
+        self.reach = start.reach;
+        self.id = start.id;
+        self.snap = start.snap;
+        Some(start.shown)
+    }
+
     /// Keep only the painted test piece's pose between drags. The document,
     /// targets, adapters and seats remain disposable.
-    pub fn keep_pose(&mut self, shown: &Document) {
+    fn keep_pose(&mut self, shown: &Document) {
         if let Some(g) = shown.graphics.iter().find(|g| Some(g.id) == self.id) {
             self.at = placed::middle(g);
             self.scale = g.axis_x.x.hypot(g.axis_x.y);
@@ -82,6 +125,7 @@ impl Trial {
         self.epoch = EPOCH.fetch_add(1, Ordering::Relaxed);
         self.id = None;
         self.snap = None;
+        self.drag_start = None;
     }
 
     /// Always start from the canonical draft. A previous trial's seats,

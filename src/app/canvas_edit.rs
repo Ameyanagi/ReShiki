@@ -69,6 +69,12 @@ impl App {
                 );
                 return;
             }
+            Edit::EquipmentAuthoringTestCancel(epoch) => {
+                let _ = self.equipment_authoring_action(
+                    super::equipment_authoring::Action::TestCancel(epoch),
+                );
+                return;
+            }
             Edit::EquipmentAuthoringTest {
                 at,
                 epoch,
@@ -441,6 +447,7 @@ impl App {
             Edit::EquipmentAuthoringPoint(_)
             | Edit::EquipmentAuthoringShape { .. }
             | Edit::EquipmentAuthoringTestStart(_)
+            | Edit::EquipmentAuthoringTestCancel(_)
             | Edit::EquipmentAuthoringTest { .. } => return,
             Edit::Click(p) | Edit::RepeatLabel(p) => return self.canvas_click(p, before),
             Edit::PieceParam { id, param, value } => {

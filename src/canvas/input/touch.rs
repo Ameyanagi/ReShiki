@@ -47,7 +47,7 @@ impl MoleculeCanvas<'_> {
                 state.touch.pending = None;
                 state.touch.mouse_down = false;
                 state.touch.navigating = true;
-                Some(self.cancel_touch_edit(state))
+                Some(Self::cancel_touch_edit(state))
             }
             touch::Event::FingerMoved { id, position } => {
                 let index = state
@@ -120,7 +120,7 @@ impl MoleculeCanvas<'_> {
                 if matches!(event, touch::Event::FingerLost { .. })
                     && state.equipment_trial.is_some()
                 {
-                    let action = self.cancel_touch_edit(state);
+                    let action = Self::cancel_touch_edit(state);
                     state.touch.fingers.remove(index);
                     if state.touch.fingers.is_empty() {
                         state.touch = Touch::default();
@@ -172,10 +172,11 @@ impl MoleculeCanvas<'_> {
         )
     }
 
-    fn cancel_touch_edit(&self, state: &mut State) -> Action<Edit> {
-        let trial = state.equipment_trial.take().map(|capture| {
-            capture.cancelled(self.camera.world_len(reshiki::equipment::solve::REACH_PX))
-        });
+    fn cancel_touch_edit(state: &mut State) -> Action<Edit> {
+        let trial = state
+            .equipment_trial
+            .take()
+            .map(|capture| capture.cancelled());
         let erasing = matches!(state.end_gesture(), Some(Gesture::Erase { .. }));
         state.last_click = None;
         state.last_transform_click = None;

@@ -272,6 +272,91 @@ fn equipment_trial_misalignment_mismatch_and_adapters_use_normal_feedback() {
 }
 
 #[test]
+fn equipment_trial_adapter_cancellation_restores_the_visible_fit_without_accumulation() {
+    for canvas_cancel in [false, true] {
+        let (mut app, edges) = joint_drawing();
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        begin(&mut app, edges);
+        choose(&mut app, "reshiki/stopper-29");
+        let id = target(&app);
+        toward(&mut app, id, true);
+        let state = app.tab.equipment_authoring.as_ref().unwrap();
+        let canonical = state.base_preview.clone().unwrap();
+        let shown = app.display_document().clone();
+        let trial = state.trial.as_ref().unwrap();
+        let pose = (trial.at, trial.turn, trial.scale, trial.reach);
+        let snap = trial.snap.clone().unwrap();
+        assert!(matches!(snap.offer, Offer::Adapter(_)));
+        assert!(snap.added.is_some());
+        assert_eq!(shown.seats.len(), 2);
+        let feedback = super::super::super::equipment::snap_text(&shown, &snap);
+        for attempt in 0..3 {
+            let epoch = app
+                .tab
+                .equipment_authoring
+                .as_ref()
+                .unwrap()
+                .trial
+                .as_ref()
+                .unwrap()
+                .epoch;
+            send(&mut app, Action::TestStart(epoch));
+            if attempt > 0 {
+                send(
+                    &mut app,
+                    Action::TestAt {
+                        at: pose.0.offset(1000., 0.),
+                        epoch,
+                        reach: pose.3,
+                        finish: false,
+                    },
+                );
+                assert!(app.display_document().seats.is_empty());
+            }
+            if canvas_cancel {
+                // Pointer cancellation, lost touch and pinch all use this batch.
+                let _ = app.update(Message::Canvas(Edit::Touch(vec![
+                    Edit::EquipmentAuthoringTestCancel(epoch),
+                    Edit::Hover(None),
+                ])));
+            } else {
+                send(&mut app, Action::TestCancel(epoch));
+            }
+            assert_eq!(app.display_document(), &shown);
+            app.display_document().validate().unwrap();
+            let trial = app
+                .tab
+                .equipment_authoring
+                .as_ref()
+                .unwrap()
+                .trial
+                .as_ref()
+                .unwrap();
+            assert_eq!((trial.at, trial.turn, trial.scale, trial.reach), pose);
+            let restored = trial.snap.as_ref().unwrap();
+            assert!(matches!(restored.offer, Offer::Adapter(_)));
+            assert_eq!(restored.added, snap.added);
+            assert_eq!(restored.target.at, snap.target.at);
+            assert_eq!(restored.moving.at, snap.moving.at);
+            assert_eq!(
+                super::super::super::equipment::snap_text(app.display_document(), restored),
+                feedback
+            );
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.revision, revision);
+            assert!(!app.tab.history.can_undo());
+        }
+        send(&mut app, Action::Accept);
+        assert_eq!(app.tab.doc, canonical);
+        assert!(app.tab.doc.seats.is_empty());
+        assert_eq!(app.tab.history.undo_frames().len(), 1);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+    }
+}
+
+#[test]
 fn equipment_trial_pose_is_retained_but_accept_save_and_undo_never_keep_trial_objects() {
     for discard in [false, true] {
         let (mut app, edges) = joint_drawing();
@@ -397,6 +482,7 @@ fn equipment_trial_draft_history_and_invalid_joints_remove_stale_paint() {
             finish: true,
         },
     );
+    send(&mut app, Action::TestCancel(old_epoch));
     assert_eq!(app.display_document(), &before);
     let _ = app.update(Message::Undo); // valid pending joint
     assert!(

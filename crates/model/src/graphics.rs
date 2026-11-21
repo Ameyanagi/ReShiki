@@ -218,6 +218,11 @@ impl GraphicChange {
                 if v.is_none() {
                     s.effects.shaded = false;
                     s.effects.gradient = None;
+                    // A borderless filled path needs an outline once its fill
+                    // is removed, just like an ordinary unfilled shape.
+                    if s.width_pt == 0. {
+                        s.width_pt = GraphicStyle::default().width_pt;
+                    }
                 }
             }
             Self::Width(v) => s.width_pt = *v,
@@ -749,6 +754,14 @@ impl Graphic {
                     .iter()
                     .any(|c| matches!(c, PathCommand::Close)))
     }
+    /// An ordinary filled path may carry no outline. In particular, editable
+    /// exchange can join its contours with doubled, invisible bridge segments.
+    pub fn is_fill_only_path(&self) -> bool {
+        self.kind == GraphicKind::Path
+            && self.style.width_pt == 0.
+            && self.style.fill.is_some()
+            && self.path.iter().any(|c| matches!(c, PathCommand::Close))
+    }
     pub fn hit(&self, p: Point, r: f32) -> bool {
         self.hit_with_text_style(p, r, &crate::typography::TextStyle::default())
     }
@@ -789,6 +802,9 @@ impl Graphic {
                         .windows(2)
                         .any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r))
             });
+        }
+        if self.is_fill_only_path() {
+            return boundary_fill_contains(p, &fill_boundaries(&self.commands()));
         }
         // A piece's parts carry their own stroke widths.
         let piece = self.kind == GraphicKind::Piece;
@@ -865,7 +881,13 @@ impl Graphic {
         Ok(())
     }
     pub fn validate(&self) -> Result<(), String> {
-        self.style.validate()?;
+        if self.is_fill_only_path() {
+            let mut style = self.style.clone();
+            style.width_pt = 0.1;
+            style.validate()?;
+        } else {
+            self.style.validate()?;
+        }
         if self.superscript.is_some() && !self.kind.brackets() {
             return Err("A superscript requires a bracket graphic".into());
         }
@@ -985,6 +1007,107 @@ pub(crate) fn fills(p: Point, paths: &[Vec<Point>]) -> bool {
         }
     }
     winding != 0
+}
+
+// Each path here is one retained boundary segment. Its last point must not be
+// joined back to its first: the segments collectively form the closed contours.
+fn boundary_fill_contains(p: Point, paths: &[Vec<Point>]) -> bool {
+    let mut winding = 0;
+    for path in paths {
+        for pair in path.windows(2) {
+            let [a, b] = pair else { continue };
+            if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+                winding += if b.y > a.y { 1 } else { -1 };
+            }
+        }
+    }
+    winding != 0
+}
+
+/// Boundary queries must not treat exact retraced edges as visible ink.
+/// Cancel before flattening: reversed cubics can round their intermediate
+/// points differently, while their original controls still match exactly.
+pub(crate) fn fill_boundaries(commands: &[PathCommand]) -> Vec<Vec<Point>> {
+    use std::collections::HashMap;
+    let key = |[a, b, c, d]: [Point; 4]| -> [u32; 8] {
+        let bits = |v: f32| if v == 0. { 0 } else { v.to_bits() };
+        [
+            bits(a.x),
+            bits(a.y),
+            bits(b.x),
+            bits(b.y),
+            bits(c.x),
+            bits(c.y),
+            bits(d.x),
+            bits(d.y),
+        ]
+    };
+    let mut segments = Vec::new();
+    let mut pending: HashMap<[u32; 8], Vec<usize>> = HashMap::new();
+    let mut append = |start: Point, a: Point, b: Point, end: Point| {
+        // Endpoint-control cubics are the straight lines stored by CDX.
+        let straight = (a == start || a == end) && (b == start || b == end);
+        let (a, b) = if straight { (start, end) } else { (a, b) };
+        let forward = key([start, a, b, end]);
+        let reverse = key([end, b, a, start]);
+        let index = segments.len();
+        let opposite = pending.get_mut(&reverse).and_then(Vec::pop);
+        segments.push((
+            start,
+            if straight {
+                PathCommand::Line(end)
+            } else {
+                PathCommand::Cubic(a, b, end)
+            },
+            forward != reverse && opposite.is_none(),
+        ));
+        if let Some((_, _, visible)) = opposite.and_then(|index| segments.get_mut(index)) {
+            *visible = false;
+        }
+        if opposite.is_none() && forward != reverse {
+            pending.entry(forward).or_default().push(index);
+        }
+    };
+    let mut at = Point::default();
+    let mut first = at;
+    let mut started = false;
+    for command in commands {
+        match *command {
+            PathCommand::Move(p) => {
+                if started {
+                    append(at, at, first, first);
+                }
+                at = p;
+                first = p;
+                started = true;
+            }
+            PathCommand::Line(p) => {
+                append(at, at, p, p);
+                at = p;
+            }
+            PathCommand::Cubic(a, b, p) => {
+                append(at, a, b, p);
+                at = p;
+            }
+            PathCommand::Close => {
+                append(at, at, first, first);
+                at = first;
+            }
+        }
+    }
+    // Filling implicitly closes every contour, including a final open one.
+    if started {
+        append(at, at, first, first);
+    }
+    let mut paths = Vec::new();
+    for (start, command, _) in segments.into_iter().filter(|(_, _, visible)| *visible) {
+        if let PathCommand::Line(end) = command {
+            paths.push(vec![start, end]);
+        } else {
+            paths.extend(flattened(&[PathCommand::Move(start), command]));
+        }
+    }
+    paths
 }
 pub fn flattened(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     let mut paths: Vec<Vec<Point>> = vec![];

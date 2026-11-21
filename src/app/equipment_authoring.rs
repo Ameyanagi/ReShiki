@@ -40,6 +40,7 @@ pub enum Action {
     TestPiece(trial::Choice),
     TestTurn(f32),
     TestStart(u64),
+    TestCancel(u64),
     TestAt {
         at: Point,
         epoch: u64,
@@ -223,9 +224,9 @@ impl State {
         }
     }
 
-    fn keep_trial_pose(&mut self) {
+    fn finish_trial_drag(&mut self) {
         if let (Some(trial), Some(shown)) = (&mut self.trial, &self.preview) {
-            trial.keep_pose(shown);
+            trial.finish_drag(shown);
         }
     }
 
@@ -492,8 +493,19 @@ impl App {
                 return focus_drawing();
             }
             Action::TestStart(epoch) => {
-                if state.trial.as_ref().is_some_and(|t| t.epoch == *epoch) {
-                    state.keep_trial_pose();
+                if let (Some(trial), Some(shown)) = (&mut state.trial, &state.preview)
+                    && trial.epoch == *epoch
+                {
+                    trial.begin_drag(shown);
+                }
+                return Task::none();
+            }
+            Action::TestCancel(epoch) => {
+                if let Some(trial) = &mut state.trial
+                    && trial.epoch == *epoch
+                    && let Some(shown) = trial.cancel_drag()
+                {
+                    state.preview = Some(shown);
                 }
                 return Task::none();
             }
@@ -514,7 +526,7 @@ impl App {
                     trial.reach = *reach;
                     state.refresh_trial();
                     if *finish {
-                        state.keep_trial_pose();
+                        state.finish_trial_drag();
                     }
                 }
                 return Task::none();
@@ -731,6 +743,9 @@ impl App {
             }
             Message::Canvas(Edit::EquipmentAuthoringTestStart(epoch)) => {
                 return Some(self.equipment_authoring_action(Action::TestStart(*epoch)));
+            }
+            Message::Canvas(Edit::EquipmentAuthoringTestCancel(epoch)) => {
+                return Some(self.equipment_authoring_action(Action::TestCancel(*epoch)));
             }
             Message::Canvas(Edit::EquipmentAuthoringTest {
                 at,
