@@ -49,7 +49,7 @@ pub struct Entry {
     pub also: Vec<Source>,
     /// Prepared drawings, populated only for tiles the browser shows. Reindexing
     /// replaces entries, so changed or removed definitions cannot leave stale tiles.
-    thumbnails: [OnceCell<Document>; 2],
+    thumbnails: [OnceCell<Box<Document>>; 2],
 }
 
 impl Entry {
@@ -78,7 +78,7 @@ impl Entry {
                 Point::default(),
                 scale,
             ));
-            doc
+            Box::new(doc)
         })
     }
 
