@@ -1,0 +1,19 @@
+{
+  "sdk_creation_program": "ChemDrawSDK 26.8.0.6801",
+  "source_probe": "drawing-elements/probes/p5-arrows-enum.chemdraw.cdxml",
+  "pair_index_zero_based": 26,
+  "source": {
+    "file": "source.cdxml",
+    "sha256": "a4ef775d0d9436442e1ccefba23190bd1f7bc58650f4d77966d0b8712cb59636"
+  },
+  "native": {
+    "file": "native.cdx",
+    "sha256": "9583239e3d7a60734a2cf3c444af51d401f3c872879619bd68c8488c7bf6f481"
+  },
+  "sdk_renderer_sha256": "74c33be8cc180c2366a8b1d815e1d3aef4e08e6ce3a622122b57a78a072b9b89",
+  "dipole_property": {
+    "code": "0x0a3a",
+    "length": 0,
+    "payload_hex": ""
+  }
+}
