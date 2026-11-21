@@ -61,6 +61,11 @@ impl MoleculeCanvas<'_> {
             .or(cursor.position())
             .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
         let inside = point.is_some_and(|p| Rectangle::with_size(bounds.size()).contains(p));
+        if self.equipment_authoring.is_some() && !matches!(state.gesture, Some(Gesture::Pan { .. }))
+        {
+            state.end_gesture();
+            state.last_click = None;
+        }
         if let Some(context) = self.optimizer {
             return optimization::update(self, context, state, event, bounds, point, inside)
                 .or_else(|| state.touch.deadline().map(Action::request_redraw_at));
@@ -195,6 +200,9 @@ impl MoleculeCanvas<'_> {
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
         let bounds = self.guides.paper(bounds);
+        if self.equipment_authoring.is_some() {
+            return mouse::Interaction::Crosshair;
+        }
         if let Some(Gesture::Transform(drag)) = &state.gesture {
             return if matches!(drag.handle, Handle::Rotate) {
                 mouse::Interaction::Grabbing

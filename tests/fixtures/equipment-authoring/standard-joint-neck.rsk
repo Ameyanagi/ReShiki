@@ -1,0 +1,91 @@
+{
+  "version": 40,
+  "atoms": [],
+  "bonds": [],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [
+    {
+      "kind": "path",
+      "origin": {
+        "x": 0,
+        "y": 0
+      },
+      "axis_x": {
+        "x": 1,
+        "y": 0
+      },
+      "axis_y": {
+        "x": 0,
+        "y": 1
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "id": 1,
+      "style": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": [
+          255,
+          255,
+          255
+        ],
+        "width_pt": 0.6,
+        "pattern": "solid"
+      },
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": -28.799999999999997,
+            "y": 0
+          }
+        },
+        {
+          "command": "line",
+          "points": {
+            "x": 28.799999999999997,
+            "y": 0
+          }
+        },
+        {
+          "command": "line",
+          "points": {
+            "x": 19.5,
+            "y": 87
+          }
+        },
+        {
+          "command": "line",
+          "points": {
+            "x": 75,
+            "y": 135
+          }
+        },
+        {
+          "command": "line",
+          "points": {
+            "x": -75,
+            "y": 135
+          }
+        },
+        {
+          "command": "line",
+          "points": {
+            "x": -19.5,
+            "y": 87
+          }
+        },
+        {
+          "command": "close"
+        }
+      ]
+    }
+  ],
+  "groups": []
+}

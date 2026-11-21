@@ -726,7 +726,7 @@ impl Writer<'_> {
                 // orbital boundary is exported separately, so clipping edges
                 // must not acquire an artificial outline.
                 let mut checked_style = part.style.clone();
-                if part.filled && checked_style.width_pt == 0. {
+                if (part.filled || g.is_fill_only_path()) && checked_style.width_pt == 0. {
                     checked_style.width_pt = 0.6;
                 }
                 checked_style.validate().map_err(invalid)?;
@@ -734,7 +734,8 @@ impl Writer<'_> {
                     return Err(invalid("Dotted graphics require native or image export"));
                 }
                 self.spend(part.commands.len())?;
-                let paths = curve_points(&part.commands)?;
+                let commands = super::compound_fill::explicit_subpaths(&part.commands);
+                let paths = curve_points(&commands)?;
                 if paths.is_empty() || paths.iter().any(|(points, _)| points.len() < 6) {
                     return Err(invalid(
                         "A graphic needs at least two anchors for editable export",
@@ -749,11 +750,21 @@ impl Writer<'_> {
                     ));
                 }
                 let closed = paths.iter().all(|(_, closed)| *closed);
-                parsed.push((self.chemdraw_style(&part.style, closed), paths));
+                let paint = self.chemdraw_style(&part.style, closed);
+                // A filled compound is one nonzero region, not one fill per
+                // contour. Keep faded/shaded styles on their existing path.
+                let joined = (paths.len() > 1
+                    && closed
+                    && paint.fill.is_some()
+                    && paint.effects.opacity.is_none()
+                    && !paint.effects.shaded)
+                    .then(|| self.joined_fill(&paths))
+                    .transpose()?;
+                parsed.push((paint, paths, joined));
             }
             // Closed and compound paths draw no heads.
             let heads = match parsed.as_slice() {
-                [(_, paths)] if matches!(paths.as_slice(), [(_, false)]) => g.heads.as_ref(),
+                [(_, paths, _)] if matches!(paths.as_slice(), [(_, false)]) => g.heads.as_ref(),
                 _ => None,
             };
             let parent = if g
@@ -765,7 +776,7 @@ impl Writer<'_> {
                 || parsed.len() > 1
                 || parsed
                     .iter()
-                    .any(|(paint, paths)| paths.len() > 1 || paint.fill.is_some())
+                    .any(|(paint, paths, _)| paths.len() > 1 || paint.fill.is_some())
             {
                 let id = self.id()?;
                 self.tree
@@ -774,10 +785,28 @@ impl Writer<'_> {
                 self.page
             };
             let mut object = None;
-            for (paint, paths) in &parsed {
+            for (paint, paths, joined) in &parsed {
+                let fill_parent = if joined.is_some() {
+                    let target = if parsed.len() > 1 && g.panel.is_none() {
+                        let id = self.id()?;
+                        self.tree
+                            .add(Some(parent), "group", [("id", id), ("Z", z.to_string())])?
+                    } else {
+                        parent
+                    };
+                    if let (Some(fill), Some(points)) = (paint.fill, joined) {
+                        self.curve(target, points, true, fill, true, 0., false, z)?;
+                    }
+                    object = Some(parent);
+                    Some(target)
+                } else {
+                    None
+                };
                 for (points, closed) in paths {
                     // A panel's fill and its broken outline share its group.
-                    let target = if parsed.len() > 1 && paint.fill.is_some() && g.panel.is_none() {
+                    let target = if let Some(target) = fill_parent {
+                        target
+                    } else if parsed.len() > 1 && paint.fill.is_some() && g.panel.is_none() {
                         let id = self.id()?;
                         self.tree
                             .add(Some(parent), "group", [("id", id), ("Z", z.to_string())])?
@@ -786,7 +815,7 @@ impl Writer<'_> {
                     };
                     // A faded fill is the outline's own: one curve draws both.
                     let fade = paint.effects.opacity.filter(|_| *closed);
-                    if let Some(fill) = paint.fill.filter(|_| fade.is_none()) {
+                    if let Some(fill) = paint.fill.filter(|_| fade.is_none() && joined.is_none()) {
                         let n = self.curve(target, points, *closed, fill, true, 0., false, z)?;
                         if paint.effects.shaded && *closed {
                             self.tree.set(n, "CurveType", "257")?;

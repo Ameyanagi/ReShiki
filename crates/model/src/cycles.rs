@@ -8,12 +8,13 @@ use crate::{
     document::{Arrow, Document, Point},
     graphics::{Graphic, GraphicKind},
     style::DEFAULT,
-    typography::{TextAlign, TextFormat},
+    typography::TextFormat,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::f32::consts::{FRAC_PI_2, TAU};
 
+mod label_placement;
 mod split;
 pub mod steps;
 
@@ -231,6 +232,23 @@ struct Span {
     sweep: f32,
 }
 impl Span {
+    /// Keep a painted parallel lane's radius positive, including its phase
+    /// when a very small arc's inner parallel crosses through the centre.
+    fn shifted(self, offset: f32) -> Option<Self> {
+        let radius = self.radius + offset;
+        (radius != 0.).then_some(Self {
+            radius: radius.abs(),
+            first: self.first + if radius < 0. { 180. } else { 0. },
+            ..self
+        })
+    }
+    fn reversed(self) -> Self {
+        Self {
+            first: self.first + self.sweep,
+            sweep: -self.sweep,
+            ..self
+        }
+    }
     fn angle(self, t: f32) -> f32 {
         (self.first + self.sweep * t).to_radians()
     }
@@ -419,6 +437,10 @@ pub fn drawn(doc: &Document, g: &Graphic) -> Drawn {
 // Insertion uses the same trimmed, bowed step as the renderer, including
 // hidden steps' side arrows and the centerline of a reversible pair.
 fn drawn_spans(doc: &Document, g: &Graphic, mut record_span: impl FnMut(usize, Span)) -> Drawn {
+    drawn_layouts(doc, g, |step, layout| record_span(step, layout.arc))
+}
+
+fn drawn_layouts(doc: &Document, g: &Graphic, mut record: impl FnMut(usize, &SideLayout)) -> Drawn {
     let Some(cycle) = &g.cycle else {
         return Drawn::default();
     };
@@ -435,11 +457,6 @@ fn drawn_spans(doc: &Document, g: &Graphic, mut record_span: impl FnMut(usize, S
         width_pt: g.style.width_pt,
         pattern: g.style.pattern,
         ..ArrowStyle::preset(Preset::Forward)
-    };
-    let format = TextFormat {
-        style: doc.drawing_style.text_style(),
-        alignment: TextAlign::Center,
-        ..Default::default()
     };
     let n = cycle.intermediates.len();
     let all = boxes(doc, cycle);
@@ -467,8 +484,6 @@ fn drawn_spans(doc: &Document, g: &Graphic, mut record_span: impl FnMut(usize, S
         boxes.push(b.unwrap_or_else(|| (at(angle), at(angle))));
         angles.push(angle);
     }
-    // What labels keep clear of: every part's ink.
-    let mut taken: Vec<(Point, Point)> = all.iter().flatten().copied().collect();
     let mut sides = all.iter().skip(n);
     let mut names = vec![];
     let ends: Vec<((Point, Point), f32)> = boxes.into_iter().zip(angles).collect();
@@ -482,7 +497,6 @@ fn drawn_spans(doc: &Document, g: &Graphic, mut record_span: impl FnMut(usize, S
             end,
             open,
         } = step_span(g, cycle, bond, step, (first, a0), (next, a1));
-        record_span(s, arc);
         // 1 when moving away from the arc's own center leaves the cycle.
         let outward = {
             let p = arc.at(0.5, 0.);
@@ -490,11 +504,15 @@ fn drawn_spans(doc: &Document, g: &Graphic, mut record_span: impl FnMut(usize, S
                 (p.x - arc.center.x) * (p.x - center.x) + (p.y - arc.center.y) * (p.y - center.y);
             if dot >= 0. { 1. } else { -1. }
         };
+        let half = if step.reversible && !step.hidden && open {
+            DEFAULT.world(style.gap_pt.max(2.)) * 0.75
+        } else {
+            0.
+        };
         if !step.hidden && open {
             if step.reversible {
                 // Two half-headed arcs either side of the line, the forward
                 // one on the outside.
-                let half = DEFAULT.world(style.gap_pt.max(2.)) * 0.75;
                 // Half heads face away from the pair.
                 let forward = ArrowStyle {
                     head: if (arc.sweep > 0.) == (outward > 0.) {
@@ -524,122 +542,203 @@ fn drawn_spans(doc: &Document, g: &Graphic, mut record_span: impl FnMut(usize, S
                 out.arcs.push(Some(s));
             }
         }
-        // Side arrows swoop in to the arc, or out of it, meeting it along
-        // its way, far enough along from their end for an easy curve.
-        for incoming in step
+        let mut layout = SideLayout::new(g.id, arc, outward, half, &style, bond, gap);
+        for (ids, incoming) in step
             .reagents
             .iter()
-            .map(|_| true)
-            .chain(step.products.iter().map(|_| false))
+            .map(|ids| (ids, true))
+            .chain(step.products.iter().map(|ids| (ids, false)))
         {
-            let Some(&Some(b)) = sides.next() else {
-                continue;
-            };
-            let side = side_on(g.id, arc, b, incoming, &style, bond, gap);
-            taken.push(side.bounds());
+            if let Some(&Some(ink)) = sides.next() {
+                layout.parts.push(SidePart {
+                    ids: ids.clone(),
+                    incoming,
+                    ink,
+                });
+            }
+        }
+        record(s, &layout);
+        for side in layout.routes(&layout.boxes()) {
             out.arrows.push(side);
             out.arcs.push(None);
         }
         if !step.name.trim().is_empty() {
-            names.push((wrapped(&step.name, &format, bond * 2.5), arc, outward));
+            names.push((step.name.as_str(), arc, outward));
         }
     }
-    // Names go where they cover the least ink: inside the cycle at the arc's
-    // middle when that is free, else outside, else a little along the arc.
-    for (text, arc, outward) in names {
-        let layout = crate::typography::layout(&text, &format);
-        let (w, h) = (layout.width, layout.height);
-        let place = |t: f32, out: f32| {
-            let angle = arc.angle(t);
-            let reach = 0.5 * (w * angle.cos().abs() + h * angle.sin().abs());
-            let c = polar(arc.center, arc.radius + out * (gap + reach), angle);
-            (c.offset(-w * 0.5, -h * 0.5), c.offset(w * 0.5, h * 0.5))
-        };
-        // Ink the box covers, and the whole box again if it reaches the arc.
-        let covered = |b: (Point, Point), out: f32| -> f32 {
-            let inked: f32 = taken
-                .iter()
-                .map(|t| grown(*t, gap * 0.5))
-                .map(|t| {
-                    let x = (b.1.x.min(t.1.x) - b.0.x.max(t.0.x)).max(0.);
-                    let y = (b.1.y.min(t.1.y) - b.0.y.max(t.0.y)).max(0.);
-                    x * y
-                })
-                .sum();
-            let c = arc.center;
-            let nearest = Point::new(c.x.clamp(b.0.x, b.1.x), c.y.clamp(b.0.y, b.1.y));
-            let farthest = Point::new(
-                if c.x - b.0.x > b.1.x - c.x {
-                    b.0.x
-                } else {
-                    b.1.x
-                },
-                if c.y - b.0.y > b.1.y - c.y {
-                    b.0.y
-                } else {
-                    b.1.y
-                },
-            );
-            let clear = if out < 0. {
-                farthest.distance(c) < arc.radius - gap * 0.5
-            } else {
-                nearest.distance(c) > arc.radius + gap * 0.5
-            };
-            inked + if clear { 0. } else { w * h }
-        };
-        let mut best: Option<((Point, Point), f32)> = None;
-        'search: for depth in [1., 1.8] {
-            for t in [0.5, 0.38, 0.62, 0.26, 0.74] {
-                for out in [-outward, outward] {
-                    let b = place(t, out * depth);
-                    let cost = covered(b, out);
-                    if best.is_none_or(|(_, c)| cost < c) {
-                        best = Some((b, cost));
-                    }
-                    if cost <= 0. {
-                        break 'search;
-                    }
-                }
-            }
-        }
-        if let Some((chosen, _)) = best {
-            taken.push(chosen);
-            out.labels.push((chosen.0, text, format.clone()));
-        }
-    }
-    if !cycle.label.trim().is_empty() {
-        let layout = crate::typography::layout(&cycle.label, &format);
-        out.labels.push((
-            center.offset(-layout.width * 0.5, -layout.height * 0.5),
-            cycle.label.clone(),
-            format,
-        ));
-    }
+    label_placement::place(doc, g, cycle, names, &all, &mut out);
     out
 }
 
-fn side_on(
-    id: u64,
-    arc: Span,
-    ink: (Point, Point),
+type SideInk = (bool, (Point, Point));
+
+#[derive(Debug, Clone)]
+struct SidePart {
+    ids: Vec<u64>,
     incoming: bool,
-    style: &ArrowStyle,
+    ink: (Point, Point),
+}
+
+#[derive(Debug, Clone)]
+struct SideLayout {
+    arc: Span,
+    id: u64,
+    lanes: Vec<(usize, Span)>,
+    style: ArrowStyle,
     bond: f32,
     gap: f32,
-) -> Arrow {
-    let c = center_of(ink);
-    let length = arc.radius * arc.sweep.to_radians().abs();
-    let ahead = (1.2 * bond).max(1.1 * (c.distance(arc.center) - arc.radius).abs());
-    let shift = if length > 0. { ahead / length } else { 0. };
-    let t = (arc.along(c) + if incoming { shift } else { -shift }).clamp(0.15, 0.85);
-    side_arrow(
-        id,
-        arc.at(t, 0.),
-        arc.tangent(t),
-        grown(ink, gap),
-        incoming,
-        style,
-    )
+    paired: bool,
+    parts: Vec<SidePart>,
+}
+
+impl SideLayout {
+    fn new(
+        id: u64,
+        arc: Span,
+        outward: f32,
+        half: f32,
+        style: &ArrowStyle,
+        bond: f32,
+        gap: f32,
+    ) -> Self {
+        let lanes = if half == 0. {
+            vec![(0, arc)]
+        } else {
+            [
+                arc.shifted(outward * half),
+                arc.shifted(-outward * half).map(Span::reversed),
+            ]
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, lane)| lane.map(|lane| (i, lane)))
+            .collect()
+        };
+        Self {
+            arc,
+            id,
+            lanes,
+            style: style.clone(),
+            bond,
+            gap,
+            paired: half != 0.,
+            parts: vec![],
+        }
+    }
+
+    fn boxes(&self) -> Vec<SideInk> {
+        self.parts.iter().map(|p| (p.incoming, p.ink)).collect()
+    }
+
+    fn routes(&self, parts: &[SideInk]) -> Vec<Arrow> {
+        let mut attachments = vec![];
+        for &(incoming, ink) in parts {
+            let c = center_of(ink);
+            let Some(&(lane, path)) = self.lanes.iter().min_by(|(i, a), (j, b)| {
+                let distance = |a: &Span| (c.distance(a.center) - a.radius).abs();
+                distance(a).total_cmp(&distance(b)).then(i.cmp(j))
+            }) else {
+                continue;
+            };
+            let length = path.radius * path.sweep.to_radians().abs();
+            let ahead = (1.2 * self.bond).max(1.1 * (c.distance(path.center) - path.radius).abs());
+            let shift = if length > 0. { ahead / length } else { 0. };
+            let projected = path.along(c);
+            let t = (projected + if incoming { shift } else { -shift }).clamp(0.15, 0.85);
+            attachments.push(SideAttachment {
+                ink,
+                incoming,
+                projected,
+                t,
+                path,
+                lane,
+            });
+        }
+        if self.paired {
+            separate_attachments(&mut attachments, self.bond);
+        }
+        attachments
+            .into_iter()
+            .map(|attachment| {
+                side_arrow(
+                    self.id,
+                    attachment.path.at(attachment.t, 0.),
+                    attachment.path.tangent(attachment.t),
+                    grown(attachment.ink, self.gap),
+                    attachment.incoming,
+                    &self.style,
+                )
+            })
+            .collect()
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SideAttachment {
+    ink: (Point, Point),
+    incoming: bool,
+    projected: f32,
+    t: f32,
+    path: Span,
+    lane: usize,
+}
+
+/// Keep joins in their parts' perimeter order. Incoming and outgoing shifts
+/// otherwise pull two neighbouring connectors onto the same point. Pooling
+/// adjacent conflicts moves the preferred joins as little as possible.
+fn separate_attachments(attachments: &mut [SideAttachment], bond: f32) {
+    #[derive(Clone, Copy)]
+    struct Block {
+        sum: f32,
+        count: usize,
+    }
+    for lane in 0..2 {
+        let mut ordered: Vec<_> = attachments
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|(_, a)| a.lane == lane)
+            .collect();
+        ordered.sort_by(|(_, a), (_, b)| a.projected.total_cmp(&b.projected));
+        let Some((_, first)) = ordered.first().filter(|_| ordered.len() > 1) else {
+            continue;
+        };
+        let length = first.path.radius * first.path.sweep.to_radians().abs();
+        if length <= 0. {
+            continue;
+        }
+        let gap = (bond / length).min(0.7 / (ordered.len() - 1) as f32);
+        let maximum = 0.85 - gap * (ordered.len() - 1) as f32;
+        let mut blocks = vec![];
+        for (i, (_, attachment)) in ordered.iter().enumerate() {
+            blocks.push(Block {
+                sum: attachment.t - i as f32 * gap,
+                count: 1,
+            });
+            while let Some([a, b]) = blocks.last_chunk::<2>() {
+                if a.sum / a.count as f32 <= b.sum / b.count as f32 {
+                    break;
+                }
+                let merged = Block {
+                    sum: a.sum + b.sum,
+                    count: a.count + b.count,
+                };
+                blocks.truncate(blocks.len() - 2);
+                blocks.push(merged);
+            }
+        }
+        let mut positions = vec![];
+        for block in blocks {
+            let base = (block.sum / block.count as f32).clamp(0.15, maximum.max(0.15));
+            for _ in 0..block.count {
+                positions.push(base + positions.len() as f32 * gap);
+            }
+        }
+        for ((index, _), t) in ordered.into_iter().zip(positions) {
+            if let Some(attachment) = attachments.get_mut(index) {
+                attachment.t = t;
+            }
+        }
+    }
 }
 
 /// A side arrow between a part's ink and the point where it touches the
@@ -1201,6 +1300,103 @@ pub(crate) fn ungroup_freed(doc: &mut Document, freed: &HashSet<u64>) {
     doc.prune_groups();
 }
 
+/// Tidy cycle graphic `id`: its intermediates go evenly round the circle,
+/// each centred on it, in order and turned as little as they can be; then
+/// each step's reagents line up beside the first half of its drawn arc and
+/// its products beside the second half, on the side of the circle they were
+/// on and within reach of the cycle. Returns whether anything moved.
+pub fn tidy(doc: &mut Document, id: u64) -> bool {
+    let Some(g) = doc.graphics.iter().find(|g| g.id == id) else {
+        return false;
+    };
+    let Some(cycle) = g.cycle.as_deref().cloned() else {
+        return false;
+    };
+    let n = cycle.intermediates.len();
+    if n == 0 {
+        return false;
+    }
+    let (center, radius) = g.cycle_circle();
+    let even = if g.cycle_counterclockwise() {
+        -TAU
+    } else {
+        TAU
+    } / n as f32;
+    let angle = |b: (Point, Point)| {
+        let c = center_of(b);
+        (c.y - center.y).atan2(c.x - center.x)
+    };
+    let all = boxes(doc, &cycle);
+    // The turn that moves them least: the mean of each one's offset from
+    // its even place.
+    let (sin, cos) = all
+        .iter()
+        .take(n)
+        .enumerate()
+        .filter_map(|(k, b)| b.map(|b| angle(b) - even * k as f32))
+        .fold((0., 0.), |(s, c), a| (s + a.sin(), c + a.cos()));
+    let place = |k: usize| sin.atan2(cos) + even * k as f32;
+    // Float noise is no move: a second tidy changes nothing.
+    let shift = |doc: &mut Document, ids: &[u64], from: Point, to: Point| {
+        let far = from.distance(to) > 0.05;
+        if far {
+            let ids = crate::molecule_names::include_annotations(doc, ids);
+            doc.translate(&ids, to.x - from.x, to.y - from.y);
+        }
+        far
+    };
+    let mut moved = false;
+    for (k, (ids, b)) in cycle.intermediates.iter().zip(&all).enumerate() {
+        if let Some(b) = b {
+            moved |= shift(doc, ids, center_of(*b), polar(center, radius, place(k)));
+        }
+    }
+    // Side parts follow the arcs as the intermediates now draw them.
+    let Some(g) = doc.graphics.iter().find(|g| g.id == id) else {
+        return moved;
+    };
+    let drawn = drawn(doc, g);
+    let bond = doc.drawing_style.bond_length_world;
+    let gap = DEFAULT.world(cycle.gap_pt);
+    let reach = radius + 3.5 * bond;
+    let mut moves = vec![];
+    let mut sides = all.iter().skip(n);
+    for (s, step) in cycle.steps.iter().enumerate() {
+        let arc = (drawn.arrows.iter().zip(&drawn.arcs)).find(|(_, a)| **a == Some(s));
+        for (parts, lo, hi) in [(&step.reagents, 0.2, 0.4), (&step.products, 0.6, 0.8)] {
+            for (j, ids) in parts.iter().enumerate() {
+                let Some(&Some(b)) = sides.next() else {
+                    continue;
+                };
+                let t = if parts.len() == 1 {
+                    (lo + hi) * 0.5
+                } else {
+                    lo + (hi - lo) * j as f32 / (parts.len() - 1) as f32
+                };
+                let on = arc.map_or_else(
+                    || polar(center, radius, place(s) + even * t),
+                    |(a, _)| a.point(t),
+                );
+                let a = (on.y - center.y).atan2(on.x - center.x);
+                let (w, h) = (b.1.x - b.0.x, b.1.y - b.0.y);
+                let clear = bond + gap + 0.5 * (w * a.cos().abs() + h * a.sin().abs());
+                let c = center_of(b);
+                let d = on.distance(center);
+                let r = if c.distance(center) < radius {
+                    (d.min(radius) - clear).max(radius * 0.5)
+                } else {
+                    (d.max(radius) + clear).min(reach)
+                };
+                moves.push((ids, c, polar(center, r, a)));
+            }
+        }
+    }
+    for (ids, from, to) in moves {
+        moved |= shift(doc, ids, from, to);
+    }
+    moved
+}
+
 /// Run the cycle the other way round: the order reverses and what came in
 /// now goes out.
 pub fn reverse(cycle: &mut Cycle) {
@@ -1443,4 +1639,9 @@ pub fn reconcile(doc: &mut Document) {
 }
 
 #[cfg(test)]
+mod side_attachment_tests;
+#[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod stack_tests;
