@@ -141,9 +141,17 @@ fn long_names_end_with_an_ellipsis() {
 }
 
 #[test]
-fn drawing_pages_return_to_properties_on_switch_new_close_and_last_tab_reset() {
+fn drawing_pages_reset_but_names_and_assistant_survive_tab_identity_changes() {
     use crate::app::InspectorTab as I;
-    for page in [I::Reactions, I::Labels, I::Abbreviations, I::Names] {
+    // Names and Assistant keep their return route across document identities;
+    // an in-document selection change has its own Properties reset coverage.
+    for (page, expected) in [
+        (I::Reactions, I::Properties),
+        (I::Labels, I::Properties),
+        (I::Abbreviations, I::Properties),
+        (I::Names, I::Names),
+        (I::Assistant, I::Assistant),
+    ] {
         let mut app = ready();
         edit(&mut app, "C");
         let first = app.tab.id;
@@ -152,51 +160,43 @@ fn drawing_pages_return_to_properties_on_switch_new_close_and_last_tab_reset() {
         let second = app.tab.id;
         app.inspector_tab = page;
         select(&mut app, first);
-        assert_eq!(app.inspector_tab, I::Properties, "switch from {page:?}");
+        assert_eq!(app.inspector_tab, expected, "switch from {page:?}");
         app.inspector_tab = page;
         select(&mut app, second);
-        assert_eq!(app.inspector_tab, I::Properties, "return from {page:?}");
+        assert_eq!(app.inspector_tab, expected, "return from {page:?}");
         app.inspector_tab = page;
         let _ = app.update(Message::New);
-        assert_eq!(app.inspector_tab, I::Properties, "new from {page:?}");
+        assert_eq!(app.inspector_tab, expected, "new from {page:?}");
         app.inspector_tab = page;
         let _ = app.update(Message::Tabs(Action::Close(None)));
         assert_eq!(app.tab.id, second);
-        assert_eq!(
-            app.inspector_tab,
-            I::Properties,
-            "close empty from {page:?}"
-        );
+        assert_eq!(app.inspector_tab, expected, "close empty from {page:?}");
         app.inspector_tab = page;
         let _ = app.update(Message::Tabs(Action::Close(None)));
         assert!(app.pending.is_some());
         let _ = app.update(Message::Discard);
         assert_eq!(app.tab.id, first);
-        assert_eq!(app.inspector_tab, I::Properties, "discard from {page:?}");
+        assert_eq!(app.inspector_tab, expected, "discard from {page:?}");
         app.inspector_tab = page;
         let _ = app.update(Message::Tabs(Action::Close(None)));
         let _ = app.update(Message::Discard);
         assert_eq!(app.strip().count(), 1);
         assert!(app.tab.doc.atoms.is_empty());
-        assert_eq!(app.inspector_tab, I::Properties, "last tab from {page:?}");
+        assert_eq!(app.inspector_tab, expected, "last tab from {page:?}");
         app.inspector_tab = page;
         let id = app.tab.id;
         let epoch = app.tab.file_epoch;
         let _ = app.update(Message::New);
         assert_eq!(app.tab.id, id);
         assert_ne!(app.tab.file_epoch, epoch);
-        assert_eq!(
-            app.inspector_tab,
-            I::Properties,
-            "new default tab from {page:?}"
-        );
+        assert_eq!(app.inspector_tab, expected, "new default tab from {page:?}");
     }
 }
 
 #[test]
-fn drawing_pages_reset_on_file_replacement_while_session_pages_stay_selected() {
+fn drawing_pages_reset_on_file_replacement_while_page_routes_and_session_tabs_stay_selected() {
     use crate::app::InspectorTab as I;
-    for page in [I::Reactions, I::Labels, I::Abbreviations, I::Names] {
+    for page in [I::Reactions, I::Labels, I::Abbreviations] {
         let mut app = ready();
         app.inspector_tab = page;
         app.show_opened(Document::default(), None);
@@ -209,6 +209,7 @@ fn drawing_pages_reset_on_file_replacement_while_session_pages_stay_selected() {
         I::Export,
         I::ThemeGenerator,
         I::Pages,
+        I::Names,
         I::Assistant,
     ] {
         let mut app = ready();

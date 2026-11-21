@@ -161,6 +161,42 @@ fn selection_order_and_document_switch_do_not_discard_the_open_page() {
 }
 
 #[test]
+fn file_replacement_rebinds_page_context_without_losing_its_return_route() {
+    for page in [InspectorTab::Names, InspectorTab::Assistant] {
+        let mut app = drawing();
+        let _ = app.update(Message::Inspector(InspectorTab::Import));
+        let _ = app.update(Message::Inspector(page));
+        let (tab, epoch) = (app.tab.id, app.tab.file_epoch);
+        let mut replacement = reshiki::document::Document::default();
+        replacement.add_atom("N", Point::default());
+        app.show_opened(replacement.clone(), Some("replacement.rsk".into()));
+        // show_opened runs inside a message; its normal final page sync must
+        // bind the empty selection to this file epoch, even if atom IDs recur.
+        let _ = app.sync_inspector_page_selection();
+        assert_eq!(app.tab.id, tab, "The existing tab receives the file");
+        assert_ne!(app.tab.file_epoch, epoch);
+        assert_eq!(app.tab.doc, replacement);
+        assert!(app.tab.selected.is_empty());
+        assert_eq!(app.inspector_tab, page);
+        assert_eq!(app.inspector_parent_tab(), InspectorTab::Import);
+        if page == InspectorTab::Names {
+            assert!(
+                !app.inspector_pages.structure_first,
+                "The replacement file has no selected structure"
+            );
+        }
+        let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+        assert_eq!(app.inspector_tab, InspectorTab::Import);
+        // Changing selection within this same replacement file is the other
+        // rule: both pages return to Properties, as they did before replacement.
+        let _ = app.update(Message::Inspector(page));
+        let _ = app.update(Message::SelectAll);
+        assert_eq!(app.inspector_tab, InspectorTab::Properties);
+        assert!(!app.tab.selected.is_empty());
+    }
+}
+
+#[test]
 fn chemical_names_entry_point_sets_order_after_selecting_its_structure() {
     let mut app = drawing();
     let atoms = app.tab.selected.clone();
