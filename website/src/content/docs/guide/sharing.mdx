@@ -32,6 +32,11 @@ Open **Export → Figure**, choose **SVG**, **SVG for Office**, **PDF** or **PNG
 
 PNG files use 1200 dpi unless you choose 150, 300 or 600 dpi in **Settings → Copy & export** or the **Resolution** menu, and copied PNGs use 300 dpi. Large drawings get a lower resolution automatically, at the same physical size. The saved-file status reports the actual pixel dimensions and DPI. If chemistry analysis fails, figure export preserves the visible drawing and shows a review notice instead of blocking Save. [Figure export details and limits](/developer/figure-export/).
 
+In Nightly builds, after a picture export, **Export again** appears at the top of
+**Export**, naming the file and its format. It replaces that export with the
+current full drawing using the previous export choices. Normal export still asks
+for a destination. The browser starts another download with the same name.
+
 File exports use the full drawing. **Copy image** uses the current selection when objects are selected.
 
 | You need                         | Use                                                                                 |

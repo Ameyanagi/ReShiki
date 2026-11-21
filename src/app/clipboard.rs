@@ -1,4 +1,4 @@
-use super::{App, Document, Job, Message, Point, Tool, editing, input_request};
+use super::{App, Document, InspectorTab, Job, Message, Point, Tool, editing, input_request};
 use iced::{Subscription, Task, time::Instant, window};
 use reshiki::clipboard::{CopyFormat, CopyOutcome, PasteOutcome, PreparedCopy};
 
@@ -61,6 +61,12 @@ fn normalize_pasted_captions(doc: &mut Document) {
             }
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NativeCopyScope {
+    Selection,
+    SelectionOrDrawing,
 }
 
 impl App {
@@ -406,19 +412,58 @@ impl App {
         image_only: bool,
         once: Option<(reshiki::export::Background, bool)>,
     ) -> Task<Message> {
+        let scope = if image_only {
+            NativeCopyScope::SelectionOrDrawing
+        } else {
+            NativeCopyScope::Selection
+        };
+        self.copy_native_in_scope(cut, image_only, once, scope)
+    }
+
+    /// Preserve the ordinary rich Office bundle, including Windows' editable
+    /// Office preview, without changing the selection to copy an entire drawing.
+    pub(super) fn copy_for_office(&mut self) -> Task<Message> {
+        let pictures = self.office_copy_pictures();
+        self.copy_native_in_scope(
+            false,
+            false,
+            Some((pictures.background, pictures.editable)),
+            NativeCopyScope::SelectionOrDrawing,
+        )
+    }
+
+    pub(super) fn office_copy_pictures(&self) -> reshiki::clipboard::Pictures {
+        self.copy_pictures(Some((
+            self.export_tab_background
+                .unwrap_or(self.appearance.copy_background)
+                .paper(self.appearance.custom_background),
+            self.export_editable(),
+        )))
+    }
+
+    fn copy_native_in_scope(
+        &mut self,
+        cut: bool,
+        image_only: bool,
+        once: Option<(reshiki::export::Background, bool)>,
+        scope: NativeCopyScope,
+    ) -> Task<Message> {
         if self.clipboard_working() {
             self.status = "A clipboard operation is already in progress".into();
             return Task::none();
         }
-        if self.tab.selected.is_empty() && !image_only {
+        if self.tab.selected.is_empty() && scope == NativeCopyScope::Selection {
             self.status = "Select objects to copy".into();
             return Task::none();
         }
-        let snapshot = if self.tab.selected.is_empty() {
-            self.tab.doc.clone()
-        } else {
-            editing::selection(&self.tab.doc, &self.tab.selected)
-        };
+        if scope == NativeCopyScope::SelectionOrDrawing
+            && !image_only
+            && self.tab.doc.object_ids().next().is_none()
+        {
+            self.status = "There is nothing to copy".into();
+            return Task::none();
+        }
+        let snapshot = reshiki::clipboard::selection_or_drawing(&self.tab.doc, &self.tab.selected);
         let cut_ids = if cut {
             reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected)
         } else {
@@ -645,6 +690,13 @@ impl App {
             return Task::none();
         }
         if reshiki::clipboard::available() {
+            if !cut
+                && self.inspector_open
+                && self.inspector_tab == InspectorTab::Export
+                && !self.settings.open
+            {
+                return self.copy_for_office();
+            }
             return self.copy_native(cut, false, None);
         }
         if self.tab.selected.is_empty() {
@@ -680,42 +732,15 @@ impl App {
     }
 
     pub(super) fn copy_smiles(&mut self) -> Task<Message> {
-        if self.clipboard_working() {
-            self.status = "A clipboard operation is already in progress".into();
-            return Task::none();
-        }
-        if let Some(a) = self.property_analysis() {
-            let text = a.smiles.clone();
-            if let Some(notice) = a.smiles_notice.clone() {
-                self.status = notice;
-                self.error = false;
-            }
-            return write_text(text);
-        }
-        Task::none()
+        self.inspector_action(super::inspector::Action::CopyIdentity(
+            super::inspector::IdentityField::Smiles,
+        ))
     }
 
     pub(super) fn copy_analysis(&mut self) -> Task<Message> {
-        if self.clipboard_working() {
-            self.status = "A clipboard operation is already in progress".into();
-            return Task::none();
-        }
-        if let Some(analysis) = self
-            .property_analysis()
-            .and_then(|a| self.elemental_analysis(a))
-        {
-            // Journal text uses plain digits for counts: C2H6O.
-            return write_text(
-                analysis
-                    .chars()
-                    .map(|c| match c {
-                        '₀'..='₉' => char::from_digit(c as u32 - '₀' as u32, 10).unwrap_or(c),
-                        _ => c,
-                    })
-                    .collect(),
-            );
-        }
-        Task::none()
+        self.inspector_action(super::inspector::Action::CopyIdentity(
+            super::inspector::IdentityField::Analysis,
+        ))
     }
 
     pub(super) fn pasted(&mut self, contents: Option<String>) -> Task<Message> {

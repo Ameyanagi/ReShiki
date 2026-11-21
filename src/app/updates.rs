@@ -1,7 +1,5 @@
 use super::{App, Message};
-use iced::widget::{
-    Space, button, checkbox, column, container, mouse_area, opaque, row, stack, text,
-};
+use iced::widget::{Space, button, column, container, mouse_area, opaque, row, stack, text};
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task};
 use reshiki::updates::{self, Channel, Preferences, Release};
 
@@ -21,6 +19,9 @@ pub enum Action {
     RecoveryCleared,
     Restarted(Result<(), String>),
     Opened(Result<(), String>),
+    OpenSettings,
+    CopyVersion,
+    OpenAboutLink(&'static str),
     /// Opens the data folder in the file manager.
     OpenDataFolder,
 }
@@ -38,6 +39,11 @@ pub(super) fn background(message: &Message) -> bool {
     ) || super::results::admitted(super::results::Modal::UpdatesDialog, message)
 }
 
+enum Failure {
+    Check(String),
+    Other(String),
+}
+
 pub struct State {
     pub open: bool,
     pub automatic: bool,
@@ -51,7 +57,8 @@ pub struct State {
     prepared: Option<std::sync::Arc<updates::install::Prepared>>,
     saving: bool,
     latest: Option<Release>,
-    error: Option<String>,
+    error: Option<Failure>,
+    version_copied: bool,
     /// The data folder About names, as resolved after startup moved it.
     pub(super) data_folder: Option<std::path::PathBuf>,
     /// Why startup could not move the data folder to `~/.reshiki`.
@@ -67,7 +74,9 @@ impl State {
         !self.saving && !self.installing && !self.restarting
     }
     pub(super) fn error(&self) -> Option<&str> {
-        self.error.as_deref()
+        self.error.as_ref().map(|error| match error {
+            Failure::Check(message) | Failure::Other(message) => message.as_str(),
+        })
     }
     pub fn new() -> Self {
         let preferences = if cfg!(test) {
@@ -89,6 +98,7 @@ impl State {
             saving: false,
             latest: None,
             error: None,
+            version_copied: false,
             data_folder: reshiki::compatibility::data_directory_location()
                 .ok()
                 .map(|location| location.path),
@@ -100,6 +110,48 @@ impl State {
             release.channel() == Some(self.channel)
                 && release.available_for(updates::CURRENT_VERSION)
         })
+    }
+    fn card_action(&self) -> (&'static str, &'static str, Action) {
+        if matches!(self.error, Some(Failure::Check(_))) {
+            ("updates-check", "Try again", Action::Check(true))
+        } else if self.available() {
+            if self.channel == Channel::Nightly {
+                ("updates-install", "Download nightly ↗", Action::Portable)
+            } else {
+                ("updates-install", "Update and restart", Action::Install)
+            }
+        } else {
+            ("updates-check", "Check now", Action::Check(true))
+        }
+    }
+    fn card_refresh_action(&self) -> Option<Action> {
+        (!self.checking
+            && !self.installing
+            && !self.restarting
+            && matches!(self.card_action().2, Action::Install | Action::Portable))
+        .then_some(Action::Check(true))
+    }
+    fn installed_channel() -> Channel {
+        Release {
+            version: updates::CURRENT_VERSION.into(),
+        }
+        .channel()
+        .unwrap_or(Channel::Stable)
+    }
+    fn version_report() -> String {
+        let version = updates::CURRENT_VERSION;
+        let installed = Self::installed_channel();
+        let platform = match std::env::consts::OS {
+            "macos" => "macOS",
+            "windows" => "Windows",
+            "linux" => "Linux",
+            _ => "Web",
+        };
+        let architecture = match std::env::consts::ARCH {
+            "aarch64" => "arm64",
+            architecture => architecture,
+        };
+        format!("ReShiki {version} ({installed}, {platform} {architecture})")
     }
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
@@ -125,6 +177,7 @@ impl App {
             Action::Show(open) => {
                 if !self.updates.restarting {
                     self.updates.open = open;
+                    self.updates.version_copied = false;
                     // Help > About replaces Help.
                     self.help_open &= !open;
                     #[cfg(not(target_arch = "wasm32"))]
@@ -148,7 +201,7 @@ impl App {
                     return Task::none();
                 }
                 if let Some(reason) = self.update_restart_blocker() {
-                    self.updates.error = Some(reason.into());
+                    self.updates.error = Some(Failure::Other(reason.into()));
                     return Task::none();
                 }
                 if self.updates.prepared.is_some() {
@@ -177,7 +230,7 @@ impl App {
                         self.updates.prepared = Some(prepared);
                         return self.restart_for_update();
                     }
-                    Err(error) => self.updates.error = Some(error),
+                    Err(error) => self.updates.error = Some(Failure::Other(error)),
                 }
             }
             Action::RecoveryCleared => return self.handoff_update(),
@@ -222,13 +275,17 @@ impl App {
                 self.updates.checking = false;
                 match result {
                     Ok(release) if release.channel() == Some(self.updates.channel) => {
-                        self.updates.latest = Some(release)
+                        if self.updates.latest.as_ref() != Some(&release) {
+                            self.updates.prepared = None;
+                        }
+                        self.updates.latest = Some(release);
                     }
                     Ok(_) => {
-                        self.updates.error =
-                            Some("The release did not match the selected update channel.".into())
+                        self.updates.error = Some(Failure::Check(
+                            "The release did not match the selected update channel.".into(),
+                        ))
                     }
-                    Err(error) => self.updates.error = Some(error),
+                    Err(error) => self.updates.error = Some(Failure::Check(error)),
                 }
             }
             Action::Channel(channel) => {
@@ -269,8 +326,9 @@ impl App {
             Action::Saved(result) => {
                 self.updates.saving = false;
                 if let Err(error) = result {
-                    self.updates.error =
-                        Some(format!("Could not save update preferences: {error}"));
+                    self.updates.error = Some(Failure::Other(format!(
+                        "Could not save update preferences: {error}"
+                    )));
                 }
             }
             Action::Download => {
@@ -281,8 +339,25 @@ impl App {
             }
             Action::Opened(result) => {
                 if let Err(error) = result {
-                    self.updates.error = Some(error);
+                    self.updates.error = Some(Failure::Other(error));
                 }
+            }
+            Action::OpenSettings => {
+                if !cfg!(target_arch = "wasm32") && !self.updates.restarting {
+                    self.updates.open = false;
+                    return self.settings_action(super::settings_page::Action::Open(Some(
+                        super::settings_page::Section::Updates,
+                    )));
+                }
+            }
+            Action::CopyVersion => {
+                self.updates.version_copied = true;
+                return iced::clipboard::write(State::version_report());
+            }
+            Action::OpenAboutLink(url) => {
+                return Task::perform(updates::open_url(url.into()), |result| {
+                    Message::Updates(Action::Opened(result))
+                });
             }
             Action::OpenDataFolder => {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -357,13 +432,13 @@ impl App {
     pub(super) fn update_restart_failed(&mut self, error: String) {
         self.cancel_close();
         self.updates.restarting = false;
-        self.updates.error = Some(error);
+        self.updates.error = Some(Failure::Other(error));
         self.updates.open = true;
     }
 
     fn restart_for_update(&mut self) -> Task<Message> {
         if let Some(reason) = self.update_restart_blocker() {
-            self.updates.error = Some(format!("Update ready. {reason}"));
+            self.updates.error = Some(Failure::Other(format!("Update ready. {reason}")));
             self.updates.open = true;
             return Task::none();
         }
@@ -419,8 +494,8 @@ impl App {
             state.progress.clone()
         } else if state.checking {
             "Checking for updates…".into()
-        } else if let Some(error) = &state.error {
-            error.clone()
+        } else if let Some(error) = state.error() {
+            error.to_owned()
         } else if let Some(latest) = &state.latest {
             if state.available() {
                 if state.channel == Channel::Stable
@@ -442,111 +517,144 @@ impl App {
         };
         let msg = |action| Message::Updates(action);
         let header = row![
-            crate::branding::wordmark(24.0),
-            Space::new().width(Length::Fill),
-            reshiki::accessibility::button("updates-close", "Close updates", "Close")
-                .on_press(msg(Action::Show(false)))
-                .padding([7, 10])
+            column![
+                crate::branding::wordmark(24.0),
+                reshiki::accessibility::button(
+                    "updates-copy-version",
+                    if state.version_copied {
+                        "Version copied"
+                    } else {
+                        "Copy ReShiki version"
+                    },
+                    text(if state.version_copied {
+                        "Copied".into()
+                    } else {
+                        format!(
+                            "Version {} · {}",
+                            updates::CURRENT_VERSION,
+                            State::installed_channel()
+                        )
+                    })
+                    .size(12),
+                )
+                .on_press(msg(Action::CopyVersion))
+                .padding(0)
                 .style(button::text)
+            ]
+            .spacing(5),
+            Space::new().width(Length::Fill),
+            reshiki::accessibility::button("updates-close", "Close About", "×")
+                .on_press(msg(Action::Show(false)))
+                .padding([6, 10])
+                .style(button::text),
         ]
-        .align_y(Alignment::Center);
-        let version = text(format!("Version {}", updates::CURRENT_VERSION))
-            .size(13)
-            .style(super::workspace::muted_text);
+        .align_y(Alignment::Start);
+        let link = |id, label, action| {
+            reshiki::accessibility::button(id, label, text(label).size(13))
+                .on_press(msg(action))
+                .padding([5, 4])
+                .style(button::text)
+        };
+        let website = link(
+            "updates-website",
+            "Website ↗",
+            Action::OpenAboutLink("https://reshiki.com/"),
+        );
+        let license = link(
+            "updates-license",
+            "License",
+            Action::OpenAboutLink("https://github.com/Ameyanagi/ReShiki/blob/main/LICENSE"),
+        );
         let panel = if cfg!(target_arch = "wasm32") {
-            // The host page ships browser updates; there is nothing to check.
             column![
                 header,
-                version,
-                text("The browser editor updates with the page that hosts it.").size(15),
-                reshiki::accessibility::button("updates-notes", "Get the desktop app", "Get the desktop app ↗")
-                    .on_press(msg(Action::Download))
-                    .style(button::text),
+                text("The browser editor updates with the page that hosts it.").size(14),
+                row![
+                    link("updates-notes", "Get the desktop app ↗", Action::Download),
+                    website,
+                    license
+                ]
+                .spacing(4),
             ]
-        } else { column![
-            header,
-            column![version]
-                .push(state.data_folder.as_ref().map(|folder| {
-                    row![
-                        text(format!("Data folder: {}", folder.display()))
-                            .size(12)
-                            .style(super::workspace::muted_text)
-                            .width(Length::Fill),
-                        reshiki::accessibility::button("updates-data-folder", "Open data folder", "Open")
-                            .on_press(msg(Action::OpenDataFolder))
-                            .padding([4, 10])
-                            .style(crate::appearance::outline),
-                    ]
-                    .spacing(8)
-                    .align_y(Alignment::Center)
-                }))
-                .push(state.data_warning.as_ref().map(|warning| {
-                    text(warning.as_str())
-                        .size(12)
-                        .style(|theme: &iced::Theme| text::Style {
-                            color: Some(theme.palette().danger),
-                        })
-                }))
-                .spacing(6),
-            row![
-                text("Channel").size(13),
-                reshiki::accessibility::button("updates-stable", "Stable update channel", "Stable").checked(state.channel == Channel::Stable)
-                    .on_press_maybe((!state.saving && !state.installing && !state.restarting).then_some(msg(Action::Channel(Channel::Stable))))
-                    .style(if state.channel == Channel::Stable { crate::appearance::primary } else { crate::appearance::outline }),
-                reshiki::accessibility::button("updates-nightly", "Nightly update channel", "Nightly").checked(state.channel == Channel::Nightly)
-                    .on_press_maybe((!state.saving && !state.installing && !state.restarting).then_some(msg(Action::Channel(Channel::Nightly))))
-                    .style(if state.channel == Channel::Nightly { crate::appearance::primary } else { crate::appearance::outline }),
-            ].spacing(8).align_y(Alignment::Center),
-            text(status).size(15),
-            row![
-                reshiki::accessibility::button("updates-check", "Check for updates", "Check for updates")
-                    .padding([9, 12])
-                    .style(crate::appearance::primary)
-                    .on_press_maybe((!state.checking && !state.installing && !state.restarting).then_some(msg(Action::Check(true)))),
-                reshiki::accessibility::button("updates-install", "Download or install update", if state.channel == Channel::Nightly { "Download nightly ↗" } else if state.installing { "Downloading…" } else { "Update and restart" })
-                    .padding([9, 12])
-                    .style(crate::appearance::primary)
-                    .on_press_maybe((state.available() && !state.installing && !state.restarting).then_some(msg(if state.channel == Channel::Nightly { Action::Portable } else { Action::Install })))
+        } else {
+            let pending = state.checking || state.installing || state.restarting;
+            let status = text(status).size(14).width(Length::Fill);
+            let mut summary = row![status].spacing(10).align_y(Alignment::Center);
+            if !pending {
+                let (id, label, action) = state.card_action();
+                let installs = matches!(action, Action::Install | Action::Portable);
+                summary = summary.push(
+                    reshiki::accessibility::button(id, label, text(label).size(13))
+                        .on_press(msg(action))
+                        .padding([7, 10])
+                        .style(if installs {
+                            crate::appearance::primary
+                        } else {
+                            crate::appearance::outline
+                        }),
+                );
+            }
+            let (label, hint) = self.star_link();
+            let star =
+                reshiki::accessibility::button("updates-star", label.clone(), text(label).size(13))
+                    .on_press(Message::Star(super::star_prompt::Action::Star {
+                        toast: false,
+                    }))
+                    .padding([5, 4])
+                    .style(button::text);
+            let star: Element<'_, Message> = match hint {
+                Some(hint) => {
+                    super::workspace::hover_hint(star, hint, iced::widget::tooltip::Position::Top)
+                        .into()
+                }
+                None => star.into(),
+            };
+            column![
+                header,
+                summary,
+                super::workspace::horizontal_line(),
+                row![
+                    link("updates-notes", "Release notes ↗", Action::Download),
+                    star,
+                    website,
+                    license
+                ]
+                .spacing(4)
+                .align_y(Alignment::Center),
+                row![
+                    link("updates-settings", "Update settings…", Action::OpenSettings),
+                    state
+                        .card_refresh_action()
+                        .map(|action| { link("updates-check-again", "Check again", action) }),
+                ]
+                .spacing(8),
             ]
-            .spacing(10),
-            reshiki::accessibility::button(
-                "updates-automatic",
-                "Check automatically",
-                checkbox(state.automatic)
-                    .label("Check automatically")
-                    .on_toggle_maybe(
-                        (!state.saving)
-                            .then_some(|enabled| Message::Updates(Action::Automatic(enabled)))
+            .push(state.data_folder.as_ref().map(|folder| {
+                row![
+                    text(format!("Data folder: {}", folder.display()))
+                        .size(11)
+                        .style(super::workspace::muted_text)
+                        .width(Length::Fill),
+                    reshiki::accessibility::button(
+                        "updates-data-folder",
+                        "Open data folder",
+                        "Open"
                     )
-                    .size(16)
-                    .text_size(13),
+                    .on_press(msg(Action::OpenDataFolder))
+                    .padding([4, 8])
+                    .style(button::text),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center)
+            }))
+            .push(
+                state
+                    .data_warning
+                    .as_ref()
+                    .map(|warning| text(warning.as_str()).size(12).style(text::danger)),
             )
-            .checked(state.automatic)
-            .on_press_maybe((!state.saving).then_some(msg(Action::Automatic(!state.automatic))))
-            .padding(0)
-            .style(|theme, _| button::Style {
-                text_color: theme.palette().text,
-                ..Default::default()
-            }),
-            row![
-                reshiki::accessibility::button("updates-notes", "Open release notes", "Release notes ↗").on_press(msg(Action::Download)).style(button::text),
-                {
-                    // Its accessible name is what it shows; signed in, the tooltip says whose star it is.
-                    let (label, tip) = self.star_link();
-                    let link = reshiki::accessibility::button("updates-star", label.clone(), text(label))
-                        .on_press(Message::Star(super::star_prompt::Action::Star { toast: false }))
-                        .style(button::text);
-                    match tip {
-                        Some(tip) => Element::from(super::workspace::hover_hint(link, tip, iced::widget::tooltip::Position::Top)),
-                        None => link.into(),
-                    }
-                },
-            ],
-            text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved tabs reopen after restarting." })
-                .size(12)
-                .style(super::workspace::muted_text),
-        ] }
-        .spacing(18);
+        }
+        .spacing(10);
         let backdrop = mouse_area(
             container(Space::new())
                 .width(Length::Fill)

@@ -46,6 +46,7 @@ mod files;
 mod macos_files;
 #[cfg(target_os = "macos")]
 pub(crate) use macos_files::install_document_events;
+mod compound_numbers;
 #[cfg(any(windows, target_os = "linux"))]
 mod desktop;
 mod gates;
@@ -252,6 +253,8 @@ pub enum Message {
     ToggleProperty(Vec<u64>, reshiki::linked_properties::Property),
     /// Show Formula, Mol. Wt. and Exact Mass under a whole molecule.
     ShowMasses(Vec<u64>),
+    NumberCompound(Vec<u64>),
+    RenumberCompounds,
     /// The decimal places of a mass line under a whole molecule.
     PropertyPlaces(Vec<u64>, reshiki::linked_properties::Property, u8),
     FontSize(String),
@@ -298,12 +301,15 @@ pub enum Message {
     Export(&'static str),
     /// Export the figure from the Export tab, with or without the editable
     /// drawing.
+    ExportAgain,
     ExportFigure(&'static str, bool),
     CopySmiles,
     CopyAnalysis,
     CopyChemicalText,
     Copy(bool),
     CopyImage,
+    /// Rich Office copy from Export, using the selection or the whole drawing.
+    CopyForOffice,
     /// Copy image on this background, with or without the editable drawing,
     /// for this copy only.
     CopyImageOn(reshiki::export::Background, bool),
@@ -473,6 +479,7 @@ pub struct App {
     appearance: crate::appearance::Settings,
     engine: LocalEngine,
     figure_exporting: bool,
+    recent_export: Option<figure_export::Recent>,
     /// Serializes clipboard preparation/publication across document tabs.
     copy_as_busy: bool,
     pdf_copy: clipboard::PdfCopy,
@@ -500,6 +507,8 @@ pub struct App {
     /// The Export tab's Include editable drawing choice; `None` follows the
     /// Settings default.
     export_tab_editable: Option<bool>,
+    /// A swatch chosen in Export; none keeps each destination's Settings default.
+    export_tab_background: Option<crate::appearance::Background>,
     help_open: bool,
     settings: settings_page::State,
     help: help::State,
@@ -604,6 +613,7 @@ impl App {
             appearance,
             engine: LocalEngine::default(),
             figure_exporting: false,
+            recent_export: figure_export::Recent::load(),
             copy_as_busy: false,
             pdf_copy: Default::default(),
             native_copy_busy: false,
@@ -626,6 +636,7 @@ impl App {
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
             export_tab_editable: None,
+            export_tab_background: None,
             help_open: false,
             settings: settings_page::State::default(),
             help: help::State::default(),
@@ -1528,6 +1539,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.annotations == b.annotations
         && a.molecule_names == b.molecule_names
         && a.property_captions == b.property_captions
+        && a.compound_numbers == b.compound_numbers
         && a.arrows == b.arrows
         && a.arrow_labels == b.arrow_labels
         && a.graphics == b.graphics

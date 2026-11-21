@@ -163,9 +163,23 @@ fn save_answer(result: rfd::MessageDialogResult) -> Message {
 /// Keep native file types and filename completion consistent across save dialogs.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) async fn save_path(title: &str, name: &str, extension: &str) -> Option<PathBuf> {
+    save_path_in(title, name, extension, None).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn save_path_in(
+    title: &str,
+    name: &str,
+    extension: &str,
+    directory: Option<&std::path::Path>,
+) -> Option<PathBuf> {
     let dialog = rfd::AsyncFileDialog::new()
         .set_title(title)
         .set_file_name(name);
+    let dialog = match directory {
+        Some(directory) => dialog.set_directory(directory),
+        None => dialog,
+    };
     let dialog = if extension == reshiki::compatibility::NATIVE_EXTENSION {
         dialog.add_filter("ReShiki drawing", reshiki::compatibility::NATIVE_EXTENSIONS)
     } else {
@@ -196,6 +210,16 @@ pub(super) async fn save_path(_title: &str, name: &str, extension: &str) -> Opti
         std::path::Path::new(name),
         extension,
     ))
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn save_path_in(
+    title: &str,
+    name: &str,
+    extension: &str,
+    _directory: Option<&std::path::Path>,
+) -> Option<PathBuf> {
+    save_path(title, name, extension).await
 }
 
 /// Write a saved file atomically in place.
@@ -340,8 +364,9 @@ pub(super) async fn save_bytes(
     suggested_name: &str,
     extension: &str,
     bytes: &[u8],
+    directory: Option<&std::path::Path>,
 ) -> Result<Option<PathBuf>, String> {
-    let Some(path) = save_path(title, suggested_name, extension).await else {
+    let Some(path) = save_path_in(title, suggested_name, extension, directory).await else {
         return Ok(None);
     };
     write(&path, bytes)?;
@@ -731,6 +756,7 @@ impl super::App {
                 {
                     self.detach_office();
                 }
+                let rebound_export = self.rebind_recent_export(&path);
                 self.tab.path = Some(path);
                 #[cfg(target_arch = "wasm32")]
                 self.remember_start_browser_tab();
@@ -757,6 +783,10 @@ impl super::App {
                     "Document saved".into()
                 };
                 self.error = false;
+                if rebound_export.is_err() {
+                    self.status
+                        .push_str(" · Could not remember export settings");
+                }
                 if !self.dirty() {
                     self.clear_recovery();
                     if let Some(action) = self.pending.take() {

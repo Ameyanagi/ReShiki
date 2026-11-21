@@ -331,3 +331,50 @@ fn mass_decimals_change_one_caption_in_one_undo_step() {
         Some("Formula: C2H6O\nMol. Wt.: 46.07\nExact Mass: 46.0419")
     );
 }
+
+#[test]
+fn arriving_multiline_name_moves_compound_number_without_an_extra_undo() {
+    let (mut app, _) = App::new();
+    let atoms = ethanol(&mut app);
+    let _ = app.update(Message::ToggleProperty(atoms.clone(), Property::Name));
+    let smiles = app.tab.naming.caption_pending.clone().unwrap();
+    let _ = app.update(Message::NumberCompound(atoms.clone()));
+    let number = reshiki::compound_numbers::label(&app.tab.doc, &atoms)
+        .unwrap()
+        .annotation;
+    let start = app
+        .tab
+        .doc
+        .annotations
+        .iter()
+        .find(|a| a.id == number)
+        .unwrap()
+        .position;
+    let frames = app.tab.history.frames();
+    let revision = app.tab.revision;
+    let mut named = record("CCO");
+    named.systematic_name = Some("2,3,4,5,6-pentahydroxy-N-(2-hydroxyethyl)hexanamide".into());
+    let _ = app.update(Message::Naming(Action::CaptionNamed(
+        smiles,
+        Box::new(Ok(Outcome::Structure(named))),
+    )));
+    let caption = link(&app).annotation.unwrap();
+    let (_, bottom) = reshiki::scene::selection_bounds(&app.tab.doc, &[caption]).unwrap();
+    let position = app
+        .tab
+        .doc
+        .annotations
+        .iter()
+        .find(|a| a.id == number)
+        .unwrap()
+        .position;
+    assert!(position.y > start.y);
+    assert!(position.y > bottom.y);
+    assert_eq!(app.tab.history.frames(), frames);
+    assert_eq!(app.tab.revision, revision);
+    let named = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.compound_numbers.is_empty());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, named);
+}

@@ -424,6 +424,11 @@ impl App {
                 .into_iter()
                 .any(|p| !shown(&self.tab.doc, &target, p));
             entries.push(command(
+                "Number compound",
+                Message::NumberCompound(target.clone()),
+                reshiki::compound_numbers::label(&self.tab.doc, &target).is_none(),
+            ));
+            entries.push(command(
                 "Show formula & masses below",
                 Message::ShowMasses(target),
                 missing,

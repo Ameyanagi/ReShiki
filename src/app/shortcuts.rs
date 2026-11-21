@@ -147,6 +147,7 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
         Message::Paste => (command, "V"),
         Message::CopyImage => (shift, "C"),
         Message::Settings(super::settings_page::Action::Open(None)) => (command, ","),
+        Message::Commands(super::command_palette::Action::Open) => (command, "K"),
         Message::Optimization(super::optimization::Action::Begin) => (shift, "D"),
         Message::Cleanup(super::cleanup::Action::Scheme) => (shift, "X"),
         Message::SelectAll => (command, "A"),
@@ -211,6 +212,9 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
 pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<Message> {
     if super::help::is_shortcut(key, mods) {
         return Some(Message::ToggleHelp);
+    }
+    if super::command_palette::is_shortcut(key, mods) {
+        return Some(Message::Commands(super::command_palette::Action::Open));
     }
     if mods.is_empty() && matches!(key, Key::Named(Named::F8)) {
         return Some(Message::KeyboardDrawing(

@@ -238,7 +238,9 @@ pub fn text_atom_refusal(doc: &Document, id: u64) -> Option<String> {
     else {
         return Some("Select a text annotation to convert to an atom".into());
     };
-    if crate::molecule_names::is_caption(doc, id) {
+    if crate::molecule_names::is_caption(doc, id)
+        || doc.compound_numbers.iter().any(|n| n.annotation == id)
+    {
         return Some(MOLECULE_NAME_TEXT.into());
     }
     if crate::reactions::includes_text(doc, id) {

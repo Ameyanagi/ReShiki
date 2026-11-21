@@ -47,6 +47,72 @@ fn top(app: &App) -> &Command {
 }
 
 #[test]
+fn search_shortcuts_open_the_palette_and_preserve_longer_chords() {
+    use crate::app::{file_shortcuts, shortcuts};
+    for (key, modifiers) in [
+        ("k", Modifiers::COMMAND),
+        ("K", Modifiers::COMMAND),
+        ("p", Modifiers::COMMAND | Modifiers::SHIFT),
+        ("P", Modifiers::COMMAND | Modifiers::SHIFT),
+    ] {
+        let key = Key::Character(key.into());
+        for message in [
+            shortcuts::key_message(&key, &key, modifiers),
+            file_shortcuts::file_message(&key, modifiers),
+        ] {
+            assert!(matches!(message, Some(Message::Commands(Action::Open))));
+            let mut app = app();
+            let before = app.tab.doc.clone();
+            let _ = app.update(message.unwrap());
+            assert!(app.commands.open);
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
+        }
+    }
+    for (key, modifiers) in [
+        ("k", Modifiers::empty()),
+        ("k", Modifiers::COMMAND | Modifiers::SHIFT),
+        ("k", Modifiers::COMMAND | Modifiers::ALT),
+        ("p", Modifiers::COMMAND),
+        ("p", Modifiers::COMMAND | Modifiers::SHIFT | Modifiers::ALT),
+    ] {
+        let key = Key::Character(key.into());
+        assert!(!is_shortcut(&key, modifiers));
+        assert!(!matches!(
+            file_shortcuts::file_message(&key, modifiers),
+            Some(Message::Commands(_))
+        ));
+    }
+    let key = Key::Character("k".into());
+    assert!(matches!(
+        shortcuts::key_message(&key, &key, Modifiers::COMMAND | Modifiers::SHIFT),
+        Some(Message::Cleanup(crate::app::cleanup::Action::Begin))
+    ));
+    assert!(matches!(
+        shortcuts::key_message(&key, &key, Modifiers::COMMAND | Modifiers::ALT),
+        Some(Message::AromaticDisplay)
+    ));
+}
+
+#[test]
+fn import_and_export_stay_available_through_search() {
+    use crate::app::InspectorTab;
+    let mut app = app();
+    for (name, tab) in [
+        ("Import structure or name", InspectorTab::Import),
+        ("Export panel", InspectorTab::Export),
+    ] {
+        search(&mut app, name);
+        let index = row(&app, name);
+        let _ = app.update(Message::Commands(Action::Run(index)));
+        assert!(!app.commands.open);
+        assert!(app.inspector_open);
+        assert_eq!(app.inspector_tab, tab);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
 fn stereo_commands_are_searchable_and_style_notes_toggle_through_the_palette() {
     let mut app = app();
     for name in ["Check drawing", "Redraw stereo bonds"] {
