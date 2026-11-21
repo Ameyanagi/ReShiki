@@ -254,12 +254,23 @@ fn hidden_nearer_bond_does_not_mask_a_visible_bond_or_background_graphic() {
     doc.add_bond(c, d, 1, "plain");
     let point = World::new(140., 50.);
     doc.graphics.push(rectangle(10, point, -1));
-    doc.graphics.push(table(vec![a, b]));
+    // The first bond is geometrically nearest until its cell clips it away.
     assert_eq!(reshiki::editing::nearest_bond(&doc, point, 7.), Some(0));
+    doc.graphics.push(table(vec![a, b]));
+    assert_eq!(reshiki::editing::nearest_bond(&doc, point, 7.), Some(1));
     assert_eq!(hit_selection(&doc, point, 10.), vec![c, d]);
+    let mut cache = crate::canvas::cache::SceneCache::default();
+    assert_eq!(
+        crate::canvas::hit::hit_selection_cached(&doc, point, 10., &mut cache),
+        vec![c, d]
+    );
     doc.bonds.pop();
     assert_eq!(hit_object(&doc, point, 10.), Some(10));
     assert_eq!(hit_selection(&doc, point, 10.), vec![10]);
+    assert_eq!(
+        crate::canvas::hit::hit_selection_cached(&doc, point, 10., &mut cache),
+        vec![10]
+    );
 }
 
 #[test]
