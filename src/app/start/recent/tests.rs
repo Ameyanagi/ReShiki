@@ -61,6 +61,25 @@ fn recent_files_reopen_through_the_configured_directory_and_deduplicate_aliases(
 }
 
 #[test]
+#[cfg(unix)]
+fn recent_uses_the_saved_identity_after_an_old_alias_becomes_unavailable() {
+    let directory = tempfile::tempdir().unwrap();
+    let drawing = directory.path().join("drawing.rsk");
+    let alias = directory.path().join("old-alias.rsk");
+    std::fs::write(&drawing, b"{}").unwrap();
+    std::os::unix::fs::symlink(&drawing, &alias).unwrap();
+    let store = directory.path().join("recent-files.json");
+    Recent::load_from(store.clone()).remember(&alias);
+    std::fs::remove_file(&alias).unwrap();
+
+    let mut recent = Recent::load_from(store);
+    assert!(recent.contains(&alias));
+    recent.remember(&drawing);
+    assert_eq!(recent.entries.len(), 1);
+    assert_eq!(recent.entries[0].path, drawing);
+}
+
+#[test]
 fn recent_loading_rejects_newer_records_relative_names_and_oversized_data() {
     let directory = tempfile::tempdir().unwrap();
     let store = directory.path().join("recent-files.json");

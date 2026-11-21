@@ -3,7 +3,7 @@ use super::{Action, Message};
 use iced::{Task, widget::image};
 use reshiki::engine::LocalEngine;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 const COUNT: usize = 5;
@@ -14,11 +14,14 @@ const PREVIEW_LIMIT: u64 = 256 * 1024;
 struct Record {
     version: u32,
     paths: Vec<PathBuf>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    resolved: BTreeMap<PathBuf, PathBuf>,
 }
 
 pub(super) struct Entry {
     pub path: PathBuf,
     pub preview: Option<image::Handle>,
+    resolved: Option<PathBuf>,
     asked: bool,
     generation: u64,
 }
@@ -57,18 +60,25 @@ impl Recent {
         })();
         let mut seen = HashSet::new();
         let writable = !existed || record.is_some();
-        let entries = record
-            .into_iter()
-            .flat_map(|record| record.paths)
-            .filter(|path| path.is_absolute() && seen.insert(path.clone()))
-            .take(COUNT)
-            .map(|path| Entry {
-                path,
-                preview: None,
-                asked: false,
-                generation: 0,
-            })
-            .collect();
+        let entries = record.map_or_else(Vec::new, |record| {
+            record
+                .paths
+                .into_iter()
+                .filter(|path| path.is_absolute() && seen.insert(path.clone()))
+                .take(COUNT)
+                .map(|path| Entry {
+                    resolved: record
+                        .resolved
+                        .get(&path)
+                        .filter(|p| p.is_absolute())
+                        .cloned(),
+                    path,
+                    preview: None,
+                    asked: false,
+                    generation: 0,
+                })
+                .collect()
+        });
         Self {
             entries,
             store: writable.then_some(store),
@@ -95,14 +105,12 @@ impl Recent {
         if !canonical_path.is_file() {
             return;
         }
-        // Reopen with the original spelling so GitHub can classify its working
-        // copies and saved versions under the configured data directory.
+        // Reopen with the original spelling for GitHub file classification.
+        // Resolve only the file just used. Old paths can be on offline shares.
         self.entries.retain(|entry| {
             entry.path != path
-                && !entry
-                    .path
-                    .canonicalize()
-                    .is_ok_and(|resolved| resolved == canonical_path)
+                && entry.path != canonical_path
+                && entry.resolved.as_ref() != Some(&canonical_path)
         });
         self.generation = self.generation.wrapping_add(1);
         self.entries.insert(
@@ -110,6 +118,7 @@ impl Recent {
             Entry {
                 path,
                 preview: None,
+                resolved: Some(canonical_path),
                 asked: false,
                 generation: self.generation,
             },
@@ -122,6 +131,11 @@ impl Recent {
                     .entries
                     .iter()
                     .map(|entry| entry.path.clone())
+                    .collect(),
+                resolved: self
+                    .entries
+                    .iter()
+                    .filter_map(|entry| entry.resolved.clone().map(|key| (entry.path.clone(), key)))
                     .collect(),
             };
             if let (Some(parent), Ok(bytes)) = (store.parent(), serde_json::to_vec(&record)) {
