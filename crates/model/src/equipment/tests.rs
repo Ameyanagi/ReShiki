@@ -697,6 +697,12 @@ fn ground_glass_hatch_ink_stays_inside_the_frosted_zone() {
                 let strokes: Vec<_> = ground
                     .filter(|path| path.style == Some(StyleKind::Line))
                     .collect();
+                // At this scale, the exposed 15/25 cone is 0.3 pt long.
+                // The outlined shoulder and diagonal pen need more room.
+                if name == "reshiki/stopper-15" && scale == 0.2 && seated {
+                    assert!(strokes.is_empty());
+                    continue;
+                }
                 assert!(!strokes.is_empty(), "{name} at {scale}");
                 for stroke in strokes {
                     assert!(stroke.flat_caps);
