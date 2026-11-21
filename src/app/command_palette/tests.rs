@@ -2591,6 +2591,24 @@ fn f6_stays_within_the_open_palette_and_leaves_modified_window_shortcuts_alone()
 }
 
 #[test]
+fn repeated_search_shortcuts_keep_the_active_query_and_filter() {
+    let mut app = app();
+    search(&mut app, "bond");
+    let _ = app.update(Message::Commands(Action::Filter(Some(Category::Edit))));
+    for (key, modifiers) in [
+        ("k", Modifiers::COMMAND),
+        ("P", Modifiers::COMMAND | Modifiers::SHIFT),
+    ] {
+        let message = modal_key(&Key::Character(key.into()), modifiers).unwrap();
+        assert!(matches!(message, Message::Commands(Action::FocusSearch)));
+        let _ = app.update(message);
+        assert!(app.commands.open && !app.help_open);
+        assert_eq!(app.commands.query, "bond");
+        assert_eq!(app.commands.filter, Some(Category::Edit));
+    }
+}
+
+#[test]
 fn fixed_palette_filters_cover_all_command_categories_and_keep_empty_results() {
     let mut app = app();
     open(&mut app);

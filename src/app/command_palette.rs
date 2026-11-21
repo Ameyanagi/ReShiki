@@ -65,6 +65,8 @@ pub enum Action {
     Cycle(isize),
     /// Move between search and the currently enabled actions; Shift reverses.
     FocusActions(bool),
+    /// Return to an already open command search without resetting its query.
+    FocusSearch,
     /// Run this row of the current items, as a click does.
     Run(usize),
     /// Run the selected row, as Enter does.
@@ -214,7 +216,7 @@ pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
         return Some(Message::ToggleHelp);
     }
     if is_shortcut(key, modifiers) {
-        return Some(Message::Commands(Action::Open));
+        return Some(Message::Commands(Action::FocusSearch));
     }
     if matches!(key, Key::Named(Named::Escape)) {
         return Some(Message::Commands(Action::Close));
@@ -428,6 +430,13 @@ impl App {
         // Filter switching also works from Keys, whose state preserves registry
         // indexes and the existing contextual command gates.
         match action {
+            Action::FocusSearch => {
+                return if self.commands.open {
+                    iced::widget::operation::focus(SEARCH)
+                } else {
+                    Task::none()
+                };
+            }
             Action::FocusActions(backwards) => {
                 return if self.commands.open || self.help_open {
                     focus::cycle(backwards)
