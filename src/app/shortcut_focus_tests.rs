@@ -15,6 +15,7 @@ use iced::keyboard::{
 use iced::{Event, Rectangle, Size};
 
 mod inspector_pages;
+mod keys_palette;
 mod review_close;
 mod selection_properties;
 mod style_status;
@@ -745,9 +746,7 @@ async fn help_hides_the_focus_ring_of_the_control_behind_it() {
         }
         let task = app.update(Message::ToggleHelp);
         ui.run_task(&mut app, task).await;
-        ui.key(&mut app, tab, Code::Tab, Modifiers::empty(), None)
-            .await;
-        assert_eq!(ui.focused(&app), ["help-about"]);
+        assert_eq!(ui.focused(&app), ["help-search"]);
         shots.push(pixels(&mut ui, &app));
         if focused_behind {
             let task = app.update(Message::ToggleHelp);
@@ -2171,7 +2170,7 @@ async fn command_palette_tab_cycles_the_filter_from_the_search_field() {
         apply(&mut app, messages);
         filters.push(app.commands.filter.map(|c| c.label()));
     }
-    assert_eq!(filters, [Some("Insert"), Some("Bond"), Some("Insert")]);
+    assert_eq!(filters, [Some("Insert"), Some("Edit"), Some("Insert")]);
     let (_, messages) = ui.event(
         &app,
         press(
@@ -2225,8 +2224,8 @@ async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
     let _ = app.update(Message::Commands(Action::Query("bond".into())));
     let field = ui.input(&app, "command-palette-search").0;
     ui.click(&mut app, field.center());
-    click_running_tasks(&mut ui, &mut app, "command-palette-filter-bond").await;
-    assert_eq!(app.commands.filter.map(|c| c.label()), Some("Bond"));
+    click_running_tasks(&mut ui, &mut app, "command-palette-filter-edit").await;
+    assert_eq!(app.commands.filter.map(|c| c.label()), Some("Edit"));
     for (key, code, text) in [
         (Key::Character("s".into()), Code::KeyS, Some("s")),
         (Key::Named(Named::Enter), Code::Enter, None),
@@ -2274,7 +2273,54 @@ async fn command_palette_unavailable_row_click_keeps_typing_in_the_search_field(
         .iter()
         .position(|c| c.name == unavailable.name)
         .expect("a catalog row");
-    click_running_tasks(&mut ui, &mut app, &format!("command-palette-row-{index}")).await;
+    let id = format!("command-palette-row-{index}");
+    // Available matches can put this unavailable result below the shared
+    // palette's viewport. Scroll its real list before sending pointer input.
+    let over = ui
+        .semantics(&app)
+        .nodes
+        .into_iter()
+        .filter(|node| node.id.starts_with("command-palette-row-"))
+        .find_map(|node| node.visible_bounds.filter(|bounds| bounds.height > 20.))
+        .expect("a visible result to scroll over")
+        .center();
+    for _ in 0..app.commands.ranked().len() {
+        let target = ui
+            .semantics(&app)
+            .nodes
+            .into_iter()
+            .find(|node| node.id == id)
+            .unwrap();
+        if target
+            .visible_bounds
+            .is_some_and(|bounds| bounds.contains(target.bounds.center()))
+        {
+            break;
+        }
+        let (_, messages) = ui.event(
+            &app,
+            Event::Mouse(mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Lines { x: 0., y: -1. },
+            }),
+            mouse::Cursor::Available(over),
+        );
+        for message in messages {
+            let task = app.update(message);
+            ui.run_task(&mut app, task).await;
+        }
+    }
+    let target = ui
+        .semantics(&app)
+        .nodes
+        .into_iter()
+        .find(|node| node.id == id)
+        .unwrap();
+    assert!(
+        target
+            .visible_bounds
+            .is_some_and(|bounds| bounds.contains(target.bounds.center()))
+    );
+    click_running_tasks(&mut ui, &mut app, &id).await;
     assert!(app.commands.open, "the palette stays open");
     assert_eq!(app.commands.current().unwrap().name, unavailable.name);
     let (_, messages) = ui.event(
@@ -2854,53 +2900,66 @@ async fn settings_search_keeps_ruler_units_separate_from_drawing_style_units() {
 async fn add_name_completion_keeps_help_search_focus() {
     use super::template_library;
     let mut ui = Ui::new().await;
-    let (mut app, _) = App::new();
-    app.engine = reshiki::engine::LocalEngine::in_process();
-    app.tab.busy = false;
-    let _ = app.update(Message::Inspector(InspectorTab::Templates));
-    let _ = app.update(Message::Templates(template_library::Action::Search(
-        "ethanol".into(),
-    )));
-    ui.focus_control(&mut app, "add-search").await;
-    let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
-    assert!(app.tab.naming.is_pending());
-    assert!(ui.input(&app, "add-search").1);
+    for keys in [true, false] {
+        let search = if keys {
+            "help-search"
+        } else {
+            "command-palette-search"
+        };
+        let (mut app, _) = App::new();
+        app.engine = reshiki::engine::LocalEngine::in_process();
+        app.tab.busy = false;
+        let _ = app.update(Message::Inspector(InspectorTab::Templates));
+        let _ = app.update(Message::Templates(template_library::Action::Search(
+            "ethanol".into(),
+        )));
+        ui.focus_control(&mut app, "add-search").await;
+        let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
+        assert!(app.tab.naming.is_pending());
+        assert!(ui.input(&app, "add-search").1);
 
-    let help = app.update(Message::ToggleHelp);
-    ui.run_task(&mut app, help).await;
-    assert!(app.help_open);
-    assert_eq!(app.inspector_tab, InspectorTab::Templates);
-    assert!(ui.input(&app, "help-search").1);
-    ui.run_task(&mut app, pending).await;
+        let palette = app.update(if keys {
+            Message::ToggleHelp
+        } else {
+            Message::Commands(super::command_palette::Action::Open)
+        });
+        ui.run_task(&mut app, palette).await;
+        assert_eq!(app.help_open, keys);
+        assert_eq!(app.commands.open, !keys);
+        assert_eq!(app.inspector_tab, InspectorTab::Templates);
+        assert!(ui.input(&app, search).1);
+        ui.run_task(&mut app, pending).await;
 
-    assert_eq!(app.tab.doc.atoms.len(), 3, "{}", app.status);
-    assert!(app.help_open);
-    assert!(
-        ui.input(&app, "help-search").1,
-        "Insertion completion must preserve the current focus owner"
-    );
-    ui.key(
-        &mut app,
-        Key::Character("b".into()),
-        Code::KeyB,
-        Modifiers::empty(),
-        Some("b"),
-    )
-    .await;
-    assert_eq!(ui.input_value(&app, "help-search"), "b");
-    // Help deliberately masks its inert background from widget operations.
-    // Check the retained Add draft only after returning to that surface.
-    ui.key(
-        &mut app,
-        Key::Named(Named::Escape),
-        Code::Escape,
-        Modifiers::empty(),
-        None,
-    )
-    .await;
-    assert!(!app.help_open);
-    assert_eq!(ui.input_value(&app, "add-search"), "ethanol");
-    assert!(app.tab.history.can_undo());
+        assert_eq!(app.tab.doc.atoms.len(), 3, "{}", app.status);
+        assert_eq!(app.help_open, keys);
+        assert_eq!(app.commands.open, !keys);
+        assert!(
+            ui.input(&app, search).1,
+            "Insertion completion must preserve the current focus owner"
+        );
+        ui.key(
+            &mut app,
+            Key::Character("b".into()),
+            Code::KeyB,
+            Modifiers::empty(),
+            Some("b"),
+        )
+        .await;
+        assert_eq!(ui.input_value(&app, search), "b");
+        // Both palette filters mask the inert background from widget operations.
+        // Check the retained Add draft only after returning to that surface.
+        ui.key(
+            &mut app,
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert!(!app.help_open && !app.commands.open);
+        assert_eq!(ui.input_value(&app, "add-search"), "ethanol");
+        assert!(app.tab.history.can_undo());
+    }
 }
 
 #[tokio::test]
@@ -2919,7 +2978,7 @@ async fn add_smiles_completion_releases_only_add_focus_on_success() {
     }
 
     let mut ui = Ui::new().await;
-    for help in [false, true] {
+    for palette in [None, Some(true), Some(false)] {
         for failure in [false, true] {
             let (mut app, _) = App::new();
             app.engine = reshiki::engine::LocalEngine::in_process();
@@ -2932,10 +2991,21 @@ async fn add_smiles_completion_releases_only_add_focus_on_success() {
             let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
             assert!(app.tab.busy && !app.tab.naming.is_pending());
             assert!(ui.input(&app, "add-search").1);
-            if help {
-                let task = app.update(Message::ToggleHelp);
+            let palette_search = palette.map(|keys| {
+                if keys {
+                    "help-search"
+                } else {
+                    "command-palette-search"
+                }
+            });
+            if let Some(search) = palette_search {
+                let task = app.update(if palette == Some(true) {
+                    Message::ToggleHelp
+                } else {
+                    Message::Commands(super::command_palette::Action::Open)
+                });
                 ui.run_task(&mut app, task).await;
-                assert!(ui.input(&app, "help-search").1);
+                assert!(ui.input(&app, search).1);
             }
             // Replace only the terminal result, retaining the real request's
             // receipt and tab routing so the error path has the same owner.
@@ -2951,10 +3021,11 @@ async fn add_smiles_completion_releases_only_add_focus_on_success() {
             assert_eq!(app.error, failure, "{}", app.status);
             assert_eq!(app.tab.doc.atoms.len(), if failure { 0 } else { 3 });
             assert_eq!(app.tab.history.can_undo(), !failure);
-            if help {
-                assert!(app.help_open);
+            if let Some(search) = palette_search {
+                assert_eq!(app.help_open, palette == Some(true));
+                assert_eq!(app.commands.open, palette == Some(false));
                 assert_eq!(app.inspector_tab, InspectorTab::Templates);
-                assert!(ui.input(&app, "help-search").1);
+                assert!(ui.input(&app, search).1);
                 ui.key(
                     &mut app,
                     Key::Character("b".into()),
@@ -2963,7 +3034,7 @@ async fn add_smiles_completion_releases_only_add_focus_on_success() {
                     Some("b"),
                 )
                 .await;
-                assert_eq!(ui.input_value(&app, "help-search"), "b");
+                assert_eq!(ui.input_value(&app, search), "b");
                 ui.key(
                     &mut app,
                     Key::Named(Named::Escape),
@@ -2972,7 +3043,7 @@ async fn add_smiles_completion_releases_only_add_focus_on_success() {
                     None,
                 )
                 .await;
-                assert!(!app.help_open);
+                assert!(!app.help_open && !app.commands.open);
             } else if failure {
                 assert!(
                     ui.input(&app, "add-search").1,

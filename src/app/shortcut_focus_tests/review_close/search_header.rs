@@ -207,6 +207,15 @@ async fn search_aliases_leave_text_intact_and_focus_the_palette() {
             crate::app::command_palette::Action::Query("benzene".into()),
         ));
         for (key, code, modifiers, text) in aliases() {
+            ui.key(
+                &mut app,
+                Key::Named(Named::F6),
+                Code::F6,
+                Modifiers::empty(),
+                None,
+            )
+            .await;
+            assert_eq!(ui.focused(&app), ["help-about"]);
             ui.key(&mut app, key, code, modifiers, Some(text)).await;
             assert!(app.commands.open);
             assert_eq!(app.commands.query, "benzene");
@@ -252,12 +261,26 @@ async fn search_aliases_respect_foreground_dialogs() {
             ))),
         };
         ui.run_task(&mut app, task).await;
+        if dialog == "Help" {
+            let task = app.update(Message::Help(crate::app::help::Action::Query(
+                "wedge".into(),
+            )));
+            ui.run_task(&mut app, task).await;
+        }
         for (key, code, modifiers, text) in aliases() {
             ui.key(&mut app, key, code, modifiers, Some(text)).await;
-            assert!(!app.commands.open, "{dialog} keeps the keyboard");
             assert_eq!(app.tab.doc, drawing, "{dialog}");
+            if dialog == "Help" {
+                // Keys and Commands are filters of one surface. Search moves
+                // Keys to a fresh All search; further Search chords refocus it.
+                assert!(app.commands.open && !app.help_open);
+                assert_eq!(app.commands.filter, None);
+                assert!(app.commands.query.is_empty());
+                assert!(ui.input(&app, "command-palette-search").1);
+                continue;
+            }
+            assert!(!app.commands.open, "{dialog} keeps the keyboard");
             assert!(match dialog {
-                "Help" => app.help_open,
                 "Settings" => app.settings.open,
                 "About" => app.updates.open,
                 "Save" => app.prompt.is_some(),

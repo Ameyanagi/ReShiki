@@ -142,6 +142,55 @@ impl Ui {
         (status, messages)
     }
 
+    async fn run_task(&mut self, app: &mut App, task: iced::Task<Message>) {
+        use iced::futures::StreamExt;
+        let mut tasks = std::collections::VecDeque::from([task]);
+        while let Some(task) = tasks.pop_front() {
+            let Some(mut stream) = iced_runtime::task::into_stream(task) else {
+                continue;
+            };
+            while let Some(action) = stream.next().await {
+                match action {
+                    iced_runtime::Action::Output(message) => tasks.push_back(app.update(message)),
+                    iced_runtime::Action::Widget(mut operation) => {
+                        let mut ui = UserInterface::build(
+                            app.view(),
+                            self.size,
+                            std::mem::take(&mut self.cache),
+                            &mut self.renderer,
+                        );
+                        loop {
+                            ui.operate(&self.renderer, operation.as_mut());
+                            match operation.finish() {
+                                operation::Outcome::Chain(next) => operation = next,
+                                _ => break,
+                            }
+                        }
+                        self.cache = ui.into_cache();
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    async fn f6(&mut self, app: &mut App, backwards: bool) {
+        let modifiers = if backwards {
+            Modifiers::SHIFT
+        } else {
+            Modifiers::empty()
+        };
+        let (status, messages) = self.event(app, key(Named::F6, modifiers, false));
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(
+            matches!(messages.as_slice(), [Message::Commands(crate::app::command_palette::Action::FocusActions(value))] if *value == backwards)
+        );
+        for message in messages {
+            let task = app.update(message);
+            self.run_task(app, task).await;
+        }
+    }
+
     fn tab(&mut self, app: &App, backwards: bool) {
         let modifiers = if backwards {
             Modifiers::SHIFT
@@ -289,7 +338,8 @@ fn key(named: Named, modifiers: Modifiers, repeat: bool) -> Event {
         Named::Enter => Code::Enter,
         Named::Escape => Code::Escape,
         Named::F1 => Code::F1,
-        _ => unreachable!("test only dispatches Tab, Enter, Escape and F1"),
+        Named::F6 => Code::F6,
+        _ => unreachable!("test only dispatches Tab, Enter, Escape, F1 and F6"),
     };
     Event::Keyboard(keyboard::Event::KeyPressed {
         key: Key::Named(named),
@@ -363,7 +413,7 @@ async fn command_palette_unavailable_rows_publish_disabled_state_and_reason() {
         .unwrap();
     assert_eq!(
         field.name,
-        "Run a command; 1 result; selected Copy NMR report, Analyze, unavailable: Predict NMR first"
+        "Run a command; 1 result; selected Copy NMR report, Analyze, unavailable: Predict NMR first; Choose a command to run"
     );
 
     // Its click action still explains the refusal without closing the palette.
@@ -680,7 +730,7 @@ async fn selected_arc_and_curve_point_controls_are_reachable_and_exit_without_ed
             let _ = app.update(message);
             let _ = app.update(Message::ToggleHelp);
             let modal = ui.snapshot(&app);
-            assert!(modal.nodes.iter().all(|node| node.id.starts_with("help-")));
+            super::renderer_tests::assert_keys_palette(&modal);
             assert!(matches!(
                 ui.activate(&app, entry_id),
                 operation::Outcome::None
@@ -948,21 +998,14 @@ async fn help_returns_keyboard_focus_and_preserves_the_underlying_input_selectio
                 .collect::<Vec<_>>()
         };
 
-        for close_with_done in [false, true] {
+        for close_with_button in [false, true] {
             let message = ui.activate_focused(&app);
             assert!(matches!(message, Message::ToggleHelp));
-            let _ = app.update(message);
+            let task = app.update(message);
+            ui.run_task(&mut app, task).await;
             assert!(app.help_open);
             let modal = ui.snapshot(&app);
-            // Four controls plus one named button per result row.
-            let rows = modal
-                .nodes
-                .iter()
-                .filter(|node| node.id.starts_with("help-row-"))
-                .count();
-            assert!(rows > 0);
-            assert_eq!(modal.nodes.len() - rows, 5);
-            assert!(modal.nodes.iter().all(|node| node.id.starts_with("help-")));
+            super::renderer_tests::assert_keys_palette(&modal);
             assert!(matches!(
                 ui.activate(&app, "help-open"),
                 operation::Outcome::None
@@ -972,22 +1015,19 @@ async fn help_returns_keyboard_focus_and_preserves_the_underlying_input_selectio
                 operation::Outcome::None
             ));
 
-            // Modal traversal stays inside Help, including wrapping and reverse
-            // traversal, without unfocusing the inert opener underneath it.
-            for id in [
-                "help-close",
-                "help-search",
-                "help-about",
-                "help-examples",
-                "help-done",
-                "help-close",
-            ] {
-                ui.tab(&app, false);
+            // F6 traverses the shared surface's actions, including wrapping and
+            // reverse traversal, without unfocusing the inert opener underneath.
+            ui.assert_focused(&app, "help-search");
+            for id in ["help-about", "help-examples", "help-search", "help-about"] {
+                ui.f6(&mut app, false).await;
                 ui.assert_focused(&app, id);
             }
-            ui.tab(&app, true);
-            ui.assert_focused(&app, "help-done");
-            let message = if close_with_done {
+            ui.f6(&mut app, true).await;
+            ui.assert_focused(&app, "help-search");
+            ui.f6(&mut app, true).await;
+            ui.assert_focused(&app, "help-examples");
+            let message = if close_with_button {
+                ui.focus(&app, "command-palette-close");
                 ui.activate_focused(&app)
             } else {
                 let (status, mut messages) =
@@ -996,7 +1036,10 @@ async fn help_returns_keyboard_focus_and_preserves_the_underlying_input_selectio
                 assert_eq!(messages.len(), 1);
                 messages.remove(0)
             };
-            assert!(matches!(message, Message::ToggleHelp));
+            assert!(matches!(
+                message,
+                Message::ToggleHelp | Message::Commands(crate::app::command_palette::Action::Close)
+            ));
             let _ = app.update(message);
             assert!(!app.help_open);
             ui.assert_focused(&app, "help-open");
@@ -1018,10 +1061,12 @@ async fn help_returns_keyboard_focus_and_preserves_the_underlying_input_selectio
         assert_eq!(messages.len(), 1);
         let message = messages.remove(0);
         assert!(matches!(message, Message::ToggleHelp));
-        let _ = app.update(message);
+        let task = app.update(message);
+        ui.run_task(&mut app, task).await;
         assert!(app.help_open);
-        ui.tab(&app, false);
-        ui.assert_focused(&app, "help-close");
+        ui.assert_focused(&app, "help-search");
+        ui.f6(&mut app, false).await;
+        ui.assert_focused(&app, "help-about");
         let (_, mut messages) = ui.event(&app, key(Named::Escape, Modifiers::empty(), false));
         assert_eq!(messages.len(), 1);
         let message = messages.remove(0);

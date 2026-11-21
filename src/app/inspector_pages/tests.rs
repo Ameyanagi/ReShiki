@@ -267,6 +267,39 @@ fn new_selection_clears_requested_analysis_and_nested_page_return_history() {
 }
 
 #[test]
+fn closing_commands_or_keys_keeps_page_history_and_requested_analysis() {
+    for keys in [false, true] {
+        let mut app = drawing();
+        let before = (app.tab.doc.clone(), app.tab.selected.clone());
+        let _ = app.show_molecular_properties();
+        let _ = app.update(Message::Inspector(InspectorTab::Assistant));
+        let _ = app.update(Message::Inspector(InspectorTab::Names));
+        for page in [InspectorTab::Names, InspectorTab::Properties] {
+            let _ = app.update(if keys {
+                Message::ToggleHelp
+            } else {
+                Message::Commands(crate::app::command_palette::Action::Open)
+            });
+            assert_eq!((app.help_open, app.commands.open), (keys, !keys));
+            let _ = app.update(Message::Escape);
+            assert!(!app.help_open && !app.commands.open);
+            assert_eq!(app.inspector_tab, page);
+            assert!(app.requested_molecular_properties());
+            if page == InspectorTab::Names {
+                let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+                assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+                let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
+                assert_eq!(app.inspector_tab, InspectorTab::Properties);
+            }
+        }
+        let _ = app.update(Message::Escape);
+        assert!(!app.requested_molecular_properties());
+        assert_eq!((app.tab.doc.clone(), app.tab.selected.clone()), before);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
 fn chemical_names_entry_point_sets_order_after_selecting_its_structure() {
     let mut app = drawing();
     let atoms = app.tab.selected.clone();

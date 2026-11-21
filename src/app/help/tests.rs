@@ -14,7 +14,7 @@ fn shortcuts_dialog_partial_redraws_preserve_unchanged_pixels() {
         iced::Font::default(),
         iced::Pixels(16.),
     ));
-    let mut view = app.with_help(Space::new().width(Length::Fill).height(Length::Fill).into());
+    let mut view = app.with_commands(Space::new().width(Length::Fill).height(Length::Fill).into());
     let mut tree = Tree::new(view.as_widget());
     let node = view
         .as_widget_mut()
@@ -668,7 +668,7 @@ async fn help_renderer_evidence() {
             let bounds = iced::Rectangle::with_size(size);
             let theme = app.theme();
             let mut view =
-                app.with_help(Space::new().width(Length::Fill).height(Length::Fill).into());
+                app.with_commands(Space::new().width(Length::Fill).height(Length::Fill).into());
             let mut tree = Tree::new(view.as_widget());
             let node =
                 view.as_widget_mut()
