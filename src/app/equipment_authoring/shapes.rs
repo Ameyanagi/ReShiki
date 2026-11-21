@@ -66,14 +66,28 @@ impl State {
     }
 
     pub(super) fn refresh_shape(&mut self) {
-        self.shape_outline = self
+        let shape = self
             .current
             .draft
             .definition
             .shapes
-            .get(self.selected_shape)
+            .get(self.selected_shape);
+        self.shape_outline = shape
             .and_then(|s| self.current.draft.shape_path(&s.id).ok())
             .unwrap_or_default();
+        if let Some(shape) = shape {
+            // Only geometry affects filled-role eligibility. Reuse the result
+            // across panel redraws, style edits and history with the same path.
+            if self
+                .shape_fill
+                .as_ref()
+                .is_none_or(|(path, _)| path != &shape.path)
+            {
+                self.shape_fill = Some((shape.path.clone(), closed_shape(shape).unwrap_or(false)));
+            }
+        } else {
+            self.shape_fill = None;
+        }
     }
 
     pub(super) fn edit_shape(&mut self, action: Action) -> Result<(), String> {
@@ -152,7 +166,7 @@ impl State {
                 MATERIALS.iter().find(|v| v.0 == shape.material).copied(),
                 |value| Action::ShapeMaterial(value.0),
             ));
-        let closed = closed_shape(shape).unwrap_or(false);
+        let closed = self.shape_fill.as_ref().is_some_and(|(_, filled)| *filled);
         let roles: Vec<_> = ROLES
             .into_iter()
             .filter(|v| {

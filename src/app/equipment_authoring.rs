@@ -117,6 +117,7 @@ pub(super) struct State {
     direction: Option<[Point; 2]>,
     selected_shape: usize,
     shape_outline: Vec<reshiki::equipment::geometry::Seg>,
+    shape_fill: Option<(String, bool)>,
 }
 
 impl State {
@@ -372,7 +373,7 @@ impl App {
                 }
             };
             let metadata = metadata::Metadata::from_definition(&draft.definition);
-            self.tab.equipment_authoring = Some(State {
+            let mut state = State {
                 current: Snapshot {
                     draft: Arc::new(draft),
                     points: vec![],
@@ -395,7 +396,10 @@ impl App {
                 direction: None,
                 selected_shape: 0,
                 shape_outline: vec![],
-            });
+                shape_fill: None,
+            };
+            state.refresh_shape();
+            self.tab.equipment_authoring = Some(state);
             self.context_menu = None;
             self.commands.open = false;
             self.tab.connect = None;

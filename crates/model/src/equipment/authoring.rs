@@ -11,6 +11,10 @@ use crate::{
     document::{Document, Point},
     graphics::{Graphic, GraphicKind, LinePattern, PathCommand},
 };
+use i_overlay::{
+    core::{fill_rule::FillRule, overlay_rule::OverlayRule},
+    float::overlay::FloatOverlay,
+};
 use std::{collections::BTreeMap, sync::Arc};
 
 #[cfg(test)]
@@ -679,14 +683,34 @@ fn filled_shape_contains(point: Xy, outline: &[(Vec<Xy>, bool)]) -> bool {
     winding != 0
 }
 
-/// Whether every contour can represent a filled body. A closed line with no
-/// area is still a stroke, even if its last command is Z.
+/// Whether all contours close and together paint a nonzero filled region.
+/// Signed areas can cancel across a bowtie's lobes without canceling its fill.
 pub fn closed_shape(shape: &Shape) -> Result<bool, String> {
-    let contours = geom::flatten(&geom::parse_path(&shape.path)?);
-    Ok(!contours.is_empty()
-        && contours.iter().all(|(points, closed)| {
-            *closed && points.len() >= 3 && geom::area(points).abs() > 1e-10
-        }))
+    let segs = geom::parse_path(&shape.path)?;
+    if segs.len() > validate::MAX_PATH_COMMANDS {
+        return Err("Simplify the shape to the equipment path command limit.".into());
+    }
+    // The existing command limit and at most 64 samples per cubic bound
+    // flattening; do not impose a smaller limit on valid authored outlines.
+    let contours = geom::flatten(&segs);
+    if contours.is_empty() || contours.iter().any(|(_, closed)| !closed) {
+        return Ok(false);
+    }
+    if let [(points, _)] = contours.as_slice()
+        && geom::area(points).abs() > 1e-10
+    {
+        // A nonzero winding integral proves some fill exists. Most ordinary
+        // single contours need no overlay, even if their outline is complex.
+        return Ok(true);
+    }
+    // Preserve contour directions: opposite duplicate contours paint nothing,
+    // while same-winding overlaps, holes and self-intersections use NonZero.
+    let subject: Vec<_> = contours.into_iter().map(|(points, _)| points).collect();
+    Ok(FloatOverlay::with_subj(&subject)
+        .overlay(OverlayRule::Subject, FillRule::NonZero)
+        .iter()
+        .flatten()
+        .any(|points| geom::area(points).abs() > 1e-10))
 }
 
 fn supported(g: &Graphic) -> Result<(), String> {

@@ -171,6 +171,77 @@ fn material_switch_uses_solid_paint_and_failed_edits_preserve_history_and_previe
 }
 
 #[test]
+fn bowtie_layer_edits_keep_filled_roles_and_round_trip_with_one_document_undo() {
+    use reshiki::{graphics::PathCommand, palette::Color};
+
+    let mut app = drawing();
+    let body = &mut app.tab.doc.graphics[0];
+    body.kind = GraphicKind::Path;
+    body.origin = Point::default();
+    body.axis_x = Point::new(1., 0.);
+    body.axis_y = Point::new(0., 1.);
+    body.style.fill = Some(Color::Paper);
+    body.path = vec![
+        PathCommand::Move(Point::new(-20., 0.)),
+        PathCommand::Line(Point::new(20., 50.)),
+        PathCommand::Line(Point::new(-20., 50.)),
+        PathCommand::Line(Point::new(20., 0.)),
+        PathCommand::Close,
+    ];
+    app.tab.doc.graphics[1].kind = GraphicKind::Line;
+    let before = app.tab.doc.clone();
+    send(&mut app, Action::Begin);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.shape_fill.as_ref().unwrap().1);
+    assert_eq!(state.current.draft.definition.shapes[0].role, Role::Glass);
+    send(&mut app, Action::SelectShape(shapes::Choice(1)));
+    assert!(
+        !app.tab
+            .equipment_authoring
+            .as_ref()
+            .unwrap()
+            .shape_fill
+            .as_ref()
+            .unwrap()
+            .1,
+        "selecting an open outline refreshes filled-role eligibility"
+    );
+    send(&mut app, Action::SelectShape(shapes::Choice(0)));
+    calibrate(&mut app);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.shape_fill.as_ref().unwrap().1);
+    let path = state.current.draft.definition.shapes[0].path.clone();
+    let history = state.past.len();
+    send(&mut app, Action::ShapeLayer(Layer::Front));
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert_eq!(state.notice, None);
+    assert_eq!(state.past.len(), history + 1);
+    let shape = &state.current.draft.definition.shapes[0];
+    assert_eq!(shape.layer, Layer::Front);
+    assert_eq!(shape.role, Role::Glass);
+    assert_eq!(shape.path, path);
+    let shown = app.display_document().clone();
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Undo);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert_eq!(state.current.draft.definition.shapes[0].layer, Layer::Body);
+    assert!(state.shape_fill.as_ref().unwrap().1);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.display_document(), &shown);
+    send(&mut app, Action::Accept);
+    assert_eq!(app.tab.doc, shown);
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let saved = Document::from_json(&app.tab.doc.file_json().unwrap()).unwrap();
+    assert_eq!(saved.piece_definitions, shown.piece_definitions);
+    assert_eq!(
+        reshiki::equipment::placed::plan(&saved.graphics[0]),
+        reshiki::equipment::placed::plan(&shown.graphics[0])
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn shape_clicks_do_not_take_over_measurement_and_pending_joint_controls() {
     let (mut app, edges) = joint_drawing();
     send(&mut app, Action::Begin);
