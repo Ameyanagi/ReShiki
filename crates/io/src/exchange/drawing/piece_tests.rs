@@ -38,6 +38,24 @@ fn authored_open_outlines_and_details_keep_widths_in_cdxml_and_cdx() {
         for (actual, expected) in widths.iter().zip([0.4, 0.6]) {
             assert!((actual - expected).abs() < 1e-3, "{widths:?}");
         }
+        // Exchange assigns drawing-order layers. Test each native curve
+        // separately so the existing single-layer authoring rule does not
+        // hide a stroke-weight classification failure.
+        let roles: Vec<_> = imported
+            .graphics
+            .iter()
+            .map(|graphic| {
+                let mut single = Document::default();
+                single.graphics.push(graphic.clone());
+                Draft::from_selection(&single, &[graphic.id])
+                    .unwrap()
+                    .definition
+                    .shapes[0]
+                    .role
+            })
+            .collect();
+        assert!(roles.contains(&crate::equipment::format::Role::Outline));
+        assert!(roles.contains(&crate::equipment::format::Role::Detail));
     }
 }
 

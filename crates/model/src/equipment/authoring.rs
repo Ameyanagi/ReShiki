@@ -20,6 +20,10 @@ mod tests;
 #[path = "authoring_artwork.rs"]
 mod artwork;
 
+// CDX stores point widths as 16.16 fixed point. Recognize a standard
+// weight after exchange without treating that quantization as a new style.
+const STROKE_PT_TOLERANCE: f32 = 1. / 65536.;
+
 /// Two rim clicks measured in the draft's millimetres. An unambiguous normal
 /// points away from filled shapes, independently of which edge was clicked first.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -200,7 +204,7 @@ impl Draft {
                     color: None,
                     role: if closed {
                         Role::Glass
-                    } else if (g.style.width_pt - 0.6).abs() < 1e-6 {
+                    } else if (g.style.width_pt - 0.6).abs() <= STROKE_PT_TOLERANCE {
                         Role::Outline
                     } else {
                         Role::Detail
@@ -590,7 +594,7 @@ fn supported(g: &Graphic) -> Result<(), String> {
 pub fn stroke_problem(g: &Graphic) -> Option<&'static str> {
     if g.kind == GraphicKind::Path
         && g.style.fill == Some(g.style.stroke)
-        && (g.style.width_pt - 0.1).abs() < 1e-6
+        && (g.style.width_pt - 0.1).abs() <= STROKE_PT_TOLERANCE
     {
         return (!artwork::certified(&g.commands())).then_some(
             "Use simpler filled paths, or Ink strokes: 0.6 pt outlines / 0.4 pt details.",
@@ -600,10 +604,11 @@ pub fn stroke_problem(g: &Graphic) -> Option<&'static str> {
         return Some("Use Ink strokes before defining an equipment piece.");
     }
     if g.closed_shape() && g.style.fill.is_some() {
-        ((g.style.width_pt - 0.6).abs() > 1e-6)
+        ((g.style.width_pt - 0.6).abs() > STROKE_PT_TOLERANCE)
             .then_some("Use 0.6 pt outlines on filled equipment shapes.")
     } else {
-        ((g.style.width_pt - 0.4).abs() > 1e-6 && (g.style.width_pt - 0.6).abs() > 1e-6)
+        ((g.style.width_pt - 0.4).abs() > STROKE_PT_TOLERANCE
+            && (g.style.width_pt - 0.6).abs() > STROKE_PT_TOLERANCE)
             .then_some("Use 0.4 pt details or 0.6 pt outlines for equipment.")
     }
 }

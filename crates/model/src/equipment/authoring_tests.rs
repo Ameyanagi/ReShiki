@@ -748,6 +748,11 @@ fn supported_outlines_details_and_imported_filled_artwork_still_convert() {
     let draft = Draft::from_selection(&doc, &[body, outline, detail]).unwrap();
     assert_eq!(draft.definition.shapes[1].role, Role::Outline);
     assert_eq!(draft.definition.shapes[2].role, Role::Detail);
+    for graphic in doc.graphics.iter_mut().filter(|g| g.style.fill.is_none()) {
+        graphic.style.width_pt = (graphic.style.width_pt * 65536.).trunc() / 65536.;
+    }
+    let exchanged = Draft::from_selection(&doc, &[body, outline, detail]).unwrap();
+    assert_eq!(exchanged.definition.shapes, draft.definition.shapes);
     let shown = draft.preview_graphic(100).unwrap();
     let paths = placed::primitives(&shown, doc.canvas_theme);
     assert!(paths.iter().any(|p| matches!(p, crate::scene::Primitive::Path { style, filled: false, .. } if style.stroke == Color::Ink && style.width_pt == 0.4)));
