@@ -48,6 +48,9 @@ fn shift(doc: &mut Document, part: &[u64], target: Point) -> bool {
 /// where their ink still meets their ordered source; ordinary take-out owns
 /// detachment. Rigid whole-group moves already moved every cut once.
 pub(in crate::cycles) fn moved(before: &Document, after: &mut Document, moved: &[u64]) -> bool {
+    if !crate::cycles::has_fits(before) && !crate::cycles::has_fits(after) {
+        return before != after;
+    }
     let old_nominal = nominal_document(before);
     let new_nominal = nominal_document(after);
     let mut rebase = vec![];

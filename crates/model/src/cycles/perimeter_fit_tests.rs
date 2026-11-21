@@ -350,6 +350,44 @@ fn same_locus(original: &[Arrow], children: &[Arrow], doc: &Document, id: u64) {
 }
 
 #[test]
+fn fit_moved_without_fitted_sources_keeps_noops_and_ordinary_moves() {
+    for before in [Document::default(), fixture().0] {
+        assert!(!cycles::has_fits(&before));
+        let ids = before.all_ids();
+        let mut after = before.clone();
+        assert!(!cycles::fit_moved(&before, &mut after, &ids));
+        assert_eq!(after, before);
+        if ids.is_empty() {
+            continue;
+        }
+        after.translate(&ids, 37., -21.);
+        let expected = after.clone();
+        assert_ne!(expected, before, "the ordinary move must actually run");
+        assert!(cycles::fit_moved(&before, &mut after, &ids));
+        assert_eq!(after, expected, "an unfitted move needs no layout repair");
+        after.validate().unwrap();
+    }
+}
+
+#[test]
+fn fit_moved_keeps_fitted_noops_and_source_presence_transitions() {
+    let (fitted, _, id) = straight_split();
+    let mut same = fitted.clone();
+    assert!(!cycles::fit_moved(&fitted, &mut same, &[]));
+    assert_eq!(same, fitted);
+
+    let mut plain = fitted.clone();
+    plain.graphics[0].cycle.as_mut().unwrap().split_runs.clear();
+    assert!(!cycles::has_fits(&plain));
+    for (before, mut after) in [(plain.clone(), fitted.clone()), (fitted, plain)] {
+        let expected = after.clone();
+        assert!(cycles::fit_moved(&before, &mut after, &[id]));
+        assert_eq!(after, expected, "keep an added or retired source intact");
+        after.validate().unwrap();
+    }
+}
+
+#[test]
 fn captured_bowed_forward_lane_is_cut_without_rebowing_and_clears_actual_member_ink() {
     let (before, after, part, id) = applied();
     let parent = main_arrows(&before, id, &[1]);
@@ -775,7 +813,7 @@ fn selected_two_cut_batch_slides_atomically_without_taking_either_member_out() {
     }
     let mut after = before.clone();
     after.translate(&selected, delta.x, delta.y);
-    cycles::fit_moved(&before, &mut after, &selected);
+    assert!(cycles::fit_moved(&before, &mut after, &selected));
     let changed = &graphic(&after, id).cycle.as_ref().unwrap().split_runs[0];
     assert_eq!(
         (changed.source_start, changed.source_span),
