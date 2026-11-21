@@ -679,12 +679,7 @@ impl App {
                 reshiki::accessibility::button(
                     "header-search",
                     format!("Search commands, structures and names; {search_keys}"),
-                    row![
-                        text("Search…").size(12),
-                        super::help::chord(search_keys, 11),
-                    ]
-                    .spacing(8)
-                    .align_y(Alignment::Center),
+                    canvas(Glyph(Icon::Search, true)).width(16).height(16),
                 )
                 .height(36)
                 .padding([0, 10])

@@ -48,10 +48,6 @@ pub(super) enum Icon {
         expect(dead_code, reason = "The browser editor has no GitHub sign-in")
     )]
     Eye,
-    #[cfg_attr(
-        target_arch = "wasm32",
-        expect(dead_code, reason = "The browser editor has no GitHub picker")
-    )]
     Search,
     /// Four squares, a list with branches and a page: the GitHub picker's
     /// Tiles and Tree views, and a file in its tree.

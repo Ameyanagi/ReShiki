@@ -288,7 +288,7 @@ fn icon_fixtures_cover_every_variant() {
         *counts.entry(family(*icon)).or_insert(0) += 1;
     }
     assert_eq!(counts, expected_counts());
-    assert_eq!(icons.len(), 157);
+    assert_eq!(icons.len(), 158);
 }
 
 fn render(

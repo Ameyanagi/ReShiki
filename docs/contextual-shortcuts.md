@@ -20,7 +20,7 @@ When an example exists, the same bottom strip shows **Before** and **After** dra
 
 ## Run a command
 
-Choose **Search…** in the header, or press **Cmd/Ctrl+K**, **Cmd/Ctrl+Shift+P**
+Choose the search icon in the header, or press **Cmd/Ctrl+K**, **Cmd/Ctrl+Shift+P**
 or **:** to open the **command palette**, also over an atom or bond. Shortcuts with Cmd/Ctrl work from text fields; **:** types a colon there. Dialogs
 keep their own keyboard input. Type part of a command and press **Enter** or
 click a command row to run it and close the palette. Search opens the **All**
