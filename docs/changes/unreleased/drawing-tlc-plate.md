@@ -10,3 +10,5 @@ issues: []
   tails and appearance settings produce an import notice.
 - Native TLC exchange keeps ChemDraw's five-point lane margins and authored Rf
   captions, and writes binary CDX show flags in the form ChemDraw can reopen.
+  Out-of-range Rf text sizes use the normal caption fallback while retaining
+  authored text, styling and placement.

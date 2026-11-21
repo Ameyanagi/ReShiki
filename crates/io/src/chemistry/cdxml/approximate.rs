@@ -250,17 +250,6 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
         .max()
         .map_or(1, |id| id.saturating_add(1));
     pass.budget = 900_000usize.saturating_sub(curve_points);
-    for (index, dropped) in super::graphics::tlc::normalize(&mut pass.tree)? {
-        pass.changed = true;
-        pass.count(
-            index,
-            if dropped {
-                Kind::TlcPlate
-            } else {
-                Kind::TlcAppearance
-            },
-        );
-    }
     pass.objects(0)?;
     pass.brackets()?;
     for index in pass.tree.descendants(0)? {
@@ -283,6 +272,19 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
                 pass.set(index, key, face.to_string())?;
             }
         }
+    }
+    // Validate owned Rf captions after the common text fallbacks have settled
+    // their runs and inherited defaults, just like ordinary captions.
+    for (index, dropped) in super::graphics::tlc::normalize(&mut pass.tree)? {
+        pass.changed = true;
+        pass.count(
+            index,
+            if dropped {
+                Kind::TlcPlate
+            } else {
+                Kind::TlcAppearance
+            },
+        );
     }
     if !pass.changed {
         return Ok((xml.into(), None, 0));

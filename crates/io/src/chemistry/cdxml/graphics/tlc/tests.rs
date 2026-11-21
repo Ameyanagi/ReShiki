@@ -119,11 +119,23 @@ fn unsupported_tlc_data_warns_without_unhiding_lanes_or_hollowing_shaded_spots()
 
 #[test]
 fn missing_or_invalid_rf_label_is_generated_with_a_notice() {
-    for body in [spot("ShowRf='yes'"), "<tlcspot Rf='0.28' Width='325095' Height='325095' ShowRf='yes'><objecttag Name='rf'><t p='NaN 1'><s>bad</s></t></objecttag></tlcspot>".into()] {
+    let invalid = |run: &str| {
+        format!(
+            "<tlcspot Rf='0.28' Width='325095' Height='325095' ShowRf='yes'><objecttag Name='rf'><t p='NaN 1'>{run}</t></objecttag></tlcspot>"
+        )
+    };
+    for body in [
+        spot("ShowRf='yes'"),
+        invalid("<s>bad</s>"),
+        invalid("<s size='3' face='1'>bad</s>"),
+    ] {
         let (graphics, notice) = read(&plate(&body, ""));
         assert!(notice.unwrap().contains("TLC plate"));
         let g = graphics.first().unwrap();
-        assert_eq!(g.tlc.as_ref().unwrap().labels(g).first().unwrap().text, "Rf = 0.28");
+        let label = g.tlc.as_ref().unwrap().labels(g).remove(0);
+        assert_eq!(label.text, "Rf = 0.28");
+        assert_eq!(label.format.style.size_pt, 7.5);
+        assert!(!label.format.style.bold);
     }
 }
 
