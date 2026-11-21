@@ -87,6 +87,70 @@ fn region_selection_encloses_only_the_visible_tlc_plate_and_rf_label_in_a_cell()
     ];
     assert!(!crate::selection_region::objects(&doc, &hidden).contains(&id));
     assert_eq!(doc, before);
+
+    for (origin, axis_x, axis_y) in [
+        (
+            Point::new(40., 30.),
+            Point::new(100., 30.),
+            Point::new(50., 150.),
+        ),
+        (
+            Point::new(40., 30.),
+            Point::new(-100., 30.),
+            Point::new(50., 150.),
+        ),
+    ] {
+        let frame = Frame {
+            origin,
+            axis_x,
+            axis_y,
+        };
+        let mut affine = doc.clone();
+        for g in &mut affine.graphics {
+            g.map_positions(|p| frame.point(Point::new(p.x / 100., p.y / 100.)));
+        }
+        affine.validate().unwrap();
+        let before = affine.clone();
+        assert!(crate::selection_region::objects(&affine, &frame.corners()).contains(&id));
+        let hidden = hidden.map(|p| frame.point(Point::new(p.x / 100., p.y / 100.)));
+        assert!(!crate::selection_region::objects(&affine, &hidden).contains(&id));
+        assert_eq!(affine, before);
+    }
+
+    let plate_region = [
+        Point::new(20., 10.),
+        Point::new(100., 10.),
+        Point::new(100., 90.),
+        Point::new(20., 90.),
+    ];
+    assert!(crate::selection_region::objects(&doc, &plate_region).contains(&id));
+    // Both a wholly visible label and one crossing the cell edge must have
+    // every visible corner enclosed, even when all plate paths are enclosed.
+    for (offset, fully_visible) in [(-60., true), (-1., false)] {
+        let spot = &mut doc.graphics[0].tlc.as_deref_mut().unwrap().lanes[0].spots[0];
+        let label = spot.label.as_mut().unwrap();
+        label.offset = Point::new(offset, -45.);
+        label.format.style.size_pt = 4.;
+        spot.show_rf = true;
+        doc.validate().unwrap();
+        let before = doc.clone();
+        let cells = Layout::new(&doc);
+        let corners = doc.graphics[0].tlc_labels()[0].corners();
+        assert_eq!(
+            corners.iter().all(|p| cells.contains(id, *p)),
+            fully_visible,
+        );
+        assert!(!cells.polygon(id, &corners).is_empty());
+        assert!(crate::selection_region::objects(&doc, &region).contains(&id));
+        assert!(!crate::selection_region::objects(&doc, &plate_region).contains(&id));
+        assert!(!crate::selection_region::objects(&doc, &hidden).contains(&id));
+        assert_eq!(doc, before);
+
+        doc.graphics[0].tlc.as_deref_mut().unwrap().lanes[0].spots[0].show_rf = false;
+        let before = doc.clone();
+        assert!(crate::selection_region::objects(&doc, &plate_region).contains(&id));
+        assert_eq!(doc, before);
+    }
 }
 
 #[test]
