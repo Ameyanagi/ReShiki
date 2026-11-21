@@ -1611,25 +1611,25 @@ pub(super) const PROPERTIES: &[Property] = &[
     Property {
         code: 0x0aa2,
         name: "ShowOrigin",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
         code: 0x0aa3,
         name: "ShowSolventFront",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
         code: 0x0aa4,
         name: "ShowBorders",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
         code: 0x0aa5,
         name: "ShowSideTicks",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {
@@ -1647,7 +1647,7 @@ pub(super) const PROPERTIES: &[Property] = &[
     Property {
         code: 0x0ab2,
         name: "ShowRf",
-        kind: "CDXBoolean",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
     Property {

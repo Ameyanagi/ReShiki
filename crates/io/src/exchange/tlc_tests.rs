@@ -2,6 +2,86 @@ use super::*;
 
 const NATIVE: &[u8] = include_bytes!("../../tests/fixtures/tlc/chemdraw26-mixed-spots.cdx");
 
+#[test]
+fn tlc_rf_tag_name_uses_native_unstyled_bytes_and_keeps_legacy_reads() {
+    let bytes = to_cdx("<CDXML><objecttag id='1' Name='rf'/></CDXML>").unwrap();
+    assert_eq!(&bytes[34..bytes.len() - 6], &[8, 0, 2, 0, b'r', b'f']);
+    for (name, raw) in [
+        ("rf", &b"rf"[..]),
+        ("stereo", b"stereo"),
+        ("number", b"number"),
+        ("réf", b"r\xe9f"),
+    ] {
+        let legacy = [b"\0\0".as_slice(), raw].concat();
+        for data in [raw, legacy.as_slice()] {
+            let bytes = tlc_frame(0x8011, &[(8, data)], false);
+            for xml in [
+                from_cdx(&bytes).unwrap(),
+                from_cdx_tolerant(&bytes).unwrap(),
+            ] {
+                let doc = roxmltree::Document::parse(&xml).unwrap();
+                let tag = doc
+                    .descendants()
+                    .find(|n| n.has_tag_name("objecttag"))
+                    .unwrap();
+                assert_eq!(tag.attribute("Name"), Some(name));
+            }
+        }
+    }
+    let bytes = to_cdx("<CDXML Name='ordinary'/>").unwrap();
+    assert_eq!(&bytes[28..bytes.len() - 4], b"\x08\0\x0a\0\0\0ordinary");
+}
+
+#[test]
+fn tlc_flags_match_native_empty_payloads_and_omit_false_without_changing_other_booleans() {
+    for (code, name) in [
+        (0x0aa2u16, "ShowOrigin"),
+        (0x0aa3, "ShowSolventFront"),
+        (0x0aa4, "ShowBorders"),
+        (0x0aa5, "ShowSideTicks"),
+        (0x0ab2, "ShowRf"),
+    ] {
+        for value in ["yes", "no"] {
+            let bytes = to_cdx(&format!("<CDXML {name}='{value}'/>")).unwrap();
+            // Independently inspect the sole root property's raw bytes. A
+            // self-roundtrip also accepts the old invalid one-byte payloads.
+            let expected = if value == "yes" {
+                [code.to_le_bytes(), [0, 0]].concat()
+            } else {
+                Vec::new()
+            };
+            assert_eq!(&bytes[28..bytes.len() - 4], expected, "{name}={value}");
+        }
+        // Previously saved ReShiki files remain readable in both modes.
+        for (payload, value) in [(&[][..], "yes"), (&[1][..], "yes"), (&[0][..], "no")] {
+            let bytes = tlc_frame(0x801f, &[(code, payload)], false);
+            for xml in [
+                from_cdx(&bytes).unwrap(),
+                from_cdx_tolerant(&bytes).unwrap(),
+            ] {
+                let doc = roxmltree::Document::parse(&xml).unwrap();
+                let spot = doc
+                    .descendants()
+                    .find(|n| n.has_tag_name("tlcspot"))
+                    .unwrap();
+                assert_eq!(spot.attribute(name), Some(value));
+            }
+        }
+    }
+    for (name, code, value, payload) in [
+        ("Visible", 0x0011u16, "yes", 1),
+        ("Visible", 0x0011, "no", 0),
+        ("InterpretChemically", 0x0708, "no", 0),
+    ] {
+        let bytes = to_cdx(&format!("<CDXML {name}='{value}'/>")).unwrap();
+        assert_eq!(
+            &bytes[28..bytes.len() - 4],
+            [code.to_le_bytes().as_slice(), &[1, 0, payload]].concat(),
+            "{name}={value}"
+        );
+    }
+}
+
 fn tlc_frame(object: u16, properties: &[(u16, &[u8])], unknown_child: bool) -> Vec<u8> {
     let mut bytes = HEADER.to_vec();
     for (code, id) in [(0x8000u16, 0u32), (0x8001, 1), (object, 2)] {

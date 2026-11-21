@@ -66,6 +66,11 @@ PROPERTIES[0x44B] = ("ExternalConnectionNum", "INT8", {})
 # 0xA39 with an empty payload; 0xA38 is the numeric CurveSpacing property.
 PROPERTIES[0xA38] = ("CurveSpacing", "UINT16", {})
 PROPERTIES[0xA39] = ("Closed", "CDXBooleanImplied", {})
+# Native ChemDraw 26 TLC flags have empty payloads when true and are absent
+# when false. One-byte Boolean payloads make its SDK reject the whole CDX.
+for code in (0xAA2, 0xAA3, 0xAA4, 0xAA5, 0xAB2):
+    name, _, enum = PROPERTIES[code]
+    PROPERTIES[code] = name, "CDXBooleanImplied", enum
 # Native ChemDraw document annotations accompany clipboard ring-fill drawings.
 PROPERTIES[0x1500] = ("Keyword", "CDXString", {})
 PROPERTIES[0x1501] = ("Content", "CDXString", {})
@@ -332,7 +337,10 @@ def to_cdx(xml):
             elif kind in ("CDXPoint2D", "CDXPoint3D", "CDXRectangle"):
                 data = coordinates(value, kind)
             elif kind == "CDXString":
-                data = b"\0\0" + value.encode("latin-1")
+                # Object-tag names are native unstyled bytes. A style-count
+                # prefix makes ChemDraw regenerate authored Rf labels.
+                prefix = b"" if el.tag == "objecttag" and name == "Name" else b"\0\0"
+                data = prefix + value.encode("latin-1")
             elif kind == "CDXObjectIDArray":
                 data = b"".join(packed("I", int(v)) for v in value.split())
             elif kind == "Unformatted" and el.tag == "embeddedobject":
@@ -490,7 +498,13 @@ def from_cdx(data):
                 el.set(name, coordinates(data, kind, False))
             elif kind == "CDXString":
                 temporary = ET.Element("t")
-                decode_text(data, temporary, fonts)
+                try:
+                    decode_text(data, temporary, fonts)
+                except ValueError:
+                    if name != "Name" or el.tag != "objecttag":
+                        raise
+                    temporary = ET.Element("t")
+                    ET.SubElement(temporary, "s").text = data.decode("latin-1")
                 el.set(name, "".join(s.text or "" for s in temporary))
             elif kind == "CDXColorTable":
                 r = Reader(data)

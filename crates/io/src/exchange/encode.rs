@@ -196,7 +196,13 @@ fn encode_value(p: &Property, value: &str, element: &str) -> Result<Vec<u8>> {
         },
         "CDXPoint2D" | "CDXPoint3D" | "CDXRectangle" => encode_coordinates(value, p.kind),
         "CDXString" => {
-            let mut data = vec![0, 0];
+            // Native object-tag names are unstyled bytes. A style-count prefix
+            // makes ChemDraw miss the `rf` tag and replace its authored label.
+            let mut data = if element == "objecttag" && p.name == "Name" {
+                Vec::new()
+            } else {
+                vec![0, 0]
+            };
             for c in value.chars() {
                 data.push(
                     u8::try_from(u32::from(c))

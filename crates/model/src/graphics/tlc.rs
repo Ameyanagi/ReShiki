@@ -172,15 +172,38 @@ impl TlcPlate {
         };
         (unit(g.axis_x), unit(g.axis_y))
     }
+    /// Native lanes are cell centres inside five-point bottom-edge margins.
+    /// Keep at least one native 16.16 point tick of available span when those
+    /// margins cannot fit. This stays ordered and continuous across ten points,
+    /// including when native coordinate rounding crosses that boundary.
+    pub fn lane_fraction(bottom_width_pt: f64, lane: usize, count: usize) -> f64 {
+        let cell = (lane as f64 + 0.5) / count.max(1) as f64;
+        if bottom_width_pt.is_finite() && bottom_width_pt > 0. {
+            let span = (bottom_width_pt - 10.)
+                .max(1. / 65536.)
+                .min(bottom_width_pt);
+            (0.5 * (bottom_width_pt - span) + cell * span) / bottom_width_pt
+        } else {
+            cell
+        }
+    }
+    fn lane_point(&self, g: &Graphic, lane: usize, v: f32) -> Point {
+        let left = self.point(g, 0., v);
+        let bottom_left = self.point(g, 0., 1.);
+        let bottom_right = self.point(g, 1., 1.);
+        let width_pt = f64::from(bottom_left.distance(bottom_right))
+            * f64::from(crate::style::DEFAULT.points_per_world());
+        let u = Self::lane_fraction(width_pt, lane, self.lanes.len()) as f32;
+        left.offset(
+            (bottom_right.x - bottom_left.x) * u,
+            (bottom_right.y - bottom_left.y) * u,
+        )
+    }
     pub fn spot_center(&self, g: &Graphic, lane: usize, rf: f64) -> Point {
         let v = 1.
             - self.origin_fraction
             - rf * (1. - self.origin_fraction - self.solvent_front_fraction);
-        self.point(
-            g,
-            (lane + 1) as f32 / (self.lanes.len() + 1) as f32,
-            v as f32,
-        )
+        self.lane_point(g, lane, v as f32)
     }
     /// An authored label's record, including one the spot currently hides.
     pub fn label_annotation(&self, g: &Graphic, lane: usize, spot: &TlcSpot) -> Option<Annotation> {
@@ -241,16 +264,24 @@ impl TlcPlate {
             );
         }
         let (x, y) = self.basis(g);
-        for (shown, v) in [
-            (self.show_origin, 1. - self.origin_fraction),
-            (self.show_solvent_front, self.solvent_front_fraction),
+        let bottom_left = self.point(g, 0., 1.);
+        let bottom_right = self.point(g, 1., 1.);
+        let bottom = Point::new(
+            bottom_right.x - bottom_left.x,
+            bottom_right.y - bottom_left.y,
+        );
+        for (shown, v, span) in [
+            (self.show_origin, 1. - self.origin_fraction, bottom),
+            (
+                self.show_solvent_front,
+                self.solvent_front_fraction,
+                g.axis_x,
+            ),
         ] {
             if shown {
+                let start = self.point(g, 0., v as f32);
                 line(
-                    vec![
-                        Move(self.point(g, 0., v as f32)),
-                        Line(self.point(g, 1., v as f32)),
-                    ],
+                    vec![Move(start), Line(start.offset(span.x, span.y))],
                     LinePattern::Dashed,
                 );
             }

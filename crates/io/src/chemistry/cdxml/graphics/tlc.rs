@@ -120,6 +120,14 @@ impl Frame {
             self.origin.y + self.x.y * a + self.y.y * b,
         )
     }
+    fn lane_at(&self, lane: usize, count: usize, v: f64, scale: f64) -> NativePoint {
+        let left = self.at(0., v);
+        let bl = self.at(0., 1.);
+        let br = self.at(1., 1.);
+        let (x, y) = (br.x - bl.x, br.y - bl.y);
+        let u = TlcPlate::lane_fraction(x.hypot(y) / scale, lane, count);
+        NativePoint::new(left.x + x * u, left.y + y * u)
+    }
     fn offset(&self, from: NativePoint, to: NativePoint) -> Point {
         let (lx, ly) = (self.x.x.hypot(self.x.y), self.y.x.hypot(self.y.y));
         let (x, y) = (
@@ -363,9 +371,11 @@ impl Reader<'_, '_> {
                     )?
                     .into_document()?;
                 let show_rf = spot.attribute("ShowRf") == Some("yes");
-                let center = frame.at(
-                    (index + 1) as f64 / (lanes.len() + 1) as f64,
+                let center = frame.lane_at(
+                    index,
+                    lanes.len(),
                     1. - origin_fraction - rf * (1. - origin_fraction - solvent_front_fraction),
+                    self.scale,
                 );
                 let tag = spot
                     .children()

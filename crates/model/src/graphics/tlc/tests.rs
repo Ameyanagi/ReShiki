@@ -60,9 +60,18 @@ fn native_tlc_keeps_lanes_spot_fraction_physical_size_and_owned_rich_label() {
     let g = plate();
     g.validate().unwrap();
     let t = g.tlc.as_deref().unwrap();
-    assert!(t.spot_center(&g, 0, 0.28).distance(Point::new(340., 518.2)) < 0.001);
+    // This helper's 40 drawing units are 13.714 points, not a 40-point plate.
+    assert!(
+        t.spot_center(&g, 0, 0.28)
+            .distance(Point::new(346.3889, 518.2))
+            < 0.001
+    );
     assert!(t.spot_center(&g, 1, 0.51).distance(Point::new(350., 481.4)) < 0.001);
-    assert!(t.spot_center(&g, 2, 0.77).distance(Point::new(360., 439.8)) < 0.001);
+    assert!(
+        t.spot_center(&g, 2, 0.77)
+            .distance(Point::new(353.6111, 439.8))
+            < 0.001
+    );
     let parts = g.parts();
     assert_eq!(parts.len(), 9); // border, two reference lines, three ticks and spots
     assert!(parts[6].filled && parts[7].filled && !parts[8].filled);
@@ -82,6 +91,103 @@ fn native_tlc_keeps_lanes_spot_fraction_physical_size_and_owned_rich_label() {
     assert!(g.hit(t.spot_center(&g, 0, 0.28), 0.));
     assert!(!g.hit(t.spot_center(&g, 2, 0.77), 0.));
     assert!(g.edit_points().is_empty());
+}
+
+#[test]
+fn native_tlc_lanes_use_measured_five_point_margins_and_equal_cell_centres() {
+    // Independent ChemDraw SDK raster probes, in physical points. The old
+    // i/(n+1) happened to agree only for the original 40-point, three-lane plate.
+    for (width, positions) in [
+        (40., vec![12.5, 27.5]),
+        (40., vec![10., 20., 30.]),
+        (80., vec![12., 26., 40., 54., 68.]),
+        (120., vec![23.333334, 60., 96.666664]),
+        (240., vec![43.333332, 120., 196.66667]),
+        (360., vec![40., 110., 180., 250., 320.]),
+    ] {
+        let world = |pt| crate::style::DEFAULT.world(pt);
+        let mut g = plate();
+        g.origin = Point::default();
+        g.axis_x = Point::new(world(width), 0.);
+        g.axis_y = Point::new(0., world(200.));
+        let prototype = g.tlc.as_deref().unwrap().lanes[0].clone();
+        g.tlc.as_deref_mut().unwrap().lanes = vec![prototype; positions.len()];
+        let t = g.tlc.as_deref().unwrap();
+        for (lane, x) in positions.iter().enumerate() {
+            for (rf, y) in [(0., 180.), (0.28, 135.2), (1., 20.)] {
+                let actual = t.spot_center(&g, lane, rf);
+                assert!(actual.distance(Point::new(world(*x), world(y))) < 0.002);
+            }
+            let tick = &g.parts()[3 + lane];
+            let points: Vec<_> = tick
+                .commands
+                .iter()
+                .flat_map(PathCommand::iter_points)
+                .collect();
+            assert!(((points[0].x + points[2].x) * 0.5 - world(*x)).abs() < 0.002);
+        }
+    }
+}
+
+#[test]
+fn native_tlc_trapezoid_uses_bottom_span_for_lanes_and_distinct_reference_spans() {
+    let world = |pt| crate::style::DEFAULT.world(pt);
+    for (top, bottom, expected) in [
+        (100., 300., [53.333332, 150., 246.66667]),
+        (300., 100., [20., 50., 80.]),
+    ] {
+        let mut g = plate();
+        g.origin = Point::default();
+        g.axis_x = Point::new(world(top), 0.);
+        g.axis_y = Point::new(world(40.), world(200.));
+        g.tlc.as_deref_mut().unwrap().bottom_right = Point::new(bottom / top, 1.);
+        g.validate().unwrap();
+        let t = g.tlc.as_deref().unwrap();
+        for (lane, x) in expected.into_iter().enumerate() {
+            for (rf, row) in [(0., 0.9), (0.5, 0.5), (1., 0.1)] {
+                let center = t.spot_center(&g, lane, rf);
+                assert!(
+                    center.distance(Point::new(world(40. * row + x), world(200. * row))) < 0.002
+                );
+            }
+        }
+        let parts = g.parts();
+        for (part, start, end) in [
+            (
+                &parts[1],
+                Point::new(world(36.), world(180.)),
+                Point::new(world(36. + bottom), world(180.)),
+            ),
+            (
+                &parts[2],
+                Point::new(world(4.), world(20.)),
+                Point::new(world(4. + top), world(20.)),
+            ),
+        ] {
+            let [PathCommand::Move(a), PathCommand::Line(b)] = part.commands.as_slice() else {
+                panic!("reference line")
+            };
+            assert!(a.distance(start) < 0.002 && b.distance(end) < 0.002);
+        }
+    }
+}
+
+#[test]
+fn native_tlc_narrow_plate_fallback_remains_finite_ordered_under_rotation_and_reflection() {
+    let world = |pt| crate::style::DEFAULT.world(pt);
+    for width in [0.01, 1., 9.99, 10., 10.01] {
+        let mut g = plate();
+        g.origin = Point::default();
+        g.axis_x = Point::new(world(width), 0.);
+        g.axis_y = Point::new(0., world(200.));
+        g.map_positions(|p| Point::new(-p.y, -p.x));
+        g.validate().unwrap();
+        let t = g.tlc.as_deref().unwrap();
+        let centers: Vec<_> = (0..3).map(|lane| t.spot_center(&g, lane, 0.5)).collect();
+        assert!(centers.iter().all(|p| p.is_finite()));
+        assert!(centers[0].y > centers[1].y && centers[1].y > centers[2].y);
+        assert!(centers[0].y < 0. && centers[2].y > -world(width));
+    }
 }
 #[test]
 fn native_tlc_geometry_and_text_use_the_shared_scene() {

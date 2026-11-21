@@ -8,3 +8,5 @@ issues: []
   Rf labels. Native ReShiki files and editable CDXML/CDX keep the plate data;
   canvas, SVG and PDF use its shared geometry. Unsupported custom spot artwork,
   tails and appearance settings produce an import notice.
+- Native TLC exchange keeps ChemDraw's five-point lane margins and authored Rf
+  captions, and writes binary CDX show flags in the form ChemDraw can reopen.
