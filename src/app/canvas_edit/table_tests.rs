@@ -334,7 +334,7 @@ fn table_command_and_numeric_half_turns_keep_the_frame_center_with_off_center_ca
                 app.tab.doc.annotations.push(Annotation {
                     id,
                     position,
-                    text: if cell == 0 { "Entry" } else { "Solvent" }.into(),
+                    text: if cell == 0 { "A" } else { "B" }.into(),
                     angle: 0.,
                     format: Default::default(),
                 });
