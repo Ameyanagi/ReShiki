@@ -1071,6 +1071,14 @@ impl App {
                 });
             }
         }
+        if !self.tab.doc.compound_numbers.is_empty() {
+            commands.push(RowCommand {
+                label: "Renumber",
+                menu: "Renumber",
+                message: Message::RenumberCompounds,
+                enabled: !self.tab.busy,
+            });
+        }
         commands.extend(self.depth_commands());
         if !keyboard {
             commands.push(RowCommand {

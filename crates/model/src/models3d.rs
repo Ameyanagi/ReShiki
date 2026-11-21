@@ -1013,6 +1013,7 @@ pub fn drawn(doc: &Document) -> std::borrow::Cow<'_, Document> {
     // Captions stay; only their links to the hidden atoms go.
     flat.molecule_names.clear();
     flat.property_captions.clear();
+    flat.compound_numbers.clear();
     crate::projection::prune_centroids(&mut flat);
     crate::ring_fills::prune(&mut flat);
     crate::depth_appearance::prune(&mut flat);

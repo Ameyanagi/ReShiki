@@ -772,6 +772,8 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::FormatChemicalName
         | Message::ToggleProperty(..)
         | Message::ShowMasses(..)
+        | Message::NumberCompound(..)
+        | Message::RenumberCompounds
         | Message::PropertyPlaces(..)
         | Message::FontSize(..)
         | Message::ApplyFontSize

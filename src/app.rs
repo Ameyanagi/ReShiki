@@ -46,6 +46,7 @@ mod files;
 mod macos_files;
 #[cfg(target_os = "macos")]
 pub(crate) use macos_files::install_document_events;
+mod compound_numbers;
 #[cfg(any(windows, target_os = "linux"))]
 mod desktop;
 mod gates;
@@ -250,6 +251,8 @@ pub enum Message {
     ToggleProperty(Vec<u64>, reshiki::linked_properties::Property),
     /// Show Formula, Mol. Wt. and Exact Mass under a whole molecule.
     ShowMasses(Vec<u64>),
+    NumberCompound(Vec<u64>),
+    RenumberCompounds,
     /// The decimal places of a mass line under a whole molecule.
     PropertyPlaces(Vec<u64>, reshiki::linked_properties::Property, u8),
     FontSize(String),
@@ -1526,6 +1529,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.annotations == b.annotations
         && a.molecule_names == b.molecule_names
         && a.property_captions == b.property_captions
+        && a.compound_numbers == b.compound_numbers
         && a.arrows == b.arrows
         && a.arrow_labels == b.arrow_labels
         && a.graphics == b.graphics

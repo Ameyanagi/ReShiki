@@ -365,6 +365,20 @@ fn molecule_names_and_reaction_conditions_stay_captions() {
         text: "CH3".into(),
     });
     named.validate().unwrap();
+    let mut numbered = Document::default();
+    let atom = numbered.add_atom("C", Point::default());
+    crate::compound_numbers::number(&mut numbered, &[atom], Default::default()).unwrap();
+    let number = numbered.compound_numbers[0].annotation;
+    numbered
+        .annotations
+        .iter_mut()
+        .find(|a| a.id == number)
+        .unwrap()
+        .text = "B".into();
+    let before = numbered.clone();
+    crate::compound_numbers::reconcile(&mut numbered, &before);
+    assert!(numbered.compound_numbers[0].fixed);
+    numbered.validate().unwrap();
     let mut reaction = Document::default();
     let condition = caption(&mut reaction, "Pd2+");
     let arrow = reaction.next_id();
@@ -383,6 +397,11 @@ fn molecule_names_and_reaction_conditions_stay_captions() {
         (
             named,
             id,
+            "This text belongs to a molecule; it stays a caption",
+        ),
+        (
+            numbered,
+            number,
             "This text belongs to a molecule; it stays a caption",
         ),
         (

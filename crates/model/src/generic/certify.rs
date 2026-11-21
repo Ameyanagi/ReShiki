@@ -153,6 +153,7 @@ pub(super) fn certify_translation(
         annotations,
         molecule_names,
         property_captions,
+        compound_numbers,
         arrows,
         arrow_labels,
         graphics,
@@ -301,6 +302,12 @@ pub(super) fn certify_translation(
         if let Some(id) = &mut n.annotation {
             undo(id)?;
         }
+        for id in &mut n.atoms {
+            undo(id)?;
+        }
+    }
+    for n in compound_numbers {
+        undo(&mut n.annotation)?;
         for id in &mut n.atoms {
             undo(id)?;
         }
