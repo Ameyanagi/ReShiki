@@ -2570,6 +2570,27 @@ fn unified_palette_entry_points_keep_keys_and_commands_distinct() {
 }
 
 #[test]
+fn f6_stays_within_the_open_palette_and_leaves_modified_window_shortcuts_alone() {
+    let key = Key::Named(Named::F6);
+    for handler in [modal_key, super::super::help::modal_key] {
+        assert!(matches!(
+            handler(&key, Modifiers::empty()),
+            Some(Message::Commands(Action::FocusActions(false)))
+        ));
+        assert!(matches!(
+            handler(&key, Modifiers::SHIFT),
+            Some(Message::Commands(Action::FocusActions(true)))
+        ));
+        for modifiers in [Modifiers::COMMAND, Modifiers::ALT, Modifiers::CTRL] {
+            assert!(handler(&key, modifiers).is_none());
+        }
+    }
+    assert!(crate::app::shortcuts::key_message(&key, &key, Modifiers::empty()).is_none());
+    let mut app = app();
+    assert_eq!(app.commands_action(Action::FocusActions(false)).units(), 0);
+}
+
+#[test]
 fn fixed_palette_filters_cover_all_command_categories_and_keep_empty_results() {
     let mut app = app();
     open(&mut app);

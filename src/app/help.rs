@@ -43,7 +43,7 @@ pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
     if super::command_palette::is_shortcut(key, modifiers) {
         return Some(Message::Commands(super::command_palette::Action::Open));
     }
-    if matches!(key, Key::Named(Named::Tab)) {
+    if matches!(key, Key::Named(Named::Tab | Named::F6)) {
         return super::command_palette::modal_key(key, modifiers);
     }
     if !modifiers.is_empty() {

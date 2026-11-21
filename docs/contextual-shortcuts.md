@@ -34,10 +34,15 @@ selected row's description appears below the list.
 | **Page Up** / **Page Down** | Move a screenful                        |
 | **Home** / **End**          | First or last result                    |
 | **Tab** / **Shift+Tab**     | Show only the next or previous category |
+| **F6** / **Shift+F6**       | Move between search and enabled actions |
 | **Enter**                   | Run the selected command                |
 | **Escape**                  | Close                                   |
 
 The chips under the search field are **All · Insert · Edit · View · File · Keys**. Click a chip, or press **Tab** / **Shift+Tab** to cycle through them. The query stays when switching between commands and keys. **Insert** includes drawing tools; **Edit** includes atom, bond, selection and analysis commands. Empty categories stay available.
+
+Press **F6** to move from search to **Run** when available, then **About**,
+**Examples**, and back to search. **Shift+F6** moves in reverse. **Enter** or
+**Space** activates a focused button; **Esc** closes the palette from any control.
 
 The palette is centered over the drawing, with one result list and a bottom strip for the selected description and any preview. The target hint names the pointed target or counts the selected objects. Keyboard navigation scrolls to keep the highlighted row visible; a new query or filter returns the list to the top. **About** and editable shortcut **Examples** remain available in the footer.
 

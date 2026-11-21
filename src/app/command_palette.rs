@@ -15,6 +15,7 @@ use reshiki::{atom_text::Mode, document::Point, keyboard_drawing::Target as Hots
 use std::{cmp::Reverse, collections::HashSet};
 
 pub(super) mod catalog;
+mod focus;
 use catalog::{Category, Command, Need, Ring, Run};
 
 pub(super) const SEARCH: &str = "command-palette-search";
@@ -62,6 +63,8 @@ pub enum Action {
     Filter(Option<Category>),
     /// Step through the filter chips, wrapping, as Tab and Shift+Tab do.
     Cycle(isize),
+    /// Move between search and the currently enabled actions; Shift reverses.
+    FocusActions(bool),
     /// Run this row of the current items, as a click does.
     Run(usize),
     /// Run the selected row, as Enter does.
@@ -215,6 +218,11 @@ pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
     }
     if matches!(key, Key::Named(Named::Escape)) {
         return Some(Message::Commands(Action::Close));
+    }
+    if matches!(key, Key::Named(Named::F6))
+        && (modifiers.is_empty() || modifiers == Modifiers::SHIFT)
+    {
+        return Some(Message::Commands(Action::FocusActions(modifiers.shift())));
     }
     if matches!(key, Key::Named(Named::Tab))
         && !(modifiers.control() || modifiers.alt() || modifiers.logo())
@@ -420,6 +428,13 @@ impl App {
         // Filter switching also works from Keys, whose state preserves registry
         // indexes and the existing contextual command gates.
         match action {
+            Action::FocusActions(backwards) => {
+                return if self.commands.open || self.help_open {
+                    focus::cycle(backwards)
+                } else {
+                    Task::none()
+                };
+            }
             Action::Filter(filter) => return self.palette_filter(filter),
             Action::Cycle(step) => {
                 let active = if self.help_open {
@@ -1033,7 +1048,7 @@ impl App {
                 .id("command-palette-detail")
                 .width(Length::Fill),
             row![
-                text("↑↓ Move · ↵ Run · Tab Filter · Esc")
+                text("↑↓ Move · ↵ Run · Tab Filter · F6 Actions · Esc")
                     .size(12)
                     .style(muted_text)
                     .width(Length::Fill),
