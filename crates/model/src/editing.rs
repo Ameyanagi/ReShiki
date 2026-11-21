@@ -727,6 +727,7 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         crate::projection::tilt(doc, ids, degrees, matches!(transform, Transform::TiltX(_)));
         return;
     }
+    let fitted = crate::cycles::has_fits(doc).then(|| doc.clone());
     let center = if matches!(transform, Transform::Rotate(_)) {
         let Some(center) = rotation_center(doc, ids) else {
             return;
@@ -755,6 +756,9 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
     };
     transform_display(doc, ids, vector);
     map_positions(doc, ids, convert, vector);
+    if let Some(before) = fitted {
+        crate::cycles::fit_transformed(&before, doc, ids);
+    }
 }
 
 /// Uniform, orientation-preserving transform used by the selection handles.
@@ -768,6 +772,7 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
     {
         return;
     }
+    let fitted = crate::cycles::has_fits(doc).then(|| doc.clone());
     for atom in &mut doc.atoms {
         if ids.contains(&atom.id) {
             atom.depth *= scale;
@@ -793,6 +798,9 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         },
         vector,
     );
+    if let Some(before) = fitted {
+        crate::cycles::fit_transformed(&before, doc, ids);
+    }
 }
 
 /// What a planar transform does to the drawing beyond moving atoms, given
@@ -916,6 +924,7 @@ pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y
     {
         return;
     }
+    let fitted = crate::cycles::has_fits(doc).then(|| doc.clone());
     let vector = |p: Point| Point::new(p.x * x, p.y * y);
     transform_display(doc, ids, vector);
     map_positions(
@@ -927,6 +936,9 @@ pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y
         },
         vector,
     );
+    if let Some(before) = fitted {
+        crate::cycles::fit_transformed(&before, doc, ids);
+    }
 }
 
 /// Whether `ids` holds nothing but text. Such text turns with a transform;

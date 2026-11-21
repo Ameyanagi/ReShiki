@@ -1049,7 +1049,11 @@ impl App {
                 Message::EquipmentAuthoring(super::equipment_authoring::Action::Begin),
             ));
         }
+        let tlc = self.tlc_panel_visible();
         let styled_graphics = self.graphic_panel_visible();
+        if tlc {
+            body = body.push(card(container(self.tlc_panel()).padding(12)));
+        }
         let cycle = self.cycle_card();
         let show_cycle = cycle.is_some();
         // A selected panel's title, fill and shadow come before the cards of

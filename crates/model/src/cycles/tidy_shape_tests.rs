@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     cycles::{self, Cycle, Shape, Step},
     document::Annotation,
-    graphics::{GraphicKind, GraphicStyle},
+    graphics::{Graphic, GraphicKind, GraphicStyle},
     typography::TextFormat,
 };
 

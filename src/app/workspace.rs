@@ -346,6 +346,7 @@ impl App {
                 arc: self.tab.arrows.arc,
             },
             doc: self.display_document(),
+            two_decimal_weight: self.appearance.two_decimal_weight,
             reviewing_pair: self.tab.mapping.review_pair.is_some() && self.tool.selects(),
             selected: if self.tab.inline_text.is_some() || self.tab.equipment_authoring.is_some() {
                 &[]
@@ -768,6 +769,7 @@ impl App {
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
             (self.toolbar.symbol, symbols.as_str()),
             (self.toolbar.orbital, orbitals.as_str()),
+            (Tool::Graphic(G::TlcPlate), "TLC plate"),
             (Tool::Equipment, super::equipment::INSERT),
             (Tool::Icons, "Icons"),
         ];
@@ -1650,6 +1652,7 @@ impl App {
     ) -> Vec<Element<'_, Message>> {
         use reshiki::graphics::GraphicKind as G;
         let chooser: Element<'_, Message> = match kind {
+            G::TlcPlate => text("TLC plate").size(12).into(),
             G::Symbol(k) => {
                 crate::appearance::pick_list(reshiki::scientific::SymbolKind::ALL, Some(k), |k| {
                     Message::Graphics(super::graphics::Action::ScientificKind(G::Symbol(k)))
