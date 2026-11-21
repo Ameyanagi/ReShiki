@@ -658,12 +658,63 @@ impl App {
     ) -> Option<&Record> {
         let state = &self.tab.naming;
         let (ticket, record) = state.structure.as_ref()?;
+        let requested = state.structure_identity.as_ref()?;
         (state.pending.is_none()
             && ticket.epoch == self.tab.file_epoch
             && state.structure_atoms == atoms
-            && state.structure_identity.as_ref() == Some(identity)
+            && requested.smiles == identity.smiles
+            && requested.naming_smiles == identity.naming_smiles
+            && requested.unknown_stereo_smiles == identity.unknown_stereo_smiles
+            && requested.write_unknown_stereo == identity.write_unknown_stereo
             && record.canonical_smiles == identity.smiles)
             .then_some(record)
+    }
+
+    pub(super) fn named_identity_warnings(
+        &self,
+        atoms: &[u64],
+        identity: &naming::Identity,
+    ) -> Option<Vec<String>> {
+        let record = self.named_identity(atoms, identity)?;
+        let requested = self.tab.naming.structure_identity.as_ref()?;
+        // The generator prepends the request's display-dependent warnings.
+        // Refresh only that prefix; reconstruction/provenance notes stay intact.
+        if let Some(provenance) = record.warnings.strip_prefix(requested.warnings.as_slice()) {
+            return Some(
+                identity
+                    .warnings
+                    .iter()
+                    .chain(provenance)
+                    .cloned()
+                    .collect(),
+            );
+        }
+        let marked = |warnings: &[String]| {
+            warnings
+                .iter()
+                .map(|warning| {
+                    if let Some(prefix) = warning.strip_suffix("; the name leaves it unspecified") {
+                        format!("{prefix}; the name marks it as unknown")
+                    } else if let Some(prefix) =
+                        warning.strip_suffix("; the name leaves them unspecified")
+                    {
+                        format!("{prefix}; the name marks them as unknown")
+                    } else {
+                        warning.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+        };
+        let marked_request = marked(&requested.warnings);
+        if let Some(provenance) = record.warnings.strip_prefix(marked_request.as_slice()) {
+            return Some(
+                marked(&identity.warnings)
+                    .into_iter()
+                    .chain(provenance.iter().cloned())
+                    .collect(),
+            );
+        }
+        Some(record.warnings.clone())
     }
 
     pub(super) fn identity_naming_idle(&self) -> bool {

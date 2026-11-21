@@ -132,7 +132,7 @@ impl App {
         cache.target.clone()
     }
 
-    fn identity_record(&self, atoms: &[u64]) -> Option<&reshiki::naming::Record> {
+    fn identity_input(&self) -> Option<reshiki::naming::Identity> {
         let mut identity = self
             .tab
             .inspector_ui
@@ -141,7 +141,17 @@ impl App {
             .identity
             .clone()?;
         identity.write_unknown_stereo = self.appearance.write_unknown_stereo;
-        self.named_identity(atoms, &identity)
+        Some(identity)
+    }
+
+    fn identity_record(&self, atoms: &[u64]) -> Option<&reshiki::naming::Record> {
+        self.named_identity(atoms, &self.identity_input()?)
+    }
+
+    fn identity_warnings(&self, atoms: &[u64]) -> Vec<String> {
+        self.identity_input()
+            .and_then(|identity| self.named_identity_warnings(atoms, &identity))
+            .unwrap_or_default()
     }
 
     fn identity_name_stale(&self) -> bool {
@@ -483,7 +493,7 @@ impl App {
                 if let Some(note) = record.omitted_stereo_note() {
                     body = body.push(text(note).size(11).style(muted_text));
                 }
-                for warning in &record.warnings {
+                for warning in self.identity_warnings(atoms) {
                     body = body.push(text(warning).size(11).style(muted_text));
                 }
             }

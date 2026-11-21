@@ -228,11 +228,8 @@ async fn restoring_a_saved_name_caption_uses_the_displayed_common_name() {
     }
 }
 
-#[test]
-fn generated_identity_reuses_layout_but_rejects_changed_wavy_stereo_input() {
+fn butan_2_ol() -> (Document, u64, u64) {
     use reshiki::document::Point;
-    let (mut app, _) = App::new();
-    app.tab.busy = false;
     let mut doc = Document::default();
     let methyl = doc.add_atom("C", Point::new(0., 0.));
     let center = doc.add_atom("C", Point::new(42., 0.));
@@ -243,6 +240,14 @@ fn generated_identity_reuses_layout_but_rejects_changed_wavy_stereo_input() {
     doc.add_bond(center, oxygen, 1, "plain");
     doc.add_bond(center, methylene, 1, "plain");
     doc.add_bond(methylene, terminal, 1, "plain");
+    (doc, center, oxygen)
+}
+
+#[test]
+fn generated_identity_reuses_layout_but_rejects_changed_wavy_stereo_input() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let (doc, center, oxygen) = butan_2_ol();
     app.tab.doc = doc;
     let atoms = app.identity_target().unwrap();
     let original = reshiki::naming::selected_identity(&app.tab.doc, &atoms).unwrap();
@@ -274,6 +279,118 @@ fn generated_identity_reuses_layout_but_rejects_changed_wavy_stereo_input() {
     let _ = app.update(Message::Undo);
     assert!(app.identity_names().is_some());
     assert!(app.identity_caption_action().is_some());
+}
+
+#[tokio::test]
+async fn atom_number_edits_reuse_names_and_refresh_only_number_dependent_warnings() {
+    use super::super::super::atom_labels::Action as Labels;
+    for (preference, marked, recognized) in [
+        (false, false, true),
+        (true, false, true),
+        (true, true, true),
+        (true, false, false),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.appearance.write_unknown_stereo = preference;
+        let (doc, center, _) = butan_2_ol();
+        app.tab.doc = doc;
+        let atoms = app.identity_target().unwrap();
+        let mut requested = reshiki::naming::selected_identity(&app.tab.doc, &atoms).unwrap();
+        requested.write_unknown_stereo = preference;
+        assert_eq!(
+            requested.warnings,
+            ["C2 has no configuration; the name leaves it unspecified"]
+        );
+        let provenance = vec![
+            "Generated and exactly reconstructed by the naming engine".to_owned(),
+            "External reference C2 must keep its original text".to_owned(),
+        ];
+        let mut record = super::super::super::naming::test_support::record("CC(O)CC");
+        let name = if marked {
+            "(2Ξ)-butan-2-ol"
+        } else {
+            "butan-2-ol"
+        };
+        record.title = name.into();
+        record.systematic_name = Some(name.into());
+        record.warnings = if !recognized {
+            provenance.clone()
+        } else if marked {
+            vec!["C2 has no configuration; the name marks it as unknown".into()]
+        } else {
+            requested.warnings.clone()
+        };
+        if recognized {
+            record.warnings.extend(provenance.clone());
+        }
+        let original_record_warnings = record.warnings.clone();
+        super::super::super::naming::test_support::generated(&mut app, record);
+        let _ = app.update(Message::Labels(Labels::Seed("41".into())));
+        let _ = app.update(Message::Labels(Labels::Number));
+        assert_eq!(
+            app.tab
+                .doc
+                .atom(center)
+                .unwrap()
+                .display
+                .number
+                .as_ref()
+                .unwrap()
+                .text,
+            "42"
+        );
+        let mut current = reshiki::naming::selected_identity(&app.tab.doc, &atoms).unwrap();
+        current.write_unknown_stereo = preference;
+        assert_eq!(requested.smiles, current.smiles);
+        assert_eq!(requested.naming_smiles, current.naming_smiles);
+        assert_eq!(
+            requested.unknown_stereo_smiles,
+            current.unknown_stereo_smiles
+        );
+        assert_eq!(requested.write_unknown_stereo, current.write_unknown_stereo);
+        assert_ne!(requested.warnings, current.warnings);
+        assert_eq!(
+            app.identity_text(IdentityField::Name).as_deref(),
+            Some(name)
+        );
+        assert!(app.identity_caption_action().is_some());
+        assert!(app.identity_naming_idle());
+        let shown = app.identity_warnings(&atoms);
+        let mut expected = if !recognized {
+            Vec::new()
+        } else if marked {
+            vec!["42 has no configuration; the name marks it as unknown".into()]
+        } else {
+            vec!["42 has no configuration; the name leaves it unspecified".into()]
+        };
+        expected.extend(provenance);
+        assert_eq!(shown, expected);
+        assert_eq!(
+            app.identity_record(&atoms).unwrap().warnings,
+            original_record_warnings
+        );
+        let mut effects = iced_runtime::task::into_stream(app.copy_identity_with(
+            IdentityField::Name,
+            move |text| async move {
+                assert_eq!(text, name);
+                Ok(())
+            },
+        ))
+        .unwrap();
+        let Some(iced_runtime::Action::Output(message)) = effects.next().await else {
+            panic!("Missing copy acknowledgement");
+        };
+        let _ = app.update(message);
+        assert_eq!(app.status, "Name copied");
+        let _ = app.add_identity_name();
+        assert_eq!(
+            reshiki::linked_properties::caption(&app.tab.doc, &atoms)
+                .unwrap()
+                .name_line(),
+            name
+        );
+    }
 }
 
 #[tokio::test]
