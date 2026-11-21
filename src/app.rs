@@ -303,6 +303,8 @@ pub enum Message {
     CopyChemicalText,
     Copy(bool),
     CopyImage,
+    /// Rich Office copy from Export, using the selection or the whole drawing.
+    CopyForOffice,
     /// Copy image on this background, with or without the editable drawing,
     /// for this copy only.
     CopyImageOn(reshiki::export::Background, bool),
@@ -499,6 +501,8 @@ pub struct App {
     /// The Export tab's Include editable drawing choice; `None` follows the
     /// Settings default.
     export_tab_editable: Option<bool>,
+    /// A swatch chosen in Export; none keeps each destination's Settings default.
+    export_tab_background: Option<crate::appearance::Background>,
     help_open: bool,
     settings: settings_page::State,
     help: help::State,
@@ -625,6 +629,7 @@ impl App {
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
             export_tab_editable: None,
+            export_tab_background: None,
             help_open: false,
             settings: settings_page::State::default(),
             help: help::State::default(),

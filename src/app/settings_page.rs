@@ -374,10 +374,12 @@ impl App {
             }
             Action::CopyBackground(background) => {
                 self.appearance.copy_background = background;
+                self.export_tab_background = None;
                 self.save_preference(Section::CopyExport, "background");
             }
             Action::ExportBackground(background) => {
                 self.appearance.export_background = background;
+                self.export_tab_background = None;
                 self.save_preference(Section::CopyExport, "background");
             }
             Action::Custom(rgb) => self.use_custom_background(rgb),
@@ -452,7 +454,9 @@ impl App {
                 self.appearance = restored(section, &self.appearance);
                 match section {
                     Section::Drawing => self.sync_drawing_style_unit(),
-                    Section::CopyExport => self.export_tab_editable = None,
+                    Section::CopyExport => {
+                        self.reset_export_panel_options();
+                    }
                     Section::Names => {
                         self.tab.naming.structure = None;
                         self.tab.stereo_notes.clear();
@@ -469,15 +473,24 @@ impl App {
     /// show of it.
     fn preview_key(&self) -> PreviewKey {
         let (tab, a) = (&self.tab, &self.appearance);
-        let png = self.inspector_open
-            && self.inspector_tab == super::InspectorTab::Export
-            && tab.inspector_ui.figure == super::inspector::FigureFormat::Png;
+        let export_panel = !self.settings.open
+            && self.inspector_open
+            && self.inspector_tab == super::InspectorTab::Export;
+        let background = export_panel.then_some(self.export_tab_background).flatten();
+        let png = export_panel && tab.inspector_ui.figure == super::inspector::FigureFormat::Png;
         (
             (tab.id, tab.file_epoch, tab.revision, tab.label_generation),
             [
-                (a.copy_background.paper(a.custom_background), None),
                 (
-                    a.export_background.paper(a.custom_background),
+                    background
+                        .unwrap_or(a.copy_background)
+                        .paper(a.custom_background),
+                    None,
+                ),
+                (
+                    background
+                        .unwrap_or(a.export_background)
+                        .paper(a.custom_background),
                     png.then(|| a.export_dpi.get()),
                 ),
             ],
@@ -526,6 +539,7 @@ impl App {
     fn use_custom_background(&mut self, rgb: [u8; 3]) {
         self.appearance.custom_background = rgb;
         self.appearance.copy_background = Background::Custom;
+        self.export_tab_background = None;
         self.save_preference(Section::CopyExport, "background");
     }
 
@@ -1479,11 +1493,12 @@ fn dpi_choices<'a>(id: &str, selected: Dpi, action: fn(Dpi) -> Action) -> Elemen
 /// the chosen one.
 pub(super) fn background_choices<'a>(
     id: &str,
-    selected: Background,
+    selected: impl Into<Option<Background>>,
     custom: [u8; 3],
     message: impl Fn(Background) -> Message,
     tiles: bool,
 ) -> Element<'a, Message> {
+    let selected = selected.into();
     let mut strip = row![].spacing(if tiles { 4 } else { 2 });
     for background in [
         Background::Transparent,
@@ -1492,7 +1507,7 @@ pub(super) fn background_choices<'a>(
         Background::Black,
         Background::Custom,
     ] {
-        let current = background == selected;
+        let current = Some(background) == selected;
         let label = background.label();
         let name = match background {
             Background::Custom => format!("Custom, {}", reshiki::palette::hex(custom)),

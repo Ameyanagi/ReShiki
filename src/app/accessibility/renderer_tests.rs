@@ -109,12 +109,6 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         app.tab.inspector_ui.close_menu();
         app.tab
             .inspector_ui
-            .update(super::super::inspector::Action::Section(
-                super::super::inspector::Section::ExportChemical,
-                true,
-            ));
-        app.tab
-            .inspector_ui
             .update(super::super::inspector::Action::ChemicalMenu(true));
         let chemicals = snapshot(&app, &mut renderer, size);
         assert_eq!(chemicals.nodes.len(), 4);
