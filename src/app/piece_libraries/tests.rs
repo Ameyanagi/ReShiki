@@ -211,7 +211,7 @@ fn library_receipts_are_app_owned_and_admitted_without_committing_text_drafts() 
 
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::test]
-async fn native_scan_runs_on_a_blocking_worker_and_reports_join_failures() {
+async fn native_scan_runs_on_a_detached_worker_and_reports_panics() {
     use iced::futures::StreamExt;
     let caller = std::thread::current().id();
     let task = scan_with(lab(1, "/unused"), move |_| {

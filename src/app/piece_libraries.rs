@@ -12,6 +12,8 @@ use reshiki::piece_library::{self as library, Change, Folder};
 use std::{path::PathBuf, sync::Arc};
 
 pub(super) mod loading;
+#[cfg(not(target_arch = "wasm32"))]
+mod reader;
 use loading::{Job, Queue, Target};
 
 #[derive(Clone)]
@@ -812,9 +814,16 @@ fn scan_with(
     let target = job.target.clone();
     Task::perform(
         async move {
-            reshiki::task::spawn_blocking(move || read(target))
-                .await
-                .map_err(|e| format!("The library could not be read: {e}"))
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                reader::read(move || read(target)).await
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                reshiki::task::spawn_blocking(move || read(target))
+                    .await
+                    .map_err(|e| format!("The library could not be read: {e}"))
+            }
         },
         move |result| Message::Equipment(Action::LibrariesLoaded(job.clone(), result)),
     )
