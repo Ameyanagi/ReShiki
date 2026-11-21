@@ -862,6 +862,8 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::FormatChemicalName
             | Message::ToggleProperty(..)
             | Message::ShowMasses(..)
+            | Message::NumberCompound(..)
+            | Message::RenumberCompounds
             | Message::PropertyPlaces(..)
             | Message::Paste
             | Message::PastePicture

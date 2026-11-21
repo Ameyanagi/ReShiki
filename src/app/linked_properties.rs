@@ -70,7 +70,7 @@ impl App {
     }
 
     /// Run a caption edit as one Undo step. Returns whether it applied.
-    fn edit_captions(
+    pub(super) fn edit_captions(
         &mut self,
         edit: impl FnOnce(&mut Document, TextFormat, bool) -> Result<(), String>,
     ) -> bool {
@@ -203,7 +203,11 @@ impl App {
     fn write_caption_name(&mut self, smiles: &str, name: &str) {
         // Like background labels: no new revision, so a Cut or Paste waiting
         // for the clipboard still applies.
+        let numbered = (!self.tab.doc.compound_numbers.is_empty()).then(|| self.tab.doc.clone());
         if linked_properties::named(&mut self.tab.doc, smiles, name) {
+            if let Some(before) = numbered {
+                reshiki::compound_numbers::reconcile(&mut self.tab.doc, &before);
+            }
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
             // A selected caption's text box shows the new name.
             let inspector = (self.inspector_open, self.inspector_tab);

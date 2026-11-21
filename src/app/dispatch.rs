@@ -116,6 +116,8 @@ impl App {
             Message::FormatChemicalName => self.format_chemical_name(),
             Message::ToggleProperty(atoms, property) => self.toggle_property(&atoms, property),
             Message::ShowMasses(atoms) => self.show_masses(&atoms),
+            Message::NumberCompound(atoms) => self.number_compound(&atoms),
+            Message::RenumberCompounds => self.renumber_compounds(),
             Message::PropertyPlaces(atoms, property, places) => {
                 self.set_property_places(&atoms, property, places)
             }

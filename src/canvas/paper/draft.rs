@@ -311,6 +311,9 @@ impl MoleculeCanvas<'_> {
                     .collect();
                 reshiki::molecule_names::preview_layout(preview.to_mut(), &resized);
             }
+            if !preview.compound_numbers.is_empty() {
+                reshiki::compound_numbers::preview_layout(preview.to_mut(), self.doc);
+            }
             *ring_selection = Some(drag.ids.clone());
         }
     }
@@ -341,6 +344,9 @@ impl MoleculeCanvas<'_> {
                 && let Ok(candidate) = current.translated(self.doc, length)
             {
                 *preview = Cow::Owned(candidate);
+                if !preview.compound_numbers.is_empty() {
+                    reshiki::compound_numbers::preview_layout(preview.to_mut(), self.doc);
+                }
                 *ring_selection = Some(plan.ids.clone());
             }
             return;
@@ -372,6 +378,9 @@ impl MoleculeCanvas<'_> {
                 preview.to_mut().translate(ids, delta.x, delta.y);
                 *ring_selection = Some(ids.clone());
                 *smart = guides;
+            }
+            if !preview.compound_numbers.is_empty() {
+                reshiki::compound_numbers::preview_layout(preview.to_mut(), self.doc);
             }
         }
     }
