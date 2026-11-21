@@ -91,6 +91,47 @@ fn view_menu_escape_owns_dismissal_and_foreground_commands_close_it() {
 }
 
 #[test]
+fn view_menu_stays_open_while_stereo_pulses_advance_and_end() {
+    use super::super::stereo;
+    let mut app = ready();
+    let atom = app.tab.doc.add_atom("C", Point::new(120., 35.));
+    app.tab.selected = vec![atom];
+    app.tab.camera.center = Point::new(80., -20.);
+    app.tab.camera.zoom = 1.75;
+    let drawing = app.tab.doc.clone();
+    let camera = app.tab.camera;
+    let revision = app.tab.revision;
+    let history = app.tab.history.frames();
+    let _ = app.update(Message::View(Action::Toggle));
+    for expired in [false, true] {
+        let age = if expired {
+            std::time::Duration::from_secs(2)
+        } else {
+            std::time::Duration::ZERO
+        };
+        app.tab.pulse = Some((vec![atom], iced::time::Instant::now() - age));
+        let _ = app.update(Message::Stereo(stereo::Action::Pulse));
+        assert!(app.view_open, "A redraw-only timer keeps View open");
+        assert_eq!(
+            app.tab.pulse.is_none(),
+            expired,
+            "The pulse still reaches its ordinary timer handler"
+        );
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.tab.selected, [atom]);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.history.frames(), history);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+    }
+    let _ = app.update(Message::Stereo(stereo::Action::Results(true)));
+    assert!(
+        !app.view_open,
+        "A foreground Stereo command still closes View"
+    );
+}
+
+#[test]
 fn view_menu_routes_page_and_canvas_choices_through_caption_commits() {
     use super::super::inline_text;
     for item in [Item::DarkCanvas, Item::PageSetup] {

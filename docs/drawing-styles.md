@@ -50,7 +50,7 @@ The interface was rendered offscreen at 1280 × 820 and 1040 × 680. Pointer eve
 
 ## Canvas colors and interface appearance
 
-The status bar controls left of **View** separate **journal style**, **canvas color theme**, and **canvas brightness**. The sun/moon button shows the current canvas mode; click it to switch between white and black paper. The brightness you choose is remembered for new drawings and the next launch. Opening a saved drawing keeps that drawing’s canvas brightness, and Undo/Redo changes only the drawing. These controls are also available in **Page setup…**. They do not change bond dimensions, font sizes, or bold formatting.
+The status bar selectors left of **View** set the **journal style** and **color theme**. **View → Dark canvas** switches the drawing between white and black paper. The brightness you choose is remembered for new drawings and the next launch. Opening a saved drawing keeps that drawing’s canvas brightness, and Undo/Redo changes only the drawing. Canvas brightness is also available in **Page setup…**. Changing it does not change bond dimensions, font sizes, or bold formatting.
 
 The color theme offers:
 
@@ -64,9 +64,9 @@ Presentation and Pastel derive their light and dark palettes from the same Jmol 
 
 The periodic table and quick atom buttons use colored tile backgrounds with regular-weight, high-contrast symbols. Jmol tiles derive their backgrounds from its published element colors; canvas label brightness adjustments do not change those tile hues. A thicker outline identifies the selected element.
 
-Canvas colors are saved with the document and participate in Undo/Redo. File exports (PNG, SVG, PDF and ChemDraw) and printing include the canvas background and visible colors. Copies always have a transparent background: Copy Image retains the visible ink in PDF/PNG/SVG, and editable ChemDraw copies retain those object colors without adding a page rectangle. Pasting between ReShiki drawings adds no background either; Ink and palette colors take on the receiving canvas.
+Color theme edits are saved with the document and participate in Undo/Redo. Canvas brightness stays out of Undo history. File exports (PNG, SVG, PDF and ChemDraw) and printing include the canvas background and visible colors. Copies always have a transparent background: Copy Image retains the visible ink in PDF/PNG/SVG, and editable ChemDraw copies retain those object colors without adding a page rectangle. Pasting between ReShiki drawings adds no background either; Ink and palette colors take on the receiving canvas.
 
-**View → Interface** controls only the surrounding interface: **Match canvas**, **Light**, or **Dark**. The preference is remembered between launches and never changes the drawing, document history, clipboard, or exports. There is no separate dark drawing preset.
+**Settings → Appearance → Interface** controls only the surrounding interface: **Match canvas**, **Light**, or **Dark**. The preference is remembered between launches and never changes the drawing, document history, clipboard, or exports. There is no separate dark drawing preset.
 
 ### Palette colors
 

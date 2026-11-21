@@ -1,6 +1,6 @@
 # Journal drawing presets
 
-Choose a journal directly from the preset selector beside the color theme selector and sun/moon canvas toggle. Selecting a journal applies its dimensions and scales the drawing in one Undo step. Choose **Manage styles…** at the bottom for a preview and detailed settings. The selector lists **JACS / ACS**, **ACS Document 1996**, **Nature**, **RSC**, **Angewandte** and **SYNLETT / SYNTHESIS**. When the current settings match none of them, the selector shows **Custom**. Each journal choice has a **Publisher instructions ↗** link in the panel.
+Choose a journal directly from the preset selector beside the color theme selector in the status bar. Selecting a journal applies its dimensions and scales the drawing in one Undo step. Choose **Manage styles…** at the bottom for a preview and detailed settings. The selector lists **JACS / ACS**, **ACS Document 1996**, **Nature**, **RSC**, **Angewandte** and **SYNLETT / SYNTHESIS**. When the current settings match none of them, the selector shows **Custom**. Each journal choice has a **Publisher instructions ↗** link in the panel.
 
 These six presets use publisher recommendations, publisher downloads, or, for **ACS Document 1996**, the stylesheet bundled with ChemDraw. ChemDraw's other bundled variants are excluded. Publisher guidance takes precedence where written dimensions differ from older downloads.
 
@@ -42,7 +42,7 @@ Direct journal selection scales existing geometry with its bond length. In the d
 
 File exports and printing carry the visible canvas colors and background. Clipboard images and editable copies always have transparent backgrounds, retaining the visible bond and label colors. Dark drawings therefore copy as white ink without a black page rectangle. No separate dark preset is needed.
 
-In **View → Interface**, choose **Match canvas**, **Light**, or **Dark** for the surrounding interface only. This application preference is remembered between launches and never changes the canvas or output.
+In **Settings → Appearance → Interface**, choose **Match canvas**, **Light**, or **Dark** for the surrounding interface only. This application preference is remembered between launches and never changes the canvas or output.
 
 ## Comparing actual drawings
 
