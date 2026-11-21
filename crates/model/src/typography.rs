@@ -582,15 +582,18 @@ fn cjk(c: char) -> bool {
 
 /// One layout feeds canvas, hit testing, selection, SVG, PDF and PNG.
 pub fn layout(text: &str, format: &TextFormat) -> Layout {
-    layout_with_metrics(text, format, style::glyph_metrics)
+    layout_with_metrics(text, format, style::cluster_metrics)
 }
 
-fn layout_with_metrics(
-    text: &str,
+/// Lay out grapheme clusters, so an emoji sequence or a letter with its marks
+/// is measured, wrapped and drawn as one piece.
+fn layout_with_metrics<'t>(
+    text: &'t str,
     format: &TextFormat,
-    glyph_metrics: impl Fn(char, &TextStyle) -> (&'static str, f32),
+    cluster_metrics: impl Fn(&str, &TextStyle) -> (&'static str, f32),
 ) -> Layout {
-    let mut lines: Vec<Vec<(char, TextStyle, f32)>> = vec![vec![]];
+    use unicode_segmentation::UnicodeSegmentation;
+    let mut lines: Vec<Vec<(&'t str, TextStyle, f32)>> = vec![vec![]];
     let max_width = format.width_pt.map(|w| style::DEFAULT.world(w));
     let mut width = 0.0;
     let mut formula_digit = false;
@@ -603,8 +606,9 @@ fn layout_with_metrics(
     // Protected name punctuation is usable only if this line has no preferred
     // break and would otherwise overflow. Keep its position through a split.
     let mut name_fallback_at = None;
-    for (index, c) in text.char_indices() {
-        if c == '\n' {
+    for (index, cluster) in text.grapheme_indices(true) {
+        let c = cluster.chars().next().unwrap_or(' ');
+        if cluster.contains('\n') {
             lines.push(vec![]);
             width = 0.0;
             break_at = None;
@@ -621,7 +625,7 @@ fn layout_with_metrics(
             formula_digit = s.script == Script::Subscript;
         }
         previous = c;
-        let (family, advance) = glyph_metrics(c, &s);
+        let (family, advance) = cluster_metrics(cluster, &s);
         s.family = family.into();
         let advance = advance * s.size();
         if let Some(line) = lines.last()
@@ -658,7 +662,7 @@ fn layout_with_metrics(
                 .filter(|at| *at > 0);
         }
         if let Some(line) = lines.last_mut() {
-            line.push((c, s, advance));
+            line.push((cluster, s, advance));
         }
         width += advance;
         before_previous = before;
@@ -699,7 +703,7 @@ fn layout_with_metrics(
             TextAlign::Right => width - line_width,
             _ => 0.0,
         };
-        let spaces = line.iter().filter(|(c, _, _)| *c == ' ').count();
+        let spaces = line.iter().filter(|(c, _, _)| *c == " ").count();
         let gap = if format.alignment == TextAlign::Justified
             && line_index + 1 < line_count
             && spaces > 0
@@ -708,7 +712,7 @@ fn layout_with_metrics(
         } else {
             0.0
         };
-        for (c, s, advance) in line {
+        for (cluster, s, advance) in line {
             let shift = match s.script {
                 Script::Normal if s.size() < size => {
                     (size - s.size()) * style::text_ascent(&s) / s.size()
@@ -724,17 +728,17 @@ fn layout_with_metrics(
                 && (last.position.y - position.y).abs() < 0.001
                 && (last.position.x + fragment_width - position.x).abs() < 0.01
             {
-                last.text.push(c);
+                last.text.push_str(cluster);
                 fragment_width += advance;
             } else {
                 fragments.push(TextFragment {
                     position,
-                    text: c.to_string(),
+                    text: cluster.to_owned(),
                     style: s,
                 });
                 fragment_width = advance;
             }
-            x += advance + if c == ' ' { gap } else { 0.0 };
+            x += advance + if cluster == " " { gap } else { 0.0 };
         }
         y += size * format.line_spacing + script_margin;
     }

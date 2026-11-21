@@ -314,7 +314,7 @@ impl App {
                 .filter(|g| self.tab.selected.contains(&g.id) && g.picture.is_none())
             {
                 colors.push(g.style.stroke);
-                colors.extend(g.style.fill.filter(|_| !g.is_condition_icon()));
+                colors.extend(g.style.fill.filter(|_| !g.is_icon()));
             }
         }
         colors
@@ -413,6 +413,30 @@ impl App {
     }
     pub(super) fn caption_action(&mut self, action: iced::widget::text_editor::Action) {
         use iced::widget::text_editor::{Action, Cursor, Edit, Position};
+        if matches!(action, Action::Edit(Edit::Backspace))
+            && self.tab.caption_editor.selection().is_none()
+        {
+            let editor = &mut self.tab.caption_editor;
+            let end = editor.cursor().position;
+            let start = editor.line(end.line).and_then(|line| {
+                unicode_segmentation::UnicodeSegmentation::grapheme_indices(
+                    line.text.get(..end.column)?,
+                    true,
+                )
+                .next_back()
+                .filter(|(_, cluster)| cluster.chars().count() > 1)
+                .map(|(start, _)| start)
+            });
+            if let Some(column) = start {
+                // Select logical bytes, not a visual Left motion: text may be
+                // right-to-left. One edit then deletes the whole grapheme and
+                // records one Undo step with its exact formatting range.
+                editor.move_to(Cursor {
+                    position: Position { column, ..end },
+                    selection: Some(end),
+                });
+            }
+        }
         let typed = matches!(action, Action::Edit(Edit::Insert(_)));
         self.edit_caption(action);
         if !typed {
@@ -795,7 +819,7 @@ impl App {
             for graphic in &mut self.tab.doc.graphics {
                 if self.tab.selected.contains(&graphic.id) && graphic.picture.is_none() {
                     graphic.style.stroke = color;
-                    if graphic.style.fill.is_some() && !graphic.is_condition_icon() {
+                    if graphic.style.fill.is_some() && !graphic.is_icon() {
                         graphic.style.fill = Some(color);
                     }
                 }

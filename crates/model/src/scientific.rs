@@ -385,6 +385,18 @@ fn glyph_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle, mark: bool) -
     }
     out
 }
+/// An icon's disc of `radius` in its fill, with no outline.
+pub(crate) fn disc(style: &GraphicStyle, radius: f32) -> Option<Part> {
+    style.fill.map(|fill| Part {
+        commands: circle(0., 0., radius, radius),
+        style: GraphicStyle {
+            fill: Some(fill),
+            width_pt: 0.,
+            ..style.clone()
+        },
+        filled: true,
+    })
+}
 /// A condition icon: strokes in the symbol's color over a disc in its fill,
 /// the paper color when placed, so an icon on an arrow covers the shaft.
 fn condition_parts(kind: SymbolKind, style: &GraphicStyle) -> Vec<Part> {
@@ -397,19 +409,7 @@ fn condition_parts(kind: SymbolKind, style: &GraphicStyle) -> Vec<Part> {
         },
         filled: false,
     };
-    let mut out: Vec<Part> = style
-        .fill
-        .map(|fill| Part {
-            commands: circle(0., 0., 0.62, 0.62),
-            style: GraphicStyle {
-                fill: Some(fill),
-                width_pt: 0.,
-                ..style.clone()
-            },
-            filled: true,
-        })
-        .into_iter()
-        .collect();
+    let mut out: Vec<Part> = disc(style, 0.62).into_iter().collect();
     let line = |a: (f32, f32), b: (f32, f32)| [Move(p(a.0, a.1)), Line(p(b.0, b.1))];
     match kind {
         SymbolKind::Light => {
@@ -554,9 +554,11 @@ impl Part {
     }
 }
 impl Graphic {
-    /// A condition icon's fill is its paper disc, not a color to edit.
-    pub fn is_condition_icon(&self) -> bool {
-        matches!(self.kind, GraphicKind::Symbol(kind) if kind.is_condition())
+    /// An icon's fill is its paper disc, not a color to edit: a condition
+    /// icon or one from the Icons tool.
+    pub fn is_icon(&self) -> bool {
+        self.kind == GraphicKind::Icon
+            || matches!(self.kind, GraphicKind::Symbol(kind) if kind.is_condition())
     }
     pub fn parts(&self) -> Vec<Part> {
         if self.kind == GraphicKind::Piece {
@@ -564,6 +566,10 @@ impl Graphic {
         }
         let mut parts = match self.kind {
             GraphicKind::Symbol(kind) => symbol_parts(kind, 1, &self.style),
+            GraphicKind::Icon => self
+                .icon
+                .as_deref()
+                .map_or_else(Vec::new, |icon| crate::line_icons::parts(icon, &self.style)),
             GraphicKind::Orbital(kind) => {
                 orbital_parts(kind, self.phase, self.phase_flipped, &self.style)
             }

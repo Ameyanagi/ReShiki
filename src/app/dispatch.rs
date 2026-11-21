@@ -10,7 +10,11 @@ impl App {
             Message::Inspector(_)
                 | Message::InsertTemplate(_)
                 | Message::Tool(
-                    Tool::Arrow | Tool::Graphic(_) | Tool::RingPreset(_) | Tool::Equipment
+                    Tool::Arrow
+                        | Tool::Graphic(_)
+                        | Tool::RingPreset(_)
+                        | Tool::Equipment
+                        | Tool::Icons
                 )
         ) || (matches!(message, Message::Tool(Tool::EditPoints))
             && !(self.inspector_open && self.inspector_tab == InspectorTab::Properties))
@@ -75,6 +79,7 @@ impl App {
             Message::EquipmentAuthoring(action) => {
                 return Some(self.equipment_authoring_action(action));
             }
+            Message::Icons(action) => return Some(self.icon_action(action)),
             Message::ResetBondDrawing => self.reset_bond_drawing(),
             Message::FixedLength(on) => self.tab.bond_drawing.fixed_length = on,
             Message::FixedAngles(on) => self.tab.bond_drawing.fixed_angles = on,

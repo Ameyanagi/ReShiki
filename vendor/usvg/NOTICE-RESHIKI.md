@@ -17,8 +17,16 @@ Apache-2.0 terms:
 - Expose `PositionedGlyph::variation_weight` only when the selected font has a
   `wght` axis, so PDF consumers can preserve distinct instances of one face.
 - Use the selected weight for raster-glyph bounds and COLR outlines as well.
+- Add opt-in conversion-work limits for repeated marker instances, normalized
+  path verbs and active conversion depth. Exceeding a caller's limits stops
+  conversion and returns an error, never a partial tree. Default options keep
+  upstream behavior.
+- Bound raw arc normalization before svgtypes buffers cubics, and generate
+  circle, ellipse and rounded-rectangle arcs through a bounded iterator when
+  conversion limits are enabled. Preserve upstream endpoints for relative
+  and chained arcs.
 
-This is a bounded weight-support change on the existing 0.45 API, not a backport
+The weight support uses the existing 0.45 API; it is not a backport
 of the complete later font stack. It does not add arbitrary CSS font-variation
 settings or change static font matching. The upstream fixes in
 https://github.com/linebender/resvg/pull/997 and

@@ -222,12 +222,13 @@ the gutters. Moving one item by itself leaves it where you put it.
    or Enter to make it, or **Discard** or Esc to leave the drawing as it was.
    To start from an empty circle instead, choose **Catalytic cycle** in the
    command palette's insert commands.
-3. To add a part, drag a structure or text that is not in a cycle. On the
-   circle it becomes a new intermediate between its neighbors; beside the
-   first half of a step's arc it becomes a reagent coming in, beside the
-   second half a product going out. A dashed outline and a tag such as
-   **Intermediate 3** or **Reagent of step 2** show the role before you let
-   go. A part already in the cycle keeps its role when it moves.
+3. To add a part, drag a structure or text that is not in a cycle. Dropped
+   on an arc, it becomes a new intermediate between that arc's two
+   intermediates; beside the first half of a step's arc it becomes a reagent
+   coming in, beside the second half a product going out. Before you let go,
+   the arc it joins lights up, a dashed outline marks the part, and a tag
+   such as **Insert between 1 and 2** or **Reagent of step 2** says what the
+   drop does. A part already in the cycle keeps its role when it moves.
 4. Clicking any part selects the whole cycle. Click the part again to select
    it alone, then drag it: every arc and side arrow refits to it. Let go
    farther out than a reagent's place, and it leaves the cycle; the tag
@@ -294,6 +295,33 @@ Atom maps and colors are one Undo step each and are saved with the drawing.
    saved it: plain arrows, text and structures, and a message says so. Select
    the intermediates and choose **Make catalytic cycle** to make the cycle
    again, then drag the reagents and products back beside their steps.
+
+### Place an icon
+
+The **Icons** tool holds the seven reaction condition icons and the whole
+outline set of [Tabler Icons](https://tabler.io/icons) 3.50.0: about 5,200
+line icons for labs, devices, weather, arrows, charts and more.
+
+1. Click **Icons** in the tools palette (next to **Equipment**), or choose
+   **Icons…** in the command palette. The side panel lists the icons:
+   the ones you placed last under **Recent**, then **Reaction conditions**,
+   then each category.
+2. Search in English or Japanese (`flask`, `heat`, `フラスコ`, `加熱`), or
+   pick a category. A search lists names first, then tags.
+3. Click an icon. It follows the pointer; click the drawing to place a copy
+   one bond length across. Each click adds another. Clicking the icon in the
+   panel again puts a copy in the middle of the view. Esc or **Done** closes
+   the panel and returns to Select.
+
+A placed icon is one shape in the drawing's line width and the current
+shape color. It sits on a disc of the paper color, so on an arrow it covers
+the shaft; group it with the arrow (⌘/Ctrl+G) and they move together. Change
+its color and line width in **Properties**, and scale or turn it with its
+handles. Icons keep their proportions. Their points cannot be edited. Each
+placement is one Undo step. The drawing keeps the icon's paths, so the file
+opens the same anywhere. PNG,
+SVG and PDF export draw it, and the dark canvas shows it in the canvas
+colors. ChemDraw gets it as curves, unless its line is dotted (see [Limits](#limits)).
 
 ### Place lab equipment
 
@@ -457,9 +485,16 @@ a handle is one Undo step.
 piece's definition travels with the `.rsk` file. To keep it for other drawings,
 use **Add to My pieces** after accepting it.
 
-This first authoring step makes fixed pieces without joints or holds.
-It does not yet assign materials or paint layers, create liquids or moving
-parts, or edit an existing definition. Pictures, text and chemical objects
+To add a ground-glass joint, choose **Add joint…**, choose **Socket** or
+**Cone** and a standard size, then click both rim edges. Review the generated
+joint and its outward arrow, use **Flip** if needed, then choose **Add joint**.
+The first joint can set the piece's scale without a separate length
+measurement; later joints must fit the established scale. A standard joint
+must meet a compatible filled glass neck.
+
+Authoring makes fixed pieces with optional standard ground-glass joints.
+It does not yet assign materials or paint layers, create holds, liquids or
+moving parts, or edit an existing definition. Pictures, text and chemical objects
 cannot become equipment shapes. Filled shapes use glass; open strokes keep
 their detail appearance. Other drawing commands wait for **Accept** or
 **Discard**.
@@ -501,6 +536,19 @@ browser adds the library's name to tell them apart.
 To make a review image of a piece file, run
 `reshiki --cli pieces render FILE --to svg` (or `--to png -o FILE.png`; add
 `--dark` for the dark canvas).
+
+### Import SVG artwork
+
+1. Choose **Import → Import SVG as drawing…**, or find **Import SVG as drawing…** in **⌘K**.
+2. Choose an `.svg` or `.svgz` file. The artwork arrives as one selected group of editable paths.
+3. Ungroup it to edit a path with **Edit points**. Save a `.rsk` file to keep the paths.
+
+Fills keep their colors. Strokes become editable outlines, and gradients use their middle color.
+Filled paths have a 0.1 pt edge in the same color. Paint opacity is kept. A translucent group makes each path translucent, so overlaps can look darker.
+Blend modes use normal compositing and are listed as approximations.
+Text, pictures, masks, clips, filters, patterns and animation are left out; the import message
+lists what changed. Outline text in the drawing program before importing it.
+**Open** still restores the embedded ReShiki drawing in an SVG exported by ReShiki.
 
 ### Start from a figure layout
 

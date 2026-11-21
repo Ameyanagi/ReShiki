@@ -44,10 +44,10 @@ index b2b4d91..615fb5b 100644
  version = "0.22"
 diff --git b/NOTICE-RESHIKI.md b/NOTICE-RESHIKI.md
 new file mode 100644
-index 0000000..3b3b91e
+index 0000000..dc6a3ea
 --- /dev/null
 +++ b/NOTICE-RESHIKI.md
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,38 @@
 +# ReShiki changes to usvg 0.45.1
 +
 +Upstream source: https://crates.io/crates/usvg/0.45.1
@@ -67,8 +67,16 @@ index 0000000..3b3b91e
 +- Expose `PositionedGlyph::variation_weight` only when the selected font has a
 +  `wght` axis, so PDF consumers can preserve distinct instances of one face.
 +- Use the selected weight for raster-glyph bounds and COLR outlines as well.
++- Add opt-in conversion-work limits for repeated marker instances, normalized
++  path verbs and active conversion depth. Exceeding a caller's limits stops
++  conversion and returns an error, never a partial tree. Default options keep
++  upstream behavior.
++- Bound raw arc normalization before svgtypes buffers cubics, and generate
++  circle, ellipse and rounded-rectangle arcs through a bounded iterator when
++  conversion limits are enabled. Preserve upstream endpoints for relative
++  and chained arcs.
 +
-+This is a bounded weight-support change on the existing 0.45 API, not a backport
++The weight support uses the existing 0.45 API; it is not a backport
 +of the complete later font stack. It does not add arbitrary CSS font-variation
 +settings or change static font matching. The upstream fixes in
 +https://github.com/linebender/resvg/pull/997 and
@@ -78,6 +86,766 @@ index 0000000..3b3b91e
 +Regression fixtures, independent FontTools controls, and before/after evidence
 +are in `tests/fixtures/font-export-103` and `tools/font-export-probe`. The probe
 +also compiles the application's `tests/font_export_103.rs` without its UI build.
+diff --git a/src/main.rs b/src/main.rs
+index 84ae502..2c01eba 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -414,6 +414,7 @@ fn process(args: Args) -> Result<(), String> {
+     };
+ 
+     let re_opt = usvg::Options {
++        conversion_limits: None,
+         resources_dir,
+         dpi: args.dpi as f32,
+         font_family: args
+diff --git a/src/parser/converter.rs b/src/parser/converter.rs
+index abd41c8..896251f 100644
+--- a/src/parser/converter.rs
++++ b/src/parser/converter.rs
+@@ -55,6 +55,11 @@ pub struct Cache {
+     mask_index: usize,
+     filter_index: usize,
+     image_index: usize,
++    conversion_limits: Option<ConversionLimits>,
++    conversion_elements: usize,
++    conversion_segments: usize,
++    conversion_depth: usize,
++    pub(crate) conversion_failed: bool,
+ }
+ 
+ impl Cache {
+@@ -76,9 +81,62 @@ impl Cache {
+             mask_index: 0,
+             filter_index: 0,
+             image_index: 0,
++            conversion_limits: None,
++            conversion_elements: 0,
++            conversion_segments: 0,
++            conversion_depth: 0,
++            conversion_failed: false,
+         }
+     }
+ 
++    pub(crate) fn enter_conversion(&mut self) -> bool {
++        if self.conversion_failed {
++            return false;
++        }
++        if let Some(limits) = self.conversion_limits {
++            let elements = self.conversion_elements.saturating_add(1);
++            let depth = self.conversion_depth.saturating_add(1);
++            if elements > limits.max_elements || depth > limits.max_depth {
++                self.conversion_failed = true;
++                return false;
++            }
++            self.conversion_elements = elements;
++            self.conversion_depth = depth;
++        }
++        true
++    }
++
++    pub(crate) fn leave_conversion(&mut self) {
++        self.conversion_depth = self.conversion_depth.saturating_sub(1);
++    }
++
++    pub(crate) fn remaining_depth(&self) -> Option<usize> {
++        self.conversion_limits
++            .map(|limits| limits.max_depth.saturating_sub(self.conversion_depth))
++    }
++
++    pub(crate) fn remaining_segments(&self) -> Option<usize> {
++        self.conversion_limits.map(|limits| {
++            limits
++                .max_path_segments
++                .saturating_sub(self.conversion_segments)
++        })
++    }
++
++    pub(crate) fn charge_path(&mut self, segments: usize) -> bool {
++        if self.conversion_failed {
++            return false;
++        }
++        if let Some(limits) = self.conversion_limits {
++            self.conversion_segments = self.conversion_segments.saturating_add(segments);
++            if self.conversion_segments > limits.max_path_segments {
++                self.conversion_failed = true;
++                return false;
++            }
++        }
++        true
++    }
++
+     // TODO: macros?
+     pub(crate) fn gen_linear_gradient_id(&mut self) -> NonEmptyString {
+         loop {
+@@ -333,6 +391,7 @@ pub(crate) fn convert_doc(svg_doc: &svgtree::Document, opt: &Options) -> Result<
+         #[cfg(feature = "text")]
+         opt.fontdb.clone(),
+     );
++    cache.conversion_limits = opt.conversion_limits;
+ 
+     for node in svg_doc.descendants() {
+         if let Some(tag) = node.tag_name() {
+@@ -368,10 +427,17 @@ pub(crate) fn convert_doc(svg_doc: &svgtree::Document, opt: &Options) -> Result<
+         g.transform = root_ts;
+         g.abs_transform = root_ts;
+         convert_children(svg_doc.root(), &state, &mut cache, &mut g);
++        if cache.conversion_failed {
++            return Err(Error::ConversionLimitReached);
++        }
+         g.calculate_bounding_boxes();
+         tree.root.children.push(Node::Group(Box::new(g)));
+     }
+ 
++    if cache.conversion_failed {
++        return Err(Error::ConversionLimitReached);
++    }
++
+     // Clear cache to make sure that all `Arc<T>` objects have a single strong reference.
+     cache.clip_paths.clear();
+     cache.masks.clear();
+@@ -507,12 +573,23 @@ pub(crate) fn convert_children(
+     parent: &mut Group,
+ ) {
+     for node in parent_node.children() {
++        if cache.conversion_failed {
++            break;
++        }
+         convert_element(node, state, cache, parent);
+     }
+ }
+ 
+ #[inline(never)]
+ pub(crate) fn convert_element(node: SvgNode, state: &State, cache: &mut Cache, parent: &mut Group) {
++    if !cache.enter_conversion() {
++        return;
++    }
++    convert_element_inner(node, state, cache, parent);
++    cache.leave_conversion();
++}
++
++fn convert_element_inner(node: SvgNode, state: &State, cache: &mut Cache, parent: &mut Group) {
+     let tag_name = match node.tag_name() {
+         Some(v) => v,
+         None => return,
+@@ -559,7 +636,7 @@ fn convert_element_impl(
+         | EId::Polyline
+         | EId::Polygon
+         | EId::Path => {
+-            if let Some(path) = super::shapes::convert(node, state) {
++            if let Some(path) = super::shapes::convert(node, state, cache) {
+                 convert_path(node, path, state, cache, parent);
+             }
+         }
+@@ -635,7 +712,7 @@ fn convert_clip_path_elements_impl(
+ ) {
+     match tag_name {
+         EId::Rect | EId::Circle | EId::Ellipse | EId::Polyline | EId::Polygon | EId::Path => {
+-            if let Some(path) = super::shapes::convert(node, state) {
++            if let Some(path) = super::shapes::convert(node, state, cache) {
+                 convert_path(node, path, state, cache, parent);
+             }
+         }
+@@ -812,6 +889,9 @@ fn convert_path(
+     cache: &mut Cache,
+     parent: &mut Group,
+ ) {
++    if !cache.charge_path(tiny_skia_path.len()) {
++        return;
++    }
+     debug_assert!(tiny_skia_path.len() >= 2);
+     if tiny_skia_path.len() < 2 {
+         return;
+@@ -904,6 +984,9 @@ fn convert_path(
+             cache,
+             &mut marker_group,
+         );
++        if cache.conversion_failed {
++            return;
++        }
+         marker_group.calculate_bounding_boxes();
+         marker = Some(marker_group);
+     }
+diff --git a/src/parser/marker.rs b/src/parser/marker.rs
+index d577ae0..7b3e552 100644
+--- a/src/parser/marker.rs
++++ b/src/parser/marker.rs
+@@ -52,6 +52,9 @@ pub(crate) fn convert(
+     ];
+ 
+     for (aid, kind) in &list {
++        if cache.conversion_failed {
++            return;
++        }
+         let mut marker = None;
+         if let Some(link) = node.find_attribute::<SvgNode>(*aid) {
+             if link.tag_name() == Some(EId::Marker) {
+@@ -164,6 +167,9 @@ fn resolve(
+     }
+ 
+     let draw_marker = |p: tiny_skia_path::Point, idx: usize| {
++        if !cache.enter_conversion() {
++            return false;
++        }
+         let mut ts = Transform::from_translate(p.x, p.y);
+ 
+         let angle = match convert_orientation(marker_node) {
+@@ -202,11 +208,15 @@ fn resolve(
+         let mut marker_state = state.clone();
+         marker_state.parent_markers.push(marker_node);
+         converter::convert_children(marker_node, &marker_state, cache, &mut g);
+-        g.calculate_bounding_boxes();
+-
+-        if g.has_children() {
+-            parent.children.push(Node::Group(Box::new(g)));
++        let proceed = !cache.conversion_failed;
++        if proceed {
++            g.calculate_bounding_boxes();
++            if g.has_children() {
++                parent.children.push(Node::Group(Box::new(g)));
++            }
+         }
++        cache.leave_conversion();
++        proceed
+     };
+ 
+     draw_markers(&segments, marker_kind, draw_marker);
+@@ -227,7 +237,7 @@ fn stroke_scale(
+ 
+ fn draw_markers<P>(path: &[Segment], kind: MarkerKind, mut draw_marker: P)
+ where
+-    P: FnMut(tiny_skia_path::Point, usize),
++    P: FnMut(tiny_skia_path::Point, usize) -> bool,
+ {
+     match kind {
+         MarkerKind::Start => {
+@@ -249,7 +259,9 @@ where
+                     }
+                 };
+ 
+-                draw_marker(p, i);
++                if !draw_marker(p, i) {
++                    return;
++                }
+ 
+                 i += 1;
+             }
+diff --git a/src/parser/mod.rs b/src/parser/mod.rs
+index 93db15c..e2b422e 100644
+--- a/src/parser/mod.rs
++++ b/src/parser/mod.rs
+@@ -20,7 +20,7 @@ mod use_node;
+ mod text;
+ 
+ pub use image::{ImageHrefDataResolverFn, ImageHrefResolver, ImageHrefStringResolverFn};
+-pub use options::Options;
++pub use options::{ConversionLimits, Options};
+ pub(crate) use svgtree::{AId, EId};
+ 
+ /// List of all errors.
+@@ -35,6 +35,9 @@ pub enum Error {
+     /// We do not allow SVG with more than 1_000_000 elements for security reasons.
+     ElementsLimitReached,
+ 
++    /// The caller's opt-in conversion work budget was exceeded.
++    ConversionLimitReached,
++
+     /// SVG doesn't have a valid size.
+     ///
+     /// Occurs when width and/or height are <= 0.
+@@ -64,6 +67,9 @@ impl std::fmt::Display for Error {
+             Error::ElementsLimitReached => {
+                 write!(f, "the maximum number of SVG elements has been reached")
+             }
++            Error::ConversionLimitReached => {
++                write!(f, "the SVG conversion work limit has been reached")
++            }
+             Error::InvalidSize => {
+                 write!(f, "SVG has an invalid size")
+             }
+diff --git a/src/parser/options.rs b/src/parser/options.rs
+index fcf70b1..c34cc39 100644
+--- a/src/parser/options.rs
++++ b/src/parser/options.rs
+@@ -8,6 +8,18 @@ use std::sync::Arc;
+ use crate::FontResolver;
+ use crate::{ImageHrefResolver, ImageRendering, ShapeRendering, Size, TextRendering};
+ 
++/// Optional bounds on conversion work, including repeated marker instances.
++/// Defaults remain unchanged unless the caller opts in.
++#[derive(Debug, Clone, Copy)]
++pub struct ConversionLimits {
++    /// Converted elements and marker instances.
++    pub max_elements: usize,
++    /// Normalized path verbs across all converted occurrences.
++    pub max_path_segments: usize,
++    /// Active element and marker conversion frames.
++    pub max_depth: usize,
++}
++
+ /// Processing options.
+ #[derive(Debug)]
+ pub struct Options<'a> {
+@@ -19,6 +31,9 @@ pub struct Options<'a> {
+     /// Default: `None`
+     pub resources_dir: Option<std::path::PathBuf>,
+ 
++    /// Opt-in work limits. Failure returns an error instead of a partial tree.
++    pub conversion_limits: Option<ConversionLimits>,
++
+     /// Target DPI.
+     ///
+     /// Impacts units conversion.
+@@ -104,6 +119,7 @@ impl Default for Options<'_> {
+     fn default() -> Options<'static> {
+         Options {
+             resources_dir: None,
++            conversion_limits: None,
+             dpi: 96.0,
+             // Default font is user-agent dependent so we can use whichever we like.
+             font_family: "Times New Roman".to_owned(),
+diff --git b/src/parser/shapes/budget.rs b/src/parser/shapes/budget.rs
+new file mode 100644
+index 0000000..8676994
+--- /dev/null
++++ b/src/parser/shapes/budget.rs
+@@ -0,0 +1,160 @@
++//! Bound arc expansion before svgtypes eagerly buffers its cubic segments.
++//! Endpoint updates mirror SimplifyingPathParser, including its rounded arc
++//! endpoint, so a later relative arc is checked with the same starting point.
++
++pub(super) struct Budget {
++    pub(super) max: Option<usize>,
++    pub(super) max_empty: Option<usize>,
++    pub(super) exceeded: bool,
++}
++
++impl Budget {
++    fn charge(&mut self, used: &mut usize, limit: usize) -> bool {
++        if *used == limit {
++            self.exceeded = true;
++            return false;
++        }
++        *used += 1;
++        true
++    }
++
++    pub(super) fn preflight_path(&mut self, value: &str) -> bool {
++        let Some(limit) = self.max else {
++            // Existing usvg callers retain the original normalization behavior.
++            return true;
++        };
++        if self.exceeded {
++            return false;
++        }
++
++        use svgtypes::PathSegment;
++
++        let mut current = kurbo::Point::new(0., 0.);
++        let mut subpath = current;
++        let mut closed = false;
++        let mut raw = 0;
++        let mut normalized = 0;
++        let mut empty = 0usize;
++        for segment in svgtypes::PathParser::from(value) {
++            let segment = match segment {
++                Ok(segment) => segment,
++                // Upstream keeps the valid prefix of malformed path data.
++                Err(_) => break,
++            };
++            // Also bound raw work when repeated closes or empty arcs emit no
++            // normalized segments.
++            if !self.charge(&mut raw, limit) {
++                return false;
++            }
++
++            let before = normalized;
++            // svgtypes inserts a move after a close before a drawing command.
++            if closed
++                && !matches!(
++                    segment,
++                    PathSegment::MoveTo { .. } | PathSegment::ClosePath { .. }
++                )
++            {
++                if !self.charge(&mut normalized, limit) {
++                    return false;
++                }
++                closed = false;
++            }
++
++            match segment {
++                PathSegment::EllipticalArc {
++                    abs,
++                    rx,
++                    ry,
++                    x_axis_rotation,
++                    large_arc,
++                    sweep,
++                    x,
++                    y,
++                } => {
++                    let to = if abs {
++                        kurbo::Point::new(x, y)
++                    } else {
++                        kurbo::Point::new(current.x + x, current.y + y)
++                    };
++                    let svg_arc = kurbo::SvgArc {
++                        from: current,
++                        to,
++                        radii: kurbo::Vec2::new(rx, ry),
++                        x_rotation: x_axis_rotation.to_radians(),
++                        large_arc,
++                        sweep,
++                    };
++                    if let Some(arc) = kurbo::Arc::from_svg_arc(&svg_arc) {
++                        // This is the same iterator and tolerance used by
++                        // to_cubic_beziers, without allocating an output Vec.
++                        let mut curves = arc.append_iter(0.1);
++                        while let Some(kurbo::PathEl::CurveTo(_, _, end)) = curves.next() {
++                            if !self.charge(&mut normalized, limit) {
++                                return false;
++                            }
++                            current = end;
++                        }
++                    } else {
++                        if !self.charge(&mut normalized, limit) {
++                            return false;
++                        }
++                        current = to;
++                    }
++                }
++                PathSegment::ClosePath { .. } => {
++                    // Consecutive closes produce only one upstream segment.
++                    if !closed && !self.charge(&mut normalized, limit) {
++                        return false;
++                    }
++                    current = subpath;
++                    closed = true;
++                }
++                _ => {
++                    if !self.charge(&mut normalized, limit) {
++                        return false;
++                    }
++                    current = match segment {
++                        PathSegment::MoveTo { abs, x, y }
++                        | PathSegment::LineTo { abs, x, y }
++                        | PathSegment::CurveTo { abs, x, y, .. }
++                        | PathSegment::SmoothCurveTo { abs, x, y, .. }
++                        | PathSegment::Quadratic { abs, x, y, .. }
++                        | PathSegment::SmoothQuadratic { abs, x, y } => {
++                            if abs {
++                                kurbo::Point::new(x, y)
++                            } else {
++                                kurbo::Point::new(current.x + x, current.y + y)
++                            }
++                        }
++                        PathSegment::HorizontalLineTo { abs, x } => {
++                            kurbo::Point::new(if abs { x } else { current.x + x }, current.y)
++                        }
++                        PathSegment::VerticalLineTo { abs, y } => {
++                            kurbo::Point::new(current.x, if abs { y } else { current.y + y })
++                        }
++                        // Arcs and closes were handled above.
++                        PathSegment::EllipticalArc { .. } | PathSegment::ClosePath { .. } => {
++                            current
++                        }
++                    };
++                    if matches!(segment, PathSegment::MoveTo { .. }) {
++                        subpath = current;
++                    }
++                    closed = false;
++                }
++            }
++            // svgtypes recursively advances past commands with no output.
++            if normalized == before {
++                empty = empty.saturating_add(1);
++                if self.max_empty.is_some_and(|limit| empty > limit) {
++                    self.exceeded = true;
++                    return false;
++                }
++            } else {
++                empty = 0;
++            }
++        }
++        true
++    }
++}
+diff --git a/src/parser/shapes.rs b/src/parser/shapes.rs
+index 6cfbfb3..63fceca 100644
+--- a/src/parser/shapes.rs
++++ b/src/parser/shapes.rs
+@@ -9,22 +9,45 @@ use tiny_skia_path::Path;
+ use super::svgtree::{AId, EId, SvgNode};
+ use super::{converter, units};
+ use crate::{ApproxEqUlps, IsValidLength, Rect};
+-
+-pub(crate) fn convert(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
+-    match node.tag_name()? {
+-        EId::Rect => convert_rect(node, state),
+-        EId::Circle => convert_circle(node, state),
+-        EId::Ellipse => convert_ellipse(node, state),
++mod budget;
++use budget::Budget;
++
++pub(crate) fn convert(
++    node: SvgNode,
++    state: &converter::State,
++    cache: &mut converter::Cache,
++) -> Option<Arc<Path>> {
++    let mut budget = Budget {
++        max: cache.remaining_segments(),
++        max_empty: cache.remaining_depth(),
++        exceeded: false,
++    };
++    let path = match node.tag_name()? {
++        EId::Rect => convert_rect(node, state, &mut budget),
++        EId::Circle => convert_circle(node, state, &mut budget),
++        EId::Ellipse => convert_ellipse(node, state, &mut budget),
+         EId::Line => convert_line(node, state),
+-        EId::Polyline => convert_polyline(node),
+-        EId::Polygon => convert_polygon(node),
+-        EId::Path => convert_path(node),
++        EId::Polyline => convert_polyline(node, &mut budget),
++        EId::Polygon => convert_polygon(node, &mut budget),
++        EId::Path => convert_path(node, &mut budget),
+         _ => None,
++    };
++    if budget.exceeded
++        || budget
++            .max
++            .is_some_and(|limit| path.as_ref().is_some_and(|p| p.len() > limit))
++    {
++        cache.conversion_failed = true;
++        return None;
+     }
++    path
+ }
+ 
+-pub(crate) fn convert_path(node: SvgNode) -> Option<Arc<Path>> {
++fn convert_path(node: SvgNode, budget: &mut Budget) -> Option<Arc<Path>> {
+     let value: &str = node.attribute(AId::D)?;
++    if !budget.preflight_path(value) {
++        return None;
++    }
+     let mut builder = tiny_skia_path::PathBuilder::new();
+     for segment in svgtypes::SimplifyingPathParser::from(value) {
+         let segment = match segment {
+@@ -58,12 +81,16 @@ pub(crate) fn convert_path(node: SvgNode) -> Option<Arc<Path>> {
+                 builder.close();
+             }
+         }
++        if budget.max.is_some_and(|limit| builder.len() > limit) {
++            budget.exceeded = true;
++            return None;
++        }
+     }
+ 
+     builder.finish().map(Arc::new)
+ }
+ 
+-fn convert_rect(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
++fn convert_rect(node: SvgNode, state: &converter::State, budget: &mut Budget) -> Option<Arc<Path>> {
+     // 'width' and 'height' attributes must be positive and non-zero.
+     let width = node.convert_user_length(AId::Width, state, Length::zero());
+     let height = node.convert_user_length(AId::Height, state, Length::zero());
+@@ -105,16 +132,16 @@ fn convert_rect(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
+         builder.move_to(x + rx, y);
+ 
+         builder.line_to(x + width - rx, y);
+-        builder.arc_to(rx, ry, 0.0, false, true, x + width, y + ry);
++        builder.arc_to(rx, ry, 0.0, false, true, x + width, y + ry, budget);
+ 
+         builder.line_to(x + width, y + height - ry);
+-        builder.arc_to(rx, ry, 0.0, false, true, x + width - rx, y + height);
++        builder.arc_to(rx, ry, 0.0, false, true, x + width - rx, y + height, budget);
+ 
+         builder.line_to(x + rx, y + height);
+-        builder.arc_to(rx, ry, 0.0, false, true, x, y + height - ry);
++        builder.arc_to(rx, ry, 0.0, false, true, x, y + height - ry, budget);
+ 
+         builder.line_to(x, y + ry);
+-        builder.arc_to(rx, ry, 0.0, false, true, x + rx, y);
++        builder.arc_to(rx, ry, 0.0, false, true, x + rx, y, budget);
+ 
+         builder.close();
+ 
+@@ -171,18 +198,22 @@ fn convert_line(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
+     builder.finish().map(Arc::new)
+ }
+ 
+-fn convert_polyline(node: SvgNode) -> Option<Arc<Path>> {
+-    let builder = points_to_path(node, "Polyline")?;
++fn convert_polyline(node: SvgNode, budget: &mut Budget) -> Option<Arc<Path>> {
++    let builder = points_to_path(node, "Polyline", budget)?;
+     builder.finish().map(Arc::new)
+ }
+ 
+-fn convert_polygon(node: SvgNode) -> Option<Arc<Path>> {
+-    let mut builder = points_to_path(node, "Polygon")?;
++fn convert_polygon(node: SvgNode, budget: &mut Budget) -> Option<Arc<Path>> {
++    let mut builder = points_to_path(node, "Polygon", budget)?;
+     builder.close();
+     builder.finish().map(Arc::new)
+ }
+ 
+-fn points_to_path(node: SvgNode, eid: &str) -> Option<tiny_skia_path::PathBuilder> {
++fn points_to_path(
++    node: SvgNode,
++    eid: &str,
++    budget: &mut Budget,
++) -> Option<tiny_skia_path::PathBuilder> {
+     use svgtypes::PointsParser;
+ 
+     let mut builder = tiny_skia_path::PathBuilder::new();
+@@ -194,6 +225,10 @@ fn points_to_path(node: SvgNode, eid: &str) -> Option<tiny_skia_path::PathBuilde
+                 } else {
+                     builder.line_to(x as f32, y as f32);
+                 }
++                if budget.max.is_some_and(|limit| builder.len() > limit) {
++                    budget.exceeded = true;
++                    return None;
++                }
+             }
+         }
+         _ => {
+@@ -219,7 +254,11 @@ fn points_to_path(node: SvgNode, eid: &str) -> Option<tiny_skia_path::PathBuilde
+     Some(builder)
+ }
+ 
+-fn convert_circle(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
++fn convert_circle(
++    node: SvgNode,
++    state: &converter::State,
++    budget: &mut Budget,
++) -> Option<Arc<Path>> {
+     let cx = node.convert_user_length(AId::Cx, state, Length::zero());
+     let cy = node.convert_user_length(AId::Cy, state, Length::zero());
+     let r = node.convert_user_length(AId::R, state, Length::zero());
+@@ -232,10 +271,14 @@ fn convert_circle(node: SvgNode, state: &converter::State) -> Option<Arc<Path>>
+         return None;
+     }
+ 
+-    ellipse_to_path(cx, cy, r, r)
++    ellipse_to_path(cx, cy, r, r, budget)
+ }
+ 
+-fn convert_ellipse(node: SvgNode, state: &converter::State) -> Option<Arc<Path>> {
++fn convert_ellipse(
++    node: SvgNode,
++    state: &converter::State,
++    budget: &mut Budget,
++) -> Option<Arc<Path>> {
+     let cx = node.convert_user_length(AId::Cx, state, Length::zero());
+     let cy = node.convert_user_length(AId::Cy, state, Length::zero());
+     let (rx, ry) = resolve_rx_ry(node, state);
+@@ -256,16 +299,16 @@ fn convert_ellipse(node: SvgNode, state: &converter::State) -> Option<Arc<Path>>
+         return None;
+     }
+ 
+-    ellipse_to_path(cx, cy, rx, ry)
++    ellipse_to_path(cx, cy, rx, ry, budget)
+ }
+ 
+-fn ellipse_to_path(cx: f32, cy: f32, rx: f32, ry: f32) -> Option<Arc<Path>> {
++fn ellipse_to_path(cx: f32, cy: f32, rx: f32, ry: f32, budget: &mut Budget) -> Option<Arc<Path>> {
+     let mut builder = tiny_skia_path::PathBuilder::new();
+     builder.move_to(cx + rx, cy);
+-    builder.arc_to(rx, ry, 0.0, false, true, cx, cy + ry);
+-    builder.arc_to(rx, ry, 0.0, false, true, cx - rx, cy);
+-    builder.arc_to(rx, ry, 0.0, false, true, cx, cy - ry);
+-    builder.arc_to(rx, ry, 0.0, false, true, cx + rx, cy);
++    builder.arc_to(rx, ry, 0.0, false, true, cx, cy + ry, budget);
++    builder.arc_to(rx, ry, 0.0, false, true, cx - rx, cy, budget);
++    builder.arc_to(rx, ry, 0.0, false, true, cx, cy - ry, budget);
++    builder.arc_to(rx, ry, 0.0, false, true, cx + rx, cy, budget);
+     builder.close();
+     builder.finish().map(Arc::new)
+ }
+@@ -280,6 +323,7 @@ trait PathBuilderExt {
+         sweep: bool,
+         x: f32,
+         y: f32,
++        budget: &mut Budget,
+     );
+ }
+ 
+@@ -293,7 +337,11 @@ impl PathBuilderExt for tiny_skia_path::PathBuilder {
+         sweep: bool,
+         x: f32,
+         y: f32,
++        budget: &mut Budget,
+     ) {
++        if budget.exceeded {
++            return;
++        }
+         let prev = match self.last_point() {
+             Some(v) => v,
+             None => return,
+@@ -310,16 +358,22 @@ impl PathBuilderExt for tiny_skia_path::PathBuilder {
+ 
+         match kurbo::Arc::from_svg_arc(&svg_arc) {
+             Some(arc) => {
+-                arc.to_cubic_beziers(0.1, |p1, p2, p| {
+-                    self.cubic_to(
+-                        p1.x as f32,
+-                        p1.y as f32,
+-                        p2.x as f32,
+-                        p2.y as f32,
+-                        p.x as f32,
+-                        p.y as f32,
+-                    );
+-                });
++                for segment in arc.append_iter(0.1) {
++                    if budget.max.is_some_and(|limit| self.len() >= limit) {
++                        budget.exceeded = true;
++                        return;
++                    }
++                    if let kurbo::PathEl::CurveTo(p1, p2, p) = segment {
++                        self.cubic_to(
++                            p1.x as f32,
++                            p1.y as f32,
++                            p2.x as f32,
++                            p2.y as f32,
++                            p.x as f32,
++                            p.y as f32,
++                        );
++                    }
++                }
+             }
+             None => {
+                 self.line_to(x, y);
+diff --git a/src/parser/text.rs b/src/parser/text.rs
+index 92ca1da..df5a7b1 100644
+--- a/src/parser/text.rs
++++ b/src/parser/text.rs
+@@ -190,7 +190,7 @@ fn collect_text_chunks_impl(
+                     continue;
+                 }
+ 
+-                match resolve_text_flow(child, state) {
++                match resolve_text_flow(child, state, cache) {
+                     Some(v) => {
+                         iter_state.text_flow = v;
+                     }
+@@ -356,9 +356,17 @@ fn collect_text_chunks_impl(
+     }
+ }
+ 
+-fn resolve_text_flow(node: SvgNode, state: &converter::State) -> Option<TextFlow> {
++fn resolve_text_flow(
++    node: SvgNode,
++    state: &converter::State,
++    cache: &mut converter::Cache,
++) -> Option<TextFlow> {
+     let linked_node = node.attribute::<SvgNode>(AId::Href)?;
+-    let path = super::shapes::convert(linked_node, state)?;
++    let path = super::shapes::convert(linked_node, state, cache)?;
++
++    if !cache.charge_path(path.len()) {
++        return None;
++    }
+ 
+     // The reference path's transform needs to be applied
+     let transform = linked_node.resolve_transform(AId::Transform, state);
 diff --git a/src/text/flatten.rs b/src/text/flatten.rs
 index f08fb87..1b7c5ac 100644
 --- a/src/text/flatten.rs

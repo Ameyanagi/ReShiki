@@ -20,7 +20,7 @@ mod use_node;
 mod text;
 
 pub use image::{ImageHrefDataResolverFn, ImageHrefResolver, ImageHrefStringResolverFn};
-pub use options::Options;
+pub use options::{ConversionLimits, Options};
 pub(crate) use svgtree::{AId, EId};
 
 /// List of all errors.
@@ -34,6 +34,9 @@ pub enum Error {
 
     /// We do not allow SVG with more than 1_000_000 elements for security reasons.
     ElementsLimitReached,
+
+    /// The caller's opt-in conversion work budget was exceeded.
+    ConversionLimitReached,
 
     /// SVG doesn't have a valid size.
     ///
@@ -63,6 +66,9 @@ impl std::fmt::Display for Error {
             }
             Error::ElementsLimitReached => {
                 write!(f, "the maximum number of SVG elements has been reached")
+            }
+            Error::ConversionLimitReached => {
+                write!(f, "the SVG conversion work limit has been reached")
             }
             Error::InvalidSize => {
                 write!(f, "SVG has an invalid size")

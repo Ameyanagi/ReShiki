@@ -86,6 +86,9 @@ impl MoleculeCanvas<'_> {
             }
             return Some(Action::publish(Edit::Piece(p)).and_capture());
         }
+        if self.tool == Tool::Icons {
+            return Some(Action::publish(Edit::Icon(p)).and_capture());
+        }
         if self.tool == Tool::Tilt {
             return self.press_tilt(state, p, point);
         }
@@ -304,7 +307,7 @@ impl MoleculeCanvas<'_> {
                         && g.panel.is_none()
                         && g.cycle.is_none()
                         && g.kind != reshiki::graphics::GraphicKind::Piece
-                        && !g.is_condition_icon()
+                        && !g.is_icon()
                 })
             {
                 if let Some(handles) = g.path_handles() {

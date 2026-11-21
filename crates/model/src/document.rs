@@ -670,7 +670,7 @@ impl Document {
                 || g.leader.is_some()
                 || g.cycle.is_some()
                 || g.piece.is_some()
-                || matches!(g.kind, GraphicKind::Symbol(kind) if kind.is_condition())
+                || g.is_icon()
                 || g.phase == crate::scientific::Phase::Gradient
                 || g.text.is_some()
         }) || self.arrows.iter().any(|a| {

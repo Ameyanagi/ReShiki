@@ -290,17 +290,35 @@ impl MoleculeCanvas<'_> {
         }
     }
 
-    /// A dashed accent box around a part a drop would add to a cycle; the
-    /// badge at the pointer names its role.
-    pub(super) fn draw_drop_ink(
+    /// Where a drop would add a part to a cycle: the arc it joins lit up and
+    /// a dashed accent box round the part; the badge names what it does.
+    pub(super) fn draw_cycle_drop(
         &self,
         frame: &mut layered::Frame<'_>,
-        ink: Option<(World, World)>,
+        target: Option<&reshiki::cycles::Target>,
         bounds: Rectangle,
     ) {
-        let Some((lo, hi)) = ink else {
+        let Some(target) = target else {
             return;
         };
+        for arc in &target.arc {
+            if let [first, rest @ ..] = arc.as_slice() {
+                let path = Path::new(|b| {
+                    b.move_to(self.camera.screen(*first, bounds));
+                    for p in rest {
+                        b.line_to(self.camera.screen(*p, bounds));
+                    }
+                });
+                frame.stroke(
+                    &path,
+                    Stroke::default()
+                        .with_width(6.)
+                        .with_color(Color { a: 0.35, ..ACCENT })
+                        .with_line_cap(canvas::LineCap::Round),
+                );
+            }
+        }
+        let (lo, hi) = target.ink;
         let a = self.camera.screen(lo, bounds);
         let b = self.camera.screen(hi, bounds);
         let path = Path::rounded_rectangle(
@@ -726,7 +744,7 @@ impl MoleculeCanvas<'_> {
                 && g.panel.is_none()
                 && g.cycle.is_none()
                 && g.kind != reshiki::graphics::GraphicKind::Piece
-                && !g.is_condition_icon()
+                && !g.is_icon()
         }) {
             if let Some(handles) = graphic.path_handles() {
                 self.draw_path_handles(frame, graphic, handles, bounds, edit_points);

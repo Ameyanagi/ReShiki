@@ -123,6 +123,7 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 pdf-writer = "0.12.1"
 ttf-parser = "0.25"
+unicode-segmentation = "1.13"
 swash = "0.2.10"
 sys-locale = "0.3"
 svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
@@ -134,6 +135,8 @@ roxmltree = "0.20"
 tiff = "0.11.3"
 thiserror = "2"
 sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"] }
+# The icon library is stored deflated (build.rs) and inflated on first use.
+miniz_oxide = "0.8"
 
 # The CLI, MCP server, assistant, updater and helper processes are desktop-only.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -350,6 +353,7 @@ rmcp = { version = "=3.5.1", default-features = false, features = ["client", "tr
 
 [build-dependencies]
 anyhow = "1"
+miniz_oxide = "0.8"
 
 [patch.crates-io]
 # Preserve libjpeg's small-component and edge chroma sampling semantics.

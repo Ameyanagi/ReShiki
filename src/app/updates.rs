@@ -450,9 +450,18 @@ impl App {
                 .style(button::text)
         ]
         .align_y(Alignment::Center);
-        let version = text(format!("Version {}", updates::CURRENT_VERSION))
-            .size(13)
-            .style(super::workspace::muted_text);
+        let version = column![
+            text(format!("Version {}", updates::CURRENT_VERSION))
+                .size(13)
+                .style(super::workspace::muted_text),
+            text(format!(
+                "Icons: Tabler Icons {} by Paweł Kuna, MIT License",
+                super::icon_browser::TABLER_VERSION
+            ))
+            .size(11)
+            .style(super::workspace::muted_text),
+        ]
+        .spacing(2);
         let panel = if cfg!(target_arch = "wasm32") {
             // The host page ships browser updates; there is nothing to check.
             column![

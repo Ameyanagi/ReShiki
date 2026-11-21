@@ -895,7 +895,7 @@ impl App {
         let hint = if cycle.steps.is_empty() {
             "Drag a structure or text onto the circle to add it"
         } else {
-            "Click a part again to move it alone; drag it off the cycle to take it out"
+            "Drop a structure on an arc to add a step · Click a part twice to move it alone"
         };
         Some(
             column![
