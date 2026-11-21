@@ -4045,6 +4045,7 @@ dependencies = [
  "time",
  "tokio",
  "ttf-parser",
+ "unicode-segmentation",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
