@@ -72,6 +72,7 @@ mod nmr;
 mod numeric_transforms;
 mod object_toolbar;
 mod office;
+mod start;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 #[cfg(test)]
@@ -131,7 +132,7 @@ pub(crate) use files::read_length;
 pub(crate) use workspace::text_width;
 
 /// The status bar's idle message.
-const READY: &str = "Ready · Choose a tool to start drawing";
+const READY: &str = "";
 const CELL_REMOVED_NOTICE: &str = "Unit cell removed by the edit";
 
 // App::fit_bounds: screen pixels kept free around the fitted drawing, the
@@ -172,6 +173,7 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Start(start::Action),
     ModifiersChanged(iced::keyboard::Modifiers),
     #[cfg(target_os = "linux")]
     LinuxClipboardWindow(iced::window::Id),
@@ -466,6 +468,7 @@ pub struct App {
     printing: printing::State,
     font_options: iced::widget::combo_box::State<String>,
     imports: import::State,
+    start: start::State,
     grid: bool,
     guides: canvas::guides::Guides,
     view_open: bool,
@@ -604,6 +607,7 @@ impl App {
                     .collect(),
             ),
             imports: Default::default(),
+            start: start::State::load(),
             grid: false,
             guides: Default::default(),
             view_open: false,
@@ -622,7 +626,7 @@ impl App {
             pdf_copy: Default::default(),
             native_copy_busy: false,
             // A recovery offer in the status bar is the launch message.
-            status: if recovered.is_empty() { READY } else { "" }.into(),
+            status: String::new(),
             error: false,
             bond_text_hint: None,
             file_io: files::State::default(),
@@ -677,7 +681,8 @@ impl App {
         #[cfg(not(target_arch = "wasm32"))]
         let update_check = Task::batch([update_check, app.github_start()]);
         app.sync_keyboard_drawing();
-        (app, Task::batch([task, update_check]))
+        let previews = app.start_previews();
+        (app, Task::batch([task, update_check, previews]))
     }
     pub fn title(&self) -> String {
         #[cfg(not(target_arch = "wasm32"))]
@@ -1353,6 +1358,7 @@ impl App {
             self.start_label_refresh(),
             self.start_caption_names(),
             self.start_autosave(),
+            self.start_previews(),
         ]);
         self.tab.nmr.invalidate_if_changed_cached(
             &self.tab.doc,
@@ -1398,6 +1404,10 @@ impl App {
     /// including its background-tab path. Their tasks still receive tab tags
     /// and run the routing tail that closes Office tabs and replays held results.
     fn update_ungated(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Message::Start(action @ start::Action::Preview(..)) = message {
+            return ControlFlow::Break(self.start_action(action));
+        }
         if let Message::OfficePrepared(binding, opened) = message {
             return ControlFlow::Break(self.office_prepared(binding, opened));
         }

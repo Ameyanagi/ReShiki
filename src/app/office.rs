@@ -71,7 +71,13 @@ impl App {
                 {
                     return Task::none();
                 }
+                #[cfg(not(target_arch = "wasm32"))]
+                let suppressed = std::mem::replace(&mut self.start.recent_suppressed, true);
                 let task = self.file_prepared(Some((path, Ok(files::Prepared::Native(doc)))));
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    self.start.recent_suppressed = suppressed;
+                }
                 self.tab.path = Some(binding.path.clone());
                 self.tab.office = Some(binding);
                 task

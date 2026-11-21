@@ -960,13 +960,23 @@ impl App {
         }
         let hovered = &self.imports.hovered;
         // Browser drags have no names until the drop.
-        let (error, label) = match hovered.as_slice() {
+        let (error, mut label) = match hovered.as_slice() {
             [path, ..] if path.as_os_str().is_empty() => (false, unnamed_label(hovered.len())),
             _ => {
                 let plan = plan(hovered);
                 (matches!(plan, Plan::Reject(_)), plan.label())
             }
         };
+        if self.start_visible() && !error {
+            label = if hovered
+                .first()
+                .is_some_and(|path| path.as_os_str().is_empty())
+            {
+                "Drop to open".into()
+            } else {
+                format!("Drop to open · {}", describe(hovered))
+            };
+        }
         let zone = Zone {
             error,
             dark: self.tab.doc.canvas_theme.is_dark(),
