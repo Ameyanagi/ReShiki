@@ -525,11 +525,18 @@ pub(super) fn tree_key(key: &iced::keyboard::Key, modifiers: Modifiers) -> Optio
     ))))
 }
 
+fn picker_naming_key(key: &iced::keyboard::Key, _modifiers: Modifiers) -> Option<Message> {
+    use iced::keyboard::{Key, key::Named};
+    matches!(key, Key::Named(Named::Escape))
+        .then_some(Message::GitHub(Action::Picker(picker::Action::CancelItem)))
+}
+
 impl App {
     /// The keys of the open GitHub dialog: [`tree_key`] in the picker's tree
     /// while no field there has text to move through, else [`modal_key`].
     pub(super) fn github_keys(&self) -> super::file_shortcuts::ModalKeys {
         match &self.github.dialog {
+            Some(Dialog::Picker(picker)) if picker.new_item.is_some() => picker_naming_key,
             Some(Dialog::Picker(picker)) if picker.tree_keys() => tree_key,
             _ => modal_key,
         }

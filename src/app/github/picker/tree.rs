@@ -1,6 +1,5 @@
 //! The picker's Tree view: the whole repository as folders that open in
 //! place, one row each, and a preview of the selected file beside them.
-//! Searching keeps the matches in the tree with their folders opened.
 use super::*;
 use crate::app::icons::{Glyph, Icon};
 use iced::widget::column;
@@ -28,8 +27,7 @@ pub(super) fn on_screen(view: Option<(f32, f32)>, len: usize) -> std::ops::Range
 
 impl Picker {
     /// Folders first, then files, each by name, the open folders' below
-    /// them. Searching, the folders and files whose names match, with the
-    /// folders above them opened.
+    /// them.
     pub(in crate::app::github) fn rows(&self) -> Vec<Row<'_>> {
         let Some((entries, _)) = &self.whole else {
             return Vec::new();
@@ -41,32 +39,13 @@ impl Picker {
         for listed in children.values_mut() {
             listed.sort_by_cached_key(|entry| (!entry.folder, last(&entry.name).to_lowercase()));
         }
-        let query = self.query();
-        let kept: Option<HashSet<&str>> = (!query.is_empty()).then(|| {
-            let mut kept = HashSet::new();
-            for entry in children.values().flatten() {
-                if last(&entry.name).to_lowercase().contains(&query) {
-                    let mut path = entry.name.as_str();
-                    while !path.is_empty() && kept.insert(path) {
-                        path = parent(path);
-                    }
-                }
-            }
-            kept
-        });
         let mut rows = Vec::new();
         let mut stack: Vec<(&Entry, usize)> = (children.get("").into_iter().flatten().rev())
             .map(|entry| (*entry, 0))
             .collect();
         while let Some((entry, depth)) = stack.pop() {
-            if kept
-                .as_ref()
-                .is_some_and(|kept| !kept.contains(entry.name.as_str()))
-            {
-                continue;
-            }
             let below = children.get(entry.name.as_str()).filter(|_| entry.folder);
-            let open = entry.folder && (kept.is_some() || self.opened.contains(&entry.name));
+            let open = entry.folder && self.opened.contains(&entry.name);
             rows.push(Row {
                 entry,
                 depth,
@@ -87,6 +66,35 @@ impl Picker {
         else {
             return Task::none();
         };
+        self.reveal_tree_index(at)
+    }
+
+    pub(super) fn reveal_new_item(&mut self) -> Task<Message> {
+        let Some(draft) = &self.new_item else {
+            return Task::none();
+        };
+        let mut path = draft.parent.as_str();
+        while !path.is_empty() {
+            self.opened.insert(path.to_owned());
+            path = parent(path);
+        }
+        let at = self.draft_row(&self.rows()).map(|(at, _, _)| at);
+        at.map_or_else(Task::none, |at| self.reveal_tree_index(at))
+    }
+
+    fn draft_row<'a>(&'a self, rows: &[Row<'_>]) -> Option<(usize, usize, &'a NewItem)> {
+        let draft = self.new_item.as_ref().filter(|_| self.can_create())?;
+        if draft.parent.is_empty() {
+            return Some((0, 0, draft));
+        }
+        let (at, parent) = rows
+            .iter()
+            .enumerate()
+            .find(|(_, row)| row.entry.name == draft.parent)?;
+        Some((at + 1, parent.depth + 1, draft))
+    }
+
+    fn reveal_tree_index(&mut self, at: usize) -> Task<Message> {
         let (top, height) = self.tree_view.unwrap_or((0., 420.));
         let y = at as f32 * ROW;
         let to = if y < top {
@@ -114,20 +122,27 @@ impl App {
         };
         let signed_in = self.github.client().is_some();
         let rows = picker.rows();
-        let range = on_screen(picker.tree_view, rows.len());
+        let draft = picker.draft_row(&rows);
+        let len = rows.len() + usize::from(draft.is_some());
+        let range = on_screen(picker.tree_view, len);
         // The rows off screen are only room to scroll.
         let mut list = column![Space::new().height(range.start as f32 * ROW)];
-        for (at, row) in rows.iter().enumerate().take(range.end).skip(range.start) {
-            list = list.push(tree_row(picker, at, row, signed_in));
+        for at in range.clone() {
+            if let Some((draft_at, depth, draft)) = draft
+                && at == draft_at
+            {
+                list = list.push(draft_tree_row(draft, depth));
+            } else {
+                let entry_at =
+                    at - usize::from(draft.is_some_and(|(draft_at, _, _)| at > draft_at));
+                if let Some(row) = rows.get(entry_at) {
+                    list = list.push(tree_row(picker, entry_at, row, signed_in));
+                }
+            }
         }
-        list = list.push(Space::new().height((rows.len() - range.end) as f32 * ROW));
-        let query = picker.query();
-        if rows.is_empty() {
-            let empty = match query.is_empty() {
-                true => "Empty",
-                false => "No match in this repository.",
-            };
-            list = list.push(container(text(empty).size(13).style(muted_text)).padding(10));
+        list = list.push(Space::new().height((len - range.end) as f32 * ROW));
+        if len == 0 {
+            list = list.push(container(text("Empty").size(13).style(muted_text)).padding(10));
         }
         if *truncated {
             list = list.push(note(TRUNCATED));
@@ -154,6 +169,27 @@ impl App {
         .height(Length::Fill)
         .into()
     }
+}
+
+fn draft_tree_row(draft: &NewItem, depth: usize) -> Element<'_, Message> {
+    let icon = if draft.folder {
+        Icon::Folder
+    } else {
+        Icon::File
+    };
+    container(
+        row![
+            Space::new().width(depth as f32 * 18. + 12.),
+            iced::widget::canvas(Glyph(icon, true)).width(16).height(16),
+            new_item_field(draft).padding([2, 6]),
+        ]
+        .spacing(6)
+        .align_y(Alignment::Center),
+    )
+    .height(ROW)
+    .padding([0, 8])
+    .align_y(Alignment::Center)
+    .into()
 }
 
 fn note<'a>(line: &'static str) -> Element<'a, Message> {

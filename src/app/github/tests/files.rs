@@ -249,43 +249,48 @@ async fn insert_puts_a_files_structures_in_the_drawing_as_one_undo_step() {
 }
 
 #[test]
-fn a_big_folder_shows_200_by_name_and_the_search_finds_the_rest() {
+fn a_big_folder_shows_more_tiles_without_searching_its_files() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     let names: Vec<String> = (0..240).map(|n| format!("hit-{n:03}.mol")).collect();
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
-    // The tiles on screen are asked about; later ones are newer, and
-    // nothing moves when their dates come.
-    files_at(&mut app, &names, |path| {
-        let n: u32 = path[4..7].parse().unwrap();
-        Some(format!("2026-11-10T00:{:02}:00Z", n % 60))
-    });
+    files_at(&mut app, &names, |_| None);
     let asked = the_picker(&app).asked.len();
     assert!(asked > 0 && asked < 30, "only the tiles on screen: {asked}");
     let shown = |app: &App| -> Vec<String> {
         let picker = the_picker(app);
         let (tiles, matching) = picker.tiles();
         let entries = picker.entries.as_ref().unwrap();
-        let mut names: Vec<String> = tiles.iter().map(|at| entries[*at].name.clone()).collect();
-        names.push(matching.to_string());
-        names
+        assert_eq!(matching, 240);
+        tiles.iter().map(|at| entries[*at].name.clone()).collect()
     };
-    let all = shown(&app);
-    assert_eq!(all.len(), 201);
-    assert_eq!(all[200], "240");
-    assert_eq!(all[0], "hit-000.mol");
-    assert_eq!(all[199], "hit-199.mol");
+    let first = shown(&app);
+    assert_eq!(first.len(), 200);
+    assert_eq!(first[0], "hit-000.mol");
+    assert_eq!(first[199], "hit-199.mol");
+    let _ = picker(&mut app, picker::Action::Select(3));
     let _ = picker(&mut app, picker::Action::Search("HIT-23".into()));
-    let found = shown(&app);
-    assert_eq!(found.len(), 11);
-    assert_eq!(found[10], "10");
-    assert!(found[..10].iter().all(|name| name.starts_with("hit-23")));
-    // The keyboard moves among the matches only.
-    let _ = picker(&mut app, picker::Action::Move(1));
-    let selected = the_picker(&app).selected.unwrap();
-    assert!(picker_names(&app)[selected].starts_with("hit-23"));
-    let _ = picker(&mut app, picker::Action::Search("nothing".into()));
-    assert_eq!(shown(&app), ["0"]);
+    assert_eq!(
+        shown(&app),
+        first,
+        "repository search leaves the files alone"
+    );
+    assert_eq!(the_picker(&app).selected, Some(3));
+    let _ = picker(&mut app, picker::Action::MoreTiles);
+    let all = shown(&app);
+    assert_eq!(all.len(), 240);
+    assert_eq!(all[239], "hit-239.mol");
+    let _ = picker(&mut app, picker::Action::Select(239));
+    assert_eq!(the_picker(&app).selected, Some(239));
+}
+
+#[test]
+fn send_to_search_still_filters_the_open_folders_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    picker_at(&mut app, Mode::SendTo, &["a.mol", "b.mol"]);
+    let _ = picker(&mut app, picker::Action::Search("B.MOL".into()));
+    assert_eq!(the_picker(&app).tiles(), (vec![1], 1));
 }
 
 #[test]
@@ -363,35 +368,59 @@ fn the_tree_opens_and_closes_folders_from_the_keyboard() {
 }
 
 #[test]
-fn tree_search_covers_the_whole_repository_with_folders_opened() {
+fn repository_search_preserves_the_tree_and_search_enter_selects_a_repository() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
-    let paths = [
-        "bipyridines/",
-        "bipyridines/phen.mol",
-        "bipyridines/deep/",
-        "bipyridines/deep/phenanthroline.cdxml",
-        "phosphines/",
-        "phosphines/dppe.sdf",
-        "phenol.rsk",
-    ];
-    tree_at(&mut app, &paths, false);
-    // Nothing opened by hand: the matches' folders open.
-    let _ = picker(&mut app, picker::Action::Search("PHEN".into()));
-    assert_eq!(
-        rows(&app),
-        [
-            "bipyridines",
-            "  deep",
-            "    phenanthroline.cdxml",
-            "  phen.mol",
-            "phenol.rsk"
-        ]
+    tree_at(
+        &mut app,
+        &["bipyridines/", "bipyridines/phen.mol", "phenol.rsk"],
+        false,
     );
-    let _ = picker(&mut app, picker::Action::Search("zzz".into()));
-    assert!(rows(&app).is_empty());
-    let _ = picker(&mut app, picker::Action::Search(String::new()));
-    assert_eq!(rows(&app), ["bipyridines", "phosphines", "phenol.rsk"]);
+    let _ = picker(&mut app, picker::Action::Row("bipyridines".into()));
+    let _ = picker(&mut app, picker::Action::Row("bipyridines/phen.mol".into()));
+    let before = rows(&app);
+    let selected = selected_row(&app);
+    let opened = the_picker(&app).opened.clone();
+    app.github.prefs.share(&alice());
+    let _ = app.picker_listed();
+    for query in ["PHEN", "no matching repository", "ligands"] {
+        let _ = picker(&mut app, picker::Action::Search(query.into()));
+        assert_eq!(rows(&app), before);
+        assert_eq!(selected_row(&app), selected);
+        assert_eq!(the_picker(&app).opened, opened);
+        assert_eq!(the_picker(&app).repo.as_ref().unwrap().id, repo().id);
+    }
+    // The regular file action still acts on the selected file.
+    let request = app.github.seq;
+    let _ = picker(&mut app, picker::Action::Enter);
+    assert_eq!(
+        app.github.seq,
+        request + 1,
+        "the selected file is requested"
+    );
+    // Submitting the search chooses the repository on the left instead.
+    let _ = picker(&mut app, picker::Action::SearchEnter);
+    assert_eq!(the_picker(&app).repo.as_ref().unwrap().id, alice().id);
+    assert!(the_picker(&app).search.is_empty());
+}
+
+#[test]
+fn submitting_repository_search_keeps_an_explicit_urls_folder_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    files_at(&mut app, &["a.mol"], |_| None);
+    let url = "https://github.com/octo/lab/tree/main/scheme/drafts";
+    let _ = picker(&mut app, picker::Action::Search(url.into()));
+    let _ = picker(&mut app, picker::Action::SearchEnter);
+    picker_lists(&mut app, &["scheme"], &[]);
+    assert_eq!(the_picker(&app).trail[0].0, "scheme");
+    picker_lists(&mut app, &["drafts"], &[]);
+    let trail: Vec<_> = the_picker(&app)
+        .trail
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect();
+    assert_eq!(trail, ["scheme", "drafts"]);
 }
 
 #[test]
@@ -610,7 +639,7 @@ async fn insert_lands_in_the_drawing_it_was_chosen_for() {
 }
 
 #[test]
-fn tree_keys_leave_a_name_field_its_arrows_and_search_hides_a_selection() {
+fn tree_keys_leave_a_name_field_its_arrows_and_search_keeps_the_selection() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     tree_at(&mut app, &["a.mol", "b.mol"], false);
@@ -622,7 +651,7 @@ fn tree_keys_leave_a_name_field_its_arrows_and_search_hides_a_selection() {
     let keys = app.github_keys();
     assert!(keys(&Key::Named(Named::ArrowLeft), Modifiers::empty()).is_some());
     let _ = picker(&mut app, picker::Action::Search("b".into()));
-    assert!(selected_row(&app).is_none());
+    assert_eq!(selected_row(&app).as_deref(), Some("a.mol"));
     // Open on a folder opens it, as Enter does.
     tree_at(&mut app, &["sub/", "sub/a.mol"], false);
     let _ = picker(&mut app, picker::Action::Move(1));
@@ -718,7 +747,134 @@ fn a_new_folder_in_the_tree_shows_under_its_folder() {
 }
 
 #[test]
-fn editing_search_cancels_creation_in_a_folder_the_filter_hides() {
+fn unnamed_items_and_cancelled_names_create_nothing_in_either_view() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, original) = app_in(dir.path());
+    let original_bytes = std::fs::read(&original).unwrap();
+    for tree in [false, true] {
+        if tree {
+            tree_at(&mut app, &["sub/", "sub/deep/", "sub/deep/a.mol"], false);
+            let _ = picker(&mut app, picker::Action::Row("sub".into()));
+            let _ = picker(&mut app, picker::Action::Row("sub/deep".into()));
+        } else {
+            files_at(&mut app, &["a.mol"], |_| None);
+        }
+        let entry_names = picker_names(&app);
+        let whole_names = |app: &App| -> Vec<String> {
+            the_picker(app)
+                .whole
+                .iter()
+                .flat_map(|(entries, _)| entries.iter())
+                .map(|entry| entry.name.clone())
+                .collect()
+        };
+        let before_whole = whole_names(&app);
+        let files_before = app.github.states[&repo().key].files.len();
+        let destination = if tree {
+            "sub/deep/draft.rsk"
+        } else {
+            "draft.rsk"
+        };
+        let path = workcopy::working_path(dir.path(), &repo().key, destination);
+        for folder in [false, true] {
+            for blank in ["", " \t "] {
+                let _ = picker(&mut app, picker::Action::NewItem(folder));
+                assert!(the_picker(&app).new_item.is_some());
+                assert_eq!(picker_names(&app), entry_names);
+                assert_eq!(whole_names(&app), before_whole);
+                let _ = picker(&mut app, picker::Action::NewItemName(blank.into()));
+                // Enter in the picker also submits the temporary item.
+                let _ = picker(&mut app, picker::Action::Enter);
+                assert!(the_picker(&app).new_item.is_none());
+                assert_eq!(picker_names(&app), entry_names);
+                assert_eq!(whole_names(&app), before_whole);
+                assert!(!path.exists());
+                assert_eq!(app.github.states[&repo().key].files.len(), files_before);
+            }
+            let _ = picker(&mut app, picker::Action::NewItem(folder));
+            let _ = picker(&mut app, picker::Action::NewItemName("draft".into()));
+            assert!(!path.exists());
+            assert_eq!(whole_names(&app), before_whole);
+            let keys = app.github_keys();
+            let escape = keys(&Key::Named(Named::Escape), Modifiers::empty()).unwrap();
+            assert!(matches!(
+                escape,
+                Message::GitHub(Action::Picker(picker::Action::CancelItem))
+            ));
+            let _ = app.update(escape);
+            assert!(the_picker(&app).new_item.is_none());
+            assert_eq!(picker_names(&app), entry_names);
+            assert_eq!(whole_names(&app), before_whole);
+            assert!(!path.exists());
+            assert_eq!(app.github.states[&repo().key].files.len(), files_before);
+        }
+    }
+    assert_eq!(std::fs::read(original).unwrap(), original_bytes);
+}
+
+#[test]
+fn a_new_folder_uses_the_nested_selected_folder_or_files_parent() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    for selected in ["sub/deep", "sub/deep/a.mol"] {
+        tree_at(&mut app, &["sub/", "sub/deep/", "sub/deep/a.mol"], false);
+        let _ = picker(&mut app, picker::Action::Row("sub".into()));
+        let _ = picker(&mut app, picker::Action::Row("sub/deep".into()));
+        if selected.ends_with(".mol") {
+            let _ = picker(&mut app, picker::Action::Row(selected.into()));
+        }
+        let _ = picker(&mut app, picker::Action::NewItem(true));
+        let _ = picker(&mut app, picker::Action::NewItemName("draft".into()));
+        assert!(
+            !the_picker(&app)
+                .whole
+                .as_ref()
+                .unwrap()
+                .0
+                .iter()
+                .any(|entry| entry.name == "sub/deep/draft")
+        );
+        let _ = picker(&mut app, picker::Action::CreateItem);
+        assert_eq!(selected_row(&app).as_deref(), Some("sub/deep/draft"));
+        assert_eq!(rows(&app), ["sub", "  deep", "    draft", "    a.mol"]);
+        let path = workcopy::working_path(dir.path(), &repo().key, "sub/deep/draft/file.rsk");
+        assert!(
+            !path.parent().unwrap().exists(),
+            "an empty folder remains virtual"
+        );
+    }
+}
+
+#[tokio::test]
+async fn entering_a_new_drawing_name_opens_an_empty_drawing_in_the_selected_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    tree_at(&mut app, &["sub/", "sub/deep/", "sub/deep/a.mol"], false);
+    let _ = picker(&mut app, picker::Action::Row("sub".into()));
+    let _ = picker(&mut app, picker::Action::Row("sub/deep".into()));
+    let _ = picker(&mut app, picker::Action::Row("sub/deep/a.mol".into()));
+    let _ = picker(&mut app, picker::Action::NewItem(false));
+    let _ = picker(&mut app, picker::Action::NewItemName("draft".into()));
+    let path = workcopy::working_path(dir.path(), &repo().key, "sub/deep/draft.rsk");
+    assert!(!path.exists());
+    assert!(file_state(&app, "sub/deep/draft.rsk").is_none());
+    let task = picker(&mut app, picker::Action::Enter);
+    run(&mut app, task).await;
+    assert!(app.github.dialog.is_none());
+    assert_eq!(app.tab.path.as_deref(), Some(path.as_path()));
+    assert!(app.tab.doc.atoms.is_empty());
+    assert!(app.tab.doc.bonds.is_empty());
+    let saved = Document::from_native_file(&std::fs::read(path).unwrap()).unwrap();
+    assert!(saved.atoms.is_empty());
+    assert!(saved.bonds.is_empty());
+    assert_eq!(
+        file_state(&app, "sub/deep/draft.rsk"),
+        Some(FileState::default())
+    );
+}
+
+#[test]
+fn editing_repository_search_cancels_creation_and_keeps_the_selected_folder() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     tree_at(&mut app, &["sub/", "sub/a.mol", "z.mol"], false);
@@ -728,6 +884,7 @@ fn editing_search_cancels_creation_in_a_folder_the_filter_hides() {
     assert!(the_picker(&app).new_item.is_some());
     let _ = picker(&mut app, picker::Action::Search("z.mol".into()));
     assert!(the_picker(&app).new_item.is_none());
+    assert_eq!(selected_row(&app).as_deref(), Some("sub"));
     let _ = picker(&mut app, picker::Action::CreateItem);
     let _ = picker(&mut app, picker::Action::Search(String::new()));
     assert!(!rows(&app).iter().any(|row| row.trim() == "draft"));

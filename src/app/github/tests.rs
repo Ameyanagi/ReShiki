@@ -1330,7 +1330,14 @@ fn a_download_still_running_never_closes_a_new_folder() {
     let Some(Dialog::Picker(picker)) = &app.github.dialog else {
         panic!("the picker closed");
     };
-    assert_eq!(picker.trail, [("fresh".to_owned(), String::new())]);
+    assert!(picker.trail.is_empty());
+    assert!(
+        picker
+            .entries
+            .iter()
+            .flatten()
+            .any(|entry| entry.folder && entry.name == "fresh")
+    );
     assert!(!workcopy::working_path(dir.path(), &repo().key, "other.rsk").exists());
 }
 
@@ -2012,7 +2019,7 @@ fn back_from_choosing_repositories_the_open_picker_lists_them_again_once() {
 }
 
 #[test]
-fn a_new_folder_opens_at_once_and_is_empty() {
+fn a_new_folder_appears_in_the_current_folder_and_can_be_opened() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     picker_at(&mut app, Mode::Open, &["ring.rsk"]);
@@ -2022,6 +2029,12 @@ fn a_new_folder_opens_at_once_and_is_empty() {
         Action::Picker(picker::Action::NewItemName("scheme".into())),
     );
     github(&mut app, Action::Picker(picker::Action::CreateItem));
+    assert_eq!(picker_names(&app), ["scheme", "ring.rsk"]);
+    assert!(the_picker(&app).trail.is_empty());
+    github(
+        &mut app,
+        Action::Picker(picker::Action::Folder("scheme".into())),
+    );
     let Some(Dialog::Picker(picker)) = &app.github.dialog else {
         panic!("no picker");
     };
@@ -2470,7 +2483,7 @@ fn a_pasted_link_shows_one_row_and_enter_opens_its_folder() {
         Action::Picker(picker::Action::Search(link.into())),
     );
     // A repository listed here needs no request: Enter opens the folder.
-    github(&mut app, Action::Picker(picker::Action::Enter));
+    github(&mut app, Action::Picker(picker::Action::SearchEnter));
     let picker = the_picker(&app);
     assert_eq!(picker.repo.as_ref().map(|repo| repo.id), Some(repo().id));
     assert!(picker.link.is_none());
