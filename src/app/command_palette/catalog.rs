@@ -863,7 +863,7 @@ fn edits(app: &App) -> Vec<Command> {
         send(
             "Tidy catalytic cycle",
             Edit,
-            "Space the intermediates evenly and line up reagents and products beside their arcs.",
+            "Evenly space intermediates and align reagents and products along the arcs.",
             "tidy cycle clean up align space evenly layout",
             Message::Cycle(cycles::Action::Tidy),
         )
