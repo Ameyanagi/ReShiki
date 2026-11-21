@@ -109,6 +109,14 @@ impl App {
             .as_ref()
             .filter(|before| before.document == document)
         else {
+            if self.inspector_tab == InspectorTab::Names {
+                self.inspector_pages.structure_first = self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter()
+                    .any(|atom| self.tab.selected.contains(&atom.id));
+            }
             self.inspector_pages.selection = Some(self.page_selection());
             return Task::none();
         };

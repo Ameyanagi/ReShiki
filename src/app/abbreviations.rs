@@ -81,10 +81,7 @@ impl App {
             .synchronize(self.tab.id, self.tab.file_epoch, &self.tab.selected)
             && matches!(
                 self.inspector_tab,
-                InspectorTab::Reactions
-                    | InspectorTab::Labels
-                    | InspectorTab::Abbreviations
-                    | InspectorTab::Names
+                InspectorTab::Reactions | InspectorTab::Labels | InspectorTab::Abbreviations
             )
         {
             self.inspector_tab = InspectorTab::Properties;

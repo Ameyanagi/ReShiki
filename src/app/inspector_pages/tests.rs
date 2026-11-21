@@ -143,8 +143,20 @@ fn selection_order_and_document_switch_do_not_discard_the_open_page() {
         let _ = app.update(Message::New);
         assert_ne!(app.tab.id, original);
         assert_eq!(app.inspector_tab, page);
+        if page == InspectorTab::Names {
+            assert!(
+                !app.inspector_pages.structure_first,
+                "An empty drawing starts with name input"
+            );
+        }
         let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(original)));
         assert_eq!(app.inspector_tab, page);
+        if page == InspectorTab::Names {
+            assert!(
+                app.inspector_pages.structure_first,
+                "The selected structure belongs to this drawing"
+            );
+        }
     }
 }
 
