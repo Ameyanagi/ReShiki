@@ -32,6 +32,8 @@ pub(crate) enum Category {
     File,
     View,
     Tool,
+    /// The shortcut registry, shown by the unified palette rather than this catalog.
+    Keys,
 }
 
 impl Category {
@@ -55,6 +57,7 @@ impl Category {
             Self::File => "File",
             Self::View => "View",
             Self::Tool => "Tool",
+            Self::Keys => "Keys",
         }
     }
 }

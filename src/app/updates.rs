@@ -178,8 +178,9 @@ impl App {
                 if !self.updates.restarting {
                     self.updates.open = open;
                     self.updates.version_copied = false;
-                    // Help > About replaces Help.
+                    // About replaces either filter of the unified palette.
                     self.help_open &= !open;
+                    self.commands.open &= !open;
                     #[cfg(not(target_arch = "wasm32"))]
                     if open {
                         return self.star_about_opened();

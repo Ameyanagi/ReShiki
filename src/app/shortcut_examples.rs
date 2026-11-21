@@ -12,6 +12,7 @@ const NAME: &str = "Shortcut examples";
 impl App {
     pub(super) fn open_shortcut_examples(&mut self) -> Task<Message> {
         self.help_open = false;
+        self.commands.open = false;
         if let Err(error) = self.load_shortcut_examples() {
             self.status = format!("Could not open shortcut examples: {error}");
             self.error = true;

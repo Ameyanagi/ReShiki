@@ -1,4 +1,4 @@
-//! Help: a searchable reference of every shortcut, with a live before/after
+//! The Keys filter: a searchable reference of every shortcut, with a live before/after
 //! drawing for contextual keys. Selecting a row only shows it; Enter or Run
 //! runs a row that names a command palette command, through the palette.
 use super::{
@@ -17,10 +17,12 @@ mod examples;
 pub(super) mod registry;
 pub(super) mod search;
 
-use registry::{Entry, Example};
+use registry::Entry;
+#[cfg(test)]
+use registry::Example;
 
-const SEARCH: &str = "help-search";
-const RESULTS: &str = "help-results";
+pub(super) const SEARCH: &str = "help-search";
+pub(super) const RESULTS: &str = "help-results";
 
 static ENTRIES: LazyLock<Vec<Entry>> = LazyLock::new(registry::entries);
 
@@ -40,6 +42,12 @@ pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
     if matches!(key, Key::Named(Named::Escape)) || is_shortcut(key, modifiers) {
         return Some(Message::ToggleHelp);
     }
+    if super::command_palette::is_shortcut(key, modifiers) {
+        return Some(Message::Commands(super::command_palette::Action::Open));
+    }
+    if matches!(key, Key::Named(Named::Tab)) {
+        return super::command_palette::modal_key(key, modifiers);
+    }
     if !modifiers.is_empty() {
         return None;
     }
@@ -48,6 +56,8 @@ pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
         Key::Named(Named::ArrowDown) => 1,
         Key::Named(Named::PageUp) => -8,
         Key::Named(Named::PageDown) => 8,
+        Key::Named(Named::Home) => isize::MIN,
+        Key::Named(Named::End) => isize::MAX,
         _ => return None,
     };
     Some(Message::Help(Action::Move(step)))
@@ -104,20 +114,21 @@ impl State {
 
 impl App {
     /// Help blocks drawing input, but its ranking uses the tab's stored mode.
-    fn help_contextual(&self) -> bool {
+    pub(super) fn help_contextual(&self) -> bool {
         self.tab.keyboard_drawing.enabled() && self.tool.selects()
     }
 
     pub(super) fn toggle_help(&mut self) -> Task<Message> {
-        self.help_open = !self.help_open;
-        if !self.help_open {
+        if self.help_open {
+            self.help_open = false;
             return Task::none();
         }
-        self.palette = None;
+        // Build the same catalog once for both filters. Keys keeps registry
+        // indexes, while command choices still use their original run gates.
+        let _ = self.commands_action(super::command_palette::Action::Open);
         self.commands.open = false;
-        // A row runs the palette command of the same name; templates are
-        // not commands Help describes.
-        let catalog = super::command_palette::catalog::build(self);
+        self.help_open = true;
+        let catalog = self.commands.catalog();
         let commands = (entries().iter().enumerate())
             .filter_map(|(index, entry)| {
                 catalog
@@ -142,6 +153,8 @@ impl App {
         }
         match action {
             Action::Query(query) => {
+                self.commands.query = query.clone();
+                self.rank_commands();
                 self.help.query = query;
                 self.help.selected = None;
                 iced::widget::operation::snap_to(
@@ -184,16 +197,10 @@ impl App {
         }
     }
 
-    pub(super) fn with_help<'a>(&'a self, base: Element<'a, Message>) -> Element<'a, Message> {
-        if !self.help_open {
-            // Keep the workspace at the same child position while Help opens
-            // and closes, so its inert focus and text selection survive.
-            return stack![base].into();
-        }
+    pub(super) fn with_keys<'a>(&'a self, base: Element<'a, Message>) -> Element<'a, Message> {
         let results = self.help.results(self.help_contextual());
         let current = self.help.current(&results);
         let selected = current.and_then(|i| entries().get(i));
-        // The selected row's command, and why it cannot run now.
         let command = current.and_then(|i| self.help.command(i));
         let unavailable = command.and_then(|command| self.command_unavailable(command));
         let name = match selected {
@@ -215,7 +222,7 @@ impl App {
         let search = reshiki::accessibility::text_input(
             SEARCH,
             name,
-            "Search by action, key or description (e.g. wedge, shift r, ring)",
+            "Search keys, actions or descriptions",
             &self.help.query,
         )
         .style(crate::appearance::input_style)
@@ -239,119 +246,42 @@ impl App {
                 ));
             }
         }
-        // The selected row's command runs from the preview too, or says why
-        // it cannot.
-        let run = current.filter(|_| command.is_some()).map(|index| {
-            // One identity per row, so a press or a queued native activation
-            // never runs a row selected after it started.
-            let button = reshiki::accessibility::button(
-                format!("help-run-{index}"),
-                format!("Run {}", selected.map_or("", |entry| entry.name)),
-                row![text("Run").size(13), enter_chord()]
-                    .spacing(8)
-                    .align_y(Alignment::Center),
-            )
-            .padding([5, 12])
-            .style(control(true))
-            .on_press_maybe(
-                unavailable
-                    .is_none()
-                    .then_some(Message::Help(Action::Run(index))),
-            );
-            let mut run = column![button].spacing(4);
-            if let Some(reason) = unavailable {
-                run = run.push(text(reason).size(11).style(muted_text));
-            }
-            Element::from(run)
-        });
         if results.is_empty() {
             list = list.push(
-                text("No shortcut matches. Try a key such as r, a command such as copy, or a group such as Boc.")
+                text("No shortcut matches. Try a key, an action, or a group such as Boc.")
                     .size(12)
                     .style(muted_text),
             );
         }
-        let popup = column![
-                row![
-                    column![
-                        text("Help & shortcuts").size(22),
-                        text("Search keys and commands; select one to see what it does")
-                            .size(12)
-                            .style(muted_text)
-                    ]
-                    .spacing(5),
-                    Space::new().width(Length::Fill),
-                    reshiki::accessibility::button(
-                        "help-close",
-                        "Close Help and shortcuts",
-                        text("×").size(25).center()
-                    )
-                    .width(32)
-                    .height(32)
-                    .padding(0)
-                    .on_press(Message::ToggleHelp)
-                    .style(control(false)),
-                ]
-                .align_y(Alignment::Center)
-                .spacing(12),
-                search,
-                row![
-                    scrollable(list.padding([0, 12]))
-                        .id(RESULTS)
-                        .width(Length::Fill)
-                        .height(Length::Fill),
-                    preview(selected, run),
-                ]
-                .spacing(16)
-                .height(Length::Fill),
-                row![
-                    text("↑ ↓ move · ↩ runs rows marked Run · Esc closes · Uppercase means Shift-letter")
-                        .size(12)
-                        .style(muted_text)
-                        .width(Length::Fill),
-                    reshiki::accessibility::button(
-                        "help-about",
-                        "About ReShiki",
-                        text("About ReShiki").size(13)
-                    )
-                    .padding([7, 14])
-                    .on_press(Message::Updates(super::updates::Action::Show(true)))
-                    .style(control(false)),
-                    reshiki::accessibility::button(
-                        "help-examples",
-                        "Open shortcut examples: one editable drawing with labeled examples, in a new tab",
-                        text("Open shortcut examples").size(13)
-                    )
-                    .padding([7, 14])
-                    .on_press(Message::OpenShortcutExamples)
-                    .style(control(false)),
-                    reshiki::accessibility::button(
-                        "help-done",
-                        "Done; close Help and shortcuts",
-                        text("Done").size(13)
-                    )
-                    .padding([7, 18])
-                    .on_press(Message::ToggleHelp)
-                    .style(control(true))
-                ]
-                .spacing(12)
-                .align_y(Alignment::Center),
-            ]
-            .spacing(16);
-        modal(
-            base,
-            popup.into(),
-            900.,
-            650.,
-            Placement::Center,
-            Message::ToggleHelp,
-        )
+        let run = current.filter(|_| command.is_some()).map(|index| {
+            Element::from(
+                reshiki::accessibility::button(
+                    format!("help-run-{index}"),
+                    format!("Run {}", selected.map_or("", |entry| entry.name)),
+                    row![text("Run").size(13), enter_chord()]
+                        .spacing(8)
+                        .align_y(Alignment::Center),
+                )
+                .padding([5, 12])
+                .style(control(true))
+                .on_press_maybe(
+                    unavailable
+                        .is_none()
+                        .then_some(Message::Help(Action::Run(index))),
+                ),
+            )
+        });
+        let detail = selected
+            .map(|entry| {
+                selected_detail(Some(entry), entry.name, entry.description, unavailable, run)
+            })
+            .unwrap_or_else(|| Space::new().into());
+        self.palette_surface(base, search.into(), list.into(), detail)
     }
 }
 
 pub(super) enum Placement {
     Center,
-    Top,
     /// Centered, and only as tall as its content.
     #[cfg_attr(
         target_arch = "wasm32",
@@ -361,7 +291,7 @@ pub(super) enum Placement {
 }
 
 /// A dialog over a dimmed, inert workspace; clicking outside it sends
-/// `dismiss`. Top placement also lets the dialog shrink to its content.
+/// `dismiss`. Fit placement lets a short dialog shrink to its content.
 pub(super) fn modal<'a>(
     base: Element<'a, Message>,
     content: Element<'a, Message>,
@@ -376,7 +306,7 @@ pub(super) fn modal<'a>(
         .width(width)
         .height(match placement {
             Placement::Center => Length::Fixed(height),
-            Placement::Top | Placement::Fit => Length::Shrink,
+            Placement::Fit => Length::Shrink,
         })
         .max_height(height)
         .style(|theme| {
@@ -402,10 +332,7 @@ pub(super) fn modal<'a>(
         .padding(24)
         .center_x(Length::Fill)
         .height(Length::Fill);
-    let popup = match placement {
-        Placement::Center | Placement::Fit => popup.align_y(Alignment::Center),
-        Placement::Top => popup.align_y(Alignment::Start),
-    };
+    let popup = popup.align_y(Alignment::Center);
     stack![
         base,
         opaque(
@@ -470,43 +397,41 @@ fn result_row(
     } else {
         entry.name.into()
     };
-    let label = if runs {
-        format!("{name}, runs with Enter")
-    } else {
-        name.clone()
-    };
-    let run: Element<'static, Message> = if runs {
-        row![text("Run").size(11).style(muted_text), enter_chord()]
-            .spacing(4)
-            .align_y(Alignment::Center)
-            .into()
-    } else {
-        Space::new().into()
-    };
+    let label = format!(
+        "{name}, {}, {}{}",
+        entry.keys,
+        entry.scope.label(),
+        if runs {
+            ", runs with Enter"
+        } else {
+            ", shortcut reference"
+        }
+    );
     let body = container(
         row![
-            container(if entry.keys.is_empty() {
-                Space::new().into()
-            } else {
-                chord(&entry.keys, 11)
-            })
-            .width(150),
-            column![
-                text(name).size(13),
-                text(entry.description).size(11).style(muted_text),
-            ]
-            .spacing(2)
-            .width(Length::Fill),
-            text(entry.scope.label())
-                .size(11)
-                .style(muted_text)
-                .width(96),
-            container(run).width(64),
+            container(
+                row![
+                    text(name)
+                        .size(13)
+                        .wrapping(iced::widget::text::Wrapping::None),
+                    text(entry.scope.label())
+                        .size(11)
+                        .style(muted_text)
+                        .wrapping(iced::widget::text::Wrapping::None),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center)
+            )
+            .width(Length::Fill)
+            .clip(true),
+            container(chord(&entry.keys, 11)).max_width(240).clip(true),
         ]
         .spacing(10)
         .align_y(Alignment::Center),
     )
-    .padding([6, 8]);
+    .padding([0, 8])
+    .height(28)
+    .align_y(Alignment::Center);
     row_button(
         format!("help-row-{index}"),
         label,
@@ -564,57 +489,56 @@ fn drawing(label: &'static str, doc: reshiki::document::Document) -> Element<'st
     .into()
 }
 
-fn preview<'a>(
+/// The shared bottom strip; examples come from the shortcut's actual edit.
+pub(super) fn selected_detail<'a>(
     entry: Option<&'static Entry>,
+    name: &str,
+    description: &str,
+    unavailable: Option<&str>,
     run: Option<Element<'a, Message>>,
 ) -> Element<'a, Message> {
-    let mut pane = column![].spacing(10).width(300);
+    let mut summary = column![
+        text(name.to_owned()).size(15),
+        text(description.to_owned()).size(12)
+    ]
+    .spacing(5)
+    .width(Length::FillPortion(3));
     if let Some(entry) = entry {
-        pane = pane.push(
-            column![
-                chord(&entry.keys, 14),
-                text(entry.name).size(17),
-                text(entry.description).size(12),
-                text(format!("Applies to: {}", entry.scope.label()))
-                    .size(11)
-                    .style(muted_text),
-            ]
-            .spacing(6),
+        summary = summary.push(
+            text(format!("Applies to: {}", entry.scope.label()))
+                .size(11)
+                .style(muted_text),
         );
-        pane = pane.extend(run);
-        pane = pane.push(match entry.example {
-            Some(example) => match examples::render(example) {
-                Ok((before, after)) => {
-                    let (target, key) = match example {
-                        Example::Atom(key) => ("highlighted atom", key),
-                        Example::Bond(key) => ("highlighted bond", key),
-                    };
-                    column![
-                        drawing("Example: before", before),
-                        text(format!(
-                            "Point at the {target} (or move the keyboard hotspot there) and press {key}"
-                        ))
-                        .size(11)
-                        .style(muted_text),
-                        drawing("Example: after", after),
-                    ]
-                    .spacing(6)
-                    .into()
-                }
-                Err(error) => text(format!("Example unavailable: {error}"))
-                    .size(11)
-                    .style(muted_text)
-                    .into(),
-            },
-            None => Element::from(
-                text("This shortcut chooses a tool or acts on the view, a file or the selection; there is no drawing to preview.")
+    }
+    if let Some(reason) = unavailable {
+        summary = summary.push(text(reason.to_owned()).size(11).style(muted_text));
+    }
+    summary = summary.extend(run);
+    let mut strip = row![
+        scrollable(summary)
+            .width(Length::FillPortion(3))
+            .height(Length::Fill)
+    ]
+    .spacing(16)
+    .height(Length::Fill);
+    if let Some(example) = entry.and_then(|entry| entry.example) {
+        strip = strip.push(match examples::render(example) {
+            Ok((before, after)) => row![drawing("Before", before), drawing("After", after)]
+                .spacing(10)
+                .width(Length::FillPortion(4))
+                .into(),
+            Err(error) => Element::from(
+                text(format!("Example unavailable: {error}"))
                     .size(11)
                     .style(muted_text),
             ),
         });
     }
-    // Clip rather than squeeze: the footer keeps the examples action.
-    pane.clip(true).into()
+    container(strip)
+        .height(144)
+        .width(Length::Fill)
+        .clip(true)
+        .into()
 }
 
 #[cfg(test)]

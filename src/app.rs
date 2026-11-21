@@ -1450,18 +1450,18 @@ impl App {
         // The command palette's Tab cycles its filter, unless a dialog is over it.
         // A visible 3D preview keeps Tab within its own controls.
         let traverse = (!preview || dialog)
-            && (!self.commands.open || self.updates.open || self.assistant.viewed_image.is_some());
+            && (!(self.commands.open || self.help_open)
+                || self.updates.open
+                || self.assistant.viewed_image.is_some());
         reshiki::accessibility::focus_scope_with(
             file_shortcuts::wrap(
                 // The command palette and Settings sit above the floating NMR
                 // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_github_dialog(self.with_recovery_manager(
                     self.with_updates(self.with_assistant_image(self.with_settings(
-                        self.with_commands(self.with_nmr(
-                            self.with_atom_text(
-                                self.with_help(self.with_palette(self.workspace())),
-                            ),
-                        )),
+                        self.with_commands(
+                            self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
+                        ),
                     ))),
                 ))),
                 if self.prompt.is_some() {

@@ -14,6 +14,7 @@ use iced::keyboard::{
 };
 use iced::{Event, Rectangle, Size};
 
+mod keys_palette;
 mod review_close;
 mod style_status;
 
@@ -742,9 +743,7 @@ async fn help_hides_the_focus_ring_of_the_control_behind_it() {
         }
         let task = app.update(Message::ToggleHelp);
         ui.run_task(&mut app, task).await;
-        ui.key(&mut app, tab, Code::Tab, Modifiers::empty(), None)
-            .await;
-        assert_eq!(ui.focused(&app), ["help-about"]);
+        assert_eq!(ui.focused(&app), ["help-search"]);
         shots.push(pixels(&mut ui, &app));
         if focused_behind {
             let task = app.update(Message::ToggleHelp);

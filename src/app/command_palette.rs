@@ -1,5 +1,5 @@
 //! The command palette: `:` opens a fuzzy search over commands, and Enter
-//! runs the selected one. Unlike Help, it executes. Each command runs through
+//! runs the selected one. Its Keys filter searches the shortcut registry. Each command runs through
 //! the path its button, menu or key already uses, so an edit is one undo step.
 use super::{
     App, Message, Pending,
@@ -17,9 +17,18 @@ use std::{cmp::Reverse, collections::HashSet};
 pub(super) mod catalog;
 use catalog::{Category, Command, Need, Ring, Run};
 
-const SEARCH: &str = "command-palette-search";
+pub(super) const SEARCH: &str = "command-palette-search";
 const RESULTS: &str = "command-palette-results";
 const RECENT: usize = 8;
+/// The visible filters group the catalog without changing command identities.
+pub(super) const FILTERS: [Option<Category>; 6] = [
+    None,
+    Some(Category::Insert),
+    Some(Category::Edit),
+    Some(Category::View),
+    Some(Category::File),
+    Some(Category::Keys),
+];
 /// Rows that fit the list, for Page Up and Page Down.
 const PAGE: isize = 10;
 const ROW_HEIGHT: f32 = 28.;
@@ -144,25 +153,41 @@ impl State {
         position as f32 * (ROW_HEIGHT + ROW_SPACING)
             + headings as f32 * (HEADING_HEIGHT + ROW_SPACING)
     }
-    /// Categories with hits and their counts, in catalog order.
+    /// Counts for the four command groups; the Keys count comes from the registry.
     fn categories(&self) -> Vec<(Category, usize)> {
         Category::ALL
             .into_iter()
-            .map(|category| {
-                let hits = self.hits.iter().filter(|i| self.in_category(**i, category));
-                (category, hits.count())
+            .filter(|category| {
+                matches!(
+                    category,
+                    Category::Insert | Category::Edit | Category::View | Category::File
+                )
             })
-            .filter(|(_, count)| *count > 0)
+            .map(|category| {
+                let count = self
+                    .hits
+                    .iter()
+                    .filter(|i| self.in_category(**i, category))
+                    .count();
+                (category, count)
+            })
             .collect()
     }
     fn in_category(&self, index: usize, category: Category) -> bool {
-        self.items
-            .get(index)
-            .is_some_and(|c| c.category == category)
+        self.items.get(index).is_some_and(|command| match category {
+            Category::Insert => matches!(command.category, Category::Insert | Category::Tool),
+            Category::Edit => matches!(
+                command.category,
+                Category::Edit | Category::Atom | Category::Bond | Category::Analyze
+            ),
+            _ => command.category == category,
+        })
     }
     /// Show one category's hits, or all of them when it has none.
     fn set_filter(&mut self, filter: Option<Category>) {
-        self.filter = filter.filter(|f| self.categories().iter().any(|(c, _)| c == f));
+        self.filter = filter.filter(|f| {
+            FILTERS.contains(&Some(*f)) || self.hits.iter().any(|i| self.in_category(*i, *f))
+        });
         self.results = (self.hits.iter().copied())
             .filter(|i| self.filter.is_none_or(|f| self.in_category(*i, f)))
             .collect();
@@ -182,6 +207,12 @@ pub(super) fn is_shortcut(key: &Key, modifiers: Modifiers) -> bool {
 /// Keys the palette takes before its search field: closing, filtering and
 /// moving.
 pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
+    if super::help::is_shortcut(key, modifiers) {
+        return Some(Message::ToggleHelp);
+    }
+    if is_shortcut(key, modifiers) {
+        return Some(Message::Commands(Action::Open));
+    }
     if matches!(key, Key::Named(Named::Escape)) {
         return Some(Message::Commands(Action::Close));
     }
@@ -386,6 +417,24 @@ impl App {
     }
 
     pub(super) fn commands_action(&mut self, action: Action) -> Task<Message> {
+        // Filter switching also works from Keys, whose state preserves registry
+        // indexes and the existing contextual command gates.
+        if let Action::Filter(filter) = action {
+            return self.palette_filter(filter);
+        }
+        if let Action::Cycle(step) = action {
+            let active = if self.help_open {
+                Some(Category::Keys)
+            } else {
+                self.commands.filter
+            };
+            let at = FILTERS
+                .iter()
+                .position(|filter| *filter == active)
+                .unwrap_or(0) as isize;
+            let next = (at + step).rem_euclid(FILTERS.len() as isize) as usize;
+            return self.palette_filter(FILTERS[next]);
+        }
         match action {
             Action::Open => {
                 self.help_open = false;
@@ -402,27 +451,17 @@ impl App {
                 self.rank_commands();
                 return iced::widget::operation::focus(SEARCH);
             }
-            Action::Close => self.commands.open = false,
+            Action::Close => {
+                self.commands.open = false;
+                self.help_open = false;
+            }
             _ if !self.commands.open => {}
             Action::Query(query) => {
                 self.commands.query = query;
                 self.rank_commands();
                 return scroll_to_top();
             }
-            Action::Filter(filter) => {
-                self.commands.set_filter(filter);
-                // A clicked chip takes focus; typing stays in the search.
-                return Task::batch([scroll_to_top(), iced::widget::operation::focus(SEARCH)]);
-            }
-            Action::Cycle(step) => {
-                let state = &mut self.commands;
-                let mut chips = vec![None];
-                chips.extend(state.categories().into_iter().map(|(c, _)| Some(c)));
-                let at = chips.iter().position(|c| *c == state.filter).unwrap_or(0) as isize;
-                let next = (at + step).rem_euclid(chips.len() as isize) as usize;
-                state.set_filter(chips.get(next).copied().flatten());
-                return scroll_to_top();
-            }
+            Action::Filter(_) | Action::Cycle(_) => unreachable!("handled above"),
             Action::Move(step) => {
                 let state = &mut self.commands;
                 let last = state.results.len().saturating_sub(1);
@@ -471,7 +510,7 @@ impl App {
     }
 
     /// Rank the catalog for the query, favoring commands for the target.
-    fn rank_commands(&mut self) {
+    pub(super) fn rank_commands(&mut self) {
         let target = self.command_target();
         let boost = |category: Category| match category {
             Category::Bond if !target.bonds.is_empty() => 30,
@@ -893,7 +932,148 @@ impl App {
         Task::none()
     }
 
+    fn palette_filter(&mut self, filter: Option<Category>) -> Task<Message> {
+        if !(self.commands.open || self.help_open) {
+            return Task::none();
+        }
+        let query = if self.help_open {
+            self.help.query.clone()
+        } else {
+            self.commands.query.clone()
+        };
+        if filter == Some(Category::Keys) {
+            if !self.help_open {
+                let _ = self.toggle_help();
+            }
+            let task = self.help_action(super::help::Action::Query(query));
+            return Task::batch([task, iced::widget::operation::focus(super::help::SEARCH)]);
+        }
+        if self.help_open {
+            let _ = self.commands_action(Action::Open);
+            self.commands.query = query;
+            self.rank_commands();
+        }
+        self.commands.set_filter(filter);
+        Task::batch([scroll_to_top(), iced::widget::operation::focus(SEARCH)])
+    }
+
+    /// One dialog shell for Commands and Keys; only its result source changes.
+    pub(super) fn palette_surface<'a>(
+        &'a self,
+        base: Element<'a, Message>,
+        search: Element<'a, Message>,
+        list: Element<'a, Message>,
+        detail: Element<'a, Message>,
+    ) -> Element<'a, Message> {
+        let counts = self.commands.categories();
+        let query = if self.help_open {
+            &self.help.query
+        } else {
+            &self.commands.query
+        };
+        let keys = search::rank(super::help::entries(), query, self.help_contextual()).len();
+        let active = if self.help_open {
+            Some(Category::Keys)
+        } else {
+            self.commands.filter
+        };
+        let mut chips = row![].spacing(6);
+        for filter in FILTERS {
+            let label = filter.map_or("All", Category::label);
+            let count = match filter {
+                None => self.commands.hits.len(),
+                Some(Category::Keys) => keys,
+                Some(category) => counts
+                    .iter()
+                    .find(|(c, _)| *c == category)
+                    .map_or(0, |(_, n)| *n),
+            };
+            chips = chips.push(
+                reshiki::accessibility::button(
+                    format!("command-palette-filter-{}", label.to_lowercase()),
+                    format!("{label}, {count} results"),
+                    text(label).size(12),
+                )
+                .padding([3, 8])
+                .style(control(active == filter))
+                .checked(active == filter)
+                .on_press(Message::Commands(Action::Filter(filter)))
+                .tab_stop(false),
+            );
+        }
+        let list = if self.help_open {
+            scrollable(list)
+                .id(super::help::RESULTS)
+                .width(Length::Fill)
+                .height(Length::Fill)
+        } else {
+            scrollable(list)
+                .id(RESULTS)
+                .on_scroll(|viewport| Message::Commands(Action::Scrolled(viewport)))
+                .width(Length::Fill)
+                .height(Length::Fill)
+        };
+        let content = column![
+            row![
+                text("Commands & keys").size(22),
+                Space::new().width(Length::Fill),
+                reshiki::accessibility::button(
+                    "command-palette-close",
+                    "Close Commands and keys",
+                    text("×").size(25).center()
+                )
+                .width(32)
+                .height(32)
+                .padding(0)
+                .on_press(Message::Commands(Action::Close))
+                .style(control(false)),
+            ]
+            .align_y(Alignment::Center),
+            search,
+            chips,
+            list,
+            container(detail)
+                .id("command-palette-detail")
+                .width(Length::Fill),
+            row![
+                text("↑↓ Move · ↵ Run · Tab Filter · Esc")
+                    .size(12)
+                    .style(muted_text)
+                    .width(Length::Fill),
+                reshiki::accessibility::button(
+                    "help-about",
+                    "About ReShiki",
+                    text("About").size(12)
+                )
+                .on_press(Message::Updates(super::updates::Action::Show(true)))
+                .style(control(false)),
+                reshiki::accessibility::button(
+                    "help-examples",
+                    "Open shortcut examples",
+                    text("Examples").size(12)
+                )
+                .on_press(Message::OpenShortcutExamples)
+                .style(control(false)),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        ]
+        .spacing(10)
+        .height(Length::Fill);
+        modal(
+            base,
+            content.into(),
+            760.,
+            600.,
+            Placement::Center,
+            Message::Commands(Action::Close),
+        )
+    }
+
     pub(super) fn with_commands<'a>(&'a self, base: Element<'a, Message>) -> Element<'a, Message> {
+        if self.help_open {
+            return self.with_keys(base);
+        }
         if !self.commands.open {
             // Keep the workspace at the same child position, as Help does.
             return stack![base].into();
@@ -916,7 +1096,7 @@ impl App {
         };
         let search = reshiki::accessibility::text_input(
             SEARCH,
-            name,
+            format!("{name}; {}", self.command_target_hint(&target)),
             "Commands, structures, names",
             &state.query,
         )
@@ -975,83 +1155,23 @@ impl App {
                     .style(muted_text),
             );
         }
-        let mut chips = row![].spacing(6);
-        let categories = state.categories().into_iter();
-        let all = (None, "All", state.hits.len());
-        for (filter, label, count) in std::iter::once(all)
-            .chain(categories.map(|(category, count)| (Some(category), category.label(), count)))
-        {
-            let active = state.filter == filter;
-            chips = chips.push(
-                reshiki::accessibility::button(
-                    format!("command-palette-filter-{}", label.to_lowercase()),
-                    format!(
-                        "{label}, {count} result{}",
-                        if count == 1 { "" } else { "s" }
-                    ),
-                    text(format!("{label} {count}")).size(12),
-                )
-                .padding([2, 8])
-                .style(control(active))
-                .checked(active)
-                .on_press(Message::Commands(Action::Filter(filter)))
-                .tab_stop(false),
-            );
-        }
-        // The selected command's description, or why it cannot run.
+        let entry = current.and_then(|command| {
+            super::help::entries()
+                .iter()
+                .find(|entry| entry.name.eq_ignore_ascii_case(&command.name))
+        });
         let detail = current
-            .map(|c| {
-                self.need_unavailable(c.need, &target)
-                    .unwrap_or(&c.detail)
-                    .to_owned()
-            })
-            .unwrap_or_default();
-        let content = column![
-            row![
-                text("Commands").size(22),
-                Space::new().width(Length::Fill),
-                reshiki::accessibility::button(
-                    "command-palette-close",
-                    "Close the command palette",
-                    text("×").size(25).center()
+            .map(|command| {
+                super::help::selected_detail(
+                    entry,
+                    &command.name,
+                    &command.detail,
+                    self.need_unavailable(command.need, &target),
+                    None,
                 )
-                .width(32)
-                .height(32)
-                .padding(0)
-                .on_press(Message::Commands(Action::Close))
-                .style(control(false)),
-            ]
-            .align_y(Alignment::Center),
-            search,
-            chips,
-            container(
-                scrollable(list.padding([0, 12]))
-                    .id(RESULTS)
-                    .on_scroll(|viewport| Message::Commands(Action::Scrolled(viewport)))
-                    .width(Length::Fill)
-                    .height(Length::Shrink),
-            )
-            // Leave room for the header and footer within the dialog's cap.
-            .max_height(320),
-            container(text(detail).size(12).wrapping(Wrapping::None))
-                .width(Length::Fill)
-                .clip(true),
-            text(format!(
-                "↑ ↓ move · Tab filters · ↩ runs · Esc closes · {}",
-                self.command_target_hint(&target)
-            ))
-            .size(12)
-            .style(muted_text),
-        ]
-        .spacing(14);
-        modal(
-            base,
-            content.into(),
-            760.,
-            560.,
-            Placement::Top,
-            Message::Commands(Action::Close),
-        )
+            })
+            .unwrap_or_else(|| Space::new().into());
+        self.palette_surface(base, search.into(), list.into(), detail)
     }
 }
 
