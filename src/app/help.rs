@@ -280,16 +280,13 @@ impl App {
 
 pub(super) enum Placement {
     Center,
+    Top,
     /// Centered, and only as tall as its content.
-    #[cfg_attr(
-        target_arch = "wasm32",
-        expect(dead_code, reason = "Only the GitHub dialogs fit their content")
-    )]
     Fit,
 }
 
 /// A dialog over a dimmed, inert workspace; clicking outside it sends
-/// `dismiss`. Fit placement lets a short dialog shrink to its content.
+/// `dismiss`. Top placement also lets the dialog shrink to its content.
 pub(super) fn modal<'a>(
     base: Element<'a, Message>,
     content: Element<'a, Message>,
@@ -304,7 +301,7 @@ pub(super) fn modal<'a>(
         .width(width)
         .height(match placement {
             Placement::Center => Length::Fixed(height),
-            Placement::Fit => Length::Shrink,
+            Placement::Top | Placement::Fit => Length::Shrink,
         })
         .max_height(height)
         .style(|theme| {
@@ -330,7 +327,10 @@ pub(super) fn modal<'a>(
         .padding(24)
         .center_x(Length::Fill)
         .height(Length::Fill);
-    let popup = popup.align_y(Alignment::Center);
+    let popup = match placement {
+        Placement::Center | Placement::Fit => popup.align_y(Alignment::Center),
+        Placement::Top => popup.align_y(Alignment::Start),
+    };
     stack![
         base,
         opaque(
