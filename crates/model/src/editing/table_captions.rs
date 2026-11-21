@@ -222,7 +222,7 @@ impl Caption {
     }
 
     fn source_inset(&self, a: &Annotation, frame: Frame, target: Point) -> Option<Point> {
-        if self.ink.angle != 0. || a.angle != 0. {
+        if !target.is_finite() || self.ink.angle != 0. || a.angle != 0. {
             return None;
         }
         let (old_lo, old_hi) = axis_aligned_bounds(self.frame)?;
@@ -236,15 +236,36 @@ impl Caption {
         }
         // Either world edge can be the excluded local 1 edge after reflection.
         // Keep the insertion point just inside without materialising a width.
-        let inset = size.x.max(size.y) * 0.000001;
-        let min_y = (lo.y + inset).max(lo.y - self.ink.bounds.0.y);
-        let max_y = (hi.y - inset).min(hi.y - self.ink.bounds.1.y);
-        if min_y > max_y {
+        if !size.is_finite() || size.x <= 0. || size.y <= 0. {
+            return None;
+        }
+        let inset = Point::new(
+            (size.x * 0.000001).min(size.x * 0.25),
+            (size.y * 0.000001).min(size.y * 0.25),
+        );
+        let min = Point::new(
+            lo.x + inset.x,
+            (lo.y + inset.y).max(lo.y - self.ink.bounds.0.y),
+        );
+        let max = Point::new(
+            hi.x - inset.x,
+            (hi.y - inset.y).min(hi.y - self.ink.bounds.1.y),
+        );
+        let position = Point::new(
+            lo.x + self.ink.position.x - old_lo.x,
+            target.y - self.ink.centre.y,
+        );
+        if !min.is_finite()
+            || !max.is_finite()
+            || !position.is_finite()
+            || min.x > max.x
+            || min.y > max.y
+        {
             return None;
         }
         Some(Point::new(
-            (lo.x + self.ink.position.x - old_lo.x).clamp(lo.x + inset, hi.x - inset),
-            (target.y - self.ink.centre.y).clamp(min_y, max_y),
+            position.x.clamp(min.x, max.x),
+            position.y.clamp(min.y, max.y),
         ))
     }
 }
