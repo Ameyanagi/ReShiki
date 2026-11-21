@@ -1012,6 +1012,15 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                     | super::figure_panels::Action::ApplyGutter
                     | super::figure_panels::Action::Align(_)
             )
+            | Message::Tlc(
+                super::tlc::Action::Apply(..)
+                    | super::tlc::Action::Toggle(..)
+                    | super::tlc::Action::Paint(..)
+                    | super::tlc::Action::AddLane(..)
+                    | super::tlc::Action::DeleteLane(..)
+                    | super::tlc::Action::AddSpot(..)
+                    | super::tlc::Action::DeleteSpot(..)
+            )
             | Message::Graphics(
                 super::graphics::Action::Style(_)
                     | super::graphics::Action::Superscript(_)
