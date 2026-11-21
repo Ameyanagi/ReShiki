@@ -899,7 +899,8 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         {
             let highlight = Path::new(|builder| {
                 use reshiki::equipment::geometry::Seg;
-                let screen = |[x, y]| self.camera.screen(World::new(x as f32, y as f32), paper);
+                let screen =
+                    |[x, y]: [f64; 2]| self.camera.screen(World::new(x as f32, y as f32), paper);
                 for segment in shape {
                     match *segment {
                         Seg::Move(p) => builder.move_to(screen(p)),

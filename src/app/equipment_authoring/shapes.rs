@@ -1,5 +1,6 @@
 //! Per-shape controls for the detached piece draft.
 use super::*;
+use iced::widget::column;
 use reshiki::equipment::authoring::{ShapeStyle, closed_shape};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
