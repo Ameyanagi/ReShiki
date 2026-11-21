@@ -193,7 +193,6 @@ fn moving_onto_an_elongated_painted_shape_inserts_with_captions_settings_and_one
             &before,
             &landed,
             &moved,
-            Some(app.appearance.two_decimal_weight),
         )
         .unwrap_or_else(|| {
             panic!(

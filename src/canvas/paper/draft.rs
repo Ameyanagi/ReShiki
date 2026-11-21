@@ -18,7 +18,6 @@ impl MoleculeCanvas<'_> {
         from: World,
         to: World,
         zoom: f32,
-        two_decimal_weight: bool,
     ) -> (
         reshiki::document::Document,
         Option<reshiki::cycles::Target>,
@@ -32,7 +31,6 @@ impl MoleculeCanvas<'_> {
         canvas.tool = Tool::Select;
         canvas.selected = ids;
         canvas.smart_guides = false;
-        canvas.two_decimal_weight = two_decimal_weight;
         canvas.camera.center = from.lerp(to, 0.5);
         canvas.camera.zoom = zoom;
         let bounds = Rectangle::new(
@@ -522,12 +520,7 @@ impl MoleculeCanvas<'_> {
                     *chain_badge = Some((p, format!("Release to take it out of {names}"), true));
                 }
                 // Show the complete candidate, including its refitted cycle.
-                if let Some(proposal) = reshiki::cycles::propose_drop_from(
-                    self.doc,
-                    preview,
-                    ids,
-                    Some(self.two_decimal_weight),
-                ) {
+                if let Some(proposal) = reshiki::cycles::propose_drop_from(self.doc, preview, ids) {
                     *preview = Cow::Owned(proposal.doc);
                     *chain_badge = Some((p, proposal.target.tag.clone(), true));
                     *cycle_drop = Some(proposal.target);

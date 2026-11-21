@@ -409,12 +409,9 @@ impl App {
                         joined = Some(format!("Took it out of {names}"));
                     }
                     // Commit the same candidate geometry the drag showed.
-                    if let Some(proposal) = reshiki::cycles::propose_drop_from(
-                        &before,
-                        &self.tab.doc,
-                        &ids,
-                        Some(self.appearance.two_decimal_weight),
-                    ) {
+                    if let Some(proposal) =
+                        reshiki::cycles::propose_drop_from(&before, &self.tab.doc, &ids)
+                    {
                         self.tab.doc = proposal.doc;
                         prepared_cycle = true;
                         joined = Some(if proposal.left_reaction {

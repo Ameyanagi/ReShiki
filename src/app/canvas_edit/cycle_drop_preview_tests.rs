@@ -87,14 +87,8 @@ fn native_bowed_cycle_drag_previews_the_document_that_release_commits() {
             let moved: Vec<_> = (40..=85).collect();
             let from = middle(&before, &moved);
             let to = on_painted_step(&before);
-            let (preview, target, edit) = MoleculeCanvas::select_drag_candidate(
-                &before,
-                &moved,
-                from,
-                to,
-                zoom,
-                app.appearance.two_decimal_weight,
-            );
+            let (preview, target, edit) =
+                MoleculeCanvas::select_drag_candidate(&before, &moved, from, to, zoom);
             let target = target.expect("the normal drag previews a painted step drop");
             assert_eq!(
                 (target.cycle, target.role),
@@ -139,14 +133,8 @@ fn a_normal_drag_that_misses_the_cycle_previews_and_commits_the_same_loose_part(
     let before = app.tab.doc.clone();
     let moved: Vec<_> = (40..=85).collect();
     let from = middle(&before, &moved);
-    let (preview, target, edit) = MoleculeCanvas::select_drag_candidate(
-        &before,
-        &moved,
-        from,
-        Point::new(3000., 2500.),
-        1.,
-        app.appearance.two_decimal_weight,
-    );
+    let (preview, target, edit) =
+        MoleculeCanvas::select_drag_candidate(&before, &moved, from, Point::new(3000., 2500.), 1.);
     assert!(target.is_none());
     assert!(cycles::role_of(&preview, moved[0]).is_none());
     let _ = app.update(Message::Canvas(edit));
@@ -158,47 +146,156 @@ fn a_normal_drag_that_misses_the_cycle_previews_and_commits_the_same_loose_part(
 }
 
 #[test]
-fn a_cycle_drag_keeps_linked_captions_and_uses_the_current_precision_in_its_snapshot() {
+fn a_cycle_drag_preserves_each_captions_mass_places_in_preview_commit_and_undo() {
+    use reshiki::linked_properties::{self, Property};
     for two_decimal_weight in [false, true] {
-        let (mut app, _) = App::new();
-        app.tab.busy = false;
-        app.appearance.two_decimal_weight = two_decimal_weight;
-        app.tab.doc = native_bowed_cycle(Shape::Ellipse);
-        // The open file can carry the opposite precision from the current UI.
-        let atoms = captioned_ethane(&mut app.tab.doc, !two_decimal_weight);
-        let before = app.tab.doc.clone();
-        let moved = reshiki::molecule_names::include_annotations(&before, &atoms);
-        let from = middle(&before, &atoms);
-        let to = on_painted_step(&before);
-        let (preview, target, edit) = MoleculeCanvas::select_drag_candidate(
-            &before,
-            &moved,
-            from,
-            to,
-            1.75,
-            two_decimal_weight,
-        );
-        assert!(target.is_some());
-        assert_eq!(preview.molecule_names, before.molecule_names);
-        assert_eq!(preview.property_captions.len(), 1);
-        let caption = &preview.property_captions[0];
-        assert_eq!(caption.two_decimal_weight, two_decimal_weight);
-        assert_eq!(
-            caption.text,
-            if two_decimal_weight {
-                "Mol. Wt.: 30.07"
-            } else {
-                "Mol. Wt.: 30.070"
+        for property in [Property::Weight, Property::ExactMass] {
+            for custom_places in [false, true] {
+                let (mut app, _) = App::new();
+                app.tab.busy = false;
+                app.appearance.two_decimal_weight = two_decimal_weight;
+                app.tab.doc = native_bowed_cycle(Shape::Ellipse);
+                // Imported captions may use a different default from the UI.
+                let atoms = captioned_ethane(&mut app.tab.doc, !two_decimal_weight);
+                if property == Property::ExactMass {
+                    linked_properties::toggle(
+                        &mut app.tab.doc,
+                        &atoms,
+                        Property::Weight,
+                        Default::default(),
+                        !two_decimal_weight,
+                    )
+                    .unwrap();
+                    linked_properties::toggle(
+                        &mut app.tab.doc,
+                        &atoms,
+                        Property::ExactMass,
+                        Default::default(),
+                        !two_decimal_weight,
+                    )
+                    .unwrap();
+                }
+                // A cycle drop must not rewrite captions outside the moved part.
+                let unrelated = captioned_ethane(&mut app.tab.doc, !two_decimal_weight);
+                linked_properties::toggle(
+                    &mut app.tab.doc,
+                    &unrelated,
+                    Property::ExactMass,
+                    Default::default(),
+                    !two_decimal_weight,
+                )
+                .unwrap();
+                let unrelated_ids =
+                    reshiki::molecule_names::include_annotations(&app.tab.doc, &unrelated);
+                app.tab.doc.translate(&unrelated_ids, 2000., -1500.);
+                if custom_places {
+                    let before_places = app.tab.doc.clone();
+                    linked_properties::set_places(
+                        &mut app.tab.doc,
+                        &atoms,
+                        property,
+                        if property == Property::Weight { 5 } else { 2 },
+                        two_decimal_weight,
+                    )
+                    .unwrap();
+                    linked_properties::set_places(
+                        &mut app.tab.doc,
+                        &unrelated,
+                        Property::Weight,
+                        1,
+                        two_decimal_weight,
+                    )
+                    .unwrap();
+                    linked_properties::set_places(
+                        &mut app.tab.doc,
+                        &unrelated,
+                        Property::ExactMass,
+                        5,
+                        two_decimal_weight,
+                    )
+                    .unwrap();
+                    linked_properties::reconcile(&mut app.tab.doc, &before_places);
+                }
+                let before = app.tab.doc.clone();
+                let link = before
+                    .property_captions
+                    .iter()
+                    .find(|link| link.atoms == atoms)
+                    .unwrap();
+                assert_eq!(link.two_decimal_weight, !two_decimal_weight);
+                assert_eq!(
+                    link.places(property),
+                    match (property, custom_places) {
+                        (Property::Weight, true) => 5,
+                        (Property::Weight, false) if two_decimal_weight => 3,
+                        (Property::Weight, false) => 2,
+                        (Property::ExactMass, true) => 2,
+                        (Property::ExactMass, false) => 4,
+                        _ => unreachable!(),
+                    }
+                );
+                if !custom_places {
+                    assert_eq!((link.weight_places, link.exact_mass_places), (None, None));
+                }
+                let moved = reshiki::molecule_names::include_annotations(&before, &atoms);
+                let from = middle(&before, &atoms);
+                let to = on_painted_step(&before);
+                let (preview, target, edit) =
+                    MoleculeCanvas::select_drag_candidate(&before, &moved, from, to, 1.75);
+                assert_eq!(
+                    target.as_ref().map(|target| (target.cycle, target.role)),
+                    Some((191, Role::Intermediate(1)))
+                );
+                assert_eq!(preview.molecule_names, before.molecule_names);
+                assert_eq!(
+                    preview.property_captions, before.property_captions,
+                    "Moved and unrelated captions retain their own effective places and text"
+                );
+                for annotation in before
+                    .annotations
+                    .iter()
+                    .filter(|a| unrelated_ids.contains(&a.id))
+                {
+                    assert_eq!(
+                        preview.annotations.iter().find(|a| a.id == annotation.id),
+                        Some(annotation)
+                    );
+                }
+                let delta = Point::new(to.x - from.x, to.y - from.y);
+                for annotation in before.annotations.iter().filter(|a| moved.contains(&a.id)) {
+                    let after = preview
+                        .annotations
+                        .iter()
+                        .find(|a| a.id == annotation.id)
+                        .unwrap();
+                    assert!(
+                        after
+                            .position
+                            .distance(annotation.position.offset(delta.x, delta.y))
+                            < 0.003
+                    );
+                    assert_eq!(after.text, annotation.text);
+                    assert_eq!(after.format, annotation.format);
+                }
+                assert_eq!(
+                    app.tab.doc, before,
+                    "The live document stays unchanged during drag"
+                );
+                let _ = app.update(Message::Canvas(edit));
+                assert!(!app.error, "{}", app.status);
+                assert_eq!(app.tab.doc, preview);
+                assert_eq!(app.tab.history.undo_frames().len(), 1);
+                assert_eq!(
+                    Document::from_json(&preview.file_json().unwrap()).unwrap(),
+                    preview
+                );
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+                let _ = app.update(Message::Redo);
+                assert_eq!(app.tab.doc, preview);
             }
-        );
-        let _ = app.update(Message::Canvas(edit));
-        assert!(!app.error, "{}", app.status);
-        assert_eq!(app.tab.doc, preview);
-        assert_eq!(app.tab.history.undo_frames().len(), 1);
-        let _ = app.update(Message::Undo);
-        assert_eq!(app.tab.doc, before);
-        let _ = app.update(Message::Redo);
-        assert_eq!(app.tab.doc, preview);
+        }
     }
 }
 
@@ -227,14 +324,8 @@ fn suzuki_catalyst_drop_preserves_its_pose_through_preview_release_reopen_move_a
     app.tab.busy = false;
     app.tab.doc = before.clone();
     app.tab.camera.zoom = 0.74;
-    let (preview, drop, edit) = MoleculeCanvas::select_drag_candidate(
-        &before,
-        &moved,
-        from,
-        target,
-        app.tab.camera.zoom,
-        app.appearance.two_decimal_weight,
-    );
+    let (preview, drop, edit) =
+        MoleculeCanvas::select_drag_candidate(&before, &moved, from, target, app.tab.camera.zoom);
     let drop = drop.expect("the actual bowed Suzuki shaft accepts the catalyst intermediate");
     assert_eq!((drop.cycle, drop.role), (191, Role::Intermediate(2)));
     for atom in before.atoms.iter().filter(|atom| moved.contains(&atom.id)) {

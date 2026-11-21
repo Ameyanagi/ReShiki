@@ -1136,25 +1136,16 @@ pub struct DropProposal {
 }
 
 pub fn propose_drop(doc: &Document, moved: &[u64]) -> Option<DropProposal> {
-    propose_drop_from(doc, doc, moved, None)
+    propose_drop_from(doc, doc, moved)
 }
 
 /// Prepare a complete drag result from its unchanged press/revision baseline.
 /// The caller may install this validated snapshot directly, without running
-/// caption/endpoint repair a second time at commit.
-pub fn propose_drop_from(
-    before: &Document,
-    doc: &Document,
-    moved: &[u64],
-    two_decimal_weight: Option<bool>,
-) -> Option<DropProposal> {
+/// caption/endpoint repair a second time at commit. Moving geometry retains
+/// existing caption precision rather than applying new-caption preferences.
+pub fn propose_drop_from(before: &Document, doc: &Document, moved: &[u64]) -> Option<DropProposal> {
     let mut target = drop_target(doc, moved)?;
     let mut candidate = doc.clone();
-    if let Some(precision) = two_decimal_weight {
-        for link in &mut candidate.property_captions {
-            link.two_decimal_weight = precision;
-        }
-    }
     let left_reaction = assign(&mut candidate, &target);
     if !target
         .part
