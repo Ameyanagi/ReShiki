@@ -41,7 +41,7 @@ Each shape has an `id`, a `layer`, a `material`, a `role` and a `path` in SVG pa
 - `layer`: `back`, `body`, `inner` or `front`. A setup paints every back layer, then the glass, then the inner layers, then the body details, then every front layer, so one clamp finger passes behind a neck and the other in front.
 - `depth` (−8 to 8) orders shapes within a layer across a setup.
 - `material`: `glass`, `frosted`, `ptfe`, `rubber`, `plastic`, `metal`, `porcelain`, `cork`, `paper`, `silica`, `sand`, `liquid` or `ink` (painted like outlines, for a stopcock bore). `color` overrides the paint.
-- `role`: `glass` shapes on the body layer join one silhouette, like fused glass; `solid` is filled and outlined; `detail` is a line.
+- `role`: `glass` shapes on the body layer join one silhouette, like fused glass; `solid` is filled and outlined; `detail` is a 0.4 pt line. Preview format 0 also supports `outline`, a 0.6 pt line without a fill. Outline-only shapes do not provide a filled body or liquid region. This extends the preview format; existing definitions keep their prior weights, and format 1 does not accept the new role.
 - `style`: `line` or `shaded` limits a shape to one style, such as a highlight.
 - `part`: the movable part the shape belongs to.
 - `when`: `{"stopcock": ["open", "all"]}` draws the shape only in those states.

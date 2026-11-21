@@ -1130,6 +1130,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         reaction_preview: None,
         reviewing_pair: false,
         optimizer: None,
+        equipment_authoring: None,
         keyboard_target: None,
         keyboard_marker: false,
         morph: None,
@@ -3994,4 +3995,90 @@ fn text_in_a_front_shape_picks_its_own_shape_over_a_filled_one_below() {
     assert_eq!(hit_object(&doc, on_text, 1.), Some(2));
     // Beside the outlined shape the filled one shows.
     assert_eq!(hit_object(&doc, World::new(70., 70.), 1.), Some(1));
+}
+
+#[test]
+fn equipment_authoring_measurements_own_raw_clicks_over_selected_handles() {
+    use reshiki::graphics::{Graphic, GraphicKind, GraphicStyle};
+    let mut doc = Document::default();
+    doc.graphics.push(Graphic::dragged(
+        1,
+        GraphicKind::Rectangle,
+        World::new(-40., -30.),
+        World::new(40., 30.),
+        GraphicStyle::default(),
+        Default::default(),
+        false,
+    ));
+    let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(600., 400.));
+    for rulers in [false, true] {
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.selected = &[1];
+        canvas.tool = Tool::Select;
+        canvas.camera = Camera {
+            center: World::new(15., -20.),
+            zoom: 2.,
+        };
+        canvas.guides.rulers = rulers;
+        canvas.equipment_authoring = Some(EquipmentAuthoring {
+            points: &[],
+            measuring: true,
+            direction: None,
+        });
+        let paper = canvas.guides.paper(bounds);
+        let mut state = State::default();
+        for world in [World::new(-40., -30.), World::new(40., 30.)] {
+            let local = canvas.camera.screen(world, paper);
+            let pointer = local + iced::Vector::new(paper.x, paper.y);
+            let cursor = mouse::Cursor::Available(pointer);
+            canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::CursorMoved { position: pointer }),
+                bounds,
+                cursor,
+            );
+            let action = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                    bounds,
+                    cursor,
+                )
+                .unwrap();
+            let Some(Edit::EquipmentAuthoringPoint(point)) = action.into_inner().0 else {
+                panic!("Measurement owns the handle");
+            };
+            assert!(point.distance(world) < 0.001, "{point:?} != {world:?}");
+            assert!(state.gesture.is_none());
+            let released = canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                cursor,
+            );
+            assert!(
+                released.and_then(|action| action.into_inner().0).is_none(),
+                "No edit on release"
+            );
+        }
+        canvas.equipment_authoring = Some(EquipmentAuthoring {
+            points: &[],
+            measuring: false,
+            direction: None,
+        });
+        let pointer = Point::new(bounds.center_x(), bounds.center_y());
+        let cursor = mouse::Cursor::Available(pointer);
+        let action = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                bounds,
+                cursor,
+            )
+            .unwrap();
+        assert!(
+            action.into_inner().0.is_none(),
+            "Preview refuses selection gestures"
+        );
+    }
 }

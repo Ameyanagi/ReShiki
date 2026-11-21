@@ -14,6 +14,18 @@
     "category",
     "units"
   ],
+  "allOf": [
+    {
+      "if": { "properties": { "format_version": { "const": 1 } } },
+      "then": {
+        "properties": {
+          "shapes": {
+            "items": { "properties": { "role": { "enum": ["glass", "solid", "detail"] } } }
+          }
+        }
+      }
+    }
+  ],
   "properties": {
     "format": {
       "const": "reshiki-piece"
@@ -289,8 +301,8 @@
           "maxItems": 3
         },
         "role": {
-          "enum": ["glass", "solid", "detail"],
-          "description": "glass joins the piece's one silhouette; solid is filled and outlined; detail is a stroke."
+          "enum": ["glass", "solid", "detail", "outline"],
+          "description": "glass joins the piece's one silhouette; solid is filled and outlined; detail is a 0.4 pt stroke; outline is a 0.6 pt stroke, available only in preview format 0."
         },
         "style": {
           "enum": ["line", "shaded"]

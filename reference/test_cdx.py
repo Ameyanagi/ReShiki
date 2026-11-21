@@ -13,6 +13,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class BinaryDrawingTests(unittest.TestCase):
+    def test_dipole_flag_is_implied_and_old_byte_flags_still_read(self):
+        plain = to_cdx("<CDXML><page id='1'><arrow id='2'/></page></CDXML>")
+        self.assertEqual(len(plain), 48)
+        expected = plain[:40] + property_bytes(0xA3A, b"") + plain[40:]
+        self.assertEqual(
+            to_cdx("<CDXML><page id='1'><arrow id='2' Dipole='yes'/></page></CDXML>"),
+            expected,
+        )
+        self.assertEqual(
+            to_cdx("<CDXML><page id='1'><arrow id='2' Dipole='no'/></page></CDXML>"),
+            plain,
+        )
+        for payload, flag in [(b"", "yes"), (b"\1", "yes"), (b"\0", "no")]:
+            with self.subTest(payload=payload):
+                old = plain[:40] + property_bytes(0xA3A, payload) + plain[40:]
+                decoded = from_cdx(old)
+                self.assertEqual(ET.fromstring(decoded).find(".//arrow").get("Dipole"), flag)
+                self.assertEqual(to_cdx(decoded), expected if flag == "yes" else plain)
+
     def test_native_clipboard_fixture_has_expected_structure(self):
         data = (ROOT / "tests/fixtures/native-ethyl-clipboard.cdx").read_bytes()
         result = handle(

@@ -1125,3 +1125,164 @@ fn a_stranded_molecule_keeps_its_linked_caption() {
     );
     doc.validate().unwrap();
 }
+
+#[test]
+fn tidy_spaces_intermediates_evenly_and_lines_up_side_parts() {
+    let (mut doc, id, [pd0, oa, tm]) = suzuki();
+    let (center, radius) = graphic(&doc, id).cycle_circle();
+    let bond = doc.drawing_style.bond_length_world;
+    let angle = |doc: &Document, t: u64| {
+        let c = center_of(ink(doc, t));
+        (c.y - center.y).atan2(c.x - center.x)
+    };
+    let put = |doc: &mut Document, t: u64, a: f32, r: f32| {
+        let c = center_of(ink(doc, t));
+        let to = center.offset(r * a.cos(), r * a.sin());
+        doc.translate(&[t], to.x - c.x, to.y - c.y);
+    };
+    // Crowd the second intermediate toward the first, off the circle.
+    let (a0, a1) = (angle(&doc, pd0), angle(&doc, oa));
+    put(&mut doc, oa, a0 + (a1 - a0) * 0.4, radius + 0.4 * bond);
+    // A reagent and a product of step 1, both badly placed; a product of
+    // step 2 inside the circle.
+    let add = |doc: &mut Document, role: Role, label: &str, a: f32, r: f32| {
+        let t = text(doc, Point::default(), label);
+        put(doc, t, a, r);
+        let target = Target {
+            cycle: id,
+            role,
+            part: vec![t],
+            ink: ink(doc, t),
+            arc: vec![],
+            tag: String::new(),
+        };
+        super::assign(doc, &target);
+        t
+    };
+    let reagent = add(
+        &mut doc,
+        Role::Reagent(0),
+        "Ar–X",
+        a0 + 0.1,
+        radius + 3. * bond,
+    );
+    let product = add(
+        &mut doc,
+        Role::Product(0),
+        "X–",
+        a0 + 0.2,
+        radius + 1.5 * bond,
+    );
+    let inside = add(&mut doc, Role::Product(1), "B(OH)3", a1 + 0.3, radius * 0.6);
+    // Step 1's arc starts well after its first intermediate.
+    if let Some(c) = doc
+        .graphics
+        .iter_mut()
+        .find(|g| g.id == id)
+        .and_then(|g| g.cycle.as_deref_mut())
+    {
+        c.steps[0].lead_pt = 40.;
+    }
+    let before = doc.clone();
+    assert!(super::tidy(&mut doc, id));
+    doc.validate().unwrap();
+    // Evenly round, in order, each centred on the circle.
+    let third = TAU / 3.;
+    let angles = [pd0, oa, tm].map(|t| angle(&doc, t));
+    for (k, t) in [pd0, oa, tm].into_iter().enumerate() {
+        let d = center_of(ink(&doc, t)).distance(center);
+        assert!(
+            (d - radius).abs() < 0.5,
+            "intermediate {k} at {d}, not {radius}"
+        );
+        let step = (angles[(k + 1) % 3] - angles[k]).rem_euclid(TAU);
+        assert!((step - third).abs() < 1e-3, "step {k} spans {step}");
+    }
+    // Side parts sit beside their step's drawn arc, which starts after the
+    // step's extra space: reagents in its first half, products in its
+    // second, on the side they were on and still within the cycle's reach.
+    let drawn = drawn(&doc, graphic(&doc, id));
+    let arc = |s: usize| &drawn.arrows[drawn.arcs.iter().position(|a| *a == Some(s)).unwrap()];
+    let beside = |t: u64, s: usize, along: f32| {
+        let on = arc(s).point(along);
+        let a = (on.y - center.y).atan2(on.x - center.x);
+        let c = center_of(ink(&doc, t));
+        let d = c.distance(center);
+        assert!(((c.y - center.y).atan2(c.x - center.x) - a).abs() < 1e-3);
+        assert!(super::holds(&doc, id, &[t]), "{t} out of reach");
+        d - on.distance(center)
+    };
+    assert!(beside(reagent, 0, 0.3) > bond);
+    assert!(beside(product, 0, 0.7) > bond);
+    assert!(beside(inside, 1, 0.7) < -bond);
+    // Everything keeps its role, and a second tidy moves nothing.
+    assert_eq!(cycle(&doc, id), cycle(&before, id));
+    assert!(!super::tidy(&mut doc, id));
+}
+
+#[test]
+fn tidy_keeps_side_parts_on_their_side_of_bowed_arcs() {
+    for (bow, inside) in [(72., true), (-72., false)] {
+        let mut doc = Document::default();
+        let centered_text = |doc: &mut Document, at: Point, label: &str| {
+            let id = text(doc, Point::default(), label);
+            let from = center_of(ink(doc, id));
+            doc.translate(&[id], at.x - from.x, at.y - from.y);
+            id
+        };
+        let parts = [
+            Point::new(0., -200.),
+            Point::new(200., 0.),
+            Point::new(0., 200.),
+            Point::new(-200., 0.),
+        ]
+        .into_iter()
+        .map(|at| centered_text(&mut doc, at, "Pd"))
+        .collect::<Vec<_>>();
+        let (id, _) = make(&mut doc, &parts).unwrap();
+        let (center, radius) = graphic(&doc, id).cycle_circle();
+        let r = if inside { radius * 0.6 } else { radius * 1.3 };
+        let side = centered_text(&mut doc, super::polar(center, r, -0.8), "ArX");
+        let target = Target {
+            cycle: id,
+            role: Role::Reagent(0),
+            part: vec![side],
+            ink: ink(&doc, side),
+            arc: vec![],
+            tag: String::new(),
+        };
+        super::assign(&mut doc, &target);
+        doc.graphics
+            .iter_mut()
+            .find(|g| g.id == id)
+            .unwrap()
+            .cycle
+            .as_deref_mut()
+            .unwrap()
+            .steps[0]
+            .bow_pt = bow;
+        let roles = cycle(&doc, id).clone();
+
+        assert!(super::tidy(&mut doc, id));
+        let placed = center_of(ink(&doc, side)).distance(center);
+        assert_eq!(placed < radius, inside, "bow {bow}: placed at {placed}");
+        assert!(super::holds(&doc, id, &[side]));
+        assert_eq!(cycle(&doc, id), &roles);
+        assert!(!super::tidy(&mut doc, id), "bow {bow}: second tidy moved");
+        doc.validate().unwrap();
+    }
+}
+
+#[test]
+fn tidy_leaves_an_empty_cycle_and_a_plain_circle_alone() {
+    let mut doc = Document::default();
+    let id = super::insert(&mut doc, Point::default(), 100.);
+    let plain = super::insert(&mut doc, Point::new(400., 0.), 100.);
+    if let Some(g) = doc.graphics.iter_mut().find(|g| g.id == plain) {
+        g.cycle = None;
+    }
+    let before = doc.clone();
+    assert!(!super::tidy(&mut doc, id));
+    assert!(!super::tidy(&mut doc, plain));
+    assert_eq!(doc, before);
+}

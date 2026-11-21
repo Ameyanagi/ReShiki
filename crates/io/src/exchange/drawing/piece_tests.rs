@@ -3,6 +3,63 @@ use crate::chemistry::cdxml;
 use crate::equipment::{builtin, placed};
 
 #[test]
+fn authored_open_outlines_and_details_keep_widths_in_cdxml_and_cdx() {
+    use crate::equipment::authoring::Draft;
+    use crate::graphics::{Graphic, GraphicKind, GraphicStyle};
+    let mut source = Document::default();
+    for (id, y, width_pt) in [(1, 0., 0.6), (2, 10., 0.4)] {
+        source.graphics.push(Graphic::dragged(
+            id,
+            GraphicKind::Line,
+            Point::new(0., y),
+            Point::new(40., y),
+            GraphicStyle {
+                width_pt,
+                ..Default::default()
+            },
+            Default::default(),
+            false,
+        ));
+    }
+    let mut draft = Draft::from_selection(&source, &[1, 2]).unwrap();
+    draft
+        .calibrate([Point::default(), Point::new(40., 0.)], 20.)
+        .unwrap();
+    let doc = draft.accept(&source, "lab/strokes").unwrap().document;
+    let request = Request::molecule("export", doc.clone());
+    let xml = write(&doc, (&request).into()).unwrap();
+    let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+    for xml in [&xml, &decoded] {
+        let imported = cdxml::import_cdxml(xml).unwrap().document;
+        assert_eq!(imported.graphics.len(), 2);
+        assert!(imported.graphics.iter().all(|g| g.style.fill.is_none()));
+        let mut widths: Vec<_> = imported.graphics.iter().map(|g| g.style.width_pt).collect();
+        widths.sort_by(f32::total_cmp);
+        for (actual, expected) in widths.iter().zip([0.4, 0.6]) {
+            assert!((actual - expected).abs() < 1e-3, "{widths:?}");
+        }
+        // Exchange assigns drawing-order layers. Test each native curve
+        // separately so the existing single-layer authoring rule does not
+        // hide a stroke-weight classification failure.
+        let roles: Vec<_> = imported
+            .graphics
+            .iter()
+            .map(|graphic| {
+                let mut single = Document::default();
+                single.graphics.push(graphic.clone());
+                Draft::from_selection(&single, &[graphic.id])
+                    .unwrap()
+                    .definition
+                    .shapes[0]
+                    .role
+            })
+            .collect();
+        assert!(roles.contains(&crate::equipment::format::Role::Outline));
+        assert!(roles.contains(&crate::equipment::format::Role::Detail));
+    }
+}
+
+#[test]
 fn a_piece_exports_as_one_group_of_curves_in_paint_order() {
     let mut document = Document::default();
     let scale = placed::world_per_mm(&document, placed::DEFAULT_PT_PER_MM);

@@ -2,6 +2,286 @@ use crate::document::Point;
 use crate::graphics::{Graphic, GraphicStyle};
 use crate::{document::Document, graphics::PathCommand};
 
+fn fill_only_bridge(annulus: bool) -> Graphic {
+    use crate::palette::Color;
+    let p = Point::new;
+    let mut graphic = Graphic::pen_curve(
+        1,
+        p(0., 0.),
+        p(1., 1.),
+        GraphicStyle {
+            fill: Some(Color::Ink),
+            width_pt: 0.,
+            ..Default::default()
+        },
+    );
+    graphic.reset_frame();
+    graphic.node_types.clear();
+    graphic.path = if annulus {
+        vec![
+            PathCommand::Move(p(0., 0.)),
+            PathCommand::Line(p(40., 0.)),
+            PathCommand::Line(p(40., 40.)),
+            PathCommand::Line(p(0., 40.)),
+            PathCommand::Line(p(0., 0.)),
+            // This bridge crosses the hole, then returns along the same line.
+            PathCommand::Cubic(p(0., 0.), p(30., 30.), p(30., 30.)),
+            PathCommand::Line(p(30., 10.)),
+            PathCommand::Line(p(10., 10.)),
+            PathCommand::Line(p(10., 30.)),
+            PathCommand::Line(p(30., 30.)),
+            PathCommand::Cubic(p(30., 30.), p(0., 0.), p(0., 0.)),
+            PathCommand::Close,
+        ]
+    } else {
+        vec![
+            PathCommand::Move(p(0., 0.)),
+            PathCommand::Line(p(10., 0.)),
+            PathCommand::Line(p(10., 10.)),
+            PathCommand::Line(p(0., 10.)),
+            PathCommand::Line(p(0., 0.)),
+            PathCommand::Cubic(p(0., 0.), p(30., 0.), p(30., 0.)),
+            PathCommand::Line(p(40., 0.)),
+            PathCommand::Line(p(40., 10.)),
+            PathCommand::Line(p(30., 10.)),
+            PathCommand::Line(p(30., 0.)),
+            // Line and endpoint-control cubic encodings cancel together.
+            PathCommand::Line(p(0., 0.)),
+            PathCommand::Close,
+        ]
+    };
+    graphic
+}
+
+#[test]
+fn fill_only_path_zero_width_is_contextual_and_survives_native_roundtrip() {
+    let graphic = fill_only_bridge(true);
+    assert!(graphic.is_fill_only_path());
+    graphic.validate().unwrap();
+    assert!(
+        graphic.style.validate().is_err(),
+        "ordinary styles keep their range"
+    );
+    let document = Document {
+        graphics: vec![graphic.clone()],
+        ..Default::default()
+    };
+    let reopened = Document::from_native_file(&document.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.graphics, document.graphics);
+    for width in [-0.1, 0.01, f32::NAN] {
+        let mut invalid = graphic.clone();
+        invalid.style.width_pt = width;
+        assert!(invalid.validate().is_err());
+    }
+    let mut invalid = graphic.clone();
+    invalid.kind = crate::graphics::GraphicKind::Rectangle;
+    assert!(invalid.validate().is_err());
+    let mut invalid = graphic.clone();
+    invalid.style.fill = None;
+    assert!(invalid.validate().is_err());
+    let mut invalid = graphic.clone();
+    invalid.path.retain(|c| !matches!(c, PathCommand::Close));
+    assert!(invalid.validate().is_err());
+    let mut invalid = graphic;
+    invalid.style.effects.opacity = Some(f32::NAN);
+    assert!(
+        invalid.validate().is_err(),
+        "other style validation still applies"
+    );
+}
+
+#[test]
+fn clearing_fill_gives_a_borderless_path_a_valid_outline() {
+    use crate::{graphics::GraphicChange, palette::Color};
+    let mut graphic = fill_only_bridge(true);
+    let path = graphic.path.clone();
+    GraphicChange::Fill(Some(Color::Paper)).apply(&mut graphic.style);
+    assert_eq!(graphic.style.width_pt, 0., "recoloring keeps no outline");
+    GraphicChange::Fill(None).apply(&mut graphic.style);
+    graphic.validate().unwrap();
+    assert_eq!(graphic.style.fill, None);
+    assert_eq!(graphic.style.width_pt, GraphicStyle::default().width_pt);
+    assert_eq!(graphic.path, path);
+
+    graphic.style.width_pt = 2.5;
+    GraphicChange::Fill(None).apply(&mut graphic.style);
+    assert_eq!(
+        graphic.style.width_pt, 2.5,
+        "existing outlines keep their width"
+    );
+}
+
+#[test]
+fn fill_boundaries_keep_straight_edges_as_two_points_and_curves_sampled() {
+    let p = Point::new;
+    for annulus in [true, false] {
+        let mut graphic = fill_only_bridge(annulus);
+        // A surviving CDX endpoint-control cubic is also a two-point edge.
+        let start = p(0., 0.);
+        let end = p(if annulus { 40. } else { 10. }, 0.);
+        for (a, b) in [(start, start), (start, end), (end, start), (end, end)] {
+            graphic.path[1] = PathCommand::Cubic(a, b, end);
+            let boundaries = super::fill_boundaries(&graphic.commands());
+            assert_eq!(
+                boundaries.len(),
+                8,
+                "retraced bridges cancel before sampling"
+            );
+            assert!(boundaries.iter().all(|edge| edge.len() == 2));
+        }
+    }
+
+    let curve = PathCommand::Cubic(p(10., -5.), p(30., -5.), p(40., 0.));
+    let commands = [
+        PathCommand::Move(p(0., 0.)),
+        curve.clone(),
+        PathCommand::Line(p(40., 40.)),
+        PathCommand::Line(p(0., 40.)),
+        PathCommand::Close,
+    ];
+    let boundaries = super::fill_boundaries(&commands);
+    let sampled = super::flattened(&[PathCommand::Move(p(0., 0.)), curve]);
+    assert_eq!(boundaries.len(), 4);
+    assert_eq!(boundaries[0], sampled[0], "curved sampling stays unchanged");
+    assert!(boundaries[1..].iter().all(|edge| edge.len() == 2));
+    let retraced = [
+        commands[0].clone(),
+        commands[1].clone(),
+        PathCommand::Cubic(p(30., -5.), p(10., -5.), p(0., 0.)),
+        PathCommand::Close,
+    ];
+    assert!(super::fill_boundaries(&retraced).is_empty());
+}
+
+#[test]
+fn fill_only_path_hits_the_nonzero_surface_without_picking_bridges() {
+    let mut graphic = fill_only_bridge(true);
+    assert!(graphic.hit(Point::new(5., 20.), 1.));
+    assert!(!graphic.hit(Point::new(20., 20.), 5.));
+    assert!(!graphic.hit(Point::new(-1., 20.), 5.));
+    graphic.style.width_pt = 0.6;
+    assert!(
+        graphic.hit(Point::new(20., 20.), 1.),
+        "visible strokes keep their edge picking"
+    );
+    let mut graphic = fill_only_bridge(false);
+    assert!(!graphic.hit(Point::new(20., 0.), 5.));
+    assert!(graphic.hit(Point::new(5., 5.), 1.));
+    assert!(graphic.hit(Point::new(35., 5.), 1.));
+    graphic.path = vec![
+        PathCommand::Move(Point::new(0., 0.)),
+        PathCommand::Line(Point::new(20., 0.)),
+        PathCommand::Line(Point::new(20., 20.)),
+        PathCommand::Line(Point::new(0., 20.)),
+        PathCommand::Close,
+        PathCommand::Move(Point::new(5., 5.)),
+        PathCommand::Line(Point::new(15., 5.)),
+        PathCommand::Line(Point::new(15., 15.)),
+        PathCommand::Line(Point::new(5., 15.)),
+        PathCommand::Close,
+    ];
+    assert!(
+        graphic.hit(Point::new(10., 10.), 0.),
+        "same-winding contours keep their fill"
+    );
+    graphic.path.extend([
+        PathCommand::Move(Point::new(30., 0.)),
+        PathCommand::Line(Point::new(40., 0.)),
+        PathCommand::Line(Point::new(40., 10.)),
+    ]);
+    assert!(graphic.hit(Point::new(38., 2.), 0.));
+    assert!(
+        !graphic.hit(Point::new(25., 5.), 0.),
+        "open fill contours close implicitly"
+    );
+}
+
+#[test]
+fn fill_only_path_diagonal_bridge_hits_stay_empty_at_ordinary_offsets() {
+    for offset in [
+        Point::default(),
+        Point::new(73.125, -46.875),
+        Point::new(1000.25, 2000.125),
+        Point::new(-500.75, 400.375),
+    ] {
+        let mut graphic = fill_only_bridge(true);
+        graphic.origin = offset;
+        // Probe the diagonal bridge's flattened samples inside the hole. Its
+        // opposite cubic may round differently, but neither side draws ink.
+        let bridge = super::flattened(&[
+            PathCommand::Move(offset),
+            PathCommand::Cubic(offset, offset.offset(30., 30.), offset.offset(30., 30.)),
+        ]);
+        for p in bridge.into_iter().flatten().filter(|p| {
+            let x = p.x - offset.x;
+            let y = p.y - offset.y;
+            (11. ..29.).contains(&x) && (11. ..29.).contains(&y)
+        }) {
+            assert!(
+                !graphic.hit(p, 1.),
+                "blank diagonal bridge at {offset:?}: {p:?}"
+            );
+        }
+        assert!(!graphic.hit(offset.offset(20., 20.), 1.));
+        assert!(graphic.hit(offset.offset(5., 20.), 1.));
+    }
+}
+
+#[test]
+fn fill_only_path_erase_crosses_visible_ink_without_targeting_a_blank_bridge() {
+    let mut doc = Document {
+        graphics: vec![fill_only_bridge(true)],
+        ..Default::default()
+    };
+    crate::erasing::stroke(&mut doc, Point::new(18., 20.), Point::new(22., 20.), 1.);
+    assert_eq!(doc.graphics.len(), 1, "the hole and its bridge have no ink");
+    crate::erasing::stroke(&mut doc, Point::new(-5., 5.), Point::new(45., 5.), 1.);
+    assert!(
+        doc.graphics.is_empty(),
+        "fast erase strokes still cross the filled surface"
+    );
+    let mut doc = Document {
+        graphics: vec![fill_only_bridge(false)],
+        ..Default::default()
+    };
+    crate::erasing::stroke(&mut doc, Point::new(20., -2.), Point::new(20., 2.), 1.);
+    assert_eq!(
+        doc.graphics.len(),
+        1,
+        "a disjoint bridge is not an erase target"
+    );
+}
+
+#[test]
+fn fill_only_path_region_selection_ignores_the_retraced_bridge() {
+    let doc = Document {
+        graphics: vec![fill_only_bridge(false)],
+        ..Default::default()
+    };
+    let blank = [
+        Point::new(18., -2.),
+        Point::new(22., -2.),
+        Point::new(22., 2.),
+        Point::new(18., 2.),
+    ];
+    assert!(crate::selection_region::objects(&doc, &blank).is_empty());
+    // Both squares fit in this concave lasso; their invisible connector does not.
+    let around_ink = [
+        Point::new(-1., -1.),
+        Point::new(11., -1.),
+        Point::new(11., 8.),
+        Point::new(29., 8.),
+        Point::new(29., -1.),
+        Point::new(41., -1.),
+        Point::new(41., 11.),
+        Point::new(-1., 11.),
+    ];
+    assert_eq!(crate::selection_region::objects(&doc, &around_ink), vec![1]);
+    let mut stroked = doc;
+    stroked.graphics[0].style.width_pt = 0.6;
+    assert!(crate::selection_region::objects(&stroked, &around_ink).is_empty());
+}
+
 fn fixture() -> Document {
     Document::from_native_file(include_bytes!(
         "../../../../tests/fixtures/tunable-pen-lines-67/before.rsk"
