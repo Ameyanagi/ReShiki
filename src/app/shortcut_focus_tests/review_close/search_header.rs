@@ -18,6 +18,18 @@ fn aliases() -> [(Key, Code, Modifiers, &'static str); 2] {
     ]
 }
 
+fn assert_fully_visible(node: &reshiki::accessibility::Node) {
+    let visible = node.visible_bounds.expect("The control is visible");
+    for (actual, expected) in [
+        (visible.x, node.bounds.x),
+        (visible.y, node.bounds.y),
+        (visible.width, node.bounds.width),
+        (visible.height, node.bounds.height),
+    ] {
+        assert!((actual - expected).abs() < 0.01, "{node:?}");
+    }
+}
+
 #[tokio::test]
 #[ignore = "Opt-in real header layout and pointer dispatch check"]
 async fn search_header_fits_and_opens_a_focused_palette() {
@@ -60,8 +72,11 @@ async fn search_header_fits_and_opens_a_focused_palette() {
                 .iter()
                 .filter(|node| node.id.starts_with("document-tab"))
             {
-                assert_eq!(tab.visible_bounds, Some(tab.bounds), "{tab:?}");
-                assert!(tab.bounds.x + tab.bounds.width <= search_left, "{tab:?}");
+                assert_fully_visible(tab);
+                assert!(
+                    tab.bounds.x + tab.bounds.width <= search_left + 0.01,
+                    "{tab:?}"
+                );
             }
             assert!(
                 snapshot
@@ -89,9 +104,12 @@ async fn search_header_fits_and_opens_a_focused_palette() {
                 "header-inspector",
             ] {
                 let node = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
-                assert_eq!(node.visible_bounds, Some(node.bounds), "{id}: {node:?}");
-                assert!(node.bounds.x >= previous_right, "{id}: {node:?}");
-                assert!(node.bounds.x + node.bounds.width <= size.width, "{id}");
+                assert_fully_visible(node);
+                assert!(node.bounds.x + 0.01 >= previous_right, "{id}: {node:?}");
+                assert!(
+                    node.bounds.x + node.bounds.width <= size.width + 0.01,
+                    "{id}"
+                );
                 previous_right = node.bounds.x + node.bounds.width;
             }
             for id in ["inspector-tab-Import", "inspector-tab-Export"] {

@@ -581,7 +581,7 @@ impl App {
         let browser = cfg!(target_arch = "wasm32");
         let settings = Message::Settings(super::settings_page::Action::Open(None));
         let search = Message::Commands(super::command_palette::Action::Open);
-        let search_keys = super::shortcuts::label(&search).expect("Search has a shortcut");
+        let search_keys = super::shortcuts::label(&search).unwrap_or_default();
         let bar = row![
             hover_hint(
                 reshiki::accessibility::button(

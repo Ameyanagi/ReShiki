@@ -109,17 +109,6 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["help", "keyboard", "reference", "keys", "cheat sheet"],
         ),
         entry(
-            format!(
-                "{} / {} / :",
-                label(Message::Commands(super::super::command_palette::Action::Open)),
-                keys(command | shift, "P"),
-            ),
-            "Command palette",
-            "Search commands, structures and names; : types normally in text fields",
-            Anywhere,
-            &["search", "commands", "names", "structures"],
-        ),
-        entry(
             "Esc",
             "Cancel / return to Select",
             "Cancel the current operation, or return to the selection tool",
