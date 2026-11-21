@@ -14,11 +14,11 @@ use iced::keyboard::{
 };
 use iced::{Event, Rectangle, Size};
 
+mod blank_canvas;
 mod inspector_pages;
 mod keys_palette;
 mod review_close;
 mod selection_properties;
-mod start_options;
 mod style_status;
 mod view_footer;
 

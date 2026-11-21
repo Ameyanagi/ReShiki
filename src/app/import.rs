@@ -1026,7 +1026,10 @@ impl App {
                 (matches!(plan, Plan::Reject(_)), plan.label())
             }
         };
-        if self.start_visible() && !error {
+        let empty_drawing = self.tab.doc.object_ids().next().is_none()
+            && !self.tab.drawing_edit_active()
+            && self.tab.mapping.review_pair.is_none();
+        if empty_drawing && !error {
             label = if hovered
                 .first()
                 .is_some_and(|path| path.as_os_str().is_empty())

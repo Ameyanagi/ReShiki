@@ -21,8 +21,10 @@ so drawings show on GitHub.
    or **Open**. Backspace goes up a folder; the parents in **lab-notes /
    scheme** go back too. Folders come first, then files, each by name; who
    changed each file last and when (**You** for your own changes) fills in
-   as GitHub answers, and nothing moves. Click the search icon in the top
-   right to filter the open repository's files or search the repository list.
+   as GitHub answers, and nothing moves. The **Search or paste a GitHub URL**
+   field stays visible below the header to filter the open repository's files
+   or search the repository list. It is focused when the Open picker appears;
+   the magnifier focuses it again without clearing what you typed.
    The ReShiki source repository is omitted from the Open list. You can open
    it explicitly by its GitHub link.
 4. Edit and save as usual. The status bar chip shows the repository, the
@@ -40,8 +42,9 @@ window title names the repository. Right-click a GitHub tab and choose
 **Color** for another one.
 
 In the picker, **+ New repository** (the last repository row) makes a private
-repository. Beside **Tiles** and **Tree** in the header, **+ New drawing**
-makes an empty drawing and **+ New folder** opens a new folder. The folder
+repository. Beside **Tiles** and **Tree** in the header, the document-plus
+icon (**New drawing**) makes an empty drawing and the folder-plus icon
+(**New folder**) opens a new folder. Hover to see their names. The folder
 reaches GitHub with the first drawing sent from it. A new drawing shows
 **not sent yet** until you send it. Creation controls appear in writable
 repositories.
@@ -76,11 +79,11 @@ shows the name, the format of a file that is not a drawing, and who changed
 it when. The pane on the right shows the selected file's preview, its path,
 and **Read only: Open makes a local copy** when it opens read only. Searching
 keeps the matches in the tree with their folders opened, across the whole
-repository. **+ New drawing** and **+ New folder** go to the selected folder.
+repository. **New drawing** and **New folder** go to the selected folder.
 
 ## Other people's repositories
 
-Click the search icon and paste a github.com link into the field. One row
+Paste a github.com link into **Search or paste a GitHub URL**. One row
 shows where it leads, such as **ligands / esters /
 route.rsk**; press Enter to open it. A link to a repository or folder opens it
 in the picker; a link to a drawing opens the drawing in a tab. The same works

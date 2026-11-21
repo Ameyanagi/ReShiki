@@ -135,7 +135,7 @@ fn apply(app: &mut App, messages: Vec<Message>) {
 
 #[tokio::test]
 #[ignore = "Opt-in real renderer layout check"]
-async fn picker_creation_and_search_are_in_its_header_in_both_views() {
+async fn picker_search_stays_visible_below_its_creation_icons_in_both_views() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _) = app_in(dir.path());
     let mut source = source_repo();
@@ -154,14 +154,14 @@ async fn picker_creation_and_search_are_in_its_header_in_both_views() {
             Action::Picker(picker::Action::Whole(opening, Ok((vec![], false)))),
         );
         let window = ui.pass(&app, None, &[]);
-        assert!(!window.has("github-search"));
+        let search = window.node("github-search");
+        assert_eq!(search.name, "Search or paste a GitHub URL");
         assert!(!window.has("github-repo-2"));
         assert!(window.node("github-repo-1").name.contains("read only"));
         let buttons = [
             "github-view-tree",
             "github-new-drawing",
             "github-new-folder",
-            "github-toggle-search",
         ]
         .map(|id| window.node(id).bounds.center());
         assert!(buttons.windows(2).all(|pair| pair[0].x < pair[1].x));
@@ -171,25 +171,55 @@ async fn picker_creation_and_search_are_in_its_header_in_both_views() {
                 .all(|point| (point.y - buttons[0].y).abs() < 2.)
         );
 
-        let clicked = ui.click(&app, buttons[3]);
-        apply(&mut app, clicked);
-        assert!(ui.pass(&app, None, &[]).has("github-search"));
+        assert_eq!(window.node("github-new-drawing").name, "New drawing");
+        assert_eq!(window.node("github-new-folder").name, "New folder");
+        assert!(
+            !window
+                .found
+                .texts
+                .iter()
+                .any(|(text, _)| { matches!(text.as_str(), "+ New drawing" | "+ New folder") })
+        );
+        let focus = window.node("github-focus-search").bounds;
+        assert!(focus.center().x < search.bounds.x);
+        assert!((focus.center().y - search.bounds.center().y).abs() < 2.);
+        assert!(search.bounds.y > window.node("github-new-folder").bounds.y);
+        assert!(search.bounds.width > 300.);
+        assert!(window.stop("github-focus-search") < window.stop("github-search"));
+        // The field stays present at the narrower supported window size too.
+        ui.size.width = 800.;
+        let narrow = ui.pass(&app, None, &[]);
+        assert!(narrow.node("github-search").bounds.width > 300.);
+        assert!(narrow.node("github-search").bounds.x >= 0.);
+        assert!(
+            narrow.node("github-search").bounds.x + narrow.node("github-search").bounds.width
+                <= 800.
+        );
+        ui.size.width = 1040.;
         github(
             &mut app,
             Action::Picker(picker::Action::Search("no match".into())),
         );
-        let clicked = ui.click(&app, buttons[3]);
+        let clicked = ui.click(&app, focus.center());
+        assert!(clicked.iter().any(|message| matches!(
+            message,
+            Message::GitHub(Action::Picker(picker::Action::FocusSearch))
+        )));
         apply(&mut app, clicked);
-        assert!(!ui.pass(&app, None, &[]).has("github-search"));
-        assert!(the_picker(&app).search.is_empty());
+        assert!(ui.pass(&app, None, &[]).has("github-search"));
+        assert_eq!(the_picker(&app).search, "no match");
 
-        let clicked = ui.click(&app, buttons[2]);
-        apply(&mut app, clicked);
-        let naming = ui.pass(&app, None, &[]);
-        assert!(naming.has("github-new-item"));
-        let clicked = ui.click(&app, naming.node("github-cancel-item").bounds.center());
-        apply(&mut app, clicked);
-        assert!(!ui.pass(&app, None, &[]).has("github-new-item"));
+        for (at, label) in [(buttons[1], "New drawing"), (buttons[2], "New folder")] {
+            let clicked = ui.click(&app, at);
+            apply(&mut app, clicked);
+            let naming = ui.pass(&app, None, &[]);
+            assert_eq!(naming.node("github-new-item").name, format!("{label} name"));
+            assert!(naming.has("github-search"));
+            let _ = naming.text(label);
+            let clicked = ui.click(&app, naming.node("github-cancel-item").bounds.center());
+            apply(&mut app, clicked);
+            assert!(!ui.pass(&app, None, &[]).has("github-new-item"));
+        }
     }
 
     github(
@@ -200,7 +230,15 @@ async fn picker_creation_and_search_are_in_its_header_in_both_views() {
     let shared = ui.pass(&app, None, &[]);
     assert!(!shared.has("github-new-drawing"));
     assert!(!shared.has("github-new-folder"));
+    assert!(shared.has("github-search"));
     let _ = shared.text("Read only");
+
+    picker_at(&mut app, Mode::SendTo, &["ring.rsk"]);
+    let sending = ui.pass(&app, None, &[]);
+    assert!(sending.has("github-search"));
+    assert!(sending.has("github-save-name"));
+    assert!(!sending.has("github-new-drawing"));
+    assert!(sending.has("github-new-folder"));
 }
 
 /// Signed in, with an unsent drawing in front: the cloud is the status

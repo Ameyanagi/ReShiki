@@ -75,7 +75,6 @@ pub(in crate::app) struct Picker {
     /// so neither drops a listing's late replies.
     request: u64,
     pub(super) search: String,
-    pub(super) search_open: bool,
     /// The last used first, then by name; `None` until GitHub lists them.
     /// Kept in this order while the picker is open.
     pub(super) repos: Option<Vec<Repo>>,
@@ -166,7 +165,6 @@ impl Picker {
             generation: 0,
             request: 0,
             search: String::new(),
-            search_open: false,
             repos: None,
             signed_out: false,
             chosen: false,
@@ -415,7 +413,8 @@ pub enum Action {
     Show(Mode),
     /// Open from GitHub, in this repository's folder (`""` is the top).
     ShowIn(RepoKey, String),
-    ToggleSearch,
+    /// Focus the always-visible search field without changing its query.
+    FocusSearch,
     Search(String),
     Move(isize),
     PickRepo(RepoKey),
@@ -465,7 +464,7 @@ pub enum Action {
     RepoCreated(u64, Result<Repo, gh::Error>),
     SaveName(String),
     SendHere,
-    /// `+ New drawing` (`false`) or `+ New folder` (`true`): a name field.
+    /// New drawing (`false`) or New folder (`true`): a name field.
     NewItem(bool),
     NewItemName(String),
     CancelItem,
@@ -593,16 +592,11 @@ impl App {
                     .collect();
                 return self.picker_show(picker);
             }
-            Action::ToggleSearch => {
-                let Some(picker) = self.picker() else {
+            Action::FocusSearch => {
+                if self.picker().is_none() {
                     return Task::none();
-                };
-                picker.search_open = !picker.search_open;
-                picker.new_item = None;
-                if picker.search_open {
-                    return iced::widget::operation::focus(SEARCH);
                 }
-                return self.picker_action(Action::Search(String::new()));
+                return iced::widget::operation::focus(SEARCH);
             }
             Action::Search(search) => {
                 let found = link::parse(&search, &self.github.ends.web);
@@ -712,7 +706,6 @@ impl App {
                 picker.changed.clear();
                 picker.repo = Some(repo.clone());
                 picker.search.clear();
-                picker.search_open = false;
                 picker.new_item = None;
                 picker.commit = None;
                 picker.root = None;
@@ -1139,7 +1132,6 @@ impl App {
                     .filter(|picker| picker.can_create() && (folder || picker.mode == Mode::Open))
                 {
                     picker.search.clear();
-                    picker.search_open = false;
                     picker.link = None;
                     picker.new_item = Some((folder, String::new()));
                     picker.error = None;
@@ -1174,7 +1166,6 @@ impl App {
                 };
                 if let Some(picker) = self.picker() {
                     picker.search = text;
-                    picker.search_open = true;
                     picker.link = Some(found.clone());
                 }
                 return Task::batch([show, self.picker_resolve(found)]);
@@ -1747,7 +1738,7 @@ impl App {
         // The tree the very first time, then the view used last.
         picker.tree = picker.mode == Mode::Open && !self.github.prefs.tiles;
         let focus = match picker.mode {
-            Mode::Open => Task::none(),
+            Mode::Open => iced::widget::operation::focus(SEARCH),
             Mode::SendTo => iced::widget::operation::focus(SAVE_NAME)
                 .chain(iced::widget::operation::select_all(SAVE_NAME)),
         };
@@ -2515,8 +2506,7 @@ impl App {
                     color: Some(theme.palette().danger),
                 })
         });
-        column![picker_toolbar(picker),]
-            .push(picker.search_open.then(|| picker_search(picker)))
+        column![picker_toolbar(picker), picker_search(picker)]
             .push(
                 picker
                     .new_item
@@ -2891,8 +2881,6 @@ fn add_repo_row(picker: &Picker) -> Element<'_, Message> {
 }
 
 fn picker_toolbar(picker: &Picker) -> Element<'_, Message> {
-    use crate::app::icons::{Glyph, Icon};
-
     let title = match picker.mode {
         Mode::Open => "Open from GitHub",
         Mode::SendTo if picker.copy => "Save a copy",
@@ -2910,31 +2898,26 @@ fn picker_toolbar(picker: &Picker) -> Element<'_, Message> {
         }
         tools = tools.push(new_item_button(true));
     }
+    tools.into()
+}
+
+fn picker_search(picker: &Picker) -> Element<'_, Message> {
+    use crate::app::icons::{Glyph, Icon};
+
     let search = reshiki::accessibility::button(
-        "github-toggle-search",
-        "Search or paste a GitHub link",
+        "github-focus-search",
+        "Focus search",
         iced::widget::canvas(Glyph(Icon::Search, true))
             .width(16)
             .height(16),
     )
-    .checked(picker.search_open)
-    .padding([5, 8])
-    .style(crate::app::workspace::control(picker.search_open))
-    .on_press(msg(Action::ToggleSearch));
-    tools
-        .push(crate::app::workspace::hover_hint(
-            search,
-            "Search or paste a GitHub link",
-            iced::widget::tooltip::Position::Bottom,
-        ))
-        .into()
-}
-
-fn picker_search(picker: &Picker) -> Element<'_, Message> {
-    reshiki::accessibility::text_input(
+    .padding([7, 8])
+    .style(crate::app::workspace::control(false))
+    .on_press(msg(Action::FocusSearch));
+    let field = reshiki::accessibility::text_input(
         SEARCH,
-        "Search or paste a GitHub link",
-        "Search or paste a GitHub link",
+        "Search or paste a GitHub URL",
+        "Search or paste a GitHub URL",
         &picker.search,
     )
     .style(crate::appearance::input_style)
@@ -2942,20 +2925,37 @@ fn picker_search(picker: &Picker) -> Element<'_, Message> {
     .on_submit(msg(Action::Enter))
     .size(13)
     .padding(7)
+    .width(Length::Fill);
+    row![
+        crate::app::workspace::hover_hint(
+            search,
+            "Search or paste a GitHub URL",
+            iced::widget::tooltip::Position::Bottom,
+        ),
+        field,
+    ]
+    .spacing(6)
+    .align_y(Alignment::Center)
     .into()
 }
 
 fn new_item_button(folder: bool) -> Element<'static, Message> {
-    let (id, label) = if folder {
-        ("github-new-folder", "New folder")
+    use crate::app::icons::{Glyph, Icon};
+
+    let (id, label, icon) = if folder {
+        ("github-new-folder", "New folder", Icon::NewFolder)
     } else {
-        ("github-new-drawing", "New drawing")
+        ("github-new-drawing", "New drawing", Icon::New)
     };
-    reshiki::accessibility::button(id, label, text(format!("+ {label}")).size(12))
-        .padding([5, 8])
-        .style(crate::app::workspace::control(false))
-        .on_press(msg(Action::NewItem(folder)))
-        .into()
+    let button = reshiki::accessibility::button(
+        id,
+        label,
+        iced::widget::canvas(Glyph(icon, true)).width(24).height(24),
+    )
+    .padding(4)
+    .style(crate::app::workspace::control(false))
+    .on_press(msg(Action::NewItem(folder)));
+    crate::app::workspace::hover_hint(button, label, iced::widget::tooltip::Position::Bottom).into()
 }
 
 fn new_item_form(folder: bool, name: &str) -> Element<'_, Message> {

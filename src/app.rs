@@ -79,7 +79,6 @@ mod nmr;
 mod numeric_transforms;
 mod object_toolbar;
 mod office;
-mod start;
 mod symbol_picker;
 mod tlc;
 #[cfg(any(windows, target_os = "linux"))]
@@ -188,7 +187,6 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    Start(start::Action),
     ModifiersChanged(iced::keyboard::Modifiers),
     #[cfg(target_os = "linux")]
     LinuxClipboardWindow(iced::window::Id),
@@ -499,7 +497,6 @@ pub struct App {
     printing: printing::State,
     font_options: iced::widget::combo_box::State<String>,
     imports: import::State,
-    start: start::State,
     grid: bool,
     guides: canvas::guides::Guides,
     view_open: bool,
@@ -586,7 +583,6 @@ impl App {
         // A file import has no engine job, and its result for the old epoch is ignored.
         self.tab.busy = false;
         self.tab.file_epoch = self.next_epoch();
-        self.tab.start_dismissed = false;
         self.tab.stereo_notes.clear();
         self.tab.equipment_authoring = None;
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
@@ -643,7 +639,6 @@ impl App {
                     .collect(),
             ),
             imports: Default::default(),
-            start: start::State::load(),
             grid: false,
             guides: Default::default(),
             view_open: false,
@@ -720,9 +715,8 @@ impl App {
         #[cfg(not(target_arch = "wasm32"))]
         let update_check = Task::batch([update_check, app.github_start()]);
         app.sync_keyboard_drawing();
-        let previews = app.start_previews();
         let libraries = app.load_piece_libraries();
-        (app, Task::batch([task, update_check, previews, libraries]))
+        (app, Task::batch([task, update_check, libraries]))
     }
     pub fn title(&self) -> String {
         #[cfg(not(target_arch = "wasm32"))]
@@ -1429,7 +1423,6 @@ impl App {
             self.start_label_refresh(),
             self.start_caption_names(),
             self.start_autosave(),
-            self.start_previews(),
         ]);
         self.tab.nmr.invalidate_if_changed_cached(
             &self.tab.doc,
@@ -1475,10 +1468,6 @@ impl App {
     /// including its background-tab path. Their tasks still receive tab tags
     /// and run the routing tail that closes Office tabs and replays held results.
     fn update_ungated(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Message::Start(action @ start::Action::Preview(..)) = message {
-            return ControlFlow::Break(self.start_action(action));
-        }
         if let Message::OfficePrepared(binding, opened) = message {
             return ControlFlow::Break(self.office_prepared(binding, opened));
         }

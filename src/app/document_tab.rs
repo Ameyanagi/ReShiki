@@ -60,8 +60,6 @@ pub(super) struct DocumentTab {
     pub(super) connect: Option<super::equipment::Connect>,
     pub(super) camera: Camera,
     pub(super) fit_to_view: bool,
-    /// The empty drawing's start options stay dismissed for this file epoch.
-    pub(super) start_dismissed: bool,
     pub(super) pages: pages::State,
     // In-progress edits and previews.
     pub(super) inline_text: Option<inline_text::State>,
@@ -212,7 +210,6 @@ impl DocumentTab {
             connect: None,
             camera: Camera::default(),
             fit_to_view: false,
-            start_dismissed: false,
             pages: pages::State::default(),
             inline_text: None,
             atom_text: None,

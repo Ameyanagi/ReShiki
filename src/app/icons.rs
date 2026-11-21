@@ -19,6 +19,12 @@ pub(super) enum Icon {
     Ring(u8, bool),
     Arrow(reshiki::arrows::Preset),
     New,
+    /// An outlined folder with a plus: create a GitHub folder.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser editor has no GitHub picker")
+    )]
+    NewFolder,
     Open,
     Save,
     SaveAs,
@@ -148,6 +154,7 @@ impl Glyph {
                 }
             }
             Icon::New => commands::new_document(f, ink),
+            Icon::NewFolder => commands::new_folder(f, ink),
             Icon::Open => commands::open(f, ink),
             Icon::Save => commands::save(f, ink),
             Icon::SaveAs => commands::save_as(f, ink),

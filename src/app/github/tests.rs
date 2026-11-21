@@ -2371,6 +2371,69 @@ fn the_picker(app: &App) -> &picker::Picker {
     }
 }
 
+/// Apply only focus operations to two real field IDs. Offline repository
+/// requests may finish, but their output is deliberately not routed here.
+async fn picker_field_focus(task: Task<Message>) -> [bool; 2] {
+    use iced::advanced::widget::{Id, operation};
+    use iced::futures::StreamExt;
+
+    #[derive(Default)]
+    struct Focus(bool);
+    impl operation::Focusable for Focus {
+        fn is_focused(&self) -> bool {
+            self.0
+        }
+        fn focus(&mut self) {
+            self.0 = true;
+        }
+        fn unfocus(&mut self) {
+            self.0 = false;
+        }
+    }
+
+    let mut search = Focus::default();
+    let mut save = Focus::default();
+    if let Some(mut stream) = iced_runtime::task::into_stream(task) {
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Widget(operation) = action {
+                let mut current = Some(operation);
+                while let Some(mut operation) = current.take() {
+                    operation.focusable(
+                        Some(&Id::from("github-search")),
+                        iced::Rectangle::default(),
+                        &mut search,
+                    );
+                    operation.focusable(
+                        Some(&Id::from("github-save-name")),
+                        iced::Rectangle::default(),
+                        &mut save,
+                    );
+                    if let operation::Outcome::Chain(next) = operation.finish() {
+                        current = Some(next);
+                    }
+                }
+            }
+        }
+    }
+    [search.0, save.0]
+}
+
+#[tokio::test]
+async fn picker_open_focuses_visible_search_and_send_to_keeps_save_name_focus() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_in(dir.path());
+    for (mode, expected) in [(Mode::Open, [true, false]), (Mode::SendTo, [false, true])] {
+        let task = app.picker_action(picker::Action::Show(mode));
+        assert_eq!(picker_field_focus(task).await, expected);
+    }
+    let _ = app.picker_action(picker::Action::Show(Mode::Open));
+    let _ = app.picker_action(picker::Action::Search(LIGANDS.into()));
+    let task = app.picker_action(picker::Action::FocusSearch);
+    assert_eq!(picker_field_focus(task).await, [true, false]);
+    assert_eq!(the_picker(&app).search, LIGANDS);
+    assert!(the_picker(&app).link.is_some());
+}
+
 /// A link followed in the picker, and GitHub's answer for its repository.
 fn resolved(app: &mut App, link: &str, answer: Result<Repo, gh::Error>) {
     github(app, Action::Picker(picker::Action::Link(link.into())));
