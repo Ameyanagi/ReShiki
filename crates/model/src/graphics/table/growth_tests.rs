@@ -103,10 +103,15 @@ fn mechanism_arrows_inherit_common_cell_before_creation_validation() {
             if kind == 2 {
                 assert!(doc.atom(a).unwrap().marks[0].id.is_some());
             }
+            let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
+            assert_owned(&reopened, &[a, b, c, arrow], cell);
             assert_eq!(
-                Document::from_native_file(&doc.file_json().unwrap()).unwrap(),
-                doc
+                reopened.arrows, doc.arrows,
+                "anchors and geometry stay exact"
             );
+            // Native saves raise the fixture's in-memory version to the
+            // feature floor required by its table, without changing its ink.
+            assert_eq!(reopened, doc.current());
         }
     }
 }

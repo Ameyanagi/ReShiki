@@ -183,10 +183,18 @@ fn two_click_mechanism_arrows_in_cells_keep_targets_and_one_undo_step() {
         app.tab.doc.validate().unwrap();
         assert_eq!(app.tab.history.undo_frames().len(), frames + 1);
         let after = app.tab.doc.clone();
+        let reopened = Document::from_native_file(&after.file_json().unwrap()).unwrap();
         assert_eq!(
-            Document::from_native_file(&after.file_json().unwrap()).unwrap(),
-            after
+            Membership::new(&reopened).unwrap().cell_of(arrow.id),
+            Some(cell)
         );
+        assert_eq!(
+            reopened.arrows, after.arrows,
+            "anchors and geometry stay exact"
+        );
+        // Saving raises the native feature version; the live Undo snapshot
+        // keeps its original version until it is reopened.
+        assert_eq!(reopened, after.current());
         let _ = app.update(Message::Undo);
         assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
