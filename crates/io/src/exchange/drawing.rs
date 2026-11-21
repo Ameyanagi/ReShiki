@@ -175,6 +175,8 @@ struct Writer<'a> {
     atom_nodes: Vec<Key>,
     bond_nodes: Vec<Key>,
     objects: Vec<(u64, Key)>,
+    /// Artwork generated from atoms has no separate drawing object ID.
+    atom_artwork: HashMap<Key, u64>,
     next: usize,
     scale: f64,
     shift: P,
@@ -655,6 +657,7 @@ impl<'a> Writer<'a> {
             atom_nodes: Vec::new(),
             bond_nodes: Vec::new(),
             objects: Vec::new(),
+            atom_artwork: HashMap::new(),
             next: doc.atoms.len() + 3,
             scale,
             shift,

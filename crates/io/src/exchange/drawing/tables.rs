@@ -189,7 +189,9 @@ impl Writer<'_> {
         // that also contain the table or outside objects remain outside it.
         let mut owners: HashMap<Key, Option<CellRef>> = HashMap::new();
         let mut mixed = HashSet::new();
-        for (id, key) in self.objects.clone() {
+        let mut objects = self.objects.clone();
+        objects.extend(self.atom_artwork.iter().map(|(&key, &id)| (id, key)));
+        for &(id, key) in &objects {
             let owner = ownership.cell_of(id);
             let mut next = Some(key);
             while let Some(node) = next {
@@ -203,7 +205,7 @@ impl Writer<'_> {
             }
         }
         let mut roots = HashMap::new();
-        for (id, key) in self.objects.clone() {
+        for (id, key) in objects {
             let Some(owner) = ownership.cell_of(id) else {
                 continue;
             };

@@ -511,9 +511,9 @@ impl Writer<'_> {
                         .ok_or_else(|| invalid("Invalid aromatic ring"))
                 })
                 .collect::<Result<Vec<_>>>()?;
-            if atoms.len() < 3 {
+            let [first, _, _, ..] = atoms.as_slice() else {
                 return Err(invalid("Invalid aromatic ring"));
-            }
+            };
             let bonds = atoms
                 .iter()
                 .zip(atoms.iter().cycle().skip(1))
@@ -532,7 +532,7 @@ impl Writer<'_> {
                     && c.atoms.len() == atoms.len()
                     && atoms.iter().all(|a| c.atoms.contains(&a.id))
             }) {
-                self.projected_circle(circle)?;
+                self.projected_circle(circle, first.id)?;
                 continue;
             }
             let points: Vec<P> = atoms.iter().map(|a| a.position.into()).collect();
@@ -574,7 +574,7 @@ impl Writer<'_> {
             let id = self.id()?;
             let major = center.add(radius, 0.);
             let minor = center.add(0., radius);
-            self.tree.add(
+            let artwork = self.tree.add(
                 Some(self.fragment),
                 "graphic",
                 [
@@ -591,6 +591,7 @@ impl Writer<'_> {
                     ("color", color),
                 ],
             )?;
+            self.atom_artwork.insert(artwork, first.id);
         }
         Ok(())
     }

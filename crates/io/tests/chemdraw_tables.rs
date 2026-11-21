@@ -113,6 +113,81 @@ async fn native_table_normal_entry_keeps_grid_chemistry_full_text_and_explicit_c
     assert_eq!(loss.unsupported, 0);
 }
 
+#[tokio::test]
+async fn generated_atom_artwork_follows_the_owning_cell_in_editable_exports() {
+    use reshiki_model::{
+        projection,
+        scientific::{SymbolKind, attach},
+    };
+
+    let xml = r#"<CDXML BondLength="20"><page id="1"><table id="2">
+      <page id="3" BoundsInParent="0 0 80 80"><fragment id="4">
+        <n id="5" p="30 40" Element="8"/>
+      </fragment></page>
+      <page id="7" BoundsInParent="80 0 160 80"><fragment id="8">
+        <n id="10" p="60 40"/><n id="11" p="50 57.320508"/>
+        <n id="12" p="30 57.320508"/><n id="13" p="20 40"/>
+        <n id="14" p="30 22.679492"/><n id="15" p="50 22.679492"/>
+        <b id="20" B="10" E="11" Order="1.5"/><b id="21" B="11" E="12" Order="1.5"/>
+        <b id="22" B="12" E="13" Order="1.5"/><b id="23" B="13" E="14" Order="1.5"/>
+        <b id="24" B="14" E="15" Order="1.5"/><b id="25" B="15" E="10" Order="1.5"/>
+      </fragment></page>
+    </table></page></CDXML>"#;
+    let mut source = read(xml.as_bytes(), "cdxml").await;
+    let oxygen = source
+        .atoms
+        .iter_mut()
+        .find(|atom| atom.element == "O")
+        .unwrap();
+    attach(oxygen, SymbolKind::PartialNegative, Point::new(220., 0.)).unwrap();
+    let ring_atoms = table(&source).table.as_ref().unwrap().cells[1]
+        .members
+        .clone();
+
+    for (tilted, tag) in [(false, "graphic"), (true, "curve")] {
+        let mut doc = source.clone();
+        if tilted {
+            projection::tilt(&mut doc, &ring_atoms, 60., true);
+        }
+        for format in ["cdxml", "cdx"] {
+            let bytes = formats::write_with_engine(doc.clone(), format, &LocalEngine::in_process())
+                .await
+                .unwrap();
+            let xml = if format == "cdx" {
+                exchange::from_cdx(&bytes).unwrap()
+            } else {
+                String::from_utf8(bytes).unwrap()
+            };
+            let xml = roxmltree::Document::parse(&xml).unwrap();
+            let plate = xml
+                .descendants()
+                .find(|node| node.has_tag_name("table"))
+                .unwrap();
+            let pages: Vec<_> = plate
+                .children()
+                .filter(|node| node.has_tag_name("page"))
+                .collect();
+            let charge = xml
+                .descendants()
+                .find(|node| node.has_tag_name("s") && node.text() == Some("δ−"))
+                .unwrap();
+            assert!(charge.ancestors().any(|node| node == pages[0]));
+            let circle = xml
+                .descendants()
+                .find(|node| node.has_tag_name(tag))
+                .unwrap();
+            assert!(circle.ancestors().any(|node| node == pages[1]));
+            assert!(
+                circle
+                    .parent()
+                    .unwrap()
+                    .children()
+                    .any(|node| node.has_tag_name("b"))
+            );
+        }
+    }
+}
+
 fn compare(source: &Document, restored: &Document) {
     let (a, b) = (table(source), table(restored));
     assert!(a.axis_x.distance(b.axis_x) < 0.003);

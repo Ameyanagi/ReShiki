@@ -368,7 +368,7 @@ impl Writer<'_> {
                             .map_or(doc.drawing_style.font_size_pt, |s| s.size_pt)
                             * 0.75
                     }));
-                    self.partial_charge_text(
+                    let artwork = self.partial_charge_text(
                         text,
                         P::from(atom.position.offset(mark.offset.x, mark.offset.y)),
                         real(size),
@@ -377,6 +377,7 @@ impl Writer<'_> {
                             .map_or(Default::default(), |s| s.color),
                         0,
                     )?;
+                    self.atom_artwork.insert(artwork, atom.id);
                     continue;
                 }
                 let (symbol, attribute) = match kind {
