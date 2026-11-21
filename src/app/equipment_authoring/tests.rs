@@ -51,7 +51,7 @@ fn calibrate(app: &mut App) {
     );
 }
 
-fn joint_drawing() -> (App, [Point; 2]) {
+pub(super) fn joint_drawing() -> (App, [Point; 2]) {
     use reshiki::{graphics::PathCommand, palette::Color};
     let (mut app, _) = App::new();
     app.tab.busy = false;
@@ -84,7 +84,7 @@ fn joint_drawing() -> (App, [Point; 2]) {
     (app, [Point::new(-9.6, 0.), Point::new(9.6, 0.)])
 }
 
-fn mark_joint(app: &mut App, edges: [Point; 2]) {
+pub(super) fn mark_joint(app: &mut App, edges: [Point; 2]) {
     send(app, Action::BeginJoint);
     for point in edges {
         let _ = app.update(Message::Canvas(Edit::EquipmentAuthoringPoint(point)));

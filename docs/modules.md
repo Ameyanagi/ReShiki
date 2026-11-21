@@ -73,6 +73,7 @@ explains how the crates and modules fit together.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
 - `src/app/equipment_authoring.rs`: A detached equipment draft, measured and reviewed on the ordinary canvas.
+- `src/app/equipment_authoring/metadata.rs`: Names and catalogue metadata in the detached equipment draft.
 - `src/app/equipment_authoring/shapes.rs`: Per-shape controls for the detached piece draft.
 - `src/app/equipment_authoring/trial.rs`: Disposable pieces for testing the draft with the ordinary seating solver.
 - `src/app/event_slot.rs`: Native event receivers are installed before their subscription takes ownership.
