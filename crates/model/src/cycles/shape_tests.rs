@@ -28,6 +28,80 @@ fn near(actual: Point, expected: Point) {
     );
 }
 
+#[test]
+fn cycle_bounds_follow_each_effective_baseline_without_changing_the_stored_host() {
+    for shape in [
+        Shape::Circle,
+        Shape::Ellipse,
+        Shape::RoundedRectangle,
+        Shape::Rectangle,
+    ] {
+        let mut g = graphic(shape);
+        g.axis_x = Point::new(120., 80.);
+        g.axis_y = Point::new(-60., 90.);
+        g.style.corner_pt = Some(8.);
+        let before = g.clone();
+        let mut baseline = g.clone();
+        baseline.cycle = None;
+        baseline.kind = match shape {
+            Shape::Circle | Shape::Ellipse => GraphicKind::Ellipse,
+            Shape::RoundedRectangle => GraphicKind::RoundedRectangle,
+            Shape::Rectangle => GraphicKind::Rectangle,
+        };
+        if shape == Shape::Circle {
+            let (center, radius) = g.cycle_circle();
+            baseline.origin = center.offset(-radius, -radius);
+            baseline.axis_x = Point::new(2. * radius, 0.);
+            baseline.axis_y = Point::new(0., 2. * radius);
+        }
+        let expected = baseline.shape_bounds();
+        let actual = g.shape_bounds();
+        near(actual.0, expected.0);
+        near(actual.1, expected.1);
+        let mut doc = Document::default();
+        doc.graphics.push(g.clone());
+        let selected = crate::scene::selection_bounds(&doc, &[g.id]).unwrap();
+        near(selected.0, expected.0);
+        near(selected.1, expected.1);
+        // Fit uses Document::bounds, with these existing viewport margins.
+        let fit = doc.bounds();
+        near(fit.0, expected.0.offset(-30., -30.));
+        near(fit.1, expected.1.offset(80., 30.));
+        assert_eq!(g, before);
+        assert_eq!(g.kind, GraphicKind::Ellipse);
+    }
+}
+
+#[test]
+fn rotated_empty_rectangle_selection_encloses_all_four_effective_corners() {
+    let mut g = graphic(Shape::Rectangle);
+    g.axis_x = Point::new(120., 80.);
+    g.axis_y = Point::new(-60., 90.);
+    let pad = g.style.width() * 0.5;
+    let corners = [
+        Point::new(10., 20.),
+        Point::new(130., 100.),
+        Point::new(70., 190.),
+        Point::new(-50., 110.),
+    ];
+    let mut stored_ellipse = g.clone();
+    stored_ellipse.cycle = None;
+    let (old_lo, old_hi) = stored_ellipse.shape_bounds();
+    assert!(
+        old_lo.x > -50. - pad && old_hi.y < 190. + pad,
+        "the stored Ellipse is smaller than the rotated rectangle's corners"
+    );
+    let mut doc = Document::default();
+    doc.graphics.push(g);
+    let (lo, hi) = crate::scene::selection_bounds(&doc, &[1]).unwrap();
+    near(lo, Point::new(-50. - pad, 20. - pad));
+    near(hi, Point::new(130. + pad, 190. + pad));
+    for corner in corners {
+        assert!(lo.x <= corner.x && corner.x <= hi.x);
+        assert!(lo.y <= corner.y && corner.y <= hi.y);
+    }
+}
+
 fn scalar_near(actual: f64, expected: f64) {
     let tolerance = 0.002 + expected.abs() * 0.000_02;
     assert!(

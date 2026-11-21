@@ -725,7 +725,12 @@ impl Graphic {
     }
     /// Vector extents, excluding an attached superscript.
     pub fn shape_bounds(&self) -> (Point, Point) {
-        let commands: Vec<_> = self.parts().into_iter().flat_map(|p| p.commands).collect();
+        // A cycle keeps Ellipse as its stored host kind. Measure the same
+        // effective perimeter that paints its chosen shape, including the
+        // legacy mean-radius circle, rather than that storage placeholder.
+        let commands = crate::cycles::outline(self)
+            .and_then(|outline| outline.subpath(0., outline.length()))
+            .unwrap_or_else(|| self.parts().into_iter().flat_map(|p| p.commands).collect());
         let mut points = commands
             .iter()
             .flat_map(PathCommand::iter_points)
