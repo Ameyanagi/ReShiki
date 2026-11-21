@@ -2530,6 +2530,49 @@ async fn context_row_rotation_field_applies_a_typed_angle() {
     assert!(!app.tab.history.can_undo());
 }
 
+#[tokio::test]
+#[ignore = "Opt-in real renderer and built local naming worker check"]
+async fn add_name_completion_keeps_help_search_focus() {
+    use super::template_library;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.tab.busy = false;
+    let _ = app.update(Message::Inspector(InspectorTab::Templates));
+    let _ = app.update(Message::Templates(template_library::Action::Search(
+        "ethanol".into(),
+    )));
+    ui.focus_control(&mut app, "add-search").await;
+    let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
+    assert!(app.tab.naming.is_pending());
+    assert!(ui.input(&app, "add-search").1);
+
+    let help = app.update(Message::ToggleHelp);
+    ui.run_task(&mut app, help).await;
+    assert!(app.help_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Templates);
+    assert!(ui.input(&app, "help-search").1);
+    ui.run_task(&mut app, pending).await;
+
+    assert_eq!(app.tab.doc.atoms.len(), 3, "{}", app.status);
+    assert!(app.help_open);
+    assert!(
+        ui.input(&app, "help-search").1,
+        "Insertion completion must preserve the current focus owner"
+    );
+    ui.key(
+        &mut app,
+        Key::Character("b".into()),
+        Code::KeyB,
+        Modifiers::empty(),
+        Some("b"),
+    )
+    .await;
+    assert_eq!(ui.input_value(&app, "help-search"), "b");
+    assert_eq!(ui.input_value(&app, "add-search"), "ethanol");
+    assert!(app.tab.history.can_undo());
+}
+
 /// Both Add input routes return keys to the drawing after a successful insert;
 /// failed names keep their draft. Advanced Import keeps its existing behavior.
 #[tokio::test]

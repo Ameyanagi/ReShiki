@@ -5,12 +5,34 @@ use super::naming;
 use super::template_library::Action;
 use super::workspace::{accessible_checkbox, accessible_command, control, muted_text};
 use super::{App, InspectorTab, Job, Message};
+use iced::advanced::widget::{Id, Operation, operation::Focusable};
 use iced::widget::{column, row, text};
-use iced::{Alignment, Element, Length, Task};
+use iced::{Alignment, Element, Length, Rectangle, Task};
 use reshiki::engine::Request;
 
 const MAX_QUERY_BYTES: usize = 8192;
 pub(super) const INPUT: &str = "add-search";
+const INSERT: &str = "add-insert";
+
+/// Release Add's insertion controls without disturbing a later focus owner.
+/// Name resolution may finish after the user has moved into Help or a field.
+pub(super) fn focus_drawing_after_insert() -> Task<Message> {
+    struct ReleaseInsertFocus;
+    impl Operation for ReleaseInsertFocus {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+
+        fn focusable(&mut self, id: Option<&Id>, _: Rectangle, state: &mut dyn Focusable) {
+            if state.is_focused()
+                && id.is_some_and(|id| *id == Id::new(INPUT) || *id == Id::new(INSERT))
+            {
+                state.unfocus();
+            }
+        }
+    }
+    iced::advanced::widget::operate(ReleaseInsertFocus).discard()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StructureQuery<'a> {
@@ -157,7 +179,7 @@ impl App {
         if let Some(query) = query {
             let label = query.result();
             content = content.push(
-                accessible_command("add-insert", label.clone(), label)
+                accessible_command(INSERT, label.clone(), label)
                     .width(Length::Fill)
                     .on_press_maybe(submit),
             );

@@ -189,7 +189,7 @@ impl App {
             && self.inspector_open
             && self.inspector_tab == InspectorTab::Templates
         {
-            super::super::focus_drawing()
+            super::super::add_panel::focus_drawing_after_insert()
         } else {
             Task::none()
         }
