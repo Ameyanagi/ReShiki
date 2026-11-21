@@ -111,6 +111,7 @@ impl Reader<'_, '_> {
                 opacity,
             }),
             panel: None,
+            tlc: None,
         })
     }
 }

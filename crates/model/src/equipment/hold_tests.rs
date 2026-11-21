@@ -437,3 +437,139 @@ fn two_stands_are_never_offered_to_each_other_or_joined_by_a_group() {
     assert!(solve::snap(&mut doc, &held, 14., false).is_none());
     assert_eq!(graphic(&doc, a).origin, a_at);
 }
+
+fn table_cells(doc: &mut Document, members: [Vec<u64>; 2]) -> u64 {
+    use crate::graphics::{
+        Graphic, GraphicKind,
+        table::{Cell, Table},
+    };
+    let id = doc.next_id();
+    let mut graphic = Graphic::dragged(
+        id,
+        GraphicKind::Rectangle,
+        Point::new(-100., -100.),
+        Point::new(2000., 2000.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    graphic.kind = GraphicKind::Table;
+    graphic.table = Some(Box::new(Table {
+        cells: members
+            .into_iter()
+            .enumerate()
+            .map(|(index, members)| Cell {
+                id: index as u32 + 1,
+                lo: Point::new(index as f32 * 0.5, 0.),
+                hi: Point::new((index + 1) as f32 * 0.5, 1.),
+                members,
+                borders: vec![],
+            })
+            .collect(),
+    }));
+    doc.graphics.push(graphic);
+    id
+}
+
+#[test]
+fn table_generated_clips_inherit_the_seats_cell_and_detach_prunes_membership() {
+    use crate::graphics::table::Membership;
+    for on_canvas in [false, true] {
+        let (mut doc, flask, condenser) = reflux();
+        table_cells(
+            &mut doc,
+            [
+                vec![],
+                if on_canvas {
+                    vec![]
+                } else {
+                    vec![flask, condenser]
+                },
+            ],
+        );
+        doc.validate().unwrap();
+        let before = doc.clone();
+        assert_eq!(solve::add_clips(&mut doc, &[flask, condenser]), 1);
+        commit(&mut doc, before);
+        let clip = doc.seats[0].clip.unwrap();
+        let ownership = Membership::new(&doc).unwrap();
+        assert_eq!(ownership.cell_of(clip), ownership.cell_of(flask));
+        assert_eq!(ownership.cell_of(clip).is_none(), on_canvas);
+        let mut doc = Document::from_json(&doc.file_json().unwrap()).unwrap();
+        let before = doc.clone();
+        assert!(solve::detach(&mut doc, &joint(flask, "neck")));
+        commit(&mut doc, before);
+        assert!(doc.graphics.iter().all(|g| g.id != clip));
+        assert_eq!(Membership::new(&doc).unwrap().cell_of(clip), None);
+        doc.validate().unwrap();
+    }
+}
+
+#[test]
+fn table_clip_batch_rejects_cross_cell_seats_without_adding_any() {
+    let (mut doc, flask, condenser) = reflux();
+    let other_flask = add(&mut doc, "reshiki/rbf-300-29", Point::new(2000., 400.));
+    let other_condenser = add(&mut doc, "reshiki/liebig-29", Point::new(2000., 100.));
+    solve::connect(
+        &mut doc,
+        &[other_condenser],
+        &joint(other_flask, "neck"),
+        &joint(other_condenser, "bottom"),
+    )
+    .unwrap();
+    table_cells(
+        &mut doc,
+        [vec![flask, condenser, other_flask], vec![other_condenser]],
+    );
+    let before = doc.clone();
+    assert_eq!(
+        solve::add_clips(&mut doc, &[flask, condenser, other_flask, other_condenser]),
+        0
+    );
+    assert_eq!(doc, before);
+}
+
+#[test]
+fn table_ground_locked_adapter_uses_the_swapped_static_target() {
+    use crate::graphics::table::Membership;
+    let (mut doc, flask, clamp) = clamped();
+    let stand = add(&mut doc, "reshiki/stand", Point::new(0., 0.));
+    solve::connect(
+        &mut doc,
+        &[clamp],
+        &joint(stand, "rod"),
+        &joint(clamp, "boss"),
+    )
+    .unwrap();
+    let condenser = add(&mut doc, "reshiki/liebig-29", Point::new(800., 100.));
+    table_cells(&mut doc, [vec![], vec![flask, clamp, stand, condenser]]);
+    doc.validate().unwrap();
+    let origins: Vec<_> = [flask, clamp, stand]
+        .into_iter()
+        .map(|id| (id, graphic(&doc, id).origin))
+        .collect();
+    let before = doc.clone();
+    // The selected grounded side stays put; the nominal target comes to it.
+    let snap = solve::connect(
+        &mut doc,
+        &[stand],
+        &joint(condenser, "bottom"),
+        &joint(flask, "neck"),
+    )
+    .unwrap();
+    assert_eq!(snap.target.at, joint(flask, "neck"));
+    assert_eq!(snap.moving.at, joint(condenser, "bottom"));
+    assert!(matches!(snap.offer, Offer::Adapter(_)));
+    let adapter = snap.added.unwrap();
+    let ownership = Membership::new(&doc).unwrap();
+    assert_eq!(ownership.cell_of(adapter), ownership.cell_of(flask));
+    assert_eq!(ownership.cell_of(adapter).unwrap().cell, 2);
+    for (id, origin) in origins {
+        assert_eq!(graphic(&doc, id).origin, origin);
+    }
+    commit(&mut doc, before);
+    Document::from_json(&doc.file_json().unwrap())
+        .unwrap()
+        .validate()
+        .unwrap();
+}

@@ -6,6 +6,7 @@ mod arrange_tests;
 #[cfg(test)]
 mod nearest_tests;
 mod rotation;
+mod table_captions;
 pub use rotation::center as rotation_center;
 pub mod reference;
 
@@ -943,6 +944,10 @@ fn map_positions(
     vector: impl Fn(Point) -> Point,
 ) {
     let ids: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
+    // Capture the cell's derived wrapping before its frame moves. A table's
+    // upright captions move by their ink centres, rather than sending their
+    // insertion points to the opposite clip edge during a flip or half-turn.
+    let captions = table_captions::Positions::new(doc, &ids);
     for graphic in &mut doc.graphics {
         if ids.contains(&graphic.id) {
             let before = graphic.clone();
@@ -979,11 +984,21 @@ fn map_positions(
     let turns = only_text(doc, &ids)
         && crate::document::text_angle(vector(Point::new(1., 0.)), vector(Point::new(0., 1.)))
             != 0.;
+    let cells = (!captions.is_empty()).then(|| crate::scene::table::Layout::new(doc));
     for a in &mut doc.annotations {
         if !ids.contains(&a.id) {
             continue;
         }
-        if a.angle == 0. && !turns {
+        if let (Some(position), Some(cells)) = (captions.get(a.id), cells.as_ref()) {
+            if a.angle != 0. || turns {
+                let (s, c) = a.angle.to_radians().sin_cos();
+                a.angle = crate::document::text_angle(
+                    vector(Point::new(c, s)),
+                    vector(Point::new(-s, c)),
+                );
+            }
+            position.place(a, cells, &convert, &vector);
+        } else if a.angle == 0. && !turns {
             a.position = convert(a.position);
         } else {
             let (w, h) = a.size();

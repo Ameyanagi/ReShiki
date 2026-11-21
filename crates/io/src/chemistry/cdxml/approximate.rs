@@ -47,6 +47,7 @@ const ALLOWED: &[&str] = &[
     "bracketedgroup",
     "bracketattachment",
     "crossingbond",
+    "tlcplate",
 ];
 /// Children of a left-out object that still import on their own.
 const SALVAGED: &[&str] = &["t", "graphic", "arrow", "curve", "fragment", "group"];
@@ -72,6 +73,7 @@ enum Kind {
     BioShape,
     GelPlate,
     TlcPlate,
+    TlcAppearance,
     BrokenCurve,
     VectorPicture,
     UnknownGraphic,
@@ -161,6 +163,11 @@ impl Kind {
             ),
             Self::GelPlate => ("gel plate", "gel plates", None),
             Self::TlcPlate => ("TLC plate", "TLC plates", None),
+            Self::TlcAppearance => (
+                "TLC plate",
+                "TLC plates",
+                same("with ordinary spots and supported Rf labels"),
+            ),
             Self::BrokenCurve => (
                 "curve with an incomplete point list",
                 "curves with an incomplete point list",
@@ -265,6 +272,19 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
                 pass.set(index, key, face.to_string())?;
             }
         }
+    }
+    // Validate owned Rf captions after the common text fallbacks have settled
+    // their runs and inherited defaults, just like ordinary captions.
+    for (index, dropped) in super::graphics::tlc::normalize(&mut pass.tree)? {
+        pass.changed = true;
+        pass.count(
+            index,
+            if dropped {
+                Kind::TlcPlate
+            } else {
+                Kind::TlcAppearance
+            },
+        );
     }
     if !pass.changed {
         return Ok((xml.into(), None, 0));
@@ -629,7 +649,11 @@ impl Pass {
             }
             if ALLOWED.contains(&tag.as_str()) {
                 kept.push(child);
-                self.objects(child)?;
+                // TLC normalization owns its lane, spot and Rf subtree.
+                // Orphan lanes/spots still take the unknown-object warning.
+                if tag != "tlcplate" {
+                    self.objects(child)?;
+                }
                 continue;
             }
             changed = true;
@@ -1797,11 +1821,19 @@ impl Pass {
         }
         // Captions turn; atom labels and inherited defaults stay upright.
         let parent = self.node(index)?.parent;
-        let caption = tag == "t"
-            && match parent {
-                Some(parent) => !matches!(self.node(parent)?.tag.as_str(), "n" | "objecttag"),
-                None => true,
-            };
+        // TLC Rf captions are owned text, with their own measured baseline and
+        // explicit turn. Other object tags retain the legacy upright fallback.
+        let tlc_rf_caption = tag == "t"
+            && parent
+                .map(|i| super::graphics::tlc::is_rf_tag(&self.tree, i))
+                .transpose()?
+                .unwrap_or(false);
+        let caption = tlc_rf_caption
+            || tag == "t"
+                && match parent {
+                    Some(parent) => !matches!(self.node(parent)?.tag.as_str(), "n" | "objecttag"),
+                    None => true,
+                };
         if !caption
             && self
                 .attr(index, "RotationAngle")?

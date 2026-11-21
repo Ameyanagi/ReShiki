@@ -50,6 +50,151 @@ fn assert_owned(doc: &Document, ids: &[u64], target: CellRef) {
 }
 
 #[test]
+fn cell_callouts_own_both_caption_and_leader_for_every_target_kind() {
+    use crate::leaders::{self, Target};
+    let (mut source, a, cell) = owned_atom();
+    let b = source.add_atom("C", Point::new(100., 60.));
+    source.add_bond(a, b, 1, "plain");
+    let shape = source.next_id();
+    source.graphics.push(Graphic::dragged(
+        shape,
+        GraphicKind::Rectangle,
+        Point::new(20., 90.),
+        Point::new(120., 150.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    source.graphics[0].table.as_mut().unwrap().cells[0]
+        .members
+        .extend([b, shape]);
+    source.drawing_style.font_size_pt = 12.;
+    source.drawing_style.line_width_pt = 1.1;
+    for target in [
+        Target::Atom { atom: a },
+        Target::Bond {
+            a,
+            b,
+            fraction: 0.5,
+        },
+        Target::Molecule { atom: a },
+        Target::Object { id: shape },
+    ] {
+        let mut doc = source.clone();
+        let text = leaders::add_callout(&mut doc, target.clone(), "Cell callout").unwrap();
+        let line = doc.graphics.iter().find(|g| g.leader.is_some()).unwrap();
+        assert_owned(&doc, &[text, line.id], cell);
+        assert_eq!(line.leader.as_ref().unwrap().end, Some(target));
+        assert_eq!(
+            line.leader.as_ref().unwrap().start,
+            Some(Target::Object { id: text })
+        );
+        assert_eq!(line.style.width_pt, source.drawing_style.line_width_pt);
+        assert_eq!(
+            doc.annotations[0].format.style,
+            source.drawing_style.text_style()
+        );
+        assert_eq!(
+            Document::from_native_file(&doc.file_json().unwrap()).unwrap(),
+            doc.current()
+        );
+    }
+}
+
+#[test]
+fn attaching_existing_callout_text_never_changes_its_cell_and_rejects_mismatches_atomically() {
+    use crate::{
+        document::Annotation,
+        leaders::{self, Target},
+    };
+    for owner in [None, Some(1), Some(2)] {
+        let (mut doc, atom, cell) = owned_atom();
+        let text = doc.next_id();
+        doc.annotations.push(Annotation {
+            id: text,
+            position: Point::new(90., 90.),
+            text: "Existing".into(),
+            angle: 0.,
+            format: Default::default(),
+        });
+        if let Some(owner) = owner {
+            doc.graphics[0]
+                .table
+                .as_mut()
+                .unwrap()
+                .cell_mut(owner)
+                .unwrap()
+                .members
+                .push(text);
+        }
+        doc.validate().unwrap();
+        let before = doc.clone();
+        let result = leaders::attach(&mut doc, text, Target::Atom { atom });
+        if owner == Some(1) {
+            result.unwrap();
+            let line = doc.graphics.iter().find(|g| g.leader.is_some()).unwrap();
+            assert_owned(&doc, &[text, line.id], cell);
+            assert_eq!(doc.annotations, before.annotations);
+        } else {
+            assert!(result.unwrap_err().contains("same table cell"));
+            assert_eq!(doc, before);
+        }
+    }
+}
+
+#[test]
+fn cell_centroids_and_both_attachment_kinds_inherit_members_and_reject_cross_cell_sets_atomically()
+{
+    for mode in 0..3 {
+        for owner in [None, Some(1), Some(2)] {
+            let (mut doc, a, cell) = owned_atom();
+            let b = doc.add_atom(
+                "O",
+                Point::new(if owner == Some(1) { 100. } else { 240. }, 60.),
+            );
+            if let Some(owner) = owner {
+                doc.graphics[0]
+                    .table
+                    .as_mut()
+                    .unwrap()
+                    .cell_mut(owner)
+                    .unwrap()
+                    .members
+                    .push(b);
+            }
+            doc.validate().unwrap();
+            let before = doc.clone();
+            let result = match mode {
+                0 => projection::add_centroid(&mut doc, &[a, b]),
+                1 => crate::attachments::add(
+                    &mut doc,
+                    &[a, b],
+                    crate::attachments::Kind::MultiCenter,
+                ),
+                _ => crate::attachments::add(&mut doc, &[a, b], crate::attachments::Kind::Variable),
+            };
+            if owner == Some(1) {
+                let point = result.unwrap();
+                assert_owned(&doc, &[point, a, b], cell);
+                assert_eq!(doc.atom(point).unwrap().centroid, [a, b]);
+                assert_eq!(doc.atom(point).unwrap().position, Point::new(80., 60.));
+                assert_eq!(doc.drawing_style, before.drawing_style);
+                assert_eq!(
+                    Document::from_native_file(&doc.file_json().unwrap()).unwrap(),
+                    doc.current()
+                );
+            } else {
+                assert!(result.unwrap_err().contains("same table cell"));
+                assert_eq!(
+                    doc, before,
+                    "no point or ownership change survives rejection"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn mechanism_arrows_inherit_common_cell_before_creation_validation() {
     use crate::arrow_anchors::{self, Pick};
     use crate::arrows::{ArrowStyle, Preset};

@@ -31,6 +31,55 @@ fn table(members: Vec<u64>) -> Graphic {
 }
 
 #[test]
+fn swept_erasing_recognizes_visible_tlc_rf_labels_without_reaching_hidden_cell_ink() {
+    use crate::graphics::{TlcLane, TlcPlate, TlcRfLabel, TlcSpot};
+    for offset in [60., 71.] {
+        let mut doc = Document::default();
+        let mut plate = Graphic::dragged(
+            1,
+            GraphicKind::TlcPlate,
+            Point::new(10., 10.),
+            Point::new(50., 50.),
+            Default::default(),
+            Default::default(),
+            false,
+        );
+        plate.tlc = Some(Box::new(TlcPlate {
+            lanes: vec![TlcLane {
+                spots: vec![TlcSpot {
+                    rf: 0.5,
+                    width_pt: 6.,
+                    height_pt: 4.,
+                    style: Default::default(),
+                    show_rf: true,
+                    label: Some(TlcRfLabel {
+                        text: "Rf".into(),
+                        format: Default::default(),
+                        offset: Point::new(offset, 80.),
+                        angle: 0.,
+                    }),
+                }],
+            }],
+            ..Default::default()
+        }));
+        doc.graphics.extend([plate, table(vec![1])]);
+        doc.validate().unwrap();
+        let before = doc.clone();
+        stroke(&mut doc, Point::new(105., 120.), Point::new(125., 120.), 5.);
+        assert_eq!(doc, before);
+        let p = Point::new(99., 120.);
+        stroke(&mut doc, p, p, 5.);
+        if offset == 60. {
+            assert!(!doc.graphics.iter().any(|g| g.id == 1));
+            assert!(doc.graphics.iter().any(|g| g.table.is_some()));
+        } else {
+            assert_eq!(doc, before);
+        }
+        doc.validate().unwrap();
+    }
+}
+
+#[test]
 fn affine_stroke_clipping_keeps_crossings_and_rejects_parallel_overflow() {
     for axis_x in [Point::new(100., 20.), Point::new(-100., -20.)] {
         let frame = Frame {

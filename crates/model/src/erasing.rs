@@ -279,6 +279,10 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
                                 .into_iter()
                                 .any(|(lo, hi)| clip::box_hit(frame, lo, hi, from, to, radius))
                         })
+                        || g.tlc_labels().iter().any(|label| {
+                            let (lo, hi) = label.bounds();
+                            clip::box_hit(frame, lo, hi, from, to, radius)
+                        })
                         || g.parts()
                             .iter()
                             .chain(g.panel_parts(&text_style).iter())
@@ -306,6 +310,10 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
                             .ink_boxes()
                             .into_iter()
                             .any(|(lo, hi)| box_hit(lo, hi, from, to, radius))
+                    })
+                    || g.tlc_labels().iter().any(|label| {
+                        let (lo, hi) = label.bounds();
+                        box_hit(lo, hi, from, to, radius)
                     })
                     || g.parts().iter().any(|part| {
                         if g.is_fill_only_path() {

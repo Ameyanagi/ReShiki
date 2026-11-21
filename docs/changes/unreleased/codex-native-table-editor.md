@@ -1,5 +1,5 @@
 ---
-section: Features
+section: Changes
 issues: []
 ---
 

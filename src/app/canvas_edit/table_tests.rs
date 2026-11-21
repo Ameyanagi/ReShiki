@@ -129,11 +129,183 @@ fn dragging_between_existing_different_cell_atoms_rolls_back_without_an_undo_ste
 }
 
 #[test]
+fn cell_callout_drafts_cancel_and_finish_with_caption_leader_style_and_one_undo() {
+    use crate::app::inline_text;
+    for mode in 0..3 {
+        let (mut app, a, cell) = app();
+        let b = app.tab.doc.add_atom("C", Point::new(100., 60.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        let shape = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::dragged(
+            shape,
+            GraphicKind::Rectangle,
+            Point::new(20., 90.),
+            Point::new(120., 150.),
+            Default::default(),
+            Default::default(),
+            false,
+        ));
+        app.tab.doc.graphics[0].table.as_mut().unwrap().cells[0]
+            .members
+            .extend([b, shape]);
+        let selected = match mode {
+            0 => vec![a],
+            1 => vec![a, b],
+            _ => vec![shape],
+        };
+        app.tab.selected = selected.clone();
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::AddCallout);
+        let _ = app.update(Message::InlineText(inline_text::Action::ReplaceText(
+            "Cell callout".into(),
+        )));
+        assert!(app.inline_candidate().is_ok());
+        assert_eq!(app.tab.doc, before);
+        assert!(app.finish_inline(false));
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        app.tab.selected = selected;
+        let target = app.callout_target().unwrap();
+        let _ = app.update(Message::AddCallout);
+        let _ = app.update(Message::InlineText(inline_text::Action::ReplaceText(
+            "Cell callout".into(),
+        )));
+        app.tab.caption_format.style.bold = true;
+        let format = app.tab.caption_format.clone();
+        let draft = app.inline_candidate().unwrap();
+        let text = draft.annotations.last().unwrap().id;
+        let line = draft
+            .graphics
+            .iter()
+            .find(|g| g.leader.is_some())
+            .unwrap()
+            .id;
+        let recovery = app.recovery_document();
+        for doc in [&draft, &recovery] {
+            let owner = Membership::new(doc).unwrap();
+            assert_eq!(owner.cell_of(text), Some(cell));
+            assert_eq!(owner.cell_of(line), Some(cell));
+            doc.validate().unwrap();
+        }
+        assert!(app.finish_inline(true), "{}", app.status);
+        assert!(!app.error, "{}", app.status);
+        assert!(app.tab.inline_text.is_none());
+        app.tab.doc.validate().unwrap();
+        let made = app.tab.doc.graphics.iter().find(|g| g.id == line).unwrap();
+        assert_eq!(made.leader.as_ref().unwrap().end, Some(target));
+        assert_eq!(app.tab.doc.annotations.last().unwrap().format, format);
+        assert_eq!(app.tab.history.undo_frames().len(), 1);
+        let after = app.tab.doc.clone();
+        assert_eq!(
+            Document::from_native_file(&after.file_json().unwrap()).unwrap(),
+            after.current()
+        );
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+    }
+}
+
+#[test]
+fn cell_centroid_and_attachment_commands_keep_ownership_or_reject_without_history() {
+    use crate::app::inspector::Action;
+    for mode in 0..3 {
+        for owner in [None, Some(1), Some(2)] {
+            let (mut app, a, cell) = app();
+            let b = app.tab.doc.add_atom(
+                "O",
+                Point::new(if owner == Some(1) { 100. } else { 240. }, 60.),
+            );
+            if let Some(owner) = owner {
+                app.tab.doc.graphics[0]
+                    .table
+                    .as_mut()
+                    .unwrap()
+                    .cell_mut(owner)
+                    .unwrap()
+                    .members
+                    .push(b);
+            }
+            app.tab.doc.validate().unwrap();
+            app.tab.selected = vec![a, b];
+            let before = app.tab.doc.clone();
+            let action = match mode {
+                0 => Action::Centroid,
+                1 => Action::Attachment(reshiki::attachments::Kind::MultiCenter),
+                _ => Action::Attachment(reshiki::attachments::Kind::Variable),
+            };
+            let _ = app.update(Message::InspectorAction(action));
+            if owner == Some(1) {
+                assert!(!app.error, "{}", app.status);
+                let id = app.tab.selected[0];
+                assert_eq!(
+                    Membership::new(&app.tab.doc).unwrap().cell_of(id),
+                    Some(cell)
+                );
+                assert_eq!(app.tab.doc.atom(id).unwrap().centroid, [a, b]);
+                app.tab.doc.validate().unwrap();
+                assert_eq!(app.tab.history.undo_frames().len(), 1);
+                let after = app.tab.doc.clone();
+                assert_eq!(
+                    Document::from_native_file(&after.file_json().unwrap()).unwrap(),
+                    after.current()
+                );
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.tab.doc, before);
+                let _ = app.update(Message::Redo);
+                assert_eq!(app.tab.doc, after);
+            } else {
+                assert!(app.error);
+                assert!(app.status.contains("same table cell"), "{}", app.status);
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+            }
+        }
+    }
+}
+
+#[test]
 fn table_command_and_numeric_half_turns_keep_the_frame_center_with_off_center_captions() {
     use crate::app::numeric_transforms::{Action, Field};
     use reshiki::document::Annotation;
     use reshiki::editing::Transform;
     use reshiki::graphics::table::Frame;
+    use reshiki::scene::{self, Primitive};
+
+    let caption_center = |doc: &Document, caption: &Annotation, cell: usize| {
+        let drawing = scene::primitives(doc);
+        let children = drawing
+            .iter()
+            .filter_map(|primitive| match primitive {
+                Primitive::Clip { primitives, .. } => Some(primitives),
+                _ => None,
+            })
+            .nth(cell)
+            .unwrap();
+        let runs: Vec<_> = children
+            .iter()
+            .filter(|p| matches!(p, Primitive::Text { text, .. } if text == &caption.text))
+            .cloned()
+            .collect();
+        let layout = scene::table::Layout::new(doc);
+        let (lo, hi) = scene::label_ink_boxes(&runs)
+            .into_iter()
+            .inspect(|(lo, hi)| {
+                for point in [*lo, Point::new(hi.x, lo.y), *hi, Point::new(lo.x, hi.y)] {
+                    assert!(layout.contains(caption.id, point));
+                }
+            })
+            .reduce(|(lo, hi), (next_lo, next_hi)| {
+                (
+                    Point::new(lo.x.min(next_lo.x), lo.y.min(next_lo.y)),
+                    Point::new(hi.x.max(next_hi.x), hi.y.max(next_hi.y)),
+                )
+            })
+            .expect("the caption paints in its cell");
+        lo.lerp(hi, 0.5)
+    };
+
     for numeric in [false, true] {
         for overflow in [false, true] {
             let (mut app, atom, _) = app();
@@ -162,7 +334,7 @@ fn table_command_and_numeric_half_turns_keep_the_frame_center_with_off_center_ca
                 app.tab.doc.annotations.push(Annotation {
                     id,
                     position,
-                    text: "off-center caption".into(),
+                    text: if cell == 0 { "A" } else { "B" }.into(),
                     angle: 0.,
                     format: Default::default(),
                 });
@@ -195,13 +367,22 @@ fn table_command_and_numeric_half_turns_keep_the_frame_center_with_off_center_ca
                     < 1e-4
             );
             assert_eq!(app.tab.doc.graphics[0].table, before.graphics[0].table);
-            for (old, new) in before.annotations.iter().zip(&app.tab.doc.annotations) {
-                assert!(
-                    new.position.distance(Point::new(
-                        2. * center.x - old.position.x,
-                        2. * center.y - old.position.y
-                    )) < 0.001
-                );
+            for (cell, (old, new)) in before
+                .annotations
+                .iter()
+                .zip(&app.tab.doc.annotations)
+                .enumerate()
+            {
+                assert_eq!(new.text, old.text);
+                assert_eq!(new.format, old.format);
+                assert_eq!(new.angle, old.angle);
+                if overflow && cell == 1 {
+                    let expected = old.position.turned(center, 180.);
+                    assert!(new.position.distance(expected) < 0.001);
+                } else {
+                    let expected = caption_center(&before, old, cell).turned(center, 180.);
+                    assert!(caption_center(&app.tab.doc, new, cell).distance(expected) < 0.001);
+                }
             }
             assert_eq!(app.tab.history.undo_frames().len(), 1);
             let after = app.tab.doc.clone();

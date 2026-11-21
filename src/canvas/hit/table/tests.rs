@@ -44,6 +44,55 @@ fn caption(id: u64, position: World, text: &str) -> Annotation {
     }
 }
 
+#[test]
+fn cell_clipped_tlc_rf_labels_keep_cached_and_uncached_whole_plate_selection() {
+    use reshiki::graphics::{TlcLane, TlcPlate, TlcRfLabel, TlcSpot};
+    for offset in [60., 71.] {
+        let mut doc = Document::default();
+        let mut plate = Graphic::dragged(
+            1,
+            GraphicKind::TlcPlate,
+            World::new(10., 10.),
+            World::new(50., 50.),
+            Default::default(),
+            Default::default(),
+            false,
+        );
+        plate.tlc = Some(Box::new(TlcPlate {
+            lanes: vec![TlcLane {
+                spots: vec![TlcSpot {
+                    rf: 0.5,
+                    width_pt: 6.,
+                    height_pt: 4.,
+                    style: Default::default(),
+                    show_rf: true,
+                    label: Some(TlcRfLabel {
+                        text: "Rf".into(),
+                        format: Default::default(),
+                        offset: World::new(offset, 80.),
+                        angle: 0.,
+                    }),
+                }],
+            }],
+            ..Default::default()
+        }));
+        doc.graphics.extend([plate, table(vec![1])]);
+        doc.validate().unwrap();
+        let p = World::new(99., 120.);
+        assert!(doc.graphics[0].hit(p, 5.));
+        let expected = if offset == 60. { vec![1] } else { vec![] };
+        assert_eq!(hit_selection(&doc, p, 5.), expected);
+        let mut cache = crate::canvas::cache::SceneCache::default();
+        assert_eq!(
+            crate::canvas::hit::hit_selection_cached(&doc, p, 5., &mut cache),
+            expected
+        );
+        assert!(hit_selection(&doc, World::new(110., 120.), 5.).is_empty());
+        doc.graphics[0].tlc.as_deref_mut().unwrap().lanes[0].spots[0].show_rf = false;
+        assert!(hit_selection(&doc, p, 5.).is_empty());
+    }
+}
+
 fn rectangle(id: u64, p: World, layer: i32) -> Graphic {
     let mut graphic = Graphic::dragged(
         id,

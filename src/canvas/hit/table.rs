@@ -145,6 +145,10 @@ impl<'a> CellClips<'a> {
             .into_iter()
             .chain(graphic.panel_titles(&style))
             .any(|label| label.ink_boxes().into_iter().any(|(lo, hi)| boxes(lo, hi)))
+            || graphic.tlc_labels().iter().any(|label| {
+                let (lo, hi) = label.bounds();
+                boxes(lo, hi)
+            })
             || graphic
                 .panel_parts(&style)
                 .iter()

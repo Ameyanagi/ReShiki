@@ -568,6 +568,9 @@ impl Graphic {
                 .flat_map(|cell| cell.border_parts(self))
                 .collect();
         }
+        if self.kind == GraphicKind::TlcPlate {
+            return self.tlc.as_deref().map_or_else(Vec::new, |t| t.parts(self));
+        }
         if self.kind == GraphicKind::Piece {
             return crate::equipment::placed::parts(self);
         }

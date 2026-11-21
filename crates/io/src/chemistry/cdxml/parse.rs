@@ -120,6 +120,9 @@ pub(super) fn read(text: &str) -> Result<Parsed> {
             | "represent"
             | "objecttag"
             | "embeddedobject"
+            | "tlcplate"
+            | "tlclane"
+            | "tlcspot"
             | "ColoredMolecularArea"
             | "chemicalproperty"
             | "annotation" => (),

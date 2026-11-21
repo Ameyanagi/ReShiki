@@ -4,6 +4,8 @@ use crate::{
     graphics::{flattened, segment_distance},
 };
 
+const BOUNDARY_TOLERANCE: f32 = 0.001;
+
 pub fn contains(polygon: &[Point], p: Point) -> bool {
     if polygon.len() < 3 {
         return false;
@@ -14,7 +16,7 @@ pub fn contains(polygon: &[Point], p: Point) -> bool {
         .zip(polygon.iter().cycle().skip(1))
         .take(polygon.len())
     {
-        if segment_distance(p, *a, *b) < 0.001 {
+        if segment_distance(p, *a, *b) < BOUNDARY_TOLERANCE {
             return true;
         }
         if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
@@ -29,6 +31,14 @@ fn encloses(polygon: &[Point], points: &[Point], closed: bool) -> bool {
     }
     let cross =
         |a: Point, b: Point, c: Point| (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    let straddles = |a: Point, b: Point, c: Point, d: Point| {
+        // Clipping and affine frame round trips can put a boundary point a
+        // few ulps across an edge. Use contains' distance tolerance here too:
+        // a point accepted on that edge must not become a strict crossing.
+        let tolerance = BOUNDARY_TOLERANCE * a.distance(b);
+        let (c, d) = (cross(a, b, c), cross(a, b, d));
+        (c < -tolerance && d > tolerance) || (c > tolerance && d < -tolerance)
+    };
     let edges = points
         .windows(2)
         .filter_map(|p| match p {
@@ -47,10 +57,7 @@ fn encloses(polygon: &[Point], points: &[Point], closed: bool) -> bool {
             .iter()
             .zip(polygon.iter().cycle().skip(1))
             .take(polygon.len())
-            .any(|(c, d)| {
-                cross(a, b, *c) * cross(a, b, *d) < -0.0001
-                    && cross(*c, *d, a) * cross(*c, *d, b) < -0.0001
-            })
+            .any(|(c, d)| straddles(a, b, *c, *d) && straddles(*c, *d, a, b))
     })
 }
 pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
@@ -122,6 +129,22 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
         }
     }
     for g in &doc.graphics {
+        if g.tlc.is_some() {
+            let paths = flattened(&g.commands());
+            let labels = g.tlc_labels();
+            let visible: Vec<_> = paths
+                .iter()
+                .filter_map(|path| visible_path(g.id, path))
+                .chain(labels.iter().filter_map(|label| {
+                    let corners = cells.polygon(g.id, &label.corners());
+                    (!corners.is_empty()).then(|| encloses(polygon, &corners, true))
+                }))
+                .collect();
+            if !visible.is_empty() && visible.into_iter().all(|inside| inside) {
+                result.push(g.id);
+            }
+            continue;
+        }
         let commands = g.commands();
         let fill_only = g.is_fill_only_path();
         let paths = if fill_only {
@@ -158,4 +181,46 @@ pub fn combine(existing: &[u64], hits: &[u64], add: bool, subtract: bool) -> Vec
         }
     }
     ids
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enclosure_uses_the_same_boundary_tolerance_as_point_containment() {
+        let polygon = [
+            Point::default(),
+            Point::new(100., 0.),
+            Point::new(100., 100.),
+            Point::new(0., 100.),
+        ];
+        let just_outside = f32::from_bits(100.0_f32.to_bits() + 2);
+        let clipped = [Point::new(20., 10.), Point::new(just_outside, 10.)];
+        assert!(clipped.iter().all(|p| contains(&polygon, *p)));
+        assert!(encloses(&polygon, &clipped, false));
+        assert!(!encloses(
+            &polygon,
+            &[clipped[0], Point::new(100.01, 10.)],
+            false,
+        ));
+    }
+
+    #[test]
+    fn enclosure_rejects_a_path_crossing_a_visible_concave_gap() {
+        let polygon = [
+            Point::default(),
+            Point::new(100., 0.),
+            Point::new(100., 100.),
+            Point::new(60., 100.),
+            Point::new(60., 40.),
+            Point::new(40., 40.),
+            Point::new(40., 100.),
+            Point::new(0., 100.),
+        ];
+        let crossing = [Point::new(20., 80.), Point::new(80., 80.)];
+        assert!(crossing.iter().all(|p| contains(&polygon, *p)));
+        assert!(!encloses(&polygon, &crossing, false));
+        assert!(!encloses(&polygon, &crossing, true));
+    }
 }

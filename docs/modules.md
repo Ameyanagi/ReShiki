@@ -517,6 +517,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/graphics/integer.rs`: Bounded decimal layers retain Python integers until the document boundary.
 - `crates/io/src/chemistry/cdxml/graphics/picture.rs`
 - `crates/io/src/chemistry/cdxml/graphics/shapes.rs`
+- `crates/io/src/chemistry/cdxml/graphics/tlc.rs`: Native TLC geometry and the import-only boundary for unsupported spot data.
 - `crates/io/src/chemistry/cdxml/groups.rs`: Logical groups from reference/engine/groups_exchange.py::read_groups.
 - `crates/io/src/chemistry/cdxml/labels.rs`: Detached label/indicator patches from reference/engine/labels_exchange.py::read_labels.
 - `crates/io/src/chemistry/cdxml/marks.rs`: Detached patches from reference/engine/marks_exchange.py::read_marks.
@@ -602,6 +603,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/exchange/drawing/objects.rs`
 - `crates/io/src/exchange/drawing/partial_charges.rs`
 - `crates/io/src/exchange/drawing/tables.rs`: Native cell pages keep chemistry editable and let ChemDraw clip/reflow it.
+- `crates/io/src/exchange/drawing/tlc.rs`: Native ChemDraw TLC objects, never a flattened collection of ellipses.
 - `crates/io/src/exchange/drawing/tree.rs`
 - `crates/io/src/exchange/encode.rs`
 - `crates/io/src/exchange/mod.rs`: Bounded CDX/CDXML serialization.
@@ -718,6 +720,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/editing.rs`
 - `crates/model/src/editing/reference.rs`: Exact drawing orientation and single-bond stretching.
 - `crates/model/src/editing/rotation.rs`: Reference sites that follow rotation, unlike axis-aligned drawing bounds.
+- `crates/model/src/editing/table_captions.rs`: Preserve readable cell ink when its owning table is transformed.
 - `crates/model/src/equipment.rs`: Lab apparatus
 - `crates/model/src/equipment/authoring.rs`: A piece-editor draft.
 - `crates/model/src/equipment/authoring_artwork.rs`: A bounded certificate for filled artwork without independent stroke-only traces.
@@ -769,6 +772,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/table.rs`: Editable table cells own ordinary drawing objects by ID.
 - `crates/model/src/graphics/table/clip.rs`: Pointer geometry clips ink before applying the editor's pick radius.
 - `crates/model/src/graphics/table/editor.rs`: Original empty grids for the native table tool.
+- `crates/model/src/graphics/tlc.rs`: Native TLC plate geometry.
 - `crates/model/src/grouping.rs`: Persistent, nested logical groups, represented as laminar sets of object IDs.
 - `crates/model/src/haworth.rs`: Haworth drawing geometry and chemically defined carbohydrate templates.
 - `crates/model/src/haworth/interchange.rs`: Recognize the tested five/six-member Haworth convention at file boundaries.
