@@ -14,7 +14,10 @@ fn drawing() -> App {
             GraphicKind::Rectangle,
             lo,
             hi,
-            GraphicStyle::default(),
+            GraphicStyle {
+                width_pt: 0.4,
+                ..Default::default()
+            },
             Default::default(),
             false,
         ));
@@ -585,6 +588,17 @@ fn equipment_authoring_screenshot_fixture_uses_the_normal_model_and_app_route() 
     .unwrap();
     app.tab.doc.validate().unwrap();
     app.tab.selected = vec![1];
+    // This preserved historical fixture has a 0.6 pt open rim. Prepare that
+    // detail explicitly; conversion must no longer silently thin it.
+    assert!(!app.can_define_equipment());
+    send(&mut app, Action::Begin);
+    assert!(app.status.contains("0.4 pt"));
+    assert!(app.tab.equipment_authoring.is_none());
+    for graphic in &mut app.tab.doc.graphics {
+        if graphic.style.fill.is_none() {
+            graphic.style.width_pt = 0.4;
+        }
+    }
     assert!(app.can_define_equipment());
     let before = app.tab.doc.clone();
     send(&mut app, Action::Begin);
@@ -599,6 +613,27 @@ fn equipment_authoring_screenshot_fixture_uses_the_normal_model_and_app_route() 
     assert!(!app.error, "{}", app.status);
     assert_eq!(app.tab.doc.graphics.len(), 1);
     assert_eq!(app.tab.doc.graphics[0].kind, GraphicKind::Piece);
+}
+
+#[test]
+fn equipment_authoring_refuses_incompatible_strokes_without_changing_source() {
+    for color in [false, true] {
+        let mut app = drawing();
+        if color {
+            app.tab.doc.graphics[0].style.stroke = reshiki::palette::Color::Custom([180, 50, 55]);
+        } else {
+            app.tab.doc.graphics[0].style.width_pt = 2.;
+        }
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        assert!(!app.can_define_equipment());
+        send(&mut app, Action::Begin);
+        assert!(app.tab.equipment_authoring.is_none());
+        assert!(app.status.contains(if color { "Ink" } else { "0.4 pt" }));
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.tab.history.can_undo());
+    }
 }
 
 #[test]

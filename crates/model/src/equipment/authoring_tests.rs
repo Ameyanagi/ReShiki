@@ -5,6 +5,7 @@ fn rectangle(doc: &mut Document, lo: Point, hi: Point, filled: bool) -> u64 {
     let id = doc.next_id();
     let style = GraphicStyle {
         fill: filled.then_some(Color::Paper),
+        width_pt: if filled { 0.6 } else { 0.4 },
         ..Default::default()
     };
     doc.graphics.push(Graphic::dragged(
@@ -78,6 +79,7 @@ fn selection_conversion_is_deterministic_and_keeps_world_curves() {
         Default::default(),
         false,
     );
+    g.style.width_pt = 0.4;
     g.axis_y = Point::new(-13., 42.);
     doc.graphics.push(g);
     let original = doc.clone();
@@ -120,7 +122,10 @@ fn first_confirmed_joint_calibrates_every_shape_and_keeps_the_source() {
         GraphicKind::Line,
         Point::new(-5., 20.),
         Point::new(5., 20.),
-        Default::default(),
+        GraphicStyle {
+            width_pt: 0.4,
+            ..Default::default()
+        },
         Default::default(),
         false,
     ));
@@ -233,7 +238,10 @@ fn open_strokes_expose_ambiguous_rims_and_body_interiors_are_refused() {
         GraphicKind::Line,
         Point::new(-10., 0.),
         Point::new(10., 0.),
-        Default::default(),
+        GraphicStyle {
+            width_pt: 0.4,
+            ..Default::default()
+        },
         Default::default(),
         false,
     ));
@@ -409,6 +417,93 @@ fn unsupported_and_mixed_selections_are_refused_without_changes() {
 }
 
 #[test]
+fn unsupported_visible_strokes_are_refused_before_conversion() {
+    for filled in [false, true] {
+        let mut doc = Document::default();
+        let id = rectangle(&mut doc, Point::default(), Point::new(40., 30.), filled);
+        for style in [
+            GraphicStyle {
+                width_pt: 2.,
+                fill: filled.then_some(Color::Paper),
+                ..Default::default()
+            },
+            GraphicStyle {
+                stroke: Color::Custom([180, 50, 55]),
+                width_pt: if filled { 0.6 } else { 0.4 },
+                fill: filled.then_some(Color::Paper),
+                ..Default::default()
+            },
+        ] {
+            doc.graphics[0].style = style;
+            let before = doc.clone();
+            let problem = Draft::from_selection(&doc, &[id]).unwrap_err();
+            assert!(
+                problem.contains("Ink") || problem.contains("0.6 pt") || problem.contains("0.4 pt"),
+                "{problem}"
+            );
+            assert_eq!(doc, before);
+        }
+    }
+}
+
+#[test]
+fn supported_outlines_details_and_imported_filled_artwork_still_convert() {
+    let (mut doc, body, _) = vessel(); // ordinary editable 0.6 pt Ink outline
+    let detail = rectangle(&mut doc, Point::new(30., 0.), Point::new(50., 10.), false);
+    let draft = Draft::from_selection(&doc, &[body, detail]).unwrap();
+    let shown = draft.preview_graphic(100).unwrap();
+    let paths = placed::primitives(&shown, doc.canvas_theme);
+    assert!(paths.iter().any(|p| matches!(p, crate::scene::Primitive::Path { style, filled: false, .. } if style.stroke == Color::Ink && style.width_pt == 0.4)));
+    // The SVG importer represents fills (including outlined SVG strokes) as
+    // filled paths with a minimum-width stroke in the same color.
+    let mut art = doc.graphics[0].clone();
+    art.kind = GraphicKind::Path;
+    art.path = doc.graphics[0].commands();
+    art.origin = Point::default();
+    art.axis_x = Point::new(1., 0.);
+    art.axis_y = Point::new(0., 1.);
+    art.style = GraphicStyle {
+        stroke: Color::Custom([20, 80, 150]),
+        fill: Some(Color::Custom([20, 80, 150])),
+        width_pt: 0.1,
+        ..Default::default()
+    };
+    doc.graphics = vec![art];
+    assert!(Draft::from_selection(&doc, &[body]).is_ok());
+    let closed = doc.graphics[0].path.clone();
+    for path in [
+        vec![
+            PathCommand::Move(Point::default()),
+            PathCommand::Line(Point::new(40., 0.)),
+        ],
+        vec![
+            PathCommand::Move(Point::default()),
+            PathCommand::Line(Point::new(40., 0.)),
+            PathCommand::Close,
+        ],
+        closed
+            .iter()
+            .cloned()
+            .chain([
+                PathCommand::Move(Point::new(50., 0.)),
+                PathCommand::Line(Point::new(80., 0.)),
+            ])
+            .collect(),
+        closed
+            .iter()
+            .cloned()
+            .chain([PathCommand::Line(Point::new(80., 0.))])
+            .collect(),
+    ] {
+        doc.graphics[0].path = path;
+        assert!(
+            Draft::from_selection(&doc, &[body]).is_err(),
+            "an open or empty fill cannot hide a visible stroke"
+        );
+    }
+}
+
+#[test]
 fn selection_expands_native_groups_and_respects_authoring_limits() {
     let (mut doc, body, _) = vessel();
     let other = rectangle(&mut doc, Point::new(30., 0.), Point::new(40., 10.), false);
@@ -440,8 +535,15 @@ fn selection_expands_native_groups_and_respects_authoring_limits() {
     let mut doc = Document::default();
     for _ in 0..2 {
         let id = doc.next_id();
-        let mut g =
-            Graphic::pen_curve(id, Point::default(), Point::new(1., 1.), Default::default());
+        let mut g = Graphic::pen_curve(
+            id,
+            Point::default(),
+            Point::new(1., 1.),
+            GraphicStyle {
+                width_pt: 0.4,
+                ..Default::default()
+            },
+        );
         g.node_types.clear();
         g.path = std::iter::once(PathCommand::Move(Point::default()))
             .chain((1..=10_000).map(|n| PathCommand::Line(Point::new(n as f32 / 1000., 0.))))
@@ -591,7 +693,10 @@ fn a_plug_can_join_the_rim_of_an_open_native_outline() {
             GraphicKind::Line,
             from,
             to,
-            Default::default(),
+            GraphicStyle {
+                width_pt: 0.4,
+                ..Default::default()
+            },
             Default::default(),
             false,
         ));

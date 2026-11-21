@@ -9,6 +9,12 @@ Use a disposable app wrapper with a fresh `RESHIKI_DATA_DIR`. Open this file,
 fit the drawing, and keep the same window, zoom, theme and panel width for
 all captures. Select the flask group.
 
+The preserved historical fixture has a 0.6 pt unfilled rim detail. Select that
+detail and set **Graphic style → Graphic line width (pt)** to **0.4** in
+Properties before defining the piece. Authoring now
+refuses incompatible stroke widths instead of silently thinning them; the
+previously captured accepted piece already used the 0.4 pt equipment detail.
+
 1. Capture the source group and the **Define as equipment piece…** command
    in Properties or the context menu. Opening the command must leave the
    document unsaved state unchanged.
@@ -30,6 +36,28 @@ Screenshots show the editor and rendered result. Record Undo/Redo and
 save/reopen observations separately because a still image cannot prove them.
 Do not capture a launch screen or unrelated recovered drawing. This fixture
 exercises length calibration only; use the joint fixture below to author a port.
+
+### Recheck the review fixes
+
+1. Open the unmodified fixture and find **Define as equipment piece…** in
+   the command palette. It must explain **Use 0.4 pt strokes for equipment
+   line details.** The original group, colors and widths must remain intact.
+   Prepare only the rim as described above, then repeat the normal acceptance
+   walkthrough. Use this prepared source for refreshed matched captures.
+2. On a disposable copy, set a visible detail to a custom red stroke, or to
+   2 pt. The command must identify **Ink** or the supported width and leave
+   the source unchanged. Restore the supported style before proceeding.
+3. With an Assistant request already running, open a valid equipment draft.
+   Let its reply finish. The equipment preview and source drawing must remain
+   unchanged, and the reply must remain available. With automatic application
+   enabled, Discard then permits the pending additive result to apply once.
+   Repeat with Accept: the equipment and additive Assistant result have
+   separate drawing Undo steps. A result replacing the original source shapes
+   must wait for review after acceptance changed their revision/selection.
+
+The model/app regressions cover these asynchronous cases without a live
+service. Record any native recheck at the new exact head; earlier screenshots
+remain historical evidence rather than proof of the updated entry checks.
 
 ## Fixed ground-glass joint fixture
 

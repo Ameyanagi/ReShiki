@@ -701,6 +701,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/editing/rotation.rs`: Reference sites that follow rotation, unlike axis-aligned drawing bounds.
 - `crates/model/src/equipment.rs`: Lab apparatus
 - `crates/model/src/equipment/authoring.rs`: A piece-editor draft.
+- `crates/model/src/equipment/authoring_artwork.rs`: A bounded certificate for filled artwork without independent stroke-only traces.
 - `crates/model/src/equipment/builtin.rs`: The built-in catalogue
 - `crates/model/src/equipment/eval.rs`: Evaluates a definition at parameter values
 - `crates/model/src/equipment/format.rs`: The `.reshiki-piece` format

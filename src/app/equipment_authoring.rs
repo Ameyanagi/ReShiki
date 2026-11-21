@@ -524,7 +524,7 @@ impl App {
                 | Message::Tick
                 | Message::ModifiersChanged(_)
         ) || super::results::admitted(super::results::Modal::Preview, message)
-            || matches!(message, Message::Updates(_))
+            || matches!(message, Message::Assistant(_) | Message::Updates(_))
                 && super::results::admitted(super::results::Modal::AtomText, message);
         if allowed {
             None

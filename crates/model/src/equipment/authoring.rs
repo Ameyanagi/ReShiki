@@ -17,6 +17,9 @@ use std::{collections::BTreeMap, sync::Arc};
 #[path = "authoring_tests.rs"]
 mod tests;
 
+#[path = "authoring_artwork.rs"]
+mod artwork;
+
 /// Two rim clicks measured in the draft's millimetres. An unambiguous normal
 /// points away from filled shapes, independently of which edge was clicked first.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -570,7 +573,33 @@ fn supported(g: &Graphic) -> Result<(), String> {
     if g.style.pattern != LinePattern::Solid || !g.style.effects.is_plain() {
         return Err("Use plain fills and solid strokes before defining an equipment piece.".into());
     }
+    if let Some(problem) = stroke_problem(g) {
+        return Err(problem.into());
+    }
     Ok(())
+}
+
+/// A visible stroke the fixed-piece paint model cannot preserve. Filled SVG
+/// artwork uses a minimum-width stroke in its fill color, not a separate outline.
+pub fn stroke_problem(g: &Graphic) -> Option<&'static str> {
+    if g.kind == GraphicKind::Path
+        && g.style.fill == Some(g.style.stroke)
+        && (g.style.width_pt - 0.1).abs() < 1e-6
+    {
+        return (!artwork::certified(&g.commands())).then_some(
+            "Use simpler filled paths, or Ink strokes: 0.6 pt outlines / 0.4 pt details.",
+        );
+    }
+    if g.style.stroke != crate::palette::Color::Ink {
+        return Some("Use Ink strokes before defining an equipment piece.");
+    }
+    if g.closed_shape() && g.style.fill.is_some() {
+        ((g.style.width_pt - 0.6).abs() > 1e-6)
+            .then_some("Use 0.6 pt outlines on filled equipment shapes.")
+    } else {
+        ((g.style.width_pt - 0.4).abs() > 1e-6)
+            .then_some("Use 0.4 pt strokes for equipment line details.")
+    }
 }
 
 fn frame(g: &Graphic) -> Affine {

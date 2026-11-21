@@ -47,7 +47,10 @@ fn defining_equipment_is_offered_for_supported_groups_with_the_shared_action() {
             GraphicKind::Rectangle,
             World::new(x, 0.),
             World::new(x + 40., 50.),
-            Default::default(),
+            reshiki::graphics::GraphicStyle {
+                fill: Some(reshiki::palette::Color::Paper),
+                ..Default::default()
+            },
             Default::default(),
             false,
         ));

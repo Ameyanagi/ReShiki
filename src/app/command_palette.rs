@@ -377,8 +377,20 @@ impl App {
                 } else if self.tab.drawing_edit_active() {
                     Some("Finish the current edit first")
                 } else {
-                    (!self.can_define_equipment())
-                        .then_some("Select plain vector shapes for a piece")
+                    let selected = self.tab.doc.expand_groups(&self.tab.selected);
+                    self.tab
+                        .doc
+                        .graphics
+                        .iter()
+                        .filter(|g| {
+                            selected.contains(&g.id)
+                                && reshiki::graphics::GraphicKind::DRAWABLE.contains(&g.kind)
+                        })
+                        .find_map(reshiki::equipment::authoring::stroke_problem)
+                        .or_else(|| {
+                            (!self.can_define_equipment())
+                                .then_some("Select plain vector shapes for a piece")
+                        })
                 }
             }
             Need::Equipment => (!self.pieces_selected()).then_some("Select equipment first"),

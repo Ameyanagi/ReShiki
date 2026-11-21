@@ -495,8 +495,14 @@ must meet a compatible filled glass neck.
 Authoring makes fixed pieces with optional standard ground-glass joints.
 It does not yet assign materials or paint layers, create holds, liquids or
 moving parts, or edit an existing definition. Pictures, text and chemical objects
-cannot become equipment shapes. Filled shapes use glass; open strokes keep
-their detail appearance. Other drawing commands wait for **Accept** or
+cannot become equipment shapes. Filled artwork becomes glass. Visible
+outlines must use **Ink** at **0.6 pt**, and open line details must use
+**Ink** at **0.4 pt**. Change unsupported stroke colors or widths in
+Properties before defining the piece; conversion refuses them. General
+stroke styling belongs to the later material and layer editor.
+Filled SVG artwork can enter without a separate stroke. Complex or
+overlapping filled paths may need simplifying or separating first.
+Other drawing commands wait for **Accept** or
 **Discard**.
 
 ### Keep and share equipment pieces
