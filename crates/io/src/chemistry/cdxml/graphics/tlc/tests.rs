@@ -234,3 +234,11 @@ fn omitted_numeric_fields_use_an_explicitly_noticed_fallback() {
     assert_eq!(t.solvent_front_fraction, 0.1);
     assert_eq!(t.lanes[0].spots[0].rf, 0.);
 }
+
+#[test]
+fn rf_rotation_exception_stays_confined_to_a_native_plate_label() {
+    let xml = "<CDXML><page><objecttag Name='rf'><t p='10 20' RotationAngle='1966080'><s size='9'>other tag</s></t></objecttag></page></CDXML>";
+    let (normalized, notice) = super::super::super::approximate::approximate(xml);
+    assert!(!normalized.contains("RotationAngle"));
+    assert!(notice.unwrap().contains("rotated caption upright"));
+}

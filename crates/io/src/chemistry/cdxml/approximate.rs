@@ -1820,11 +1820,33 @@ impl Pass {
         }
         // Captions turn; atom labels and inherited defaults stay upright.
         let parent = self.node(index)?.parent;
-        let caption = tag == "t"
-            && match parent {
-                Some(parent) => !matches!(self.node(parent)?.tag.as_str(), "n" | "objecttag"),
-                None => true,
-            };
+        // TLC Rf captions are owned text, with their own measured baseline and
+        // explicit turn. Other object tags retain the legacy upright fallback.
+        let mut tlc_rf_caption = false;
+        if tag == "t" {
+            let mut current = Some(index);
+            tlc_rf_caption = true;
+            for expected in ["t", "objecttag", "tlcspot", "tlclane", "tlcplate"] {
+                let Some(i) = current else {
+                    tlc_rf_caption = false;
+                    break;
+                };
+                let node = self.node(i)?;
+                if node.tag != expected
+                    || expected == "objecttag" && node.attr("Name") != Some("rf")
+                {
+                    tlc_rf_caption = false;
+                    break;
+                }
+                current = node.parent;
+            }
+        }
+        let caption = tlc_rf_caption
+            || tag == "t"
+                && match parent {
+                    Some(parent) => !matches!(self.node(parent)?.tag.as_str(), "n" | "objecttag"),
+                    None => true,
+                };
         if !caption
             && self
                 .attr(index, "RotationAngle")?
