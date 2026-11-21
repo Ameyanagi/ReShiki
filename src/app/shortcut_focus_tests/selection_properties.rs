@@ -20,7 +20,7 @@ fn drawing() -> (App, Vec<u64>) {
 }
 
 #[tokio::test]
-#[ignore = "Opt-in actual keyboard Escape and Close analysis focus regression"]
+#[ignore = "Opt-in actual keyboard Esc and Close analysis focus regression"]
 async fn requested_properties_close_from_focused_controls_without_editing() {
     let mut ui = Ui::new().await;
     for fragment in [false, true] {
