@@ -1088,18 +1088,21 @@ pub fn unclipped(doc: &Document, ids: &[u64]) -> usize {
 /// Put a clip of the right size on every ground-glass seat between the
 /// pieces `ids` that has none; how many went on.
 pub fn add_clips(doc: &mut Document, ids: &[u64]) -> usize {
-    let wanted: Vec<(usize, Arc<Definition>, i32)> = (doc.seats.iter().enumerate())
+    let wanted: Vec<_> = doc
+        .seats
+        .iter()
+        .enumerate()
         .filter_map(|(i, s)| {
             let layer = (doc.graphics.iter())
                 .find(|g| g.id == s.a.piece)
                 .map_or(-1, |g| g.layer);
-            Some((i, missing_clip(doc, ids, s)?, layer))
+            let targets = [s.a.piece, s.b.piece];
+            Some((i, missing_clip(doc, ids, s)?, layer, targets))
         })
         .collect();
     // Refuse the whole batch before allocating any clips.
-    for (i, ..) in &wanted {
-        let seat = &doc.seats[*i];
-        if crate::graphics::table::require_same_cell(doc, &[seat.a.piece, seat.b.piece]).is_err() {
+    for (_, _, _, targets) in &wanted {
+        if crate::graphics::table::require_same_cell(doc, targets).is_err() {
             return 0;
         }
     }
@@ -1108,8 +1111,7 @@ pub fn add_clips(doc: &mut Document, ids: &[u64]) -> usize {
         .iter()
         .any(|g| g.table.is_some())
         .then(|| doc.clone());
-    for (i, d, layer) in &wanted {
-        let targets = [doc.seats[*i].a.piece, doc.seats[*i].b.piece];
+    for (i, d, layer, targets) in &wanted {
         let id = doc.next_id();
         let mut g = placed::graphic(id, d.clone(), Point::default(), 1.);
         g.layer = *layer;
@@ -1118,7 +1120,7 @@ pub fn add_clips(doc: &mut Document, ids: &[u64]) -> usize {
             s.clip = Some(id);
         }
         if let Some(before) = &before
-            && crate::graphics::table::inherit_attachment(before, doc, &[id], &targets).is_err()
+            && crate::graphics::table::inherit_attachment(before, doc, &[id], targets).is_err()
         {
             *doc = before.clone();
             return 0;
