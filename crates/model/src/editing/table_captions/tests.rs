@@ -9,6 +9,57 @@ use crate::{
     typography::TextAlign,
 };
 
+#[test]
+fn source_inset_stays_finite_inside_extremely_narrow_cell_axes() {
+    for (width, height) in [(0.01, 100_000.), (100_000., 0.01)] {
+        let frame = Frame {
+            origin: Point::default(),
+            axis_x: Point::new(width, 0.),
+            axis_y: Point::new(0., height),
+        };
+        let position = frame.point(Point::new(0.25, 0.25));
+        let caption = super::Caption {
+            frame,
+            ink: super::Ink {
+                position,
+                centre: Point::new(width * 0.1, height * 0.1),
+                pivot: Point::default(),
+                angle: 0.,
+                visible: 1,
+                total: 1,
+                bounds: (Point::default(), Point::new(width * 0.2, height * 0.2)),
+            },
+        };
+        let a = Annotation {
+            id: 1,
+            position,
+            text: "X".into(),
+            format: Default::default(),
+            angle: 0.,
+        };
+        for reflected in [false, true] {
+            let frame = if reflected {
+                Frame {
+                    origin: Point::new(width, height),
+                    axis_x: Point::new(-width, 0.),
+                    axis_y: Point::new(0., -height),
+                }
+            } else {
+                frame
+            };
+            let target = frame.point(Point::new(0.5, 0.5));
+            let placed = caption.source_inset(&a, frame, target).unwrap();
+            assert!(placed.is_finite());
+            assert!(super::in_cell(frame, placed));
+            assert!(
+                caption
+                    .source_inset(&a, frame, Point::new(f32::NAN, 0.))
+                    .is_none()
+            );
+        }
+    }
+}
+
 // Native QA geometry: three columns and two rows, with the existing Entry and
 // Solvent captions inserted near the upper-left corner of their cells.
 fn drawing() -> Document {
