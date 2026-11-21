@@ -275,3 +275,25 @@ fn native_tlc_normal_graphic_opacity_and_wavy_border_have_shared_rendering() {
             .all(|p| matches!(p,Primitive::Opacity {alpha, ..} if *alpha==0.5))
     );
 }
+
+#[test]
+fn native_tlc_rotation_center_follows_its_convex_four_corner_frame() {
+    let mut g = plate();
+    g.tlc.as_deref_mut().unwrap().bottom_right = Point::new(1.2, 0.9);
+    let expected = g.tlc.as_deref().unwrap().point(&g, 0.5, 0.5);
+    let mut doc = Document {
+        graphics: vec![g],
+        ..Default::default()
+    };
+    let centre = crate::editing::rotation_center(&doc, &[1]).unwrap();
+    assert!(centre.distance(expected) < 0.001);
+    for _ in 0..8 {
+        doc.graphics[0].map_positions(|p| p.turned(centre, 17.));
+    }
+    assert!(
+        crate::editing::rotation_center(&doc, &[1])
+            .unwrap()
+            .distance(centre)
+            < 0.001
+    );
+}

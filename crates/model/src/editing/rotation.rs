@@ -76,6 +76,12 @@ fn graphic_anchor(graphic: &Graphic) -> (f64, f64) {
     let (x, y) = match graphic.kind {
         GraphicKind::Symbol(_) | GraphicKind::Orbital(_) | GraphicKind::Icon => (0., 0.),
         GraphicKind::Line | GraphicKind::Curve => (0.5, 0.),
+        GraphicKind::TlcPlate => graphic.tlc.as_deref().map_or((0.5, 0.5), |t| {
+            (
+                (1. + f64::from(t.bottom_right.x)) * 0.25,
+                (1. + f64::from(t.bottom_right.y)) * 0.25,
+            )
+        }),
         // Legacy half arcs have a half-height frame; both forms use the ellipse center.
         GraphicKind::Arc if graphic.arc.is_none() => (0.5, 1.),
         GraphicKind::Path => {
