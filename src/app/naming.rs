@@ -516,11 +516,15 @@ impl App {
         (ticket, cancel)
     }
 
-    fn naming_finished(&mut self, ticket: Ticket, result: Result<Outcome, naming::Error>) {
+    fn naming_finished(
+        &mut self,
+        ticket: Ticket,
+        result: Result<Outcome, naming::Error>,
+    ) -> Task<Message> {
         if self.tab.naming.pending.map(Pending::ticket) != Some(ticket)
             || ticket.epoch != self.tab.file_epoch
         {
-            return;
+            return Task::none();
         }
         let online = matches!(self.tab.naming.pending, Some(Pending::Online(_)));
         let generate = matches!(self.tab.naming.pending, Some(Pending::Generate(_)));
@@ -548,7 +552,7 @@ impl App {
                     "The drawing changed. Try again.",
                 ));
             }
-            return;
+            return Task::none();
         }
         match result {
             Err(error) => {
@@ -570,7 +574,7 @@ impl App {
                 if let Some(preview) = preview {
                     self.tab.naming.set_preview(*preview);
                     if let Some((caption, placement)) = import {
-                        self.insert_import_preview(caption, placement);
+                        return self.insert_import_preview(caption, placement);
                     }
                 } else if import.is_some() {
                     self.tab.naming.notice = Some(Notice::new(
@@ -593,6 +597,7 @@ impl App {
                 }
             }
         }
+        Task::none()
     }
 
     pub(super) fn naming_action(&mut self, action: Action) -> Task<Message> {
@@ -736,7 +741,7 @@ impl App {
                     move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
                 );
             }
-            Action::Finished(ticket, result) => self.naming_finished(ticket, *result),
+            Action::Finished(ticket, result) => return self.naming_finished(ticket, *result),
             Action::NameDraft(atoms, name) => self.tab.naming.name_draft = Some((atoms, name)),
             Action::Rename(atoms, name) => self.rename_molecule(&atoms, &name),
             Action::NameRow(atoms) => {

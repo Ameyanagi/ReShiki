@@ -1,14 +1,16 @@
 //! Shared search for templates, chemical names and SMILES in the Add tab.
 use super::engine_jobs::InsertPlacement;
+use super::icons::{Glyph, Icon};
 use super::naming;
 use super::template_library::Action;
-use super::workspace::{accessible_checkbox, accessible_command, muted_text};
+use super::workspace::{accessible_checkbox, accessible_command, control, muted_text};
 use super::{App, InspectorTab, Job, Message};
 use iced::widget::{column, row, text};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::engine::Request;
 
 const MAX_QUERY_BYTES: usize = 8192;
+pub(super) const INPUT: &str = "add-search";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StructureQuery<'a> {
@@ -23,7 +25,7 @@ impl<'a> StructureQuery<'a> {
             return None;
         }
         Some(
-            if reshiki::chemistry::smiles::parse_for_import(text).is_ok() {
+            if reshiki::chemistry::smiles::parse_input_for_import(text).is_ok() {
                 Self::Smiles(text)
             } else {
                 Self::Name(text)
@@ -116,20 +118,28 @@ impl App {
         let submit = (query.is_some() && self.can_insert_add_query())
             .then_some(Message::Templates(Action::InsertQuery));
         let field = reshiki::accessibility::text_input(
-            "add-search",
+            INPUT,
             "Name, SMILES or template",
             "Name, SMILES or template",
             value,
         )
         .on_input(|input| Message::Templates(Action::Search(input)))
-        .on_submit_maybe(submit.clone())
+        .on_submit(Message::Templates(Action::InsertQuery))
         .padding(8)
         .size(13)
         .style(crate::appearance::input_style);
         let menu_open = self.templates.add_menu_open;
-        let more = accessible_command("add-more", "Add options", "⋯")
-            .expanded(menu_open)
-            .on_press(Message::Templates(Action::AddMenu(!menu_open)));
+        let more = reshiki::accessibility::button(
+            "add-more",
+            "Add options",
+            iced::widget::canvas(Glyph(Icon::More, true))
+                .width(24)
+                .height(24),
+        )
+        .padding(3)
+        .style(control(false))
+        .expanded(menu_open)
+        .on_press(Message::Templates(Action::AddMenu(!menu_open)));
         let caption = self.wants_name_caption();
         let can_caption = !matches!(query, Some(StructureQuery::Smiles(_)));
         let toggle_caption = can_caption && !self.tab.naming.is_pending();
@@ -187,6 +197,12 @@ mod tests {
             StructureQuery::read("CCO").unwrap().result(),
             "Insert CCO · from SMILES"
         );
+        for input in ["CCO ethanol", "CCO\tethanol", "CCO |u:0| ethanol"] {
+            assert_eq!(
+                StructureQuery::read(input),
+                Some(StructureQuery::Smiles(input))
+            );
+        }
     }
 
     #[test]
@@ -262,5 +278,32 @@ mod tests {
         assert!((inserted.y - camera.center.y).abs() < 0.001);
         let _ = app.update(Message::Undo);
         assert_eq!(app.tab.doc, before);
+    }
+
+    #[tokio::test]
+    async fn add_imports_named_smiles_and_keeps_cx_notices_instead_of_resolving_a_name() {
+        for (query, discarded_query) in [("CCO ethanol", false), ("CCO |u:0| ethanol", true)] {
+            let (mut app, _) = App::new();
+            app.engine = reshiki::engine::LocalEngine::in_process();
+            app.tab.busy = false;
+            let before = app.tab.doc.clone();
+            let _ = app.update(Message::Inspector(InspectorTab::Templates));
+            let _ = app.update(Message::Templates(Action::Search(query.into())));
+            let task = app.update(Message::Templates(Action::InsertQuery));
+            assert!(app.tab.busy && !app.tab.naming.is_pending());
+            let mut stream = iced_runtime::task::into_stream(task).unwrap();
+            while let Some(action) = stream.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    let _ = app.update(message);
+                }
+            }
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.tab.doc.atoms.len(), 3, "{}", app.status);
+            assert_eq!(app.templates.query, query);
+            assert_eq!(app.status.contains("query constraints"), discarded_query);
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
+        }
     }
 }

@@ -443,10 +443,11 @@ impl Operation for Fields {
     fn text_input(&mut self, _id: Option<&Id>, _bounds: Rectangle, _state: &mut dyn TextInput) {
         self.single_line = true;
     }
-    fn focusable(&mut self, _id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
+    fn focusable(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
         if state.is_focused() && !self.button {
             self.focused = true;
-            if self.leave && self.single_line {
+            // Add resolves asynchronously; its successful insertion releases focus.
+            if self.leave && self.single_line && id != Some(&Id::new(super::add_panel::INPUT)) {
                 state.unfocus();
             }
         }

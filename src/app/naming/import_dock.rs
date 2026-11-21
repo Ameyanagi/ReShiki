@@ -62,8 +62,7 @@ impl App {
         }
         let caption = self.tab.naming.add_name_below;
         if self.tab.naming.preview.is_some() {
-            self.insert_import_preview(caption, placement);
-            return Task::none();
+            return self.insert_import_preview(caption, placement);
         }
         let name = match self.tab.naming.name_to_resolve() {
             Ok(name) => name,
@@ -86,23 +85,27 @@ impl App {
         )
     }
 
-    pub(super) fn insert_import_preview(&mut self, caption: bool, placement: InsertPlacement) {
+    pub(super) fn insert_import_preview(
+        &mut self,
+        caption: bool,
+        placement: InsertPlacement,
+    ) -> Task<Message> {
         if !self.naming_can_edit() || self.tab.naming.pending.is_some() {
             self.tab.naming.notice = Some(Notice::new(
                 NoticeKind::Retry,
                 "Finish the current edit, then try again.",
             ));
-            return;
+            return Task::none();
         }
         let Some(preview) = self.tab.naming.preview.clone() else {
-            return;
+            return Task::none();
         };
         if self.tab.naming.smiles != preview.smiles {
             self.tab.naming.notice = Some(Notice::new(
                 NoticeKind::Retry,
                 "Apply the edited SMILES before inserting.",
             ));
-            return;
+            return Task::none();
         }
         // The caption keeps the drawn identity: layout may add an explicit
         // stereo hydrogen (e.g. proline in a macrocycle) that the parser's
@@ -113,7 +116,7 @@ impl App {
             Ok(identity) => identity,
             Err(error) => {
                 self.tab.naming.notice = Some(Notice::new(NoticeKind::Unsupported, error));
-                return;
+                return Task::none();
             }
         };
         let multicomponent = preview.is_multicomponent();
@@ -125,7 +128,7 @@ impl App {
                     NoticeKind::Retry,
                     "The alias choice changed. Choose its name again.",
                 ));
-                return;
+                return Task::none();
             };
             alias.name.clone()
         } else {
@@ -146,7 +149,7 @@ impl App {
                 self.appearance.name_typography,
             ) {
                 self.tab.naming.notice = Some(Notice::new(NoticeKind::Failed, error));
-                return;
+                return Task::none();
             }
         }
         let before = self.tab.doc.clone();
@@ -155,11 +158,11 @@ impl App {
             self.error = true;
             let title = &preview.record.title;
             self.status = format!("Could not insert {title}");
-            return;
+            return Task::none();
         };
         self.commit_structure_insert(before, selected, placement);
         if self.error {
-            return;
+            return Task::none();
         }
         self.tool = Tool::Select;
         // One-step insertion still states what was assumed or ignored.
@@ -181,6 +184,15 @@ impl App {
         } else {
             format!("Inserted {}", preview.record.title)
         };
+        if placement == InsertPlacement::ViewCenter
+            && self.tabs.temporary_depth == 0
+            && self.inspector_open
+            && self.inspector_tab == InspectorTab::Templates
+        {
+            super::super::focus_drawing()
+        } else {
+            Task::none()
+        }
     }
 
     pub(in crate::app) fn name_import_panel(&self) -> Element<'_, Message> {

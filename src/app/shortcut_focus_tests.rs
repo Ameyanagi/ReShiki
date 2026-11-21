@@ -2529,3 +2529,168 @@ async fn context_row_rotation_field_applies_a_typed_angle() {
     assert_eq!(app.tab.doc, drawing);
     assert!(!app.tab.history.can_undo());
 }
+
+/// Both Add input routes return keys to the drawing after a successful insert;
+/// failed names keep their draft. Advanced Import keeps its existing behavior.
+#[tokio::test]
+#[ignore = "Opt-in real renderer and built local naming worker check"]
+async fn add_name_and_smiles_return_focus_only_after_a_successful_insert() {
+    use super::{naming, template_library};
+    let mut ui = Ui::new().await;
+    for enter in [true, false] {
+        for query in ["CCO", "ethanol", "this is not a chemical name"] {
+            let (mut app, _) = App::new();
+            app.engine = reshiki::engine::LocalEngine::in_process();
+            app.tab.busy = false;
+            let before = app.tab.doc.clone();
+            let _ = app.update(Message::Inspector(InspectorTab::Templates));
+            let _ = app.update(Message::Templates(template_library::Action::Search(
+                query.into(),
+            )));
+            ui.focus_control(&mut app, "add-search").await;
+            assert!(ui.input(&app, "add-search").1);
+            if enter {
+                let (status, messages) = ui.event(
+                    &app,
+                    press(
+                        Key::Named(Named::Enter),
+                        Code::Enter,
+                        Modifiers::empty(),
+                        None,
+                    ),
+                    mouse::Cursor::Unavailable,
+                );
+                assert_eq!(status, iced::event::Status::Captured);
+                assert!(
+                    ui.input(&app, "add-search").1,
+                    "Submission waits for its result"
+                );
+                assert!(!messages.is_empty());
+                for message in messages {
+                    let task = app.update(message);
+                    assert!(
+                        ui.input(&app, "add-search").1,
+                        "Pending insertion keeps the draft focused"
+                    );
+                    let (status, repeated) = ui.event(
+                        &app,
+                        press(
+                            Key::Named(Named::Enter),
+                            Code::Enter,
+                            Modifiers::empty(),
+                            None,
+                        ),
+                        mouse::Cursor::Unavailable,
+                    );
+                    assert_eq!(status, iced::event::Status::Captured);
+                    assert!(repeated.iter().all(|message| matches!(
+                        message,
+                        Message::Templates(template_library::Action::InsertQuery)
+                    )));
+                    for message in repeated {
+                        let _ = app.update(message);
+                    }
+                    assert_eq!(app.inspector_tab, InspectorTab::Templates);
+                    assert_eq!(app.tab.doc, before);
+                    ui.run_task(&mut app, task).await;
+                }
+            } else {
+                let at = ui.bounds(&app, "add-insert").center();
+                let _ = ui.drag(&mut app, at, at).await;
+            }
+            assert_eq!(ui.input_value(&app, "add-search"), query);
+            if query == "this is not a chemical name" {
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+                if enter {
+                    assert!(ui.input(&app, "add-search").1, "Failed name keeps focus");
+                }
+                assert!(app.imported_name_notice(query).is_some());
+            } else {
+                assert_eq!(app.tab.doc.atoms.len(), 3, "{}", app.status);
+                ui.assert_unfocused(&app);
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+            }
+        }
+    }
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.tab.busy = false;
+    let _ = app.update(Message::Inspector(InspectorTab::Templates));
+    let _ = app.update(Message::Templates(template_library::Action::Search(
+        "ethanol".into(),
+    )));
+    let origin = app.tab.id;
+    let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
+    app.add_tab();
+    let front = app.tab.id;
+    let _ = app.update(Message::Templates(template_library::Action::Search(
+        "caffeine".into(),
+    )));
+    ui.focus_control(&mut app, "add-search").await;
+    ui.run_task(&mut app, pending).await;
+    assert_eq!(app.tab.id, front);
+    assert!(app.tab.doc.atoms.is_empty());
+    assert!(
+        ui.input(&app, "add-search").1,
+        "Background insertion leaves front focus alone"
+    );
+    assert_eq!(ui.input_value(&app, "add-search"), "caffeine");
+    assert_eq!(app.in_tab(origin, |app| app.tab.doc.atoms.len()), Some(3));
+
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.tab.busy = false;
+    let _ = app.update(Message::Inspector(InspectorTab::Templates));
+    let _ = app.update(Message::Templates(template_library::Action::Search(
+        "ethanol".into(),
+    )));
+    let pending = app.update(Message::Templates(template_library::Action::InsertQuery));
+    let _ = app.update(Message::ToggleInspector);
+    assert!(!app.inspector_open);
+    ui.focus_control(&mut app, "text-style-size").await;
+    assert!(ui.input(&app, "text-style-size").1);
+    ui.run_task(&mut app, pending).await;
+    assert_eq!(app.tab.doc.atoms.len(), 3, "{}", app.status);
+    assert!(
+        ui.input(&app, "text-style-size").1,
+        "A completion behind hidden Add leaves the STYLE draft focused"
+    );
+
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.tab.busy = false;
+    let _ = app.update(Message::Inspector(InspectorTab::Import));
+    let _ = app.update(Message::Imports(super::import::Action::InputKind(
+        super::import::InputKind::Name,
+    )));
+    let _ = app.update(Message::Naming(naming::Action::Name("ethanol".into())));
+    // The second advanced insert reuses its preview synchronously.
+    for atoms in [3, 6] {
+        ui.focus_control(&mut app, "import-name").await;
+        ui.key(
+            &mut app,
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        )
+        .await;
+        assert_eq!(app.tab.doc.atoms.len(), atoms, "{}", app.status);
+        assert!(
+            !ui.input(&app, "import-name").1,
+            "Advanced Enter keeps its existing blur"
+        );
+        assert_eq!(ui.input_value(&app, "import-name"), "ethanol");
+    }
+    ui.focus_control(&mut app, "import-name").await;
+    let task = app.update(Message::Naming(naming::Action::InsertName));
+    ui.run_task(&mut app, task).await;
+    assert_eq!(app.tab.doc.atoms.len(), 9);
+    assert!(
+        ui.input(&app, "import-name").1,
+        "Advanced completion does not request drawing focus"
+    );
+}

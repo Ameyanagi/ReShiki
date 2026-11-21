@@ -50,7 +50,7 @@ async fn name_insert_keeps_the_camera_when_structure_and_caption_fit() -> Result
         let result = preview(&app, "CCO").await?;
         app.tab.naming.set_preview(result);
 
-        app.insert_import_preview(
+        let _ = app.insert_import_preview(
             true,
             crate::app::engine_jobs::InsertPlacement::BesideDrawing,
         );
@@ -81,7 +81,7 @@ async fn name_insert_reveals_both_structures_and_captions_without_zooming_in() -
     };
     let result = preview(&app, "CCO").await?;
     app.tab.naming.set_preview(result.clone());
-    app.insert_import_preview(
+    let _ = app.insert_import_preview(
         true,
         crate::app::engine_jobs::InsertPlacement::BesideDrawing,
     );
@@ -95,7 +95,7 @@ async fn name_insert_reveals_both_structures_and_captions_without_zooming_in() -
     assert!(visible.contains(camera.screen(hi, paper)));
     app.tab.naming.set_preview(result);
 
-    app.insert_import_preview(
+    let _ = app.insert_import_preview(
         true,
         crate::app::engine_jobs::InsertPlacement::BesideDrawing,
     );
@@ -496,7 +496,7 @@ async fn changed_alias_choice_keeps_retry_detail_and_summary() -> Result<(), Str
     app.tab.naming.import_alias = Some(usize::MAX);
     let before = app.tab.doc.clone();
 
-    app.insert_import_preview(
+    let _ = app.insert_import_preview(
         true,
         crate::app::engine_jobs::InsertPlacement::BesideDrawing,
     );
