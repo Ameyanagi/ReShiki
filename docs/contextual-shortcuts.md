@@ -19,8 +19,9 @@ The preview pane labels its drawings **Example: before** and **Example: after**.
 
 ## Run a command
 
-Press **:** to open the **command palette**, also over an atom or bond; in a
-text field, **:** types a colon. Type part of a command and press **Enter** or
+Choose **Search…** in the header, or press **Cmd/Ctrl+K**, **Cmd/Ctrl+Shift+P**
+or **:** to open the **command palette**, also over an atom or bond. Shortcuts with Cmd/Ctrl work from text fields; **:** types a colon there. Dialogs
+keep their own keyboard input. Type part of a command and press **Enter** or
 click a row: unlike Help, the palette runs the command and closes. Each row
 shows its category and shortcut, so the palette also teaches the keys, and the
 selected row's description appears below the list.

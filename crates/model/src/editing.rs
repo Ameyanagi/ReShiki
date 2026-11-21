@@ -106,6 +106,8 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         link.annotation.is_none_or(|id| ids.contains(&id))
             && link.atoms.iter().all(|id| ids.contains(id))
     });
+    part.compound_numbers
+        .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
     part.reactions
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.groups
@@ -151,6 +153,11 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
                 .iter()
                 .map(|l| (l.annotation, &l.atoms)),
         );
+    let links = links.chain(
+        doc.compound_numbers
+            .iter()
+            .map(|n| (Some(n.annotation), &n.atoms)),
+    );
     for (annotation, atoms) in links {
         if annotation.is_some_and(|id| ids.contains(&id)) {
             ids.extend(atoms.iter().copied());
@@ -230,6 +237,8 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
     part.property_captions.retain(|n| {
         n.annotation.is_none_or(|id| ids.contains(&id)) && n.atoms.iter().all(|id| ids.contains(id))
     });
+    part.compound_numbers
+        .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
     part.arrow_labels
         .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
     part.models
@@ -535,6 +544,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         annotations,
         molecule_names,
         property_captions,
+        compound_numbers,
         arrows,
         arrow_labels,
         graphics,
@@ -569,6 +579,10 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
     }
     for link in property_captions {
         link.annotation.iter_mut().try_for_each(map)?;
+        link.atoms.iter_mut().try_for_each(map)?;
+    }
+    for link in compound_numbers {
+        map(&mut link.annotation)?;
         link.atoms.iter_mut().try_for_each(map)?;
     }
     for a in arrows {
@@ -609,6 +623,7 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.annotations.extend(part.annotations);
     doc.molecule_names.extend(part.molecule_names);
     doc.property_captions.extend(part.property_captions);
+    doc.compound_numbers.extend(part.compound_numbers);
     doc.arrows.extend(part.arrows);
     doc.arrow_labels.extend(part.arrow_labels);
     if doc.arrow_labels.iter().any(|label| label.gap.is_some()) {
@@ -956,6 +971,11 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
                 .chain([name.annotation])
                 .collect()
         })
+        .chain(
+            doc.compound_numbers
+                .iter()
+                .map(|n| n.atoms.iter().copied().chain([n.annotation]).collect()),
+        )
         .collect();
     let labels: Vec<Vec<_>> = doc
         .arrow_labels

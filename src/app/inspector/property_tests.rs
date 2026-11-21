@@ -157,15 +157,24 @@ async fn copy_smiles_preserves_cached_text_and_surfaces_axial_notice() {
             }
             app.status = "Previous status".into();
             let before = app.tab.doc.clone();
-            let mut effects =
-                iced_runtime::task::into_stream(app.update(Message::CopySmiles)).unwrap();
-            assert!(matches!(
-                effects.next().await,
-                Some(iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write { contents, .. }))
-                    if contents == EXPECTED
-            ));
+            let mut effects = iced_runtime::task::into_stream(app.copy_identity_with(
+                IdentityField::Smiles,
+                |contents| async move {
+                    assert_eq!(contents, EXPECTED);
+                    Ok(())
+                },
+            ))
+            .unwrap();
+            let Some(iced_runtime::Action::Output(message)) = effects.next().await else {
+                panic!("Missing acknowledgement");
+            };
+            let _ = app.update(message);
             assert!(effects.next().await.is_none());
-            assert_eq!(app.status, expected_notice.unwrap_or("Previous status"));
+            assert_eq!(app.status, "SMILES copied");
+            assert_eq!(
+                app.property_analysis().unwrap().smiles_notice.as_deref(),
+                expected_notice
+            );
             assert_eq!(app.tab.doc, before);
             assert!(!app.tab.history.can_undo());
             assert!(!app.error);
@@ -180,13 +189,18 @@ async fn copy_analysis_routes_the_displayed_text_to_the_clipboard() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
     app.tab.analysis = Some(analysis("CCO"));
-    let mut effects = iced_runtime::task::into_stream(app.update(Message::CopyAnalysis)).unwrap();
-    let expected = "Anal. Calcd for C2H6O: C, 52.14; H, 13.13.";
-    assert!(matches!(
-        effects.next().await,
-        Some(iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write { contents, .. }))
-            if contents == expected
-    ));
+    let mut effects = iced_runtime::task::into_stream(app.copy_identity_with(
+        IdentityField::Analysis,
+        |contents| async move {
+            assert_eq!(contents, "Anal. Calcd for C2H6O: C, 52.14; H, 13.13.");
+            Ok(())
+        },
+    ))
+    .unwrap();
+    let Some(iced_runtime::Action::Output(message)) = effects.next().await else {
+        panic!("Missing acknowledgement");
+    };
+    let _ = app.update(message);
     assert!(effects.next().await.is_none());
 
     app.tab.analysis = Some(analysis("O=O"));

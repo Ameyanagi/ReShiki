@@ -47,7 +47,9 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         let tree = snapshot(&app, &mut renderer, size);
         for id in [
             "header-new",
-            "header-export",
+            "header-search",
+            "inspector-tab-Import",
+            "inspector-tab-Export",
             "help-open",
             "transform-rotation",
             "transform-width",
@@ -107,12 +109,6 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
                 .all(|node| node.id.starts_with("figure-format-"))
         );
         app.tab.inspector_ui.close_menu();
-        app.tab
-            .inspector_ui
-            .update(super::super::inspector::Action::Section(
-                super::super::inspector::Section::ExportChemical,
-                true,
-            ));
         app.tab
             .inspector_ui
             .update(super::super::inspector::Action::ChemicalMenu(true));

@@ -18,6 +18,7 @@ pub(super) fn protect_references(doc: &Document, work: &mut Work) -> Result<(), 
         .molecule_names
         .iter()
         .map(|n| n.atoms.len())
+        .chain(doc.compound_numbers.iter().map(|n| n.atoms.len()))
         .chain(doc.depth_appearance.iter().map(|s| s.atoms.len()))
         .chain(doc.atoms.iter().map(|a| a.centroid.len()))
         .chain(doc.generic.repeats.iter().map(|r| {
@@ -94,6 +95,15 @@ pub(super) fn reject_changed_references(
         if name.atoms.iter().any(|id| changed_ids.contains(id)) {
             return Err(reference_error("generated name captions"));
         }
+    }
+    // Number cloning/ownership across changed generic components needs an
+    // explicit policy. Keep the source rather than silently flattening it.
+    if doc
+        .compound_numbers
+        .iter()
+        .any(|n| n.atoms.iter().any(|id| changed_ids.contains(id)))
+    {
+        return Err(reference_error("compound numbers"));
     }
     if doc
         .arrows

@@ -38,7 +38,7 @@ enum Completion {
     Properties,
     /// Imports(Loaded).
     Imports,
-    /// Naming(Finished | CaptionNamed) and Labels(LocantsFinished).
+    /// Naming(Finished | Generated | CaptionNamed) and Labels(LocantsFinished).
     Naming,
     /// ClipboardRead, ClipboardWritten, CopyAsPrepared and CopyAsWritten.
     Clipboard,
@@ -307,12 +307,17 @@ fn completion(message: &Message) -> Option<Completion> {
             use super::inspector::Action;
             match action {
                 Action::PropertiesCalculated(..) => Some(Completion::Properties),
+                Action::IdentityCopied(..) => Some(Completion::Clipboard),
                 Action::Section(..)
+                | Action::CopyIdentity(_)
+                | Action::NameIdentity
+                | Action::AddIdentityName
                 | Action::ModelControls(_)
                 | Action::Figure(..)
                 | Action::FigureMenu(..)
                 | Action::ResolutionMenu(..)
                 | Action::ExportEditable(..)
+                | Action::ExportBackground(..)
                 | Action::Chemical(..)
                 | Action::ChemicalMenu(..)
                 | Action::RefreshProperties
@@ -366,6 +371,9 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Automatic(..)
                 | Action::Download
                 | Action::Install
+                | Action::OpenSettings
+                | Action::CopyVersion
+                | Action::OpenAboutLink(_)
                 | Action::OpenDataFolder
                 | Action::Poll => None,
             }
@@ -619,7 +627,9 @@ fn completion(message: &Message) -> Option<Completion> {
             match action {
                 #[cfg(target_arch = "wasm32")]
                 Action::Refresh => None,
-                Action::Finished(..) | Action::CaptionNamed(..) => Some(Completion::Naming),
+                Action::Finished(..) | Action::Generated(..) | Action::CaptionNamed(..) => {
+                    Some(Completion::Naming)
+                }
                 Action::NameDraft(..)
                 | Action::Rename(..)
                 | Action::NameRow(..)
@@ -762,6 +772,8 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::FormatChemicalName
         | Message::ToggleProperty(..)
         | Message::ShowMasses(..)
+        | Message::NumberCompound(..)
+        | Message::RenumberCompounds
         | Message::PropertyPlaces(..)
         | Message::FontSize(..)
         | Message::ApplyFontSize
@@ -804,12 +816,14 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Open
         | Message::Save
         | Message::Export(..)
+        | Message::ExportAgain
         | Message::ExportFigure(..)
         | Message::CopySmiles
         | Message::CopyAnalysis
         | Message::CopyChemicalText
         | Message::Copy(..)
         | Message::CopyImage
+        | Message::CopyForOffice
         | Message::CopyImageOn(..)
         | Message::CopyAs(..)
         | Message::Paste

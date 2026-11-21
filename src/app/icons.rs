@@ -24,6 +24,7 @@ pub(super) enum Icon {
     Check,
     Cleanup,
     Trash,
+    Copy,
     Undo,
     Redo,
     Import,
@@ -104,6 +105,7 @@ impl Glyph {
         match self.0 {
             Icon::ColorTiles(soft) => chrome::color_tiles(f, ink, soft),
             Icon::Trash => commands::trash(f, ink),
+            Icon::Copy => commands::copy(f, ink),
 
             Icon::Keyboard => chrome::keyboard(f, ink),
             Icon::Settings => chrome::gear(f, ink),

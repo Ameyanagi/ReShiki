@@ -460,6 +460,16 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["merge", "fuse", "connect", "combine"],
         ),
         entry(
+            format!(
+                ": / {}",
+                label(Message::Commands(super::super::command_palette::Action::Open))
+            ),
+            "Command palette",
+            "Search commands, structures and names",
+            Anywhere,
+            &["search", "find", "palette"],
+        ),
+        entry(
             keys(command | shift, "K"),
             "Clean up",
             "Redraw the selection, or the whole drawing, with regular geometry",
@@ -507,6 +517,14 @@ pub(crate) fn entries() -> Vec<Entry> {
         ),
     ];
     list.extend(atom_entries());
+    // Keep Shift+P and P searches on Phenyl, whose shorter chord comes first.
+    list.push(entry(
+        keys(command | shift, "P"),
+        "Command palette",
+        "Search commands, structures and names",
+        Anywhere,
+        &["search", "find", "palette"],
+    ));
     list.extend(bond_entries());
     list.extend(
         [

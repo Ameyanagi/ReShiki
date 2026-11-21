@@ -833,6 +833,7 @@ impl App {
                         Ok(Some(super::figure_export::Saved {
                             path,
                             details: vec![],
+                            recent: None,
                         }))
                     },
                     Message::Exported,

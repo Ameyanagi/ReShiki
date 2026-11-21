@@ -366,6 +366,9 @@ pub struct Document {
     /// Optional native links; older readers keep the caption as plain text.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub property_captions: Vec<crate::linked_properties::PropertyCaption>,
+    /// Optional atom-instance links; older readers retain the bold annotation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub compound_numbers: Vec<crate::compound_numbers::CompoundNumber>,
     #[serde(default)]
     pub arrows: Vec<Arrow>,
     /// Text owned by an arrow; older readers keep the text but not the link.
@@ -407,6 +410,7 @@ impl Default for Document {
             annotations: vec![],
             molecule_names: vec![],
             property_captions: vec![],
+            compound_numbers: vec![],
             arrows: vec![],
             arrow_labels: vec![],
             graphics: vec![],
@@ -483,7 +487,10 @@ impl Document {
     }
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
-        if self
+        if !self.compound_numbers.is_empty() {
+            // Shared format 40: unknown optional metadata may flatten to text.
+            CAPTION_PLACES
+        } else if self
             .property_captions
             .iter()
             .any(|link| link.weight_places.is_some() || link.exact_mass_places.is_some())
@@ -687,6 +694,7 @@ impl Document {
         self.annotations.retain(|a| !ids.contains(&a.id));
         crate::molecule_names::prune(self);
         crate::linked_properties::prune(self);
+        crate::compound_numbers::prune(self);
         crate::models3d::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
@@ -800,6 +808,7 @@ impl Document {
             annotations,
             molecule_names,
             property_captions,
+            compound_numbers,
             arrows,
             arrow_labels,
             graphics,
@@ -822,6 +831,7 @@ impl Document {
         depth_appearance.clear();
         molecule_names.clear();
         property_captions.clear();
+        compound_numbers.clear();
         *generic = Generic::default();
     }
     /// Whether the document contains any drawing content.
@@ -843,6 +853,7 @@ impl Document {
             annotations,
             molecule_names,
             property_captions,
+            compound_numbers,
             arrows,
             arrow_labels,
             graphics,
@@ -865,6 +876,7 @@ impl Document {
             || !depth_appearance.is_empty()
             || !molecule_names.is_empty()
             || !property_captions.is_empty()
+            || !compound_numbers.is_empty()
             || !generic.is_empty()
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -1030,6 +1042,7 @@ impl Document {
         }
         crate::molecule_names::validate(self)?;
         crate::linked_properties::validate(self)?;
+        crate::compound_numbers::validate(self)?;
         crate::arrow_labels::validate(self)?;
         for graphic in &self.graphics {
             graphic.validate()?;
@@ -1080,6 +1093,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + doc.arrow_labels.len()
         + doc.molecule_names.len()
         + doc.property_captions.len()
+        + doc.compound_numbers.len()
         + doc.graphics.len()
         + doc.groups.len()
         + doc.reactions.len()
@@ -1112,6 +1126,12 @@ fn frame_bytes(doc: &Document) -> usize {
         + bytes(&doc.arrow_labels[..])
         + bytes(&doc.molecule_names[..])
         + bytes(&doc.property_captions[..])
+        + bytes(&doc.compound_numbers[..])
+        + doc
+            .compound_numbers
+            .iter()
+            .map(|n| bytes(&n.atoms[..]) + n.text.len())
+            .sum::<usize>()
         + bytes(&doc.graphics[..])
         + bytes(&doc.groups[..])
         + bytes(&doc.reactions[..])
