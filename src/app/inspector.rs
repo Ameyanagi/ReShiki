@@ -2811,12 +2811,6 @@ impl App {
     /// inspector reveal apply.
     pub(super) fn show_inspector_tab(&mut self, tab: InspectorTab) -> Option<Task<Message>> {
         self.enter_inspector_page(tab);
-        if tab != InspectorTab::ThemeGenerator {
-            self.theme_library.editor = None;
-        }
-        if tab != InspectorTab::DrawingStyle {
-            self.tab.styles.editor = None;
-        }
         if tab == InspectorTab::Labels {
             let atoms: Vec<_> = self
                 .tab

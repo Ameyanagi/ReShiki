@@ -15,7 +15,7 @@ fn assistant_returns_to_history_and_selection_keeps_its_existing_route() {
     let atom = app.tab.doc.atoms[0].id;
     let _ = app.update(Message::Canvas(crate::canvas::Edit::Select(vec![atom])));
     assert_eq!(app.inspector_tab, InspectorTab::Versions);
-    assert!(app.inspector_page_header().is_none());
+    assert!(app.inspector_page_back_label().is_none());
 }
 
 fn version(c: char) -> api::RemoteVersion {

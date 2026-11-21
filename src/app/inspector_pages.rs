@@ -1,14 +1,12 @@
 //! Chemical names and Assistant are pages within the ordinary inspector tabs.
-use super::{App, InspectorTab, Message, document_tab::TabId, inspector};
-use iced::widget::{row, text};
-use iced::{Alignment, Element, Length, Task};
+use super::{App, InspectorTab, Message, document_tab::TabId};
+use iced::Task;
 use std::collections::HashSet;
 
 #[derive(Default)]
 pub(super) struct State {
     /// Exact preceding pages; tab-track styling is derived separately.
     previous: Vec<InspectorTab>,
-    pub(super) structure_first: bool,
     selection: Option<Selection>,
 }
 
@@ -39,14 +37,14 @@ impl App {
             }
         } else {
             self.inspector_pages.previous.clear();
-        }
-        if tab == InspectorTab::Names {
-            self.inspector_pages.structure_first = self
-                .tab
-                .doc
-                .atoms
-                .iter()
-                .any(|atom| self.tab.selected.contains(&atom.id));
+            // A nested page can return to its editor. An ordinary destination
+            // abandons unrelated drafts, just like a direct tab activation.
+            if tab != InspectorTab::ThemeGenerator {
+                self.theme_library.editor = None;
+            }
+            if tab != InspectorTab::DrawingStyle {
+                self.tab.styles.editor = None;
+            }
         }
         self.inspector_pages.selection = is_page(tab).then(|| self.page_selection());
         if tab != InspectorTab::Assistant {
@@ -96,8 +94,8 @@ impl App {
     /// that assign IDs directly. A document-tab switch retains its page routing.
     pub(super) fn sync_inspector_page_selection(&mut self) -> Task<Message> {
         if !self.inspector_open || !is_page(self.inspector_tab) {
-            if !is_page(self.inspector_tab) {
-                self.inspector_pages.previous.clear();
+            if !is_page(self.inspector_tab) && !self.inspector_pages.previous.is_empty() {
+                self.enter_inspector_page(self.inspector_tab);
             }
             self.inspector_pages.selection = None;
             return Task::none();
@@ -109,14 +107,6 @@ impl App {
             .as_ref()
             .filter(|before| before.document == document)
         else {
-            if self.inspector_tab == InspectorTab::Names {
-                self.inspector_pages.structure_first = self
-                    .tab
-                    .doc
-                    .atoms
-                    .iter()
-                    .any(|atom| self.tab.selected.contains(&atom.id));
-            }
             self.inspector_pages.selection = Some(self.page_selection());
             return Task::none();
         };
@@ -125,9 +115,7 @@ impl App {
         {
             return Task::none();
         }
-        self.assistant.menu = None;
-        self.inspector_pages.selection = None;
-        self.inspector_pages.previous.clear();
+        self.enter_inspector_page(InspectorTab::Properties);
         self.inspector_tab = InspectorTab::Properties;
         Task::batch([
             super::focus_drawing(),
@@ -139,19 +127,17 @@ impl App {
         ])
     }
 
-    pub(super) fn inspector_page_header(&self) -> Option<Element<'_, Message>> {
-        let title = match self.inspector_tab {
-            InspectorTab::Names => "Chemical names",
-            InspectorTab::Assistant => "Assistant",
-            _ => return None,
-        };
+    pub(super) fn inspector_page_back_label(&self) -> Option<&'static str> {
+        if !is_page(self.inspector_tab) {
+            return None;
+        }
         let previous = self
             .inspector_pages
             .previous
             .last()
             .copied()
             .unwrap_or(InspectorTab::Properties);
-        let label = match previous {
+        Some(match previous {
             InspectorTab::Properties => "Properties",
             InspectorTab::Predict => "Predict",
             InspectorTab::Templates => "Add",
@@ -168,46 +154,7 @@ impl App {
             InspectorTab::Labels => "Atom labels",
             InspectorTab::Abbreviations => "Abbreviations",
             InspectorTab::Assistant => "Assistant",
-        };
-        let back = Message::InspectorAction(inspector::Action::BackPage);
-        #[cfg(not(target_arch = "wasm32"))]
-        let new_conversation = (self.inspector_tab == InspectorTab::Assistant).then(|| {
-            reshiki::accessibility::button(
-                "assistant-new-conversation",
-                "New conversation",
-                text("＋").size(16),
-            )
-            .padding([3, 5])
-            .style(iced::widget::button::text)
-            .on_press(Message::Assistant(super::assistant::Action::Reset))
-        });
-        #[cfg(target_arch = "wasm32")]
-        let new_conversation: Option<Element<'_, Message>> = None;
-        Some(
-            row![
-                reshiki::accessibility::button(
-                    "inspector-page-back",
-                    format!("Back to {label}"),
-                    text(format!("‹ {label}")).size(12)
-                )
-                .padding([4, 0])
-                .style(iced::widget::button::text)
-                .on_press(back.clone()),
-                text(format!("· {title}")).size(14).width(Length::Fill),
-                new_conversation,
-                reshiki::accessibility::button(
-                    "inspector-page-close",
-                    format!("Close {title}"),
-                    text("×").size(18)
-                )
-                .padding([3, 5])
-                .style(iced::widget::button::text)
-                .on_press(back),
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center)
-            .into(),
-        )
+        })
     }
 }
 
@@ -217,10 +164,14 @@ mod tests;
 #[cfg(test)]
 mod drawing_routes {
     use super::*;
+    use crate::app::inspector;
 
     #[test]
     fn drawing_sidebars_remain_exact_page_return_targets() {
-        for previous in [InspectorTab::Equipment, InspectorTab::Icons] {
+        for (previous, label) in [
+            (InspectorTab::Equipment, "Equipment"),
+            (InspectorTab::Icons, "Icons"),
+        ] {
             for page in [InspectorTab::Names, InspectorTab::Assistant] {
                 let (mut app, _) = App::new();
                 app.tab.busy = false;
@@ -230,7 +181,7 @@ mod drawing_routes {
                     .add_atom("C", reshiki::document::Point::default());
                 let _ = app.update(Message::Inspector(previous));
                 let _ = app.update(Message::Inspector(page));
-                assert!(app.inspector_page_header().is_some());
+                assert_eq!(app.inspector_page_back_label(), Some(label));
                 let _ = app.update(Message::InspectorAction(inspector::Action::BackPage));
                 assert_eq!(app.inspector_tab, previous);
                 let _ = app.update(Message::Inspector(page));
