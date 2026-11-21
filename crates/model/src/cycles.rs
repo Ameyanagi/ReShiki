@@ -833,7 +833,6 @@ fn wrapped(name: &str, format: &TextFormat, width: f32) -> String {
 
 /// Whether `p` lies on what the cycle draws.
 pub fn hit(doc: &Document, g: &Graphic, p: Point, r: f32) -> bool {
-    // Side arrows and names stay within a few bond lengths of the circle.
     let (center, radius) = g.cycle_circle();
     let bow = g
         .cycle
@@ -844,13 +843,19 @@ pub fn hit(doc: &Document, g: &Graphic, p: Point, r: f32) -> bool {
     let reach = 8. * doc.drawing_style.bond_length_world + DEFAULT.world(bow);
     // A noncircle's corner miter can exceed both its frame and mean-radius
     // bounds. Let native arrow hit testing bound the final painted shafts.
-    if g.cycle.as_ref().is_none_or(|c| c.shape == Shape::Circle)
-        && p.distance(center) > radius + reach
+    let outside_circle = g.cycle.as_ref().is_none_or(|c| c.shape == Shape::Circle)
+        && p.distance(center) > radius + reach;
+    // Crowded step names can escape this bound, as can a long center label.
+    // Unlabeled circles still reject distant queries without resolving paint.
+    if outside_circle
+        && g.cycle.as_ref().is_none_or(|c| {
+            c.label.trim().is_empty() && c.steps.iter().all(|step| step.name.trim().is_empty())
+        })
     {
         return false;
     }
     let drawn = drawn(doc, g);
-    drawn.arrows.iter().any(|a| a.hit(p, r))
+    (!outside_circle && drawn.arrows.iter().any(|a| a.hit(p, r)))
         || drawn.labels.iter().any(|(at, text, format)| {
             let layout = crate::typography::layout(text, format);
             contains(grown((*at, at.offset(layout.width, layout.height)), r), p)

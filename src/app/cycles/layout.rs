@@ -15,96 +15,6 @@ pub(super) struct MakeLayout {
     corner: Option<f32>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn make_configuration_propagates_a_rejected_size_instead_of_using_the_old_frame() {
-        use reshiki::{cycles::Cycle, document::Point};
-        let mut doc = Document::default();
-        let a = doc.add_atom("C", Point::default());
-        let b = doc.add_atom("C", Point::new(42., 0.));
-        doc.add_bond(a, b, 1, "plain");
-        let id = doc.next_id();
-        let mut g = Graphic::dragged(
-            id,
-            GraphicKind::Ellipse,
-            Point::default(),
-            Point::new(1., 1.),
-            Default::default(),
-            Default::default(),
-            false,
-        );
-        g.axis_x = Point::new(6e-5, 0.);
-        g.axis_y = Point::new(0., 6e-5);
-        g.cycle = Some(Box::new(Cycle {
-            shape: Shape::Ellipse,
-            intermediates: vec![vec![a, b]],
-            steps: vec![Default::default()],
-            ..Default::default()
-        }));
-        doc.graphics.push(g);
-        doc.validate().unwrap();
-        let before = doc.clone();
-        let layout = MakeLayout {
-            shape: Shape::Ellipse,
-            size: Some([600., 200.]),
-            corner: None,
-        };
-        assert!(layout.apply(&mut doc, id).is_err());
-        assert_eq!(doc, before);
-    }
-
-    #[tokio::test]
-    #[ignore = "Opt-in cycle controls with the app renderer"]
-    async fn shape_controls_follow_the_explicit_choice_and_show_only_its_dimensions() {
-        use iced::advanced::{renderer::Headless, widget::operation};
-        use iced_runtime::{UserInterface, user_interface::Cache};
-        let mut renderer =
-            <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
-                .await
-                .unwrap();
-        let (mut app, _) = App::new();
-        let id = reshiki::cycles::insert(&mut app.tab.doc, Default::default(), 150.);
-        app.tab.selected = vec![id];
-        for (shape, selected) in [
-            (Shape::Circle, "cycle.shape.circle"),
-            (Shape::Ellipse, "cycle.shape.ellipse"),
-            (Shape::RoundedRectangle, "cycle.shape.rounded-rectangle"),
-            (Shape::Rectangle, "cycle.shape.rectangle"),
-        ] {
-            app.tab.doc.graphics[0].cycle.as_mut().unwrap().shape = shape;
-            app.sync_cycle();
-            let size = iced::Size::new(340., 250.);
-            let mut ui = UserInterface::build(
-                controls(&app.tab.doc.graphics[0], &app.tab.cycle_inputs),
-                size,
-                Cache::new(),
-                &mut renderer,
-            );
-            let mut collect =
-                reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
-            ui.operate(&mut renderer, &mut operation::black_box(&mut collect));
-            let snapshot = collect.snapshot();
-            assert!(snapshot.duplicate_ids.is_empty());
-            let has = |id: &str| snapshot.nodes.iter().any(|n| n.id == id);
-            let checked: Vec<_> = snapshot
-                .nodes
-                .iter()
-                .filter(|n| n.checked == Some(true))
-                .map(|n| n.id.as_str())
-                .collect();
-            assert_eq!(checked, [selected]);
-            assert_eq!(has("cycle-radius"), shape == Shape::Circle);
-            assert_eq!(has("cycle-width"), shape != Shape::Circle);
-            assert_eq!(has("cycle-height"), shape != Shape::Circle);
-            assert_eq!(has("cycle-corner"), shape == Shape::RoundedRectangle);
-            assert!(snapshot.nodes.iter().all(|n| n.visible_bounds.is_some()));
-        }
-    }
-}
-
 impl MakeLayout {
     pub(super) fn apply(self, doc: &mut Document, id: u64) -> Result<(), String> {
         let g = doc
@@ -469,5 +379,95 @@ impl App {
         self.changed(before);
         self.sync_cycle();
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn make_configuration_propagates_a_rejected_size_instead_of_using_the_old_frame() {
+        use reshiki::{cycles::Cycle, document::Point};
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let id = doc.next_id();
+        let mut g = Graphic::dragged(
+            id,
+            GraphicKind::Ellipse,
+            Point::default(),
+            Point::new(1., 1.),
+            Default::default(),
+            Default::default(),
+            false,
+        );
+        g.axis_x = Point::new(6e-5, 0.);
+        g.axis_y = Point::new(0., 6e-5);
+        g.cycle = Some(Box::new(Cycle {
+            shape: Shape::Ellipse,
+            intermediates: vec![vec![a, b]],
+            steps: vec![Default::default()],
+            ..Default::default()
+        }));
+        doc.graphics.push(g);
+        doc.validate().unwrap();
+        let before = doc.clone();
+        let layout = MakeLayout {
+            shape: Shape::Ellipse,
+            size: Some([600., 200.]),
+            corner: None,
+        };
+        assert!(layout.apply(&mut doc, id).is_err());
+        assert_eq!(doc, before);
+    }
+
+    #[tokio::test]
+    #[ignore = "Opt-in cycle controls with the app renderer"]
+    async fn shape_controls_follow_the_explicit_choice_and_show_only_its_dimensions() {
+        use iced::advanced::{renderer::Headless, widget::operation};
+        use iced_runtime::{UserInterface, user_interface::Cache};
+        let mut renderer =
+            <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
+                .await
+                .unwrap();
+        let (mut app, _) = App::new();
+        let id = reshiki::cycles::insert(&mut app.tab.doc, Default::default(), 150.);
+        app.tab.selected = vec![id];
+        for (shape, selected) in [
+            (Shape::Circle, "cycle.shape.circle"),
+            (Shape::Ellipse, "cycle.shape.ellipse"),
+            (Shape::RoundedRectangle, "cycle.shape.rounded-rectangle"),
+            (Shape::Rectangle, "cycle.shape.rectangle"),
+        ] {
+            app.tab.doc.graphics[0].cycle.as_mut().unwrap().shape = shape;
+            app.sync_cycle();
+            let size = iced::Size::new(340., 250.);
+            let mut ui = UserInterface::build(
+                controls(&app.tab.doc.graphics[0], &app.tab.cycle_inputs),
+                size,
+                Cache::new(),
+                &mut renderer,
+            );
+            let mut collect =
+                reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+            ui.operate(&renderer, &mut operation::black_box(&mut collect));
+            let snapshot = collect.snapshot();
+            assert!(snapshot.duplicate_ids.is_empty());
+            let has = |id: &str| snapshot.nodes.iter().any(|n| n.id == id);
+            let checked: Vec<_> = snapshot
+                .nodes
+                .iter()
+                .filter(|n| n.checked == Some(true))
+                .map(|n| n.id.as_str())
+                .collect();
+            assert_eq!(checked, [selected]);
+            assert_eq!(has("cycle-radius"), shape == Shape::Circle);
+            assert_eq!(has("cycle-width"), shape != Shape::Circle);
+            assert_eq!(has("cycle-height"), shape != Shape::Circle);
+            assert_eq!(has("cycle-corner"), shape == Shape::RoundedRectangle);
+            assert!(snapshot.nodes.iter().all(|n| n.visible_bounds.is_some()));
+        }
     }
 }
