@@ -83,6 +83,68 @@ fn native_callback_keeps_its_enqueue_context_across_a_document_revision() {
 }
 
 #[test]
+fn changing_table_cells_revokes_queued_native_edits_even_after_returning_to_the_cell() {
+    use super::super::tables::{Action as Table, CellAction};
+    use reshiki::{document::Point, graphics::table};
+    let (mut app, _) = App::new();
+    app.tab.doc.graphics = vec![
+        table::editor::dragged(1, Point::default(), Point::new(300., 200.), [1, 2], 0.6).unwrap(),
+    ];
+    app.set_selection(vec![1]);
+    let _ = app.accessibility_refresh();
+    for next_cell in [2, 1] {
+        let target = app.table_target().unwrap();
+        let before = (
+            app.tab.doc.clone(),
+            app.tab.revision,
+            app.tab.selected.clone(),
+        );
+        let version = app.accessibility.context_version;
+        let request = native_request(
+            &mut app,
+            "table-cell-text",
+            reshiki::accessibility::Role::TextInput,
+        );
+        let (sender, mut receiver) = mpsc::channel(1);
+        enqueue_native(
+            &sender,
+            &app.accessibility.context_epoch,
+            app.accessibility.generation,
+            request.clone(),
+        );
+        let _ = app.update(Message::Table(Table::Edit(
+            target,
+            CellAction::Cell(next_cell),
+        )));
+        assert_eq!(
+            (&app.tab.doc, app.tab.revision, &app.tab.selected),
+            (&before.0, before.1, &before.2)
+        );
+        assert_ne!(app.accessibility.context_version, version);
+        let reopened = native_request(
+            &mut app,
+            "table-cell-text",
+            reshiki::accessibility::Role::TextInput,
+        );
+        assert_ne!(request.target_node, reopened.target_node);
+        assert!(app.accessibility.tree.resolve(&request).is_none());
+        assert_eq!(
+            app.accessibility_action(receiver.try_recv().unwrap())
+                .units(),
+            0
+        );
+        assert_eq!(
+            app.accessibility_action(Action::Dispatch(
+                version,
+                Box::new(Message::Table(Table::Edit(target, CellAction::AddText)))
+            ))
+            .units(),
+            0
+        );
+    }
+}
+
+#[test]
 fn cancelled_and_reopened_caption_rejects_old_native_and_dispatched_edits() {
     use super::super::inline_text::Action as Inline;
     use reshiki::document::Point;

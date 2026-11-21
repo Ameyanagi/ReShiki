@@ -335,7 +335,7 @@ fn selected_graphic(kind: GraphicKind, size: Size) -> App {
 #[tokio::test]
 #[ignore = "Opt-in real table Properties accessibility and Undo regression"]
 async fn table_cell_controls_publish_native_actions_and_keep_the_explicit_target() {
-    use crate::app::tables::Action;
+    use crate::app::tables::{Action, CellAction};
     use reshiki::graphics::table::Membership;
     let size = Size::new(1280., 820.);
     let mut ui = Ui::new(size).await;
@@ -350,7 +350,10 @@ async fn table_cell_controls_publish_native_actions_and_keep_the_explicit_target
     let operation::Outcome::Some(message) = ui.set_value(&app, "table-active-cell", "2") else {
         panic!("The native cell selector must accept a cell value");
     };
-    assert!(matches!(message, Message::Table(Action::Cell(2))));
+    assert!(matches!(
+        message,
+        Message::Table(Action::Edit(_, CellAction::Cell(2)))
+    ));
     let _ = app.update(message);
     let before = app.tab.doc.clone();
     let operation::Outcome::Some(message) = ui.set_value(&app, "table-cell-text", "Editable cell")

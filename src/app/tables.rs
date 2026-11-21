@@ -1,11 +1,10 @@
 //! Native table creation and explicit cell editing. Cell ownership changes
 //! never infer identity from coordinates or move molecular geometry.
-use super::{App, Message};
+use super::{App, Message, document_tab::TabId};
 use crate::canvas::Tool;
 use iced::widget::{column, row, text};
 use iced::{Element, Length};
 use reshiki::{
-    document::{Annotation, Point},
     graphics::{
         GraphicKind,
         table::{self, Border, CellRef, Membership, Side},
@@ -18,6 +17,25 @@ pub enum Action {
     Rows(String),
     Columns(String),
     ApplyGrid,
+    Edit(Target, CellAction),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Target {
+    tab: TabId,
+    epoch: u64,
+    revision: u64,
+    context: u64,
+    cell: CellRef,
+}
+impl Target {
+    pub(super) fn accessibility_identity(self) -> (CellRef, u64) {
+        (self.cell, self.context)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum CellAction {
     Cell(u32),
     SelectTable,
     SelectContents,
@@ -40,6 +58,7 @@ pub(super) struct Inputs {
     width: String,
     width_source: Option<(CellRef, f32)>,
     selection: Vec<u64>,
+    context: u64,
 }
 impl Default for Inputs {
     fn default() -> Self {
@@ -52,11 +71,21 @@ impl Default for Inputs {
             width: "0.6".into(),
             width_source: None,
             selection: Vec::new(),
+            context: 0,
         }
     }
 }
 
 impl App {
+    pub(super) fn table_target(&self) -> Option<Target> {
+        Some(Target {
+            tab: self.tab.id,
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
+            context: self.tab.table_inputs.context,
+            cell: self.active_table_cell()?,
+        })
+    }
     pub(super) fn active_table_cell(&self) -> Option<CellRef> {
         let target = self.tab.table_inputs.active?;
         (self.tool != Tool::Graphic(GraphicKind::Table)).then_some(target)
@@ -64,12 +93,18 @@ impl App {
 
     pub(super) fn sync_tables(&mut self) {
         if !self.tab.doc.graphics.iter().any(|g| g.table.is_some()) {
+            if self.tab.table_inputs.active.is_some() {
+                self.tab.table_inputs.context = self.tab.table_inputs.context.wrapping_add(1);
+            }
             self.tab.table_inputs.active = None;
             self.tab.table_inputs.width_source = None;
             return;
         }
         let selected = &self.tab.selected;
         let selection_changed = *selected != self.tab.table_inputs.selection;
+        if selection_changed {
+            self.tab.table_inputs.context = self.tab.table_inputs.context.wrapping_add(1);
+        }
         self.tab.table_inputs.selection = selected.clone();
         let direct = self
             .tab
@@ -112,6 +147,7 @@ impl App {
         });
         if target != self.tab.table_inputs.active {
             self.tab.table_inputs.active = target;
+            self.tab.table_inputs.context = self.tab.table_inputs.context.wrapping_add(1);
         }
         self.sync_table_width();
     }
@@ -140,8 +176,6 @@ impl App {
         match action {
             Action::Rows(value) => self.tab.table_inputs.rows = value,
             Action::Columns(value) => self.tab.table_inputs.columns = value,
-            Action::Text(value) => self.tab.table_inputs.text = value,
-            Action::Width(value) => self.tab.table_inputs.width = value,
             Action::ApplyGrid => {
                 let counts = self
                     .tab
@@ -162,20 +196,34 @@ impl App {
                     self.error = true;
                 }
             }
-            Action::Done => {
-                self.tab.table_inputs.active = None;
-                self.set_selection(vec![]);
-            }
-            other => self.edit_table_action(other),
+            Action::Edit(target, action) => self.edit_table_action(target, action),
         }
     }
 
-    fn edit_table_action(&mut self, action: Action) {
+    fn edit_table_action(&mut self, key: Target, action: CellAction) {
         self.sync_tables();
-        let Some(mut target) = self.tab.table_inputs.active else {
+        if self.table_target() != Some(key) {
             return;
-        };
-        if let Action::Cell(cell) = action {
+        }
+        let mut target = key.cell;
+        match action {
+            CellAction::Text(value) => {
+                self.tab.table_inputs.text = value;
+                return;
+            }
+            CellAction::Width(value) => {
+                self.tab.table_inputs.width = value;
+                return;
+            }
+            CellAction::Done => {
+                self.tab.table_inputs.active = None;
+                self.tab.table_inputs.context = self.tab.table_inputs.context.wrapping_add(1);
+                self.set_selection(vec![]);
+                return;
+            }
+            _ => {}
+        }
+        if let CellAction::Cell(cell) = action {
             target.cell = cell;
             if self
                 .tab
@@ -187,16 +235,19 @@ impl App {
                 .and_then(|t| t.cell(cell))
                 .is_some()
             {
-                self.tab.table_inputs.active = Some(target);
+                if self.tab.table_inputs.active != Some(target) {
+                    self.tab.table_inputs.active = Some(target);
+                    self.tab.table_inputs.context = self.tab.table_inputs.context.wrapping_add(1);
+                }
                 self.sync_table_width();
             }
             return;
         }
-        if matches!(action, Action::SelectTable) {
+        if matches!(action, CellAction::SelectTable) {
             self.set_selection(vec![target.table]);
             return;
         }
-        if matches!(action, Action::SelectContents) {
+        if matches!(action, CellAction::SelectContents) {
             let ids = self
                 .tab
                 .doc
@@ -213,7 +264,7 @@ impl App {
         let before = self.tab.doc.clone();
         let result: Result<Option<u64>, String> = (|| {
             match action {
-                Action::AssignSelection | Action::ReleaseSelection => {
+                CellAction::AssignSelection | CellAction::ReleaseSelection => {
                     let ids: Vec<_> = self
                         .tab
                         .selected
@@ -226,11 +277,11 @@ impl App {
                     }
                     table::relink(
                         &mut self.tab.doc,
-                        matches!(action, Action::AssignSelection).then_some(target),
+                        matches!(action, CellAction::AssignSelection).then_some(target),
                         &ids,
                     )?;
                 }
-                Action::AddText => {
+                CellAction::AddText => {
                     let value = self.tab.table_inputs.text.clone();
                     if value.trim().is_empty() {
                         return Err("Enter text for this cell.".into());
@@ -253,17 +304,12 @@ impl App {
                         style: self.tab.doc.drawing_style.text_style(),
                         ..Default::default()
                     };
-                    self.tab.doc.annotations.push(Annotation {
-                        id,
-                        position: frame.point(Point::new(0.05, 0.08)),
-                        text: value,
-                        format,
-                        angle: 0.,
-                    });
+                    let annotation = table::editor::new_text(id, frame, value, format)?;
+                    self.tab.doc.annotations.push(annotation);
                     table::relink(&mut self.tab.doc, Some(target), &[id])?;
                     return Ok(Some(id));
                 }
-                Action::ApplyWidth => {
+                CellAction::ApplyWidth => {
                     let width = self
                         .tab
                         .table_inputs
@@ -361,7 +407,9 @@ impl App {
                 .into(),
             );
         }
-        let target = self.tab.table_inputs.active?;
+        let key = self.table_target()?;
+        let target = key.cell;
+        let send = move |action| Message::Table(Action::Edit(key, action));
         let graphic = self
             .tab
             .doc
@@ -377,8 +425,8 @@ impl App {
             "Active table cell",
             choices.clone(),
             cell.id.to_string(),
-            move |id| send(Action::Cell(id)),
-            iced::widget::pick_list(choices, Some(cell.id), move |id| send(Action::Cell(id)))
+            move |id| send(CellAction::Cell(id)),
+            iced::widget::pick_list(choices, Some(cell.id), move |id| send(CellAction::Cell(id)))
                 .text_size(12),
         );
         Some(
@@ -392,25 +440,25 @@ impl App {
                 .spacing(6),
                 row![
                     accessible_command("table-select", "Select the table", "Select table")
-                        .on_press(send(Action::SelectTable)),
+                        .on_press(send(CellAction::SelectTable)),
                     accessible_command(
                         "table-cell-select",
                         "Select this cell's contents",
                         "Select contents"
                     )
-                    .on_press(send(Action::SelectContents))
+                    .on_press(send(CellAction::SelectContents))
                 ]
                 .spacing(6),
                 input("table-cell-text", "New cell text", &inputs.text)
-                    .on_input(move |v| send(Action::Text(v)))
-                    .on_submit(send(Action::AddText))
+                    .on_input(move |v| send(CellAction::Text(v)))
+                    .on_submit(send(CellAction::AddText))
                     .width(Length::Fill),
                 accessible_command(
                     "table-cell-add-text",
                     "Add editable text to this cell",
                     "Add text"
                 )
-                .on_press(send(Action::AddText)),
+                .on_press(send(CellAction::AddText)),
                 row![
                     text("Border (pt)").size(12),
                     input(
@@ -418,15 +466,15 @@ impl App {
                         "Cell border width in points",
                         &inputs.width
                     )
-                    .on_input(move |v| send(Action::Width(v)))
-                    .on_submit(send(Action::ApplyWidth))
+                    .on_input(move |v| send(CellAction::Width(v)))
+                    .on_submit(send(CellAction::ApplyWidth))
                     .width(65),
                     accessible_command(
                         "table-cell-width-apply",
                         "Set all four cell border widths",
                         "Apply"
                     )
-                    .on_press(send(Action::ApplyWidth))
+                    .on_press(send(CellAction::ApplyWidth))
                 ]
                 .spacing(6),
                 text("Assigning content keeps its position and clips it to this cell.")
@@ -438,17 +486,17 @@ impl App {
                         "Assign selected content to this cell",
                         "Assign selection"
                     )
-                    .on_press(send(Action::AssignSelection)),
+                    .on_press(send(CellAction::AssignSelection)),
                     accessible_command(
                         "table-cell-release",
                         "Release selected content from its cell",
                         "Release selection"
                     )
-                    .on_press(send(Action::ReleaseSelection))
+                    .on_press(send(CellAction::ReleaseSelection))
                 ]
                 .spacing(6),
                 accessible_command("table-cell-done", "Finish editing this table cell", "Done")
-                    .on_press(send(Action::Done)),
+                    .on_press(send(CellAction::Done)),
             ]
             .spacing(8)
             .into(),

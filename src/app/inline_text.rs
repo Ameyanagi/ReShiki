@@ -1012,15 +1012,16 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                     | super::figure_panels::Action::ApplyGutter
                     | super::figure_panels::Action::Align(_)
             )
-            | Message::Table(
-                super::tables::Action::AddText
-                    | super::tables::Action::ApplyWidth
-                    | super::tables::Action::AssignSelection
-                    | super::tables::Action::ReleaseSelection
-                    | super::tables::Action::SelectTable
-                    | super::tables::Action::SelectContents
-                    | super::tables::Action::Done
-            )
+            | Message::Table(super::tables::Action::Edit(
+                _,
+                super::tables::CellAction::AddText
+                    | super::tables::CellAction::ApplyWidth
+                    | super::tables::CellAction::AssignSelection
+                    | super::tables::CellAction::ReleaseSelection
+                    | super::tables::CellAction::SelectTable
+                    | super::tables::CellAction::SelectContents
+                    | super::tables::CellAction::Done
+            ))
             | Message::Graphics(
                 super::graphics::Action::Style(_)
                     | super::graphics::Action::Superscript(_)

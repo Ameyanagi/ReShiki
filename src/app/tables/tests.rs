@@ -1,5 +1,12 @@
 use super::*;
 use crate::canvas::Edit;
+use reshiki::document::Point;
+
+fn edit_cell(app: &mut App, action: CellAction) {
+    app.sync_tables();
+    let target = app.table_target().unwrap();
+    let _ = app.update(Message::Table(Action::Edit(target, action)));
+}
 
 fn draw(app: &mut App) -> u64 {
     let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Table)));
@@ -52,12 +59,10 @@ fn active_cell_text_and_border_edits_are_native_and_each_one_undo() {
     let (mut app, _) = App::new();
     let id = draw(&mut app);
     let original = app.tab.doc.clone();
-    let _ = app.update(Message::Table(Action::Cell(2)));
-    let _ = app.update(Message::Table(Action::Text(
-        "Full editable cell text".into(),
-    )));
+    edit_cell(&mut app, CellAction::Cell(2));
+    edit_cell(&mut app, CellAction::Text("Full editable cell text".into()));
     assert_eq!(app.tab.doc, original);
-    let _ = app.update(Message::Table(Action::AddText));
+    edit_cell(&mut app, CellAction::AddText);
     assert!(!app.error, "{}", app.status);
     let caption = app.tab.doc.annotations.last().unwrap();
     assert_eq!(caption.text, "Full editable cell text");
@@ -66,8 +71,8 @@ fn active_cell_text_and_border_edits_are_native_and_each_one_undo() {
         Some(CellRef { table: id, cell: 2 })
     );
     let with_text = app.tab.doc.clone();
-    let _ = app.update(Message::Table(Action::Width("0".into())));
-    let _ = app.update(Message::Table(Action::ApplyWidth));
+    edit_cell(&mut app, CellAction::Width("0".into()));
+    edit_cell(&mut app, CellAction::ApplyWidth);
     assert!(!app.error, "{}", app.status);
     let cell = app
         .tab
@@ -102,11 +107,11 @@ fn assigning_and_releasing_a_molecule_keeps_geometry_and_refuses_partial_graphs(
     app.tab.doc.add_bond(a, b, 1, "plain");
     let original = app.tab.doc.clone();
     app.set_selection(vec![a]);
-    let _ = app.update(Message::Table(Action::AssignSelection));
+    edit_cell(&mut app, CellAction::AssignSelection);
     assert!(app.error);
     assert_eq!(app.tab.doc, original);
     app.set_selection(vec![a, b]);
-    let _ = app.update(Message::Table(Action::AssignSelection));
+    edit_cell(&mut app, CellAction::AssignSelection);
     assert_eq!(
         app.tab
             .doc
@@ -124,8 +129,8 @@ fn assigning_and_releasing_a_molecule_keeps_geometry_and_refuses_partial_graphs(
     assert_eq!(membership.cell_of(a), Some(CellRef { table: id, cell: 1 }));
     assert_eq!(membership.cell_of(b), membership.cell_of(a));
     let assigned = app.tab.doc.clone();
-    let _ = app.update(Message::Table(Action::Cell(2)));
-    let _ = app.update(Message::Table(Action::AssignSelection));
+    edit_cell(&mut app, CellAction::Cell(2));
+    edit_cell(&mut app, CellAction::AssignSelection);
     assert_eq!(
         Membership::new(&app.tab.doc).unwrap().cell_of(a),
         Some(CellRef { table: id, cell: 2 })
@@ -133,7 +138,7 @@ fn assigning_and_releasing_a_molecule_keeps_geometry_and_refuses_partial_graphs(
     assert_eq!(app.tab.doc.atoms, assigned.atoms);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, assigned);
-    let _ = app.update(Message::Table(Action::ReleaseSelection));
+    edit_cell(&mut app, CellAction::ReleaseSelection);
     assert_eq!(Membership::new(&app.tab.doc).unwrap().cell_of(a), None);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, assigned);
@@ -144,9 +149,9 @@ fn explicit_cell_choice_wins_over_the_previously_selected_caption() {
     let (mut app, _) = App::new();
     let id = draw(&mut app);
     for (cell, text) in [(1, "First"), (2, "Second")] {
-        let _ = app.update(Message::Table(Action::Cell(cell)));
-        let _ = app.update(Message::Table(Action::Text(text.into())));
-        let _ = app.update(Message::Table(Action::AddText));
+        edit_cell(&mut app, CellAction::Cell(cell));
+        edit_cell(&mut app, CellAction::Text(text.into()));
+        edit_cell(&mut app, CellAction::AddText);
         let caption = app.tab.doc.annotations.last().unwrap();
         assert_eq!(caption.text, text);
         assert_eq!(
@@ -155,6 +160,178 @@ fn explicit_cell_choice_wins_over_the_previously_selected_caption() {
         );
         assert_eq!(app.tab.selected, [caption.id]);
     }
+}
+
+#[test]
+fn mixed_table_and_rectangle_properties_style_only_the_rectangle_in_one_undo() {
+    use reshiki::graphics::{BracketSides, Graphic, GraphicChange, GraphicStyle};
+    let (mut app, _) = App::new();
+    let table = draw(&mut app);
+    app.tab.doc.graphics.push(Graphic::dragged(
+        2,
+        GraphicKind::Rectangle,
+        Point::new(400., 20.),
+        Point::new(500., 120.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    ));
+    app.set_selection(vec![table, 2]);
+    assert!(app.graphic_panel_visible());
+    let before = app.tab.doc.clone();
+    let frames = app.tab.history.frames();
+    let color = Color::Custom([17, 126, 108]);
+    let _ = app.update(Message::Graphics(super::super::graphics::Action::Style(
+        GraphicChange::Fill(Some(color)),
+    )));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.graphics[0], before.graphics[0]);
+    assert_eq!(app.tab.doc.graphics[1].style.fill, Some(color));
+    assert_eq!(app.tab.history.frames(), frames + 1);
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+}
+
+#[test]
+fn stale_cell_actions_cannot_cross_cells_selection_history_epoch_or_tabs() {
+    let (mut app, _) = App::new();
+    draw(&mut app);
+    edit_cell(&mut app, CellAction::Text("Current draft".into()));
+    let first = app.table_target().unwrap();
+    edit_cell(&mut app, CellAction::Cell(2));
+    let before = app.tab.doc.clone();
+    for action in [
+        CellAction::Text("Old draft".into()),
+        CellAction::Width("3".into()),
+        CellAction::AddText,
+        CellAction::ApplyWidth,
+        CellAction::AssignSelection,
+        CellAction::Done,
+    ] {
+        let _ = app.update(Message::Table(Action::Edit(first, action)));
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.table_inputs.text, "Current draft");
+        assert_eq!(app.active_table_cell().unwrap().cell, 2);
+    }
+    edit_cell(&mut app, CellAction::Cell(1));
+    assert_ne!(
+        app.table_target(),
+        Some(first),
+        "Returning to a cell starts a new control context"
+    );
+    let _ = app.update(Message::Table(Action::Edit(first, CellAction::AddText)));
+    assert_eq!(app.tab.doc, before);
+    let selected = app.table_target().unwrap();
+    app.set_selection(vec![]);
+    let _ = app.update(Message::Table(Action::Edit(selected, CellAction::AddText)));
+    assert_eq!(app.tab.doc, before);
+    let previous = app.table_target().unwrap();
+    edit_cell(&mut app, CellAction::Width("2".into()));
+    edit_cell(&mut app, CellAction::ApplyWidth);
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.history.can_redo());
+    let restored = app.tab.doc.clone();
+    let _ = app.update(Message::Table(Action::Edit(previous, CellAction::AddText)));
+    assert_eq!(app.tab.doc, restored);
+    assert!(app.tab.history.can_redo());
+    let previous = app.table_target().unwrap();
+    app.tab.file_epoch += 1;
+    let _ = app.update(Message::Table(Action::Edit(previous, CellAction::AddText)));
+    assert_eq!(app.tab.doc, restored);
+    let previous = app.table_target().unwrap();
+    app.tab.id = super::super::document_tab::TabId(app.tab.id.0 + 1);
+    let _ = app.update(Message::Table(Action::Edit(previous, CellAction::AddText)));
+    assert_eq!(app.tab.doc, restored);
+}
+
+#[test]
+fn transformed_merged_cells_add_upright_visible_pickable_text_and_one_undo() {
+    use reshiki::{graphics::table::Frame, typography::TextFormat};
+    for (x, y) in [
+        (Point::new(600., 0.), Point::new(0., 400.)),
+        (Point::new(0., 600.), Point::new(-400., 0.)),
+        (Point::new(-600., 0.), Point::new(0., -400.)),
+        (Point::new(-600., 0.), Point::new(0., 400.)),
+        (Point::new(600., 120.), Point::new(1500., 700.)),
+        (Point::new(600., 0.), Point::new(5000., 1000.)),
+    ] {
+        let (mut app, _) = App::new();
+        let mut g =
+            table::editor::dragged(1, Point::default(), Point::new(600., 400.), [1, 3], 0.6)
+                .unwrap();
+        g.origin = Point::new(2000., 2000.);
+        g.axis_x = x;
+        g.axis_y = y;
+        let cells = &mut g.table.as_mut().unwrap().cells;
+        cells.truncate(1);
+        cells[0].id = 37;
+        cells[0].hi = Point::new(1., 1.); // One merged cell spans all three columns.
+        let frame = Frame::of(&g).unwrap();
+        app.tab.doc.graphics = vec![g];
+        app.set_selection(vec![1]);
+        let before = app.tab.doc.clone();
+        edit_cell(&mut app, CellAction::Text("Product".into()));
+        edit_cell(&mut app, CellAction::AddText);
+        assert!(!app.error, "{}", app.status);
+        let a = app.tab.doc.annotations.last().unwrap();
+        assert_eq!(a.angle, 0.);
+        assert_eq!(
+            Membership::new(&app.tab.doc).unwrap().cell_of(a.id),
+            Some(CellRef { table: 1, cell: 37 })
+        );
+        let layout = reshiki::scene::table_annotation_layout(a, frame);
+        let visible = layout
+            .fragments
+            .iter()
+            .flat_map(|fragment| {
+                let at = a.position.offset(fragment.position.x, fragment.position.y);
+                reshiki::style::text_ink_boxes(
+                    &fragment.text,
+                    fragment.style.size(),
+                    &fragment.style,
+                )
+                .into_iter()
+                .map(move |(lo, hi)| (at.offset(lo.x, lo.y), at.offset(hi.x, hi.y)))
+            })
+            .find(|(lo, hi)| {
+                [*lo, Point::new(hi.x, lo.y), *hi, Point::new(lo.x, hi.y)]
+                    .into_iter()
+                    .all(|p| frame.contains(p))
+            })
+            .expect("At least one complete glyph must remain visible");
+        assert_eq!(
+            crate::canvas::hit_object(&app.tab.doc, visible.0.lerp(visible.1, 0.5), 0.),
+            Some(a.id)
+        );
+        if x.y == 0. && x.x > 0. && y.x == 0. && y.y > 0. {
+            assert_eq!(a.position, frame.point(Point::new(0.05, 0.08)));
+            assert_eq!(a.format.width_pt, TextFormat::default().width_pt);
+        }
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+    }
+}
+
+#[test]
+fn unreadably_thin_affine_cell_refuses_text_without_an_edit_or_lost_draft() {
+    let (mut app, _) = App::new();
+    let mut g =
+        table::editor::dragged(1, Point::default(), Point::new(600., 400.), [1, 1], 0.6).unwrap();
+    g.axis_y = Point::new(600., 0.002);
+    g.validate().unwrap();
+    app.tab.doc.graphics = vec![g];
+    app.set_selection(vec![1]);
+    let before = app.tab.doc.clone();
+    let frames = app.tab.history.frames();
+    edit_cell(&mut app, CellAction::Text("Product".into()));
+    edit_cell(&mut app, CellAction::AddText);
+    assert!(app.error);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.history.frames(), frames);
+    assert_eq!(app.tab.table_inputs.text, "Product");
 }
 
 #[tokio::test]
@@ -205,10 +382,11 @@ async fn manual_table_editor_renderer_evidence() -> anyhow::Result<()> {
         iced::Size::new(1280., 820.),
     );
     let table = draw(&mut app);
-    let _ = app.update(Message::Table(Action::Text(
-        "Original editable text wraps within its owning cell".into(),
-    )));
-    let _ = app.update(Message::Table(Action::AddText));
+    edit_cell(
+        &mut app,
+        CellAction::Text("Original editable text wraps within its owning cell".into()),
+    );
+    edit_cell(&mut app, CellAction::AddText);
     let mut ring = Vec::new();
     for i in 0..6 {
         let angle = i as f32 * std::f32::consts::TAU / 6.;
@@ -226,8 +404,8 @@ async fn manual_table_editor_renderer_evidence() -> anyhow::Result<()> {
         );
     }
     app.set_selection(ring);
-    let _ = app.update(Message::Table(Action::Cell(2)));
-    let _ = app.update(Message::Table(Action::AssignSelection));
+    edit_cell(&mut app, CellAction::Cell(2));
+    edit_cell(&mut app, CellAction::AssignSelection);
     app.tab.doc.validate().map_err(anyhow::Error::msg)?;
     app.tab.camera.center = Point::new(180., 100.);
     app.tab.camera.zoom = 1.6;

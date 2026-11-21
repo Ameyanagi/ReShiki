@@ -808,7 +808,10 @@ impl App {
     pub(super) fn apply_graphic_style(&mut self, change: GraphicChange) {
         change.apply(&mut self.tab.graphic_style);
         let before = self.tab.doc.clone();
-        for g in self.selected_graphics_mut().filter(|g| g.picture.is_none()) {
+        for g in self
+            .selected_graphics_mut()
+            .filter(|g| g.picture.is_none() && g.table.is_none())
+        {
             // Symbols and orbitals draw no waves.
             if matches!(
                 change,
