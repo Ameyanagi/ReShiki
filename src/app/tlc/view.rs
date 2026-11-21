@@ -260,13 +260,13 @@ impl App {
 
 // The shared accessible_checkbox uses compact 14 px boxes. Keep these existing
 // 16 px checkbox children and attach the same checked button semantics.
-fn tlc_checkbox(
+fn tlc_checkbox<'a>(
     k: Target,
     id: &'static str,
-    label: &'static str,
+    label: &'a str,
     checked: bool,
     switch: Switch,
-) -> reshiki::accessibility::Button<'static, Message> {
+) -> reshiki::accessibility::Button<'a, Message> {
     let message = Message::Tlc(Action::Toggle(k, switch, !checked));
     let toggle = message.clone();
     reshiki::accessibility::button(
