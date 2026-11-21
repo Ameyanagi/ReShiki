@@ -1569,7 +1569,7 @@ impl App {
             known
                 .into_iter()
                 .flatten()
-                .filter(|(_, state)| !state.read_only)
+                .filter(|(_, state)| !state.read_only && !self.github.link_only(state.repo_id))
                 .map(|(_, state)| Repo {
                     id: state.repo_id,
                     key: state.key(),

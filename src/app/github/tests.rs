@@ -2516,6 +2516,15 @@ fn shared_repositories_need_an_installation_to_be_writable() {
         7,
     ))
     .unwrap();
+    let mut signed_out = signed_out(dir.path());
+    signed_out.github.prefs = app.github.prefs.clone();
+    assert_eq!(
+        signed_out
+            .github_picker_repos()
+            .into_iter()
+            .find(|repo| repo.id == may_push.id),
+        Some(alice())
+    );
     assert!(
         !app.github_picker_repos()
             .iter()

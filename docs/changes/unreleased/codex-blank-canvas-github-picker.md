@@ -8,3 +8,4 @@ issues: []
 - **New drawing** and **New folder** sit beside **Tiles** and **Tree** in the
   GitHub picker. The search icon opens the search and link field.
 - The Icon Browser uses a short **Search icons…** prompt.
+- The **TLC plate tool** is available through the command palette.
