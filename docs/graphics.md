@@ -28,8 +28,9 @@ text is centred in the shape and wraps to its width. It moves with the shape,
 rewraps when you resize it, and dragging the text drags the shape. The usual
 text editor applies, so symbols, typed shortcuts and sub- and superscripts all
 work. Applying empty text adds nothing; Delete on the shape removes its text
-too. The text stays upright when the shape is rotated. ChemDraw files get the
-text as a caption centred over the shape.
+too. The text turns with the shape and wraps along it; in a mirrored shape it
+stays readable. ChemDraw files get the text as a caption centred over the
+shape, turned with it.
 
 ### Shade or shadow a shape
 
