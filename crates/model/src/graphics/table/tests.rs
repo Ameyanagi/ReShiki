@@ -125,6 +125,45 @@ fn table_frames_invert_reflections_without_clamping_or_moving_content() {
 }
 
 #[test]
+fn table_rotation_uses_its_affine_center_and_keeps_owned_coordinates() {
+    let (mut doc, table, ids) = fixture();
+    let frame = Frame::of(&doc.graphics[0]).unwrap();
+    assert_eq!(
+        editing::rotation_center(&doc, &[table]),
+        Some(frame.point(Point::new(0.5, 0.5)))
+    );
+    let local = frame.local(doc.atom(ids[0]).unwrap().position).unwrap();
+    let selected = with_contents(&doc, &[table]);
+    let pivot = editing::rotation_center(&doc, &selected).unwrap();
+    let ownership = doc.graphics[0].table.clone();
+    for _ in 0..4 {
+        editing::transform(&mut doc, &[table], editing::Transform::Rotate(90.));
+        doc.validate().unwrap();
+        let frame = Frame::of(&doc.graphics[0]).unwrap();
+        assert!(
+            editing::rotation_center(&doc, &[table])
+                .unwrap()
+                .distance(frame.point(Point::new(0.5, 0.5)))
+                < 1e-4
+        );
+        assert!(
+            editing::rotation_center(&doc, &selected)
+                .unwrap()
+                .distance(pivot)
+                < 1e-4
+        );
+        assert!(
+            frame
+                .local(doc.atom(ids[0]).unwrap().position)
+                .unwrap()
+                .distance(local)
+                < 1e-5
+        );
+        assert_eq!(doc.graphics[0].table, ownership);
+    }
+}
+
+#[test]
 fn table_validation_rejects_overlap_bad_members_and_split_chemistry_atomically() {
     let (doc, table, ids) = fixture();
     let mut invalid = doc.clone();
@@ -319,7 +358,7 @@ fn move_and_attach_preserves_original_cell_membership_after_temporary_id_remappi
         let b = doc.add_atom("C", Point::new(180., 180.));
         relink(&mut doc, Some(CellRef { table, cell: 1 }), &[a, b]).unwrap();
         let before = doc.clone();
-        let source = crate::joining::Source::with_mode(&doc, &[a], mode).unwrap();
+        let source = crate::joining::Prepared::with_mode(&doc, &[a], mode).unwrap();
         let (joined, _) = source
             .place(Point::new(180., 180.), None, 4., Anchor::Atom(a), mode)
             .unwrap();
@@ -344,7 +383,7 @@ fn move_and_attach_preserves_original_cell_membership_after_temporary_id_remappi
         }
         assert_eq!(doc, before);
         relink(&mut doc, Some(CellRef { table, cell: 2 }), &[b]).unwrap();
-        let source = crate::joining::Source::with_mode(&doc, &[a], mode).unwrap();
+        let source = crate::joining::Prepared::with_mode(&doc, &[a], mode).unwrap();
         assert!(
             source
                 .place(Point::new(180., 180.), None, 4., Anchor::Atom(a), mode)

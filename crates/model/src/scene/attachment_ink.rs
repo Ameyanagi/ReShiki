@@ -199,6 +199,10 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
         lo - half <= at && at <= hi + half
     };
     match part {
+        // Table clips group multiple objects after the per-bond scene pass.
+        // They cannot establish one bond's surviving ink; recursing would
+        // also mistake clipped-off children for visible attachment targets.
+        Primitive::Clip { .. } => false,
         Primitive::Opacity { alpha, primitive } => {
             *alpha > 0. && intersects_fraction(primitive, origin, axis, at)
         }
