@@ -732,6 +732,12 @@ impl super::App {
                     self.detach_office();
                 }
                 self.tab.path = Some(path);
+                #[cfg(target_arch = "wasm32")]
+                self.remember_start_browser_tab();
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(path) = self.tab.path.clone() {
+                    self.remember_start_file(&path);
+                }
                 // A file saved in a format keeps it without asking.
                 self.tab.keep_format = true;
                 self.tab.untitled_name = None;
@@ -801,6 +807,7 @@ impl super::App {
                 prepared,
             }) => {
                 if self.open_browser_duplicate(duplicate) {
+                    self.remember_start_browser_tab();
                     return Task::none();
                 }
                 let task = self.file_prepared(Some((path, Ok(*prepared))));
@@ -820,10 +827,14 @@ impl super::App {
                     self.error = true;
                     return Task::none();
                 };
+                #[cfg(not(target_arch = "wasm32"))]
+                self.remember_start_file(&path);
                 self.open_target(None);
                 self.show_opened(doc, None);
                 self.tab.untitled_name = Some(name);
                 self.tab.mark_saved(reshiki::document::Document::default());
+                #[cfg(target_arch = "wasm32")]
+                self.remember_start_browser_tab();
                 // A record that no longer fits in one drawing is left out, and
                 // the status says so in amber, as an open from GitHub does.
                 if placed < total {
@@ -861,21 +872,29 @@ impl super::App {
             }
             Ok(Prepared::Native(doc)) => {
                 #[cfg(not(target_arch = "wasm32"))]
+                self.remember_start_file(&path);
+                #[cfg(not(target_arch = "wasm32"))]
                 let kept = self.github_opened(&path);
                 #[cfg(target_arch = "wasm32")]
                 let kept = iced::Task::none();
                 if self.open_target(Some(&path)) {
                     self.show_opened(*doc, Some(path));
                 }
+                #[cfg(target_arch = "wasm32")]
+                self.remember_start_browser_tab();
                 return kept;
             }
             Ok(Prepared::Picture(doc, warning)) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                self.remember_start_file(&path);
                 self.open_target(None);
                 self.show_opened(*doc, None);
                 self.tab.untitled_name = path
                     .file_stem()
                     .map(|name| name.to_string_lossy().into_owned());
                 self.tab.mark_saved(reshiki::document::Document::default());
+                #[cfg(target_arch = "wasm32")]
+                self.remember_start_browser_tab();
                 let name = path
                     .file_name()
                     .unwrap_or(path.as_os_str())

@@ -156,6 +156,8 @@ explains how the crates and modules fit together.
 - `src/app/shortcut_examples.rs`: An editable, unbound copy of the bundled reference in a document tab.
 - `src/app/shortcuts.rs`
 - `src/app/star_prompt.rs`: The "Like ReShiki?" toast, which asks for a GitHub star after use or the first GitHub sign-in.
+- `src/app/start.rs`: The empty drawing's import field, actions and recent files.
+- `src/app/start/recent.rs`: Five local file identities; previews are bounded, disposable and never reopened.
 - `src/app/startup.rs`
 - `src/app/stereo.rs`: Advisory drawing checks and explicit, undoable stereobond fixes.
 - `src/app/tabs.rs`: Document tabs
