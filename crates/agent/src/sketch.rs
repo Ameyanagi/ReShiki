@@ -423,6 +423,7 @@ impl Sketch {
                 label_style: None,
                 label_color_override: false,
                 highlight: None,
+                highlight_style: None,
                 alignment: Default::default(),
                 label: a.label.clone(),
                 reverse_label: a.label.clone(),

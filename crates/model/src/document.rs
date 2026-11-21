@@ -127,6 +127,9 @@ pub struct Bond {
     /// Persistent paint behind the bond, independent of its ordinary ink.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub highlight: Option<crate::palette::Color>,
+    /// An imported highlight's style; absent uses the drawing's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub highlight_style: Option<crate::highlights::HighlightStyle>,
     /// Draw the inner component along its ring; chemical order stays unchanged.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub ring_arc: bool,
@@ -356,6 +359,9 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// cycles or equipment pieces require version 40.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
+/// Optional per-highlight style overrides belong to version 40's highlight
+/// effects. Their absence inherits `Document::highlight_style`; older readers
+/// retain the colors and draw them in the document's style.
 ///
 /// | Version | Added |
 /// | --- | --- |
@@ -459,7 +465,8 @@ pub struct Document {
     pub atom_labels: crate::atom_labels::Settings,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ring_fills: Vec<crate::ring_fills::RingFill>,
-    /// How every atom and bond highlight in the drawing is painted.
+    /// Default style for atom, bond and contracted-label highlights. Imported
+    /// paint can override it; an explicit drawing-wide style choice resets it.
     #[serde(
         default,
         skip_serializing_if = "crate::highlights::HighlightStyle::is_flat"
@@ -705,6 +712,7 @@ impl Document {
                 .iter()
                 .any(|f| f.effect != crate::ring_fills::RingEffect::Flat)
             || !self.highlight_style.is_flat()
+            || crate::highlights::has_overrides(self)
             || crate::palette::any_color(self, |c| c == crate::palette::Color::Paper)
             || self.annotations.iter().any(|a| a.angle != 0.)
         {
@@ -835,6 +843,7 @@ impl Document {
         if let Some(retained) = retained {
             fresh.distance_derived = retained.distance_derived;
             fresh.highlight = retained.highlight;
+            fresh.highlight_style = retained.highlight_style;
             fresh.z_order = retained.z_order;
             fresh.indicator = retained.indicator.clone();
             fresh.double_position = retained.double_position;

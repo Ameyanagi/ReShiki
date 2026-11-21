@@ -345,6 +345,7 @@ pub fn find_with_policy(
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             alignment: Default::default(),
             label: preset.label.clone(),
             reverse_label: preset.reverse_label.clone(),

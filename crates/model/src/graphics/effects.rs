@@ -138,7 +138,8 @@ pub fn export_notice(doc: &crate::document::Document) -> Vec<String> {
         .ring_fills
         .iter()
         .any(|f| matches!(f.effect, RingEffect::Glow | RingEffect::Disc))
-        || !doc.highlight_style.is_flat() && crate::highlights::any(doc);
+        || crate::highlights::has_style(doc, crate::highlights::HighlightStyle::Glow)
+        || crate::highlights::has_style(doc, crate::highlights::HighlightStyle::Disc);
     [(fills, EXPORT_NOTICE), (glows, GLOW_NOTICE)]
         .into_iter()
         .filter(|(lost, _)| *lost)
@@ -161,8 +162,7 @@ pub fn tiled(doc: &crate::document::Document) -> bool {
             .ring_fills
             .iter()
             .any(|f| matches!(f.effect, RingEffect::Gradient | RingEffect::Glow))
-        || doc.highlight_style == crate::highlights::HighlightStyle::Glow
-            && crate::highlights::any(doc)
+        || crate::highlights::has_style(doc, crate::highlights::HighlightStyle::Glow)
 }
 
 impl Graphic {

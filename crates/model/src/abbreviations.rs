@@ -14,6 +14,9 @@ pub struct Abbreviation {
     /// Paint behind the contracted label, separate from its internal atoms.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub highlight: Option<crate::palette::Color>,
+    /// An imported label highlight's style; absent uses the drawing's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub highlight_style: Option<crate::highlights::HighlightStyle>,
     pub label: String,
     #[serde(default)]
     pub reverse_label: String,
@@ -835,6 +838,7 @@ impl Document {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             alignment: Default::default(),
             label: label.trim().into(),
             reverse_label: reverse_label.trim().into(),

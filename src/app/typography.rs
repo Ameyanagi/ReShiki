@@ -670,11 +670,10 @@ impl App {
         };
     }
     pub(super) fn apply_highlight_style(&mut self, style: reshiki::highlights::HighlightStyle) {
-        if self.tab.doc.highlight_style == style {
+        let before = self.tab.doc.clone();
+        if !reshiki::highlights::set_style(&mut self.tab.doc, style) {
             return;
         }
-        let before = self.tab.doc.clone();
-        self.tab.doc.highlight_style = style;
         self.changed(before);
         self.status = format!("{style} highlights in this drawing");
     }

@@ -940,6 +940,7 @@ fn reconstruct_bonds(
             let mut bond = Bond {
                 distance_derived: false,
                 highlight: None,
+                highlight_style: None,
                 ring_arc: false,
                 projection: false,
                 stereo_authoritative: false,

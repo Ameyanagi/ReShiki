@@ -86,6 +86,7 @@ fn hidden_members_preserve_overlapping_anchor_semantics_and_follow_each_edit() {
         }),
         label_color_override: true,
         highlight: None,
+        highlight_style: None,
         label: "Label".into(),
         reverse_label: String::new(),
         anchor,

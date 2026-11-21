@@ -113,6 +113,7 @@ pub fn documents() -> anyhow::Result<Vec<(String, Document)>> {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             alignment: Default::default(),
             label: "Et".into(),
             reverse_label: String::new(),

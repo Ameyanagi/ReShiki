@@ -222,6 +222,7 @@ fn a_mark_drag_builds_its_orbit_guide_once_and_rebuilds_it_on_real_changes() {
                 label_style: None,
                 label_color_override: false,
                 highlight: None,
+                highlight_style: None,
                 label: "OMe".into(),
                 reverse_label: "MeO".into(),
                 anchor: o,

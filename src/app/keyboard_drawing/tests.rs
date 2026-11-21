@@ -1249,6 +1249,7 @@ async fn keyboard_bar_publishes_native_actions_and_fits_compact_canvas() {
                             label_style: None,
                             label_color_override: false,
                             highlight: None,
+                            highlight_style: None,
                             label,
                             reverse_label: String::new(),
                             anchor: b,

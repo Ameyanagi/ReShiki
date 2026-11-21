@@ -33,6 +33,28 @@ fn cell(id: u32, lo: f32, hi: f32, members: Vec<u64>) -> Cell {
 }
 
 #[test]
+fn cell_partition_keeps_default_and_imported_highlight_styles() {
+    use crate::highlights::HighlightStyle;
+    let mut doc = Document::default();
+    doc.highlight_style = HighlightStyle::Disc;
+    let a = doc.add_atom("C", Point::new(20., 50.));
+    let b = doc.add_atom("C", Point::new(60., 50.));
+    doc.add_bond(a, b, 1, "plain");
+    crate::highlights::apply(&mut doc, &[a, b], Some(Color::Custom([10, 20, 30])));
+    doc.atoms[0].display.highlight_style = Some(HighlightStyle::Flat);
+    doc.bonds[0].highlight_style = Some(HighlightStyle::Glow);
+    doc.graphics.push(table(vec![cell(1, 0., 0.5, vec![a, b])]));
+    doc.validate().unwrap();
+    let owners = Membership::new(&doc).unwrap();
+    let parts = partition(&doc, &owners);
+    let part = &parts[&owners.cell_of(a)];
+    assert_eq!(part.highlight_style, HighlightStyle::Disc);
+    assert_eq!(part.atoms, doc.atoms);
+    assert_eq!(part.bonds, doc.bonds);
+    assert!(crate::scene::svg(&doc).contains("<feGaussianBlur"));
+}
+
+#[test]
 fn vector_bond_strokes_stay_inside_their_cell_group_without_changing_canvas_ink() {
     let mut doc = Document::default();
     let a = doc.add_atom("C", Point::new(20., 50.));

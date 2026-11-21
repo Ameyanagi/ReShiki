@@ -258,6 +258,7 @@ async fn boc_ala_ome_keeps_both_attachments_and_chemistry_across_formats() {
         label_style: None,
         label_color_override: false,
         highlight: None,
+        highlight_style: None,
     });
     collapsed.require_version(crate::document::RESIDUE_GROUPS);
     assert_residue_boundaries(&collapsed);

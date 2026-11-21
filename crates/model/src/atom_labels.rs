@@ -634,6 +634,9 @@ pub struct AtomDisplay {
     /// Persistent paint behind the atom or its complete visible label.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub highlight: Option<crate::palette::Color>,
+    /// An imported highlight's style; absent uses the drawing's default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight_style: Option<crate::highlights::HighlightStyle>,
     /// Separate attached-H ink when preserving a themed label across paste/export.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hydrogen_color: Option<crate::palette::Color>,

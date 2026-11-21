@@ -3719,6 +3719,7 @@ fn unmarked_atoms_do_not_change_mark_hit_order_and_hidden_marks_stay_hidden() {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
         });
     assert_eq!(hit::hit_object(&doc, probe, 1.), Some(a));
     doc.abbreviations.clear();

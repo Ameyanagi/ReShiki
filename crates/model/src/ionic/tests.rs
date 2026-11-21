@@ -203,6 +203,7 @@ fn condensed_labels_and_abbreviations_stay_intact() {
         label_style: None,
         label_color_override: false,
         highlight: None,
+        highlight_style: None,
         alignment: Default::default(),
     });
     let before = doc.clone();

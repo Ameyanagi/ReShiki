@@ -302,6 +302,63 @@ fn stereodescriptors_are_searchable_and_toggle_the_whole_drawing() {
 }
 
 #[test]
+fn applying_the_current_highlight_style_resets_pasted_styles_and_is_undoable() {
+    use reshiki::{
+        highlights::{self, HighlightStyle},
+        palette::Color,
+    };
+    let mut app = app();
+    let _ = app.update(Message::New);
+    let mut source = Document::default();
+    source.highlight_style = HighlightStyle::Glow;
+    let a = source.add_atom("C", Point::default());
+    let b = source.add_atom("C", Point::new(42., 0.));
+    source.add_bond(a, b, 1, "plain");
+    highlights::apply(&mut source, &[a, b], Some(Color::Custom([10, 20, 30])));
+    let ids = reshiki::editing::append(&mut app.tab.doc, &source, Point::default());
+    app.tab.history = Default::default();
+    assert_eq!(app.tab.doc.highlight_style, HighlightStyle::Flat);
+    assert_eq!(
+        app.tab.doc.bonds[0].highlight_style,
+        Some(HighlightStyle::Glow)
+    );
+
+    run(&mut app, "Highlight style: Flat");
+    assert_eq!(app.tab.doc.highlight_style, HighlightStyle::Flat);
+    assert!(app.tab.doc.bonds[0].highlight_style.is_none());
+    assert!(
+        app.tab
+            .doc
+            .atom(ids[0])
+            .unwrap()
+            .display
+            .highlight_style
+            .is_none()
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.highlight_style, HighlightStyle::Flat);
+    assert_eq!(
+        app.tab.doc.bonds[0].highlight_style,
+        Some(HighlightStyle::Glow)
+    );
+    assert_eq!(
+        app.tab.doc.atom(ids[0]).unwrap().display.highlight_style,
+        Some(HighlightStyle::Glow)
+    );
+    let _ = app.update(Message::Redo);
+    assert!(app.tab.doc.bonds[0].highlight_style.is_none());
+    assert!(
+        app.tab
+            .doc
+            .atom(ids[0])
+            .unwrap()
+            .display
+            .highlight_style
+            .is_none()
+    );
+}
+
+#[test]
 fn steroid_alpha_beta_is_searchable_and_undoable() {
     let mut app = app();
     let _ = app.update(Message::New);

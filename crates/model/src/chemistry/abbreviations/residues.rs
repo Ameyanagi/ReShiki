@@ -519,6 +519,7 @@ pub(super) fn find(
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
         });
     }
     if result.abbreviations.len() > doc.abbreviations.len() {

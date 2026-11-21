@@ -1981,6 +1981,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
         .map(|b| Bond {
             distance_derived: false,
             highlight: None,
+            highlight_style: None,
             ring_arc: false,
             projection: false,
             z_order: 0,

@@ -338,6 +338,7 @@ fn collapsed_assignments_retain_original_owners_at_the_visible_group_anchor() {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             label: "Et".into(),
             reverse_label: "Et".into(),
             anchor: 2,

@@ -53,6 +53,7 @@ fn metadata_cases() -> Vec<(&'static str, Document)> {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             label: "C".into(),
             reverse_label: String::new(),
             anchor: 1,

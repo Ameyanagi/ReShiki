@@ -178,14 +178,17 @@ fn changing_bond_order_keeps_highlight_and_atom_only_highlights_do_not_paint_inc
 
 #[test]
 fn shared_atoms_and_fused_bonds_keep_paint_when_duplicate_geometry_is_removed() {
+    use reshiki::highlights::HighlightStyle;
     use reshiki::templates::{self, Anchor, Connection};
     for destination_color in [None, tint(Hue::Red)] {
         let mut destination = Document::default();
+        destination.highlight_style = HighlightStyle::Disc;
         let a = destination.add_atom("C", Point::default());
         let b = destination.add_atom("C", Point::new(42., 0.));
         destination.add_bond(a, b, 1, "plain");
         highlights::apply(&mut destination, &[a, b], destination_color);
         let mut source = Document::default();
+        source.highlight_style = HighlightStyle::Glow;
         let x = source.add_atom("C", Point::default());
         let y = source.add_atom("C", Point::new(42., 0.));
         source.add_bond(x, y, 1, "plain");
@@ -204,6 +207,11 @@ fn shared_atoms_and_fused_bonds_keep_paint_when_duplicate_geometry_is_removed() 
             shared.atom(b).unwrap().display.highlight,
             destination_color.or(tint(Hue::Blue))
         );
+        let expected_style = destination_color.is_none().then_some(HighlightStyle::Glow);
+        assert_eq!(
+            shared.atom(b).unwrap().display.highlight_style,
+            expected_style
+        );
         let (fused, _) = templates::place_with_mode(
             &destination,
             &source,
@@ -219,11 +227,18 @@ fn shared_atoms_and_fused_bonds_keep_paint_when_duplicate_geometry_is_removed() 
             fused.bonds[0].highlight,
             destination_color.or(tint(Hue::Blue))
         );
+        assert_eq!(fused.bonds[0].highlight_style, expected_style);
         assert!(
             fused
                 .atoms
                 .iter()
                 .all(|atom| atom.display.highlight == destination_color.or(tint(Hue::Blue)))
+        );
+        assert!(
+            fused
+                .atoms
+                .iter()
+                .all(|atom| atom.display.highlight_style == expected_style)
         );
     }
 }
@@ -231,15 +246,33 @@ fn shared_atoms_and_fused_bonds_keep_paint_when_duplicate_geometry_is_removed() 
 #[test]
 fn typed_preset_replacement_keeps_label_and_anchor_paint_and_colors_new_members() {
     use reshiki::atom_text::{self, Mode};
+    use reshiki::highlights::HighlightStyle;
     for (element, first, replacement) in [("O", "OMe", "OEt"), ("C", "Cp", "Cp*")] {
         let mut doc = Document::default();
         let anchor = doc.add_atom(element, Point::default());
         highlights::apply(&mut doc, &[anchor], tint(Hue::Red));
+        doc.atom_mut(anchor).unwrap().display.highlight_style = Some(HighlightStyle::Glow);
         doc = atom_text::apply(&doc, anchor, first, Mode::Group).unwrap();
         assert_eq!(doc.abbreviation(anchor).unwrap().highlight, tint(Hue::Red));
         highlights::apply(&mut doc, &[anchor], tint(Hue::Blue));
         assert_eq!(doc.atom(anchor).unwrap().display.highlight, tint(Hue::Red));
         let replaced = atom_text::apply(&doc, anchor, replacement, Mode::Group).unwrap();
+        assert_eq!(
+            replaced.abbreviation(anchor).unwrap().highlight_style,
+            Some(HighlightStyle::Glow)
+        );
+        assert!(
+            replaced
+                .atoms
+                .iter()
+                .all(|a| a.display.highlight_style == Some(HighlightStyle::Glow))
+        );
+        assert!(
+            replaced
+                .bonds
+                .iter()
+                .all(|b| b.highlight_style == Some(HighlightStyle::Glow))
+        );
         assert_eq!(
             replaced.abbreviation(anchor).unwrap().highlight,
             tint(Hue::Blue)

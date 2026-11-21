@@ -22,6 +22,7 @@ fn abbreviation(
         label_style: None,
         label_color_override: false,
         highlight: None,
+        highlight_style: None,
     }
 }
 

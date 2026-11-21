@@ -448,6 +448,7 @@ pub(crate) fn preserved_append_part(
 ) -> Result<MappedAppendPart, String> {
     if source.atom_labels != doc.atom_labels
         || source.drawing_style != doc.drawing_style
+        || source.highlight_style != doc.highlight_style
         || !offset.x.is_finite()
         || !offset.y.is_finite()
     {
@@ -478,6 +479,7 @@ fn mapped_append_part(
     let mapping = mapping?;
     let mut part = source.clone();
     if matches!(mode, AppendMode::Ordinary | AppendMode::PreserveLayout) {
+        crate::highlights::preserve_style(&mut part, doc.highlight_style);
         crate::stereo_groups::renumber_incoming(doc, &mut part.atoms);
     }
     remap_ids(&mut part, &mapping)?;

@@ -839,7 +839,12 @@ standard deviations; svg2pdf rasterizes the blur in PDF. Highlights glow with a
 spread of 0.4 and a blur of 0.5 highlight radii; ring fills with 0.1 and 0.2
 bond lengths. A highlight disc is 1.6 times the flat highlight's radius; a ring
 disc reaches 1.15 times past its farthest atom. `Document::highlight_style`
-stores the drawing's style (document version 40).
+stores the drawing's default (document version 40). Pasted atom, bond and
+contracted-label highlights keep their source style in an optional
+`highlight_style` override on the painted object. An absent override inherits
+the drawing default, including in older native files. Choosing a highlight
+style for the drawing resets every override, even when choosing the current
+default. Older readers keep the paint colors and use the drawing's default.
 
 CDXML does not keep ReShiki's parametric shape type. External saves may split
 grouped bracket strokes, change stacking values and quantize colors/coordinates.

@@ -592,6 +592,7 @@ fn atoms_hidden_in_a_collapsed_group_do_not_claim_map_numbers() {
         label_style: None,
         label_color_override: false,
         highlight: None,
+        highlight_style: None,
         alignment: Default::default(),
         label: "R".into(),
         reverse_label: "R".into(),
@@ -692,6 +693,7 @@ fn absent_indicator_fast_path_matches_full_layout_for_visibility_and_display_ove
                             label_style: None,
                             label_color_override: false,
                             highlight: None,
+                            highlight_style: None,
                         });
                         compare(&doc);
                         doc.abbreviations.clear();

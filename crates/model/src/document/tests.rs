@@ -259,6 +259,7 @@ fn replacing_a_bond_keeps_paint_and_indicators_and_resets_chemical_fields() {
     doc.add_bond(b, c, 1, "plain");
     let bond = &mut doc.bonds[0];
     bond.highlight = Some(crate::palette::Color::Custom([10, 20, 30]));
+    bond.highlight_style = Some(crate::highlights::HighlightStyle::Glow);
     bond.z_order = -4;
     bond.indicator.show = Some(false);
     bond.indicator.offset = Some(Point::new(3., -2.));
@@ -278,6 +279,7 @@ fn replacing_a_bond_keeps_paint_and_indicators_and_resets_chemical_fields() {
     assert_eq!((replaced.a, replaced.b, replaced.order), (b, a, 2));
     assert_eq!(replaced.display, "bold");
     assert_eq!(replaced.highlight, old.highlight);
+    assert_eq!(replaced.highlight_style, old.highlight_style);
     assert_eq!(replaced.z_order, old.z_order);
     assert_eq!(replaced.indicator, old.indicator);
     assert_eq!(replaced.double_position, old.double_position);
@@ -595,6 +597,7 @@ fn rejects_dangling_bond_and_duplicate_ids() {
     doc.bonds.push(Bond {
         distance_derived: false,
         highlight: None,
+        highlight_style: None,
         ring_arc: false,
         projection: false,
         stereo_authoritative: false,

@@ -1647,6 +1647,7 @@ fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
     let reshiki::document::Bond {
         distance_derived,
         highlight,
+        highlight_style,
         ring_arc,
         projection,
         stereo_authoritative,
@@ -1666,6 +1667,7 @@ fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
     } = a;
     *distance_derived == b.distance_derived
         && *highlight == b.highlight
+        && *highlight_style == b.highlight_style
         && *ring_arc == b.ring_arc
         && *projection == b.projection
         && *stereo_authoritative == b.stereo_authoritative

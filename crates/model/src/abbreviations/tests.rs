@@ -6,6 +6,7 @@ fn abbreviation_containing_returns_the_first_member_match_or_none() {
         label_style: None,
         label_color_override: false,
         highlight: None,
+        highlight_style: None,
         label: "first".into(),
         reverse_label: String::new(),
         anchor: 1,

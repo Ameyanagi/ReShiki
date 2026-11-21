@@ -15,7 +15,7 @@ const KAPPA: f32 = 0.552_284_8;
 // Cubic circle segments overshoot the true radius by at most 0.0273%.
 pub(crate) const CAPSULE_RADIUS_SCALE: f32 = 1.0003;
 
-/// How the drawing paints its atom and bond highlights.
+/// How atom, bond and contracted-label highlights are painted.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HighlightStyle {
@@ -157,8 +157,9 @@ pub(crate) fn atom_bounds(doc: &Document, atom: &Atom) -> Option<(Point, Point)>
         return None;
     }
     let (a, b, rx, ry) = label_shape(doc, atom);
-    let reach = glow_reach(doc);
-    if doc.highlight_style == HighlightStyle::Disc {
+    let style = atom_style(doc, atom);
+    let reach = glow_reach(doc, style);
+    if style == HighlightStyle::Disc {
         let r = disc_radius(a, b, rx, ry);
         let center = a.lerp(b, 0.5);
         return Some((center.offset(-r, -r), center.offset(r, r)));
@@ -170,8 +171,8 @@ pub(crate) fn atom_bounds(doc: &Document, atom: &Atom) -> Option<(Point, Point)>
 }
 
 /// How far a highlight's glow reaches past its flat shape, if it glows.
-fn glow_reach(doc: &Document) -> f32 {
-    if doc.highlight_style == HighlightStyle::Glow {
+fn glow_reach(doc: &Document, style: HighlightStyle) -> f32 {
+    if style == HighlightStyle::Glow {
         let r = radius(&doc.drawing_style);
         crate::scene::glow_reach(r * GLOW_SPREAD, r * GLOW_BLUR)
     } else {
@@ -195,7 +196,8 @@ pub(crate) fn bond_bounds(
     }
     let a = doc.atom(bond.a)?.position;
     let b = doc.atom(bond.b)?.position;
-    let radius = bond_radius(doc, bond, joins) * CAPSULE_RADIUS_SCALE + glow_reach(doc);
+    let radius = bond_radius(doc, bond, joins) * CAPSULE_RADIUS_SCALE
+        + glow_reach(doc, bond_style(doc, bond));
     Some((
         Point::new(a.x.min(b.x) - radius, a.y.min(b.y) - radius),
         Point::new(a.x.max(b.x) + radius, a.y.max(b.y) + radius),
@@ -352,17 +354,36 @@ pub(crate) fn primitives_with_opacity(
     if !any(doc) {
         return Vec::new();
     }
+    // Styles form separate paint families. Matching colors within one family
+    // still share their outline/glow; another family's cap cannot cover them.
+    let joins = crate::bond_joins::Joins::new(doc);
+    HighlightStyle::ALL
+        .into_iter()
+        .filter(|style| has_style(doc, *style))
+        .flat_map(|style| primitives_for_style(doc, opacity, &joins, style))
+        .collect()
+}
+
+fn primitives_for_style(
+    doc: &Document,
+    opacity: &crate::rear_opacity::Paint,
+    joins: &crate::bond_joins::Joins<'_>,
+    style: HighlightStyle,
+) -> Vec<Primitive> {
     let mut bonds: BTreeMap<_, Vec<_>> = BTreeMap::new();
     let mut covered: HashMap<(u64, Color), f32> = HashMap::new();
-    let joins = crate::bond_joins::Joins::new(doc);
-    for bond in &doc.bonds {
+    for bond in doc
+        .bonds
+        .iter()
+        .filter(|bond| bond_style(doc, bond) == style)
+    {
         let Some(color) = bond.highlight.filter(|_| doc.bond_visible(bond.a, bond.b)) else {
             continue;
         };
         let Some((a, b)) = doc.atom(bond.a).zip(doc.atom(bond.b)) else {
             continue;
         };
-        let radius = bond_radius(doc, bond, &joins);
+        let radius = bond_radius(doc, bond, joins);
         let length = a.position.distance(b.position);
         let u = if length > 0.001 {
             Point::new(
@@ -423,7 +444,11 @@ pub(crate) fn primitives_with_opacity(
         }
     }
     let mut atoms: BTreeMap<_, Vec<_>> = BTreeMap::new();
-    for atom in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
+    for atom in doc
+        .atoms
+        .iter()
+        .filter(|a| doc.atom_visible(a.id) && atom_style(doc, a) == style)
+    {
         let Some(color) = atom_color(doc, atom) else {
             continue;
         };
@@ -432,7 +457,7 @@ pub(crate) fn primitives_with_opacity(
         // color can overpaint it (including unrelated crossing bonds). Avoid
         // drawing that same boundary twice and darkening its antialiased edge.
         if !opacity.has_visibility()
-            && doc.highlight_style != HighlightStyle::Disc
+            && style != HighlightStyle::Disc
             && a == b
             && rx == ry
             && bonds.len() == 1
@@ -440,7 +465,7 @@ pub(crate) fn primitives_with_opacity(
         {
             continue;
         }
-        let commands = if doc.highlight_style == HighlightStyle::Disc {
+        let commands = if style == HighlightStyle::Disc {
             let r = disc_radius(a, b, rx, ry);
             let center = a.lerp(b, 0.5);
             capsule(center, center, Point::new(r, 0.), Point::new(0., r))
@@ -463,7 +488,7 @@ pub(crate) fn primitives_with_opacity(
             );
         }
     }
-    let painted = |parts: Vec<Primitive>| glowing(doc, parts);
+    let painted = |parts: Vec<Primitive>| glowing(doc, style, parts);
     if opacity.has_visibility() {
         // Batch translucent rear paint to avoid doubling identical endpoint
         // halos. Keep opaque front atoms above opaque bond halos across colors,
@@ -493,8 +518,8 @@ pub(crate) fn primitives_with_opacity(
 /// The highlight paths as soft glows when the drawing asks for them. Bonds
 /// and atoms of one color glow as one shape, so where they meet the glow is
 /// no brighter; faded rear paint keeps its own glow.
-fn glowing(doc: &Document, parts: Vec<Primitive>) -> Vec<Primitive> {
-    if doc.highlight_style != HighlightStyle::Glow {
+fn glowing(doc: &Document, style: HighlightStyle, parts: Vec<Primitive>) -> Vec<Primitive> {
+    if style != HighlightStyle::Glow {
         return parts;
     }
     let r = radius(&doc.drawing_style);
@@ -544,12 +569,96 @@ pub fn any(doc: &Document) -> bool {
         || doc.abbreviations.iter().any(|g| g.highlight.is_some())
 }
 
+pub(crate) fn has_overrides(doc: &Document) -> bool {
+    doc.atoms
+        .iter()
+        .any(|a| a.display.highlight_style.is_some())
+        || doc.bonds.iter().any(|b| b.highlight_style.is_some())
+        || doc
+            .abbreviations
+            .iter()
+            .any(|g| g.highlight_style.is_some())
+}
+
+/// Paint stored with this style, including hidden abbreviation members.
+pub(crate) fn has_style(doc: &Document, style: HighlightStyle) -> bool {
+    doc.atoms.iter().any(|a| {
+        a.display.highlight.is_some()
+            && a.display.highlight_style.unwrap_or(doc.highlight_style) == style
+    }) || doc
+        .bonds
+        .iter()
+        .any(|b| b.highlight.is_some() && bond_style(doc, b) == style)
+        || doc.abbreviations.iter().any(|g| {
+            g.highlight.is_some() && g.highlight_style.unwrap_or(doc.highlight_style) == style
+        })
+}
+
+/// Apply an explicit style to every highlight and to future paint. Returns
+/// whether the drawing changed, including resetting imported overrides when
+/// the chosen style is already the default.
+pub fn set_style(doc: &mut Document, style: HighlightStyle) -> bool {
+    let changed = doc.highlight_style != style || has_overrides(doc);
+    doc.highlight_style = style;
+    for atom in &mut doc.atoms {
+        atom.display.highlight_style = None;
+    }
+    for bond in &mut doc.bonds {
+        bond.highlight_style = None;
+    }
+    for group in &mut doc.abbreviations {
+        group.highlight_style = None;
+    }
+    changed
+}
+
+/// Freeze only existing paint whose inherited default would change on append.
+/// Unpainted imported objects use the destination default for future paint.
+pub(crate) fn preserve_style(part: &mut Document, destination: HighlightStyle) {
+    if part.highlight_style == destination {
+        return;
+    }
+    for atom in &mut part.atoms {
+        if atom.display.highlight.is_some() {
+            atom.display
+                .highlight_style
+                .get_or_insert(part.highlight_style);
+        }
+    }
+    for bond in &mut part.bonds {
+        if bond.highlight.is_some() {
+            bond.highlight_style.get_or_insert(part.highlight_style);
+        }
+    }
+    for group in &mut part.abbreviations {
+        if group.highlight.is_some() {
+            group.highlight_style.get_or_insert(part.highlight_style);
+        }
+    }
+}
+
 /// A contracted label can have its own paint without recoloring its anchor
 /// inside the expanded fragment.
 pub(crate) fn atom_color(doc: &Document, atom: &Atom) -> Option<Color> {
     doc.abbreviation(atom.id)
         .and_then(|group| group.highlight)
         .or(atom.display.highlight)
+}
+
+/// Use the style of the same paint source as `atom_color`: a separately
+/// painted contracted label takes precedence over the anchor's hidden paint.
+pub(crate) fn atom_style(doc: &Document, atom: &Atom) -> HighlightStyle {
+    atom_style_override(doc, atom).unwrap_or(doc.highlight_style)
+}
+
+pub(crate) fn atom_style_override(doc: &Document, atom: &Atom) -> Option<HighlightStyle> {
+    doc.abbreviation(atom.id)
+        .filter(|group| group.highlight.is_some())
+        .map_or(atom.display.highlight_style, |group| group.highlight_style)
+}
+
+fn bond_style(doc: &Document, bond: &Bond) -> HighlightStyle {
+    bond.highlight_style.unwrap_or(doc.highlight_style)
 }
 
 /// Visible highlight colors for the selected objects. Hidden abbreviation
@@ -577,11 +686,19 @@ pub fn selected_colors(doc: &Document, ids: &[u64]) -> Vec<Option<Color>> {
 /// Clearing a selected group removes all its highlights, including its members.
 pub fn apply(doc: &mut Document, ids: &[u64], color: Option<Color>) -> usize {
     let selected: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
-    let mut contracted = HashSet::new();
+    let mut contracted = HashMap::new();
     for group in &mut doc.abbreviations {
         if group.members.iter().any(|id| selected.contains(id)) {
             group.highlight = color;
-            contracted.extend(group.members.iter().copied());
+            if color.is_none() {
+                group.highlight_style = None;
+            }
+            contracted.extend(
+                group
+                    .members
+                    .iter()
+                    .map(|&id| (id, (group.anchor, group.highlight_style))),
+            );
         }
     }
     let visible_atoms: HashSet<_> = doc
@@ -602,9 +719,16 @@ pub fn apply(doc: &mut Document, ids: &[u64], color: Option<Color>) -> usize {
         if selected.contains(&atom.id)
             && (color.is_none()
                 || atom.display.highlight.is_none()
-                || !contracted.contains(&atom.id))
+                || !contracted.contains_key(&atom.id))
         {
+            if atom.display.highlight.is_none() {
+                atom.display.highlight_style =
+                    contracted.get(&atom.id).and_then(|(_, style)| *style);
+            }
             atom.display.highlight = color;
+            if color.is_none() {
+                atom.display.highlight_style = None;
+            }
         }
     }
     for bond in &mut doc.bonds {
@@ -614,7 +738,18 @@ pub fn apply(doc: &mut Document, ids: &[u64], color: Option<Color>) -> usize {
                 || bond.highlight.is_none()
                 || visible_bonds.contains(&(bond.a, bond.b)))
         {
+            if bond.highlight.is_none() {
+                bond.highlight_style = contracted.get(&bond.a).and_then(|(anchor, style)| {
+                    contracted
+                        .get(&bond.b)
+                        .filter(|(other, _)| other == anchor)
+                        .and(*style)
+                });
+            }
             bond.highlight = color;
+            if color.is_none() {
+                bond.highlight_style = None;
+            }
         }
     }
     visible_atoms.len() + visible_bonds.len()
@@ -626,11 +761,20 @@ pub(crate) fn inherit_merged(doc: &mut Document, mapping: &HashMap<u64, u64>) {
     let atoms: Vec<_> = doc
         .atoms
         .iter()
-        .filter_map(|atom| Some((*mapping.get(&atom.id)?, atom.display.highlight?)))
+        .filter_map(|atom| {
+            Some((
+                *mapping.get(&atom.id)?,
+                atom.display.highlight?,
+                atom.display.highlight_style,
+            ))
+        })
         .collect();
-    for (id, color) in atoms {
-        if let Some(atom) = doc.atom_mut(id) {
-            atom.display.highlight.get_or_insert(color);
+    for (id, color, style) in atoms {
+        if let Some(atom) = doc.atom_mut(id)
+            && atom.display.highlight.is_none()
+        {
+            atom.display.highlight = Some(color);
+            atom.display.highlight_style = style;
         }
     }
     let bonds: Vec<_> = doc
@@ -641,16 +785,19 @@ pub(crate) fn inherit_merged(doc: &mut Document, mapping: &HashMap<u64, u64>) {
                 *mapping.get(&bond.a)?,
                 *mapping.get(&bond.b)?,
                 bond.highlight?,
+                bond.highlight_style,
             ))
         })
         .collect();
-    for (a, b, color) in bonds {
+    for (a, b, color, style) in bonds {
         if let Some(bond) = doc
             .bonds
             .iter_mut()
             .find(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
+            && bond.highlight.is_none()
         {
-            bond.highlight.get_or_insert(color);
+            bond.highlight = Some(color);
+            bond.highlight_style = style;
         }
     }
 }
@@ -658,6 +805,153 @@ pub(crate) fn inherit_merged(doc: &mut Document, mapping: &HashMap<u64, u64>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recoloring_an_imported_label_keeps_its_style_and_its_members_own_paint() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(42., 0.));
+        let c = doc.add_atom("C", Point::new(84., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        doc.add_bond(b, c, 1, "plain");
+        let red = Color::Custom([255, 0, 0]);
+        let blue = Color::Custom([0, 0, 255]);
+        doc.atoms[0].display.highlight = Some(red);
+        doc.atoms[0].display.highlight_style = Some(HighlightStyle::Glow);
+        doc.bonds[0].highlight = Some(red);
+        doc.bonds[0].highlight_style = Some(HighlightStyle::Flat);
+        doc.abbreviations.push(crate::abbreviations::Abbreviation {
+            label_style: None,
+            label_color_override: false,
+            highlight: Some(red),
+            highlight_style: Some(HighlightStyle::Disc),
+            label: "Pr".into(),
+            reverse_label: String::new(),
+            anchor: a,
+            exit: None,
+            members: vec![a, b, c],
+            alignment: Default::default(),
+        });
+        apply(&mut doc, &[a], Some(blue));
+        assert_eq!(atom_color(&doc, &doc.atoms[0]), Some(blue));
+        assert_eq!(atom_style(&doc, &doc.atoms[0]), HighlightStyle::Disc);
+        assert_eq!(doc.atoms[0].display.highlight, Some(red));
+        assert_eq!(
+            doc.atoms[0].display.highlight_style,
+            Some(HighlightStyle::Glow)
+        );
+        assert_eq!(
+            doc.atoms[1].display.highlight_style,
+            Some(HighlightStyle::Disc)
+        );
+        assert_eq!(doc.bonds[0].highlight_style, Some(HighlightStyle::Flat));
+        assert_eq!(doc.bonds[1].highlight_style, Some(HighlightStyle::Disc));
+        apply(&mut doc, &[a], None);
+        assert!(!any(&doc));
+        assert!(!has_overrides(&doc));
+    }
+
+    #[test]
+    fn mixed_styles_keep_their_geometry_and_effects_even_when_their_colors_match() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(42., 0.));
+        let c = doc.add_atom("C", Point::new(84., 0.));
+        let d = doc.add_atom("C", Point::new(126., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        doc.add_bond(b, c, 1, "plain");
+        let color = Color::Custom([10, 20, 30]);
+        apply(&mut doc, &[a, b, c, d], Some(color));
+        doc.atom_mut(c).unwrap().display.highlight = None;
+        doc.atom_mut(a).unwrap().display.highlight_style = Some(HighlightStyle::Disc);
+        doc.atom_mut(b).unwrap().display.highlight_style = Some(HighlightStyle::Glow);
+        doc.bonds[1].highlight_style = Some(HighlightStyle::Glow);
+        let paint = primitives_with_opacity(&doc, &crate::rear_opacity::Paint::new(&doc));
+        assert_eq!(
+            paint
+                .iter()
+                .filter(|p| matches!(p, Primitive::Glow { .. }))
+                .count(),
+            1
+        );
+        assert_eq!(
+            paint
+                .iter()
+                .filter(|p| matches!(p, Primitive::Path { .. }))
+                .count(),
+            3
+        );
+        let Some(Primitive::Path { commands, .. }) = paint.last() else {
+            panic!("the disc remains above the flat bond's matching cap");
+        };
+        let r = radius(&doc.drawing_style);
+        let reach = commands
+            .iter()
+            .flat_map(PathCommand::points)
+            .map(|p| p.distance(Point::default()))
+            .fold(0., f32::max);
+        assert!(reach > DISC * 0.99 * r);
+        let (disc_lo, _) = atom_bounds(&doc, doc.atom(a).unwrap()).unwrap();
+        assert!((disc_lo.x + DISC * r).abs() < 0.001);
+        let (glow_lo, _) = atom_bounds(&doc, doc.atom(b).unwrap()).unwrap();
+        assert!((glow_lo.x - (42. - r - glow_reach(&doc, HighlightStyle::Glow))).abs() < 0.001);
+        let joins = crate::bond_joins::Joins::new(&doc);
+        let (flat_lo, _) = bond_bounds(&doc, &doc.bonds[0], &joins).unwrap();
+        let (glowing_lo, _) = bond_bounds(&doc, &doc.bonds[1], &joins).unwrap();
+        assert!(glowing_lo.y < flat_lo.y);
+        assert!(crate::graphics::tiled(&doc));
+        assert_eq!(
+            crate::graphics::export_notice(&doc),
+            [crate::graphics::GLOW_NOTICE]
+        );
+        assert!(crate::scene::svg(&doc).contains("<feGaussianBlur"));
+
+        let mut only_flat = Document::default();
+        only_flat.highlight_style = HighlightStyle::Glow;
+        let a = only_flat.add_atom("C", Point::default());
+        only_flat.atom_mut(a).unwrap().display.highlight = Some(color);
+        only_flat.atom_mut(a).unwrap().display.highlight_style = Some(HighlightStyle::Flat);
+        assert!(!crate::graphics::tiled(&only_flat));
+        assert!(crate::graphics::export_notice(&only_flat).is_empty());
+    }
+
+    #[test]
+    fn native_style_overrides_are_optional_and_reset_with_explicit_appearance_edits() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let color = Color::Custom([10, 20, 30]);
+        apply(&mut doc, &[a, b], Some(color));
+        let legacy = doc.file_json().unwrap();
+        assert!(!String::from_utf8_lossy(&legacy).contains("highlight_style"));
+        let reopened = Document::from_native_file(&legacy).unwrap();
+        assert_eq!(reopened.file_json().unwrap(), legacy);
+        assert!(!has_overrides(&reopened));
+
+        doc.atoms[0].display.highlight_style = Some(HighlightStyle::Disc);
+        doc.bonds[0].highlight_style = Some(HighlightStyle::Glow);
+        apply(&mut doc, &[a, b], Some(Color::Custom([40, 50, 60])));
+        assert_eq!(
+            doc.atoms[0].display.highlight_style,
+            Some(HighlightStyle::Disc)
+        );
+        assert_eq!(doc.bonds[0].highlight_style, Some(HighlightStyle::Glow));
+        assert!(set_style(&mut doc, HighlightStyle::Flat));
+        assert!(!has_overrides(&doc));
+        assert!(!set_style(&mut doc, HighlightStyle::Flat));
+        doc.atoms[0].display.highlight_style = Some(HighlightStyle::Disc);
+        doc.bonds[0].highlight_style = Some(HighlightStyle::Glow);
+        apply(&mut doc, &[a, b], None);
+        assert!(!has_overrides(&doc));
+        apply(&mut doc, &[a, b], Some(color));
+        assert_eq!(atom_style(&doc, &doc.atoms[0]), HighlightStyle::Flat);
+        assert_eq!(bond_style(&doc, &doc.bonds[0]), HighlightStyle::Flat);
+
+        let mut invalid = serde_json::to_value(&doc).unwrap();
+        invalid["atoms"][0]["display"]["highlight_style"] = "unsupported".into();
+        assert!(serde_json::from_value::<Document>(invalid).is_err());
+    }
 
     #[test]
     fn the_drawing_paints_every_highlight_flat_as_a_glow_or_as_a_disc() {

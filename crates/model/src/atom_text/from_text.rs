@@ -176,6 +176,7 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
             label,
             reverse_label,
             anchor: atom,

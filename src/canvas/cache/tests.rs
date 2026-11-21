@@ -369,6 +369,7 @@ fn retained_ring_hits_reuse_geometry_and_invalidate_on_real_document_changes() {
             label_style: None,
             label_color_override: false,
             highlight: None,
+            highlight_style: None,
         });
     assert_eq!(cache.ring_at(&doc, moved), None);
     doc.abbreviations.clear();
