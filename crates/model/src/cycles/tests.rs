@@ -624,6 +624,103 @@ fn step_names_sit_inside_the_arc_and_long_ones_break() {
 }
 
 #[test]
+fn distant_drawn_step_names_remain_clickable_without_picking_adjacent_space() {
+    for reflected in [false, true] {
+        for counterclockwise in [false, true] {
+            let (mut doc, id, _) = suzuki();
+            let (center, radius) = graphic(&doc, id).cycle_circle();
+            let obstacle = text(&mut doc, Point::default(), "MMMMMM\nMMMMMM\nMMMMMM");
+            let annotation = doc.annotations.last_mut().unwrap();
+            annotation.format.style.size_pt = 144.;
+            let (width, height) = annotation.size();
+            annotation.position = center.offset(-0.5 * width, -0.5 * height);
+            let g = doc.graphics.iter_mut().find(|g| g.id == id).unwrap();
+            if reflected {
+                g.origin.y += g.axis_y.y;
+                g.axis_y.y = -g.axis_y.y;
+            }
+            let c = g.cycle.as_mut().unwrap();
+            c.counterclockwise = counterclockwise;
+            c.steps[0].name = "Oxidative addition".into();
+            c.steps[0].reagents.push(vec![obstacle]);
+            doc.validate().unwrap();
+
+            let g = graphic(&doc, id);
+            let painted = drawn(&doc, g);
+            let (at, name, format) = &painted.labels[0];
+            let size = crate::typography::layout(name, format);
+            let p = at.offset(0.5 * size.width, 0.5 * size.height);
+            assert!(
+                p.distance(center) > radius + 8. * doc.drawing_style.bond_length_world,
+                "the actual label must escape the old click cutoff"
+            );
+            assert!(super::hit(&doc, g, p, 1.));
+            assert!(super::hit(
+                &doc,
+                g,
+                at.offset(size.width + 0.5, 0.5 * size.height),
+                1.
+            ));
+            let outside = at.offset(size.width + 2., 0.5 * size.height);
+            assert!(painted.arrows.iter().all(|arrow| !arrow.hit(outside, 1.)));
+            assert!(!super::hit(&doc, g, outside, 1.));
+            assert!(!super::hit(&doc, g, center.offset(10000., 10000.), 1.));
+        }
+    }
+}
+
+#[test]
+fn long_center_labels_remain_clickable_beyond_the_circle_cutoff() {
+    let mut doc = Document::default();
+    let id = super::insert(&mut doc, Point::default(), 50.);
+    doc.graphics[0].cycle.as_mut().unwrap().label = "M".repeat(200);
+    let g = graphic(&doc, id);
+    let painted = drawn(&doc, g);
+    let (at, label, format) = &painted.labels[0];
+    let size = crate::typography::layout(label, format);
+    let p = at.offset(0.9 * size.width, 0.5 * size.height);
+    assert!(p.distance(Point::default()) > 50. + 8. * doc.drawing_style.bond_length_world);
+    assert!(super::hit(&doc, g, p, 1.));
+    assert!(!super::hit(
+        &doc,
+        g,
+        at.offset(size.width + 2., 0.5 * size.height),
+        1.
+    ));
+
+    doc.graphics[0].cycle.as_mut().unwrap().label.clear();
+    assert!(!super::hit(&doc, graphic(&doc, id), p, 1.));
+}
+
+#[test]
+fn a_name_does_not_expand_the_outer_circle_arrow_hit_scope() {
+    let (mut doc, id, _) = suzuki();
+    let (center, radius) = graphic(&doc, id).cycle_circle();
+    let reagent = text(&mut doc, center.offset(5000., 5000.), "Ar–X");
+    let c = doc.graphics[0].cycle.as_mut().unwrap();
+    c.steps[0].reagents.push(vec![reagent]);
+    c.steps[0].name = "OA".into();
+    let g = graphic(&doc, id);
+    let painted = drawn(&doc, g);
+    let side = painted
+        .arrows
+        .iter()
+        .zip(&painted.arcs)
+        .find(|(_, step)| step.is_none())
+        .unwrap()
+        .0;
+    let p = side.point(0.5);
+    assert!(p.distance(center) > radius + 8. * doc.drawing_style.bond_length_world);
+    assert!(side.hit(p, 1.));
+    assert!(!super::hit(&doc, g, p, 1.));
+
+    doc.graphics[0].cycle.as_mut().unwrap().steps[0]
+        .name
+        .clear();
+    assert!(!super::hit(&doc, graphic(&doc, id), p, 1.));
+}
+
+#[test]
 fn step_names_keep_clear_of_each_other_and_the_parts() {
     let (mut doc, id, [pd0, oa, tm]) = suzuki();
     let (center, radius) = graphic(&doc, id).cycle_circle();

@@ -59,6 +59,7 @@ explains how the crates and modules fit together.
 - `src/app/context_menu.rs`: Commands for the object under a secondary click, or the current selection.
 - `src/app/context_menu/cascade.rs`: Cascading context panels share one event boundary and use laid-out rows as anchors.
 - `src/app/cycles.rs`: Catalytic cycles
+- `src/app/cycles/layout.rs`: Explicit cycle shapes and their dimensions in Properties and Make review.
 - `src/app/depth_appearance.rs`
 - `src/app/desktop.rs`: UI-side ownership acknowledgement; the transport cannot accept a request merely because it queued bytes.
 - `src/app/dispatch.rs`: The message dispatch table
@@ -695,8 +696,18 @@ explains how the crates and modules fit together.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.
 - `crates/model/src/cycles.rs`: Catalytic cycles.
 - `crates/model/src/cycles/label_placement.rs`: Place each step name on one side of the ring with space around the ink.
+- `crates/model/src/cycles/perimeter_arcs.rs`: Noncircle step shafts and side contacts on their resolved native geometry.
+- `crates/model/src/cycles/perimeter_deform.rs`: Tangent-preserving Bow and reversible lanes, built from original perimeter arclength knots.
+- `crates/model/src/cycles/perimeter_frames.rs`: Shared painted-lane tangent and corner frames for noncircle names and roles.
+- `crates/model/src/cycles/perimeter_names.rs`: Noncircle names follow the final forward shaft, with actual painted ink deciding between inside, outside and nearby positions.
+- `crates/model/src/cycles/perimeter_sides.rs`: Side contacts on the resolved, open, painted step shafts.
+- `crates/model/src/cycles/resize.rs`: Resize an explicit cycle shape without replacing its retained affine frame.
+- `crates/model/src/cycles/shapes.rs`: Cycle-local perimeter geometry.
+- `crates/model/src/cycles/shapes/shaft.rs`: Open geometry read from the native shaft after Bow, lanes and head trim.
 - `crates/model/src/cycles/split.rs`: Keep inherited side parts beside the step that an insertion shortens.
 - `crates/model/src/cycles/steps.rs`: A catalytic cycle's steps as ordinary reactions.
+- `crates/model/src/cycles/tidy_phase.rs`: Least-motion phase on a noncircular, world-arclength perimeter.
+- `crates/model/src/cycles/tidy_shape.rs`: Noncircle Tidy preserves ordered roles on equal perimeter distances.
 - `crates/model/src/depiction.rs`: Opt-in nitrogen charge separation using the same cleanup as analysis.
 - `crates/model/src/depth_appearance.rs`: Persistent paint for an editable projection, independent of chemical styles.
 - `crates/model/src/document.rs`

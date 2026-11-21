@@ -3,7 +3,11 @@
 use super::{Camera, Document, Rectangle, SelectionBox, nmr};
 use reshiki::rear_opacity::Paint;
 use reshiki::scene::{self, Primitive};
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 #[derive(Default)]
 pub(super) struct SceneCache {
@@ -23,12 +27,15 @@ pub(super) struct SceneCache {
     nmr: NmrCache,
     foreground_orbital: Option<bool>,
     ring_interiors: Option<Rc<reshiki::editing::RingInteriors>>,
+    cycle_hits: HashMap<u64, reshiki::cycles::HitLayout>,
     /// Keyed by the objects a preview redraws itself.
     remainder: Option<(Vec<u64>, Option<Rc<super::paper::Remainder>>)>,
     /// A [`Frame`] compared the drawing and still holds it.
     compared: bool,
     #[cfg(test)]
     pub comparisons: usize,
+    #[cfg(test)]
+    pub cycle_hit_layouts: usize,
 }
 
 /// One draw of the canvas. It compares the drawing with the cached one as it
@@ -125,6 +132,7 @@ impl SceneCache {
             self.nmr.entry = None;
             self.foreground_orbital = None;
             self.ring_interiors = None;
+            self.cycle_hits.clear();
             self.remainder = None;
         }
     }
@@ -134,6 +142,34 @@ impl SceneCache {
         self.ring_interiors
             .get_or_insert_with(|| Rc::new(reshiki::editing::RingInteriors::new(doc)))
             .at(point)
+    }
+
+    pub fn cycle_hit(
+        &mut self,
+        doc: &Document,
+        graphic: &reshiki::graphics::Graphic,
+        point: reshiki::document::Point,
+        radius: f32,
+    ) -> bool {
+        self.document(doc);
+        if let Some(layout) = self.cycle_hits.get(&graphic.id) {
+            return layout.hit(point, radius);
+        }
+        if !reshiki::cycles::HitLayout::may_hit(doc, graphic, point) {
+            return false;
+        }
+        #[cfg(test)]
+        let builds = &mut self.cycle_hit_layouts;
+        self.cycle_hits
+            .entry(graphic.id)
+            .or_insert_with(|| {
+                #[cfg(test)]
+                {
+                    *builds += 1;
+                }
+                reshiki::cycles::HitLayout::new(doc, graphic)
+            })
+            .hit(point, radius)
     }
 
     fn selected(&mut self, doc: &Document, ids: &[u64]) {
@@ -294,5 +330,7 @@ impl SceneCache {
     }
 }
 
+#[cfg(test)]
+mod cycle_tests;
 #[cfg(test)]
 mod tests;
