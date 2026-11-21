@@ -302,6 +302,15 @@ fn convert(
     fonts: &mut HashMap<u16, TextEncoding>,
     tolerant: bool,
 ) -> Result<Element> {
+    convert_within_tlc(tree, fonts, tolerant, false).map(|(element, _)| element)
+}
+
+fn convert_within_tlc(
+    tree: &Tree<'_>,
+    fonts: &mut HashMap<u16, TextEncoding>,
+    tolerant: bool,
+    within_tlc: bool,
+) -> Result<(Element, bool)> {
     let (mut connection_count, mut node_type_count) = (0usize, 0usize);
     for (tag, _) in &tree.raw {
         match *tag {
@@ -366,12 +375,19 @@ fn convert(
                 | "scheme"
                 | "step"
         );
+    let tlc = matches!(tree.name, "tlcplate" | "tlclane" | "tlcspot");
+    let within_tlc = within_tlc || tlc;
+    let mut tlc_skipped = false;
     let (mut text, mut utf8_text, mut skipped) = (None, None, 0usize);
     for (tag, data) in &tree.raw {
         if *tag == 0x100 {
             continue;
         }
         let Some(p) = SCHEMA.codes.get(tag) else {
+            if tolerant && within_tlc && !strict {
+                tlc_skipped = true;
+                continue;
+            }
             if matches!(tree.name, "CDXML" | "page")
                 || tree.name == "n" && matches!(tag, 0x448 | 0x44d)
                 || !strict
@@ -380,6 +396,7 @@ fn convert(
             }
             if tolerant {
                 skipped += 1;
+                tlc_skipped |= within_tlc;
                 continue;
             }
             return Err(format!("Unsupported binary drawing property 0x{tag:04x}"));
@@ -408,9 +425,11 @@ fn convert(
                 ("CurvePoints3D", _) => {
                     if let Some(points) = curve_points_3d(data) {
                         el.set(p.name, points);
+                    } else {
+                        tlc_skipped |= within_tlc;
                     }
                 }
-                _ => {}
+                _ => tlc_skipped |= within_tlc,
             },
         }
     }
@@ -431,9 +450,15 @@ fn convert(
             .extend(decode_text(data, fonts, utf8_text.is_some())?);
     }
     for child in &tree.children {
-        el.children.push(convert(child, fonts, tolerant)?);
+        tlc_skipped |= within_tlc && child.name == "unknownobject";
+        let (child, skipped) = convert_within_tlc(child, fonts, tolerant, within_tlc)?;
+        tlc_skipped |= skipped;
+        el.children.push(child);
     }
-    Ok(el)
+    if tlc && tlc_skipped {
+        el.set(TLC_SKIPPED, "yes");
+    }
+    Ok((el, tlc_skipped))
 }
 /// A count, then x, y and z for each point.
 fn curve_points_3d(data: &[u8]) -> Option<String> {
@@ -454,6 +479,13 @@ fn property(
     fonts: &HashMap<u16, TextEncoding>,
 ) -> Result<()> {
     {
+        if raw_tlc_dimension(p, tree.name) {
+            let mut r = Reader::new(data);
+            let value = i32::from_le_bytes(r.array()?);
+            r.done()?;
+            el.set(p.name, value);
+            return Ok(());
+        }
         if numeric(p.kind) {
             el.set(p.name, decode_number(p, data)?);
             return Ok(());

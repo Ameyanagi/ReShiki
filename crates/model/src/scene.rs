@@ -2397,6 +2397,24 @@ fn graphic_primitive(
     doc: &Document,
     shaded: usize,
 ) -> Vec<Primitive> {
+    if g.kind == crate::graphics::GraphicKind::TlcPlate {
+        let mut out: Vec<_> = g
+            .parts()
+            .into_iter()
+            .map(|p| Primitive::Path {
+                commands: p.commands,
+                style: p.style,
+                filled: p.filled,
+            })
+            .collect();
+        for label in g.tlc_labels() {
+            push_annotation(&mut out, &label);
+        }
+        return out
+            .into_iter()
+            .map(|p| see_through(p, g.style.effects.opacity))
+            .collect();
+    }
     if g.cycle.is_some() {
         return cycle_primitives(g, doc);
     }

@@ -564,6 +564,11 @@ impl Writer<'_> {
             } else {
                 index + 2 + fill_layer
             };
+            if let Some(tlc) = &g.tlc {
+                let n = self.tlc(g, tlc, z)?;
+                self.objects.push((g.id, n));
+                continue;
+            }
             if self.generic_bracket(g, z)? {
                 continue;
             }

@@ -171,6 +171,7 @@ impl Graphic {
         !matches!(
             self.kind,
             GraphicKind::Picture
+                | GraphicKind::TlcPlate
                 | GraphicKind::Symbol(_)
                 | GraphicKind::Orbital(_)
                 | GraphicKind::Icon

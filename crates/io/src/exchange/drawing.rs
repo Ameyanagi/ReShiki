@@ -30,6 +30,7 @@ mod partial_charges;
 mod piece_tests;
 #[cfg(test)]
 mod purpose_tests;
+mod tlc;
 mod tree;
 #[cfg(test)]
 mod turned_text_tests;

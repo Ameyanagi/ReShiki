@@ -670,6 +670,7 @@ impl Document {
                 || g.leader.is_some()
                 || g.cycle.is_some()
                 || g.piece.is_some()
+                || g.tlc.is_some()
                 || g.is_icon()
                 || g.phase == crate::scientific::Phase::Gradient
                 || g.text.is_some()
@@ -1111,6 +1112,16 @@ impl Document {
             }
             text += annotation.text.len();
         }
+        for label in self
+            .graphics
+            .iter()
+            .filter_map(|g| g.tlc.as_deref())
+            .flat_map(|t| &t.lanes)
+            .flat_map(|l| &l.spots)
+            .filter_map(|s| s.label.as_ref())
+        {
+            text = text.saturating_add(label.text.len());
+        }
         if text > MAX_DRAWING_TEXT {
             return Err("A drawing can hold at most 1 MB of text".into());
         }
@@ -1320,6 +1331,35 @@ fn frame_bytes(doc: &Document) -> usize {
         + doc.reactions.len()
         + doc.abbreviations.len();
     let text: usize = doc.annotations.iter().map(|a| a.text.len()).sum();
+    let tlc: usize = doc
+        .graphics
+        .iter()
+        .filter_map(|g| g.tlc.as_deref())
+        .map(|t| {
+            size_of::<crate::graphics::TlcPlate>()
+                + bytes(&t.lanes[..])
+                + t.lanes
+                    .iter()
+                    .map(|l| {
+                        bytes(&l.spots[..])
+                            + l.spots
+                                .iter()
+                                .filter_map(|s| s.label.as_ref())
+                                .map(|l| {
+                                    l.text.len()
+                                        + l.format.style.family.len()
+                                        + bytes(&l.format.spans[..])
+                                        + l.format
+                                            .spans
+                                            .iter()
+                                            .map(|s| s.style.family.len())
+                                            .sum::<usize>()
+                                })
+                                .sum::<usize>()
+                    })
+                    .sum::<usize>()
+        })
+        .sum();
     let paths: usize = doc.graphics.iter().map(|g| bytes(&g.path[..])).sum();
     let nodes: usize = doc.arrows.iter().map(|a| bytes(&a.nodes[..])).sum();
     let models: usize = doc
@@ -1355,6 +1395,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + objects * OWNED
         + text
         + paths
+        + tlc
         + nodes
         + models
 }

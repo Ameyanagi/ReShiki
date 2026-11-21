@@ -3,6 +3,7 @@
 mod integer;
 mod picture;
 mod shapes;
+pub(super) mod tlc;
 pub use super::arrows::NativePathHeads;
 use super::{numeric, presentation};
 use crate::{
@@ -90,6 +91,24 @@ pub struct NativeStyle {
     pub opacity: Option<f64>,
 }
 impl NativeStyle {
+    fn into_document(self) -> Result<GraphicStyle> {
+        Ok(GraphicStyle {
+            stroke: self.stroke.into_color()?,
+            fill: self
+                .fill
+                .map(presentation::NativeColor::into_color)
+                .transpose()?,
+            width_pt: self.width_pt as f32,
+            pattern: self.pattern,
+            effects: crate::graphics::Effects {
+                shaded: self.shaded,
+                shadow_pt: self.shadow_pt.map(|d| d as f32),
+                opacity: self.opacity.map(|a| a as f32),
+                gradient: None,
+            },
+            corner_pt: self.corner_pt.map(|c| c as f32),
+        })
+    }
     /// ChemDraw's Shaded paints the shape in its one color.
     fn shade(&mut self) {
         self.shaded = true;
@@ -123,6 +142,8 @@ pub struct NativeGraphic {
     /// A panel ReShiki wrote, whole but for its ID, layer and frame.
     #[serde(skip)]
     pub panel: Option<Box<Graphic>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tlc: Option<Box<crate::graphics::TlcPlate>>,
 }
 impl NativeGraphic {
     /// This is the JSON->Value->Document numeric boundary: direct f64->f32.
@@ -141,26 +162,11 @@ impl NativeGraphic {
             .picture_source
             .map(|p| p.into_document(budget))
             .transpose()?;
-        let style = if let Some(s) = self.style {
-            GraphicStyle {
-                stroke: s.stroke.into_color()?,
-                fill: s
-                    .fill
-                    .map(presentation::NativeColor::into_color)
-                    .transpose()?,
-                width_pt: s.width_pt as f32,
-                pattern: s.pattern,
-                effects: crate::graphics::Effects {
-                    shaded: s.shaded,
-                    shadow_pt: s.shadow_pt.map(|d| d as f32),
-                    opacity: s.opacity.map(|a| a as f32),
-                    gradient: None,
-                },
-                corner_pt: s.corner_pt.map(|c| c as f32),
-            }
-        } else {
-            GraphicStyle::default()
-        };
+        let style = self
+            .style
+            .map(NativeStyle::into_document)
+            .transpose()?
+            .unwrap_or_default();
         let graphic = Graphic {
             depth: [0.; 3],
             arc: None,
@@ -190,6 +196,7 @@ impl NativeGraphic {
                 .collect(),
             picture,
             panel: None,
+            tlc: self.tlc,
         };
         graphic.validate().map_err(Error::Document)?;
         Ok(graphic)
@@ -265,6 +272,7 @@ fn required<'a, 'input>(el: Node<'a, 'input>, key: &str) -> Result<&'a str> {
 }
 struct Reader<'a, 'input> {
     root: Node<'a, 'input>,
+    tlc_text: Option<presentation::TextReader<'a, 'input>>,
     scale: f64,
     colors: presentation::Palette,
     /// A colored page, which ChemDraw paints inside shadowed outlines.
@@ -493,6 +501,7 @@ impl Reader<'_, '_> {
             heads: None,
             picture_source: None,
             panel: None,
+            tlc: None,
         })
     }
     /// A panel ReShiki wrote, in place of the group of its parts. Its frame
@@ -517,6 +526,7 @@ impl Reader<'_, '_> {
             heads: None,
             picture_source: None,
             panel: Some(Box::new(panel)),
+            tlc: None,
         })
     }
 }
@@ -585,6 +595,11 @@ pub fn read(
         .filter(|c| c.into_document().is_ok_and(|rgb| rgb != [255; 3]));
     let mut reader = Reader {
         root,
+        tlc_text: root
+            .descendants()
+            .any(|node| named(node, "tlcplate"))
+            .then(|| presentation::TextReader::new(root))
+            .transpose()?,
         scale,
         colors,
         page,
@@ -615,9 +630,16 @@ pub fn read(
             stack.push(el.children());
             continue;
         }
-        if !["graphic", "curve", "group", "embeddedobject", "arrow"]
-            .iter()
-            .any(|key| named(el, key))
+        if ![
+            "graphic",
+            "curve",
+            "group",
+            "embeddedobject",
+            "arrow",
+            "tlcplate",
+        ]
+        .iter()
+        .any(|key| named(el, key))
         {
             continue;
         }
@@ -631,7 +653,9 @@ pub fn read(
             continue;
         }
         reader.spend(el.attribute(crate::exchange::PANEL).map_or(0, str::len))?;
-        let mut value = if let Some(panel) = panel_record(el) {
+        let mut value = if named(el, "tlcplate") {
+            reader.tlc(el)?
+        } else if let Some(panel) = panel_record(el) {
             reader.panel(el, panel)?
         } else if named(el, "group") {
             let children: Vec<_> = el

@@ -118,6 +118,10 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
                             .into_iter()
                             .any(|(lo, hi)| box_hit(lo, hi, from, to, radius))
                     })
+                    || g.tlc_labels().iter().any(|label| {
+                        let (lo, hi) = label.bounds();
+                        box_hit(lo, hi, from, to, radius)
+                    })
                     || g.parts().iter().any(|part| {
                         path_hit(&part.commands, from, to, radius + part.style.width() / 2.)
                     })

@@ -45,6 +45,7 @@ const ALLOWED: &[&str] = &[
     "bracketedgroup",
     "bracketattachment",
     "crossingbond",
+    "tlcplate",
 ];
 /// Children of a left-out object that still import on their own.
 const SALVAGED: &[&str] = &["t", "graphic", "arrow", "curve", "fragment", "group"];
@@ -71,6 +72,7 @@ enum Kind {
     BioShape,
     GelPlate,
     TlcPlate,
+    TlcAppearance,
     BrokenCurve,
     VectorPicture,
     UnknownGraphic,
@@ -161,6 +163,11 @@ impl Kind {
             Self::Table => ("table", "tables", same("as its cell contents")),
             Self::GelPlate => ("gel plate", "gel plates", None),
             Self::TlcPlate => ("TLC plate", "TLC plates", None),
+            Self::TlcAppearance => (
+                "TLC plate",
+                "TLC plates",
+                same("with ordinary spots and supported Rf labels"),
+            ),
             Self::BrokenCurve => (
                 "curve with an incomplete point list",
                 "curves with an incomplete point list",
@@ -243,6 +250,17 @@ fn rewrite(xml: &str) -> Result<(String, Option<String>, usize)> {
         .max()
         .map_or(1, |id| id.saturating_add(1));
     pass.budget = 900_000usize.saturating_sub(curve_points);
+    for (index, dropped) in super::graphics::tlc::normalize(&mut pass.tree)? {
+        pass.changed = true;
+        pass.count(
+            index,
+            if dropped {
+                Kind::TlcPlate
+            } else {
+                Kind::TlcAppearance
+            },
+        );
+    }
     pass.objects(0)?;
     pass.brackets()?;
     for index in pass.tree.descendants(0)? {
@@ -629,7 +647,11 @@ impl Pass {
             }
             if ALLOWED.contains(&tag.as_str()) {
                 kept.push(child);
-                self.objects(child)?;
+                // TLC normalization owns its lane, spot and Rf subtree.
+                // Orphan lanes/spots still take the unknown-object warning.
+                if tag != "tlcplate" {
+                    self.objects(child)?;
+                }
                 continue;
             }
             changed = true;

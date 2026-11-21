@@ -72,6 +72,11 @@ impl Encoder {
             return Err("Drawing object limit exceeded".into());
         }
         let name = el.tag_name().name();
+        if matches!(name, "tlcplate" | "tlclane" | "tlcspot")
+            && el.attribute(TLC_SKIPPED) == Some("yes")
+        {
+            return Err("Cannot encode TLC data skipped during import".into());
+        }
         if let Some(number) = el.attribute("ExternalConnectionNum") {
             external_connection_number(name, el.attribute("NodeType"), number)?;
         }
@@ -176,6 +181,9 @@ impl Encoder {
     }
 }
 fn encode_value(p: &Property, value: &str, element: &str) -> Result<Vec<u8>> {
+    if raw_tlc_dimension(p, element) {
+        return Ok(integer::<i32>(value)?.to_le_bytes().to_vec());
+    }
     if numeric(p.kind) {
         return encode_number(p, value);
     }

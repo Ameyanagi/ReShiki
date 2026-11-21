@@ -511,6 +511,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/graphics/integer.rs`: Bounded decimal layers retain Python integers until the document boundary.
 - `crates/io/src/chemistry/cdxml/graphics/picture.rs`
 - `crates/io/src/chemistry/cdxml/graphics/shapes.rs`
+- `crates/io/src/chemistry/cdxml/graphics/tlc.rs`: Native TLC geometry and the import-only boundary for unsupported spot data.
 - `crates/io/src/chemistry/cdxml/groups.rs`: Logical groups from reference/engine/groups_exchange.py::read_groups.
 - `crates/io/src/chemistry/cdxml/labels.rs`: Detached label/indicator patches from reference/engine/labels_exchange.py::read_labels.
 - `crates/io/src/chemistry/cdxml/marks.rs`: Detached patches from reference/engine/marks_exchange.py::read_marks.
@@ -593,6 +594,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/exchange/drawing/ligands.rs`: Hidden-charge and aromatic-ligand presentation using native CDX symbols.
 - `crates/io/src/exchange/drawing/objects.rs`
 - `crates/io/src/exchange/drawing/partial_charges.rs`
+- `crates/io/src/exchange/drawing/tlc.rs`: Native ChemDraw TLC objects, never a flattened collection of ellipses.
 - `crates/io/src/exchange/drawing/tree.rs`
 - `crates/io/src/exchange/encode.rs`
 - `crates/io/src/exchange/mod.rs`: Bounded CDX/CDXML serialization.
@@ -744,6 +746,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/path/smooth.rs`
 - `crates/model/src/graphics/path/symmetry.rs`: Reflection fitting for a connected path, including its Bézier controls.
 - `crates/model/src/graphics/superscript.rs`
+- `crates/model/src/graphics/tlc.rs`: Native TLC plate geometry.
 - `crates/model/src/grouping.rs`: Persistent, nested logical groups, represented as laminar sets of object IDs.
 - `crates/model/src/haworth.rs`: Haworth drawing geometry and chemically defined carbohydrate templates.
 - `crates/model/src/haworth/interchange.rs`: Recognize the tested five/six-member Haworth convention at file boundaries.

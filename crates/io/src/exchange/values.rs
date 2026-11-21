@@ -3,6 +3,12 @@ use super::{Property, Reader, Result, finite};
 #[cfg(test)]
 mod tests;
 
+/// Unlike page dimensions, ChemDraw's TLC spot dimensions keep their raw
+/// signed 16.16 integer spelling in CDXML as well as CDX.
+pub(super) fn raw_tlc_dimension(property: &Property, element: &str) -> bool {
+    element == "tlcspot" && matches!(property.name, "Width" | "Height")
+}
+
 pub(super) fn numeric(kind: &str) -> bool {
     matches!(
         kind,
