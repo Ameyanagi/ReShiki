@@ -8,6 +8,8 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+pub mod clip;
+
 pub const MAX_CELLS: usize = 4096;
 pub const MAX_MEMBERS: usize = 100_000;
 

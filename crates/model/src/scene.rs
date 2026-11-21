@@ -19,6 +19,7 @@ mod occlusion;
 pub(crate) mod projected_bonds;
 mod svg;
 pub mod table;
+pub(crate) use table::annotation_layout as table_annotation_layout;
 
 #[derive(Debug, Clone)]
 pub enum Primitive {

@@ -777,6 +777,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/graphics/path/symmetry.rs`: Reflection fitting for a connected path, including its Bézier controls.
 - `crates/model/src/graphics/superscript.rs`
 - `crates/model/src/graphics/table.rs`: Editable table cells own ordinary drawing objects by ID.
+- `crates/model/src/graphics/table/clip.rs`: Pointer geometry clips ink before applying the editor's pick radius.
 - `crates/model/src/graphics/tlc.rs`: Native TLC plate geometry.
 - `crates/model/src/grouping.rs`: Persistent, nested logical groups, represented as laminar sets of object IDs.
 - `crates/model/src/haworth.rs`: Haworth drawing geometry and chemically defined carbohydrate templates.

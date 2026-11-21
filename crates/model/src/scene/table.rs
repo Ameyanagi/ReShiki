@@ -262,6 +262,17 @@ fn available(frame: Frame, position: Point, angle: f32) -> Option<f32> {
     (width.is_finite() && width > 1e-4).then_some(width)
 }
 
+/// The derived text layout inside an affine cell, shared by painting and
+/// geometry queries. Canonical text, formatting and child geometry stay whole.
+pub(crate) fn annotation_layout(
+    annotation: &crate::document::Annotation,
+    frame: Frame,
+) -> crate::typography::Layout {
+    let mut effective = annotation.clone();
+    wrap(frame, &mut effective);
+    crate::typography::cell_layout(&effective.text, &effective.format)
+}
+
 pub(super) fn primitives(doc: &Document) -> Vec<Primitive> {
     // Malformed ownership must never paint the same child outside its clip.
     // Stored drawings are validated; an invalid transient view paints no ink.
