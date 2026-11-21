@@ -204,6 +204,13 @@ impl<'a> Frame<'a> {
         self.dark = crate::appearance::is_dark(theme);
         self
     }
+    pub(super) fn canvas_theme(&self) -> reshiki::canvas_theme::CanvasTheme {
+        if self.dark {
+            reshiki::canvas_theme::CanvasTheme::Dark
+        } else {
+            reshiki::canvas_theme::CanvasTheme::Light
+        }
+    }
     pub(super) fn with_text_cache(
         mut self,
         cache: &'a std::cell::RefCell<super::text_cache::TextCache>,

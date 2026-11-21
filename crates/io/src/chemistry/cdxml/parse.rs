@@ -104,6 +104,8 @@ pub(super) fn read(text: &str) -> Result<Parsed> {
             }
             "CDXML"
             | "page"
+            | "table"
+            | "border"
             | "fragment"
             | "group"
             | "t"
@@ -156,6 +158,11 @@ pub(super) fn read(text: &str) -> Result<Parsed> {
             // type: groups precede fragments even when XML orders them later.
             stack.extend(node.children().filter(|n| n.has_tag_name("fragment")).rev());
             stack.extend(node.children().filter(|n| n.has_tag_name("group")).rev());
+            stack.extend(
+                node.children()
+                    .filter(|n| n.has_tag_name("table") || n.has_tag_name("page"))
+                    .rev(),
+            );
         }
     }
     if total_atoms != chemical_nodes || total_bonds != chemical_bonds {

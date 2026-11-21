@@ -3,6 +3,100 @@ use reshiki::document::Document;
 use reshiki::models3d::{Display, ForceField, Model3d, Placed, Style, set_display};
 use std::collections::HashMap;
 
+#[test]
+fn native_table_tiles_share_export_clips_wrapped_fonts_and_canvas_colors() {
+    use reshiki::{
+        canvas_theme::CanvasTheme,
+        document::Annotation,
+        graphics::{
+            Graphic, GraphicKind,
+            table::{Cell, Table},
+        },
+        palette::Color,
+        typography::{TextFormat, TextSpan, TextStyle},
+    };
+    for theme in CanvasTheme::ALL {
+        let mut doc = Document {
+            canvas_theme: theme,
+            ..Document::default()
+        };
+        let text = "wrapped table text preserves every hidden word";
+        doc.annotations.push(Annotation {
+            id: 1,
+            position: World::new(5., 5.),
+            text: text.into(),
+            format: TextFormat {
+                spans: vec![TextSpan {
+                    start: 0,
+                    end: 7,
+                    style: TextStyle {
+                        color: Color::Custom([210, 10, 60]),
+                        ..Default::default()
+                    },
+                }],
+                ..Default::default()
+            },
+            angle: 0.,
+        });
+        let mut g = Graphic::dragged(
+            2,
+            GraphicKind::Rectangle,
+            World::default(),
+            World::new(100., 65.),
+            Default::default(),
+            Default::default(),
+            false,
+        );
+        g.kind = GraphicKind::Table;
+        g.table = Some(Box::new(Table {
+            cells: vec![Cell {
+                id: 1,
+                lo: World::default(),
+                hi: World::new(1., 1.),
+                members: vec![1],
+                borders: vec![],
+            }],
+        }));
+        doc.graphics.push(g);
+        doc.validate().unwrap();
+        let scene = scene::primitives(&doc);
+        assert!(
+            scene.iter().all(is_model),
+            "Native cell groups must take the shared SVG tile path"
+        );
+        let bounds = scene::bounds(&scene);
+        let (width, height) = (
+            (bounds.1.x - bounds.0.x).ceil() as u32,
+            (bounds.1.y - bounds.0.y).ceil() as u32,
+        );
+        let actual = pixels_on(&scene, bounds.0, 1., width, height, theme).unwrap();
+        let exported = registered_svg(&scene::svg(&doc), bounds);
+        let tree = reshiki::export::parse_svg(exported).unwrap();
+        let mut expected = resvg::tiny_skia::Pixmap::new(width, height).unwrap();
+        resvg::render(&tree, Default::default(), &mut expected.as_mut());
+        assert!(
+            actual.chunks_exact(4).any(|p| p[3] > 0),
+            "Wrapped font glyphs disappeared"
+        );
+        assert!(
+            worst_difference(&actual, &expected) <= 1,
+            "Cell canvas and export pixels differ on {theme:?}"
+        );
+        let camera = Camera {
+            zoom: 1.,
+            ..Camera::default()
+        };
+        let viewport = Rectangle::with_size(Size::new(300., 300.));
+        let light = plan_on(&scene, camera, viewport, CanvasTheme::Light);
+        let dark = plan_on(&scene, camera, viewport, CanvasTheme::Dark);
+        assert_eq!(light.len(), dark.len());
+        assert!(
+            light.iter().zip(dark).all(|(a, b)| a.key != b.key),
+            "Theme changes must invalidate native cell tiles"
+        );
+    }
+}
+
 /// Ethanol at `x`, shown only as a 3D model.
 fn add_ethanol(doc: &mut Document, x: f32) {
     let c1 = doc.add_atom("C", World::new(x, 0.));

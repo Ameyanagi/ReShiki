@@ -78,7 +78,10 @@ pub(in crate::canvas) fn begin(doc: &reshiki::document::Document) {
         .iter()
         .any(|m| m.turning || m.morph.is_some_and(|t| t < 1.));
     SAMPLES.set(if moving { TURNING } else { OVERSAMPLE });
-    if doc.models.iter().all(|m| m.display == Display::TwoD) && !reshiki::graphics::tiled(doc) {
+    if doc.models.iter().all(|m| m.display == Display::TwoD)
+        && !reshiki::graphics::tiled(doc)
+        && !doc.graphics.iter().any(|g| g.table.is_some())
+    {
         TILES.take();
     }
 }
@@ -95,6 +98,7 @@ pub(in crate::canvas) fn is_model(primitive: &Primitive) -> bool {
         p => matches!(
             p,
             Primitive::Sphere { .. }
+                | Primitive::Clip { .. }
                 | Primitive::Ellipsoid { .. }
                 | Primitive::ShadedQuad { .. }
                 | Primitive::ShadedPolygon { .. }
@@ -185,7 +189,17 @@ fn key(primitive: &Primitive, hasher: &mut DefaultHasher) {
     }
 }
 
+#[cfg(test)]
 fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
+    plan_on(run, camera, bounds, Default::default())
+}
+
+fn plan_on(
+    run: &[Primitive],
+    camera: Camera,
+    bounds: Rectangle,
+    theme: reshiki::canvas_theme::CanvasTheme,
+) -> Vec<Tile> {
     let scale = camera.zoom * SAMPLES.get();
     let device = |p: World| [p.x * scale, p.y * scale];
     // A contour strokes every bond's outline at once; each polygon is its own
@@ -222,6 +236,7 @@ fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
             let cell = [tx * TILE, ty * TILE, (tx + 1) * TILE, (ty + 1) * TILE];
             let mut hasher = DefaultHasher::new();
             scale.to_bits().hash(&mut hasher);
+            theme.is_dark().hash(&mut hasher);
             let mut rect = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
             let mut reaching = vec![];
             for (b, key, part) in &parts {
@@ -266,7 +281,8 @@ pub(in crate::canvas) fn draw(
 ) {
     let oversample = SAMPLES.get();
     let scale = camera.zoom * oversample;
-    let tiles = plan(run, camera, bounds);
+    let theme = frame.canvas_theme();
+    let tiles = plan_on(run, camera, bounds, theme);
     let Some([ox, oy, ..]) = tiles.first().map(|tile| tile.rect) else {
         return;
     };
@@ -284,12 +300,13 @@ pub(in crate::canvas) fn draw(
         let [x0, y0, x1, y1] = tile.rect;
         let size = [(x1 - x0) as u32, (y1 - y0) as u32];
         let render = || {
-            pixels(
+            pixels_on(
                 &primitives(run, &tile.parts),
                 world(x0, y0),
                 scale,
                 size[0],
                 size[1],
+                theme,
             )
         };
         let Some(handle) = TILES.with_borrow_mut(|cache| cache.get(tile.key, size, render)) else {
@@ -307,6 +324,7 @@ pub(in crate::canvas) fn draw(
 }
 
 /// Straight-alpha RGBA pixels of `run`, rendered as figure export does.
+#[cfg(test)]
 pub(in crate::canvas) fn pixels(
     run: &[Primitive],
     origin: World,
@@ -314,9 +332,20 @@ pub(in crate::canvas) fn pixels(
     width: u32,
     height: u32,
 ) -> Option<Vec<u8>> {
+    pixels_on(run, origin, scale, width, height, Default::default())
+}
+
+fn pixels_on(
+    run: &[Primitive],
+    origin: World,
+    scale: f32,
+    width: u32,
+    height: u32,
+    theme: reshiki::canvas_theme::CanvasTheme,
+) -> Option<Vec<u8>> {
     let hi = origin.offset(width as f32 / scale, height as f32 / scale);
-    let svg = scene::svg_part(run, origin, hi);
-    let tree = resvg::usvg::Tree::from_str(&svg, &Default::default()).ok()?;
+    let svg = scene::svg_part_on(run, origin, hi, theme, Some(theme.background()));
+    let tree = reshiki::export::parse_svg(svg).ok()?;
     let mut pixmap = resvg::tiny_skia::Pixmap::new(width, height)?;
     resvg::render(
         &tree,

@@ -659,6 +659,14 @@ pub fn materialized(doc: &Document) -> std::borrow::Cow<'_, Document> {
         });
         next += 1;
     }
+    // All table graphics have now been copied, even those after the pieces.
+    for g in doc.graphics.iter().filter(|g| g.piece.is_some()) {
+        crate::graphics::table::replace_member(
+            &mut out,
+            g.id,
+            emitted.get(&g.id).map_or(&[], Vec::as_slice),
+        );
+    }
     // Two groups that each held a piece of one assembly now share its
     // curves: merge them, so groups stay nested or apart as ChemDraw needs.
     while let Some((a, b)) = overlapping(&out.groups) {

@@ -155,6 +155,8 @@ fn validate(text: &str) -> Result<Tree> {
             node.tag.as_str(),
             "CDXML"
                 | "page"
+                | "table"
+                | "border"
                 | "fragment"
                 | "n"
                 | "b"
@@ -182,7 +184,9 @@ fn validate(text: &str) -> Result<Tree> {
     }
     if pages == 0
         || at(Validation, tree.node(0))?.tag == "CDXML"
-            && pages != at(Validation, tree.children(0, "page"))?.len()
+            && pages
+                != at(Validation, tree.children(0, "page"))?.len()
+                    + at(Validation, super::tables::cell_count(&tree))?
     {
         return Err(error(Validation, PreparationCause::Objects));
     }
@@ -385,6 +389,7 @@ fn prepare(text: &str, check_chemistry: bool) -> Result<PreparedCdxml> {
     validate_predicates(&at(Validation, Tree::parse_import(text))?, true)?;
     let (text, generic) = at(Validation, super::generic::extract(text))?;
     let mut source = validate(&text)?;
+    at(Normalization, super::tables::normalize(&mut source))?;
     for index in at(Normalization, source.descendants(0))? {
         let node = at(Normalization, source.node(index))?;
         if node.tag != "curve" {

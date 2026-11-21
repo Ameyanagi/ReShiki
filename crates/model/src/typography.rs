@@ -585,12 +585,28 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
     layout_with_metrics(text, format, style::cluster_metrics)
 }
 
+/// Native chemistry-table text first uses normal word boundaries, then wraps
+/// an indivisible word between whole grapheme clusters when the cell is narrow.
+/// This is a derived paint layout; no line breaks or spans are stored back.
+pub(crate) fn cell_layout(text: &str, format: &TextFormat) -> Layout {
+    layout_with_metrics_mode(text, format, style::cluster_metrics, true)
+}
+
 /// Lay out grapheme clusters, so an emoji sequence or a letter with its marks
 /// is measured, wrapped and drawn as one piece.
 fn layout_with_metrics<'t>(
     text: &'t str,
     format: &TextFormat,
     cluster_metrics: impl Fn(&str, &TextStyle) -> (&'static str, f32),
+) -> Layout {
+    layout_with_metrics_mode(text, format, cluster_metrics, false)
+}
+
+fn layout_with_metrics_mode<'t>(
+    text: &'t str,
+    format: &TextFormat,
+    cluster_metrics: impl Fn(&str, &TextStyle) -> (&'static str, f32),
+    cell: bool,
 ) -> Layout {
     use unicode_segmentation::UnicodeSegmentation;
     let mut lines: Vec<Vec<(&'t str, TextStyle, f32)>> = vec![vec![]];
@@ -648,10 +664,13 @@ fn layout_with_metrics<'t>(
                 name_fallback_at = Some(line.len());
             }
         }
-        // Prefer word, CJK and unprotected name boundaries. An indivisible word
-        // wider than the box still overflows instead of being cut mid-word.
+        // Prefer word, CJK and unprotected name boundaries. A native cell may
+        // also split a word, keeping each grapheme (and its style) intact.
         if max_width.is_some_and(|limit| width + advance > limit)
-            && let Some(split) = break_at.take().or(name_fallback_at)
+            && let Some(split) = break_at.take().or(name_fallback_at).or_else(|| {
+                cell.then(|| lines.last().map_or(0, Vec::len))
+                    .filter(|&n| n > 0)
+            })
             && let Some(line) = lines.last_mut()
         {
             let overflow = line.split_off(split);

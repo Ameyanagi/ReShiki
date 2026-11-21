@@ -35,6 +35,15 @@ struct Item {
     data: Option<String>,
     width: Option<f32>,
     height: Option<f32>,
+    #[serde(default)]
+    clips: Vec<Clip>,
+}
+#[derive(Deserialize)]
+struct Clip {
+    transform: [f32; 6],
+    commands: Vec<Vec<f32>>,
+    #[serde(default)]
+    even_odd: bool,
 }
 #[derive(Deserialize)]
 struct Stroke {
@@ -66,25 +75,18 @@ fn parse(data: &[u8]) -> Result<Snapshot> {
         if !item.transform.iter().all(|v| v.is_finite()) {
             return Err(anyhow::anyhow!("Invalid print transform"));
         }
+        if item.clips.len() > 64 {
+            return Err(anyhow::anyhow!("Too many print clips"));
+        }
+        for clip in &item.clips {
+            if !clip.transform.iter().all(|v| v.is_finite()) {
+                return Err(anyhow::anyhow!("Invalid print clip transform"));
+            }
+            validate_commands(&clip.commands)?;
+        }
         match item.kind.as_str() {
             "path" => {
-                if item.commands.is_empty() || item.commands[0].first() != Some(&0.) {
-                    return Err(anyhow::anyhow!("Invalid print path"));
-                }
-                for command in &item.commands {
-                    if !command.iter().all(|v| v.is_finite())
-                        || !matches!(
-                            command.as_slice(),
-                            [0., _, _]
-                                | [1., _, _]
-                                | [2., _, _, _, _]
-                                | [3., _, _, _, _, _, _]
-                                | [4.]
-                        )
-                    {
-                        return Err(anyhow::anyhow!("Invalid print path command"));
-                    }
-                }
+                validate_commands(&item.commands)?;
                 if let Some(stroke) = &item.stroke
                     && (!stroke.width.is_finite()
                         || stroke.width <= 0.
@@ -117,6 +119,22 @@ fn parse(data: &[u8]) -> Result<Snapshot> {
         }
     }
     Ok(s)
+}
+fn validate_commands(commands: &[Vec<f32>]) -> Result<()> {
+    if commands.first().and_then(|c| c.first()) != Some(&0.) {
+        return Err(anyhow::anyhow!("Invalid print path"));
+    }
+    for command in commands {
+        if !command.iter().all(|v| v.is_finite())
+            || !matches!(
+                command.as_slice(),
+                [0., _, _] | [1., _, _] | [2., _, _, _, _] | [3., _, _, _, _, _, _] | [4.]
+            )
+        {
+            return Err(anyhow::anyhow!("Invalid print path command"));
+        }
+    }
+    Ok(())
 }
 fn check(status: gp::Status) -> Result<()> {
     if status == gp::Ok {
@@ -192,12 +210,15 @@ fn color([r, g, b, a]: [u8; 4]) -> u32 {
     u32::from_be_bytes([a, r, g, b])
 }
 fn path(item: &Item) -> Result<Path> {
+    path_commands(&item.commands, item.even_odd)
+}
+fn path_commands(commands: &[Vec<f32>], even_odd: bool) -> Result<Path> {
     let mut path = Path::default();
     // SAFETY: path stays owned for all calls. Commands were validated by parse;
     // pointers are returned by GDI+ and destroyed by their corresponding API.
     unsafe {
         check(gp::GdipCreatePath(
-            if item.even_odd {
+            if even_odd {
                 gp::FillModeAlternate
             } else {
                 gp::FillModeWinding
@@ -206,7 +227,7 @@ fn path(item: &Item) -> Result<Path> {
         ))?;
         let mut last = [0., 0.];
         let mut first = last;
-        for command in &item.commands {
+        for command in commands {
             match command.as_slice() {
                 [0., x, y] => {
                     check(gp::GdipStartPathFigure(path.0))?;
@@ -284,6 +305,21 @@ fn draw(graphics: &Graphics, s: &Snapshot, page: usize) -> Result<()> {
         ))?;
         for item in &s.primitives {
             let _saved = Saved::new(graphics)?;
+            // Clip paths have snapshot/world transforms, independently of the
+            // item's own transform. Set them while only the sheet transform is
+            // active, then draw the complete original path/image through them.
+            for clip in &item.clips {
+                let path = path_commands(&clip.commands, clip.even_odd)?;
+                let [a, b, c, d, x, y] = clip.transform;
+                let mut matrix = Matrix::default();
+                check(gp::GdipCreateMatrix2(a, b, c, d, x, y, &mut matrix.0))?;
+                check(gp::GdipTransformPath(path.0, matrix.0))?;
+                check(gp::GdipSetClipPath(
+                    graphics.0,
+                    path.0,
+                    gp::CombineModeIntersect,
+                ))?;
+            }
             let [a, b, c, d, x, y] = item.transform;
             let mut matrix = Matrix::default();
             check(gp::GdipCreateMatrix2(a, b, c, d, x, y, &mut matrix.0))?;

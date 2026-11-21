@@ -1321,6 +1321,7 @@ pub fn materialized(doc: &Document) -> (std::borrow::Cow<'_, Document>, Vec<Mate
         {
             group.members.extend(&ids);
         }
+        crate::graphics::table::replace_member(&mut out, g.id, &ids);
         written.push(Materialized {
             graphic: g.clone(),
             drawn: ids,

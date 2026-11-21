@@ -233,6 +233,20 @@ pub fn restore(
             .flatten()
             .copied()
             .collect();
+        if doc.graphics.iter().any(|graphic| graphic.table.is_some()) {
+            let Ok(ownership) = crate::graphics::table::Membership::new(doc) else {
+                continue;
+            };
+            let basis = if drawn.is_empty() { &parts } else { &drawn };
+            let mut owners = basis.iter().map(|id| ownership.cell_of(*id));
+            // None is an owner too: an output explicitly released onto the
+            // canvas must not be pulled back into a cell by cycle metadata.
+            if let Some(owner) = owners.next()
+                && owners.any(|other| other != owner)
+            {
+                continue;
+            }
+        }
         g.id = doc.next_id();
         g.origin = crate::document::Point::new(g.origin.x * scale, g.origin.y * scale);
         g.axis_x = crate::document::Point::new(g.axis_x.x * scale, g.axis_x.y * scale);
@@ -253,7 +267,19 @@ pub fn restore(
                 group.members.push(g.id);
             }
         }
+        let cycle_id = g.id;
         doc.graphics.push(g);
+        if drawn.is_empty() {
+            // Hidden, unnamed steps can draw nothing. Their checked parts
+            // still identify the cell, while remaining ordinary members.
+            if let Some(&part) = parts.iter().next() {
+                crate::graphics::table::replace_member(doc, part, &[part, cycle_id]);
+            }
+        } else {
+            for id in &drawn {
+                crate::graphics::table::replace_member(doc, *id, &[cycle_id]);
+            }
+        }
         restored += 1;
     }
     if restored > 0 {

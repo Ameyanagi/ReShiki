@@ -336,7 +336,7 @@ pub const CAPTION_NAMES: u32 = 39;
 /// on lines, corner radii, gradient and see-through fills, glows; Reference and
 /// Illustration molecules and arrows; color by origin settings on reactions;
 /// figure panels and lasting row, column and grid layouts; catalytic cycles;
-/// lab equipment pieces with their embedded definitions.
+/// lab equipment pieces with their embedded definitions; editable chemistry tables.
 pub const DRAWING_ELEMENTS: u32 = 40;
 
 /// The newest document format this build reads. Native output uses version 30
@@ -669,6 +669,7 @@ impl Document {
                 || g.panel.is_some()
                 || g.leader.is_some()
                 || g.cycle.is_some()
+                || g.table.is_some()
                 || g.piece.is_some()
                 || g.is_icon()
                 || g.phase == crate::scientific::Phase::Gradient
@@ -867,7 +868,8 @@ impl Document {
         }
     }
     pub fn delete(&mut self, ids: &[u64]) {
-        self.delete_objects(ids);
+        let ids = crate::graphics::table::with_contents(self, ids);
+        self.delete_objects(&ids);
         crate::arrow_anchors::reconcile(self);
     }
     /// Prune an extracted drawing without repairing the surviving geometry.
@@ -902,10 +904,12 @@ impl Document {
         self.prune_groups();
         crate::reactions::prune(self);
         crate::generic::prune(self);
+        crate::graphics::table::prune(self);
     }
     pub fn translate(&mut self, ids: &[u64], dx: f32, dy: f32) {
+        let ids = crate::graphics::table::with_contents(self, ids);
         // Dragging the text in a shape drags the shape.
-        let ids = crate::shape_text::with_holders(self, ids);
+        let ids = crate::shape_text::with_holders(self, &ids);
         let ids = self.expand_abbreviation_selection(&ids);
         let ids = ids.as_slice();
         for graphic in &mut self.graphics {
@@ -947,6 +951,20 @@ impl Document {
                         unit.extend(group.members.iter().map(|member| (*member, index)));
                     }
                 }
+            }
+        }
+        // An explicitly moved table owns its contents' offset, even if a
+        // selection also lists a child as a separate arrangement unit.
+        for graphic in &self.graphics {
+            if let Some(table) = &graphic.table
+                && let Some(index) = unit.get(&graphic.id).copied()
+            {
+                unit.extend(
+                    table
+                        .cells
+                        .iter()
+                        .flat_map(|cell| cell.members.iter().map(|&id| (id, index))),
+                );
             }
         }
         // Dragging the text in a shape drags the shape, unless it moves itself.
@@ -1119,6 +1137,7 @@ impl Document {
         crate::ring_fills::validate(self)?;
         crate::attachments::validate(self)?;
         crate::generic::validate(self)?;
+        crate::graphics::table::validate(self)?;
         crate::models3d::validate(self)?;
         self.drawing_style.validate()?;
         if let Some(theme) = &self.custom_theme {
@@ -1321,6 +1340,19 @@ fn frame_bytes(doc: &Document) -> usize {
         + doc.abbreviations.len();
     let text: usize = doc.annotations.iter().map(|a| a.text.len()).sum();
     let paths: usize = doc.graphics.iter().map(|g| bytes(&g.path[..])).sum();
+    let tables: usize = doc
+        .graphics
+        .iter()
+        .filter_map(|g| g.table.as_ref())
+        .map(|table| {
+            bytes(&table.cells[..])
+                + table
+                    .cells
+                    .iter()
+                    .map(|cell| bytes(&cell.members[..]) + bytes(&cell.borders[..]))
+                    .sum::<usize>()
+        })
+        .sum();
     let nodes: usize = doc.arrows.iter().map(|a| bytes(&a.nodes[..])).sum();
     let models: usize = doc
         .models
@@ -1355,6 +1387,7 @@ fn frame_bytes(doc: &Document) -> usize {
         + objects * OWNED
         + text
         + paths
+        + tables
         + nodes
         + models
 }

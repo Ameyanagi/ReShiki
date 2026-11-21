@@ -35,6 +35,7 @@ mod scene;
 pub(crate) mod schemes;
 mod stereo;
 mod symbol;
+pub(crate) mod tables;
 mod tree;
 mod variables;
 pub(crate) mod xml_guard;

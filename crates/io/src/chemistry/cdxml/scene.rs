@@ -104,6 +104,8 @@ pub struct NativeScene {
     pub atom_labels: crate::atom_labels::Settings,
     pub graphics: Vec<NativeGraphic>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tables: Vec<crate::graphics::Graphic>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub ring_fills: Vec<crate::ring_fills::RingFill>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub property_captions: Vec<crate::linked_properties::PropertyCaption>,
@@ -517,6 +519,18 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         &mut objects,
     )?;
     extend_fragment_objects(&nodes, &order, &tree, &source_by_index, &mut objects)?;
+    let tables = super::tables::read(
+        root,
+        prepared.source_scale,
+        &objects.entries,
+        next_id
+            .checked_add(base.graphics.len() as u64)
+            .ok_or(SceneError::Limit)?,
+    )?;
+    for (source, id) in tables.bindings {
+        objects.put(source, vec![id])?;
+    }
+    base.tables = tables.graphics;
     groups_and_abbreviations(
         prepared,
         &filtered,
@@ -661,6 +675,7 @@ fn base_scene(prepared: &PreparedCdxml) -> NativeScene {
         arrows: Vec::new(),
         atom_labels: Default::default(),
         graphics: Vec::new(),
+        tables: Vec::new(),
         ring_fills: Vec::new(),
         property_captions: Vec::new(),
         groups: Vec::new(),
@@ -687,8 +702,20 @@ fn read_captions_and_arrows(
         .map(|n| n.id())
         .collect();
     for page in nodes.iter().filter(|n| n.has_tag_name("page")) {
-        let defaults = attributes(*page);
+        let mut defaults = Attributes::new();
+        let ancestors: Vec<_> = page
+            .ancestors()
+            .filter(|n| n.has_tag_name("page"))
+            .collect();
+        for ancestor in ancestors.into_iter().rev() {
+            defaults.extend(attributes(ancestor));
+        }
         for node in page.descendants().filter(Node::is_element) {
+            // A native cell is itself a page. Its text and arrows are read
+            // once, with that nearest page's defaults.
+            if node.ancestors().skip(1).find(|n| n.has_tag_name("page")) != Some(*page) {
+                continue;
+            }
             let ordinal = *ordinals.get(&node.id()).ok_or(SceneError::Limit)?;
             if matches!(objects.get(ordinal), Some([])) {
                 continue;
@@ -1077,6 +1104,7 @@ fn groups_and_abbreviations(
         .collect::<Vec<_>>();
     let group_id = next_id
         .checked_add(u64::try_from(base.graphics.len()).map_err(|_| SceneError::Limit)?)
+        .and_then(|id| id.checked_add(base.tables.len() as u64))
         .ok_or(SceneError::Limit)?;
     base.groups = super::read_groups(filtered, &translated, group_id)?;
     base.abbreviations = super::read_abbreviations(
@@ -1157,6 +1185,7 @@ fn scene_result(
         && base.annotations.is_empty()
         && base.arrows.is_empty()
         && base.graphics.is_empty()
+        && base.tables.is_empty()
     {
         return Err(SceneError::Invalid("No supported drawing objects found"));
     }

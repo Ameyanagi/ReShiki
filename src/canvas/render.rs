@@ -148,6 +148,7 @@ fn draw_primitives_with_opacity(
                 draw_halo(frame, primitives, camera, bounds, *radius)
             }
             Primitive::Sphere { .. }
+            | Primitive::Clip { .. }
             | Primitive::Ellipsoid { .. }
             | Primitive::ShadedQuad { .. }
             | Primitive::ShadedPolygon { .. }
@@ -413,6 +414,7 @@ fn draw_halo(
                 }
             }
             Primitive::Picture(_)
+            | Primitive::Clip { .. }
             | Primitive::Rotated { .. }
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }

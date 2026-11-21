@@ -87,7 +87,8 @@ pub enum Arrange {
 /// The selected part as its own document: [`crate::attachments::selection`],
 /// then [`Document::expand_abbreviation_selection`].
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
-    let ids = crate::generic::selection(doc, ids);
+    let ids = crate::graphics::table::with_contents(doc, ids);
+    let ids = crate::generic::selection(doc, &ids);
     let ids = crate::attachments::selection(doc, &ids);
     let ids: HashSet<_> = doc
         .expand_abbreviation_selection(&ids)
@@ -595,6 +596,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         map(&mut g.id)?;
         crate::leaders::remap(g, mapping);
         crate::cycles::remap(g, mapping);
+        crate::graphics::table::remap(g, mapping)?;
         if let Some(text) = &mut g.text {
             map(text)?;
         }
@@ -716,6 +718,8 @@ pub fn center(doc: &Document, ids: &[u64]) -> Point {
 }
 
 pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
+    let ids = crate::graphics::table::with_contents(doc, ids);
+    let ids = ids.as_slice();
     if let Transform::TiltX(degrees) | Transform::TiltY(degrees) = transform {
         crate::projection::tilt(doc, ids, degrees, matches!(transform, Transform::TiltX(_)));
         return;
@@ -751,6 +755,8 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
 
 /// Uniform, orientation-preserving transform used by the selection handles.
 pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32, degrees: f32) {
+    let ids = crate::graphics::table::with_contents(doc, ids);
+    let ids = ids.as_slice();
     if !scale.is_finite()
         || scale <= 0.0
         || !degrees.is_finite()
@@ -792,6 +798,8 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
 /// line on the other side, so the configuration stays as drawn. The Flip
 /// tool and Compare's lined-up view both use it.
 pub fn transform_display(doc: &mut Document, ids: &[u64], vector: impl Fn(Point) -> Point) {
+    let ids = crate::graphics::table::with_contents(doc, ids);
+    let ids = ids.as_slice();
     transform_hydrogen_positions(doc, ids, &vector);
     let (x, y) = (vector(Point::new(1., 0.)), vector(Point::new(0., 1.)));
     let mirrored = x.x * y.y - x.y * y.x < 0.;
@@ -892,6 +900,8 @@ fn transform_hydrogen_positions(doc: &mut Document, ids: &[u64], vector: impl Fn
 /// Stretch the drawing in its plane without reflecting atoms or resizing text.
 /// Projection depth stays unchanged: this changes X/Y, not the Z axis.
 pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y: f32) {
+    let ids = crate::graphics::table::with_contents(doc, ids);
+    let ids = ids.as_slice();
     if !x.is_finite()
         || !y.is_finite()
         || x <= 0.

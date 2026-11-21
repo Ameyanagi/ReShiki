@@ -52,9 +52,12 @@ const OBJECTS: &[(u16, &str)] = &[
     (0x800d, "scheme"),
     (0x800e, "step"),
     (0x8011, "objecttag"),
+    // Native editable table and cell-edge records, verified in ChemDraw 26.
+    (0x8016, "table"),
     (0x8017, "bracketedgroup"),
     (0x8018, "bracketattachment"),
     (0x8019, "crossingbond"),
+    (0x801a, "border"),
     // ChemDraw's linked property text, checked against ChemDraw 26 files.
     (0x8020, "chemicalproperty"),
     // ChemDraw stores arrows as 0x8021, despite the published SDK listing

@@ -51,10 +51,20 @@ pub(super) fn render_svg(
 /// `drawing` alone over `lo..hi`, one SVG unit per drawing unit, in the light
 /// theme and without a background.
 pub(super) fn render_part(drawing: Vec<Primitive>, lo: super::Point, hi: super::Point) -> String {
+    render_part_on(drawing, lo, hi, Default::default(), None)
+}
+
+pub(super) fn render_part_on(
+    drawing: Vec<Primitive>,
+    lo: super::Point,
+    hi: super::Point,
+    theme: crate::canvas_theme::CanvasTheme,
+    paper: Option<[u8; 3]>,
+) -> String {
     let (width, height) = (hi.x - lo.x, hi.y - lo.y);
     let frame = Frame {
-        theme: Default::default(),
-        paper: None,
+        theme,
+        paper,
         lo,
         hi,
         gradients: Default::default(),
@@ -193,6 +203,29 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
     let ink = format!("rgb({r},{g},{b})");
     for p in drawing {
         match p {
+            Primitive::Clip { corners, primitives } => {
+                frame.gradients.set(frame.gradients.get() + 1);
+                let id = format!("reshiki-table-cell-{}", frame.gradients.get());
+                let points = corners.iter().map(|p| format!("{},{}", p.x, p.y)).collect::<Vec<_>>().join(" ");
+                s.push_str(&format!("<defs><clipPath id=\"{id}\" clipPathUnits=\"userSpaceOnUse\"><polygon points=\"{points}\"/></clipPath></defs>"));
+                let mut inner = String::new();
+                for primitive in primitives {
+                    if frame.paper.is_none()
+                        && let Primitive::Halo { radius, primitives } = primitive {
+                        // A transparent halo also removes earlier cells' ink,
+                        // but only inside this cell. Flush its preceding ink
+                        // before applying that clipped knockout to the scene.
+                        if !inner.is_empty() {
+                            s.push_str(&format!("<g clip-path=\"url(#{id})\">{inner}</g>"));
+                            inner.clear();
+                        }
+                        knockout(s, &primitives, radius, frame, halos, Some(&id));
+                    } else {
+                        push_svg(&mut inner, vec![primitive], frame, halos);
+                    }
+                }
+                if !inner.is_empty() { s.push_str(&format!("<g clip-path=\"url(#{id})\">{inner}</g>")); }
+            }
             Primitive::Opacity { alpha, primitive } => {
                 let mut inner = String::new();
                 push_svg(&mut inner, vec![*primitive], frame, halos);
@@ -214,26 +247,7 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 if let Some([r, g, b]) = frame.paper {
                     push_halo(s, &primitives, radius, &format!("rgb({r},{g},{b})"));
                 } else {
-                    // Knock the halo out of everything drawn so far, so the
-                    // destination shows through exactly where paper would.
-                    *halos += 1;
-                    let id = format!("reshiki-label-halo-{halos}");
-                    let (lo, hi) = (frame.lo, frame.hi);
-                    let mut mask = format!(
-                        "<mask id=\"{id}\" maskUnits=\"userSpaceOnUse\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"white\"/><g id=\"{id}-ink\">",
-                        lo.x,
-                        lo.y,
-                        hi.x - lo.x,
-                        hi.y - lo.y,
-                        lo.x,
-                        lo.y,
-                        hi.x - lo.x,
-                        hi.y - lo.y
-                    );
-                    push_halo(&mut mask, &primitives, radius, "black");
-                    mask.push_str("</g></mask>");
-                    let earlier = std::mem::take(s);
-                    s.push_str(&format!("{mask}<g mask=\"url(#{id})\">{earlier}</g>"));
+                    knockout(s, &primitives, radius, frame, halos, None);
                 }
             }
             Primitive::Picture(g) => {
@@ -571,6 +585,42 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
     }
 }
 
+/// Knock the halo out of everything painted before it. A cell supplies its
+/// clip so the destination shows through only inside that affine boundary.
+fn knockout(
+    s: &mut String,
+    primitives: &[Primitive],
+    radius: f32,
+    frame: &Frame,
+    halos: &mut usize,
+    clip: Option<&str>,
+) {
+    *halos += 1;
+    let id = format!("reshiki-label-halo-{halos}");
+    let (lo, hi) = (frame.lo, frame.hi);
+    let mut mask = format!(
+        "<mask id=\"{id}\" maskUnits=\"userSpaceOnUse\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"white\"/><g id=\"{id}-ink\">",
+        lo.x,
+        lo.y,
+        hi.x - lo.x,
+        hi.y - lo.y,
+        lo.x,
+        lo.y,
+        hi.x - lo.x,
+        hi.y - lo.y,
+    );
+    if let Some(clip) = clip {
+        mask.push_str(&format!("<g clip-path=\"url(#{clip})\">"));
+    }
+    push_halo(&mut mask, primitives, radius, "black");
+    if clip.is_some() {
+        mask.push_str("</g>");
+    }
+    mask.push_str("</g></mask>");
+    let earlier = std::mem::take(s);
+    s.push_str(&format!("{mask}<g mask=\"url(#{id})\">{earlier}</g>"));
+}
+
 fn path_data(commands: &[crate::graphics::PathCommand]) -> String {
     use crate::graphics::PathCommand;
     let mut path = String::new();
@@ -665,6 +715,7 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
                 &format!("fill=\"{color}\" {}", spread(0.)),
             ),
             Primitive::Picture(_)
+            | Primitive::Clip { .. }
             | Primitive::Rotated { .. }
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }

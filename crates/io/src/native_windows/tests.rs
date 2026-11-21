@@ -1,6 +1,84 @@
 use super::*;
 
 #[test]
+fn native_table_print_snapshot_keeps_clipped_vector_children_and_unclipped_borders() {
+    use crate::{
+        document::{Annotation, Point},
+        graphics::{
+            Graphic, GraphicKind,
+            table::{Border, Cell, Side, Table},
+        },
+        palette::Color,
+    };
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(10., 40.));
+    let b = doc.add_atom("C", Point::new(170., 40.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.annotations.push(Annotation {
+        id: 10,
+        position: Point::new(5., 5.),
+        text: "all table text stays editable and wraps".into(),
+        format: Default::default(),
+        angle: 0.,
+    });
+    let mut g = Graphic::dragged(
+        20,
+        GraphicKind::Rectangle,
+        Point::default(),
+        Point::new(100., 60.),
+        Default::default(),
+        Default::default(),
+        false,
+    );
+    g.kind = GraphicKind::Table;
+    g.table = Some(Box::new(Table {
+        cells: vec![Cell {
+            id: 1,
+            lo: Point::default(),
+            hi: Point::new(1., 1.),
+            members: vec![a, b, 10],
+            borders: vec![Border {
+                side: Side::Right,
+                width_pt: 2.,
+                color: Color::Custom([255, 0, 0]),
+                pattern: Default::default(),
+            }],
+        }],
+    }));
+    doc.graphics.push(g);
+    doc.page_layout = Some(crate::pages::Layout::around(&doc));
+    doc.validate().unwrap();
+    let data: Value = serde_json::from_slice(&print_snapshot(&doc).unwrap()).unwrap();
+    let primitives = data["primitives"].as_array().unwrap();
+    let clipped: Vec<_> = primitives
+        .iter()
+        .filter(|p| p["clips"].as_array().is_some_and(|c| !c.is_empty()))
+        .collect();
+    assert!(
+        clipped.len() > 4,
+        "Bond and outlined glyphs must remain native vector paths"
+    );
+    assert!(
+        clipped
+            .iter()
+            .all(|p| p["kind"] == "path" && p["clips"].as_array().unwrap().len() == 1)
+    );
+    assert!(
+        clipped
+            .iter()
+            .all(|p| p["clips"][0]["commands"].as_array().unwrap().len() == 5)
+    );
+    let border = primitives
+        .iter()
+        .find(|p| p["stroke"]["color"] == json!([255, 0, 0, 255]))
+        .unwrap();
+    assert!(
+        border["clips"].as_array().unwrap().is_empty(),
+        "Cell borders must paint outside the content clip"
+    );
+}
+
+#[test]
 fn windows_print_keeps_vector_text_page_offsets_and_physical_size() {
     let mut doc: Document = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/ui-drawn-ethanol.reshiki"

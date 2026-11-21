@@ -889,9 +889,9 @@ async fn objects_without_an_equivalent_are_left_out_and_named() {
         left_out("2 BioDraw shapes; 1 gel plate; 1 TLC plate; 1 other ChemDraw object")
     );
     assert_eq!(document.annotations.len(), 1);
-    // A table's cells and a plasmid map's ring, regions and labels remain.
+    // A native table remains editable; a plasmid map keeps its drawn parts.
     let (document, notices) = read(
-        "<table id='2' BoundingBox='10 10 200 100'><page id='3'><border id='4' Side='left'/>\
+        "<table id='2' BoundingBox='10 10 200 100'><page id='3' BoundsInParent='10 10 200 100'><border id='4' Side='left'/>\
          <t id='5' p='20 30'><s>cell</s></t></page></table>\
          <plasmidmap id='6' p='300 300' RingRadius='3932160' LineWidth='2'>\
          <plasmidregion id='7' AngularSize='90' Head3D='300 240 0' Tail3D='360 300 0' \
@@ -905,7 +905,7 @@ async fn objects_without_an_equivalent_are_left_out_and_named() {
         notices,
         nearest(
             "1 line, arrowhead or shadow size at the nearest size ReShiki draws; \
-             1 plasmid map as its ring, regions and labels; 1 table as its cell contents"
+             1 plasmid map as its ring, regions and labels"
         )
     );
     let mut texts: Vec<_> = document
@@ -916,7 +916,7 @@ async fn objects_without_an_equivalent_are_left_out_and_named() {
     texts.sort_unstable();
     assert_eq!(texts, ["cell", "ori"]);
     let kinds: Vec<_> = document.graphics.iter().map(|g| g.kind).collect();
-    assert_eq!(kinds, [GraphicKind::Ellipse]);
+    assert_eq!(kinds, [GraphicKind::Ellipse, GraphicKind::Table]);
     // A region is an arc arrow around the ring.
     assert!(document.arrows[0].arc.is_some());
     // A template file's grid, a picture without a bitmap and an oval without

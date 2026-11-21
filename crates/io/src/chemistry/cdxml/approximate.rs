@@ -21,6 +21,8 @@ pub(super) const GRADIENT: &str = "Gradient";
 const ALLOWED: &[&str] = &[
     "CDXML",
     "page",
+    "table",
+    "border",
     "fragment",
     "n",
     "b",
@@ -67,7 +69,6 @@ enum Kind {
     LabelStyle,
     Paragraph,
     PlasmidMap,
-    Table,
     BioShape,
     GelPlate,
     TlcPlate,
@@ -158,7 +159,6 @@ impl Kind {
                 "plasmid maps",
                 same("as its ring, regions and labels"),
             ),
-            Self::Table => ("table", "tables", same("as its cell contents")),
             Self::GelPlate => ("gel plate", "gel plates", None),
             Self::TlcPlate => ("TLC plate", "TLC plates", None),
             Self::BrokenCurve => (
@@ -638,7 +638,6 @@ impl Pass {
                 "templategrid" => {}
                 "bioshape" => self.count(child, Kind::BioShape),
                 "plasmidmap" => self.count(child, Kind::PlasmidMap),
-                "table" => self.count(child, Kind::Table),
                 "gepplate" => self.count(child, Kind::GelPlate),
                 "tlcplate" => self.count(child, Kind::TlcPlate),
                 _ => self.count(child, Kind::OtherObject),

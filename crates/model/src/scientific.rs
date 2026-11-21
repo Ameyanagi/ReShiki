@@ -561,6 +561,13 @@ impl Graphic {
             || matches!(self.kind, GraphicKind::Symbol(kind) if kind.is_condition())
     }
     pub fn parts(&self) -> Vec<Part> {
+        if let Some(table) = &self.table {
+            return table
+                .cells
+                .iter()
+                .flat_map(|cell| cell.border_parts(self))
+                .collect();
+        }
         if self.kind == GraphicKind::Piece {
             return crate::equipment::placed::parts(self);
         }

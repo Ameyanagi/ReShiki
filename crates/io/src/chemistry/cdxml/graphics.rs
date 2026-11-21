@@ -190,6 +190,7 @@ impl NativeGraphic {
                 .collect(),
             picture,
             panel: None,
+            table: None,
         };
         graphic.validate().map_err(Error::Document)?;
         Ok(graphic)
@@ -256,6 +257,11 @@ fn visible(node: Node<'_, '_>) -> bool {
     node.ancestors()
         .all(|parent| parent.attribute("Visible") != Some("no"))
 }
+pub(super) fn table_cell(node: Node<'_, '_>) -> Option<roxmltree::NodeId> {
+    node.ancestors()
+        .find(|n| named(*n, "page") && n.parent_element().is_some_and(|p| named(p, "table")))
+        .map(|n| n.id())
+}
 fn float(el: Node<'_, '_>, key: &str, default: &str) -> Result<f64> {
     Ok(numeric::float(el.attribute(key).unwrap_or(default))?)
 }
@@ -271,6 +277,8 @@ struct Reader<'a, 'input> {
     page: Option<presentation::NativeColor>,
     /// The topmost structure, text or arrow; layers above it are in front.
     top: NativeLayer,
+    /// Each native table cell has an independent stacking plane.
+    cell_tops: HashMap<roxmltree::NodeId, NativeLayer>,
     work: std::cell::Cell<usize>,
     points: usize,
 }
@@ -369,8 +377,11 @@ impl Reader<'_, '_> {
     }
     fn layer(&mut self, el: Node<'_, '_>) -> Result<NativeLayer> {
         let text = el.attribute("Z").unwrap_or("0");
-        self.spend(text.len() + self.top.length())?;
-        Ok(NativeLayer::parse(text)?.relative(&self.top))
+        let top = table_cell(el)
+            .and_then(|cell| self.cell_tops.get(&cell))
+            .unwrap_or(&self.top);
+        self.spend(text.len() + top.length())?;
+        Ok(NativeLayer::parse(text)?.relative(top))
     }
     fn point(&mut self, text: &str) -> Result<NativePoint> {
         self.spend(text.len())?;
@@ -558,6 +569,7 @@ pub fn read(
     // side of both, so a graphic goes in front only when ChemDraw stacks it
     // above every one of them: a shape never covers text ChemDraw shows.
     let mut top = None;
+    let mut cell_tops: HashMap<roxmltree::NodeId, NativeLayer> = HashMap::new();
     for el in root.descendants().filter(|n| {
         visible(*n)
             && (["fragment", "n", "b", "t", "arrow"].iter().any(|k| named(*n, k))
@@ -567,8 +579,14 @@ pub fn read(
         if let Some(text) = el.attribute("Z") {
             let z = NativeLayer::parse(text)?;
             // A line or arc read here is a graphic, not something to stay under.
-            if !read_as_graphic(el, &identities, claimed) && top.as_ref().is_none_or(|m| &z > m) {
-                top = Some(z);
+            if !read_as_graphic(el, &identities, claimed) {
+                if let Some(cell) = table_cell(el) {
+                    if cell_tops.get(&cell).is_none_or(|old| &z > old) {
+                        cell_tops.insert(cell, z);
+                    }
+                } else if top.as_ref().is_none_or(|m| &z > m) {
+                    top = Some(z);
+                }
             }
         }
     }
@@ -589,6 +607,7 @@ pub fn read(
         colors,
         page,
         top,
+        cell_tops,
         work: std::cell::Cell::new(root.document().input_text().len()),
         points: 0,
     };
@@ -611,7 +630,7 @@ pub fn read(
             continue;
         }
         reader.spend(1)?;
-        if named(el, "fragment") {
+        if named(el, "fragment") || named(el, "table") || named(el, "page") {
             stack.push(el.children());
             continue;
         }

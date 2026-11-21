@@ -5,6 +5,7 @@ mod heads;
 pub mod panel;
 mod path;
 mod superscript;
+pub mod table;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
 pub(crate) use effects::bounding_frame;
@@ -38,6 +39,8 @@ pub enum GraphicKind {
     Path,
     /// A line icon from the Icons tool; see [`crate::line_icons`].
     Icon,
+    /// Native editable cells containing ordinary chemistry and drawing objects.
+    Table,
 }
 impl GraphicKind {
     pub const DRAWABLE: [Self; 10] = [
@@ -80,6 +83,7 @@ impl std::fmt::Display for GraphicKind {
             Self::Picture => "Picture",
             Self::Piece => "Equipment piece",
             Self::Icon => "Icon",
+            Self::Table => "Table",
         })
     }
 }
@@ -379,6 +383,8 @@ pub struct Graphic {
     /// The intermediates and steps that make an ellipse a catalytic cycle.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cycle: Option<Box<crate::cycles::Cycle>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table: Option<Box<table::Table>>,
     /// The annotation this closed shape holds, centred inside it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<u64>,
@@ -501,6 +507,7 @@ impl Graphic {
                 panel: None,
                 leader: None,
                 cycle: None,
+                table: None,
                 text: None,
             };
         }
@@ -551,6 +558,7 @@ impl Graphic {
             panel: None,
             leader: None,
             cycle: None,
+            table: None,
             text: None,
         }
     }
@@ -582,6 +590,7 @@ impl Graphic {
                 | GraphicKind::Orbital(_)
                 | GraphicKind::Piece
                 | GraphicKind::Icon
+                | GraphicKind::Table
         ) {
             return self.parts().into_iter().flat_map(|p| p.commands).collect();
         }
@@ -720,6 +729,11 @@ impl Graphic {
     }
     /// Vector extents, excluding an attached superscript.
     pub fn shape_bounds(&self) -> (Point, Point) {
+        if self.table.is_some()
+            && let Some(bounds) = table::bounds(self)
+        {
+            return bounds;
+        }
         let commands: Vec<_> = self.parts().into_iter().flat_map(|p| p.commands).collect();
         let mut points = commands
             .iter()
@@ -808,6 +822,9 @@ impl Graphic {
 
     /// Edit one handle, preserving a connected path if its frame rejects the edit.
     pub fn edit_point(&mut self, index: usize, p: Point) -> Result<(), String> {
+        if self.table.is_some() {
+            return Err("Resize table cells with their table controls".into());
+        }
         // Dragging a callout leader's end releases it from its target, and
         // the leader stays a line.
         let mut ends = self.line_ends();
@@ -866,6 +883,7 @@ impl Graphic {
     }
     pub fn validate(&self) -> Result<(), String> {
         self.style.validate()?;
+        table::validate_graphic(self)?;
         if self.superscript.is_some() && !self.kind.brackets() {
             return Err("A superscript requires a bracket graphic".into());
         }

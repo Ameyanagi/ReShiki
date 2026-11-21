@@ -564,6 +564,11 @@ impl Writer<'_> {
             } else {
                 index + 2 + fill_layer
             };
+            if g.table.is_some() {
+                let n = self.native_table(g, z)?;
+                self.objects.push((g.id, n));
+                continue;
+            }
             if self.generic_bracket(g, z)? {
                 continue;
             }

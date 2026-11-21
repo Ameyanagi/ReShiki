@@ -18,9 +18,16 @@ pub(crate) use group_labels::clearer_orientation;
 mod occlusion;
 pub(crate) mod projected_bonds;
 mod svg;
+mod table;
 
 #[derive(Debug, Clone)]
 pub enum Primitive {
+    /// A native table cell's affine content boundary. Children retain their
+    /// complete editable geometry; every backend clips this same scene group.
+    Clip {
+        corners: [Point; 4],
+        primitives: Vec<Primitive>,
+    },
     /// Drawing-only alpha. Underlying ink stays exact for other backgrounds.
     Opacity {
         alpha: f32,
@@ -2207,6 +2214,9 @@ fn find_ring_center(faces: &FaceIndex<'_>, from: u64, to: u64) -> Option<Point> 
 /// Drawing primitives with colors in canonical light-canvas bytes; renderers
 /// apply the canvas conversion once.
 pub fn primitives(doc: &Document) -> Vec<Primitive> {
+    if doc.graphics.iter().any(|g| g.table.is_some()) {
+        return table::primitives(doc);
+    }
     let flat = crate::models3d::drawn(doc);
     let opacity = crate::rear_opacity::Paint::new(&flat);
     primitives_with_opacity(doc, &flat, &opacity)
@@ -2219,6 +2229,25 @@ pub fn primitives_with_opacity(
     raw: &Document,
     flat: &Document,
     opacity: &crate::rear_opacity::Paint,
+) -> Vec<Primitive> {
+    if raw.graphics.iter().any(|g| g.table.is_some()) {
+        return table::primitives(raw);
+    }
+    primitives_with_tables(raw, flat, opacity, &Default::default(), false)
+}
+
+fn primitives_in_cell(doc: &Document) -> Vec<Primitive> {
+    let flat = crate::models3d::drawn(doc);
+    let opacity = crate::rear_opacity::Paint::new(&flat);
+    primitives_with_tables(doc, &flat, &opacity, &Default::default(), true)
+}
+
+fn primitives_with_tables(
+    raw: &Document,
+    flat: &Document,
+    opacity: &crate::rear_opacity::Paint,
+    tables: &std::collections::HashMap<u64, Vec<Primitive>>,
+    cell_text: bool,
 ) -> Vec<Primitive> {
     let inputs = BondInputs::prepare(flat, opacity, Resolve::Scene);
     let doc = inputs.doc();
@@ -2245,7 +2274,7 @@ pub fn primitives_with_opacity(
             halos.atoms.push((id, None));
         }
     }
-    push_underlays(&mut out, doc, &graphics, shaded, opacity);
+    push_underlays(&mut out, doc, &graphics, shaded, opacity, tables);
     out.extend(cells.behind);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
@@ -2284,7 +2313,7 @@ pub fn primitives_with_opacity(
     push_label_halo(&mut out, doc, runs, opacity, &halos.above(None));
     out.extend(cells.above);
     out.extend(crate::models3d::primitives(raw));
-    push_arrows_and_annotations(&mut out, doc);
+    push_arrows_and_annotations(&mut out, doc, cell_text);
     let held: std::collections::HashMap<_, _> = doc
         .graphics
         .iter()
@@ -2297,15 +2326,27 @@ pub fn primitives_with_opacity(
         })
         .collect();
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
-        out.extend(graphic_primitive(graphic, doc, shaded));
+        out.extend(table_graphic_primitive(graphic, doc, shaded, tables));
         if let Some(text) = graphic.text.and_then(|t| held.get(&t)) {
-            push_annotation(&mut out, text);
+            push_annotation(&mut out, text, cell_text);
         }
         if halos.front.contains(&graphic.id) {
             push_label_halo(&mut out, doc, runs, opacity, &halos.above(Some(graphic.id)));
         }
     }
     out
+}
+
+fn table_graphic_primitive(
+    g: &&crate::graphics::Graphic,
+    doc: &Document,
+    shaded: usize,
+    tables: &std::collections::HashMap<u64, Vec<Primitive>>,
+) -> Vec<Primitive> {
+    tables
+        .get(&g.id)
+        .cloned()
+        .unwrap_or_else(|| graphic_primitive(g, doc, shaded))
 }
 
 /// Orbitals keep complete lobes. The labels they reach are drawn above the
@@ -2695,12 +2736,13 @@ fn push_underlays(
     graphics: &[&crate::graphics::Graphic],
     shaded: usize,
     opacity: &crate::rear_opacity::Paint,
+    tables: &std::collections::HashMap<u64, Vec<Primitive>>,
 ) {
     out.extend(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(|g| graphic_primitive(g, doc, shaded)),
+            .flat_map(|g| table_graphic_primitive(g, doc, shaded, tables)),
     );
     for fill in &doc.ring_fills {
         out.extend(opacity.owned_parts(
@@ -2988,7 +3030,7 @@ fn atom_label_parts(
     opacity.atom_parts(a.id, parts)
 }
 
-fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
+fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document, cell_text: bool) {
     for unit in &doc.generic.repeats {
         if let Some(position) = unit.label_position(doc) {
             let style = doc.drawing_style.text_style();
@@ -3025,11 +3067,15 @@ fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
         .filter_map(|g| g.text)
         .collect();
     for a in doc.annotations.iter().filter(|a| !front.contains(&a.id)) {
-        push_annotation(out, a);
+        push_annotation(out, a, cell_text);
     }
 }
-fn push_annotation(out: &mut Vec<Primitive>, a: &crate::document::Annotation) {
-    let layout = crate::typography::layout(&a.text, &a.format);
+fn push_annotation(out: &mut Vec<Primitive>, a: &crate::document::Annotation, cell_text: bool) {
+    let layout = if cell_text {
+        crate::typography::cell_layout(&a.text, &a.format)
+    } else {
+        crate::typography::layout(&a.text, &a.format)
+    };
     let runs: Vec<_> = layout
         .fragments
         .into_iter()
@@ -3737,6 +3783,7 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
     let mut points = vec![];
     for p in drawing {
         match p {
+            Primitive::Clip { corners, .. } => points.extend(corners),
             Primitive::Opacity { alpha, primitive } => {
                 if *alpha > 0. {
                     let (lo, hi) = bounds(std::slice::from_ref(primitive.as_ref()));
@@ -3890,6 +3937,17 @@ pub fn svg_of(doc: &Document, drawing: Vec<Primitive>, paper: Option<[u8; 3]>) -
 /// export does: the canvas paints 3D models this way.
 pub fn svg_part(drawing: &[Primitive], lo: Point, hi: Point) -> String {
     svg::render_part(drawing.to_vec(), lo, hi)
+}
+/// Canvas image tiles use the same clip, fonts and theme as figure export.
+/// `paper` supplies halo ink without painting an opaque tile background.
+pub fn svg_part_on(
+    drawing: &[Primitive],
+    lo: Point,
+    hi: Point,
+    theme: crate::canvas_theme::CanvasTheme,
+    paper: Option<[u8; 3]>,
+) -> String {
+    svg::render_part_on(drawing.to_vec(), lo, hi, theme, paper)
 }
 /// A figure carries the canvas background when exported or copied.
 pub fn svg_with_background(doc: &Document) -> String {

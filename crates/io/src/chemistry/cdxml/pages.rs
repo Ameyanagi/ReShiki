@@ -17,6 +17,7 @@ const SHEET_ASPECT: f64 = 4. / 3.;
 const GEOMETRY: &[(&str, usize)] = &[
     ("p", 2),
     ("BoundingBox", 2),
+    ("BoundsInParent", 2),
     ("Head3D", 3),
     ("Tail3D", 3),
     ("Center3D", 3),
@@ -86,7 +87,11 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
         let mut geometry = Vec::new();
         let mut bounds: Option<[f64; 4]> = None;
         let mut native_atoms = Vec::new();
+        let mut panels = Vec::new();
         for &index in &nodes {
+            if let Some(record) = tree.node(index)?.attr(crate::exchange::PANEL) {
+                panels.push((index, record.to_owned()));
+            }
             if tree.node(index)?.tag == "fragment" {
                 let atoms = tree.children(index, "n")?;
                 let mut is_3d = false;
@@ -134,7 +139,7 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
                     .collect::<std::result::Result<Vec<_>, _>>()
                     .map_err(|e| Error::Invalid(e.to_string()))?;
                 let valid_count = match field {
-                    "BoundingBox" => values.len() == 4,
+                    "BoundingBox" | "BoundsInParent" => values.len() == 4,
                     "CurvePoints" | "CurvePoints3D" => {
                         !values.is_empty() && values.len().is_multiple_of(dimensions)
                     }
@@ -257,7 +262,7 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
             }
         }
         if let Some(bounds) = bounds {
-            placed.push((bounds, native_atoms, geometry));
+            placed.push((bounds, native_atoms, geometry, panels));
         }
     }
     // Rows of pages in page order, left to right, then down, about as wide
@@ -287,7 +292,7 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
         *start = column_left;
     }
     let (mut next_left, mut row_top, mut lowest) = (0., 0., 0_f64);
-    for (slot, ([left, top, right, bottom], native_atoms, geometry)) in
+    for (slot, ([left, top, right, bottom], native_atoms, geometry, panels)) in
         placed.into_iter().enumerate()
     {
         if slot > 0 && slot % columns == 0 {
@@ -308,6 +313,10 @@ pub(super) fn arrange(xml: &str) -> Result<String> {
         };
         next_left = right + dx + gap;
         lowest = lowest.max(bottom + dy);
+        for (index, record) in panels {
+            let record = super::tables::translate_panel(&record, dx, dy)?;
+            tree.node_mut(index)?.set(crate::exchange::PANEL, record);
+        }
         for (atom, [ax, ay, az]) in native_atoms {
             let (ax, ay) = ((ax + kx) / 65536., (ay + ky) / 65536.);
             native_integer(ax)?;

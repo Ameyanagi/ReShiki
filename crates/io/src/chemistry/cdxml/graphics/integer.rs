@@ -81,7 +81,7 @@ impl NativeLayer {
     }
     /// Exact layer against the topmost chemistry or text, with the chemical
     /// plane (zero) skipped: only a layer above `top` is positive.
-    pub(super) fn relative(&self, top: &Self) -> Self {
+    pub(in crate::chemistry::cdxml) fn relative(&self, top: &Self) -> Self {
         let positive = self > top;
         let (large, small) = if positive { (self, top) } else { (top, self) };
         let different_signs = large.negative != small.negative;
