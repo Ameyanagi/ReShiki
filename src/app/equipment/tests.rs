@@ -146,11 +146,19 @@ fn opening_the_schlenk_tube_valve_is_one_undo_step() {
     let _ = app.update(Message::Equipment(Action::Arm(k(
         "reshiki/jy-schlenk-tube",
     ))));
+    let camera = app.tab.camera;
+    let viewport = app.viewport;
     let _ = app.update(Message::Canvas(Edit::Piece(Point::new(120., 80.))));
     let id = app.tab.doc.graphics[0].id;
     assert_eq!(app.tool, Tool::Select);
     assert_eq!(app.inspector_tab, InspectorTab::Properties);
     assert_eq!(app.tab.selected, [id]);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    assert_eq!(
+        app.viewport, viewport,
+        "an open panel needs no compensation"
+    );
 
     let open = Value::State("open".into());
     let _ = app.update(Message::Equipment(Action::Param {
@@ -257,6 +265,98 @@ fn rejected_placement_stays_armed_and_can_be_retried() {
         assert_eq!(app.tab.doc.graphics.len(), 1);
         assert_eq!(app.tool, Tool::Select);
         assert!(app.inspector_open);
+    }
+}
+
+#[test]
+fn reopening_properties_after_placement_preserves_visible_anchor_zoom_and_fit() {
+    for hose in [false, true] {
+        for fit in [false, true] {
+            for (zoom, rulers) in [(0.5, false), (1., true), (2., false)] {
+                for covered in [false, true] {
+                    let (mut app, _) = App::new();
+                    app.tab.busy = false;
+                    let inspector_width = app.inspector_width();
+                    let piece = if hose {
+                        "reshiki/hose-7"
+                    } else {
+                        "reshiki/rbf-100-15"
+                    };
+                    let _ = app.update(Message::Equipment(Action::Arm(k(piece))));
+                    let _ = app.update(Message::ToggleInspector);
+                    app.viewport = iced::Size::new(1000., 600.);
+                    app.tab.camera.center = Point::new(42., -20.);
+                    app.tab.camera.zoom = zoom;
+                    app.tab.fit_to_view = fit;
+                    app.guides.rulers = rulers;
+                    let before = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+                    // Use the physical canvas width after opening the panel,
+                    // independently of the viewport the handler records.
+                    let viewport = iced::Size::new(1000. - inspector_width, 600.);
+                    let after = app.guides.paper(iced::Rectangle::with_size(viewport));
+                    let x = if covered {
+                        before.width - 20.
+                    } else {
+                        after.width / 2.
+                    };
+                    let at = app
+                        .tab
+                        .camera
+                        .center
+                        .offset((x - before.width / 2.) / zoom, 40.);
+                    let screen_before = app.tab.camera.screen(at, before);
+                    let edit = if hose {
+                        Edit::Hose(at.offset(-80. / zoom, -40. / zoom), at)
+                    } else {
+                        Edit::Piece(at)
+                    };
+                    let _ = app.update(Message::Canvas(edit));
+                    assert!(!app.error, "{}", app.status);
+                    assert_eq!(app.tool, Tool::Select);
+                    assert!(app.inspector_open);
+                    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+                    assert_eq!(app.viewport, viewport);
+                    assert_eq!(app.tab.camera.zoom, zoom);
+                    assert_eq!(app.tab.fit_to_view, fit);
+                    let [piece] = app.tab.doc.graphics.as_slice() else {
+                        panic!("one placed piece");
+                    };
+                    let anchor = if hose {
+                        let (_, end) = solve::hose::grips(piece)
+                            .into_iter()
+                            .find(|(grip, _)| *grip == Grip::End(1))
+                            .unwrap();
+                        Point::new(end[0] as f32, end[1] as f32)
+                    } else {
+                        placed::middle(piece)
+                    };
+                    let expected = iced::Point::new(
+                        if covered {
+                            after.width - 16.
+                        } else {
+                            screen_before.x
+                        },
+                        screen_before.y,
+                    );
+                    assert!(
+                        app.tab.camera.screen(anchor, after).distance(expected) < 0.01,
+                        "hose={hose}, fit={fit}, zoom={zoom}, rulers={rulers}, covered={covered}"
+                    );
+                    let camera = app.tab.camera;
+                    let _ = app.update(Message::Viewport(viewport));
+                    assert_eq!(app.tab.camera.center, camera.center);
+                    assert_eq!(app.tab.camera.zoom, zoom, "the panel resize must not Fit");
+                    assert_eq!(app.tab.fit_to_view, fit);
+                    let _ = app.update(Message::Viewport(iced::Size::new(500., 400.)));
+                    if fit {
+                        assert_ne!(app.tab.camera.zoom, zoom, "a real resize still Fits");
+                    } else {
+                        assert_eq!(app.tab.camera.center, camera.center);
+                        assert_eq!(app.tab.camera.zoom, zoom);
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -678,11 +678,7 @@ impl App {
         if self.error {
             return;
         }
-        if !self.equipment.repeat {
-            self.select_tool(Tool::Select);
-            self.inspector_open = true;
-            self.inspector_tab = InspectorTab::Properties;
-        }
+        self.finish_equipment_placement(at);
         if let Some(snap) = snap {
             self.snapped(&snap);
         }
@@ -704,12 +700,31 @@ impl App {
         if self.error {
             return;
         }
-        if !self.equipment.repeat {
-            self.select_tool(Tool::Select);
-            self.inspector_open = true;
-            self.inspector_tab = InspectorTab::Properties;
-        }
+        self.finish_equipment_placement(to);
         self.status = hose_text(&self.tab.doc, &barbs);
+    }
+
+    /// Reveal the placed equipment without moving its anchor away from the
+    /// pointer, unless the opening panel would cover that part of the canvas.
+    fn finish_equipment_placement(&mut self, anchor: Point) {
+        if self.equipment.repeat {
+            return;
+        }
+        let was_open = self.inspector_open;
+        let old_width = self.inspector_width();
+        let old_viewport = self.viewport;
+        self.select_tool(Tool::Select);
+        self.inspector_open = true;
+        self.inspector_tab = InspectorTab::Properties;
+        if !was_open {
+            self.preserve_inspector_page_position(old_width, old_viewport);
+            // An anchor in the newly covered right strip cannot stay under the
+            // pointer. Pan only enough to leave it 16 px inside the paper.
+            let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+            let right = (paper.width - 16.).max(0.);
+            let x = self.tab.camera.screen(anchor, paper).x;
+            self.tab.camera.center.x += (x - right).max(0.) / self.tab.camera.zoom;
+        }
     }
 
     /// Drag a hose's end or middle, as one Undo step.
