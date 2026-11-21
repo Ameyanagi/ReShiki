@@ -144,10 +144,14 @@ fn empty_native_cycle_only_accepts_its_visible_open_arrow() {
             cycles::drop_target(&doc, &[free]).unwrap().role,
             Role::Intermediate(0)
         );
-        for point in [
-            Point::new(0., 0.),
-            point.offset(0., -3. * doc.drawing_style.bond_length_world),
-        ] {
+        let perimeter = outline(&doc.graphics[0]).unwrap();
+        let on = perimeter.project(point).unwrap();
+        let tangent = perimeter.tangents(on.s).unwrap().outgoing;
+        let away = point.offset(
+            tangent.y * 3. * doc.drawing_style.bond_length_world,
+            -tangent.x * 3. * doc.drawing_style.bond_length_world,
+        );
+        for point in [Point::new(0., 0.), away] {
             place(&mut doc, free, point);
             assert!(cycles::drop_target(&doc, &[free]).is_none());
         }
@@ -170,6 +174,66 @@ fn old_mean_circle_zone_and_hidden_shafts_do_not_collect_loose_parts() {
     assert!(cycles::drop_target(&doc, &[free]).is_none());
     place(&mut doc, free, center);
     assert!(cycles::drop_target(&doc, &[free]).is_none());
+}
+
+#[test]
+fn side_roles_follow_reverse_lane_travel_once_and_keep_the_actual_central_core_empty() {
+    for shape in [Shape::Ellipse, Shape::RoundedRectangle, Shape::Rectangle] {
+        for mirrored in [false, true] {
+            let mut doc = fixture(shape, 2, mirrored, false);
+            doc.graphics[0].cycle.as_mut().unwrap().steps[0].reversible = true;
+            let geometry = Geometry::new(&doc, &doc.graphics[0]).unwrap();
+            let route = geometry.route(0, 0, 1).unwrap();
+            let reverse = Shaft::from_arrow(&route.arrows[1]).unwrap();
+            let dir = geometry.dir as f32;
+            let bond = doc.drawing_style.bond_length_world;
+            let probes: Vec<_> = [0.2, 0.8]
+                .into_iter()
+                .map(|t| {
+                    let (on, tangent) = reverse.sample(reverse.length() * t, false).unwrap();
+                    // Reverse travel's right normal points to the actual inside.
+                    on.offset(dir * tangent.y * 2. * bond, -dir * tangent.x * 2. * bond)
+                })
+                .collect();
+            let free = text(&mut doc, probes[0], "Ar–X");
+            for (point, expected) in probes.into_iter().zip([Role::Product(0), Role::Reagent(0)]) {
+                place(&mut doc, free, point);
+                assert_eq!(
+                    cycles::drop_target(&doc, &[free]).unwrap().role,
+                    expected,
+                    "{shape:?}/{mirrored}"
+                );
+            }
+            place(&mut doc, free, Point::new(0., 20.));
+            assert!(cycles::drop_target(&doc, &[free]).is_none());
+        }
+    }
+}
+
+#[test]
+fn bridge_full_lap_depends_on_endpoint_identity_not_coincident_projections() {
+    let mut doc = fixture(Shape::Rectangle, 3, false, false);
+    let first = doc.graphics[0].cycle.as_ref().unwrap().intermediates[0][0];
+    let last = doc.graphics[0].cycle.as_ref().unwrap().intermediates[2][0];
+    let at = center_of(crate::scene::selection_bounds(&doc, &[first]).unwrap());
+    place(&mut doc, last, at);
+    let geometry = Geometry::new(&doc, &doc.graphics[0]).unwrap();
+    assert!(geometry.route(0, 0, 2).is_none());
+    assert!(geometry.route(0, 0, 0).is_some());
+    let mut doc = fixture(Shape::Ellipse, 1, false, false);
+    doc.graphics[0].cycle.as_mut().unwrap().steps[0].bow_pt = 720.;
+    let route = Geometry::new(&doc, &doc.graphics[0])
+        .unwrap()
+        .route(0, 0, 0)
+        .unwrap();
+    let point = route.arrows[0].point(0.5);
+    let free = text(&mut doc, point, "Pd insert");
+    let target = cycles::drop_target(&doc, &[free]).unwrap();
+    assert_eq!(target.role, Role::Intermediate(1));
+    cycles::assign(&mut doc, &target);
+    assert!(cycles::holds(&doc, 1, &[free]));
+    cycles::reverse(doc.graphics[0].cycle.as_mut().unwrap());
+    assert!(cycles::holds(&doc, 1, &[free]));
 }
 
 #[test]
@@ -257,6 +321,28 @@ fn inward_bow_cannot_split_outside_its_directed_native_interval_or_fall_through(
 }
 
 #[test]
+fn a_background_blocked_bow_does_not_mask_a_painted_foreground_target() {
+    let mut doc = fixture(Shape::Rectangle, 4, false, false);
+    doc.graphics[0].cycle.as_mut().unwrap().steps[0].bow_pt = -720.;
+    doc.graphics[0].layer = -10;
+    let geometry = Geometry::new(&doc, &doc.graphics[0]).unwrap();
+    let route = geometry.route(0, 0, 1).unwrap();
+    let point = (1..100)
+        .map(|i| route.arrows[0].point(i as f32 / 100.))
+        .find(|p| !geometry.splittable(&route, *p))
+        .unwrap();
+    let foreground = cycles::insert(&mut doc, point.offset(-100., 0.), 100.);
+    let g = doc.graphics.last_mut().unwrap();
+    g.layer = 10;
+    g.cycle.as_mut().unwrap().shape = Shape::Rectangle;
+    doc.graphics.swap(0, 1); // The background was appended later in the document.
+    let free = text(&mut doc, point, "Pd");
+    let target = cycles::drop_target(&doc, &[free]).unwrap();
+    assert_eq!(target.cycle, foreground);
+    assert_eq!(target.role, Role::Intermediate(0));
+}
+
+#[test]
 fn hidden_step_decorations_keep_their_owner_and_malformed_frames_miss() {
     let mut doc = fixture(Shape::Rectangle, 4, false, false);
     let side = text(&mut doc, Point::new(1100., -100.), "Ar–X");
@@ -305,4 +391,73 @@ fn hidden_step_decorations_keep_their_owner_and_malformed_frames_miss() {
 
 fn text_at_origin(doc: &mut Document) -> u64 {
     text(doc, Point::default(), "loose")
+}
+
+#[test]
+fn finite_large_native_frames_do_not_depend_on_the_overflowing_legacy_radius_seed() {
+    let mut doc = fixture(Shape::Ellipse, 0, false, false);
+    let g = &mut doc.graphics[0];
+    g.origin = Point::default();
+    g.axis_x = Point::new(1e20, 0.);
+    g.axis_y = Point::new(0., 1e20);
+    let center = g.cycle_circle().0;
+    assert!(g.cycle_circle().1.is_infinite());
+    let perimeter = outline(g).unwrap();
+    assert!(perimeter_arcs::empty_arrow(g, &perimeter).is_some());
+    let part = text(&mut doc, center, "Pd");
+    let c = doc.graphics[0].cycle.as_mut().unwrap();
+    c.intermediates.push(vec![part]);
+    c.steps.push(Step::default());
+    doc.validate().unwrap();
+    assert!(cycles::holds(&doc, 1, &[part]));
+}
+
+#[test]
+fn remote_zero_bow_reversible_corner_keeps_the_inserted_member_after_nudge_and_reverse() {
+    for mirrored in [false, true] {
+        let mut doc = fixture(Shape::Rectangle, 2, false, false);
+        let g = &mut doc.graphics[0];
+        g.origin = Point::new(if mirrored { 1000. } else { 0. }, 0.);
+        g.axis_x = Point::new(if mirrored { -1000. } else { 1000. }, 0.);
+        g.axis_y = Point::new(if mirrored { -1000. } else { 1000. }, 10.);
+        let c = g.cycle.as_mut().unwrap();
+        c.steps[0].reversible = true;
+        let [first, last] = [c.intermediates[0][0], c.intermediates[1][0]];
+        place(&mut doc, first, Point::new(500., 5.));
+        place(&mut doc, last, Point::new(500., 0.));
+        let geometry = Geometry::new(&doc, &doc.graphics[0]).unwrap();
+        let route = geometry.route(0, 0, 1).unwrap();
+        let point = route.arrows[0]
+            .nodes
+            .iter()
+            .map(|node| node.point)
+            .max_by(|a, b| {
+                geometry
+                    .outline
+                    .project(*a)
+                    .unwrap()
+                    .distance
+                    .total_cmp(&geometry.outline.project(*b).unwrap().distance)
+            })
+            .unwrap();
+        assert!(
+            geometry.outline.project(point).unwrap().distance
+                > f64::from(4. * doc.drawing_style.bond_length_world),
+            "mirror={mirrored} p={point:?} projection={:?} reach={} nodes={:?}",
+            geometry.outline.project(point),
+            4. * doc.drawing_style.bond_length_world,
+            route.arrows[0].nodes,
+        );
+        let free = text(&mut doc, point, "Pd insert");
+        let target = cycles::drop_target(&doc, &[free]).unwrap();
+        assert_eq!(target.role, Role::Intermediate(1));
+        cycles::assign(&mut doc, &target);
+        let delta = Point::new(0.125, -0.0625);
+        doc.translate(&[free], delta.x, delta.y);
+        assert!(doc.take_out(&[free], delta).is_empty());
+        assert!(cycles::holds(&doc, 1, &[free]));
+        cycles::reverse(doc.graphics[0].cycle.as_mut().unwrap());
+        assert!(cycles::holds(&doc, 1, &[free]));
+        doc.validate().unwrap();
+    }
 }

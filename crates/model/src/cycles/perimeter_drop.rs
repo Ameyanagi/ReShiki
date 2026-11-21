@@ -49,7 +49,9 @@ impl<'a> Geometry<'a> {
             1.
         };
         let (center, radius) = graphic.cycle_circle();
-        let top = outline.project(center.offset(0., -2. * radius))?.s;
+        let top = outline
+            .project(center.offset(0., -2. * radius))
+            .map_or(0., |p| p.s);
         let ends = crate::scene::selections_bounds(doc, &cycle.intermediates)
             .into_iter()
             .enumerate()
@@ -122,9 +124,12 @@ pub(super) fn target(doc: &Document, graphic: &Graphic, p: Point) -> Drop {
     }
     let routes: Vec<_> = (0..n)
         .map(|s| {
-            (!geometry.cycle.steps[s].hidden)
-                .then(|| geometry.route(s, s, (s + 1) % n))
-                .flatten()
+            geometry
+                .cycle
+                .steps
+                .get(s)
+                .filter(|step| !step.hidden)
+                .and_then(|_| geometry.route(s, s, (s + 1) % n))
         })
         .collect();
     // Rank actual visible hits before side zones; strict distance ties retain
@@ -233,9 +238,14 @@ pub(super) fn holds(doc: &Document, graphic: &Graphic, part: &[u64], point: Poin
                 || (n > 1 && {
                     // After insertion the donor's settings precede the member;
                     // reversing moves those settings to its successor instead.
-                    [before, i]
-                        .into_iter()
-                        .any(|s| geometry.cycle.steps[s].bow_pt != 0. && near(s, before, next))
+                    [before, i].into_iter().any(|s| {
+                        geometry
+                            .cycle
+                            .steps
+                            .get(s)
+                            .is_some_and(|step| step.bow_pt != 0. || step.reversible)
+                            && near(s, before, next)
+                    })
                 })
         }
         _ => false,

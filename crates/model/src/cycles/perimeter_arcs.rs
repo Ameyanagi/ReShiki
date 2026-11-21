@@ -120,7 +120,9 @@ fn arrow_style(g: &Graphic) -> ArrowStyle {
 pub(super) fn empty_arrow(g: &Graphic, perimeter: &Outline) -> Option<Arrow> {
     let dir = if g.cycle_counterclockwise() { -1. } else { 1. };
     let (center, radius) = g.cycle_circle();
-    let top = perimeter.project(center.offset(0., -2. * radius))?.s;
+    let top = perimeter
+        .project(center.offset(0., -2. * radius))
+        .map_or(0., |p| p.s);
     let length = perimeter.length();
     let gap = length * 0.02 / std::f64::consts::TAU;
     path_arrow(

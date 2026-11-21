@@ -1087,8 +1087,18 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
     }
     let ink = crate::scene::selection_bounds(doc, &part)?;
     let p = center_of(ink);
+    let mut graphics: Vec<_> = doc.graphics.iter().collect();
+    // A rejected noncircle split must not block a visible foreground cycle.
+    // Match scene paint order for shaped drawings; legacy Circle-only
+    // drawings retain their existing document-order target precedence.
+    if graphics
+        .iter()
+        .any(|g| g.cycle.as_deref().is_some_and(|c| c.shape != Shape::Circle))
+    {
+        graphics.sort_by_key(|g| g.layer);
+    }
     let mut blocked = false;
-    doc.graphics.iter().rev().find_map(|g| {
+    graphics.into_iter().rev().find_map(|g| {
         if blocked {
             return None;
         }

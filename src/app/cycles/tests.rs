@@ -2,10 +2,10 @@ use super::*;
 use crate::canvas::Edit;
 use reshiki::document::{Annotation, Document, Point};
 
-#[path = "shape_tests.rs"]
-mod shapes;
 #[path = "drop_tests.rs"]
 mod drops;
+#[path = "shape_tests.rs"]
+mod shapes;
 
 fn text(app: &mut App, x: f32, y: f32, value: &str) -> u64 {
     let id = app.tab.doc.next_id();
