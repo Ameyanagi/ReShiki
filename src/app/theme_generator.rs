@@ -388,6 +388,7 @@ impl App {
                 if !self.finish_inline(true) {
                     return Task::none();
                 }
+                self.status_style_open = false;
                 self.theme_library.editor = Some(Editor::new(
                     &self.tab.doc,
                     self.tab.file_epoch,

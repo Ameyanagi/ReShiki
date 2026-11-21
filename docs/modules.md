@@ -56,6 +56,7 @@ explains how the crates and modules fit together.
 - `src/app/color_popover.rs`: Style bar menus
 - `src/app/command_palette.rs`: The command palette
 - `src/app/command_palette/catalog.rs`: The palette's commands
+- `src/app/compound_numbers.rs`: Compound numbering uses the normal caption transaction and text editor.
 - `src/app/context_menu.rs`: Commands for the object under a secondary click, or the current selection.
 - `src/app/context_menu/cascade.rs`: Cascading context panels share one event boundary and use laid-out rows as anchors.
 - `src/app/depth_appearance.rs`
@@ -157,7 +158,10 @@ explains how the crates and modules fit together.
 - `src/app/shortcut_examples.rs`: An editable, unbound copy of the bundled reference in a document tab.
 - `src/app/shortcuts.rs`
 - `src/app/star_prompt.rs`: The "Like ReShiki?" toast, which asks for a GitHub star after use or the first GitHub sign-in.
+- `src/app/start.rs`: The empty drawing's import field, actions and recent files.
+- `src/app/start/recent.rs`: Five local file identities; previews are bounded, disposable and never reopened.
 - `src/app/startup.rs`
+- `src/app/status_style.rs`: Journal dimensions and color theme share one status-bar chooser.
 - `src/app/stereo.rs`: Advisory drawing checks and explicit, undoable stereobond fixes.
 - `src/app/tabs.rs`: Document tabs
 - `src/app/template_library.rs`
@@ -668,6 +672,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/compare/chemistry.rs`: One molecule as chemistry, for comparing
 - `crates/model/src/compare/fit.rs`: The 2D fit (Kabsch) that best carries one set of points onto another, with what is left over
 - `crates/model/src/compare/structure.rs`: Molecules matched by structure
+- `crates/model/src/compound_numbers.rs`: Compound numbers are ordinary bold text, linked to atom instances rather than chemical identity.
 - `crates/model/src/crossings.rs`: Drawing depth at crossings; never changes chemical connectivity.
 - `crates/model/src/crossings/depth.rs`: Resolve crossings at their actual XYZ intersection, with explicit layers taking precedence over automatic depth.
 - `crates/model/src/crossings/ring_strokes.rs`: Crossing clearance for cubic aromatic circles and partial ring curves.

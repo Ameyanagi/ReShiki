@@ -12,6 +12,8 @@ pub(super) enum Owner {
 /// Every async completion kind. A new result-bearing message must map to one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Completion {
+    #[cfg(not(target_arch = "wasm32"))]
+    StartPreview,
     /// EngineDone.
     Engine,
     /// Optimization(WorkerDone).
@@ -87,6 +89,8 @@ enum Completion {
 impl Completion {
     fn owner(self) -> Owner {
         match self {
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::StartPreview => Owner::App,
             Self::Engine
             | Self::Optimization
             | Self::Models3d
@@ -155,6 +159,13 @@ const NOWHERE: Admission = Admission {
 
 fn admission(completion: Completion) -> Admission {
     match completion {
+        #[cfg(not(target_arch = "wasm32"))]
+        Completion::StartPreview => Admission {
+            atom_text: true,
+            preview: true,
+            optimization: true,
+            updates_dialog: true,
+        },
         // Models3d drops its result itself while a modal is open, so its
         // pending job is cleared in every modal.
         Completion::Engine
@@ -289,6 +300,15 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Restore(..) => None,
             }
         }
+        Message::Start(action) => match action {
+            #[cfg(not(target_arch = "wasm32"))]
+            super::start::Action::Preview(..) => Some(Completion::StartPreview),
+            super::start::Action::Input(_) | super::start::Action::Insert => None,
+            #[cfg(any(target_arch = "wasm32", test))]
+            super::start::Action::BrowserOpen(..) => None,
+            #[cfg(not(target_arch = "wasm32"))]
+            super::start::Action::Open(_) => None,
+        },
         Message::Accessibility(action) => {
             use super::accessibility::Action;
             match action {
@@ -317,6 +337,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::FigureMenu(..)
                 | Action::ResolutionMenu(..)
                 | Action::ExportEditable(..)
+                | Action::ExportBackground(..)
                 | Action::Chemical(..)
                 | Action::ChemicalMenu(..)
                 | Action::RefreshProperties
@@ -370,6 +391,9 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Automatic(..)
                 | Action::Download
                 | Action::Install
+                | Action::OpenSettings
+                | Action::CopyVersion
+                | Action::OpenAboutLink(_)
                 | Action::OpenDataFolder
                 | Action::Poll => None,
             }
@@ -768,6 +792,8 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::FormatChemicalName
         | Message::ToggleProperty(..)
         | Message::ShowMasses(..)
+        | Message::NumberCompound(..)
+        | Message::RenumberCompounds
         | Message::PropertyPlaces(..)
         | Message::FontSize(..)
         | Message::ApplyFontSize
@@ -798,6 +824,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::BracketIon
         | Message::DrawChargeSeparated(_)
         | Message::NormalizeDepiction
+        | Message::StatusStyle(..)
         | Message::View(..)
         | Message::Appearance(..)
         | Message::CanvasTheme(..)
@@ -810,12 +837,14 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Open
         | Message::Save
         | Message::Export(..)
+        | Message::ExportAgain
         | Message::ExportFigure(..)
         | Message::CopySmiles
         | Message::CopyAnalysis
         | Message::CopyChemicalText
         | Message::Copy(..)
         | Message::CopyImage
+        | Message::CopyForOffice
         | Message::CopyImageOn(..)
         | Message::CopyAs(..)
         | Message::Paste

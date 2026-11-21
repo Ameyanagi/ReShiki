@@ -29,6 +29,7 @@ fn record_count(doc: &Document) -> usize {
         .saturating_add(doc.groups.len())
         .saturating_add(doc.abbreviations.len())
         .saturating_add(doc.molecule_names.len())
+        .saturating_add(doc.compound_numbers.len())
         .saturating_add(doc.ring_fills.len())
         .saturating_add(doc.depth_appearance.len())
         .saturating_add(doc.reactions.len())
@@ -111,6 +112,11 @@ pub(super) fn component(doc: &Document, hit: &[u64], work: &mut Work) -> Result<
                 .map(|n| n.atoms.len().saturating_add(1)),
         )
         .chain(
+            doc.compound_numbers
+                .iter()
+                .map(|n| n.atoms.len().saturating_add(1)),
+        )
+        .chain(
             doc.ring_fills
                 .iter()
                 .map(|g| g.atoms.len().saturating_add(1)),
@@ -188,6 +194,12 @@ pub(super) fn component(doc: &Document, hit: &[u64], work: &mut Work) -> Result<
         connect(
             &mut adjacent,
             std::iter::once(name.annotation).chain(name.atoms.iter().copied()),
+        );
+    }
+    for n in &doc.compound_numbers {
+        connect(
+            &mut adjacent,
+            std::iter::once(n.annotation).chain(n.atoms.iter().copied()),
         );
     }
     for link in &doc.property_captions {

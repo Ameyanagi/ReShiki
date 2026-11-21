@@ -163,9 +163,23 @@ fn save_answer(result: rfd::MessageDialogResult) -> Message {
 /// Keep native file types and filename completion consistent across save dialogs.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) async fn save_path(title: &str, name: &str, extension: &str) -> Option<PathBuf> {
+    save_path_in(title, name, extension, None).await
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn save_path_in(
+    title: &str,
+    name: &str,
+    extension: &str,
+    directory: Option<&std::path::Path>,
+) -> Option<PathBuf> {
     let dialog = rfd::AsyncFileDialog::new()
         .set_title(title)
         .set_file_name(name);
+    let dialog = match directory {
+        Some(directory) => dialog.set_directory(directory),
+        None => dialog,
+    };
     let dialog = if extension == reshiki::compatibility::NATIVE_EXTENSION {
         dialog.add_filter("ReShiki drawing", reshiki::compatibility::NATIVE_EXTENSIONS)
     } else {
@@ -196,6 +210,16 @@ pub(super) async fn save_path(_title: &str, name: &str, extension: &str) -> Opti
         std::path::Path::new(name),
         extension,
     ))
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn save_path_in(
+    title: &str,
+    name: &str,
+    extension: &str,
+    _directory: Option<&std::path::Path>,
+) -> Option<PathBuf> {
+    save_path(title, name, extension).await
 }
 
 /// Write a saved file atomically in place.
@@ -340,8 +364,9 @@ pub(super) async fn save_bytes(
     suggested_name: &str,
     extension: &str,
     bytes: &[u8],
+    directory: Option<&std::path::Path>,
 ) -> Result<Option<PathBuf>, String> {
-    let Some(path) = save_path(title, suggested_name, extension).await else {
+    let Some(path) = save_path_in(title, suggested_name, extension, directory).await else {
         return Ok(None);
     };
     write(&path, bytes)?;
@@ -731,7 +756,14 @@ impl super::App {
                 {
                     self.detach_office();
                 }
+                let rebound_export = self.rebind_recent_export(&path);
                 self.tab.path = Some(path);
+                #[cfg(target_arch = "wasm32")]
+                self.remember_start_browser_tab();
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(path) = self.tab.path.clone() {
+                    self.remember_start_file(&path);
+                }
                 // A file saved in a format keeps it without asking.
                 self.tab.keep_format = true;
                 self.tab.untitled_name = None;
@@ -751,6 +783,10 @@ impl super::App {
                     "Document saved".into()
                 };
                 self.error = false;
+                if rebound_export.is_err() {
+                    self.status
+                        .push_str(" · Could not remember export settings");
+                }
                 if !self.dirty() {
                     self.clear_recovery();
                     if let Some(action) = self.pending.take() {
@@ -801,6 +837,7 @@ impl super::App {
                 prepared,
             }) => {
                 if self.open_browser_duplicate(duplicate) {
+                    self.remember_start_browser_tab();
                     return Task::none();
                 }
                 let task = self.file_prepared(Some((path, Ok(*prepared))));
@@ -820,10 +857,14 @@ impl super::App {
                     self.error = true;
                     return Task::none();
                 };
+                #[cfg(not(target_arch = "wasm32"))]
+                self.remember_start_file(&path);
                 self.open_target(None);
                 self.show_opened(doc, None);
                 self.tab.untitled_name = Some(name);
                 self.tab.mark_saved(reshiki::document::Document::default());
+                #[cfg(target_arch = "wasm32")]
+                self.remember_start_browser_tab();
                 // A record that no longer fits in one drawing is left out, and
                 // the status says so in amber, as an open from GitHub does.
                 if placed < total {
@@ -861,21 +902,29 @@ impl super::App {
             }
             Ok(Prepared::Native(doc)) => {
                 #[cfg(not(target_arch = "wasm32"))]
+                self.remember_start_file(&path);
+                #[cfg(not(target_arch = "wasm32"))]
                 let kept = self.github_opened(&path);
                 #[cfg(target_arch = "wasm32")]
                 let kept = iced::Task::none();
                 if self.open_target(Some(&path)) {
                     self.show_opened(*doc, Some(path));
                 }
+                #[cfg(target_arch = "wasm32")]
+                self.remember_start_browser_tab();
                 return kept;
             }
             Ok(Prepared::Picture(doc, warning)) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                self.remember_start_file(&path);
                 self.open_target(None);
                 self.show_opened(*doc, None);
                 self.tab.untitled_name = path
                     .file_stem()
                     .map(|name| name.to_string_lossy().into_owned());
                 self.tab.mark_saved(reshiki::document::Document::default());
+                #[cfg(target_arch = "wasm32")]
+                self.remember_start_browser_tab();
                 let name = path
                     .file_name()
                     .unwrap_or(path.as_os_str())

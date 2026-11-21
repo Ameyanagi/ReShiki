@@ -46,6 +46,7 @@ mod files;
 mod macos_files;
 #[cfg(target_os = "macos")]
 pub(crate) use macos_files::install_document_events;
+mod compound_numbers;
 #[cfg(any(windows, target_os = "linux"))]
 mod desktop;
 mod gates;
@@ -71,6 +72,7 @@ mod nmr;
 mod numeric_transforms;
 mod object_toolbar;
 mod office;
+mod start;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 #[cfg(test)]
@@ -104,6 +106,7 @@ mod shortcut_focus_tests;
 mod shortcuts;
 mod star_prompt;
 mod startup;
+mod status_style;
 mod stereo;
 mod tabs;
 mod template_library;
@@ -129,7 +132,7 @@ pub(crate) use files::read_length;
 pub(crate) use workspace::text_width;
 
 /// The status bar's idle message.
-const READY: &str = "Ready · Choose a tool to start drawing";
+const READY: &str = "";
 const CELL_REMOVED_NOTICE: &str = "Unit cell removed by the edit";
 
 // App::fit_bounds: screen pixels kept free around the fitted drawing, the
@@ -170,6 +173,7 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Start(start::Action),
     ModifiersChanged(iced::keyboard::Modifiers),
     #[cfg(target_os = "linux")]
     LinuxClipboardWindow(iced::window::Id),
@@ -250,6 +254,8 @@ pub enum Message {
     ToggleProperty(Vec<u64>, reshiki::linked_properties::Property),
     /// Show Formula, Mol. Wt. and Exact Mass under a whole molecule.
     ShowMasses(Vec<u64>),
+    NumberCompound(Vec<u64>),
+    RenumberCompounds,
     /// The decimal places of a mass line under a whole molecule.
     PropertyPlaces(Vec<u64>, reshiki::linked_properties::Property, u8),
     FontSize(String),
@@ -282,6 +288,7 @@ pub enum Message {
     DrawChargeSeparated(Vec<u64>),
     NormalizeDepiction,
     View(view_settings::Action),
+    StatusStyle(status_style::Action),
     Appearance(crate::appearance::Mode),
     CanvasTheme(reshiki::canvas_theme::CanvasTheme),
     ColorTheme(reshiki::canvas_theme::ColorTheme),
@@ -296,12 +303,15 @@ pub enum Message {
     Export(&'static str),
     /// Export the figure from the Export tab, with or without the editable
     /// drawing.
+    ExportAgain,
     ExportFigure(&'static str, bool),
     CopySmiles,
     CopyAnalysis,
     CopyChemicalText,
     Copy(bool),
     CopyImage,
+    /// Rich Office copy from Export, using the selection or the whole drawing.
+    CopyForOffice,
     /// Copy image on this background, with or without the editable drawing,
     /// for this copy only.
     CopyImageOn(reshiki::export::Background, bool),
@@ -458,9 +468,11 @@ pub struct App {
     printing: printing::State,
     font_options: iced::widget::combo_box::State<String>,
     imports: import::State,
+    start: start::State,
     grid: bool,
     guides: canvas::guides::Guides,
     view_open: bool,
+    status_style_open: bool,
     /// The list of Check drawing findings is open.
     check_results: bool,
     /// The Clean up options menu is open.
@@ -470,6 +482,7 @@ pub struct App {
     appearance: crate::appearance::Settings,
     engine: LocalEngine,
     figure_exporting: bool,
+    recent_export: Option<figure_export::Recent>,
     /// Serializes clipboard preparation/publication across document tabs.
     copy_as_busy: bool,
     pdf_copy: clipboard::PdfCopy,
@@ -497,6 +510,8 @@ pub struct App {
     /// The Export tab's Include editable drawing choice; `None` follows the
     /// Settings default.
     export_tab_editable: Option<bool>,
+    /// A swatch chosen in Export; none keeps each destination's Settings default.
+    export_tab_background: Option<crate::appearance::Background>,
     help_open: bool,
     settings: settings_page::State,
     help: help::State,
@@ -528,6 +543,9 @@ fn focus_drawing() -> Task<Message> {
 impl App {
     /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
     pub(super) fn begin_file_epoch(&mut self) {
+        if self.tabs.temporary_depth == 0 {
+            self.status_style_open = false;
+        }
         self.sync_drawing_panel_context();
         self.cancel_engine_job();
         // A file import has no engine job, and its result for the old epoch is ignored.
@@ -588,9 +606,11 @@ impl App {
                     .collect(),
             ),
             imports: Default::default(),
+            start: start::State::load(),
             grid: false,
             guides: Default::default(),
             view_open: false,
+            status_style_open: false,
             check_results: false,
             cleanup_menu: false,
             cleanup_options: reshiki::cleanup::Options {
@@ -600,11 +620,12 @@ impl App {
             appearance,
             engine: LocalEngine::default(),
             figure_exporting: false,
+            recent_export: figure_export::Recent::load(),
             copy_as_busy: false,
             pdf_copy: Default::default(),
             native_copy_busy: false,
             // A recovery offer in the status bar is the launch message.
-            status: if recovered.is_empty() { READY } else { "" }.into(),
+            status: String::new(),
             error: false,
             bond_text_hint: None,
             file_io: files::State::default(),
@@ -622,6 +643,7 @@ impl App {
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
             export_tab_editable: None,
+            export_tab_background: None,
             help_open: false,
             settings: settings_page::State::default(),
             help: help::State::default(),
@@ -657,7 +679,8 @@ impl App {
         #[cfg(not(target_arch = "wasm32"))]
         let update_check = Task::batch([update_check, app.github_start()]);
         app.sync_keyboard_drawing();
-        (app, Task::batch([task, update_check]))
+        let previews = app.start_previews();
+        (app, Task::batch([task, update_check, previews]))
     }
     pub fn title(&self) -> String {
         #[cfg(not(target_arch = "wasm32"))]
@@ -1260,6 +1283,9 @@ impl App {
     }
 
     fn update_front(&mut self, message: Message, background: bool) -> Task<Message> {
+        if !background && !status_style::keeps_open(&message) {
+            self.status_style_open = false;
+        }
         let message = match self.update_ungated(message) {
             ControlFlow::Break(task) => return task,
             ControlFlow::Continue(message) => message,
@@ -1328,6 +1354,7 @@ impl App {
             self.start_label_refresh(),
             self.start_caption_names(),
             self.start_autosave(),
+            self.start_previews(),
         ]);
         self.tab.nmr.invalidate_if_changed_cached(
             &self.tab.doc,
@@ -1373,6 +1400,10 @@ impl App {
     /// including its background-tab path. Their tasks still receive tab tags
     /// and run the routing tail that closes Office tabs and replays held results.
     fn update_ungated(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Message::Start(action @ start::Action::Preview(..)) = message {
+            return ControlFlow::Break(self.start_action(action));
+        }
         if let Message::OfficePrepared(binding, opened) = message {
             return ControlFlow::Break(self.office_prepared(binding, opened));
         }
@@ -1521,6 +1552,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.annotations == b.annotations
         && a.molecule_names == b.molecule_names
         && a.property_captions == b.property_captions
+        && a.compound_numbers == b.compound_numbers
         && a.arrows == b.arrows
         && a.arrow_labels == b.arrow_labels
         && a.graphics == b.graphics

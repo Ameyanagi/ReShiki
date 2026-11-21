@@ -459,6 +459,17 @@ async fn generate_identity_for_atoms(
 }
 
 impl App {
+    pub(super) fn start_name_notice(&self, input: &str) -> Option<String> {
+        (self.tab.naming.name.trim() == input.trim())
+            .then(|| {
+                self.tab
+                    .naming
+                    .notice
+                    .as_ref()
+                    .map(|notice| notice.summary().to_owned())
+            })
+            .flatten()
+    }
     #[cfg(target_arch = "wasm32")]
     pub(super) fn naming_subscription(&self) -> iced::Subscription<Message> {
         if self.strip().any(|tab| tab.naming.local_cancel.is_some()) {

@@ -263,9 +263,9 @@ impl App {
             .into();
         let paper = self.with_drop_overlay(
             sensor(super::atom_text::canvas_anchor(self.with_context_menu(
-                self.with_inline_text(
-                    self.with_star_prompt(self.with_model_notice(drawing.map(Message::Canvas))),
-                ),
+                self.with_inline_text(self.with_star_prompt(
+                    self.with_start(self.with_model_notice(drawing.map(Message::Canvas))),
+                )),
             )))
             .on_show(Message::Viewport)
             .on_resize(Message::Viewport)
@@ -577,9 +577,20 @@ impl App {
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
+        responsive(move |size| {
+            let search = Message::Commands(super::command_palette::Action::Open);
+            let keys = super::shortcuts::label(&search).unwrap_or_default();
+            self.command_bar_at(size.width, &keys)
+        })
+        .height(Length::Shrink)
+        .into()
+    }
+
+    fn command_bar_at(&self, width: f32, search_keys: &str) -> Element<'_, Message> {
         // The browser build updates with its page and has no local assistant.
         let browser = cfg!(target_arch = "wasm32");
         let settings = Message::Settings(super::settings_page::Action::Open(None));
+        let search = Message::Commands(super::command_palette::Action::Open);
         let bar = row![
             hover_hint(
                 reshiki::accessibility::button(
@@ -647,6 +658,27 @@ impl App {
             responsive(move |size| self.tab_strip(size.width))
                 .width(Length::Fill)
                 .height(Length::Shrink),
+            hover_hint(
+                reshiki::accessibility::button(
+                    "header-search",
+                    format!("Search commands, structures and names; {search_keys}"),
+                    row![
+                        text("Search…").size(12),
+                        super::help::chord(search_keys, 11),
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+                )
+                .height(36)
+                .padding([0, 10])
+                .style(control(self.commands.open))
+                .on_press(search.clone()),
+                keyed("Search commands, structures and names", &search),
+                tooltip::Position::Bottom,
+            ),
+            self.check_button(),
+            self.cleanup_button(),
+            divider(),
             (!browser).then(|| icon_button(
                 Icon::Assistant(self.assistant.busy),
                 if self.assistant.busy {
@@ -657,20 +689,6 @@ impl App {
                 Some(Message::Assistant(super::assistant::Action::Open)),
                 self.inspector_open && self.inspector_tab == InspectorTab::Assistant
             )),
-            icon_button(
-                Icon::Import,
-                keyed("Import", &Message::Inspector(InspectorTab::Import)),
-                Some(Message::Inspector(InspectorTab::Import)),
-                self.inspector_open && self.inspector_tab == InspectorTab::Import
-            ),
-            self.check_button(),
-            self.cleanup_button(),
-            icon_button(
-                Icon::Export,
-                keyed("Export", &Message::Inspector(InspectorTab::Export)),
-                Some(Message::Inspector(InspectorTab::Export)),
-                self.inspector_open && self.inspector_tab == InspectorTab::Export
-            ),
             icon_button(
                 Icon::Settings,
                 keyed("Settings", &settings),
@@ -684,7 +702,9 @@ impl App {
                 self.inspector_open
             )
         ]
-        .spacing(4)
+        // Keep three ordinary tabs beside Search at the minimum window size,
+        // including the longer Ctrl+K hint on Windows and Linux.
+        .spacing(if width < 1200. { 2 } else { 4 })
         .align_y(Alignment::Center);
         container(bar).padding([9, 14]).style(panel).into()
     }
@@ -1090,6 +1110,14 @@ impl App {
                     enabled: true,
                 });
             }
+        }
+        if !self.tab.doc.compound_numbers.is_empty() {
+            commands.push(RowCommand {
+                label: "Renumber",
+                menu: "Renumber",
+                message: Message::RenumberCompounds,
+                enabled: !self.tab.busy,
+            });
         }
         commands.extend(self.depth_commands());
         if !keyboard {
@@ -3140,72 +3168,11 @@ impl App {
             .into()
     }
 
-    /// Journal preset, color theme and canvas light/dark: whole-document
-    /// settings, kept beside View and zoom.
-    fn document_settings(&self) -> [Element<'_, Message>; 3] {
-        use super::document_styles::Choice;
-        use super::theme_files::Choice as ThemeChoice;
-        use reshiki::document_styles::Preset;
-        let current = Preset::ALL
-            .into_iter()
-            .find(|p| p.style() == self.tab.doc.drawing_style)
-            .map(Choice::Journal)
-            .unwrap_or(Choice::Custom);
-        let (themes, theme) = self.theme_choices();
-        let themes_only: Vec<_> = (themes.iter())
-            .filter(|choice| **choice != ThemeChoice::Manage)
-            .cloned()
-            .collect();
+    /// The combined style chooser and the canvas light/dark control.
+    fn document_settings(&self) -> [Element<'_, Message>; 2] {
         let dark = self.tab.doc.canvas_theme.is_dark();
         [
-            hover_hint(
-                // Manage styles… opens the inspector, so ↑ ↓ skip it.
-                reshiki::accessibility::select(
-                    "journal-preset",
-                    "Journal preset",
-                    Preset::ALL.to_vec(),
-                    current.to_string(),
-                    |preset| Message::QuickDrawingStyle(Choice::Journal(preset)),
-                    crate::appearance::close_on_escape(
-                        crate::appearance::pick_list(
-                            Preset::ALL
-                                .into_iter()
-                                .map(Choice::Journal)
-                                .chain([Choice::Details])
-                                .collect::<Vec<_>>(),
-                            Some(current),
-                            Message::QuickDrawingStyle,
-                        )
-                        .text_size(11)
-                        .padding([4, 8]),
-                    ),
-                ),
-                "Journal preset · Bond length, line widths and label font",
-                tooltip::Position::Top,
-            )
-            .into(),
-            hover_hint(
-                // Manage themes… opens the theme editor, so ↑ ↓ skip it.
-                reshiki::accessibility::select(
-                    "color-theme",
-                    "Color theme",
-                    themes_only,
-                    theme.to_string(),
-                    |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
-                    crate::appearance::close_on_escape(
-                        crate::appearance::pick_list(themes, Some(theme.clone()), |choice| {
-                            Message::ThemeFile(super::theme_files::Action::Choose(choice))
-                        })
-                        // Sizes the list for an embedded theme's name, which is not an option.
-                        .placeholder(theme.to_string())
-                        .text_size(11)
-                        .padding([4, 8]),
-                    ),
-                ),
-                "Color theme",
-                tooltip::Position::Top,
-            )
-            .into(),
+            self.status_style(),
             hover_hint(
                 reshiki::accessibility::button(
                     "canvas-theme",

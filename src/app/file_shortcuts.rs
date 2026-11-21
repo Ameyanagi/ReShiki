@@ -501,6 +501,11 @@ fn browser_tab_binding(
 
 pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Message> {
     use super::tabs::Action as Tabs;
+    // Open Search before a focused editor can consume the command. The modal
+    // branch above this router keeps dialogs in charge of their own keys.
+    if super::command_palette::is_shortcut(key, modifiers) {
+        return Some(Message::Commands(super::command_palette::Action::Open));
+    }
     for (tab, message) in [
         (TabKey::New, Message::New),
         (TabKey::Close, Message::Tabs(Tabs::Close(None))),

@@ -1,6 +1,6 @@
 # Journal drawing presets
 
-Choose a journal directly from the preset selector beside the color theme selector and sun/moon canvas toggle. Selecting a journal applies its dimensions and scales the drawing in one Undo step. Choose **Manage styles…** at the bottom for a preview and detailed settings. The selector lists **JACS / ACS**, **ACS Document 1996**, **Nature**, **RSC**, **Angewandte** and **SYNLETT / SYNTHESIS**. When the current settings match none of them, the selector shows **Custom**. Each journal choice has a **Publisher instructions ↗** link in the panel.
+Open the combined preset and color theme button in the status bar, such as **JACS · Publication**, then choose a **Journal preset**. Selecting a journal applies its dimensions and scales the drawing in one Undo step. Choose **Manage styles…** below the lists for a preview and detailed settings. The selector lists **JACS / ACS**, **ACS Document 1996**, **Nature**, **RSC**, **Angewandte** and **SYNLETT / SYNTHESIS**. When the current settings match none of them, the selector shows **Custom**. Each journal choice has a **Publisher instructions ↗** link in the panel.
 
 These six presets use publisher recommendations, publisher downloads, or, for **ACS Document 1996**, the stylesheet bundled with ChemDraw. ChemDraw's other bundled variants are excluded. Publisher guidance takes precedence where written dimensions differ from older downloads.
 
@@ -36,7 +36,7 @@ Direct journal selection scales existing geometry with its bond length. In the d
 
 ## Canvas colors and interface appearance
 
-The **sun/moon toggle** beside the preset and color theme selectors changes document page colors independently of its journal dimensions. The same setting is available in **Page setup…**. Dark canvas displays and exports black paper with white bonds and labels. Ink and palette colors switch to their dark-canvas tones, custom colors stay exact, and raster pictures retain their original pixels. The canvas choice is saved in the document and can be undone.
+The **sun/moon toggle** beside the combined preset and color theme button changes document page colors independently of its journal dimensions. The same setting is available in **Page setup…**. Dark canvas displays and exports black paper with white bonds and labels. Ink and palette colors switch to their dark-canvas tones, custom colors stay exact, and raster pictures retain their original pixels. The canvas choice is saved in the document and can be undone.
 
 **Publication**, **Presentation**, **Pastel**, **Jmol**, and **VESTA** control atom colors independently of the journal preset and light/dark canvas. Presentation and Pastel derive from the [Jmol element color reference](https://jmol.sourceforge.net/jscolors/): Presentation uses lightness 50% and Jmol chroma × 2 on light paper, and lightness 70% with chroma × 1 on dark paper; Pastel uses softer tones. Gamut mapping and automatic-label contrast checks can adjust the displayed colors. Both brighten on dark canvases and retain neutral carbon/hydrogen labels. Jmol keeps the reference palette, with label brightness adjusted for readable contrast. All three use colored element-picker tiles with regular-weight symbols. Ring interiors use the theme's Tint row for each canvas, and automatic atom labels stay legible over light and dark fills.
 
