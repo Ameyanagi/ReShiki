@@ -40,6 +40,7 @@ mod drawing_panel_capture;
 use document_tab::DocumentTab;
 mod engine_jobs;
 pub(crate) mod equipment;
+mod equipment_authoring;
 mod event_slot;
 mod figure_export;
 mod figure_panels;
@@ -222,6 +223,7 @@ pub enum Message {
     ),
     Templates(template_library::Action),
     Equipment(equipment::Action),
+    EquipmentAuthoring(equipment_authoring::Action),
     Icons(icon_browser::Action),
     TemplateNavigate(bool),
     InspectorScroll(f32),
@@ -554,6 +556,7 @@ impl App {
         self.tab.busy = false;
         self.tab.file_epoch = self.next_epoch();
         self.tab.stereo_notes.clear();
+        self.tab.equipment_authoring = None;
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
         self.tab.mapping.clear_pending();
@@ -1053,6 +1056,14 @@ impl App {
         focus_drawing()
     }
     fn display_document(&self) -> &Document {
+        if let Some(preview) = self
+            .tab
+            .equipment_authoring
+            .as_ref()
+            .and_then(|s| s.preview.as_ref())
+        {
+            return preview;
+        }
         if let Some(session) =
             self.tab.optimization.as_ref().filter(|session| {
                 session.current(self.tab.id, self.tab.file_epoch, self.tab.revision)
@@ -1439,7 +1450,7 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let preview = self.tab.optimization.is_some()
+        let preview = (self.tab.optimization.is_some() || self.tab.equipment_authoring.is_some())
             && self.inspector_open
             && self.inspector_tab == InspectorTab::Properties;
         #[cfg(not(target_arch = "wasm32"))]
@@ -1489,6 +1500,8 @@ impl App {
                     Some(help::modal_key)
                 } else if self.commands.open {
                     Some(command_palette::modal_key)
+                } else if self.tab.equipment_authoring.is_some() {
+                    Some(equipment_authoring::modal_key)
                 } else {
                     None
                 },
@@ -1499,6 +1512,8 @@ impl App {
                     }
                     #[cfg(target_arch = "wasm32")]
                     None
+                } else if self.tab.equipment_authoring.is_some() {
+                    Some(equipment_authoring::leftover_key)
                 } else {
                     None
                 },

@@ -31,6 +31,62 @@ fn labels(app: &App, page: Page) -> Vec<&'static str> {
 }
 
 #[test]
+fn defining_equipment_is_offered_for_supported_groups_with_the_shared_action() {
+    use reshiki::graphics::{Graphic, GraphicKind};
+
+    const LABEL: &str = "Define as equipment piece…";
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    assert!(!labels(&app, Page::Main).contains(&LABEL));
+
+    let mut shapes = Vec::new();
+    for x in [0., 60.] {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::dragged(
+            id,
+            GraphicKind::Rectangle,
+            World::new(x, 0.),
+            World::new(x + 40., 50.),
+            Default::default(),
+            Default::default(),
+            false,
+        ));
+        shapes.push(id);
+    }
+    app.tab.doc.group_selection(&shapes).unwrap();
+    app.tab.selected = vec![shapes[0]];
+    let entries = app.context_entries(Page::Main);
+    let commands: Vec<_> = entries
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Item {
+                label: LABEL,
+                action: Action::Run(message),
+                enabled: true,
+                ..
+            } => Some(message.as_ref()),
+            _ => None,
+        })
+        .collect();
+    assert!(matches!(
+        commands.as_slice(),
+        [Message::EquipmentAuthoring(
+            super::super::equipment_authoring::Action::Begin
+        )]
+    ));
+
+    app.tab.busy = true;
+    assert!(!labels(&app, Page::Main).contains(&LABEL));
+    app.tab.busy = false;
+    let atom = app.tab.doc.add_atom("C", World::new(150., 0.));
+    app.tab.selected.push(atom);
+    assert!(!labels(&app, Page::Main).contains(&LABEL));
+    app.tab.selected = vec![shapes[0]];
+    app.tab.doc.graphics[1].layer += 1;
+    assert!(!labels(&app, Page::Main).contains(&LABEL));
+}
+
+#[test]
 fn redraw_stereo_bonds_is_available_for_atom_selections_and_dispatches() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

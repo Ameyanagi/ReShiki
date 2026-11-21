@@ -36,7 +36,7 @@ impl App {
         if self.assistant.busy {
             return Task::none();
         }
-        if self.tab.inline_text.is_some() || self.tab.joining.is_some() {
+        if self.tab.drawing_edit_active() {
             self.assistant.waiting_for_canvas_edit = true;
             self.assistant.waiting_apply_is_automatic = false;
             self.assistant.status =

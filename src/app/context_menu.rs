@@ -732,6 +732,13 @@ impl App {
                 true,
             ));
         }
+        if self.can_define_equipment() {
+            entries.push(command(
+                "Define as equipment piece…",
+                Message::EquipmentAuthoring(super::equipment_authoring::Action::Begin),
+                true,
+            ));
+        }
         entries.push(submenu("Arrange & transform", Page::Align));
         if self.callout_target().is_some() {
             entries.push(command("Add callout", Message::AddCallout, true));
