@@ -577,11 +577,20 @@ impl App {
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
+        responsive(move |size| {
+            let search = Message::Commands(super::command_palette::Action::Open);
+            let keys = super::shortcuts::label(&search).unwrap_or_default();
+            self.command_bar_at(size.width, &keys)
+        })
+        .height(Length::Shrink)
+        .into()
+    }
+
+    fn command_bar_at(&self, width: f32, search_keys: &str) -> Element<'_, Message> {
         // The browser build updates with its page and has no local assistant.
         let browser = cfg!(target_arch = "wasm32");
         let settings = Message::Settings(super::settings_page::Action::Open(None));
         let search = Message::Commands(super::command_palette::Action::Open);
-        let search_keys = super::shortcuts::label(&search).unwrap_or_default();
         let bar = row![
             hover_hint(
                 reshiki::accessibility::button(
@@ -655,7 +664,7 @@ impl App {
                     format!("Search commands, structures and names; {search_keys}"),
                     row![
                         text("Search…").size(12),
-                        super::help::chord(&search_keys, 11),
+                        super::help::chord(search_keys, 11),
                     ]
                     .spacing(8)
                     .align_y(Alignment::Center),
@@ -693,7 +702,9 @@ impl App {
                 self.inspector_open
             )
         ]
-        .spacing(4)
+        // Keep three ordinary tabs beside Search at the minimum window size,
+        // including the longer Ctrl+K hint on Windows and Linux.
+        .spacing(if width < 1200. { 2 } else { 4 })
         .align_y(Alignment::Center);
         container(bar).padding([9, 14]).style(panel).into()
     }

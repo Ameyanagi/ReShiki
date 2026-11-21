@@ -60,6 +60,27 @@ async fn search_header_fits_and_opens_a_focused_palette() {
             let camera = app.tab.camera;
             let snapshot = ui.semantics(&app);
             assert!(snapshot.duplicate_ids.is_empty());
+            let tabs = snapshot
+                .nodes
+                .iter()
+                .filter(|node| {
+                    node.id
+                        .strip_prefix("document-tab-")
+                        .is_some_and(|suffix| suffix.parse::<u64>().is_ok())
+                })
+                .count();
+            assert_eq!(
+                tabs,
+                3,
+                "{size:?}: {:?}",
+                snapshot
+                    .nodes
+                    .iter()
+                    .filter(|node| node.id.starts_with("header-")
+                        || node.id.starts_with("document-tab-"))
+                    .map(|node| (&node.id, node.bounds))
+                    .collect::<Vec<_>>()
+            );
             let search_left = snapshot
                 .nodes
                 .iter()
