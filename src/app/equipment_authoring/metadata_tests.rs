@@ -2,7 +2,14 @@ use super::super::Action as DraftAction;
 use super::*;
 
 fn send(app: &mut App, action: Action) {
-    let _ = app.update(message(action));
+    let draft = app
+        .tab
+        .equipment_authoring
+        .as_ref()
+        .unwrap()
+        .identity
+        .clone();
+    let _ = app.update(message(&draft, action));
 }
 
 fn ready() -> App {
@@ -223,12 +230,22 @@ fn equipment_metadata_rows_preserve_punctuation_and_ignore_removed_targets() {
 #[tokio::test]
 #[ignore = "Opt-in equipment metadata control tree through the real renderer"]
 async fn equipment_metadata_controls_have_live_names_and_values() {
-    use iced::advanced::{renderer::Headless, widget::operation};
+    use iced::advanced::{
+        renderer::Headless,
+        widget::{Operation, operation},
+    };
     use iced_runtime::{UserInterface, user_interface::Cache};
     let mut app = ready();
     send(&mut app, Action::Category(Category::Flask));
     let keyword = keyword(&mut app, "glass");
     let variant = variant(&mut app, "capacity_ml", "100");
+    let draft = app
+        .tab
+        .equipment_authoring
+        .as_ref()
+        .unwrap()
+        .identity
+        .clone();
     let mut renderer =
         <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
             .await
@@ -278,8 +295,116 @@ async fn equipment_metadata_controls_have_live_names_and_values() {
             "100",
         ),
     ] {
+        let id = control_id(&draft, &id);
         let node = tree.nodes.iter().find(|n| n.id == id).unwrap();
         assert_eq!(node.name, name);
         assert_eq!(node.value.as_deref(), Some(value));
     }
+    let old_author = control_id(&draft, "equipment-metadata-author");
+    let mut captured =
+        reshiki::accessibility::SetValue::<Message>::new(old_author.clone(), "Old draft".into());
+    ui.operate(&renderer, &mut operation::black_box(&mut captured));
+    let operation::Outcome::Some(captured) = captured.finish() else {
+        panic!("The original live control produces a value action");
+    };
+    let cache = ui.into_cache();
+    let _ = app.update(Message::EquipmentAuthoring(DraftAction::Discard));
+    let _ = app.update(Message::EquipmentAuthoring(DraftAction::Begin));
+    send(&mut app, Action::Text(Field::Author, "New draft".into()));
+    let before = app
+        .tab
+        .equipment_authoring
+        .as_ref()
+        .unwrap()
+        .current
+        .clone();
+    let _ = app.update(captured);
+    assert!(app.tab.equipment_authoring.as_ref().unwrap().current == before);
+    let live_author = app
+        .tab
+        .equipment_authoring
+        .as_ref()
+        .unwrap()
+        .metadata_control_id("equipment-metadata-author");
+    let mut ui = UserInterface::build(app.equipment_authoring_panel(), size, cache, &mut renderer);
+    let mut stale =
+        reshiki::accessibility::SetValue::<Message>::new(old_author, "Stale native request".into());
+    ui.operate(&renderer, &mut operation::black_box(&mut stale));
+    assert!(matches!(stale.finish(), operation::Outcome::None));
+    let mut live =
+        reshiki::accessibility::SetValue::<Message>::new(live_author, "Live native edit".into());
+    ui.operate(&renderer, &mut operation::black_box(&mut live));
+    let operation::Outcome::Some(live) = live.finish() else {
+        panic!("The replacement draft's live control remains editable");
+    };
+    let _ = ui.into_cache();
+    let _ = app.update(live);
+    assert_eq!(
+        app.tab
+            .equipment_authoring
+            .as_ref()
+            .unwrap()
+            .current
+            .metadata
+            .author,
+        "Live native edit"
+    );
+}
+
+#[test]
+fn equipment_metadata_discarded_draft_controls_cannot_edit_a_new_draft() {
+    let mut app = ready();
+    let drawing = app.tab.doc.clone();
+    let selection = app.tab.selected.clone();
+    let revision = app.tab.revision;
+    let captured = {
+        let state = app.tab.equipment_authoring.as_ref().unwrap();
+        [
+            DraftAction::Name("Old English name".into()),
+            DraftAction::Metadata(Action::Text(Field::Author, "Old author".into())),
+            DraftAction::Metadata(Action::Text(Field::Japanese, "古い下書き".into())),
+            DraftAction::Metadata(Action::Category(Category::Heating)),
+            DraftAction::Metadata(Action::AddKeyword),
+        ]
+        .map(|action| state.metadata_control_message(action))
+    };
+    let _ = app.update(Message::EquipmentAuthoring(DraftAction::Discard));
+    let _ = app.update(Message::EquipmentAuthoring(DraftAction::Begin));
+    let name = app
+        .tab
+        .equipment_authoring
+        .as_ref()
+        .unwrap()
+        .metadata_control_message(DraftAction::Name("New English name".into()));
+    let _ = app.update(name);
+    send(&mut app, Action::Text(Field::Author, "New author".into()));
+    send(
+        &mut app,
+        Action::Text(Field::Japanese, "新しい下書き".into()),
+    );
+    send(&mut app, Action::Category(Category::Flask));
+    keyword(&mut app, "current, literal keyword");
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    let before = state.current.clone();
+    let history = state.past.len();
+    for message in captured {
+        let _ = app.update(message);
+    }
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert!(state.current == before);
+    assert_eq!(state.past.len(), history);
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.selected, selection);
+    assert_eq!(app.tab.revision, revision);
+    let live = state.metadata_control_message(DraftAction::Metadata(Action::Text(
+        Field::Author,
+        "Live author".into(),
+    )));
+    let _ = app.update(live);
+    let state = app.tab.equipment_authoring.as_ref().unwrap();
+    assert_eq!(state.current.metadata.author, "Live author");
+    assert_eq!(state.current.name, before.name);
+    assert_eq!(state.current.metadata.japanese, before.metadata.japanese);
+    assert!(state.current.metadata.keywords == before.metadata.keywords);
+    assert_eq!(state.past.len(), history + 1);
 }

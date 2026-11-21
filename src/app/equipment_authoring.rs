@@ -21,6 +21,10 @@ pub enum Action {
     Length(String),
     Name(String),
     Metadata(metadata::Action),
+    MetadataControl {
+        draft: String,
+        action: Box<Action>,
+    },
     SelectShape(shapes::Choice),
     ShapeAt {
         at: Point,
@@ -325,7 +329,7 @@ impl App {
 
     pub(super) fn equipment_authoring_action(&mut self, action: Action) -> Task<Message> {
         // Native value operations can finish after a different shape or draft
-        // becomes current. Retain the target of the picker that offered it.
+        // becomes current. Retain the target of the control that offered it.
         let action =
             match action {
                 Action::ShapeControl {
@@ -336,6 +340,17 @@ impl App {
                     if !self.tab.equipment_authoring.as_ref().is_some_and(|state| {
                         state.identity == draft && state.selected_shape == shape
                     }) {
+                        return Task::none();
+                    }
+                    *action
+                }
+                Action::MetadataControl { draft, action } => {
+                    if !self
+                        .tab
+                        .equipment_authoring
+                        .as_ref()
+                        .is_some_and(|state| state.identity == draft)
+                    {
                         return Task::none();
                     }
                     *action
@@ -845,13 +860,13 @@ impl App {
             section("Define equipment"),
             text("English name").size(12),
             reshiki::accessibility::text_input(
-                "equipment-piece-name",
+                state.metadata_control_id("equipment-piece-name"),
                 "English equipment name",
                 "Piece name",
                 &current.name,
             )
             .style(crate::appearance::input_style)
-            .on_input(|value| Message::EquipmentAuthoring(Action::Name(value)))
+            .on_input(|value| state.metadata_control_message(Action::Name(value)))
             .on_submit(Message::ContextKey("Enter".into()))
             .padding(7)
             .size(12),

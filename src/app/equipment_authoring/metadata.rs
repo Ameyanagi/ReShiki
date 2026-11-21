@@ -169,16 +169,37 @@ const CATEGORIES: [Choice; 13] = [
     Choice(Category::Other, "Other"),
 ];
 
-fn message(action: Action) -> Message {
-    Message::EquipmentAuthoring(super::Action::Metadata(action))
+// Scope widget lookup as well as emitted messages: native requests may wait
+// either before or after their live-widget operation.
+fn control_id(draft: &str, id: &str) -> String {
+    format!("{id}-{draft}")
 }
 
-fn input<'a>(id: String, label: String, value: &str, field: Field) -> Element<'a, Message> {
+fn control_message(draft: &str, action: super::Action) -> Message {
+    Message::EquipmentAuthoring(super::Action::MetadataControl {
+        draft: draft.into(),
+        action: Box::new(action),
+    })
+}
+
+fn message(draft: &str, action: Action) -> Message {
+    control_message(draft, super::Action::Metadata(action))
+}
+
+fn input<'a>(
+    draft: &str,
+    id: String,
+    label: String,
+    value: &str,
+    field: Field,
+) -> Element<'a, Message> {
+    let id = control_id(draft, &id);
+    let draft = draft.to_owned();
     column![
         text(label.clone()).size(12),
         reshiki::accessibility::text_input(id, label, "", value)
             .style(crate::appearance::input_style)
-            .on_input(move |value| message(Action::Text(field, value)))
+            .on_input(move |value| message(&draft, Action::Text(field, value)))
             .on_submit(Message::ContextKey("Enter".into()))
             .padding(7)
             .size(12)
@@ -190,19 +211,28 @@ fn input<'a>(id: String, label: String, value: &str, field: Field) -> Element<'a
 }
 
 fn button(
+    draft: &str,
     id: String,
     label: String,
     caption: &'static str,
     action: Action,
 ) -> Element<'static, Message> {
-    reshiki::accessibility::button(id, label, text(caption).size(12))
+    reshiki::accessibility::button(control_id(draft, &id), label, text(caption).size(12))
         .style(super::super::workspace::control(false))
         .padding([5, 7])
-        .on_press(message(action))
+        .on_press(message(draft, action))
         .into()
 }
 
 impl State {
+    pub(super) fn metadata_control_id(&self, id: &str) -> String {
+        control_id(&self.identity, id)
+    }
+
+    pub(super) fn metadata_control_message(&self, action: super::Action) -> Message {
+        control_message(&self.identity, action)
+    }
+
     pub(super) fn edit_metadata(&mut self, action: Action) {
         let mut next = self.current.metadata.clone();
         next.edit(action);
@@ -215,10 +245,11 @@ impl State {
     pub(super) fn metadata_panel(&self) -> Element<'_, Message> {
         let m = &self.current.metadata;
         let category = CATEGORIES.iter().find(|v| v.0 == m.category).copied();
-        let choose = |c: Choice| message(Action::Category(c.0));
+        let choose = |c: Choice| message(&self.identity, Action::Category(c.0));
         let mut body = column![
             section("Piece details"),
             input(
+                &self.identity,
                 "equipment-metadata-japanese".into(),
                 "Japanese name (optional)".into(),
                 &m.japanese,
@@ -226,7 +257,7 @@ impl State {
             ),
             text("Category").size(12),
             reshiki::accessibility::select(
-                "equipment-metadata-category",
+                self.metadata_control_id("equipment-metadata-category"),
                 "Equipment category",
                 CATEGORIES.to_vec(),
                 category.map_or("", |c| c.1),
@@ -240,12 +271,14 @@ impl State {
             body = body.push(
                 row![
                     input(
+                        &self.identity,
                         format!("equipment-keyword-{}", entry.id),
                         format!("Keyword {}", i + 1),
                         &entry.value,
                         Field::Keyword(entry.id)
                     ),
                     button(
+                        &self.identity,
                         format!("equipment-remove-keyword-{}", entry.id),
                         format!("Remove keyword {}", i + 1),
                         "Remove",
@@ -258,6 +291,7 @@ impl State {
         }
         body = body
             .push(button(
+                &self.identity,
                 "equipment-add-keyword".into(),
                 "Add keyword".into(),
                 "Add keyword",
@@ -268,6 +302,7 @@ impl State {
             body = body.push(
                 column![
                     input(
+                        &self.identity,
                         format!("equipment-variant-name-{}", entry.id),
                         format!("Variant {} name", i + 1),
                         &entry.name,
@@ -275,12 +310,14 @@ impl State {
                     ),
                     row![
                         input(
+                            &self.identity,
                             format!("equipment-variant-value-{}", entry.id),
                             format!("Variant {} value", i + 1),
                             &entry.value,
                             Field::VariantValue(entry.id)
                         ),
                         button(
+                            &self.identity,
                             format!("equipment-remove-variant-{}", entry.id),
                             format!("Remove variant {}", i + 1),
                             "Remove",
@@ -294,18 +331,21 @@ impl State {
             );
         }
         body.push(button(
+            &self.identity,
             "equipment-add-variant".into(),
             "Add variant field".into(),
             "Add variant field",
             Action::AddVariant,
         ))
         .push(input(
+            &self.identity,
             "equipment-metadata-author".into(),
             "Author (optional)".into(),
             &m.author,
             Field::Author,
         ))
         .push(input(
+            &self.identity,
             "equipment-metadata-license".into(),
             "Licence (optional)".into(),
             &m.license,
