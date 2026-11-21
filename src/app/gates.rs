@@ -281,6 +281,14 @@ impl App {
             self.tabs.menu = false;
             return Break(Task::none());
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.inspector_open
+            && self.inspector_tab == InspectorTab::Assistant
+            && self.assistant.menu.is_some()
+            && matches!(message, Message::Escape)
+        {
+            return Break(self.assistant_action(super::assistant::Action::Menu(None)));
+        }
         if self.check_results && matches!(message, Message::Escape) {
             self.check_results = false;
             return Break(super::focus_drawing());
@@ -384,6 +392,13 @@ impl App {
                 Task::none()
             } else if self.cancel_model_generation() {
                 Task::none()
+            } else if self.inspector_open
+                && matches!(
+                    self.inspector_tab,
+                    InspectorTab::Names | InspectorTab::Assistant
+                )
+            {
+                self.close_inspector_page()
             } else if self.inspector_open
                 && self.inspector_tab == InspectorTab::Properties
                 && self.requested_molecular_properties()

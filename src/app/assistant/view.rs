@@ -1,6 +1,6 @@
 //! The assistant panel: conversation, activity, draft and result cards, composer and footer.
 use super::{Action, ChatMessage, Draft, Menu, action, card, surface};
-use crate::app::{App, InspectorTab, Message, document_tab::TabId};
+use crate::app::{App, Message, document_tab::TabId};
 use crate::canvas::layered::canvas;
 use iced::widget::{
     Space, button, column, container, mouse_area, opaque, row, scrollable, stack, text,
@@ -17,7 +17,7 @@ impl App {
             return self.assistant_elsewhere(id);
         }
         let chat = self.assistant_chat();
-        let header = panel_header();
+        let header = panel_header(self.inspector_page_back_label().unwrap_or("Properties"));
         let footer = self.assistant_footer();
         let result_navigation = self.assistant_result_navigation();
         let base: Element<'_, Message> = container(
@@ -87,6 +87,7 @@ impl App {
     fn assistant_elsewhere(&self, id: TabId) -> Element<'_, Message> {
         let name = self.strip().find(|tab| tab.id == id).map(|tab| tab.name());
         column![
+            panel_back(self.inspector_page_back_label().unwrap_or("Properties")),
             text(format!(
                 "This conversation belongs to {}.",
                 name.unwrap_or_else(|| "a closed drawing".into())
@@ -436,7 +437,11 @@ impl App {
                 if !matches!(key.status, text_editor::Status::Focused { .. }) {
                     return text_editor::Binding::from_key_press(key);
                 }
-                if key.modifiers.command()
+                if key.key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape) {
+                    // A bare Unfocus deliberately bubbles in Iced. Consume
+                    // this field's Escape before the page's back shortcut.
+                    Some(text_editor::Binding::Sequence(vec![text_editor::Binding::Unfocus]))
+                } else if key.modifiers.command()
                     && key.key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter)
                 {
                     Some(text_editor::Binding::Custom(Message::Assistant(
@@ -592,28 +597,53 @@ fn codex_reply(reply: &str) -> Element<'_, Message> {
     .spacing(6)
     .into()
 }
-fn panel_header<'a>() -> Element<'a, Message> {
+
+fn panel_back<'a>(previous: &str) -> Element<'a, Message> {
+    super::super::workspace::hover_hint(
+        reshiki::accessibility::button(
+            "inspector-page-back",
+            format!("Back to {previous}"),
+            text("‹").size(18),
+        )
+        .padding([3, 8])
+        .style(super::super::workspace::control(false))
+        .on_press(Message::InspectorAction(
+            super::super::inspector::Action::BackPage,
+        )),
+        "Back to inspector",
+        tooltip::Position::Bottom,
+    )
+    .into()
+}
+
+fn panel_header<'a>(previous: &str) -> Element<'a, Message> {
     row![
-        super::super::workspace::hover_hint(
-            button(text("‹").size(18))
-                .padding([3, 8])
-                .style(super::super::workspace::control(false))
-                .on_press(Message::Inspector(InspectorTab::Properties)),
-            "Back to inspector",
-            tooltip::Position::Bottom
-        ),
+        panel_back(previous),
         text("Assistant").size(16),
         Space::new().width(Length::Fill),
         super::super::workspace::hover_hint(
-            action("＋", Action::Reset),
+            reshiki::accessibility::button(
+                "assistant-new-conversation",
+                "New conversation",
+                text("＋").size(12),
+            )
+            .padding([7, 10])
+            .style(super::super::workspace::control(false))
+            .on_press(Message::Assistant(Action::Reset)),
             "New conversation",
             tooltip::Position::Bottom
         ),
         super::super::workspace::hover_hint(
-            button(text("×").size(18))
-                .padding([3, 8])
-                .style(super::super::workspace::control(false))
-                .on_press(Message::ToggleInspector),
+            reshiki::accessibility::button(
+                "inspector-page-close",
+                "Close Assistant",
+                text("×").size(18),
+            )
+            .padding([3, 8])
+            .style(super::super::workspace::control(false))
+            .on_press(Message::InspectorAction(
+                super::super::inspector::Action::BackPage
+            )),
             "Close assistant",
             tooltip::Position::Bottom
         )

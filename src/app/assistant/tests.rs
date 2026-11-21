@@ -350,7 +350,7 @@ fn menus_and_completion_preserve_history_scroll_until_jump_is_requested() {
 }
 
 #[test]
-fn selecting_and_styling_a_scheme_keeps_the_assistant_open_for_replacement() {
+fn a_new_selection_returns_to_properties_but_styling_keeps_the_assistant() {
     use crate::canvas::Edit;
     use reshiki::{
         arrows::{ArrowStyle, Preset},
@@ -400,7 +400,7 @@ fn selecting_and_styling_a_scheme_keeps_the_assistant_open_for_replacement() {
     let revision = app.tab.revision;
     let _ = app.update(Message::SelectAll);
     assert_eq!(app.tab.selected, original.all_ids());
-    assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
     for ids in [
         vec![carbon, oxygen],
         vec![caption],
@@ -408,10 +408,11 @@ fn selecting_and_styling_a_scheme_keeps_the_assistant_open_for_replacement() {
         vec![graphic],
         vec![],
     ] {
+        let _ = app.update(Message::Assistant(Action::Open));
         let _ = app.update(Message::Canvas(Edit::Select(ids.clone())));
         assert_eq!(app.tab.selected, ids);
         assert!(app.inspector_open);
-        assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+        assert_eq!(app.inspector_tab, InspectorTab::Properties);
         assert_eq!(app.tab.doc, original);
         assert_eq!(app.tab.revision, revision);
         assert!(!app.tab.history.can_undo());
@@ -419,6 +420,7 @@ fn selecting_and_styling_a_scheme_keeps_the_assistant_open_for_replacement() {
         assert_eq!(app.assistant.input.text(), "Replace this scheme");
     }
     let _ = app.update(Message::SelectAll);
+    let _ = app.update(Message::Assistant(Action::Open));
     let _ = app.update(Message::TextStyle(StyleChange::Color(
         reshiki::palette::Color::Custom([32, 80, 145]),
     )));

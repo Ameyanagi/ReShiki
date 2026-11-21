@@ -108,6 +108,7 @@ explains how the crates and modules fit together.
 - `src/app/inspector.rs`: Selection-focused properties and task-based export controls.
 - `src/app/inspector/context.rs`: Properties follows the selection; an idle canvas shows drawing settings, while a drawing tool shows the same defaults as its context row.
 - `src/app/inspector/identity.rs`: One-click molecular identity, using the Properties analysis and naming caches.
+- `src/app/inspector_pages.rs`: Chemical names and Assistant are pages within the ordinary inspector tabs.
 - `src/app/joining.rs`
 - `src/app/keyboard_drawing.rs`: Application routing for the pointer-independent drawing hotspot.
 - `src/app/label_refresh.rs`: A single label calculation in flight, with exact snapshot identity checks.

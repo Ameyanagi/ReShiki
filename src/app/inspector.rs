@@ -268,6 +268,7 @@ pub enum Action {
     ExportBackground(Option<crate::appearance::Background>),
     Chemical(ChemicalFormat),
     ChemicalMenu(bool),
+    BackPage,
     DismissMolecule,
     RefreshProperties,
     RefreshPropertiesFor(PropertyKey),
@@ -458,7 +459,8 @@ impl State {
                 self.close_menu();
                 self.chemical_menu = open;
             }
-            Action::DismissMolecule
+            Action::BackPage
+            | Action::DismissMolecule
             | Action::ExportBackground(_)
             | Action::RefreshProperties
             | Action::RefreshPropertiesFor(..)
@@ -508,6 +510,7 @@ pub(super) fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Mes
 }
 impl App {
     pub(super) fn show_molecular_properties(&mut self) -> Task<Message> {
+        self.enter_inspector_page(InspectorTab::Properties);
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Properties;
         self.tab.inspector_ui.model_controls = false;
@@ -707,6 +710,7 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::BackPage => self.close_inspector_page(),
             Action::DismissMolecule => self.dismiss_molecular_properties(),
             Action::CopyIdentity(field) => self.copy_identity(field),
             Action::IdentityCopied(key, result) => {
@@ -2636,12 +2640,7 @@ impl App {
     /// Returns the Import tab's focus task. `None` lets update_inner's
     /// inspector reveal apply.
     pub(super) fn show_inspector_tab(&mut self, tab: InspectorTab) -> Option<Task<Message>> {
-        if tab != InspectorTab::ThemeGenerator {
-            self.theme_library.editor = None;
-        }
-        if tab != InspectorTab::DrawingStyle {
-            self.tab.styles.editor = None;
-        }
+        self.enter_inspector_page(tab);
         if tab == InspectorTab::Labels {
             let atoms: Vec<_> = self
                 .tab

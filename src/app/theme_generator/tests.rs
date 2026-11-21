@@ -1,4 +1,81 @@
 use super::*;
+
+#[test]
+fn theme_draft_survives_nested_inspector_pages() {
+    use crate::app::{assistant, command_palette, inspector};
+
+    for commands in [false, true] {
+        for pages in [
+            [InspectorTab::Names, InspectorTab::Assistant],
+            [InspectorTab::Assistant, InspectorTab::Names],
+        ] {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            let drawing = app.tab.doc.clone();
+            for action in [
+                Action::Open,
+                Action::Name("Unfinished theme  ".into()),
+                Action::Lightness(CanvasTheme::Light, 43.),
+                Action::Chroma(CanvasTheme::Dark, 80.),
+                Action::Preview(Preview::Tiles),
+                Action::Bold(false),
+            ] {
+                let _ = app.update(Message::ThemeGenerator(action));
+            }
+            let snapshot = |app: &App| {
+                let editor = app
+                    .theme_library
+                    .editor
+                    .as_ref()
+                    .expect("retained theme draft");
+                (
+                    editor.candidate().unwrap(),
+                    editor.name.clone(),
+                    editor.preview,
+                    editor.bold,
+                )
+            };
+            let draft = snapshot(&app);
+            for page in pages {
+                if commands && (page == InspectorTab::Names || !cfg!(target_arch = "wasm32")) {
+                    let name = if page == InspectorTab::Names {
+                        "Chemical names panel"
+                    } else {
+                        "Assistant panel"
+                    };
+                    let _ = app.update(Message::Commands(command_palette::Action::Open));
+                    let _ = app.update(Message::Commands(command_palette::Action::Query(
+                        name.into(),
+                    )));
+                    assert_eq!(app.commands.current().unwrap().name, name);
+                    let _ = app.update(Message::Commands(command_palette::Action::Submit));
+                    assert!(!app.commands.open);
+                } else {
+                    let _ = app.update(if page == InspectorTab::Assistant {
+                        Message::Assistant(assistant::Action::Open)
+                    } else {
+                        Message::Inspector(page)
+                    });
+                }
+                assert_eq!(app.inspector_tab, page);
+                assert_eq!(snapshot(&app), draft);
+            }
+            for previous in [pages[0], InspectorTab::ThemeGenerator] {
+                let _ = app.update(if commands {
+                    Message::InspectorAction(inspector::Action::BackPage)
+                } else {
+                    Message::Escape
+                });
+                assert_eq!(app.inspector_tab, previous);
+                assert_eq!(snapshot(&app), draft);
+            }
+            assert_eq!(app.tab.doc, drawing);
+            assert!(!app.tab.history.can_undo());
+            assert!(app.theme_library.themes().is_empty());
+        }
+    }
+}
+
 #[test]
 fn imported_inherited_ring_fills_preview_like_the_canvas() {
     let mut theme = ThemeFile::capture(&Document::default());

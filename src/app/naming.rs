@@ -1,5 +1,5 @@
 //! Per-document local name parsing, editable previews and rule-based name generation.
-use super::workspace::{accessible_checkbox, accessible_command, command, muted_text, section};
+use super::workspace::{accessible_checkbox, accessible_command, muted_text, section};
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use crate::canvas::{Camera, Edit, MoleculeCanvas, PreviewStyles, Tool};
@@ -297,6 +297,11 @@ impl Drop for State {
     }
 }
 impl State {
+    #[cfg(test)]
+    pub(super) fn input_name(&self) -> &str {
+        &self.name
+    }
+
     pub(super) fn is_pending(&self) -> bool {
         self.pending.is_some()
     }
@@ -1083,12 +1088,17 @@ impl App {
         }
     }
 
-    /// The Chemical names inspector, opened from a molecule's right-click
-    /// menu: a fixed header above the scrolling panel.
+    /// The Chemical names inspector keeps its fixed header above the scrolling panel.
     pub(super) fn naming_inspector(&self) -> Element<'_, Message> {
+        let previous = self.inspector_page_back_label().unwrap_or("Properties");
         let header = column![
             row![
-                command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
+                accessible_command(
+                    "inspector-page-back",
+                    format!("Back to {previous}"),
+                    format!("‹ {previous}"),
+                )
+                .on_press(Message::InspectorAction(super::inspector::Action::BackPage)),
                 Space::new().width(Length::Fill),
                 accessible_command("naming.import", "Open SMILES import", "Import")
                     .on_press(Message::Inspector(InspectorTab::Import)),
