@@ -362,6 +362,85 @@ fn atom_only_preview_follows_move_and_resize_without_pinning_or_renumbering() {
 }
 
 #[test]
+fn caption_aware_previews_match_commit_and_keep_explicit_offsets() {
+    use crate::{linked_properties, molecule_names};
+    for legacy_name in [false, true] {
+        let mut before = Document::default();
+        let atoms = molecule(&mut before, 0., 0.);
+        before.atom_mut(atoms[1]).unwrap().position.x = 500.;
+        let name = "2-(acetyloxy)benzoic acid";
+        let name_id = if legacy_name {
+            molecule_names::show(
+                &mut before,
+                &atoms,
+                name.into(),
+                "CC".into(),
+                TextFormat::default(),
+                true,
+            )
+            .unwrap()
+        } else {
+            linked_properties::rename(&mut before, &atoms, name, TextFormat::default(), false)
+                .unwrap();
+            let id = before.property_captions[0].annotation.unwrap();
+            before.translate(&[id], 7., 11.);
+            id
+        };
+        add(&mut before, &atoms);
+        let number_id = label(&before, &atoms).unwrap().annotation;
+        before.translate(&[number_id], 5., 9.);
+        for explicit_captions in [false, true] {
+            for (scale, degrees, delta) in [
+                (0.25, 0., Point::default()),
+                (1., 90., Point::default()),
+                (1., 0., Point::new(60., 20.)),
+            ] {
+                let mut ids = atoms.clone();
+                if explicit_captions {
+                    ids.extend([name_id, number_id]);
+                }
+                let mut preview = before.clone();
+                editing::transform_about(&mut preview, &ids, Point::default(), scale, degrees);
+                preview.translate(&ids, delta.x, delta.y);
+                let mut committed = preview.clone();
+                let identities = molecule_names::IDENTITY_ENTRIES.with(|count| count.get());
+                preview_layout(&mut preview, &before);
+                assert_eq!(
+                    molecule_names::IDENTITY_ENTRIES.with(|count| count.get()),
+                    identities,
+                    "geometry previews do not check chemical identity"
+                );
+                let _ = transaction::reconcile(&mut committed, before.clone()).unwrap();
+                assert_eq!(preview.annotations, committed.annotations);
+                assert_eq!(preview.compound_numbers, before.compound_numbers);
+                assert_eq!(preview.property_captions, before.property_captions);
+                assert_eq!(preview.molecule_names, before.molecule_names);
+                if !legacy_name && scale < 1. {
+                    let height = |doc: &Document| {
+                        doc.annotations
+                            .iter()
+                            .find(|a| a.id == name_id)
+                            .unwrap()
+                            .size()
+                            .1
+                    };
+                    assert!(
+                        height(&preview) > height(&before),
+                        "the narrowed name wraps"
+                    );
+                }
+            }
+        }
+        let mut preview = before.clone();
+        preview.translate(&[number_id], -13., 17.);
+        let mut committed = preview.clone();
+        preview_layout(&mut preview, &before);
+        let _ = transaction::reconcile(&mut committed, before.clone()).unwrap();
+        assert_eq!(preview.annotations, committed.annotations);
+    }
+}
+
+#[test]
 fn atom_merge_remaps_removed_instances_and_retains_fixed_number() {
     let mut doc = Document::default();
     let a = molecule(&mut doc, 0., 0.);

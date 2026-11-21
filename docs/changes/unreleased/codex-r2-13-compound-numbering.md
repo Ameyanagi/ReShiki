@@ -9,4 +9,6 @@ issues: []
   override such as **2a**. Numbers follow molecule moves, save with their links
   in `.rsk` files, and remain separate from chemical names and property captions.
   Whole-molecule copies get fresh automatic numbers; edited copies keep their
-  text. Other formats keep the visible labels as plain text.
+  text. Resize previews keep numbers below wrapping name captions, matching
+  their final position when the drag ends. Other formats keep the visible labels
+  as plain text.

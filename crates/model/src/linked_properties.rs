@@ -458,6 +458,53 @@ fn anchor(doc: &Document, atoms: &[u64]) -> Option<Point> {
     Some(Point::new((lo.x + hi.x) / 2., hi.y))
 }
 
+fn rewrap(doc: &Document, link: &PropertyCaption, caption: &mut Annotation) {
+    let width = caption.size().0;
+    wrap(doc, link, caption);
+    caption.position.x += (width - caption.size().0) / 2.;
+}
+
+/// Follow geometry-only previews without recalculating properties, checking
+/// identity, or changing links. Explicitly moved captions keep their offsets.
+pub(crate) fn preview_layout(doc: &mut Document, before: &Document) {
+    let captions: Vec<_> = doc
+        .property_captions
+        .iter()
+        .filter_map(|link| {
+            let mut caption = doc
+                .annotations
+                .iter()
+                .find(|a| Some(a.id) == link.annotation && a.text == link.text)?
+                .clone();
+            let old = before
+                .property_captions
+                .iter()
+                .find(|old| old.annotation == link.annotation)?;
+            let shift = before
+                .annotations
+                .iter()
+                .any(|a| a.id == caption.id && a.position == caption.position)
+                .then(|| anchor(before, &old.atoms))
+                .flatten()
+                .zip(anchor(doc, &link.atoms));
+            if link.properties.first() == Some(&Property::Name)
+                && reshaped(before, doc, &link.atoms)
+            {
+                rewrap(doc, link, &mut caption);
+            }
+            if let Some((from, to)) = shift {
+                caption.position = caption.position.offset(to.x - from.x, to.y - from.y);
+            }
+            Some(caption)
+        })
+        .collect();
+    for caption in captions {
+        if let Some(current) = doc.annotations.iter_mut().find(|a| a.id == caption.id) {
+            *current = caption;
+        }
+    }
+}
+
 /// Show or hide one property of the molecule made of `atoms`, which must be
 /// one whole connected component. The first property adds the caption below
 /// the molecule. Hiding the last removes it, and the link stays only to keep a
@@ -815,9 +862,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             {
                 // Restyled text or a reshaped molecule wraps the name again;
                 // a width set by hand stays until the values change.
-                let width = caption.size().0;
-                wrap(doc, &link, &mut caption);
-                caption.position.x += (width - caption.size().0) / 2.;
+                rewrap(doc, &link, &mut caption);
             }
             if let Some((from, to)) = shift.zip(anchor(doc, &link.atoms)) {
                 caption.position = caption.position.offset(to.x - from.x, to.y - from.y);

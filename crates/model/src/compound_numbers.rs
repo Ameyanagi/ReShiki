@@ -200,8 +200,23 @@ pub fn renumber(doc: &mut Document) {
 
 /// Follow atom-only canvas previews without text edits, pinning, renumbering
 /// or history work. Captions explicitly transformed with the atoms are already
-/// in place. The committed transaction also refreshes related name/property text.
+/// in place. Related captions lay out first, as in the committed transaction.
 pub fn preview_layout(doc: &mut Document, before: &Document) {
+    if !doc.molecule_names.is_empty() {
+        let moved: Vec<_> = doc
+            .compound_numbers
+            .iter()
+            .filter(|link| {
+                link.atoms.iter().any(|id| {
+                    let position = |doc: &Document| doc.atom(*id).map(|a| (a.position, a.depth));
+                    position(doc) != position(before)
+                })
+            })
+            .flat_map(|link| link.atoms.iter().copied())
+            .collect();
+        crate::molecule_names::preview_layout(doc, &moved);
+    }
+    crate::linked_properties::preview_layout(doc, before);
     for link in &doc.compound_numbers {
         let Some(old) = before
             .compound_numbers
@@ -220,11 +235,7 @@ pub fn preview_layout(doc: &mut Document, before: &Document) {
         {
             continue;
         }
-        let bottom = |doc: &Document, atoms: &[u64]| {
-            let (lo, hi) = crate::scene::selection_bounds(doc, atoms)?;
-            Some(Point::new((lo.x + hi.x) / 2., hi.y))
-        };
-        if let Some((from, to)) = bottom(before, &old.atoms).zip(bottom(doc, &link.atoms))
+        if let Some((from, to)) = anchor(before, &old.atoms).zip(anchor(doc, &link.atoms))
             && let Some(a) = doc.annotations.iter_mut().find(|a| a.id == link.annotation)
         {
             a.position = a.position.offset(to.x - from.x, to.y - from.y);
