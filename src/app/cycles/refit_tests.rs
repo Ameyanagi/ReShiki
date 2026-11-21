@@ -82,12 +82,14 @@ fn a_width_edit_with_a_fitted_cut_reviews_and_applies_the_exact_snapshot_once() 
 fn a_shape_edit_with_a_fitted_cut_can_be_discarded_without_history() {
     let (mut app, id) = fitted_cycle();
     let before = app.tab.doc.clone();
-    let _ = app.update(Message::Cycle(Action::Shape(Shape::Rectangle)));
+    // Circle retires the shaped source and transports its cut, requiring
+    // review; a compatible shaped outline can preserve the cut in place.
+    let _ = app.update(Message::Cycle(Action::Shape(Shape::Circle)));
     assert!(!app.error, "{}", app.status);
     assert_eq!(app.tab.doc, before);
     let preview = app.display_document();
     let g = preview.graphics.iter().find(|g| g.id == id).unwrap();
-    assert_eq!(g.cycle.as_ref().unwrap().shape, Shape::Rectangle);
+    assert_eq!(g.cycle.as_ref().unwrap().shape, Shape::Circle);
     assert_ne!(preview.atoms, before.atoms);
     assert!(app.tab.cycle_inputs.proposal.is_some());
     let _ = app.update(Message::Escape);

@@ -270,7 +270,7 @@ impl Profile {
                 }
             };
             for pair in cuts.windows(2) {
-                let (a, b) = (pair[0], pair[1]);
+                let &[a, b] = pair else { continue };
                 if inside(curve_point(curve, a + (b - a) * 0.5), bounds) {
                     intervals.push((station_at(a), station_at(b)));
                 }
@@ -467,7 +467,7 @@ fn coordinate_roots(curve: Segment, axis: usize, value: f64) -> Vec<f64> {
         }
     }
     for pair in knots.windows(2) {
-        let (mut a, mut b) = (pair[0], pair[1]);
+        let &[mut a, mut b] = pair else { continue };
         let (mut fa, fb) = (eval(a), eval(b));
         if fa == 0. || fb == 0. || fa.is_sign_positive() == fb.is_sign_positive() {
             continue;
@@ -653,7 +653,11 @@ mod tests {
             1.,
             false,
         );
-        let forward = Profile::new(&[baseline.clone()], &[painted.clone()]).unwrap();
+        let forward = Profile::new(
+            std::slice::from_ref(&baseline),
+            std::slice::from_ref(&painted),
+        )
+        .unwrap();
         let reverse_section = |source: &CubicSection| {
             section(
                 native(source)

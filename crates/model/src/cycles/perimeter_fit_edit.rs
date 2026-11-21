@@ -6,6 +6,26 @@ use crate::{
     graphics::Graphic,
 };
 
+fn same_gram(a: &Graphic, b: &Graphic) -> bool {
+    let gram = |g: &Graphic| {
+        let (x, y) = (g.axis_x, g.axis_y);
+        let dot =
+            |a: Point, b: Point| f64::from(a.x) * f64::from(b.x) + f64::from(a.y) * f64::from(b.y);
+        [dot(x, x), dot(y, y), dot(x, y)]
+    };
+    let (a, b) = (gram(a), gram(b));
+    // The near-zero cross term rounds at the product-of-axis-lengths
+    // scale, not at its own value. Frame inputs have native f32 precision.
+    let scales = [
+        a[0].max(b[0]),
+        a[1].max(b[1]),
+        (a[0] * a[1]).sqrt().max((b[0] * b[1]).sqrt()),
+    ];
+    a.into_iter().zip(b).zip(scales).all(|((a, b), scale)| {
+        (a - b).abs() <= 32. * f64::from(f32::EPSILON) * scale.max(f64::MIN_POSITIVE)
+    })
+}
+
 fn shift(doc: &mut Document, part: &[u64], target: Point) -> bool {
     let nominal = nominal_document(doc);
     let Some(ink) = crate::scene::primary_selections_bounds(&nominal, &[part.to_vec()])
@@ -48,18 +68,7 @@ pub(in crate::cycles) fn moved(before: &Document, after: &mut Document, moved: &
         let new_bounds = crate::scene::primary_selections_bounds(&new_nominal, &b.intermediates);
         let whole =
             moved.contains(&old.id) && a.parts().flat_map(|(_, p)| p).all(|id| moved.contains(id));
-        let gram = |g: &Graphic| {
-            [
-                g.axis_x.x * g.axis_x.x + g.axis_x.y * g.axis_x.y,
-                g.axis_y.x * g.axis_y.x + g.axis_y.y * g.axis_y.y,
-                g.axis_x.x * g.axis_y.x + g.axis_x.y * g.axis_y.y,
-            ]
-        };
-        let rigid = whole
-            && gram(old)
-                .into_iter()
-                .zip(gram(new))
-                .all(|(a, b)| (a - b).abs() <= 1e-5 * a.abs().max(b.abs()).max(1.));
+        let rigid = whole && same_gram(old, new);
         for (r, run) in a.split_runs.iter().enumerate() {
             let Some(next) = b
                 .split_runs
@@ -68,7 +77,9 @@ pub(in crate::cycles) fn moved(before: &Document, after: &mut Document, moved: &
             else {
                 continue;
             };
-            let next_run = &b.split_runs[next];
+            let Some(next_run) = b.split_runs.get(next) else {
+                continue;
+            };
             let slots = [run.first_step, run.end_slot(a.intermediates.len())];
             let next_slots = [
                 next_run.first_step,
@@ -100,7 +111,17 @@ pub(in crate::cycles) fn moved(before: &Document, after: &mut Document, moved: &
                 } else {
                     (run.source_start, run.source_span)
                 };
-                rebase.push((old.id, next, if start >= 1. { 0. } else { start }, span, r));
+                rebase.push((
+                    old.id,
+                    next,
+                    if start >= 1. || start == 0. {
+                        0.
+                    } else {
+                        start
+                    },
+                    span,
+                    r,
+                ));
             } else if outer_changed || trims_changed || geometry_changed {
                 let Some(outline) = crate::cycles::outline(new) else {
                     *after = before.clone();
@@ -143,7 +164,11 @@ pub(in crate::cycles) fn moved(before: &Document, after: &mut Document, moved: &
                 rebase.push((
                     old.id,
                     next,
-                    if start >= 1. { 0. } else { start },
+                    if start >= 1. || start == 0. {
+                        0.
+                    } else {
+                        start
+                    },
                     p.length / outline.length(),
                     r,
                 ));
@@ -166,6 +191,9 @@ pub(in crate::cycles) fn moved(before: &Document, after: &mut Document, moved: &
     // bounds/label calculation never enters this path.
     let mut slides = vec![];
     for &id in &active {
+        if moved.contains(&id) {
+            continue;
+        }
         let Some(g) = after.graphics.iter().find(|g| g.id == id) else {
             continue;
         };
@@ -176,14 +204,21 @@ pub(in crate::cycles) fn moved(before: &Document, after: &mut Document, moved: &
             continue;
         };
         for (r, run) in c.split_runs.iter().enumerate() {
+            let selected: Vec<_> = (0..run.cuts.len())
+                .map(|cut| {
+                    c.intermediates
+                        .get((run.first_step + cut + 1) % c.intermediates.len())
+                        .is_some_and(|part| part.iter().any(|id| moved.contains(id)))
+                })
+                .collect();
             for (cut, &old) in run.cuts.iter().enumerate() {
+                if selected.get(cut) != Some(&true) {
+                    continue;
+                }
                 let slot = (run.first_step + cut + 1) % c.intermediates.len();
                 let Some(part) = c.intermediates.get(slot) else {
                     continue;
                 };
-                if !part.iter().any(|id| moved.contains(id)) || moved.contains(&id) {
-                    continue;
-                }
                 let Some(source) = layout.sources.get(r).and_then(Option::as_ref) else {
                     continue;
                 };
@@ -195,21 +230,51 @@ pub(in crate::cycles) fn moved(before: &Document, after: &mut Document, moved: &
                 .flatten() else {
                     continue;
                 };
-                if let Some(u) = source.projected_cut(cut, center_of(body)) {
+                let group = (0..cut)
+                    .rev()
+                    .find(|i| selected.get(*i) != Some(&true))
+                    .map_or(0, |i| i + 1);
+                let next = (cut + 1..run.cuts.len()).find(|i| selected.get(*i) != Some(&true));
+                let bracket = (
+                    group
+                        .checked_sub(1)
+                        .and_then(|i| run.cuts.get(i))
+                        .copied()
+                        .unwrap_or(0.),
+                    next.and_then(|i| run.cuts.get(i)).copied().unwrap_or(1.),
+                );
+                if let Some(u) = source.projected_cut(center_of(body), bracket) {
                     let distance = source
                         .profiles
                         .center
                         .distance_at(old)
                         .zip(source.profiles.center.distance_at(u))
                         .map_or(f64::INFINITY, |(a, b)| (a - b).abs());
-                    if distance > 0.01 {
-                        slides.push((id, r, cut, slot, u));
-                    }
+                    slides.push((
+                        id,
+                        r,
+                        group,
+                        cut,
+                        slot,
+                        if distance <= 0.01 { old } else { u },
+                    ));
                 }
             }
         }
     }
-    for &(id, r, cut, slot, u) in &slides {
+    let mut groups = vec![];
+    for &(id, r, group, _, _, _) in &slides {
+        if !groups.contains(&(id, r, group)) {
+            groups.push((id, r, group));
+        }
+    }
+    // Neighboring selected cuts share a child. Install and validate all
+    // stations in that ordered group together, never against stale neighbors.
+    for (id, r, group) in groups {
+        let entries: Vec<_> = slides
+            .iter()
+            .filter(|&&(host, run, g, _, _, _)| (host, run, g) == (id, r, group))
+            .collect();
         let mut candidate = after.clone();
         let Some(c) = candidate
             .graphics
@@ -219,10 +284,11 @@ pub(in crate::cycles) fn moved(before: &Document, after: &mut Document, moved: &
         else {
             continue;
         };
-        let Some(value) = c.split_runs.get_mut(r).and_then(|r| r.cuts.get_mut(cut)) else {
-            continue;
-        };
-        *value = u;
+        for &&(_, _, _, cut, _, u) in &entries {
+            if let Some(value) = c.split_runs.get_mut(r).and_then(|r| r.cuts.get_mut(cut)) {
+                *value = u;
+            }
+        }
         if c.validate().is_err() {
             continue;
         }
@@ -231,7 +297,11 @@ pub(in crate::cycles) fn moved(before: &Document, after: &mut Document, moved: &
             .iter()
             .find(|g| g.id == id)
             .and_then(|g| Layout::graphic(&candidate, g))
-            .is_some_and(|l| l.cut_intersects(slot) == Some(true));
+            .is_some_and(|layout| {
+                entries
+                    .iter()
+                    .all(|&&(_, _, _, _, slot, _)| layout.cut_intersects(slot) == Some(true))
+            });
         if keep {
             *after = candidate;
         }
@@ -503,23 +573,28 @@ pub(in crate::cycles) fn edited(
         .and_then(|g| g.cycle.as_deref())
         .is_some_and(|c| !c.split_runs.is_empty());
     if retained {
-        // Mark the host as edited: unchanged intersecting cut ink stays put;
-        // only cuts left behind by the new source are transported.
-        let positions: Vec<_> = old_cycle
-            .intermediates
-            .iter()
-            .map(|ids| crate::scene::selection_bounds(after, ids))
-            .collect();
-        let requested = *after != *before;
-        moved(before, after, &[id]);
-        if requested && after == before {
-            return Err("Cycle arrows need room between structures".into());
+        if !reversed {
+            // Mark the host as edited: unchanged intersecting cut ink stays put;
+            // only cuts left behind by the new source are transported.
+            let positions: Vec<_> = old_cycle
+                .intermediates
+                .iter()
+                .map(|ids| crate::scene::selection_bounds(after, ids))
+                .collect();
+            let requested = *after != *before;
+            moved(before, after, &[id]);
+            if requested && after == before {
+                return Err("Cycle arrows need room between structures".into());
+            }
+            changed_positions |= old_cycle
+                .intermediates
+                .iter()
+                .zip(positions)
+                .any(|(ids, b)| crate::scene::selection_bounds(after, ids) != b);
         }
-        changed_positions |= old_cycle
-            .intermediates
-            .iter()
-            .zip(positions)
-            .any(|(ids, b)| crate::scene::selection_bounds(after, ids) != b);
+        // Reverse already permuted boundaries and frozen intervals together.
+        // Matching those runs by their old indices would rebase the wrong
+        // family (or overwrite its capture from a transient label cache).
         if !valid(after, id) {
             return Err("Cycle arrows need room between structures".into());
         }

@@ -201,3 +201,106 @@ fn a_cycle_drag_keeps_linked_captions_and_uses_the_current_precision_in_its_snap
         assert_eq!(app.tab.doc, preview);
     }
 }
+
+#[test]
+fn suzuki_catalyst_drop_preserves_its_pose_through_preview_release_reopen_move_and_undo() {
+    let mut doc = Document::from_native_file(include_bytes!(
+        "../../../tests/fixtures/cycles/suzuki-rectangle-bow180-target.rsk"
+    ))
+    .unwrap();
+    let target = middle(&doc, &(137..=143).collect::<Vec<_>>());
+    // Retain the aryl–Pd–Br graph from the original oxidative-addition
+    // intermediate, with its spectator phosphine ligands omitted.
+    let catalyst = reshiki::editing::selection(&doc, &(40..=47).collect::<Vec<_>>());
+    assert_eq!(catalyst.atoms.len(), 8);
+    assert!(catalyst.atoms.iter().any(|atom| atom.element == "Pd"));
+    assert!(catalyst.atoms.iter().any(|atom| atom.element == "Br"));
+    doc.delete(&(137..=143).collect::<Vec<_>>());
+    let moved = reshiki::editing::append_preserving_layout(&mut doc, &catalyst, Point::default());
+    let from = middle(&doc, &moved);
+    let loose_at = target.offset(600., -500.);
+    doc.translate(&moved, loose_at.x - from.x, loose_at.y - from.y);
+    doc.validate().unwrap();
+    let before = doc;
+    let from = middle(&before, &moved);
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = before.clone();
+    app.tab.camera.zoom = 0.74;
+    let (preview, drop, edit) = MoleculeCanvas::select_drag_candidate(
+        &before,
+        &moved,
+        from,
+        target,
+        app.tab.camera.zoom,
+        app.appearance.two_decimal_weight,
+    );
+    let drop = drop.expect("the actual bowed Suzuki shaft accepts the catalyst intermediate");
+    assert_eq!((drop.cycle, drop.role), (191, Role::Intermediate(2)));
+    for atom in before.atoms.iter().filter(|atom| moved.contains(&atom.id)) {
+        assert!(
+            preview
+                .atom(atom.id)
+                .unwrap()
+                .position
+                .distance(atom.position.offset(target.x - from.x, target.y - from.y))
+                < 0.001,
+            "insertion must preserve the exact pose shown under the pointer"
+        );
+    }
+    assert_eq!(preview.bonds, before.bonds);
+    let _ = app.update(Message::Canvas(edit));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, preview);
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let reopened = Document::from_native_file(&preview.file_json().unwrap()).unwrap();
+    assert_eq!(reopened, preview);
+    let capture = reopened.graphics[0]
+        .cycle
+        .as_ref()
+        .unwrap()
+        .split_runs
+        .clone();
+    assert_eq!(capture.len(), 1);
+    let mut reopened_app = App::new().0;
+    reopened_app.tab.busy = false;
+    reopened_app.tab.doc = reopened;
+    let all = reopened_app.tab.doc.all_ids();
+    let _ = reopened_app.update(Message::Canvas(Edit::Move(all, 20., 10.)));
+    assert!(!reopened_app.error, "{}", reopened_app.status);
+    assert_eq!(
+        reopened_app.tab.doc.graphics[0]
+            .cycle
+            .as_ref()
+            .unwrap()
+            .split_runs,
+        capture,
+        "a whole-cycle move preserves the captured source stations"
+    );
+    let _ = reopened_app.update(Message::Undo);
+    assert_eq!(reopened_app.tab.doc, preview);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, preview);
+    if let Some(dir) = std::env::var_os("RESHIKI_CYCLE_CATALYST_QA_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, doc) in [("before", &before), ("after", &preview)] {
+            std::fs::write(dir.join(format!("{name}.rsk")), doc.file_json().unwrap()).unwrap();
+        }
+        std::fs::write(
+            dir.join("drag.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "cycle": 191,
+                "part": moved,
+                "from": from,
+                "to": target,
+                "zoom": 0.74,
+                "intermediate": "aryl–Pd–Br; spectator phosphine ligands omitted"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    }
+}

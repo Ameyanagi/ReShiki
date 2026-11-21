@@ -1261,7 +1261,8 @@ pub fn drop_target(doc: &Document, moved: &[u64]) -> Option<Target> {
         let bond = doc.drawing_style.bond_length_world;
         let n = cycle.intermediates.len();
         let (role, arrows) = if cycle.shape != Shape::Circle {
-            match perimeter_drop::target(doc, g, p) {
+            let point = perimeter_arcs::fits::drop_point(doc, &part)?;
+            match perimeter_drop::target(doc, g, point) {
                 perimeter_drop::Drop::Miss => return None,
                 perimeter_drop::Drop::Blocked => {
                     blocked = true;
@@ -1452,9 +1453,10 @@ pub fn assign(doc: &mut Document, target: &Target) -> bool {
         let n = cycle.intermediates.len();
         let station = if native && n > 0 {
             let donor = (i + n - 1) % n;
-            let Some(station) =
-                perimeter_drop::insertion_station(doc, g, donor, center_of(target.ink))
-            else {
+            let Some(point) = perimeter_arcs::fits::drop_point(doc, &target.part) else {
+                return false;
+            };
+            let Some(station) = perimeter_drop::insertion_station(doc, g, donor, point) else {
                 return false;
             };
             Some(station)
@@ -1519,13 +1521,12 @@ pub fn assign(doc: &mut Document, target: &Target) -> bool {
     if let Some(split) = split {
         split::apply(doc, split);
     }
-    if let Some(baseline) = baseline {
-        if !perimeter_arcs::fits::finish_split(&baseline, doc, target)
-            || !perimeter_arcs::fits::valid(doc, target.cycle)
-        {
-            *doc = baseline;
-            return false;
-        }
+    if let Some(baseline) = baseline
+        && (!perimeter_arcs::fits::finish_split(&baseline, doc, target)
+            || !perimeter_arcs::fits::valid(doc, target.cycle))
+    {
+        *doc = baseline;
+        return false;
     }
     left
 }

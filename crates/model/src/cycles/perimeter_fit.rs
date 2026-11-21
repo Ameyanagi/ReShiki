@@ -106,6 +106,13 @@ fn nominal_document(doc: &Document) -> Document {
     nominal
 }
 
+pub(in crate::cycles) fn drop_point(doc: &Document, part: &[u64]) -> Option<Point> {
+    crate::scene::primary_selections_bounds(&nominal_document(doc), &[part.to_vec()])
+        .pop()
+        .flatten()
+        .map(center_of)
+}
+
 fn extra_ink(doc: &Document, part: &[u64]) -> Vec<Ink> {
     crate::scene::participant_indicator_ink_boxes(doc, part)
         .into_iter()
@@ -123,6 +130,7 @@ fn connected_opening(
     station: f64,
     bracket: Opening,
     boxes: &[Ink],
+    bridge: f64,
 ) -> Option<Opening> {
     let mut intervals: Vec<_> = boxes
         .iter()
@@ -132,7 +140,12 @@ fn connected_opening(
     let mut connected: Vec<Opening> = vec![];
     for (a, b) in intervals {
         if let Some(last) = connected.last_mut()
-            && a <= last.1 + 64. * f64::EPSILON
+            && (a <= last.1 + 64. * f64::EPSILON
+                || bridge > 0.
+                    && profile
+                        .distance_at(a)
+                        .zip(profile.distance_at(last.1))
+                        .is_some_and(|(a, b)| a - b <= bridge))
         {
             last.1 = last.1.max(b);
         } else {
@@ -145,15 +158,22 @@ fn connected_opening(
 }
 
 fn part_ink(doc: &Document, part: &[u64]) -> Vec<Ink> {
-    crate::scene::selection_bounds(doc, part)
+    crate::scene::primary_selections_bounds(doc, &[part.to_vec()])
+        .pop()
+        .flatten()
         .into_iter()
-        .chain(
-            crate::molecule_names::include_annotations(doc, part)
-                .into_iter()
-                .filter(|id| !part.contains(id))
-                .filter_map(|id| crate::scene::selection_bounds(doc, &[id])),
-        )
+        .chain(extra_ink(doc, part))
         .collect()
+}
+
+fn head_envelope(g: &Graphic) -> f64 {
+    let style = arrow_style(g);
+    f64::from(
+        DEFAULT
+            .world(style.head_length_pt)
+            .hypot(DEFAULT.world(style.head_width_pt))
+            + DEFAULT.world(style.width_pt),
+    )
 }
 
 #[derive(Clone)]
@@ -302,11 +322,45 @@ impl Source {
             });
             source.openings.push(opening);
         }
+        let boxes = source.outer.map(|ink| ink.into_iter().collect());
+        source.crop_outer(g, boxes)?;
         Some(source)
     }
 
-    fn projected_cut(&self, cut: usize, point: Point) -> Option<f64> {
-        let bracket = self.cut_bracket(cut)?;
+    fn crop_outer(&mut self, g: &Graphic, boxes: [Vec<Ink>; 2]) -> Option<()> {
+        let c = g.cycle.as_deref()?;
+        for (end, boxes) in boxes.into_iter().enumerate() {
+            let step = c.steps.get(if end == 0 {
+                self.run.first_step
+            } else {
+                self.run.last_step(c.steps.len())
+            })?;
+            let control = if end == 0 {
+                step.lead_pt
+            } else {
+                step.trail_pt
+            };
+            let gap = DEFAULT.world((c.gap_pt + control.min(0.)).max(0.));
+            let boxes: Vec<_> = boxes.into_iter().map(|b| grown(b, gap)).collect();
+            let station = end as f64;
+            let bracket = if end == 0 {
+                self.bracket(0)?
+            } else {
+                self.bracket(self.cuts.len())?
+            };
+            for lane in 0..3 {
+                if let Some(profile) = self.lane(lane)
+                    && let Some((a, b)) = connected_opening(profile, station, bracket, &boxes, 0.)
+                {
+                    let crop = self.outer_crops.get_mut(end)?.get_mut(lane)?;
+                    *crop = if end == 0 { crop.max(b) } else { crop.min(a) };
+                }
+            }
+        }
+        Some(())
+    }
+
+    fn projected_cut(&self, point: Point, bracket: Opening) -> Option<f64> {
         [usize::from(self.run.source_reversible), 2]
             .into_iter()
             .take(if self.run.source_reversible { 2 } else { 1 })
@@ -350,34 +404,32 @@ impl Source {
                 .map(|b| grown(b, gap))
                 .collect();
             let bracket = self.cut_bracket(cut)?;
-            display.openings[cut] =
-                std::array::from_fn(|lane| connected_opening(self.lane(lane)?, u, bracket, &boxes));
+            // A nearby indicator can meet the same lane just beyond the
+            // body's interval at a tight turn. Join only gaps within one
+            // native head envelope, measured along that source lane; a
+            // distant crossing must still decline rather than erase a route.
+            *display.openings.get_mut(cut)? = std::array::from_fn(|lane| {
+                connected_opening(self.lane(lane)?, u, bracket, &boxes, head_envelope(g))
+            });
         }
-        for end in 0..2 {
-            let slot = if end == 0 {
-                self.run.first_step
-            } else {
-                self.run.end_slot(n)
-            };
-            let boxes: Vec<_> = display.outer[end]
-                .into_iter()
-                .chain(extra_ink(doc, c.intermediates.get(slot)?))
-                .map(|b| grown(b, gap))
-                .collect();
-            let station = end as f64;
-            let bracket = if end == 0 {
-                self.bracket(0)?
-            } else {
-                self.bracket(self.cuts.len())?
-            };
-            for lane in 0..3 {
-                if let Some(profile) = self.lane(lane)
-                    && let Some((a, b)) = connected_opening(profile, station, bracket, &boxes)
-                {
-                    display.outer_crops[end][lane] = if end == 0 { b } else { a };
-                }
-            }
-        }
+        let slots = [self.run.first_step, self.run.end_slot(n)];
+        let boxes: Option<Vec<_>> = slots
+            .into_iter()
+            .enumerate()
+            .map(|(end, slot)| {
+                Some(
+                    display
+                        .outer
+                        .get(end)
+                        .copied()?
+                        .into_iter()
+                        .chain(extra_ink(doc, c.intermediates.get(slot)?))
+                        .collect(),
+                )
+            })
+            .collect();
+        let boxes: [Vec<Ink>; 2] = boxes?.try_into().ok()?;
+        display.crop_outer(g, boxes)?;
         Some(display)
     }
 
@@ -388,12 +440,12 @@ impl Source {
             let lane = self.painted_lane(step, painted_lane)?;
             let profile = self.lane(lane)?;
             let mut from = if child == 0 {
-                self.outer_crops[0][lane]
+                *self.outer_crops.first()?.get(lane)?
             } else {
                 self.openings.get(child - 1)?.get(lane)?.as_ref()?.1
             };
             let mut to = if child == self.cuts.len() {
-                self.outer_crops[1][lane]
+                *self.outer_crops.get(1)?.get(lane)?
             } else {
                 self.openings.get(child)?.get(lane)?.as_ref()?.0
             };
@@ -414,12 +466,7 @@ impl Source {
             // requested opening is insufficient near oblique edges/corners.
             // Refine only this opening, by at most one head envelope; never
             // erase a distant second crossing to make an invalid split fit.
-            let radius = f64::from(
-                DEFAULT
-                    .world(style.head_length_pt)
-                    .hypot(DEFAULT.world(style.head_width_pt))
-                    + DEFAULT.world(style.width_pt),
-            );
+            let radius = head_envelope(g);
             let initial = (from, to);
             let mut candidate = None;
             for trial in 0..=8 {
@@ -444,12 +491,27 @@ impl Source {
                 } else {
                     self.ink.get(child)
                 };
-                let left = left_ink.is_some_and(|ink| {
+                let mut left = left_ink.is_some_and(|ink| {
                     super::names::arrow_hits(&arrow, *ink, gap_at(step.lead_pt) - 0.01)
                 });
-                let right = right_ink.is_some_and(|ink| {
+                let mut right = right_ink.is_some_and(|ink| {
                     super::names::arrow_hits(&arrow, *ink, gap_at(step.trail_pt) - 0.01)
                 });
+                let caption_gap = DEFAULT.world(gap) - 0.01;
+                let ends = [profile.point(from)?, profile.point(to)?];
+                for ink in &self.captions {
+                    if !super::names::arrow_hits(&arrow, *ink, caption_gap) {
+                        continue;
+                    }
+                    let (lo, hi) = grown(*ink, caption_gap + radius as f32);
+                    let near = |p: Point| lo.x <= p.x && p.x <= hi.x && lo.y <= p.y && p.y <= hi.y;
+                    // The connected display opening already clips a nearby
+                    // caption's centerline. Its native head can still cross
+                    // the oblique boundary; refine that same local end only.
+                    // A distant crossing stays a rejection below.
+                    left |= near(ends[0]);
+                    right |= near(ends[1]);
+                }
                 if !left && !right {
                     let gap = DEFAULT.world(gap) - 0.01;
                     let other = self.ink.iter().enumerate().any(|(i, ink)| {

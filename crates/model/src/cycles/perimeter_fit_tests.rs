@@ -184,6 +184,129 @@ fn far_off_split() -> (Document, u64, u64) {
     (doc, cut, id)
 }
 
+fn cached_outer_straight_split() -> (Document, u64, u64, u64) {
+    let (mut doc, cut, id) = straight_split();
+    let old_outer = {
+        let cycle = doc.graphics[0].cycle.as_mut().unwrap();
+        let _ = cycle.remove_intermediate(1);
+        cycle.intermediates[0].clone()
+    };
+    let molecule = Document::from_json(include_bytes!(
+        "../../../../tests/fixtures/chemical-naming-rust/r-lactic-rust-native.rsk"
+    ))
+    .unwrap();
+    let outer = crate::editing::append_preserving_layout(&mut doc, &molecule, Point::default());
+    let centre = molecule
+        .all_ids()
+        .into_iter()
+        .zip(outer.iter().copied())
+        .find(|(id, _)| *id == 2)
+        .unwrap()
+        .1;
+    doc.graphics[0].cycle.as_mut().unwrap().intermediates[0] = outer.clone();
+    doc.annotations.retain(|a| !old_outer.contains(&a.id));
+    doc.groups.clear();
+    doc.atom_labels.stereo = true;
+    doc.atom_mut(centre).unwrap().display.stereo.show = Some(true);
+    doc.atom_mut(centre).unwrap().display.stereo.offset = Some(Point::new(120., 0.));
+    let from = center_of(
+        crate::scene::primary_selections_bounds(
+            &nominal_document(&doc),
+            std::slice::from_ref(&outer),
+        )
+        .pop()
+        .flatten()
+        .unwrap(),
+    );
+    doc.translate(&outer, -400. - from.x, -200. - from.y);
+    crate::atom_labels::refresh::Refresh::calculate(&doc, &Default::default())
+        .unwrap()
+        .apply(&mut doc);
+    assert_eq!(doc.atom(centre).unwrap().cip_label.as_deref(), Some("R"));
+    let station = capture_station(&doc, id, 0, 0.5);
+    let target = {
+        let g = graphic(&doc, id);
+        let outline = cycles::outline(g).unwrap();
+        deform::profiles(
+            id,
+            &outline,
+            station.start * outline.length(),
+            station.span * outline.length(),
+            0.,
+            true,
+            &arrow_style(g),
+        )
+        .unwrap()
+        .center
+        .point(station.u)
+        .unwrap()
+    };
+    let from = center(&doc, &[cut]);
+    doc.translate(&[cut], target.x - from.x, target.y - from.y);
+    assert!(doc.graphics[0].cycle.as_mut().unwrap().insert_intermediate(
+        1,
+        vec![cut],
+        Some(station)
+    ));
+    let members: Vec<_> = std::iter::once(id)
+        .chain(
+            graphic(&doc, id)
+                .cycle
+                .as_ref()
+                .unwrap()
+                .intermediates
+                .iter()
+                .flatten()
+                .copied(),
+        )
+        .collect();
+    doc.group_selection(&members).unwrap();
+    doc.validate().unwrap();
+    (doc, cut, id, centre)
+}
+
+fn add_plain_opposite_run(doc: &mut Document, id: u64) {
+    let station = capture_station(doc, id, 2, 0.5);
+    let target = {
+        let g = graphic(doc, id);
+        let outline = cycles::outline(g).unwrap();
+        deform::profiles(
+            id,
+            &outline,
+            station.start * outline.length(),
+            station.span * outline.length(),
+            0.,
+            false,
+            &arrow_style(g),
+        )
+        .unwrap()
+        .center
+        .point(station.u)
+        .unwrap()
+    };
+    let cut = text_at(doc, target, "Y");
+    assert!(doc.graphics[0].cycle.as_mut().unwrap().insert_intermediate(
+        3,
+        vec![cut],
+        Some(station)
+    ));
+    for group in doc.groups.iter_mut().filter(|g| g.members.contains(&id)) {
+        group.members.push(cut);
+    }
+    assert_eq!(
+        graphic(doc, id)
+            .cycle
+            .as_ref()
+            .unwrap()
+            .split_runs
+            .iter()
+            .map(|r| r.first_step)
+            .collect::<Vec<_>>(),
+        vec![0, 2]
+    );
+    doc.validate().unwrap();
+}
+
 fn outside_openings(doc: &Document, id: u64, p: Point) -> bool {
     let c = graphic(doc, id).cycle.as_ref().unwrap();
     c.intermediates.iter().all(|ids| {
@@ -451,6 +574,307 @@ fn no_op_child_bow_or_lane_setting_keeps_the_fitted_source_exact() {
         let mut after = before.clone();
         assert!(!cycles::fit_edited(&before, &mut after, id, bow).unwrap());
         assert_eq!(after, before);
+    }
+}
+
+#[test]
+fn display_opening_joins_only_a_nearby_indicator_interval_on_its_native_lane() {
+    let (doc, _, id) = straight_split();
+    let layout = Layout::graphic(&doc, graphic(&doc, id)).unwrap();
+    let source = layout.sources[0].as_ref().unwrap();
+    let profile = &source.profiles.center;
+    let station = source.cuts[0];
+    let center = profile.point(station).unwrap();
+    let box_at = |lo, hi| (center.offset(lo, -5.), center.offset(hi, 5.));
+    let boxes = [box_at(-5., 5.), box_at(20., 30.), box_at(70., 80.)];
+    let plain = connected_opening(profile, station, (0., 1.), &boxes, 0.).unwrap();
+    let local = connected_opening(profile, station, (0., 1.), &boxes, 20.).unwrap();
+    assert!((profile.point(plain.1).unwrap().x - (center.x + 5.)).abs() < 0.001);
+    assert!((profile.point(local.1).unwrap().x - (center.x + 30.)).abs() < 0.001);
+    assert!(
+        profile.point(local.1).unwrap().x < center.x + 70.,
+        "the distant interval cannot widen the local opening"
+    );
+}
+
+#[test]
+fn distant_mapping_ink_does_not_fill_the_clear_corridor_to_its_molecule() {
+    let mut doc = Document::default();
+    let atom = doc.add_atom("N", Point::default());
+    doc.atom_labels.maps = true;
+    let a = doc.atom_mut(atom).unwrap();
+    a.map_num = 11;
+    a.display.mapping.offset = Some(Point::new(0., -500.));
+    let union = crate::scene::selection_bounds(&doc, &[atom]).unwrap();
+    let middle = center_of(union);
+    let arrow = Arrow::new(
+        doc.next_id(),
+        middle.offset(-100., 0.),
+        middle.offset(100., 0.),
+        Default::default(),
+        Default::default(),
+    );
+    assert!(super::super::names::arrow_hits(&arrow, union, 0.));
+    let ink = part_ink(&doc, &[atom]);
+    assert!(ink.len() >= 2, "body and map indicator retain separate ink");
+    assert!(
+        ink.iter()
+            .all(|ink| !super::super::names::arrow_hits(&arrow, *ink, 0.)),
+        "a route through the empty corridor must not hit an artificial union box"
+    );
+}
+
+#[test]
+fn reverse_fit_keeps_frozen_sources_with_changed_outer_cache_and_swapped_run_slots() {
+    for two_runs in [false, true] {
+        let (mut before, _, id, centre) = cached_outer_straight_split();
+        if two_runs {
+            add_plain_opposite_run(&mut before, id);
+        }
+        let captured_ink = crate::scene::selection_bounds(
+            &before,
+            &graphic(&before, id).cycle.as_ref().unwrap().intermediates[0],
+        );
+        crate::atom_labels::clear_computed(&mut before);
+        assert!(before.atom(centre).unwrap().cip_label.is_none());
+        assert_ne!(
+            captured_ink,
+            crate::scene::selection_bounds(
+                &before,
+                &graphic(&before, id).cycle.as_ref().unwrap().intermediates[0]
+            )
+        );
+        let cycle = graphic(&before, id).cycle.as_ref().unwrap().clone();
+        let samples = |doc: &Document| {
+            let layout = Layout::graphic(doc, graphic(doc, id)).unwrap();
+            layout
+                .sources
+                .iter()
+                .flat_map(|source| {
+                    let source = source.as_ref().unwrap();
+                    [
+                        Some(&source.profiles.center),
+                        source.profiles.forward.as_ref(),
+                        source.profiles.reverse.as_ref(),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .flat_map(|profile| {
+                        [0., 0.125, 0.35, 0.5, 0.7, 0.875, 1.].map(|u| profile.point(u).unwrap())
+                    })
+                    .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        };
+        let original_samples = samples(&before);
+        let mut expected = cycle.split_runs.clone();
+        let n = cycle.steps.len();
+        for run in &mut expected {
+            run.first_step = (n - (run.first_step + run.cuts.len() + 1) % n) % n;
+            let start = (run.source_start + run.source_span).rem_euclid(1.);
+            run.source_start = if start >= 1. || start == 0. {
+                0.
+            } else {
+                start
+            };
+            run.source_span = -run.source_span;
+            run.cuts = run.cuts.iter().rev().map(|u| 1. - u).collect();
+        }
+        if two_runs {
+            assert_eq!(
+                expected.iter().map(|r| r.first_step).collect::<Vec<_>>(),
+                vec![2, 0]
+            );
+        }
+        let mut after = before.clone();
+        cycles::reverse(after.graphics[0].cycle.as_mut().unwrap());
+        assert!(!cycles::fit_edited(&before, &mut after, id, None).unwrap());
+        assert_eq!(
+            graphic(&after, id).cycle.as_ref().unwrap().split_runs,
+            expected,
+            "reverse must use each captured family, even when first_step keys exchange"
+        );
+        assert_eq!(after.atoms, before.atoms);
+        assert_eq!(after.annotations, before.annotations);
+        after.validate().unwrap();
+        let reversed = after.clone();
+        cycles::reverse(after.graphics[0].cycle.as_mut().unwrap());
+        assert!(!cycles::fit_edited(&reversed, &mut after, id, None).unwrap());
+        let restored = graphic(&after, id).cycle.as_ref().unwrap();
+        let mut original = cycle;
+        for (wanted, actual) in original.split_runs.iter_mut().zip(&restored.split_runs) {
+            // The two inverse modular additions can differ by one f64 ulp.
+            assert!((wanted.source_start - actual.source_start).abs() <= 16. * f64::EPSILON);
+            wanted.source_start = actual.source_start;
+        }
+        assert_eq!(restored, &original);
+        let restored_samples = samples(&after);
+        assert_eq!(restored_samples.len(), original_samples.len());
+        for (a, b) in restored_samples.into_iter().zip(original_samples) {
+            assert!(
+                a.distance(b) < 0.001,
+                "double reverse moved native f32 geometry: {a:?} versus {b:?}"
+            );
+        }
+        assert_eq!(after.atoms, before.atoms);
+        assert_eq!(after.annotations, before.annotations);
+        after.validate().unwrap();
+    }
+}
+
+#[test]
+fn selected_two_cut_batch_slides_atomically_without_taking_either_member_out() {
+    let (mut before, first, id) = straight_split();
+    let (second_at, station) = {
+        let g = graphic(&before, id);
+        let layout = Layout::graphic(&before, g).unwrap();
+        let source = layout.sources[0].as_ref().unwrap();
+        let run = &g.cycle.as_ref().unwrap().split_runs[0];
+        (
+            source.profiles.center.point(0.75).unwrap(),
+            SplitStation {
+                u: 0.75,
+                start: run.source_start,
+                span: run.source_span,
+            },
+        )
+    };
+    let second = text_at(&mut before, second_at, "Y");
+    assert!(
+        before.graphics[0]
+            .cycle
+            .as_mut()
+            .unwrap()
+            .insert_intermediate(2, vec![second], Some(station))
+    );
+    for group in before.groups.iter_mut().filter(|g| g.members.contains(&id)) {
+        group.members.push(second);
+    }
+    before.validate().unwrap();
+    let run = graphic(&before, id).cycle.as_ref().unwrap().split_runs[0].clone();
+    let delta = Point::new(60., 0.);
+    let selected = [first, second];
+    let expected = {
+        let layout = Layout::graphic(&before, graphic(&before, id)).unwrap();
+        let profile = &layout.sources[0].as_ref().unwrap().profiles.center;
+        let spacing =
+            profile.distance_at(run.cuts[1]).unwrap() - profile.distance_at(run.cuts[0]).unwrap();
+        assert!(f64::from(delta.x) < spacing);
+        run.cuts
+            .iter()
+            .map(|u| profile.shift(*u, f64::from(delta.x)).unwrap())
+            .collect::<Vec<_>>()
+    };
+    for cut in selected {
+        let ink = crate::scene::selection_bounds(&before, &[cut]).unwrap();
+        assert!(
+            delta.x
+                > (ink.1.x - ink.0.x) * 0.5
+                    + DEFAULT.world(graphic(&before, id).cycle.as_ref().unwrap().gap_pt)
+        );
+    }
+    let mut after = before.clone();
+    after.translate(&selected, delta.x, delta.y);
+    cycles::fit_moved(&before, &mut after, &selected);
+    let changed = &graphic(&after, id).cycle.as_ref().unwrap().split_runs[0];
+    assert_eq!(
+        (changed.source_start, changed.source_span),
+        (run.source_start, run.source_span)
+    );
+    for ((u, old), expected) in changed.cuts.iter().zip(&run.cuts).zip(expected) {
+        assert!(
+            *u > *old + 0.01,
+            "both selected cuts need their new logical station"
+        );
+        assert!((*u - expected).abs() < 1e-6);
+    }
+    let layout = Layout::graphic(&after, graphic(&after, id)).unwrap();
+    assert_eq!(layout.cut_intersects(1), Some(true));
+    assert_eq!(layout.cut_intersects(2), Some(true));
+    for resolved in &layout.steps {
+        for arrow in &resolved
+            .as_ref()
+            .expect("every child remains positive after the batch")
+            .arrows
+        {
+            assert!(
+                crate::cycles::shapes::Shaft::from_arrow(arrow)
+                    .unwrap()
+                    .length()
+                    > 1.
+            );
+        }
+    }
+    assert!(after.take_out(&selected, delta).is_empty());
+    assert_eq!(
+        cycles::role_of(&after, first),
+        Some((id, Role::Intermediate(1)))
+    );
+    assert_eq!(
+        cycles::role_of(&after, second),
+        Some((id, Role::Intermediate(2)))
+    );
+    after.validate().unwrap();
+}
+
+#[test]
+fn whole_selected_thirteen_degree_rotation_preserves_capture_and_reflection_maps_it_once() {
+    use crate::editing::{self, Transform};
+    for reflected in [false, true] {
+        let (mut doc, _, id, centre) = cached_outer_straight_split();
+        let captured = graphic(&doc, id).cycle.as_ref().unwrap().split_runs.clone();
+        assert_eq!(doc.atom(centre).unwrap().cip_label.as_deref(), Some("R"));
+        crate::atom_labels::clear_computed(&mut doc);
+        let ids = doc.all_ids();
+        let old_axis = graphic(&doc, id).axis_x;
+        let expected: Vec<_> = captured
+            .iter()
+            .map(|run| {
+                if reflected {
+                    ((-run.source_start).rem_euclid(1.), -run.source_span)
+                } else {
+                    (run.source_start, run.source_span)
+                }
+            })
+            .collect();
+        if reflected {
+            editing::transform(&mut doc, &ids, Transform::FlipHorizontal);
+            let runs = &graphic(&doc, id).cycle.as_ref().unwrap().split_runs;
+            assert_eq!(
+                runs.iter()
+                    .map(|r| (r.source_start, r.source_span))
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            editing::transform_about(&mut doc, &ids, Point::new(-80., 50.), 1., 13.);
+        } else {
+            editing::transform(&mut doc, &ids, Transform::Rotate(13.));
+        }
+        assert_ne!(
+            graphic(&doc, id).axis_x,
+            old_axis,
+            "the ordinary transform must actually run"
+        );
+        let runs = &graphic(&doc, id).cycle.as_ref().unwrap().split_runs;
+        assert_eq!(
+            runs.iter()
+                .map(|r| (r.source_start, r.source_span))
+                .collect::<Vec<_>>(),
+            expected,
+            "rigid 13-degree rotation must not remeasure transient exterior ink or flip a capture twice"
+        );
+        assert_eq!(
+            runs.iter().map(|r| r.cuts.clone()).collect::<Vec<_>>(),
+            captured.iter().map(|r| r.cuts.clone()).collect::<Vec<_>>()
+        );
+        let layout = Layout::graphic(&doc, graphic(&doc, id)).unwrap();
+        assert!(
+            layout
+                .steps
+                .iter()
+                .all(|r| r.as_ref().is_some_and(|r| !r.arrows.is_empty()))
+        );
+        doc.validate().unwrap();
     }
 }
 
