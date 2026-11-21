@@ -69,9 +69,12 @@ fn equipment_metadata_undo_redo_and_discard_leave_the_drawing_untouched() {
         .unwrap()
         .current
         .clone();
-    send(&mut app, Action::Text(Field::Japanese, "フラスコ".into()));
+    send(&mut app, Action::Text(Field::Author, "Laboratory A".into()));
     let shown = app.display_document().clone();
-    assert_eq!(shown.piece_definitions[0].names["ja"], "フラスコ");
+    assert_eq!(
+        shown.piece_definitions[0].credits.author.as_deref(),
+        Some("Laboratory A")
+    );
     let _ = app.update(Message::Undo);
     assert!(app.tab.equipment_authoring.as_ref().unwrap().current == snapshot);
     let _ = app.update(Message::Redo);
@@ -104,10 +107,6 @@ fn equipment_metadata_accept_and_reopen_keep_metadata_geometry_and_one_undo() {
     let _ = app.update(Message::EquipmentAuthoring(DraftAction::Name(
         "Custom flask".into(),
     )));
-    send(
-        &mut app,
-        Action::Text(Field::Japanese, "自作フラスコ".into()),
-    );
     send(&mut app, Action::Category(Category::Flask));
     send(&mut app, Action::Text(Field::Author, "Laboratory A".into()));
     send(&mut app, Action::Text(Field::License, "CC-BY-4.0".into()));
@@ -124,7 +123,7 @@ fn equipment_metadata_accept_and_reopen_keep_metadata_geometry_and_one_undo() {
     let accepted = app.tab.doc.clone();
     let d = &accepted.piece_definitions[0];
     assert_eq!(d.names["en"], "Custom flask");
-    assert_eq!(d.names["ja"], "自作フラスコ");
+    assert!(!d.names.contains_key("ja"));
     assert_eq!(d.category, Category::Flask);
     assert_eq!(d.keywords, ["air-free, glass"]);
     assert_eq!(d.variant["capacity_ml"], "100");
@@ -152,13 +151,50 @@ fn equipment_metadata_accept_and_reopen_keep_metadata_geometry_and_one_undo() {
 }
 
 #[test]
+fn equipment_metadata_preserves_saved_localized_names_through_accept_and_reopen() {
+    let mut app = ready();
+    let before = app.tab.doc.clone();
+    {
+        let state = app.tab.equipment_authoring.as_mut().unwrap();
+        let definition = &mut Arc::make_mut(&mut state.current.draft).definition;
+        definition
+            .names
+            .insert("ja".into(), " 自作フラスコ ".into());
+        definition.names.insert("fr".into(), "Fiole".into());
+        // Existing/imported names are carried by the definition, not editable
+        // form state. The same conversion is used when opening a draft.
+        state.current.metadata = Metadata::from_definition(definition);
+    }
+    let _ = app.update(Message::EquipmentAuthoring(DraftAction::Name(
+        "Custom flask".into(),
+    )));
+    send(&mut app, Action::Category(Category::Flask));
+    send(&mut app, Action::Text(Field::Author, "Laboratory A".into()));
+    let shown = app.display_document().clone();
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(shown.piece_definitions[0].names["ja"], " 自作フラスコ ");
+    assert_eq!(shown.piece_definitions[0].names["fr"], "Fiole");
+    let _ = app.update(Message::EquipmentAuthoring(DraftAction::Accept));
+    assert!(app.tab.equipment_authoring.is_none());
+    assert_eq!(app.tab.doc, shown);
+    let reopened = Document::from_json(&app.tab.doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.piece_definitions, app.tab.doc.piece_definitions);
+    assert_eq!(reopened.piece_definitions[0].names["en"], "Custom flask");
+    assert_eq!(reopened.piece_definitions[0].names["ja"], " 自作フラスコ ");
+    assert_eq!(reopened.piece_definitions[0].names["fr"], "Fiole");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, shown);
+}
+
+#[test]
 fn equipment_metadata_invalid_fields_block_accept_without_losing_draft_history() {
     let mut app = ready();
     let before = app.tab.doc.clone();
     let revision = app.tab.revision;
     let shown = app.display_document().clone();
     for action in [
-        Action::Text(Field::Japanese, "x".repeat(201)),
         Action::Text(Field::Author, "x".repeat(201)),
         Action::Text(Field::License, "bad\0licence".into()),
     ] {
@@ -261,16 +297,15 @@ async fn equipment_metadata_controls_have_live_names_and_values() {
     ui.operate(&renderer, &mut operation::black_box(&mut collect));
     let tree = collect.snapshot();
     assert!(tree.duplicate_ids.is_empty());
+    assert!(!tree.nodes.iter().any(|node| {
+        node.id.starts_with("equipment-metadata-japanese")
+            || node.name == "Japanese name (optional)"
+    }));
     for (id, name, value) in [
         (
             "equipment-piece-name".into(),
             "English equipment name",
             "New equipment piece",
-        ),
-        (
-            "equipment-metadata-japanese".into(),
-            "Japanese name (optional)",
-            "",
         ),
         (
             "equipment-metadata-category".into(),
@@ -362,7 +397,7 @@ fn equipment_metadata_discarded_draft_controls_cannot_edit_a_new_draft() {
         [
             DraftAction::Name("Old English name".into()),
             DraftAction::Metadata(Action::Text(Field::Author, "Old author".into())),
-            DraftAction::Metadata(Action::Text(Field::Japanese, "古い下書き".into())),
+            DraftAction::Metadata(Action::Text(Field::License, "Old licence".into())),
             DraftAction::Metadata(Action::Category(Category::Heating)),
             DraftAction::Metadata(Action::AddKeyword),
         ]
@@ -378,10 +413,7 @@ fn equipment_metadata_discarded_draft_controls_cannot_edit_a_new_draft() {
         .metadata_control_message(DraftAction::Name("New English name".into()));
     let _ = app.update(name);
     send(&mut app, Action::Text(Field::Author, "New author".into()));
-    send(
-        &mut app,
-        Action::Text(Field::Japanese, "新しい下書き".into()),
-    );
+    send(&mut app, Action::Text(Field::License, "New licence".into()));
     send(&mut app, Action::Category(Category::Flask));
     keyword(&mut app, "current, literal keyword");
     let state = app.tab.equipment_authoring.as_ref().unwrap();
@@ -404,7 +436,7 @@ fn equipment_metadata_discarded_draft_controls_cannot_edit_a_new_draft() {
     let state = app.tab.equipment_authoring.as_ref().unwrap();
     assert_eq!(state.current.metadata.author, "Live author");
     assert_eq!(state.current.name, before.name);
-    assert_eq!(state.current.metadata.japanese, before.metadata.japanese);
+    assert_eq!(state.current.metadata.license, before.metadata.license);
     assert!(state.current.metadata.keywords == before.metadata.keywords);
     assert_eq!(state.past.len(), history + 1);
 }

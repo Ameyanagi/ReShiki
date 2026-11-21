@@ -6,7 +6,6 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Field {
-    Japanese,
     Author,
     License,
     Keyword(u64),
@@ -45,7 +44,6 @@ impl Entry {
 
 #[derive(Clone, PartialEq)]
 pub(super) struct Metadata {
-    japanese: String,
     category: Category,
     keywords: Vec<Entry>,
     variants: Vec<Entry>,
@@ -56,7 +54,6 @@ pub(super) struct Metadata {
 impl Metadata {
     pub(super) fn from_definition(d: &Definition) -> Self {
         Self {
-            japanese: d.names.get("ja").cloned().unwrap_or_default(),
             category: d.category,
             keywords: d
                 .keywords
@@ -77,11 +74,7 @@ impl Metadata {
         // Preserve entered text; the definition validator checks its limits
         // and control characters. Empty editor rows carry no saved metadata.
         let optional = |s: &str| (!s.is_empty()).then(|| s.to_owned());
-        if let Some(name) = optional(&self.japanese) {
-            d.names.insert("ja".into(), name);
-        } else {
-            d.names.remove("ja");
-        }
+        // Localized names stay in the existing definition, outside this form.
         d.category = self.category;
         d.keywords = self
             .keywords
@@ -119,7 +112,6 @@ impl Metadata {
             Action::RemoveVariant(id) => self.variants.retain(|e| e.id != id),
             Action::Text(field, value) => {
                 let input = match field {
-                    Field::Japanese => Some(&mut self.japanese),
                     Field::Author => Some(&mut self.author),
                     Field::License => Some(&mut self.license),
                     Field::Keyword(id) => self
@@ -248,13 +240,6 @@ impl State {
         let choose = |c: Choice| message(&self.identity, Action::Category(c.0));
         let mut body = column![
             section("Piece details"),
-            input(
-                &self.identity,
-                "equipment-metadata-japanese".into(),
-                "Japanese name (optional)".into(),
-                &m.japanese,
-                Field::Japanese
-            ),
             text("Category").size(12),
             reshiki::accessibility::select(
                 self.metadata_control_id("equipment-metadata-category"),
