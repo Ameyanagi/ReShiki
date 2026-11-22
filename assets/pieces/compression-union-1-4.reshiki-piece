@@ -9,8 +9,7 @@
     "bore": "tube-stop"
   },
   "names": {
-    "en": "Compression tube union, 1/4 in",
-    "ja": "チューブ用ユニオン継手 1/4 in"
+    "en": "Compression tube union, 1/4 in"
   },
   "category": "other",
   "grounded": false,
@@ -19,10 +18,7 @@
     "tube fitting",
     "1/4 in",
     "6.35 mm",
-    "継手",
-    "継ぎ手",
-    "チューブ継手",
-    "断面"
+    "joint"
   ],
   "credits": {
     "author": "ReShiki",
@@ -488,22 +484,19 @@
       "id": "view",
       "kind": "states",
       "names": {
-        "en": "View",
-        "ja": "表示"
+        "en": "View"
       },
       "states": [
         {
           "id": "exterior",
           "names": {
-            "en": "Exterior",
-            "ja": "外観"
+            "en": "Exterior"
           }
         },
         {
           "id": "section",
           "names": {
-            "en": "Section",
-            "ja": "縦断面"
+            "en": "Section"
           }
         }
       ],
