@@ -90,7 +90,7 @@ pub struct Port {
     pub mm: f64,
     /// A hold's length in world units; 0 for a joint.
     pub length: f64,
-    /// Axial span that must lie inside the receiving grip, in world units.
+    /// Axial span that must lie inside the held segment, in world units.
     /// Zero retains the original centre-only hold semantics.
     pub contact_length: f64,
 }
@@ -102,6 +102,8 @@ impl Port {
             Kind::Taper(size) => size.clone(),
             Kind::Plug(PlugFamily::Compression, size) => format!("Ø{size} mm compression"),
             Kind::Plug(family, _) => format!("{family:?}").to_lowercase(),
+            Kind::Hold(HoldKind::TubeSpan, [size, _]) => format!("Ø{size} mm tube"),
+            Kind::Hold(HoldKind::ThroughBore, [size, _]) => format!("Ø{size} mm through bore"),
             Kind::Hold(_, [lo, hi]) if lo == hi => format!("Ø{lo} mm"),
             Kind::Hold(_, [lo, hi]) => format!("Ø{lo}–{hi} mm"),
         }
@@ -112,9 +114,10 @@ impl Port {
             _ => None,
         }
     }
-    /// A rail takes any number of sliders; every other port one partner.
+    /// Rails and continuous tube spans take multiple holders. Each holder
+    /// and every other port takes one partner.
     pub fn shared(&self) -> bool {
-        self.hold() == Some(HoldKind::Rail)
+        matches!(self.hold(), Some(HoldKind::Rail | HoldKind::TubeSpan))
     }
     /// The middle of a hold.
     fn centre(&self) -> [f64; 2] {
@@ -219,13 +222,14 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             dir: [delta[0] / length, delta[1] / length],
             mm: t.scale_factor(),
             length,
+            // A through bore requires its whole passage over the tube.
             // Revision 3's pad contacts require the advertised jaw span.
-            // Older embedded built-ins and authored holds keep their original
-            // centre-only attachment behavior when read or manipulated.
-            contact_length: if d.id == "reshiki/clamp-3finger"
-                && d.revision >= 3
-                && h.hold.id == "jaw"
-                && h.hold.kind == HoldKind::Jaw
+            // Older clamps and authored jaws keep their centre-only behavior.
+            contact_length: if h.hold.kind == HoldKind::ThroughBore
+                || (d.id == "reshiki/clamp-3finger"
+                    && d.revision >= 3
+                    && h.hold.id == "jaw"
+                    && h.hold.kind == HoldKind::Jaw)
             {
                 length
             } else {
@@ -250,8 +254,12 @@ pub fn mates(a: &Port, b: &Port) -> bool {
                 let (held, holder) = if x.held() { (dx, dy) } else { (dy, dx) };
                 let d = (held[0] + held[1]) / 2.;
                 let (f, m) = sides(a, b);
-                (holder[0]..=holder[1]).contains(&d)
-                    && f.length / f.mm + 1e-6 >= m.contact_length / m.mm
+                let diameter_fits = if matches!(x, HoldKind::TubeSpan | HoldKind::ThroughBore) {
+                    held[0] == held[1] && holder[0] == holder[1] && held[0] == holder[0]
+                } else {
+                    (holder[0]..=holder[1]).contains(&d)
+                };
+                diameter_fits && f.length / f.mm + 1e-6 >= m.contact_length / m.mm
             }
             _ => false,
         }
@@ -742,8 +750,8 @@ fn fit(doc: &mut Document, a: &Port, b: &Port) {
     piece.params.insert(k, Value::Number((lo + hi) / 2.));
 }
 
-/// Free joints and holds of the pieces in (or not in) `moving`. A rail
-/// stays free however many sliders it holds.
+/// Free joints and holds of the pieces in (or not in) `moving`. Rails and
+/// tube spans stay available however many holders they already carry.
 fn free(doc: &Document, moving: &BTreeSet<u64>, inside: bool) -> Vec<Port> {
     let seated: BTreeSet<&JointRef> = doc.seats.iter().flat_map(|s| [&s.a, &s.b]).collect();
     doc.graphics
@@ -1256,9 +1264,94 @@ pub fn carried(doc: &Document, ids: &[u64], clicked: &[u64]) -> Vec<u64> {
         .collect()
 }
 
-/// A drag of the pieces `ids` by `delta`, along the rails that hold them on
-/// pieces that stay and stopped at the rails' ends; `None` when nothing that
-/// stays holds them. Pieces held any other way do not move.
+/// A normal drag on one tube or bored fitting can slide at their mechanical
+/// attachment. `ids` may already include the assembly from click selection;
+/// `selected` is the selection before that click. An already selected whole
+/// assembly keeps its ordinary movement. Endpoint connections and authored
+/// groups stay together, and grounded holds retain `carried`'s policy.
+pub fn carried_through(
+    doc: &Document,
+    ids: &[u64],
+    clicked: &[u64],
+    selected: &[u64],
+) -> Option<Vec<u64>> {
+    let [clicked] = clicked else { return None };
+    let definition = doc
+        .graphics
+        .iter()
+        .find(|g| g.id == *clicked)?
+        .piece
+        .as_ref()?
+        .linked
+        .as_ref()?;
+    if !definition
+        .holds
+        .iter()
+        .any(|h| matches!(h.kind, HoldKind::TubeSpan | HoldKind::ThroughBore))
+    {
+        return None;
+    }
+    let members = assembly(doc, *clicked);
+    if members.iter().all(|id| selected.contains(id)) {
+        return None;
+    }
+    let all = carried(doc, ids, &[*clicked]);
+    if !all.contains(clicked) {
+        return None;
+    }
+    let boundary = |s: &Seat| {
+        let (Some(a), Some(b)) = (port(doc, &s.a), port(doc, &s.b)) else {
+            return false;
+        };
+        through_bore(&a, &b)
+    };
+    let mut moving = if selected.contains(clicked) {
+        selected
+            .iter()
+            .copied()
+            .filter(|id| all.contains(id))
+            .collect()
+    } else {
+        BTreeSet::from([*clicked])
+    };
+    loop {
+        let count = moving.len();
+        for id in moving.clone() {
+            moving.extend(reach(doc, id, |s| {
+                !boundary(s) && s.pieces().all(|id| all.contains(&id))
+            }));
+        }
+        for group in &doc.groups {
+            if group.members.iter().any(|id| moving.contains(id)) {
+                moving.extend(group.members.iter().copied().filter(|id| all.contains(id)));
+            }
+        }
+        if moving.len() == count {
+            break;
+        }
+    }
+    let moving: Vec<_> = all
+        .into_iter()
+        .filter(|id| !members.contains(id) || moving.contains(id))
+        .collect();
+    doc.seats
+        .iter()
+        .any(|s| boundary(s) && moving.contains(&s.a.piece) != moving.contains(&s.b.piece))
+        .then_some(moving)
+}
+
+fn through_bore(a: &Port, b: &Port) -> bool {
+    matches!(
+        (a.hold(), b.hold()),
+        (Some(HoldKind::TubeSpan), Some(HoldKind::ThroughBore))
+            | (Some(HoldKind::ThroughBore), Some(HoldKind::TubeSpan))
+    )
+}
+
+/// A drag along a rail or a straight tube span, stopped at its ends. A
+/// through bore stays wholly over the tube, whether the fitting or tube is
+/// moved. `None` when no stationary piece holds the selection; other kinds
+/// of hold do not permit sliding.
 pub fn constrain(doc: &Document, ids: &[u64], delta: [f64; 2]) -> Option<[f64; 2]> {
     let mut axis: Option<[f64; 2]> = None;
     let (mut lo, mut hi) = (f64::NEG_INFINITY, f64::INFINITY);
@@ -1266,19 +1359,40 @@ pub fn constrain(doc: &Document, ids: &[u64], delta: [f64; 2]) -> Option<[f64; 2
         let (Some(a), Some(b)) = (port(doc, &s.a), port(doc, &s.b)) else {
             return Some([0., 0.]);
         };
-        let (rail, slider) = if ids.contains(&s.a.piece) {
-            (b, a)
+        let through = through_bore(&a, &b);
+        let (rail, slider, sign) = if through {
+            let (span, bore) = sides(&a, &b);
+            if !mates(span, bore) {
+                return Some([0., 0.]);
+            }
+            let sign = if ids.contains(&span.at.piece) {
+                -1.
+            } else {
+                1.
+            };
+            (span, bore, sign)
+        } else if ids.contains(&s.a.piece) {
+            (&b, &a, 1.)
         } else {
-            (a, b)
+            (&a, &b, 1.)
         };
         let v = *axis.get_or_insert(rail.dir);
         if !rail.shared() || (rail.dir[0] * v[1] - rail.dir[1] * v[0]).abs() > 1e-6 {
             return Some([0., 0.]);
         }
-        // How far along `v` the slider may go before it leaves either end.
+        // A bore's entire span must stay inside the tube. Rails retain
+        // their earlier centre-only slider semantics.
+        let inset = if through {
+            slider.contact_length * rail.mm / slider.mm / 2.
+        } else {
+            0.
+        };
         let way = dot(rail.dir, v);
         let t = dot(sub(slider.centre(), rail.point), rail.dir);
-        let (x, y) = (-t * way, (rail.length - t) * way);
+        let (x, y) = (
+            (inset - t) * way * sign,
+            (rail.length - inset - t) * way * sign,
+        );
         lo = lo.max(x.min(y));
         hi = hi.min(x.max(y));
     }

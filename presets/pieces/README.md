@@ -58,6 +58,23 @@ A seated cone sits 0.06 L outside the socket mouth (2.52 mm for 29/42).
 
 A segment something grips or slides along: `kind` is `rail` (a stand rod), `slider` (a boss head), `grip` (a neck) or `jaw` (a clamp), with `from`, `to` and `diameter_mm` (one number, or `[min, max]` for a jaw).
 
+For a rigid tube passing through a fitting, use `tube_span` on each straight
+section of the tube and `through_bore` along the fitting's complete passage.
+Both use one numeric `diameter_mm`, the nominal tube outside diameter. They
+mate only when those diameters match exactly and the whole bore fits inside
+the tube span. A tube span accepts multiple fittings. Each bore accepts one
+tube. The axes may run in either direction. Sliding stops before either end
+of the fitting would pass a tube endpoint.
+
+These mechanical holds attach the fitting along the tube, which remains one
+graphic across all fittings.
+A bent rigid tube can expose several straight spans on that same graphic.
+Use ordinary shapes for rigid tubing and the `tube` field for flexible hoses.
+To switch between exterior and section artwork without releasing a
+seat, keep the holds fixed and unconditional, and apply `when` only to the
+shapes. Draw the tube on `body` and the fitting on `front`, leaving the
+section's passage unfilled where the continuous tube should show.
+
 - `part` moves the hold with a part, as a clamp's jaw tilts with its head.
 - `fit` names a millimetre `range` parameter that a jaw or slider sets to the diameter it closes on, so a clamp's fingers meet the neck.
 - `when`: `{"jaw": ["closed"]}` holds only in those states; an open jaw lets go of the neck, and closing it on a neck takes hold again.

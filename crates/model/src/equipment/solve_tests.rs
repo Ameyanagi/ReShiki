@@ -47,6 +47,313 @@ fn commit(doc: &mut Document, before: Document) {
     let _ = crate::transaction::reconcile(doc, before).unwrap();
 }
 
+const BORE_FITTING: &str = "reshiki/compression-bulkhead-union-bored-through-1-4";
+
+fn centre(p: &solve::Port) -> [f64; 2] {
+    [
+        p.point[0] + p.dir[0] * p.length / 2.,
+        p.point[1] + p.dir[1] * p.length / 2.,
+    ]
+}
+
+fn add_bore_on_tube(doc: &mut Document, tube: u64, distance_mm: f64) -> u64 {
+    let span = port(doc, &joint(tube, "span"));
+    let bore = add(doc, BORE_FITTING, Point::default());
+    let old = centre(&port(doc, &joint(bore, "bore")));
+    doc.translate(
+        &[bore],
+        (span.point[0] + span.dir[0] * distance_mm * span.mm - old[0]) as f32,
+        (span.point[1] + span.dir[1] * distance_mm * span.mm - old[1] + 10. * span.mm) as f32,
+    );
+    let snap = solve::connect(doc, &[bore], &span.at, &joint(bore, "bore")).unwrap();
+    assert!(matches!(snap.offer, Offer::Seat));
+    bore
+}
+
+#[test]
+fn through_bores_require_exact_nominal_od_and_a_full_length_tube_span() {
+    use super::format::{Gender, HoldKind, PlugFamily};
+    use super::solve::Kind;
+
+    let mut doc = Document::default();
+    let tube = add(
+        &mut doc,
+        "reshiki/compression-tube-60-1-4",
+        Point::default(),
+    );
+    let fitting = add(&mut doc, BORE_FITTING, Point::default());
+    let span = port(&doc, &joint(tube, "span"));
+    let bore = port(&doc, &joint(fitting, "bore"));
+    assert_eq!(span.kind, Kind::Hold(HoldKind::TubeSpan, [6.35; 2]));
+    assert_eq!(bore.kind, Kind::Hold(HoldKind::ThroughBore, [6.35; 2]));
+    assert_eq!((span.gender, bore.gender), (Gender::F, Gender::M));
+    assert!(span.shared());
+    assert!(!bore.shared());
+    assert!((bore.contact_length / bore.mm - 48.).abs() < 1e-6);
+    assert!(solve::mates(&span, &bore));
+    for kind in [
+        Kind::Hold(HoldKind::ThroughBore, [6.; 2]),
+        Kind::Hold(HoldKind::ThroughBore, [6., 7.]),
+        Kind::Hold(HoldKind::Jaw, [6.35; 2]),
+        Kind::Plug(PlugFamily::Compression, 6.35),
+    ] {
+        assert!(!solve::mates(
+            &span,
+            &solve::Port {
+                kind,
+                ..bore.clone()
+            }
+        ));
+    }
+    let mut short = span.clone();
+    short.length = 47.9 * short.mm;
+    assert!(!solve::mates(&short, &bore));
+    short.length = 48. * short.mm;
+    assert!(solve::mates(&short, &bore));
+}
+
+#[test]
+fn tube_span_and_through_bore_definitions_reject_ranges_and_adjustable_fit() {
+    use super::format::{Diameter, Param, Unit};
+    use std::collections::BTreeMap;
+
+    for id in ["reshiki/compression-tube-60-1-4", BORE_FITTING] {
+        let original = builtin::find(id).unwrap();
+        let hold = if id == BORE_FITTING { "bore" } else { "span" };
+        let mut ranged = (*original).clone();
+        ranged
+            .holds
+            .iter_mut()
+            .find(|h| h.id == hold)
+            .unwrap()
+            .diameter_mm = Diameter::Range([6.35, 6.35]);
+        assert!(
+            super::validate::validate(&ranged)
+                .unwrap_err()
+                .contains("one nominal tube diameter")
+        );
+        let mut adjustable = (*original).clone();
+        adjustable.params.push(Param::Range {
+            id: "fit".into(),
+            names: BTreeMap::from([("en".into(), "Fit".into())]),
+            min: 6.,
+            max: 7.,
+            default: 6.35,
+            unit: Unit::Mm,
+        });
+        adjustable
+            .holds
+            .iter_mut()
+            .find(|h| h.id == hold)
+            .unwrap()
+            .fit = Some("fit".into());
+        assert!(
+            super::validate::validate(&adjustable)
+                .unwrap_err()
+                .contains("only a jaw or slider fits")
+        );
+    }
+}
+
+#[test]
+fn a_bore_turns_onto_a_tube_and_keeps_its_full_span_inside_either_end() {
+    for angle in [90., 180.] {
+        for end in [0., 1.] {
+            let mut doc = Document::default();
+            let tube = add(
+                &mut doc,
+                "reshiki/compression-tube-60-1-4",
+                Point::default(),
+            );
+            let fitting = add(&mut doc, BORE_FITTING, Point::new(100., 100.));
+            let pivot = doc
+                .graphics
+                .iter()
+                .find(|g| g.id == fitting)
+                .unwrap()
+                .origin;
+            crate::editing::transform_about(&mut doc, &[fitting], pivot, 1., angle);
+            let span = port(&doc, &joint(tube, "span"));
+            let old = centre(&port(&doc, &joint(fitting, "bore")));
+            doc.translate(
+                &[fitting],
+                (span.point[0] + span.dir[0] * span.length * end - old[0]) as f32,
+                (span.point[1] + span.dir[1] * span.length * end - old[1]) as f32,
+            );
+            solve::connect(&mut doc, &[fitting], &span.at, &joint(fitting, "bore")).unwrap();
+            let bore = port(&doc, &joint(fitting, "bore"));
+            let c = centre(&bore);
+            let inset = bore.contact_length / 2.;
+            let along = if end == 0. {
+                inset
+            } else {
+                span.length - inset
+            };
+            let expected = [
+                span.point[0] + span.dir[0] * along,
+                span.point[1] + span.dir[1] * along,
+            ];
+            assert!((c[0] - expected[0]).hypot(c[1] - expected[1]) < 1e-3);
+            let (off, turn) = residual(&span, &bore);
+            assert!(off < 1e-3 && turn < 1e-3);
+        }
+    }
+}
+
+#[test]
+fn one_continuous_tube_carries_multiple_bores_through_section_and_reopen() {
+    use super::eval::Value;
+
+    let mut doc = Document::default();
+    let tube = add(
+        &mut doc,
+        "reshiki/compression-tube-120-1-4",
+        Point::default(),
+    );
+    let first = add_bore_on_tube(&mut doc, tube, 28.);
+    let second = add_bore_on_tube(&mut doc, tube, 92.);
+    assert_eq!(doc.graphics.len(), 3);
+    assert_eq!(doc.seats.len(), 2);
+    assert!(builtin::find(BORE_FITTING).unwrap().joints.is_empty());
+    let frames: Vec<_> = doc
+        .graphics
+        .iter()
+        .map(|g| (g.id, g.origin, g.axis_x, g.axis_y))
+        .collect();
+    let seats = doc.seats.clone();
+    for view in ["section", "exterior"] {
+        for id in [tube, first, second] {
+            let released =
+                solve::adjust::set(&mut doc, id, "view", Value::State(view.into())).unwrap();
+            assert!(released.is_empty());
+            assert_eq!(doc.seats, seats);
+        }
+    }
+    assert_eq!(
+        doc.graphics
+            .iter()
+            .map(|g| (g.id, g.origin, g.axis_x, g.axis_y))
+            .collect::<Vec<_>>(),
+        frames
+    );
+    let mut back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(back.seats, seats);
+    assert_eq!(back.graphics.len(), 3);
+    assert!(solve::detach(&mut back, &joint(first, "bore")));
+    assert_eq!(back.seats.len(), 1);
+    assert!(back.seats[0].a == joint(second, "bore") || back.seats[0].b == joint(second, "bore"));
+    assert!(solve::partner(&back, &joint(second, "bore")).is_some());
+}
+
+#[test]
+fn tube_and_bore_sliding_both_respect_the_whole_contact_span() {
+    let mut doc = Document::default();
+    let tube = add(
+        &mut doc,
+        "reshiki/compression-tube-120-1-4",
+        Point::default(),
+    );
+    let first = add_bore_on_tube(&mut doc, tube, 28.);
+    let _second = add_bore_on_tube(&mut doc, tube, 92.);
+    let mm = port(&doc, &joint(tube, "span")).mm;
+    // Use the same click-expanded selection and movement helper as a normal
+    // pointer press, rather than supplying the reduced moving set directly.
+    let clicked = doc.click_selection(&[], &[first]);
+    assert_eq!(clicked.len(), 3);
+    let fitting_drag = solve::carried_through(&doc, &clicked, &[first], &[]).unwrap();
+    assert_eq!(fitting_drag, [first]);
+    for (direction, limit) in [(-1., -4.), (1., 68.)] {
+        let moved = solve::constrain(&doc, &fitting_drag, [direction * 1e6, 100.]).unwrap();
+        assert!((moved[0] / mm - limit).abs() < 1e-3 && moved[1].abs() < 1e-6);
+        let mut slid = doc.clone();
+        slid.translate(&fitting_drag, moved[0] as f32, moved[1] as f32);
+        solve::check(&mut slid, None);
+        assert_eq!(slid.seats.len(), 2);
+    }
+    assert_eq!(
+        solve::carried_through(&doc, &[first], &[first], &[first]).unwrap(),
+        [first]
+    );
+    let clicked = doc.click_selection(&[], &[tube]);
+    let tube_drag = solve::carried_through(&doc, &clicked, &[tube], &[]).unwrap();
+    assert_eq!(tube_drag, [tube]);
+    // A click-release selects the assembly; dragging that full preselection
+    // carries it whole. An individual selected piece remains able to slide.
+    assert!(solve::carried_through(&doc, &clicked, &[tube], &clicked).is_none());
+    let whole = solve::carried(&doc, &clicked, &[tube]);
+    assert_eq!(whole.len(), 3);
+    assert!(solve::constrain(&doc, &whole, [1e6, 100.]).is_none());
+    // Both stationary bores constrain a tube dragged through them: only
+    // 4 mm remains before either 48 mm passage reaches an endpoint.
+    for direction in [-1., 1.] {
+        let moved = solve::constrain(&doc, &tube_drag, [direction * 1e6, 100.]).unwrap();
+        assert!((moved[0] / mm - direction * 4.).abs() < 1e-3);
+        assert!(moved[1].abs() < 1e-6);
+        let mut slid = doc.clone();
+        slid.translate(&tube_drag, moved[0] as f32, moved[1] as f32);
+        solve::check(&mut slid, None);
+        assert_eq!(slid.seats.len(), 2);
+    }
+    doc.translate(&[tube], (5. * mm) as f32, 0.);
+    solve::check(&mut doc, None);
+    assert_eq!(doc.seats.len(), 1);
+    // A fitting rotated off the common axis cannot keep its mechanical seat.
+    let fitting = if doc.seats[0].a.piece == tube {
+        doc.seats[0].b.piece
+    } else {
+        doc.seats[0].a.piece
+    };
+    let pivot = doc
+        .graphics
+        .iter()
+        .find(|g| g.id == fitting)
+        .unwrap()
+        .origin;
+    crate::editing::transform_about(&mut doc, &[fitting], pivot, 1., 90.);
+    solve::check(&mut doc, None);
+    assert!(doc.seats.is_empty());
+}
+
+#[test]
+fn a_through_drag_carries_endpoint_groups_but_respects_groups_across_the_bore() {
+    let mut doc = Document::default();
+    let tube = add(
+        &mut doc,
+        "reshiki/compression-tube-120-1-4",
+        Point::default(),
+    );
+    let fitting = add_bore_on_tube(&mut doc, tube, 60.);
+    let cap = add(&mut doc, "reshiki/compression-cap-1-4", Point::default());
+    solve::connect(&mut doc, &[cap], &joint(tube, "b"), &joint(cap, "tube")).unwrap();
+    let annotation = doc.add_atom("C", Point::new(400., 100.));
+    let group = doc.next_id();
+    doc.groups.push(crate::grouping::Group {
+        id: group,
+        members: vec![cap, annotation],
+        integral: false,
+        layout: None,
+    });
+    let clicked = doc.click_selection(&[], &[tube]);
+    let moving = solve::carried_through(&doc, &clicked, &[tube], &[]).unwrap();
+    assert!(moving.contains(&tube) && moving.contains(&cap) && moving.contains(&annotation));
+    assert!(!moving.contains(&fitting));
+    let mm = port(&doc, &joint(tube, "span")).mm;
+    let d = solve::constrain(&doc, &moving, [1e6, 100.]).unwrap();
+    assert!((d[0] / mm - 36.).abs() < 1e-3 && d[1].abs() < 1e-6);
+    doc.translate(&moving, d[0] as f32, d[1] as f32);
+    solve::check(&mut doc, None);
+    assert_eq!(doc.seats.len(), 2);
+    // Grabbing an ordinary terminating fitting keeps ordinary assembly moves.
+    assert!(solve::carried_through(&doc, &clicked, &[cap], &[]).is_none());
+    for integral in [false, true] {
+        doc.groups[0].members.push(tube);
+        doc.groups[0].members.push(fitting);
+        doc.groups[0].integral = integral;
+        let clicked = doc.click_selection(&[], &[tube]);
+        assert!(solve::carried_through(&doc, &clicked, &[tube], &[]).is_none());
+    }
+}
+
 #[test]
 fn a_mass_flow_controller_keeps_its_compression_ports_in_section_view() {
     use super::eval::Value;

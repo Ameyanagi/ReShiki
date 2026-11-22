@@ -515,6 +515,20 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "kind", "from", "to", "diameter_mm"],
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "enum": ["tube_span", "through_bore"] } },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": {
+              "diameter_mm": { "type": "number", "exclusiveMinimum": 0 },
+              "fit": false
+            }
+          }
+        }
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -522,7 +536,7 @@
           "maxLength": 64
         },
         "kind": {
-          "enum": ["rail", "slider", "grip", "jaw"]
+          "enum": ["rail", "slider", "grip", "jaw", "tube_span", "through_bore"]
         },
         "from": {
           "type": "array",

@@ -151,6 +151,14 @@ pub fn validate(d: &Definition) -> Result<(), String> {
                 h.id
             ));
         }
+        if matches!(h.kind, HoldKind::TubeSpan | HoldKind::ThroughBore)
+            && !matches!(h.diameter_mm, Diameter::One(_))
+        {
+            return Err(format!(
+                "Hold \"{}\" needs one nominal tube diameter, not a diameter range.",
+                h.id
+            ));
+        }
         point(&format!("Hold \"{}\"", h.id), h.from)?;
         point(&format!("Hold \"{}\"", h.id), h.to)?;
         if h.from == h.to {
@@ -171,7 +179,7 @@ pub fn validate(d: &Definition) -> Result<(), String> {
                 .params
                 .iter()
                 .any(|p| matches!(p, Param::Range { id, unit: Unit::Mm, .. } if id == k));
-            if h.kind.held() || !mm_range {
+            if !matches!(h.kind, HoldKind::Jaw | HoldKind::Slider) || !mm_range {
                 return Err(format!(
                     "Hold \"{}\" fits \"{k}\": only a jaw or slider fits, and only a millimetre range parameter.",
                     h.id

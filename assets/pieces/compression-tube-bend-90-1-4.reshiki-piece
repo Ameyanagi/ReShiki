@@ -1,0 +1,175 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "revision": 1,
+  "family": "compression-tube",
+  "names": {
+    "en": "Stainless-steel compression tubing",
+    "ja": "ステンレスチューブ"
+  },
+  "category": "other",
+  "keywords": [
+    "tubing",
+    "rigid tube",
+    "compression",
+    "1/4 in",
+    "6.35 mm",
+    "チューブ",
+    "配管",
+    "継ぎ手"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "id": "reshiki/compression-tube-bend-90-1-4",
+  "variant": {
+    "geometry": "90° bend",
+    "length": "143.4 mm",
+    "tube_od": "1/4 in OD"
+  },
+  "shapes": [
+    {
+      "id": "steel",
+      "layer": "body",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 -3.175H60A23.175 23.175 0 0 1 83.175 20V72H76.825V20A16.825 16.825 0 0 0 60 3.175H0Z",
+      "color": [
+        186,
+        201,
+        212
+      ]
+    },
+    {
+      "id": "open-section",
+      "layer": "body",
+      "material": "paper",
+      "role": "fill",
+      "path": "M0 -2.285H60A22.285 22.285 0 0 1 82.285 20V72H77.715V20A17.715 17.715 0 0 0 60 2.285H0Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "tube-wall",
+      "layer": "body",
+      "material": "ink",
+      "role": "outline",
+      "path": "M0 -3.175H60A23.175 23.175 0 0 1 83.175 20V72M0 3.175H60A16.825 16.825 0 0 1 76.825 20V72",
+      "depth": 2
+    },
+    {
+      "id": "section-wall",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -2.285H60A22.285 22.285 0 0 1 82.285 20V72M0 2.285H60A17.715 17.715 0 0 1 77.715 20V72",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "rim-edges",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -3.175V-2.285M0 2.285V3.175M76.825 72H77.715M82.285 72H83.175",
+      "depth": 2
+    }
+  ],
+  "joints": [
+    {
+      "id": "a",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 6.35,
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "b",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 6.35,
+      "at": [
+        80,
+        72
+      ],
+      "dir": [
+        0,
+        1
+      ]
+    }
+  ],
+  "holds": [
+    {
+      "id": "inlet-span",
+      "kind": "tube_span",
+      "from": [
+        0,
+        0
+      ],
+      "to": [
+        60,
+        0
+      ],
+      "diameter_mm": 6.35
+    },
+    {
+      "id": "outlet-span",
+      "kind": "tube_span",
+      "from": [
+        80,
+        20
+      ],
+      "to": [
+        80,
+        72
+      ],
+      "diameter_mm": 6.35
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View",
+        "ja": "表示"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior",
+            "ja": "外観"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section",
+            "ja": "縦断面"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ]
+}
