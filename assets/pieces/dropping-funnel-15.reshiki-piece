@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/dropping-funnel-15",
- "revision": 1,
+ "revision": 2,
  "family": "dropping-funnel",
  "variant": {
   "joint": "15/25"
@@ -73,7 +73,7 @@
    "material": "glass",
    "role": "glass",
    "id": "shape-7",
-   "path": "M-4 -34L-19 -48L-19 -140Q-19 -148 -6.5 -151L6.5 -151Q19 -148 19 -140L19 -48L4 -34Z"
+   "path": "M-4 -34L-19 -48L-19 -140C-19 -148 -8.36 -148 -8.36 -156.2L8.36 -156.2C8.36 -148 19 -148 19 -140L19 -48L4 -34Z"
   },
   {
    "layer": "body",
