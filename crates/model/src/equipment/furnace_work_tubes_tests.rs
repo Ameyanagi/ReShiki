@@ -94,7 +94,7 @@ fn check_slide(
         bore.point[0] + axis[0] * bore.length / 2.,
         bore.point[1] + axis[1] * bore.length / 2.,
     ];
-    let ids = solve::assembly(doc, furnace);
+    let ids: Vec<_> = solve::assembly(doc, furnace).into_iter().collect();
     let moving = solve::carried_through(doc, &ids, &[tube], &[]).unwrap();
     assert_eq!(moving.len() + 1, ids.len());
     assert!(!moving.contains(&furnace));
@@ -250,13 +250,13 @@ fn changing_an_occupied_bore_releases_only_its_furnace_seat() {
     let endpoint_seat = doc
         .seats
         .iter()
-        .find(|s| s.pieces().contains(&union))
+        .find(|s| s.a.piece == union || s.b.piece == union)
         .unwrap()
         .clone();
     let old = doc.graphics.clone();
     let released = change(&mut doc, furnace, "tube-od", "1-4-in");
     assert_eq!(released.len(), 1);
-    assert!(released[0].pieces().contains(&furnace));
+    assert!(released[0].a.piece == furnace || released[0].b.piece == furnace);
     assert_eq!(doc.seats, [endpoint_seat]);
     assert_eq!(doc.graphics[1..], old[1..]);
     assert!(!solve::mates(
