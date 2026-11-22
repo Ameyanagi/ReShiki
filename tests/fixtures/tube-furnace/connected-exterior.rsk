@@ -38,7 +38,7 @@
         "y": 1.1666666269302368
       },
       "piece": {
-        "definition": "reshiki/quartz-work-tube-600-32@3#344b868f75b856db7"
+        "definition": "reshiki/quartz-work-tube-600-32@3#344b868f75b856db"
       }
     },
     {
@@ -95,7 +95,7 @@
         "y": -1.1666666269302368
       },
       "piece": {
-        "definition": "reshiki/compression-tube-120-1-4@2#4e4906b7b7f22be15"
+        "definition": "reshiki/compression-tube-120-1-4@2#4e4906b7b7f22be1"
       }
     },
     {
@@ -152,7 +152,7 @@
         "y": 1.1666666269302368
       },
       "piece": {
-        "definition": "reshiki/compression-tube-120-1-4@2#4e4906b7b7f22be15"
+        "definition": "reshiki/compression-tube-120-1-4@2#4e4906b7b7f22be1"
       }
     }
   ],
