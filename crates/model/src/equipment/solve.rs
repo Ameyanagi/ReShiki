@@ -93,6 +93,8 @@ pub struct Port {
     /// Axial span that must lie inside the held segment, in world units.
     /// Zero retains the original centre-only hold semantics.
     pub contact_length: f64,
+    /// Depth from a compression opening to its tube stop, in world units.
+    pub(super) insertion: f64,
 }
 
 impl Port {
@@ -129,14 +131,14 @@ impl Port {
         let t = dot(sub(p, self.point), self.dir).clamp(inset, self.length - inset);
         add(self.point, mul(self.dir, t))
     }
-    /// Where the seated pieces touch: the male shoulder sits 0.06 L outside
-    /// the female mouth.
+    /// Where the seated pieces touch. A cone's shoulder sits outside the
+    /// socket mouth, while a compression tube seats at the internal stop.
     fn contact(&self) -> [f64; 2] {
-        let exposure = match (&self.kind, self.gender) {
-            (Kind::Taper(size), Gender::F) => taper(size).map_or(0., |t| t.exposure()),
-            _ => 0.,
+        let offset = match (&self.kind, self.gender) {
+            (Kind::Taper(size), Gender::F) => taper(size).map_or(0., |t| t.exposure()) * self.mm,
+            _ => -self.insertion,
         };
-        add(self.point, mul(self.dir, exposure * self.mm))
+        add(self.point, mul(self.dir, offset))
     }
     /// The joint's diameter in world units, for the snap ring.
     pub fn diameter(&self) -> f64 {
@@ -190,6 +192,9 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             mm: t.scale_factor(),
             length: 0.,
             contact_length: 0.,
+            insertion: j
+                .tube_stop
+                .map_or(0., |stop| len(sub(t.apply(stop), t.apply(j.at)))),
         })
         .collect();
     // A hose's ends are where its centre line ends.
@@ -235,6 +240,7 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             } else {
                 0.
             },
+            insertion: 0.,
         })
     }));
     out
@@ -317,11 +323,16 @@ pub fn residual(a: &Port, b: &Port) -> (f64, f64) {
 /// How far apart two ports are for snapping: from the female contact point
 /// to the male cone, shoulder to tip, or from a jaw or slider to what it
 /// holds. A cone whose tip reaches the mouth, or is already inside it,
-/// counts as close.
+/// counts as close. A compression tube can snap at the visible mouth or
+/// anywhere down the receiving bore to the stop.
 fn gap(a: &Port, b: &Port) -> f64 {
     let (f, m) = sides(a, b);
     if f.hold().is_some() {
         return len(sub(m.centre(), f.nearest(m, m.centre())));
+    }
+    if f.insertion > 0. {
+        let along = dot(sub(m.point, f.point), f.dir).clamp(-f.insertion, 0.);
+        return len(sub(m.point, add(f.point, mul(f.dir, along))));
     }
     let length = match (&m.kind, m.gender) {
         (Kind::Taper(size), Gender::M) => taper(size).map_or(0., |t| t.l) * m.mm,
@@ -774,6 +785,7 @@ fn adapter(s: &Port, m: &Port) -> Option<(Arc<Definition>, String, String)> {
         },
         gender: j.gender(),
         contact_length: 0.,
+        insertion: 0.,
         ..like.clone()
     };
     builtin::catalogue()
@@ -1428,7 +1440,8 @@ pub fn detach(doc: &mut Document, j: &JointRef) -> bool {
             Kind::Taper(size) => taper(size).map_or(10., |t| t.l + t.d),
             Kind::Plug(_, size) => 2. * size,
             Kind::Hold(_, [lo, hi]) => lo + hi,
-        } * s.mm;
+        } * s.mm
+            + f.insertion;
         // Off a hold, towards the side the pulled piece is on.
         let out = if s.hold().is_some() {
             let n = perp(s.dir);

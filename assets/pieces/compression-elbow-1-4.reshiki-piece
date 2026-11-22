@@ -32,7 +32,7 @@
   "shapes": [
     {
       "id": "elbow-body",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "solid",
       "path": "M-11 -7.5H3.5Q7.5 -7.5 7.5 -3.5V11H-7.5V7.5H-11Z",
@@ -40,11 +40,33 @@
         215,
         220,
         224
-      ]
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "elbow-body-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-2.1 10.5L-3.175 10.5L-3.175 11L-7.5 11L-7.5 7.5L-11 7.5L-11 3.175L-10.5 3.175L-10.5 2.1L-2.1 2.1ZM7.5 -3.5L7.5 11L3.175 11L3.175 10.5L2.1 10.5L2.1 -2.1L-10.5 -2.1L-10.5 -3.175L-11 -3.175L-11 -7.5L3.5 -7.5C6.166667 -7.5 7.5 -6.166667 7.5 -3.5Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "left-neck",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "solid",
       "path": "M-9 4.8L-14 4.8L-14 -4.8L-9 -4.8Z",
@@ -52,11 +74,33 @@
         199,
         209,
         217
-      ]
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "left-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-9 4.8L-14 4.8L-14 3.175L-10.5 3.175L-10.5 2.1L-9 2.1ZM-10.5 -2.1L-10.5 -3.175L-14 -3.175L-14 -4.8L-9 -4.8L-9 -2.1Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "left-nut-metal",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "fill",
       "path": "M-14 5.8L-15.5 7.6L-22 7.6L-24 5.8L-24 -5.8L-22 -7.6L-15.5 -7.6L-14 -5.8Z",
@@ -64,20 +108,29 @@
         224,
         230,
         234
-      ]
-    },
-    {
-      "id": "left-exterior-recess",
-      "layer": "front",
-      "material": "paper",
-      "role": "fill",
-      "path": "M-22.2 3.175L-24 3.175L-24 -3.175L-22.2 -3.175Z",
+      ],
       "when": {
         "view": [
           "exterior"
         ]
-      },
-      "depth": 1
+      }
+    },
+    {
+      "id": "left-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-14 5.8L-15.5 7.6L-22 7.6L-24 5.8L-24 3.175L-14 3.175ZM-22 -7.6L-15.5 -7.6L-14 -5.8L-14 -3.175L-24 -3.175L-24 -5.8Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "left-nut-outline",
@@ -160,7 +213,7 @@
     },
     {
       "id": "down-neck",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "solid",
       "path": "M4.8 9L4.8 14L-4.8 14L-4.8 9Z",
@@ -168,11 +221,33 @@
         199,
         209,
         217
-      ]
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "down-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-2.1 10.5L-3.175 10.5L-3.175 14L-4.8 14L-4.8 9L-2.1 9ZM4.8 14L3.175 14L3.175 10.5L2.1 10.5L2.1 9L4.8 9Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "down-nut-metal",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "fill",
       "path": "M5.8 14L7.6 15.5L7.6 22L5.8 24L-5.8 24L-7.6 22L-7.6 15.5L-5.8 14Z",
@@ -180,20 +255,29 @@
         224,
         230,
         234
-      ]
-    },
-    {
-      "id": "down-exterior-recess",
-      "layer": "front",
-      "material": "paper",
-      "role": "fill",
-      "path": "M3.175 22.2L3.175 24L-3.175 24L-3.175 22.2Z",
+      ],
       "when": {
         "view": [
           "exterior"
         ]
-      },
-      "depth": 1
+      }
+    },
+    {
+      "id": "down-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-3.175 24L-5.8 24L-7.6 22L-7.6 15.5L-5.8 14L-3.175 14ZM7.6 15.5L7.6 22L5.8 24L3.175 24L3.175 14L5.8 14Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "down-nut-outline",
@@ -276,7 +360,7 @@
     },
     {
       "id": "section-fluid-opening",
-      "layer": "front",
+      "layer": "back",
       "material": "paper",
       "role": "fill",
       "path": "M-24 -3.175L-10.5 -3.175L-10.5 -2.1L2.1 -2.1L2.1 10.5L3.175 10.5L3.175 24L-3.175 24L-3.175 10.5L-2.1 10.5L-2.1 2.1L-10.5 2.1L-10.5 3.175L-24 3.175Z",
@@ -284,8 +368,7 @@
         "view": [
           "section"
         ]
-      },
-      "depth": 2
+      }
     },
     {
       "id": "section-fluid-walls",
@@ -380,7 +463,8 @@
       "dir": [
         -1,
         0
-      ]
+      ],
+      "insertion_mm": 13.5
     },
     {
       "id": "down",
@@ -395,7 +479,8 @@
       "dir": [
         0,
         1
-      ]
+      ],
+      "insertion_mm": 13.5
     }
   ],
   "params": [

@@ -80,6 +80,67 @@ fn seated(doc: &Document) {
 }
 
 #[test]
+fn a_tube_follows_a_moving_compression_stop_inside_a_fixed_mouth() {
+    use super::format::{Joint, Motion, Param, Part, Unit};
+
+    let mut doc = Document::default();
+    let mut definition = (*builtin::find("reshiki/compression-cap-1-4").unwrap()).clone();
+    definition.id = "test/stretching-compression-cap".into();
+    definition.grounded = true;
+    let socket = &mut definition.joints[0];
+    let (mouth, dir) = (socket.at(), socket.dir());
+    let Joint::Plug { part, .. } = socket else {
+        panic!("the cap has a compression plug");
+    };
+    *part = Some("body".into());
+    for shape in &mut definition.shapes {
+        shape.part = Some("body".into());
+    }
+    definition.params.push(Param::Range {
+        id: "stretch".into(),
+        names: [("en".into(), "Stretch".into())].into(),
+        min: 0.,
+        max: 1.,
+        default: 0.,
+        unit: Unit::Fraction,
+    });
+    definition.parts.push(Part {
+        id: "body".into(),
+        parent: None,
+        param: "stretch".into(),
+        motion: Motion::Stretch {
+            pivot: mouth,
+            axis: dir,
+            per_unit: 1.,
+        },
+        handle: None,
+    });
+    super::validate::validate(&definition).unwrap();
+    let cap = doc.next_id();
+    let mm = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+    doc.graphics.push(placed::graphic(
+        cap,
+        definition.into(),
+        Point::default(),
+        mm,
+    ));
+    let tube = add(
+        &mut doc,
+        "reshiki/compression-tube-60-1-4",
+        Point::default(),
+    );
+    seat(&mut doc, tube, "b", cap, "tube");
+    let before = port(&doc, tube, "b");
+    let opening = port(&doc, cap, "tube");
+    let released = adjust::set(&mut doc, cap, "stretch", Value::Number(1.)).unwrap();
+    assert!(released.is_empty());
+    assert_eq!(doc.seats.len(), 1);
+    assert_eq!(port(&doc, cap, "tube").point, opening.point);
+    assert!((port(&doc, tube, "b").point[0] - before.point[0] - 13.5 * f64::from(mm)).abs() < 1e-5);
+    seated(&doc);
+}
+
+#[test]
 fn tilting_a_clamp_on_a_stand_turns_the_flask_it_holds_and_leaves_the_stand() {
     let (mut doc, flask, clamp) = clamped();
     let stand = add(&mut doc, "reshiki/stand", Point::new(-300., 0.));

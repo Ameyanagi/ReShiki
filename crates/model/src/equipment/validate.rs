@@ -633,10 +633,29 @@ fn joint(
             ));
         }
     }
-    if let Joint::Plug { size_mm, .. } = j
-        && !(size_mm.is_finite() && *size_mm > 0.)
+    if let Joint::Plug {
+        size_mm,
+        family,
+        gender,
+        insertion_mm,
+        ..
+    } = j
     {
-        return Err(format!("{owner} needs a positive size."));
+        if !(size_mm.is_finite() && *size_mm > 0.) {
+            return Err(format!("{owner} needs a positive size."));
+        }
+        if let Some(depth) = insertion_mm {
+            if (*family, *gender) != (PlugFamily::Compression, Gender::F) {
+                return Err(format!(
+                    "{owner} can set insertion_mm only on a female compression opening."
+                ));
+            }
+            if !(0. < *depth && *depth <= MAX_COORDINATE) {
+                return Err(format!(
+                    "{owner} needs insertion_mm greater than zero and at most {MAX_COORDINATE}."
+                ));
+            }
+        }
     }
     // A tube's ends follow the centre line stored on each placed copy.
     if tube_end {

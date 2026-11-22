@@ -699,6 +699,7 @@ fn an_embedded_plug_keeps_its_original_attachment_rule() {
         size_mm: 10.,
         at: [0., 0.],
         dir: [0., 1.],
+        insertion_mm: None,
         part: None,
         poses: BTreeMap::new(),
     });

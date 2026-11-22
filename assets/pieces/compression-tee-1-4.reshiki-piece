@@ -32,7 +32,7 @@
   "shapes": [
     {
       "id": "tee-body",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "solid",
       "path": "M-13 -7.5L13 -7.5L13 7.5L7.5 7.5L7.5 13L-7.5 13L-7.5 7.5L-13 7.5Z",
@@ -40,11 +40,33 @@
         215,
         220,
         224
-      ]
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "tee-body-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-2.1 13L-7.5 13L-7.5 7.5L-13 7.5L-13 2.1L-2.1 2.1ZM13 7.5L7.5 7.5L7.5 13L2.1 13L2.1 2.1L13 2.1ZM13 -2.1L-13 -2.1L-13 -7.5L13 -7.5Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "left-neck",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "solid",
       "path": "M-12 4.8L-17 4.8L-17 -4.8L-12 -4.8Z",
@@ -52,11 +74,33 @@
         199,
         209,
         217
-      ]
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "left-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-12 4.8L-17 4.8L-17 3.175L-13.5 3.175L-13.5 2.1L-12 2.1ZM-12 -2.1L-13.5 -2.1L-13.5 -3.175L-17 -3.175L-17 -4.8L-12 -4.8Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "left-nut-metal",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "fill",
       "path": "M-17 5.8L-18.5 7.6L-25 7.6L-27 5.8L-27 -5.8L-25 -7.6L-18.5 -7.6L-17 -5.8Z",
@@ -64,20 +108,29 @@
         224,
         230,
         234
-      ]
-    },
-    {
-      "id": "left-exterior-recess",
-      "layer": "front",
-      "material": "paper",
-      "role": "fill",
-      "path": "M-25.2 3.175L-27 3.175L-27 -3.175L-25.2 -3.175Z",
+      ],
       "when": {
         "view": [
           "exterior"
         ]
-      },
-      "depth": 1
+      }
+    },
+    {
+      "id": "left-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-17 5.8L-18.5 7.6L-25 7.6L-27 5.8L-27 3.175L-17 3.175ZM-25 -7.6L-18.5 -7.6L-17 -5.8L-17 -3.175L-27 -3.175L-27 -5.8Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "left-nut-outline",
@@ -160,7 +213,7 @@
     },
     {
       "id": "right-neck",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "solid",
       "path": "M12 -4.8L17 -4.8L17 4.8L12 4.8Z",
@@ -168,11 +221,33 @@
         199,
         209,
         217
-      ]
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "right-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M13.5 3.175L17 3.175L17 4.8L12 4.8L12 2.1L13.5 2.1ZM17 -3.175L13.5 -3.175L13.5 -2.1L12 -2.1L12 -4.8L17 -4.8Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "right-nut-metal",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "fill",
       "path": "M17 -5.8L18.5 -7.6L25 -7.6L27 -5.8L27 5.8L25 7.6L18.5 7.6L17 5.8Z",
@@ -180,20 +255,29 @@
         224,
         230,
         234
-      ]
-    },
-    {
-      "id": "right-exterior-recess",
-      "layer": "front",
-      "material": "paper",
-      "role": "fill",
-      "path": "M25.2 -3.175L27 -3.175L27 3.175L25.2 3.175Z",
+      ],
       "when": {
         "view": [
           "exterior"
         ]
-      },
-      "depth": 1
+      }
+    },
+    {
+      "id": "right-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M27 5.8L25 7.6L18.5 7.6L17 5.8L17 3.175L27 3.175ZM27 -5.8L27 -3.175L17 -3.175L17 -5.8L18.5 -7.6L25 -7.6Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "right-nut-outline",
@@ -276,7 +360,7 @@
     },
     {
       "id": "branch-neck",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "solid",
       "path": "M4.8 12L4.8 17L-4.8 17L-4.8 12Z",
@@ -284,11 +368,33 @@
         199,
         209,
         217
-      ]
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "branch-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-2.1 13.5L-3.175 13.5L-3.175 17L-4.8 17L-4.8 12L-2.1 12ZM4.8 17L3.175 17L3.175 13.5L2.1 13.5L2.1 12L4.8 12Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "branch-nut-metal",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "fill",
       "path": "M5.8 17L7.6 18.5L7.6 25L5.8 27L-5.8 27L-7.6 25L-7.6 18.5L-5.8 17Z",
@@ -296,20 +402,29 @@
         224,
         230,
         234
-      ]
-    },
-    {
-      "id": "branch-exterior-recess",
-      "layer": "front",
-      "material": "paper",
-      "role": "fill",
-      "path": "M3.175 25.2L3.175 27L-3.175 27L-3.175 25.2Z",
+      ],
       "when": {
         "view": [
           "exterior"
         ]
-      },
-      "depth": 1
+      }
+    },
+    {
+      "id": "branch-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-3.175 27L-5.8 27L-7.6 25L-7.6 18.5L-5.8 17L-3.175 17ZM7.6 18.5L7.6 25L5.8 27L3.175 27L3.175 17L5.8 17Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "branch-nut-outline",
@@ -392,7 +507,7 @@
     },
     {
       "id": "section-fluid-opening",
-      "layer": "front",
+      "layer": "back",
       "material": "paper",
       "role": "fill",
       "path": "M-27 -3.175L-13.5 -3.175L-13.5 -2.1L13.5 -2.1L13.5 -3.175L27 -3.175L27 3.175L13.5 3.175L13.5 2.1L2.1 2.1L2.1 13.5L3.175 13.5L3.175 27L-3.175 27L-3.175 13.5L-2.1 13.5L-2.1 2.1L-13.5 2.1L-13.5 3.175L-27 3.175Z",
@@ -400,15 +515,14 @@
         "view": [
           "section"
         ]
-      },
-      "depth": 2
+      }
     },
     {
       "id": "section-fluid-walls",
       "layer": "front",
       "material": "ink",
       "role": "detail",
-      "path": "M-27 -3.175L-13.5 -3.175L-13.5 -2.1L13.5 -2.1L13.5 -3.175L27 -3.175M27 3.175L13.5 3.175L13.5 2.1L2.1 2.1L2.1 13.5L3.175 13.5L3.175 27M-3.175 27L-3.175 13.5L-2.1 13.5L-2.1 2.1L-13.5 2.1L-13.5 3.175L-27 3.175L-27 -3.175",
+      "path": "M-27 -3.175L-13.5 -3.175L-13.5 -2.1L13.5 -2.1L13.5 -3.175L27 -3.175M27 3.175L13.5 3.175L13.5 2.1L2.1 2.1L2.1 13.5L3.175 13.5L3.175 27M-3.175 27L-3.175 13.5L-2.1 13.5L-2.1 2.1L-13.5 2.1L-13.5 3.175L-27 3.175",
       "when": {
         "view": [
           "section"
@@ -522,7 +636,8 @@
       "dir": [
         -1,
         0
-      ]
+      ],
+      "insertion_mm": 13.5
     },
     {
       "id": "right",
@@ -537,7 +652,8 @@
       "dir": [
         1,
         0
-      ]
+      ],
+      "insertion_mm": 13.5
     },
     {
       "id": "branch",
@@ -552,7 +668,8 @@
       "dir": [
         0,
         1
-      ]
+      ],
+      "insertion_mm": 13.5
     }
   ],
   "params": [

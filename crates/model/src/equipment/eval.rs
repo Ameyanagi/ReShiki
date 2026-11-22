@@ -2,7 +2,7 @@
 //! drawn in the current states and poses the joints, holds and handles. The
 //! result is in the piece's own millimetres; `plan` places it on the page.
 use super::format::*;
-use super::geometry::{Affine, Seg, add, flatten, mul, parse_path, sub};
+use super::geometry::{Affine, Seg, add, flatten, mul, normalize, parse_path, sub};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -26,6 +26,7 @@ pub struct PosedJoint<'a> {
     pub joint: &'a Joint,
     pub at: Xy,
     pub dir: Xy,
+    pub(super) tube_stop: Option<Xy>,
 }
 
 #[derive(Debug, Clone)]
@@ -214,10 +215,18 @@ fn posed<'a>(
                 .part()
                 .and_then(|k| parts.get(k).copied())
                 .unwrap_or(Affine::IDENTITY);
+            let tube_stop = match j {
+                Joint::Plug {
+                    insertion_mm: Some(depth),
+                    ..
+                } => Some(m.apply(add(at, mul(normalize(dir), -*depth)))),
+                _ => None,
+            };
             PosedJoint {
                 joint: j,
                 at: m.apply(at),
                 dir: m.apply_dir(dir),
+                tube_stop,
             }
         })
         .collect()

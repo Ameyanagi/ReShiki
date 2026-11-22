@@ -355,6 +355,68 @@ fn a_through_drag_carries_endpoint_groups_but_respects_groups_across_the_bore() 
 }
 
 #[test]
+fn rigid_tubes_snap_at_compression_mouths_and_seat_at_the_internal_stops() {
+    use super::eval::Value;
+
+    for name in [
+        "compression-union-1-4",
+        "compression-elbow-1-4",
+        "compression-tee-1-4",
+        "compression-cap-1-4",
+        "compression-bulkhead-union-1-4",
+    ] {
+        let definition = builtin::find(&format!("reshiki/{name}")).unwrap();
+        for socket in &definition.joints {
+            for move_tube in [true, false] {
+                let mut doc = Document::default();
+                let tube_name = "reshiki/compression-tube-60-1-4";
+                let origin = Point::default();
+                let (fitting, tube) = if move_tube {
+                    let fitting = add(&mut doc, &definition.id, origin);
+                    (fitting, add(&mut doc, tube_name, origin))
+                } else {
+                    let tube = add(&mut doc, tube_name, origin);
+                    (add(&mut doc, &definition.id, origin), tube)
+                };
+                let opening = port(&doc, &joint(fitting, socket.id()));
+                let end = joint(tube, "a");
+                let g = doc.graphics.iter_mut().find(|g| g.id == tube).unwrap();
+                let [x, y] = opening.point.map(|v| v as f32);
+                let [dx, dy] = opening.dir.map(|v| (v * opening.mm) as f32);
+                g.origin = Point::new(x, y);
+                g.axis_x = Point::new(dx, dy);
+                g.axis_y = Point::new(-dy, dx);
+                let moving = if move_tube { tube } else { fitting };
+                let snap = solve::snap(&mut doc, &[moving], solve::REACH_PX / 2., false).unwrap();
+                assert!(matches!(snap.offer, Offer::Seat));
+                assert_eq!(doc.seats.len(), 1);
+                let inside = |doc: &Document| {
+                    let mouth = port(doc, &opening.at);
+                    let tip = port(doc, &end);
+                    super::geometry::dot(super::geometry::sub(mouth.point, tip.point), mouth.dir)
+                        / mouth.mm
+                };
+                assert!((inside(&doc) - 13.5).abs() < 1e-5, "{name}");
+                let section = Value::State("section".into());
+                for piece in [fitting, tube] {
+                    assert!(
+                        solve::adjust::set(&mut doc, piece, "view", section.clone())
+                            .unwrap()
+                            .is_empty()
+                    );
+                }
+                let mut reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+                assert_eq!(reopened.seats, doc.seats);
+                assert!((inside(&reopened) - 13.5).abs() < 1e-5);
+                assert!(solve::detach(&mut reopened, &opening.at));
+                assert!(reopened.seats.is_empty());
+                assert!((inside(&reopened) + 12.7).abs() < 1e-5);
+            }
+        }
+    }
+}
+
+#[test]
 fn a_mass_flow_controller_keeps_its_compression_ports_in_section_view() {
     use super::eval::Value;
     use super::format::{Gender, Joint, Material, PlugFamily};

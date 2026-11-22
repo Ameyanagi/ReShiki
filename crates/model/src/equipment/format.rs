@@ -249,6 +249,9 @@ pub enum Joint {
         size_mm: f64,
         at: Xy,
         dir: Xy,
+        /// Tube stop measured inwards from a female compression opening.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        insertion_mm: Option<f64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         part: Option<String>,
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

@@ -32,7 +32,7 @@
   "shapes": [
     {
       "id": "closed-cap-body",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "solid",
       "path": "M-1 -7.5L8 -7.5L11 -4.5L11 4.5L8 7.5L-1 7.5Z",
@@ -40,11 +40,33 @@
         215,
         220,
         224
-      ]
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "closed-cap-body-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11 -4.5L11 4.5L8 7.5L-1 7.5L-1 3.175L2.5 3.175L2.5 2.1L5 2.1L5 -2.1L2.5 -2.1L2.5 -3.175L-1 -3.175L-1 -7.5L8 -7.5Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "tube-neck",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "solid",
       "path": "M4 4.8L-1 4.8L-1 -4.8L4 -4.8Z",
@@ -52,11 +74,33 @@
         199,
         209,
         217
-      ]
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "tube-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M4 4.8L-1 4.8L-1 3.175L2.5 3.175L2.5 2.1L4 2.1ZM2.5 -2.1L2.5 -3.175L-1 -3.175L-1 -4.8L4 -4.8L4 -2.1Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "tube-nut-metal",
-      "layer": "body",
+      "layer": "front",
       "material": "metal",
       "role": "fill",
       "path": "M-1 5.8L-2.5 7.6L-9 7.6L-11 5.8L-11 -5.8L-9 -7.6L-2.5 -7.6L-1 -5.8Z",
@@ -64,20 +108,29 @@
         224,
         230,
         234
-      ]
-    },
-    {
-      "id": "tube-exterior-recess",
-      "layer": "front",
-      "material": "paper",
-      "role": "fill",
-      "path": "M-9.2 3.175L-11 3.175L-11 -3.175L-9.2 -3.175Z",
+      ],
       "when": {
         "view": [
           "exterior"
         ]
-      },
-      "depth": 1
+      }
+    },
+    {
+      "id": "tube-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-1 5.8L-2.5 7.6L-9 7.6L-11 5.8L-11 3.175L-1 3.175ZM-9 -7.6L-2.5 -7.6L-1 -5.8L-1 -3.175L-11 -3.175L-11 -5.8Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
     },
     {
       "id": "tube-nut-outline",
@@ -160,7 +213,7 @@
     },
     {
       "id": "section-fluid-opening",
-      "layer": "front",
+      "layer": "back",
       "material": "paper",
       "role": "fill",
       "path": "M-11 -3.175L2.5 -3.175L2.5 -2.1L5 -2.1L5 2.1L2.5 2.1L2.5 3.175L-11 3.175Z",
@@ -168,15 +221,14 @@
         "view": [
           "section"
         ]
-      },
-      "depth": 2
+      }
     },
     {
       "id": "section-fluid-walls",
       "layer": "front",
       "material": "ink",
       "role": "detail",
-      "path": "M-11 -3.175L2.5 -3.175L2.5 -2.1L5 -2.1L5 2.1M5 2.1L2.5 2.1L2.5 3.175L-11 3.175L-11 -3.175",
+      "path": "M-11 -3.175L2.5 -3.175L2.5 -2.1L5 -2.1L5 2.1M5 2.1L2.5 2.1L2.5 3.175L-11 3.175",
       "when": {
         "view": [
           "section"
@@ -238,7 +290,8 @@
       "dir": [
         -1,
         0
-      ]
+      ],
+      "insertion_mm": 13.5
     }
   ],
   "params": [

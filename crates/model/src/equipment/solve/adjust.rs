@@ -168,12 +168,17 @@ pub fn toggled(g: &Graphic, param: &str) -> Option<Value> {
     ))
 }
 
-/// The rigid motion that takes the pose (`point`, `dir`) of `from` to that of `to`.
+/// The rigid motion between the poses of the attachment.
 fn motion(from: &Port, to: &Port) -> Affine {
     let angle = |v: [f64; 2]| v[1].atan2(v[0]).to_degrees();
-    Affine::translate(to.point)
+    let (a, b) = if from.insertion > 0. || to.insertion > 0. {
+        (from.contact(), to.contact())
+    } else {
+        (from.point, to.point)
+    };
+    Affine::translate(b)
         .then(Affine::rotate(angle(to.dir) - angle(from.dir), [0., 0.]))
-        .then(Affine::translate(mul(from.point, -1.)))
+        .then(Affine::translate(mul(a, -1.)))
 }
 
 fn same(a: &Affine, b: &Affine) -> bool {
