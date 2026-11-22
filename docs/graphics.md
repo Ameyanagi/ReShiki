@@ -442,7 +442,8 @@ detached; click it a second time to select it alone and delete it.
 Schlenk tubes come with S-type and straight sidearms in 15/25 and 29/42,
 facing left or right. Both use the same three-way valve with side and
 downward hose outlets. The standalone **Three-way stopcock** comes with three
-hose barbs or with two barbs and a downward 15/25 or 29/42 ground-glass cone.
+hose barbs or with two barbs and a 15/25 or 29/42 ground-glass cone on the left.
+It turns to align the cone when placed on a matching socket.
 
 Many flasks, funnels and NMR tubes have movable liquid levels.
 The **Cow receiver adapter** turns between

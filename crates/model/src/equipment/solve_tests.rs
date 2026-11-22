@@ -397,9 +397,9 @@ fn a_ground_glass_stopcock_keeps_all_seats_when_the_flow_changes() {
         let hose = add(&mut doc, "reshiki/hose-7", Point::new(90., 100.));
         let septum = add(&mut doc, "reshiki/septum-hose-7", Point::new(400., 100.));
         for (moving, port, target, socket) in [
-            (stopcock, "down", flask, "neck"),
-            (hose, "a", stopcock, "left"),
-            (septum, "barb", stopcock, "right"),
+            (stopcock, "left", flask, "neck"),
+            (hose, "a", stopcock, "right"),
+            (septum, "barb", stopcock, "down"),
         ] {
             solve::connect(
                 &mut doc,

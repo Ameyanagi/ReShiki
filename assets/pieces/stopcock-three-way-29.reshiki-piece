@@ -29,82 +29,155 @@
  "units": "mm",
  "shapes": [
   {
-   "id": "barrel-and-arms",
+   "id": "rounded-barrel",
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "path": "M-7.8 -12L7.8 -12L7.64 -3.5L14 -3.5L14 3.5L7.52 3.5L7.4 10Q7.2 13 4.5 15L4.5 18L-4.5 18L-4.5 15Q-7.2 13 -7.4 10L-7.52 3.5L-14 3.5L-14 -3.5L-7.64 -3.5Z"
+   "path": "M-10.4 -19Q-12 -18.2 -11.1 -12L-9.9 20Q-9.8 23.5 0 25Q9.8 23.5 9.9 20L11.1 -12Q12 -18.2 10.4 -19Q0 -22 -10.4 -19Z"
   },
   {
-   "id": "left-barb",
+   "id": "left-cone-neck",
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "path": "M-8 -3.3L-22 -3.3L-22 -4.6L-26.5 -3.3L-26.5 -4.6L-31 -3.3L-31 -4.5L-35 -3.1L-35 3.1L-31 4.5L-31 3.3L-26.5 4.6L-26.5 3.3L-22 4.6L-22 3.3L-8 3.3Z"
+   "path": "M0 -4L-12 -4Q-15 -4 -18 -13L-23.4 -13L-23.4 13L-18 13Q-15 4 -12 4L0 4Z"
   },
   {
    "id": "right-barb",
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "path": "M8 3.3L22 3.3L22 4.6L26.5 3.3L26.5 4.6L31 3.3L31 4.5L35 3.1L35 -3.1L31 -4.5L31 -3.3L26.5 -4.6L26.5 -3.3L22 -4.6L22 -3.3L8 -3.3Z"
+   "path": "M0 3.4L21 3.4L26 3.4L26 4.5L30 3.4L30 4.5L34 3.4L34 4.4L38 3.4L40 3.1C41.1 3.1 41.1 -3.1 40 -3.1L38 -3.4L34 -4.4L34 -3.4L30 -4.5L30 -3.4L26 -4.5L26 -3.4L21 -3.4L0 -3.4Z"
   },
   {
-   "id": "cone-stem",
+   "id": "lower-plug-tip",
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "path": "M-4.5 14L-4.5 18Q-4.5 22 -13 24L-13 28.4L13 28.4L13 24Q4.5 22 4.5 18L4.5 14Z"
+   "path": "M-3.8 22L-3.8 27Q0 31 3.8 27L3.8 22Z"
   },
   {
-   "id": "plug-collar",
+   "id": "upper-collar",
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "path": "M-4.9 -16.5L4.9 -16.5A1.5 1.5 0 0 1 6.4 -15L6.4 -13.5A1.5 1.5 0 0 1 4.9 -12L-4.9 -12A1.5 1.5 0 0 1 -6.4 -13.5L-6.4 -15A1.5 1.5 0 0 1 -4.9 -16.5Z"
+   "path": "M12.3 -20A12.3 3.5 0 0 1 -12.3 -20A12.3 3.5 0 0 1 12.3 -20Z"
   },
   {
-   "id": "wheel-stem",
+   "id": "short-key-stem",
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "path": "M-2 -23L2 -23L2 -15L-2 -15Z"
+   "path": "M-3 -29L-3 -19L3 -19L3 -29Z"
   },
   {
-   "id": "ground-plug",
+   "id": "frosted-plug",
    "layer": "body",
    "material": "frosted",
-   "role": "solid",
-   "path": "M-5.6 9L5.6 9L6.2 -12.5L-6.2 -12.5Z"
+   "role": "fill",
+   "path": "M-8.8 -18Q0 -20.2 8.8 -18L7.800000000000001 21Q0 23.2 -7.800000000000001 21Z"
   },
   {
-   "id": "wheel",
+   "id": "plug-side-edges",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-8.8 -18L-7.800000000000001 21M8.8 -18L7.800000000000001 21"
+  },
+  {
+   "id": "upper-front-rim",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-12.3 -20Q0 -13 12.3 -20"
+  },
+  {
+   "id": "lower-collar",
    "layer": "body",
    "material": "glass",
    "role": "solid",
-   "path": "M7 -26A7 7 0 0 1 -7 -26A7 7 0 0 1 7 -26Z"
+   "path": "M11.2 23A11.2 3.2 0 0 1 -11.2 23A11.2 3.2 0 0 1 11.2 23Z"
   },
   {
-   "id": "wheel-hub",
+   "id": "lower-front-rim",
    "layer": "body",
-   "material": "ink",
-   "role": "solid",
-   "path": "M1.3 -26A1.3 1.3 0 0 1 -1.3 -26A1.3 1.3 0 0 1 1.3 -26Z"
-  },
-  {
-   "id": "wheel-indicator",
-   "layer": "body",
-   "material": "ink",
+   "material": "glass",
    "role": "detail",
-   "path": "M0 -28.3L0 -31",
-   "part": "control"
+   "path": "M-11.2 23Q0 28.6 11.2 23"
+  },
+  {
+   "id": "paddle-closed",
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "path": "M-17 -33C-19 -35 -12 -40 -3 -42C5 -44 16 -46 18 -43C21 -40 12 -35 6 -33L3 -28L-3 -28L-4 -32C-9 -31 -15 -31 -17 -33Z",
+   "when": {
+    "stopcock": [
+     "closed"
+    ]
+   }
+  },
+  {
+   "id": "paddle-left-right",
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "path": "M17 -33C19 -35 12 -40 3 -42C-5 -44 -16 -46 -18 -43C-21 -40 -12 -35 -6 -33L-3 -28L3 -28L4 -32C9 -31 15 -31 17 -33Z",
+   "when": {
+    "stopcock": [
+     "left-right"
+    ]
+   }
+  },
+  {
+   "id": "paddle-left-down",
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "path": "M-10.54 -33C-11.78 -35 -7.44 -40 -1.86 -42C3.1 -44 9.92 -46 11.16 -43C13.02 -40 7.44 -35 3.72 -33L1.86 -28L-1.86 -28L-2.48 -32C-5.58 -31 -9.3 -31 -10.54 -33Z",
+   "when": {
+    "stopcock": [
+     "left-down"
+    ]
+   }
+  },
+  {
+   "id": "paddle-right-down",
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "path": "M10.54 -33C11.78 -35 7.44 -40 1.86 -42C-3.1 -44 -9.92 -46 -11.16 -43C-13.02 -40 -7.44 -35 -3.72 -33L-1.86 -28L1.86 -28L2.48 -32C5.58 -31 9.3 -31 10.54 -33Z",
+   "when": {
+    "stopcock": [
+     "right-down"
+    ]
+   }
+  },
+  {
+   "id": "paddle-all",
+   "layer": "body",
+   "material": "glass",
+   "role": "solid",
+   "path": "M-18 -38Q-19 -41 -16 -42L16 -42Q19 -41 18 -38Q14 -35 4 -35L3 -28L-3 -28L-4 -35Q-14 -35 -18 -38Z",
+   "when": {
+    "stopcock": [
+     "all"
+    ]
+   }
+  },
+  {
+   "id": "forward-barb",
+   "layer": "front",
+   "material": "glass",
+   "role": "solid",
+   "path": "M1.24 6.68L5.9 8.8L11.56 12.92L15.56 15.92L14.9 16.8L18.76 18.32L18.1 19.2L21.96 20.72L21.36 21.52L25.16 23.12L26.94 24.08C27.82 24.74 31.54 19.78 30.66 19.12L29.24 17.68L26.64 14.48L26.04 15.28L23.5 12L22.84 12.88L20.3 9.6L19.64 10.48L15.64 7.48L10.1 3.2L6.76 -0.68C4.36 -2.48 -1.16 4.88 1.24 6.68Z"
   },
   {
    "id": "closed-bore",
-   "layer": "body",
+   "layer": "front",
    "material": "ink",
    "role": "solid",
-   "path": "M1.9 0A1.9 1.9 0 0 1 -1.9 0A1.9 1.9 0 0 1 1.9 0Z",
+   "path": "M1.25 0A1.25 1.25 0 0 1 -1.25 0A1.25 1.25 0 0 1 1.25 0Z",
    "when": {
     "stopcock": [
      "closed"
@@ -113,10 +186,10 @@
   },
   {
    "id": "left-channel",
-   "layer": "body",
+   "layer": "front",
    "material": "ink",
-   "role": "solid",
-   "path": "M-6 -1.7L1.7 -1.7L1.7 1.7L-6 1.7Z",
+   "role": "detail",
+   "path": "M-7 0L0 0",
    "when": {
     "stopcock": [
      "left-right",
@@ -127,10 +200,10 @@
   },
   {
    "id": "right-channel",
-   "layer": "body",
+   "layer": "front",
    "material": "ink",
-   "role": "solid",
-   "path": "M-1.7 -1.7L6 -1.7L6 1.7L-1.7 1.7Z",
+   "role": "detail",
+   "path": "M0 0L7 0",
    "when": {
     "stopcock": [
      "left-right",
@@ -140,11 +213,11 @@
    }
   },
   {
-   "id": "down-channel",
-   "layer": "body",
+   "id": "forward-channel",
+   "layer": "front",
    "material": "ink",
-   "role": "solid",
-   "path": "M-1.7 -1.7L1.7 -1.7L1.7 9.5L-1.7 9.5Z",
+   "role": "detail",
+   "path": "M0 0L8.4 6.3",
    "when": {
     "stopcock": [
      "left-down",
@@ -152,32 +225,46 @@
      "all"
     ]
    }
+  },
+  {
+   "id": "right-open-tip",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M39.9 2.05C40.65 2.05 40.65 -2.05 39.9 -2.05C39.15 -2.05 39.15 2.05 39.9 2.05Z"
+  },
+  {
+   "id": "forward-open-tip",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M27.49 23.18C28.09 23.63 30.55 20.35 29.95 19.9C29.35 19.45 26.89 22.73 27.49 23.18Z"
   }
  ],
  "joints": [
   {
    "id": "left",
-   "kind": "plug",
-   "family": "hose",
-   "size_mm": 7,
+   "kind": "taper",
+   "size": "29/42",
    "gender": "M",
    "at": [
-    -35,
+    -27,
     0
    ],
    "dir": [
     -1,
     0
-   ]
+   ],
+   "draw": "standard"
   },
   {
    "id": "right",
    "kind": "plug",
    "family": "hose",
-   "size_mm": 7,
    "gender": "M",
+   "size_mm": 7,
    "at": [
-    35,
+    40,
     0
    ],
    "dir": [
@@ -187,18 +274,18 @@
   },
   {
    "id": "down",
-   "kind": "taper",
-   "size": "29/42",
+   "kind": "plug",
+   "family": "hose",
    "gender": "M",
+   "size_mm": 7,
    "at": [
-    0,
-    32
+    28.8,
+    21.6
    ],
    "dir": [
-    0,
-    1
-   ],
-   "draw": "standard"
+    0.8,
+    0.6
+   ]
   }
  ],
  "params": [
@@ -254,53 +341,12 @@
    "id": "control",
    "param": "stopcock",
    "motion": {
-    "per_state": {
-     "closed": [
-      1.0,
-      0.0,
-      -0.0,
-      1.0,
-      -0.0,
-      -0.0
-     ],
-     "left-right": [
-      0.0,
-      1.0,
-      -1.0,
-      0.0,
-      -26.0,
-      -26.0
-     ],
-     "left-down": [
-      -0.707107,
-      -0.707107,
-      0.707107,
-      -0.707107,
-      18.384776,
-      -44.384776
-     ],
-     "right-down": [
-      -0.707107,
-      0.707107,
-      -0.707107,
-      -0.707107,
-      -18.384776,
-      -44.384776
-     ],
-     "all": [
-      -1.0,
-      0.0,
-      -0.0,
-      -1.0,
-      -0.0,
-      -52.0
-     ]
-    }
+    "per_state": {}
    },
    "handle": {
     "at": [
      0,
-     -26
+     -37
     ],
     "gesture": "toggle"
    }
