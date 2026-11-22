@@ -17,7 +17,7 @@ specified envelope of a commercial model.
 | Piece                            | Port            | Interface                          | Geometry                               |
 | -------------------------------- | --------------- | ---------------------------------- | -------------------------------------- |
 | `tube-furnace-32`                | `bore`          | Mechanical `through_bore`, 32 mm   | x = −150 to +150, y = 0                |
-| `quartz-work-tube-600-32`        | `span`          | Mechanical `tube_span`, 32 mm      | x = −300 to +300, y = 0                |
+| `quartz-work-tube-600-32`        | `span`          | Mechanical `tube_span`, 32 mm      | x = −270 to +270, y = 0                |
 | Work tube                        | `left`, `right` | Male `work_tube`, exact 32 mm OD   | x = −300 / +300, outward along −x / +x |
 | `work-tube-end-seal-32`          | `work-tube`     | Female `work_tube`, exact 32 mm OD | x = 0, outward −x, insertion 18 mm     |
 | End seal                         | `gas-nozzle`    | Male `compression`, 6.35 mm OD     | x = 54, outward +x                     |
@@ -34,9 +34,20 @@ The assembled origins in furnace millimetres are work tube 0; end seals
 ±282; adapters ±324; and the `a` ends of the outer compression tubes ±348.
 The 600 mm work tube remains one piece through the full furnace. The bore
 relation lets the tube and its end accessories move along the furnace axis
-while the grounded furnace stays put. This existing relation bounds movement
-by the full tube and bore spans; it does not model collision of external
-accessories with the furnace shell.
+while the grounded furnace stays put. The authored mechanical span reserves
+30 mm at each end of the 600 mm tube, leaving 540 mm available to the
+300 mm furnace bore. Centred axial travel is therefore limited to ±120 mm.
+The tube artwork and its end ports remain at ±300 mm.
+
+Each seal's inner lip starts 18 mm inboard of its tube end, so the nearest
+seal lip is at ±162 mm at a travel limit. The furnace's locating apertures
+reach ±155 mm at the seal's height, leaving a 7 mm gap between material
+boundaries in both views. This reserve comprises 18 mm for the seal,
+5 mm for the aperture beyond the nominal bore end and 7 mm of clearance.
+At the default 0.4 pt/mm scale, that leaves about 2.2 pt of clear space after
+the two 0.6 pt outlines. The wider controller base sits below the seals.
+This authored restriction covers this tube and seal set; the generic
+relation does not perform collision detection for other accessories.
 
 `work_tube` is distinct from `compression`, `hose` and other plug families.
 Its nominal OD matches exactly: a 31.99 mm work-tube port does not match a

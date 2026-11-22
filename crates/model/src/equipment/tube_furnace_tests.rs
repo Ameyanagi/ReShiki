@@ -209,13 +209,19 @@ fn tube_furnace_keeps_one_tube_and_all_seven_seats_across_views_and_reopen() {
 }
 
 #[test]
-fn tube_furnace_bore_holds_the_full_span_and_slides_seals_with_the_tube() {
-    let (mut doc, ids) = complete();
+fn tube_furnace_reserves_both_ends_and_keeps_seals_clear_at_each_slide_limit() {
+    let (doc, ids) = complete();
     let span = port(&doc, ids[1], "span");
     let bore = port(&doc, ids[0], "bore");
     assert_eq!(span.kind, Kind::Hold(HoldKind::TubeSpan, [32.; 2]));
     assert_eq!(bore.kind, Kind::Hold(HoldKind::ThroughBore, [32.; 2]));
     assert!((bore.contact_length / bore.mm - 300.).abs() < 1e-4);
+    assert!((span.length / span.mm - 540.).abs() < 1e-4);
+    let tube = builtin::find(TUBE).unwrap();
+    assert_eq!(tube.holds[0].from, [-270., 0.]);
+    assert_eq!(tube.holds[0].to, [270., 0.]);
+    assert_eq!(tube.joints[0].at(), [-300., 0.]);
+    assert_eq!(tube.joints[1].at(), [300., 0.]);
     assert!(builtin::find(FURNACE).unwrap().joints.is_empty());
     let mut short = span.clone();
     short.length = 299. * short.mm;
@@ -223,17 +229,82 @@ fn tube_furnace_bore_holds_the_full_span_and_slides_seals_with_the_tube() {
     let moving = solve::carried_through(&doc, &ids, &[ids[1]], &[]).unwrap();
     assert_eq!(moving.len(), 7);
     assert!(!moving.contains(&ids[0]));
-    let delta = solve::constrain(&doc, &moving, [1e6, 100.]).unwrap();
-    assert!((delta[0] / span.mm - 150.).abs() < 1e-3);
-    assert!(delta[1].abs() < 1e-6);
     let furnace_origin = doc.graphics.iter().find(|g| g.id == ids[0]).unwrap().origin;
-    doc.translate(&moving, delta[0] as f32, delta[1] as f32);
-    solve::check(&mut doc, None);
-    assert_eq!(doc.seats.len(), 7);
-    assert_eq!(
-        doc.graphics.iter().find(|g| g.id == ids[0]).unwrap().origin,
-        furnace_origin
-    );
+    for view in ["exterior", "section"] {
+        // Only material at the seal's height constrains this assembly:
+        // the wider controller base is below it. Derive the boundaries
+        // from the artwork so an aperture or seal edit cannot hide a clash.
+        let furnace_bounds = material_x_bounds_at_seal_height(FURNACE, view);
+        assert_eq!(furnace_bounds, [-155., 155.]);
+        let seal_bounds = material_x_bounds_at_seal_height(SEAL, view);
+        assert_eq!(seal_bounds[0], 0.);
+        let mut viewed = doc.clone();
+        for id in ids {
+            assert!(
+                solve::adjust::set(&mut viewed, id, "view", Value::State(view.into()))
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+        for direction in [-1., 1.] {
+            let delta = solve::constrain(&viewed, &moving, [direction * 1e6, 100.]).unwrap();
+            assert!((delta[0] / span.mm - direction * 120.).abs() < 1e-3);
+            assert!(delta[1].abs() < 1e-6);
+            let mut slid = viewed.clone();
+            slid.translate(&moving, delta[0] as f32, delta[1] as f32);
+            solve::check(&mut slid, None);
+            assert_eq!(slid.seats, doc.seats);
+            assert_eq!(
+                slid.graphics
+                    .iter()
+                    .find(|g| g.id == ids[0])
+                    .unwrap()
+                    .origin,
+                furnace_origin
+            );
+            let nearest_seal = if direction > 0. { ids[2] } else { ids[5] };
+            let lip = port(&slid, nearest_seal, "work-tube");
+            let lip_distance = (lip.point[0] - f64::from(furnace_origin.x)).abs() / span.mm;
+            assert!((lip_distance - 162.).abs() < 1e-3);
+            let case_extent = if direction > 0. {
+                -furnace_bounds[0]
+            } else {
+                furnace_bounds[1]
+            };
+            let gap_mm = lip_distance - case_extent;
+            assert!((gap_mm - 7.).abs() < 1e-3);
+            // Two 0.6 pt outlines leave a visible gap at the default scale.
+            assert!(gap_mm * f64::from(placed::DEFAULT_PT_PER_MM) - 0.6 > 2.);
+            let reopened = Document::from_json(&slid.file_json().unwrap()).unwrap();
+            assert_eq!(reopened.seats, doc.seats);
+        }
+    }
+}
+
+fn material_x_bounds_at_seal_height(id: &str, view: &str) -> [f64; 2] {
+    let definition = builtin::find(id).unwrap();
+    let values = Values::from([("view".into(), Value::State(view.into()))]);
+    let evaluated = evaluate(&definition, &resolve(&definition, &values).unwrap()).unwrap();
+    let mut bounds = [f64::INFINITY, f64::NEG_INFINITY];
+    for drawn in &evaluated.shapes {
+        if !drawn.shape.role.filled() {
+            continue;
+        }
+        let points: Vec<_> = flatten(&drawn.path).into_iter().flatten().collect();
+        let low = points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
+        let high = points
+            .iter()
+            .map(|p| p[1])
+            .fold(f64::NEG_INFINITY, f64::max);
+        if low <= 33. && high >= 16. {
+            for point in points {
+                bounds[0] = bounds[0].min(point[0]);
+                bounds[1] = bounds[1].max(point[0]);
+            }
+        }
+    }
+    assert!(bounds.iter().all(|v| v.is_finite()));
+    bounds
 }
 
 #[test]

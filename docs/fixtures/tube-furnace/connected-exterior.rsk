@@ -38,7 +38,7 @@
         "y": 1.1666666269302368
       },
       "piece": {
-        "definition": "reshiki/quartz-work-tube-600-32@1#4239259983672163"
+        "definition": "reshiki/quartz-work-tube-600-32@2#37ba62d517985e02"
       }
     },
     {
@@ -607,7 +607,7 @@
       "format": "reshiki-piece",
       "format_version": 0,
       "id": "reshiki/quartz-work-tube-600-32",
-      "revision": 1,
+      "revision": 2,
       "family": "quartz-work-tube",
       "variant": {
         "length": "600 mm",
@@ -766,11 +766,11 @@
           "id": "span",
           "kind": "tube_span",
           "from": [
-            -300,
+            -270,
             0
           ],
           "to": [
-            300,
+            270,
             0
           ],
           "diameter_mm": 32
