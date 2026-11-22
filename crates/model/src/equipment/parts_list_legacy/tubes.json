@@ -2259,5 +2259,159 @@
         "params": []
       }
     }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/quartz-work-tube-600-32",
+      "revision": 1,
+      "family": "quartz-work-tube",
+      "variant": {
+        "length": "600 mm",
+        "tube_od": "32 mm",
+        "tube_id": "28 mm"
+      },
+      "names": {
+        "en": "Quartz work tube, 600 mm, 32 mm OD"
+      },
+      "category": "vessel",
+      "keywords": [
+        "quartz reaction tube",
+        "work tube",
+        "gas-phase reaction",
+        "600 mm",
+        "32 mm",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "glass-body",
+          "layer": "body",
+          "material": "glass",
+          "role": "fill",
+          "path": "M-300 -16H300V16H-300Z"
+        },
+        {
+          "id": "upper-wall-section",
+          "layer": "body",
+          "material": "glass",
+          "role": "fill",
+          "path": "M-300 -16H300V-14H-300Z",
+          "color": [216, 230, 234],
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "lower-wall-section",
+          "layer": "body",
+          "material": "glass",
+          "role": "fill",
+          "path": "M-300 14H300V16H-300Z",
+          "color": [216, 230, 234],
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "outer-walls",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M-300 -16H300M-300 16H300",
+          "depth": 2
+        },
+        {
+          "id": "inner-walls",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-300 -14H300M-300 14H300",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "open-rims",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-300 -16V-14M-300 14V16M300 -16V-14M300 14V16",
+          "depth": 2
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "joints": [
+        {
+          "id": "left",
+          "kind": "plug",
+          "family": "work_tube",
+          "gender": "M",
+          "size_mm": 32,
+          "at": [-300, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "right",
+          "kind": "plug",
+          "family": "work_tube",
+          "gender": "M",
+          "size_mm": 32,
+          "at": [300, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [-300, 0],
+          "to": [300, 0],
+          "diameter_mm": 32
+        }
+      ]
+    },
+    "spec": {
+      "material": "quartz",
+      "od_mm": 32,
+      "id_mm": 28,
+      "ends": ["left", "right"],
+      "length": {
+        "fixed_mm": 600,
+        "params": []
+      }
+    }
   }
 ]

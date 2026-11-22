@@ -241,8 +241,25 @@ fn tube_spec_rejects_bad_dimensions_ends_and_length_bindings() {
 
 #[test]
 fn original_stock_tubes_report_without_upgrading_their_embedded_definitions() {
-    assert_eq!(super::archived_tubes().len(), 16);
+    assert_eq!(super::archived_tubes().len(), 17);
+    let quartz_revisions: BTreeSet<_> = super::archived_tubes()
+        .iter()
+        .filter(|old| old.definition.id == "reshiki/quartz-work-tube-600-32")
+        .map(|old| old.definition.revision)
+        .collect();
+    assert_eq!(quartz_revisions, BTreeSet::from([1, 2]));
     for old in super::archived_tubes() {
+        // The archived report metadata must satisfy the same physical
+        // dimension and port checks as a newly authored specification.
+        let mut described = old.definition.clone();
+        described.tube_spec = Some(old.spec.clone());
+        validate::validate(&described).unwrap();
+        if old.definition.id == "reshiki/quartz-work-tube-600-32" && old.definition.revision == 1 {
+            assert_eq!(old.definition.holds[0].from, [-300., 0.]);
+            assert_eq!(old.definition.holds[0].to, [300., 0.]);
+            assert_eq!(old.spec.length.fixed_mm, 600.);
+            assert_eq!((old.spec.od_mm, old.spec.id_mm), (32., Some(28.)));
+        }
         let mut original = old.definition.clone();
         if let [Param::States { names, states, .. }] = original.params.as_mut_slice() {
             names.insert("ja".into(), "表示".into());
