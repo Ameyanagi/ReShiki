@@ -384,6 +384,37 @@ fn a_schlenk_downward_barb_can_hold_a_septum_while_its_side_barb_holds_a_hose() 
 }
 
 #[test]
+fn schlenk_shoulders_keep_the_socket_and_clip_seat() {
+    for (suffix, stopper) in [
+        ("15", "reshiki/stopper-15"),
+        ("15-left", "reshiki/stopper-15"),
+        ("29", "reshiki/stopper-29"),
+        ("29-left", "reshiki/stopper-29"),
+    ] {
+        for series in ["reshiki/schlenk-tube", "reshiki/schlenk-tube-straight"] {
+            let mut doc = Document::default();
+            let tube = add(
+                &mut doc,
+                &format!("{series}-{suffix}"),
+                Point::new(200., 300.),
+            );
+            let stopper = add(&mut doc, stopper, Point::new(400., 100.));
+            solve::connect(
+                &mut doc,
+                &[stopper],
+                &joint(tube, "neck"),
+                &joint(stopper, "bottom"),
+            )
+            .unwrap();
+            assert_eq!(solve::add_clips(&mut doc, &[tube, stopper]), 1);
+            assert!(doc.seats[0].clip.is_some());
+            let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+            assert_eq!(back.seats, doc.seats, "{series}-{suffix}");
+        }
+    }
+}
+
+#[test]
 fn standalone_stopcocks_keep_the_top_view_port_axes_in_every_flow_setting() {
     use super::eval::Value;
 
