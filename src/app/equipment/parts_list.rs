@@ -202,10 +202,11 @@ fn insert_table(doc: &mut Document, id: u64, rows: &[Cells], start: Point) -> Re
         .table
         .as_mut()
         .ok_or("Could not create the parts table")?;
+    let mut cells = grid.cells.iter_mut();
     for (row, (values, row_height)) in data.iter().zip(heights).enumerate() {
         let mut left = 0.;
-        for (column, (value, cell_width)) in values.iter().zip(widths).enumerate() {
-            let cell = &mut grid.cells[row * HEADERS.len() + column];
+        for ((value, cell_width), width_pt) in values.iter().zip(widths).zip(COLUMN_PT) {
+            let cell = cells.next().ok_or("The parts table is missing a cell")?;
             cell.lo = Point::new(left / width, top / height);
             cell.hi = Point::new((left + cell_width) / width, (top + row_height) / height);
             if !value.is_empty() {
@@ -217,7 +218,7 @@ fn insert_table(doc: &mut Document, id: u64, rows: &[Cells], start: Point) -> Re
                 next_id = next_id
                     .checked_add(1)
                     .ok_or("The drawing has no free object IDs")?;
-                let format = cell_format(COLUMN_PT[column], row == 0);
+                let format = cell_format(width_pt, row == 0);
                 let text = table::editor::new_text(next_id, frame, value.clone(), format)?;
                 cell.members.push(next_id);
                 doc.annotations.push(text);
