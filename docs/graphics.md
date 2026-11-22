@@ -355,6 +355,13 @@ ground-glass joints, or use an adapter to connect two sizes.
    piece selected. Turn on **Keep placing** to place several copies, then
    press Esc to stop.
 
+Gas-line valves, regulators and instruments offer **Exterior** and **Section**
+views. Ball and needle valves have selectable positions; check and relief valves
+show their spring and seat construction. Compression connections match the same
+1/8-inch or 1/4-inch tubing OD. The initial threaded instrument and regulator
+connections use **1/4 in NPT**. See the [gas-line lineup](gas-line-valves.md) for
+port types, view options and nominal references.
+
 A placed piece is one object. Drag it to move it, turn it with the rotation
 handle, and scale it from a corner; it never stretches, so there are no side
 handles. Copy, paste, Undo and saving work as for any shape. **Properties →

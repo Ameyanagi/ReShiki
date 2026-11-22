@@ -104,6 +104,8 @@ impl Port {
             Kind::Taper(size) => size.clone(),
             Kind::Plug(PlugFamily::Compression, size) => format!("Ø{size} mm compression"),
             Kind::Plug(PlugFamily::WorkTube, size) => format!("Ø{size} mm work tube"),
+            Kind::Plug(PlugFamily::Npt, size) if *size == 6.35 => "1/4 in NPT".into(),
+            Kind::Plug(PlugFamily::Npt, size) => format!("{size} mm nominal NPT"),
             Kind::Plug(family, _) => format!("{family:?}").to_lowercase(),
             Kind::Hold(HoldKind::TubeSpan, [size, _]) => format!("Ø{size} mm tube"),
             Kind::Hold(HoldKind::ThroughBore, [size, _]) => format!("Ø{size} mm through bore"),
@@ -145,7 +147,7 @@ impl Port {
     pub fn diameter(&self) -> f64 {
         let mm = match &self.kind {
             Kind::Taper(size) => taper(size).map_or(10., |t| t.d),
-            Kind::Plug(_, size) => *size,
+            Kind::Plug(family, size) => family.opening_mm(*size),
             Kind::Hold(_, [_, hi]) => *hi,
         };
         mm * self.mm
@@ -247,14 +249,19 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
     out
 }
 
-/// Same kind, opposite gender. Tapers, compression and work-tube fittings match by
-/// nominal size, other plugs within 10 %. Holds match by kind and diameter.
+/// Same kind, opposite gender. Tapers, compression, work tubes and NPT
+/// match by exact nominal size. Other plugs match within 10 %.
+/// Holds match by kind and diameter.
 pub fn mates(a: &Port, b: &Port) -> bool {
     a.gender != b.gender
         && match (&a.kind, &b.kind) {
             (Kind::Taper(x), Kind::Taper(y)) => x == y,
             (Kind::Plug(f, x), Kind::Plug(g, y))
-                if f == g && matches!(f, PlugFamily::Compression | PlugFamily::WorkTube) =>
+                if f == g
+                    && matches!(
+                        f,
+                        PlugFamily::Compression | PlugFamily::WorkTube | PlugFamily::Npt
+                    ) =>
             {
                 x == y
             }

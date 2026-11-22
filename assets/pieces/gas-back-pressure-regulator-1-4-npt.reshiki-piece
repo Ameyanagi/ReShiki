@@ -1,0 +1,436 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/gas-back-pressure-regulator-1-4-npt",
+  "revision": 1,
+  "family": "gas-back-pressure-regulator",
+  "variant": {
+    "connection": "1/4 in NPT",
+    "function": "Upstream control"
+  },
+  "names": {
+    "en": "Back-pressure regulator, 1/4 in NPT"
+  },
+  "category": "other",
+  "keywords": [
+    "pressure regulator",
+    "back pressure",
+    "NPT",
+    "1/4 in",
+    "gas line",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "flow-body",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-44 -10L-36 -10L-36 -11L-35.8042 -12.2361L-35.2361 -13.3511L-34.3511 -14.2361L-33.2361 -14.8042L-32 -15L32 -15L33.2361 -14.8042L34.3511 -14.2361L35.2361 -13.3511L35.8042 -12.2361L36 -11L36 -10L44 -10L44 10L36 10L36 13L35.8042 14.2361L35.2361 15.3511L34.3511 16.2361L33.2361 16.8042L32 17L-32 17L-33.2361 16.8042L-34.3511 16.2361L-35.2361 15.3511L-35.8042 14.2361L-36 13L-36 10L-44 10Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "flow-body-cut",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-44 -6.858L-44 -10L-36 -10L-36 -11L-35.8042 -12.2361L-35.2361 -13.3511L-34.3511 -14.2361L-33.2361 -14.8042L-32 -15L-23.1 -15L-23.1 -3L-34 -3L-34 -6.858ZM-44 10L-44 6.858L-34 6.858L-34 3L-10 3L-10 2L-4.8 2L-4.8 5L-8 5L-8 13L11 13L18 13L18 5L18 3L34 3L34 6.858L44 6.858L44 10L36 10L36 13L35.8042 14.2361L35.2361 15.3511L34.3511 16.2361L33.2361 16.8042L32 17L-32 17L-33.2361 16.8042L-34.3511 16.2361L-35.2361 15.3511L-35.8042 14.2361L-36 13L-36 10ZM44 -10L44 -6.858L34 -6.858L34 -3L18 -3L14 -3L11 -3L11 5L4.8 5L4.8 2L8 2L8 -8L2.1 -8L2.1 -10L14 -10L14 -15L32 -15L33.2361 -14.8042L34.3511 -14.2361L35.2361 -13.3511L35.8042 -12.2361L36 -11L36 -10ZM-18.9 -3L-18.9 -11.8L-14 -11.8L-14 -10L-2.1 -10L-2.1 -8L-12 -8L-12 -3Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "flow-body-hatch",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-39.942 -8.058L-39.2 -8.8M-32.8401 -7.1599L-26.2 -13.8M-40.8 8.8L-40.058 8.058M-27.8 -4.2L-24.3 -7.7M-34.8 10.8L-28.2 4.2M-17.7 -6.3L-14.8485 -9.1515M-31.8 15.8L-20.2 4.2M-23.8 15.8L-12.2 4.2M-15.8 15.8L-9.2 9.2M-7.8 15.8L-6.2 14.2M9.2 -1.2L9.8 -1.8M12.2 -4.2L21.8 -13.8M0.2 15.8L1.8 14.2M20.2 -4.2L29.8 -13.8M8.2 15.8L9.8 14.2M19.2 4.8L19.8 4.2M28.2 -4.2L34.8 -10.8M16.2 15.8L17.8 14.2M19.2 12.8L27.8 4.2M40.058 -8.058L40.8 -8.8M24.2 15.8L32.8401 7.1599M32.2554 15.7446L34.7446 13.2554M39.2 8.8L39.942 8.058",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "spring-bonnet",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M17 -73L17.9271 -72.8532L18.7634 -72.4271L19.4271 -71.7634L19.8532 -70.9271L20 -70L20 -17L19.8532 -16.0729L19.4271 -15.2366L18.7634 -14.5729L17.9271 -14.1468L17 -14L-17 -14L-17.9271 -14.1468L-18.7634 -14.5729L-19.4271 -15.2366L-19.8532 -16.0729L-20 -17L-20 -70L-19.8532 -70.9271L-19.4271 -71.7634L-18.7634 -72.4271L-17.9271 -72.8532L-17 -73Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "spring-bonnet-cut",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-17 -73L17 -73L17.9271 -72.8532L18.7634 -72.4271L19.4271 -71.7634L19.8532 -70.9271L20 -70L20 -17L19.8532 -16.0729L19.4271 -15.2366L18.7634 -14.5729L17.9271 -14.1468L17 -14L14 -14L14 -23L13 -23L13 -66L-13 -66L-13 -23L-14 -23L-14 -16L-18.9 -16L-19.816 -16L-19.8532 -16.0729L-20 -17L-20 -70L-19.8532 -70.9271L-19.4271 -71.7634L-18.7634 -72.4271L-17.9271 -72.8532Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "spring-bonnet-hatch",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-18.8 -69.2L-16.2 -71.8M-18.8 -61.2L-14.2 -65.8M-12.8 -67.2L-8.2 -71.8M-18.8 -53.2L-14.2 -57.8M-4.8 -67.2L-0.2 -71.8M-18.8 -45.2L-14.2 -49.8M3.2 -67.2L7.8 -71.8M-18.8 -37.2L-14.2 -41.8M11.2 -67.2L15.8 -71.8M-18.8 -29.2L-14.2 -33.8M14.2 -62.2L18.8 -66.8M-18.8 -21.2L-14.2 -25.8M14.2 -54.2L18.8 -58.8M14.2 -46.2L18.8 -50.8M14.2 -38.2L18.8 -42.8M14.2 -30.2L18.8 -34.8M15.1843 -23.1843L18.8 -26.8M15.2 -15.2L18.8 -18.8",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "adjustment-knob",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M19 -91L19.9271 -90.8532L20.7634 -90.4271L21.4271 -89.7634L21.8532 -88.9271L22 -88L22 -76L21.8532 -75.0729L21.4271 -74.2366L20.7634 -73.5729L19.9271 -73.1468L19 -73L-19 -73L-19.9271 -73.1468L-20.7634 -73.5729L-21.4271 -74.2366L-21.8532 -75.0729L-22 -76L-22 -88L-21.8532 -88.9271L-21.4271 -89.7634L-20.7634 -90.4271L-19.9271 -90.8532L-19 -91Z",
+      "color": [
+        76,
+        119,
+        102
+      ]
+    },
+    {
+      "id": "knob-grip--15",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-15 -88L-15 -76",
+      "depth": 2
+    },
+    {
+      "id": "knob-grip--7",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-7 -88L-7 -76",
+      "depth": 2
+    },
+    {
+      "id": "knob-grip-1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M1 -88L1 -76",
+      "depth": 2
+    },
+    {
+      "id": "knob-grip-9",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M9 -88L9 -76",
+      "depth": 2
+    },
+    {
+      "id": "knob-grip-17",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M17 -88L17 -76",
+      "depth": 2
+    },
+    {
+      "id": "adjustment-screw",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M2 -76L2 -55L-2 -55L-2 -76Z",
+      "color": [
+        139,
+        156,
+        169
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "control-spring",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M0 -59L-8 -57.724L8 -54.824L0 -53.2L-8 -51.924L8 -49.024L0 -47.4L-8 -46.124L8 -43.224L0 -41.6L-8 -40.324L8 -37.424L0 -35.8L-8 -34.524L8 -31.624L0 -30",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "diaphragm",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-15 -25L-10 -24L0 -22L10 -24L15 -25L15 -23L0 -20L-15 -23Z",
+      "color": [
+        238,
+        239,
+        225
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "poppet-stem",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M1.2 -22L1.2 -5L-1.2 -5L-1.2 -22Z",
+      "color": [
+        139,
+        156,
+        169
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "back-pressure-seat-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-4.8 2L-4.8 5L-8 5L-8 2Z",
+      "color": [
+        238,
+        239,
+        225
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "back-pressure-seat-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M8 2L8 5L4.8 5L4.8 2Z",
+      "color": [
+        238,
+        239,
+        225
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "back-pressure-poppet",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-7 -6L7 -6L4.8 -2L-4.8 -2Z",
+      "color": [
+        139,
+        156,
+        169
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "upstream-domain-band",
+      "layer": "front",
+      "material": "plastic",
+      "role": "fill",
+      "path": "M-26 -15L-26 -11L-34 -11L-34 -15Z",
+      "color": [
+        76,
+        119,
+        102
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "inlet-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-42.5 6.5L-41.1 5.8M-42.5 -6.5L-41.1 -5.8M-39.5 6.5L-38.1 5.8M-39.5 -6.5L-38.1 -5.8M-36.5 6.5L-35.1 5.8M-36.5 -6.5L-35.1 -5.8",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "outlet-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M42.5 -6.5L41.1 -5.8M42.5 6.5L41.1 5.8M39.5 -6.5L38.1 -5.8M39.5 6.5L38.1 5.8M36.5 -6.5L35.1 -5.8M36.5 6.5L35.1 5.8",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "flow",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-12 25L12 25",
+      "depth": 5
+    },
+    {
+      "id": "flow-head",
+      "layer": "front",
+      "material": "ink",
+      "role": "fill",
+      "path": "M12 25L8 27L8 23Z",
+      "depth": 5
+    }
+  ],
+  "joints": [
+    {
+      "id": "inlet",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        -44,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "outlet",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        44,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        -45
+      ]
+    },
+    {
+      "id": "inlet",
+      "at": [
+        -44,
+        0
+      ]
+    },
+    {
+      "id": "outlet",
+      "at": [
+        44,
+        0
+      ]
+    }
+  ]
+}

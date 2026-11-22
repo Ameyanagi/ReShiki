@@ -204,11 +204,25 @@ pub enum PlugFamily {
     Compression,
     /// A terminating work-tube seal, sized by the tube's exact nominal OD.
     WorkTube,
+    /// NPT pipe thread. size_mm stores nominal pipe size in millimetres,
+    /// not the thread's outside diameter. Initially only 1/4 in is supported.
+    Npt,
     Stopper,
     Septum,
     Thermometer,
     Nmr,
     Stir,
+}
+
+impl PlugFamily {
+    /// Physical rim diameter for attachment and the snap target. The NPT
+    /// nominal pipe size differs from its outside diameter.
+    pub fn opening_mm(self, size_mm: f64) -> f64 {
+        match self {
+            Self::Npt if size_mm == 6.35 => 13.716,
+            _ => size_mm,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -243,11 +257,12 @@ pub enum Joint {
         #[serde(default = "standard")]
         draw: JointDraw,
     },
-    /// Rubber, probes, compression fittings or terminating work-tube seals.
+    /// Rubber, probes, hose barbs, work-tube seals, and metal tube or pipe fittings.
     Plug {
         id: String,
         family: PlugFamily,
         gender: Gender,
+        /// Physical diameter, except NPT's nominal pipe size converted to mm.
         size_mm: f64,
         at: Xy,
         dir: Xy,

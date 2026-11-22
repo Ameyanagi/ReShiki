@@ -644,6 +644,11 @@ fn joint(
         if !(size_mm.is_finite() && *size_mm > 0.) {
             return Err(format!("{owner} needs a positive size."));
         }
+        if *family == PlugFamily::Npt && *size_mm != 6.35 {
+            return Err(format!(
+                "{owner} supports only 1/4 in NPT: use nominal size_mm 6.35."
+            ));
+        }
         if let Some(depth) = insertion_mm {
             if *gender != Gender::F
                 || !matches!(family, PlugFamily::Compression | PlugFamily::WorkTube)
@@ -785,14 +790,16 @@ fn attach(
                 }
             }
         }
-        Joint::Plug { size_mm, .. } => {
+        Joint::Plug {
+            family, size_mm, ..
+        } => {
             let outlines: Vec<&Outline> = all.iter().map(|(_, o)| o).collect();
             let gap = near(at, &outlines);
             let mut anchors = [at; 2];
             if gap > ATTACH_MM {
                 // The mouth's centre can lie in open air between two walls.
                 // Its diameter and axis reconstruct both physical rim edges.
-                let v = mul(perp(u), size_mm / 2.);
+                let v = mul(perp(u), family.opening_mm(*size_mm) / 2.);
                 anchors = [add(at, v), add(at, mul(v, -1.))];
                 let rim_gap = anchors
                     .iter()

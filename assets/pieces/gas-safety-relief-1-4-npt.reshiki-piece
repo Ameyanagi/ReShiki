@@ -1,0 +1,447 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/gas-safety-relief-1-4-npt",
+  "revision": 1,
+  "family": "gas-safety-relief",
+  "variant": {
+    "connection": "1/4 in NPT",
+    "pattern": "Bottom inlet, side discharge"
+  },
+  "names": {
+    "en": "Spring safety relief valve, 1/4 in NPT"
+  },
+  "category": "other",
+  "keywords": [
+    "safety relief",
+    "spring poppet",
+    "discharge",
+    "NPT",
+    "1/4 in",
+    "gas line",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "angle-flow-body",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M40 -1L18 -1L18 8L11 16L11 24L-11 24L-11 16L-18 8L-18 -31L18 -31L18 -23L40 -23Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "angle-flow-body-cut",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M40 -5.142L40 -1L18 -1L18 8L11 16L11 24L6.858 24L6.858 12L3 12L3 -4L10 -4L10 -8L30 -8L30 -5.142ZM40 -23L40 -18.858L30 -18.858L30 -16L10 -16L10 -26L-10 -26L-10 -4L-3 -4L-3 12L-6.858 12L-6.858 24L-11 24L-11 16L-18 8L-18 -31L18 -31L18 -23Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "angle-flow-body-hatch",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-16.8 -23.2L-10.2 -29.8M-16.8 -15.2L-11.2 -20.8M-4.8 -27.2L-2.2 -29.8M-16.8 -7.2L-11.2 -12.8M3.2 -27.2L5.8 -29.8M-16.8 0.8L-11.2 -4.8M10.8485 -26.8485L13.8 -29.8M-16.2163 8.2163L-5.2 -2.8M11.2 -19.2L16.8 -24.8M-12.4829 12.4829L-4.2 4.2M17.2 -17.2L21.8 -21.8M-9.8 17.8L-8.058 16.058M4.2 3.8L14.8 -6.8M25.2 -17.2L29.8 -21.8M5.2 10.8L16.8 -0.8M18.2 -2.2L22.8 -6.8M36.058 -20.058L37.8 -21.8M8.058 15.942L16.8 7.2M26.2 -2.2L28.8401 -4.8401M9.2 22.8L9.8 22.2M34.2 -2.2L35.942 -3.942",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "spring-tower",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M10 -105L10.9271 -104.8532L11.7634 -104.4271L12.4271 -103.7634L12.8532 -102.9271L13 -102L13 -31L12.8532 -30.0729L12.4271 -29.2366L11.7634 -28.5729L10.9271 -28.1468L10 -28L-10 -28L-10.9271 -28.1468L-11.7634 -28.5729L-12.4271 -29.2366L-12.8532 -30.0729L-13 -31L-13 -102L-12.8532 -102.9271L-12.4271 -103.7634L-11.7634 -104.4271L-10.9271 -104.8532L-10 -105Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "spring-tower-cut",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-10 -105L10 -105L10.9271 -104.8532L11.7634 -104.4271L12.4271 -103.7634L12.8532 -102.9271L13 -102L13 -31L12.8532 -30.0729L12.4271 -29.2366L11.7634 -28.5729L10.9271 -28.1468L10 -28L8 -28L8 -99L-8 -99L-8 -28L-10 -28L-10.9271 -28.1468L-11.7634 -28.5729L-12.4271 -29.2366L-12.8532 -30.0729L-13 -31L-13 -102L-12.8532 -102.9271L-12.4271 -103.7634L-11.7634 -104.4271L-10.9271 -104.8532Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "spring-tower-hatch",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-11.8 -100.2L-8.2 -103.8M-11.8 -92.2L-9.2 -94.8M-3.8 -100.2L-0.2 -103.8M-11.8 -84.2L-9.2 -86.8M4.2 -100.2L7.8 -103.8M-11.8 -76.2L-9.2 -78.8M9.2 -97.2L11.8 -99.8M-11.8 -68.2L-9.2 -70.8M9.2 -89.2L11.8 -91.8M-11.8 -60.2L-9.2 -62.8M9.2 -81.2L11.8 -83.8M-11.8 -52.2L-9.2 -54.8M9.2 -73.2L11.8 -75.8M-11.8 -44.2L-9.2 -46.8M9.2 -65.2L11.8 -67.8M-11.8 -36.2L-9.2 -38.8M9.2 -57.2L11.8 -59.8M-10.6484 -29.3516L-9.2 -30.8M9.2 -49.2L11.8 -51.8M9.2 -41.2L11.8 -43.8M9.2 -33.2L11.8 -35.8",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "protective-cover",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M13 -132L13.9271 -131.8532L14.7634 -131.4271L15.4271 -130.7634L15.8532 -129.9271L16 -129L16 -107L15.8532 -106.0729L15.4271 -105.2366L14.7634 -104.5729L13.9271 -104.1468L13 -104L-13 -104L-13.9271 -104.1468L-14.7634 -104.5729L-15.4271 -105.2366L-15.8532 -106.0729L-16 -107L-16 -129L-15.8532 -129.9271L-15.4271 -130.7634L-14.7634 -131.4271L-13.9271 -131.8532L-13 -132Z",
+      "color": [
+        139,
+        156,
+        169
+      ]
+    },
+    {
+      "id": "cover-lock-band",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M16 -109L16 -104L-16 -104L-16 -109Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "depth": 2
+    },
+    {
+      "id": "set-screw",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M2 -111L2 -94L-2 -94L-2 -111Z",
+      "color": [
+        139,
+        156,
+        169
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "spring-seated",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M0 -96L-6 -94.0933L6 -89.76L0 -87.3333L-6 -85.4267L6 -81.0933L0 -78.6667L-6 -76.76L6 -72.4267L0 -70L-6 -68.0933L6 -63.76L0 -61.3333L-6 -59.4267L6 -55.0933L0 -52.6667L-6 -50.76L6 -46.4267L0 -44",
+      "when": {
+        "view": [
+          "section"
+        ],
+        "condition": [
+          "seated"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "poppet-stem-seated",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M1.7 -43L1.7 -6L-1.7 -6L-1.7 -43Z",
+      "color": [
+        139,
+        156,
+        169
+      ],
+      "when": {
+        "view": [
+          "section"
+        ],
+        "condition": [
+          "seated"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "poppet-seated",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-7 -9L7 -9L5 -4L-5 -4Z",
+      "color": [
+        139,
+        156,
+        169
+      ],
+      "when": {
+        "view": [
+          "section"
+        ],
+        "condition": [
+          "seated"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "spring-relieving",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M0 -96L-6 -94.24L6 -90.24L0 -88L-6 -86.24L6 -82.24L0 -80L-6 -78.24L6 -74.24L0 -72L-6 -70.24L6 -66.24L0 -64L-6 -62.24L6 -58.24L0 -56L-6 -54.24L6 -50.24L0 -48",
+      "when": {
+        "view": [
+          "section"
+        ],
+        "condition": [
+          "relieving"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "poppet-stem-relieving",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M1.7 -47L1.7 -10L-1.7 -10L-1.7 -47Z",
+      "color": [
+        139,
+        156,
+        169
+      ],
+      "when": {
+        "view": [
+          "section"
+        ],
+        "condition": [
+          "relieving"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "poppet-relieving",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-7 -13L7 -13L5 -8L-5 -8Z",
+      "color": [
+        139,
+        156,
+        169
+      ],
+      "when": {
+        "view": [
+          "section"
+        ],
+        "condition": [
+          "relieving"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "seat-seal-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-3 -4L-3 -2L-6 -2L-6 -4Z",
+      "color": [
+        57,
+        66,
+        74
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "seat-seal-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M6 -4L6 -2L3 -2L3 -4Z",
+      "color": [
+        57,
+        66,
+        74
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "inlet-thread",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M6.5 22.5L5.8 21.1M-6.5 22.5L-5.8 21.1M6.5 19.5L5.8 18.1M-6.5 19.5L-5.8 18.1M6.5 16.5L5.8 15.1M-6.5 16.5L-5.8 15.1",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "discharge-thread",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M38.5 -18.5L37.1 -17.8M38.5 -5.5L37.1 -6.2M35.5 -18.5L34.1 -17.8M35.5 -5.5L34.1 -6.2M32.5 -18.5L31.1 -17.8M32.5 -5.5L31.1 -6.2",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    }
+  ],
+  "joints": [
+    {
+      "id": "inlet",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        0,
+        24
+      ],
+      "dir": [
+        0,
+        1
+      ]
+    },
+    {
+      "id": "discharge",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        40,
+        -12
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    },
+    {
+      "id": "condition",
+      "kind": "states",
+      "names": {
+        "en": "Relief state"
+      },
+      "states": [
+        {
+          "id": "seated",
+          "names": {
+            "en": "Seated"
+          }
+        },
+        {
+          "id": "relieving",
+          "names": {
+            "en": "Relieving"
+          }
+        }
+      ],
+      "default": "seated"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        -70
+      ]
+    },
+    {
+      "id": "inlet",
+      "at": [
+        0,
+        24
+      ]
+    },
+    {
+      "id": "discharge",
+      "at": [
+        40,
+        -12
+      ]
+    }
+  ]
+}
