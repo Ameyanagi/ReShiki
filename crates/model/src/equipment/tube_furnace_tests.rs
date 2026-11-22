@@ -290,7 +290,10 @@ fn material_x_bounds_at_seal_height(id: &str, view: &str) -> [f64; 2] {
         if !drawn.shape.role.filled() {
             continue;
         }
-        let points: Vec<_> = flatten(&drawn.path).into_iter().flatten().collect();
+        let points: Vec<_> = flatten(&drawn.path)
+            .into_iter()
+            .flat_map(|(points, _)| points)
+            .collect();
         let low = points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
         let high = points
             .iter()
