@@ -173,6 +173,47 @@
         }
       }
     },
+    "tube_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["material", "od_mm", "ends", "length"],
+      "description": "Physical tube dimensions, independent of illustration scale or view. Cut length includes inserted ends.",
+      "properties": {
+        "material": {
+          "enum": [
+            "stainless_steel",
+            "borosilicate_glass",
+            "quartz",
+            "ptfe",
+            "polyethylene",
+            "copper"
+          ]
+        },
+        "od_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "id_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "ends": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "length": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fixed_mm"],
+          "properties": {
+            "fixed_mm": { "type": "number", "minimum": 0 },
+            "params": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "maxItems": 16,
+              "uniqueItems": true
+            }
+          }
+        }
+      }
+    },
     "shapes": {
       "type": "array",
       "maxItems": 256,

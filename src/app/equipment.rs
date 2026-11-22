@@ -17,7 +17,7 @@ use reshiki::equipment::{
     solve::{self, JointRef, Offer, Port, Seat, Snap, adjust},
 };
 use reshiki::graphics::Graphic;
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 pub(super) const INSERT: &str = "Insert equipment…";
 
@@ -65,6 +65,15 @@ pub enum Action {
     Detach(JointRef),
     /// Put a joint clip on every ground-glass seat of the selection.
     AddClips,
+    PartsList,
+    CopyPartsList,
+    PartsListCopied {
+        tab: super::document_tab::TabId,
+        epoch: u64,
+        result: Result<(), String>,
+    },
+    CutLengthInput(CutLengthTarget, String),
+    ApplyCutLength(CutLengthTarget),
     /// Show one library, or all.
     Shelf(Shelf),
     Import,
@@ -122,7 +131,11 @@ impl Action {
     pub fn completes(&self) -> bool {
         matches!(
             self,
-            Self::Imported(_) | Self::Exported(_) | Self::Linked(_) | Self::LibrariesLoaded(..)
+            Self::Imported(_)
+                | Self::Exported(_)
+                | Self::Linked(_)
+                | Self::LibrariesLoaded(..)
+                | Self::PartsListCopied { .. }
         )
     }
 }
@@ -373,17 +386,18 @@ fn named(d: &Definition) -> String {
 }
 
 fn size(d: &Definition) -> String {
-    let volume = d.variant.get("volume_ml").map(|v| format!("{v} mL"));
-    let rest = d
-        .variant
+    variant_descriptions(&d.variant)
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+fn variant_descriptions(variant: &BTreeMap<String, String>) -> impl Iterator<Item = String> + '_ {
+    let volume = variant.get("volume_ml").map(|v| format!("{v} mL"));
+    let rest = variant
         .iter()
         .filter(|(key, _)| *key != "volume_ml")
         .map(|(_, value)| value.clone());
-    volume
-        .into_iter()
-        .chain(rest)
-        .collect::<Vec<_>>()
-        .join(" · ")
+    volume.into_iter().chain(rest)
 }
 
 /// Every word of the query is in a name in any language, a keyword or a size.
@@ -498,6 +512,24 @@ impl App {
                     };
                 }
                 return super::focus_drawing();
+            }
+            Action::PartsList => {
+                self.insert_equipment_parts_list();
+                return super::focus_drawing();
+            }
+            Action::CopyPartsList => return self.copy_equipment_parts_list(),
+            Action::PartsListCopied { tab, epoch, result } => {
+                if self.tab.id == tab && self.tab.file_epoch == epoch {
+                    self.error = result.is_err();
+                    self.status = result
+                        .map_or_else(|error| error, |()| "Copied the equipment parts list".into());
+                }
+            }
+            Action::CutLengthInput(target, value) => self.edit_cut_length(target, value),
+            Action::ApplyCutLength(target) => {
+                if self.apply_cut_length(target) {
+                    return super::focus_drawing();
+                }
             }
             Action::Detach(joint) => {
                 let before = self.tab.doc.clone();
@@ -1022,6 +1054,15 @@ impl App {
         let id = g.id;
         let param_id = param.id();
         let label = param.names().get("en").map_or(param_id, String::as_str);
+        if let Value::Number(value) = current
+            && g.piece
+                .as_ref()
+                .and_then(|piece| piece.linked.as_ref())
+                .and_then(|definition| definition.tube_spec.as_ref())
+                .is_some_and(|spec| spec.length.params.iter().any(|p| p == param_id))
+        {
+            return Some(self.cut_length_input(g.id, param_id, label, *value));
+        }
         let (range, step, value) = match (param, current) {
             (Param::States { states, .. }, Value::State(current)) => {
                 let choices = row(states.iter().map(|state| {
@@ -1149,6 +1190,18 @@ impl App {
                         body = body.push(control);
                     }
                 }
+                if d.tube_spec
+                    .as_ref()
+                    .is_some_and(|spec| spec.length.params.len() > 1)
+                    && let Ok(Some(length)) =
+                        reshiki::equipment::parts_list::cut_length_mm(d, &values)
+                {
+                    body = body.push(
+                        text(format!("Cut length {length:.2} mm"))
+                            .size(11)
+                            .style(muted_text),
+                    );
+                }
             }
         }
         // One piece: each joint and hold, what is seated on it, and Detach.
@@ -1245,6 +1298,10 @@ impl App {
             body = body.push(self.piece_library_rows(d));
         }
         if self.pieces_selected() {
+            body = body.push(command(
+                "Insert equipment parts list",
+                Message::Equipment(Action::PartsList),
+            ));
             body = body.push(hover_hint(
                 command("Connect…", Message::Equipment(Action::Connect)),
                 "Seat on a free joint nearby (J)",
@@ -1254,6 +1311,11 @@ impl App {
         Some(super::inspector::card(container(body).padding(12)))
     }
 }
+
+mod cut_length;
+mod parts_list;
+pub(super) use cut_length::Draft as CutLengthDraft;
+pub use cut_length::Target as CutLengthTarget;
 
 #[cfg(test)]
 mod tests;

@@ -436,6 +436,9 @@ impl App {
                 }
             }
             Need::Equipment => (!self.pieces_selected()).then_some("Select equipment first"),
+            Need::EquipmentInDrawing => {
+                (!self.has_equipment()).then_some("Add equipment to the drawing first")
+            }
             Need::EquipmentClips => (self.tab.selected.len() < 2
                 || reshiki::equipment::solve::unclipped(&self.tab.doc, &self.tab.selected) == 0)
                 .then_some("Select equipment with unclipped joints"),

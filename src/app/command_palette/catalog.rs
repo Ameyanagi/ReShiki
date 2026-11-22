@@ -74,6 +74,7 @@ pub(crate) enum Need {
     Callout,
     DefineEquipment,
     Equipment,
+    EquipmentInDrawing,
     EquipmentClips,
     MakeCycle,
     CyclePart,
@@ -899,6 +900,22 @@ fn edits(app: &App) -> Vec<Command> {
         )
         .need(Need::Equipment)
         .keys("J"),
+        send(
+            "Insert equipment parts list",
+            Category::Insert,
+            "List the equipment, tubing lengths and connections in an editable table.",
+            "equipment tubing joint fittings inventory bill of materials bom parts list",
+            Message::Equipment(equipment::Action::PartsList),
+        )
+        .need(Need::EquipmentInDrawing),
+        send(
+            "Copy equipment parts list",
+            Edit,
+            "Copy the equipment, tube lengths and connections as tab-separated text.",
+            "equipment tubing joint fittings inventory bill of materials bom paste spreadsheet",
+            Message::Equipment(equipment::Action::CopyPartsList),
+        )
+        .need(Need::EquipmentInDrawing),
         send(
             "Equipment: Add clips to all joints",
             Edit,

@@ -42,6 +42,9 @@ pub struct Definition {
     /// Flexible tubing, drawn along a centre line stored on each placed copy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tube: Option<Tube>,
+    /// Physical tube data, independent of artwork, view and drawing scale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tube_spec: Option<TubeSpec>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shapes: Vec<Shape>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -106,6 +109,52 @@ pub struct Tube {
     pub color: Option<Rgb>,
     /// The two plug joints at the ends of the centre line.
     pub ends: [String; 2],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TubeMaterial {
+    StainlessSteel,
+    BorosilicateGlass,
+    Quartz,
+    Ptfe,
+    Polyethylene,
+    Copper,
+}
+
+impl std::fmt::Display for TubeMaterial {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::StainlessSteel => "Stainless steel",
+            Self::BorosilicateGlass => "Borosilicate glass",
+            Self::Quartz => "Quartz",
+            Self::Ptfe => "PTFE",
+            Self::Polyethylene => "Polyethylene",
+            Self::Copper => "Copper",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TubeSpec {
+    pub material: TubeMaterial,
+    pub od_mm: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id_mm: Option<f64>,
+    /// Stable joint IDs at the two actual cut ends, including inserted ends.
+    pub ends: [String; 2],
+    pub length: TubeLength,
+}
+
+/// Cut length in local millimetres: the fixed contribution (such as an arc)
+/// plus the current values of the named millimetre range parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TubeLength {
+    pub fixed_mm: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
