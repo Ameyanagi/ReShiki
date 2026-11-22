@@ -501,7 +501,7 @@
               "const": "plug"
             },
             "family": {
-              "enum": ["hose", "stopper", "septum", "thermometer", "nmr", "stir"]
+              "enum": ["hose", "compression", "stopper", "septum", "thermometer", "nmr", "stir"]
             },
             "size_mm": {
               "type": "number",

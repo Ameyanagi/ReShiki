@@ -149,6 +149,7 @@ const FILES: &[&str] = piece_files![
     "heating-mantle",
     "hotplate",
     "dewar",
+    "mass-flow-controller",
     "keck-clip-10",
     "boss-head",
 ];
