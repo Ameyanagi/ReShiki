@@ -29,3 +29,5 @@ mod solve_tests;
 mod tests;
 #[cfg(test)]
 mod tube_furnace_tests;
+#[cfg(test)]
+mod vertical_tube_furnace_tests;
