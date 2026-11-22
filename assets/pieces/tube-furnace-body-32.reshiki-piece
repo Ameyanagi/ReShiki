@@ -1,0 +1,441 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/tube-furnace-body-32",
+  "revision": 1,
+  "family": "tube-furnace-body",
+  "variant": {
+    "work_tube_od": "32 mm"
+  },
+  "names": {
+    "en": "Split tube furnace body, 32 mm work tube"
+  },
+  "category": "heating",
+  "keywords": [
+    "tube furnace body",
+    "furnace only",
+    "bare furnace",
+    "split tube furnace",
+    "vertical furnace",
+    "horizontal furnace",
+    "work tube",
+    "32 mm",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "left-shell",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-47 -150H0V150H-47Q-60 150 -60 137V-137Q-60 -150 -47 -150Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "right-shell",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M0 -150H47Q60 -150 60 -137V137Q60 150 47 150H0Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "cover-rails",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-55 -138H-52V138H-55ZM52 -138H55V138H52Z",
+      "color": [
+        190,
+        200,
+        205
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "left-vent-slots",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-44.8 -129.2H-24.2A1.2 1.2 0 0 1 -23 -128A1.2 1.2 0 0 1 -24.2 -126.8H-44.8A1.2 1.2 0 0 1 -46 -128A1.2 1.2 0 0 1 -44.8 -129.2ZM-44.8 -113.2H-24.2A1.2 1.2 0 0 1 -23 -112A1.2 1.2 0 0 1 -24.2 -110.8H-44.8A1.2 1.2 0 0 1 -46 -112A1.2 1.2 0 0 1 -44.8 -113.2ZM-44.8 -97.2H-24.2A1.2 1.2 0 0 1 -23 -96A1.2 1.2 0 0 1 -24.2 -94.8H-44.8A1.2 1.2 0 0 1 -46 -96A1.2 1.2 0 0 1 -44.8 -97.2ZM-44.8 -81.2H-24.2A1.2 1.2 0 0 1 -23 -80A1.2 1.2 0 0 1 -24.2 -78.8H-44.8A1.2 1.2 0 0 1 -46 -80A1.2 1.2 0 0 1 -44.8 -81.2ZM-44.8 -65.2H-24.2A1.2 1.2 0 0 1 -23 -64A1.2 1.2 0 0 1 -24.2 -62.8H-44.8A1.2 1.2 0 0 1 -46 -64A1.2 1.2 0 0 1 -44.8 -65.2ZM-44.8 -49.2H-24.2A1.2 1.2 0 0 1 -23 -48A1.2 1.2 0 0 1 -24.2 -46.8H-44.8A1.2 1.2 0 0 1 -46 -48A1.2 1.2 0 0 1 -44.8 -49.2ZM-44.8 -33.2H-24.2A1.2 1.2 0 0 1 -23 -32A1.2 1.2 0 0 1 -24.2 -30.8H-44.8A1.2 1.2 0 0 1 -46 -32A1.2 1.2 0 0 1 -44.8 -33.2ZM-44.8 -17.2H-24.2A1.2 1.2 0 0 1 -23 -16A1.2 1.2 0 0 1 -24.2 -14.8H-44.8A1.2 1.2 0 0 1 -46 -16A1.2 1.2 0 0 1 -44.8 -17.2ZM-44.8 -1.2H-24.2A1.2 1.2 0 0 1 -23 0A1.2 1.2 0 0 1 -24.2 1.2H-44.8A1.2 1.2 0 0 1 -46 0A1.2 1.2 0 0 1 -44.8 -1.2ZM-44.8 14.8H-24.2A1.2 1.2 0 0 1 -23 16A1.2 1.2 0 0 1 -24.2 17.2H-44.8A1.2 1.2 0 0 1 -46 16A1.2 1.2 0 0 1 -44.8 14.8ZM-44.8 30.8H-24.2A1.2 1.2 0 0 1 -23 32A1.2 1.2 0 0 1 -24.2 33.2H-44.8A1.2 1.2 0 0 1 -46 32A1.2 1.2 0 0 1 -44.8 30.8ZM-44.8 46.8H-24.2A1.2 1.2 0 0 1 -23 48A1.2 1.2 0 0 1 -24.2 49.2H-44.8A1.2 1.2 0 0 1 -46 48A1.2 1.2 0 0 1 -44.8 46.8ZM-44.8 62.8H-24.2A1.2 1.2 0 0 1 -23 64A1.2 1.2 0 0 1 -24.2 65.2H-44.8A1.2 1.2 0 0 1 -46 64A1.2 1.2 0 0 1 -44.8 62.8ZM-44.8 78.8H-24.2A1.2 1.2 0 0 1 -23 80A1.2 1.2 0 0 1 -24.2 81.2H-44.8A1.2 1.2 0 0 1 -46 80A1.2 1.2 0 0 1 -44.8 78.8ZM-44.8 94.8H-24.2A1.2 1.2 0 0 1 -23 96A1.2 1.2 0 0 1 -24.2 97.2H-44.8A1.2 1.2 0 0 1 -46 96A1.2 1.2 0 0 1 -44.8 94.8ZM-44.8 110.8H-24.2A1.2 1.2 0 0 1 -23 112A1.2 1.2 0 0 1 -24.2 113.2H-44.8A1.2 1.2 0 0 1 -46 112A1.2 1.2 0 0 1 -44.8 110.8ZM-44.8 126.8H-24.2A1.2 1.2 0 0 1 -23 128A1.2 1.2 0 0 1 -24.2 129.2H-44.8A1.2 1.2 0 0 1 -46 128A1.2 1.2 0 0 1 -44.8 126.8Z",
+      "color": [
+        92,
+        107,
+        116
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "right-vent-slots",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M24.2 -129.2H44.8A1.2 1.2 0 0 1 46 -128A1.2 1.2 0 0 1 44.8 -126.8H24.2A1.2 1.2 0 0 1 23 -128A1.2 1.2 0 0 1 24.2 -129.2ZM24.2 -113.2H44.8A1.2 1.2 0 0 1 46 -112A1.2 1.2 0 0 1 44.8 -110.8H24.2A1.2 1.2 0 0 1 23 -112A1.2 1.2 0 0 1 24.2 -113.2ZM24.2 -97.2H44.8A1.2 1.2 0 0 1 46 -96A1.2 1.2 0 0 1 44.8 -94.8H24.2A1.2 1.2 0 0 1 23 -96A1.2 1.2 0 0 1 24.2 -97.2ZM24.2 -81.2H44.8A1.2 1.2 0 0 1 46 -80A1.2 1.2 0 0 1 44.8 -78.8H24.2A1.2 1.2 0 0 1 23 -80A1.2 1.2 0 0 1 24.2 -81.2ZM24.2 -65.2H44.8A1.2 1.2 0 0 1 46 -64A1.2 1.2 0 0 1 44.8 -62.8H24.2A1.2 1.2 0 0 1 23 -64A1.2 1.2 0 0 1 24.2 -65.2ZM24.2 -49.2H44.8A1.2 1.2 0 0 1 46 -48A1.2 1.2 0 0 1 44.8 -46.8H24.2A1.2 1.2 0 0 1 23 -48A1.2 1.2 0 0 1 24.2 -49.2ZM24.2 -33.2H44.8A1.2 1.2 0 0 1 46 -32A1.2 1.2 0 0 1 44.8 -30.8H24.2A1.2 1.2 0 0 1 23 -32A1.2 1.2 0 0 1 24.2 -33.2ZM24.2 -17.2H44.8A1.2 1.2 0 0 1 46 -16A1.2 1.2 0 0 1 44.8 -14.8H24.2A1.2 1.2 0 0 1 23 -16A1.2 1.2 0 0 1 24.2 -17.2ZM24.2 -1.2H44.8A1.2 1.2 0 0 1 46 0A1.2 1.2 0 0 1 44.8 1.2H24.2A1.2 1.2 0 0 1 23 0A1.2 1.2 0 0 1 24.2 -1.2ZM24.2 14.8H44.8A1.2 1.2 0 0 1 46 16A1.2 1.2 0 0 1 44.8 17.2H24.2A1.2 1.2 0 0 1 23 16A1.2 1.2 0 0 1 24.2 14.8ZM24.2 30.8H44.8A1.2 1.2 0 0 1 46 32A1.2 1.2 0 0 1 44.8 33.2H24.2A1.2 1.2 0 0 1 23 32A1.2 1.2 0 0 1 24.2 30.8ZM24.2 46.8H44.8A1.2 1.2 0 0 1 46 48A1.2 1.2 0 0 1 44.8 49.2H24.2A1.2 1.2 0 0 1 23 48A1.2 1.2 0 0 1 24.2 46.8ZM24.2 62.8H44.8A1.2 1.2 0 0 1 46 64A1.2 1.2 0 0 1 44.8 65.2H24.2A1.2 1.2 0 0 1 23 64A1.2 1.2 0 0 1 24.2 62.8ZM24.2 78.8H44.8A1.2 1.2 0 0 1 46 80A1.2 1.2 0 0 1 44.8 81.2H24.2A1.2 1.2 0 0 1 23 80A1.2 1.2 0 0 1 24.2 78.8ZM24.2 94.8H44.8A1.2 1.2 0 0 1 46 96A1.2 1.2 0 0 1 44.8 97.2H24.2A1.2 1.2 0 0 1 23 96A1.2 1.2 0 0 1 24.2 94.8ZM24.2 110.8H44.8A1.2 1.2 0 0 1 46 112A1.2 1.2 0 0 1 44.8 113.2H24.2A1.2 1.2 0 0 1 23 112A1.2 1.2 0 0 1 24.2 110.8ZM24.2 126.8H44.8A1.2 1.2 0 0 1 46 128A1.2 1.2 0 0 1 44.8 129.2H24.2A1.2 1.2 0 0 1 23 128A1.2 1.2 0 0 1 24.2 126.8Z",
+      "color": [
+        92,
+        107,
+        116
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "split-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -149V149",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "left-shell-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-47 -150H-17V150H-47Q-60 150 -60 137V-137Q-60 -150 -47 -150Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "right-shell-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M17 -150H47Q60 -150 60 -137V137Q60 150 47 150H17Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "left-insulation",
+      "layer": "front",
+      "material": "porcelain",
+      "role": "solid",
+      "path": "M-44 -143H-17V143H-44Q-52 143 -52 135V-135Q-52 -143 -44 -143Z",
+      "color": [
+        225,
+        219,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "right-insulation",
+      "layer": "front",
+      "material": "porcelain",
+      "role": "solid",
+      "path": "M17 -143H44Q52 -143 52 -135V135Q52 143 44 143H17Z",
+      "color": [
+        225,
+        219,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "section-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-49 -130L-35 -116M35 -130L49 -116M-49 -105L-35 -91M35 -105L49 -91M-49 -80L-35 -66M35 -80L49 -66M-49 -55L-35 -41M35 -55L49 -41M-49 -30L-35 -16M35 -30L49 -16M-49 -5L-35 9M35 -5L49 9M-49 20L-35 34M35 20L49 34M-49 45L-35 59M35 45L49 59M-49 70L-35 84M35 70L49 84M-49 95L-35 109M35 95L49 109",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "heating-elements",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-21 -126V-113M21 -126V-113M-21 -102V-89M21 -102V-89M-21 -78V-65M21 -78V-65M-21 -54V-41M21 -54V-41M-21 -30V-17M21 -30V-17M-21 -6V7M21 -6V7M-21 18V31M21 18V31M-21 42V55M21 42V55M-21 66V79M21 66V79M-21 90V103M21 90V103M-21 114V127M21 114V127",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "top-left-aperture",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-36 -155H-16V-145H-36Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "top-right-aperture",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M16 -155H36V-145H16Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "bottom-left-aperture",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-36 145H-16V155H-36Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "bottom-right-aperture",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M16 145H36V155H16Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "split-handle",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M60 -36H69Q80 -36 80 -25V25Q80 36 69 36H60V30H69Q74 30 74 24V-24Q74 -30 69 -30H60Z",
+      "color": [
+        174,
+        185,
+        194
+      ],
+      "depth": 2
+    },
+    {
+      "id": "top-toggle-latch",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-7 -112H19L23 -109V-103L19 -100H-7Z",
+      "color": [
+        172,
+        184,
+        193
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "top-latch-lever",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M0 -110H16Q19 -110 19 -107V-105Q19 -102 16 -102H0Z",
+      "color": [
+        218,
+        224,
+        229
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "top-latch-hook",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-7 -110H-12V-102H-7",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "bottom-toggle-latch",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-7 100H19L23 103V109L19 112H-7Z",
+      "color": [
+        172,
+        184,
+        193
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "bottom-latch-lever",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M0 102H16Q19 102 19 105V107Q19 110 16 110H0Z",
+      "color": [
+        218,
+        224,
+        229
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "bottom-latch-hook",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-7 102H-12V110H-7",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "grounded": true,
+  "holds": [
+    {
+      "id": "bore",
+      "kind": "through_bore",
+      "from": [
+        0,
+        -150
+      ],
+      "to": [
+        0,
+        150
+      ],
+      "diameter_mm": 32
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        0
+      ]
+    }
+  ]
+}

@@ -152,6 +152,7 @@ const FILES: &[&str] = piece_files![
     "mass-flow-controller",
     "tube-furnace-32",
     "tube-furnace-vertical-32",
+    "tube-furnace-body-32",
     "quartz-work-tube-600-32",
     "work-tube-end-seal-32",
     "work-tube-end-seal-compression-32-1-4",

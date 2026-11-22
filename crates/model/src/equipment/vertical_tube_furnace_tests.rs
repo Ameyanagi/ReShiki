@@ -8,6 +8,7 @@ use super::solve::{self, JointRef, Kind, Port, ports, residual};
 use crate::document::{Document, Point};
 
 const FURNACE: &str = "reshiki/tube-furnace-vertical-32";
+const BODY: &str = "reshiki/tube-furnace-body-32";
 const TUBE: &str = "reshiki/quartz-work-tube-600-32";
 
 fn add(doc: &mut Document, name: &str) -> u64 {
@@ -34,8 +35,11 @@ fn port(doc: &Document, piece: u64, name: &str) -> Port {
         .unwrap()
 }
 fn complete(size: &str) -> (Document, [u64; 6]) {
+    complete_with_furnace(size, FURNACE)
+}
+fn complete_with_furnace(size: &str, furnace: &str) -> (Document, [u64; 6]) {
     let mut doc = Document::default();
-    let furnace = add(&mut doc, FURNACE);
+    let furnace = add(&mut doc, furnace);
     let origin = doc
         .graphics
         .iter()
@@ -79,6 +83,113 @@ fn complete(size: &str) -> (Document, [u64; 6]) {
         ids[2 + 2 * k..4 + 2 * k].copy_from_slice(&[seal, line]);
     }
     (doc, ids)
+}
+
+#[test]
+fn bare_tube_furnace_body_rotates_the_same_seated_assembly_between_axes() {
+    use super::geometry::{Affine, dot, len, sub};
+
+    let body = builtin::find(BODY).unwrap();
+    assert!(body.grounded);
+    assert_ne!(body.family, builtin::find(FURNACE).unwrap().family);
+    assert_eq!(
+        builtin::catalogue().iter().filter(|d| d.id == BODY).count(),
+        1
+    );
+    for size in ["1-4", "1-8"] {
+        let (upright, ids) = complete_with_furnace(size, BODY);
+        let pivot = upright
+            .graphics
+            .iter()
+            .find(|g| g.id == ids[0])
+            .unwrap()
+            .origin;
+        let ports_before: Vec<_> = upright.graphics.iter().flat_map(ports).collect();
+        let definition_key = upright.graphics[0]
+            .piece
+            .as_ref()
+            .unwrap()
+            .definition
+            .clone();
+        for angle in [0., 90.] {
+            for view in ["exterior", "section"] {
+                let mut doc = upright.clone();
+                for id in ids {
+                    solve::adjust::set(&mut doc, id, "view", Value::State(view.into())).unwrap();
+                }
+                crate::editing::transform_about(&mut doc, &ids, pivot, 1., angle);
+                solve::check(&mut doc, None);
+                doc.validate().unwrap();
+                assert_eq!((doc.graphics.len(), doc.seats.len()), (6, 5));
+                assert_eq!(doc.seats, upright.seats);
+                assert_eq!(
+                    doc.graphics[0].piece.as_ref().unwrap().definition,
+                    definition_key
+                );
+                let turn =
+                    Affine::rotate(f64::from(angle), [f64::from(pivot.x), f64::from(pivot.y)]);
+                for before in &ports_before {
+                    let after = port(&doc, before.at.piece, &before.at.joint);
+                    assert!(len(sub(after.point, turn.apply(before.point))) < 1e-3);
+                    assert!(len(sub(after.dir, turn.apply_dir(before.dir))) < 1e-6);
+                    assert_eq!(
+                        (after.kind, after.gender),
+                        (before.kind.clone(), before.gender)
+                    );
+                }
+                let bore = port(&doc, ids[0], "bore");
+                let span = port(&doc, ids[1], "span");
+                assert!((bore.contact_length / bore.mm - 300.).abs() < 1e-4);
+                assert!((span.length / span.mm - 540.).abs() < 1e-4);
+                let centre = |p: &Port| {
+                    [
+                        p.point[0] + p.dir[0] * p.length / 2.,
+                        p.point[1] + p.dir[1] * p.length / 2.,
+                    ]
+                };
+                assert!(len(sub(centre(&bore), centre(&span))) < 1e-3);
+                let axis = if angle == 0. { 1 } else { 0 };
+                assert!((bore.dir[axis].abs() - 1.).abs() < 1e-6);
+                assert!(bore.dir[1 - axis].abs() < 1e-6);
+                assert!(solve::carried_through(&doc, &ids, &[ids[0]], &[]).is_none());
+                let moving = solve::carried_through(&doc, &ids, &[ids[1]], &[]).unwrap();
+                assert_eq!(moving.len(), 5);
+                assert!(!moving.contains(&ids[0]));
+                for direction in [-1., 1.] {
+                    let requested = [
+                        bore.dir[0] * direction * 1e6 - bore.dir[1] * 99.,
+                        bore.dir[1] * direction * 1e6 + bore.dir[0] * 99.,
+                    ];
+                    let delta = solve::constrain(&doc, &moving, requested).unwrap();
+                    assert!((dot(delta, bore.dir) / bore.mm - direction * 120.).abs() < 1e-3);
+                    assert!((delta[0] * bore.dir[1] - delta[1] * bore.dir[0]).abs() < 1e-3);
+                    let mut slid = doc.clone();
+                    slid.translate(&moving, delta[0] as f32, delta[1] as f32);
+                    solve::check(&mut slid, None);
+                    assert_eq!(slid.seats, doc.seats);
+                    let near = if direction > 0. { ids[2] } else { ids[4] };
+                    let lip = port(&slid, near, "work-tube");
+                    let distance = dot(sub(lip.point, centre(&bore)), bore.dir).abs() / bore.mm;
+                    assert!((distance - 155. - 7.).abs() < 1e-3);
+                }
+                for seat in &doc.seats {
+                    let (off, angle) = residual(
+                        &port(&doc, seat.a.piece, &seat.a.joint),
+                        &port(&doc, seat.b.piece, &seat.b.joint),
+                    );
+                    assert!(off < 1e-3 && angle < 1e-3);
+                }
+                let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+                assert_eq!(reopened.seats, doc.seats);
+                assert_eq!(
+                    reopened.graphics[0].piece.as_ref().unwrap().definition,
+                    definition_key
+                );
+                let orientation = if angle == 0. { "upright" } else { "horizontal" };
+                write_evidence(&doc, &format!("body-{size}-{orientation}"), view);
+            }
+        }
+    }
 }
 
 #[test]

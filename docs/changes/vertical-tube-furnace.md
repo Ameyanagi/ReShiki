@@ -11,6 +11,14 @@ references. The control module, frame, split cover and side handle are original
 native paths. The open centre leaves room for both tube ends throughout axial
 travel.
 
+The separate **Split tube furnace body, 32 mm work tube** retains only that
+housing, vents, latches, handle and locating apertures. It adds one catalogue
+asset without changing the supported upright or horizontal variants. A focused
+model case rotates the same bare body, centred quartz tube, direct end seals
+and tubing through the production transform path. It checks authoritative port
+positions, all five seats, both views, save/reopen and the unchanged travel and
+clearance in upright and horizontal orientations.
+
 ## Inputs and checks
 
 - [¼-inch assembly](../../tests/fixtures/vertical-tube-furnace/connected-1-4.rsk)

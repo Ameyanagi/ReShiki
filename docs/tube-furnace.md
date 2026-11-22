@@ -99,6 +99,19 @@ Reusable native examples:
 - [Upright furnace with ¼-inch tubing](../tests/fixtures/vertical-tube-furnace/connected-1-4.rsk)
 - [Upright furnace with ⅛-inch tubing](../tests/fixtures/vertical-tube-furnace/connected-1-8.rsk)
 
+For a furnace without a frame or controller, choose **Split tube furnace
+body, 32 mm work tube**. This is a separate catalogue piece containing only
+the split housing, vents, latches, side handle and locating apertures.
+Its default drawing is upright. Rotate the same piece, or its whole connected
+assembly, 90° to use it horizontally.
+
+The furnace-only body's `bore` uses the same exact 32 mm mechanical interface
+and 300 mm span. The quartz tube and direct end seals connect as above, with
+the same ±120 mm travel and 7 mm end-seal clearance. Dragging this grounded
+body moves its connected assembly; dragging the exposed tube slides the tube
+and end accessories. The existing supported upright furnace and horizontal
+furnace remain available separately.
+
 These are generic diagram pieces. Connector dimensions identify the drawn
 interfaces; the pieces carry no operating ratings.
 
@@ -135,3 +148,5 @@ For both direct-connection upright examples, use
 `RESHIKI_VERTICAL_FURNACE_EVIDENCE=/absolute/review/directory cargo test -p reshiki-model vertical_tube_furnace`.
 The [upright furnace review record](changes/vertical-tube-furnace.md) describes
 the source checks and renderer proof.
+The focused `bare_tube_furnace_body_rotates_the_same_seated_assembly_between_axes`
+model case checks the same bare body and connected tube in both orientations.
