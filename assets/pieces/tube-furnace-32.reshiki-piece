@@ -1,0 +1,446 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/tube-furnace-32",
+  "revision": 1,
+  "family": "tube-furnace",
+  "variant": {
+    "work_tube_od": "32 mm",
+    "layout": "Horizontal"
+  },
+  "names": {
+    "en": "Horizontal split tube furnace, 32 mm work tube"
+  },
+  "category": "heating",
+  "keywords": [
+    "tube furnace",
+    "split tube furnace",
+    "gas-phase reaction",
+    "work tube",
+    "32 mm",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "feet",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-156 112H-116V123H-156ZM116 112H156V123H116Z",
+      "color": [
+        74,
+        86,
+        98
+      ]
+    },
+    {
+      "id": "control-base",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-164 59H164V111Q164 117 158 117H-158Q-164 117 -164 111Z",
+      "color": [
+        117,
+        130,
+        142
+      ]
+    },
+    {
+      "id": "control-panel",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-55 72H64V108H-55Z",
+      "color": [
+        65,
+        117,
+        151
+      ],
+      "depth": 1
+    },
+    {
+      "id": "display-window",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-35 79H32V96H-35Z",
+      "color": [
+        36,
+        48,
+        59
+      ],
+      "depth": 2
+    },
+    {
+      "id": "display-mark",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-25 85H-12V89H-25ZM-7 85H6V89H-7ZM11 85H24V89H11Z",
+      "color": [
+        180,
+        219,
+        221
+      ],
+      "depth": 3
+    },
+    {
+      "id": "control-dial",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M50 83A7 7 0 1 1 49.999 97A7 7 0 1 1 50 83Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "depth": 2
+    },
+    {
+      "id": "control-mark",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M50 84V89M-151 78H-80M-151 85H-80M-151 92H-80",
+      "depth": 3
+    },
+    {
+      "id": "upper-shell",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-150 -51Q-150 -64 -137 -64H137Q150 -64 150 -51V0H-150Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "lower-shell",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-150 0H150V47Q150 60 137 60H-137Q-150 60 -150 47Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "upper-accent",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-45 -63H45V-8H-45Z",
+      "color": [
+        65,
+        117,
+        151
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "lower-accent",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-45 8H45V59H-45Z",
+      "color": [
+        65,
+        117,
+        151
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "split-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-149 0H149",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "upper-shell-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-150 -51Q-150 -64 -137 -64H137Q150 -64 150 -51V-17H-150Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "lower-shell-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-150 17H150V47Q150 60 137 60H-137Q-150 60 -150 47Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "upper-insulation",
+      "layer": "front",
+      "material": "porcelain",
+      "role": "solid",
+      "path": "M-143 -48Q-143 -56 -135 -56H135Q143 -56 143 -48V-17H-143Z",
+      "color": [
+        225,
+        219,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "lower-insulation",
+      "layer": "front",
+      "material": "porcelain",
+      "role": "solid",
+      "path": "M-143 17H143V44Q143 52 135 52H-135Q-143 52 -143 44Z",
+      "color": [
+        225,
+        219,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "upper-section-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-128 -53L-113 -38M-103 -53L-88 -38M-78 -53L-63 -38M-53 -53L-38 -38M-28 -53L-13 -38M-3 -53L12 -38M22 -53L37 -38M47 -53L62 -38M72 -53L87 -38M97 -53L112 -38M122 -53L137 -38",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "lower-section-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-128 36L-115 49M-103 36L-90 49M-78 36L-65 49M-53 36L-40 49M-28 36L-15 49M-3 36L10 49M22 36L35 49M47 36L60 49M72 36L85 49M97 36L110 49M122 36L135 49",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "heating-elements",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-126 -21H-113M-126 21H-113M-102 -21H-89M-102 21H-89M-78 -21H-65M-78 21H-65M-54 -21H-41M-54 21H-41M-30 -21H-17M-30 21H-17M-6 -21H7M-6 21H7M18 -21H31M18 21H31M42 -21H55M42 21H55M66 -21H79M66 21H79M90 -21H103M90 21H103M114 -21H127M114 21H127",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "handle",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-32 -64V-75Q-32 -80 -27 -80H27Q32 -80 32 -75V-64H24V-72H-24V-64Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 2
+    },
+    {
+      "id": "aperture-upper--150",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-155 -36H-145V-16H-155Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "aperture-lower--150",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-155 16H-145V36H-155Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "latch--150",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-134 -9H-142V-3H-138V9H-130",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "aperture-upper-150",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M145 -36H155V-16H145Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "aperture-lower-150",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M145 16H155V36H145Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "latch-150",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M134 -9H142V-3H138V9H130",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "grounded": true,
+  "holds": [
+    {
+      "id": "bore",
+      "kind": "through_bore",
+      "from": [
+        -150,
+        0
+      ],
+      "to": [
+        150,
+        0
+      ],
+      "diameter_mm": 32
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        65
+      ]
+    }
+  ]
+}

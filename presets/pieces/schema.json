@@ -503,7 +503,16 @@
               "const": "plug"
             },
             "family": {
-              "enum": ["hose", "compression", "stopper", "septum", "thermometer", "nmr", "stir"]
+              "enum": [
+                "hose",
+                "compression",
+                "work_tube",
+                "stopper",
+                "septum",
+                "thermometer",
+                "nmr",
+                "stir"
+              ]
             },
             "size_mm": {
               "type": "number",
@@ -519,7 +528,7 @@
           "dependentSchemas": {
             "insertion_mm": {
               "properties": {
-                "family": { "const": "compression" },
+                "family": { "enum": ["compression", "work_tube"] },
                 "gender": { "const": "F" }
               }
             }

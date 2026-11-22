@@ -1,0 +1,308 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/work-tube-end-seal-32",
+  "revision": 1,
+  "family": "work-tube-end-seal",
+  "variant": {
+    "work_tube_od": "32 mm",
+    "gas_nozzle_od": "1/4 in OD"
+  },
+  "names": {
+    "en": "Work-tube end seal, 32 mm, 1/4 in gas nozzle"
+  },
+  "category": "adapter",
+  "keywords": [
+    "work tube end seal",
+    "gas inlet",
+    "gas outlet",
+    "gas nozzle",
+    "32 mm",
+    "1/4 in",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "seal-shell-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 -16V-24L6 -27H24L30 -22H34V22L24 27H6L0 24V16Z",
+      "color": [
+        208,
+        218,
+        225
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "gas-nozzle-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M34 -3.175H54V3.175H34Z",
+      "color": [
+        208,
+        218,
+        225
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "seal-upper-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 -16V-24L6 -27H24L30 -22H34V-3.175H54V-2.285H28L22 -14H18V-16Z",
+      "color": [
+        208,
+        218,
+        225
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "seal-lower-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 16H18V14H22L28 2.285H54V3.175H34V22L24 27H6L0 24Z",
+      "color": [
+        208,
+        218,
+        225
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "sealing-ring--1",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M6 -16H12V-21H6Z",
+      "color": [
+        112,
+        127,
+        134
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "wall--1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -16H18V-14H22L28 -2.285H54",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "hatching--1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M15 -23L19 -19M22 -24L26 -20M29 -16L32 -13M29 -10L32 -7",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "sealing-ring-1",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M6 16H12V21H6Z",
+      "color": [
+        112,
+        127,
+        134
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "wall-1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 16H18V14H22L28 2.285H54",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "hatching-1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M15 23L19 19M22 24L26 20M29 16L32 13M29 10L32 7",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "outer-boundary",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M0 -16V-24L6 -27H24L30 -22H34V-3.175H54M54 3.175H34V22L24 27H6L0 24V16",
+      "depth": 4
+    },
+    {
+      "id": "seal-clamp-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M20 -27V27M24 -26V26",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "upper-clamp-tab",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11 -27V-33H18V-27Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "lower-clamp-tab",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11 27V33H18V27Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "nozzle-rim",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M54 -3.175V-2.285M54 2.285V3.175",
+      "depth": 4
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "joints": [
+    {
+      "id": "work-tube",
+      "kind": "plug",
+      "family": "work_tube",
+      "gender": "F",
+      "size_mm": 32,
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 18
+    },
+    {
+      "id": "gas-nozzle",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 6.35,
+      "at": [
+        54,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        18,
+        0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1562 @@
+{
+  "version": 15,
+  "atoms": [],
+  "bonds": [],
+  "graphics": [
+    {
+      "id": 1,
+      "kind": "piece",
+      "origin": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": 1.1666666269302368,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 1.1666666269302368
+      },
+      "piece": {
+        "definition": "reshiki/tube-furnace-32@1#e2409ddc32351f31"
+      }
+    },
+    {
+      "id": 2,
+      "kind": "piece",
+      "origin": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": 1.1666666269302368,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 1.1666666269302368
+      },
+      "piece": {
+        "definition": "reshiki/quartz-work-tube-600-32@1#4239259983672163"
+      }
+    },
+    {
+      "id": 3,
+      "kind": "piece",
+      "origin": {
+        "x": -329.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": -1.1666666269302368,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": -1.1666666269302368
+      },
+      "piece": {
+        "definition": "reshiki/work-tube-end-seal-32@1#4333cce1ad91e636"
+      }
+    },
+    {
+      "id": 4,
+      "kind": "piece",
+      "origin": {
+        "x": -378.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": -1.1666666269302368,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": -1.1666666269302368
+      },
+      "piece": {
+        "definition": "reshiki/work-tube-gas-port-adapter-1-4@1#fa3e41cc92479ef8"
+      }
+    },
+    {
+      "id": 5,
+      "kind": "piece",
+      "origin": {
+        "x": -406.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": -1.1666666269302368,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": -1.1666666269302368
+      },
+      "piece": {
+        "definition": "reshiki/compression-tube-120-1-4@1#9a25423b992b49ce"
+      }
+    },
+    {
+      "id": 6,
+      "kind": "piece",
+      "origin": {
+        "x": 329.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": 1.1666666269302368,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 1.1666666269302368
+      },
+      "piece": {
+        "definition": "reshiki/work-tube-end-seal-32@1#4333cce1ad91e636"
+      }
+    },
+    {
+      "id": 7,
+      "kind": "piece",
+      "origin": {
+        "x": 378.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": 1.1666666269302368,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 1.1666666269302368
+      },
+      "piece": {
+        "definition": "reshiki/work-tube-gas-port-adapter-1-4@1#fa3e41cc92479ef8"
+      }
+    },
+    {
+      "id": 8,
+      "kind": "piece",
+      "origin": {
+        "x": 406.0,
+        "y": 0.0
+      },
+      "axis_x": {
+        "x": 1.1666666269302368,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 1.1666666269302368
+      },
+      "piece": {
+        "definition": "reshiki/compression-tube-120-1-4@1#9a25423b992b49ce"
+      }
+    }
+  ],
+  "piece_definitions": [
+    {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/tube-furnace-32",
+      "revision": 1,
+      "family": "tube-furnace",
+      "variant": {
+        "work_tube_od": "32 mm",
+        "layout": "Horizontal"
+      },
+      "names": {
+        "en": "Horizontal split tube furnace, 32 mm work tube"
+      },
+      "category": "heating",
+      "keywords": [
+        "tube furnace",
+        "split tube furnace",
+        "gas-phase reaction",
+        "work tube",
+        "32 mm",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "feet",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M-156 112H-116V123H-156ZM116 112H156V123H116Z",
+          "color": [
+            74,
+            86,
+            98
+          ]
+        },
+        {
+          "id": "control-base",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M-164 59H164V111Q164 117 158 117H-158Q-164 117 -164 111Z",
+          "color": [
+            117,
+            130,
+            142
+          ]
+        },
+        {
+          "id": "control-panel",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M-55 72H64V108H-55Z",
+          "color": [
+            65,
+            117,
+            151
+          ],
+          "depth": 1
+        },
+        {
+          "id": "display-window",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M-35 79H32V96H-35Z",
+          "color": [
+            36,
+            48,
+            59
+          ],
+          "depth": 2
+        },
+        {
+          "id": "display-mark",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M-25 85H-12V89H-25ZM-7 85H6V89H-7ZM11 85H24V89H11Z",
+          "color": [
+            180,
+            219,
+            221
+          ],
+          "depth": 3
+        },
+        {
+          "id": "control-dial",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M50 83A7 7 0 1 1 49.999 97A7 7 0 1 1 50 83Z",
+          "color": [
+            231,
+            236,
+            240
+          ],
+          "depth": 2
+        },
+        {
+          "id": "control-mark",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M50 84V89M-151 78H-80M-151 85H-80M-151 92H-80",
+          "depth": 3
+        },
+        {
+          "id": "upper-shell",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M-150 -51Q-150 -64 -137 -64H137Q150 -64 150 -51V0H-150Z",
+          "color": [
+            231,
+            236,
+            240
+          ],
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          }
+        },
+        {
+          "id": "lower-shell",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M-150 0H150V47Q150 60 137 60H-137Q-150 60 -150 47Z",
+          "color": [
+            231,
+            236,
+            240
+          ],
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          }
+        },
+        {
+          "id": "upper-accent",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M-45 -63H45V-8H-45Z",
+          "color": [
+            65,
+            117,
+            151
+          ],
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          },
+          "depth": 1
+        },
+        {
+          "id": "lower-accent",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M-45 8H45V59H-45Z",
+          "color": [
+            65,
+            117,
+            151
+          ],
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          },
+          "depth": 1
+        },
+        {
+          "id": "split-seam",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-149 0H149",
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "upper-shell-section",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M-150 -51Q-150 -64 -137 -64H137Q150 -64 150 -51V-17H-150Z",
+          "color": [
+            231,
+            236,
+            240
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          }
+        },
+        {
+          "id": "lower-shell-section",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M-150 17H150V47Q150 60 137 60H-137Q-150 60 -150 47Z",
+          "color": [
+            231,
+            236,
+            240
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          }
+        },
+        {
+          "id": "upper-insulation",
+          "layer": "front",
+          "material": "porcelain",
+          "role": "solid",
+          "path": "M-143 -48Q-143 -56 -135 -56H135Q143 -56 143 -48V-17H-143Z",
+          "color": [
+            225,
+            219,
+            199
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 1
+        },
+        {
+          "id": "lower-insulation",
+          "layer": "front",
+          "material": "porcelain",
+          "role": "solid",
+          "path": "M-143 17H143V44Q143 52 135 52H-135Q-143 52 -143 44Z",
+          "color": [
+            225,
+            219,
+            199
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 1
+        },
+        {
+          "id": "upper-section-hatching",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-128 -53L-113 -38M-103 -53L-88 -38M-78 -53L-63 -38M-53 -53L-38 -38M-28 -53L-13 -38M-3 -53L12 -38M22 -53L37 -38M47 -53L62 -38M72 -53L87 -38M97 -53L112 -38M122 -53L137 -38",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "lower-section-hatching",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-128 36L-115 49M-103 36L-90 49M-78 36L-65 49M-53 36L-40 49M-28 36L-15 49M-3 36L10 49M22 36L35 49M47 36L60 49M72 36L85 49M97 36L110 49M122 36L135 49",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "heating-elements",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-126 -21H-113M-126 21H-113M-102 -21H-89M-102 21H-89M-78 -21H-65M-78 21H-65M-54 -21H-41M-54 21H-41M-30 -21H-17M-30 21H-17M-6 -21H7M-6 21H7M18 -21H31M18 21H31M42 -21H55M42 21H55M66 -21H79M66 21H79M90 -21H103M90 21H103M114 -21H127M114 21H127",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 3
+        },
+        {
+          "id": "handle",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M-32 -64V-75Q-32 -80 -27 -80H27Q32 -80 32 -75V-64H24V-72H-24V-64Z",
+          "color": [
+            74,
+            86,
+            98
+          ],
+          "depth": 2
+        },
+        {
+          "id": "aperture-upper--150",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M-155 -36H-145V-16H-155Z",
+          "color": [
+            74,
+            86,
+            98
+          ],
+          "depth": 3
+        },
+        {
+          "id": "aperture-lower--150",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M-155 16H-145V36H-155Z",
+          "color": [
+            74,
+            86,
+            98
+          ],
+          "depth": 3
+        },
+        {
+          "id": "latch--150",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-134 -9H-142V-3H-138V9H-130",
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          },
+          "depth": 3
+        },
+        {
+          "id": "aperture-upper-150",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M145 -36H155V-16H145Z",
+          "color": [
+            74,
+            86,
+            98
+          ],
+          "depth": 3
+        },
+        {
+          "id": "aperture-lower-150",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M145 16H155V36H145Z",
+          "color": [
+            74,
+            86,
+            98
+          ],
+          "depth": 3
+        },
+        {
+          "id": "latch-150",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M134 -9H142V-3H138V9H130",
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          },
+          "depth": 3
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "grounded": true,
+      "holds": [
+        {
+          "id": "bore",
+          "kind": "through_bore",
+          "from": [
+            -150,
+            0
+          ],
+          "to": [
+            150,
+            0
+          ],
+          "diameter_mm": 32
+        }
+      ],
+      "labels": [
+        {
+          "id": "body",
+          "at": [
+            0,
+            65
+          ]
+        }
+      ]
+    },
+    {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/quartz-work-tube-600-32",
+      "revision": 1,
+      "family": "quartz-work-tube",
+      "variant": {
+        "length": "600 mm",
+        "tube_od": "32 mm",
+        "tube_id": "28 mm"
+      },
+      "names": {
+        "en": "Quartz work tube, 600 mm, 32 mm OD"
+      },
+      "category": "vessel",
+      "keywords": [
+        "quartz reaction tube",
+        "work tube",
+        "gas-phase reaction",
+        "600 mm",
+        "32 mm",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "glass-body",
+          "layer": "body",
+          "material": "glass",
+          "role": "fill",
+          "path": "M-300 -16H300V16H-300Z"
+        },
+        {
+          "id": "upper-wall-section",
+          "layer": "body",
+          "material": "glass",
+          "role": "fill",
+          "path": "M-300 -16H300V-14H-300Z",
+          "color": [
+            216,
+            230,
+            234
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 1
+        },
+        {
+          "id": "lower-wall-section",
+          "layer": "body",
+          "material": "glass",
+          "role": "fill",
+          "path": "M-300 14H300V16H-300Z",
+          "color": [
+            216,
+            230,
+            234
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 1
+        },
+        {
+          "id": "outer-walls",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M-300 -16H300M-300 16H300",
+          "depth": 2
+        },
+        {
+          "id": "inner-walls",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-300 -14H300M-300 14H300",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "open-rims",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-300 -16V-14M-300 14V16M300 -16V-14M300 14V16",
+          "depth": 2
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "joints": [
+        {
+          "id": "left",
+          "kind": "plug",
+          "family": "work_tube",
+          "gender": "M",
+          "size_mm": 32,
+          "at": [
+            -300,
+            0
+          ],
+          "dir": [
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "right",
+          "kind": "plug",
+          "family": "work_tube",
+          "gender": "M",
+          "size_mm": 32,
+          "at": [
+            300,
+            0
+          ],
+          "dir": [
+            1,
+            0
+          ]
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [
+            -300,
+            0
+          ],
+          "to": [
+            300,
+            0
+          ],
+          "diameter_mm": 32
+        }
+      ]
+    },
+    {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/work-tube-end-seal-32",
+      "revision": 1,
+      "family": "work-tube-end-seal",
+      "variant": {
+        "work_tube_od": "32 mm",
+        "gas_nozzle_od": "1/4 in OD"
+      },
+      "names": {
+        "en": "Work-tube end seal, 32 mm, 1/4 in gas nozzle"
+      },
+      "category": "adapter",
+      "keywords": [
+        "work tube end seal",
+        "gas inlet",
+        "gas outlet",
+        "gas nozzle",
+        "32 mm",
+        "1/4 in",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "seal-shell-exterior",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -16V-24L6 -27H24L30 -22H34V22L24 27H6L0 24V16Z",
+          "color": [
+            208,
+            218,
+            225
+          ],
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          }
+        },
+        {
+          "id": "gas-nozzle-exterior",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M34 -3.175H54V3.175H34Z",
+          "color": [
+            208,
+            218,
+            225
+          ],
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          }
+        },
+        {
+          "id": "seal-upper-section",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -16V-24L6 -27H24L30 -22H34V-3.175H54V-2.285H28L22 -14H18V-16Z",
+          "color": [
+            208,
+            218,
+            225
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          }
+        },
+        {
+          "id": "seal-lower-section",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 16H18V14H22L28 2.285H54V3.175H34V22L24 27H6L0 24Z",
+          "color": [
+            208,
+            218,
+            225
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          }
+        },
+        {
+          "id": "sealing-ring--1",
+          "layer": "front",
+          "material": "rubber",
+          "role": "solid",
+          "path": "M6 -16H12V-21H6Z",
+          "color": [
+            112,
+            127,
+            134
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "wall--1",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -16H18V-14H22L28 -2.285H54",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 3
+        },
+        {
+          "id": "hatching--1",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M15 -23L19 -19M22 -24L26 -20M29 -16L32 -13M29 -10L32 -7",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "sealing-ring-1",
+          "layer": "front",
+          "material": "rubber",
+          "role": "solid",
+          "path": "M6 16H12V21H6Z",
+          "color": [
+            112,
+            127,
+            134
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "wall-1",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 16H18V14H22L28 2.285H54",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 3
+        },
+        {
+          "id": "hatching-1",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M15 23L19 19M22 24L26 20M29 16L32 13M29 10L32 7",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "outer-boundary",
+          "layer": "front",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -16V-24L6 -27H24L30 -22H34V-3.175H54M54 3.175H34V22L24 27H6L0 24V16",
+          "depth": 4
+        },
+        {
+          "id": "seal-clamp-seam",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M20 -27V27M24 -26V26",
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          },
+          "depth": 3
+        },
+        {
+          "id": "upper-clamp-tab",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M11 -27V-33H18V-27Z",
+          "color": [
+            74,
+            86,
+            98
+          ],
+          "depth": 3
+        },
+        {
+          "id": "lower-clamp-tab",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M11 27V33H18V27Z",
+          "color": [
+            74,
+            86,
+            98
+          ],
+          "depth": 3
+        },
+        {
+          "id": "nozzle-rim",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M54 -3.175V-2.285M54 2.285V3.175",
+          "depth": 4
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "joints": [
+        {
+          "id": "work-tube",
+          "kind": "plug",
+          "family": "work_tube",
+          "gender": "F",
+          "size_mm": 32,
+          "at": [
+            0,
+            0
+          ],
+          "dir": [
+            -1,
+            0
+          ],
+          "insertion_mm": 18
+        },
+        {
+          "id": "gas-nozzle",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.35,
+          "at": [
+            54,
+            0
+          ],
+          "dir": [
+            1,
+            0
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "id": "body",
+          "at": [
+            18,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/work-tube-gas-port-adapter-1-4",
+      "revision": 1,
+      "family": "work-tube-gas-port-adapter",
+      "variant": {
+        "connection": "1/4 in compression",
+        "bore": "tube-stop"
+      },
+      "names": {
+        "en": "Work-tube gas-port adapter, 1/4 in"
+      },
+      "category": "adapter",
+      "keywords": [
+        "work tube gas port adapter",
+        "compression fitting",
+        "gas inlet",
+        "gas outlet",
+        "1/4 in",
+        "6.35 mm",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "adapter-exterior",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -5.8L2 -7.6H11L13 -5.8H14L16 -8H20L22 -5.8H23L25 -7.6H34L36 -5.8V5.8L34 7.6H25L23 5.8H22L20 8H16L14 5.8H13L11 7.6H2L0 5.8Z",
+          "color": [
+            231,
+            236,
+            240
+          ],
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          }
+        },
+        {
+          "id": "adapter-upper-section",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -3.175V-5.8L2 -7.6H11L13 -5.8H14L16 -8H20L22 -5.8H23L25 -7.6H34L36 -5.8V-3.175H24V-2.285H12V-3.175Z",
+          "color": [
+            231,
+            236,
+            240
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          }
+        },
+        {
+          "id": "adapter-lower-section",
+          "layer": "front",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 3.175H12V2.285H24V3.175H36V5.8L34 7.6H25L23 5.8H22L20 8H16L14 5.8H13L11 7.6H2L0 5.8Z",
+          "color": [
+            231,
+            236,
+            240
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          }
+        },
+        {
+          "id": "adapter-outer-edges",
+          "layer": "front",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -3.175V-5.8L2 -7.6H11L13 -5.8H14L16 -8H20L22 -5.8H23L25 -7.6H34L36 -5.8V-3.175M36 3.175V5.8L34 7.6H25L23 5.8H22L20 8H16L14 5.8H13L11 7.6H2L0 5.8V3.175",
+          "depth": 4
+        },
+        {
+          "id": "nut-flats",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M3 -7.6V7.6M11 -7.6V7.6M25 -7.6V7.6M33 -7.6V7.6",
+          "when": {
+            "view": [
+              "exterior"
+            ]
+          },
+          "depth": 3
+        },
+        {
+          "id": "section-passage",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3.175H12V-2.285H24V-3.175H36M0 3.175H12V2.285H24V3.175H36",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 3
+        },
+        {
+          "id": "ferrules--1",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M4 -5.7H8L11 -3.175H8ZM25 -3.175H28L32 -5.7H28Z",
+          "color": [
+            171,
+            188,
+            199
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "adapter-hatch--1",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M15 -5.6L17 -3.6M19 -5.6L21 -3.6",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 3
+        },
+        {
+          "id": "ferrules-1",
+          "layer": "front",
+          "material": "metal",
+          "role": "solid",
+          "path": "M4 5.7H8L11 3.175H8ZM25 3.175H28L32 5.7H28Z",
+          "color": [
+            171,
+            188,
+            199
+          ],
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "adapter-hatch-1",
+          "layer": "front",
+          "material": "ink",
+          "role": "detail",
+          "path": "M15 5.6L17 3.6M19 5.6L21 3.6",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 3
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "joints": [
+        {
+          "id": "nozzle",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "F",
+          "size_mm": 6.35,
+          "at": [
+            0,
+            0
+          ],
+          "dir": [
+            -1,
+            0
+          ],
+          "insertion_mm": 12
+        },
+        {
+          "id": "gas-line",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "F",
+          "size_mm": 6.35,
+          "at": [
+            36,
+            0
+          ],
+          "dir": [
+            1,
+            0
+          ],
+          "insertion_mm": 12
+        }
+      ],
+      "labels": [
+        {
+          "id": "body",
+          "at": [
+            18,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "revision": 1,
+      "family": "compression-tube",
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "keywords": [
+        "tubing",
+        "rigid tube",
+        "compression",
+        "1/4 in",
+        "6.35 mm",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "id": "reshiki/compression-tube-120-1-4",
+      "variant": {
+        "geometry": "Straight",
+        "length": "120 mm",
+        "tube_od": "1/4 in OD"
+      },
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -3.175H120V3.175H0Z",
+          "color": [
+            186,
+            201,
+            212
+          ]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -2.285H120V2.285H0Z",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -3.175H120M0 3.175H120",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -2.285H120M0 2.285H120",
+          "when": {
+            "view": [
+              "section"
+            ]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3.175V-2.285M0 2.285V3.175M120 -3.175V-2.285M120 2.285V3.175",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.35,
+          "at": [
+            0,
+            0
+          ],
+          "dir": [
+            -1,
+            0
+          ]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.35,
+          "at": [
+            120,
+            0
+          ],
+          "dir": [
+            1,
+            0
+          ]
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [
+            0,
+            0
+          ],
+          "to": [
+            120,
+            0
+          ],
+          "diameter_mm": 6.35
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ]
+    }
+  ],
+  "seats": [
+    {
+      "a": {
+        "piece": 1,
+        "joint": "bore"
+      },
+      "b": {
+        "piece": 2,
+        "joint": "span"
+      }
+    },
+    {
+      "a": {
+        "piece": 2,
+        "joint": "left"
+      },
+      "b": {
+        "piece": 3,
+        "joint": "work-tube"
+      }
+    },
+    {
+      "a": {
+        "piece": 3,
+        "joint": "gas-nozzle"
+      },
+      "b": {
+        "piece": 4,
+        "joint": "nozzle"
+      }
+    },
+    {
+      "a": {
+        "piece": 4,
+        "joint": "gas-line"
+      },
+      "b": {
+        "piece": 5,
+        "joint": "a"
+      }
+    },
+    {
+      "a": {
+        "piece": 2,
+        "joint": "right"
+      },
+      "b": {
+        "piece": 6,
+        "joint": "work-tube"
+      }
+    },
+    {
+      "a": {
+        "piece": 6,
+        "joint": "gas-nozzle"
+      },
+      "b": {
+        "piece": 7,
+        "joint": "nozzle"
+      }
+    },
+    {
+      "a": {
+        "piece": 7,
+        "joint": "gas-line"
+      },
+      "b": {
+        "piece": 8,
+        "joint": "a"
+      }
+    }
+  ]
+}

@@ -645,9 +645,11 @@ fn joint(
             return Err(format!("{owner} needs a positive size."));
         }
         if let Some(depth) = insertion_mm {
-            if (*family, *gender) != (PlugFamily::Compression, Gender::F) {
+            if *gender != Gender::F
+                || !matches!(family, PlugFamily::Compression | PlugFamily::WorkTube)
+            {
                 return Err(format!(
-                    "{owner} can set insertion_mm only on a female compression opening."
+                    "{owner} can set insertion_mm only on a female compression or work-tube opening."
                 ));
             }
             if !(0. < *depth && *depth <= MAX_COORDINATE) {

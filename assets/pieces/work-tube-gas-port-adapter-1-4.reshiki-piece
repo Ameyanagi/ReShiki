@@ -1,0 +1,245 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/work-tube-gas-port-adapter-1-4",
+  "revision": 1,
+  "family": "work-tube-gas-port-adapter",
+  "variant": {
+    "connection": "1/4 in compression",
+    "bore": "tube-stop"
+  },
+  "names": {
+    "en": "Work-tube gas-port adapter, 1/4 in"
+  },
+  "category": "adapter",
+  "keywords": [
+    "work tube gas port adapter",
+    "compression fitting",
+    "gas inlet",
+    "gas outlet",
+    "1/4 in",
+    "6.35 mm",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "adapter-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 -5.8L2 -7.6H11L13 -5.8H14L16 -8H20L22 -5.8H23L25 -7.6H34L36 -5.8V5.8L34 7.6H25L23 5.8H22L20 8H16L14 5.8H13L11 7.6H2L0 5.8Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "adapter-upper-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 -3.175V-5.8L2 -7.6H11L13 -5.8H14L16 -8H20L22 -5.8H23L25 -7.6H34L36 -5.8V-3.175H24V-2.285H12V-3.175Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "adapter-lower-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 3.175H12V2.285H24V3.175H36V5.8L34 7.6H25L23 5.8H22L20 8H16L14 5.8H13L11 7.6H2L0 5.8Z",
+      "color": [
+        231,
+        236,
+        240
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "adapter-outer-edges",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M0 -3.175V-5.8L2 -7.6H11L13 -5.8H14L16 -8H20L22 -5.8H23L25 -7.6H34L36 -5.8V-3.175M36 3.175V5.8L34 7.6H25L23 5.8H22L20 8H16L14 5.8H13L11 7.6H2L0 5.8V3.175",
+      "depth": 4
+    },
+    {
+      "id": "nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M3 -7.6V7.6M11 -7.6V7.6M25 -7.6V7.6M33 -7.6V7.6",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "section-passage",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -3.175H12V-2.285H24V-3.175H36M0 3.175H12V2.285H24V3.175H36",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "ferrules--1",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M4 -5.7H8L11 -3.175H8ZM25 -3.175H28L32 -5.7H28Z",
+      "color": [
+        171,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "adapter-hatch--1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M15 -5.6L17 -3.6M19 -5.6L21 -3.6",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "ferrules-1",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M4 5.7H8L11 3.175H8ZM25 3.175H28L32 5.7H28Z",
+      "color": [
+        171,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "adapter-hatch-1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M15 5.6L17 3.6M19 5.6L21 3.6",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "joints": [
+    {
+      "id": "nozzle",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 12
+    },
+    {
+      "id": "gas-line",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        36,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ],
+      "insertion_mm": 12
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        18,
+        0
+      ]
+    }
+  ]
+}

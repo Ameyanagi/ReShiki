@@ -103,6 +103,7 @@ impl Port {
         match &self.kind {
             Kind::Taper(size) => size.clone(),
             Kind::Plug(PlugFamily::Compression, size) => format!("Ø{size} mm compression"),
+            Kind::Plug(PlugFamily::WorkTube, size) => format!("Ø{size} mm work tube"),
             Kind::Plug(family, _) => format!("{family:?}").to_lowercase(),
             Kind::Hold(HoldKind::TubeSpan, [size, _]) => format!("Ø{size} mm tube"),
             Kind::Hold(HoldKind::ThroughBore, [size, _]) => format!("Ø{size} mm through bore"),
@@ -246,13 +247,15 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
     out
 }
 
-/// Same kind, opposite gender. Tapers and compression fittings match by
+/// Same kind, opposite gender. Tapers, compression and work-tube fittings match by
 /// nominal size, other plugs within 10 %. Holds match by kind and diameter.
 pub fn mates(a: &Port, b: &Port) -> bool {
     a.gender != b.gender
         && match (&a.kind, &b.kind) {
             (Kind::Taper(x), Kind::Taper(y)) => x == y,
-            (Kind::Plug(PlugFamily::Compression, x), Kind::Plug(PlugFamily::Compression, y)) => {
+            (Kind::Plug(f, x), Kind::Plug(g, y))
+                if f == g && matches!(f, PlugFamily::Compression | PlugFamily::WorkTube) =>
+            {
                 x == y
             }
             (Kind::Plug(f, x), Kind::Plug(g, y)) => f == g && (x - y).abs() <= 0.1 * x.max(*y),
