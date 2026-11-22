@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/sep-funnel-29",
- "revision": 1,
+ "revision": 2,
  "family": "sep-funnel",
  "variant": {
   "joint": "29/42"
@@ -26,7 +26,7 @@
    "material": "glass",
    "role": "glass",
    "id": "shape-1",
-   "path": "M-13 0C-13 10 -34 14 -34 40C-34 66 -10 92 -4 104L4 104C10 92 34 66 34 40C34 14 13 10 13 0Z"
+   "path": "M-15.01 -8.2C-15.01 0 -18.25 8.5 -23.5 14C-28.75 19.5 -34 27 -34 40C-34 66 -10 92 -4 104L4 104C10 92 34 66 34 40C34 27 28.75 19.5 23.5 14C18.25 8.5 15.01 0 15.01 -8.2Z"
   },
   {
    "layer": "body",
