@@ -10,6 +10,103 @@ fn k(id: &str) -> String {
 }
 
 #[test]
+fn tube_furnace_pointer_drags_carry_the_casing_chain_but_slide_the_bare_tube() {
+    use reshiki::equipment::eval::Value;
+    let source = Document::from_json(include_bytes!(
+        "../../../tests/fixtures/tube-furnace/connected-exterior.rsk"
+    ))
+    .unwrap();
+    assert_eq!((source.graphics.len(), source.seats.len()), (8, 7));
+    for view in ["exterior", "section"] {
+        for (name, clicked, local) in [
+            ("casing", 1, Point::new(100., -36.)),
+            ("base", 1, Point::new(100., 88.)),
+            ("bare tube", 2, Point::new(220., 0.)),
+        ] {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            app.tool = Tool::Select;
+            app.tab.doc = source.clone();
+            app.tab.selected.clear();
+            let all: Vec<_> = source.graphics.iter().map(|g| g.id).collect();
+            // Keep each actual hit and its release inside the real pointer
+            // helper's viewport; the connected fixture itself stays intact.
+            app.tab.doc.translate(&all, -120., 0.);
+            for id in &all {
+                solve::adjust::set(&mut app.tab.doc, *id, "view", Value::State(view.into()))
+                    .unwrap();
+            }
+            let before = app.tab.doc.clone();
+            let graphic = before.graphics.iter().find(|g| g.id == clicked).unwrap();
+            let from = graphic.origin.offset(
+                graphic.axis_x.x * local.x + graphic.axis_y.x * local.y,
+                graphic.axis_x.y * local.x + graphic.axis_y.y * local.y,
+            );
+            let to = from.offset(24., -18.);
+            // This sends CursorMoved, press, motion and release through the
+            // production canvas input path, with no preselected assembly.
+            let edits = crate::canvas::select_drag(
+                &before,
+                &[],
+                from,
+                to,
+                iced::keyboard::Modifiers::empty(),
+            );
+            let (moving, dx, dy) = edits
+                .iter()
+                .find_map(|edit| match edit {
+                    Edit::Move(ids, dx, dy) => Some((ids, *dx, *dy)),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{name} in {view} must publish a move: {edits:?}"));
+            let expected: Vec<_> = all
+                .iter()
+                .copied()
+                .filter(|id| clicked == 1 || *id != 1)
+                .collect();
+            assert_eq!(moving.len(), expected.len(), "{name} in {view}");
+            assert!(expected.iter().all(|id| moving.contains(id)));
+            let expected_dy = if clicked == 1 { -18. } else { 0. };
+            assert!((dx - 24.).abs() < 1e-3 && (dy - expected_dy).abs() < 1e-3);
+            for edit in edits {
+                let _ = app.update(Message::Canvas(edit));
+            }
+            assert!(!app.error, "{name} in {view}: {}", app.status);
+            assert_eq!(app.tab.doc.seats, before.seats);
+            for old in &before.graphics {
+                let after = app
+                    .tab
+                    .doc
+                    .graphics
+                    .iter()
+                    .find(|g| g.id == old.id)
+                    .unwrap();
+                let target = if expected.contains(&old.id) {
+                    old.origin.offset(24., expected_dy)
+                } else {
+                    old.origin
+                };
+                assert!(
+                    after.origin.distance(target) < 1e-3,
+                    "{name} in {view}: {}",
+                    old.id
+                );
+                assert_eq!((after.axis_x, after.axis_y), (old.axis_x, old.axis_y));
+            }
+            let moved = app.tab.doc.clone();
+            let reopened = Document::from_json(&moved.file_json().unwrap()).unwrap();
+            assert_eq!(reopened.seats, before.seats);
+            assert_eq!(reopened.graphics.len(), 8);
+            assert_eq!(app.tab.history.undo_frames().len(), 1);
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc, moved);
+        }
+    }
+}
+
+#[test]
 fn search_finds_pieces_by_any_name_keyword_or_size() {
     let found = |query: &str| -> Vec<&str> {
         (builtin::catalogue().iter())

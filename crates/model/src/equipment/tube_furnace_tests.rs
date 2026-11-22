@@ -209,6 +209,29 @@ fn tube_furnace_keeps_one_tube_and_all_seven_seats_across_views_and_reopen() {
 }
 
 #[test]
+fn tube_furnace_grounded_casing_carries_its_entire_seated_chain() {
+    let (mut doc, ids) = complete();
+    let clicked = doc.click_selection(&[], &[ids[0]]);
+    assert_eq!(clicked.len(), 8);
+    assert!(solve::carried_through(&doc, &clicked, &[ids[0]], &[]).is_none());
+    let moving = solve::carried(&doc, &clicked, &[ids[0]]);
+    assert_eq!(moving.len(), 8);
+    assert!(ids.iter().all(|id| moving.contains(id)));
+    assert!(solve::constrain(&doc, &moving, [24., -18.]).is_none());
+    let before = doc.clone();
+    doc.translate(&moving, 24., -18.);
+    solve::check(&mut doc, None);
+    assert_eq!(doc.seats, before.seats);
+    for graphic in &doc.graphics {
+        let old = before.graphics.iter().find(|g| g.id == graphic.id).unwrap();
+        assert!(graphic.origin.distance(old.origin.offset(24., -18.)) < 1e-4);
+        assert_eq!((graphic.axis_x, graphic.axis_y), (old.axis_x, old.axis_y));
+    }
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.seats, before.seats);
+}
+
+#[test]
 fn tube_furnace_reserves_both_ends_and_keeps_seals_clear_at_each_slide_limit() {
     let (doc, ids) = complete();
     let span = port(&doc, ids[1], "span");

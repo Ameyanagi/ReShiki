@@ -34,7 +34,10 @@ The assembled origins in furnace millimetres are work tube 0; end seals
 ±282; adapters ±324; and the `a` ends of the outer compression tubes ±348.
 The 600 mm work tube remains one piece through the full furnace. The bore
 relation lets the tube and its end accessories move along the furnace axis
-while the grounded furnace stays put. The authored mechanical span reserves
+while the grounded furnace stays put. Drag the furnace casing or base to
+move the whole connected assembly freely; drag the exposed tube to slide it
+and its attached end accessories through the stationary furnace.
+The authored mechanical span reserves
 30 mm at each end of the 600 mm tube, leaving 540 mm available to the
 300 mm furnace bore. Centred axial travel is therefore limited to ±120 mm.
 The tube artwork and its end ports remain at ±300 mm.
