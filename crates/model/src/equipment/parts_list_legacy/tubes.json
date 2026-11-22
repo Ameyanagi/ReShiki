@@ -1,0 +1,2263 @@
+[
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-60-1-16",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "Straight",
+        "length": "60 mm",
+        "tube_od": "1/16 in OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": ["tubing", "rigid tube", "compression", "1/16 in", "1.5875 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -0.79375H60V0.79375H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -0.54375H60V0.54375H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -0.79375H60M0 0.79375H60",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -0.54375H60M0 0.54375H60",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -0.79375V-0.54375M0 0.54375V0.79375M60 -0.79375V-0.54375M60 0.54375V0.79375",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 1.5875,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 1.5875,
+          "at": [60, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [60, 0],
+          "diameter_mm": 1.5875
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 1.5875,
+      "id_mm": 1.0875,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 60.0,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-120-1-16",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "Straight",
+        "length": "120 mm",
+        "tube_od": "1/16 in OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": ["tubing", "rigid tube", "compression", "1/16 in", "1.5875 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -0.79375H120V0.79375H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -0.54375H120V0.54375H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -0.79375H120M0 0.79375H120",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -0.54375H120M0 0.54375H120",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -0.79375V-0.54375M0 0.54375V0.79375M120 -0.79375V-0.54375M120 0.54375V0.79375",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 1.5875,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 1.5875,
+          "at": [120, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [120, 0],
+          "diameter_mm": 1.5875
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 1.5875,
+      "id_mm": 1.0875,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 120.0,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-bend-90-1-16",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "90° bend",
+        "length": "130.8 mm",
+        "tube_od": "1/16 in OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": [
+        "tubing",
+        "rigid tube",
+        "compression",
+        "bent tube",
+        "90 degree",
+        "1/16 in",
+        "1.5875 mm",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -0.79375H60A12.79375 12.79375 0 0 1 72.79375 12V64H71.20625V12A11.20625 11.20625 0 0 0 60 0.79375H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -0.54375H60A12.54375 12.54375 0 0 1 72.54375 12V64H71.45625V12A11.45625 11.45625 0 0 0 60 0.54375H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -0.79375H60A12.79375 12.79375 0 0 1 72.79375 12V64M0 0.79375H60A11.20625 11.20625 0 0 1 71.20625 12V64",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -0.54375H60A12.54375 12.54375 0 0 1 72.54375 12V64M0 0.54375H60A11.45625 11.45625 0 0 1 71.45625 12V64",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -0.79375V-0.54375M0 0.54375V0.79375M71.20625 64H71.45625M72.54375 64H72.79375",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 1.5875,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 1.5875,
+          "at": [72.0, 64.0],
+          "dir": [0, 1]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "inlet-span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [60, 0],
+          "diameter_mm": 1.5875
+        },
+        {
+          "id": "outlet-span",
+          "kind": "tube_span",
+          "from": [72.0, 12.0],
+          "to": [72.0, 64.0],
+          "diameter_mm": 1.5875
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 1.5875,
+      "id_mm": 1.0875,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 130.84955592153875,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-60-1-8",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "Straight",
+        "length": "60 mm",
+        "tube_od": "1/8 in OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": ["tubing", "rigid tube", "compression", "1/8 in", "3.175 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -1.5875H60V1.5875H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -1.0875H60V1.0875H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -1.5875H60M0 1.5875H60",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -1.0875H60M0 1.0875H60",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -1.5875V-1.0875M0 1.0875V1.5875M60 -1.5875V-1.0875M60 1.0875V1.5875",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 3.175,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 3.175,
+          "at": [60, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [60, 0],
+          "diameter_mm": 3.175
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 3.175,
+      "id_mm": 2.175,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 60.0,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-120-1-8",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "Straight",
+        "length": "120 mm",
+        "tube_od": "1/8 in OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": ["tubing", "rigid tube", "compression", "1/8 in", "3.175 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -1.5875H120V1.5875H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -1.0875H120V1.0875H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -1.5875H120M0 1.5875H120",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -1.0875H120M0 1.0875H120",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -1.5875V-1.0875M0 1.0875V1.5875M120 -1.5875V-1.0875M120 1.0875V1.5875",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 3.175,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 3.175,
+          "at": [120, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [120, 0],
+          "diameter_mm": 3.175
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 3.175,
+      "id_mm": 2.175,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 120.0,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-bend-90-1-8",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "90° bend",
+        "length": "137.1 mm",
+        "tube_od": "1/8 in OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": [
+        "tubing",
+        "rigid tube",
+        "compression",
+        "bent tube",
+        "90 degree",
+        "1/8 in",
+        "3.175 mm",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -1.5875H60A17.5875 17.5875 0 0 1 77.5875 16V68H74.4125V16A14.4125 14.4125 0 0 0 60 1.5875H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -1.0875H60A17.0875 17.0875 0 0 1 77.0875 16V68H74.9125V16A14.9125 14.9125 0 0 0 60 1.0875H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -1.5875H60A17.5875 17.5875 0 0 1 77.5875 16V68M0 1.5875H60A14.4125 14.4125 0 0 1 74.4125 16V68",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -1.0875H60A17.0875 17.0875 0 0 1 77.0875 16V68M0 1.0875H60A14.9125 14.9125 0 0 1 74.9125 16V68",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -1.5875V-1.0875M0 1.0875V1.5875M74.4125 68H74.9125M77.0875 68H77.5875",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 3.175,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 3.175,
+          "at": [76.0, 68.0],
+          "dir": [0, 1]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "inlet-span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [60, 0],
+          "diameter_mm": 3.175
+        },
+        {
+          "id": "outlet-span",
+          "kind": "tube_span",
+          "from": [76.0, 16.0],
+          "to": [76.0, 68.0],
+          "diameter_mm": 3.175
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 3.175,
+      "id_mm": 2.175,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 137.13274122871834,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "revision": 1,
+      "family": "compression-tube",
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "keywords": ["tubing", "rigid tube", "compression", "1/4 in", "6.35 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "id": "reshiki/compression-tube-60-1-4",
+      "variant": {
+        "geometry": "Straight",
+        "length": "60 mm",
+        "tube_od": "1/4 in OD"
+      },
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -3.175H60V3.175H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -2.285H60V2.285H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -3.175H60M0 3.175H60",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -2.285H60M0 2.285H60",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3.175V-2.285M0 2.285V3.175M60 -3.175V-2.285M60 2.285V3.175",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.35,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.35,
+          "at": [60, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [60, 0],
+          "diameter_mm": 6.35
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 6.35,
+      "id_mm": 4.57,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 60.0,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "revision": 1,
+      "family": "compression-tube",
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "keywords": ["tubing", "rigid tube", "compression", "1/4 in", "6.35 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "id": "reshiki/compression-tube-120-1-4",
+      "variant": {
+        "geometry": "Straight",
+        "length": "120 mm",
+        "tube_od": "1/4 in OD"
+      },
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -3.175H120V3.175H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -2.285H120V2.285H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -3.175H120M0 3.175H120",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -2.285H120M0 2.285H120",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3.175V-2.285M0 2.285V3.175M120 -3.175V-2.285M120 2.285V3.175",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.35,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.35,
+          "at": [120, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [120, 0],
+          "diameter_mm": 6.35
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 6.35,
+      "id_mm": 4.57,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 120.0,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "revision": 1,
+      "family": "compression-tube",
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "keywords": ["tubing", "rigid tube", "compression", "1/4 in", "6.35 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "id": "reshiki/compression-tube-bend-90-1-4",
+      "variant": {
+        "geometry": "90° bend",
+        "length": "143.4 mm",
+        "tube_od": "1/4 in OD"
+      },
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -3.175H60A23.175 23.175 0 0 1 83.175 20V72H76.825V20A16.825 16.825 0 0 0 60 3.175H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -2.285H60A22.285 22.285 0 0 1 82.285 20V72H77.715V20A17.715 17.715 0 0 0 60 2.285H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -3.175H60A23.175 23.175 0 0 1 83.175 20V72M0 3.175H60A16.825 16.825 0 0 1 76.825 20V72",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -2.285H60A22.285 22.285 0 0 1 82.285 20V72M0 2.285H60A17.715 17.715 0 0 1 77.715 20V72",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3.175V-2.285M0 2.285V3.175M76.825 72H77.715M82.285 72H83.175",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.35,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.35,
+          "at": [80, 72],
+          "dir": [0, 1]
+        }
+      ],
+      "holds": [
+        {
+          "id": "inlet-span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [60, 0],
+          "diameter_mm": 6.35
+        },
+        {
+          "id": "outlet-span",
+          "kind": "tube_span",
+          "from": [80, 20],
+          "to": [80, 72],
+          "diameter_mm": 6.35
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 6.35,
+      "id_mm": 4.57,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 143.41592653589794,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-60-3-8",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "Straight",
+        "length": "60 mm",
+        "tube_od": "3/8 in OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": ["tubing", "rigid tube", "compression", "3/8 in", "9.525 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -4.7625H60V4.7625H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -3.8725H60V3.8725H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -4.7625H60M0 4.7625H60",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3.8725H60M0 3.8725H60",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -4.7625V-3.8725M0 3.8725V4.7625M60 -4.7625V-3.8725M60 3.8725V4.7625",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 9.525,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 9.525,
+          "at": [60, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [60, 0],
+          "diameter_mm": 9.525
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 9.525,
+      "id_mm": 7.745,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 60.0,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-120-3-8",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "Straight",
+        "length": "120 mm",
+        "tube_od": "3/8 in OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": ["tubing", "rigid tube", "compression", "3/8 in", "9.525 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -4.7625H120V4.7625H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -3.8725H120V3.8725H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -4.7625H120M0 4.7625H120",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3.8725H120M0 3.8725H120",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -4.7625V-3.8725M0 3.8725V4.7625M120 -4.7625V-3.8725M120 3.8725V4.7625",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 9.525,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 9.525,
+          "at": [120, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [120, 0],
+          "diameter_mm": 9.525
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 9.525,
+      "id_mm": 7.745,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 120.0,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-bend-90-3-8",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "90° bend",
+        "length": "159.1 mm",
+        "tube_od": "3/8 in OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": [
+        "tubing",
+        "rigid tube",
+        "compression",
+        "bent tube",
+        "90 degree",
+        "3/8 in",
+        "9.525 mm",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -4.7625H60A34.7625 34.7625 0 0 1 94.7625 30V82H85.2375V30A25.2375 25.2375 0 0 0 60 4.7625H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -3.8725H60A33.8725 33.8725 0 0 1 93.8725 30V82H86.1275V30A26.1275 26.1275 0 0 0 60 3.8725H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -4.7625H60A34.7625 34.7625 0 0 1 94.7625 30V82M0 4.7625H60A25.2375 25.2375 0 0 1 85.2375 30V82",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3.8725H60A33.8725 33.8725 0 0 1 93.8725 30V82M0 3.8725H60A26.1275 26.1275 0 0 1 86.1275 30V82",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -4.7625V-3.8725M0 3.8725V4.7625M85.2375 82H86.1275M93.8725 82H94.7625",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 9.525,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 9.525,
+          "at": [90.0, 82.0],
+          "dir": [0, 1]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "inlet-span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [60, 0],
+          "diameter_mm": 9.525
+        },
+        {
+          "id": "outlet-span",
+          "kind": "tube_span",
+          "from": [90.0, 30.0],
+          "to": [90.0, 82.0],
+          "diameter_mm": 9.525
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 9.525,
+      "id_mm": 7.745,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 159.1238898038469,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-60-6-mm",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "Straight",
+        "length": "60 mm",
+        "tube_od": "6 mm OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": ["tubing", "rigid tube", "compression", "6 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -3H60V3H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -2.11H60V2.11H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -3H60M0 3H60",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -2.11H60M0 2.11H60",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3V-2.11M0 2.11V3M60 -3V-2.11M60 2.11V3",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.0,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.0,
+          "at": [60, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [60, 0],
+          "diameter_mm": 6.0
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 6,
+      "id_mm": 4.22,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 60.0,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-120-6-mm",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "Straight",
+        "length": "120 mm",
+        "tube_od": "6 mm OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": ["tubing", "rigid tube", "compression", "6 mm", "joint"],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -3H120V3H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -2.11H120V2.11H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -3H120M0 3H120",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -2.11H120M0 2.11H120",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3V-2.11M0 2.11V3M120 -3V-2.11M120 2.11V3",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.0,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.0,
+          "at": [120, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [120, 0],
+          "diameter_mm": 6.0
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 6,
+      "id_mm": 4.22,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 120.0,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/compression-tube-bend-90-6-mm",
+      "revision": 1,
+      "family": "compression-tube",
+      "variant": {
+        "geometry": "90° bend",
+        "length": "143.4 mm",
+        "tube_od": "6 mm OD"
+      },
+      "names": {
+        "en": "Stainless-steel compression tubing"
+      },
+      "category": "other",
+      "grounded": false,
+      "keywords": [
+        "tubing",
+        "rigid tube",
+        "compression",
+        "bent tube",
+        "90 degree",
+        "6 mm",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "steel",
+          "layer": "body",
+          "material": "metal",
+          "role": "fill",
+          "path": "M0 -3H60A23 23 0 0 1 83 20V72H77V20A17 17 0 0 0 60 3H0Z",
+          "color": [186, 201, 212]
+        },
+        {
+          "id": "open-section",
+          "layer": "body",
+          "material": "paper",
+          "role": "fill",
+          "path": "M0 -2.11H60A22.11 22.11 0 0 1 82.11 20V72H77.89V20A17.89 17.89 0 0 0 60 2.11H0Z",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "tube-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M0 -3H60A23 23 0 0 1 83 20V72M0 3H60A17 17 0 0 1 77 20V72",
+          "depth": 2
+        },
+        {
+          "id": "section-wall",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -2.11H60A22.11 22.11 0 0 1 82.11 20V72M0 2.11H60A17.89 17.89 0 0 1 77.89 20V72",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "rim-edges",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M0 -3V-2.11M0 2.11V3M77 72H77.89M82.11 72H83",
+          "depth": 2
+        }
+      ],
+      "joints": [
+        {
+          "id": "a",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.0,
+          "at": [0, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "b",
+          "kind": "plug",
+          "family": "compression",
+          "gender": "M",
+          "size_mm": 6.0,
+          "at": [80.0, 72.0],
+          "dir": [0, 1]
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "holds": [
+        {
+          "id": "inlet-span",
+          "kind": "tube_span",
+          "from": [0, 0],
+          "to": [60, 0],
+          "diameter_mm": 6.0
+        },
+        {
+          "id": "outlet-span",
+          "kind": "tube_span",
+          "from": [80.0, 20.0],
+          "to": [80.0, 72.0],
+          "diameter_mm": 6.0
+        }
+      ]
+    },
+    "spec": {
+      "material": "stainless_steel",
+      "od_mm": 6,
+      "id_mm": 4.22,
+      "ends": ["a", "b"],
+      "length": {
+        "fixed_mm": 143.41592653589794,
+        "params": []
+      }
+    }
+  },
+  {
+    "definition": {
+      "format": "reshiki-piece",
+      "format_version": 0,
+      "id": "reshiki/quartz-work-tube-600-32",
+      "revision": 2,
+      "family": "quartz-work-tube",
+      "variant": {
+        "length": "600 mm",
+        "tube_od": "32 mm",
+        "tube_id": "28 mm"
+      },
+      "names": {
+        "en": "Quartz work tube, 600 mm, 32 mm OD"
+      },
+      "category": "vessel",
+      "keywords": [
+        "quartz reaction tube",
+        "work tube",
+        "gas-phase reaction",
+        "600 mm",
+        "32 mm",
+        "joint"
+      ],
+      "credits": {
+        "author": "ReShiki",
+        "license": "CC0-1.0"
+      },
+      "units": "mm",
+      "shapes": [
+        {
+          "id": "glass-body",
+          "layer": "body",
+          "material": "glass",
+          "role": "fill",
+          "path": "M-300 -16H300V16H-300Z"
+        },
+        {
+          "id": "upper-wall-section",
+          "layer": "body",
+          "material": "glass",
+          "role": "fill",
+          "path": "M-300 -16H300V-14H-300Z",
+          "color": [216, 230, 234],
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "lower-wall-section",
+          "layer": "body",
+          "material": "glass",
+          "role": "fill",
+          "path": "M-300 14H300V16H-300Z",
+          "color": [216, 230, 234],
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 1
+        },
+        {
+          "id": "outer-walls",
+          "layer": "body",
+          "material": "ink",
+          "role": "outline",
+          "path": "M-300 -16H300M-300 16H300",
+          "depth": 2
+        },
+        {
+          "id": "inner-walls",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-300 -14H300M-300 14H300",
+          "when": {
+            "view": ["section"]
+          },
+          "depth": 2
+        },
+        {
+          "id": "open-rims",
+          "layer": "body",
+          "material": "ink",
+          "role": "detail",
+          "path": "M-300 -16V-14M-300 14V16M300 -16V-14M300 14V16",
+          "depth": 2
+        }
+      ],
+      "params": [
+        {
+          "id": "view",
+          "kind": "states",
+          "names": {
+            "en": "View"
+          },
+          "states": [
+            {
+              "id": "exterior",
+              "names": {
+                "en": "Exterior"
+              }
+            },
+            {
+              "id": "section",
+              "names": {
+                "en": "Section"
+              }
+            }
+          ],
+          "default": "exterior"
+        }
+      ],
+      "joints": [
+        {
+          "id": "left",
+          "kind": "plug",
+          "family": "work_tube",
+          "gender": "M",
+          "size_mm": 32,
+          "at": [-300, 0],
+          "dir": [-1, 0]
+        },
+        {
+          "id": "right",
+          "kind": "plug",
+          "family": "work_tube",
+          "gender": "M",
+          "size_mm": 32,
+          "at": [300, 0],
+          "dir": [1, 0]
+        }
+      ],
+      "holds": [
+        {
+          "id": "span",
+          "kind": "tube_span",
+          "from": [-270, 0],
+          "to": [270, 0],
+          "diameter_mm": 32
+        }
+      ]
+    },
+    "spec": {
+      "material": "quartz",
+      "od_mm": 32,
+      "id_mm": 28,
+      "ends": ["left", "right"],
+      "length": {
+        "fixed_mm": 600,
+        "params": []
+      }
+    }
+  }
+]

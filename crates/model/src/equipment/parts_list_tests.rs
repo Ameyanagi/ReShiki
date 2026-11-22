@@ -2,7 +2,7 @@ use super::*;
 use crate::document::{History, Point};
 use crate::equipment::geometry;
 use crate::equipment::solve::{Port, adjust};
-use crate::equipment::{builtin, format, placed, validate};
+use crate::equipment::{builtin, placed, validate};
 use std::sync::Arc;
 
 const TUBE: &str = "reshiki/compression-tube-120-1-4";
@@ -241,19 +241,23 @@ fn tube_spec_rejects_bad_dimensions_ends_and_length_bindings() {
 
 #[test]
 fn original_stock_tubes_report_without_upgrading_their_embedded_definitions() {
-    for text in [
-        include_str!("parts_list_legacy/compression-tube-60-1-4.reshiki-piece"),
-        include_str!("parts_list_legacy/compression-tube-120-1-4.reshiki-piece"),
-        include_str!("parts_list_legacy/compression-tube-bend-90-1-4.reshiki-piece"),
-    ] {
-        let d = Arc::new(format::parse(text).unwrap());
+    assert_eq!(super::archived_tubes().len(), 16);
+    for old in super::archived_tubes() {
+        let mut original = old.definition.clone();
+        if let [Param::States { names, states, .. }] = original.params.as_mut_slice() {
+            names.insert("ja".into(), "表示".into());
+            states[0].names.insert("ja".into(), "外観".into());
+        }
+        let d = Arc::new(original);
         let key = placed::key(&d);
         assert!(!serde_json::to_string(&d).unwrap().contains("tube_spec"));
         let mut doc = Document::default();
         let id = place(&mut doc, d.clone());
         let before = doc.clone();
         let rows = parts_list(&doc, &[]).unwrap();
-        assert!(rows[0].tube.is_some());
+        let tube = rows[0].tube.as_ref().unwrap();
+        assert_eq!(tube.od_mm, old.spec.od_mm);
+        assert_eq!(tube.cut_length_mm, old.spec.length.fixed_mm);
         assert_eq!(doc, before);
         let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
         assert_eq!(back.graphics[0].piece.as_ref().unwrap().definition, key);

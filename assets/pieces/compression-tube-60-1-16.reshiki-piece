@@ -2,7 +2,7 @@
   "format": "reshiki-piece",
   "format_version": 0,
   "id": "reshiki/compression-tube-60-1-16",
-  "revision": 1,
+  "revision": 2,
   "family": "compression-tube",
   "variant": {
     "geometry": "Straight",
@@ -38,7 +38,8 @@
         186,
         201,
         212
-      ]
+      ],
+      "part": "length"
     },
     {
       "id": "open-section",
@@ -51,7 +52,8 @@
           "section"
         ]
       },
-      "depth": 1
+      "depth": 1,
+      "part": "length"
     },
     {
       "id": "tube-wall",
@@ -59,7 +61,8 @@
       "material": "ink",
       "role": "outline",
       "path": "M0 -0.79375H60M0 0.79375H60",
-      "depth": 2
+      "depth": 2,
+      "part": "length"
     },
     {
       "id": "section-wall",
@@ -72,7 +75,8 @@
           "section"
         ]
       },
-      "depth": 2
+      "depth": 2,
+      "part": "length"
     },
     {
       "id": "rim-edges",
@@ -80,7 +84,8 @@
       "material": "ink",
       "role": "detail",
       "path": "M0 -0.79375V-0.54375M0 0.54375V0.79375M60 -0.79375V-0.54375M60 0.54375V0.79375",
-      "depth": 2
+      "depth": 2,
+      "part": "length"
     }
   ],
   "joints": [
@@ -97,7 +102,8 @@
       "dir": [
         -1,
         0
-      ]
+      ],
+      "part": "length"
     },
     {
       "id": "b",
@@ -112,7 +118,8 @@
       "dir": [
         1,
         0
-      ]
+      ],
+      "part": "length"
     }
   ],
   "params": [
@@ -137,6 +144,17 @@
         }
       ],
       "default": "exterior"
+    },
+    {
+      "id": "length",
+      "kind": "range",
+      "names": {
+        "en": "Length"
+      },
+      "min": 20,
+      "max": 1000,
+      "default": 60,
+      "unit": "mm"
     }
   ],
   "holds": [
@@ -151,7 +169,49 @@
         60,
         0
       ],
-      "diameter_mm": 1.5875
+      "diameter_mm": 1.5875,
+      "part": "length"
     }
-  ]
+  ],
+  "parts": [
+    {
+      "id": "length",
+      "param": "length",
+      "motion": {
+        "stretch": {
+          "pivot": [
+            0,
+            0
+          ],
+          "axis": [
+            1,
+            0
+          ],
+          "per_unit": 0.016666666666666666
+        }
+      },
+      "handle": {
+        "at": [
+          60,
+          0
+        ],
+        "gesture": "drag"
+      }
+    }
+  ],
+  "tube_spec": {
+    "material": "stainless_steel",
+    "od_mm": 1.5875,
+    "id_mm": 1.0875,
+    "ends": [
+      "a",
+      "b"
+    ],
+    "length": {
+      "fixed_mm": 0,
+      "params": [
+        "length"
+      ]
+    }
+  }
 }

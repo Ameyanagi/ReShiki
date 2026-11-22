@@ -1,11 +1,10 @@
 //! A report of placed equipment, with actual cut lengths and endpoint seats.
 //! View and illustration scale never change an item's identity or dimensions.
 use super::eval::{self, Value, Values};
-use super::format::{Definition, HoldKind, TubeLength, TubeMaterial, TubeSpec};
+use super::format::{Definition, HoldKind, Param, TubeLength, TubeMaterial, TubeSpec};
 use super::solve::{self, JointRef};
 use crate::document::Document;
 use serde::Serialize;
-use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
@@ -200,64 +199,70 @@ pub fn tube_row(doc: &Document, id: u64) -> Result<Option<TubeRow>, String> {
     }))
 }
 
-fn spec(d: &Definition) -> Option<Cow<'_, TubeSpec>> {
-    if let Some(spec) = &d.tube_spec {
-        return Some(Cow::Borrowed(spec));
-    }
-    legacy_spec(d).map(Cow::Owned)
+fn spec(d: &Definition) -> Option<&TubeSpec> {
+    d.tube_spec.as_ref().or_else(|| legacy_spec(d))
 }
 
-/// Only the three exact authored revision-1 geometries from #1371 get a
-/// dimensional fallback. Names, keywords and variant labels are not parsed.
-/// Keeping these snapshots also preserves drawings from before English-only
-/// catalogue metadata. Unknown or modified old geometry remains generic.
-fn legacy_spec(d: &Definition) -> Option<TubeSpec> {
-    if d.revision != 1
-        || !matches!(
-            d.id.as_str(),
-            "reshiki/compression-tube-60-1-4"
-                | "reshiki/compression-tube-120-1-4"
-                | "reshiki/compression-tube-bend-90-1-4"
-        )
-    {
-        return None;
-    }
-    static LEGACY: OnceLock<Vec<Definition>> = OnceLock::new();
-    let originals = LEGACY.get_or_init(|| {
-        [
-            include_str!("parts_list_legacy/compression-tube-60-1-4.reshiki-piece"),
-            include_str!("parts_list_legacy/compression-tube-120-1-4.reshiki-piece"),
-            include_str!("parts_list_legacy/compression-tube-bend-90-1-4.reshiki-piece"),
-        ]
-        .into_iter()
-        .map(|text| super::format::parse(text).expect("archived tube definition"))
-        .collect()
-    });
-    let original = originals.iter().find(|o| o.id == d.id)?;
-    if d.shapes != original.shapes
-        || d.joints != original.joints
-        || d.holds != original.holds
-        || d.params != original.params
-        || d.parts != original.parts
-        || d.tube != original.tube
-    {
-        return None;
-    }
-    let fixed_mm = match d.id.as_str() {
-        "reshiki/compression-tube-60-1-4" => 60.,
-        "reshiki/compression-tube-120-1-4" => 120.,
-        _ => 112. + 10. * std::f64::consts::PI,
-    };
-    Some(TubeSpec {
-        material: TubeMaterial::StainlessSteel,
-        od_mm: 6.35,
-        id_mm: Some(4.57),
-        ends: ["a".into(), "b".into()],
-        length: TubeLength {
-            fixed_mm,
-            params: vec![],
-        },
+#[derive(serde::Deserialize)]
+struct ArchivedTube {
+    definition: Definition,
+    spec: TubeSpec,
+}
+
+fn archived_tubes() -> &'static [ArchivedTube] {
+    static LEGACY: OnceLock<Vec<ArchivedTube>> = OnceLock::new();
+    LEGACY.get_or_init(|| {
+        serde_json::from_str(include_str!("parts_list_legacy/tubes.json"))
+            .expect("archived tube definitions")
     })
+}
+
+/// Pinned stock tubes keep their original definitions. Recognize archived
+/// geometry and ports without inferring physical dimensions from labels.
+fn legacy_spec(d: &Definition) -> Option<&'static TubeSpec> {
+    if !(d.id.starts_with("reshiki/compression-tube-") || d.id == "reshiki/quartz-work-tube-600-32")
+    {
+        return None;
+    }
+    let archived = archived_tubes().iter().find(|tube| {
+        let old = &tube.definition;
+        old.id == d.id
+            && old.revision == d.revision
+            && old.shapes == d.shapes
+            && old.joints == d.joints
+            && old.holds == d.holds
+            && old.parts == d.parts
+            && old.tube == d.tube
+            && same_view(&old.params, &d.params)
+    })?;
+    Some(&archived.spec)
+}
+
+fn same_view(old: &[Param], current: &[Param]) -> bool {
+    // A stock tube only has View. Its localized labels may have changed
+    // without a geometry revision.
+    let (
+        [
+            Param::States {
+                id: a,
+                states: sa,
+                default: da,
+                ..
+            },
+        ],
+        [
+            Param::States {
+                id: b,
+                states: sb,
+                default: db,
+                ..
+            },
+        ],
+    ) = (old, current)
+    else {
+        return false;
+    };
+    a == b && da == db && sa.iter().map(|s| &s.id).eq(sb.iter().map(|s| &s.id))
 }
 
 #[cfg(test)]
