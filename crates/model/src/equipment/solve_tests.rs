@@ -384,6 +384,40 @@ fn a_schlenk_downward_barb_can_hold_a_septum_while_its_side_barb_holds_a_hose() 
 }
 
 #[test]
+fn standalone_stopcocks_keep_the_top_view_port_axes_in_every_flow_setting() {
+    use super::eval::Value;
+
+    for valve in [
+        "reshiki/stopcock-three-way-hose",
+        "reshiki/stopcock-three-way-15",
+        "reshiki/stopcock-three-way-29",
+    ] {
+        let mut doc = Document::default();
+        let stopcock = add(&mut doc, valve, Point::new(250., 300.));
+        let origin = doc.graphics.last().unwrap().origin;
+        let axes = [("left", [-1., 0.]), ("right", [1., 0.]), ("down", [0., 1.])];
+        let initial_points = axes.map(|(name, _)| port(&doc, &joint(stopcock, name)).point);
+        for state in ["left-right", "left-down", "right-down", "all", "closed"] {
+            solve::adjust::set(&mut doc, stopcock, "stopcock", Value::State(state.into())).unwrap();
+            for ((name, direction), initial_point) in axes.into_iter().zip(initial_points) {
+                let outlet = port(&doc, &joint(stopcock, name));
+                let x = outlet.point[0] - f64::from(origin.x);
+                let y = outlet.point[1] - f64::from(origin.y);
+                assert_eq!(outlet.point, initial_point, "{valve} {state} {name}");
+                assert!(
+                    (outlet.dir[0] - direction[0]).abs() < 1e-9
+                        && (outlet.dir[1] - direction[1]).abs() < 1e-9,
+                    "{valve} {state} {name}: {:?}",
+                    outlet.dir
+                );
+                assert!((x * direction[1] - y * direction[0]).abs() < 1e-9);
+                assert!(x * direction[0] + y * direction[1] > 0.);
+            }
+        }
+    }
+}
+
+#[test]
 fn a_ground_glass_stopcock_keeps_all_seats_when_the_flow_changes() {
     use super::eval::Value;
 

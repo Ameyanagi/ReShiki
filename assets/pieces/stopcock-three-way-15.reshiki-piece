@@ -20,7 +20,10 @@
   "Schlenk",
   "三方コック",
   "三方活栓",
-  "スリ付き"
+  "スリ付き",
+  "top view",
+  "coplanar",
+  "上面図"
  ],
  "credits": {
   "author": "ReShiki",
@@ -29,11 +32,11 @@
  "units": "mm",
  "shapes": [
   {
-   "id": "rounded-barrel",
+   "id": "round-body",
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "path": "M-10.4 -19Q-12 -18.2 -11.1 -12L-9.9 20Q-9.8 23.5 0 25Q9.8 23.5 9.9 20L11.1 -12Q12 -18.2 10.4 -19Q0 -22 -10.4 -19Z"
+   "path": "M13.5 0A13.5 13.5 0 0 1 -13.5 0A13.5 13.5 0 0 1 13.5 0Z"
   },
   {
    "id": "left-cone-neck",
@@ -47,130 +50,36 @@
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "path": "M0 3.4L21 3.4L26 3.4L26 4.5L30 3.4L30 4.5L34 3.4L34 4.4L38 3.4L40 3.1C41.1 3.1 41.1 -3.1 40 -3.1L38 -3.4L34 -4.4L34 -3.4L30 -4.5L30 -3.4L26 -4.5L26 -3.4L21 -3.4L0 -3.4Z"
+   "path": "M0 3.4L21 3.4L26 3.4L26 4.5L30 3.4L30 4.5L34 3.4L34 4.4L40 3.1L40 -3.1L34 -4.4L34 -3.4L30 -4.5L30 -3.4L26 -4.5L26 -3.4L21 -3.4L0 -3.4Z"
   },
   {
-   "id": "lower-plug-tip",
+   "id": "down-barb",
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "path": "M-3.8 22L-3.8 27Q0 31 3.8 27L3.8 22Z"
+   "path": "M-3.4 0L-3.4 17L-3.4 22L-4.5 22L-3.4 26L-4.5 26L-3.4 30L-4.4 30L-3.1 36L3.1 36L4.4 30L3.4 30L4.5 26L3.4 26L4.5 22L3.4 22L3.4 17L3.4 0Z"
   },
   {
-   "id": "upper-collar",
-   "layer": "body",
-   "material": "glass",
-   "role": "glass",
-   "path": "M12.3 -20A12.3 3.5 0 0 1 -12.3 -20A12.3 3.5 0 0 1 12.3 -20Z"
-  },
-  {
-   "id": "short-key-stem",
-   "layer": "body",
-   "material": "glass",
-   "role": "glass",
-   "path": "M-3 -29L-3 -19L3 -19L3 -29Z"
-  },
-  {
-   "id": "frosted-plug",
+   "id": "round-frosted-plug",
    "layer": "body",
    "material": "frosted",
    "role": "fill",
-   "path": "M-8.8 -18Q0 -20.2 8.8 -18L7.800000000000001 21Q0 23.2 -7.800000000000001 21Z"
+   "path": "M10.2 0A10.2 10.2 0 0 1 -10.2 0A10.2 10.2 0 0 1 10.2 0Z"
   },
   {
-   "id": "plug-side-edges",
+   "id": "plug-rim",
    "layer": "body",
    "material": "glass",
    "role": "detail",
-   "path": "M-8.8 -18L-7.800000000000001 21M8.8 -18L7.800000000000001 21"
+   "path": "M10.2 0A10.2 10.2 0 0 1 -10.2 0A10.2 10.2 0 0 1 10.2 0Z"
   },
   {
-   "id": "upper-front-rim",
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "path": "M-12.3 -20Q0 -13 12.3 -20"
-  },
-  {
-   "id": "lower-collar",
-   "layer": "body",
-   "material": "glass",
-   "role": "solid",
-   "path": "M11.2 23A11.2 3.2 0 0 1 -11.2 23A11.2 3.2 0 0 1 11.2 23Z"
-  },
-  {
-   "id": "lower-front-rim",
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "path": "M-11.2 23Q0 28.6 11.2 23"
-  },
-  {
-   "id": "paddle-closed",
-   "layer": "body",
-   "material": "glass",
-   "role": "solid",
-   "path": "M-17 -33C-19 -35 -12 -40 -3 -42C5 -44 16 -46 18 -43C21 -40 12 -35 6 -33L3 -28L-3 -28L-4 -32C-9 -31 -15 -31 -17 -33Z",
-   "when": {
-    "stopcock": [
-     "closed"
-    ]
-   }
-  },
-  {
-   "id": "paddle-left-right",
-   "layer": "body",
-   "material": "glass",
-   "role": "solid",
-   "path": "M17 -33C19 -35 12 -40 3 -42C-5 -44 -16 -46 -18 -43C-21 -40 -12 -35 -6 -33L-3 -28L3 -28L4 -32C9 -31 15 -31 17 -33Z",
-   "when": {
-    "stopcock": [
-     "left-right"
-    ]
-   }
-  },
-  {
-   "id": "paddle-left-down",
-   "layer": "body",
-   "material": "glass",
-   "role": "solid",
-   "path": "M-10.54 -33C-11.78 -35 -7.44 -40 -1.86 -42C3.1 -44 9.92 -46 11.16 -43C13.02 -40 7.44 -35 3.72 -33L1.86 -28L-1.86 -28L-2.48 -32C-5.58 -31 -9.3 -31 -10.54 -33Z",
-   "when": {
-    "stopcock": [
-     "left-down"
-    ]
-   }
-  },
-  {
-   "id": "paddle-right-down",
-   "layer": "body",
-   "material": "glass",
-   "role": "solid",
-   "path": "M10.54 -33C11.78 -35 7.44 -40 1.86 -42C-3.1 -44 -9.92 -46 -11.16 -43C-13.02 -40 -7.44 -35 -3.72 -33L-1.86 -28L1.86 -28L2.48 -32C5.58 -31 9.3 -31 10.54 -33Z",
-   "when": {
-    "stopcock": [
-     "right-down"
-    ]
-   }
-  },
-  {
-   "id": "paddle-all",
-   "layer": "body",
-   "material": "glass",
-   "role": "solid",
-   "path": "M-18 -38Q-19 -41 -16 -42L16 -42Q19 -41 18 -38Q14 -35 4 -35L3 -28L-3 -28L-4 -35Q-14 -35 -18 -38Z",
-   "when": {
-    "stopcock": [
-     "all"
-    ]
-   }
-  },
-  {
-   "id": "forward-barb",
+   "id": "paddle",
    "layer": "front",
    "material": "glass",
    "role": "solid",
-   "path": "M1.24 6.68L5.9 8.8L11.56 12.92L15.56 15.92L14.9 16.8L18.76 18.32L18.1 19.2L21.96 20.72L21.36 21.52L25.16 23.12L26.94 24.08C27.82 24.74 31.54 19.78 30.66 19.12L29.24 17.68L26.64 14.48L26.04 15.28L23.5 12L22.84 12.88L20.3 9.6L19.64 10.48L15.64 7.48L10.1 3.2L6.76 -0.68C4.36 -2.48 -1.16 4.88 1.24 6.68Z"
+   "path": "M-16.6298 6.8883C-18.3519 2.73084 -8.9546 -3.32643 -2.1813 -5.26611C3.97971 -8.684 14.9078 -11.0458 16.6298 -6.8883C18.3519 -2.73084 8.9546 3.32643 2.1813 5.26611C-3.97971 8.684 -14.9078 11.0458 -16.6298 6.8883Z",
+   "part": "control"
   },
   {
    "id": "closed-bore",
@@ -188,8 +97,8 @@
    "id": "left-channel",
    "layer": "front",
    "material": "ink",
-   "role": "detail",
-   "path": "M-7 0L0 0",
+   "role": "solid",
+   "path": "M-9 -1L1 -1L1 1L-9 1Z",
    "when": {
     "stopcock": [
      "left-right",
@@ -202,8 +111,8 @@
    "id": "right-channel",
    "layer": "front",
    "material": "ink",
-   "role": "detail",
-   "path": "M0 0L7 0",
+   "role": "solid",
+   "path": "M-1 -1L9 -1L9 1L-1 1Z",
    "when": {
     "stopcock": [
      "left-right",
@@ -213,11 +122,11 @@
    }
   },
   {
-   "id": "forward-channel",
+   "id": "down-channel",
    "layer": "front",
    "material": "ink",
-   "role": "detail",
-   "path": "M0 0L8.4 6.3",
+   "role": "solid",
+   "path": "M-1 -1L1 -1L1 9L-1 9Z",
    "when": {
     "stopcock": [
      "left-down",
@@ -225,20 +134,6 @@
      "all"
     ]
    }
-  },
-  {
-   "id": "right-open-tip",
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "path": "M39.9 2.05C40.65 2.05 40.65 -2.05 39.9 -2.05C39.15 -2.05 39.15 2.05 39.9 2.05Z"
-  },
-  {
-   "id": "forward-open-tip",
-   "layer": "front",
-   "material": "glass",
-   "role": "detail",
-   "path": "M27.49 23.18C28.09 23.63 30.55 20.35 29.95 19.9C29.35 19.45 26.89 22.73 27.49 23.18Z"
   }
  ],
  "joints": [
@@ -279,12 +174,12 @@
    "gender": "M",
    "size_mm": 7,
    "at": [
-    28.8,
-    21.6
+    0,
+    36
    ],
    "dir": [
-    0.8,
-    0.6
+    0,
+    1
    ]
   }
  ],
@@ -341,12 +236,53 @@
    "id": "control",
    "param": "stopcock",
    "motion": {
-    "per_state": {}
+    "per_state": {
+     "closed": [
+      0.92388,
+      -0.382683,
+      0.382683,
+      0.92388,
+      0,
+      0
+     ],
+     "left-right": [
+      1.0,
+      0.0,
+      -0.0,
+      1.0,
+      0,
+      0
+     ],
+     "left-down": [
+      0.707107,
+      -0.707107,
+      0.707107,
+      0.707107,
+      0,
+      0
+     ],
+     "right-down": [
+      0.707107,
+      0.707107,
+      -0.707107,
+      0.707107,
+      0,
+      0
+     ],
+     "all": [
+      0.0,
+      1.0,
+      -1.0,
+      0.0,
+      0,
+      0
+     ]
+    }
    },
    "handle": {
     "at": [
      0,
-     -37
+     0
     ],
     "gesture": "toggle"
    }
