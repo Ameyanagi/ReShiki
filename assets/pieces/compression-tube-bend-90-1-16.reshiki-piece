@@ -1,0 +1,172 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/compression-tube-bend-90-1-16",
+  "revision": 1,
+  "family": "compression-tube",
+  "variant": {
+    "geometry": "90° bend",
+    "length": "130.8 mm",
+    "tube_od": "1/16 in OD"
+  },
+  "names": {
+    "en": "Stainless-steel compression tubing"
+  },
+  "category": "other",
+  "grounded": false,
+  "keywords": [
+    "tubing",
+    "rigid tube",
+    "compression",
+    "bent tube",
+    "90 degree",
+    "1/16 in",
+    "1.5875 mm",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "steel",
+      "layer": "body",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 -0.79375H60A12.79375 12.79375 0 0 1 72.79375 12V64H71.20625V12A11.20625 11.20625 0 0 0 60 0.79375H0Z",
+      "color": [
+        186,
+        201,
+        212
+      ]
+    },
+    {
+      "id": "open-section",
+      "layer": "body",
+      "material": "paper",
+      "role": "fill",
+      "path": "M0 -0.54375H60A12.54375 12.54375 0 0 1 72.54375 12V64H71.45625V12A11.45625 11.45625 0 0 0 60 0.54375H0Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "tube-wall",
+      "layer": "body",
+      "material": "ink",
+      "role": "outline",
+      "path": "M0 -0.79375H60A12.79375 12.79375 0 0 1 72.79375 12V64M0 0.79375H60A11.20625 11.20625 0 0 1 71.20625 12V64",
+      "depth": 2
+    },
+    {
+      "id": "section-wall",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -0.54375H60A12.54375 12.54375 0 0 1 72.54375 12V64M0 0.54375H60A11.45625 11.45625 0 0 1 71.45625 12V64",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "rim-edges",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -0.79375V-0.54375M0 0.54375V0.79375M71.20625 64H71.45625M72.54375 64H72.79375",
+      "depth": 2
+    }
+  ],
+  "joints": [
+    {
+      "id": "a",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 1.5875,
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "b",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 1.5875,
+      "at": [
+        72.0,
+        64.0
+      ],
+      "dir": [
+        0,
+        1
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "holds": [
+    {
+      "id": "inlet-span",
+      "kind": "tube_span",
+      "from": [
+        0,
+        0
+      ],
+      "to": [
+        60,
+        0
+      ],
+      "diameter_mm": 1.5875
+    },
+    {
+      "id": "outlet-span",
+      "kind": "tube_span",
+      "from": [
+        72.0,
+        12.0
+      ],
+      "to": [
+        72.0,
+        64.0
+      ],
+      "diameter_mm": 1.5875
+    }
+  ]
+}

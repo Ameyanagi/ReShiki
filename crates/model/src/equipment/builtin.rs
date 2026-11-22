@@ -159,6 +159,46 @@ const FILES: &[&str] = piece_files![
     "compression-cap-1-4",
     "compression-bulkhead-union-1-4",
     "compression-bulkhead-union-bored-through-1-4",
+    "compression-tube-60-1-16",
+    "compression-tube-120-1-16",
+    "compression-tube-bend-90-1-16",
+    "compression-union-1-16",
+    "compression-elbow-1-16",
+    "compression-tee-1-16",
+    "compression-cap-1-16",
+    "compression-bulkhead-union-1-16",
+    "compression-bulkhead-union-bored-through-1-16",
+    "compression-tube-60-1-8",
+    "compression-tube-120-1-8",
+    "compression-tube-bend-90-1-8",
+    "compression-union-1-8",
+    "compression-elbow-1-8",
+    "compression-tee-1-8",
+    "compression-cap-1-8",
+    "compression-bulkhead-union-1-8",
+    "compression-bulkhead-union-bored-through-1-8",
+    "compression-tube-60-3-8",
+    "compression-tube-120-3-8",
+    "compression-tube-bend-90-3-8",
+    "compression-union-3-8",
+    "compression-elbow-3-8",
+    "compression-tee-3-8",
+    "compression-cap-3-8",
+    "compression-bulkhead-union-3-8",
+    "compression-bulkhead-union-bored-through-3-8",
+    "compression-tube-60-6-mm",
+    "compression-tube-120-6-mm",
+    "compression-tube-bend-90-6-mm",
+    "compression-union-6-mm",
+    "compression-elbow-6-mm",
+    "compression-tee-6-mm",
+    "compression-cap-6-mm",
+    "compression-bulkhead-union-6-mm",
+    "compression-bulkhead-union-bored-through-6-mm",
+    "compression-reducing-union-1-8-1-16",
+    "compression-reducing-union-1-4-1-8",
+    "compression-reducing-union-3-8-1-4",
+    "compression-reducing-union-6-mm-1-4",
     "keck-clip-10",
     "boss-head",
 ];
@@ -217,6 +257,105 @@ mod tests {
                 };
                 assert!(port_of(&straight).is_some(), "{suffix} {port}");
                 assert_eq!(port_of(&straight), port_of(&bent));
+            }
+        }
+    }
+
+    #[test]
+    fn compression_sizes_and_reducers_keep_exact_nominal_interfaces() {
+        use crate::equipment::format::{Category, Gender, HoldKind, Joint, Param, PlugFamily};
+
+        let sizes = [
+            ("1-16", 1.5875, 7.),
+            ("1-8", 3.175, 10.5),
+            ("1-4", 6.35, 13.5),
+            ("3-8", 9.525, 15.),
+            ("6-mm", 6., 13.),
+        ];
+        let families = [
+            "compression-tube-60",
+            "compression-tube-120",
+            "compression-tube-bend-90",
+            "compression-union",
+            "compression-elbow",
+            "compression-tee",
+            "compression-cap",
+            "compression-bulkhead-union",
+            "compression-bulkhead-union-bored-through",
+        ];
+        for (size, od, depth) in sizes {
+            for family in families {
+                let id = format!("reshiki/{family}-{size}");
+                let piece = super::find(&id).unwrap_or_else(|| panic!("missing {id}"));
+                assert_eq!(piece.category, Category::Other, "{id}");
+                assert!(piece.keywords.iter().any(|word| word == "joint"), "{id}");
+                assert!(piece.names.keys().all(|language| language == "en"), "{id}");
+                assert!(
+                    piece.params.iter().any(|param| matches!(
+                        param,
+                        Param::States { id, default, states, .. }
+                            if id == "view" && default == "exterior"
+                                && states.iter().any(|state| state.id == "section")
+                    )),
+                    "{id}"
+                );
+                let tube = family.starts_with("compression-tube");
+                let through = family.ends_with("bored-through");
+                if through {
+                    assert!(piece.joints.is_empty(), "{id}");
+                    let bore = piece.holds.iter().find(|hold| hold.id == "bore").unwrap();
+                    assert_eq!(bore.kind, HoldKind::ThroughBore, "{id}");
+                    assert_eq!(bore.diameter_mm.range(), [od; 2], "{id}");
+                    assert!(bore.to[0] - bore.from[0] <= 60., "{id}");
+                    assert!(bore.when.is_empty() && bore.part.is_none(), "{id}");
+                } else {
+                    assert!(!piece.joints.is_empty(), "{id}");
+                }
+                for joint in &piece.joints {
+                    let Joint::Plug {
+                        family,
+                        gender,
+                        size_mm,
+                        insertion_mm,
+                        ..
+                    } = joint
+                    else {
+                        panic!("non-compression interface on {id}");
+                    };
+                    assert_eq!(*family, PlugFamily::Compression, "{id}");
+                    assert_eq!(*size_mm, od, "{id}");
+                    assert_eq!(*gender, if tube { Gender::M } else { Gender::F }, "{id}");
+                    assert_eq!(*insertion_mm, if tube { None } else { Some(depth) }, "{id}");
+                }
+                if tube {
+                    assert!(!piece.holds.is_empty(), "{id}");
+                    for span in &piece.holds {
+                        assert_eq!(span.kind, HoldKind::TubeSpan, "{id}");
+                        assert_eq!(span.diameter_mm.range(), [od; 2], "{id}");
+                    }
+                }
+            }
+        }
+        for (name, left, right) in [
+            ("1-8-1-16", (3.175, 10.5), (1.5875, 7.)),
+            ("1-4-1-8", (6.35, 13.5), (3.175, 10.5)),
+            ("3-8-1-4", (9.525, 15.), (6.35, 13.5)),
+            ("6-mm-1-4", (6., 13.), (6.35, 13.5)),
+        ] {
+            let id = format!("reshiki/compression-reducing-union-{name}");
+            let piece = super::find(&id).unwrap();
+            assert_eq!(piece.category, Category::Other, "{id}");
+            assert_eq!(piece.joints.len(), 2, "{id}");
+            for (end, (od, depth)) in [("left", left), ("right", right)] {
+                let joint = piece.joints.iter().find(|joint| joint.id() == end).unwrap();
+                assert!(
+                    matches!(
+                        joint,
+                        Joint::Plug { family: PlugFamily::Compression, gender: Gender::F, size_mm, insertion_mm: Some(insertion), .. }
+                            if *size_mm == od && *insertion == depth
+                    ),
+                    "{id} {end}"
+                );
             }
         }
     }
