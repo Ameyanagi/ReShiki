@@ -23,3 +23,5 @@ mod placed_tests;
 mod solve_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tube_furnace_tests;

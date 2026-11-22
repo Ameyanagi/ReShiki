@@ -202,6 +202,8 @@ pub enum Gender {
 pub enum PlugFamily {
     Hose,
     Compression,
+    /// A terminating work-tube seal, sized by the tube's exact nominal OD.
+    WorkTube,
     Stopper,
     Septum,
     Thermometer,
@@ -241,7 +243,7 @@ pub enum Joint {
         #[serde(default = "standard")]
         draw: JointDraw,
     },
-    /// Rubber, septa, thermometers, hose barbs or compression fittings.
+    /// Rubber, probes, compression fittings or terminating work-tube seals.
     Plug {
         id: String,
         family: PlugFamily,
@@ -249,7 +251,7 @@ pub enum Joint {
         size_mm: f64,
         at: Xy,
         dir: Xy,
-        /// Tube stop measured inwards from a female compression opening.
+        /// Tube stop measured inwards from a female compression or work-tube opening.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         insertion_mm: Option<f64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
