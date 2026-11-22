@@ -142,7 +142,7 @@ fn tube_furnace_work_tube_interfaces_are_exact_and_distinct_from_gas_seats() {
 #[test]
 fn tube_furnace_keeps_one_tube_and_all_seven_seats_across_views_and_reopen() {
     let fixture = Document::from_json(include_bytes!(
-        "../../../../docs/fixtures/tube-furnace/connected-exterior.rsk"
+        "../../../../tests/fixtures/tube-furnace/connected-exterior.rsk"
     ))
     .unwrap();
     fixture.validate().unwrap();
