@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/fractionating-15",
- "revision": 1,
+ "revision": 2,
  "family": "fractionating",
  "variant": {
   "joint": "15/25"
@@ -33,7 +33,7 @@
    "material": "glass",
    "role": "glass",
    "id": "shape-2",
-   "path": "M10 -3L10 -214L6.5 -220L6.5 -223L-6.5 -223L-6.5 -220L-10 -214L-10 -3Z"
+   "path": "M10 -3L10 -214C10 -220 8.35 -220 8.35 -226L-8.35 -226C-8.35 -220 -10 -220 -10 -214L-10 -3Z"
   },
   {
    "layer": "body",
