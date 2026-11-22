@@ -148,7 +148,13 @@ fn cells(row: &PartRow, listed: &BTreeSet<u64>) -> Cells {
         if let Some(inner) = tube.id_mm {
             values[2].push_str(&format!(" · {inner} mm ID"));
         }
-        values[3] = format!("{} mm", tube.cut_length_mm);
+        // A bend contributes an arc length. Keep the rounded report readable
+        // while leaving the calculated cut length at full precision in the model.
+        let cut_length = format!("{:.3}", tube.cut_length_mm);
+        values[3] = format!(
+            "{} mm",
+            cut_length.trim_end_matches('0').trim_end_matches('.')
+        );
         for (at, end) in values[4..6].iter_mut().zip(&tube.ends) {
             *at = end
                 .connection
