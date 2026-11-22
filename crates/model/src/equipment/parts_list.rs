@@ -212,8 +212,7 @@ struct ArchivedTube {
 fn archived_tubes() -> &'static [ArchivedTube] {
     static LEGACY: OnceLock<Vec<ArchivedTube>> = OnceLock::new();
     LEGACY.get_or_init(|| {
-        serde_json::from_str(include_str!("parts_list_legacy/tubes.json"))
-            .expect("archived tube definitions")
+        serde_json::from_str(include_str!("parts_list_legacy/tubes.json")).unwrap_or_default()
     })
 }
 
