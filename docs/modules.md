@@ -72,6 +72,8 @@ explains how the crates and modules fit together.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
+- `src/app/equipment/cut_length.rs`: Exact numeric inputs for tube lengths.
+- `src/app/equipment/parts_list.rs`: Insert the equipment inventory as native table cells with editable text.
 - `src/app/equipment_authoring.rs`: A detached equipment draft, measured and reviewed on the ordinary canvas.
 - `src/app/equipment_authoring/metadata.rs`: Names and catalogue metadata in the detached equipment draft.
 - `src/app/equipment_authoring/shapes.rs`: Per-shape controls for the detached piece draft.
@@ -750,6 +752,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/equipment/eval.rs`: Evaluates a definition at parameter values
 - `crates/model/src/equipment/format.rs`: The `.reshiki-piece` format
 - `crates/model/src/equipment/geometry.rs`: Path data and plane geometry for pieces, in f64 millimetres.
+- `crates/model/src/equipment/parts_list.rs`: A report of placed equipment, with actual cut lengths and endpoint seats.
 - `crates/model/src/equipment/placed.rs`: Pieces placed in a drawing.
 - `crates/model/src/equipment/plan.rs`: The paint plan
 - `crates/model/src/equipment/revise.rs`: Moving placed pieces to another revision of their definition, as a library offers it.

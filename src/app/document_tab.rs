@@ -70,6 +70,7 @@ pub(super) struct DocumentTab {
     /// reached, and what it let go of; the drag is one Undo step until
     /// release or any other commit.
     pub(super) piece_sliding: Option<(u64, u64, String, String)>,
+    pub(super) piece_lengths: Vec<super::equipment::CutLengthDraft>,
     pub(super) erase_stroke: bool,
     pub(super) erase_committed: bool,
     pub(super) cleanup_serial: u64,
@@ -216,6 +217,7 @@ impl DocumentTab {
             joining: None,
             equipment_authoring: None,
             piece_sliding: None,
+            piece_lengths: Vec::new(),
             erase_stroke: false,
             erase_committed: false,
             cleanup_serial: 0,

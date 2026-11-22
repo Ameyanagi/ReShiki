@@ -86,6 +86,9 @@ pub fn validate(d: &Definition) -> Result<(), String> {
     for p in &d.parts {
         part(p, &params, &parts)?;
     }
+    if let Some(spec) = &d.tube_spec {
+        tube_spec(spec, d, &params)?;
+    }
 
     // Shapes: paths, states, parts, limits.
     let mut commands = 0;
@@ -338,6 +341,76 @@ fn group(n: usize) -> String {
 
 fn english(names: &BTreeMap<String, String>, id: &str) -> String {
     names.get("en").cloned().unwrap_or_else(|| id.to_string())
+}
+
+fn tube_spec(
+    spec: &TubeSpec,
+    d: &Definition,
+    params: &BTreeMap<&str, &Param>,
+) -> Result<(), String> {
+    if !spec.od_mm.is_finite() || spec.od_mm <= 0. {
+        return Err("The tube specification needs a positive outside diameter.".into());
+    }
+    if spec
+        .id_mm
+        .is_some_and(|id| !id.is_finite() || id <= 0. || id >= spec.od_mm)
+    {
+        return Err(
+            "The tube inside diameter must be positive and smaller than its outside diameter."
+                .into(),
+        );
+    }
+    if spec.ends[0] == spec.ends[1]
+        || spec
+            .ends
+            .iter()
+            .any(|end| !d.joints.iter().any(|j| j.id() == end))
+    {
+        return Err("The tube specification needs two different end joints of this piece.".into());
+    }
+    if !spec.length.fixed_mm.is_finite() || spec.length.fixed_mm < 0. {
+        return Err("The tube's fixed length contribution must be finite and nonnegative.".into());
+    }
+    unique(
+        "tube length parameter",
+        spec.length.params.iter().map(String::as_str),
+    )?;
+    let mut minimum = spec.length.fixed_mm;
+    let mut maximum = minimum;
+    for id in &spec.length.params {
+        let Some(Param::Range {
+            min,
+            max,
+            unit: Unit::Mm,
+            ..
+        }) = params.get(id.as_str()).copied()
+        else {
+            return Err(format!(
+                "Tube length parameter \"{id}\" must name a millimetre range parameter."
+            ));
+        };
+        if *min < 0. {
+            return Err(format!(
+                "Tube length parameter \"{id}\" must not become negative."
+            ));
+        }
+        minimum += min;
+        maximum += max;
+    }
+    if minimum <= 0. || !maximum.is_finite() {
+        return Err(
+            "The tube cut length must stay positive and finite throughout its ranges.".into(),
+        );
+    }
+    for h in d.holds.iter().filter(|h| h.kind == HoldKind::TubeSpan) {
+        if h.diameter_mm.range() != [spec.od_mm; 2] {
+            return Err(format!(
+                "Tube span \"{}\" must match the tube specification's outside diameter.",
+                h.id
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn param(p: &Param, liquids: &BTreeSet<&str>) -> Result<(), String> {

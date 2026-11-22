@@ -256,6 +256,7 @@ impl Draft {
             grounded: false,
             clip: None,
             tube: None,
+            tube_spec: None,
             shapes,
             joints: vec![],
             holds: vec![],

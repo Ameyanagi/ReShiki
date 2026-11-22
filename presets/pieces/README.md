@@ -80,6 +80,51 @@ section's passage unfilled where the continuous tube should show.
 - `fit` names a millimetre `range` parameter that a jaw or slider sets to the diameter it closes on, so a clamp's fingers meet the neck.
 - `when`: `{"jaw": ["closed"]}` holds only in those states; an open jaw lets go of the neck, and closing it on a neck takes hold again.
 
+### Physical tube specifications
+
+Optional `tube_spec` describes one physical tube independently of its display
+size or Exterior/Section state. It does not turn a rigid tube into a flexible
+hose. For example:
+
+```json
+"tube_spec": {
+  "material": "stainless_steel",
+  "od_mm": 6.35,
+  "id_mm": 4.57,
+  "ends": ["a", "b"],
+  "length": { "fixed_mm": 0, "params": ["length"] }
+}
+```
+
+Materials are `stainless_steel`, `borosilicate_glass`, `quartz`, `ptfe`,
+`polyethylene` and `copper`. The inside diameter is optional and must be
+smaller than the outside diameter. The two ends name distinct joints.
+Cut length is `fixed_mm` plus the current values of the named millimetre
+range parameters. A fixed tube can use an empty parameter list. For a 90°
+bend of centreline radius 20 mm, use `fixed_mm: 31.41592653589793` and the
+two straight-leg length parameters. Count the complete cut tube, including
+the ends inserted into compression fittings, rather than the visible gap
+between fittings. View switches, rotation and resizing the illustration
+do not change this length.
+
+Use axial `stretch` parts on straight tube shapes, end joints and their
+`tube_span` holds to change length without changing the diameter. A rigid
+elbow can translate with one leg while a second leg stretches along its own
+axis. Keep span/end IDs stable and holds unconditional across views. The
+standard adjustment solver carries attached endpoint pieces and retains
+mechanical seats that still fit; a shortened span releases a bore that no
+longer fits completely.
+
+The model's `equipment::parts_list(doc, selection)` reports one row per
+placed equipment ID, with the actual name, variant and optional physical
+tube dimensions. An empty selection includes the whole document. From/To
+list endpoint seats; a free end stays free. Through fittings are reported
+separately from endpoints and do not split the tube or add tube items.
+The report does not infer fluid paths through equipment internals. Existing
+drawings keep their embedded revisions. The original three revision-1
+compression-tube geometries have a fixed-dimension report fallback; other
+pieces without this option remain ordinary equipment rows.
+
 ### Parameters and parts
 
 - `range`: `min`, `max`, `default` and `unit` (`mm`, `deg` or `fraction`).

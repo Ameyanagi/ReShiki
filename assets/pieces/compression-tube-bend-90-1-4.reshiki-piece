@@ -1,7 +1,7 @@
 {
   "format": "reshiki-piece",
   "format_version": 0,
-  "revision": 1,
+  "revision": 2,
   "family": "compression-tube",
   "names": {
     "en": "Stainless-steel compression tubing"
@@ -23,7 +23,7 @@
   "id": "reshiki/compression-tube-bend-90-1-4",
   "variant": {
     "geometry": "90° bend",
-    "length": "143.4 mm",
+    "length": "Default 143.4 mm",
     "tube_od": "1/4 in OD"
   },
   "shapes": [
@@ -32,54 +32,168 @@
       "layer": "body",
       "material": "metal",
       "role": "fill",
-      "path": "M0 -3.175H60A23.175 23.175 0 0 1 83.175 20V72H76.825V20A16.825 16.825 0 0 0 60 3.175H0Z",
+      "path": "M0 -3.175H60V3.175H0Z",
       "color": [
         186,
         201,
         212
-      ]
+      ],
+      "part": "inlet"
+    },
+    {
+      "id": "steel-bend",
+      "layer": "body",
+      "material": "metal",
+      "role": "fill",
+      "path": "M59 -3.175H60A23.175 23.175 0 0 1 83.175 20V21H76.825V20A16.825 16.825 0 0 0 60 3.175H59Z",
+      "color": [
+        186,
+        201,
+        212
+      ],
+      "part": "bend-offset"
+    },
+    {
+      "id": "steel-outlet",
+      "layer": "body",
+      "material": "metal",
+      "role": "fill",
+      "path": "M76.825 20H83.175V72H76.825Z",
+      "color": [
+        186,
+        201,
+        212
+      ],
+      "part": "outlet"
     },
     {
       "id": "open-section",
       "layer": "body",
       "material": "paper",
       "role": "fill",
-      "path": "M0 -2.285H60A22.285 22.285 0 0 1 82.285 20V72H77.715V20A17.715 17.715 0 0 0 60 2.285H0Z",
+      "path": "M0 -2.285H60V2.285H0Z",
       "when": {
         "view": [
           "section"
         ]
       },
-      "depth": 1
+      "depth": 1,
+      "part": "inlet"
+    },
+    {
+      "id": "open-section-bend",
+      "layer": "body",
+      "material": "paper",
+      "role": "fill",
+      "path": "M59 -2.285H60A22.285 22.285 0 0 1 82.285 20V21H77.715V20A17.715 17.715 0 0 0 60 2.285H59Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1,
+      "part": "bend-offset"
+    },
+    {
+      "id": "open-section-outlet",
+      "layer": "body",
+      "material": "paper",
+      "role": "fill",
+      "path": "M77.715 20H82.285V72H77.715Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1,
+      "part": "outlet"
     },
     {
       "id": "tube-wall",
       "layer": "body",
       "material": "ink",
       "role": "outline",
-      "path": "M0 -3.175H60A23.175 23.175 0 0 1 83.175 20V72M0 3.175H60A16.825 16.825 0 0 1 76.825 20V72",
-      "depth": 2
+      "path": "M0 -3.175H60M0 3.175H60",
+      "depth": 2,
+      "part": "inlet"
+    },
+    {
+      "id": "tube-wall-bend",
+      "layer": "body",
+      "material": "ink",
+      "role": "outline",
+      "path": "M60 -3.175A23.175 23.175 0 0 1 83.175 20M60 3.175A16.825 16.825 0 0 1 76.825 20",
+      "depth": 2,
+      "part": "bend-offset"
+    },
+    {
+      "id": "tube-wall-outlet",
+      "layer": "body",
+      "material": "ink",
+      "role": "outline",
+      "path": "M83.175 20V72M76.825 20V72",
+      "depth": 2,
+      "part": "outlet"
     },
     {
       "id": "section-wall",
       "layer": "body",
       "material": "ink",
       "role": "detail",
-      "path": "M0 -2.285H60A22.285 22.285 0 0 1 82.285 20V72M0 2.285H60A17.715 17.715 0 0 1 77.715 20V72",
+      "path": "M0 -2.285H60M0 2.285H60",
       "when": {
         "view": [
           "section"
         ]
       },
-      "depth": 2
+      "depth": 2,
+      "part": "inlet"
+    },
+    {
+      "id": "section-wall-bend",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M60 -2.285A22.285 22.285 0 0 1 82.285 20M60 2.285A17.715 17.715 0 0 1 77.715 20",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2,
+      "part": "bend-offset"
+    },
+    {
+      "id": "section-wall-outlet",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M82.285 20V72M77.715 20V72",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2,
+      "part": "outlet"
     },
     {
       "id": "rim-edges",
       "layer": "body",
       "material": "ink",
       "role": "detail",
-      "path": "M0 -3.175V-2.285M0 2.285V3.175M76.825 72H77.715M82.285 72H83.175",
-      "depth": 2
+      "path": "M0 -3.175V-2.285M0 2.285V3.175",
+      "depth": 2,
+      "part": "inlet"
+    },
+    {
+      "id": "rim-edges-outlet",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M76.825 72H77.715M82.285 72H83.175",
+      "depth": 2,
+      "part": "outlet"
     }
   ],
   "joints": [
@@ -96,7 +210,8 @@
       "dir": [
         -1,
         0
-      ]
+      ],
+      "part": "inlet"
     },
     {
       "id": "b",
@@ -111,7 +226,8 @@
       "dir": [
         0,
         1
-      ]
+      ],
+      "part": "outlet"
     }
   ],
   "holds": [
@@ -126,7 +242,8 @@
         60,
         0
       ],
-      "diameter_mm": 6.35
+      "diameter_mm": 6.35,
+      "part": "inlet"
     },
     {
       "id": "outlet-span",
@@ -139,7 +256,8 @@
         80,
         72
       ],
-      "diameter_mm": 6.35
+      "diameter_mm": 6.35,
+      "part": "outlet"
     }
   ],
   "params": [
@@ -164,6 +282,105 @@
         }
       ],
       "default": "exterior"
+    },
+    {
+      "id": "inlet_length",
+      "kind": "range",
+      "names": {
+        "en": "Inlet straight length"
+      },
+      "min": 20,
+      "max": 1000,
+      "default": 60,
+      "unit": "mm"
+    },
+    {
+      "id": "outlet_length",
+      "kind": "range",
+      "names": {
+        "en": "Outlet straight length"
+      },
+      "min": 20,
+      "max": 1000,
+      "default": 52,
+      "unit": "mm"
     }
-  ]
+  ],
+  "parts": [
+    {
+      "id": "inlet",
+      "param": "inlet_length",
+      "motion": {
+        "stretch": {
+          "pivot": [
+            0,
+            0
+          ],
+          "axis": [
+            1,
+            0
+          ],
+          "per_unit": 0.016666666666666666
+        }
+      },
+      "handle": {
+        "at": [
+          60,
+          0
+        ],
+        "gesture": "drag"
+      }
+    },
+    {
+      "id": "bend-offset",
+      "param": "inlet_length",
+      "motion": {
+        "translate": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "id": "outlet",
+      "parent": "bend-offset",
+      "param": "outlet_length",
+      "motion": {
+        "stretch": {
+          "pivot": [
+            80,
+            20
+          ],
+          "axis": [
+            0,
+            1
+          ],
+          "per_unit": 0.019230769230769232
+        }
+      },
+      "handle": {
+        "at": [
+          80,
+          72
+        ],
+        "gesture": "drag"
+      }
+    }
+  ],
+  "tube_spec": {
+    "material": "stainless_steel",
+    "od_mm": 6.35,
+    "id_mm": 4.57,
+    "ends": [
+      "a",
+      "b"
+    ],
+    "length": {
+      "fixed_mm": 31.41592653589793,
+      "params": [
+        "inlet_length",
+        "outlet_length"
+      ]
+    }
+  }
 }
