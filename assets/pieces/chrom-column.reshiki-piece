@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/chrom-column",
- "revision": 1,
+ "revision": 2,
  "family": "chrom-column",
  "variant": {},
  "names": {
@@ -31,7 +31,7 @@
    "material": "glass",
    "role": "glass",
    "id": "shape-2",
-   "path": "M13 -40L13 -48L-13 -48L-13 -40Z"
+   "path": "M-15 -49L15 -49C15 -42 17.8 -37.6 20.8 -33.6L-20.8 -33.6C-17.8 -37.6 -15 -42 -15 -49Z"
   },
   {
    "layer": "body",
