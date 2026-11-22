@@ -100,6 +100,7 @@ impl Port {
     pub fn size(&self) -> String {
         match &self.kind {
             Kind::Taper(size) => size.clone(),
+            Kind::Plug(PlugFamily::Compression, size) => format!("Ø{size} mm compression"),
             Kind::Plug(family, _) => format!("{family:?}").to_lowercase(),
             Kind::Hold(_, [lo, hi]) if lo == hi => format!("Ø{lo} mm"),
             Kind::Hold(_, [lo, hi]) => format!("Ø{lo}–{hi} mm"),
@@ -235,12 +236,15 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
     out
 }
 
-/// Same kind, opposite gender; tapers of one size, plugs within 10 %; a
-/// slider on a rail and a jaw on a grip whose diameter is in the jaw's range.
+/// Same kind, opposite gender. Tapers and compression fittings match by
+/// nominal size, other plugs within 10 %. Holds match by kind and diameter.
 pub fn mates(a: &Port, b: &Port) -> bool {
     a.gender != b.gender
         && match (&a.kind, &b.kind) {
             (Kind::Taper(x), Kind::Taper(y)) => x == y,
+            (Kind::Plug(PlugFamily::Compression, x), Kind::Plug(PlugFamily::Compression, y)) => {
+                x == y
+            }
             (Kind::Plug(f, x), Kind::Plug(g, y)) => f == g && (x - y).abs() <= 0.1 * x.max(*y),
             (Kind::Hold(x, dx), Kind::Hold(y, dy)) if x.mate() == *y => {
                 let (held, holder) = if x.held() { (dx, dy) } else { (dy, dx) };

@@ -49,7 +49,7 @@ Each shape has an `id`, a `layer`, a `material`, a `role` and a `path` in SVG pa
 ### Joints
 
 - **Taper** (ground glass): `size` is one of `10/18`, `14/20`, `14/23`, `15/25`, `19/22`, `19/28`, `19/38`, `24/29`, `29/42`; `gender` is `M` or `F`. ReShiki draws the socket or cone itself, so every 15/25 joint looks and seats alike. For a socket (`F`), `at` is the centre of the mouth and `dir` points out of it; draw your neck so that it meets the socket's base, L + 4 mm inside the mouth, at the size's neck diameter (13 mm for 15/25). For a cone (`M`), `at` is the shoulder centre and `dir` points to the tip; your tube ends 3.6 mm behind the shoulder. A cone that is not ground glass, such as a rubber septum or a PTFE sleeve, sets `"draw": "none"` and draws its own end; its `at` must sit on that drawing.
-- **Plug**: `family` is `hose`, `stopper`, `septum`, `thermometer`, `nmr` or `stir`, with `size_mm`. `at` sits on the end of the barb, stem or opening.
+- **Plug.** Set `family` to `hose`, `compression`, `stopper`, `septum`, `thermometer`, `nmr` or `stir`. Place `at` at the end of the barb, stem or opening. For compression fittings, `size_mm` is the nominal tube outside diameter. Use `6.35` for ¼-inch tubing and `6` for 6 mm tubing. Compression ends mate when their nominal sizes match exactly.
 - `part` moves the joint with a part. `poses` gives it another position in a state: `{"turn": {"r1": {"at": [..], "dir": [..]}}}`.
 
 A seated cone sits 0.06 L outside the socket mouth (2.52 mm for 29/42).

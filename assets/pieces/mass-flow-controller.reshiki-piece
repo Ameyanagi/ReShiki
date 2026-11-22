@@ -1,0 +1,675 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/mass-flow-controller",
+  "revision": 1,
+  "family": "mass-flow-controller",
+  "variant": {
+    "connection": "1/4 in compression"
+  },
+  "names": {
+    "en": "Mass flow controller",
+    "ja": "マスフローコントローラー"
+  },
+  "category": "other",
+  "keywords": [
+    "mass flow controller",
+    "MFC",
+    "gas flow",
+    "compression tube fitting",
+    "1/4 in",
+    "マスフローコントローラー",
+    "流量制御",
+    "ガス",
+    "継手",
+    "断面"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "flow-block",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-38 -18H38V18H-38Z",
+      "color": [
+        215,
+        220,
+        224
+      ]
+    },
+    {
+      "id": "control-housing",
+      "layer": "body",
+      "material": "plastic",
+      "role": "solid",
+      "path": "M-34 -112H6Q8 -112 8 -110V-18H-36V-110Q-36 -112 -34 -112Z",
+      "color": [
+        218,
+        226,
+        232
+      ]
+    },
+    {
+      "id": "housing-face",
+      "layer": "body",
+      "material": "plastic",
+      "role": "fill",
+      "path": "M-32 -106H4V-23H-32Z",
+      "color": [
+        235,
+        239,
+        242
+      ]
+    },
+    {
+      "id": "housing-left-seam",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-32 -106V-23"
+    },
+    {
+      "id": "housing-top-plate",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-36 -112H8V-108H-36Z",
+      "color": [
+        193,
+        203,
+        211
+      ]
+    },
+    {
+      "id": "electrical-connector-neck",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-23 -120H-11V-112H-23Z"
+    },
+    {
+      "id": "electrical-connector-collar",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-25 -120H-9V-116H-25Z",
+      "color": [
+        180,
+        191,
+        200
+      ]
+    },
+    {
+      "id": "electrical-connector-cap",
+      "layer": "body",
+      "material": "plastic",
+      "role": "solid",
+      "path": "M-22 -124H-12V-120H-22Z",
+      "color": [
+        152,
+        166,
+        177
+      ]
+    },
+    {
+      "id": "connector-lines",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-21 -122H-13M-24 -118H-10"
+    },
+    {
+      "id": "actuator-foot",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M12 -23H36V-18H12Z",
+      "color": [
+        186,
+        198,
+        207
+      ]
+    },
+    {
+      "id": "valve-actuator",
+      "layer": "body",
+      "material": "plastic",
+      "role": "solid",
+      "path": "M14 -66H34V-23H14Z",
+      "color": [
+        167,
+        181,
+        192
+      ]
+    },
+    {
+      "id": "actuator-cap",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M14 -75Q24 -78 34 -75V-65Q24 -62 14 -65Z",
+      "color": [
+        204,
+        213,
+        220
+      ]
+    },
+    {
+      "id": "actuator-cap-seam",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M14 -67Q24 -64 34 -67"
+    },
+    {
+      "id": "actuator-stem",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M20 -23H28V-18H20Z"
+    },
+    {
+      "id": "housing-upper-screw",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-26.9 -100A1.1 1.1 0 1 1 -29.1 -100A1.1 1.1 0 1 1 -26.9 -100Z",
+      "color": [
+        234,
+        238,
+        241
+      ]
+    },
+    {
+      "id": "housing-upper-screw-slot",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-28.55 -100H-27.45"
+    },
+    {
+      "id": "housing-lower-screw",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M1.1 -29A1.1 1.1 0 1 1 -1.1 -29A1.1 1.1 0 1 1 1.1 -29Z",
+      "color": [
+        234,
+        238,
+        241
+      ]
+    },
+    {
+      "id": "housing-lower-screw-slot",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-0.55 -29H0.55"
+    },
+    {
+      "id": "actuator-left-bolt",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M17.1 -21A1.1 1.1 0 1 1 14.9 -21A1.1 1.1 0 1 1 17.1 -21Z",
+      "color": [
+        234,
+        238,
+        241
+      ]
+    },
+    {
+      "id": "actuator-left-bolt-slot",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M15.45 -21H16.55"
+    },
+    {
+      "id": "actuator-right-bolt",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M33.1 -21A1.1 1.1 0 1 1 30.9 -21A1.1 1.1 0 1 1 33.1 -21Z",
+      "color": [
+        234,
+        238,
+        241
+      ]
+    },
+    {
+      "id": "actuator-right-bolt-slot",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M31.45 -21H32.55"
+    },
+    {
+      "id": "mfc-nameplate",
+      "layer": "body",
+      "material": "paper",
+      "role": "solid",
+      "path": "M-32 -88H6V-63H-32Z"
+    },
+    {
+      "id": "mfc-label",
+      "layer": "front",
+      "material": "ink",
+      "role": "fill",
+      "path": "M-29.8 -70.198L-29.8 -81.802L-26.293 -81.802L-24.188 -73.887L-22.106 -81.802L-18.592 -81.802L-18.592 -70.198L-20.768 -70.198L-20.768 -79.332L-23.072 -70.198L-25.328 -70.198L-27.623 -79.332L-27.623 -70.198ZM-16.249 -70.198L-16.249 -81.802L-8.293 -81.802L-8.293 -79.839L-13.906 -79.839L-13.906 -77.092L-9.061 -77.092L-9.061 -75.129L-13.906 -75.129L-13.906 -70.198ZM1.063 -74.464L3.335 -73.744Q2.812 -71.844 1.597 -70.922Q0.382 -70 -1.486 -70Q-3.797 -70 -5.285 -71.579Q-6.774 -73.158 -6.774 -75.897Q-6.774 -78.794 -5.278 -80.397Q-3.782 -82 -1.344 -82Q0.786 -82 2.116 -80.741Q2.907 -79.997 3.303 -78.604L0.984 -78.05Q0.778 -78.953 0.125 -79.475Q-0.528 -79.997 -1.462 -79.997Q-2.753 -79.997 -3.556 -79.071Q-4.359 -78.145 -4.359 -76.071Q-4.359 -73.871 -3.568 -72.937Q-2.776 -72.003 -1.51 -72.003Q-0.576 -72.003 0.097 -72.596Q0.77 -73.19 1.063 -74.464Z"
+    },
+    {
+      "id": "nameplate-divider",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-27 -68H1"
+    },
+    {
+      "id": "inlet-neck",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-49 -5.8H-43L-41 -6.8H-38V6.8H-41L-43 5.8H-49Z",
+      "color": [
+        204,
+        213,
+        220
+      ]
+    },
+    {
+      "id": "outlet-neck",
+      "layer": "body",
+      "material": "metal",
+      "role": "solid",
+      "path": "M38 -6.8H41L43 -5.8H49V5.8H43L41 6.8H38Z",
+      "color": [
+        204,
+        213,
+        220
+      ]
+    },
+    {
+      "id": "inlet-nut-fill",
+      "layer": "body",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-64 -6L-61 -9H-51L-49 -7V7L-51 9H-61L-64 6Z",
+      "color": [
+        222,
+        228,
+        232
+      ]
+    },
+    {
+      "id": "outlet-nut-fill",
+      "layer": "body",
+      "material": "metal",
+      "role": "fill",
+      "path": "M49 -7L51 -9H61L64 -6V6L61 9H51L49 7Z",
+      "color": [
+        222,
+        228,
+        232
+      ]
+    },
+    {
+      "id": "inlet-exterior-opening",
+      "layer": "front",
+      "material": "paper",
+      "role": "fill",
+      "path": "M-64 -3.175H-61.5V3.175H-64Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": -3
+    },
+    {
+      "id": "outlet-exterior-opening",
+      "layer": "front",
+      "material": "paper",
+      "role": "fill",
+      "path": "M61.5 -3.175H64V3.175H61.5Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": -3
+    },
+    {
+      "id": "section-gas-passage",
+      "layer": "front",
+      "material": "paper",
+      "role": "fill",
+      "path": "M-64 -3.175H-49V-2.4H13V-4.8H29V-2.4H49V-3.175H64V3.175H49V2.4H29V4.8H13V2.4H-49V3.175H-64Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": -3
+    },
+    {
+      "id": "section-passage-walls",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-64 -3.175H-49V-2.4H13V-4.8H29V-2.4H49V-3.175H64M-64 3.175H-49V2.4H13V4.8H29V2.4H49V3.175H64",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": -2
+    },
+    {
+      "id": "section-block-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-35 -15L-27 -7M-29 -15L-21 -7M-23 -15L-15 -7M-17 -15L-9 -7M-11 -15L-3 -7M-5 -15L3 -7M1 -15L9 -7M7 -15L15 -7M13 -15L20 -8M27 -13L33 -7M31 -15L36 -10",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": -2
+    },
+    {
+      "id": "inlet-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-54 -3.175L-58 -3.175L-61 -5.5H-56ZM-54 3.175L-58 3.175L-61 5.5H-56Z",
+      "color": [
+        168,
+        181,
+        191
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": -1
+    },
+    {
+      "id": "inlet-section-thread",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-50 -6L-51.4 -5L-52.8 -6L-54.2 -5M-50 6L-51.4 5L-52.8 6L-54.2 5",
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M54 -3.175L58 -3.175L61 -5.5H56ZM54 3.175L58 3.175L61 5.5H56Z",
+      "color": [
+        168,
+        181,
+        191
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": -1
+    },
+    {
+      "id": "outlet-section-thread",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M50 -6L51.4 -5L52.8 -6L54.2 -5M50 6L51.4 5L52.8 6L54.2 5",
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-nut-outline",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-64 -3.175V-6L-61 -9H-51L-49 -7V-3.175M-49 3.175V7L-51 9H-61L-64 6V3.175"
+    },
+    {
+      "id": "outlet-nut-outline",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M64 -3.175V-6L61 -9H51L49 -7V-3.175M49 3.175V7L51 9H61L64 6V3.175"
+    },
+    {
+      "id": "exterior-nut-seams",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-49 -3.175V3.175M49 -3.175V3.175",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "inlet-nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-61 -9V-3.9M-61 3.9V9M-51 -9V9",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "outlet-nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M61 -9V-3.9M61 3.9V9M51 -9V9",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "inlet-mouth-rim",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-64 -3.175H-61.5M-64 3.175H-61.5"
+    },
+    {
+      "id": "outlet-mouth-rim",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M61.5 -3.175H64M61.5 3.175H64"
+    },
+    {
+      "id": "inlet-label-plate",
+      "layer": "front",
+      "material": "paper",
+      "role": "fill",
+      "path": "M-35 7H-8V16H-35Z",
+      "depth": 1
+    },
+    {
+      "id": "outlet-label-plate",
+      "layer": "front",
+      "material": "paper",
+      "role": "fill",
+      "path": "M5 7H37V16H5Z",
+      "depth": 1
+    },
+    {
+      "id": "inlet-label",
+      "layer": "front",
+      "material": "ink",
+      "role": "fill",
+      "path": "M-33 14.5L-33 9L-31.889 9L-31.889 14.5ZM-30.82 14.5L-30.82 9L-29.74 9L-27.489 12.673L-27.489 9L-26.457 9L-26.457 14.5L-27.571 14.5L-29.789 10.913L-29.789 14.5ZM-25.253 14.5L-25.253 9.045L-24.142 9.045L-24.142 13.573L-21.381 13.573L-21.381 14.5ZM-20.589 14.5L-20.589 9L-16.511 9L-16.511 9.93L-19.479 9.93L-19.479 11.15L-16.718 11.15L-16.718 12.076L-19.479 12.076L-19.479 13.573L-16.406 13.573L-16.406 14.5ZM-14.226 14.5L-14.226 9.93L-15.858 9.93L-15.858 9L-11.488 9L-11.488 9.93L-13.116 9.93L-13.116 14.5Z",
+      "depth": 2
+    },
+    {
+      "id": "outlet-label",
+      "layer": "front",
+      "material": "ink",
+      "role": "fill",
+      "path": "M7 11.783Q7 10.97 7.243 10.419Q7.424 10.012 7.738 9.689Q8.052 9.366 8.426 9.21Q8.923 9 9.572 9Q10.748 9 11.453 9.729Q12.159 10.458 12.159 11.757Q12.159 13.045 11.459 13.773Q10.759 14.5 9.587 14.5Q8.4 14.5 7.7 13.776Q7 13.052 7 11.783ZM8.107 11.746Q8.107 12.65 8.524 13.116Q8.941 13.582 9.583 13.582Q10.225 13.582 10.637 13.12Q11.049 12.657 11.049 11.732Q11.049 10.818 10.648 10.368Q10.247 9.918 9.583 9.918Q8.919 9.918 8.513 10.373Q8.107 10.828 8.107 11.746ZM12.99 9.091L14.064 9.091L14.064 11.971Q14.064 12.657 14.104 12.86Q14.172 13.187 14.432 13.384Q14.691 13.582 15.141 13.582Q15.598 13.582 15.83 13.395Q16.063 13.208 16.11 12.936Q16.157 12.664 16.157 12.033L16.157 9.091L17.231 9.091L17.231 11.884Q17.231 12.842 17.144 13.237Q17.057 13.633 16.823 13.905Q16.589 14.177 16.197 14.339Q15.805 14.5 15.174 14.5Q14.412 14.5 14.018 14.324Q13.625 14.148 13.396 13.867Q13.168 13.586 13.095 13.277Q12.99 12.82 12.99 11.928ZM19.56 14.409L19.56 9.99L17.982 9.99L17.982 9.091L22.208 9.091L22.208 9.99L20.634 9.99L20.634 14.409ZM22.93 14.409L22.93 9.134L24.004 9.134L24.004 13.513L26.674 13.513L26.674 14.409ZM27.44 14.409L27.44 9.091L31.384 9.091L31.384 9.99L28.514 9.99L28.514 11.17L31.184 11.17L31.184 12.066L28.514 12.066L28.514 13.513L31.485 13.513L31.485 14.409ZM33.593 14.409L33.593 9.99L32.015 9.99L32.015 9.091L36.241 9.091L36.241 9.99L34.667 9.99L34.667 14.409Z",
+      "depth": 2
+    },
+    {
+      "id": "flow-direction",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-18 24H14M8 20L14 24L8 28"
+    },
+    {
+      "id": "section-valve-stem",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M21 -18V-10H25V-18M23 -10V-5.8",
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "section-valve-head",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M19 -5.8H27L24 -3.8H22Z",
+      "color": [
+        170,
+        184,
+        195
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "housing-side-shade",
+      "layer": "body",
+      "material": "plastic",
+      "role": "fill",
+      "path": "M4 -106H8V-23H4Z",
+      "color": [
+        189,
+        202,
+        213
+      ],
+      "style": "shaded"
+    },
+    {
+      "id": "actuator-side-shade",
+      "layer": "body",
+      "material": "plastic",
+      "role": "fill",
+      "path": "M30 -63H34V-24H30Z",
+      "color": [
+        133,
+        154,
+        171
+      ],
+      "style": "shaded"
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View",
+        "ja": "表示"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior",
+            "ja": "外観"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section",
+            "ja": "縦断面"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "joints": [
+    {
+      "id": "inlet",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [-64, 0],
+      "dir": [-1, 0]
+    },
+    {
+      "id": "outlet",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [64, 0],
+      "dir": [1, 0]
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        -13,
+        -75
+      ]
+    },
+    {
+      "id": "inlet",
+      "at": [
+        -64,
+        0
+      ]
+    },
+    {
+      "id": "outlet",
+      "at": [
+        64,
+        0
+      ]
+    }
+  ]
+}

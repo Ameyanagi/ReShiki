@@ -201,6 +201,7 @@ pub enum Gender {
 #[serde(rename_all = "snake_case")]
 pub enum PlugFamily {
     Hose,
+    Compression,
     Stopper,
     Septum,
     Thermometer,
@@ -240,7 +241,7 @@ pub enum Joint {
         #[serde(default = "standard")]
         draw: JointDraw,
     },
-    /// Rubber, septa, thermometers, hose barbs: no ground glass.
+    /// Rubber, septa, thermometers, hose barbs or compression fittings.
     Plug {
         id: String,
         family: PlugFamily,

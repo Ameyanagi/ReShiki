@@ -48,6 +48,91 @@ fn commit(doc: &mut Document, before: Document) {
 }
 
 #[test]
+fn a_mass_flow_controller_keeps_its_compression_ports_in_section_view() {
+    use super::eval::Value;
+    use super::format::{Gender, Joint, Material, PlugFamily};
+    use super::solve::Kind;
+
+    let mut doc = Document::default();
+    let mfc = add(&mut doc, "reshiki/mass-flow-controller", Point::default());
+    let inlet = port(&doc, &joint(mfc, "inlet"));
+    let outlet = port(&doc, &joint(mfc, "outlet"));
+    for socket in [&inlet, &outlet] {
+        assert_eq!(socket.gender, Gender::F);
+        assert_eq!(socket.kind, Kind::Plug(PlugFamily::Compression, 6.35));
+        let tube_end = |family, size| solve::Port {
+            kind: Kind::Plug(family, size),
+            gender: Gender::M,
+            ..socket.clone()
+        };
+        assert!(solve::mates(
+            socket,
+            &tube_end(PlugFamily::Compression, 6.35)
+        ));
+        assert!(!solve::mates(
+            socket,
+            &tube_end(PlugFamily::Compression, 6.)
+        ));
+        assert!(!solve::mates(socket, &tube_end(PlugFamily::Hose, 6.35)));
+    }
+    assert!((inlet.dir[0] + 1.).abs() < 1e-6 && inlet.dir[1].abs() < 1e-6);
+    assert!((outlet.dir[0] - 1.).abs() < 1e-6 && outlet.dir[1].abs() < 1e-6);
+
+    let mut tubing = (*builtin::find("reshiki/hose-7").unwrap()).clone();
+    tubing.id = "test/compression-tube".into();
+    let spec = tubing.tube.as_mut().unwrap();
+    spec.width_mm = 6.35;
+    spec.material = Material::Metal;
+    for end in &mut tubing.joints {
+        let Joint::Plug {
+            family,
+            gender,
+            size_mm,
+            ..
+        } = end
+        else {
+            panic!("tube ends are plug joints");
+        };
+        (*family, *gender, *size_mm) = (PlugFamily::Compression, Gender::M, 6.35);
+    }
+    let tube = doc.next_id();
+    let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+    doc.graphics.push(placed::graphic(
+        tube,
+        tubing.into(),
+        Point::new(200., 0.),
+        scale,
+    ));
+    let end = joint(tube, "a");
+    let snap = solve::connect(&mut doc, &[tube], &outlet.at, &end).unwrap();
+    assert!(matches!(snap.offer, Offer::Seat));
+    let seated = port(&doc, &end);
+
+    let section = Value::State("section".into());
+    let released = solve::adjust::set(&mut doc, mfc, "view", section.clone()).unwrap();
+    assert!(released.is_empty());
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.seats, doc.seats);
+    assert_eq!(reopened.seats.len(), 1);
+    assert_eq!(port(&reopened, &end).point, seated.point);
+    assert_eq!(
+        reopened.graphics[0]
+            .piece
+            .as_ref()
+            .unwrap()
+            .params
+            .get("view"),
+        Some(&section),
+    );
+    for exterior in [inlet, outlet] {
+        let restored = port(&reopened, &exterior.at);
+        assert_eq!(restored.kind, exterior.kind);
+        assert_eq!(restored.point, exterior.point);
+        assert_eq!(restored.dir, exterior.dir);
+    }
+}
+
+#[test]
 fn a_condenser_dropped_near_a_neck_seats_upright_and_stays_seated_when_reopened() {
     let mut doc = Document::default();
     let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(200., 300.));
