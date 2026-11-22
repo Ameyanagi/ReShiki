@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/jy-nmr-tube",
- "revision": 1,
+ "revision": 2,
  "family": "jy-nmr-tube",
  "variant": {},
  "names": {
@@ -156,14 +156,6 @@
    },
    "id": "shape-14",
    "path": "M3.2 -36L3.2 -25"
-  },
-  {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "id": "shape-15",
-   "path": "M3.8 138L7 138",
-   "part": "sample-mark"
   },
   {
    "layer": "inner",
