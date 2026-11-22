@@ -115,6 +115,7 @@ impl JointKind {
                 size_mm: *size_mm,
                 at: rim.at,
                 dir,
+                insertion_mm: None,
                 part: None,
                 poses: BTreeMap::new(),
             },

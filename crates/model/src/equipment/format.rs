@@ -249,6 +249,9 @@ pub enum Joint {
         size_mm: f64,
         at: Xy,
         dir: Xy,
+        /// Tube stop measured inwards from a female compression opening.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        insertion_mm: Option<f64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         part: Option<String>,
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -311,6 +314,10 @@ pub enum HoldKind {
     Slider,
     Grip,
     Jaw,
+    /// A continuous straight tube segment available to multiple fittings.
+    TubeSpan,
+    /// A fitting's complete straight passage, occupied by one tube.
+    ThroughBore,
 }
 
 /// One diameter, or the range a jaw or slider fits.
@@ -350,9 +357,9 @@ pub struct Hold {
 }
 
 impl HoldKind {
-    /// Rails and grips are held; sliders and jaws hold them.
+    /// Rails, grips and tube spans are held by their matching holders.
     pub fn held(self) -> bool {
-        matches!(self, Self::Rail | Self::Grip)
+        matches!(self, Self::Rail | Self::Grip | Self::TubeSpan)
     }
     /// The kind this one pairs with.
     pub fn mate(self) -> Self {
@@ -361,6 +368,8 @@ impl HoldKind {
             Self::Slider => Self::Rail,
             Self::Grip => Self::Jaw,
             Self::Jaw => Self::Grip,
+            Self::TubeSpan => Self::ThroughBore,
+            Self::ThroughBore => Self::TubeSpan,
         }
     }
 }

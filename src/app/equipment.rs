@@ -264,6 +264,8 @@ fn seat_state(doc: &Document, port: &Port, partner: &JointRef) -> String {
         Some(HoldKind::Grip) => "Held by the",
         Some(HoldKind::Slider) => "On the",
         Some(HoldKind::Jaw) => "Grips the",
+        Some(HoldKind::TubeSpan) => "Passes through the",
+        Some(HoldKind::ThroughBore) => "Carries the",
         // A socket holds a cone; a cone sits in a socket.
         None if port.gender == Gender::F => "Holds the",
         None => "Seated in the",
@@ -317,6 +319,12 @@ pub(crate) fn snap_text(doc: &Document, snap: &Snap) -> String {
         (&snap.moving, &snap.target)
     };
     let mut text = match &snap.offer {
+        Offer::Seat if held.hold() == Some(HoldKind::TubeSpan) => format!(
+            "Pass the {} through the {} · {}",
+            joint_name(doc, &held.at),
+            joint_name(doc, &holder.at),
+            held.size()
+        ),
         Offer::Seat if held.hold() == Some(HoldKind::Rail) => format!(
             "Mount the {} on the {}",
             joint_name(doc, &holder.at),
@@ -760,8 +768,11 @@ impl App {
                 } else {
                     (&snap.moving, &snap.target)
                 };
+                let through = held.hold() == Some(HoldKind::TubeSpan);
                 let (held, holder) = (joint_name(doc, &held.at), joint_name(doc, &holder.at));
-                if snap.target.hold() == Some(HoldKind::Rail)
+                if through {
+                    format!("The {held} passes through the {holder}")
+                } else if snap.target.hold() == Some(HoldKind::Rail)
                     || snap.moving.hold() == Some(HoldKind::Rail)
                 {
                     format!("Mounted the {holder} on the {held}")

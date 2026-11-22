@@ -480,13 +480,29 @@ impl MoleculeCanvas<'_> {
                         clicked.clone()
                     },
                 );
-                // A drag moves a piece's whole assembly, or slides what a
-                // stand holds along its rod. A piece picked out of its
-                // assembly, or Alt, pulls the piece out.
+                // A fresh or individually selected tube/bore drag slides
+                // at its through attachment. Click-expanded assemblies
+                // differ from a whole assembly selected before the press.
+                let sliding = (!state.modifiers.alt()
+                    && !state.modifiers.shift()
+                    && !self.copies(state.modifiers))
+                .then(|| {
+                    reshiki::equipment::solve::carried_through(
+                        self.doc,
+                        &ids,
+                        &picked,
+                        self.selected,
+                    )
+                })
+                .flatten();
+                // Other drags carry the assembly or slide along a stand.
+                // A picked-out piece, or Alt, otherwise pulls it out.
                 let piece = self.doc.expand_groups(&ids).len()
                     > ids.iter().collect::<std::collections::HashSet<_>>().len();
-                state.pull_out = state.modifiers.alt() || piece;
-                let ids = if state.pull_out {
+                state.pull_out = state.modifiers.alt() || (piece && sliding.is_none());
+                let ids = if let Some(ids) = sliding {
+                    ids
+                } else if state.pull_out {
                     reshiki::equipment::solve::detached(self.doc, &ids)
                 } else {
                     reshiki::equipment::solve::carried(self.doc, &ids, &picked)
