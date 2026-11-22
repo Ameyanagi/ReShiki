@@ -43,7 +43,11 @@ providing a through-flow outlet.
 The selected KPR and KBP **A configurations each have only two opposed flow
 ports**. Neither body gains a gauge, relief or vent connection from another
 configuration. Their exterior forms may be similar, but they retain distinct
-regulator kinds, sensing domains and internal passages. The separate gauge tee
+regulator kinds, sensing domains and internal passages. Their Exterior view looks
+straight down the contoured adjustment knob, concentric bonnet and body; the
+opposed flow ports remain in the drawing plane. Original PR and BP cap markings
+identify pressure-reducing and back-pressure functions. Section retains the
+longitudinal mechanism view and the same port seats. The separate gauge tee
 provides the instrument branch.
 
 Only **1/4 in NPT** is included initially; BSPP is not included. Its plug family
@@ -68,6 +72,6 @@ instrument tee or extra threaded sizes are inferred from the initial lineup.
 - **[N] Needle valves:** Swagelok [integral-bonnet catalogue, pp. 2–4](https://www.swagelok.com/downloads/webcatalogs/en/MS-01-164.pdf), [SS-ORS2](https://products.swagelok.com/en/c/straight-pattern-regulating-stem/p/SS-ORS2) and [SS-1RS4](https://products.swagelok.com/en/c/straight-pattern-regulating-stem/p/SS-1RS4).
 - **[C] Check valves:** Swagelok [C-series catalogue, pp. 2 and 11](https://www.swagelok.com/downloads/webcatalogs/en/MS-01-176.pdf), [SS-2C-1/3](https://products.swagelok.com/en/c/fixed-pressure/p/SS-2C-1%252F3) and [SS-4C-1/3](https://products.swagelok.com/en/c/fixed-pressure/p/SS-4C-1%252F3).
 - **[R] Safety relief:** Swagelok [PRV catalogue, pp. 2 and 6](https://www.swagelok.com/downloads/webcatalogs/en/MS-02-432.pdf), including the anatomy, connection table and ordering key.
-- **[P] Regulators:** Swagelok [K-series catalogue, pp. 6–7, 24–25 and 52](https://boston.swagelok.com/downloads/webcatalogs/en/MS-02-230.PDF), [KPR1FRA412A20000](https://products.swagelok.com/en/c/single-stage/p/KPR1FRA412A20000) and [KBP1F0A4A5A20000](https://products.swagelok.com/en/c/back-pressure-regulators/p/KBP1F0A4A5A20000). Page 52 establishes A-configuration port topology.
+- **[P] Regulators:** Swagelok [K-series catalogue, pp. 6–7, 24–25 and 52](https://www.swagelok.com/downloads/webcatalogs/en/ms-02-230.pdf), [KPR1FRA412A20000](https://products.swagelok.com/en/c/single-stage/p/KPR1FRA412A20000) and [KBP1F0A4A5A20000](https://products.swagelok.com/en/c/back-pressure-regulators/p/KBP1F0A4A5A20000). Page 52 establishes A-configuration port topology.
 - **[I] Instruments:** WIKA [232.50/233.50 model](https://www.wika.com/en-us/232_50_233_50.WIKA) and [PM 02.02, pp. 2, 5 and 8](https://www.wika.com/media/Data-sheets/Pressure/Pressure-gauges/ds_pm0202_en_co.pdf); WIKA [A-10 model](https://www.wika.com/en-us/a_10.WIKA) and [PE 81.60, p. 5](https://www.wika.com/media/Data-sheets/Pressure/Pressure-sensors/ds_pe8160_en_co.pdf). The gauge's NS63 lower-mount 1/4 NPT combination is explicit; the transmitter's ordinary NPT option is distinct from its female-thread option.
 - **[F] Fittings:** Swagelok [SS-400-3-4TTF](https://products.swagelok.com/en/c/tees/p/SS-400-3-4TTF), [SS-200-1-4](https://products.swagelok.com/en/c/straights/p/SS-200-1-4) and [SS-400-1-4](https://products.swagelok.com/en/c/straights/p/SS-400-1-4).
