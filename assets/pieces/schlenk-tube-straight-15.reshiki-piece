@@ -17,11 +17,11 @@
   "keywords": [
     "Schlenk",
     "straight sidearm",
-    "two-way stopcock",
+    "three-way stopcock",
     "hose barb",
     "シュレンク",
     "直管",
-    "二方コック"
+    "三方コック"
   ],
   "credits": {
     "author": "ReShiki",
@@ -58,62 +58,74 @@
       "path": "M13 11.5L47.5 11.5L47.5 18.5L13 18.5Z"
     },
     {
-      "id": "stopcock-housing",
+      "id": "s6",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M36.5 18.5L47.5 18.5L47.5 11.5L36.5 11.5Z"
+    },
+    {
+      "id": "s7",
       "layer": "body",
       "material": "glass",
       "role": "glass",
       "path": "M46.6 25L61.4 25L61.8 3L46.2 3Z"
     },
     {
-      "id": "stopcock-retainer",
+      "id": "s8",
       "layer": "body",
       "material": "glass",
       "role": "glass",
       "path": "M59 28A5 5 0 0 1 49 28A5 5 0 0 1 59 28Z"
     },
     {
-      "id": "barb-root",
+      "id": "s9",
       "layer": "body",
       "material": "glass",
       "role": "glass",
-      "path": "M61 11.6L65 11.6L65 18.4L61 18.4Z"
+      "path": "M61 18.4L65 18.4L65 11.6L61 11.6Z"
     },
     {
-      "id": "hose-barb",
+      "id": "s10",
       "layer": "body",
       "material": "glass",
       "role": "glass",
-      "path": "M62 18.3L76 18.3L76 19.6L80.5 18.3L80.5 19.6L85 18.3L85 19.5L89 18.5L89 11.5L85 10.5L85 11.7L80.5 10.4L80.5 11.7L76 10.4L76 11.7L62 11.7Z"
+      "path": "M62 18.3L76 18.3L76 19.6L80.5 18.3L80.5 19.6L85 18.3L85 19.5L89 18.1L89 11.9L85 10.5L85 11.7L80.5 10.4L80.5 11.7L76 10.4L76 11.7L62 11.7Z"
     },
     {
-      "id": "stopcock-plug",
+      "id": "s11",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M50.7 29L50.7 39L49.4 39L50.7 43.5L49.4 43.5L50.7 48L49.5 48L50.9 52L57.1 52L58.5 48L57.3 48L58.6 43.5L57.3 43.5L58.6 39L57.3 39L57.3 29Z"
+    },
+    {
+      "id": "s12",
       "layer": "body",
       "material": "frosted",
       "role": "solid",
       "path": "M48.4 24L59.6 24L60.2 2.5L47.8 2.5Z"
     },
     {
-      "id": "stopcock-cap",
+      "id": "s13",
       "layer": "body",
       "material": "glass",
       "role": "glass",
       "path": "M49.1 -1.5L58.9 -1.5A1.5 1.5 0 0 1 60.4 0L60.4 1.5A1.5 1.5 0 0 1 58.9 3L49.1 3A1.5 1.5 0 0 1 47.6 1.5L47.6 0A1.5 1.5 0 0 1 49.1 -1.5Z"
     },
     {
-      "id": "stopcock-stem",
+      "id": "s14",
       "layer": "body",
       "material": "glass",
       "role": "glass",
-      "path": "M53 -7L55 -7A1 1 0 0 1 56 -6L56 -2A1 1 0 0 1 55 -1L53 -1A1 1 0 0 1 52 -2L52 -6A1 1 0 0 1 53 -7Z",
-      "part": "stopcock-control"
+      "path": "M53 -7L55 -7A1 1 0 0 1 56 -6L56 -2A1 1 0 0 1 55 -1L53 -1A1 1 0 0 1 52 -2L52 -6A1 1 0 0 1 53 -7Z"
     },
     {
-      "id": "closed-handle",
+      "id": "s15",
       "layer": "body",
       "material": "glass",
       "role": "solid",
       "path": "M50.64 -7Q49.04 -9.5 51.04 -12L56.96 -12Q58.96 -9.5 57.36 -7Z",
-      "part": "stopcock-control",
       "when": {
         "stopcock": [
           "closed"
@@ -121,10 +133,10 @@
       }
     },
     {
-      "id": "closed-flow",
+      "id": "s16",
       "layer": "body",
       "material": "ink",
-      "role": "fill",
+      "role": "solid",
       "path": "M55.9 15A1.9 1.9 0 0 1 52.1 15A1.9 1.9 0 0 1 55.9 15Z",
       "when": {
         "stopcock": [
@@ -133,27 +145,67 @@
       }
     },
     {
-      "id": "open-handle",
+      "id": "s17",
       "layer": "body",
       "material": "glass",
       "role": "solid",
       "path": "M42 -7Q40.4 -9.5 42.4 -12L65.6 -12Q67.6 -9.5 66 -7Z",
-      "part": "stopcock-control",
       "when": {
         "stopcock": [
-          "open"
+          "side",
+          "all"
         ]
       }
     },
     {
-      "id": "open-flow",
+      "id": "s18",
       "layer": "body",
       "material": "ink",
-      "role": "fill",
-      "path": "M48.2 13.3L59.8 13.3L59.8 16.7L48.2 16.7Z",
+      "role": "solid",
+      "path": "M48.2 13.3L54.8 13.3L54.8 16.7L48.2 16.7Z",
       "when": {
         "stopcock": [
-          "open"
+          "side",
+          "down",
+          "all"
+        ]
+      }
+    },
+    {
+      "id": "s19",
+      "layer": "body",
+      "material": "ink",
+      "role": "solid",
+      "path": "M53.2 13.3L59.8 13.3L59.8 16.7L53.2 16.7Z",
+      "when": {
+        "stopcock": [
+          "side",
+          "all"
+        ]
+      }
+    },
+    {
+      "id": "s20",
+      "layer": "body",
+      "material": "glass",
+      "role": "solid",
+      "path": "M46.29 -7Q44.69 -9.5 46.69 -12L61.31 -12Q63.31 -9.5 61.71 -7Z",
+      "when": {
+        "stopcock": [
+          "down"
+        ]
+      }
+    },
+    {
+      "id": "s21",
+      "layer": "body",
+      "material": "ink",
+      "role": "solid",
+      "path": "M52.3 13.3L55.7 13.3L55.7 24.5L52.3 24.5Z",
+      "when": {
+        "stopcock": [
+          "down",
+          "all"
         ]
       }
     }
@@ -175,7 +227,7 @@
       "draw": "standard"
     },
     {
-      "id": "hose",
+      "id": "hose1",
       "kind": "plug",
       "family": "hose",
       "gender": "M",
@@ -187,6 +239,21 @@
       "dir": [
         1,
         0
+      ]
+    },
+    {
+      "id": "hose2",
+      "kind": "plug",
+      "family": "hose",
+      "gender": "M",
+      "size_mm": 7,
+      "at": [
+        54,
+        52
+      ],
+      "dir": [
+        0,
+        1
       ]
     }
   ],
@@ -236,10 +303,24 @@
           }
         },
         {
-          "id": "open",
+          "id": "side",
           "names": {
-            "en": "Open",
-            "ja": "開"
+            "en": "Arm to side barb",
+            "ja": "側管へ"
+          }
+        },
+        {
+          "id": "down",
+          "names": {
+            "en": "Arm to down barb",
+            "ja": "下管へ"
+          }
+        },
+        {
+          "id": "all",
+          "names": {
+            "en": "All open",
+            "ja": "全開"
           }
         }
       ]
@@ -271,27 +352,10 @@
   ],
   "parts": [
     {
-      "id": "stopcock-control",
+      "id": "stopcock",
       "param": "stopcock",
       "motion": {
-        "per_state": {
-          "closed": [
-            1,
-            0,
-            0,
-            1,
-            0,
-            0
-          ],
-          "open": [
-            1,
-            0,
-            0,
-            1,
-            0,
-            0
-          ]
-        }
+        "per_state": {}
       },
       "handle": {
         "at": [

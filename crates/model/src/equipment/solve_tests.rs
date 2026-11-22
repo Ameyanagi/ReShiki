@@ -345,27 +345,42 @@ fn the_w_septum_seats_on_compatible_hose_barbs_throughout_the_catalogue() {
 }
 
 #[test]
-fn a_schlenk_downward_barb_can_hold_a_septum_while_its_side_barb_holds_a_hose() {
-    let mut doc = Document::default();
-    let tube = add(&mut doc, "reshiki/schlenk-tube-15", Point::new(250., 300.));
-    let septum = add(&mut doc, "reshiki/septum-hose-7", Point::new(80., 120.));
-    let hose = add(&mut doc, "reshiki/hose-7", Point::new(550., 300.));
-    let downward = joint(tube, "hose2");
-    solve::connect(&mut doc, &[septum], &downward, &joint(septum, "barb")).unwrap();
-    assert!(solve::connect(&mut doc, &[hose], &downward, &joint(hose, "a")).is_none());
-    solve::connect(&mut doc, &[hose], &joint(tube, "hose1"), &joint(hose, "a")).unwrap();
-    let needle = add(&mut doc, "reshiki/balloon", Point::new(400., 500.));
-    solve::connect(
-        &mut doc,
-        &[needle],
-        &joint(septum, "needle"),
-        &joint(needle, "needle"),
-    )
-    .unwrap();
+fn the_w_septum_seats_narrow_end_first() {
+    use super::geometry::{flatten, inside, parse_path};
 
-    let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
-    assert_eq!(back.seats, doc.seats);
-    assert_eq!(back.seats.len(), 3);
+    let septum = builtin::find("reshiki/septum-hose-7").unwrap();
+    let outline = flatten(&parse_path(&septum.shapes[0].path).unwrap());
+    assert!(inside([6., -8.], &outline), "the exposed face is wide");
+    assert!(!inside([6., 4.], &outline), "the seated side is narrow");
+}
+
+#[test]
+fn a_schlenk_downward_barb_can_hold_a_septum_while_its_side_barb_holds_a_hose() {
+    for tube in [
+        "reshiki/schlenk-tube-15",
+        "reshiki/schlenk-tube-straight-29-left",
+    ] {
+        let mut doc = Document::default();
+        let tube = add(&mut doc, tube, Point::new(250., 300.));
+        let septum = add(&mut doc, "reshiki/septum-hose-7", Point::new(80., 120.));
+        let hose = add(&mut doc, "reshiki/hose-7", Point::new(550., 300.));
+        let downward = joint(tube, "hose2");
+        solve::connect(&mut doc, &[septum], &downward, &joint(septum, "barb")).unwrap();
+        assert!(solve::connect(&mut doc, &[hose], &downward, &joint(hose, "a")).is_none());
+        solve::connect(&mut doc, &[hose], &joint(tube, "hose1"), &joint(hose, "a")).unwrap();
+        let needle = add(&mut doc, "reshiki/balloon", Point::new(400., 500.));
+        solve::connect(
+            &mut doc,
+            &[needle],
+            &joint(septum, "needle"),
+            &joint(needle, "needle"),
+        )
+        .unwrap();
+
+        let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+        assert_eq!(back.seats, doc.seats);
+        assert_eq!(back.seats.len(), 3);
+    }
 }
 
 #[test]

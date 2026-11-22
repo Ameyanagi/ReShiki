@@ -191,7 +191,7 @@ fn opening_the_schlenk_tube_valve_is_one_undo_step() {
 }
 
 #[test]
-fn a_straight_schlenk_sidearm_stopcock_opens_and_undoes() {
+fn a_straight_schlenk_sidearm_uses_the_s_type_flow_controls_and_undoes() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
     let _ = app.update(Message::Equipment(Action::Arm(k(
@@ -205,11 +205,11 @@ fn a_straight_schlenk_sidearm_stopcock_opens_and_undoes() {
     let _ = app.update(Message::Equipment(Action::Param {
         id,
         param: "stopcock".into(),
-        value: Value::State("open".into()),
+        value: Value::State("side".into()),
     }));
     assert_eq!(
         value_text(&app.tab.doc.graphics[0], "stopcock", None),
-        "Stopcock: Open"
+        "Stopcock: Arm to side barb"
     );
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);

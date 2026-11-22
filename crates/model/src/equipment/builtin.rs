@@ -187,4 +187,27 @@ mod tests {
         }
         assert_eq!(super::catalogue().len(), super::FILES.len());
     }
+
+    #[test]
+    fn the_straight_schlenk_sidearms_keep_the_s_type_valve_controls_and_ports() {
+        for suffix in ["15", "15-left", "29", "29-left"] {
+            let straight = super::find(&format!("reshiki/schlenk-tube-straight-{suffix}")).unwrap();
+            let bent = super::find(&format!("reshiki/schlenk-tube-{suffix}")).unwrap();
+            let straight_valve = straight.params.iter().find(|p| p.id() == "stopcock");
+            let bent_valve = bent.params.iter().find(|p| p.id() == "stopcock");
+            assert!(straight_valve.is_some(), "{suffix}");
+            assert_eq!(straight_valve, bent_valve);
+            for port in ["hose1", "hose2"] {
+                let port_of = |definition: &super::Definition| {
+                    definition
+                        .joints
+                        .iter()
+                        .find(|joint| joint.id() == port)
+                        .map(|joint| (joint.gender(), joint.dir()))
+                };
+                assert!(port_of(&straight).is_some(), "{suffix} {port}");
+                assert_eq!(port_of(&straight), port_of(&bent));
+            }
+        }
+    }
 }

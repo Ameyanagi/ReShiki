@@ -385,9 +385,10 @@ Two sockets, two cones, or sizes no adapter joins only show why they do not
 seat.
 
 Under **Rubber septum**, choose **15/25 · 7 mm hose barb** to cap a free hose
-barb with a W-shaped stopper. It turns to match the barb, including the
-downward and side outlets on Schlenk equipment and compatible outlets on
-condensers and other pieces. The septum can also hold the balloon's needle.
+barb with a W-shaped stopper. It turns so its narrow end seats on the barb
+and its wide end faces out. This works on the downward and side outlets on
+Schlenk equipment and compatible outlets on condensers and other pieces.
+The septum can also hold the balloon's needle.
 
 Seated pieces form an assembly. A click selects the whole assembly and a drag
 moves it; turning, scaling, copying and **Bring to front** act on all of it.
@@ -439,7 +440,8 @@ detached; click it a second time to select it alone and delete it.
 ### Move parts and set liquid levels
 
 Schlenk tubes come with S-type and straight sidearms in 15/25 and 29/42,
-facing left or right. The standalone **Three-way stopcock** comes with three
+facing left or right. Both use the same three-way valve with side and
+downward hose outlets. The standalone **Three-way stopcock** comes with three
 hose barbs or with two barbs and a downward 15/25 or 29/42 ground-glass cone.
 
 Many flasks, funnels and NMR tubes have movable liquid levels.
@@ -453,9 +455,9 @@ compatible flask and can display motion arrows.
    **Valve: Closed · click to switch**. A second click and a drag, or
    Option-drag, still pulls a piece out of the assembly. Holding Option disables the handles.
 2. Click a circle to cycle through the states of a valve or stopcock.
-   J. Young valves and straight Schlenk tube stopcocks toggle between
-   **Closed** and **Open**. The S-type stopcock cycles through **Closed**,
-   **Arm to side barb**, **Arm to down barb** and **All open**. The
+   J. Young valves toggle between **Closed** and **Open**. The Schlenk tube
+   stopcock cycles through **Closed**, **Arm to side barb**,
+   **Arm to down barb** and **All open**. The
    standalone three-way stopcock can close all ports, join any pair or
    open all three.
 3. Drag a diamond to tilt a clamp or move a liquid's surface. The label
