@@ -1279,11 +1279,12 @@ pub fn carried(doc: &Document, ids: &[u64], clicked: &[u64]) -> Vec<u64> {
         .collect()
 }
 
-/// A normal drag on one tube or bored fitting can slide at their mechanical
-/// attachment. `ids` may already include the assembly from click selection;
+/// A normal drag on one ungrounded tube or bored fitting can slide at its
+/// mechanical attachment. `ids` may already include the assembly from click selection;
 /// `selected` is the selection before that click. An already selected whole
 /// assembly keeps its ordinary movement. Endpoint connections and authored
-/// groups stay together, and grounded holds retain `carried`'s policy.
+/// groups stay together. A clicked grounded piece keeps `carried`'s ordinary
+/// whole-assembly policy.
 pub fn carried_through(
     doc: &Document,
     ids: &[u64],
@@ -1299,10 +1300,11 @@ pub fn carried_through(
         .as_ref()?
         .linked
         .as_ref()?;
-    if !definition
-        .holds
-        .iter()
-        .any(|h| matches!(h.kind, HoldKind::TubeSpan | HoldKind::ThroughBore))
+    if definition.grounded
+        || !definition
+            .holds
+            .iter()
+            .any(|h| matches!(h.kind, HoldKind::TubeSpan | HoldKind::ThroughBore))
     {
         return None;
     }
