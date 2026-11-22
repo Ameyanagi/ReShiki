@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/still-head-15",
- "revision": 1,
+ "revision": 2,
  "family": "still-head",
  "variant": {
   "joint": "15/25"
@@ -33,7 +33,7 @@
    "material": "glass",
    "role": "glass",
    "id": "shape-2",
-   "path": "M8 -3L8 -62L6.5 -68L6.5 -72L-6.5 -72L-6.5 -68L-8 -62L-8 -3Z"
+   "path": "M8 -3L8 -60C8 -67 8.35 -67 8.35 -75L-8.35 -75C-8.35 -67 -8 -67 -8 -60L-8 -3Z"
   },
   {
    "layer": "body",
