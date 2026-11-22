@@ -18,6 +18,8 @@ mod hold_tests;
 #[cfg(test)]
 mod hose_tests;
 #[cfg(test)]
+mod npt_tests;
+#[cfg(test)]
 mod placed_tests;
 #[cfg(test)]
 mod solve_tests;

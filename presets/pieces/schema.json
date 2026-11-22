@@ -507,6 +507,7 @@
                 "hose",
                 "compression",
                 "work_tube",
+                "npt",
                 "stopper",
                 "septum",
                 "thermometer",
@@ -532,7 +533,9 @@
                 "gender": { "const": "F" }
               }
             }
-          }
+          },
+          "if": { "properties": { "family": { "const": "npt" } } },
+          "then": { "properties": { "size_mm": { "const": 6.35 } } }
         }
       ]
     },
