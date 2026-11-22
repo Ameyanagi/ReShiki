@@ -4,18 +4,19 @@
 //! measures this executable's effective throughput; processor count is not used.
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(any(not(target_arch = "wasm32"), feature = "browser"))]
+use std::{collections::BTreeMap, hint::black_box, sync::Mutex};
 use std::{
-    collections::BTreeMap,
-    hint::black_box,
     sync::{
-        Arc, Mutex, OnceLock,
+        Arc, OnceLock,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::Duration,
 };
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "browser"))]
 use web_time::Instant;
 
+#[cfg(any(not(target_arch = "wasm32"), feature = "browser", test))]
 mod platform;
 
 pub const MIB: usize = 1024 * 1024;
@@ -33,6 +34,39 @@ const MAX_GEOMETRY_SECONDS: u64 = 120;
 const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(10);
 const WORK_UNITS_PER_RATE: u64 = 10;
 
+/// An optional wall-clock deadline. Plain Wasm hosts have no clock imports;
+/// their callers must retain work/memory limits and any host fuel budget.
+#[derive(Clone, Copy, Debug)]
+pub struct Deadline {
+    #[cfg(any(not(target_arch = "wasm32"), feature = "browser"))]
+    at: Instant,
+}
+
+impl Deadline {
+    pub fn after(duration: Duration) -> Option<Self> {
+        #[cfg(any(not(target_arch = "wasm32"), feature = "browser"))]
+        {
+            Instant::now().checked_add(duration).map(|at| Self { at })
+        }
+        #[cfg(all(target_arch = "wasm32", not(feature = "browser")))]
+        {
+            let _ = duration;
+            None
+        }
+    }
+
+    pub fn is_expired(&self) -> bool {
+        #[cfg(any(not(target_arch = "wasm32"), feature = "browser"))]
+        {
+            Instant::now() >= self.at
+        }
+        #[cfg(all(target_arch = "wasm32", not(feature = "browser")))]
+        {
+            false
+        }
+    }
+}
+
 /// Injectable machine observations. Missing observations use the historical
 /// 256 MiB heap (`FALLBACK_MEMORY / HEAP_SHARE_DIVISOR`), 60 s geometry timeout
 /// (`MIN_GEOMETRY_SECONDS` at `REFERENCE_RATE`), and 50 million work unit defaults
@@ -45,19 +79,31 @@ pub struct Capabilities {
 }
 impl Capabilities {
     pub fn detect() -> Self {
-        static RATE: OnceLock<Option<u64>> = OnceLock::new();
-        static MEMORY: OnceLock<Mutex<(Instant, Option<u64>)>> = OnceLock::new();
-        let observed =
-            MEMORY.get_or_init(|| Mutex::new((Instant::now(), platform::memory_headroom())));
-        let memory_headroom_bytes = observed.lock().ok().and_then(|mut snapshot| {
-            if snapshot.0.elapsed() >= Duration::from_secs(1) {
-                *snapshot = (Instant::now(), platform::memory_headroom());
+        #[cfg(all(target_arch = "wasm32", not(feature = "browser")))]
+        {
+            // Neither std's clock nor wasm-bindgen JavaScript imports exist
+            // in hosts such as Typst. Resolve the established bounded defaults.
+            Self {
+                memory_headroom_bytes: None,
+                lookup_operations_per_second: None,
             }
-            snapshot.1
-        });
-        Self {
-            memory_headroom_bytes,
-            lookup_operations_per_second: *RATE.get_or_init(calibrate),
+        }
+        #[cfg(any(not(target_arch = "wasm32"), feature = "browser"))]
+        {
+            static RATE: OnceLock<Option<u64>> = OnceLock::new();
+            static MEMORY: OnceLock<Mutex<(Instant, Option<u64>)>> = OnceLock::new();
+            let observed =
+                MEMORY.get_or_init(|| Mutex::new((Instant::now(), platform::memory_headroom())));
+            let memory_headroom_bytes = observed.lock().ok().and_then(|mut snapshot| {
+                if snapshot.0.elapsed() >= Duration::from_secs(1) {
+                    *snapshot = (Instant::now(), platform::memory_headroom());
+                }
+                snapshot.1
+            });
+            Self {
+                memory_headroom_bytes,
+                lookup_operations_per_second: *RATE.get_or_init(calibrate),
+            }
         }
     }
     pub fn resolve(self) -> Budget {
@@ -70,7 +116,8 @@ impl Capabilities {
             .unwrap_or(MAX_HEAP_BYTES)
             .clamp(MIN_HEAP_BYTES, MAX_HEAP_BYTES);
         // The probe is a throughput proxy, not a claim about a molecule's solve
-        // time. Independent wall-clock and work ceilings remain mandatory.
+        // time. Work ceilings remain mandatory; hosts with clocks also use
+        // independent wall-clock deadlines.
         // The historical reference timeout is also the minimum geometry timeout.
         let seconds = REFERENCE_RATE
             .saturating_mul(MIN_GEOMETRY_SECONDS)
@@ -172,6 +219,7 @@ impl Cancellation {
     }
 }
 
+#[cfg(any(not(target_arch = "wasm32"), feature = "browser"))]
 fn calibrate() -> Option<u64> {
     let table: BTreeMap<_, _> = (0u64..256).map(|n| (n * 17, n.rotate_left(7))).collect();
     let start = Instant::now();

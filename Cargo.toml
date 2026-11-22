@@ -161,6 +161,7 @@ open = "5"
 
 # The browser editor: one thread, no processes, and the page's own APIs.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+reshiki-io = { path = "crates/io", features = ["browser"] }
 # Browser canvases have no sRGB surface format, so pack sRGB colours as-is.
 iced = { version = "0.14", default-features = false, features = ["wgpu", "webgl", "web-colors"] }
 tokio = { version = "1", default-features = false, features = ["sync"] }

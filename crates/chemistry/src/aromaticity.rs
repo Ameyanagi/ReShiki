@@ -7,12 +7,8 @@ use super::{
     ELEMENTS, Element,
     graph::{Graph, Valence, pi_electron_count},
 };
-use reshiki_process_heap::policy::{Budget, Cancellation, Capabilities, MIB};
+use reshiki_process_heap::policy::{Budget, Cancellation, Capabilities, Deadline, MIB};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-#[cfg(not(target_arch = "wasm32"))]
-use std::time::Instant;
-#[cfg(target_arch = "wasm32")]
-use web_time::Instant;
 
 #[cfg(test)]
 mod tests;
@@ -60,7 +56,7 @@ fn element(number: i32) -> Result<&'static Element, String> {
 struct Work {
     remaining: usize,
     checkpoint: usize,
-    deadline: Option<Instant>,
+    deadline: Option<Deadline>,
     cancellation: Cancellation,
 }
 impl Work {
@@ -76,10 +72,7 @@ impl Work {
         if self.cancellation.is_cancelled() {
             return Err("Aromaticity calculation cancelled".into());
         }
-        if self
-            .deadline
-            .is_some_and(|deadline| Instant::now() >= deadline)
-        {
+        if self.deadline.is_some_and(|deadline| deadline.is_expired()) {
             return Err(
                 "Aromaticity time budget exceeded; chemistry analysis is incomplete".into(),
             );
@@ -349,7 +342,7 @@ fn run_with_budget(
         "Aromaticity calculation resources are busy; retry after other calculations finish",
     )?;
     let mut work = Work::units(budget.work_units());
-    work.deadline = Instant::now().checked_add(budget.analysis_timeout());
+    work.deadline = Deadline::after(budget.analysis_timeout());
     work.cancellation = cancellation;
     work.check()?;
     let result = perceive_cached_with_work(graph, rings, cache, &mut work)?;

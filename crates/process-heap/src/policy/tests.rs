@@ -1,6 +1,13 @@
 use super::*;
 
 #[test]
+fn a_zero_duration_deadline_is_already_expired_when_a_clock_is_available() {
+    if let Some(deadline) = Deadline::after(Duration::ZERO) {
+        assert!(deadline.is_expired());
+    }
+}
+
+#[test]
 fn resolved_budgets_match_literal_policy_goldens() {
     // Keep these expected values independent of the policy constants so changes
     // to the implementation cannot silently update the historical behavior.

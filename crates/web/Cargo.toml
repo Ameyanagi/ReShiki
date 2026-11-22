@@ -10,7 +10,7 @@ description = "Headless ReShiki import, export and rendering for the browser"
 crate-type = ["cdylib"]
 
 [dependencies]
-reshiki-io = { path = "../io" }
+reshiki-io = { path = "../io", features = ["browser"] }
 reshiki-model = { path = "../model" }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 # The `code` property of the errors the exports throw.

@@ -644,6 +644,10 @@ jobs:
           shared-key: wasm32
       - name: Check the browser editor, its worker and the headless library for wasm32
         run: cargo clippy -p reshiki-web -p reshiki -p reshiki-web-worker --lib --bin reshiki --target wasm32-unknown-unknown --locked -- -D warnings
+      - name: Test molecule import in plain Wasm
+        run: |
+          cargo build -p reshiki-io --example wasm_import_smoke --target wasm32-unknown-unknown --locked
+          node scripts/check_wasm_import.mjs target/wasm32-unknown-unknown/debug/examples/wasm_import_smoke.wasm
       - name: Build the headless library for the package tests
         run: |
           version=$(awk '$0 == "name = \"wasm-bindgen\"" { getline; gsub(/"/, "", $3); print $3 }' Cargo.lock)
