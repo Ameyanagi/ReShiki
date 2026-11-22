@@ -40,7 +40,8 @@ enum Completion {
     Imports,
     /// Naming(Finished | Generated | CaptionNamed) and Labels(LocantsFinished).
     Naming,
-    /// ClipboardRead, ClipboardWritten, CopyAsPrepared and CopyAsWritten.
+    /// ClipboardRead, ClipboardWritten, CopyAsPrepared, CopyAsWritten and
+    /// Equipment(PartsListCopied).
     Clipboard,
     /// Pasted.
     Pasted,
@@ -681,6 +682,9 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::OpenOnlineSource
                 | Action::WriteUnknownStereo(_) => None,
             }
+        }
+        Message::Equipment(super::equipment::Action::PartsListCopied { .. }) => {
+            Some(Completion::Clipboard)
         }
         Message::Equipment(action) if action.completes() => Some(Completion::PieceLibrary),
         Message::ThemeFile(action) => {

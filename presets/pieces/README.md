@@ -49,7 +49,8 @@ Each shape has an `id`, a `layer`, a `material`, a `role` and a `path` in SVG pa
 ### Joints
 
 - **Taper** (ground glass): `size` is one of `10/18`, `14/20`, `14/23`, `15/25`, `19/22`, `19/28`, `19/38`, `24/29`, `29/42`; `gender` is `M` or `F`. ReShiki draws the socket or cone itself, so every 15/25 joint looks and seats alike. For a socket (`F`), `at` is the centre of the mouth and `dir` points out of it; draw your neck so that it meets the socket's base, L + 4 mm inside the mouth, at the size's neck diameter (13 mm for 15/25). For a cone (`M`), `at` is the shoulder centre and `dir` points to the tip; your tube ends 3.6 mm behind the shoulder. A cone that is not ground glass, such as a rubber septum or a PTFE sleeve, sets `"draw": "none"` and draws its own end; its `at` must sit on that drawing.
-- **Plug.** Set `family` to `hose`, `compression`, `stopper`, `septum`, `thermometer`, `nmr` or `stir`. Place `at` at the end of the barb, stem or opening. For compression fittings, `size_mm` is the nominal tube outside diameter. Use `6.35` for ¼-inch tubing and `6` for 6 mm tubing. Compression ends mate when their nominal sizes match exactly. A female compression opening can set `insertion_mm` to the depth of its internal tube stop. Draw `at` at the visible mouth with `dir` pointing outward so tubes snap at the opening and seat at the stop.
+- **Plug.** Set `family` to `hose`, `compression`, `npt`, `stopper`, `septum`, `thermometer`, `nmr` or `stir`. Place `at` at the end of the barb, stem or opening. For compression fittings, `size_mm` is the nominal tube outside diameter. Use `6.35` for ¼-inch tubing and `6` for 6 mm tubing. Compression ends mate when their nominal sizes match exactly. A female compression opening can set `insertion_mm` to the depth of its internal tube stop. Draw `at` at the visible mouth with `dir` pointing outward so tubes snap at the opening and seat at the stop.
+- **NPT.** Use plug family `npt` with nominal `size_mm: 6.35` for the initial **1/4 in NPT** thread. This nominal pipe size is not the outside diameter; the rim and snap target use 13.716 mm. NPT joins only an opposite-gender NPT port of the exact same nominal size. It cannot join compression, hose, metric tubing, or a different thread standard. Its frame is the illustrated connection plane. NPT does not use the compression-only `insertion_mm` field.
 - `part` moves the joint with a part. `poses` gives it another position in a state: `{"turn": {"r1": {"at": [..], "dir": [..]}}}`.
 
 A seated cone sits 0.06 L outside the socket mouth (2.52 mm for 29/42).
@@ -78,6 +79,51 @@ section's passage unfilled where the continuous tube should show.
 - `part` moves the hold with a part, as a clamp's jaw tilts with its head.
 - `fit` names a millimetre `range` parameter that a jaw or slider sets to the diameter it closes on, so a clamp's fingers meet the neck.
 - `when`: `{"jaw": ["closed"]}` holds only in those states; an open jaw lets go of the neck, and closing it on a neck takes hold again.
+
+### Physical tube specifications
+
+Optional `tube_spec` describes one physical tube independently of its display
+size or Exterior/Section state. It does not turn a rigid tube into a flexible
+hose. For example:
+
+```json
+"tube_spec": {
+  "material": "stainless_steel",
+  "od_mm": 6.35,
+  "id_mm": 4.57,
+  "ends": ["a", "b"],
+  "length": { "fixed_mm": 0, "params": ["length"] }
+}
+```
+
+Materials are `stainless_steel`, `borosilicate_glass`, `quartz`, `ptfe`,
+`polyethylene` and `copper`. The inside diameter is optional and must be
+smaller than the outside diameter. The two ends name distinct joints.
+Cut length is `fixed_mm` plus the current values of the named millimetre
+range parameters. A fixed tube can use an empty parameter list. For a 90°
+bend of centreline radius 20 mm, use `fixed_mm: 31.41592653589793` and the
+two straight-leg length parameters. Count the complete cut tube, including
+the ends inserted into compression fittings, rather than the visible gap
+between fittings. View switches, rotation and resizing the illustration
+do not change this length.
+
+Use axial `stretch` parts on straight tube shapes, end joints and their
+`tube_span` holds to change length without changing the diameter. A rigid
+elbow can translate with one leg while a second leg stretches along its own
+axis. Keep span/end IDs stable and holds unconditional across views. The
+standard adjustment solver carries attached endpoint pieces and retains
+mechanical seats that still fit; a shortened span releases a bore that no
+longer fits completely.
+
+The model's `equipment::parts_list(doc, selection)` reports one row per
+placed equipment ID, with the actual name, variant and optional physical
+tube dimensions. An empty selection includes the whole document. From/To
+list endpoint seats; a free end stays free. Through fittings are reported
+separately from endpoints and do not split the tube or add tube items.
+The report does not infer fluid paths through equipment internals. Existing
+drawings keep their embedded revisions. The original three revision-1
+compression-tube geometries have a fixed-dimension report fallback; other
+pieces without this option remain ordinary equipment rows.
 
 ### Parameters and parts
 

@@ -590,6 +590,7 @@ impl App {
                 }
                 Message::CopyAsPrepared(..)
                 | Message::CopyAsWritten(..)
+                | Message::Equipment(super::equipment::Action::PartsListCopied { .. })
                 | Message::InspectorAction(super::inspector::Action::IdentityCopied(..)) => {
                     self.copy_as_busy = false;
                     Task::none()

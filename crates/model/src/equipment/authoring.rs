@@ -83,7 +83,9 @@ impl JointKind {
                     Gender::F => t.d + 2. * t.socket_wall,
                 }
             }
-            Self::Plug { size_mm, .. } => *size_mm,
+            Self::Plug {
+                family, size_mm, ..
+            } => family.opening_mm(*size_mm),
         };
         if !width.is_finite() || width <= 0. {
             return Err("Choose a positive opening size.".into());
@@ -254,6 +256,7 @@ impl Draft {
             grounded: false,
             clip: None,
             tube: None,
+            tube_spec: None,
             shapes,
             joints: vec![],
             holds: vec![],

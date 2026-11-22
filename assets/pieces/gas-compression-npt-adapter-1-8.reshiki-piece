@@ -1,0 +1,389 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/gas-compression-npt-adapter-1-8",
+  "revision": 1,
+  "family": "gas-compression-npt-adapter",
+  "variant": {
+    "compression": "1/8 in",
+    "thread": "1/4 in NPT"
+  },
+  "names": {
+    "en": "Compression-to-NPT adapter, 1/8 in to 1/4 in NPT"
+  },
+  "category": "other",
+  "keywords": [
+    "compression adapter",
+    "thread adapter",
+    "1/8 in",
+    "NPT",
+    "gas line",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "inlet-neck",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-17 3.84L-21 3.84L-21 -3.84L-17 -3.84Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "inlet-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-17 3.84L-21 3.84L-21 1.5875L-18.2 1.5875L-18.2 1.26L-17 1.26ZM-17 -1.26L-18.2 -1.26L-18.2 -1.5875L-21 -1.5875L-21 -3.84L-17 -3.84Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "inlet-nut-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-21 4.64L-22.2 6.08L-27.4 6.08L-29 4.64L-29 -4.64L-27.4 -6.08L-22.2 -6.08L-21 -4.64Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "inlet-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-21 4.64L-22.2 6.08L-27.4 6.08L-29 4.64L-29 1.5875L-21 1.5875ZM-27.4 -6.08L-22.2 -6.08L-21 -4.64L-21 -1.5875L-29 -1.5875L-29 -4.64Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "inlet-nut-outline",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-21 4.64L-22.2 6.08L-27.4 6.08L-29 4.64L-29 1.5875M-29 -1.5875L-29 -4.64L-27.4 -6.08L-22.2 -6.08L-21 -4.64",
+      "depth": 6
+    },
+    {
+      "id": "inlet-rim",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-27.56 1.5875L-29 1.5875M-27.56 -1.5875L-29 -1.5875",
+      "depth": 6
+    },
+    {
+      "id": "inlet-nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-22.2 6.08L-22.2 -6.08M-27.4 6.08L-27.4 3.12M-27.4 -3.12L-27.4 -6.08",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "inlet-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-23 1.5875L-25.16 1.5875L-27.56 4.56L-24.68 4.56ZM-23 -1.5875L-25.16 -1.5875L-27.56 -4.56L-24.68 -4.56Z",
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "inlet-section-thread",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-21.8 4.88L-22.76 4.16L-23.72 4.88L-24.68 4.16M-21.8 -4.88L-22.76 -4.16L-23.72 -4.88L-24.68 -4.16",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "inlet-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-22.6 5.76L-27 5.76L-28.04 4.72L-23.4 4.72Z",
+      "color": [
+        242,
+        245,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4,
+      "style": "shaded"
+    },
+    {
+      "id": "inlet-exterior-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-21 4.64L-21 -4.64",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "inlet-section-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-21 4.64L-21 1.5875M-21 -1.5875L-21 -4.64",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "adapter-wrench-body",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-19.2 -8L5 -8L11 -5L11 5L5 8L-19.2 8Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "adapter-wrench-body-cut",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11 -5L11 -1.26L-18.2 -1.26L-18.2 -1.5875L-19.2 -1.5875L-19.2 -8L5 -8ZM-19.2 8L-19.2 1.5875L-18.2 1.5875L-18.2 1.26L11 1.26L11 5L5 8Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "adapter-wrench-body-hatch",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-18 -6L-17.2 -6.8M-13.54 -2.46L-9.2 -6.8M-14.8 6.8L-10.46 2.46M-5.54 -2.46L-1.2 -6.8M-6.8 6.8L-2.46 2.46M2.46 -2.46L6.1056 -6.1056M1.2 6.8L5.54 2.46",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "male-npt",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M9 -7.35L28 -6.858L28 6.858L9 7.35Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "male-npt-cut",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M28 -6.858L28 -1.26L9 -1.26L9 -7.35ZM9 7.35L9 1.26L28 1.26L28 6.858Z",
+      "color": [
+        208,
+        218,
+        226
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "male-npt-hatch",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M10.46 -2.46L14.0196 -6.0196M10.2 5.8L13.54 2.46M18.46 -2.46L21.8177 -5.8177M18.0857 5.9143L21.54 2.46M26.46 -2.46L26.8 -2.8M26.2983 5.7017L26.8 5.2",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "male-npt-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M11 -7.12L12.3 -5.9M11 7.12L12.3 5.9M13.8 -7.12L15.1 -5.9M13.8 7.12L15.1 5.9M16.6 -7.12L17.9 -5.9M16.6 7.12L17.9 5.9M19.4 -7.12L20.7 -5.9M19.4 7.12L20.7 5.9M22.2 -7.12L23.5 -5.9M22.2 7.12L23.5 5.9",
+      "depth": 2
+    }
+  ],
+  "joints": [
+    {
+      "id": "compression",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 3.175,
+      "at": [
+        -29,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 10.8
+    },
+    {
+      "id": "thread",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "M",
+      "size_mm": 6.35,
+      "at": [
+        28,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "compression",
+      "at": [
+        -29,
+        0
+      ]
+    },
+    {
+      "id": "thread",
+      "at": [
+        28,
+        0
+      ]
+    }
+  ]
+}

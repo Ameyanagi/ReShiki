@@ -42,6 +42,9 @@ pub struct Definition {
     /// Flexible tubing, drawn along a centre line stored on each placed copy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tube: Option<Tube>,
+    /// Physical tube data, independent of artwork, view and drawing scale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tube_spec: Option<TubeSpec>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shapes: Vec<Shape>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -106,6 +109,52 @@ pub struct Tube {
     pub color: Option<Rgb>,
     /// The two plug joints at the ends of the centre line.
     pub ends: [String; 2],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TubeMaterial {
+    StainlessSteel,
+    BorosilicateGlass,
+    Quartz,
+    Ptfe,
+    Polyethylene,
+    Copper,
+}
+
+impl std::fmt::Display for TubeMaterial {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::StainlessSteel => "Stainless steel",
+            Self::BorosilicateGlass => "Borosilicate glass",
+            Self::Quartz => "Quartz",
+            Self::Ptfe => "PTFE",
+            Self::Polyethylene => "Polyethylene",
+            Self::Copper => "Copper",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TubeSpec {
+    pub material: TubeMaterial,
+    pub od_mm: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id_mm: Option<f64>,
+    /// Stable joint IDs at the two actual cut ends, including inserted ends.
+    pub ends: [String; 2],
+    pub length: TubeLength,
+}
+
+/// Cut length in local millimetres: the fixed contribution (such as an arc)
+/// plus the current values of the named millimetre range parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TubeLength {
+    pub fixed_mm: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -204,11 +253,25 @@ pub enum PlugFamily {
     Compression,
     /// A terminating work-tube seal, sized by the tube's exact nominal OD.
     WorkTube,
+    /// NPT pipe thread. size_mm stores nominal pipe size in millimetres,
+    /// not the thread's outside diameter. Initially only 1/4 in is supported.
+    Npt,
     Stopper,
     Septum,
     Thermometer,
     Nmr,
     Stir,
+}
+
+impl PlugFamily {
+    /// Physical rim diameter for attachment and the snap target. The NPT
+    /// nominal pipe size differs from its outside diameter.
+    pub fn opening_mm(self, size_mm: f64) -> f64 {
+        match self {
+            Self::Npt if size_mm == 6.35 => 13.716,
+            _ => size_mm,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -243,11 +306,12 @@ pub enum Joint {
         #[serde(default = "standard")]
         draw: JointDraw,
     },
-    /// Rubber, probes, compression fittings or terminating work-tube seals.
+    /// Rubber, probes, hose barbs, work-tube seals, and metal tube or pipe fittings.
     Plug {
         id: String,
         family: PlugFamily,
         gender: Gender,
+        /// Physical diameter, except NPT's nominal pipe size converted to mm.
         size_mm: f64,
         at: Xy,
         dir: Xy,

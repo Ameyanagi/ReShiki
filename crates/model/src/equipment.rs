@@ -5,7 +5,9 @@ pub mod builtin;
 pub mod eval;
 pub mod format;
 pub mod geometry;
+pub mod parts_list;
 pub mod placed;
+pub use parts_list::parts_list;
 pub mod plan;
 pub mod revise;
 pub mod solve;
@@ -17,6 +19,8 @@ mod adjust_tests;
 mod hold_tests;
 #[cfg(test)]
 mod hose_tests;
+#[cfg(test)]
+mod npt_tests;
 #[cfg(test)]
 mod placed_tests;
 #[cfg(test)]
