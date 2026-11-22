@@ -2,7 +2,7 @@
   "format": "reshiki-piece",
   "format_version": 0,
   "id": "reshiki/vigreux-15",
-  "revision": 1,
+  "revision": 2,
   "family": "vigreux",
   "variant": {
     "joint": "15/25"
@@ -33,7 +33,7 @@
       "material": "glass",
       "role": "glass",
       "id": "shape-2",
-      "path": "M9 -3 L9 -187 Q9 -195 6.5 -200 L6.5 -203 L-6.5 -203 L-6.5 -200 Q-9 -195 -9 -187 L-9 -3 Z"
+      "path": "M9 -3L9 -187C9 -195 8.35 -197 8.35 -206L-8.35 -206C-8.35 -197 -9 -195 -9 -187L-9 -3Z"
     },
     {
       "layer": "body",
