@@ -56,6 +56,49 @@ sockets. The seal's small tube nozzle uses the existing compression family,
 so the separate adapter needs no invented threaded interface. A 6 mm tube
 does not match a 6.35 mm (¼-inch) gas-line socket.
 
+## Upright furnace and direct compression end seals
+
+Choose **Vertical split tube furnace, 32 mm work tube** for an upright
+assembly. Its aluminium frame leaves the centre open above and below the
+furnace. The control module stays upright beside the frame, and the split
+cover has its own side handle and latches.
+
+Use the same **Quartz work tube, 600 mm, 32 mm OD**. Connecting `span` to
+the vertical furnace's `bore` aligns the tube with the y axis. The bore runs
+from y = −150 to +150 mm; the tube retains its 540 mm usable span and
+±120 mm axial travel. The nearest mounted seal lip stays 7 mm beyond the
+locating aperture at either travel limit. Frame posts, mounting brackets,
+feet and controls remain outside the tube and seal corridor.
+
+Two direct end-seal variants combine the 32 mm work-tube socket with a
+female compression gas connection:
+
+| Piece                                   | Gas-line tube OD  | Gas-line insertion |
+| --------------------------------------- | ----------------- | ------------------ |
+| `work-tube-end-seal-compression-32-1-4` | ¼ inch (6.35 mm)  | 13.5 mm            |
+| `work-tube-end-seal-compression-32-1-8` | ⅛ inch (3.175 mm) | 10.5 mm            |
+
+Both keep the `work-tube` socket at x = 0, facing −x, with 18 mm insertion.
+Their `gas-line` socket is at x = 54 mm, facing +x. The gas-side stops use
+the same depths and seat artwork as the existing compression unions.
+Section exposes the passage and each tube stop. Sizes match exactly;
+a 6 mm or ⅛-inch tube does not connect to the ¼-inch socket.
+
+Connect one seal's `work-tube` socket to each quartz-tube end, then connect
+the matching metal tube directly to `gas-line`. The top and bottom seals
+turn to face outwards. This assembly has six objects and five seats, with
+the furnace frame and control module included in the furnace object.
+The horizontal furnace and its separate nozzle-and-adapter option are
+unchanged.
+
+Reusable native examples:
+
+- [Upright furnace with ¼-inch tubing](../tests/fixtures/vertical-tube-furnace/connected-1-4.rsk)
+- [Upright furnace with ⅛-inch tubing](../tests/fixtures/vertical-tube-furnace/connected-1-8.rsk)
+
+These are generic diagram pieces. Connector dimensions identify the drawn
+interfaces; the pieces carry no operating ratings.
+
 ## Artwork references
 
 The native artwork is original. The housing uses Asahi Rika's ARF-KC as a
@@ -66,6 +109,8 @@ use the work-tube accessory reference:
 
 - [Asahi Rika ARF-KC tube furnaces](https://www.kanjyouro.com/tube/arf/arf_kc/)
 - [Asahi Rika ARF-50KC housing drawing](https://www.kanjyouro.com/download/pdf/arf-50kc.pdf)
+- [Asahi Rika catalogue cover, ARF-40KC with upright stand](https://www.kanjyouro.com/download/pdf/arf_1zone.pdf#page=1)
+- [Asahi Rika upright aluminium stand](https://www.kanjyouro.com/option/stand/)
 - [Carbolite work-tube accessories](https://www.carbolite.com/products/modified-atmosphere/work-tube-accessories/)
 
 The accessory catalogue includes end seals for 32 mm OD work tubes. The
@@ -82,3 +127,8 @@ RESHIKI_TUBE_FURNACE_EVIDENCE=/absolute/review/directory \
 
 The evidence output contains Exterior and Section `.rsk` and `.svg` files
 on light and dark canvases, all generated from the tested native assembly.
+
+For both direct-connection upright examples, use
+`RESHIKI_VERTICAL_FURNACE_EVIDENCE=/absolute/review/directory cargo test -p reshiki-model vertical_tube_furnace`.
+The [upright furnace review record](changes/vertical-tube-furnace.md) describes
+the source checks and renderer proof.
