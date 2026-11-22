@@ -58,14 +58,17 @@ does not match a 6.35 mm (¼-inch) gas-line socket.
 
 ## Artwork references
 
-The native artwork is original. Manufacturer references established the
-separate split furnace, exchangeable straight work tube, terminating seal
-sleeve and gas nozzle silhouettes:
+The native artwork is original. The housing uses Asahi Rika's ARF-KC as a
+visual reference for the split cover, arched lifting handle, vertical vent
+slots and visible toggle latches. Its proportions and control module remain
+generic. The independent work tube, terminating seal sleeve and gas nozzle
+use the work-tube accessory reference:
 
-- [Carbolite TS split tube furnaces](https://www.carbolite.com/products/tube-furnace-range/split-tube-furnaces/ts-range/)
+- [Asahi Rika ARF-KC tube furnaces](https://www.kanjyouro.com/tube/arf/arf_kc/)
+- [Asahi Rika ARF-50KC housing drawing](https://www.kanjyouro.com/download/pdf/arf-50kc.pdf)
 - [Carbolite work-tube accessories](https://www.carbolite.com/products/modified-atmosphere/work-tube-accessories/)
 
-The reference catalogue includes end seals for 32 mm OD work tubes. The
+The accessory catalogue includes end seals for 32 mm OD work tubes. The
 600 mm length, 28 mm illustrated bore and 18 mm seal insertion are explicit
 geometry choices for this diagram set. The pieces carry no pressure or
 temperature operating rating.
