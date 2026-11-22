@@ -270,6 +270,87 @@ mod tests {
         solve::{self, JointRef},
     };
 
+    fn copying_parts_list() -> App {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let scale = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
+        app.tab.doc.graphics.push(placed::graphic(
+            1,
+            builtin::find("reshiki/compression-tube-60-1-4").unwrap(),
+            Point::default(),
+            scale,
+        ));
+        app.tab.saved = app.tab.doc.clone();
+        // Start the production command without polling its OS/browser
+        // clipboard task; deliver the controlled receipt through tab routing.
+        let task = app.update(Message::Equipment(Action::CopyPartsList));
+        assert!(task.units() > 0);
+        assert_eq!(app.status, "Copying the equipment parts list…");
+        assert!(!app.error);
+        app
+    }
+
+    #[test]
+    fn parts_list_copy_feedback_follows_its_source_tab_for_success_and_failure() {
+        for result in [Ok(()), Err("Clipboard permission denied".into())] {
+            let mut app = copying_parts_list();
+            let (source, epoch) = (app.tab.id, app.tab.file_epoch);
+            let document = app.tab.doc.clone();
+            app.add_tab();
+            let front = app.tab.id;
+            app.status = "Other tab is ready".into();
+            let completion = Message::Equipment(Action::PartsListCopied {
+                tab: source,
+                epoch,
+                result: result.clone(),
+            });
+            assert!(crate::app::tabs::document_result(&completion));
+            let _ = app.update(Message::Tab(source, Box::new(completion)));
+            assert_eq!(app.tab.id, front);
+            assert_eq!(app.status, "Other tab is ready");
+            assert!(!app.error);
+            let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(source)));
+            assert_eq!(app.tab.doc, document);
+            assert_eq!(app.error, result.is_err());
+            assert_eq!(
+                app.status,
+                result.map_or_else(|error| error, |()| "Copied the equipment parts list".into())
+            );
+        }
+    }
+
+    #[test]
+    fn parts_list_copy_feedback_cannot_update_a_reopened_source_document() {
+        for result in [Ok(()), Err("Clipboard permission denied".into())] {
+            let mut app = copying_parts_list();
+            let (source, epoch) = (app.tab.id, app.tab.file_epoch);
+            app.show_opened(Document::default(), None);
+            assert_eq!(app.tab.id, source);
+            assert_ne!(app.tab.file_epoch, epoch);
+            let replacement = app.tab.doc.clone();
+            app.status = "Replacement document is ready".into();
+            app.error = false;
+            app.add_tab();
+            let front = app.tab.id;
+            app.status = "Other tab is ready".into();
+            let _ = app.update(Message::Tab(
+                source,
+                Box::new(Message::Equipment(Action::PartsListCopied {
+                    tab: source,
+                    epoch,
+                    result,
+                })),
+            ));
+            assert_eq!(app.tab.id, front);
+            assert_eq!(app.status, "Other tab is ready");
+            assert!(!app.error);
+            let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(source)));
+            assert_eq!(app.status, "Replacement document is ready");
+            assert!(!app.error);
+            assert_eq!(app.tab.doc, replacement);
+        }
+    }
+
     #[test]
     fn equipment_parts_command_creates_an_editable_table_from_the_whole_drawing() {
         let (mut app, _) = App::new();

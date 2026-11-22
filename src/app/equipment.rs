@@ -126,8 +126,8 @@ pub struct Connect {
 }
 
 impl Action {
-    /// A file dialog or library read finished: app work that leaves the
-    /// drawing and its text drafts alone.
+    /// A file, library or clipboard task finished without changing the
+    /// drawing or its text drafts. `results` assigns its completion owner.
     pub fn completes(&self) -> bool {
         matches!(
             self,

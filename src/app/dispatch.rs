@@ -315,6 +315,9 @@ impl App {
     /// These arms must handle every Owner::Document completion in results.rs.
     pub(super) fn update_document_result(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Equipment(action @ super::equipment::Action::PartsListCopied { .. }) => {
+                return self.equipment_action(action);
+            }
             Message::Labels(action) => return self.label_action(action),
             Message::Optimization(action) => return self.optimization_action(action),
             Message::Models3d(action) => return self.models3d_action(action),
