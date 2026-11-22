@@ -335,7 +335,7 @@ impl Environment {
         radius: u8,
         deadline: Instant,
     ) -> Result<String, String> {
-        if Instant::now() > deadline {
+        if cfg!(not(target_arch = "wasm32")) && Instant::now() > deadline {
             return Err("NMR prediction exceeded its work deadline".into());
         }
         if !(MIN_RADIUS..=MAX_RADIUS).contains(&radius) {
@@ -464,7 +464,7 @@ impl Environment {
         for (a, b, o) in bonds {
             code.push_str(&format!("{a}-{b}:{o};"));
         }
-        if Instant::now() > deadline {
+        if cfg!(not(target_arch = "wasm32")) && Instant::now() > deadline {
             return Err("NMR prediction exceeded its work deadline".into());
         }
         Ok(format!("{:x}", Sha256::digest(code.as_bytes())))

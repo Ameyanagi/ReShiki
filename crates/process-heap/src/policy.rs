@@ -2,7 +2,7 @@
 //! Requests resolve from a memory snapshot refreshed at most once per second.
 //! A small, bounded lookup probe
 //! measures this executable's effective throughput; processor count is not used.
-#[cfg(not(target_arch = "wasm32"))]
+#![allow(unused_imports)]
 use std::time::Instant;
 use std::{
     collections::BTreeMap,
@@ -13,8 +13,6 @@ use std::{
     },
     time::Duration,
 };
-#[cfg(target_arch = "wasm32")]
-use web_time::Instant;
 
 mod platform;
 
@@ -45,19 +43,29 @@ pub struct Capabilities {
 }
 impl Capabilities {
     pub fn detect() -> Self {
-        static RATE: OnceLock<Option<u64>> = OnceLock::new();
-        static MEMORY: OnceLock<Mutex<(Instant, Option<u64>)>> = OnceLock::new();
-        let observed =
-            MEMORY.get_or_init(|| Mutex::new((Instant::now(), platform::memory_headroom())));
-        let memory_headroom_bytes = observed.lock().ok().and_then(|mut snapshot| {
-            if snapshot.0.elapsed() >= Duration::from_secs(1) {
-                *snapshot = (Instant::now(), platform::memory_headroom());
+        #[cfg(target_arch = "wasm32")]
+        {
+            return Self {
+                memory_headroom_bytes: None,
+                lookup_operations_per_second: None,
+            };
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            static RATE: OnceLock<Option<u64>> = OnceLock::new();
+            static MEMORY: OnceLock<Mutex<(Instant, Option<u64>)>> = OnceLock::new();
+            let observed =
+                MEMORY.get_or_init(|| Mutex::new((Instant::now(), platform::memory_headroom())));
+            let memory_headroom_bytes = observed.lock().ok().and_then(|mut snapshot| {
+                if snapshot.0.elapsed() >= Duration::from_secs(1) {
+                    *snapshot = (Instant::now(), platform::memory_headroom());
+                }
+                snapshot.1
+            });
+            Self {
+                memory_headroom_bytes,
+                lookup_operations_per_second: *RATE.get_or_init(calibrate),
             }
-            snapshot.1
-        });
-        Self {
-            memory_headroom_bytes,
-            lookup_operations_per_second: *RATE.get_or_init(calibrate),
         }
     }
     pub fn resolve(self) -> Budget {
@@ -172,6 +180,7 @@ impl Cancellation {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn calibrate() -> Option<u64> {
     let table: BTreeMap<_, _> = (0u64..256).map(|n| (n * 17, n.rotate_left(7))).collect();
     let start = Instant::now();

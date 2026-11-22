@@ -9,10 +9,7 @@ use super::{
 };
 use reshiki_process_heap::policy::{Budget, Cancellation, Capabilities, MIB};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
-#[cfg(target_arch = "wasm32")]
-use web_time::Instant;
 
 #[cfg(test)]
 mod tests;
@@ -76,9 +73,10 @@ impl Work {
         if self.cancellation.is_cancelled() {
             return Err("Aromaticity calculation cancelled".into());
         }
-        if self
-            .deadline
-            .is_some_and(|deadline| Instant::now() >= deadline)
+        if cfg!(not(target_arch = "wasm32"))
+            && self
+                .deadline
+                .is_some_and(|deadline| Instant::now() >= deadline)
         {
             return Err(
                 "Aromaticity time budget exceeded; chemistry analysis is incomplete".into(),
@@ -349,7 +347,9 @@ fn run_with_budget(
         "Aromaticity calculation resources are busy; retry after other calculations finish",
     )?;
     let mut work = Work::units(budget.work_units());
-    work.deadline = Instant::now().checked_add(budget.analysis_timeout());
+    if cfg!(not(target_arch = "wasm32")) {
+        work.deadline = Instant::now().checked_add(budget.analysis_timeout());
+    }
     work.cancellation = cancellation;
     work.check()?;
     let result = perceive_cached_with_work(graph, rings, cache, &mut work)?;
