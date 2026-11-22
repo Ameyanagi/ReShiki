@@ -78,6 +78,10 @@ impl App {
     }
 
     pub(super) fn copy_equipment_parts_list(&mut self) -> Task<Message> {
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
         let rows = match self.equipment_parts_cells() {
             Ok(rows) => rows,
             Err(error) => {
@@ -100,6 +104,9 @@ impl App {
                 .join("\t"),
             );
         }
+        // Like identity text copies, publication owns the global slot until
+        // its receipt, even if the source document is replaced or closed.
+        self.copy_as_busy = true;
         self.status = "Copying the equipment parts list…".into();
         self.error = false;
         let (tab, epoch) = (self.tab.id, self.tab.file_epoch);
@@ -270,7 +277,7 @@ mod tests {
         solve::{self, JointRef},
     };
 
-    fn copying_parts_list() -> App {
+    fn equipment_drawing() -> App {
         let (mut app, _) = App::new();
         app.tab.busy = false;
         let scale = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
@@ -281,12 +288,18 @@ mod tests {
             scale,
         ));
         app.tab.saved = app.tab.doc.clone();
+        app
+    }
+
+    fn copying_parts_list() -> App {
+        let mut app = equipment_drawing();
         // Start the production command without polling its OS/browser
         // clipboard task; deliver the controlled receipt through tab routing.
         let task = app.update(Message::Equipment(Action::CopyPartsList));
         assert!(task.units() > 0);
         assert_eq!(app.status, "Copying the equipment parts list…");
         assert!(!app.error);
+        assert!(app.clipboard_working());
         app
     }
 
@@ -306,6 +319,7 @@ mod tests {
             });
             assert!(crate::app::tabs::document_result(&completion));
             let _ = app.update(Message::Tab(source, Box::new(completion)));
+            assert!(!app.clipboard_working());
             assert_eq!(app.tab.id, front);
             assert_eq!(app.status, "Other tab is ready");
             assert!(!app.error);
@@ -327,6 +341,7 @@ mod tests {
             app.show_opened(Document::default(), None);
             assert_eq!(app.tab.id, source);
             assert_ne!(app.tab.file_epoch, epoch);
+            assert!(app.clipboard_working());
             let replacement = app.tab.doc.clone();
             app.status = "Replacement document is ready".into();
             app.error = false;
@@ -341,6 +356,7 @@ mod tests {
                     result,
                 })),
             ));
+            assert!(!app.clipboard_working());
             assert_eq!(app.tab.id, front);
             assert_eq!(app.status, "Other tab is ready");
             assert!(!app.error);
@@ -348,6 +364,105 @@ mod tests {
             assert_eq!(app.status, "Replacement document is ready");
             assert!(!app.error);
             assert_eq!(app.tab.doc, replacement);
+        }
+    }
+
+    #[test]
+    fn parts_list_copy_waits_for_pending_cut_copy_and_other_clipboard_work() {
+        for cut in [false, true] {
+            let mut app = equipment_drawing();
+            app.tab.selected = vec![1];
+            let before = app.tab.doc.clone();
+            assert!(app.copy_native(cut, false, None).units() > 0);
+            assert!(app.native_copy_busy && app.tab.clipboard_busy);
+            assert_eq!(app.copy_equipment_parts_list().units(), 0);
+            assert_eq!(app.status, "A clipboard operation is already in progress");
+            assert_eq!(app.tab.doc, before);
+            assert!(app.native_copy_busy && app.tab.clipboard_busy);
+        }
+        for pending in ["copy-as", "paste", "background-paste"] {
+            let mut app = equipment_drawing();
+            if pending == "copy-as" {
+                assert!(app.copy_name("Pending name".into()).units() > 0);
+            } else {
+                assert!(app.paste_native(false).units() > 0);
+                if pending == "background-paste" {
+                    app.add_tab();
+                }
+            }
+            assert!(app.clipboard_working());
+            assert_eq!(app.copy_equipment_parts_list().units(), 0);
+            assert_eq!(app.status, "A clipboard operation is already in progress");
+            assert!(app.clipboard_working());
+        }
+    }
+
+    #[test]
+    fn parts_list_copy_holds_the_global_slot_and_restores_command_availability() {
+        let mut app = equipment_drawing();
+        let commands = crate::app::command_palette::catalog::build(&app);
+        let copy = commands
+            .iter()
+            .find(|c| c.name == "Copy equipment parts list")
+            .unwrap();
+        let insert = commands
+            .iter()
+            .find(|c| c.name == "Insert equipment parts list")
+            .unwrap();
+        assert!(app.command_unavailable(copy).is_none());
+        assert!(app.copy_equipment_parts_list().units() > 0);
+        assert!(app.command_unavailable(copy).is_some());
+        assert!(app.command_unavailable(insert).is_none());
+        assert_eq!(app.copy_native(true, false, None).units(), 0);
+        assert_eq!(app.copy_native(false, false, None).units(), 0);
+        assert_eq!(app.copy_name("Another copy".into()).units(), 0);
+        assert_eq!(app.paste_native(false).units(), 0);
+        assert_eq!(app.copy_equipment_parts_list().units(), 0);
+        assert!(app.clipboard_working());
+        let (tab, epoch) = (app.tab.id, app.tab.file_epoch);
+        let _ = app.update(Message::Equipment(Action::PartsListCopied {
+            tab,
+            epoch,
+            result: Ok(()),
+        }));
+        assert!(!app.clipboard_working());
+        assert!(app.command_unavailable(copy).is_none());
+        assert!(app.copy_equipment_parts_list().units() > 0);
+        assert!(app.clipboard_working());
+
+        let (mut empty, _) = App::new();
+        assert_eq!(empty.copy_equipment_parts_list().units(), 0);
+        assert!(!empty.clipboard_working());
+    }
+
+    #[test]
+    fn closing_the_parts_copy_source_keeps_the_global_slot_until_its_receipt() {
+        for result in [Ok(()), Err("Clipboard permission denied".into())] {
+            let mut app = copying_parts_list();
+            let (source, epoch) = (app.tab.id, app.tab.file_epoch);
+            let _ = app.close_active_tab();
+            assert!(app.tab_index(source).is_none());
+            assert!(app.clipboard_working());
+            assert_eq!(
+                app.copy_name("Wait for the previous write".into()).units(),
+                0
+            );
+            app.status = "Other tab is ready".into();
+            app.error = false;
+            let front = app.tab.id;
+            let _ = app.update(Message::Tab(
+                source,
+                Box::new(Message::Equipment(Action::PartsListCopied {
+                    tab: source,
+                    epoch,
+                    result,
+                })),
+            ));
+            assert!(!app.clipboard_working());
+            assert_eq!(app.tab.id, front);
+            assert_eq!(app.status, "Other tab is ready");
+            assert!(!app.error);
+            assert!(app.paste_native(false).units() > 0);
         }
     }
 

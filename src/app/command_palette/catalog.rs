@@ -75,6 +75,7 @@ pub(crate) enum Need {
     DefineEquipment,
     Equipment,
     EquipmentInDrawing,
+    CopyEquipmentPartsList,
     EquipmentClips,
     MakeCycle,
     CyclePart,
@@ -915,7 +916,7 @@ fn edits(app: &App) -> Vec<Command> {
             "equipment tubing joint fittings inventory bill of materials bom paste spreadsheet",
             Message::Equipment(equipment::Action::CopyPartsList),
         )
-        .need(Need::EquipmentInDrawing),
+        .need(Need::CopyEquipmentPartsList),
         send(
             "Equipment: Add clips to all joints",
             Edit,

@@ -519,6 +519,7 @@ impl App {
             }
             Action::CopyPartsList => return self.copy_equipment_parts_list(),
             Action::PartsListCopied { tab, epoch, result } => {
+                self.copy_as_busy = false;
                 if self.tab.id == tab && self.tab.file_epoch == epoch {
                     self.error = result.is_err();
                     self.status = result

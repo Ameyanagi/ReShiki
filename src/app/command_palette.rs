@@ -439,6 +439,13 @@ impl App {
             Need::EquipmentInDrawing => {
                 (!self.has_equipment()).then_some("Add equipment to the drawing first")
             }
+            Need::CopyEquipmentPartsList => {
+                if self.clipboard_working() {
+                    Some("A clipboard operation is already in progress")
+                } else {
+                    (!self.has_equipment()).then_some("Add equipment to the drawing first")
+                }
+            }
             Need::EquipmentClips => (self.tab.selected.len() < 2
                 || reshiki::equipment::solve::unclipped(&self.tab.doc, &self.tab.selected) == 0)
                 .then_some("Select equipment with unclipped joints"),
