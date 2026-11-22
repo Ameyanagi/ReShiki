@@ -1,0 +1,311 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/schlenk-tube-straight-29-left",
+  "revision": 1,
+  "family": "schlenk-tube",
+  "variant": {
+    "geometry": "Straight",
+    "side": "Left",
+    "joint": "29/42"
+  },
+  "names": {
+    "en": "Schlenk tube, straight, 29/42, left",
+    "ja": "シュレンク管 直管 29/42 左"
+  },
+  "category": "schlenk",
+  "keywords": [
+    "Schlenk",
+    "straight sidearm",
+    "two-way stopcock",
+    "hose barb",
+    "シュレンク",
+    "直管",
+    "二方コック"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-1",
+      "path": "M13 -12Q16 -10.8 16 0L16 94A16 16 0 0 1 -16 94L-16 0Q-16 -10.8 -13 -12Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-2",
+      "path": "M-13 -11L-13 -21L13 -21L13 -11Z"
+    },
+    {
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "id": "shape-3",
+      "path": "M13 -18.2L13 -16L-13 -16L-13 -18.2Z"
+    },
+    {
+      "id": "straight-sidearm",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-13 11.5L-47.5 11.5L-47.5 18.5L-13 18.5Z"
+    },
+    {
+      "id": "stopcock-housing",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-46.6 25L-61.4 25L-61.8 3L-46.2 3Z"
+    },
+    {
+      "id": "stopcock-retainer",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-59 28A5 5 0 0 0 -49 28A5 5 0 0 0 -59 28Z"
+    },
+    {
+      "id": "barb-root",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-61 11.6L-65 11.6L-65 18.4L-61 18.4Z"
+    },
+    {
+      "id": "hose-barb",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-62 18.3L-76 18.3L-76 19.6L-80.5 18.3L-80.5 19.6L-85 18.3L-85 19.5L-89 18.5L-89 11.5L-85 10.5L-85 11.7L-80.5 10.4L-80.5 11.7L-76 10.4L-76 11.7L-62 11.7Z"
+    },
+    {
+      "id": "stopcock-plug",
+      "layer": "body",
+      "material": "frosted",
+      "role": "solid",
+      "path": "M-48.4 24L-59.6 24L-60.2 2.5L-47.8 2.5Z"
+    },
+    {
+      "id": "stopcock-cap",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-49.1 -1.5L-58.9 -1.5A1.5 1.5 0 0 0 -60.4 0L-60.4 1.5A1.5 1.5 0 0 0 -58.9 3L-49.1 3A1.5 1.5 0 0 0 -47.6 1.5L-47.6 0A1.5 1.5 0 0 0 -49.1 -1.5Z"
+    },
+    {
+      "id": "stopcock-stem",
+      "layer": "body",
+      "material": "glass",
+      "role": "glass",
+      "path": "M-53 -7L-55 -7A1 1 0 0 0 -56 -6L-56 -2A1 1 0 0 0 -55 -1L-53 -1A1 1 0 0 0 -52 -2L-52 -6A1 1 0 0 0 -53 -7Z",
+      "part": "stopcock-control"
+    },
+    {
+      "id": "closed-handle",
+      "layer": "body",
+      "material": "glass",
+      "role": "solid",
+      "path": "M-50.64 -7Q-49.04 -9.5 -51.04 -12L-56.96 -12Q-58.96 -9.5 -57.36 -7Z",
+      "part": "stopcock-control",
+      "when": {
+        "stopcock": [
+          "closed"
+        ]
+      }
+    },
+    {
+      "id": "closed-flow",
+      "layer": "body",
+      "material": "ink",
+      "role": "fill",
+      "path": "M-55.9 15A1.9 1.9 0 0 0 -52.1 15A1.9 1.9 0 0 0 -55.9 15Z",
+      "when": {
+        "stopcock": [
+          "closed"
+        ]
+      }
+    },
+    {
+      "id": "open-handle",
+      "layer": "body",
+      "material": "glass",
+      "role": "solid",
+      "path": "M-42 -7Q-40.4 -9.5 -42.4 -12L-65.6 -12Q-67.6 -9.5 -66 -7Z",
+      "part": "stopcock-control",
+      "when": {
+        "stopcock": [
+          "open"
+        ]
+      }
+    },
+    {
+      "id": "open-flow",
+      "layer": "body",
+      "material": "ink",
+      "role": "fill",
+      "path": "M-48.2 13.3L-59.8 13.3L-59.8 16.7L-48.2 16.7Z",
+      "when": {
+        "stopcock": [
+          "open"
+        ]
+      }
+    }
+  ],
+  "joints": [
+    {
+      "id": "neck",
+      "gender": "F",
+      "at": [
+        0,
+        -64
+      ],
+      "dir": [
+        0,
+        -1
+      ],
+      "kind": "taper",
+      "size": "29/42",
+      "draw": "standard"
+    },
+    {
+      "id": "hose",
+      "kind": "plug",
+      "family": "hose",
+      "gender": "M",
+      "size_mm": 7,
+      "at": [
+        -89,
+        15
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    }
+  ],
+  "holds": [
+    {
+      "id": "neck-grip",
+      "kind": "grip",
+      "from": [
+        0,
+        -18
+      ],
+      "to": [
+        0,
+        -16
+      ],
+      "diameter_mm": 26
+    },
+    {
+      "id": "body",
+      "kind": "grip",
+      "from": [
+        0,
+        30
+      ],
+      "to": [
+        0,
+        90
+      ],
+      "diameter_mm": 32
+    }
+  ],
+  "params": [
+    {
+      "id": "stopcock",
+      "names": {
+        "en": "Stopcock",
+        "ja": "コック"
+      },
+      "kind": "states",
+      "default": "closed",
+      "states": [
+        {
+          "id": "closed",
+          "names": {
+            "en": "Closed",
+            "ja": "閉"
+          }
+        },
+        {
+          "id": "open",
+          "names": {
+            "en": "Open",
+            "ja": "開"
+          }
+        }
+      ]
+    },
+    {
+      "id": "fill",
+      "names": {
+        "en": "Liquid level",
+        "ja": "液面"
+      },
+      "kind": "fill",
+      "liquid": "body",
+      "default": 0
+    },
+    {
+      "id": "liquid_color",
+      "names": {
+        "en": "Liquid colour",
+        "ja": "液の色"
+      },
+      "kind": "color",
+      "liquid": "body",
+      "default": [
+        79,
+        143,
+        208
+      ]
+    }
+  ],
+  "parts": [
+    {
+      "id": "stopcock-control",
+      "param": "stopcock",
+      "motion": {
+        "per_state": {
+          "closed": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "open": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ]
+        }
+      },
+      "handle": {
+        "at": [
+          -54,
+          -9.5
+        ],
+        "gesture": "toggle"
+      }
+    }
+  ],
+  "liquids": [
+    {
+      "id": "body",
+      "region": "M -14.8 0 L -14.8 94 L -14.71892 95.54702 L -14.47658 97.07709 L -14.07564 98.57345 L -13.52047 100.0197 L -12.81718 101.4 L -11.97345 102.69922 L -10.99854 103.90313 L -9.90313 104.99854 L -8.69922 105.97345 L -7.4 106.81718 L -6.0197 107.52047 L -4.57345 108.07564 L -3.07709 108.47658 L -1.54702 108.71892 L 0 108.8 L 1.54702 108.71892 L 3.07709 108.47658 L 4.57345 108.07564 L 6.0197 107.52047 L 7.4 106.81718 L 8.69922 105.97345 L 9.90313 104.99854 L 10.99854 103.90313 L 11.97345 102.69922 L 12.81718 101.4 L 13.52047 100.0197 L 14.07564 98.57345 L 14.47658 97.07709 L 14.71892 95.54702 L 14.8 94 L 14.8 0 Z"
+    }
+  ]
+}

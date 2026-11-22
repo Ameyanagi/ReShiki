@@ -306,6 +306,105 @@ fn connect_lists_nearest_fitting_joints_and_seats_the_chosen_one() {
 }
 
 #[test]
+fn the_w_septum_seats_on_compatible_hose_barbs_throughout_the_catalogue() {
+    use super::format::{Gender, Joint, PlugFamily};
+
+    let mut checked = 0;
+    for definition in builtin::catalogue() {
+        for barb in definition.joints.iter().filter(|joint| {
+            matches!(
+                joint,
+                Joint::Plug {
+                    family: PlugFamily::Hose,
+                    gender: Gender::M,
+                    size_mm: 7.,
+                    ..
+                }
+            )
+        }) {
+            let mut doc = Document::default();
+            let vessel = add(&mut doc, &definition.id, Point::new(250., 300.));
+            let septum = add(&mut doc, "reshiki/septum-hose-7", Point::new(80., 120.));
+            let target = joint(vessel, barb.id());
+            let cap = joint(septum, "barb");
+            let snap = solve::connect(&mut doc, &[septum], &target, &cap)
+                .unwrap_or_else(|| panic!("{} {}", definition.id, barb.id()));
+            assert!(matches!(snap.offer, Offer::Seat));
+            let (gap, angle) = residual(&port(&doc, &target), &port(&doc, &cap));
+            assert!(
+                gap < 0.01 && angle < 0.01,
+                "{} {}",
+                definition.id,
+                barb.id()
+            );
+            doc.validate().unwrap();
+            checked += 1;
+        }
+    }
+    assert!(checked >= 52, "checked {checked} compatible hose barbs");
+}
+
+#[test]
+fn a_schlenk_downward_barb_can_hold_a_septum_while_its_side_barb_holds_a_hose() {
+    let mut doc = Document::default();
+    let tube = add(&mut doc, "reshiki/schlenk-tube-15", Point::new(250., 300.));
+    let septum = add(&mut doc, "reshiki/septum-hose-7", Point::new(80., 120.));
+    let hose = add(&mut doc, "reshiki/hose-7", Point::new(550., 300.));
+    let downward = joint(tube, "hose2");
+    solve::connect(&mut doc, &[septum], &downward, &joint(septum, "barb")).unwrap();
+    assert!(solve::connect(&mut doc, &[hose], &downward, &joint(hose, "a")).is_none());
+    solve::connect(&mut doc, &[hose], &joint(tube, "hose1"), &joint(hose, "a")).unwrap();
+    let needle = add(&mut doc, "reshiki/balloon", Point::new(400., 500.));
+    solve::connect(
+        &mut doc,
+        &[needle],
+        &joint(septum, "needle"),
+        &joint(needle, "needle"),
+    )
+    .unwrap();
+
+    let back = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(back.seats, doc.seats);
+    assert_eq!(back.seats.len(), 3);
+}
+
+#[test]
+fn a_ground_glass_stopcock_keeps_all_seats_when_the_flow_changes() {
+    use super::eval::Value;
+
+    for (vessel, valve) in [
+        ("reshiki/rbf-100-15", "reshiki/stopcock-three-way-15"),
+        ("reshiki/rbf-100-29", "reshiki/stopcock-three-way-29"),
+    ] {
+        let mut doc = Document::default();
+        let flask = add(&mut doc, vessel, Point::new(250., 300.));
+        let stopcock = add(&mut doc, valve, Point::new(250., 100.));
+        let hose = add(&mut doc, "reshiki/hose-7", Point::new(90., 100.));
+        let septum = add(&mut doc, "reshiki/septum-hose-7", Point::new(400., 100.));
+        for (moving, port, target, socket) in [
+            (stopcock, "down", flask, "neck"),
+            (hose, "a", stopcock, "left"),
+            (septum, "barb", stopcock, "right"),
+        ] {
+            solve::connect(
+                &mut doc,
+                &[moving],
+                &joint(target, socket),
+                &joint(moving, port),
+            )
+            .unwrap_or_else(|| panic!("{valve} {socket}"));
+        }
+        let seats = doc.seats.clone();
+        assert_eq!(seats.len(), 3);
+        for state in ["left-right", "left-down", "right-down", "all", "closed"] {
+            solve::adjust::set(&mut doc, stopcock, "stopcock", Value::State(state.into())).unwrap();
+            assert_eq!(doc.seats, seats);
+            doc.validate().unwrap();
+        }
+    }
+}
+
+#[test]
 fn a_tampered_seat_is_released_on_open_and_the_pieces_stay_put() {
     let mut doc = Document::default();
     let flask = add(&mut doc, "reshiki/rbf-100-15", Point::new(200., 300.));
