@@ -1,0 +1,325 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/compression-cap-6-mm",
+  "revision": 1,
+  "family": "compression-cap",
+  "variant": {
+    "connection": "6 mm compression",
+    "bore": "blind"
+  },
+  "names": {
+    "en": "Compression tube cap, 6 mm"
+  },
+  "category": "other",
+  "grounded": false,
+  "keywords": [
+    "compression tube fitting",
+    "tube fitting",
+    "6 mm",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "closed-cap-body",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-2.5 -7.4L9.4 -7.4L11 -4.81L11 4.81L9.4 7.4L-2.5 7.4Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "tube-neck",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M3.5 4.65L-1.5 4.65L-1.5 -4.65L3.5 -4.65Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "tube-nut-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-1.5 5.624L-3.21 7.4L-9.29 7.4L-11 5.624L-11 -5.624L-9.29 -7.4L-3.21 -7.4L-1.5 -5.624Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "tube-nut-outline",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-1.5 5.624L-3.21 7.4L-9.29 7.4L-11 5.624L-11 3M-11 -3L-11 -5.624L-9.29 -7.4L-3.21 -7.4L-1.5 -5.624",
+      "depth": 6
+    },
+    {
+      "id": "tube-mouth-rim",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-9.2 3L-11 3M-9.2 -3L-11 -3",
+      "depth": 6
+    },
+    {
+      "id": "tube-exterior-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-1.5 5.624L-1.5 -5.624",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "tube-section-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-1.5 5.624L-1.5 3M-1.5 -3L-1.5 -5.624",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "tube-nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-3.21 7.4L-3.21 -7.4M-9.29 7.4L-9.29 3.848M-9.29 -3.848L-9.29 -7.4",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "tube-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-3.59 3L-6.44 3L-9.29 5.772L-5.87 5.772ZM-3.59 -3L-6.44 -3L-9.29 -5.772L-5.87 -5.772Z",
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "tube-section-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-2.355 6.608L-3.495 5.288L-4.635 6.608L-5.775 5.288M-2.355 -6.608L-3.495 -5.288L-4.635 -6.608L-5.775 -5.288",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "tube-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-3.41 7.1L-9.09 7.1L-8.49 6.3L-4.01 6.3Z",
+      "color": [
+        242,
+        245,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4,
+      "style": "shaded"
+    },
+    {
+      "id": "section-fluid-opening",
+      "layer": "back",
+      "material": "paper",
+      "role": "fill",
+      "path": "M-11 -3L2 -3L2 -2.4L4.5 -2.4L4.5 2.4L2 2.4L2 3L-11 3Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "section-fluid-walls",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-11 -3L2 -3L2 -2.4L4.5 -2.4L4.5 2.4M-11 3L2 3L2 2.4L4.5 2.4",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "section-material-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M7.25 -4.33L8.25 -3.33M7.25 3.33L8.25 4.33",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "closed-cap-body-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11 -4.81L11 4.81L9.4 7.4L-2.5 7.4L-2.5 3L2 3L2 2.4L4.5 2.4L4.5 -2.4L2 -2.4L2 -3L-2.5 -3L-2.5 -7.4L9.4 -7.4Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "tube-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M3.5 4.65L-1.5 4.65L-1.5 3L2 3L2 2.4L3.5 2.4ZM2 -2.4L2 -3L-1.5 -3L-1.5 -4.65L3.5 -4.65L3.5 -2.4Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "tube-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-1.5 5.624L-3.21 7.4L-9.29 7.4L-11 5.624L-11 3L-1.5 3ZM-9.29 -7.4L-3.21 -7.4L-1.5 -5.624L-1.5 -3L-11 -3L-11 -5.624Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    }
+  ],
+  "joints": [
+    {
+      "id": "tube",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 6.0,
+      "at": [
+        -11.0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 13.0
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        0
+      ]
+    }
+  ]
+}

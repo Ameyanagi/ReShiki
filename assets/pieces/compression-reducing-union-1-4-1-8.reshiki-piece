@@ -1,0 +1,521 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/compression-reducing-union-1-4-1-8",
+  "revision": 1,
+  "family": "compression-reducing-union",
+  "variant": {
+    "connection": "1/4 in × 1/8 in compression",
+    "left_od": "1/4 in OD",
+    "right_od": "1/8 in OD",
+    "bore": "tube-stop"
+  },
+  "names": {
+    "en": "Compression reducing union, 1/4 in × 1/8 in"
+  },
+  "category": "other",
+  "grounded": false,
+  "keywords": [
+    "compression tube fitting",
+    "tube fitting",
+    "1/4 in",
+    "6.35 mm",
+    "joint",
+    "reducer",
+    "reducing union",
+    "1/8 in",
+    "3.175 mm"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "central-reducer-body",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-4.5 -5.304L-3.5 -7.8L3.5 -7.8L4.5 -5.304L4.5 5.304L3.5 7.8L-3.5 7.8L-4.5 5.304Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "left-neck",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-2 4.8L-7 4.8L-7 -4.8L-2 -4.8Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "left-nut-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-7 5.776L-8.8 7.6L-15.2 7.6L-17 5.776L-17 -5.776L-15.2 -7.6L-8.8 -7.6L-7 -5.776Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "left-nut-outline",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-7 5.776L-8.8 7.6L-15.2 7.6L-17 5.776L-17 3.175M-17 -3.175L-17 -5.776L-15.2 -7.6L-8.8 -7.6L-7 -5.776",
+      "depth": 6
+    },
+    {
+      "id": "left-mouth-rim",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-15.2 3.175L-17 3.175M-15.2 -3.175L-17 -3.175",
+      "depth": 6
+    },
+    {
+      "id": "left-exterior-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-7 5.776L-7 -5.776",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "left-section-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-7 5.776L-7 3.175M-7 -3.175L-7 -5.776",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "left-nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-8.8 7.6L-8.8 -7.6M-15.2 7.6L-15.2 3.952M-15.2 -3.952L-15.2 -7.6",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "left-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-9.2 3.175L-12.2 3.175L-15.2 5.96275L-11.6 5.96275ZM-9.2 -3.175L-12.2 -3.175L-15.2 -5.96275L-11.6 -5.96275Z",
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "left-section-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-7.9 6.8035L-9.1 5.476L-10.3 6.8035L-11.5 5.476M-7.9 -6.8035L-9.1 -5.476L-10.3 -6.8035L-11.5 -5.476",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "left-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-9 7.3L-15 7.3L-14.4 6.5L-9.6 6.5Z",
+      "color": [
+        242,
+        245,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4,
+      "style": "shaded"
+    },
+    {
+      "id": "right-neck",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M2 -3.15L6 -3.15L6 3.15L2 3.15Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "right-nut-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M6 -4.256L7.44 -5.6L12.56 -5.6L14 -4.256L14 4.256L12.56 5.6L7.44 5.6L6 4.256Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "right-nut-outline",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M6 -4.256L7.44 -5.6L12.56 -5.6L14 -4.256L14 -1.5875M14 1.5875L14 4.256L12.56 5.6L7.44 5.6L6 4.256",
+      "depth": 6
+    },
+    {
+      "id": "right-mouth-rim",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M12.4 -1.5875L14 -1.5875M12.4 1.5875L14 1.5875",
+      "depth": 6
+    },
+    {
+      "id": "right-exterior-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M6 -4.256L6 4.256",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "right-section-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M6 -4.256L6 -1.5875M6 1.5875L6 4.256",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "right-nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M7.44 -5.6L7.44 5.6M12.56 -5.6L12.56 -2.912M12.56 2.912L12.56 5.6",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "right-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M7.76 -1.5875L10.16 -1.5875L12.56 -4.115375L9.68 -4.115375ZM7.76 1.5875L10.16 1.5875L12.56 4.115375L9.68 4.115375Z",
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "right-section-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M6.72 -4.87775L7.68 -3.674L8.64 -4.87775L9.6 -3.674M6.72 4.87775L7.68 3.674L8.64 4.87775L9.6 3.674",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "right-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M7.64 -5.3L12.36 -5.3L11.76 -4.5L8.24 -4.5Z",
+      "color": [
+        242,
+        245,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4,
+      "style": "shaded"
+    },
+    {
+      "id": "section-fluid-opening",
+      "layer": "back",
+      "material": "paper",
+      "role": "fill",
+      "path": "M-17 -3.175L-3.5 -3.175L-3.5 -1.143L3.5 -1.143L3.5 -1.5875L14 -1.5875L14 1.5875L3.5 1.5875L3.5 1.143L-3.5 1.143L-3.5 3.175L-17 3.175Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "section-fluid-walls",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-17 -3.175L-3.5 -3.175L-3.5 -1.143L3.5 -1.143L3.5 -1.5875L14 -1.5875M-17 3.175L-3.5 3.175L-3.5 1.143L3.5 1.143L3.5 1.5875L14 1.5875",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "section-material-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-2.7 -7.1L-0.5 -4.9M-2.7 4.9L-0.5 7.1",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "central-reducer-body-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M3.5 1.5875L4.5 1.5875L4.5 5.304L3.5 7.8L-3.5 7.8L-4.5 5.304L-4.5 3.175L-3.5 3.175L-3.5 1.143L3.5 1.143ZM4.5 -5.304L4.5 -1.5875L3.5 -1.5875L3.5 -1.143L-3.5 -1.143L-3.5 -3.175L-4.5 -3.175L-4.5 -5.304L-3.5 -7.8L3.5 -7.8Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "left-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-2 4.8L-7 4.8L-7 3.175L-3.5 3.175L-3.5 1.143L-2 1.143ZM-2 -1.143L-3.5 -1.143L-3.5 -3.175L-7 -3.175L-7 -4.8L-2 -4.8Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "left-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-7 5.776L-8.8 7.6L-15.2 7.6L-17 5.776L-17 3.175L-7 3.175ZM-15.2 -7.6L-8.8 -7.6L-7 -5.776L-7 -3.175L-17 -3.175L-17 -5.776Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "right-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M3.5 1.5875L6 1.5875L6 3.15L2 3.15L2 1.143L3.5 1.143ZM6 -1.5875L3.5 -1.5875L3.5 -1.143L2 -1.143L2 -3.15L6 -3.15Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "right-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M14 4.256L12.56 5.6L7.44 5.6L6 4.256L6 1.5875L14 1.5875ZM14 -4.256L14 -1.5875L6 -1.5875L6 -4.256L7.44 -5.6L12.56 -5.6Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    }
+  ],
+  "joints": [
+    {
+      "id": "left",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        -17.0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 13.5
+    },
+    {
+      "id": "right",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 3.175,
+      "at": [
+        14.0,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ],
+      "insertion_mm": 10.5
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        0
+      ]
+    }
+  ]
+}

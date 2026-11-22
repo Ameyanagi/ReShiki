@@ -1,0 +1,156 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/compression-tube-60-6-mm",
+  "revision": 1,
+  "family": "compression-tube",
+  "variant": {
+    "geometry": "Straight",
+    "length": "60 mm",
+    "tube_od": "6 mm OD"
+  },
+  "names": {
+    "en": "Stainless-steel compression tubing"
+  },
+  "category": "other",
+  "grounded": false,
+  "keywords": [
+    "tubing",
+    "rigid tube",
+    "compression",
+    "6 mm",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "steel",
+      "layer": "body",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 -3H60V3H0Z",
+      "color": [
+        186,
+        201,
+        212
+      ]
+    },
+    {
+      "id": "open-section",
+      "layer": "body",
+      "material": "paper",
+      "role": "fill",
+      "path": "M0 -2.11H60V2.11H0Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "tube-wall",
+      "layer": "body",
+      "material": "ink",
+      "role": "outline",
+      "path": "M0 -3H60M0 3H60",
+      "depth": 2
+    },
+    {
+      "id": "section-wall",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -2.11H60M0 2.11H60",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "rim-edges",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -3V-2.11M0 2.11V3M60 -3V-2.11M60 2.11V3",
+      "depth": 2
+    }
+  ],
+  "joints": [
+    {
+      "id": "a",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 6.0,
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "b",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 6.0,
+      "at": [
+        60,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "holds": [
+    {
+      "id": "span",
+      "kind": "tube_span",
+      "from": [
+        0,
+        0
+      ],
+      "to": [
+        60,
+        0
+      ],
+      "diameter_mm": 6.0
+    }
+  ]
+}

@@ -1,0 +1,590 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/compression-bulkhead-union-6-mm",
+  "revision": 1,
+  "family": "compression-bulkhead-union",
+  "variant": {
+    "connection": "6 mm compression",
+    "bore": "tube-stop"
+  },
+  "names": {
+    "en": "Compression bulkhead union, 6 mm"
+  },
+  "category": "other",
+  "grounded": false,
+  "keywords": [
+    "compression tube fitting",
+    "tube fitting",
+    "6 mm",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "bulkhead-barrel",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-15.7 -5.65L15.7 -5.65L15.7 5.65L-15.7 5.65Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "fixed-shoulder",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-7.95 -7.19872L-7.15 -9.472L-2.75 -9.472L-1.95 -7.19872L-1.95 7.19872L-2.75 9.472L-7.15 9.472L-7.95 7.19872Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "panel-mounting-nut",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M1.95 -8.3694L2.75 -10.73L7.15 -10.73L7.95 -8.3694L7.95 8.3694L7.15 10.73L2.75 10.73L1.95 8.3694Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "left-neck",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-9.5 4.65L-14.5 4.65L-14.5 -4.65L-9.5 -4.65Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "left-nut-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-14.5 5.624L-16.21 7.4L-22.29 7.4L-24 5.624L-24 -5.624L-22.29 -7.4L-16.21 -7.4L-14.5 -5.624Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "left-nut-outline",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-14.5 5.624L-16.21 7.4L-22.29 7.4L-24 5.624L-24 3M-24 -3L-24 -5.624L-22.29 -7.4L-16.21 -7.4L-14.5 -5.624",
+      "depth": 6
+    },
+    {
+      "id": "left-mouth-rim",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-22.2 3L-24 3M-22.2 -3L-24 -3",
+      "depth": 6
+    },
+    {
+      "id": "left-exterior-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-14.5 5.624L-14.5 -5.624",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "left-section-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-14.5 5.624L-14.5 3M-14.5 -3L-14.5 -5.624",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "left-nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-16.21 7.4L-16.21 -7.4M-22.29 7.4L-22.29 3.848M-22.29 -3.848L-22.29 -7.4",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "left-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-16.59 3L-19.44 3L-22.29 5.772L-18.87 5.772ZM-16.59 -3L-19.44 -3L-22.29 -5.772L-18.87 -5.772Z",
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "left-section-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-15.355 6.608L-16.495 5.288L-17.635 6.608L-18.775 5.288M-15.355 -6.608L-16.495 -5.288L-17.635 -6.608L-18.775 -5.288",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "left-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-16.41 7.1L-22.09 7.1L-21.49 6.3L-17.01 6.3Z",
+      "color": [
+        242,
+        245,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4,
+      "style": "shaded"
+    },
+    {
+      "id": "right-neck",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M9.5 -4.65L14.5 -4.65L14.5 4.65L9.5 4.65Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "right-nut-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M14.5 -5.624L16.21 -7.4L22.29 -7.4L24 -5.624L24 5.624L22.29 7.4L16.21 7.4L14.5 5.624Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "right-nut-outline",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M14.5 -5.624L16.21 -7.4L22.29 -7.4L24 -5.624L24 -3M24 3L24 5.624L22.29 7.4L16.21 7.4L14.5 5.624",
+      "depth": 6
+    },
+    {
+      "id": "right-mouth-rim",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M22.2 -3L24 -3M22.2 3L24 3",
+      "depth": 6
+    },
+    {
+      "id": "right-exterior-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M14.5 -5.624L14.5 5.624",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "right-section-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M14.5 -5.624L14.5 -3M14.5 3L14.5 5.624",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "right-nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M16.21 -7.4L16.21 7.4M22.29 -7.4L22.29 -3.848M22.29 3.848L22.29 7.4",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "right-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M16.59 -3L19.44 -3L22.29 -5.772L18.87 -5.772ZM16.59 3L19.44 3L22.29 5.772L18.87 5.772Z",
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "right-section-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M15.355 -6.608L16.495 -5.288L17.635 -6.608L18.775 -5.288M15.355 6.608L16.495 5.288L17.635 6.608L18.775 5.288",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "right-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M16.41 -7.1L22.09 -7.1L21.49 -6.3L17.01 -6.3Z",
+      "color": [
+        242,
+        245,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4,
+      "style": "shaded"
+    },
+    {
+      "id": "section-fluid-opening",
+      "layer": "back",
+      "material": "paper",
+      "role": "fill",
+      "path": "M-24 -3L-11 -3L-11 -2.4L11 -2.4L11 -3L24 -3L24 3L11 3L11 2.4L-11 2.4L-11 3L-24 3Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "section-fluid-walls",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-24 -3L-11 -3L-11 -2.4L11 -2.4L11 -3L24 -3M-24 3L-11 3L-11 2.4L11 2.4L11 3L24 3",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "section-material-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-10.2 -4.95L-8.35 -3.1M-10.2 3.1L-8.35 4.95M-6.3 -4.95L-4.45 -3.1M-6.3 3.1L-4.45 4.95M-2.4 -4.95L-0.55 -3.1M-2.4 3.1L-0.55 4.95M1.5 -4.95L3.35 -3.1M1.5 3.1L3.35 4.95M5.4 -4.95L7.25 -3.1M5.4 3.1L7.25 4.95M9.3 -4.95L11.15 -3.1M9.3 3.1L11.15 4.95",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "mounting-thread-detail",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-1.65 5.65L-0.95 5.05L-0.25 5.65L0.45 5.05L1.15 5.65M-1.65 -5.65L-0.95 -5.05L-0.25 -5.65L0.45 -5.05L1.15 -5.65",
+      "depth": 5
+    },
+    {
+      "id": "bulkhead-barrel-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11 3L15.7 3L15.7 5.65L-15.7 5.65L-15.7 3L-11 3L-11 2.4L11 2.4ZM15.7 -3L11 -3L11 -2.4L-11 -2.4L-11 -3L-15.7 -3L-15.7 -5.65L15.7 -5.65Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "fixed-shoulder-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-1.95 7.19872L-2.75 9.472L-7.15 9.472L-7.95 7.19872L-7.95 2.4L-1.95 2.4ZM-1.95 -7.19872L-1.95 -2.4L-7.95 -2.4L-7.95 -7.19872L-7.15 -9.472L-2.75 -9.472Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "panel-mounting-nut-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M7.95 8.3694L7.15 10.73L2.75 10.73L1.95 8.3694L1.95 2.4L7.95 2.4ZM7.95 -8.3694L7.95 -2.4L1.95 -2.4L1.95 -8.3694L2.75 -10.73L7.15 -10.73Z",
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "left-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-9.5 4.65L-14.5 4.65L-14.5 3L-11 3L-11 2.4L-9.5 2.4ZM-9.5 -2.4L-11 -2.4L-11 -3L-14.5 -3L-14.5 -4.65L-9.5 -4.65Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "left-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-14.5 5.624L-16.21 7.4L-22.29 7.4L-24 5.624L-24 3L-14.5 3ZM-22.29 -7.4L-16.21 -7.4L-14.5 -5.624L-14.5 -3L-24 -3L-24 -5.624Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "right-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11 3L14.5 3L14.5 4.65L9.5 4.65L9.5 2.4L11 2.4ZM14.5 -3L11 -3L11 -2.4L9.5 -2.4L9.5 -4.65L14.5 -4.65Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "right-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M24 5.624L22.29 7.4L16.21 7.4L14.5 5.624L14.5 3L24 3ZM24 -5.624L24 -3L14.5 -3L14.5 -5.624L16.21 -7.4L22.29 -7.4Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    }
+  ],
+  "joints": [
+    {
+      "id": "left",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 6.0,
+      "at": [
+        -24.0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 13.0
+    },
+    {
+      "id": "right",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 6.0,
+      "at": [
+        24.0,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ],
+      "insertion_mm": 13.0
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        0
+      ]
+    }
+  ]
+}

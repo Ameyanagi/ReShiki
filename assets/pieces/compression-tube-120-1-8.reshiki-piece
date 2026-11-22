@@ -1,0 +1,157 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/compression-tube-120-1-8",
+  "revision": 1,
+  "family": "compression-tube",
+  "variant": {
+    "geometry": "Straight",
+    "length": "120 mm",
+    "tube_od": "1/8 in OD"
+  },
+  "names": {
+    "en": "Stainless-steel compression tubing"
+  },
+  "category": "other",
+  "grounded": false,
+  "keywords": [
+    "tubing",
+    "rigid tube",
+    "compression",
+    "1/8 in",
+    "3.175 mm",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "steel",
+      "layer": "body",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 -1.5875H120V1.5875H0Z",
+      "color": [
+        186,
+        201,
+        212
+      ]
+    },
+    {
+      "id": "open-section",
+      "layer": "body",
+      "material": "paper",
+      "role": "fill",
+      "path": "M0 -1.0875H120V1.0875H0Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "tube-wall",
+      "layer": "body",
+      "material": "ink",
+      "role": "outline",
+      "path": "M0 -1.5875H120M0 1.5875H120",
+      "depth": 2
+    },
+    {
+      "id": "section-wall",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -1.0875H120M0 1.0875H120",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "rim-edges",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -1.5875V-1.0875M0 1.0875V1.5875M120 -1.5875V-1.0875M120 1.0875V1.5875",
+      "depth": 2
+    }
+  ],
+  "joints": [
+    {
+      "id": "a",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 3.175,
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "b",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 3.175,
+      "at": [
+        120,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "holds": [
+    {
+      "id": "span",
+      "kind": "tube_span",
+      "from": [
+        0,
+        0
+      ],
+      "to": [
+        120,
+        0
+      ],
+      "diameter_mm": 3.175
+    }
+  ]
+}
