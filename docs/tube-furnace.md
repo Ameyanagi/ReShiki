@@ -7,7 +7,35 @@ existing 120 mm, ¼-inch compression tubes: eight objects and seven seats.
 Select **View → Section** on the pieces to expose the continuous passage.
 Views change artwork without changing ports, poses or the parts represented.
 
-## Connections
+## Choose a work tube
+
+Select a furnace and set **Properties → Tube OD** to the tube's outside
+diameter. The default is 32 mm. Smaller openings show the matching ceramic
+inserts in Exterior and Section. These options are available on the
+horizontal, vertical and body-only furnaces.
+
+- **Quartz.** Use the 600 mm, 32 × 28 mm work tube, or a 500 mm work tube
+  in 15 × 12.5 mm or 20 × 17 mm OD × ID. Each OD has matching direct
+  1/8-inch and 1/4-inch compression end seals. The 15 and 20 mm dimensions
+  come from the [Asahi Rika quartz work-tube catalogue](https://www.kanjyouro.com/option/core_tube/).
+- **Stainless steel (SUS).** Choose 1/16, 1/8, 1/4 or 3/8 inch, or 6 mm.
+  Place an ordinary straight compression tube of that OD and set its
+  **Length** to at least 360 mm. Connect its ends to the usual
+  compression unions, reducers, tees, elbows or valves. The tube counts
+  as one cut item and the parts list identifies its furnace passage.
+
+The 300 mm quartz attachment lets a centred 500 mm quartz tube slide 70 mm
+either way. In the stainless-steel options, the valid straight span covers
+360 mm to reserve room for fittings at both ends of the casing. A 360 mm
+tube seats in the centre; a 500 mm straight tube can slide 70 mm either way.
+These are drawing dimensions. The open heated passage in the illustration
+still spans the same housing.
+
+Changing the size while a tube is seated releases the furnace connection.
+The tube retains its dimensions and end fittings. Set the size before
+seating the replacement tube.
+
+## Default 32 mm quartz connections
 
 Geometry uses millimetres, with the quartz tube and furnace centred at the
 origin and the tube axis along x. The furnace includes 32 mm locating
@@ -61,7 +89,7 @@ does not match a 6.35 mm (¼-inch) gas-line socket.
 
 ## Upright furnace and direct compression end seals
 
-Choose **Vertical split tube furnace, 32 mm work tube** for an upright
+Choose **Vertical split tube furnace** for an upright
 assembly. Its aluminium frame leaves the centre open above and below the
 furnace. The control module stays upright beside the frame, and the split
 cover has its own side handle and latches.
@@ -99,14 +127,13 @@ Reusable native examples:
 - [Upright furnace with ¼-inch tubing](../tests/fixtures/vertical-tube-furnace/connected-1-4.rsk)
 - [Upright furnace with ⅛-inch tubing](../tests/fixtures/vertical-tube-furnace/connected-1-8.rsk)
 
-For a furnace without a frame or controller, choose **Split tube furnace
-body, 32 mm work tube**. This is a separate catalogue piece containing only
+For a furnace without a frame or controller, choose **Split tube furnace body**. This is a separate catalogue piece containing only
 the split housing, vents, latches, side handle and locating apertures.
 Its default drawing is upright. Rotate the same piece, or its whole connected
 assembly, 90° to use it horizontally.
 
-The furnace-only body's `bore` uses the same exact 32 mm mechanical interface
-and 300 mm span. The quartz tube and direct end seals connect as above, with
+At the default 32 mm setting, the furnace-only body's `bore` uses the same
+mechanical interface and 300 mm span. The quartz tube and direct end seals connect as above, with
 the same ±120 mm travel and 7 mm end-seal clearance. Dragging this grounded
 body moves its connected assembly; dragging the exposed tube slides the tube
 and end accessories. The existing supported upright furnace and horizontal

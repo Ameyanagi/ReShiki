@@ -19,7 +19,7 @@
         "y": 1.1666666269302368
       },
       "piece": {
-        "definition": "reshiki/tube-furnace-32@2#450c7fd8cd66899d"
+        "definition": "reshiki/tube-furnace-32@3#97739cd8ff75e09c"
       }
     },
     {
@@ -161,14 +161,14 @@
       "format": "reshiki-piece",
       "format_version": 0,
       "id": "reshiki/tube-furnace-32",
-      "revision": 2,
+      "revision": 3,
       "family": "tube-furnace",
       "variant": {
-        "work_tube_od": "32 mm",
+        "work_tube_od": "Selectable tube OD",
         "layout": "Horizontal"
       },
       "names": {
-        "en": "Horizontal split tube furnace, 32 mm work tube"
+        "en": "Horizontal split tube furnace"
       },
       "category": "heating",
       "keywords": [
@@ -177,7 +177,10 @@
         "gas-phase reaction",
         "work tube",
         "32 mm",
-        "joint"
+        "joint",
+        "quartz",
+        "SUS",
+        "stainless steel"
       ],
       "credits": {
         "author": "ReShiki",
@@ -698,6 +701,510 @@
               "exterior"
             ]
           }
+        },
+        {
+          "id": "insert-20-mm-in-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 -16L-155 -10L-143 -10L-143 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "20-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-20-mm-in-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 10L-155 16L-143 16L-143 10Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "20-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-20-mm-out-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 -16L143 -10L155 -10L155 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "20-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-20-mm-out-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 10L143 16L155 16L155 10Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "20-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-15-mm-in-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 -16L-155 -7.5L-143 -7.5L-143 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "15-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-15-mm-in-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 7.5L-155 16L-143 16L-143 7.5Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "15-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-15-mm-out-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 -16L143 -7.5L155 -7.5L155 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "15-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-15-mm-out-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 7.5L143 16L155 16L155 7.5Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "15-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-3-8-in-in-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 -16L-155 -4.7625L-143 -4.7625L-143 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "3-8-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-3-8-in-in-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 4.7625L-155 16L-143 16L-143 4.7625Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "3-8-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-3-8-in-out-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 -16L143 -4.7625L155 -4.7625L155 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "3-8-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-3-8-in-out-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 4.7625L143 16L155 16L155 4.7625Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "3-8-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-4-in-in-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 -16L-155 -3.175L-143 -3.175L-143 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-4-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-4-in-in-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 3.175L-155 16L-143 16L-143 3.175Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-4-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-4-in-out-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 -16L143 -3.175L155 -3.175L155 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-4-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-4-in-out-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 3.175L143 16L155 16L155 3.175Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-4-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-6-mm-in-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 -16L-155 -3L-143 -3L-143 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "6-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-6-mm-in-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 3L-155 16L-143 16L-143 3Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "6-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-6-mm-out-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 -16L143 -3L155 -3L155 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "6-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-6-mm-out-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 3L143 16L155 16L155 3Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "6-mm"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-8-in-in-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 -16L-155 -1.5875L-143 -1.5875L-143 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-8-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-8-in-in-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 1.5875L-155 16L-143 16L-143 1.5875Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-8-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-8-in-out-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 -16L143 -1.5875L155 -1.5875L155 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-8-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-8-in-out-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 1.5875L143 16L155 16L155 1.5875Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-8-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-16-in-in-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 -16L-155 -0.79375L-143 -0.79375L-143 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-16-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-16-in-in-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M-155 0.79375L-155 16L-143 16L-143 0.79375Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-16-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-16-in-out-a",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 -16L143 -0.79375L155 -0.79375L155 -16Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-16-in"
+            ]
+          }
+        },
+        {
+          "id": "insert-1-16-in-out-b",
+          "layer": "front",
+          "depth": 3,
+          "material": "porcelain",
+          "role": "fill",
+          "path": "M143 0.79375L143 16L155 16L155 0.79375Z",
+          "color": [
+            215,
+            206,
+            183
+          ],
+          "when": {
+            "tube-od": [
+              "1-16-in"
+            ]
+          }
         }
       ],
       "params": [
@@ -722,6 +1229,64 @@
             }
           ],
           "default": "exterior"
+        },
+        {
+          "kind": "states",
+          "id": "tube-od",
+          "names": {
+            "en": "Tube OD"
+          },
+          "states": [
+            {
+              "id": "32-mm",
+              "names": {
+                "en": "32 mm"
+              }
+            },
+            {
+              "id": "20-mm",
+              "names": {
+                "en": "20 mm"
+              }
+            },
+            {
+              "id": "15-mm",
+              "names": {
+                "en": "15 mm"
+              }
+            },
+            {
+              "id": "3-8-in",
+              "names": {
+                "en": "3/8 in"
+              }
+            },
+            {
+              "id": "1-4-in",
+              "names": {
+                "en": "1/4 in"
+              }
+            },
+            {
+              "id": "6-mm",
+              "names": {
+                "en": "6 mm"
+              }
+            },
+            {
+              "id": "1-8-in",
+              "names": {
+                "en": "1/8 in"
+              }
+            },
+            {
+              "id": "1-16-in",
+              "names": {
+                "en": "1/16 in"
+              }
+            }
+          ],
+          "default": "32-mm"
         }
       ],
       "grounded": true,
@@ -737,7 +1302,138 @@
             150,
             0
           ],
-          "diameter_mm": 32
+          "diameter_mm": 32,
+          "when": {
+            "tube-od": [
+              "32-mm"
+            ]
+          }
+        },
+        {
+          "id": "bore-20-mm",
+          "kind": "through_bore",
+          "from": [
+            -150,
+            0
+          ],
+          "to": [
+            150,
+            0
+          ],
+          "diameter_mm": 20,
+          "when": {
+            "tube-od": [
+              "20-mm"
+            ]
+          }
+        },
+        {
+          "id": "bore-15-mm",
+          "kind": "through_bore",
+          "from": [
+            -150,
+            0
+          ],
+          "to": [
+            150,
+            0
+          ],
+          "diameter_mm": 15,
+          "when": {
+            "tube-od": [
+              "15-mm"
+            ]
+          }
+        },
+        {
+          "id": "bore-3-8-in",
+          "kind": "through_bore",
+          "from": [
+            -180,
+            0
+          ],
+          "to": [
+            180,
+            0
+          ],
+          "diameter_mm": 9.525,
+          "when": {
+            "tube-od": [
+              "3-8-in"
+            ]
+          }
+        },
+        {
+          "id": "bore-1-4-in",
+          "kind": "through_bore",
+          "from": [
+            -180,
+            0
+          ],
+          "to": [
+            180,
+            0
+          ],
+          "diameter_mm": 6.35,
+          "when": {
+            "tube-od": [
+              "1-4-in"
+            ]
+          }
+        },
+        {
+          "id": "bore-6-mm",
+          "kind": "through_bore",
+          "from": [
+            -180,
+            0
+          ],
+          "to": [
+            180,
+            0
+          ],
+          "diameter_mm": 6,
+          "when": {
+            "tube-od": [
+              "6-mm"
+            ]
+          }
+        },
+        {
+          "id": "bore-1-8-in",
+          "kind": "through_bore",
+          "from": [
+            -180,
+            0
+          ],
+          "to": [
+            180,
+            0
+          ],
+          "diameter_mm": 3.175,
+          "when": {
+            "tube-od": [
+              "1-8-in"
+            ]
+          }
+        },
+        {
+          "id": "bore-1-16-in",
+          "kind": "through_bore",
+          "from": [
+            -180,
+            0
+          ],
+          "to": [
+            180,
+            0
+          ],
+          "diameter_mm": 1.5875,
+          "when": {
+            "tube-od": [
+              "1-16-in"
+            ]
+          }
         }
       ],
       "labels": [

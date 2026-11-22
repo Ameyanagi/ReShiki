@@ -1,0 +1,194 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/quartz-work-tube-500-15",
+  "revision": 1,
+  "family": "quartz-work-tube",
+  "variant": {
+    "length": "500 mm",
+    "tube_od": "15 mm",
+    "tube_id": "12.5 mm"
+  },
+  "names": {
+    "en": "Quartz work tube, 500 mm, 15 mm OD"
+  },
+  "category": "vessel",
+  "keywords": [
+    "quartz reaction tube",
+    "work tube",
+    "tube furnace",
+    "gas-phase reaction",
+    "500 mm",
+    "15 mm OD",
+    "12.5 mm ID",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "glass-body",
+      "layer": "body",
+      "material": "glass",
+      "role": "fill",
+      "path": "M-250 -7.5H250V7.5H-250Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "upper-wall-section",
+      "layer": "body",
+      "material": "glass",
+      "role": "fill",
+      "path": "M-250 -7.5H250V-6.25H-250Z",
+      "color": [
+        216,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "lower-wall-section",
+      "layer": "body",
+      "material": "glass",
+      "role": "fill",
+      "path": "M-250 6.25H250V7.5H-250Z",
+      "color": [
+        216,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 1
+    },
+    {
+      "id": "outer-walls",
+      "layer": "body",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-250 -7.5H250M-250 7.5H250",
+      "depth": 2
+    },
+    {
+      "id": "inner-walls",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-250 -6.25H250M-250 6.25H250",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "open-rims",
+      "layer": "body",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-250 -7.5V-6.25M-250 6.25V7.5M250 -7.5V-6.25M250 6.25V7.5",
+      "depth": 2
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "joints": [
+    {
+      "id": "left",
+      "kind": "plug",
+      "family": "work_tube",
+      "gender": "M",
+      "size_mm": 15,
+      "at": [
+        -250,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "right",
+      "kind": "plug",
+      "family": "work_tube",
+      "gender": "M",
+      "size_mm": 15,
+      "at": [
+        250,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "holds": [
+    {
+      "id": "span",
+      "kind": "tube_span",
+      "from": [
+        -220,
+        0
+      ],
+      "to": [
+        220,
+        0
+      ],
+      "diameter_mm": 15
+    }
+  ],
+  "tube_spec": {
+    "material": "quartz",
+    "od_mm": 15,
+    "id_mm": 12.5,
+    "ends": [
+      "left",
+      "right"
+    ],
+    "length": {
+      "fixed_mm": 500,
+      "params": []
+    }
+  }
+}

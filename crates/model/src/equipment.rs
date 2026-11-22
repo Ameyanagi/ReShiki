@@ -16,6 +16,8 @@ pub mod validate;
 #[cfg(test)]
 mod adjust_tests;
 #[cfg(test)]
+mod furnace_work_tubes_tests;
+#[cfg(test)]
 mod hold_tests;
 #[cfg(test)]
 mod hose_tests;

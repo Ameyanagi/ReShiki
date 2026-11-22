@@ -1,0 +1,531 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/work-tube-end-seal-compression-15-1-8",
+  "revision": 1,
+  "family": "work-tube-end-seal-compression",
+  "variant": {
+    "work_tube_od": "15 mm",
+    "gas_connection": "1/8 in compression"
+  },
+  "names": {
+    "en": "Work-tube end seal, 15 mm, 1/8 in compression"
+  },
+  "category": "adapter",
+  "keywords": [
+    "work tube end seal",
+    "quartz",
+    "tube furnace",
+    "direct compression fitting",
+    "gas inlet",
+    "gas outlet",
+    "15 mm OD",
+    "1/8 in",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "seal-shell-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 -7.5V-13.5L6 -16.5H24L30 -11.5H34V11.5L24 16.5H6L0 13.5V7.5Z",
+      "color": [
+        208,
+        218,
+        225
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "seal-upper-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 -7.5V-13.5L6 -16.5H24L30 -11.5H34V-1.143H28L22 -6.25H18V-7.5Z",
+      "color": [
+        208,
+        218,
+        225
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "seal-lower-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M0 7.5H18V6.25H22L28 1.143H34V11.5L24 16.5H6L0 13.5Z",
+      "color": [
+        208,
+        218,
+        225
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "sealing-ring--1",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M6 -7.5H12V-11.5H6Z",
+      "color": [
+        112,
+        127,
+        134
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "seal-wall--1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 -7.5H18V-6.25H22L28 -1.143H34",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "seal-hatch--1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M15 -14.5L19 -10.5M22 -15.5L26 -11.5M29 -7.5L32 -4.5",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "sealing-ring-1",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M6 7.5H12V11.5H6Z",
+      "color": [
+        112,
+        127,
+        134
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "seal-wall-1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M0 7.5H18V6.25H22L28 1.143H34",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "seal-hatch-1",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M15 14.5L19 10.5M22 15.5L26 11.5M29 7.5L32 4.5",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "seal-outer-boundary",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M0 -7.5V-13.5L6 -16.5H24L30 -11.5H34V-3.15M34 3.15V11.5L24 16.5H6L0 13.5V7.5",
+      "depth": 4
+    },
+    {
+      "id": "seal-clamp-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M20 -16.5V16.5M24 -15.5V15.5",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "upper-clamp-tab",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11 -16.5V-22.5H18V-16.5Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "lower-clamp-tab",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11 16.5V22.5H18V16.5Z",
+      "color": [
+        74,
+        86,
+        98
+      ],
+      "depth": 3
+    },
+    {
+      "id": "gas-neck-bridge-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M34 -3.15H42.0V3.15H34Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "gas-neck-bridge-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M34 -3.15H42.0V-1.143H34Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "gas-neck-bridge-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M34 1.143H42.0V3.15H34Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "gas-neck-bridge-edges",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M34 -3.15H42.0M34 3.15H42.0",
+      "depth": 4
+    },
+    {
+      "id": "gas-neck-bridge-passage",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M34 -1.143H42.0M34 1.143H42.0",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "compression-neck",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M42 -3.15L46 -3.15L46 3.15L42 3.15Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "compression-nut-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M46 -4.256L47.44 -5.6L52.56 -5.6L54 -4.256L54 4.256L52.56 5.6L47.44 5.6L46 4.256Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "compression-nut-outline",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M46 -4.256L47.44 -5.6L52.56 -5.6L54 -4.256L54 -1.5875M54 1.5875L54 4.256L52.56 5.6L47.44 5.6L46 4.256",
+      "depth": 6
+    },
+    {
+      "id": "compression-mouth-rim",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M52.4 -1.5875L54 -1.5875M52.4 1.5875L54 1.5875",
+      "depth": 6
+    },
+    {
+      "id": "compression-exterior-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M46 -4.256L46 4.256",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "compression-section-back-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M46 -4.256L46 -1.5875M46 1.5875L46 4.256",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 6
+    },
+    {
+      "id": "compression-nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M47.44 -5.6L47.44 5.6M52.56 -5.6L52.56 -2.912M52.56 2.912L52.56 5.6",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "compression-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M47.76 -1.5875L50.16 -1.5875L52.56 -4.115375L49.68 -4.115375ZM47.76 1.5875L50.16 1.5875L52.56 4.115375L49.68 4.115375Z",
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "compression-section-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M46.72 -4.87775L47.68 -3.674L48.64 -4.87775L49.6 -3.674M46.72 4.87775L47.68 3.674L48.64 4.87775L49.6 3.674",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 5
+    },
+    {
+      "id": "compression-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M47.64 -5.3L52.36 -5.3L51.76 -4.5L48.24 -4.5Z",
+      "color": [
+        242,
+        245,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4,
+      "style": "shaded"
+    },
+    {
+      "id": "compression-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M43.5 1.5875L46 1.5875L46 3.15L42 3.15L42 1.143L43.5 1.143ZM46 -1.5875L43.5 -1.5875L43.5 -1.143L42 -1.143L42 -3.15L46 -3.15Z",
+      "color": [
+        199,
+        209,
+        217
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "compression-nut-metal-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M54 4.256L52.56 5.6L47.44 5.6L46 4.256L46 1.5875L54 1.5875ZM54 -4.256L54 -1.5875L46 -1.5875L46 -4.256L47.44 -5.6L52.56 -5.6Z",
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "joints": [
+    {
+      "id": "work-tube",
+      "kind": "plug",
+      "family": "work_tube",
+      "gender": "F",
+      "size_mm": 15,
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 18
+    },
+    {
+      "id": "gas-line",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 3.175,
+      "at": [
+        54,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ],
+      "insertion_mm": 10.5
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        18,
+        0
+      ]
+    }
+  ]
+}
