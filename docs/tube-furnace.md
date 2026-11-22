@@ -35,7 +35,7 @@ Changing the size while a tube is seated releases the furnace connection.
 The tube retains its dimensions and end fittings. Set the size before
 seating the replacement tube.
 
-## Connections
+## Default 32 mm quartz connections
 
 Geometry uses millimetres, with the quartz tube and furnace centred at the
 origin and the tube axis along x. The furnace includes 32 mm locating
@@ -132,8 +132,8 @@ the split housing, vents, latches, side handle and locating apertures.
 Its default drawing is upright. Rotate the same piece, or its whole connected
 assembly, 90° to use it horizontally.
 
-The furnace-only body's `bore` uses the same exact 32 mm mechanical interface
-and 300 mm span. The quartz tube and direct end seals connect as above, with
+At the default 32 mm setting, the furnace-only body's `bore` uses the same
+mechanical interface and 300 mm span. The quartz tube and direct end seals connect as above, with
 the same ±120 mm travel and 7 mm end-seal clearance. Dragging this grounded
 body moves its connected assembly; dragging the exposed tube slides the tube
 and end accessories. The existing supported upright furnace and horizontal
