@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/schlenk-tube-15-left",
- "revision": 1,
+ "revision": 2,
  "family": "schlenk-tube",
  "variant": {
   "joint": "15/25",
@@ -27,7 +27,7 @@
    "material": "glass",
    "role": "glass",
    "id": "shape-1",
-   "path": "M-6.5 -12Q-16 -10.8 -16 0L-16 94A16 16 0 0 0 16 94L16 0Q16 -10.8 6.5 -12Z"
+   "path": "M-8.35 -23C-8.35 -13 -16 -14 -16 0L-16 94A16 16 0 0 0 16 94L16 0C16 -14 8.35 -13 8.35 -23Z"
   },
   {
    "layer": "body",

@@ -22,6 +22,16 @@ fn search_finds_pieces_by_any_name_keyword_or_size() {
     }
     assert_eq!(found("liebig"), ["reshiki/liebig-15", "reshiki/liebig-29"]);
     assert_eq!(found("septum 29/42"), ["reshiki/septum-29"]);
+    assert_eq!(found("septum 15/25 hose"), ["reshiki/septum-hose-7"]);
+    assert_eq!(
+        found("straight schlenk tube"),
+        [
+            "reshiki/schlenk-tube-straight-15",
+            "reshiki/schlenk-tube-straight-15-left",
+            "reshiki/schlenk-tube-straight-29",
+            "reshiki/schlenk-tube-straight-29-left",
+        ]
+    );
     assert!(found("burette").is_empty());
     assert_eq!(found("").len(), builtin::catalogue().len());
 }
@@ -178,6 +188,31 @@ fn opening_the_schlenk_tube_valve_is_one_undo_step() {
     assert_eq!(tube.id, id);
     assert!(!tube.piece.as_ref().unwrap().params.contains_key("valve"));
     assert_eq!(value_text(tube, "valve", None), "Valve: Closed");
+}
+
+#[test]
+fn a_straight_schlenk_sidearm_uses_the_s_type_flow_controls_and_undoes() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Equipment(Action::Arm(k(
+        "reshiki/schlenk-tube-straight-15-left",
+    ))));
+    let _ = app.update(Message::Canvas(Edit::Piece(Point::new(120., 80.))));
+    let tube = &app.tab.doc.graphics[0];
+    let id = tube.id;
+    let before = app.tab.doc.clone();
+    assert_eq!(value_text(tube, "stopcock", None), "Stopcock: Closed");
+    let _ = app.update(Message::Equipment(Action::Param {
+        id,
+        param: "stopcock".into(),
+        value: Value::State("side".into()),
+    }));
+    assert_eq!(
+        value_text(&app.tab.doc.graphics[0], "stopcock", None),
+        "Stopcock: Arm to side barb"
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
 }
 
 #[test]

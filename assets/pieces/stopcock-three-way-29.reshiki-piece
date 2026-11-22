@@ -1,0 +1,291 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/stopcock-three-way-29",
+ "revision": 1,
+ "family": "stopcock-three-way",
+ "variant": {
+  "outlet": "29/42 cone"
+ },
+ "names": {
+  "en": "Three-way stopcock, 29/42 cone",
+  "ja": "三方コック（29/42 スリ付き）"
+ },
+ "category": "schlenk",
+ "keywords": [
+  "three-way stopcock",
+  "T stopcock",
+  "glass stopcock",
+  "7 mm hose barb",
+  "Schlenk",
+  "三方コック",
+  "三方活栓",
+  "スリ付き",
+  "top view",
+  "coplanar",
+  "上面図"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "round-body",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M13.5 0A13.5 13.5 0 0 1 -13.5 0A13.5 13.5 0 0 1 13.5 0Z"
+  },
+  {
+   "id": "left-cone-neck",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M0 -4L-12 -4Q-15 -4 -18 -13L-23.4 -13L-23.4 13L-18 13Q-15 4 -12 4L0 4Z"
+  },
+  {
+   "id": "right-barb",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M0 3.4L21 3.4L26 3.4L26 4.5L30 3.4L30 4.5L34 3.4L34 4.4L40 3.1L40 -3.1L34 -4.4L34 -3.4L30 -4.5L30 -3.4L26 -4.5L26 -3.4L21 -3.4L0 -3.4Z"
+  },
+  {
+   "id": "down-barb",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-3.4 0L-3.4 17L-3.4 22L-4.5 22L-3.4 26L-4.5 26L-3.4 30L-4.4 30L-3.1 36L3.1 36L4.4 30L3.4 30L4.5 26L3.4 26L4.5 22L3.4 22L3.4 17L3.4 0Z"
+  },
+  {
+   "id": "round-frosted-plug",
+   "layer": "body",
+   "material": "frosted",
+   "role": "fill",
+   "path": "M10.2 0A10.2 10.2 0 0 1 -10.2 0A10.2 10.2 0 0 1 10.2 0Z"
+  },
+  {
+   "id": "plug-rim",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M10.2 0A10.2 10.2 0 0 1 -10.2 0A10.2 10.2 0 0 1 10.2 0Z"
+  },
+  {
+   "id": "paddle",
+   "layer": "front",
+   "material": "glass",
+   "role": "solid",
+   "path": "M-16.6298 6.8883C-18.3519 2.73084 -8.9546 -3.32643 -2.1813 -5.26611C3.97971 -8.684 14.9078 -11.0458 16.6298 -6.8883C18.3519 -2.73084 8.9546 3.32643 2.1813 5.26611C-3.97971 8.684 -14.9078 11.0458 -16.6298 6.8883Z",
+   "part": "control"
+  },
+  {
+   "id": "closed-bore",
+   "layer": "front",
+   "material": "ink",
+   "role": "solid",
+   "path": "M1.25 0A1.25 1.25 0 0 1 -1.25 0A1.25 1.25 0 0 1 1.25 0Z",
+   "when": {
+    "stopcock": [
+     "closed"
+    ]
+   }
+  },
+  {
+   "id": "left-channel",
+   "layer": "front",
+   "material": "ink",
+   "role": "solid",
+   "path": "M-9 -1L1 -1L1 1L-9 1Z",
+   "when": {
+    "stopcock": [
+     "left-right",
+     "left-down",
+     "all"
+    ]
+   }
+  },
+  {
+   "id": "right-channel",
+   "layer": "front",
+   "material": "ink",
+   "role": "solid",
+   "path": "M-1 -1L9 -1L9 1L-1 1Z",
+   "when": {
+    "stopcock": [
+     "left-right",
+     "right-down",
+     "all"
+    ]
+   }
+  },
+  {
+   "id": "down-channel",
+   "layer": "front",
+   "material": "ink",
+   "role": "solid",
+   "path": "M-1 -1L1 -1L1 9L-1 9Z",
+   "when": {
+    "stopcock": [
+     "left-down",
+     "right-down",
+     "all"
+    ]
+   }
+  }
+ ],
+ "joints": [
+  {
+   "id": "left",
+   "kind": "taper",
+   "size": "29/42",
+   "gender": "M",
+   "at": [
+    -27,
+    0
+   ],
+   "dir": [
+    -1,
+    0
+   ],
+   "draw": "standard"
+  },
+  {
+   "id": "right",
+   "kind": "plug",
+   "family": "hose",
+   "gender": "M",
+   "size_mm": 7,
+   "at": [
+    40,
+    0
+   ],
+   "dir": [
+    1,
+    0
+   ]
+  },
+  {
+   "id": "down",
+   "kind": "plug",
+   "family": "hose",
+   "gender": "M",
+   "size_mm": 7,
+   "at": [
+    0,
+    36
+   ],
+   "dir": [
+    0,
+    1
+   ]
+  }
+ ],
+ "params": [
+  {
+   "id": "stopcock",
+   "kind": "states",
+   "names": {
+    "en": "Stopcock flow",
+    "ja": "コックの流路"
+   },
+   "states": [
+    {
+     "id": "closed",
+     "names": {
+      "en": "Closed",
+      "ja": "閉"
+     }
+    },
+    {
+     "id": "left-right",
+     "names": {
+      "en": "Left ↔ right",
+      "ja": "左 ↔ 右"
+     }
+    },
+    {
+     "id": "left-down",
+     "names": {
+      "en": "Left ↔ down",
+      "ja": "左 ↔ 下"
+     }
+    },
+    {
+     "id": "right-down",
+     "names": {
+      "en": "Right ↔ down",
+      "ja": "右 ↔ 下"
+     }
+    },
+    {
+     "id": "all",
+     "names": {
+      "en": "All open",
+      "ja": "全開"
+     }
+    }
+   ],
+   "default": "closed"
+  }
+ ],
+ "parts": [
+  {
+   "id": "control",
+   "param": "stopcock",
+   "motion": {
+    "per_state": {
+     "closed": [
+      0.92388,
+      -0.382683,
+      0.382683,
+      0.92388,
+      0,
+      0
+     ],
+     "left-right": [
+      1.0,
+      0.0,
+      -0.0,
+      1.0,
+      0,
+      0
+     ],
+     "left-down": [
+      0.707107,
+      -0.707107,
+      0.707107,
+      0.707107,
+      0,
+      0
+     ],
+     "right-down": [
+      0.707107,
+      0.707107,
+      -0.707107,
+      0.707107,
+      0,
+      0
+     ],
+     "all": [
+      0.0,
+      1.0,
+      -1.0,
+      0.0,
+      0,
+      0
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     0
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ]
+}

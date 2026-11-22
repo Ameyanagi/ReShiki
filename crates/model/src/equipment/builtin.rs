@@ -25,6 +25,7 @@ const FILES: &[&str] = piece_files![
     "stopper-29",
     "septum-15",
     "septum-29",
+    "septum-hose-7",
     "balloon",
     "red-29-15",
     "exp-15-29",
@@ -48,6 +49,13 @@ const FILES: &[&str] = piece_files![
     "schlenk-tube-29",
     "schlenk-tube-29-left",
     "schlenk-tube-15-left",
+    "schlenk-tube-straight-15",
+    "schlenk-tube-straight-15-left",
+    "schlenk-tube-straight-29",
+    "schlenk-tube-straight-29-left",
+    "stopcock-three-way-hose",
+    "stopcock-three-way-15",
+    "stopcock-three-way-29",
     "jy-storage-flask-25",
     "jy-storage-flask-25-rising",
     "jy-storage-flask-25-cone",
@@ -178,5 +186,28 @@ mod tests {
             );
         }
         assert_eq!(super::catalogue().len(), super::FILES.len());
+    }
+
+    #[test]
+    fn the_straight_schlenk_sidearms_keep_the_s_type_valve_controls_and_ports() {
+        for suffix in ["15", "15-left", "29", "29-left"] {
+            let straight = super::find(&format!("reshiki/schlenk-tube-straight-{suffix}")).unwrap();
+            let bent = super::find(&format!("reshiki/schlenk-tube-{suffix}")).unwrap();
+            let straight_valve = straight.params.iter().find(|p| p.id() == "stopcock");
+            let bent_valve = bent.params.iter().find(|p| p.id() == "stopcock");
+            assert!(straight_valve.is_some(), "{suffix}");
+            assert_eq!(straight_valve, bent_valve);
+            for port in ["hose1", "hose2"] {
+                let port_of = |definition: &super::Definition| {
+                    definition
+                        .joints
+                        .iter()
+                        .find(|joint| joint.id() == port)
+                        .map(|joint| (joint.gender(), joint.dir()))
+                };
+                assert!(port_of(&straight).is_some(), "{suffix} {port}");
+                assert_eq!(port_of(&straight), port_of(&bent));
+            }
+        }
     }
 }

@@ -384,6 +384,12 @@ catalogue joins them, the label says **Insert Expansion adapter, 15/25 →
 Two sockets, two cones, or sizes no adapter joins only show why they do not
 seat.
 
+Under **Rubber septum**, choose **15/25 · 7 mm hose barb** to cap a free hose
+barb with a W-shaped stopper. It turns so its narrow end seats on the barb
+and its wide end faces out. This works on the downward and side outlets on
+Schlenk equipment and compatible outlets on condensers and other pieces.
+The septum can also hold the balloon's needle.
+
 Seated pieces form an assembly. A click selects the whole assembly and a drag
 moves it; turning, scaling, copying and **Bring to front** act on all of it.
 To take a piece out, click it again so it is selected alone, then drag it:
@@ -433,9 +439,16 @@ detached; click it a second time to select it alone and delete it.
 
 ### Move parts and set liquid levels
 
-Schlenk pieces with glass stopcocks switch between flow settings. J. Young
-valves toggle between open and closed. Many flasks, funnels and NMR tubes
-have movable liquid levels. The **Cow receiver adapter** turns between
+Schlenk tubes come with S-type and straight sidearms in 15/25 and 29/42,
+facing left or right. The ground-glass socket joins directly to the vessel’s
+rounded shoulder. Both styles use the same three-way valve with side and
+downward hose outlets. The standalone **Three-way stopcock** is drawn from
+above, with left, right and downward ports in the plane of the drawing. Choose
+three hose barbs or two barbs and a 15/25 or 29/42 ground-glass cone on the left.
+The stopcock turns to align the cone when placed on a matching socket.
+
+Many flasks, funnels and NMR tubes have movable liquid levels.
+The **Cow receiver adapter** turns between
 receivers, the **Thermometer** slides through its adapter, and the
 **Balloon** on its needle inflates and deflates. The **Stir bar** seats in a
 compatible flask and can display motion arrows.
@@ -444,10 +457,12 @@ compatible flask and can display motion arrows.
    parts. Hover over a handle to see its setting and value, for example
    **Valve: Closed · click to switch**. A second click and a drag, or
    Option-drag, still pulls a piece out of the assembly. Holding Option disables the handles.
-2. Click a circle to cycle through the states of a valve or stopcock. A
-   J. Young valve switches between **Closed** and **Open**.
-   A stopcock cycles through **Closed**, **Arm to side barb**, **Arm to down
-   barb** and **All open**.
+2. Click a circle to cycle through the states of a valve or stopcock.
+   J. Young valves toggle between **Closed** and **Open**. The Schlenk tube
+   stopcock cycles through **Closed**, **Arm to side barb**,
+   **Arm to down barb** and **All open**. The
+   standalone three-way stopcock can close all ports, join any pair or
+   open all three.
 3. Drag a diamond to tilt a clamp or move a liquid's surface. The label
    beside the pointer shows the value, for example **Tilt: 25°** or **Liquid
    level: 40 %**. The percentage measures only the share of the vessel's

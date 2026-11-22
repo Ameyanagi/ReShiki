@@ -1,0 +1,51 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/septum-hose-7",
+  "revision": 1,
+  "family": "septum",
+  "variant": { "joint": "15/25", "mount": "7 mm hose barb" },
+  "names": { "en": "Rubber septum, 15/25, hose barb", "ja": "セプタム 15/25 ホース口用" },
+  "category": "addition",
+  "keywords": ["septum", "rubber", "hose cap", "W stopper", "セプタム", "ゴム栓", "W栓", "ホース口"],
+  "credits": { "author": "ReShiki" },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "stopper",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "color": [232, 109, 63],
+      "path": "M-5.2 7.4Q0 8.2 5.2 7.4L5.6 -1.7H5.9Q7.4 -1.7 7.4 -3.2L7.7 -11.8Q0 -14.6 -7.7 -11.8L-7.4 -3.2Q-7.4 -1.7 -5.9 -1.7H-5.6Z"
+    },
+    {
+      "id": "sleeve-lip",
+      "layer": "front",
+      "material": "rubber",
+      "role": "fill",
+      "color": [252, 150, 98],
+      "path": "M-5.7 -10.7Q0 -12.35 5.7 -10.7V-9.9Q0 -11.5 -5.7 -9.9Z"
+    }
+  ],
+  "joints": [
+    {
+      "id": "barb",
+      "kind": "plug",
+      "family": "hose",
+      "gender": "F",
+      "size_mm": 7,
+      "at": [0, 0],
+      "dir": [0, 1]
+    },
+    {
+      "id": "needle",
+      "kind": "plug",
+      "family": "septum",
+      "gender": "F",
+      "size_mm": 1,
+      "at": [0, -13.2],
+      "dir": [0, -1]
+    }
+  ]
+}

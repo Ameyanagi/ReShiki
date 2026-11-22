@@ -21,13 +21,14 @@ use std::rc::Rc;
 
 enum HandleShape {
     Circle(f32),
+    Ring(f32),
     Square,
     Diamond,
 }
 
 fn draw_handle(frame: &mut layered::Frame<'_>, point: Point, shape: HandleShape, chosen: bool) {
     let path = match shape {
-        HandleShape::Circle(radius) => Path::circle(point, radius),
+        HandleShape::Circle(radius) | HandleShape::Ring(radius) => Path::circle(point, radius),
         HandleShape::Square => {
             Path::rectangle(point - Vector::new(4., 4.), iced::Size::new(8., 8.))
         }
@@ -39,16 +40,18 @@ fn draw_handle(frame: &mut layered::Frame<'_>, point: Point, shape: HandleShape,
             builder.close();
         }),
     };
-    frame.fill(
-        &path,
-        if chosen {
-            ACCENT
-        } else if matches!(shape, HandleShape::Square) {
-            ACCENT_TINT
-        } else {
-            Color::WHITE
-        },
-    );
+    if !matches!(shape, HandleShape::Ring(_)) {
+        frame.fill(
+            &path,
+            if chosen {
+                ACCENT
+            } else if matches!(shape, HandleShape::Square) {
+                ACCENT_TINT
+            } else {
+                Color::WHITE
+            },
+        );
+    }
     frame.stroke(
         &path,
         Stroke::default()
@@ -567,7 +570,8 @@ impl MoleculeCanvas<'_> {
                     .camera
                     .screen(World::new(h.at[0] as f32, h.at[1] as f32), bounds);
                 let shape = if h.toggle {
-                    HandleShape::Circle(4.5)
+                    // Leave flow marks visible beneath the toggle.
+                    HandleShape::Ring(4.5)
                 } else {
                     HandleShape::Diamond
                 };

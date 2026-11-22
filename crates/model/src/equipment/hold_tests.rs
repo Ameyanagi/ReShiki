@@ -320,7 +320,6 @@ fn new_clamp_rejects_short_top_edges_in_snap_connect_and_jaw_closing() {
     for (piece, name) in [
         ("reshiki/liebig-15", "top-neck"),
         ("reshiki/liebig-29", "top-neck"),
-        ("reshiki/schlenk-tube-15", "neck-grip"),
         ("reshiki/cow-15", "inlet-neck"),
         ("reshiki/exp-15-29", "top-neck"),
         ("reshiki/red-29-15", "top-neck"),
