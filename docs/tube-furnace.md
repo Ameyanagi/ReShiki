@@ -2,7 +2,7 @@
 
 The horizontal furnace, quartz work tube, two terminating end seals and two
 gas-port adapters are separate equipment objects. The connected example in
-[connected-exterior.rsk](fixtures/tube-furnace/connected-exterior.rsk) adds two
+[connected-exterior.rsk](../tests/fixtures/tube-furnace/connected-exterior.rsk) adds two
 existing 120 mm, ¼-inch compression tubes: eight objects and seven seats.
 Select **View → Section** on the pieces to expose the continuous passage.
 Views change artwork without changing ports, poses or the parts represented.
