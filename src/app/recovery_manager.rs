@@ -263,7 +263,7 @@ impl App {
                 }
             } else {
                 self.status = format!(
-                    "Could not restore recovery drafts: {} · Drafts kept · Try again",
+                    "Restore failed · {} · Drafts kept · Try again",
                     errors.join("; ")
                 );
                 self.error = true;
