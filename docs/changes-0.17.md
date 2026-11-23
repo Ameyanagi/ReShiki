@@ -79,7 +79,7 @@ reference lists the individual feature rules. [Document format](architecture.md#
 - Added a separate furnace-only body without a stand or temperature controller.
   Rotate the same connected piece between upright and horizontal diagrams. [PR #1378](https://github.com/Ameyanagi/ReShiki/pull/1378)
 - **Define as equipment piece…** turns selected shapes into a fixed equipment piece. Mark a known length, preview the result, then Accept it in this drawing. Discard keeps the source shapes, and one drawing Undo reverses acceptance. Liquid and moving-part authoring remain unavailable. [PR #1356](https://github.com/Ameyanagi/ReShiki/pull/1356)
-- **Add joint…** defines a fixed ground-glass socket or cone from two rim edges in an equipment draft. Choose a standard size, review the generated joint and outward arrow, then add it to the draft. The first joint sets the piece's scale. Draft Undo stays separate from the drawing, and Accept remains one drawing edit. Standard joints require a compatible filled glass neck; liquid, moving-part and library authoring remain for later slices. [PR #1356](https://github.com/Ameyanagi/ReShiki/pull/1356)
+- **Add joint…** defines a fixed ground-glass socket or cone from two rim edges in an equipment draft. Choose a standard size, review the generated joint and outward arrow, then add it to the draft. The first joint sets the piece's scale. Draft Undo stays separate from the drawing, and Accept remains one drawing edit. Standard joints require a compatible filled glass neck. The Equipment panel can save accepted pieces in **My pieces** for use in other drawings. [PR #1356](https://github.com/Ameyanagi/ReShiki/pull/1356)
 - Equipment drafts include an English name, category, keywords,
   variant fields, author and licence. Metadata uses draft Undo and Redo;
   Accept keeps it with the piece in one drawing edit. Existing localized
@@ -88,8 +88,8 @@ reference lists the individual feature rules. [Document format](architecture.md#
   piece of lab equipment as data only: outlines in millimetres, ground-glass
   and plug joints, holds, parameters, movable parts and liquid regions.
   `reshiki --cli pieces check FILE…` checks piece files and names the field to
-  fix. Placing pieces in a drawing comes later. See
-  [Command line](agent-cli.md#pieces). [PR #1356](https://github.com/Ameyanagi/ReShiki/pull/1356)
+  fix. Use **Insert equipment…** to place pieces from the catalogue or a
+  library. [Command line](agent-cli.md#pieces) [PR #1356](https://github.com/Ameyanagi/ReShiki/pull/1356)
 - **Lab stands, clamps and joint clips (preview)**: a three-finger clamp
   holds a flask's neck with its back fingers behind the glass and its front
   finger in front, on the canvas and in every export. Clamps mount on a lab
@@ -122,8 +122,8 @@ reference lists the individual feature rules. [Document format](architecture.md#
   one object and never stretches; copy, paste, Undo, PNG, SVG and PDF export
   and the dark canvas work as for other shapes, and ChemDraw gets each piece
   as a group of curves. Drawings with equipment are saved as document
-  version 40 and carry every piece they use. Joints do not snap together yet.
-  See [Editable graphics](graphics.md#place-lab-equipment). [PR #1356](https://github.com/Ameyanagi/ReShiki/pull/1356)
+  version 40 and carry every piece they use. Compatible pieces can snap at
+  their joints. [Editable graphics](graphics.md#place-lab-equipment) [PR #1356](https://github.com/Ameyanagi/ReShiki/pull/1356)
 - **Lab equipment joints (preview)**: pieces snap together by their joints.
   Drag a condenser onto a flask's neck, or place one from the Equipment
   panel: a green ring and a label show the joint it seats on, and the
@@ -575,11 +575,9 @@ reference lists the individual feature rules. [Document format](architecture.md#
 - A ChemDraw file (CDX or CDXML) now opens even when it uses a drawing style
   or object ReShiki cannot draw yet. Shaded orbitals, doubled curves,
   see-through objects, rotated captions and similar styles import as the
-  nearest style, and one message lists what changed, such as "2 doubled curves
-  as single lines; 1 rotated caption upright". BioDraw shapes, gel and TLC
-  plates are left out and named. Before, one such object refused the whole
-  file. See
-  [ChemDraw styles ReShiki cannot draw yet](graphics.md#chemdraw-styles-reshiki-cannot-draw-yet).
+  nearest style. One message lists the substitutions and omissions, including
+  BioDraw shapes and gel plates. Supported TLC plates open as editable objects.
+  [ChemDraw import limits](graphics.md#chemdraw-styles-reshiki-cannot-draw-yet)
 - Arcs from older ChemDraw files, drawn bracket pairs, daggers, the lone pair
   bar and its hybrid and filled orbitals now import as drawn.
 - CDX files written by ChemDraw: no-go arrows keep their cross or hash, lone
