@@ -121,7 +121,7 @@ impl App {
             "{count} {} · {}",
             plural(count, "draft", "drafts"),
             newest
-                .map(|candidate| age(candidate.snapshot.saved_at, now()))
+                .map(|candidate| age(candidate.saved_at, now()))
                 .unwrap_or_default()
         );
         let mut short: String = name.chars().take(32).collect();
@@ -141,8 +141,8 @@ impl App {
                 format!(
                     "{} · {} · {} atoms",
                     title(candidate),
-                    date(candidate.snapshot.saved_at),
-                    candidate.snapshot.document.atoms.len()
+                    date(candidate.saved_at),
+                    candidate.atoms
                 )
             })
             .collect::<Vec<_>>()
@@ -236,9 +236,9 @@ impl App {
                         });
                     let detail = format!(
                         "{} · {} atoms · {}",
-                        date(candidate.snapshot.saved_at),
-                        candidate.snapshot.document.atoms.len(),
-                        age(candidate.snapshot.saved_at, now())
+                        date(candidate.saved_at),
+                        candidate.atoms,
+                        age(candidate.saved_at, now())
                     );
                     let name = title(candidate);
                     let label = format!("{name} · {detail}");
@@ -306,7 +306,7 @@ impl App {
                         .map(|failure| Element::from(text(failure).size(12)))
                         .unwrap_or_else(|| Space::new().into()),
                     if busy {
-                        Element::from(text("Checking open ReShiki pages…").size(12))
+                        Element::from(text("Working with recovery drafts…").size(12))
                     } else {
                         Space::new().into()
                     },

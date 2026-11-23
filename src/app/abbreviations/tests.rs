@@ -118,28 +118,24 @@ fn background_swaps_and_recursive_updates_do_not_clear_the_visible_draft() {
     assert_eq!(app.abbreviations.context.as_ref().unwrap().tab, front);
 }
 
-#[test]
-fn restoring_into_a_reused_empty_tab_starts_a_fresh_panel_context() {
-    use reshiki::recovery::{Candidate, Snapshot};
+#[tokio::test]
+async fn restoring_into_a_reused_empty_tab_starts_a_fresh_panel_context() {
+    use reshiki::recovery::Snapshot;
     let (mut app, _) = App::new();
     app.tab.busy = false;
     let (id, epoch) = (app.tab.id, app.tab.file_epoch);
     draft(&mut app);
     app.inspector_tab = InspectorTab::Reactions;
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join("recovered.json");
-    std::fs::write(&path, "draft").unwrap();
     let mut document = Document::default();
     document.add_atom("O", Point::default());
-    app.recovered = vec![Candidate {
-        path,
-        snapshot: Snapshot {
-            document,
-            source: None,
-            saved_at: 1,
-        },
-    }];
-    let _ = app.update(Message::Restore);
+    let (_directory, draft) = super::super::recovery_manager::test_draft(Snapshot {
+        document,
+        source: None,
+        saved_at: 1,
+    });
+    app.recovered = vec![draft];
+    let task = app.update(Message::Restore);
+    super::super::recovery_manager::finish_test_task(&mut app, task).await;
     assert_eq!(app.tab.id, id);
     assert_ne!(app.tab.file_epoch, epoch);
     assert_eq!(app.inspector_tab, InspectorTab::Properties);

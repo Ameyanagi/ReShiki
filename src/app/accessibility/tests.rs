@@ -356,14 +356,14 @@ fn the_github_menu_reaches_native_controls_when_it_opens() {
 
 fn recovery_app() -> App {
     let (mut app, _) = App::new();
-    app.recovered.push(reshiki::recovery::Candidate {
-        path: "4294967294-accessibility.json".into(),
-        snapshot: reshiki::recovery::Snapshot {
+    app.recovered.push(
+        super::super::recovery_manager::test_draft(reshiki::recovery::Snapshot {
             document: reshiki::document::Document::default(),
             source: None,
             saved_at: 0,
-        },
-    });
+        })
+        .1,
+    );
     app
 }
 

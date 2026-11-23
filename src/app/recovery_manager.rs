@@ -4,7 +4,7 @@ use iced::{
     Task,
     keyboard::{Key, Modifiers, key::Named},
 };
-use reshiki::recovery::Candidate;
+use reshiki::recovery::{Candidate, Discovery, Draft, Recovery, Replacement};
 use std::{collections::BTreeSet, path::PathBuf};
 
 mod view;
@@ -27,6 +27,8 @@ pub enum Action {
     /// Show the folder that holds the drafts a newer ReShiki made.
     #[cfg(not(target_arch = "wasm32"))]
     OpenFolder,
+    Discovered(u64, Result<Discovery, String>),
+    Loaded(u64, Loaded),
     Finished(u64, Outcome),
     #[cfg(target_arch = "wasm32")]
     OwnersReady(u64, Result<(), String>, Box<Action>),
@@ -34,7 +36,7 @@ pub enum Action {
 
 pub(super) fn completion(action: &Action) -> bool {
     match action {
-        Action::Finished(..) => true,
+        Action::Discovered(..) | Action::Loaded(..) | Action::Finished(..) => true,
         #[cfg(target_arch = "wasm32")]
         Action::OwnersReady(..) => true,
         _ => false,
@@ -44,6 +46,13 @@ pub(super) fn completion(action: &Action) -> bool {
 #[derive(Debug, Clone, Default)]
 pub struct Outcome {
     removed: Vec<PathBuf>,
+    protected: Vec<PathBuf>,
+    errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Loaded {
+    candidates: Vec<Candidate>,
     protected: Vec<PathBuf>,
     errors: Vec<String>,
 }
@@ -68,6 +77,8 @@ pub(super) struct State {
     selected: BTreeSet<PathBuf>,
     serial: u64,
     pending: Option<u64>,
+    discovery: Option<u64>,
+    dismissed: bool,
     failure: Option<String>,
     /// Abandoned drafts made with a newer ReShiki, which cannot be offered.
     pub(super) newer: usize,
@@ -75,6 +86,7 @@ pub(super) struct State {
 
 impl State {
     /// The startup state: `newer` unreadable drafts in the recovery folder.
+    #[cfg(test)]
     pub(super) fn found(newer: usize) -> Self {
         Self {
             newer,
@@ -106,6 +118,18 @@ impl App {
         !self.recovered.is_empty() || self.recovery_manager.newer > 0
     }
 
+    pub(super) fn dismiss_recovery(&mut self) {
+        self.recovery_manager.discovery = None;
+        self.recovery_manager.pending = None;
+        self.recovery_manager.dismissed = true;
+        self.recovery_manager.close();
+        self.recovered.clear();
+        self.recovery_manager.newer = 0;
+        if self.status.is_empty() {
+            self.status = super::READY.into();
+        }
+    }
+
     pub(super) fn recovery_accessibility_context(&self) -> AccessibilityContext {
         AccessibilityContext {
             dialog: self.recovery_manager.dialog,
@@ -125,10 +149,164 @@ impl App {
             // Unknown is protected from deletion, not proof an offer is live.
             return;
         }
-        self.recovered.retain(Candidate::available);
+        self.recovered.retain(Draft::available);
+    }
+
+    pub(super) fn replaced_recovery_source(&mut self, replacement: &Replacement) {
+        let Some(original) = &replacement.original else {
+            return;
+        };
+        // A concurrent rescan may already have offered the updated file. Only
+        // remove the old offer, never a newer identity at the same path.
+        self.recovered.retain(|draft| draft.source() != *original);
+        if !self.recovery_manager.dismissed
+            && let Some(offer) = &replacement.offer
+            && !self.recovered.iter().any(|draft| draft.path == offer.path)
+        {
+            self.recovery_manager.selected.remove(&original.path);
+            self.recovered.push(offer.clone());
+            self.recovered.sort_by(|a, b| {
+                b.saved_at
+                    .cmp(&a.saved_at)
+                    .then_with(|| a.path.cmp(&b.path))
+            });
+        }
+    }
+
+    pub(super) fn restore_recovered(&mut self) -> Task<Message> {
+        self.restore_recovered_selection(|_| true)
+    }
+
+    pub(super) fn restore_recovered_selection(
+        &mut self,
+        selected: impl Fn(&Draft) -> bool,
+    ) -> Task<Message> {
+        if self.recovery_manager.pending.is_some() || self.exit.frozen() {
+            return Task::none();
+        }
+        #[cfg(target_arch = "wasm32")]
+        if !reshiki::storage::browser::owners_verified() {
+            self.status = "Could not check open ReShiki pages · Drafts kept · Try again".into();
+            self.error = true;
+            return Task::none();
+        }
+        let drafts: Vec<_> = self
+            .recovered
+            .iter()
+            .filter(|draft| selected(draft))
+            .cloned()
+            .collect();
+        if drafts.is_empty() {
+            return Task::none();
+        }
+        self.recovery_manager.serial = self.recovery_manager.serial.wrapping_add(1);
+        let serial = self.recovery_manager.serial;
+        self.recovery_manager.pending = Some(serial);
+        self.recovery_manager.failure = None;
+        self.status = "Loading recovery drafts…".into();
+        self.error = false;
+        Task::perform(load(drafts), move |loaded| {
+            Message::Recovery(Action::Loaded(serial, loaded))
+        })
+    }
+
+    /// Discovery is app-owned and cannot delay initial window construction.
+    pub(super) fn discover_recovery(&mut self, recovery: Option<Recovery>) -> Task<Message> {
+        let Some(recovery) = recovery else {
+            return Task::none();
+        };
+        self.recovery_manager.serial = self.recovery_manager.serial.wrapping_add(1);
+        let serial = self.recovery_manager.serial;
+        self.recovery_manager.discovery = Some(serial);
+        Task::perform(
+            async move {
+                reshiki::task::spawn_blocking(move || recovery.discover())
+                    .await
+                    .map_err(|error| format!("Recovery worker failed: {error}"))
+            },
+            move |result| Message::Recovery(Action::Discovered(serial, result)),
+        )
     }
 
     pub(super) fn recovery_action(&mut self, action: Action) -> Task<Message> {
+        if let Action::Discovered(serial, result) = action {
+            if self.recovery_manager.discovery != Some(serial) {
+                return Task::none();
+            }
+            self.recovery_manager.discovery = None;
+            match result {
+                Ok(discovery) => {
+                    self.recovered = discovery.drafts;
+                    self.recovery_manager.newer = discovery.newer;
+                    self.prune_recovery_owners();
+                }
+                Err(error) => {
+                    self.status = format!("Could not check recovery drafts · {error}");
+                    self.error = true;
+                }
+            }
+            return Task::none();
+        }
+        if let Action::Loaded(serial, loaded) = action {
+            if self.recovery_manager.pending != Some(serial) {
+                return Task::none();
+            }
+            self.recovery_manager.pending = None;
+            if self.exit.frozen() || self.pending.is_some() {
+                self.recovery_manager.close();
+                self.status = "Recovery postponed · Drafts kept · Try again".into();
+                return Task::none();
+            }
+            let errors = loaded.errors;
+            self.recovered
+                .retain(|draft| !loaded.protected.contains(&draft.path));
+            let mut count = 0;
+            // Hydration preserves newest-first discovery order. Install oldest
+            // first so the newest is the front tab, just like synchronous restore.
+            for candidate in loaded.candidates.into_iter().rev() {
+                if !candidate.available() {
+                    self.recovered.retain(|draft| draft.path != candidate.path);
+                    continue;
+                }
+                self.recovered.retain(|draft| draft.path != candidate.path);
+                self.restore_candidate(candidate);
+                count += 1;
+            }
+            if errors.is_empty() {
+                self.recovery_manager.close();
+                if count > 0 {
+                    self.status = match count {
+                        1 => "Recovered drawing · Save to keep a new copy".into(),
+                        n => format!("Recovered {n} drawings · Save each to keep a copy"),
+                    };
+                    self.error = false;
+                } else {
+                    self.status = "No abandoned recovery drafts to restore".into();
+                    self.error = false;
+                }
+            } else {
+                self.status = format!(
+                    "Restore failed · {} · Drafts kept · Try again",
+                    errors.join("; ")
+                );
+                self.error = true;
+                self.recovery_manager.dialog = Some(Dialog::Picker);
+                self.recovery_manager.failure = Some(self.status.clone());
+            }
+            if count > 0 {
+                // This app-owned receipt bypasses update_front. Start the same
+                // document follow-up work now, with each result tagged to the
+                // restored tab rather than the tab that requested recovery.
+                self.sync_keyboard_drawing();
+                let document_tasks =
+                    Task::batch([self.start_label_refresh(), self.start_caption_names()]);
+                return Task::batch([
+                    super::tagged(document_tasks, self.tab.id),
+                    self.start_autosave(),
+                ]);
+            }
+            return Task::none();
+        }
         #[cfg(target_arch = "wasm32")]
         if let Action::OwnersReady(serial, result, then) = action {
             if self.recovery_manager.pending != Some(serial) {
@@ -242,7 +420,8 @@ impl App {
                 if selected.is_empty() {
                     return Task::none();
                 }
-                self.restore_recovered_selection(|candidate| selected.contains(&candidate.path));
+                return self
+                    .restore_recovered_selection(|candidate| selected.contains(&candidate.path));
             }
             Action::RestoreAll => {
                 if self.recovery_manager.dialog == Some(Dialog::Picker) {
@@ -273,7 +452,7 @@ impl App {
                     self.error = true;
                 }
             }
-            Action::Finished(..) => {}
+            Action::Discovered(..) | Action::Loaded(..) | Action::Finished(..) => {}
             #[cfg(target_arch = "wasm32")]
             Action::OwnersReady(..) => {}
         }
@@ -285,8 +464,30 @@ fn plural<'a>(count: usize, one: &'a str, many: &'a str) -> &'a str {
     if count == 1 { one } else { many }
 }
 
+async fn load(drafts: Vec<Draft>) -> Loaded {
+    reshiki::task::spawn_blocking(move || {
+        let mut loaded = Loaded::default();
+        for draft in drafts {
+            if !draft.available() {
+                loaded.protected.push(draft.path);
+                continue;
+            }
+            match draft.load() {
+                Ok(candidate) => loaded.candidates.push(candidate),
+                Err(error) => loaded.errors.push(format!("{}: {error}", title(&draft))),
+            }
+        }
+        loaded
+    })
+    .await
+    .unwrap_or_else(|error| Loaded {
+        errors: vec![format!("Recovery worker failed: {error}")],
+        ..Loaded::default()
+    })
+}
+
 #[cfg(not(target_arch = "wasm32"))]
-async fn discard(candidates: Vec<Candidate>) -> Outcome {
+async fn discard(candidates: Vec<Draft>) -> Outcome {
     reshiki::task::spawn_blocking(move || {
         let mut outcome = Outcome::default();
         for candidate in candidates {
@@ -294,7 +495,16 @@ async fn discard(candidates: Vec<Candidate>) -> Outcome {
                 outcome.protected.push(candidate.path);
                 continue;
             }
-            match reshiki::recovery::discard(&candidate) {
+            if std::fs::symlink_metadata(&candidate.path)
+                .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+            {
+                outcome.removed.push(candidate.path);
+                continue;
+            }
+            match candidate
+                .load()
+                .and_then(|loaded| reshiki::recovery::discard(&loaded))
+            {
                 Ok(()) => outcome.removed.push(candidate.path),
                 Err(error) => outcome
                     .errors
@@ -311,7 +521,29 @@ async fn discard(candidates: Vec<Candidate>) -> Outcome {
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn discard(candidates: Vec<Candidate>) -> Outcome {
+async fn discard(candidates: Vec<Draft>) -> Outcome {
+    // Refresh before hydration too: an unknown owner is protected until the
+    // browser lock query completes. The existing transaction refreshes again
+    // and compares its durable bytes before deleting anything.
+    if let Err(error) = crate::web::refresh_recovery_owners().await {
+        return Outcome {
+            errors: vec![error],
+            ..Outcome::default()
+        };
+    }
+    let candidates = match candidates
+        .iter()
+        .map(Draft::load)
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(candidates) => candidates,
+        Err(error) => {
+            return Outcome {
+                errors: vec![error],
+                ..Outcome::default()
+            };
+        }
+    };
     match crate::web::discard_recovery(&candidates).await {
         Ok(removed) => Outcome {
             removed,
@@ -324,9 +556,8 @@ async fn discard(candidates: Vec<Candidate>) -> Outcome {
     }
 }
 
-fn title(candidate: &Candidate) -> String {
+fn title(candidate: &Draft) -> String {
     candidate
-        .snapshot
         .source
         .as_ref()
         .and_then(|path| path.file_name())
@@ -370,6 +601,38 @@ fn now() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+#[cfg(test)]
+pub(super) async fn finish_test_task(app: &mut App, task: Task<Message>) {
+    use iced::futures::StreamExt;
+    if let Some(mut stream) = iced_runtime::task::into_stream(task) {
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                let _ = app.update(message);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+pub(super) fn run_test_task(app: &mut App, task: Task<Message>) {
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(finish_test_task(app, task));
+}
+
+#[cfg(test)]
+pub(super) fn test_draft(snapshot: reshiki::recovery::Snapshot) -> (tempfile::TempDir, Draft) {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    std::fs::write(
+        directory.path().join("4294967294-example.json"),
+        serde_json::to_vec(&snapshot).unwrap(),
+    )
+    .unwrap();
+    let draft = store.discover().drafts.remove(0);
+    (directory, draft)
 }
 
 #[cfg(test)]

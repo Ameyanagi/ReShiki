@@ -74,7 +74,7 @@ async fn manual_recovery_banner_evidence() -> anyhow::Result<()> {
         let store = Recovery::in_directory(&drafts).map_err(anyhow::Error::msg)?;
         let (mut app, _) = App::new();
         app.tab.busy = false;
-        app.recovered = store.candidates();
+        app.recovered = store.discover().drafts;
         assert_eq!(app.recovered.len(), count);
         app.status.clear();
         app.tab.camera.zoom = 1.;

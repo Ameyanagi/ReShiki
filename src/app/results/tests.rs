@@ -8,6 +8,20 @@ fn receipts_outside_the_matrix_preserve_predicates_and_wrapper_routing() {
     // Historical raw predicate answers, including receipts handled before any modal gate.
     // Columns: atom text, preview, optimization, updates background.
     let mut cases = vec![
+        (
+            Message::Recovery(crate::app::recovery_manager::Action::Discovered(
+                0,
+                Ok(Default::default()),
+            )),
+            [false; 4],
+        ),
+        (
+            Message::Recovery(crate::app::recovery_manager::Action::Loaded(
+                0,
+                Default::default(),
+            )),
+            [false; 4],
+        ),
         (Message::Opened(None), [true; 4]),
         (Message::OfficePrepared(binding.clone(), None), [false; 4]),
         (

@@ -28,7 +28,7 @@ fn seeded() -> (tempfile::TempDir, Recovery, App) {
     app.tab.busy = false;
     // App::new disables recovery under cfg(test). Read actual valid files;
     // an empty startup state would not exercise the acceptance requirement.
-    app.recovered = store.candidates();
+    app.recovered = store.discover().drafts;
     assert_eq!(app.recovered.len(), 2);
     (directory, store, app)
 }
@@ -60,15 +60,16 @@ fn recovery_bin_name_matches_the_platform() {
     assert_eq!(BIN_NAME, "Trash");
 }
 
-#[test]
-fn review_lists_real_drafts_and_restores_only_checked_drawings() {
+#[tokio::test]
+async fn review_lists_real_drafts_and_restores_only_checked_drawings() {
     let (_directory, store, mut app) = seeded();
     assert_eq!(title(&app.recovered[0]), "newest.rsk");
     let _ = act(&mut app, Action::Show);
     assert!(app.recovery_manager.selected.is_empty());
     let selected = app.recovered[1].path.clone();
     let _ = act(&mut app, Action::Toggle(selected.clone()));
-    let _ = act(&mut app, Action::RestoreSelected);
+    let task = act(&mut app, Action::RestoreSelected);
+    finish_test_task(&mut app, task).await;
     assert_eq!(app.strip().count(), 1);
     assert_eq!(app.tab.doc.atoms[0].element, "O");
     assert_eq!(app.recovered.len(), 1);
@@ -165,13 +166,14 @@ fn failed_durable_deletion_retains_offers_and_accepts_a_retry() {
     assert_ne!(app.recovery_manager.pending, Some(serial));
 }
 
-#[test]
-fn restore_all_remains_available_and_modal_blocks_drawing_commands() {
+#[tokio::test]
+async fn restore_all_remains_available_and_modal_blocks_drawing_commands() {
     let (_directory, _store, mut app) = seeded();
     let _ = act(&mut app, Action::Show);
     let _ = app.update(Message::New);
     assert_eq!(app.strip().count(), 1);
-    let _ = act(&mut app, Action::RestoreAll);
+    let task = act(&mut app, Action::RestoreAll);
+    finish_test_task(&mut app, task).await;
     assert_eq!(app.strip().count(), 2);
     assert!(app.recovered.is_empty());
     assert_eq!(app.tab.doc.atoms[0].element, "N");
@@ -205,7 +207,7 @@ fn a_recovery_dialog_keeps_background_update_receipts_and_save_questions_working
 #[test]
 fn drafts_from_a_newer_version_show_the_banner_until_dismissed() {
     let (directory, store, mut app) = seeded();
-    let mut newer = serde_json::to_value(&app.recovered[0].snapshot).unwrap();
+    let mut newer = serde_json::to_value(&app.recovered[0].load().unwrap().snapshot).unwrap();
     newer["document"]["version"] = (reshiki::document::VERSION + 1).into();
     std::fs::write(
         directory.path().join("4294967294-newer.json"),
@@ -227,10 +229,211 @@ fn drafts_from_a_newer_version_show_the_banner_until_dismissed() {
 #[test]
 fn titles_dates_and_ages_are_bounded_and_do_not_expose_source_directories() {
     let (_directory, _store, mut app) = seeded();
-    app.recovered[0].snapshot.source = Some("/synthetic-account/private/aspirin.rsk".into());
+    app.recovered[0].source = Some("/synthetic-account/private/aspirin.rsk".into());
     assert_eq!(title(&app.recovered[0]), "aspirin.rsk");
     assert_eq!(date(0), "1970-01-01 00:00 UTC");
     assert_eq!(date(u64::MAX), "Unknown date");
     assert_eq!(age(100, 99), "just now");
     assert_eq!(age(0, 86400 * 4), "4 d ago");
+}
+
+#[tokio::test]
+async fn discovery_is_deferred_app_owned_and_does_not_change_the_open_drawing() {
+    let (_directory, store, mut app) = seeded();
+    app.recovered.clear();
+    app.tab.doc.add_atom("S", Point::default());
+    let before = app.tab.doc.clone();
+    let task = app.discover_recovery(Some(store));
+    assert!(
+        app.recovered.is_empty(),
+        "Startup schedules discovery without reading drafts inline"
+    );
+    finish_test_task(&mut app, task).await;
+    assert_eq!(app.recovered.len(), 2);
+    assert_eq!(app.tab.doc, before);
+    assert!(app.recovery_banner_shown());
+}
+
+#[tokio::test]
+async fn dismiss_during_discovery_or_restore_ignores_delayed_receipts() {
+    let (_directory, store, mut app) = seeded();
+    app.recovered.clear();
+    let discovery = app.discover_recovery(Some(store));
+    let _ = app.update(Message::DismissRecovery);
+    finish_test_task(&mut app, discovery).await;
+    assert!(app.recovered.is_empty());
+
+    let (_directory, store, mut app) = seeded();
+    let task = app.restore_recovered();
+    assert!(
+        app.tab.doc.atoms.is_empty(),
+        "Hydration is deferred until the task runs"
+    );
+    let _ = app.update(Message::DismissRecovery);
+    finish_test_task(&mut app, task).await;
+    assert!(app.tab.doc.atoms.is_empty());
+    assert_eq!(store.candidates().len(), 2);
+}
+
+#[tokio::test]
+async fn changed_draft_is_retained_and_never_restored_or_discarded() {
+    let (_directory, store, mut app) = seeded();
+    let path = app.recovered[0].path.clone();
+    let mut candidate = app.recovered[0].load().unwrap();
+    candidate.snapshot.document.add_atom("S", Point::default());
+    std::fs::write(&path, serde_json::to_vec(&candidate.snapshot).unwrap()).unwrap();
+    let _ = act(&mut app, Action::Show);
+    let _ = act(&mut app, Action::Toggle(path.clone()));
+    let task = act(&mut app, Action::RestoreSelected);
+    finish_test_task(&mut app, task).await;
+    assert!(app.tab.doc.atoms.is_empty());
+    assert_eq!(app.recovered.len(), 2);
+    assert!(app.error && app.status.contains("changed"));
+    assert!(app.recovery_manager.open());
+    let _ = act(&mut app, Action::Discard);
+    let task = act(&mut app, Action::ConfirmDiscard);
+    finish_test_task(&mut app, task).await;
+    assert!(path.exists());
+    assert_eq!(
+        app.recovered.len(),
+        1,
+        "Unchanged draft was discarded, changed one kept"
+    );
+    assert_eq!(store.candidates().len(), 1);
+    assert!(app.error && app.status.contains("changed"));
+}
+
+#[tokio::test]
+async fn delayed_restore_keeps_edits_made_in_the_front_tab() {
+    let (_directory, _store, mut app) = seeded();
+    let selected = app.recovered[1].path.clone();
+    let task = app.restore_recovered_selection(|draft| draft.path == selected);
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("S", Point::default());
+    app.changed(before);
+    finish_test_task(&mut app, task).await;
+    assert_eq!(app.strip().count(), 2);
+    let elements: Vec<_> = app
+        .strip()
+        .map(|tab| tab.doc.atoms[0].element.as_str())
+        .collect();
+    assert_eq!(elements, ["S", "O"]);
+}
+
+#[tokio::test]
+async fn hydration_completion_starts_tagged_document_jobs_without_a_timer_tick() {
+    use iced::futures::StreamExt;
+    let (_directory, store, mut app) = seeded();
+    app.tab.recovery = Some(Recovery::in_directory(store.session.parent().unwrap()).unwrap());
+    let path = app.recovered[1].path.clone();
+    let task = app.restore_recovered_selection(|draft| draft.path == path);
+    let mut stream = iced_runtime::task::into_stream(task).unwrap();
+    let mut followup = None;
+    while let Some(action) = stream.next().await {
+        if let iced_runtime::Action::Output(message) = action {
+            assert!(matches!(message, Message::Recovery(Action::Loaded(..))));
+            followup = Some(app.update(message));
+        }
+    }
+    assert!(
+        app.tab.autosave.pending(),
+        "The restored draft starts durable autosave immediately"
+    );
+    assert!(
+        app.tab.label_refresh.pending_key().is_some(),
+        "Label refresh starts without another input"
+    );
+    assert_eq!(
+        app.tab.keyboard_drawing.target(),
+        reshiki::keyboard_drawing::Target::Atom(app.tab.doc.atoms[0].id),
+        "Keyboard targeting is reconciled immediately"
+    );
+    let id = app.tab.id;
+    let mut stream = iced_runtime::task::into_stream(followup.unwrap()).unwrap();
+    let mut saved = false;
+    while let Some(action) = stream.next().await {
+        if let iced_runtime::Action::Output(Message::Tab(owner, message)) = action {
+            assert_eq!(owner, id);
+            if matches!(*message, Message::Autosaved(..)) {
+                let _ = app.update(Message::Tab(owner, message));
+                saved = true;
+            }
+        }
+    }
+    assert!(saved);
+    assert!(
+        !path.exists(),
+        "The original retires only after the replacement autosave completes"
+    );
+}
+
+#[tokio::test]
+async fn restore_all_keeps_changes_after_hydration_and_after_autosave_preparation() {
+    use iced::futures::StreamExt;
+    for before_install in [true, false] {
+        let (_directory, store, mut app) = seeded();
+        let root = store.session.parent().unwrap();
+        app.tab.recovery = Some(Recovery::in_directory(root).unwrap());
+        app.tabs.recovery_root = Some(root.into());
+        let changed_path = app.recovered[0].path.clone();
+        let unchanged_path = app.recovered[1].path.clone();
+        let mut changed = app.recovered[0].load().unwrap().snapshot;
+        changed.document.add_atom("S", Point::default());
+        changed.saved_at += 100;
+        let bytes = serde_json::to_vec(&changed).unwrap();
+        let task = app.restore_recovered();
+        let mut stream = iced_runtime::task::into_stream(task).unwrap();
+        let mut receipt = None;
+        while let Some(action) = stream.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                assert!(matches!(message, Message::Recovery(Action::Loaded(..))));
+                receipt = Some(message);
+            }
+        }
+        if before_install {
+            std::fs::write(&changed_path, &bytes).unwrap();
+        }
+        let autosaves = app.update(receipt.unwrap());
+        if !before_install {
+            std::fs::write(&changed_path, &bytes).unwrap();
+        }
+        finish_test_task(&mut app, autosaves).await;
+        assert_eq!(app.strip().count(), 2);
+        assert_eq!(
+            app.tab.doc.atoms.len(),
+            1,
+            "The tab keeps the offered snapshot"
+        );
+        assert_eq!(std::fs::read(&changed_path).unwrap(), bytes);
+        assert!(!unchanged_path.exists(), "Unchanged originals still retire");
+        assert!(
+            app.strip()
+                .all(|tab| tab.recovery.as_ref().unwrap().session.exists())
+        );
+        assert_eq!(app.recovered.len(), 1);
+        assert_eq!(app.recovered[0].path, changed_path);
+        assert_eq!(
+            app.recovered[0].load().unwrap().snapshot.document,
+            changed.document
+        );
+    }
+}
+
+#[tokio::test]
+async fn dismiss_keeps_a_delayed_preserved_source_receipt_from_reviving_the_banner() {
+    let (_directory, store, mut app) = seeded();
+    app.tab.recovery = Some(Recovery::in_directory(store.session.parent().unwrap()).unwrap());
+    let candidate = app.recovered[0].load().unwrap();
+    let path = candidate.path.clone();
+    let mut changed = candidate.snapshot.clone();
+    changed.document.add_atom("S", Point::default());
+    let bytes = serde_json::to_vec(&changed).unwrap();
+    app.restore_candidate(candidate);
+    let autosaves = app.start_autosave();
+    std::fs::write(&path, &bytes).unwrap();
+    let _ = app.update(Message::DismissRecovery);
+    finish_test_task(&mut app, autosaves).await;
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    assert!(app.recovered.is_empty());
+    assert!(!app.recovery_banner_shown());
 }

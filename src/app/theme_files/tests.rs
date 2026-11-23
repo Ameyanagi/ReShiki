@@ -226,8 +226,8 @@ fn interface_preference_remains_independent_of_remembered_canvas() {
     assert!(crate::appearance::is_dark(&app.theme()));
 }
 
-#[test]
-fn recovering_a_light_draft_preserves_it_without_replacing_dark_preference() {
+#[tokio::test]
+async fn recovering_a_light_draft_preserves_it_without_replacing_dark_preference() {
     use reshiki::canvas_theme::CanvasTheme::{Dark, Light};
     let (mut app, _) = App::new();
     app.tab.busy = false;
@@ -235,16 +235,15 @@ fn recovering_a_light_draft_preserves_it_without_replacing_dark_preference() {
     let mut recovered = reshiki::document::Document::default();
     let oxygen = recovered.add_atom("O", reshiki::document::Point::default());
     recovered.atom_mut(oxygen).unwrap().label_h = 2;
-    let dir = tempfile::tempdir().unwrap();
-    app.recovered.push(reshiki::recovery::Candidate {
-        path: dir.path().join("closed-draft.json"),
-        snapshot: reshiki::recovery::Snapshot {
+    let (_directory, draft) =
+        super::super::recovery_manager::test_draft(reshiki::recovery::Snapshot {
             document: recovered.clone(),
             source: None,
             saved_at: 1,
-        },
-    });
-    app.restore_recovered();
+        });
+    app.recovered.push(draft);
+    let task = app.restore_recovered();
+    super::super::recovery_manager::finish_test_task(&mut app, task).await;
     assert_eq!(app.tab.doc.canvas_theme, Light);
     assert_eq!(app.tab.doc.atoms, recovered.atoms);
     assert_eq!(app.appearance.canvas_theme, Dark);

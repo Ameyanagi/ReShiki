@@ -9,8 +9,13 @@ fn abandoned(directory: &Path, name: &str, saved_at: u64) -> Candidate {
         saved_at,
     };
     let path = directory.join(format!("4294967294-{name}-{saved_at}.json"));
-    std::fs::write(&path, serde_json::to_vec(&snapshot).unwrap()).unwrap();
-    Candidate { path, snapshot }
+    let bytes = serde_json::to_vec(&snapshot).unwrap();
+    std::fs::write(&path, &bytes).unwrap();
+    Candidate {
+        path,
+        snapshot,
+        identity: identity(&bytes),
+    }
 }
 
 #[test]
@@ -101,6 +106,7 @@ fn recovery_scan_and_discard_do_not_follow_symbolic_links() {
     let candidate = Candidate {
         path: link,
         snapshot: source.snapshot,
+        identity: source.identity,
     };
     assert!(discard(&candidate).is_err());
     assert!(source.path.exists());
@@ -153,6 +159,10 @@ fn old_dark_drafts_convert_their_colors_once() {
     std::fs::write(&draft, serde_json::to_vec(&snapshot).unwrap()).unwrap();
     let restored = store.candidates().remove(0).snapshot.document;
     assert_eq!(restored, Document::from_json(bytes).unwrap());
+    assert_eq!(
+        store.discover().drafts[0].load().unwrap().snapshot.document,
+        restored
+    );
     assert_ne!(restored.bonds, old.bonds);
     // This build's draft is marked current and reads back unchanged.
     store.save(&restored, None).unwrap();
@@ -279,6 +289,10 @@ fn drafts_keep_3d_models() {
     let candidates = store.candidates();
     assert_eq!(candidates[0].snapshot.document, doc.current());
     assert_eq!(candidates[0].snapshot.document.models, doc.models);
+    assert_eq!(
+        store.discover().drafts[0].load().unwrap().snapshot.document,
+        doc.current()
+    );
 }
 
 /// A draft from a newer ReShiki cannot be offered, but it is counted so the
@@ -302,4 +316,219 @@ fn drafts_from_a_newer_version_are_counted_not_offered() {
     assert_eq!(scan.candidates[0].path, readable.path);
     assert_eq!(scan.newer, 1);
     assert_eq!(store.candidates().len(), 1);
+}
+
+#[test]
+fn lightweight_discovery_matches_scan_and_loads_the_exact_validated_drafts() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    abandoned(directory.path(), "older.rsk", 100);
+    abandoned(directory.path(), "newer.rsk", 200);
+    std::fs::write(directory.path().join("4294967294-corrupt.json"), b"{").unwrap();
+    let mut future = serde_json::to_value(&store.candidates()[0].snapshot).unwrap();
+    future["document"]["version"] = (crate::document::VERSION + 1).into();
+    future["document"]["future_feature"] = true.into();
+    std::fs::write(
+        directory.path().join("4294967294-future.json"),
+        serde_json::to_vec(&future).unwrap(),
+    )
+    .unwrap();
+    let eager = store.scan();
+    let discovery = store.discover();
+    assert_eq!(discovery.newer, eager.newer);
+    assert_eq!(discovery.newer, 1);
+    assert_eq!(discovery.drafts.len(), eager.candidates.len());
+    for (draft, candidate) in discovery.drafts.iter().zip(&eager.candidates) {
+        assert_eq!(draft.path, candidate.path);
+        assert_eq!(draft.source, candidate.snapshot.source);
+        assert_eq!(draft.saved_at, candidate.snapshot.saved_at);
+        assert_eq!(draft.atoms, candidate.snapshot.document.atoms.len());
+        let loaded = draft.load().unwrap();
+        assert_eq!(loaded.snapshot.document, candidate.snapshot.document);
+        assert_eq!(loaded.snapshot.source, candidate.snapshot.source);
+    }
+}
+
+#[test]
+fn deferred_load_rejects_changed_missing_and_live_owned_drafts() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    let mut candidate = abandoned(directory.path(), "drawing.rsk", 100);
+    let draft = store.discover().drafts.remove(0);
+    candidate
+        .snapshot
+        .document
+        .add_atom("N", Default::default());
+    std::fs::write(
+        &candidate.path,
+        serde_json::to_vec(&candidate.snapshot).unwrap(),
+    )
+    .unwrap();
+    assert!(draft.load().unwrap_err().contains("changed"));
+    let refreshed = store.discover().drafts.remove(0);
+    assert_eq!(refreshed.load().unwrap().snapshot.document.atoms.len(), 2);
+    let mut live = refreshed.clone();
+    live.path = directory
+        .path()
+        .join(format!("{}-live.json", std::process::id()));
+    std::fs::write(&live.path, serde_json::to_vec(&candidate.snapshot).unwrap()).unwrap();
+    assert!(live.load().unwrap_err().contains("running"));
+    std::fs::remove_file(&candidate.path).unwrap();
+    assert!(refreshed.load().is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn deferred_load_does_not_follow_a_replaced_symlink() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    let candidate = abandoned(directory.path(), "drawing.rsk", 100);
+    let draft = store.discover().drafts.remove(0);
+    let target = directory.path().join("outside.txt");
+    std::fs::rename(&candidate.path, &target).unwrap();
+    std::os::unix::fs::symlink(&target, &candidate.path).unwrap();
+    assert!(draft.load().unwrap_err().contains("regular file"));
+    assert!(target.exists());
+}
+
+#[test]
+fn replacement_keeps_and_reoffers_an_original_changed_after_hydration() {
+    let directory = tempfile::tempdir().unwrap();
+    let replacement = Recovery::in_directory(directory.path()).unwrap();
+    let candidate = abandoned(directory.path(), "original.rsk", 100);
+    let source = candidate.source();
+    let mut changed = candidate.snapshot.clone();
+    changed.document.add_atom("N", Default::default());
+    let bytes = serde_json::to_vec(&changed).unwrap();
+    std::fs::write(&source.path, &bytes).unwrap();
+    let saved = replacement
+        .save_replacing(&candidate.snapshot.document, None, Some(&source))
+        .unwrap();
+    assert!(saved.kept);
+    assert_eq!(saved.original.as_ref(), Some(&source));
+    assert_eq!(std::fs::read(&source.path).unwrap(), bytes);
+    assert_eq!(
+        saved.offer.unwrap().load().unwrap().snapshot.document,
+        changed.document
+    );
+    let copy: Snapshot =
+        serde_json::from_slice(&std::fs::read(&replacement.session).unwrap()).unwrap();
+    assert_eq!(copy.document, candidate.snapshot.document.current());
+}
+
+#[test]
+fn retirement_rechecks_changes_after_the_replacement_was_saved() {
+    let directory = tempfile::tempdir().unwrap();
+    let replacement = Recovery::in_directory(directory.path()).unwrap();
+    let candidate = abandoned(directory.path(), "original.rsk", 100);
+    let source = candidate.source();
+    replacement
+        .save(&candidate.snapshot.document, None)
+        .unwrap();
+    let bytes = b"changed even to an invalid draft after the durable save";
+    std::fs::write(&source.path, bytes).unwrap();
+    let saved = source.retire(&replacement.session);
+    assert!(saved.kept && saved.offer.is_none());
+    assert_eq!(std::fs::read(&source.path).unwrap(), bytes);
+    assert!(replacement.session.exists());
+}
+
+#[test]
+fn retirement_does_not_unlink_a_writer_that_reclaimed_the_original_name() {
+    let directory = tempfile::tempdir().unwrap();
+    let candidate = abandoned(directory.path(), "original.rsk", 100);
+    let source = candidate.source();
+    let claimed = source.claim().unwrap();
+    let bytes = b"a concurrent atomic writer reclaimed this original path";
+    std::fs::write(&source.path, bytes).unwrap();
+    let saved = source.retire_claimed(claimed.clone());
+    assert!(saved.kept);
+    assert_eq!(std::fs::read(&source.path).unwrap(), bytes);
+    assert!(
+        !claimed.exists(),
+        "Only the exact originally offered bytes retired"
+    );
+}
+
+#[test]
+fn changed_claims_stay_recoverable_without_clobbering_a_new_original() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    let candidate = abandoned(directory.path(), "original.rsk", 100);
+    let source = candidate.source();
+    let claimed = source.claim().unwrap();
+    let mut changed = candidate.snapshot.clone();
+    changed.document.add_atom("N", Default::default());
+    let claimed_bytes = serde_json::to_vec(&changed).unwrap();
+    std::fs::write(&claimed, &claimed_bytes).unwrap();
+    let mut newest = changed.clone();
+    newest.document.add_atom("S", Default::default());
+    let newest_bytes = serde_json::to_vec(&newest).unwrap();
+    std::fs::write(&source.path, &newest_bytes).unwrap();
+    let saved = source.retire_claimed(claimed.clone());
+    assert!(saved.kept);
+    assert_eq!(saved.offer.unwrap().path, claimed);
+    assert_eq!(std::fs::read(&claimed).unwrap(), claimed_bytes);
+    assert_eq!(std::fs::read(&source.path).unwrap(), newest_bytes);
+    assert_eq!(store.discover().drafts.len(), 2);
+}
+
+#[test]
+fn retirement_keeps_a_now_live_source_after_saving_its_copy() {
+    let directory = tempfile::tempdir().unwrap();
+    let replacement = Recovery::in_directory(directory.path()).unwrap();
+    let mut candidate = abandoned(directory.path(), "original.rsk", 100);
+    let path = directory
+        .path()
+        .join(format!("{}-now-live.json", std::process::id()));
+    std::fs::rename(&candidate.path, &path).unwrap();
+    candidate.path = path;
+    let source = candidate.source();
+    let bytes = std::fs::read(&source.path).unwrap();
+    let saved = replacement
+        .save_replacing(&candidate.snapshot.document, None, Some(&source))
+        .unwrap();
+    assert!(saved.kept && saved.offer.is_none());
+    assert_eq!(std::fs::read(&source.path).unwrap(), bytes);
+    assert!(replacement.session.exists());
+}
+
+#[test]
+fn replacement_rejects_the_original_path_before_writing_any_bytes() {
+    let directory = tempfile::tempdir().unwrap();
+    let candidate = abandoned(directory.path(), "original.rsk", 100);
+    let source = candidate.source();
+    let recovery = Recovery {
+        session: source.path.clone(),
+    };
+    let changed = b"changed after this source token was offered";
+    std::fs::write(&source.path, changed).unwrap();
+    assert!(
+        recovery
+            .save_replacing(&candidate.snapshot.document, None, Some(&source))
+            .unwrap_err()
+            .contains("different recovery path")
+    );
+    assert_eq!(std::fs::read(&source.path).unwrap(), changed);
+}
+
+#[cfg(unix)]
+#[test]
+fn replacement_rejects_a_symlink_alias_before_overwriting_the_original() {
+    let directory = tempfile::tempdir().unwrap();
+    let candidate = abandoned(directory.path(), "original.rsk", 100);
+    let source = candidate.source();
+    let recovery = Recovery {
+        session: directory.path().join("replacement.json"),
+    };
+    std::os::unix::fs::symlink(&source.path, &recovery.session).unwrap();
+    let changed = b"changed bytes behind a replacement-path symlink";
+    std::fs::write(&source.path, changed).unwrap();
+    assert!(
+        recovery
+            .save_replacing(&candidate.snapshot.document, None, Some(&source))
+            .is_err()
+    );
+    assert_eq!(std::fs::read(&source.path).unwrap(), changed);
+    assert!(recovery.session.is_symlink());
 }

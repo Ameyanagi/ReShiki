@@ -199,7 +199,7 @@ impl App {
             Message::InsertTemplate(index) => self.insert_template(index),
             Message::Tick => self.request_drafts(),
             Message::Restore if self.pending.is_some() => {}
-            Message::Restore => self.restore_recovered(),
+            Message::Restore => return Some(self.restore_recovered()),
             Message::DismissRecovery => self.dismiss_recovery(),
             Message::Recovery(action) => return Some(self.recovery_action(action)),
             Message::Canvas(Edit::BeginTransform(field)) => {
