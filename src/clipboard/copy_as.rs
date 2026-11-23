@@ -3,13 +3,15 @@
 use super::{CDX_TYPES, LIMIT, Representation};
 use crate::{document::Document, engine::LocalEngine, export, payload};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 mod chemdoodle;
 
 const TEXT: &str = "public.utf8-plain-text";
 const NAME_REASON: &str = "Name needs one complete molecule or a charge-balanced salt.";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CopyFormat {
     Png,
     Svg,
@@ -247,6 +249,20 @@ pub async fn prepare_chemical_text(
     snapshot: Document,
     format: CopyFormat,
 ) -> Result<PreparedCopy, String> {
+    #[cfg(target_arch = "wasm32")]
+    if format != CopyFormat::Name
+        && let Some(copy) = super::worker::prepare_chemical_text(&snapshot, format).await?
+    {
+        return Ok(copy);
+    }
+    prepare_chemical_text_local(engine, snapshot, format).await
+}
+
+pub(super) async fn prepare_chemical_text_local(
+    engine: LocalEngine,
+    snapshot: Document,
+    format: CopyFormat,
+) -> Result<PreparedCopy, String> {
     let (snapshot, notice) = match export::checked_document(&engine, snapshot.clone()).await {
         Ok(checked) => (checked, None),
         Err(error) => (
@@ -254,14 +270,14 @@ pub async fn prepare_chemical_text(
             Some(format!("Chemistry could not be refreshed: {error}")),
         ),
     };
-    let mut copy = prepare_as(engine, snapshot, format, Default::default()).await?;
+    let mut copy = prepare_as_local(engine, snapshot, format, Default::default()).await?;
     if let Some(notice) = notice {
         copy.notices.insert(0, notice);
     }
     Ok(copy)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PreparedCopy {
     pub format: CopyFormat,
     pub notices: Vec<String>,
@@ -291,6 +307,21 @@ pub fn prepare_name(name: String) -> PreparedCopy {
 /// Warnings are retained; a failed conversion never falls back to another format.
 /// `pictures` applies to PNG, SVG and PDF.
 pub async fn prepare_as(
+    engine: LocalEngine,
+    original: Document,
+    format: CopyFormat,
+    pictures: super::Pictures,
+) -> Result<PreparedCopy, String> {
+    #[cfg(target_arch = "wasm32")]
+    if format != CopyFormat::Name
+        && let Some(copy) = super::worker::prepare_as(&original, format, pictures).await?
+    {
+        return Ok(copy);
+    }
+    prepare_as_local(engine, original, format, pictures).await
+}
+
+pub(super) async fn prepare_as_local(
     engine: LocalEngine,
     original: Document,
     format: CopyFormat,

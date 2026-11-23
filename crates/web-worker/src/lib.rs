@@ -28,6 +28,11 @@ pub async fn run(job: String, request: Vec<u8>) -> Result<Vec<u8>, String> {
             let request = reshiki::browser_render::install_fonts(&request)?;
             reshiki::browser_render::respond(request).await
         }
+        "clipboard" => {
+            reshiki_process_heap::begin(reshiki::browser_render::HEAP_BYTES);
+            let request = reshiki::browser_render::install_fonts(&request)?;
+            reshiki::clipboard::worker_respond(request).await
+        }
         _ => Err(format!("Unknown worker job {job}")),
     }
 }

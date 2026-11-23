@@ -210,6 +210,9 @@ explains how the crates and modules fit together.
 - `src/assistant/mod.rs`: Reviewed, editable drawing proposals.
 - `src/assistant/settings.rs`: Catalog-driven assistant choices with an application default and explicit overrides.
 - `src/branding.rs`: The Reaction Cycle mark shared by the desktop app and release packages.
+- `src/browser_render.rs`: Browser export jobs use the existing renderers in a separate worker memory.
+- `src/browser_render/snapshot.rs`: File JSON omits transient display state.
+- `src/browser_worker.rs`: One bounded module worker per job kind.
 - `src/canvas.rs`: The molecule canvas
 - `src/canvas/cache.rs`: Canvas-local derived data, invalidated by document contents rather than edit hooks.
 - `src/canvas/dashes.rs`
@@ -280,6 +283,7 @@ explains how the crates and modules fit together.
 - `src/clipboard/linux.rs`: Wayland uses the focused GUI owner; X11 retains its persistent worker.
 - `src/clipboard/name.rs`: Chemical names retain their source text alongside rich text typography.
 - `src/clipboard/priority.rs`: Shared paste order.
+- `src/clipboard/worker.rs`: Browser clipboard preparation uses the existing pipeline and ordered flavors.
 - `src/desktop.rs`: Windows/Linux desktop handoff and long-lived Office launcher proxies.
 - `src/desktop/admission.rs`: The UI's one-shot answer to a desktop request; the listener waits on it.
 - `src/desktop/client.rs`: The launcher side
