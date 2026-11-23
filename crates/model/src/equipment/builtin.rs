@@ -122,13 +122,16 @@ pub(super) fn clip(size: &str) -> Option<Arc<Definition>> {
 }
 
 macro_rules! piece_files {
-    ($($name:literal),* $(,)?) => {
-        &[$(Source {
+    ($($name:literal),* $(,)?) => {{
+        // OnceLock needs explicit static storage: an interior-mutable array
+        // cannot be borrowed through const temporary promotion.
+        static SOURCES: [Source; [$($name),*].len()] = [$(Source {
             id: concat!("reshiki/", $name),
             text: include_str!(concat!("../../../../assets/pieces/", $name, ".reshiki-piece")),
             definition: OnceLock::new(), header: OnceLock::new(),
-        }),*]
-    };
+        }),*];
+        &SOURCES
+    }};
 }
 
 static FILES: &[Source] = piece_files![
