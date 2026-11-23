@@ -65,9 +65,9 @@ pub struct Discovery {
 }
 
 impl Draft {
-    fn from_candidate(candidate: Candidate, bytes: &[u8]) -> Self {
+    fn from_candidate(candidate: Candidate) -> Self {
         Self {
-            identity: identity(bytes),
+            identity: candidate.identity,
             path: candidate.path,
             source: candidate.snapshot.source,
             saved_at: candidate.snapshot.saved_at,
@@ -208,8 +208,7 @@ impl Source {
                         snapshot,
                         identity: identity(&bytes),
                     };
-                    self.available()
-                        .then(|| Draft::from_candidate(candidate, &bytes))
+                    self.available().then(|| Draft::from_candidate(candidate))
                 })
         } else {
             None
@@ -343,7 +342,7 @@ impl Recovery {
     /// made with a newer ReShiki.
     pub fn scan(&self) -> Scan {
         let mut candidates = Vec::new();
-        let newer = self.scan_each(|candidate, _bytes| candidates.push(candidate));
+        let newer = self.scan_each(|candidate| candidates.push(candidate));
         candidates.sort_by(|a, b| {
             b.snapshot
                 .saved_at
@@ -357,8 +356,7 @@ impl Recovery {
     /// Native callers should run this filesystem/parse work on a worker.
     pub fn discover(&self) -> Discovery {
         let mut drafts = Vec::new();
-        let newer =
-            self.scan_each(|candidate, bytes| drafts.push(Draft::from_candidate(candidate, bytes)));
+        let newer = self.scan_each(|candidate| drafts.push(Draft::from_candidate(candidate)));
         drafts.sort_by(|a, b| {
             b.saved_at
                 .cmp(&a.saved_at)
@@ -367,7 +365,7 @@ impl Recovery {
         Discovery { drafts, newer }
     }
 
-    fn scan_each(&self, mut accept: impl FnMut(Candidate, &[u8])) -> usize {
+    fn scan_each(&self, mut accept: impl FnMut(Candidate)) -> usize {
         let Some(parent) = self.session.parent() else {
             return 0;
         };
@@ -409,14 +407,11 @@ impl Recovery {
                 continue;
             };
             snapshot.document.migrate();
-            accept(
-                Candidate {
-                    path,
-                    snapshot,
-                    identity: identity(&bytes),
-                },
-                &bytes,
-            );
+            accept(Candidate {
+                path,
+                snapshot,
+                identity: identity(&bytes),
+            });
         }
         newer
     }
