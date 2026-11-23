@@ -1,0 +1,171 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/komagome-pipette-3",
+ "revision": 1,
+ "family": "komagome-pipette",
+ "variant": {
+  "capacity": "3 mL"
+ },
+ "names": {
+  "en": "Komagome pipette, 3 mL"
+ },
+ "category": "addition",
+ "keywords": [
+  "pipette",
+  "liquid transfer",
+  "komagome",
+  "dropper",
+  "rubber bulb",
+  "approximate scale"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "glass",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M5 0C5.15 2 5 5 3.7 8L3.7 55C3.7 60.5 7.5 64.625 7.5 71.5C7.5 78.375 3.4 83.875 3.4 90.75L3.4 195.25C3.4 225.5 1.3 258.5 0.7 275L-0.7 275C-1.3 258.5 -3.4 225.5 -3.4 195.25L-3.4 90.75C-3.4 83.875 -7.5 78.375 -7.5 71.5C-7.5 64.625 -3.7 60.5 -3.7 55L-3.7 8C-5 5 -5.15 2 -5 0Z"
+  },
+  {
+   "id": "open-mouth",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-4.45 1.4Q0 2.4 4.45 1.4",
+   "when": {
+    "bulb": [
+     "removed"
+    ]
+   }
+  },
+  {
+   "id": "scale-marks",
+   "layer": "front",
+   "material": "ink",
+   "role": "fill",
+   "path": "M-2.75 126.29H1.84V126.71H-2.75ZM-2.75 130.74H-0.37V131.06H-2.75ZM-2.75 135.14H-0.37V135.46H-2.75ZM-2.75 139.54H-0.37V139.86H-2.75ZM-2.75 143.94H-0.37V144.26H-2.75ZM-2.75 148.29H1.84V148.71H-2.75ZM-2.75 152.74H-0.37V153.06H-2.75ZM-2.75 157.14H-0.37V157.46H-2.75ZM-2.75 161.54H-0.37V161.86H-2.75ZM-2.75 165.94H-0.37V166.26H-2.75ZM-2.75 170.29H1.84V170.71H-2.75ZM-2.75 174.74H-0.37V175.06H-2.75ZM-2.75 179.14H-0.37V179.46H-2.75ZM-2.75 183.54H-0.37V183.86H-2.75ZM-2.75 187.94H-0.37V188.26H-2.75ZM-2.75 192.29H1.84V192.71H-2.75Z"
+  },
+  {
+   "id": "rubber-bulb",
+   "layer": "front",
+   "material": "rubber",
+   "role": "solid",
+   "path": "M-5.8 7L-5.8 -3C-5.8 -8 -8.5 -10 -8.5 -20.52C-8.5 -30.6 -4.93 -36 0 -36C4.93 -36 8.5 -30.6 8.5 -20.52C8.5 -10 5.8 -8 5.8 -3L5.8 7Z",
+   "color": [
+    177,
+    68,
+    57
+   ],
+   "part": "bulb-toggle",
+   "when": {
+    "bulb": [
+     "fitted"
+    ]
+   }
+  },
+  {
+   "id": "bulb-socket-edge",
+   "layer": "front",
+   "material": "rubber",
+   "role": "detail",
+   "path": "M-5.15 3Q0 4 5.15 3",
+   "part": "bulb-toggle",
+   "when": {
+    "bulb": [
+     "fitted"
+    ]
+   }
+  }
+ ],
+ "params": [
+  {
+   "id": "bulb",
+   "names": {
+    "en": "Rubber bulb"
+   },
+   "kind": "states",
+   "default": "fitted",
+   "states": [
+    {
+     "id": "fitted",
+     "names": {
+      "en": "Fitted"
+     }
+    },
+    {
+     "id": "removed",
+     "names": {
+      "en": "Removed"
+     }
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "names": {
+    "en": "Drawn liquid level"
+   },
+   "kind": "fill",
+   "liquid": "sample",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "sample",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "bulb-toggle",
+   "param": "bulb",
+   "motion": {
+    "per_state": {
+     "fitted": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "removed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     -19.8
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "sample",
+   "region": "M4.45 1.4C4.6 2 4.45 5 3.15 8L3.15 55C3.15 60.5 6.95 64.625 6.95 71.5C6.95 78.375 2.85 83.875 2.85 90.75L2.85 195.25C2.85 225.5 0.75 258.5 0.15 273.8L-0.15 273.8C-0.75 258.5 -2.85 225.5 -2.85 195.25L-2.85 90.75C-2.85 83.875 -6.95 78.375 -6.95 71.5C-6.95 64.625 -3.15 60.5 -3.15 55L-3.15 8C-4.45 5 -4.6 2 -4.45 1.4Z"
+  }
+ ]
+}

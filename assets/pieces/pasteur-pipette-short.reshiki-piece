@@ -1,0 +1,166 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/pasteur-pipette-short",
+ "revision": 1,
+ "family": "pasteur-pipette",
+ "variant": {
+  "length": "150 mm",
+  "style": "Short"
+ },
+ "names": {
+  "en": "Pasteur pipette, Short"
+ },
+ "category": "addition",
+ "keywords": [
+  "pipette",
+  "liquid transfer",
+  "pasteur",
+  "dropper",
+  "short",
+  "rubber bulb",
+  "capillary"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "glass",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M3.6 0L3.6 5C3.6 8 2.85 8 2.85 11C2.85 14 3.6 14 3.6 18L3.6 84C3.6 92 0.8 95 0.8 101L0.8 150L-0.8 150L-0.8 101C-0.8 95 -3.6 92 -3.6 84L-3.6 18C-3.6 14 -2.85 14 -2.85 11C-2.85 8 -3.6 8 -3.6 5L-3.6 0Z"
+  },
+  {
+   "id": "open-mouth",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-3.05 1.4Q0 2.4 3.05 1.4",
+   "when": {
+    "bulb": [
+     "removed"
+    ]
+   }
+  },
+  {
+   "id": "rubber-bulb",
+   "layer": "front",
+   "material": "rubber",
+   "role": "solid",
+   "path": "M-4.4 7L-4.4 -3C-4.4 -8 -8.5 -10 -8.5 -18.24C-8.5 -27.2 -4.93 -32 0 -32C4.93 -32 8.5 -27.2 8.5 -18.24C8.5 -10 4.4 -8 4.4 -3L4.4 7Z",
+   "color": [
+    177,
+    68,
+    57
+   ],
+   "part": "bulb-toggle",
+   "when": {
+    "bulb": [
+     "fitted"
+    ]
+   }
+  },
+  {
+   "id": "bulb-socket-edge",
+   "layer": "front",
+   "material": "rubber",
+   "role": "detail",
+   "path": "M-3.75 3Q0 4 3.75 3",
+   "part": "bulb-toggle",
+   "when": {
+    "bulb": [
+     "fitted"
+    ]
+   }
+  }
+ ],
+ "params": [
+  {
+   "id": "bulb",
+   "names": {
+    "en": "Rubber bulb"
+   },
+   "kind": "states",
+   "default": "fitted",
+   "states": [
+    {
+     "id": "fitted",
+     "names": {
+      "en": "Fitted"
+     }
+    },
+    {
+     "id": "removed",
+     "names": {
+      "en": "Removed"
+     }
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "names": {
+    "en": "Drawn liquid level"
+   },
+   "kind": "fill",
+   "liquid": "sample",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "sample",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "bulb-toggle",
+   "param": "bulb",
+   "motion": {
+    "per_state": {
+     "fitted": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "removed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     -17.6
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "sample",
+   "region": "M3.05 1.4L3.05 5C3.05 8 2.3 8 2.3 11C2.3 14 3.05 14 3.05 18L3.05 84C3.05 92 0.25 95 0.25 101L0.25 148.8L-0.25 148.8L-0.25 101C-0.25 95 -3.05 92 -3.05 84L-3.05 18C-3.05 14 -2.3 14 -2.3 11C-2.3 8 -3.05 8 -3.05 5L-3.05 1.4Z"
+  }
+ ]
+}
