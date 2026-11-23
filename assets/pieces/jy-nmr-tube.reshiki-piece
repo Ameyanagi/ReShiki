@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/jy-nmr-tube",
- "revision": 2,
+ "revision": 3,
  "family": "jy-nmr-tube",
  "variant": {},
  "names": {
@@ -27,224 +27,244 @@
    "path": "M-2.5 -0.01L-2.5 0L-2.5 175.5A2.5 2.5 0 0 0 2.5 175.5L2.5 0L2.5 -0.01Z"
   },
   {
+   "id": "shape-2",
    "layer": "body",
    "material": "glass",
    "role": "glass",
-   "id": "shape-2",
-   "path": "M2.5 2L4.2 -2L4.2 -24L-4.2 -24L-4.2 -2L-2.5 2Z"
+   "path": "M-3.4 -35V-21C-3.4 -20 -4.6 -20 -4.6 -18.6C-4.6 -16.6 -3 -15 -2.9 -12.4Q-2.8 -11.3 -3.3 -10.8C-4 -10.4 -4 -8.8 -3.8 -6.4C-3.6 -3.6 -3.1 -1 -2.5 .4V2H2.5V.4C3.1 -1 3.6 -3.6 3.8 -6.4C4 -8.8 4 -10.4 3.3 -10.8Q2.8 -11.3 2.9 -12.4C3 -15 4.6 -16.6 4.6 -18.6C4.6 -20 3.4 -20 3.4 -21V-35Z"
   },
   {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "id": "shape-3",
-   "path": "M-4.2 -14L4.2 -14.9"
-  },
-  {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "id": "shape-4",
-   "path": "M-4.2 -15.8L4.2 -16.7"
-  },
-  {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "id": "shape-5",
-   "path": "M-4.2 -17.6L4.2 -18.5"
-  },
-  {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "id": "shape-6",
-   "path": "M-4.2 -19.4L4.2 -20.3"
-  },
-  {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "id": "shape-7",
-   "path": "M-4.2 -21.2L4.2 -22.1"
-  },
-  {
-   "layer": "inner",
-   "material": "ptfe",
-   "role": "solid",
-   "when": {
-    "valve": [
-     "closed"
-    ]
-   },
    "id": "shape-8",
-   "path": "M-0.5 -20L0.5 -20A1.2 1.2 0 0 1 1.7 -18.8L1.7 -1.2A1.2 1.2 0 0 1 0.5 0L-0.5 0A1.2 1.2 0 0 1 -1.7 -1.2L-1.7 -18.8A1.2 1.2 0 0 1 -0.5 -20Z"
-  },
-  {
-   "layer": "body",
-   "material": "plastic",
-   "role": "solid",
-   "color": [
-    244,
-    241,
-    234
-   ],
-   "when": {
-    "valve": [
-     "closed"
-    ]
-   },
-   "id": "shape-9",
-   "path": "M-3.4 -38L3.4 -38A2 2 0 0 1 5.4 -36L5.4 -25A2 2 0 0 1 3.4 -23L-3.4 -23A2 2 0 0 1 -5.4 -25L-5.4 -36A2 2 0 0 1 -3.4 -38Z"
-  },
-  {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "when": {
-    "valve": [
-     "closed"
-    ]
-   },
-   "id": "shape-10",
-   "path": "M-3.2 -36L-3.2 -25"
-  },
-  {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "when": {
-    "valve": [
-     "closed"
-    ]
-   },
-   "id": "shape-11",
-   "path": "M-1.6 -36L-1.6 -25"
-  },
-  {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "when": {
-    "valve": [
-     "closed"
-    ]
-   },
-   "id": "shape-12",
-   "path": "M0 -36L0 -25"
-  },
-  {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "when": {
-    "valve": [
-     "closed"
-    ]
-   },
-   "id": "shape-13",
-   "path": "M1.6 -36L1.6 -25"
-  },
-  {
-   "layer": "body",
-   "material": "glass",
-   "role": "detail",
-   "when": {
-    "valve": [
-     "closed"
-    ]
-   },
-   "id": "shape-14",
-   "path": "M3.2 -36L3.2 -25"
-  },
-  {
    "layer": "inner",
    "material": "ptfe",
-   "role": "solid",
-   "when": {
-    "valve": [
-     "open"
-    ]
-   },
-   "id": "shape-16",
-   "path": "M-0.5 -22.5L0.5 -22.5A1.2 1.2 0 0 1 1.7 -21.3L1.7 -3.7A1.2 1.2 0 0 1 0.5 -2.5L-0.5 -2.5A1.2 1.2 0 0 1 -1.7 -3.7L-1.7 -21.3A1.2 1.2 0 0 1 -0.5 -22.5Z"
+   "role": "fill",
+   "path": "M-2.2 -35H2.2V-14.2Q2.2 -13.72 3.0216936 -13.4370416C2.9574 -13.1084 2.914 -12.764 2.9 -12.4Q2.53 -12.18 2.15 -12.1V-11.83Q2.15 -11.61 1.8 -11.58Q0 -11.39 -1.8 -11.58Q-2.15 -11.61 -2.15 -11.83V-12.1Q-2.53 -12.18 -2.9 -12.4C-2.914 -12.764 -2.9574 -13.1084 -3.0216936 -13.4370416Q-2.2 -13.72 -2.2 -14.2Z",
+   "color": [
+    226,
+    226,
+    218
+   ],
+   "part": "valve-handle"
   },
   {
+   "id": "lower-ptfe-side-bore",
+   "layer": "inner",
+   "material": "ptfe",
+   "role": "fill",
+   "path": "M-.67 -15.4A.67 .55 0 0 1 .67 -15.4A.67 .55 0 0 1 -.67 -15.4Z",
+   "depth": 1,
+   "color": [
+    112,
+    120,
+    116
+   ],
+   "part": "valve-handle"
+  },
+  {
+   "id": "seated-ptfe-contact-band",
+   "layer": "inner",
+   "material": "ptfe",
+   "role": "fill",
+   "path": "M-3.0216936 -13.4370416Q0 -13.18 3.0216936 -13.4370416C2.9574 -13.1084 2.914 -12.764 2.9 -12.4Q0 -12.145 -2.9 -12.4C-2.914 -12.764 -2.9574 -13.1084 -3.0216936 -13.4370416Z",
+   "depth": 1,
+   "color": [
+    252,
+    250,
+    244
+   ],
+   "part": "valve-handle",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   }
+  },
+  {
+   "id": "closed-lower-plug-seal",
+   "layer": "inner",
+   "material": "rubber",
+   "role": "fill",
+   "path": "M-2.25 -25A2.25 0.33 0 0 1 2.25 -25A2.25 0.33 0 0 1 -2.25 -25Z",
+   "depth": 1,
+   "color": [
+    113,
+    129,
+    134
+   ],
+   "part": "valve-handle"
+  },
+  {
+   "id": "shape-9",
    "layer": "body",
    "material": "plastic",
    "role": "solid",
+   "path": "M-6 -43H6V-31.1Q6 -30 4.9 -30H-4.9Q-6 -30 -6 -31.1Z",
    "color": [
-    244,
-    241,
-    234
+    245,
+    211,
+    38
    ],
-   "when": {
-    "valve": [
-     "open"
-    ]
-   },
-   "id": "shape-17",
-   "path": "M-3.4 -40.5L3.4 -40.5A2 2 0 0 1 5.4 -38.5L5.4 -27.5A2 2 0 0 1 3.4 -25.5L-3.4 -25.5A2 2 0 0 1 -5.4 -27.5L-5.4 -38.5A2 2 0 0 1 -3.4 -40.5Z"
+   "part": "valve-handle"
   },
   {
+   "id": "cap-closed-knurled-band",
+   "layer": "body",
+   "material": "plastic",
+   "role": "solid",
+   "path": "M-7 -48.1A7 .9 0 0 1 7 -48.1V-42.6Q7 -41.9 6.3 -41.9H-6.3Q-7 -41.9 -7 -42.6Z",
+   "depth": 1,
+   "color": [
+    249,
+    216,
+    47
+   ],
+   "part": "valve-handle"
+  },
+  {
+   "id": "shape-10",
    "layer": "body",
    "material": "glass",
    "role": "detail",
-   "when": {
-    "valve": [
-     "open"
-    ]
-   },
-   "id": "shape-18",
-   "path": "M-3.2 -38.5L-3.2 -27.5"
+   "path": "M-4.8 -46.4V-43.1",
+   "depth": 2,
+   "part": "valve-handle"
   },
   {
+   "id": "shape-11",
    "layer": "body",
    "material": "glass",
    "role": "detail",
-   "when": {
-    "valve": [
-     "open"
-    ]
-   },
-   "id": "shape-19",
-   "path": "M-1.6 -38.5L-1.6 -27.5"
+   "path": "M-2.4 -46.4V-43.1",
+   "depth": 2,
+   "part": "valve-handle"
   },
   {
+   "id": "shape-12",
    "layer": "body",
    "material": "glass",
    "role": "detail",
-   "when": {
-    "valve": [
-     "open"
-    ]
-   },
-   "id": "shape-20",
-   "path": "M0 -38.5L0 -27.5"
+   "path": "M0 -46.4V-43.1",
+   "depth": 2,
+   "part": "valve-handle"
   },
   {
+   "id": "shape-13",
    "layer": "body",
    "material": "glass",
    "role": "detail",
-   "when": {
-    "valve": [
-     "open"
-    ]
-   },
-   "id": "shape-21",
-   "path": "M1.6 -38.5L1.6 -27.5"
+   "path": "M2.4 -46.4V-43.1",
+   "depth": 2,
+   "part": "valve-handle"
   },
   {
+   "id": "shape-14",
    "layer": "body",
    "material": "glass",
    "role": "detail",
-   "when": {
-    "valve": [
-     "open"
-    ]
-   },
-   "id": "shape-22",
-   "path": "M3.2 -38.5L3.2 -27.5"
+   "path": "M4.8 -46.4V-43.1",
+   "depth": 2,
+   "part": "valve-handle"
+  },
+  {
+   "id": "closed-exposed-ptfe-stem",
+   "layer": "front",
+   "material": "ptfe",
+   "role": "solid",
+   "path": "M-2.8 -63.2A2.8 .8 0 0 1 2.8 -63.2V-48.1H-2.8Z",
+   "color": [
+    249,
+    247,
+    240
+   ],
+   "part": "valve-handle"
+  },
+  {
+   "id": "closed-primary-stem-seal",
+   "layer": "front",
+   "material": "rubber",
+   "role": "fill",
+   "path": "M-3.05 -62.3H3.05V-61.65Q0 -61.35 -3.05 -61.65Z",
+   "depth": 1,
+   "color": [
+    109,
+    127,
+    134
+   ],
+   "part": "valve-handle"
+  },
+  {
+   "id": "closed-secondary-stem-seal",
+   "layer": "front",
+   "material": "rubber",
+   "role": "fill",
+   "path": "M-3.2 -49.65A3.2 0.4 0 0 1 3.2 -49.65A3.2 0.4 0 0 1 -3.2 -49.65Z",
+   "depth": 1,
+   "color": [
+    128,
+    109,
+    66
+   ],
+   "part": "valve-handle"
+  },
+  {
+   "id": "closed-stem-tip-face",
+   "layer": "front",
+   "material": "ptfe",
+   "role": "fill",
+   "path": "M-2.8 -63.2A2.8 0.8 0 0 1 2.8 -63.2A2.8 0.8 0 0 1 -2.8 -63.2Z",
+   "depth": 2,
+   "color": [
+    249,
+    247,
+    240
+   ],
+   "part": "valve-handle"
+  },
+  {
+   "id": "closed-stem-tip-rim",
+   "layer": "front",
+   "material": "plastic",
+   "role": "fill",
+   "path": "M-2.8 -63.2A2.8 0.8 0 0 1 2.8 -63.2A2.8 0.8 0 0 1 -2.8 -63.2ZM-2.55 -63.2A2.55 0.55 0 0 0 2.55 -63.2A2.55 0.55 0 0 0 -2.55 -63.2Z",
+   "depth": 3,
+   "color": [
+    109,
+    115,
+    114
+   ],
+   "part": "valve-handle"
+  },
+  {
+   "id": "closed-stem-tip-bore",
+   "layer": "front",
+   "material": "plastic",
+   "role": "fill",
+   "path": "M-1.05 -63.14A1.05 0.3 0 0 1 1.05 -63.14A1.05 0.3 0 0 1 -1.05 -63.14Z",
+   "depth": 4,
+   "color": [
+    57,
+    64,
+    65
+   ],
+   "part": "valve-handle"
+  }
+ ],
+ "joints": [
+  {
+   "id": "nmr-stem",
+   "kind": "plug",
+   "family": "nmr",
+   "gender": "M",
+   "size_mm": 6.4,
+   "at": [
+    0,
+    -49.25
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "part": "valve-handle"
   }
  ],
  "params": [
@@ -336,14 +356,14 @@
       0,
       1,
       0,
-      0
+      -2.5
      ]
     }
    },
    "handle": {
     "at": [
      0,
-     -32
+     -40
     ],
     "gesture": "toggle"
    }

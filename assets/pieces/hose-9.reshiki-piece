@@ -1,0 +1,70 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/hose-9",
+ "revision": 1,
+ "family": "hose",
+ "variant": {
+  "bore": "9 mm"
+ },
+ "names": {
+  "en": "Rubber hose, 9 mm"
+ },
+ "category": "other",
+ "keywords": [
+  "hose",
+  "tubing",
+  "rubber hose",
+  "9 mm"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "tube": {
+  "width_mm": 11,
+  "material": "rubber",
+  "color": [
+   196,
+   106,
+   58
+  ],
+  "ends": [
+   "a",
+   "b"
+  ]
+ },
+ "joints": [
+  {
+   "id": "a",
+   "kind": "plug",
+   "family": "hose",
+   "gender": "F",
+   "size_mm": 9,
+   "at": [
+    0,
+    0
+   ],
+   "dir": [
+    -1,
+    0
+   ]
+  },
+  {
+   "id": "b",
+   "kind": "plug",
+   "family": "hose",
+   "gender": "F",
+   "size_mm": 9,
+   "at": [
+    60,
+    0
+   ],
+   "dir": [
+    1,
+    0
+   ]
+  }
+ ]
+}

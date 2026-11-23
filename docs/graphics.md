@@ -494,7 +494,12 @@ line names the released piece, for example **Tilt: 25° · releases the tube**.
 
 ### Connect hoses
 
-1. Choose **Rubber hose, 7 mm** in the **Equipment** panel.
+The **J. Young NMR evacuation manifold** sits upright above the **J. Young
+NMR tube**. Seat the white stem at the top of the tube in the manifold's
+bottom socket. The side barb takes the **Rubber hose · 9 mm bore**. Both
+connections follow the assembly when you move it or switch a valve state.
+
+1. In **Equipment**, choose the **Rubber hose** bore that matches the barb.
 2. Drag from one hose barb, such as a condenser's water inlet, to another.
    Or click a barb to hang a hose from it. A ring marks the barb an end will
    go on.
