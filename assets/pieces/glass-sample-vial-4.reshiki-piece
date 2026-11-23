@@ -45,7 +45,7 @@
    "layer": "body",
    "material": "glass",
    "role": "detail",
-   "path": "M-6.5 2.35L6.5 1.45M-6.5 4.25L6.5 3.35M-6.5 6.15L6.5 5.25"
+   "path": "M-6.5 2.35L6.5 1.45M-6.5 4.25L6.5 3.35M-6 5.6L6 4.7"
   },
   {
    "id": "inside-base",
