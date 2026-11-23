@@ -1,0 +1,174 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/pycnometer-50",
+ "revision": 1,
+ "family": "pycnometer",
+ "variant": {
+  "volume_ml": "50"
+ },
+ "names": {
+  "en": "Gay-Lussac pycnometer"
+ },
+ "category": "vessel",
+ "keywords": [
+  "pycnometer",
+  "Gay-Lussac",
+  "density bottle",
+  "specific gravity bottle",
+  "capillary stopper",
+  "50 mL"
+ ],
+ "credits": {
+  "author": "ReShiki"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "bottle",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-7 -65L-7 -50.8C-7 -47.1 -15.3 -46.3 -20.4 -39.6C-23.8 -35.1 -25 -29.4 -25 -24C-25 -12.2 -22 -2.7 -17.2 0L17.2 0C22 -2.7 25 -12.2 25 -24C25 -29.4 23.8 -35.1 20.4 -39.6C15.3 -46.3 7 -47.1 7 -50.8L7 -65"
+  },
+  {
+   "id": "mouth-lips",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-7 -65L-5.1 -65M5.1 -65L7 -65"
+  },
+  {
+   "id": "mouth-rim",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-7 -65Q0 -67.2 7 -65Q0 -62.8 -7 -65Z",
+   "when": {
+    "closure": [
+     "removed"
+    ]
+   }
+  },
+  {
+   "id": "ground-socket",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-5.1 -65L-4.45 -52M5.1 -65L4.45 -52",
+   "when": {
+    "closure": [
+     "removed"
+    ]
+   }
+  },
+  {
+   "id": "base-thickness",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-16.7 -1.8L16.7 -1.8"
+  },
+  {
+   "id": "capillary-stopper",
+   "layer": "front",
+   "material": "glass",
+   "role": "solid",
+   "path": "M-2.6 -85L-4.5 -75L-4.5 -68.2Q-4.5 -67 -5.5 -67L-5.5 -65L-5.1 -65L-4.45 -52L-0.4 -52L-0.4 -85ZM0.4 -85L0.4 -52L4.45 -52L5.1 -65L5.5 -65L5.5 -67Q4.5 -67 4.5 -68.2L4.5 -75L2.6 -85Z",
+   "part": "stopper"
+  },
+  {
+   "id": "stopper-ground-surface",
+   "layer": "front",
+   "material": "frosted",
+   "role": "fill",
+   "path": "M-5.1 -65L-4.45 -52L-0.4 -52L-0.4 -65ZM0.4 -65L0.4 -52L4.45 -52L5.1 -65Z",
+   "part": "stopper"
+  }
+ ],
+ "params": [
+  {
+   "id": "closure",
+   "names": {
+    "en": "Capillary stopper"
+   },
+   "kind": "states",
+   "default": "closed",
+   "states": [
+    {
+     "id": "closed",
+     "names": {
+      "en": "Closed"
+     }
+    },
+    {
+     "id": "removed",
+     "names": {
+      "en": "Removed"
+     }
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "stopper",
+   "param": "closure",
+   "motion": {
+    "per_state": {
+     "closed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "removed": [
+      1,
+      0,
+      0,
+      1,
+      38,
+      -18
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     -76
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M-4.2 -50.2C-4.4 -45.6 -14.3 -45 -19.2 -38.6C-22.3 -34.5 -23.6 -29 -23.6 -24C-23.6 -13.1 -20.8 -4.2 -16.7 -1.8L16.7 -1.8C20.8 -4.2 23.6 -13.1 23.6 -24C23.6 -29 22.3 -34.5 19.2 -38.6C14.3 -45 4.4 -45.6 4.2 -50.2Z"
+  }
+ ]
+}

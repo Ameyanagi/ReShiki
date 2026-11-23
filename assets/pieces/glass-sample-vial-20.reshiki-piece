@@ -1,0 +1,199 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/glass-sample-vial-20",
+ "revision": 1,
+ "family": "glass-sample-vial",
+ "variant": {
+  "volume_ml": "20"
+ },
+ "names": {
+  "en": "Glass sample vial, screw cap, 20 mL"
+ },
+ "category": "vessel",
+ "keywords": [
+  "glass vial",
+  "sample vial",
+  "screw cap",
+  "liquid sample",
+  "weighing",
+  "borosilicate",
+  "capped vial"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "body",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-10.6 0.9L-10.6 8.8C-10.6 10.8 -14 10.8 -14 13L-14 55.2Q-14 57 -12.2 57L12.2 57Q14 57 14 55.2L14 13C14 10.8 10.6 10.8 10.6 8.8L10.6 0.9C10.6 -0.3 -10.6 -0.3 -10.6 0.9Z"
+  },
+  {
+   "id": "mouth-front",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-10.6 .9C-10.6 2.1 10.6 2.1 10.6 .9"
+  },
+  {
+   "id": "neck-thread",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-12 2.35L12 1.45M-12 4.25L12 3.35M-12 6.15L12 5.25"
+  },
+  {
+   "id": "inside-base",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-12.8 54.3Q-12.8 55.7 -11.4 55.7L11.4 55.7Q12.8 55.7 12.8 54.3"
+  },
+  {
+   "id": "thread-collar",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-12 .5L12 .5L12 7.4L-12 7.4Z"
+  },
+  {
+   "id": "cap",
+   "layer": "front",
+   "material": "plastic",
+   "role": "solid",
+   "path": "M-12.6 -3L12.6 -3Q13.6 -3 13.6 -2L13.6 7Q13.6 8 12.6 8L-12.6 8Q-13.6 8 -13.6 7L-13.6 -2Q-13.6 -3 -12.6 -3Z",
+   "part": "closure",
+   "color": [
+    62,
+    67,
+    72
+   ]
+  },
+  {
+   "id": "cap-ribs",
+   "layer": "front",
+   "material": "plastic",
+   "role": "detail",
+   "path": "M-9.792 -1.5L-9.792 6.4M-4.896 -1.5L-4.896 6.4M0 -1.5L0 6.4M4.896 -1.5L4.896 6.4M9.792 -1.5L9.792 6.4",
+   "part": "closure",
+   "color": [
+    148,
+    155,
+    160
+   ]
+  },
+  {
+   "id": "cap-lower-edge",
+   "layer": "front",
+   "material": "plastic",
+   "role": "detail",
+   "path": "M-12.8 7.2L12.8 7.2",
+   "part": "closure",
+   "color": [
+    148,
+    155,
+    160
+   ]
+  }
+ ],
+ "params": [
+  {
+   "id": "closure",
+   "names": {
+    "en": "Screw cap"
+   },
+   "kind": "states",
+   "default": "closed",
+   "states": [
+    {
+     "id": "closed",
+     "names": {
+      "en": "Closed"
+     }
+    },
+    {
+     "id": "removed",
+     "names": {
+      "en": "Removed"
+     }
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "closure",
+   "param": "closure",
+   "motion": {
+    "per_state": {
+     "closed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "removed": [
+      1,
+      0,
+      0,
+      1,
+      36,
+      49
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     2.5
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M-12.8 13.6L12.8 13.6L12.8 54.3Q12.8 55.5 11.6 55.5L-11.6 55.5Q-12.8 55.5 -12.8 54.3Z",
+   "meniscus": "concave"
+  }
+ ],
+ "labels": [
+  {
+   "id": "sample",
+   "at": [
+    0,
+    34.5
+   ]
+  }
+ ]
+}
