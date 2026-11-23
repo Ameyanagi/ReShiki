@@ -582,3 +582,129 @@ fn radical_recount_keeps_a_set_count_and_unrelated_atoms() {
     assert_eq!(radicals(&drawn, marked), 3);
     assert_eq!(radicals(&drawn, bare), 1);
 }
+
+// Captured pre-optimization normalization, independent of the borrowed views.
+fn cloned_reference_chemistry_changed(before: &Document, after: &Document) -> bool {
+    before.generic != after.generic
+        || before.bonds.len() != after.bonds.len()
+        || before.bonds.iter().zip(&after.bonds).any(|(a, b)| {
+            let mut a = a.clone();
+            let mut b = b.clone();
+            a.distance_derived = false;
+            b.distance_derived = false;
+            a.z_order = 0;
+            b.z_order = 0;
+            a.color = Default::default();
+            b.color = Default::default();
+            a.highlight = None;
+            b.highlight = None;
+            a.double_position = Default::default();
+            b.double_position = Default::default();
+            a.secondary_display = None;
+            b.secondary_display = None;
+            a.indicator = Default::default();
+            b.indicator = Default::default();
+            a.cip_label = None;
+            a.undefined_stereo = false;
+            b.cip_label = None;
+            b.undefined_stereo = false;
+            if a.order == 4 && b.order == 4 || a.order == b.order && a.projection && b.projection {
+                a.display = "plain".into();
+                b.display = "plain".into();
+                a.projection = false;
+                b.projection = false;
+                if a.a > a.b {
+                    a.reverse();
+                }
+                if b.a > b.b {
+                    b.reverse();
+                }
+            }
+            a != b
+        })
+        || before.atoms.len() != after.atoms.len()
+        || before.atoms.iter().zip(&after.atoms).any(|(a, b)| {
+            let mut a = a.clone();
+            let mut b = b.clone();
+            a.text_style = None;
+            b.text_style = None;
+            a.marks.clear();
+            b.marks.clear();
+            a.mark_serial = 0;
+            b.mark_serial = 0;
+            a.display = Default::default();
+            b.display = Default::default();
+            a.cip_label = None;
+            a.steroid_label = None;
+            a.undefined_stereo = false;
+            a.undefined_pseudoasymmetric = false;
+            b.cip_label = None;
+            b.steroid_label = None;
+            b.undefined_stereo = false;
+            b.undefined_pseudoasymmetric = false;
+            a.label_h = 0;
+            b.label_h = 0;
+            a != b
+        })
+}
+
+#[test]
+fn borrowed_chemistry_comparison_matches_cloned_normalization() {
+    let (base, _) = ethane(1);
+    for order_a in [1, 4, 5] {
+        for order_b in [1, 4, 5] {
+            for projection_a in [false, true] {
+                for projection_b in [false, true] {
+                    for reverse_a in [false, true] {
+                        for reverse_b in [false, true] {
+                            let mut before = base.clone();
+                            let mut after = base.clone();
+                            for (doc, order, projection, reverse, display) in [
+                                (&mut before, order_a, projection_a, reverse_a, "wedge"),
+                                (&mut after, order_b, projection_b, reverse_b, "bold"),
+                            ] {
+                                let bond = &mut doc.bonds[0];
+                                bond.order = order;
+                                bond.projection = projection;
+                                bond.display = display.into();
+                                bond.stereo = Some("trans".into());
+                                bond.stereo_atoms = vec![41, 42, 43];
+                                if reverse {
+                                    bond.reverse();
+                                }
+                            }
+                            after.atoms[0].cip_label = Some("R".into());
+                            after.atoms[0].label_h = 5;
+                            after.bonds[0].color = BLUE;
+                            assert_eq!(
+                                chemistry_changed(&before, &after),
+                                cloned_reference_chemistry_changed(&before, &after),
+                                "orders {order_a}/{order_b}, projection {projection_a}/{projection_b}, reversed {reverse_a}/{reverse_b}",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "isolated requested-Rust-allocation measurement; run with --test-threads=1"]
+fn chemistry_comparison_allocates_nothing() {
+    let (mut before, _) = ethane(1);
+    before.atoms = vec![before.atoms[0].clone(); 2_000];
+    before.bonds = vec![before.bonds[0].clone(); 2_000];
+    let mut after = before.clone();
+    after.atoms[0].cip_label = Some("R".into());
+    let (changed, allocations) = crate::parity_tests::measured(|| {
+        let mut changed = false;
+        for _ in 0..100 {
+            changed |= std::hint::black_box(chemistry_changed(&before, &after));
+        }
+        changed
+    });
+    assert!(!changed);
+    assert_eq!(allocations.count, 0);
+    assert_eq!(allocations.bytes, 0);
+}
