@@ -3,8 +3,8 @@
 //! not carry these jobs' code and data, a runaway job uses this module's
 //! memory, not the editor's, and terminating the worker frees all of it.
 //!
-//! Each job takes and returns bytes in its own desktop worker protocol. Only
-//! naming runs here so far; InChI, 3D geometry and raster export can follow.
+//! Jobs exchange bytes. Naming retains its desktop protocol; rendering calls
+//! the normal exporters. Separate job pools retain independent heap budgets.
 #![forbid(unsafe_code)]
 #![cfg(target_arch = "wasm32")]
 
@@ -17,11 +17,16 @@ static ALLOCATOR: reshiki_process_heap::BoundedHeap = reshiki_process_heap::Boun
 
 /// The response to one request for `job`.
 #[wasm_bindgen]
-pub fn run(job: &str, request: &[u8]) -> Result<Vec<u8>, String> {
-    match job {
+pub async fn run(job: String, request: Vec<u8>) -> Result<Vec<u8>, String> {
+    match job.as_str() {
         "naming" => {
             reshiki_process_heap::begin(reshiki::naming::worker::HEAP_BYTES);
-            reshiki::naming::worker::respond(request)
+            reshiki::naming::worker::respond(&request)
+        }
+        "render" => {
+            reshiki_process_heap::begin(reshiki::browser_render::HEAP_BYTES);
+            let request = reshiki::browser_render::install_fonts(&request)?;
+            reshiki::browser_render::respond(request).await
         }
         _ => Err(format!("Unknown worker job {job}")),
     }

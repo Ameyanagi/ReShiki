@@ -4274,6 +4274,7 @@ dependencies = [
  "reshiki",
  "reshiki-process-heap",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]

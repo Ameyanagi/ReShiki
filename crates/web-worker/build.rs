@@ -1,11 +1,9 @@
-//! Give the worker the desktop naming process's 8 MiB stack, and cap its
-//! memory at 128 MiB: naming's 96 MiB heap budget, that stack and the OPSIN
-//! tables, with room for the allocator's own overhead. A job that recurses
-//! deeper, such as InChI (32 MiB in the editor today), raises the stack when
-//! it moves here.
+//! Export jobs use the editor's 32 MiB stack and a bounded 1.5 GiB heap,
+//! including full-size raster buffers. Naming retains its separate 96 MiB
+//! heap budget. The memory maximum includes the stack, static data and heap.
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("wasm32") {
-        println!("cargo:rustc-link-arg-cdylib=-zstack-size=8388608");
-        println!("cargo:rustc-link-arg-cdylib=--max-memory=134217728");
+        println!("cargo:rustc-link-arg-cdylib=-zstack-size=33554432");
+        println!("cargo:rustc-link-arg-cdylib=--max-memory=2147483648");
     }
 }

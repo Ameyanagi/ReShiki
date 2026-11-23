@@ -353,10 +353,14 @@ impl App {
             .map(Path::to_path_buf);
         Task::perform(
             async move {
-                // Let "Preparing … export…" show before this holds the page's thread.
+                // Let the busy status paint before serialization or a local fallback.
                 #[cfg(target_arch = "wasm32")]
                 crate::web::after_paint().await;
-                let p = reshiki::export::publication(
+                #[cfg(target_arch = "wasm32")]
+                use reshiki::browser_render::publication;
+                #[cfg(not(target_arch = "wasm32"))]
+                use reshiki::export::publication;
+                let p = publication(
                     &engine,
                     doc,
                     render_format,
