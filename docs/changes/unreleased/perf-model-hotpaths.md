@@ -5,3 +5,5 @@ issues: []
 
 - Reduced repeated allocation and undo-memory accounting work while editing
   drawings, preserving chemistry-change detection and undo behavior.
+- Equipment lookups load definitions as needed and reuse a catalogue interface
+  index when finding compatible adapters, keeping the same matching choices.

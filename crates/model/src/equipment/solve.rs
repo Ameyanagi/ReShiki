@@ -6,7 +6,7 @@
 //! as a stand stays put while what it holds slides along its rod.
 use super::builtin;
 use super::eval::{Value, holds, joints, resolve};
-use super::format::{Category, Definition, Gender, HoldKind, Joint, PlugFamily, taper};
+use super::format::{Definition, Gender, HoldKind, Joint, PlugFamily, taper};
 use super::geometry::{Affine, add, dot, len, mul, normalize, perp, sub};
 use super::placed;
 use crate::document::{Document, Point};
@@ -256,16 +256,7 @@ pub fn mates(a: &Port, b: &Port) -> bool {
     a.gender != b.gender
         && match (&a.kind, &b.kind) {
             (Kind::Taper(x), Kind::Taper(y)) => x == y,
-            (Kind::Plug(f, x), Kind::Plug(g, y))
-                if f == g
-                    && matches!(
-                        f,
-                        PlugFamily::Compression | PlugFamily::WorkTube | PlugFamily::Npt
-                    ) =>
-            {
-                x == y
-            }
-            (Kind::Plug(f, x), Kind::Plug(g, y)) => f == g && (x - y).abs() <= 0.1 * x.max(*y),
+            (Kind::Plug(f, x), Kind::Plug(g, y)) => plug_mates(*f, *x, *g, *y),
             (Kind::Hold(x, dx), Kind::Hold(y, dy)) if x.mate() == *y => {
                 let (held, holder) = if x.held() { (dx, dy) } else { (dy, dx) };
                 let d = (held[0] + held[1]) / 2.;
@@ -786,30 +777,58 @@ fn free(doc: &Document, moving: &BTreeSet<u64>, inside: bool) -> Vec<Port> {
 /// The first catalogue adapter with one joint that mates `s` and another
 /// that mates `m`: which joint goes where.
 fn adapter(s: &Port, m: &Port) -> Option<(Arc<Definition>, String, String)> {
-    let probe = |j: &Joint, like: &Port| Port {
-        kind: match j {
-            Joint::Taper { size, .. } => Kind::Taper(size.clone()),
-            Joint::Plug {
-                family, size_mm, ..
-            } => Kind::Plug(*family, *size_mm),
-        },
-        gender: j.gender(),
-        contact_length: 0.,
-        insertion: 0.,
-        ..like.clone()
-    };
-    builtin::catalogue()
-        .iter()
-        .filter(|d| d.category == Category::Adapter)
-        .find_map(|d| {
-            d.joints.iter().find_map(|a| {
-                let b = d
-                    .joints
-                    .iter()
-                    .find(|b| b.id() != a.id() && mates(&probe(b, m), m))?;
-                mates(&probe(a, s), s).then(|| (d.clone(), a.id().to_owned(), b.id().to_owned()))
-            })
+    let interface = |p: &Port| {
+        Some(builtin::AdapterInterface {
+            family: match &p.kind {
+                Kind::Taper(_) => builtin::AdapterFamily::Taper,
+                Kind::Plug(family, _) => builtin::AdapterFamily::Plug(*family),
+                Kind::Hold(..) => return None,
+            },
+            gender: if p.gender == Gender::M {
+                Gender::F
+            } else {
+                Gender::M
+            },
         })
+    };
+    builtin::adapter_paths(interface(s)?, interface(m)?)
+        .iter()
+        .find_map(|path| {
+            (joint_mates(path.near, s) && joint_mates(path.far, m)).then_some(())?;
+            Some((
+                path.definition()?,
+                path.near.id().to_owned(),
+                path.far.id().to_owned(),
+            ))
+        })
+}
+
+fn plug_mates(family: PlugFamily, size: f64, other: PlugFamily, other_size: f64) -> bool {
+    family == other
+        && if matches!(
+            family,
+            PlugFamily::Compression | PlugFamily::WorkTube | PlugFamily::Npt
+        ) {
+            size == other_size
+        } else {
+            (size - other_size).abs() <= 0.1 * size.max(other_size)
+        }
+}
+
+/// Adapter probes need only their interface; cloning a placed Port also copies
+/// its owned joint name and other frame fields for every failed candidate.
+fn joint_mates(joint: &Joint, port: &Port) -> bool {
+    joint.gender() != port.gender
+        && match (joint, &port.kind) {
+            (Joint::Taper { size, .. }, Kind::Taper(other)) => size == other,
+            (
+                Joint::Plug {
+                    family, size_mm, ..
+                },
+                Kind::Plug(other, size),
+            ) => plug_mates(*family, *size_mm, *other, *size),
+            _ => false,
+        }
 }
 
 /// Seat the moving pieces on `s` through their joint `m`: directly, or
@@ -1127,9 +1146,7 @@ fn missing_clip(doc: &Document, ids: &[u64], s: &Seat) -> Option<Arc<Definition>
         return None;
     }
     let (size, _) = clip_frame(doc, s)?;
-    (builtin::catalogue().iter())
-        .find(|d| d.clip.as_ref().is_some_and(|c| c.size == size))
-        .cloned()
+    builtin::clip(&size)
 }
 
 /// How many ground-glass seats between the pieces `ids` could take a clip.
@@ -1517,3 +1534,7 @@ pub(crate) fn prune(doc: &mut Document) {
         !ids.contains(&s.a.piece) || !ids.contains(&s.b.piece)
     });
 }
+
+#[cfg(test)]
+#[path = "solve/adapter_tests.rs"]
+mod adapter_tests;
