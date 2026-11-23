@@ -238,6 +238,7 @@ explains how the crates and modules fit together.
 - `src/canvas/paper/draft.rs`: Previews of drags that edit the draft document directly (tilts, pointer edits, transforms and moves) or select a region.
 - `src/canvas/paper/fragment.rs`: Redraw only the molecules a preview changes, over the cached rest of the drawing.
 - `src/canvas/paper/geometry.rs`: Retain the paper's static selection markers and tessellated scene together.
+- `src/canvas/paper/memo.rs`: One completed preview for an unchanged placement or drag.
 - `src/canvas/paper/overlays.rs`: Editing aids drawn over the document
 - `src/canvas/paper/placement.rs`: Previews that place new structure onto the draft, stroking the conflict when a placement fails.
 - `src/canvas/pen.rs`: One shared plan for pen previews and completed segments.

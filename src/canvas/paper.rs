@@ -23,7 +23,7 @@ mod preview_tests;
 use super::render::{draw_document, draw_primitives};
 use super::smart_guides::Guide;
 use super::{
-    Camera, MoleculeCanvas, State, World, layered, markers, models3d, pages, smart_guides,
+    Camera, MoleculeCanvas, State, Tool, World, layered, markers, models3d, pages, smart_guides,
 };
 use fragment::Fragment;
 use iced::{Color, Point, Rectangle, mouse};
