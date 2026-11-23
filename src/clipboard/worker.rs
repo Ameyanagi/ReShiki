@@ -12,6 +12,39 @@ const REQUEST_BYTES: usize = 128 * 1024 * 1024;
 const RESPONSE_BYTES: usize = 512 * 1024 * 1024;
 type Prepared = (CopyOutcome, Vec<Representation>);
 
+#[derive(Debug)]
+enum RequestError {
+    TooLarge,
+    Invalid(String),
+}
+
+impl RequestError {
+    fn message(self) -> String {
+        match self {
+            Self::TooLarge => "Browser clipboard request exceeds 128 MiB".into(),
+            Self::Invalid(error) => error,
+        }
+    }
+}
+
+fn request_length(bytes: usize, limit: usize) -> Result<(), RequestError> {
+    if bytes > limit {
+        Err(RequestError::TooLarge)
+    } else {
+        Ok(())
+    }
+}
+
+/// Size admission happens before dispatch, so an oversized worker request can
+/// retain local preparation. Serialization and post-dispatch errors cannot.
+fn worker_request<T>(request: Result<T, RequestError>) -> Result<Option<T>, String> {
+    match request {
+        Ok(request) => Ok(Some(request)),
+        Err(RequestError::TooLarge) => Ok(None),
+        Err(error @ RequestError::Invalid(_)) => Err(error.message()),
+    }
+}
+
 #[derive(Clone, Copy, Serialize, Deserialize)]
 enum Background {
     Transparent,
@@ -106,23 +139,31 @@ enum PreparedReply {
 #[cfg(test)]
 fn request(document: &Document, image_only: bool, pictures: Pictures) -> Result<Vec<u8>, String> {
     request_operation(document, Operation::Copy { image_only }, pictures)
+        .map_err(RequestError::message)
 }
 
 fn request_operation(
     document: &Document,
     operation: Operation,
     pictures: Pictures,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, RequestError> {
+    request_operation_with_limit(document, operation, pictures, REQUEST_BYTES)
+}
+
+fn request_operation_with_limit(
+    document: &Document,
+    operation: Operation,
+    pictures: Pictures,
+    limit: usize,
+) -> Result<Vec<u8>, RequestError> {
     let bytes = serde_json::to_vec(&Request {
         version: VERSION,
         document: Snapshot::borrowed(document),
         operation,
         pictures: pictures.into(),
     })
-    .map_err(|error| error.to_string())?;
-    if bytes.len() > REQUEST_BYTES {
-        return Err("Browser clipboard request exceeds 128 MiB".into());
-    }
+    .map_err(|error| RequestError::Invalid(error.to_string()))?;
+    request_length(bytes.len(), limit)?;
     Ok(bytes)
 }
 
@@ -259,7 +300,9 @@ async fn exchange(
     if !crate::browser_render::available() || !host::allows_worker() {
         return Ok(None);
     }
-    let bytes = request_operation(document, operation, pictures)?;
+    let Some(bytes) = worker_request(request_operation(document, operation, pictures))? else {
+        return Ok(None);
+    };
     let cancel = browser_worker::Cancel::default();
     match crate::browser_render::exchange("clipboard", &bytes, &cancel).await {
         Ok(reply) => decode(&reply).map(Some),

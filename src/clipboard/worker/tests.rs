@@ -5,6 +5,66 @@ use crate::{
     engine::LocalEngine,
 };
 
+#[test]
+fn clipboard_request_limit_falls_back_only_for_pre_dispatch_size_admission() {
+    for bytes in [0, REQUEST_BYTES - 1, REQUEST_BYTES] {
+        assert_eq!(
+            worker_request(request_length(bytes, REQUEST_BYTES)),
+            Ok(Some(()))
+        );
+    }
+    for bytes in [REQUEST_BYTES + 1, usize::MAX] {
+        assert_eq!(
+            worker_request(request_length(bytes, REQUEST_BYTES)),
+            Ok(None)
+        );
+    }
+    let error = "Browser clipboard request exceeds 128 MiB";
+    assert_eq!(
+        worker_request::<()>(Err(RequestError::Invalid(error.into()))),
+        Err(error.into()),
+        "a serialization error must not become fallback based on its wording"
+    );
+}
+
+#[test]
+fn clipboard_request_encoding_preserves_local_fallback_for_every_operation() {
+    let document = drawing();
+    let pictures = Pictures::default();
+    for operation in [
+        Operation::Copy { image_only: false },
+        Operation::Copy { image_only: true },
+        Operation::CopyAs {
+            format: CopyFormat::Svg,
+        },
+        Operation::ChemicalText {
+            format: CopyFormat::Smiles,
+        },
+    ] {
+        let bytes = request_operation(&document, operation, pictures).unwrap();
+        assert!(!bytes.is_empty() && bytes.len() < 1024 * 1024);
+        assert_eq!(
+            worker_request(request_operation_with_limit(
+                &document,
+                operation,
+                pictures,
+                bytes.len(),
+            )),
+            Ok(Some(bytes.clone()))
+        );
+        assert_eq!(
+            worker_request(request_operation_with_limit(
+                &document,
+                operation,
+                pictures,
+                bytes.len() - 1,
+            )),
+            Ok(None),
+            "the caller must retain its local preparation path before dispatch"
+        );
+    }
+}
+
 fn drawing() -> Document {
     let mut doc = Document {
         annotations: vec![Annotation {
