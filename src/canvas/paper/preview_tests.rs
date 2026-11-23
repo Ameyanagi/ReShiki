@@ -437,9 +437,13 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
                 ];
             }
         }
-        assert_eq!(
-            changed, 0,
-            "{name}: bounds {rect:?}, max channel difference {largest}"
+        // Drawing paths in separate GPU layers has slightly different
+        // antialias rounding. Compare the full destination, including its
+        // clipping, and reject differences above two 8-bit levels.
+        assert_eq!(retained.len(), full.len());
+        assert!(
+            largest <= 2 && changed < size.width as usize * size.height as usize / 20,
+            "{name}: {changed} changed pixels, bounds {rect:?}, max channel difference {largest}"
         );
     };
     compare("equipment", &warm, &whole);

@@ -300,7 +300,18 @@ impl MoleculeCanvas<'_> {
                 &[],
                 self.reviewing_pair,
             );
-            draw_primitives(frame, &fragment.scene, self.camera, bounds, 0.);
+            if let Some(record) = &memo {
+                record.geometry.borrow_mut().draw(
+                    frame,
+                    (fragment.remainder.markers.clone(), fragment.scene.clone()),
+                    self.camera,
+                    bounds,
+                    &[],
+                    self.reviewing_pair,
+                );
+            } else {
+                draw_primitives(frame, &fragment.scene, self.camera, bounds, 0.);
+            }
         } else if let Some(camera) = cached_camera {
             let (markers, scene) = state.scene.borrow_mut().render(self.doc, selected);
             if rotating {

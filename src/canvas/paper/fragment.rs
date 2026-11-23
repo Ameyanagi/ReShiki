@@ -67,7 +67,7 @@ impl Remainder {
 
 pub(super) struct Fragment {
     pub remainder: Rc<Remainder>,
-    pub scene: Vec<Primitive>,
+    pub scene: Rc<[Primitive]>,
 }
 
 impl Fragment {
@@ -113,7 +113,7 @@ impl Fragment {
             (part, excluded)
         };
         let remainder = cache.remainder(base, &excluded)?;
-        let scene = scene::primitives(&part);
+        let scene: Rc<[Primitive]> = scene::primitives(&part).into();
         let mut fragment = layout(&part, &scene);
         // A pixel of antialiasing and a little more for estimated text widths,
         // plus the gap automatic hydrogens, charges and group labels keep from
