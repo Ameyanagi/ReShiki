@@ -202,7 +202,6 @@ def main():
         for index in range(1, original.GetNumAtoms()):
             for field, value in [
                 ("isotope", 13),
-                ("map_num", 17),
                 ("stereo", dict(winding="cw", neighbors=[])),
                 ("marks", [dict(kind="lone_pair", offset=dict(x=2, y=3))]),
                 ("display", dict(number=dict(text="1"))),
@@ -210,6 +209,9 @@ def main():
                 doc = document(original, high_ids=True)
                 doc["atoms"][index][field] = value
                 emit(f"excluded/{label}/{index}/{field}", original, doc)
+            doc = document(original, high_ids=True)
+            doc["atoms"][index]["map_num"] = 17
+            emit(f"mapped-member/{label}/{index}", original, doc)
         doc = document(original, high_ids=True)
         ids = [a["id"] for a in doc["atoms"]]
         for selected in [ids, ids[1:], ids[2:], ids[:1], [2**63], ids + [2**63], ids + ids]:

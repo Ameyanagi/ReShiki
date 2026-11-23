@@ -175,9 +175,9 @@ def find(doc, mol, selection, label=None):
         members = [ids[i] for i in match[1:]]
         if used.intersection(members):
             continue
+        # Atom-map numbers annotate the reaction and leave group matching intact.
         if any(
             atoms[i].get("isotope")
-            or atoms[i].get("map_num")
             or atoms[i].get("stereo")
             or atoms[i].get("marks")
             or atoms[i].get("display", {}).get("number")
