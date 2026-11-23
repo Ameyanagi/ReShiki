@@ -11,6 +11,9 @@ use i_overlay::core::overlay_rule::OverlayRule;
 use i_overlay::float::overlay::FloatOverlay;
 use std::collections::BTreeSet;
 
+#[cfg(test)]
+mod liquid_tests;
+
 /// A joint detail's material, colour, ink, style, path and flat-cap policy.
 type Detail = (
     Material,
@@ -792,13 +795,21 @@ pub fn level(region: &[Vec<Xy>], fill: f64) -> f64 {
 
 /// Stretches of the cut surface at `level`, each from left to right.
 fn surfaces(shapes: &Pools, level: f64) -> Vec<(f64, f64)> {
+    cut_edges(shapes, level)
+        .map(|(a, b)| (a[0].min(b[0]), a[0].max(b[0])))
+        .collect()
+}
+
+fn is_cut_edge(a: Xy, b: Xy, level: f64) -> bool {
+    (a[1] - level).abs() < 1e-6 && (b[1] - level).abs() < 1e-6 && a[0] != b[0]
+}
+
+fn cut_edges(shapes: &Pools, level: f64) -> impl Iterator<Item = (Xy, Xy)> + '_ {
     shapes
         .iter()
         .flat_map(|shape| shape.first())
         .flat_map(|outer| super::geometry::edges(outer, true))
-        .filter(|(a, b)| (a[1] - level).abs() < 1e-6 && (b[1] - level).abs() < 1e-6 && a[0] != b[0])
-        .map(|(a, b)| (a[0].min(b[0]), a[0].max(b[0])))
-        .collect()
+        .filter(move |&(a, b)| is_cut_edge(a, b, level))
 }
 
 /// Where the liquid's surface is, for its handle: the middle of its widest
@@ -841,34 +852,150 @@ fn liquid(region: &[Vec<Xy>], fill: f64, meniscus: Meniscus, scale: f64) -> Vec<
     }
     let level = level(region, fill);
     let shapes = below(region, level);
-    // Each stretch of the cut surface gets its own meniscus, so none crosses dry glass.
-    let surfaces = surfaces(&shapes, level);
-    let mut out = pools(shapes);
     if meniscus == Meniscus::Flat {
-        return out;
+        return pools(shapes);
     }
-    for (xl, xr) in surfaces {
-        let m = (1.6 * scale).min((xr - xl) / 8.)
-            * if meniscus == Meniscus::Convex {
-                -1.
-            } else {
-                1.
-            };
-        let (a, c) = ([xl, level - m * 0.6], [xr, level - m * 0.6]);
-        let q = [(xl + xr) / 2., level + m];
-        out.push((
-            Ink::Stroke(Weight::Detail),
-            vec![
-                Seg::Move(a),
-                Seg::Cubic(
-                    add(a, mul(sub(q, a), 2. / 3.)),
-                    add(c, mul(sub(q, c), 2. / 3.)),
-                    c,
-                ),
-            ],
-        ));
+    let mut surfaces = liquid_surfaces(&shapes, level, meniscus, scale, region).into_iter();
+    let (mut out, mut strokes) = (Vec::new(), Vec::new());
+    for shape in shapes {
+        let mut path = Vec::new();
+        for (contour, points) in shape.iter().enumerate() {
+            if contour != 0 {
+                path.extend(polygon(points, true));
+                continue;
+            }
+            if let Some(start) = points.first() {
+                path.push(Seg::Move(*start));
+            }
+            for (edge, (a, b)) in super::geometry::edges(points, true).enumerate() {
+                if is_cut_edge(a, b, level) {
+                    let (left, right) = if a[0] < b[0] { (a, b) } else { (b, a) };
+                    let segment = surfaces
+                        .next()
+                        .map_or(Seg::Line(right), |surface| surface.segment());
+                    path.push(match segment {
+                        Seg::Cubic(c1, c2, _) if a[0] > b[0] => Seg::Cubic(c2, c1, b),
+                        Seg::Cubic(..) => segment,
+                        _ => Seg::Line(b),
+                    });
+                    strokes.push((Ink::Stroke(Weight::Detail), vec![Seg::Move(left), segment]));
+                } else if edge + 1 < points.len() {
+                    path.push(Seg::Line(b));
+                }
+            }
+            path.push(Seg::Close);
+        }
+        out.push((Ink::Fill, path));
     }
+    // Every fill precedes every surface stroke, including disconnected pools.
+    out.extend(strokes);
     out
+}
+
+/// A left-to-right surface, in the original pool traversal order.
+struct LiquidSurface {
+    order: usize,
+    left: Xy,
+    right: Xy,
+    controls: Option<[Xy; 2]>,
+}
+
+impl LiquidSurface {
+    fn segment(&self) -> Seg {
+        self.controls.map_or(Seg::Line(self.right), |[c1, c2]| {
+            Seg::Cubic(c1, c2, self.right)
+        })
+    }
+}
+
+/// Check all control hulls against the source in one overlay. Disjoint interior
+/// X intervals keep the subject's even-odd rule from cancelling overlapping hulls.
+fn liquid_surfaces(
+    shapes: &Pools,
+    level: f64,
+    meniscus: Meniscus,
+    scale: f64,
+    region: &[Vec<Xy>],
+) -> Vec<LiquidSurface> {
+    let mut surfaces: Vec<_> = cut_edges(shapes, level)
+        .enumerate()
+        .map(|(order, (a, b))| {
+            let (a, b) = if a[0] < b[0] { (a, b) } else { (b, a) };
+            let m = (1.6 * scale).min((b[0] - a[0]) / 8.)
+                * if meniscus == Meniscus::Convex {
+                    -1.
+                } else {
+                    1.
+                };
+            // Keep the old centre offset (0.2 m), with the wall contacts fixed.
+            let q = [a[0].midpoint(b[0]), level + 0.4 * m];
+            let c1 = add(a, mul(sub(q, a), 2. / 3.));
+            let c2 = add(b, mul(sub(q, b), 2. / 3.));
+            let hull_area = area(&[[0., 0.], sub(c1, a), sub(c2, a), sub(b, a)]);
+            let nondegenerate = m != 0.
+                && a[0] < c1[0]
+                && c1[0] < c2[0]
+                && c2[0] < b[0]
+                && c1[1].is_finite()
+                && c2[1].is_finite()
+                && hull_area.is_finite()
+                && hull_area != 0.;
+            LiquidSurface {
+                order,
+                left: a,
+                right: b,
+                controls: nondegenerate.then_some([c1, c2]),
+            }
+        })
+        .collect();
+    surfaces.sort_by(|a, b| a.left[0].total_cmp(&b.left[0]));
+    // A running rightmost endpoint also catches nested intervals, without
+    // comparing each hull to every other hull or retrying rejected candidates.
+    let mut previous: Option<&mut LiquidSurface> = None;
+    let mut right = f64::NEG_INFINITY;
+    for surface in &mut surfaces {
+        if surface.left[0] < right {
+            surface.controls = None;
+            if let Some(previous) = previous {
+                previous.controls = None;
+            }
+        }
+        right = right.max(surface.right[0]);
+        previous = Some(surface);
+    }
+    let hulls: Vec<Vec<Xy>> = surfaces
+        .iter()
+        .filter_map(|s| s.controls.map(|[c1, c2]| vec![s.left, c1, c2, s.right]))
+        .collect();
+    if !hulls.is_empty() {
+        // A Bezier stays inside its full control hull. Difference catches holes
+        // and narrow walls that testing only the four control points misses.
+        let outside = FloatOverlay::with_subj_and_clip(&hulls, region)
+            .overlay(OverlayRule::Difference, FillRule::EvenOdd);
+        let mut intervals: Vec<_> = outside
+            .iter()
+            .filter_map(|shape| shape.first())
+            .map(|outer| {
+                outer
+                    .iter()
+                    .fold((f64::INFINITY, f64::NEG_INFINITY), |(l, r), p| {
+                        (l.min(p[0]), r.max(p[0]))
+                    })
+            })
+            .collect();
+        intervals.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut intervals = intervals.into_iter().peekable();
+        for surface in &mut surfaces {
+            while intervals.peek().is_some_and(|&(_, r)| r <= surface.left[0]) {
+                intervals.next();
+            }
+            if intervals.peek().is_some_and(|&(l, _)| l < surface.right[0]) {
+                surface.controls = None;
+            }
+        }
+    }
+    surfaces.sort_by_key(|s| s.order);
+    surfaces
 }
 
 /// The transform that seats `moving` (a joint of a piece drawn at `scale`
