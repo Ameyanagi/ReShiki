@@ -429,7 +429,7 @@ def main():
             )
         for claim in [(), (2,), *(((3,),) if count else ())]:
             emit(f"group/{matching}/{filled}/{second_fill}/{count}/{claim}", root, claimed=claim)
-    for tag in ["group", "fragment", "n", "page", "unknown"]:
+    for tag in ["group", "fragment", "table", "n", "page", "unknown"]:
         root = ET.Element("CDXML")
         page = ET.SubElement(root, "page")
         container = ET.SubElement(page, tag, id="duplicate")
@@ -438,6 +438,13 @@ def main():
         )
         for claim in [(), (2,), (3,)]:
             emit(f"descent/{tag}/{claim}", root, claimed=claim)
+    root = ET.Element("CDXML")
+    page = ET.SubElement(root, "page")
+    table = ET.SubElement(page, "table", id="duplicate")
+    cell = ET.SubElement(table, "page", id="duplicate")
+    ET.SubElement(cell, "graphic", GraphicType="Rectangle", BoundingBox="1 2 3 4", id="duplicate")
+    for claim in [(), (2,), (3,), (2, 3), (4,)]:
+        emit(f"descent/table-cell/{claim}", root, claimed=claim)
     for value in ["", "0", "false", "100"]:
         root = xml(root_attrs={"SupersededBy": "1"})
         root.find("page/graphic").set("SupersededBy", value)

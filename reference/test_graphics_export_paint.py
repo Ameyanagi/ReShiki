@@ -3,7 +3,7 @@
 import unittest
 import xml.etree.ElementTree as ET
 
-from engine.graphics_exchange import write_graphics
+from engine.graphics_exchange import read_graphics, write_graphics
 
 TRIANGLE = [
     {"command": "move", "points": {"x": 1, "y": 2}},
@@ -201,6 +201,51 @@ class NativeLineExportTests(unittest.TestCase):
     def test_dotted_line_keeps_explicit_unsupported_error(self):
         with self.assertRaisesRegex(ValueError, "Dotted graphics"):
             exported(self.line(style={"pattern": "dotted"}), paths={"7": OPEN_PATH})
+
+
+class GraphicDiscoveryTests(unittest.TestCase):
+    def test_container_claims_do_not_claim_descendant_graphics(self):
+        for tag in ("fragment", "table", "page"):
+            for claim in (None, "container", "graphic"):
+                with self.subTest(tag=tag, claim=claim):
+                    root = ET.fromstring(
+                        f'<CDXML><page><{tag} id="same"><graphic id="same" '
+                        f'GraphicType="Rectangle" BoundingBox="1 2 3 4"/></{tag}></page></CDXML>'
+                    )
+                    container = root[0][0]
+                    graphic = container[0]
+                    claimed = {"container": container, "graphic": graphic}.get(claim)
+                    objects = {} if claimed is None else {claimed: [99]}
+                    before = ET.tostring(root)
+                    result = read_graphics(root, 1, 100, objects)
+                    self.assertEqual(ET.tostring(root), before)
+                    if claimed is not None:
+                        self.assertEqual(objects[claimed], [99])
+                    if claim == "graphic":
+                        self.assertEqual(result, [])
+                    else:
+                        self.assertEqual(len(result), 1)
+                        self.assertEqual(result[0]["id"], 100)
+                        self.assertEqual(result[0]["origin"], {"x": 1, "y": 2})
+                        self.assertEqual(result[0]["axis_x"], {"x": 2, "y": 0})
+                        self.assertEqual(result[0]["axis_y"], {"x": 0, "y": 2})
+                        self.assertEqual(objects[graphic], [100])
+
+    def test_table_cell_descent_preserves_leaf_identity_and_excludes_unknown_containers(self):
+        root = ET.fromstring(
+            '<CDXML><page><table><page><graphic GraphicType="Rectangle" '
+            'BoundingBox="1 2 3 4"/></page></table><unknown><page>'
+            '<graphic GraphicType="Rectangle" BoundingBox="5 6 7 8"/>'
+            "</page></unknown></page></CDXML>"
+        )
+        table, unknown = root[0]
+        cell = table[0]
+        graphic = cell[0]
+        objects = {table: [98], cell: [99]}
+        result = read_graphics(root, 1, 100, objects)
+        self.assertEqual([g["id"] for g in result], [100])
+        self.assertEqual(objects, {table: [98], cell: [99], graphic: [100]})
+        self.assertNotIn(unknown[0][0], objects)
 
 
 if __name__ == "__main__":

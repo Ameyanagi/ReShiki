@@ -293,9 +293,10 @@ def read_graphics(
                 value["id"] = first_id + len(result)
                 result.append(value)
                 objects[el] = [value["id"]]
-            elif el.tag == "fragment":
+            elif el.tag in ("fragment", "table", "page"):
                 # ChemDraw can move a curve into a molecular fragment when
-                # saving. Retain its geometry without giving it chemical meaning.
+                # saving, or into a table's cell page. Containers do not claim
+                # their contents; retain each unclaimed graphic's own identity.
                 collect(el)
 
     for page in root.findall("page"):
