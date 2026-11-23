@@ -1031,8 +1031,9 @@ pub fn on_title_change(callback: Option<js_sys::Function>) {
 /// Run naming and export jobs in workers that `factory` returns: a new
 /// module `Worker` running `worker.js` each time, made on first use.
 #[wasm_bindgen(js_name = setWorker)]
-pub fn set_worker(factory: js_sys::Function) {
+pub fn set_worker(factory: js_sys::Function, render: Option<bool>) {
     reshiki::naming::set_worker(factory);
+    reshiki::browser_render::set_enabled(render.unwrap_or(true));
 }
 
 fn call(callback: &js_sys::Function, argument: &JsValue, name: &str) {

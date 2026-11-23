@@ -6,6 +6,9 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 
+mod snapshot;
+pub use snapshot::Snapshot;
+
 pub const HEAP_BYTES: usize = 1536 * 1024 * 1024;
 const MAX_REQUEST_BYTES: usize = 128 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 512 * 1024 * 1024;
@@ -13,7 +16,22 @@ const MAX_HEADER_BYTES: usize = 1024 * 1024;
 #[cfg(target_arch = "wasm32")]
 const JOB: &str = "render";
 
-thread_local! { static INSTALLED_FONTS: Cell<usize> = const { Cell::new(0) }; }
+thread_local! {
+    static INSTALLED_FONTS: Cell<usize> = const { Cell::new(0) };
+    #[cfg(target_arch = "wasm32")]
+    static ENABLED: Cell<bool> = const { Cell::new(true) };
+}
+
+/// A caller-supplied editor module has no verified matching render module.
+#[cfg(target_arch = "wasm32")]
+pub fn set_enabled(enabled: bool) {
+    ENABLED.set(enabled);
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn available() -> bool {
+    ENABLED.get() && crate::browser_worker::available()
+}
 
 /// Prefix a job's bytes with its ordered font snapshot. Caller buffers are copied.
 pub fn request_fonts(request: &[u8]) -> Result<Vec<u8>, String> {
@@ -71,9 +89,9 @@ pub async fn exchange(
     cancel: &crate::browser_worker::Cancel,
 ) -> Result<Vec<u8>, crate::browser_worker::Failure> {
     use crate::browser_worker::{self, Failure};
-    if !browser_worker::available() {
+    if !available() {
         return Err(Failure::Unavailable(
-            "This page did not provide a local worker".into(),
+            "This page has no matching local render worker".into(),
         ));
     }
     let request = request_fonts(request).map_err(Failure::Failed)?;
@@ -107,13 +125,13 @@ impl From<Background> for export::Background {
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
-enum Request {
+enum Request<'a> {
     Save {
-        document: Document,
+        document: Snapshot<'a>,
         format: String,
     },
     Publication {
-        document: Document,
+        document: Snapshot<'a>,
         format: String,
         pages: bool,
         editable: bool,
@@ -200,11 +218,11 @@ async fn respond_inner(request: &[u8]) -> Result<export::Publication, String> {
     if request.len() > MAX_REQUEST_BYTES {
         return Err("Browser export request exceeds 128 MiB".into());
     }
-    let request: Request = serde_json::from_slice(request).map_err(|e| e.to_string())?;
+    let request: Request<'_> = serde_json::from_slice(request).map_err(|e| e.to_string())?;
     let engine = LocalEngine::default();
     match request {
         Request::Save { document, format } => Ok(export::Publication {
-            bytes: formats::write(document, &format).await?,
+            bytes: formats::write(document.into_document(), &format).await?,
             details: vec![],
         }),
         Request::Publication {
@@ -225,7 +243,7 @@ async fn respond_inner(request: &[u8]) -> Result<export::Publication, String> {
             };
             export::publication(
                 &engine,
-                document,
+                document.into_document(),
                 format,
                 pages,
                 editable,
@@ -240,11 +258,11 @@ async fn respond_inner(request: &[u8]) -> Result<export::Publication, String> {
 
 #[cfg(target_arch = "wasm32")]
 async fn dispatch(
-    request: &Request,
+    request: &Request<'_>,
     cancel: &crate::browser_worker::Cancel,
 ) -> Result<Option<export::Publication>, String> {
     use crate::browser_worker::{self, Failure};
-    if !browser_worker::available() {
+    if !available() {
         return Ok(None);
     }
     let bytes = serde_json::to_vec(request).map_err(|e| e.to_string())?;
@@ -267,7 +285,7 @@ pub async fn save(
         "png" | "svg" | "svg-office" | "pdf" | "cdxml" | "cdx"
     ) {
         let request = Request::Save {
-            document: document.clone(),
+            document: Snapshot::borrowed(&document),
             format: format.into(),
         };
         if let Some(output) = dispatch(&request, cancel).await? {
@@ -290,7 +308,7 @@ pub async fn publication(
     max_pixels: u64,
 ) -> Result<export::Publication, String> {
     let request = Request::Publication {
-        document: document.clone(),
+        document: Snapshot::borrowed(&document),
         format: format.into(),
         pages,
         editable,
