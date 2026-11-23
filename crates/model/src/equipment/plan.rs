@@ -11,6 +11,9 @@ use i_overlay::core::overlay_rule::OverlayRule;
 use i_overlay::float::overlay::FloatOverlay;
 use std::collections::BTreeSet;
 
+#[cfg(test)]
+mod liquid_tests;
+
 /// A joint detail's material, colour, ink, style, path and flat-cap policy.
 type Detail = (
     Material,
@@ -841,34 +844,75 @@ fn liquid(region: &[Vec<Xy>], fill: f64, meniscus: Meniscus, scale: f64) -> Vec<
     }
     let level = level(region, fill);
     let shapes = below(region, level);
-    // Each stretch of the cut surface gets its own meniscus, so none crosses dry glass.
-    let surfaces = surfaces(&shapes, level);
-    let mut out = pools(shapes);
     if meniscus == Meniscus::Flat {
-        return out;
+        return pools(shapes);
     }
-    for (xl, xr) in surfaces {
-        let m = (1.6 * scale).min((xr - xl) / 8.)
-            * if meniscus == Meniscus::Convex {
-                -1.
-            } else {
-                1.
-            };
-        let (a, c) = ([xl, level - m * 0.6], [xr, level - m * 0.6]);
-        let q = [(xl + xr) / 2., level + m];
-        out.push((
-            Ink::Stroke(Weight::Detail),
-            vec![
-                Seg::Move(a),
-                Seg::Cubic(
-                    add(a, mul(sub(q, a), 2. / 3.)),
-                    add(c, mul(sub(q, c), 2. / 3.)),
-                    c,
-                ),
-            ],
-        ));
+    let (mut out, mut strokes) = (Vec::new(), Vec::new());
+    for shape in shapes {
+        let mut path = Vec::new();
+        for (contour, points) in shape.iter().enumerate() {
+            if contour != 0 {
+                path.extend(polygon(points, true));
+                continue;
+            }
+            if let Some(start) = points.first() {
+                path.push(Seg::Move(*start));
+            }
+            for (edge, (a, b)) in super::geometry::edges(points, true).enumerate() {
+                let cut =
+                    (a[1] - level).abs() < 1e-6 && (b[1] - level).abs() < 1e-6 && a[0] != b[0];
+                if cut {
+                    let (left, right) = if a[0] < b[0] { (a, b) } else { (b, a) };
+                    let segment = meniscus_edge(left, right, level, meniscus, scale, region);
+                    path.push(match segment {
+                        Seg::Cubic(c1, c2, _) if a[0] > b[0] => Seg::Cubic(c2, c1, b),
+                        Seg::Cubic(..) => segment,
+                        _ => Seg::Line(b),
+                    });
+                    strokes.push((Ink::Stroke(Weight::Detail), vec![Seg::Move(left), segment]));
+                } else if edge + 1 < points.len() {
+                    path.push(Seg::Line(b));
+                }
+            }
+            path.push(Seg::Close);
+        }
+        out.push((Ink::Fill, path));
     }
+    // Every fill precedes every surface stroke, including disconnected pools.
+    out.extend(strokes);
     out
+}
+
+/// A left-to-right surface segment shared by the fill and its visible edge.
+fn meniscus_edge(
+    a: Xy,
+    b: Xy,
+    level: f64,
+    meniscus: Meniscus,
+    scale: f64,
+    region: &[Vec<Xy>],
+) -> Seg {
+    let m = (1.6 * scale).min((b[0] - a[0]) / 8.)
+        * if meniscus == Meniscus::Convex {
+            -1.
+        } else {
+            1.
+        };
+    // Keep the old curve's centre offset (0.2 m), with the wall contacts fixed.
+    let q = [a[0].midpoint(b[0]), level + 0.4 * m];
+    let c1 = add(a, mul(sub(q, a), 2. / 3.));
+    let c2 = add(b, mul(sub(q, b), 2. / 3.));
+    // A Bezier stays in its control hull. Check the entire hull against the
+    // original even-odd region: corner tests alone miss holes and narrow walls.
+    let hull = [a, c1, c2, b];
+    if FloatOverlay::with_subj_and_clip(&hull, region)
+        .overlay(OverlayRule::Difference, FillRule::EvenOdd)
+        .is_empty()
+    {
+        Seg::Cubic(c1, c2, b)
+    } else {
+        Seg::Line(b)
+    }
 }
 
 /// The transform that seats `moving` (a joint of a piece drawn at `scale`

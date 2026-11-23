@@ -743,7 +743,9 @@ fn ground_glass_hatch_ink_stays_inside_the_frosted_zone() {
 
 #[test]
 fn liquid_level_leaves_the_asked_share_of_the_area_and_stays_level_when_turned() {
-    let def = fixture("rbf-300-29");
+    let mut def = fixture("rbf-300-29");
+    // Measure the level cut itself; a curved meniscus also shapes the fill edge.
+    def.liquids[0].meniscus = super::format::Meniscus::Flat;
     for degrees in [0., 35.] {
         let mut instance = Instance::new(&def, Affine::rotate(degrees, [0., 0.]));
         instance.values.insert("fill".into(), Value::Number(0.3));
