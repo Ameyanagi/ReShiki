@@ -21,6 +21,7 @@ struct Entry {
     margin: Vector,
     // Raster sampling is frame-local; retain the vector layers around each run.
     layers: Vec<Layer>,
+    raster: Vec<models3d::PreparedRun>,
 }
 
 #[cfg(test)]
@@ -28,7 +29,10 @@ mod tests;
 
 enum Layer {
     Retained(Vec<layered::RetainedGeometry>),
-    Raster(std::ops::Range<usize>),
+    Raster {
+        range: std::ops::Range<usize>,
+        run: usize,
+    },
 }
 
 #[derive(PartialEq, Eq)]
@@ -99,6 +103,15 @@ impl SceneGeometryCache {
                 )
             };
             let mut layers = Vec::new();
+            // View/selection changes need new vector geometry, but an unchanged
+            // immutable scene keeps each raster run's bounds and content hashes.
+            let mut raster = self
+                .0
+                .as_mut()
+                .filter(|entry| Rc::ptr_eq(&entry.scene, &scene))
+                .map(|entry| std::mem::take(&mut entry.raster))
+                .unwrap_or_default();
+            let mut raster_index = 0;
             let mut vector = frame.layer(margin);
             if !reviewing_pair {
                 markers.draw_with_nmr(&mut vector, camera, wide, true, nmr_ids);
@@ -108,7 +121,14 @@ impl SceneGeometryCache {
                 let end = start + run.len();
                 if run.first().is_some_and(models3d::is_model) {
                     layers.push(retain(vector));
-                    layers.push(Layer::Raster(start..end));
+                    if raster_index == raster.len() {
+                        raster.push(models3d::PreparedRun::new(run));
+                    }
+                    layers.push(Layer::Raster {
+                        range: start..end,
+                        run: raster_index,
+                    });
+                    raster_index += 1;
                     vector = frame.layer(margin);
                 } else {
                     draw_primitives(&mut vector, run, camera, wide, 0.);
@@ -124,9 +144,10 @@ impl SceneGeometryCache {
                 center: camera.center,
                 margin,
                 layers,
+                raster,
             });
         }
-        let entry = self.0.as_ref().expect("The scene was retained above");
+        let entry = self.0.as_mut().expect("The scene was retained above");
         let shift = Vector::new(
             (entry.center.x - camera.center.x) * camera.zoom,
             (entry.center.y - camera.center.y) * camera.zoom,
@@ -134,8 +155,8 @@ impl SceneGeometryCache {
         for layer in &entry.layers {
             match layer {
                 Layer::Retained(geometry) => frame.retained(geometry, shift),
-                Layer::Raster(range) => {
-                    draw_primitives(frame, &entry.scene[range.clone()], camera, bounds, 0.);
+                Layer::Raster { range, run } => {
+                    entry.raster[*run].draw(frame, &entry.scene[range.clone()], camera, bounds, 1.);
                 }
             }
         }

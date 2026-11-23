@@ -13,7 +13,7 @@ use std::ops::ControlFlow;
 use std::time::Duration;
 
 mod tiles;
-pub(super) use tiles::{begin, draw, end, is_model};
+pub(super) use tiles::{PreparedRun, begin, draw, end, is_model};
 
 /// Screen pixels on either side of the drawn selection outline that move it.
 const EDGE_PX: f32 = 8.;

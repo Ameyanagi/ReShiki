@@ -89,7 +89,7 @@ async fn mixed_scene_retains_vectors_around_live_tiles_in_paint_order() {
                 let (live, _) = render(None);
                 let (cold, _) = render(Some(&mut retained));
                 let (warm, drawn) = render(Some(&mut retained));
-                assert_eq!(drawn, 2, "Only the two raster primitives stay live");
+                assert_eq!(drawn, 0, "No vector primitives are tessellated again");
                 assert_eq!(warm, cold, "A warm frame must preserve every layer");
                 let error: usize = live
                     .iter()

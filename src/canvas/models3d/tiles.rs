@@ -9,7 +9,7 @@ use iced::{Point, Rectangle, Size};
 use reshiki::scene::{self, Primitive};
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 /// Device pixels per logical pixel: Retina exactly, downsampled on 1× screens.
@@ -117,6 +117,7 @@ type Part = (usize, Option<usize>);
 /// A visible tile: its key, its device-pixel rectangle (the grid cell cut to
 /// what it shows) and the parts reaching it, in order. The key covers only
 /// those parts, so editing one model leaves another's tiles cached.
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Tile {
     key: u64,
     rect: [i64; 4],
@@ -189,86 +190,176 @@ fn key(primitive: &Primitive, hasher: &mut DefaultHasher) {
     }
 }
 
+/// Bounds and hashes of an immutable scene run. The paper owns this alongside
+/// the Rc scene, so neither pointer reuse nor an edited preview can stale it.
+pub(in crate::canvas) struct PreparedRun {
+    parts: Vec<PreparedPart>,
+    plan: Option<(PlanKey, std::rc::Rc<[Tile]>)>,
+    #[cfg(test)]
+    plans: usize,
+}
+
+struct PreparedPart {
+    lo: World,
+    hi: World,
+    key: u64,
+    part: Part,
+}
+
+#[derive(PartialEq, Eq)]
+struct PlanKey {
+    scale: u32,
+    dark: bool,
+    cells: [[i64; 2]; 2],
+}
+
+impl PreparedRun {
+    pub fn new(run: &[Primitive]) -> Self {
+        // A contour strokes every bond's outline at once; only its polygons
+        // reaching a tile are copied for rasterization, with their order kept.
+        let parts = run
+            .iter()
+            .enumerate()
+            .flat_map(|(i, p)| {
+                let count = contour(p).map_or(1, |polygons| polygons.len());
+                (0..count).map(move |j| {
+                    let (part, p) = if contour(p).is_some() {
+                        ((i, Some(j)), Cow::Owned(keep_polygons(p, &[j])))
+                    } else {
+                        ((i, None), Cow::Borrowed(p))
+                    };
+                    let (lo, hi) = scene::bounds(std::slice::from_ref(&*p));
+                    let mut hasher = DefaultHasher::new();
+                    key(&p, &mut hasher);
+                    PreparedPart {
+                        lo: lo.offset(-MARGIN, -MARGIN),
+                        hi: hi.offset(MARGIN, MARGIN),
+                        key: hasher.finish(),
+                        part,
+                    }
+                })
+            })
+            .collect();
+        Self {
+            parts,
+            plan: None,
+            #[cfg(test)]
+            plans: 0,
+        }
+    }
+
+    fn plan(
+        &mut self,
+        camera: Camera,
+        bounds: Rectangle,
+        theme: reshiki::canvas_theme::CanvasTheme,
+    ) -> std::rc::Rc<[Tile]> {
+        let scale = camera.zoom * SAMPLES.get();
+        let cells = [Point::ORIGIN, Point::new(bounds.width, bounds.height)].map(|p| {
+            let p = camera.world(p, bounds);
+            [p.x, p.y].map(|v| ((v * scale).floor() as i64).div_euclid(TILE))
+        });
+        let key = PlanKey {
+            scale: scale.to_bits(),
+            dark: theme.is_dark(),
+            cells,
+        };
+        if let Some((cached, tiles)) = &self.plan
+            && *cached == key
+        {
+            return tiles.clone();
+        }
+        #[cfg(test)]
+        {
+            self.plans += 1;
+        }
+        // Visit only cells each part reaches, instead of testing every part
+        // against every visible cell. Sorted cells preserve the old tile order.
+        let mut cells: BTreeMap<(i64, i64), (DefaultHasher, [i64; 4], Vec<Part>)> = BTreeMap::new();
+        let [lo, hi] = key.cells;
+        for part in &self.parts {
+            let b = [
+                (part.lo.x * scale).floor(),
+                (part.lo.y * scale).floor(),
+                (part.hi.x * scale).ceil() + 1.,
+                (part.hi.y * scale).ceil() + 1.,
+            ]
+            .map(|v| v as i64);
+            let first = [
+                b[0].div_euclid(TILE).max(lo[0]),
+                b[1].div_euclid(TILE).max(lo[1]),
+            ];
+            let last = [
+                (b[2] - 1).div_euclid(TILE).min(hi[0]),
+                (b[3] - 1).div_euclid(TILE).min(hi[1]),
+            ];
+            for ty in first[1]..=last[1] {
+                for tx in first[0]..=last[0] {
+                    let (hasher, rect, reaching) = cells.entry((ty, tx)).or_insert_with(|| {
+                        let mut hasher = DefaultHasher::new();
+                        key.scale.hash(&mut hasher);
+                        key.dark.hash(&mut hasher);
+                        (hasher, [i64::MAX, i64::MAX, i64::MIN, i64::MIN], vec![])
+                    });
+                    part.key.hash(hasher);
+                    *rect = [
+                        rect[0].min(b[0]),
+                        rect[1].min(b[1]),
+                        rect[2].max(b[2]),
+                        rect[3].max(b[3]),
+                    ];
+                    reaching.push(part.part);
+                }
+            }
+        }
+        let tiles: std::rc::Rc<[Tile]> = cells
+            .into_iter()
+            .map(|((ty, tx), (mut hasher, rect, parts))| {
+                let rect = [
+                    rect[0].max(tx * TILE),
+                    rect[1].max(ty * TILE),
+                    rect[2].min((tx + 1) * TILE),
+                    rect[3].min((ty + 1) * TILE),
+                ];
+                rect.hash(&mut hasher);
+                Tile {
+                    key: hasher.finish(),
+                    rect,
+                    parts,
+                }
+            })
+            .collect();
+        self.plan = Some((key, tiles.clone()));
+        tiles
+    }
+
+    pub fn draw(
+        &mut self,
+        frame: &mut layered::Frame<'_>,
+        run: &[Primitive],
+        camera: Camera,
+        bounds: Rectangle,
+        opacity: f32,
+    ) {
+        let tiles = self.plan(camera, bounds, frame.canvas_theme());
+        draw_tiles(frame, run, &tiles, camera, bounds, opacity);
+    }
+}
+
 #[cfg(test)]
 fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
     plan_on(run, camera, bounds, Default::default())
 }
 
+#[cfg(test)]
 fn plan_on(
     run: &[Primitive],
     camera: Camera,
     bounds: Rectangle,
     theme: reshiki::canvas_theme::CanvasTheme,
 ) -> Vec<Tile> {
-    let scale = camera.zoom * SAMPLES.get();
-    let device = |p: World| [p.x * scale, p.y * scale];
-    // A contour strokes every bond's outline at once; each polygon is its own
-    // part so a tile copies and renders only the outlines reaching it.
-    let parts: Vec<_> = run
-        .iter()
-        .enumerate()
-        .flat_map(|(i, p)| match contour(p) {
-            Some(polygons) => (0..polygons.len())
-                .map(|j| ((i, Some(j)), Cow::Owned(keep_polygons(p, &[j]))))
-                .collect(),
-            None => vec![((i, None), Cow::Borrowed(p))],
-        })
-        .map(|(part, p)| {
-            let (lo, hi) = scene::bounds(std::slice::from_ref(&*p));
-            let ([x0, y0], [x1, y1]) = (
-                device(lo.offset(-MARGIN, -MARGIN)),
-                device(hi.offset(MARGIN, MARGIN)),
-            );
-            let mut hasher = DefaultHasher::new();
-            key(&p, &mut hasher);
-            (
-                [x0.floor(), y0.floor(), x1.ceil() + 1., y1.ceil() + 1.].map(|v| v as i64),
-                hasher.finish(),
-                part,
-            )
-        })
-        .collect();
-    let [lo, hi] = [Point::ORIGIN, Point::new(bounds.width, bounds.height)]
-        .map(|p| device(camera.world(p, bounds)).map(|v| (v.floor() as i64).div_euclid(TILE)));
-    let mut tiles = vec![];
-    for ty in lo[1]..=hi[1] {
-        for tx in lo[0]..=hi[0] {
-            let cell = [tx * TILE, ty * TILE, (tx + 1) * TILE, (ty + 1) * TILE];
-            let mut hasher = DefaultHasher::new();
-            scale.to_bits().hash(&mut hasher);
-            theme.is_dark().hash(&mut hasher);
-            let mut rect = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
-            let mut reaching = vec![];
-            for (b, key, part) in &parts {
-                if b[0] < cell[2] && b[2] > cell[0] && b[1] < cell[3] && b[3] > cell[1] {
-                    key.hash(&mut hasher);
-                    rect = [
-                        rect[0].min(b[0]),
-                        rect[1].min(b[1]),
-                        rect[2].max(b[2]),
-                        rect[3].max(b[3]),
-                    ];
-                    reaching.push(*part);
-                }
-            }
-            if reaching.is_empty() {
-                continue;
-            }
-            let rect = [
-                rect[0].max(cell[0]),
-                rect[1].max(cell[1]),
-                rect[2].min(cell[2]),
-                rect[3].min(cell[3]),
-            ];
-            rect.hash(&mut hasher);
-            tiles.push(Tile {
-                key: hasher.finish(),
-                rect,
-                parts: reaching,
-            });
-        }
-    }
-    tiles
+    let mut prepared = PreparedRun::new(run);
+    prepared.plan(camera, bounds, theme).to_vec()
 }
 
 /// Draw a run of consecutive model primitives as the tiles that show.
@@ -279,10 +370,20 @@ pub(in crate::canvas) fn draw(
     bounds: Rectangle,
     opacity: f32,
 ) {
+    PreparedRun::new(run).draw(frame, run, camera, bounds, opacity);
+}
+
+fn draw_tiles(
+    frame: &mut layered::Frame<'_>,
+    run: &[Primitive],
+    tiles: &[Tile],
+    camera: Camera,
+    bounds: Rectangle,
+    opacity: f32,
+) {
     let oversample = SAMPLES.get();
     let scale = camera.zoom * oversample;
     let theme = frame.canvas_theme();
-    let tiles = plan_on(run, camera, bounds, theme);
     let Some([ox, oy, ..]) = tiles.first().map(|tile| tile.rect) else {
         return;
     };
