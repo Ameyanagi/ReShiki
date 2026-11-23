@@ -63,6 +63,47 @@ fn assert_seated(doc: &Document, end: &Port, barb: &Port) {
 }
 
 #[test]
+fn stock_hose_bores_only_seat_on_the_matching_nmr_manifold() {
+    let mut drawing = Document::default();
+    let definition = builtin::find("reshiki/jy-nmr-evacuation-manifold").unwrap();
+    let scale = placed::world_per_mm(&drawing, placed::DEFAULT_PT_PER_MM);
+    for x in [100., 400.] {
+        let id = drawing.next_id();
+        drawing.graphics.push(placed::graphic(
+            id,
+            definition.clone(),
+            Point::new(x, 200.),
+            scale,
+        ));
+    }
+    let barbs: Vec<_> = drawing.graphics.iter().flat_map(solve::ports).collect();
+    assert_eq!(barbs.len(), 2);
+    for (name, expected) in [("reshiki/hose-9", 2), ("reshiki/hose-7", 0)] {
+        let mut doc = drawing.clone();
+        let (hose, matched) = hose::place_hose(
+            &mut doc,
+            builtin::find(name).unwrap(),
+            barbs[0].point,
+            barbs[1].point,
+            REACH,
+        );
+        assert_eq!(matched.len(), expected, "{name}");
+        assert_eq!(doc.seats.len(), expected, "{name}");
+        let seats = doc.seats.clone();
+        solve::check(&mut doc, None);
+        assert_eq!(doc.seats, seats);
+        for (end, barb) in ["a", "b"].into_iter().zip(&barbs) {
+            let end = port(&doc, hose, end);
+            if expected == 2 {
+                assert_seated(&doc, &end, barb);
+            } else {
+                assert!(solve::partner(&doc, &end.at).is_none());
+            }
+        }
+    }
+}
+
+#[test]
 fn a_hose_seats_at_both_ends_and_leaves_along_each_barb() {
     let (mut doc, condenser, hose) = connected();
     assert_eq!(doc.seats.len(), 2);

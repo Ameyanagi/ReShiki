@@ -158,6 +158,7 @@ static FILES: &[Source] = piece_files![
     "thermometer",
     "cow-15",
     "hose-7",
+    "hose-9",
     "stand",
     "clamp-3finger",
     "ring",
