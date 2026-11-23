@@ -61,6 +61,7 @@ struct Entry {
 }
 
 impl TextCache {
+    #[cfg(test)]
     pub fn get(
         &mut self,
         text: &str,
@@ -106,7 +107,12 @@ impl TextCache {
             entry.used = self.clock;
             return Some(entry.text.clone());
         }
-        let extent = if let Some(extent) = self.extents.get(&key) {
+        // An origin already in view favors the usual outline path. Only cold
+        // offscreen origins pay for a metrics preflight; visible text should
+        // not be shaped twice just to learn it still needs drawing.
+        let extent = if visible(Some(Rectangle::with_size(iced::Size::ZERO))) {
+            None
+        } else if let Some(extent) = self.extents.get(&key) {
             *extent
         } else {
             let extent = bounds::conservative(text, size, zoom, style);
