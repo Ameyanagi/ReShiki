@@ -319,8 +319,11 @@ async fn preview_fragments_match_whole_previews() {
 #[ignore = "Equipment preview cache and pixel regression check; requires a headless renderer"]
 async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
     use iced::advanced::Renderer as _;
-    use iced::advanced::graphics::geometry::Renderer as _;
     use iced::advanced::renderer::Headless;
+    use iced::advanced::{
+        Layout, Widget, layout, renderer,
+        widget::{Tree, tree},
+    };
     use std::rc::Rc;
 
     let mut renderer = <Renderer as Headless>::new(
@@ -345,18 +348,38 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
     };
     canvas.tool = Tool::Equipment;
     canvas.piece = Some(&piece);
-    let mut state = State {
+    let state = State {
         cursor: Some(canvas.camera.screen(World::new(80., 0.), bounds)),
         ..State::default()
     };
-    let mut shot = |canvas: &crate::canvas::MoleculeCanvas<'_>, state: &State, split: bool| {
+    let mut tree = Tree {
+        tag: tree::Tag::of::<State>(),
+        state: tree::State::new(state),
+        children: Vec::new(),
+    };
+    let mut shot = |canvas: &crate::canvas::MoleculeCanvas<'_>, tree: &Tree, split: bool| {
         super::fragment::SPLIT.with(|allow| allow.set(split));
         render::DRAWN_PRIMITIVES.with(|count| count.set(0));
         renderer.reset(bounds);
+        let state = tree.state.downcast_ref::<State>();
         let cursor = mouse::Cursor::Available(state.cursor.unwrap());
-        for layer in canvas.draw(state, &renderer, &Theme::Light, bounds, cursor) {
-            renderer.draw_geometry(layer);
-        }
+        let widget = super::layered::canvas(canvas).shifted(State::shifts);
+        let node = layout::Node::new(bounds.size());
+        let clip = Rectangle {
+            x: 24.,
+            y: 16.,
+            width: 720.,
+            height: 450.,
+        };
+        widget.draw(
+            tree,
+            &mut renderer,
+            &Theme::Light,
+            &renderer::Style::default(),
+            Layout::new(&node),
+            cursor,
+            &clip,
+        );
         super::fragment::SPLIT.with(|allow| allow.set(true));
         let drawn = render::DRAWN_PRIMITIVES.with(std::cell::Cell::get);
         (
@@ -364,17 +387,25 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
             drawn,
         )
     };
-    let cached = |state: &State| state.scene.borrow().preview.clone().unwrap();
-    let (cold, _) = shot(&canvas, &state, true);
-    let first = cached(&state);
-    let (warm, reduced) = shot(&canvas, &state, true);
-    assert!(Rc::ptr_eq(&first, &cached(&state)));
+    let cached = |tree: &Tree| {
+        tree.state
+            .downcast_ref::<State>()
+            .scene
+            .borrow()
+            .preview
+            .clone()
+            .unwrap()
+    };
+    let (cold, _) = shot(&canvas, &tree, true);
+    let first = cached(&tree);
+    let (warm, reduced) = shot(&canvas, &tree, true);
+    assert!(Rc::ptr_eq(&first, &cached(&tree)));
     assert!(first.fragment.get().unwrap().is_some());
     assert!(
         cold == warm,
         "an unchanged preview must preserve every pixel"
     );
-    let (whole, full) = shot(&canvas, &state, false);
+    let (whole, full) = shot(&canvas, &tree, false);
     assert!(
         warm == whole,
         "a separated ghost must match the complete preview"
@@ -383,34 +414,63 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
         reduced < full,
         "a warm frame drew {reduced} of {full} primitives"
     );
-    assert!(state.scene.borrow().preview.is_none());
+    assert!(
+        tree.state
+            .downcast_ref::<State>()
+            .scene
+            .borrow()
+            .preview
+            .is_none()
+    );
 
-    shot(&canvas, &state, true);
-    let previous = cached(&state);
+    canvas.piece = None;
+    let (base, _) = shot(&canvas, &tree, false);
+    let changed_pixels = (180..320)
+        .flat_map(|y| (410..620).map(move |x| 4 * (y * 800 + x)))
+        .filter(|&i| warm[i..i + 4] != base[i..i + 4])
+        .count();
+    assert!(
+        changed_pixels > 100,
+        "the ghost contributed only {changed_pixels} pixels"
+    );
+    canvas.piece = Some(&piece);
+
+    shot(&canvas, &tree, true);
+    let previous = cached(&tree);
+    let state = tree.state.downcast_mut::<State>();
     state.cursor = Some(state.cursor.unwrap() + Vector::new(8., 0.));
-    shot(&canvas, &state, true);
-    let next = cached(&state);
+    shot(&canvas, &tree, true);
+    let next = cached(&tree);
     assert!(!Rc::ptr_eq(&previous, &next));
 
+    // Pan within the retained margins and compare the widget's shifted layers
+    // with a fresh complete draw through the same viewport.
+    canvas.camera.center = World::new(16., 8.);
+    let (panned, _) = shot(&canvas, &tree, true);
+    assert!(!tree.state.downcast_ref::<State>().shifts().is_empty());
+    let (panned_whole, _) = shot(&canvas, &tree, false);
+    assert!(panned == panned_whole);
+
     canvas.camera.zoom *= 1.25;
-    shot(&canvas, &state, true);
-    let zoomed = cached(&state);
+    shot(&canvas, &tree, true);
+    let zoomed = cached(&tree);
     assert!(!Rc::ptr_eq(&next, &zoomed));
 
-    state.cursor = Some(canvas.camera.screen(World::new(-225., 0.), bounds));
-    let (near, _) = shot(&canvas, &state, true);
-    assert!(cached(&state).fragment.get().unwrap().is_none());
-    let (near_whole, _) = shot(&canvas, &state, false);
+    tree.state.downcast_mut::<State>().cursor =
+        Some(canvas.camera.screen(World::new(-225., 0.), bounds));
+    let (near, _) = shot(&canvas, &tree, true);
+    assert!(cached(&tree).fragment.get().unwrap().is_none());
+    let (near_whole, _) = shot(&canvas, &tree, false);
     assert!(
         near == near_whole,
         "overlapping equipment must retain paint order"
     );
 
-    shot(&canvas, &state, true);
-    let before_edit = cached(&state);
+    shot(&canvas, &tree, true);
+    let before_edit = cached(&tree);
     let mut edited = doc.clone();
     edited.add_atom("O", World::new(90., 80.));
     canvas.doc = &edited;
-    shot(&canvas, &state, true);
-    assert!(!Rc::ptr_eq(&before_edit, &cached(&state)));
+    shot(&canvas, &tree, true);
+    assert!(!Rc::ptr_eq(&before_edit, &cached(&tree)));
 }
