@@ -3,26 +3,22 @@
 // instance, so a page holds one editor; embed.js puts more in iframes.
 import load, * as wasm from "../dist/editor/reshiki.js";
 import { loadFonts } from "./fonts.js";
+import { createInitializer } from "./initialization.js";
 
 const BINARY = new Set(["png", "pdf", "cdx"]);
 const FIGURES = new Set(["svg", "png", "pdf"]);
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-let loading;
 
 // Heavy jobs such as naming load their own module in a worker, on first use.
 const worker = () => new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
 
-export function initEditor(module) {
-  // A failed load is forgotten, so a later mount can try again.
-  loading ??= load(module === undefined ? undefined : { module_or_path: module })
-    .then(() => wasm.setWorker(worker))
-    .catch((error) => {
-      loading = undefined;
-      throw error;
-    });
-  return loading.then(() => undefined);
-}
+export const initEditor = createInitializer({
+  load,
+  configureWorker: (factory, render) => wasm.setWorker(factory, render),
+  worker,
+  available: () => typeof Worker === "function",
+});
 
 const bytes = (data) => (typeof data === "string" ? encoder.encode(data) : data);
 

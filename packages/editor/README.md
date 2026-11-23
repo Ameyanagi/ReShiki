@@ -32,7 +32,7 @@ scripts/build_wasm.sh --test   # and run the tests
 The script needs Rust (the toolchain in `rust-toolchain.toml` and its
 `wasm32-unknown-unknown` target), `uv` and `bun`. It installs the matching
 `wasm-bindgen` CLI and a pinned binaryen `wasm-opt` under `target/tools`. It
-writes the editor to `dist/editor`, its worker for [naming](#naming) to
+writes the editor to `dist/editor`, its workers for [heavy jobs](#workers) to
 `dist/worker`, and the license texts and third-party notices to
 `dist/licenses`. The same run builds
 [`@ameyanagi/reshiki-headless`](../headless/README.md) in `packages/headless`.
@@ -204,8 +204,8 @@ as `application/wasm`; a production server must do the same.
 Keep the package's `src/` and `dist/` folders beside each other when copying
 them to a public directory: `src/editor.js` and `src/worker.js` load
 `../dist/…`. Adjust the three import-map URLs to that directory together.
-The page and package must share an origin for the naming worker; see
-[Naming](#naming). Open the HTTP URL, rather than `index.html` as a local file.
+The page and package must share an origin for workers; see
+[Workers](#workers). Open the HTTP URL, rather than `index.html` as a local file.
 The repository's `examples/serve.ts` is a development tool and is not part
 of the installed package.
 
@@ -303,19 +303,41 @@ through the CSSOM, which `style-src` does not restrict. `src/frame.html`, the
 page `embed()` loads, has an inline `<style>`, so serve it with
 `style-src 'unsafe-inline'` or a page of your own.
 
-### Naming
+### Workers
+
+Figure export runs in a lazy module Web Worker, including menu Export and
+`save`/`exportImage` figures (PNG, SVG and PDF, plus `save` CDXML/CDX).
+It uses the same preparation and export code as the desktop, with all fonts
+added to the editor, including fonts restored from storage. Each export uses
+a snapshot; later edits do not change it, and destroying the editor cancels
+pending API exports. File pickers, downloads and clipboard access stay on the
+page thread.
+
+An explicit module passed to `initEditor(module)` or `mount(..., { module })`
+keeps figure preparation in that editor module. Its build cannot be assumed to
+match the bundled render worker. The existing naming worker is still configured.
+
+The export queue accepts at most eight pending calls per job kind. Loading,
+queue waits and export jobs each have a 60-second limit. Request data including
+fonts is limited to 128 MiB and returned figure bytes to 512 MiB. A worker
+that fails to initialize falls back to the existing page-thread exporter.
+An error or timeout after dispatch rejects without repeating the work on
+the page. Exports retain the existing raster pixel budgets, with a 1.5 GiB
+heap budget in a separate worker from naming.
+
+#### Naming
 
 Name ↔ structure conversion (**Import → Name**, **Name molecule**) runs the
 desktop's OPSIN Rust port and naming rules in a module Web Worker,
 `src/worker.js`, which loads its own WebAssembly
-(`dist/worker/reshiki_web_worker_bg.wasm`, about 2.3 MB gzipped) the first time
-a name is converted, never at startup. As on the desktop, a request stops after
-15 seconds and the worker's heap is limited to 96 MiB (its memory to
-128 MiB), so a runaway name cannot block or crash the editor; the next
-request starts a new worker.
+(`dist/worker/reshiki_web_worker_bg.wasm`) on first use, never at startup.
+As on the desktop, naming stops after 15 seconds and retains its 96 MiB heap
+budget. Each worker has a 2 GiB memory ceiling, including its 32 MiB stack;
+these are bounds, not memory allocated at startup. A stopped worker is replaced
+for the next request.
 
 Browsers start workers only from the page's own origin, so serve the package
-from the page's site to use naming. A Content-Security-Policy whose
+from the page's site to use workers. A Content-Security-Policy whose
 `script-src` allows that site needs nothing more. If it sets `worker-src` (or
 `child-src`), that must allow the site too, for example
 `worker-src 'self' blob:`.
@@ -365,7 +387,7 @@ it.
 - Shortcuts follow the desktop app, with ⌘ as Command on a Mac, except
   three that browsers keep for their own tabs: New is Alt+N, Close tab Alt+W
   and next/previous tab Alt+] / Alt+[ (⌃N, ⌃W, ⌃] / ⌃[ on a Mac).
-- Work other than [naming](#naming) runs on the page's thread, so a long
+- Work other than [worker jobs](#workers) runs on the page's thread, so a long
   cleanup, import, NMR prediction or 3D model pauses the page.
 - Without WebGPU, lines are drawn without antialiasing: WebGL2 loses most
   canvases with it.

@@ -76,6 +76,7 @@ struct Host {
     receiver: Option<mpsc::UnboundedReceiver<Request>>,
     replies: HashMap<u64, oneshot::Sender<Result<Document, String>>>,
     next_reply: u64,
+    exports: HashMap<u64, reshiki::browser_worker::Cancel>,
     on_change: Option<js_sys::Function>,
     /// Called with "ja", "ko" or "zh", once for each, the first time text in
     /// that language has characters no loaded font draws.
@@ -982,7 +983,23 @@ pub async fn save(format: String) -> Result<Vec<u8>, JsError> {
         .await
         .map_err(|_| js("The editor stopped"))?
         .map_err(js)?;
-    formats::write(doc, &format).await.map_err(js)
+    let cancel = reshiki::browser_worker::Cancel::default();
+    HOST.with_borrow_mut(|host| host.exports.insert(id, cancel.clone()));
+    let _pending = PendingExport(id);
+    let output = reshiki::browser_render::save(doc, &format, &cancel).await;
+    if HOST.with_borrow(|host| host.requests.is_none()) {
+        return Err(js("The editor stopped"));
+    }
+    output.map_err(js)
+}
+
+struct PendingExport(u64);
+impl Drop for PendingExport {
+    fn drop(&mut self) {
+        if let Some(cancel) = HOST.with_borrow_mut(|host| host.exports.remove(&self.0)) {
+            cancel.stop();
+        }
+    }
 }
 
 /// Call `callback` after each edit to the drawing in front, or stop with none.
@@ -1011,11 +1028,12 @@ pub fn on_title_change(callback: Option<js_sys::Function>) {
     HOST.with_borrow_mut(|host| host.on_title_change = callback);
 }
 
-/// Run heavy jobs, so far naming, in workers that `factory` returns: a new
+/// Run naming and export jobs in workers that `factory` returns: a new
 /// module `Worker` running `worker.js` each time, made on first use.
 #[wasm_bindgen(js_name = setWorker)]
-pub fn set_worker(factory: js_sys::Function) {
+pub fn set_worker(factory: js_sys::Function, render: Option<bool>) {
     reshiki::naming::set_worker(factory);
+    reshiki::browser_render::set_enabled(render.unwrap_or(true));
 }
 
 fn call(callback: &js_sys::Function, argument: &JsValue, name: &str) {
@@ -1163,6 +1181,7 @@ fn font_request_settled(lang: &str) {
 #[wasm_bindgen]
 pub fn destroy() -> Result<(), JsError> {
     send(Request::Close)?;
+    reshiki::browser_worker::shutdown();
     // The page may reuse the element; its events keep their own keys.
     let swap = HOST.with_borrow_mut(|host| host.command_key.take());
     if let (Some(swap), Some(window)) = (swap, web_sys::window()) {
@@ -1199,6 +1218,10 @@ pub fn destroy() -> Result<(), JsError> {
     }
     HOST.with_borrow_mut(|host| {
         host.requests = None;
+        host.replies.clear();
+        for (_, cancel) in host.exports.drain() {
+            cancel.stop();
+        }
         host.on_change = None;
         host.on_missing_font = None;
         host.on_dirty_change = None;

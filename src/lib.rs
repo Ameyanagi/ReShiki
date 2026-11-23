@@ -43,6 +43,11 @@ pub use reshiki_io::{
 pub mod accessibility;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod assistant;
+#[doc(hidden)]
+pub mod browser_render;
+#[cfg(target_arch = "wasm32")]
+#[doc(hidden)]
+pub mod browser_worker;
 #[cfg(not(target_arch = "wasm32"))]
 #[doc(hidden)]
 pub mod cli;

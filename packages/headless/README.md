@@ -159,9 +159,20 @@ its rows.
   under one drawing unit. Outlined SVG text is drawn with Liberation Sans
   glyphs; live SVG text names Arial, so a browser draws it with the viewer's
   Arial or a substitute.
-- Everything runs on the calling thread. Large drawings block the page until
-  they finish, and InChI and 3D work have no time limit in the browser. Run the
-  module in a Web Worker to keep a page responsive.
+- PNG/SVG previews and SVG, PNG, PDF, CDXML and CDX conversions use a module
+  Web Worker when the host supports it. It starts on first use, uses the exact
+  module supplied to `init`, and receives the fonts accepted by `addFont`.
+  Keep the package's `src` and `dist` folders together; bundlers follow the
+  worker's `new URL(..., import.meta.url)` reference. Browser worker scripts
+  must be served from the page's origin and allowed by its Content Security
+  Policy (`worker-src 'self'` when that directive is set).
+- Rendering requests run one at a time, with at most eight pending. Loading,
+  running, and waiting in the queue each have a 60-second limit. A stopped
+  worker is replaced on the next request; a dispatched request is never
+  repeated on the calling thread. These failures reject with `code: "failed"`.
+  Hosts without Worker, or unable to start it before dispatch, retain direct
+  execution. Those hosts can block on large drawings. Other operations still
+  run on the calling thread; InChI and 3D work have no browser time limit.
 
 ## Build and test
 

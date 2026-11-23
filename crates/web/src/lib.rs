@@ -200,3 +200,10 @@ pub fn add_font(bytes: Vec<u8>) -> Result<usize, Error> {
 pub fn version() -> String {
     env!("RESHIKI_VERSION").into()
 }
+
+/// The exact compiled module initialized by this package, cloned into a worker
+/// with independent memory by the JavaScript transport.
+#[wasm_bindgen(js_name = workerModule)]
+pub fn worker_module() -> JsValue {
+    wasm_bindgen::module()
+}

@@ -9,10 +9,16 @@ use crate::{
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+#[cfg(any(target_arch = "wasm32", test))]
+mod worker;
 #[cfg(not(any(windows, target_os = "linux", target_arch = "wasm32")))]
 use std::{path::PathBuf, process::Stdio, time::Duration};
 #[cfg(not(any(windows, target_os = "linux", target_arch = "wasm32")))]
 use tokio::process::Command;
+#[cfg(any(target_arch = "wasm32", test))]
+#[doc(hidden)]
+pub use worker::respond as worker_respond;
 
 #[cfg(target_os = "linux")]
 mod linux;
@@ -181,7 +187,7 @@ impl Default for Pictures {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CopyOutcome {
     pub external_editable: bool,
     pub image_only: bool,
@@ -372,15 +378,24 @@ pub async fn copy(
     image_only: bool,
     pictures: Pictures,
 ) -> Result<CopyOutcome, String> {
-    let (outcome, representations) = prepare_copy_with_limit(
-        engine,
-        original,
-        image_only,
-        cfg!(target_arch = "wasm32"),
-        payload::EMBED_LIMIT,
-        pictures,
-    )
-    .await?;
+    #[cfg(target_arch = "wasm32")]
+    let prepared = worker::prepare(&original, image_only, pictures).await?;
+    #[cfg(not(target_arch = "wasm32"))]
+    let prepared = None;
+    let (outcome, representations) = match prepared {
+        Some(prepared) => prepared,
+        None => {
+            prepare_copy_with_limit(
+                engine,
+                original,
+                image_only,
+                cfg!(target_arch = "wasm32"),
+                payload::EMBED_LIMIT,
+                pictures,
+            )
+            .await?
+        }
+    };
     // Office's embedded object is the drawing, so it follows the switch too.
     // It needs the Office preview, which a see-through or glowing drawing
     // cannot have; that copy is written without the embedded object.
