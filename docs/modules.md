@@ -284,6 +284,7 @@ explains how the crates and modules fit together.
 - `src/clipboard/name.rs`: Chemical names retain their source text alongside rich text typography.
 - `src/clipboard/priority.rs`: Shared paste order.
 - `src/clipboard/worker.rs`: Browser clipboard preparation uses the existing pipeline and ordered flavors.
+- `src/clipboard/worker/host.rs`: Clipboard writes on WebKit must stay within the original user gesture.
 - `src/desktop.rs`: Windows/Linux desktop handoff and long-lived Office launcher proxies.
 - `src/desktop/admission.rs`: The UI's one-shot answer to a desktop request; the listener waits on it.
 - `src/desktop/client.rs`: The launcher side

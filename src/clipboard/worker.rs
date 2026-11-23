@@ -5,6 +5,8 @@ use super::{CopyOutcome, Document, Pictures, Representation, export, prepare_cop
 use crate::browser_render::Snapshot;
 use serde::{Deserialize, Serialize};
 
+mod host;
+
 const VERSION: u32 = 1;
 const REQUEST_BYTES: usize = 128 * 1024 * 1024;
 const RESPONSE_BYTES: usize = 512 * 1024 * 1024;
@@ -254,7 +256,7 @@ async fn exchange(
     pictures: Pictures,
 ) -> Result<Option<PreparedReply>, String> {
     use crate::browser_worker::{self, Failure};
-    if !crate::browser_render::available() {
+    if !crate::browser_render::available() || !host::allows_worker() {
         return Ok(None);
     }
     let bytes = request_operation(document, operation, pictures)?;
