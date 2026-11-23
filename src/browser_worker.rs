@@ -160,7 +160,7 @@ pub async fn exchange(
             return Err(Failure::Unavailable(error));
         }
     };
-    pool.active.set(request.worker.clone());
+    drop(pool.active.replace(request.worker.clone()));
     pool.loading.set(!ready);
     let mut sent = false;
     let mut started = Instant::now();
@@ -179,7 +179,7 @@ pub async fn exchange(
                         worker.set_onmessage(None);
                         worker.set_onerror(None);
                         worker.set_onmessageerror(None);
-                        pool.idle.set(Some(worker));
+                        drop(pool.idle.replace(Some(worker)));
                     }
                     return Ok(bytes);
                 }

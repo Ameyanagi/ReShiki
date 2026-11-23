@@ -42,6 +42,23 @@ test.skipIf(typeof Worker !== "function")(
         format: { style: { family: "ReShiki Font Export Fixture" } },
       });
       const drawing = JSON.stringify(doc);
+      // Multiple PDF Form resources have nondeterministic dictionary/object
+      // ordering. Keep exact bytes on a single-form fixture, while all other
+      // formats above/below exercise the added font and molecular artwork.
+      const pdfDrawing = JSON.stringify({
+        version: doc.version,
+        atoms: [],
+        bonds: [],
+        graphics: [
+          {
+            id: 1,
+            kind: "rectangle",
+            origin: { x: 0, y: 0 },
+            axis_x: { x: 84, y: 0 },
+            axis_y: { x: 0, y: 42 },
+          },
+        ],
+      });
       for (const svgText of ["outline", "live"]) {
         expect(await offThread.renderSvg(drawing, "rsk", { svgText })).toBe(
           await direct.renderSvg(drawing, "rsk", { svgText }),
@@ -51,9 +68,12 @@ test.skipIf(typeof Worker !== "function")(
         await direct.renderPng(drawing, "rsk", { maxWidth: 320, maxHeight: 240 }),
       );
       for (const format of ["svg", "png", "pdf", "cdxml", "cdx"]) {
-        expect(await offThread.convert(drawing, "rsk", format)).toEqual(
-          await direct.convert(drawing, "rsk", format),
-        );
+        const fixture = format === "pdf" ? pdfDrawing : drawing;
+        const expected = await direct.convert(fixture, "rsk", format);
+        if (format === "pdf") {
+          expect(new TextDecoder().decode(expected).match(/\/Subtype \/Form\b/g)).toHaveLength(1);
+        }
+        expect(await offThread.convert(fixture, "rsk", format)).toEqual(expected);
       }
       await expect(offThread.renderSvg("CC", "bad")).rejects.toMatchObject({
         code: "invalid_arguments",

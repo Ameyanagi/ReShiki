@@ -172,10 +172,31 @@ test.skipIf(!built || typeof Worker !== "function")(
       const appended = await peer.save(boldDocument, "svg", [regular, bold]);
       expect(appended).not.toEqual(beforeAppend);
       expect(appended).toEqual(expectedBold);
+      // One Form resource makes PDF byte equality deterministic despite
+      // svg2pdf's HashMap resource ordering. The font fixture remains covered
+      // exactly by SVG/PNG and the editable chemical formats.
+      const pdfDocument = {
+        version: document.version,
+        atoms: [],
+        bonds: [],
+        graphics: [
+          {
+            id: 1,
+            kind: "rectangle",
+            origin: { x: 0, y: 0 },
+            axis_x: { x: 84, y: 0 },
+            axis_y: { x: 0, y: 42 },
+          },
+        ],
+      };
       let expectedPng: Uint8Array | undefined;
       for (const format of ["png", "pdf", "cdxml", "cdx"]) {
-        const expected = await direct(boldDocument, format);
-        expect(await peer.save(boldDocument, format, [regular, bold])).toEqual(expected);
+        const fixture = format === "pdf" ? pdfDocument : boldDocument;
+        const expected = await direct(fixture, format);
+        if (format === "pdf") {
+          expect(decoder.decode(expected).match(/\/Subtype \/Form\b/g)).toHaveLength(1);
+        }
+        expect(await peer.save(fixture, format, [regular, bold])).toEqual(expected);
         if (format === "png") expectedPng = expected;
       }
       expect(await peer.save(boldDocument, "svg", [regular, bold])).toEqual(expectedBold);
