@@ -268,6 +268,7 @@ static FILES: &[Source] = piece_files![
     "sep-funnel-29",
     "nmr-tube",
     "jy-nmr-tube",
+    "jy-nmr-evacuation-manifold",
     "chrom-column",
     "stir-bar",
     "oil-bath",
