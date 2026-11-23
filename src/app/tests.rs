@@ -199,14 +199,11 @@ fn a_data_folder_that_could_not_move_is_named_in_the_status_bar() {
 fn dismissing_the_recovery_offer_restores_the_ready_message() {
     use reshiki::recovery::Snapshot;
     let (mut app, _) = App::new();
-    let candidate = Candidate {
-        path: "draft.json".into(),
-        snapshot: Snapshot {
-            document: Document::default(),
-            source: None,
-            saved_at: 0,
-        },
-    };
+    let (_directory, candidate) = recovery_manager::test_draft(Snapshot {
+        document: Document::default(),
+        source: None,
+        saved_at: 0,
+    });
     // At launch the offer replaces the ready message.
     app.recovered = vec![candidate.clone()];
     app.status.clear();

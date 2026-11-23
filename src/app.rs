@@ -5,7 +5,7 @@ use reshiki::{
     editing::{self, Arrange, Transform},
     engine::{LocalEngine, Request, Response},
     graphics::{BracketSides, Graphic, GraphicChange},
-    recovery::{Candidate, Recovery},
+    recovery::{Draft, Recovery},
     transaction::chemistry_changed,
 };
 use std::ops::ControlFlow;
@@ -530,7 +530,7 @@ pub struct App {
     ring_size: u8,
     aromatic_ring: bool,
     custom_element: String,
-    recovered: Vec<Candidate>,
+    recovered: Vec<Draft>,
     recovery_manager: recovery_manager::State,
     exit: autosave::Exit,
     inspector_open: bool,
@@ -605,10 +605,7 @@ impl App {
         } else {
             Recovery::standard().ok()
         };
-        let reshiki::recovery::Scan {
-            candidates: recovered,
-            newer: newer_drafts,
-        } = recovery.as_ref().map(|r| r.scan()).unwrap_or_default();
+        let discovery = recovery.clone();
         let recovery_root = recovery
             .as_ref()
             .and_then(|r| r.session.parent().map(PathBuf::from));
@@ -669,8 +666,8 @@ impl App {
             ring_size: 6,
             aromatic_ring: false,
             custom_element: String::new(),
-            recovered,
-            recovery_manager: recovery_manager::State::found(newer_drafts),
+            recovered: Vec::new(),
+            recovery_manager: recovery_manager::State::default(),
             exit: autosave::Exit::default(),
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
@@ -716,7 +713,8 @@ impl App {
         let update_check = Task::batch([update_check, app.github_start()]);
         app.sync_keyboard_drawing();
         let libraries = app.load_piece_libraries();
-        (app, Task::batch([task, update_check, libraries]))
+        let discovery = app.discover_recovery(discovery);
+        (app, Task::batch([task, update_check, libraries, discovery]))
     }
     pub fn title(&self) -> String {
         #[cfg(not(target_arch = "wasm32"))]

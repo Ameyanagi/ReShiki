@@ -64,14 +64,14 @@ async fn long_status_keeps_its_full_message_cue_outside_the_clipped_text() {
         let mut fit_bounds = None;
         for recovery in [false, true] {
             app.recovered = if recovery {
-                vec![reshiki::recovery::Candidate {
-                    path: "4294967294-0.json".into(),
-                    snapshot: reshiki::recovery::Snapshot {
+                vec![
+                    super::super::recovery_manager::test_draft(reshiki::recovery::Snapshot {
                         document: Document::default(),
                         source: Some("A long recovered document name.rsk".into()),
                         saved_at: 1792845600,
-                    },
-                }]
+                    })
+                    .1,
+                ]
             } else {
                 vec![]
             };

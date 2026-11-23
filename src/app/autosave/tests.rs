@@ -296,8 +296,9 @@ fn restored_drafts_keep_distinct_source_names_without_paths() {
         .unwrap();
     }
     let (mut app, _) = App::new();
-    app.recovered = store.candidates();
-    let _ = app.update(Message::Restore);
+    app.recovered = store.discover().drafts;
+    let task = app.update(Message::Restore);
+    super::super::recovery_manager::run_test_task(&mut app, task);
     let names: Vec<_> = app.strip().map(DocumentTab::name).collect();
     assert_eq!(names, ["caffeine (recovered)", "ibuprofen (recovered)"]);
     assert!(app.strip().all(|tab| tab.path.is_none() && app.edited(tab)));
@@ -305,7 +306,7 @@ fn restored_drafts_keep_distinct_source_names_without_paths() {
 
 #[test]
 fn restore_opens_every_draft_as_a_tab_with_the_latest_in_front() {
-    use reshiki::recovery::{Candidate, Snapshot};
+    use reshiki::recovery::Snapshot;
     let (mut app, directory) = fixture();
     app.tab.doc = Default::default();
     app.tab.revision = 0;
@@ -314,19 +315,22 @@ fn restore_opens_every_draft_as_a_tab_with_the_latest_in_front() {
         let mut document = reshiki::document::Document::default();
         document.add_atom(element, Point::default());
         let path = directory.path().join(format!("4294967294-{element}.json"));
-        std::fs::write(&path, "draft").unwrap();
-        Candidate {
-            path,
-            snapshot: Snapshot {
-                document,
-                source: None,
-                saved_at,
-            },
-        }
+        let snapshot = Snapshot {
+            document,
+            source: None,
+            saved_at,
+        };
+        std::fs::write(&path, serde_json::to_vec(&snapshot).unwrap()).unwrap();
     };
     // Candidates arrive newest first.
-    app.recovered = vec![candidate("N", 2), candidate("O", 1)];
-    let _ = app.update(Message::Restore);
+    candidate("N", 2);
+    candidate("O", 1);
+    app.recovered = Recovery::in_directory(directory.path())
+        .unwrap()
+        .discover()
+        .drafts;
+    let task = app.update(Message::Restore);
+    super::super::recovery_manager::run_test_task(&mut app, task);
     assert!(app.recovered.is_empty());
     let elements: Vec<_> = app
         .strip()

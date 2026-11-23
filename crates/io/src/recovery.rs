@@ -20,6 +20,7 @@ pub struct Candidate {
     pub path: PathBuf,
     pub snapshot: Snapshot,
 }
+#[derive(Debug, Clone)]
 pub struct Recovery {
     pub session: PathBuf,
 }
@@ -30,6 +31,76 @@ pub struct Scan {
     /// Abandoned drafts this version cannot read because a newer one made them.
     pub newer: usize,
 }
+/// A validated recovery offer without its document. Discovery drops documents
+/// after collecting this metadata; only a selected offer is hydrated again.
+#[derive(Debug, Clone)]
+pub struct Draft {
+    pub path: PathBuf,
+    pub source: Option<PathBuf>,
+    pub saved_at: u64,
+    pub atoms: usize,
+    identity: [u8; 32],
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Discovery {
+    pub drafts: Vec<Draft>,
+    pub newer: usize,
+}
+
+impl Draft {
+    fn from_candidate(candidate: Candidate, bytes: &[u8]) -> Self {
+        Self {
+            identity: identity(bytes),
+            path: candidate.path,
+            source: candidate.snapshot.source,
+            saved_at: candidate.snapshot.saved_at,
+            atoms: candidate.snapshot.document.atoms.len(),
+        }
+    }
+
+    pub fn available(&self) -> bool {
+        !owned_by_running_instance(&self.path)
+    }
+
+    /// Hydrate only the offered snapshot. Both ownership and identity are
+    /// checked again, including migrations, before the caller can act on it.
+    pub fn load(&self) -> Result<Candidate, String> {
+        if !self.available() {
+            return Err("The draft belongs to a running ReShiki instance".into());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if !std::fs::symlink_metadata(&self.path)
+            .map_err(|error| error.to_string())?
+            .is_file()
+        {
+            return Err("The recovery draft is no longer a regular file".into());
+        }
+        let bytes = crate::storage::read(&self.path).map_err(|error| error.to_string())?;
+        if identity(&bytes) != self.identity {
+            return Err("The recovery draft changed; reopen ReShiki to review it again".into());
+        }
+        let mut snapshot: Snapshot =
+            serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+        snapshot.document.validate()?;
+        snapshot.document.migrate();
+        if !self.available() {
+            return Err("The draft belongs to a running ReShiki instance".into());
+        }
+        Ok(Candidate {
+            path: self.path.clone(),
+            snapshot,
+        })
+    }
+}
+
+// Keep exact file identity without retaining a document or a second file-sized
+// buffer. Replaced/edited files must be reviewed again before restore/discard.
+fn identity(bytes: &[u8]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes).into()
+}
+
 impl Candidate {
     /// Only an abandoned draft may be restored or discarded. Recheck before
     /// acting: a process ID may have been reused since the startup scan.
@@ -72,52 +143,8 @@ impl Recovery {
     /// The abandoned drafts to offer, newest first, and how many more were
     /// made with a newer ReShiki.
     pub fn scan(&self) -> Scan {
-        let Some(parent) = self.session.parent() else {
-            return Scan::default();
-        };
-        let Ok(entries) = crate::storage::read_dir(parent) else {
-            return Scan::default();
-        };
-        let mut newer = 0;
-        let mut candidates: Vec<_> = entries
-            .into_iter()
-            .filter_map(|path| {
-                if path == self.session || path.extension().and_then(|e| e.to_str()) != Some("json")
-                {
-                    return None;
-                }
-                // Do not offer another currently running instance's draft.
-                if owned_by_running_instance(&path) {
-                    return None;
-                }
-                #[cfg(not(target_arch = "wasm32"))]
-                if !std::fs::symlink_metadata(&path).ok()?.is_file() {
-                    return None;
-                }
-                let bytes = crate::storage::read(&path).ok()?;
-                let snapshot = serde_json::from_slice::<Snapshot>(&bytes)
-                    .ok()
-                    .filter(|snapshot| snapshot.document.validate().is_ok());
-                let Some(mut snapshot) = snapshot else {
-                    #[derive(Deserialize)]
-                    struct Probe {
-                        document: Version,
-                    }
-                    #[derive(Deserialize)]
-                    struct Version {
-                        version: u64,
-                    }
-                    if serde_json::from_slice::<Probe>(&bytes).is_ok_and(|probe| {
-                        probe.document.version > u64::from(crate::document::VERSION)
-                    }) {
-                        newer += 1;
-                    }
-                    return None;
-                };
-                snapshot.document.migrate();
-                Some(Candidate { path, snapshot })
-            })
-            .collect();
+        let mut candidates = Vec::new();
+        let newer = self.scan_each(|candidate, _bytes| candidates.push(candidate));
         candidates.sort_by(|a, b| {
             b.snapshot
                 .saved_at
@@ -125,6 +152,67 @@ impl Recovery {
                 .then_with(|| a.path.cmp(&b.path))
         });
         Scan { candidates, newer }
+    }
+
+    /// Validate abandoned drafts one at a time, keeping only picker metadata.
+    /// Native callers should run this filesystem/parse work on a worker.
+    pub fn discover(&self) -> Discovery {
+        let mut drafts = Vec::new();
+        let newer =
+            self.scan_each(|candidate, bytes| drafts.push(Draft::from_candidate(candidate, bytes)));
+        drafts.sort_by(|a, b| {
+            b.saved_at
+                .cmp(&a.saved_at)
+                .then_with(|| a.path.cmp(&b.path))
+        });
+        Discovery { drafts, newer }
+    }
+
+    fn scan_each(&self, mut accept: impl FnMut(Candidate, &[u8])) -> usize {
+        let Some(parent) = self.session.parent() else {
+            return 0;
+        };
+        let Ok(entries) = crate::storage::read_dir(parent) else {
+            return 0;
+        };
+        let mut newer = 0;
+        for path in entries {
+            if path == self.session
+                || path.extension().and_then(|e| e.to_str()) != Some("json")
+                || owned_by_running_instance(&path)
+            {
+                continue;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if !std::fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.is_file()) {
+                continue;
+            }
+            let Ok(bytes) = crate::storage::read(&path) else {
+                continue;
+            };
+            let snapshot = serde_json::from_slice::<Snapshot>(&bytes)
+                .ok()
+                .filter(|snapshot| snapshot.document.validate().is_ok());
+            let Some(mut snapshot) = snapshot else {
+                #[derive(Deserialize)]
+                struct Probe {
+                    document: Version,
+                }
+                #[derive(Deserialize)]
+                struct Version {
+                    version: u64,
+                }
+                if serde_json::from_slice::<Probe>(&bytes)
+                    .is_ok_and(|probe| probe.document.version > u64::from(crate::document::VERSION))
+                {
+                    newer += 1;
+                }
+                continue;
+            };
+            snapshot.document.migrate();
+            accept(Candidate { path, snapshot }, &bytes);
+        }
+        newer
     }
     pub fn save(&self, document: &Document, source: Option<PathBuf>) -> Result<(), String> {
         self.save_replacing(document, source, None)

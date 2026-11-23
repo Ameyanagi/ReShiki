@@ -79,23 +79,22 @@ fn undo_and_redo_validate_accepted_reports() {
     assert_stale(&app);
 }
 
-#[test]
-fn open_and_restore_keep_source_report_in_its_epoch() {
-    use reshiki::recovery::{Candidate, Snapshot};
+#[tokio::test]
+async fn open_and_restore_keep_source_report_in_its_epoch() {
+    use reshiki::recovery::Snapshot;
     for restore in [false, true] {
         let (mut app, report) = armed_report();
         let source = app.tab.id;
         let epoch = app.tab.file_epoch;
         if restore {
-            app.recovered.push(Candidate {
-                path: "nmr-cache-draft.json".into(),
-                snapshot: Snapshot {
-                    document: ethyl_acetate_doc(),
-                    source: None,
-                    saved_at: 1,
-                },
+            let (_directory, draft) = super::super::recovery_manager::test_draft(Snapshot {
+                document: ethyl_acetate_doc(),
+                source: None,
+                saved_at: 1,
             });
-            let _ = app.update(Message::Restore);
+            app.recovered.push(draft);
+            let task = app.update(Message::Restore);
+            super::super::recovery_manager::finish_test_task(&mut app, task).await;
         } else {
             let _ = app.update(Message::FilePrepared(Some((
                 "nmr-cache-open.rsk".into(),
@@ -1289,9 +1288,9 @@ fn update_reports_nmr_export_under_atom_text_without_editing() {
     assert_eq!(app.tab.doc, before);
 }
 
-#[test]
-fn restore_during_prediction_keeps_source_work_and_allows_prediction_in_the_recovered_tab() {
-    use reshiki::recovery::{Candidate, Snapshot};
+#[tokio::test]
+async fn restore_during_prediction_keeps_source_work_and_allows_prediction_in_the_recovered_tab() {
+    use reshiki::recovery::Snapshot;
     let directory = tempfile::tempdir().unwrap();
     let mut app = ethyl_acetate();
     let source = app.tab.id;
@@ -1308,17 +1307,19 @@ fn restore_during_prediction_keeps_source_work_and_allows_prediction_in_the_reco
         .unwrap()
         .apply(&mut recovered);
     let path = directory.path().join("4294967294-nmr.json");
-    std::fs::write(&path, "draft").unwrap();
+    let snapshot = Snapshot {
+        document: recovered.clone(),
+        source: None,
+        saved_at: 1,
+    };
+    std::fs::write(&path, serde_json::to_vec(&snapshot).unwrap()).unwrap();
     app.tabs.recovery_root = Some(directory.path().into());
-    app.recovered = vec![Candidate {
-        path,
-        snapshot: Snapshot {
-            document: recovered.clone(),
-            source: None,
-            saved_at: 1,
-        },
-    }];
-    let _ = app.update(Message::Restore);
+    app.recovered = reshiki::recovery::Recovery::in_directory(directory.path())
+        .unwrap()
+        .discover()
+        .drafts;
+    let task = app.update(Message::Restore);
+    super::super::recovery_manager::finish_test_task(&mut app, task).await;
     assert!(app.recovered.is_empty());
     assert_eq!(app.strip().count(), 2);
     assert_ne!(app.tab.id, source);

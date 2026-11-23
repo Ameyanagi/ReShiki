@@ -153,6 +153,10 @@ fn old_dark_drafts_convert_their_colors_once() {
     std::fs::write(&draft, serde_json::to_vec(&snapshot).unwrap()).unwrap();
     let restored = store.candidates().remove(0).snapshot.document;
     assert_eq!(restored, Document::from_json(bytes).unwrap());
+    assert_eq!(
+        store.discover().drafts[0].load().unwrap().snapshot.document,
+        restored
+    );
     assert_ne!(restored.bonds, old.bonds);
     // This build's draft is marked current and reads back unchanged.
     store.save(&restored, None).unwrap();
@@ -279,6 +283,10 @@ fn drafts_keep_3d_models() {
     let candidates = store.candidates();
     assert_eq!(candidates[0].snapshot.document, doc.current());
     assert_eq!(candidates[0].snapshot.document.models, doc.models);
+    assert_eq!(
+        store.discover().drafts[0].load().unwrap().snapshot.document,
+        doc.current()
+    );
 }
 
 /// A draft from a newer ReShiki cannot be offered, but it is counted so the
@@ -302,4 +310,77 @@ fn drafts_from_a_newer_version_are_counted_not_offered() {
     assert_eq!(scan.candidates[0].path, readable.path);
     assert_eq!(scan.newer, 1);
     assert_eq!(store.candidates().len(), 1);
+}
+
+#[test]
+fn lightweight_discovery_matches_scan_and_loads_the_exact_validated_drafts() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    abandoned(directory.path(), "older.rsk", 100);
+    abandoned(directory.path(), "newer.rsk", 200);
+    std::fs::write(directory.path().join("4294967294-corrupt.json"), b"{").unwrap();
+    let mut future = serde_json::to_value(&store.candidates()[0].snapshot).unwrap();
+    future["document"]["version"] = (crate::document::VERSION + 1).into();
+    future["document"]["future_feature"] = true.into();
+    std::fs::write(
+        directory.path().join("4294967294-future.json"),
+        serde_json::to_vec(&future).unwrap(),
+    )
+    .unwrap();
+    let eager = store.scan();
+    let discovery = store.discover();
+    assert_eq!(discovery.newer, eager.newer);
+    assert_eq!(discovery.newer, 1);
+    assert_eq!(discovery.drafts.len(), eager.candidates.len());
+    for (draft, candidate) in discovery.drafts.iter().zip(&eager.candidates) {
+        assert_eq!(draft.path, candidate.path);
+        assert_eq!(draft.source, candidate.snapshot.source);
+        assert_eq!(draft.saved_at, candidate.snapshot.saved_at);
+        assert_eq!(draft.atoms, candidate.snapshot.document.atoms.len());
+        let loaded = draft.load().unwrap();
+        assert_eq!(loaded.snapshot.document, candidate.snapshot.document);
+        assert_eq!(loaded.snapshot.source, candidate.snapshot.source);
+    }
+}
+
+#[test]
+fn deferred_load_rejects_changed_missing_and_live_owned_drafts() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    let mut candidate = abandoned(directory.path(), "drawing.rsk", 100);
+    let draft = store.discover().drafts.remove(0);
+    candidate
+        .snapshot
+        .document
+        .add_atom("N", Default::default());
+    std::fs::write(
+        &candidate.path,
+        serde_json::to_vec(&candidate.snapshot).unwrap(),
+    )
+    .unwrap();
+    assert!(draft.load().unwrap_err().contains("changed"));
+    let refreshed = store.discover().drafts.remove(0);
+    assert_eq!(refreshed.load().unwrap().snapshot.document.atoms.len(), 2);
+    let mut live = refreshed.clone();
+    live.path = directory
+        .path()
+        .join(format!("{}-live.json", std::process::id()));
+    std::fs::write(&live.path, serde_json::to_vec(&candidate.snapshot).unwrap()).unwrap();
+    assert!(live.load().unwrap_err().contains("running"));
+    std::fs::remove_file(&candidate.path).unwrap();
+    assert!(refreshed.load().is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn deferred_load_does_not_follow_a_replaced_symlink() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    let candidate = abandoned(directory.path(), "drawing.rsk", 100);
+    let draft = store.discover().drafts.remove(0);
+    let target = directory.path().join("outside.txt");
+    std::fs::rename(&candidate.path, &target).unwrap();
+    std::os::unix::fs::symlink(&target, &candidate.path).unwrap();
+    assert!(draft.load().unwrap_err().contains("regular file"));
+    assert!(target.exists());
 }

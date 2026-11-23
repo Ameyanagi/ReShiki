@@ -941,7 +941,7 @@ fn expansion_finishing_under_the_recovery_dialog_is_discarded_not_left_pending()
         serde_json::to_vec(&snapshot).unwrap(),
     )
     .unwrap();
-    app.recovered = store.candidates();
+    app.recovered = store.discover().drafts;
     let _ = app.update(Message::Recovery(
         super::super::recovery_manager::Action::Show,
     ));

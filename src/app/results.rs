@@ -264,7 +264,9 @@ pub(super) fn admitted(modal: Modal, message: &Message) -> bool {
 fn completion(message: &Message) -> Option<Completion> {
     match message {
         Message::Recovery(action) => match action {
-            super::recovery_manager::Action::Finished(..) => Some(Completion::Recovery),
+            super::recovery_manager::Action::Discovered(..)
+            | super::recovery_manager::Action::Loaded(..)
+            | super::recovery_manager::Action::Finished(..) => Some(Completion::Recovery),
             #[cfg(target_arch = "wasm32")]
             super::recovery_manager::Action::OwnersReady(..) => Some(Completion::Recovery),
             super::recovery_manager::Action::Show

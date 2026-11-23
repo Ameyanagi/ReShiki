@@ -239,14 +239,13 @@ pub(super) fn many_tabs(app: &mut App) {
 
 /// A launch that found drafts from a session that closed unexpectedly.
 pub(super) fn recovery(app: &mut App) {
-    use reshiki::recovery::{Candidate, Snapshot};
+    use reshiki::recovery::Snapshot;
     let snapshot = Snapshot {
         document: benzene(),
         source: None,
         saved_at: 0,
     };
-    let path = std::path::PathBuf::from("draft.json");
-    app.recovered = vec![Candidate { path, snapshot }];
+    app.recovered = vec![super::super::recovery_manager::test_draft(snapshot).1];
     // As at launch, where the offer replaces the ready message.
     app.status.clear();
 }
