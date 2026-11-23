@@ -9,16 +9,16 @@
 
 **ReShiki (リシキ)** means “REinvention of the wheel for drawing chemical structure.” _Shiki_ is 式, as in chemical equation.
 
-[Download](https://github.com/Ameyanagi/ReShiki/releases/latest) · [User guide](https://reshiki.com/guide/first-molecule/) · [Release notes](https://reshiki.com/developer/changes-0.16/) · [Try it in your browser](https://reshiki.com/demo/)
+[Download](https://github.com/Ameyanagi/ReShiki/releases/latest) · [User guide](https://reshiki.com/guide/first-molecule/) · [Release notes](https://reshiki.com/developer/changes-0.17/) · [Try it in your browser](https://reshiki.com/demo/)
 
 [![Sponsor this work](website/public/badges/sponsor.svg)](https://github.com/sponsors/Ameyanagi)
 [![Star on GitHub](website/public/badges/star.svg)](https://github.com/Ameyanagi/ReShiki)
 
 [![Watch the ReShiki tour](website/public/media/reshiki-promo-poster.png)](https://reshiki.com/#promo-video)
 
-## What's new in 0.16.0
+## What's new in 0.17.0
 
-Drawings kept in your GitHub repositories with a chemistry-aware Compare, a Settings page with copy and export backgrounds and resolutions, name and property captions under molecules, and NMR prediction and shift labels from Python, the command line and agents. Older drawings open normally; [file compatibility](docs/changes-0.16.md#file-compatibility) lists what needs 0.16.0.
+Draw catalytic cycles, TLC plates, editable tables and laboratory setups with connected equipment. Properties follows the selection, and the GitHub picker searches repositories and opens pasted URLs. [File compatibility](docs/changes-0.17.md#file-compatibility)
 
 ## Install
 
