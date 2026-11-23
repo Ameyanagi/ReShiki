@@ -217,6 +217,50 @@ async fn oversized_picture_payload_is_omitted_from_all_formats_with_one_notice()
     }
 }
 
+#[tokio::test]
+async fn noneditable_pictures_keep_copy_images_native_size_gate_without_size_notices() {
+    let mut source = Document::default();
+    source.add_atom("O", Default::default());
+    let pictures = Pictures {
+        editable: false,
+        ..Default::default()
+    };
+    for browser in [false, true] {
+        for image_only in [false, true] {
+            let (outcome, representations) = prepare_copy_with_limit(
+                LocalEngine::in_process(),
+                source.clone(),
+                image_only,
+                browser,
+                0,
+                pictures,
+            )
+            .await
+            .unwrap();
+            assert!(
+                !outcome
+                    .notices
+                    .iter()
+                    .any(|notice| notice.contains("too large"))
+            );
+            // Ordinary desktop Copy retains its native data independently
+            // of picture eligibility. Copy Image must still obey the cap.
+            assert_eq!(
+                representations.iter().any(|r| r.kind == NATIVE),
+                !browser && !image_only
+            );
+            for picture in representations.iter().filter(|r| {
+                matches!(
+                    r.kind.as_str(),
+                    "public.png" | "public.svg-image" | "com.adobe.pdf"
+                )
+            }) {
+                assert!(payload::read(&picture.bytes().unwrap()).is_none());
+            }
+        }
+    }
+}
+
 /// With the editable drawing off, Copy and Copy image put no drawing in their
 /// pictures, but ReShiki's own clipboard data still carries it on the desktop.
 /// The browser's only place for it is the HTML picture, so it has none. The

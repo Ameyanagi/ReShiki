@@ -1,5 +1,82 @@
 use super::*;
 
+#[test]
+fn clipboard_vectors_share_one_scene_and_keep_single_format_output_and_metadata() {
+    let mut doc: Document = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/ui-drawn-ethanol.reshiki"
+    ))
+    .unwrap();
+    for theme in [
+        crate::canvas_theme::CanvasTheme::Light,
+        crate::canvas_theme::CanvasTheme::Dark,
+    ] {
+        doc.canvas_theme = theme;
+        for background in [
+            Background::Transparent,
+            Background::Canvas,
+            Background::Color([255; 3]),
+        ] {
+            let before = SCENES.with(std::cell::Cell::get);
+            let vectors = prepare_clipboard_vectors(&doc, background).unwrap();
+            assert_eq!(SCENES.with(std::cell::Cell::get), before + 1);
+            let envelope = crate::payload::encode(&doc).unwrap();
+            let restored_drawing = crate::payload::decode(&envelope).unwrap();
+            for drawing in [None, Some(envelope.as_slice())] {
+                let prepared_before = SCENES.with(std::cell::Cell::get);
+                let prepared = [vectors.pdf(drawing).unwrap(), vectors.svg(drawing).unwrap()];
+                assert_eq!(SCENES.with(std::cell::Cell::get), prepared_before);
+                for (format, shared) in ["pdf", "svg-office"].into_iter().zip(prepared) {
+                    let single =
+                        clipboard_figure_with_drawing(&doc, format, background, 300, drawing)
+                            .unwrap();
+                    if format == "svg-office" {
+                        assert_eq!(shared.bytes, single.bytes, "{theme:?}, {background:?}");
+                    } else {
+                        // PDF resource dictionaries may be serialized in a
+                        // different order; compare its fixed page geometry,
+                        // drawing invocation and cross-reference integrity.
+                        assert_eq!(pdf_media_box(&shared.bytes), pdf_media_box(&single.bytes));
+                        assert_eq!(
+                            pdf_text_object(&shared.bytes, 4),
+                            pdf_text_object(&single.bytes, 4)
+                        );
+                        assert_pdf_xref(&shared.bytes);
+                    }
+                    assert_eq!(shared.detail, single.detail);
+                    match crate::payload::read(&shared.bytes) {
+                        Some(restored) => {
+                            assert_eq!(restored.unwrap(), restored_drawing)
+                        }
+                        None => assert!(drawing.is_none()),
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn straight_alpha_reuses_the_pixmap_allocation_and_preserves_rgba_values() {
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(3, 2).unwrap();
+    pixmap.fill(resvg::tiny_skia::Color::from_rgba8(201, 87, 33, 117));
+    let expected: Vec<_> = pixmap
+        .pixels()
+        .iter()
+        .flat_map(|p| {
+            let p = p.demultiply();
+            [p.red(), p.green(), p.blue(), p.alpha()]
+        })
+        .collect();
+    let allocation = pixmap.data().as_ptr();
+    let bytes = straight_alpha(pixmap);
+    assert_eq!(
+        bytes.as_ptr(),
+        allocation,
+        "conversion must not allocate a second bitmap"
+    );
+    assert_eq!(bytes, expected);
+}
+
 #[tokio::test]
 async fn editable_png_contains_the_prepared_drawing_and_preserves_pixels() -> anyhow::Result<()> {
     use crate::{engine::LocalEngine, export};

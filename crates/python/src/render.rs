@@ -1,7 +1,7 @@
 use reshiki_io::{engine::LocalEngine, export, formats};
 use reshiki_model::{document::Document, scene, style::DrawingStyle};
 
-use crate::styles;
+use crate::{bitmap_budget::BitmapBudget, styles};
 
 pub struct Options<'a> {
     style: Option<&'a str>,
@@ -56,6 +56,24 @@ pub async fn document(
     doc: Document,
     format: &str,
     options: &Options<'_>,
+) -> Result<Vec<u8>, String> {
+    document_inner(doc, format, options, None).await
+}
+
+pub(crate) async fn document_with_budget(
+    doc: Document,
+    format: &str,
+    options: &Options<'_>,
+    budget: &BitmapBudget,
+) -> Result<Vec<u8>, String> {
+    document_inner(doc, format, options, Some(budget)).await
+}
+
+async fn document_inner(
+    doc: Document,
+    format: &str,
+    options: &Options<'_>,
+    bitmap_budget: Option<&BitmapBudget>,
 ) -> Result<Vec<u8>, String> {
     let doc = styles::apply(doc, options.style)?;
     let engine = LocalEngine::in_process();
@@ -125,12 +143,22 @@ pub async fn document(
             "PNG exceeds the 16 million pixel budget; reduce dpi or fit width/height".into(),
         );
     }
+    let raw_bytes =
+        usize::try_from(u64::from(w) * u64::from(h) * 4).map_err(|_| "Could not allocate image")?;
+    // All async figure work is finished. Rendering and encoding run inline on
+    // this permit-holder's thread, with no awaits or nested Rayon work that
+    // could depend on workers blocked waiting for bitmap capacity.
+    let _bitmap_permit = bitmap_budget
+        .map(|budget| budget.acquire(raw_bytes))
+        .transpose()?;
     let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h).ok_or("Could not allocate image")?;
     resvg::render(
         &tree,
         resvg::tiny_skia::Transform::from_scale(scale as f32, scale as f32),
         &mut pixmap.as_mut(),
     );
+    // Consume and demultiply the pixmap in place; no second full RGBA buffer.
+    let pixels = export::straight_alpha(pixmap);
     let mut bytes = Vec::new();
     {
         let mut encoder = png::Encoder::new(&mut bytes, w, h);
@@ -142,15 +170,6 @@ pub async fn document(
             unit: png::Unit::Meter,
         }));
         let mut writer = encoder.write_header().map_err(|error| error.to_string())?;
-        // resvg uses premultiplied alpha; PNG stores straight alpha.
-        let pixels: Vec<u8> = pixmap
-            .pixels()
-            .iter()
-            .flat_map(|pixel| {
-                let color = pixel.demultiply();
-                [color.red(), color.green(), color.blue(), color.alpha()]
-            })
-            .collect();
         writer
             .write_image_data(&pixels)
             .map_err(|error| error.to_string())?;
