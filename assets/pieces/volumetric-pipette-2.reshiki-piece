@@ -1,0 +1,99 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/volumetric-pipette-2",
+ "revision": 1,
+ "family": "volumetric-pipette",
+ "variant": {
+  "capacity": "2 mL"
+ },
+ "names": {
+  "en": "Volumetric pipette 2 mL"
+ },
+ "category": "addition",
+ "keywords": [
+  "pipette",
+  "liquid transfer",
+  "volumetric",
+  "single mark",
+  "bulb pipette",
+  "2 mL"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "glass",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M2.625 0L2.625 177.75C2.625 183 4.1 186.5 4.1 195.25C4.1 204 2.625 207.5 2.625 212.75L2.625 331C2.625 338 0.65 347 0.6 355L-0.6 355C-0.65 347 -2.625 338 -2.625 331L-2.625 212.75C-2.625 207.5 -4.1 204 -4.1 195.25C-4.1 186.5 -2.625 183 -2.625 177.75L-2.625 0Z"
+  },
+  {
+   "id": "open-mouth",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-2.075 1.4Q0 2.4 2.075 1.4"
+  },
+  {
+   "id": "single-mark",
+   "layer": "front",
+   "material": "ink",
+   "role": "fill",
+   "path": "M-2.625 145.45H2.625V146.05H-2.625Z"
+  }
+ ],
+ "params": [
+  {
+   "id": "fill",
+   "names": {
+    "en": "Drawn liquid level"
+   },
+   "kind": "fill",
+   "liquid": "sample",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "sample",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "liquid-level",
+   "param": "fill",
+   "motion": {
+    "translate": [
+     0,
+     -352
+    ]
+   },
+   "handle": {
+    "at": [
+     9.625,
+     353.5
+    ],
+    "gesture": "drag"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "sample",
+   "region": "M2.075 1.4L2.075 177.75C2.075 183 3.55 186.5 3.55 195.25C3.55 204 2.075 207.5 2.075 212.75L2.075 331C2.075 338 0.14 347 0.14 353.8L-0.14 353.8C-0.14 347 -2.075 338 -2.075 331L-2.075 212.75C-2.075 207.5 -3.55 204 -3.55 195.25C-3.55 186.5 -2.075 183 -2.075 177.75L-2.075 1.4Z"
+  }
+ ]
+}

@@ -1,0 +1,188 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/komagome-pipette-5",
+ "revision": 1,
+ "family": "komagome-pipette",
+ "variant": {
+  "capacity": "5 mL"
+ },
+ "names": {
+  "en": "Komagome pipette 5 mL"
+ },
+ "category": "addition",
+ "keywords": [
+  "pipette",
+  "liquid transfer",
+  "komagome",
+  "dropper",
+  "rubber bulb",
+  "approximate scale"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "glass",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M5.5 0C5.65 2 5.5 5 4.1 8L4.1 55C4.1 60.5 8.3 64.625 8.3 71.5C8.3 78.375 3.9 83.875 3.9 90.75L3.9 195.25C3.9 225.5 1.3 258.5 0.7 275L-0.7 275C-1.3 258.5 -3.9 225.5 -3.9 195.25L-3.9 90.75C-3.9 83.875 -8.3 78.375 -8.3 71.5C-8.3 64.625 -4.1 60.5 -4.1 55L-4.1 8C-5.5 5 -5.65 2 -5.5 0Z"
+  },
+  {
+   "id": "open-mouth",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-4.95 1.4Q0 2.4 4.95 1.4",
+   "when": {
+    "bulb": [
+     "removed"
+    ]
+   }
+  },
+  {
+   "id": "scale-marks",
+   "layer": "front",
+   "material": "ink",
+   "role": "fill",
+   "path": "M-3.25 126.29H2.015V126.71H-3.25ZM-3.25 128.98H-0.52V129.3H-3.25ZM-3.25 131.62H-0.52V131.94H-3.25ZM-3.25 134.26H-0.52V134.58H-3.25ZM-3.25 136.9H-0.52V137.22H-3.25ZM-3.25 139.49H2.015V139.91H-3.25ZM-3.25 142.18H-0.52V142.5H-3.25ZM-3.25 144.82H-0.52V145.14H-3.25ZM-3.25 147.46H-0.52V147.78H-3.25ZM-3.25 150.1H-0.52V150.42H-3.25ZM-3.25 152.69H2.015V153.11H-3.25ZM-3.25 155.38H-0.52V155.7H-3.25ZM-3.25 158.02H-0.52V158.34H-3.25ZM-3.25 160.66H-0.52V160.98H-3.25ZM-3.25 163.3H-0.52V163.62H-3.25ZM-3.25 165.89H2.015V166.31H-3.25ZM-3.25 168.58H-0.52V168.9H-3.25ZM-3.25 171.22H-0.52V171.54H-3.25ZM-3.25 173.86H-0.52V174.18H-3.25ZM-3.25 176.5H-0.52V176.82H-3.25ZM-3.25 179.09H2.015V179.51H-3.25ZM-3.25 181.78H-0.52V182.1H-3.25ZM-3.25 184.42H-0.52V184.74H-3.25ZM-3.25 187.06H-0.52V187.38H-3.25ZM-3.25 189.7H-0.52V190.02H-3.25ZM-3.25 192.29H2.015V192.71H-3.25Z"
+  },
+  {
+   "id": "rubber-bulb",
+   "layer": "front",
+   "material": "rubber",
+   "role": "solid",
+   "path": "M-6.3 7L-6.3 -3C-6.3 -8 -9.35 -10 -9.35 -23.94C-9.35 -35.7 -5.423 -42 0 -42C5.423 -42 9.35 -35.7 9.35 -23.94C9.35 -10 6.3 -8 6.3 -3L6.3 7Z",
+   "color": [
+    177,
+    68,
+    57
+   ],
+   "part": "bulb-toggle",
+   "when": {
+    "bulb": [
+     "fitted"
+    ]
+   }
+  },
+  {
+   "id": "bulb-socket-edge",
+   "layer": "front",
+   "material": "rubber",
+   "role": "detail",
+   "path": "M-5.65 3Q0 4 5.65 3",
+   "part": "bulb-toggle",
+   "when": {
+    "bulb": [
+     "fitted"
+    ]
+   }
+  }
+ ],
+ "params": [
+  {
+   "id": "bulb",
+   "names": {
+    "en": "Rubber bulb"
+   },
+   "kind": "states",
+   "default": "fitted",
+   "states": [
+    {
+     "id": "fitted",
+     "names": {
+      "en": "Fitted"
+     }
+    },
+    {
+     "id": "removed",
+     "names": {
+      "en": "Removed"
+     }
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "names": {
+    "en": "Drawn liquid level"
+   },
+   "kind": "fill",
+   "liquid": "sample",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "sample",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "bulb-toggle",
+   "param": "bulb",
+   "motion": {
+    "per_state": {
+     "fitted": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "removed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     -23.1
+    ],
+    "gesture": "toggle"
+   }
+  },
+  {
+   "id": "liquid-level",
+   "param": "fill",
+   "motion": {
+    "translate": [
+     0,
+     -272
+    ]
+   },
+   "handle": {
+    "at": [
+     12.5,
+     273.5
+    ],
+    "gesture": "drag"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "sample",
+   "region": "M4.95 1.4C5.1 2 4.95 5 3.55 8L3.55 55C3.55 60.5 7.75 64.625 7.75 71.5C7.75 78.375 3.35 83.875 3.35 90.75L3.35 195.25C3.35 225.5 0.75 258.5 0.15 273.8L-0.15 273.8C-0.75 258.5 -3.35 225.5 -3.35 195.25L-3.35 90.75C-3.35 83.875 -7.75 78.375 -7.75 71.5C-7.75 64.625 -3.55 60.5 -3.55 55L-3.55 8C-4.95 5 -5.1 2 -4.95 1.4Z"
+  }
+ ]
+}

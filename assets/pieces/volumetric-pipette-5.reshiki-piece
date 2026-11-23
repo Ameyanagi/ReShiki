@@ -1,0 +1,99 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/volumetric-pipette-5",
+ "revision": 1,
+ "family": "volumetric-pipette",
+ "variant": {
+  "capacity": "5 mL"
+ },
+ "names": {
+  "en": "Volumetric pipette 5 mL"
+ },
+ "category": "addition",
+ "keywords": [
+  "pipette",
+  "liquid transfer",
+  "volumetric",
+  "single mark",
+  "bulb pipette",
+  "5 mL"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "glass",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M3.225 0L3.225 173.75C3.225 180.25 6 180.75 6 189.75L6 207.75C6 217.25 3.225 218.75 3.225 223.75L3.225 351C3.225 358 0.65 367 0.6 375L-0.6 375C-0.65 367 -3.225 358 -3.225 351L-3.225 223.75C-3.225 218.75 -6 217.25 -6 207.75L-6 189.75C-6 180.75 -3.225 180.25 -3.225 173.75L-3.225 0Z"
+  },
+  {
+   "id": "open-mouth",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-2.675 1.4Q0 2.4 2.675 1.4"
+  },
+  {
+   "id": "single-mark",
+   "layer": "front",
+   "material": "ink",
+   "role": "fill",
+   "path": "M-3.225 141.45H3.225V142.05H-3.225Z"
+  }
+ ],
+ "params": [
+  {
+   "id": "fill",
+   "names": {
+    "en": "Drawn liquid level"
+   },
+   "kind": "fill",
+   "liquid": "sample",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "sample",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "liquid-level",
+   "param": "fill",
+   "motion": {
+    "translate": [
+     0,
+     -372
+    ]
+   },
+   "handle": {
+    "at": [
+     10.225,
+     373.5
+    ],
+    "gesture": "drag"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "sample",
+   "region": "M2.675 1.4L2.675 173.75C2.675 180.25 5.45 180.75 5.45 189.75L5.45 207.75C5.45 217.25 2.675 218.75 2.675 223.75L2.675 351C2.675 358 0.14 367 0.14 373.8L-0.14 373.8C-0.14 367 -2.675 358 -2.675 351L-2.675 223.75C-2.675 218.75 -5.45 217.25 -5.45 207.75L-5.45 189.75C-5.45 180.75 -2.675 180.25 -2.675 173.75L-2.675 1.4Z"
+  }
+ ]
+}

@@ -1,0 +1,99 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/volumetric-pipette-10",
+ "revision": 1,
+ "family": "volumetric-pipette",
+ "variant": {
+  "capacity": "10 mL"
+ },
+ "names": {
+  "en": "Volumetric pipette 10 mL"
+ },
+ "category": "addition",
+ "keywords": [
+  "pipette",
+  "liquid transfer",
+  "volumetric",
+  "single mark",
+  "bulb pipette",
+  "10 mL"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "glass",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M3.225 0L3.225 196.3C3.225 204.75 7.6 205.4 7.6 217.1L7.6 240.5C7.6 252.85 3.225 254.8 3.225 261.3L3.225 416C3.225 423 0.65 432 0.6 440L-0.6 440C-0.65 432 -3.225 423 -3.225 416L-3.225 261.3C-3.225 254.8 -7.6 252.85 -7.6 240.5L-7.6 217.1C-7.6 205.4 -3.225 204.75 -3.225 196.3L-3.225 0Z"
+  },
+  {
+   "id": "open-mouth",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-2.675 1.4Q0 2.4 2.675 1.4"
+  },
+  {
+   "id": "single-mark",
+   "layer": "front",
+   "material": "ink",
+   "role": "fill",
+   "path": "M-3.225 164H3.225V164.6H-3.225Z"
+  }
+ ],
+ "params": [
+  {
+   "id": "fill",
+   "names": {
+    "en": "Drawn liquid level"
+   },
+   "kind": "fill",
+   "liquid": "sample",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "sample",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "liquid-level",
+   "param": "fill",
+   "motion": {
+    "translate": [
+     0,
+     -437
+    ]
+   },
+   "handle": {
+    "at": [
+     10.225,
+     438.5
+    ],
+    "gesture": "drag"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "sample",
+   "region": "M2.675 1.4L2.675 196.3C2.675 204.75 7.05 205.4 7.05 217.1L7.05 240.5C7.05 252.85 2.675 254.8 2.675 261.3L2.675 416C2.675 423 0.14 432 0.14 438.8L-0.14 438.8C-0.14 432 -2.675 423 -2.675 416L-2.675 261.3C-2.675 254.8 -7.05 252.85 -7.05 240.5L-7.05 217.1C-7.05 205.4 -2.675 204.75 -2.675 196.3L-2.675 1.4Z"
+  }
+ ]
+}
