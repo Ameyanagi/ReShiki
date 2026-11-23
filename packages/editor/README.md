@@ -313,6 +313,10 @@ a snapshot; later edits do not change it, and destroying the editor cancels
 pending API exports. File pickers, downloads and clipboard access stay on the
 page thread.
 
+An explicit module passed to `initEditor(module)` or `mount(..., { module })`
+keeps figure preparation in that editor module. Its build cannot be assumed to
+match the bundled render worker. The existing naming worker is still configured.
+
 The export queue accepts at most eight pending calls per job kind. Loading,
 queue waits and export jobs each have a 60-second limit. Request data including
 fonts is limited to 128 MiB and returned figure bytes to 512 MiB. A worker
