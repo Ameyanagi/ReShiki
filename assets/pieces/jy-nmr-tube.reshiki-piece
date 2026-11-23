@@ -2,7 +2,7 @@
  "format": "reshiki-piece",
  "format_version": 0,
  "id": "reshiki/jy-nmr-tube",
- "revision": 2,
+ "revision": 3,
  "family": "jy-nmr-tube",
  "variant": {},
  "names": {
@@ -31,7 +31,7 @@
    "material": "glass",
    "role": "glass",
    "id": "shape-2",
-   "path": "M2.5 2L4.2 -2L4.2 -24L-4.2 -24L-4.2 -2L-2.5 2Z"
+   "path": "M2.5 2L4.2 -2L4.2 -27L-4.2 -27L-4.2 -2L-2.5 2Z"
   },
   {
    "layer": "body",
@@ -85,9 +85,9 @@
    "material": "plastic",
    "role": "solid",
    "color": [
-    244,
-    241,
-    234
+    245,
+    211,
+    38
    ],
    "when": {
     "valve": [
@@ -95,7 +95,7 @@
     ]
    },
    "id": "shape-9",
-   "path": "M-3.4 -38L3.4 -38A2 2 0 0 1 5.4 -36L5.4 -25A2 2 0 0 1 3.4 -23L-3.4 -23A2 2 0 0 1 -5.4 -25L-5.4 -36A2 2 0 0 1 -3.4 -38Z"
+   "path": "M-5.4 -35.8A5.4 2.2 0 0 1 5.4 -35.8V-25Q5.4 -23 3.4 -23H-3.4Q-5.4 -23 -5.4 -25Z"
   },
   {
    "layer": "body",
@@ -107,7 +107,7 @@
     ]
    },
    "id": "shape-10",
-   "path": "M-3.2 -36L-3.2 -25"
+   "path": "M-3.4 -32.6V-26.3"
   },
   {
    "layer": "body",
@@ -119,7 +119,7 @@
     ]
    },
    "id": "shape-11",
-   "path": "M-1.6 -36L-1.6 -25"
+   "path": "M-1.7 -32.6V-26.3"
   },
   {
    "layer": "body",
@@ -131,7 +131,7 @@
     ]
    },
    "id": "shape-12",
-   "path": "M0 -36L0 -25"
+   "path": "M0 -32.6V-26.3"
   },
   {
    "layer": "body",
@@ -143,7 +143,7 @@
     ]
    },
    "id": "shape-13",
-   "path": "M1.6 -36L1.6 -25"
+   "path": "M1.7 -32.6V-26.3"
   },
   {
    "layer": "body",
@@ -155,7 +155,7 @@
     ]
    },
    "id": "shape-14",
-   "path": "M3.2 -36L3.2 -25"
+   "path": "M3.4 -32.6V-26.3"
   },
   {
    "layer": "inner",
@@ -174,9 +174,9 @@
    "material": "plastic",
    "role": "solid",
    "color": [
-    244,
-    241,
-    234
+    245,
+    211,
+    38
    ],
    "when": {
     "valve": [
@@ -184,7 +184,7 @@
     ]
    },
    "id": "shape-17",
-   "path": "M-3.4 -40.5L3.4 -40.5A2 2 0 0 1 5.4 -38.5L5.4 -27.5A2 2 0 0 1 3.4 -25.5L-3.4 -25.5A2 2 0 0 1 -5.4 -27.5L-5.4 -38.5A2 2 0 0 1 -3.4 -40.5Z"
+   "path": "M-5.4 -38.3A5.4 2.2 0 0 1 5.4 -38.3V-27.5Q5.4 -25.5 3.4 -25.5H-3.4Q-5.4 -25.5 -5.4 -27.5Z"
   },
   {
    "layer": "body",
@@ -196,7 +196,7 @@
     ]
    },
    "id": "shape-18",
-   "path": "M-3.2 -38.5L-3.2 -27.5"
+   "path": "M-3.4 -35.1V-28.8"
   },
   {
    "layer": "body",
@@ -208,7 +208,7 @@
     ]
    },
    "id": "shape-19",
-   "path": "M-1.6 -38.5L-1.6 -27.5"
+   "path": "M-1.7 -35.1V-28.8"
   },
   {
    "layer": "body",
@@ -220,7 +220,7 @@
     ]
    },
    "id": "shape-20",
-   "path": "M0 -38.5L0 -27.5"
+   "path": "M0 -35.1V-28.8"
   },
   {
    "layer": "body",
@@ -232,7 +232,7 @@
     ]
    },
    "id": "shape-21",
-   "path": "M1.6 -38.5L1.6 -27.5"
+   "path": "M1.7 -35.1V-28.8"
   },
   {
    "layer": "body",
@@ -244,7 +244,105 @@
     ]
    },
    "id": "shape-22",
-   "path": "M3.2 -38.5L3.2 -27.5"
+   "path": "M3.4 -35.1V-28.8"
+  },
+  {
+   "id": "cap-closed-top-rim",
+   "layer": "body",
+   "depth": 1,
+   "material": "plastic",
+   "role": "solid",
+   "path": "M-5.4 -35.8A5.4 2.2 0 0 1 5.4 -35.8A5.4 2.2 0 0 1 -5.4 -35.8Z",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "color": [
+    253,
+    225,
+    70
+   ]
+  },
+  {
+   "id": "cap-closed-inset-wall",
+   "layer": "body",
+   "depth": 2,
+   "material": "plastic",
+   "role": "fill",
+   "path": "M-2.9 -35.8A2.9 1.15 0 0 1 2.9 -35.8A2.9 1.15 0 0 1 -2.9 -35.8Z",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   },
+   "color": [
+    154,
+    125,
+    27
+   ]
+  },
+  {
+   "id": "cap-closed-axial-mouth",
+   "layer": "body",
+   "depth": 3,
+   "material": "paper",
+   "role": "fill",
+   "path": "M-2.25 -35.55A2.25 0.65 0 0 1 2.25 -35.55A2.25 0.65 0 0 1 -2.25 -35.55Z",
+   "when": {
+    "valve": [
+     "closed"
+    ]
+   }
+  },
+  {
+   "id": "cap-open-top-rim",
+   "layer": "body",
+   "depth": 1,
+   "material": "plastic",
+   "role": "solid",
+   "path": "M-5.4 -38.3A5.4 2.2 0 0 1 5.4 -38.3A5.4 2.2 0 0 1 -5.4 -38.3Z",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "color": [
+    253,
+    225,
+    70
+   ]
+  },
+  {
+   "id": "cap-open-inset-wall",
+   "layer": "body",
+   "depth": 2,
+   "material": "plastic",
+   "role": "fill",
+   "path": "M-2.9 -38.3A2.9 1.15 0 0 1 2.9 -38.3A2.9 1.15 0 0 1 -2.9 -38.3Z",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   },
+   "color": [
+    154,
+    125,
+    27
+   ]
+  },
+  {
+   "id": "cap-open-axial-mouth",
+   "layer": "body",
+   "depth": 3,
+   "material": "paper",
+   "role": "fill",
+   "path": "M-2.25 -38.05A2.25 0.65 0 0 1 2.25 -38.05A2.25 0.65 0 0 1 -2.25 -38.05Z",
+   "when": {
+    "valve": [
+     "open"
+    ]
+   }
   }
  ],
  "params": [
