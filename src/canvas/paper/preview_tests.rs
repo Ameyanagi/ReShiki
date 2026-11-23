@@ -423,6 +423,20 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
             .is_none()
     );
 
+    if let Some(directory) = std::env::var_os("RESHIKI_PREVIEW_EVIDENCE") {
+        let directory = std::path::PathBuf::from(directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        for (name, pixels) in [
+            ("equipment-retained.png", warm.clone()),
+            ("equipment-full.png", whole),
+        ] {
+            image::RgbaImage::from_raw(size.width, size.height, pixels)
+                .unwrap()
+                .save(directory.join(name))
+                .unwrap();
+        }
+    }
+
     canvas.piece = None;
     let (base, _) = shot(&canvas, &tree, false);
     let changed_pixels = (180..320)
