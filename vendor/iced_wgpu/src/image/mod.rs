@@ -3,6 +3,9 @@ pub(crate) use cache::Cache;
 
 mod atlas;
 
+#[cfg(test)]
+mod tests;
+
 #[cfg(feature = "image")]
 mod raster;
 

@@ -54,21 +54,19 @@ impl Memory {
 pub struct Cache {
     map: FxHashMap<image::Id, Memory>,
     hits: FxHashSet<image::Id>,
-    should_trim: bool,
 }
 
 impl Cache {
     pub fn get_mut(&mut self, handle: &image::Handle) -> Option<&mut Memory> {
+        let memory = self.map.get_mut(&handle.id())?;
         let _ = self.hits.insert(handle.id());
 
-        self.map.get_mut(&handle.id())
+        Some(memory)
     }
 
     pub fn insert(&mut self, handle: &image::Handle, memory: Memory) {
         let _ = self.map.insert(handle.id(), memory);
         let _ = self.hits.insert(handle.id());
-
-        self.should_trim = true;
     }
 
     pub fn contains(&self, handle: &image::Handle) -> bool {
@@ -80,19 +78,31 @@ impl Cache {
         atlas: &mut Atlas,
         on_drop: impl Fn(Arc<wgpu::BindGroup>),
     ) {
-        // Only trim if new entries have landed in the `Cache`
-        if !self.should_trim {
+        // Hits only contain cached entries. Equal counts mean every entry was
+        // used this frame, so no retention checks or map scan are necessary.
+        if self.hits.len() == self.map.len() {
+            self.hits.clear();
             return;
         }
 
+        // A retained image batch may still address the shared atlas. Do not
+        // recycle its regions until it releases the bind group.
+        let atlas_in_use = atlas.is_in_use();
         let hits = &self.hits;
 
         self.map.retain(|id, memory| {
             // Retain active allocations
-            if let Memory::Device { allocation, .. } = memory
-                && allocation
+            if let Memory::Device {
+                allocation,
+                bind_group,
+                ..
+            } = memory
+                && (allocation
                     .as_ref()
                     .is_some_and(|allocation| allocation.strong_count() > 0)
+                    || bind_group.as_ref().map_or(atlas_in_use, |bind_group| {
+                        Arc::strong_count(bind_group) > 1
+                    }))
             {
                 return true;
             }
@@ -118,6 +128,142 @@ impl Cache {
         });
 
         self.hits.clear();
-        self.should_trim = false;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::image::tests::Gpu;
+    use std::cell::Cell;
+
+    #[test]
+    #[ignore = "requires a GPU adapter"]
+    fn missing_and_stale_lookups_do_not_prevent_idle_eviction() {
+        let gpu = Gpu::new();
+        let mut atlas = gpu.atlas();
+        let mut cache = Cache::default();
+        let used = image::Handle::from_rgba(8, 8, vec![255; 8 * 8 * 4]);
+        let idle = image::Handle::from_rgba(8, 8, vec![128; 8 * 8 * 4]);
+        let missing = image::Handle::from_path("missing-cache-entry.png");
+        for handle in [&used, &idle] {
+            cache.insert(
+                handle,
+                Memory::Device {
+                    entry: gpu.upload(&mut atlas),
+                    bind_group: None,
+                    allocation: None,
+                },
+            );
+        }
+        cache.trim(&mut atlas, |_| panic!("unexpected dedicated group"));
+        assert!(cache.contains(&used));
+        assert!(cache.contains(&idle));
+
+        // One current hit plus one miss must not look like two cached hits.
+        assert!(cache.get_mut(&used).is_some());
+        assert!(cache.get_mut(&missing).is_none());
+        cache.trim(&mut atlas, |_| panic!("unexpected dedicated group"));
+        assert!(cache.contains(&used));
+        assert!(!cache.contains(&idle));
+
+        // Querying the evicted handle must not count as use of the one entry
+        // left in the map. With no current use, that entry must also expire.
+        assert!(cache.get_mut(&idle).is_none());
+        cache.trim(&mut atlas, |_| panic!("unexpected dedicated group"));
+        assert!(!cache.contains(&used));
+    }
+
+    #[test]
+    #[ignore = "requires a GPU adapter"]
+    fn trims_idle_entries_without_insertions_but_keeps_each_frame_use() {
+        let gpu = Gpu::new();
+        let mut atlas = gpu.atlas();
+        let mut cache = Cache::default();
+        let handle = image::Handle::from_rgba(8, 8, vec![255; 8 * 8 * 4]);
+        cache.insert(
+            &handle,
+            Memory::Device {
+                entry: gpu.upload(&mut atlas),
+                bind_group: None,
+                allocation: None,
+            },
+        );
+        cache.trim(&mut atlas, |_| {
+            panic!("shared atlas has no dedicated group")
+        });
+
+        for _ in 0..3 {
+            assert!(cache.get_mut(&handle).is_some());
+            cache.trim(&mut atlas, |_| panic!("unexpected dedicated group"));
+            assert!(cache.contains(&handle));
+        }
+
+        cache.trim(&mut atlas, |_| panic!("unexpected dedicated group"));
+        assert!(!cache.contains(&handle));
+    }
+
+    #[test]
+    #[ignore = "requires a GPU adapter"]
+    fn retains_live_allocation_and_shared_atlas_until_owners_release_them() {
+        let gpu = Gpu::new();
+        let mut atlas = gpu.atlas();
+        let mut cache = Cache::default();
+        let handle = image::Handle::from_rgba(8, 8, vec![255; 8 * 8 * 4]);
+        let entry = gpu.upload(&mut atlas);
+        // SAFETY: this image has just been allocated in the atlas above.
+        #[allow(unsafe_code)]
+        let allocation = unsafe { image::allocate(&handle, entry.size()) };
+        cache.insert(
+            &handle,
+            Memory::Device {
+                entry,
+                bind_group: None,
+                allocation: Some(allocation.downgrade()),
+            },
+        );
+        cache.trim(&mut atlas, |_| {});
+        cache.trim(&mut atlas, |_| {});
+        assert!(cache.contains(&handle));
+
+        let retained_batch = atlas.bind_group().clone();
+        drop(allocation);
+        cache.trim(&mut atlas, |_| {});
+        assert!(cache.contains(&handle));
+        drop(retained_batch);
+        cache.trim(&mut atlas, |_| {});
+        assert!(!cache.contains(&handle));
+    }
+
+    #[test]
+    #[ignore = "requires a GPU adapter"]
+    fn retains_dedicated_bind_group_until_batch_releases_it() {
+        let gpu = Gpu::new();
+        let mut atlas = gpu.atlas();
+        let mut dedicated = gpu.atlas();
+        let entry = gpu.upload(&mut dedicated);
+        let retained_batch = dedicated.bind_group().clone();
+        drop(dedicated);
+        let mut cache = Cache::default();
+        let handle = image::Handle::from_rgba(8, 8, vec![255; 8 * 8 * 4]);
+        cache.insert(
+            &handle,
+            Memory::Device {
+                entry,
+                bind_group: Some(retained_batch.clone()),
+                allocation: None,
+            },
+        );
+        let dropped = Cell::new(0);
+        let on_drop = |_| dropped.set(dropped.get() + 1);
+        cache.trim(&mut atlas, on_drop);
+        cache.trim(&mut atlas, on_drop);
+        assert!(cache.contains(&handle));
+        assert_eq!(dropped.get(), 0);
+
+        drop(retained_batch);
+        cache.trim(&mut atlas, on_drop);
+        assert!(!cache.contains(&handle));
+        assert_eq!(dropped.get(), 1);
     }
 }

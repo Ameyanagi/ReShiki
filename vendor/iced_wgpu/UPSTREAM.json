@@ -6,11 +6,20 @@
   "source": "crates.io iced_wgpu 0.14.0",
   "upstream_file_sha256": {
     "Cargo.toml": "25b9c6ee060874ed93645f49d1ec0e8056378a187ebb5660c97b8cef71380675",
-    "src/triangle/msaa.rs": "86c6319d50274fafcf775a759eedb0ae6fd8fc7e3f351c31688c690fd2fde3d8"
+    "src/triangle/msaa.rs": "86c6319d50274fafcf775a759eedb0ae6fd8fc7e3f351c31688c690fd2fde3d8",
+    "src/image/atlas.rs": "847adb21d9942b45fbc8af9705a0ebf4b7cd461af16d6ba8ca661ebeecf3bac2",
+    "src/image/cache.rs": "825aa022d61bbd679bc6ea63b9f010b569a016f2cbd8c703f9059c49770a3b03",
+    "src/image/mod.rs": "9d95459954e0e901f1755a8e8525d999fd1a33853287337ae17fb70434734b83",
+    "src/image/raster.rs": "5a477223977f8b2769d9d49c52dfee08697c39dc4bca13899cad6225220db7ea",
+    "src/image/vector.rs": "434f1afd1e5688d477f7d077a25a047357e3e1631684cd7116c0b7a8afd2c019"
   },
-  "purpose": "Release oversized MSAA targets when the window shrinks while preserving antialiasing.",
+  "purpose": "Release oversized MSAA targets when the window shrinks, and reclaim cold image entries and empty atlas pages.",
   "local_changes": [
     "src/triangle/msaa.rs: recreate MSAA targets whenever the region size differs, including when it shrinks; leave the ratio calculation unchanged",
+    "src/image/{cache,mod,raster,vector}.rs: expire cold raster and SVG entries independently of insertion, preserving live allocations and bind groups",
+    "src/image/{raster,vector}.rs: skip retention scans when every cached entry was used; exclude raster misses from hit counts and test idle eviction after missing/stale lookups",
+    "src/image/atlas.rs: recreate an unreferenced empty atlas at its backend baseline",
+    "src/image/{tests.rs,atlas/tests.rs} (added): regression checks for image cache aging, active resources, and GPU operations recorded before an idle reset",
     "LICENSE (added): Iced's MIT license, which the crate package does not include; the same text as licenses/iced/LICENSE"
   ]
 }
