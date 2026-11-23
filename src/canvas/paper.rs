@@ -204,6 +204,7 @@ impl MoleculeCanvas<'_> {
                 .filter(|record| record.matches(inputs, self.piece))
                 .cloned()
         });
+        let reuse = previous.is_some();
         let (memo, live) = if let Some(record) = previous {
             (Some(record), None)
         } else {
@@ -327,7 +328,11 @@ impl MoleculeCanvas<'_> {
                 &nmr_ids,
                 self.reviewing_pair,
             );
-        } else if let Some(record) = &memo {
+        } else if let Some(record) = &memo
+            && reuse
+        {
+            // A changing drag draws the complete preview directly. Retain its
+            // geometry once the same inputs are requested again.
             let scene = record
                 .whole
                 .get_or_init(|| reshiki::scene::primitives(preview).into());

@@ -484,9 +484,11 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
     let next = cached(&tree);
     assert!(!Rc::ptr_eq(&previous, &next));
 
-    // Pan within the retained margins and compare the widget's shifted layers
-    // with a fresh complete draw through the same viewport.
+    // The first pan fills the expanded cache. The second reuses its shifted
+    // layers through the same widget viewport.
     canvas.camera.center = World::new(16., 8.);
+    shot(&canvas, &tree, true);
+    canvas.camera.center = World::new(32., 16.);
     let (panned, _) = shot(&canvas, &tree, true);
     assert!(!tree.state.downcast_ref::<State>().shifts().is_empty());
     let (panned_whole, _) = shot(&canvas, &tree, false);
