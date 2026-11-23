@@ -247,6 +247,24 @@
    "part": "valve-handle"
   }
  ],
+ "joints": [
+  {
+   "id": "nmr-stem",
+   "kind": "plug",
+   "family": "nmr",
+   "gender": "M",
+   "size_mm": 6.4,
+   "at": [
+    0,
+    -49.25
+   ],
+   "dir": [
+    0,
+    -1
+   ],
+   "part": "valve-handle"
+  }
+ ],
  "params": [
   {
    "id": "valve",

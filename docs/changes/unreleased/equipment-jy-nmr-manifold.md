@@ -3,5 +3,5 @@ section: Changes
 issues: []
 ---
 
-- The equipment catalogue now includes a J. Young NMR evacuation manifold with a yellow knurled cap, a 10 mm valve, a 9 mm hose connector and open/closed valve controls.
-- A matching 9 mm rubber hose is available for the manifold through the standard flexible-hose placement and reshaping tools.
+- The equipment catalogue now includes an upright J. Young NMR evacuation manifold. Its bottom socket seats on the J. Young NMR tube, and its side barb accepts the stock 9 mm rubber hose.
+- The PTFE spindle presses against the tapered glass seat when the manifold valve is closed and lifts clear when open.

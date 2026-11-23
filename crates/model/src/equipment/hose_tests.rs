@@ -76,7 +76,12 @@ fn stock_hose_bores_only_seat_on_the_matching_nmr_manifold() {
             scale,
         ));
     }
-    let barbs: Vec<_> = drawing.graphics.iter().flat_map(solve::ports).collect();
+    let barbs: Vec<_> = drawing
+        .graphics
+        .iter()
+        .flat_map(solve::ports)
+        .filter(|port| port.at.joint == "hose")
+        .collect();
     assert_eq!(barbs.len(), 2);
     for (name, expected) in [("reshiki/hose-9", 2), ("reshiki/hose-7", 0)] {
         let mut doc = drawing.clone();

@@ -412,6 +412,101 @@ fn opening_the_schlenk_tube_valve_is_one_undo_step() {
 }
 
 #[test]
+fn the_nmr_tube_and_hose_stay_seated_on_the_upright_manifold() {
+    const TUBE: &str = "reshiki/jy-nmr-tube";
+    const MANIFOLD: &str = "reshiki/jy-nmr-evacuation-manifold";
+    const HOSE: &str = "reshiki/hose-9";
+
+    let port = |doc: &Document, id, joint: &str| {
+        let graphic = doc.graphics.iter().find(|g| g.id == id).unwrap();
+        solve::ports(graphic)
+            .into_iter()
+            .find(|p| p.at.joint == joint)
+            .unwrap()
+    };
+    let place = |app: &mut App, id, at| {
+        let placed = app.tab.doc.next_id();
+        let _ = app.update(Message::Equipment(Action::Arm(k(id))));
+        let _ = app.update(Message::Canvas(Edit::Piece(at)));
+        assert!(!app.error, "{}", app.status);
+        placed
+    };
+    let seat_on = |app: &mut App, id, joint, target: &solve::Port| {
+        let scale = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
+        let probe = placed::graphic(0, builtin::find(id).unwrap(), Point::default(), scale);
+        let moving = solve::ports(&probe)
+            .into_iter()
+            .find(|p| p.at.joint == joint)
+            .unwrap();
+        let at = Point::new(
+            (target.point[0] - moving.point[0]) as f32 + 2.,
+            (target.point[1] - moving.point[1]) as f32 - 3.,
+        );
+        place(app, id, at)
+    };
+    let lay_hose = |app: &mut App, from, to| {
+        let id = app.tab.doc.next_id();
+        let _ = app.update(Message::Equipment(Action::Arm(k(HOSE))));
+        let _ = app.update(Message::Canvas(Edit::Hose(from, to)));
+        assert!(!app.error, "{}", app.status);
+        id
+    };
+
+    for hose_first in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let (tube, manifold, hose) = if hose_first {
+            let hose = lay_hose(&mut app, Point::new(320., 200.), Point::new(460., 200.));
+            let end = port(&app.tab.doc, hose, "a");
+            let manifold = seat_on(&mut app, MANIFOLD, "hose", &end);
+            let socket = port(&app.tab.doc, manifold, "nmr-socket");
+            let tube = seat_on(&mut app, TUBE, "nmr-stem", &socket);
+            (tube, manifold, hose)
+        } else {
+            let tube = place(&mut app, TUBE, Point::new(200., 390.));
+            let stem = port(&app.tab.doc, tube, "nmr-stem");
+            let manifold = seat_on(&mut app, MANIFOLD, "nmr-socket", &stem);
+            let barb = port(&app.tab.doc, manifold, "hose");
+            let at = Point::new(barb.point[0] as f32, barb.point[1] as f32);
+            let hose = lay_hose(&mut app, at, at);
+            (tube, manifold, hose)
+        };
+
+        let check = |doc: &Document| {
+            assert_eq!(doc.graphics.len(), 3);
+            assert_eq!(doc.seats.len(), 2);
+            let stem = port(doc, tube, "nmr-stem");
+            let socket = port(doc, manifold, "nmr-socket");
+            let barb = port(doc, manifold, "hose");
+            let end = port(doc, hose, "a");
+            assert!(stem.dir[0].abs() < 1e-5 && stem.dir[1] < 0.);
+            assert!(socket.dir[0].abs() < 1e-5 && socket.dir[1] > 0.);
+            assert!(barb.dir[0] > 0. && barb.dir[1].abs() < 1e-5);
+            for (a, b) in [(&stem, &socket), (&barb, &end)] {
+                assert_eq!(solve::partner(doc, &a.at), Some(b.at.clone()));
+                let (distance, angle) = solve::residual(a, b);
+                assert!(distance < 1e-3 && angle < 1e-3, "{distance} mm, {angle}°");
+            }
+        };
+        check(&app.tab.doc);
+        for id in [tube, manifold] {
+            let before = app.tab.doc.clone();
+            let _ = app.update(Message::Equipment(Action::Param {
+                id,
+                param: "valve".into(),
+                value: Value::State("open".into()),
+            }));
+            assert!(!app.error, "{}", app.status);
+            check(&app.tab.doc);
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+        }
+        let reopened = Document::from_json(&app.tab.doc.file_json().unwrap()).unwrap();
+        check(&reopened);
+    }
+}
+
+#[test]
 fn a_straight_schlenk_sidearm_uses_the_s_type_flow_controls_and_undoes() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
