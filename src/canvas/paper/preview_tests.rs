@@ -314,3 +314,214 @@ async fn preview_fragments_match_whole_previews() {
     let ((fragment, _), (whole, _)) = (shot(&canvas, &state, true), shot(&canvas, &state, false));
     assert!(fragment == whole, "the attached number stayed where it was");
 }
+
+#[tokio::test]
+#[ignore = "Equipment preview cache and pixel regression check; requires a headless renderer"]
+async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
+    use iced::advanced::Renderer as _;
+    use iced::advanced::renderer::Headless;
+    use iced::advanced::{
+        Layout, Widget, layout, renderer,
+        widget::{Tree, tree},
+    };
+    use std::rc::Rc;
+
+    let mut renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        std::env::var("RESHIKI_PERF_RENDERER").ok().as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    let piece = reshiki::equipment::builtin::find("reshiki/mass-flow-controller").unwrap();
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-240., 0.));
+    let b = doc.add_atom("N", World::new(-210., 0.));
+    doc.add_bond(a, b, 1, "");
+
+    let size = iced::Size::new(800, 500);
+    let bounds = Rectangle::with_size(iced::Size::new(800., 500.));
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.camera = Camera {
+        center: World::default(),
+        zoom: 1.,
+    };
+    canvas.tool = Tool::Equipment;
+    canvas.piece = Some(&piece);
+    let state = State {
+        cursor: Some(canvas.camera.screen(World::new(80., 0.), bounds)),
+        ..State::default()
+    };
+    let mut tree = Tree {
+        tag: tree::Tag::of::<State>(),
+        state: tree::State::new(state),
+        children: Vec::new(),
+    };
+    let mut shot = |canvas: &crate::canvas::MoleculeCanvas<'_>, tree: &Tree, split: bool| {
+        super::fragment::SPLIT.with(|allow| allow.set(split));
+        render::DRAWN_PRIMITIVES.with(|count| count.set(0));
+        renderer.reset(bounds);
+        let state = tree.state.downcast_ref::<State>();
+        let cursor = mouse::Cursor::Available(state.cursor.unwrap());
+        let widget = super::layered::canvas(canvas).shifted(State::shifts);
+        let node = layout::Node::new(bounds.size());
+        let clip = Rectangle {
+            x: 24.,
+            y: 16.,
+            width: 720.,
+            height: 450.,
+        };
+        widget.draw(
+            tree,
+            &mut renderer,
+            &Theme::Light,
+            &renderer::Style::default(),
+            Layout::new(&node),
+            cursor,
+            &clip,
+        );
+        super::fragment::SPLIT.with(|allow| allow.set(true));
+        let drawn = render::DRAWN_PRIMITIVES.with(std::cell::Cell::get);
+        (
+            Headless::screenshot(&mut renderer, size, 1., iced::Color::WHITE),
+            drawn,
+        )
+    };
+    let cached = |tree: &Tree| {
+        tree.state
+            .downcast_ref::<State>()
+            .scene
+            .borrow()
+            .preview
+            .clone()
+            .unwrap()
+    };
+    let (cold, _) = shot(&canvas, &tree, true);
+    let first = cached(&tree);
+    let (warm, reduced) = shot(&canvas, &tree, true);
+    assert!(Rc::ptr_eq(&first, &cached(&tree)));
+    assert!(first.fragment.get().unwrap().is_some());
+    assert!(
+        cold == warm,
+        "an unchanged preview must preserve every pixel"
+    );
+    let (whole, full) = shot(&canvas, &tree, false);
+    let compare = |name: &str, retained: &[u8], full: &[u8]| {
+        if let Some(directory) = std::env::var_os("RESHIKI_PREVIEW_EVIDENCE") {
+            let directory = std::path::PathBuf::from(directory);
+            std::fs::create_dir_all(&directory).unwrap();
+            for (suffix, pixels) in [("retained", retained), ("full", full)] {
+                image::RgbaImage::from_raw(size.width, size.height, pixels.to_vec())
+                    .unwrap()
+                    .save(directory.join(format!("{name}-{suffix}.png")))
+                    .unwrap();
+            }
+        }
+        let (mut changed, mut largest, mut error, mut coverage) = (0, 0, 0, 0);
+        let mut rect = [size.width as usize, size.height as usize, 0, 0];
+        for (index, (a, b)) in retained
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(full.as_chunks::<4>().0.iter())
+            .enumerate()
+        {
+            let differences: [u8; 4] = std::array::from_fn(|i| a[i].abs_diff(b[i]));
+            let delta = differences.into_iter().max().unwrap();
+            error += differences.into_iter().map(usize::from).sum::<usize>();
+            let blank = |pixel: &[u8]| pixel == [255; 4];
+            coverage += usize::from(a[3] != b[3] || blank(a) != blank(b));
+            if delta > 0 {
+                let (x, y) = (index % size.width as usize, index / size.width as usize);
+                changed += 1;
+                largest = largest.max(delta);
+                rect = [
+                    rect[0].min(x),
+                    rect[1].min(y),
+                    rect[2].max(x),
+                    rect[3].max(y),
+                ];
+            }
+        }
+        // Drawing paths in separate GPU layers has slightly different
+        // antialias rounding. Compare the full destination, including its
+        // clipping, and reject differences above two 8-bit levels.
+        assert_eq!(retained.len(), full.len());
+        assert!(
+            largest <= 2 && coverage == 0 && error <= retained.len() / 100,
+            "{name}: {changed} changed pixels, bounds {rect:?}, max channel difference {largest}, coverage differences {coverage}, total channel difference {error}"
+        );
+    };
+    compare("equipment", &warm, &whole);
+    assert!(
+        reduced < full,
+        "a warm frame drew {reduced} of {full} primitives"
+    );
+    assert!(
+        tree.state
+            .downcast_ref::<State>()
+            .scene
+            .borrow()
+            .preview
+            .is_none()
+    );
+
+    canvas.piece = None;
+    let (base, _) = shot(&canvas, &tree, false);
+    let changed_pixels = (180..320)
+        .flat_map(|y| (410..620).map(move |x| 4 * (y * 800 + x)))
+        .filter(|&i| warm[i..i + 4] != base[i..i + 4])
+        .count();
+    assert!(
+        changed_pixels > 100,
+        "the ghost contributed only {changed_pixels} pixels"
+    );
+    canvas.piece = Some(&piece);
+
+    shot(&canvas, &tree, true);
+    let previous = cached(&tree);
+    let state = tree.state.downcast_mut::<State>();
+    state.cursor = Some(state.cursor.unwrap() + Vector::new(8., 0.));
+    shot(&canvas, &tree, true);
+    let next = cached(&tree);
+    assert!(!Rc::ptr_eq(&previous, &next));
+
+    // The first pan fills the expanded cache. The second reuses its shifted
+    // layers through the same widget viewport.
+    canvas.camera.center = World::new(16., 8.);
+    shot(&canvas, &tree, true);
+    canvas.camera.center = World::new(32., 16.);
+    let (panned, _) = shot(&canvas, &tree, true);
+    assert!(!tree.state.downcast_ref::<State>().shifts().is_empty());
+    let (panned_whole, _) = shot(&canvas, &tree, false);
+    compare("equipment-panned", &panned, &panned_whole);
+
+    canvas.camera.zoom *= 1.25;
+    shot(&canvas, &tree, true);
+    let zoomed = cached(&tree);
+    assert!(!Rc::ptr_eq(&next, &zoomed));
+
+    tree.state.downcast_mut::<State>().cursor =
+        Some(canvas.camera.screen(World::new(-225., 0.), bounds));
+    let (near, _) = shot(&canvas, &tree, true);
+    let overlap = cached(&tree);
+    assert!(overlap.fragment.get().unwrap().is_none());
+    let (near_warm, _) = shot(&canvas, &tree, true);
+    assert!(Rc::ptr_eq(&overlap, &cached(&tree)));
+    assert!(overlap.whole.get().is_some());
+    let (near_whole, _) = shot(&canvas, &tree, false);
+    compare("equipment-overlap", &near, &near_whole);
+    compare("equipment-overlap-warm", &near_warm, &near_whole);
+    assert!(
+        near_warm == near_whole,
+        "the overlapping preview replays in the enclosing frame"
+    );
+
+    shot(&canvas, &tree, true);
+    let before_edit = cached(&tree);
+    let mut edited = doc.clone();
+    edited.add_atom("O", World::new(90., 80.));
+    canvas.doc = &edited;
+    shot(&canvas, &tree, true);
+    assert!(!Rc::ptr_eq(&before_edit, &cached(&tree)));
+}

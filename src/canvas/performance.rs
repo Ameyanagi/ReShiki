@@ -589,3 +589,91 @@ fn draw_reference_atom_markers(
         }
     }
 }
+
+/// Run against a saved reactor drawing using RESHIKI_PERF_EQUIPMENT_DRAWING.
+#[tokio::test]
+#[ignore = "Equipment preview timing on a user-supplied drawing and headless renderer"]
+async fn manual_equipment_preview_workloads() {
+    let path = std::env::var_os("RESHIKI_PERF_EQUIPMENT_DRAWING")
+        .expect("Set RESHIKI_PERF_EQUIPMENT_DRAWING to a saved reactor drawing");
+    let doc = Document::from_json(&std::fs::read(path).unwrap()).unwrap();
+    let renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        std::env::var("RESHIKI_PERF_RENDERER").ok().as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    let iterations = std::env::var("RESHIKI_PERF_ITERATIONS")
+        .ok()
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(20)
+        .max(1);
+    let bounds = Rectangle::with_size(iced::Size::new(1200., 700.));
+    let (lo, hi) = doc.bounds();
+    let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+    canvas.camera = Camera {
+        center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
+        zoom: (940. / (hi.x - lo.x)).min(440. / (hi.y - lo.y)),
+    };
+    let mfc = reshiki::equipment::builtin::find("reshiki/mass-flow-controller").unwrap();
+    let hover = Point::new(540., 605.);
+    let mut state = State {
+        cursor: Some(hover),
+        ..Default::default()
+    };
+    canvas.tool = Tool::Equipment;
+    canvas.piece = Some(&mfc);
+    println!(
+        "Equipment fixture: {} pieces, {} connections; {}",
+        doc.graphics
+            .iter()
+            .filter(|graphic| graphic.piece.is_some())
+            .count(),
+        doc.seats.len(),
+        renderer.name()
+    );
+    println!("PERF,workload,iterations,median_ms,p95_ms,mean_ms");
+    let draw = |canvas: &MoleculeCanvas<'_>, state: &State| {
+        black_box(canvas.draw(
+            state,
+            &renderer,
+            &Theme::Light,
+            bounds,
+            mouse::Cursor::Available(state.cursor.unwrap()),
+        ));
+    };
+    measure("equipment_stationary_placement", iterations, |_| {
+        draw(&canvas, &state)
+    });
+    measure("equipment_moving_placement", iterations, |i| {
+        state.cursor = Some(hover + Vector::new((i % 8) as f32 * 3., 0.));
+        draw(&canvas, &state);
+    });
+
+    let graphic = doc
+        .graphics
+        .iter()
+        .find(|graphic| graphic.piece.is_some())
+        .expect("The fixture must contain placed equipment");
+    let ids = [graphic.id];
+    let start = graphic.origin;
+    let from = canvas.camera.screen(start, bounds);
+    canvas.piece = None;
+    canvas.tool = Tool::Select;
+    canvas.selected = &ids;
+    state.gesture = Some(Gesture::Move {
+        start,
+        ids: ids.to_vec(),
+        clicked: ids.to_vec(),
+    });
+    let at = from + Vector::new(16., 10.);
+    state.cursor = Some(at);
+    measure("equipment_stationary_drag", iterations, |_| {
+        draw(&canvas, &state)
+    });
+    measure("equipment_moving_drag", iterations, |i| {
+        state.cursor = Some(at + Vector::new((i % 8) as f32 * 3., 0.));
+        draw(&canvas, &state);
+    });
+}

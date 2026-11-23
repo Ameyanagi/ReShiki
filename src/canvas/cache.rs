@@ -30,6 +30,7 @@ pub(super) struct SceneCache {
     cycle_hits: HashMap<u64, reshiki::cycles::HitLayout>,
     /// Keyed by the objects a preview redraws itself.
     remainder: Option<(Vec<u64>, Option<Rc<super::paper::Remainder>>)>,
+    pub(super) preview: Option<Rc<super::paper::PreviewMemo>>,
     /// A [`Frame`] compared the drawing and still holds it.
     compared: bool,
     #[cfg(test)]
@@ -134,6 +135,7 @@ impl SceneCache {
             self.ring_interiors = None;
             self.cycle_hits.clear();
             self.remainder = None;
+            self.preview = None;
         }
     }
 

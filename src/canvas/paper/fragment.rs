@@ -1,15 +1,16 @@
 //! Redraw only the molecules a preview changes, over the cached rest of the drawing.
 //!
 //! A ring, template or bond preview, or a partial move, changes a few atoms of
-//! a large drawing. Their connected molecules are drawn from the preview; the
-//! rest keeps its scene and tessellation. The split applies only while the two
+//! a large drawing. A free equipment preview adds one piece. The changed part
+//! is drawn from the preview; the rest keeps its scene and tessellation.
+//! The split applies only while the two
 //! parts stay apart: no ink, atom, bond or automatic indicator's reach of one
 //! comes near the other's. Then no crossing gap, halo,
 //! paint order or automatic label placement can differ from drawing the whole
 //! preview.
 use crate::canvas::{Camera, World, cache::SceneCache, markers::Markers};
 use reshiki::document::Document;
-use reshiki::graphics::PathCommand;
+use reshiki::graphics::{Graphic, PathCommand};
 use reshiki::scene::{self, Primitive};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
@@ -66,12 +67,12 @@ impl Remainder {
 
 pub(super) struct Fragment {
     pub remainder: Rc<Remainder>,
-    pub scene: Vec<Primitive>,
+    pub scene: Rc<[Primitive]>,
 }
 
 impl Fragment {
-    /// Split `preview` against the cached `base`, or `None` when it changes
-    /// more than atoms, bonds and abbreviations, or the parts would meet.
+    /// Split a small molecular edit or a freely placed piece from the retained
+    /// drawing. Return `None` when the parts depend on or meet each other.
     pub fn new(
         cache: &mut SceneCache,
         base: &Document,
@@ -82,24 +83,37 @@ impl Fragment {
         if !SPLIT.with(std::cell::Cell::get) {
             return None;
         }
-        let atoms = molecules(base, preview, changed_atoms(base, preview)?);
-        // A cycle's arrows follow its parts, so moving one redraws it whole.
-        let held = reshiki::cycles::part_ids(base);
-        if atoms.iter().any(|id| held.contains(id)) {
-            return None;
-        }
-        let ids: Vec<_> = preview
-            .atoms
-            .iter()
-            .map(|a| a.id)
-            .filter(|id| atoms.contains(id))
-            .collect();
-        let part = reshiki::editing::preserved_expansion_selection(preview, &ids).ok()?;
-        let drawn: HashSet<_> = part.object_ids().chain(atoms).collect();
-        let mut excluded: Vec<_> = base.object_ids().filter(|id| drawn.contains(id)).collect();
-        excluded.sort_unstable();
+        let (part, excluded) = if let Some((piece, original)) = appended_piece(base, preview) {
+            if !changed_atoms(base, preview, original)?.is_empty() {
+                return None;
+            }
+            let part = reshiki::editing::preserved_expansion_selection(preview, &[piece]).ok()?;
+            (part, Vec::new())
+        } else {
+            let atoms = molecules(
+                base,
+                preview,
+                changed_atoms(base, preview, &preview.graphics)?,
+            );
+            // A cycle's arrows follow its parts, so moving one redraws it whole.
+            let held = reshiki::cycles::part_ids(base);
+            if atoms.iter().any(|id| held.contains(id)) {
+                return None;
+            }
+            let ids: Vec<_> = preview
+                .atoms
+                .iter()
+                .map(|a| a.id)
+                .filter(|id| atoms.contains(id))
+                .collect();
+            let part = reshiki::editing::preserved_expansion_selection(preview, &ids).ok()?;
+            let drawn: HashSet<_> = part.object_ids().chain(atoms).collect();
+            let mut excluded: Vec<_> = base.object_ids().filter(|id| drawn.contains(id)).collect();
+            excluded.sort_unstable();
+            (part, excluded)
+        };
         let remainder = cache.remainder(base, &excluded)?;
-        let scene = scene::primitives(&part);
+        let scene: Rc<[Primitive]> = scene::primitives(&part).into();
         let mut fragment = layout(&part, &scene);
         // A pixel of antialiasing and a little more for estimated text widths,
         // plus the gap automatic hydrogens, charges and group labels keep from
@@ -126,10 +140,26 @@ impl Fragment {
     }
 }
 
+fn appended_piece<'a>(base: &Document, preview: &'a Document) -> Option<(u64, &'a [Graphic])> {
+    // Cells and page clipping depend on the full scene. A solver that seats the
+    // new piece also changes ports or paint order, checked below by changed_atoms.
+    let (piece, original) = preview.graphics.split_last()?;
+    (original.len() == base.graphics.len()
+        && piece.piece.is_some()
+        && piece.style.effects.opacity == Some(0.5)
+        && base.page_layout.is_none()
+        && !base.graphics.iter().any(|g| g.table.is_some()))
+    .then_some((piece.id, original))
+}
+
 /// Atoms whose drawing can differ, or `None` when anything besides atoms,
-/// bonds and abbreviations differs. Rear opacity and 3D models depend on the
-/// whole drawing, so they always take the full path.
-fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
+/// bonds and abbreviations differs after setting aside the free preview piece.
+/// Rear opacity and 3D models depend on the whole drawing.
+fn changed_atoms(
+    base: &Document,
+    preview: &Document,
+    original_graphics: &[Graphic],
+) -> Option<HashSet<u64>> {
     let Document {
         generic,
         canvas_theme,
@@ -151,7 +181,7 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         compound_numbers,
         arrows,
         arrow_labels,
-        graphics,
+        graphics: _,
         groups,
         reactions,
         models,
@@ -182,7 +212,7 @@ fn changed_atoms(base: &Document, preview: &Document) -> Option<HashSet<u64>> {
         && *seats == base.seats
         && *arrows == base.arrows
         && *arrow_labels == base.arrow_labels
-        && *graphics == base.graphics
+        && original_graphics == base.graphics
         && *groups == base.groups
         && *reactions == base.reactions
         && *recent_colors == base.recent_colors;

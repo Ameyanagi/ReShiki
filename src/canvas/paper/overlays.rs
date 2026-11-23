@@ -614,9 +614,9 @@ impl MoleculeCanvas<'_> {
         frame: &mut layered::Frame<'_>,
         state: &State,
         bounds: Rectangle,
-        template_notice: Option<(String, bool)>,
-        chain_badge: Option<(World, String, bool)>,
-        rejection: Option<reshiki::editing::RingRejection>,
+        template_notice: &Option<(String, bool)>,
+        chain_badge: &Option<(World, String, bool)>,
+        rejection: &Option<reshiki::editing::RingRejection>,
     ) {
         if let Some((content, valid)) = template_notice {
             let position = Point::new(
@@ -626,16 +626,16 @@ impl MoleculeCanvas<'_> {
             frame.fill_rectangle(
                 position - Vector::new(5., 4.),
                 iced::Size::new((bounds.width - 18.).max(1.), 25.),
-                if valid {
+                if *valid {
                     ACCENT_TINT
                 } else {
                     rgb([253, 235, 233])
                 },
             );
             frame.fill_text(canvas::Text {
-                content,
+                content: content.clone(),
                 position,
-                color: rgb(if valid { [30, 100, 85] } else { [160, 50, 45] }),
+                color: rgb(if *valid { [30, 100, 85] } else { [160, 50, 45] }),
                 size: 12.into(),
                 ..Default::default()
             });
@@ -644,9 +644,9 @@ impl MoleculeCanvas<'_> {
             badge(
                 frame,
                 bounds,
-                self.camera.screen(point, bounds),
-                content,
-                valid,
+                self.camera.screen(*point, bounds),
+                content.clone(),
+                *valid,
             );
         }
         // A rejected ring shows where it would go, and why, at the pointer;
@@ -676,7 +676,7 @@ impl MoleculeCanvas<'_> {
                     Stroke::default().with_width(2.).with_color(error),
                 );
             }
-            badge(frame, bounds, pointer, rejection.label, false);
+            badge(frame, bounds, pointer, rejection.label.clone(), false);
         }
     }
 
