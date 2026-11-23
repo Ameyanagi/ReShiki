@@ -4,7 +4,7 @@ use iced::{
     Task,
     keyboard::{Key, Modifiers, key::Named},
 };
-use reshiki::recovery::{Candidate, Discovery, Draft, Recovery};
+use reshiki::recovery::{Candidate, Discovery, Draft, Recovery, Replacement};
 use std::{collections::BTreeSet, path::PathBuf};
 
 mod view;
@@ -78,6 +78,7 @@ pub(super) struct State {
     serial: u64,
     pending: Option<u64>,
     discovery: Option<u64>,
+    dismissed: bool,
     failure: Option<String>,
     /// Abandoned drafts made with a newer ReShiki, which cannot be offered.
     pub(super) newer: usize,
@@ -120,6 +121,7 @@ impl App {
     pub(super) fn dismiss_recovery(&mut self) {
         self.recovery_manager.discovery = None;
         self.recovery_manager.pending = None;
+        self.recovery_manager.dismissed = true;
         self.recovery_manager.close();
         self.recovered.clear();
         self.recovery_manager.newer = 0;
@@ -148,6 +150,27 @@ impl App {
             return;
         }
         self.recovered.retain(Draft::available);
+    }
+
+    pub(super) fn replaced_recovery_source(&mut self, replacement: &Replacement) {
+        let Some(original) = &replacement.original else {
+            return;
+        };
+        // A concurrent rescan may already have offered the updated file. Only
+        // remove the old offer, never a newer identity at the same path.
+        self.recovered.retain(|draft| draft.source() != *original);
+        if !self.recovery_manager.dismissed
+            && let Some(offer) = &replacement.offer
+            && !self.recovered.iter().any(|draft| draft.path == offer.path)
+        {
+            self.recovery_manager.selected.remove(&original.path);
+            self.recovered.push(offer.clone());
+            self.recovered.sort_by(|a, b| {
+                b.saved_at
+                    .cmp(&a.saved_at)
+                    .then_with(|| a.path.cmp(&b.path))
+            });
+        }
     }
 
     pub(super) fn restore_recovered(&mut self) -> Task<Message> {

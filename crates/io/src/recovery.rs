@@ -19,7 +19,23 @@ pub struct Snapshot {
 pub struct Candidate {
     pub path: PathBuf,
     pub snapshot: Snapshot,
+    identity: [u8; 32],
 }
+/// The exact abandoned file a restored tab may retire after saving its copy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Source {
+    pub path: PathBuf,
+    identity: [u8; 32],
+}
+
+/// A successful replacement save, including any original that was kept.
+#[derive(Debug, Clone, Default)]
+pub struct Replacement {
+    pub original: Option<Source>,
+    pub kept: bool,
+    pub offer: Option<Draft>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Recovery {
     pub session: PathBuf,
@@ -90,6 +106,7 @@ impl Draft {
         Ok(Candidate {
             path: self.path.clone(),
             snapshot,
+            identity: self.identity,
         })
     }
 }
@@ -102,6 +119,13 @@ fn identity(bytes: &[u8]) -> [u8; 32] {
 }
 
 impl Candidate {
+    pub fn source(&self) -> Source {
+        Source {
+            path: self.path.clone(),
+            identity: self.identity,
+        }
+    }
+
     /// Only an abandoned draft may be restored or discarded. Recheck before
     /// acting: a process ID may have been reused since the startup scan.
     pub fn available(&self) -> bool {
@@ -114,6 +138,181 @@ pub(crate) fn owned_by_running_instance(path: &Path) -> bool {
         .and_then(|stem| stem.to_str())
         .and_then(|stem| stem.split('-').next())
         .is_some_and(running)
+}
+
+impl Draft {
+    pub fn source(&self) -> Source {
+        Source {
+            path: self.path.clone(),
+            identity: self.identity,
+        }
+    }
+}
+
+impl Source {
+    fn available(&self) -> bool {
+        !owned_by_running_instance(&self.path)
+    }
+
+    fn matches_path(&self, path: &Path) -> bool {
+        if !self.available() {
+            return false;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let matches = {
+            if !std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file()) {
+                return false;
+            }
+            use sha2::{Digest, Sha256};
+            use std::io::Read;
+            let digest = (|| -> std::io::Result<[u8; 32]> {
+                let mut file = std::fs::File::open(path)?;
+                let mut digest = Sha256::new();
+                let mut buffer = [0; 64 * 1024];
+                loop {
+                    let read = file.read(&mut buffer)?;
+                    if read == 0 {
+                        return Ok(digest.finalize().into());
+                    }
+                    digest.update(&buffer[..read]);
+                }
+            })();
+            digest.is_ok_and(|digest| digest == self.identity)
+        };
+        #[cfg(target_arch = "wasm32")]
+        let matches =
+            crate::storage::read(path).is_ok_and(|bytes| identity(&bytes) == self.identity);
+        matches && self.available()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn matches(&self) -> bool {
+        self.matches_path(&self.path)
+    }
+
+    fn preserved(&self, path: &Path) -> Replacement {
+        let offer = if self.available() {
+            #[cfg(not(target_arch = "wasm32"))]
+            let regular = std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file());
+            #[cfg(target_arch = "wasm32")]
+            let regular = true;
+            regular
+                .then(|| crate::storage::read(path).ok())
+                .flatten()
+                .and_then(|bytes| {
+                    let mut snapshot: Snapshot = serde_json::from_slice(&bytes).ok()?;
+                    snapshot.document.validate().ok()?;
+                    snapshot.document.migrate();
+                    let candidate = Candidate {
+                        path: path.to_path_buf(),
+                        snapshot,
+                        identity: identity(&bytes),
+                    };
+                    self.available()
+                        .then(|| Draft::from_candidate(candidate, &bytes))
+                })
+        } else {
+            None
+        };
+        Replacement {
+            original: Some(self.clone()),
+            kept: true,
+            offer,
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn retire(&self, replacement: &Path) -> Replacement {
+        if self.path == replacement || !self.available() {
+            return self.preserved(&self.path);
+        }
+        if std::fs::symlink_metadata(&self.path)
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+        {
+            return Replacement {
+                original: Some(self.clone()),
+                ..Replacement::default()
+            };
+        }
+        if !self.matches_path(&self.path) {
+            return self.preserved(&self.path);
+        }
+        self.retire_matching()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn retire_matching(&self) -> Replacement {
+        // Claim the name before the final digest check. A writer replacing the
+        // original path afterwards cannot have its new file unlinked by us.
+        // The claim is a persistent .json in the recovery folder: a crash or
+        // failed restore of its name must never clean up unverified bytes.
+        let Some(claim) = self.claim() else {
+            return self.preserved(&self.path);
+        };
+        self.retire_claimed(claim)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn claim(&self) -> Option<PathBuf> {
+        let stem = self.path.file_stem()?.to_str()?;
+        let parent = self.path.parent()?;
+        let (file, path) = tempfile::Builder::new()
+            .prefix(&format!("{stem}-retiring-"))
+            .suffix(".json")
+            .tempfile_in(parent)
+            .ok()?
+            .keep()
+            .ok()?;
+        drop(file);
+        std::fs::remove_file(&path).ok()?;
+        if !self.available() || std::fs::rename(&self.path, &path).is_err() {
+            return None;
+        }
+        Some(path)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn retire_claimed(&self, claim: PathBuf) -> Replacement {
+        if self.matches_path(&claim) && std::fs::remove_file(&claim).is_ok() {
+            return if std::fs::symlink_metadata(&self.path).is_ok() {
+                self.preserved(&self.path)
+            } else {
+                Replacement {
+                    original: Some(self.clone()),
+                    ..Replacement::default()
+                }
+            };
+        }
+        // Restore without clobbering a concurrent writer. If it reclaimed the
+        // original name, the claimed copy stays separately recoverable.
+        let preserved = self.restore_claim(&claim);
+        self.preserved(&preserved)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn restore_claim(&self, claim: &Path) -> PathBuf {
+        #[cfg(unix)]
+        if std::fs::hard_link(claim, &self.path).is_ok()
+            && self.path.parent().is_some_and(|parent| {
+                std::fs::File::open(parent)
+                    .and_then(|directory| directory.sync_all())
+                    .is_ok()
+            })
+        {
+            // The restored name is durable before the fallback name is dropped.
+            let _ = std::fs::remove_file(claim);
+            return self.path.clone();
+        }
+        #[cfg(windows)]
+        if tempfile::TempPath::try_from_path(claim).is_ok_and(|mut path| {
+            // Even a failed no-clobber rename must never clean up changed bytes.
+            path.disable_cleanup(true);
+            path.persist_noclobber(&self.path).is_ok()
+        }) {
+            return self.path.clone();
+        }
+        claim.to_path_buf()
+    }
 }
 
 impl Recovery {
@@ -210,21 +409,43 @@ impl Recovery {
                 continue;
             };
             snapshot.document.migrate();
-            accept(Candidate { path, snapshot }, &bytes);
+            accept(
+                Candidate {
+                    path,
+                    snapshot,
+                    identity: identity(&bytes),
+                },
+                &bytes,
+            );
         }
         newer
     }
     pub fn save(&self, document: &Document, source: Option<PathBuf>) -> Result<(), String> {
-        self.save_replacing(document, source, None)
+        self.save_replacing(document, source, None).map(|_| ())
     }
-    /// [`Self::save`], then remove the draft `old` this one replaces; in the
-    /// browser both happen together, so a failed save never loses `old`.
+    /// Save a restored copy, retiring only the exact abandoned source offered.
+    /// A changed/live source stays recoverable. Browser writes retain the
+    /// existing guarded two-key transaction, so a failed save never loses it.
     pub fn save_replacing(
         &self,
         document: &Document,
         source: Option<PathBuf>,
-        old: Option<&Path>,
-    ) -> Result<(), String> {
+        old: Option<&Source>,
+    ) -> Result<Replacement, String> {
+        let same_path = old.is_some_and(|old| old.path == self.session);
+        #[cfg(not(target_arch = "wasm32"))]
+        let same_path = same_path
+            || old.is_some_and(|old| {
+                std::fs::symlink_metadata(&self.session)
+                    .is_ok_and(|metadata| metadata.file_type().is_symlink())
+                    || std::fs::canonicalize(&self.session)
+                        .ok()
+                        .zip(std::fs::canonicalize(&old.path).ok())
+                        .is_some_and(|(destination, original)| destination == original)
+            });
+        if same_path {
+            return Err("A recovered copy must use a different recovery path".into());
+        }
         document.validate()?;
         #[derive(Serialize)]
         struct BorrowedSnapshot<'a> {
@@ -247,11 +468,31 @@ impl Recovery {
                 .unwrap_or_default()
                 .as_secs(),
         };
-        crate::storage::write_replacing(
-            &self.session,
-            &serde_json::to_vec(&snapshot).map_err(|e| e.to_string())?,
-            old,
-        )
+        let bytes = serde_json::to_vec(&snapshot).map_err(|e| e.to_string())?;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            crate::storage::write_atomic(&self.session, &bytes)?;
+            Ok(old.map_or_else(Replacement::default, |old| old.retire(&self.session)))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let retire = old.filter(|old| old.path != self.session && old.matches());
+            // No await separates validation from this batch. The browser sink
+            // compares both previous byte strings again in its durable transaction.
+            crate::storage::write_replacing(
+                &self.session,
+                &bytes,
+                retire.map(|old| old.path.as_path()),
+            )?;
+            Ok(match old {
+                Some(old) if retire.is_some() => Replacement {
+                    original: Some(old.clone()),
+                    ..Replacement::default()
+                },
+                Some(old) => old.preserved(&old.path),
+                None => Replacement::default(),
+            })
+        }
     }
     pub fn clear(&self) -> Result<(), String> {
         remove(&self.session)

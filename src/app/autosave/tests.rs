@@ -43,7 +43,7 @@ fn failed_retirement_cancels_exit_and_is_retried_on_the_next_close() {
     assert!(app.tabs.retiring[0].pending);
     let _ = app.update(Message::Tab(
         id,
-        Box::new(Message::Autosaved(key, Ok(None))),
+        Box::new(Message::Autosaved(key, Ok(Replacement::default()))),
     ));
     assert!(app.tabs.retiring.is_empty());
 }
@@ -114,7 +114,7 @@ fn successful_close_discards_held_results_and_stays_frozen_until_exit() {
     let message = || Message::Tab(id, Box::new(Message::Pasted(Some("O".into()))));
     let _ = app.update(message());
     assert_eq!(app.tabs.deferred_results.len(), 1);
-    let _ = app.update(Message::Autosaved(key, Ok(None)));
+    let _ = app.update(Message::Autosaved(key, Ok(Replacement::default())));
     assert!(app.exit.committed() && app.exit.frozen());
     assert!(app.tabs.deferred_results.is_empty());
     let _ = app.update(message());
@@ -122,7 +122,7 @@ fn successful_close_discards_held_results_and_stays_frozen_until_exit() {
     assert!(!app.tab.busy && app.tab.doc.all_ids().is_empty());
 }
 
-fn run(work: (Key, PathBuf, Work)) -> (Key, Result<Option<PathBuf>, String>) {
+fn run(work: (Key, PathBuf, Work)) -> (Key, Result<Replacement, String>) {
     let (key, path, work) = work;
     (
         key,
@@ -572,16 +572,33 @@ fn close_waits_for_clear_and_failure_keeps_window_open() {
     assert!(app.tab.autosave_status.contains("permission denied"));
 }
 
+fn source_at(path: &std::path::Path, document: &Document) -> Source {
+    let snapshot = reshiki::recovery::Snapshot {
+        document: document.clone(),
+        source: None,
+        saved_at: 1,
+    };
+    std::fs::write(path, serde_json::to_vec(&snapshot).unwrap()).unwrap();
+    Recovery::in_directory(path.parent().unwrap())
+        .unwrap()
+        .discover()
+        .drafts
+        .into_iter()
+        .find(|draft| draft.path == path)
+        .unwrap()
+        .source()
+}
+
 #[test]
 fn restoring_keeps_original_until_a_durable_copy_succeeds() {
     let (mut app, directory) = fixture();
     let original = directory.path().join("original.json");
-    std::fs::write(&original, "original recovery").unwrap();
+    let original_source = source_at(&original, &app.tab.doc);
     let missing = directory.path().join("missing/draft.json");
     let work = Work::Save {
         document: Box::new(app.tab.doc.clone()),
         source: None,
-        retire_candidate: Some(original.clone()),
+        retire_candidate: Some(original_source.clone()),
     };
     assert!(
         tokio::runtime::Runtime::new()
@@ -590,10 +607,14 @@ fn restoring_keeps_original_until_a_durable_copy_succeeds() {
             .is_err()
     );
     assert!(original.exists());
-    app.recover_candidate(original.clone());
+    app.recover_candidate(original_source.clone());
     let work = app.prepare_autosave().unwrap();
     let (key, result) = run(work);
-    assert_eq!(result.as_ref().unwrap(), &Some(original.clone()));
+    assert_eq!(
+        result.as_ref().unwrap().original.as_ref(),
+        Some(&original_source)
+    );
+    assert!(!result.as_ref().unwrap().kept);
     let _ = app.autosaved(key, result);
     assert!(!original.exists());
     assert!(app.tab.recovery.as_ref().unwrap().session.exists());
@@ -603,8 +624,8 @@ fn restoring_keeps_original_until_a_durable_copy_succeeds() {
 fn failed_restore_write_retries_without_losing_original_identity() {
     let (mut app, directory) = fixture();
     let original = directory.path().join("original.json");
-    std::fs::write(&original, "original").unwrap();
-    app.recover_candidate(original.clone());
+    let original_source = source_at(&original, &app.tab.doc);
+    app.recover_candidate(original_source.clone());
     let (key, path, work) = app.prepare_autosave().unwrap();
     let failure = tokio::runtime::Runtime::new()
         .unwrap()
@@ -663,7 +684,7 @@ fn failed_update_handoff_replays_clipboard_results_on_either_side_of_draft_clean
             if before_cleanup {
                 let _ = app.update(completion());
             }
-            let _ = app.update(Message::Autosaved(key, Ok(None)));
+            let _ = app.update(Message::Autosaved(key, Ok(Replacement::default())));
             assert!(app.exit.frozen() && !app.exit.committed());
             if !before_cleanup {
                 let _ = app.update(completion());
@@ -798,4 +819,57 @@ fn manual_recovery_workloads() {
             let _ = black_box(app.autosaved(key, result));
         });
     }
+}
+
+#[test]
+fn explicit_save_clear_does_not_lose_a_changed_restore_source_from_an_older_write() {
+    let (mut app, directory) = fixture();
+    let original = directory.path().join("4294967294-original.json");
+    let source = source_at(&original, &app.tab.doc);
+    app.recover_candidate(source);
+    let work = app.prepare_autosave().unwrap();
+    let mut changed = app.tab.doc.clone();
+    changed.add_atom("N", Point::default());
+    let updated = reshiki::recovery::Snapshot {
+        document: changed.clone(),
+        source: None,
+        saved_at: 2,
+    };
+    let bytes = serde_json::to_vec(&updated).unwrap();
+    std::fs::write(&original, &bytes).unwrap();
+    // Explicit file saves clear the tab's recovery state while the older
+    // ordered write may still be running.
+    app.clear_recovery();
+    let (key, result) = run(work);
+    assert!(result.as_ref().unwrap().kept);
+    let _ = app.autosaved(key, result);
+    assert_eq!(std::fs::read(&original).unwrap(), bytes);
+    assert!(app.tab.autosave.retire_candidate.is_none());
+    assert_eq!(app.recovered.len(), 1);
+    assert_eq!(app.recovered[0].load().unwrap().snapshot.document, changed);
+}
+
+#[test]
+fn closing_a_restored_tab_still_reoffers_a_source_kept_by_its_pending_write() {
+    let (mut app, directory) = fixture();
+    let original = directory.path().join("4294967294-original.json");
+    let source = source_at(&original, &app.tab.doc);
+    app.recover_candidate(source);
+    let work = app.prepare_autosave().unwrap();
+    let id = app.tab.id;
+    let mut changed = app.tab.doc.clone();
+    changed.add_atom("N", Point::default());
+    let updated = reshiki::recovery::Snapshot {
+        document: changed.clone(),
+        source: None,
+        saved_at: 2,
+    };
+    let bytes = serde_json::to_vec(&updated).unwrap();
+    std::fs::write(&original, &bytes).unwrap();
+    let _ = app.close_active_tab();
+    let (key, result) = run(work);
+    let _ = app.update(Message::Tab(id, Box::new(Message::Autosaved(key, result))));
+    assert_eq!(std::fs::read(&original).unwrap(), bytes);
+    assert_eq!(app.recovered.len(), 1);
+    assert_eq!(app.recovered[0].load().unwrap().snapshot.document, changed);
 }

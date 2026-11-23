@@ -387,7 +387,10 @@ pub enum Message {
     /// Save a ChemDraw or MOL file in its own format, now and from now on.
     KeepFormat,
     Tick,
-    Autosaved(autosave::Key, Result<Option<PathBuf>, String>),
+    Autosaved(
+        autosave::Key,
+        Result<reshiki::recovery::Replacement, String>,
+    ),
     Restore,
     DismissRecovery,
     Recovery(recovery_manager::Action),

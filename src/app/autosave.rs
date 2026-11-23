@@ -3,7 +3,7 @@ use super::{App, Message, document_tab::DocumentTab, document_tab::TabId};
 use iced::Task;
 use reshiki::{
     document::Document,
-    recovery::{Candidate, Recovery},
+    recovery::{Candidate, Recovery, Replacement, Source},
 };
 use std::path::PathBuf;
 
@@ -24,7 +24,7 @@ pub(super) struct State {
     pending: Option<Key>,
     clear: bool,
     requested: bool,
-    retire_candidate: Option<PathBuf>,
+    retire_candidate: Option<Source>,
 }
 
 /// A closed tab's draft remains tracked until its removal succeeds.
@@ -81,12 +81,12 @@ pub(super) enum Work {
     Save {
         document: Box<Document>,
         source: Option<PathBuf>,
-        retire_candidate: Option<PathBuf>,
+        retire_candidate: Option<Source>,
     },
     Clear,
 }
 
-pub(super) async fn execute(path: PathBuf, work: Work) -> Result<Option<PathBuf>, String> {
+pub(super) async fn execute(path: PathBuf, work: Work) -> Result<Replacement, String> {
     reshiki::task::spawn_blocking(move || {
         let recovery = Recovery { session: path };
         match work {
@@ -97,10 +97,9 @@ pub(super) async fn execute(path: PathBuf, work: Work) -> Result<Option<PathBuf>
             } => {
                 // Keep the original recovery candidate until its replacement
                 // is durably written. A failed save must never lose it.
-                recovery.save_replacing(&document, source, retire_candidate.as_deref())?;
-                Ok(retire_candidate)
+                recovery.save_replacing(&document, source, retire_candidate.as_ref())
             }
-            Work::Clear => recovery.clear().map(|()| None),
+            Work::Clear => recovery.clear().map(|()| Replacement::default()),
         }
     })
     .await
@@ -162,8 +161,8 @@ impl App {
                 || (!dirty && tab.autosaved_revision.is_some()))
     }
 
-    pub(super) fn recover_candidate(&mut self, path: PathBuf) {
-        self.tab.autosave.retire_candidate = Some(path);
+    pub(super) fn recover_candidate(&mut self, source: Source) {
+        self.tab.autosave.retire_candidate = Some(source);
         self.tab.autosave.requested = true;
         self.tab.autosaved_revision = None;
     }
@@ -264,8 +263,11 @@ impl App {
         &mut self,
         id: TabId,
         key: Key,
-        result: Result<Option<PathBuf>, String>,
+        result: Result<Replacement, String>,
     ) -> Task<Message> {
+        if let Ok(replacement) = &result {
+            self.replaced_recovery_source(replacement);
+        }
         let Some(retired) = self.tabs.retiring.iter_mut().find(|tab| tab.id == id) else {
             return Task::none();
         };
@@ -340,15 +342,15 @@ impl App {
     pub(super) fn autosaved(
         &mut self,
         key: Key,
-        result: Result<Option<PathBuf>, String>,
+        result: Result<Replacement, String>,
     ) -> Task<Message> {
         if self.tab.autosave.pending != Some(key) {
             return Task::none();
         }
         self.tab.autosave.pending = None;
-        if let Ok(Some(path)) = &result {
-            self.recovered.retain(|candidate| candidate.path != *path);
-            if self.tab.autosave.retire_candidate.as_ref() == Some(path) {
+        if let Ok(replacement) = &result {
+            self.replaced_recovery_source(replacement);
+            if replacement.original.as_ref() == self.tab.autosave.retire_candidate.as_ref() {
                 self.tab.autosave.retire_candidate = None;
             }
         }
@@ -390,9 +392,13 @@ impl App {
             }
         } else if key.revision == self.tab.revision {
             match result {
-                Ok(_) => {
+                Ok(replacement) => {
                     self.tab.autosaved_revision = Some(self.tab.revision);
-                    self.tab.autosave_status = "Recovery draft saved".into();
+                    self.tab.autosave_status = if replacement.kept {
+                        "Recovery saved · Changed or protected original kept".into()
+                    } else {
+                        "Recovery draft saved".into()
+                    };
                 }
                 Err(error) => self.tab.autosave_status = format!("Recovery save failed: {error}"),
             }
@@ -403,6 +409,7 @@ impl App {
     /// Opens a recovery draft in a new tab, or in the tab in front if it is an
     /// unchanged empty Untitled drawing.
     pub(super) fn restore_candidate(&mut self, candidate: Candidate) {
+        let original = candidate.source();
         self.target_tab();
         let before = self.tab.doc.clone();
         self.tab.doc = candidate.snapshot.document;
@@ -425,7 +432,7 @@ impl App {
         self.tab.revision = self.tab.revision.wrapping_add(1);
         self.fit();
         self.tab.selected.clear();
-        self.recover_candidate(candidate.path);
+        self.recover_candidate(original);
     }
 }
 
