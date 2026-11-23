@@ -92,6 +92,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("reshiki-mcp", "panic_hook"): 0,
     ("reshiki-mcp", "transcripts"): 0,
     ("reshiki-process-heap", "global_allocator_unwind"): 0,
+    ("reshiki-python", "bitmap_budget"): 0,
 }
 
 
