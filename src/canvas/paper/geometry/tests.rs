@@ -18,6 +18,17 @@ async fn mixed_scene_retains_vectors_around_live_tiles_in_paint_order() {
     let mut doc = Document::default();
     let id = doc.add_atom("N", World::new(100., 100.));
     let markers = Rc::new(Markers::new(&doc, &[id]));
+    let mut model = reshiki::models3d::Model3d::new(
+        &doc,
+        vec![reshiki::models3d::Placed {
+            id,
+            xyz: [0., 0., 0.],
+        }],
+        vec![],
+        reshiki::models3d::ForceField::Mmff94s,
+    );
+    model.display = reshiki::models3d::Display::ThreeD;
+    doc.models.push(model);
     let ball = |x| Primitive::Sphere {
         center: World::new(x, 110.),
         radius: 35.,
@@ -45,10 +56,14 @@ async fn mixed_scene_retains_vectors_around_live_tiles_in_paint_order() {
                 center: World::new(160., 120.),
                 zoom,
             };
-            for step in 0..4 {
+            for step in 0..5 {
                 if step > 0 {
                     camera.center = camera.center.offset(7., -3.);
                 }
+                // The same scene must keep its vector layers when live raster
+                // sampling switches from turning quality back to resting.
+                doc.models[0].turning = step < 3;
+                models3d::begin(&doc);
                 let mut render = |cache: Option<&mut SceneGeometryCache>| {
                     renderer.reset(bounds);
                     let mut frame = layered::Frame::new(&renderer, bounds.size())
@@ -89,6 +104,14 @@ async fn mixed_scene_retains_vectors_around_live_tiles_in_paint_order() {
                 let (live, _) = render(None);
                 let (cold, _) = render(Some(&mut retained));
                 let (warm, drawn) = render(Some(&mut retained));
+                let gold = warm
+                    .chunks_exact(4)
+                    .filter(|p| p[0] > p[1].saturating_add(15) && p[1] > p[2].saturating_add(15))
+                    .count();
+                assert!(
+                    gold > 200,
+                    "The raster balls must actually appear: {gold} gold pixels"
+                );
                 assert_eq!(drawn, 0, "No vector primitives are tessellated again");
                 assert_eq!(warm, cold, "A warm frame must preserve every layer");
                 let error: usize = live
@@ -108,4 +131,5 @@ async fn mixed_scene_retains_vectors_around_live_tiles_in_paint_order() {
             }
         }
     }
+    models3d::end();
 }

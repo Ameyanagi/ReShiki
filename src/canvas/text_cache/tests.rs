@@ -1,6 +1,95 @@
 use super::*;
 
 #[test]
+fn cold_offscreen_ascii_does_not_create_outlines_and_warm_unicode_uses_exact_bounds() {
+    let mut cache = TextCache::default();
+    let style = TextStyle::default();
+    assert!(
+        cache
+            .get_visible("OFFSCREEN", 14., 1., [0, 0, 0], &style, |_| false)
+            .is_none()
+    );
+    assert!(
+        cache.entries.is_empty(),
+        "The early-out must precede outlining"
+    );
+    assert!(cache.extents.values().any(Option::is_some));
+    let first = cache.get("日本語 🧪", 14., 1., [0, 0, 0], &style);
+    assert!(
+        cache
+            .get_visible("日本語 🧪", 14., 1., [0, 0, 0], &style, |_| false)
+            .is_none()
+    );
+    assert!(Rc::ptr_eq(
+        &first,
+        &cache.get("日本語 🧪", 14., 1., [0, 0, 0], &style)
+    ));
+}
+
+#[test]
+fn conservative_ascii_bounds_cover_shaped_ink_at_supported_sizes_and_fonts() {
+    for family in ["Arial", "Times New Roman", "Courier New"] {
+        for bold in [false, true] {
+            let style = TextStyle {
+                family: family.into(),
+                bold,
+                ..Default::default()
+            };
+            for size in [6., 14., 80.] {
+                for zoom in [0.25, 1., 4.] {
+                    for text in ["AV office fi", "(NH2) + COOH", "gypjQ_ / [] {}"] {
+                        let Some(bound) = bounds::conservative(text, size, zoom, &style) else {
+                            continue;
+                        };
+                        let paths = outline(text, size, zoom, [0, 0, 0], &style);
+                        if let Some(ink) = paths.bounds {
+                            assert!(
+                                bound.x <= ink.x
+                                    && bound.y <= ink.y
+                                    && bound.x + bound.width >= ink.x + ink.width
+                                    && bound.y + bound.height >= ink.y + ink.height,
+                                "{family} bold={bold} {size} {zoom} {text}: {bound:?} must cover {ink:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(bounds::conservative("🧪", 14., 1., &Default::default()).is_none());
+    assert!(
+        bounds::conservative(
+            "italic",
+            14.,
+            1.,
+            &TextStyle {
+                italic: true,
+                ..Default::default()
+            }
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn offscreen_text_extents_have_a_separate_bounded_budget() {
+    let mut cache = TextCache::default();
+    for i in 0..2100 {
+        cache.get_visible(
+            &i.to_string(),
+            14.,
+            1.,
+            [0, 0, 0],
+            &Default::default(),
+            |_| false,
+        );
+        assert!(cache.entries.is_empty());
+        assert!(cache.extents.len() <= LIMIT);
+        assert!(cache.extent_cost <= 1024 * 1024);
+    }
+}
+
+#[test]
 fn text_cache_keys_cover_shaping_color_and_zoom() {
     let mut cache = TextCache::default();
     let style = TextStyle::default();

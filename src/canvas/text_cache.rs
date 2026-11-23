@@ -1,7 +1,9 @@
 //! Bounded, position-independent text outlines. Pan and translation reuse glyphs,
 //! and zoom reuses them between quarter-octave steps.
+mod bounds;
 mod glyphs;
 use super::{Point, Rectangle, rgb};
+pub(super) use bounds::conservative as conservative_bounds;
 use iced::{
     Color,
     widget::{
@@ -29,7 +31,7 @@ pub(super) fn zoom_step(zoom: f32) -> f32 {
 const BUDGET: usize = 8 * 1024 * 1024;
 const LIMIT: usize = 2048;
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 struct Key {
     text: String,
     family: String,
@@ -46,6 +48,10 @@ pub(super) struct TextCache {
     cost: usize,
     clock: u64,
     glyphs: glyphs::Glyphs,
+    /// Cheap conservative extents survive outline eviction, with their own cap.
+    extents: HashMap<Key, Option<Rectangle>>,
+    extent_cost: usize,
+    fonts: usize,
 }
 
 struct Entry {
@@ -63,6 +69,26 @@ impl TextCache {
         color: [u8; 3],
         style: &TextStyle,
     ) -> Rc<OutlinedText> {
+        self.get_visible(text, size, zoom, color, style, |_| true)
+            .unwrap()
+    }
+
+    /// Reject offscreen text before creating paths or colour-glyph pictures.
+    /// Unknown cold font bounds fail open; warm entries use their exact ink.
+    pub fn get_visible(
+        &mut self,
+        text: &str,
+        size: f32,
+        zoom: f32,
+        color: [u8; 3],
+        style: &TextStyle,
+        visible: impl Fn(Option<Rectangle>) -> bool,
+    ) -> Option<Rc<OutlinedText>> {
+        let fonts = reshiki::style::font_generation();
+        if self.fonts != fonts {
+            *self = Self::default();
+            self.fonts = fonts;
+        }
         let key = Key {
             text: text.into(),
             family: style.family.clone(),
@@ -74,8 +100,31 @@ impl TextCache {
         };
         self.clock += 1;
         if let Some(entry) = self.entries.get_mut(&key) {
+            if !visible(entry.text.bounds) {
+                return None;
+            }
             entry.used = self.clock;
-            return entry.text.clone();
+            return Some(entry.text.clone());
+        }
+        let extent = if let Some(extent) = self.extents.get(&key) {
+            *extent
+        } else {
+            let extent = bounds::conservative(text, size, zoom, style);
+            let cost =
+                key.text.len() + key.family.len() + std::mem::size_of::<(Key, Option<Rectangle>)>();
+            const EXTENT_BUDGET: usize = 1024 * 1024;
+            if cost <= EXTENT_BUDGET {
+                if self.extents.len() >= LIMIT || self.extent_cost + cost > EXTENT_BUDGET {
+                    self.extents.clear();
+                    self.extent_cost = 0;
+                }
+                self.extent_cost += cost;
+                self.extents.insert(key.clone(), extent);
+            }
+            extent
+        };
+        if extent.is_some() && !visible(extent) {
+            return None;
         }
         let result = Rc::new(outline_with_glyphs(
             text,
@@ -102,7 +151,7 @@ impl TextCache {
                 },
             );
         }
-        result
+        visible(result.bounds).then_some(result)
     }
 
     /// Drop the least recently used outlines until one more of `incoming`
@@ -203,17 +252,14 @@ pub(super) fn outline(
     outline_with_glyphs(text, size, zoom, color, style, None)
 }
 
-fn outline_with_glyphs(
+fn canvas_text(
     text: &str,
     size: f32,
     zoom: f32,
     color: [u8; 3],
     style: &TextStyle,
-    glyphs: Option<&mut glyphs::Glyphs>,
-) -> OutlinedText {
-    #[cfg(target_arch = "wasm32")]
-    crate::web::text_drawn(text);
-    let t = canvas::Text {
+) -> canvas::Text {
+    canvas::Text {
         content: text.to_owned(),
         position: Point::ORIGIN,
         size: (size * zoom).into(),
@@ -235,7 +281,20 @@ fn outline_with_glyphs(
         color: rgb(color),
         shaping: iced::widget::text::Shaping::Advanced,
         ..Default::default()
-    };
+    }
+}
+
+fn outline_with_glyphs(
+    text: &str,
+    size: f32,
+    zoom: f32,
+    color: [u8; 3],
+    style: &TextStyle,
+    glyphs: Option<&mut glyphs::Glyphs>,
+) -> OutlinedText {
+    #[cfg(target_arch = "wasm32")]
+    crate::web::text_drawn(text);
+    let t = canvas_text(text, size, zoom, color, style);
     // Iced centers its font metrics within line height, whereas
     // SVG's text-before-edge uses the font ascent. Align actual ink
     // to our shared font metrics so screen and export agree.
