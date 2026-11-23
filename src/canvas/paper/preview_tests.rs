@@ -504,9 +504,14 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
     tree.state.downcast_mut::<State>().cursor =
         Some(canvas.camera.screen(World::new(-225., 0.), bounds));
     let (near, _) = shot(&canvas, &tree, true);
-    assert!(cached(&tree).fragment.get().unwrap().is_none());
+    let overlap = cached(&tree);
+    assert!(overlap.fragment.get().unwrap().is_none());
+    let (near_warm, _) = shot(&canvas, &tree, true);
+    assert!(Rc::ptr_eq(&overlap, &cached(&tree)));
+    assert!(overlap.whole.get().is_some());
     let (near_whole, _) = shot(&canvas, &tree, false);
     compare("equipment-overlap", &near, &near_whole);
+    compare("equipment-overlap-warm", &near_warm, &near_whole);
 
     shot(&canvas, &tree, true);
     let before_edit = cached(&tree);
