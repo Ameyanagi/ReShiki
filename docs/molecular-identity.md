@@ -1,7 +1,5 @@
 # Molecular identity
 
-Available in Nightly builds; not in ReShiki 0.16.0.
-
 **Properties → Identity** puts the name, formula, molecular weight and chemical
 identifiers together. Click a value to copy it. **Descriptors** keeps the other
 calculated properties in a collapsed card.

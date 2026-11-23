@@ -16,8 +16,6 @@ Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Exp
 
 ## Export again
 
-Available in Nightly builds; not in ReShiki 0.16.0.
-
 After exporting a picture, the top of **Export** offers **Export again**, with
 the filename, format and PNG resolution. Click it to replace that file with the
 current full drawing, using the previous background, resolution, SVG text and

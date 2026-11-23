@@ -399,7 +399,7 @@ to 9 decimal places to remove floating-point noise. This is
     "analyzed_atoms": ["1", "2", "3", "4", "5", "6", "7"]
   },
   "versions": {
-    "app": "0.16.0",
+    "app": "0.17.0",
     "document": 40,
     "engine_protocol": 1,
     "operation_api": 2
@@ -465,7 +465,7 @@ lines with the long text fields cut:
     "solvent": "CDCl3"
   },
   "versions": {
-    "app": "0.16.0",
+    "app": "0.17.0",
     "document": 40,
     "engine_protocol": 1,
     "operation_api": 2
@@ -543,7 +543,7 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
     "status": "not_preferred"
   },
   "versions": {
-    "app": "0.16.0",
+    "app": "0.17.0",
     "document": 40,
     "engine_protocol": 1,
     "operation_api": 2
@@ -607,7 +607,7 @@ command line reads and writes. `grants` and `files` describe the file tools of
 the MCP server; the command line uses neither.
 
 `reshiki --version` (or `reshiki --cli --version`) prints only the
-application version, such as `reshiki 0.16.0`, and exits without opening a
+application version, such as `reshiki 0.17.0`, and exits without opening a
 window.
 
 <details>
@@ -720,7 +720,7 @@ window.
     "stability": "experimental"
   },
   "versions": {
-    "app": "0.16.0",
+    "app": "0.17.0",
     "document": 40,
     "engine_protocol": 1,
     "operation_api": 2

@@ -542,17 +542,17 @@ and joint editing. Test pieces, trial seats and adapters are discarded;
 **Accept** keeps the authored piece at its original position.
 
 Authoring makes fixed pieces with optional standard ground-glass joints.
-It does not yet assign materials or paint layers, create holds, liquids or
-moving parts, or edit an existing definition. Pictures, text and chemical objects
-cannot become equipment shapes. Filled artwork becomes glass. Visible
-outlines must use **Ink** at **0.6 pt**. Open artwork keeps **0.6 pt**
-outlines or **0.4 pt** details. Change unsupported stroke colors or widths in
-Properties before defining the piece; conversion refuses them. General
-stroke styling belongs to the later material and layer editor.
-Filled SVG artwork can enter without a separate stroke. In the material
-editor, use **Fill only** for a surface and separate **Outline** paths for
-its visible edges. Complex or overlapping filled paths may need simplifying
-or separating first.
+Choose a shape in the draft to set its material, paint layer and drawing role.
+Draft Undo restores those settings before you accept the piece. Use a piece
+file to define holds, liquid regions or moving parts. The input to the draft
+is drawing shapes, paths and curves. Filled artwork starts as glass. Visible
+source outlines use **Ink** at **0.6 pt**, and open artwork keeps **0.6 pt**
+outlines or **0.4 pt** details. Adjust unsupported source strokes in
+Properties before defining the piece.
+
+Filled SVG artwork can enter without a separate stroke. In the draft, use
+**Fill only** for a surface and separate **Outline** paths for its visible
+edges. Simplify complex or overlapping filled paths if needed.
 Other drawing commands wait for **Accept** or
 **Discard**.
 
@@ -658,7 +658,6 @@ cm**, **RSC graphical abstract · 8 × 4 cm** or **Elsevier graphical abstract �
   ChemDraw files.
 - A panel's title uses the drawing's font and size in bold. Title text is
   edited in **Properties**, not on the canvas.
-- Adding parts to noncircular cycles still uses the circular drop targets.
 - ChemDraw has no cycle object: CDXML and CDX
   get its arrows, text and reaction steps. Only ReShiki reads the cycle back,
   and only from a file nothing else has changed.
@@ -905,7 +904,7 @@ grouped curves; 1 rotated caption upright".
 | In the ChemDraw file                                                         | In ReShiki                                                       |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Doubled curve                                                                | Two grouped parallel curves; with a fill or arrowheads, one line |
-| See-through object (alpha)                                                   | Opaque                                                           |
+| Supported ChemDraw faded fill                                                | An editable fade with its opacity                                |
 | Arc from an older ChemDraw file                                              | The same arc as a curve or curved arrow, without a message       |
 | Arc arrow without its centre or axes                                         | A straight arrow                                                 |
 | Curved arrow with a double shaft; longer curve with a no-go or dipole mark   | The curve without the mark                                       |
@@ -917,8 +916,8 @@ grouped curves; 1 rotated caption upright".
 | Rotated caption; outlined or shadowed text                                   | Upright; plain face                                              |
 | Atom or abbreviation label with more than one font, size or weight           | The style of its first character; colours are kept               |
 | Line, arrowhead, shadow or text size outside ReShiki's range                 | The nearest size in range                                        |
-| BioDraw shape, gel plate, TLC plate, other unknown object                    | Left out and named; captions and drawings inside it are kept     |
-| Table                                                                        | The cell contents without the frame                              |
+| BioDraw shape, gel plate or other unknown object                             | The import notice names the omission and contents stay visible   |
+| Supported TLC plate or table                                                 | An editable plate or table with its supported contents           |
 | Plasmid map in a CDXML file                                                  | Its ring, regions as arcs, and labels                            |
 | Picture without a PNG, TIFF, JPEG, GIF or BMP copy                           | Left out and named                                               |
 
@@ -927,9 +926,9 @@ with its pages in rows on one drawing, in page order, so **Fit** shows them
 all. Page boundaries, paper settings and empty pages are not kept, and the
 message says so.
 
-In a CDX file, a table, plasmid map, gel plate or TLC plate is named as "other
-ChemDraw object", and the captions and drawings inside it are kept. A CDX
-property or value ReShiki does not know is skipped on a drawing object. On an
+In a CDX file, unsupported objects such as gel plates can appear as “other
+ChemDraw object” in the import notice. ReShiki keeps captions and drawings
+inside them. An unknown drawing-object property or value is skipped. On an
 atom or bond, an unknown property is skipped and named in the message, and an
 unknown value still refuses the file.
 
