@@ -94,6 +94,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          sparse-checkout: scripts
       - id: scope
         run: python3 scripts/ci_scope.py
   # No sdist: the package compiles assets, presets and vendored crates from the
@@ -112,8 +113,26 @@ jobs:
     steps:
       - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # Preserve all workspace sources, embedded assets, notices and wheel fixtures.
         with:
           persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/*/
+            /.cargo/
+            /.github/actions/
+            /assets/
+            /crates/
+            /data/
+            /licenses/
+            /native/
+            /presets/
+            /resources/
+            /scripts/
+            /src/
+            /tests/fixtures/
+            /vendor/
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: "0.13.5"
