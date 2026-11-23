@@ -494,7 +494,7 @@ line names the released piece, for example **Tilt: 25° · releases the tube**.
 
 ### Connect hoses
 
-1. Choose **Rubber hose, 7 mm** in the **Equipment** panel.
+1. In **Equipment**, choose the **Rubber hose** bore that matches the barb.
 2. Drag from one hose barb, such as a condenser's water inlet, to another.
    Or click a barb to hang a hose from it. A ring marks the barb an end will
    go on.
