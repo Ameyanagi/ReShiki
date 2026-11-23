@@ -5,9 +5,8 @@
   "revision": 1,
   "family": "burette",
   "variant": {
-    "capacity": "50 mL",
-    "stopcock": "PTFE",
-    "division": "0.1 mL"
+    "volume_ml": "50",
+    "stopcock": "PTFE stopcock"
   },
   "names": {
     "en": "Burette, PTFE stopcock"
@@ -21,7 +20,8 @@
     "dispensing",
     "volumetric glassware",
     "50 mL",
-    "ptfe stopcock"
+    "ptfe stopcock",
+    "0.1 mL divisions"
   ],
   "credits": {
     "author": "ReShiki",

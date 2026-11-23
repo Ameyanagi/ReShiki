@@ -5,9 +5,8 @@
   "revision": 1,
   "family": "burette",
   "variant": {
-    "capacity": "10 mL",
-    "stopcock": "Glass",
-    "division": "0.05 mL"
+    "volume_ml": "10",
+    "stopcock": "Glass stopcock"
   },
   "names": {
     "en": "Burette, glass stopcock"
@@ -21,7 +20,8 @@
     "dispensing",
     "volumetric glassware",
     "10 mL",
-    "glass stopcock"
+    "glass stopcock",
+    "0.05 mL divisions"
   ],
   "credits": {
     "author": "ReShiki",
