@@ -253,7 +253,18 @@ fn search_finds_pieces_by_any_name_keyword_or_size() {
             "reshiki/schlenk-tube-straight-29-left",
         ]
     );
-    assert!(found("burette").is_empty());
+    assert_eq!(
+        found("burette"),
+        [
+            "reshiki/burette-10-glass",
+            "reshiki/burette-10-ptfe",
+            "reshiki/burette-25-glass",
+            "reshiki/burette-25-ptfe",
+            "reshiki/burette-50-glass",
+            "reshiki/burette-50-ptfe",
+        ]
+    );
+    assert!(found("unlisted sample apparatus").is_empty());
     assert_eq!(found("").len(), builtin::catalogue().len());
 }
 
