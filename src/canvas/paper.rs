@@ -192,6 +192,9 @@ impl MoleculeCanvas<'_> {
         self.draw_background(frame, state, bounds);
         let base = self.joining.map(|(j, _)| &j.base).unwrap_or(self.doc);
         let inputs = memo::Inputs::new(self, state, bounds);
+        // The test reference draws each complete preview from scratch.
+        #[cfg(test)]
+        let inputs = inputs.filter(|_| fragment::SPLIT.with(std::cell::Cell::get));
         let previous = inputs.as_ref().and_then(|inputs| {
             state
                 .scene
