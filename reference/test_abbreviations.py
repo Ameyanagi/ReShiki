@@ -95,6 +95,25 @@ class Abbreviations(unittest.TestCase):
         checked = run(operation="clean", document=result["document"])
         self.assertEqual(checked["document"]["abbreviations"], result["document"]["abbreviations"])
 
+    def test_detection_preserves_atom_maps_in_a_contracted_group(self):
+        doc = imported("N[O:17]C")["document"]
+        oxygen = next(atom for atom in doc["atoms"] if atom["element"] == "O")
+        carbon = next(atom for atom in doc["atoms"] if atom["element"] == "C")
+        members = [oxygen["id"], carbon["id"]]
+        self.assertEqual(oxygen["map_num"], 17)
+
+        for request in ({}, {"text": "OMe", "selected_ids": members}):
+            with self.subTest(request=request):
+                result = run(operation="abbreviate", format="find", document=doc, **request)[
+                    "document"
+                ]
+                self.assertEqual(
+                    result["abbreviations"],
+                    [dict(label="OMe", reverse_label="MeO", anchor=oxygen["id"], members=members)],
+                )
+                self.assertEqual(result["atoms"], doc["atoms"])
+                self.assertEqual(result["bonds"], doc["bonds"])
+
     def test_selected_phenyl_is_not_suppressed_by_unselected_protecting_group(self):
         for label, smiles in [
             ("TBDPS", "N1CCC([Si](c2ccccc2)(c2ccccc2)C(C)(C)C)CC1"),
