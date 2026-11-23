@@ -1,0 +1,236 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/safety-pipette-filler",
+ "revision": 1,
+ "family": "safety-pipette-filler",
+ "variant": {
+  "bulb": "50 mL"
+ },
+ "names": {
+  "en": "Safety pipette filler, 50 mL"
+ },
+ "category": "addition",
+ "keywords": [
+  "autopipetter",
+  "pipette filler",
+  "safety pipetter",
+  "manual pipette aid",
+  "rubber bulb",
+  "pipette bulb",
+  "volumetric pipette",
+  "glass pipette",
+  "small-bore adapter"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "rubber-body",
+   "layer": "body",
+   "material": "rubber",
+   "role": "solid",
+   "path": "M-5.2 -123L5.2 -123Q6 -123 6 -122L6 -121Q6 -120 4.4 -120L4.4 -104C4.4 -99 24 -98 24 -76C24 -58 12 -53 5.6 -52L5.6 -36Q7 -34 7 -30Q7 -25 5.2 -23L5.2 -15L-5.2 -15L-5.2 -21Q-5.2 -24 -11 -25L-21 -25Q-22 -25 -22 -23L-24 -23Q-26 -23 -26 -26L-26 -34Q-26 -37 -24 -37L-22 -37Q-22 -35 -21 -35L-11 -35Q-7 -35 -5.6 -36L-5.6 -52C-12 -53 -24 -58 -24 -76C-24 -98 -4.4 -99 -4.4 -104L-4.4 -120Q-6 -120 -6 -121L-6 -122Q-6 -123 -5.2 -123Z",
+   "color": [
+    27,
+    119,
+    173
+   ]
+  },
+  {
+   "id": "bulb-soft-highlight",
+   "layer": "body",
+   "material": "rubber",
+   "role": "fill",
+   "path": "M-17 -83C-17 -92 -10 -97 -3 -96C-8 -94 -12 -89 -13 -82Q-15 -79 -17 -83Z",
+   "color": [
+    50,
+    140,
+    189
+   ],
+   "depth": 1
+  },
+  {
+   "id": "bulb-soft-edge",
+   "layer": "body",
+   "material": "rubber",
+   "role": "fill",
+   "path": "M17 -87C25 -69 12 -57 3 -55C14 -55 24 -62 24 -76Q24 -84 20 -90Z",
+   "color": [
+    20,
+    102,
+    155
+   ],
+   "depth": 1
+  },
+  {
+   "id": "vent-stem-edge",
+   "layer": "body",
+   "material": "rubber",
+   "role": "detail",
+   "path": "M-2.3 -118L-2.3 -106",
+   "color": [
+    50,
+    140,
+    189
+   ],
+   "depth": 1
+  },
+  {
+   "id": "vent-head-line",
+   "layer": "body",
+   "material": "rubber",
+   "role": "detail",
+   "path": "M-4 -120L4 -120",
+   "color": [
+    27,
+    119,
+    173
+   ],
+   "depth": 2
+  },
+  {
+   "id": "side-valve-head-line",
+   "layer": "body",
+   "material": "rubber",
+   "role": "detail",
+   "path": "M-22 -34L-22 -26",
+   "color": [
+    27,
+    119,
+    173
+   ],
+   "depth": 2
+  },
+  {
+   "id": "lower-valve-edge",
+   "layer": "body",
+   "material": "rubber",
+   "role": "detail",
+   "path": "M-2.5 -49L-2.5 -38",
+   "color": [
+    50,
+    140,
+    189
+   ],
+   "depth": 1
+  },
+  {
+   "id": "small-adapter-front-fill",
+   "layer": "front",
+   "material": "rubber",
+   "role": "fill",
+   "path": "M-2.8 -6L2.8 -6L2.8 0.8Q5 0.8 5.4 2L8.8 18L2.75 18L2.75 16L-2.75 16L-2.75 18L-8.8 18L-5.4 2Q-5 0.8 -2.8 0.8Z",
+   "color": [
+    27,
+    119,
+    173
+   ],
+   "when": {
+    "adapter": [
+     "small"
+    ]
+   }
+  },
+  {
+   "id": "small-adapter-outline",
+   "layer": "front",
+   "material": "rubber",
+   "role": "outline",
+   "path": "M-2.8 -6L-2.8 0.8Q-5 0.8 -5.4 2L-8.8 18L-2.75 18M2.8 -6L2.8 0.8Q5 0.8 5.4 2L8.8 18L2.75 18",
+   "color": [
+    27,
+    119,
+    173
+   ],
+   "when": {
+    "adapter": [
+     "small"
+    ]
+   }
+  },
+  {
+   "id": "small-adapter-edge",
+   "layer": "front",
+   "material": "rubber",
+   "role": "fill",
+   "path": "M-4.8 3L-3.6 3L-6.1 15L-7.1 15Z",
+   "color": [
+    50,
+    140,
+    189
+   ],
+   "when": {
+    "adapter": [
+     "small"
+    ]
+   }
+  },
+  {
+   "id": "standard-socket-front-fill",
+   "layer": "front",
+   "material": "rubber",
+   "role": "fill",
+   "path": "M-6.6 -18L6.6 -18L9 0L3.35 0L3.35 -2L-3.35 -2L-3.35 0L-9 0Z",
+   "color": [
+    27,
+    119,
+    173
+   ],
+   "depth": 1
+  },
+  {
+   "id": "standard-socket-outline",
+   "layer": "front",
+   "material": "rubber",
+   "role": "outline",
+   "path": "M-6.6 -18L-9 0L-3.35 0M6.6 -18L9 0L3.35 0",
+   "color": [
+    27,
+    119,
+    173
+   ],
+   "depth": 2
+  },
+  {
+   "id": "socket-soft-edge",
+   "layer": "front",
+   "material": "rubber",
+   "role": "fill",
+   "path": "M-5.8 -15L-4.5 -15L-6.5 -2L-7.7 -2Z",
+   "color": [
+    50,
+    140,
+    189
+   ],
+   "depth": 2
+  }
+ ],
+ "params": [
+  {
+   "id": "adapter",
+   "names": {
+    "en": "Socket"
+   },
+   "kind": "states",
+   "default": "standard",
+   "states": [
+    {
+     "id": "standard",
+     "names": {
+      "en": "Standard"
+     }
+    },
+    {
+     "id": "small",
+     "names": {
+      "en": "Small-bore adapter"
+     }
+    }
+   ]
+  }
+ ]
+}
