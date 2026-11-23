@@ -107,8 +107,8 @@
       "layer": "front",
       "material": "plastic",
       "role": "solid",
-      "path": "M-7.5 -69L-16.3 -69C-18 -69 -18 -61 -16.3 -61L-7.5 -61Z",
-      "depth": 1
+      "path": "M-6.3 -69L-16.3 -69C-18 -69 -18 -61 -16.3 -61L-6.3 -61Z",
+      "depth": -1
     },
     {
       "id": "retainer-ribs",
@@ -116,7 +116,7 @@
       "material": "ink",
       "role": "detail",
       "path": "M-16 -68.2L-16 -61.8 M-14 -68.2L-14 -61.8 M-12 -68.2L-12 -61.8 M-10 -68.2L-10 -61.8",
-      "depth": 2
+      "depth": -1
     },
     {
       "id": "turning-key",
