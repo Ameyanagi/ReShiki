@@ -286,6 +286,24 @@ pub struct Committed {
 /// 6. Equipment seats are checked last, after layouts have moved their items;
 ///    a seat that no longer fits is released.
 pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rejection> {
+    reconcile_inner(doc, before, None)
+}
+
+/// Reconcile an explicit resize whose chosen unit must stay fixed while
+/// layout groups reflow around it. Numeric parameter edits use `reconcile`.
+pub fn reconcile_with_layout_anchor(
+    doc: &mut Document,
+    before: Document,
+    anchor: u64,
+) -> Result<Reconciled, Rejection> {
+    reconcile_inner(doc, before, Some(anchor))
+}
+
+fn reconcile_inner(
+    doc: &mut Document,
+    before: Document,
+    anchor: Option<u64>,
+) -> Result<Reconciled, Rejection> {
     recount_radicals(&before, doc);
     crate::fischer::reconcile(doc, &before);
     crate::projection::sync_centroids(doc);
@@ -316,7 +334,10 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
             return Err(Rejection::Invalid(error));
         }
         doc.reconcile_molecule_groups();
-        crate::layouts::reconcile(doc, &before);
+        match anchor {
+            Some(id) => crate::layouts::reconcile_anchored(doc, &before, id),
+            None => crate::layouts::reconcile(doc, &before),
+        }
         // Layouts can move shapes; their text follows.
         crate::shape_text::reconcile_changes(doc, &before);
         // Last, after layouts have moved things: seats that no longer fit go.

@@ -1317,6 +1317,53 @@ fn table_cross_cell_equipment_snap_and_connect_are_atomic() {
 }
 
 #[test]
+fn a_tube_end_drag_auto_seats_only_within_its_own_table_cell() {
+    use super::{eval::Value, solve::adjust};
+    use crate::graphics::table::Membership;
+    for end in ["a", "b"] {
+        for together in [false, true] {
+            let mut doc = Document::default();
+            let tube = add(
+                &mut doc,
+                "reshiki/compression-tube-60-1-4",
+                Point::default(),
+            );
+            let cap = add(&mut doc, "reshiki/compression-cap-1-4", Point::default());
+            solve::connect(&mut doc, &[cap], &joint(tube, end), &joint(cap, "tube")).unwrap();
+            adjust::set_end(&mut doc, tube, "length", end, Value::Number(100.)).unwrap();
+            // Leave the cap exactly where this end will reach on its next extension.
+            doc.seats.clear();
+            adjust::set_end(&mut doc, tube, "length", end, Value::Number(60.)).unwrap();
+            let table = table_cells(
+                &mut doc,
+                if together {
+                    [vec![tube, cap], vec![]]
+                } else {
+                    [vec![tube], vec![cap]]
+                },
+            );
+            let before = doc.clone();
+            let owners = Membership::new(&doc).unwrap();
+            adjust::set_end(&mut doc, tube, "length", end, Value::Number(100.)).unwrap();
+            assert_eq!(doc.seats.len(), usize::from(together));
+            assert_eq!(
+                Membership::new(&doc).unwrap().cell_of(tube),
+                owners.cell_of(tube)
+            );
+            assert_eq!(
+                Membership::new(&doc).unwrap().cell_of(cap),
+                owners.cell_of(cap)
+            );
+            let stored_table =
+                |d: &Document| d.graphics.iter().find(|g| g.id == table).unwrap().clone();
+            assert_eq!(stored_table(&doc), stored_table(&before));
+            commit(&mut doc, before);
+            assert_eq!(doc.seats.len(), usize::from(together));
+        }
+    }
+}
+
+#[test]
 fn table_rejected_adapter_snap_restores_released_seats_and_their_owned_clip() {
     let mut doc = Document::default();
     let flask = add(&mut doc, "reshiki/rbf-300-29", Point::new(200., 300.));

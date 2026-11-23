@@ -203,6 +203,77 @@ fn ordinary_stainless_steel_seats_pass_and_report_dimensions_with_fittings_attac
 }
 
 #[test]
+fn either_tube_end_grows_through_a_stationary_furnace_and_releases_an_uncovered_bore() {
+    for furnace_name in FURNACES {
+        for view in ["exterior", "section"] {
+            for end in ["a", "b"] {
+                let mut doc = Document::default();
+                let furnace = add(&mut doc, furnace_name);
+                assert!(change(&mut doc, furnace, "tube-od", "1-4-in").is_empty());
+                assert!(change(&mut doc, furnace, "view", view).is_empty());
+                let tube = add(&mut doc, "reshiki/compression-tube-60-1-4");
+                length(&mut doc, tube, 600.);
+                let bore = bore_of(&doc, furnace);
+                link_through_centre(&mut doc, &bore, &joint(tube, "span"));
+                let furnace_before = doc
+                    .graphics
+                    .iter()
+                    .find(|g| g.id == furnace)
+                    .unwrap()
+                    .clone();
+                let opposite = joint(tube, if end == "a" { "b" } else { "a" });
+                let pinned = port_of(&doc, &opposite).point;
+                let seats = doc.seats.clone();
+                for mm in [660., 580.] {
+                    assert!(
+                        solve::adjust::set_end(&mut doc, tube, "length", end, Value::Number(mm))
+                            .unwrap()
+                            .is_empty()
+                    );
+                    assert_eq!(doc.seats, seats);
+                    assert_eq!(
+                        *doc.graphics.iter().find(|g| g.id == furnace).unwrap(),
+                        furnace_before
+                    );
+                    let fixed = port_of(&doc, &opposite).point;
+                    assert!((fixed[0] - pinned[0]).hypot(fixed[1] - pinned[1]) < 1e-4);
+                    let row = tube_row(&doc, tube).unwrap().unwrap();
+                    assert_eq!(row.cut_length_mm, mm);
+                    assert_eq!(row.through[0].fitting.id, furnace);
+                }
+                let released =
+                    solve::adjust::set_end(&mut doc, tube, "length", end, Value::Number(300.))
+                        .unwrap();
+                assert_eq!(released, seats);
+                assert!(doc.seats.is_empty());
+                assert_eq!(
+                    *doc.graphics.iter().find(|g| g.id == furnace).unwrap(),
+                    furnace_before
+                );
+                assert!(tube_row(&doc, tube).unwrap().unwrap().through.is_empty());
+                assert!(
+                    solve::adjust::set_end(&mut doc, tube, "length", end, Value::Number(600.))
+                        .unwrap()
+                        .is_empty()
+                );
+                assert_eq!(
+                    doc.seats, seats,
+                    "extending back over a bore seats it again"
+                );
+                assert_eq!(
+                    *doc.graphics.iter().find(|g| g.id == furnace).unwrap(),
+                    furnace_before
+                );
+                assert_eq!(
+                    tube_row(&doc, tube).unwrap().unwrap().through[0].fitting.id,
+                    furnace
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn smaller_quartz_uses_exact_end_seals_and_keeps_its_passage_when_rotated() {
     for size in [15, 20] {
         for gas in ["1-8", "1-4"] {

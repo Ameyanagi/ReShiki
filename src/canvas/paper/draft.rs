@@ -10,6 +10,31 @@ use reshiki::graphics::GraphicKind;
 use std::borrow::Cow;
 
 impl MoleculeCanvas<'_> {
+    #[cfg(test)]
+    pub(crate) fn piece_handle_drag_candidate(
+        doc: &reshiki::document::Document,
+        id: u64,
+        handle: reshiki::equipment::solve::adjust::Handle,
+        to: World,
+    ) -> reshiki::document::Document {
+        let mut canvas =
+            crate::canvas::tests::chain_canvas(doc, crate::canvas::ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        let bounds = Rectangle::with_size(iced::Size::new(1200., 1200.));
+        let state = State {
+            gesture: Some(Gesture::PieceHandle {
+                id,
+                start: World::new(handle.at[0] as f32, handle.at[1] as f32),
+                handle,
+            }),
+            cursor: Some(canvas.camera.screen(to, bounds)),
+            ..Default::default()
+        };
+        let mut draft = Draft::new(doc);
+        canvas.preview_piece_handle(&mut draft, &state, bounds);
+        draft.preview.into_owned()
+    }
+
     /// The document shown by a normal Select drag and the edit its release emits.
     #[cfg(test)]
     pub(crate) fn select_drag_candidate(
@@ -441,7 +466,31 @@ impl MoleculeCanvas<'_> {
             return;
         };
         let text = crate::app::equipment::value_text(g, &handle.param, Some(&value));
-        if let Ok(released) = adjust::set(draft.preview.to_mut(), *id, &handle.param, value) {
+        let result = match &handle.tube_end {
+            Some(end) => adjust::set_end(draft.preview.to_mut(), *id, &handle.param, end, value),
+            None => adjust::set(draft.preview.to_mut(), *id, &handle.param, value),
+        };
+        if let Ok(mut released) = result {
+            if handle.tube_end.is_some() {
+                // Layout groups can reflow when the tube changes size. Show
+                // the same final layout and seats that release will commit.
+                if reshiki::transaction::reconcile_with_layout_anchor(
+                    draft.preview.to_mut(),
+                    self.doc.clone(),
+                    *id,
+                )
+                .is_err()
+                {
+                    return;
+                }
+                released = self
+                    .doc
+                    .seats
+                    .iter()
+                    .filter(|s| !draft.preview.seats.contains(s))
+                    .cloned()
+                    .collect();
+            }
             let note = crate::app::equipment::released_text(self.doc, *id, &released);
             draft.chain_badge = Some((p, text + &note, released.is_empty()));
         }
