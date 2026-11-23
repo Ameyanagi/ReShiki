@@ -31,6 +31,27 @@ struct DocumentText {
     format: TextFormat,
 }
 
+#[test]
+fn caption_style_is_independent_of_rotation() -> anyhow::Result<()> {
+    let read = |angle: &str| -> anyhow::Result<Value> {
+        let source = format!(
+            r#"<CDXML><page><t RotationAngle="{angle}"><s size="12" face="1">Caption</s></t></page></CDXML>"#
+        );
+        let xml = presentation::parse(&source)?;
+        let reader = presentation::TextReader::new(xml.root_element())?;
+        let caption = xml
+            .descendants()
+            .find(|node| node.has_tag_name("t"))
+            .context("Missing caption")?;
+        Ok(serde_json::to_value(reader.read(caption, None, false)?)?)
+    };
+    let upright = read("0")?;
+    for angle in ["-0", "1e-300", "1", "360", "nan", "inf", "bad"] {
+        assert_eq!(read(angle)?, upright, "{angle}");
+    }
+    Ok(())
+}
+
 fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
     if actual == expected {
         return None;

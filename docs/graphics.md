@@ -899,7 +899,7 @@ see [generic structures](generic-structures.md#define-a-repeating-unit).
 Opening or pasting a CDX or CDXML file never fails because of one style or
 object. ReShiki imports the nearest thing it draws and shows one message that
 lists what changed and how many, such as "2 doubled curves as pairs of
-grouped curves; 1 rotated caption upright".
+grouped curves". Turned captions retain their angle and remain editable.
 
 | In the ChemDraw file                                                         | In ReShiki                                                       |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -913,7 +913,7 @@ grouped curves; 1 rotated caption upright".
 | Dagger, double dagger, lone pair bar; plain, shaded and filled orbitals      | The matching ReShiki symbol or orbital, without a message        |
 | Rac, Abs and Rel stereo flags                                                | Text grouped with a rounded box                                  |
 | Unbalanced equilibrium arrow whose short arrow is under a fifth of the other | The short arrow a fifth as long as the other                     |
-| Rotated caption; outlined or shadowed text                                   | Upright; plain face                                              |
+| Outlined or shadowed text                                                    | Plain face                                                       |
 | Atom or abbreviation label with more than one font, size or weight           | The style of its first character; colours are kept               |
 | Line, arrowhead, shadow or text size outside ReShiki's range                 | The nearest size in range                                        |
 | BioDraw shape, gel plate or other unknown object                             | The import notice names the omission and contents stay visible   |

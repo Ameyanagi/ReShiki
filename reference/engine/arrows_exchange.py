@@ -246,6 +246,11 @@ def write_arrow(parent, arrow, identifier, position, color_id):
         attrs["Dipole"] = "yes"
     if arrow.get("kind") in ("equilibrium", "retro"):
         attrs["ArrowShaftSpacing"] = str(round(s["gap_pt"] * 100))
+    if arrow.get("kind") == "retro" and s["shape"] == "open":
+        # An angled retrosynthesis head uses the center size for its width.
+        length = int(attrs["HeadSize"])
+        width = int(attrs["ArrowheadWidth"])
+        attrs["ArrowheadCenterSize"] = str(max(math.ceil(length / 10), min(length, width)))
     start, end = arrow["start"], arrow["end"]
     if not curved:
         attrs.update(Tail3D=position(start) + " 0", Head3D=position(end) + " 0")
