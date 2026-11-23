@@ -891,6 +891,11 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
         docs.push((format!("transformed/{name}"), doc));
     }
     docs.extend(cases::documents()?);
+    let expected_layouts = reshiki::templates::LIBRARY
+        .iter()
+        .filter(|template| template.group == "Figure layouts")
+        .count();
+    assert!(expected_layouts > 0, "Missing built-in figure layouts");
     let (mut accepted, mut rejected, mut exact, mut invalid_inputs, mut native_layouts) =
         (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
@@ -974,6 +979,10 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
         "Editable drawing comparisons: {accepted} accepted ({exact} byte-identical), {rejected} rejected; {invalid_inputs} invalid documents rejected; {native_layouts} figure layouts verified"
     );
     assert!(accepted >= 400 && rejected >= 800);
+    assert_eq!(
+        native_layouts, expected_layouts,
+        "Every built-in figure layout needs a successful, checked CDXML export"
+    );
     if !failures.is_empty() {
         let mut categories = std::collections::BTreeMap::<String, usize>::new();
         for failure in &failures {
