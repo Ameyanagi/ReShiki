@@ -14,10 +14,43 @@ fn drawing() -> Document {
     }
 }
 
+fn parity_drawing(format: &str) -> Document {
+    if format != "pdf" {
+        return drawing();
+    }
+    // svg2pdf orders multiple Form resources through a HashMap. A single-form
+    // geometry fixture keeps full PDF byte parity deterministic; the other
+    // formats retain the mixed-style text fixture above.
+    use crate::graphics::{Graphic, GraphicKind};
+    Document {
+        graphics: vec![Graphic::dragged(
+            1,
+            GraphicKind::Rectangle,
+            Point::default(),
+            Point::new(84., 42.),
+            Default::default(),
+            Default::default(),
+            false,
+        )],
+        ..Document::default()
+    }
+}
+
+fn assert_single_pdf_form(bytes: &[u8]) {
+    assert_eq!(
+        bytes
+            .windows(b"/Subtype /Form".len())
+            .filter(|w| *w == b"/Subtype /Form")
+            .count(),
+        1,
+        "PDF byte-parity fixture must have exactly one Form resource"
+    );
+}
+
 #[tokio::test]
 async fn publication_protocol_preserves_existing_bytes_and_details() {
     for format in ["png", "svg", "svg-office", "pdf"] {
-        let doc = drawing();
+        let doc = parity_drawing(format);
         let expected = export::publication(
             &LocalEngine::default(),
             doc.clone(),
@@ -30,6 +63,9 @@ async fn publication_protocol_preserves_existing_bytes_and_details() {
         )
         .await
         .unwrap();
+        if format == "pdf" {
+            assert_single_pdf_form(&expected.bytes);
+        }
         let request = Request::Publication {
             document: Snapshot::owned(doc),
             format: format.into(),
@@ -51,8 +87,11 @@ async fn publication_protocol_preserves_existing_bytes_and_details() {
 #[tokio::test]
 async fn save_protocol_preserves_existing_formats_and_operation_errors() {
     for format in ["svg", "png", "pdf", "cdxml", "cdx"] {
-        let doc = drawing();
+        let doc = parity_drawing(format);
         let expected = formats::write(doc.clone(), format).await.unwrap();
+        if format == "pdf" {
+            assert_single_pdf_form(&expected);
+        }
         let request = Request::Save {
             document: Snapshot::owned(doc),
             format: format.into(),
@@ -112,18 +151,21 @@ fn marked_centroid_drawing(xi: bool) -> (Document, u64, [u64; 2]) {
     let cl = doc.add_atom("Cl", Point::new(284., 0.));
     doc.add_bond(a, f, 1, "plain");
     doc.add_bond(b, cl, 1, "plain");
+    let c = doc.add_atom("C", Point::new(200., 140.));
+    let d = doc.add_atom("C", Point::new(242., 140.));
+    doc.add_bond(c, d, 1, "plain");
     doc.atom_labels.stereo = true;
     doc.atom_labels.mark_undefined_stereocentres = true;
     doc.atom_labels.undefined_xi = xi;
     crate::atom_labels::refresh::refresh_optional_stereo(&mut doc);
     assert!(doc.atom(center).unwrap().undefined_stereo);
     assert!(doc.bond_between(a, b).unwrap().1.undefined_stereo);
-    // This independent component makes checked_document preserve the incoming
-    // snapshot. The marker flags above came from a real stereo refresh.
-    let c = doc.add_atom("C", Point::new(200., 140.));
-    let d = doc.add_atom("C", Point::new(242., 140.));
-    doc.add_bond(c, d, 1, "plain");
+    // Adding a bond invalidates computed labels, so finish every molecular
+    // component before refreshing. Adding only the centroid preserves them
+    // and makes checked_document retain the incoming visible snapshot.
     crate::projection::add_centroid(&mut doc, &[c, d]).unwrap();
+    assert!(doc.atom(center).unwrap().undefined_stereo);
+    assert!(doc.bond_between(a, b).unwrap().1.undefined_stereo);
     (doc, center, [c, d])
 }
 
@@ -209,6 +251,9 @@ fn shared_snapshot_preserves_every_skipped_visible_field_without_changing_file_j
     model.turning = true;
     doc.models.push(model);
     let doc = doc.current();
+    assert!(doc.atom(center).unwrap().undefined_stereo);
+    assert!(doc.atom(center).unwrap().undefined_pseudoasymmetric);
+    assert!(doc.bonds.iter().any(|b| b.undefined_stereo));
     let file = serde_json::to_value(&doc).unwrap();
     assert!(
         file["atoms"]
@@ -250,12 +295,19 @@ fn shared_snapshot_preserves_every_skipped_visible_field_without_changing_file_j
 async fn failed_chemistry_keeps_the_same_visible_snapshot_across_the_worker_protocol() {
     let (mut doc, center, _) = marked_centroid_drawing(true);
     doc.atoms.retain(|atom| atom.centroid.is_empty());
-    // Preserve the last visible marker while a subsequent edit makes the
-    // chemistry invalid. figure_document must retain it on its error branch.
-    for position in [Point::new(0., 50.), Point::new(0., -50.)] {
-        let hydrogen = doc.add_atom("H", position);
-        doc.add_bond(center, hydrogen, 1, "plain");
+    // A separate invalid molecule does not prevent the editor's per-component
+    // refresh from marking the valid molecules. The whole-document exporter
+    // then fails analysis and must preserve that genuinely refreshed snapshot.
+    let invalid = doc.add_atom("C", Point::new(400., 140.));
+    for i in 0..5 {
+        let hydrogen = doc.add_atom("H", Point::new(360. + 20. * i as f32, 190.));
+        doc.add_bond(invalid, hydrogen, 1, "plain");
     }
+    crate::atom_labels::refresh::Refresh::calculate(&doc, &Default::default())
+        .unwrap()
+        .apply(&mut doc);
+    assert!(doc.atom(center).unwrap().undefined_stereo);
+    assert!(doc.bonds.iter().any(|b| b.undefined_stereo));
     let expected = export::publication(
         &LocalEngine::default(),
         doc.clone(),

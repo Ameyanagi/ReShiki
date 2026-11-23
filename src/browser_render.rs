@@ -261,7 +261,7 @@ async fn dispatch(
     request: &Request<'_>,
     cancel: &crate::browser_worker::Cancel,
 ) -> Result<Option<export::Publication>, String> {
-    use crate::browser_worker::{self, Failure};
+    use crate::browser_worker::Failure;
     if !available() {
         return Ok(None);
     }
