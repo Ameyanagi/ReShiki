@@ -75,9 +75,18 @@ test.skipIf(typeof Worker !== "function")(
         }
         expect(await offThread.convert(fixture, "rsk", format)).toEqual(expected);
       }
-      await expect(offThread.renderSvg("CC", "bad")).rejects.toMatchObject({
+      // Bun's .rejects assertion blocks real Worker message delivery. Await
+      // normally before asserting so this exercises the actual coded reply.
+      const failure = await offThread.renderSvg("CC", "bad").catch((error) => error);
+      expect(failure).toMatchObject({
+        message: "Unknown input format bad",
         code: "invalid_arguments",
       });
+      expect(workers).toHaveLength(1);
+      expect(await offThread.renderSvg(drawing, "rsk")).toBe(
+        await direct.renderSvg(drawing, "rsk"),
+      );
+      expect(workers).toHaveLength(1);
       // An idle transport failure discards its font cursor and module instance.
       workers[0].dispatchEvent(new ErrorEvent("error", { message: "restart probe" }));
       expect(await offThread.renderSvg(drawing, "rsk")).toBe(
@@ -85,7 +94,7 @@ test.skipIf(typeof Worker !== "function")(
       );
       expect(workers).toHaveLength(2);
       // Startup fallback would otherwise hide a broken real worker in this test.
-      expect(replies).toBe(9);
+      expect(replies).toBe(10);
     } finally {
       workers.forEach((worker) => worker.terminate());
     }

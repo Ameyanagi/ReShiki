@@ -119,6 +119,26 @@ async fn save_protocol_preserves_existing_formats_and_operation_errors() {
 }
 
 #[test]
+fn request_envelope_limit_is_inclusive_and_checked_before_allocation() {
+    // The smallest font snapshot is "[]"; these lengths need no large buffer.
+    assert_eq!(
+        envelope_length(2, MAX_REQUEST_BYTES - 6).unwrap(),
+        MAX_REQUEST_BYTES
+    );
+    for (fonts, request) in [
+        (2, MAX_REQUEST_BYTES - 5),
+        (MAX_REQUEST_BYTES, 0),
+        (usize::MAX, 1),
+        (0, usize::MAX),
+    ] {
+        assert!(matches!(
+            envelope_length(fonts, request),
+            Err(EnvelopeError::TooLarge)
+        ));
+    }
+}
+
+#[test]
 fn font_envelope_keeps_job_bytes_and_rejects_truncated_headers() {
     let request = br#"{"job":"clipboard"}"#;
     let envelope = request_fonts(request).unwrap();

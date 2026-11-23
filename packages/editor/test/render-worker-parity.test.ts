@@ -152,7 +152,7 @@ test.skipIf(!built || typeof Worker !== "function")(
         encoder.encode(JSON.stringify(drawing)),
         "rsk",
         format,
-        undefined,
+        "live", // Editor Save uses live SVG text; headless defaults to outlines.
       ) as Promise<Uint8Array>;
     let peer = editorWorker();
     try {
@@ -201,9 +201,11 @@ test.skipIf(!built || typeof Worker !== "function")(
       }
       expect(await peer.save(boldDocument, "svg", [regular, bold])).toEqual(expectedBold);
       expect(peer.responses).toBe(10);
-      await expect(peer.save(document, "svg", [regular])).rejects.toThrow(
-        "font snapshot is older than the worker",
-      );
+      // Bun's .rejects assertion blocks real Worker message delivery; assert
+      // the rejection only after normal async delivery has completed.
+      const failure = await peer.save(document, "svg", [regular]).catch((error) => error);
+      expect(failure).toBeInstanceOf(Error);
+      expect(failure.message).toContain("font snapshot is older than the worker");
 
       peer.stop();
       peer = editorWorker();
