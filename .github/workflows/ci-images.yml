@@ -92,6 +92,8 @@ jobs:
           }
           Write-Host "Verified Actions runtime: $version ($node)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/ci-images
       - name: Build or resolve CI images
         id: images
         shell: bash

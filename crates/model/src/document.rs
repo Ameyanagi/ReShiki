@@ -1351,9 +1351,54 @@ impl Document {
     }
 }
 
+/// A stored snapshot never changes, so estimate its owned bytes once.
+struct HistoryFrame {
+    document: Document,
+    bytes: usize,
+}
+
+#[derive(Default)]
+struct HistoryFrames {
+    frames: VecDeque<HistoryFrame>,
+    bytes: usize,
+}
+impl HistoryFrames {
+    fn push_back(&mut self, document: Document) {
+        let bytes = frame_bytes(&document);
+        self.bytes += bytes;
+        self.frames.push_back(HistoryFrame { document, bytes });
+    }
+    fn pop_back(&mut self) -> Option<HistoryFrame> {
+        let frame = self.frames.pop_back()?;
+        self.bytes -= frame.bytes;
+        Some(frame)
+    }
+    fn pop_front(&mut self) -> Option<HistoryFrame> {
+        let frame = self.frames.pop_front()?;
+        self.bytes -= frame.bytes;
+        Some(frame)
+    }
+    fn clear(&mut self) {
+        self.frames.clear();
+        self.bytes = 0;
+    }
+    fn len(&self) -> usize {
+        self.frames.len()
+    }
+    fn is_empty(&self) -> bool {
+        self.frames.is_empty()
+    }
+    fn back(&self) -> Option<&Document> {
+        self.frames.back().map(|frame| &frame.document)
+    }
+    fn iter(&self) -> impl DoubleEndedIterator<Item = &Document> + ExactSizeIterator + Clone {
+        self.frames.iter().map(|frame| &frame.document)
+    }
+}
+
 pub struct History {
-    undo: VecDeque<Document>,
-    redo: VecDeque<Document>,
+    undo: HistoryFrames,
+    redo: HistoryFrames,
     limit: usize,
     /// Estimated bytes of all frames ([`frame_bytes`]) above which the oldest
     /// undo frames, then the furthest redo frames, are dropped, down to
@@ -1370,9 +1415,16 @@ impl Default for History {
         }
     }
 }
+#[cfg(test)]
+thread_local! {
+    static FRAME_ESTIMATES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Rough heap bytes of one history frame, from object counts. Pictures are
 /// shared between frames, so their data is not counted.
 fn frame_bytes(doc: &Document) -> usize {
+    #[cfg(test)]
+    FRAME_ESTIMATES.with(|count| count.set(count.get() + 1));
     use std::mem::{size_of, size_of_val as bytes};
     // Small strings and lists each object owns, such as an element symbol.
     const OWNED: usize = 16;
@@ -1484,8 +1536,8 @@ impl History {
     /// whatever their size.
     pub fn with_limit(limit: usize) -> Self {
         Self {
-            undo: VecDeque::new(),
-            redo: VecDeque::new(),
+            undo: HistoryFrames::default(),
+            redo: HistoryFrames::default(),
             limit: limit.max(1),
             max_bytes: usize::MAX,
         }
@@ -1506,11 +1558,15 @@ impl History {
         }
     }
     /// Undo frames, oldest first; the last is the next undo.
-    pub fn undo_frames(&self) -> std::collections::vec_deque::Iter<'_, Document> {
+    pub fn undo_frames(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = &Document> + ExactSizeIterator + Clone {
         self.undo.iter()
     }
     /// Redo frames, oldest first; the last is the next redo.
-    pub fn redo_frames(&self) -> std::collections::vec_deque::Iter<'_, Document> {
+    pub fn redo_frames(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = &Document> + ExactSizeIterator + Clone {
         self.redo.iter()
     }
     pub fn commit(&mut self, before: Document, after: &Document) -> bool {
@@ -1546,7 +1602,7 @@ impl History {
     /// Estimated bytes of the undo and redo frames, as the byte limit counts
     /// them.
     pub fn bytes(&self) -> usize {
-        self.undo.iter().chain(&self.redo).map(frame_bytes).sum()
+        self.undo.bytes + self.redo.bytes
     }
     /// Drops frames until at least `bytes` estimated bytes are released or
     /// `keep` frames remain: the oldest undo steps first, then the redo steps
@@ -1555,13 +1611,13 @@ impl History {
         let mut released = 0;
         while released < bytes && self.frames() > keep {
             let frame = self.undo.pop_front().or_else(|| self.redo.pop_front());
-            released += frame.as_ref().map_or(0, frame_bytes);
+            released += frame.as_ref().map_or(0, |frame| frame.bytes);
         }
         released
     }
     pub fn undo(&mut self, doc: &mut Document) -> bool {
         if let Some(prev) = self.undo.pop_back() {
-            self.redo.push_back(std::mem::replace(doc, prev));
+            self.redo.push_back(std::mem::replace(doc, prev.document));
             self.cap();
             true
         } else {
@@ -1570,7 +1626,7 @@ impl History {
     }
     pub fn redo(&mut self, doc: &mut Document) -> bool {
         if let Some(next) = self.redo.pop_back() {
-            self.undo.push_back(std::mem::replace(doc, next));
+            self.undo.push_back(std::mem::replace(doc, next.document));
             self.cap();
             true
         } else {

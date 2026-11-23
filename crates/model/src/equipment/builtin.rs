@@ -1,15 +1,140 @@
 //! The built-in catalogue: data in assets/pieces, read the same way as any
 //! user's piece.
-use super::format::{Definition, parse};
-use std::sync::{Arc, OnceLock};
+use super::format::{Category, Clip, Definition, Gender, Joint, PlugFamily, parse};
+use serde::Deserialize;
+use std::{
+    collections::HashMap,
+    sync::{Arc, OnceLock},
+};
 
-macro_rules! piece_files {
-    ($($name:literal),* $(,)?) => {
-        &[$(include_str!(concat!("../../../../assets/pieces/", $name, ".reshiki-piece"))),*]
-    };
+struct Source {
+    id: &'static str,
+    text: &'static str,
+    definition: OnceLock<Option<Arc<Definition>>>,
+    header: OnceLock<Option<Header>>,
+}
+impl Source {
+    fn definition(&'static self) -> Option<Arc<Definition>> {
+        self.definition
+            .get_or_init(|| parse(self.text).ok().map(Arc::new))
+            .clone()
+    }
+    fn header(&'static self) -> Option<&'static Header> {
+        self.header
+            .get_or_init(|| serde_json::from_str(self.text).ok())
+            .as_ref()
+    }
 }
 
-const FILES: &[&str] = piece_files![
+// Read only interface metadata here. Ignored artwork is tokenized without
+// constructing a JSON tree or parsing/validating its SVG paths. Full definitions
+// still pass the ordinary strict parser before they can be returned to a caller.
+#[derive(Deserialize)]
+struct Header {
+    category: Category,
+    #[serde(default)]
+    joints: Vec<Joint>,
+    #[serde(default)]
+    clip: Option<Clip>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) enum AdapterFamily {
+    Taper,
+    Plug(PlugFamily),
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) struct AdapterInterface {
+    pub family: AdapterFamily,
+    pub gender: Gender,
+}
+impl AdapterInterface {
+    fn of(joint: &Joint) -> Self {
+        Self {
+            family: match joint {
+                Joint::Taper { .. } => AdapterFamily::Taper,
+                Joint::Plug { family, .. } => AdapterFamily::Plug(*family),
+            },
+            gender: joint.gender(),
+        }
+    }
+}
+
+pub(super) struct AdapterPath {
+    source: &'static Source,
+    pub near: &'static Joint,
+    pub far: &'static Joint,
+}
+impl AdapterPath {
+    pub fn definition(&self) -> Option<Arc<Definition>> {
+        self.source.definition()
+    }
+}
+
+/// Paths retain catalogue, near-joint and far-joint precedence. Only family and
+/// gender are indexed; the solver still applies the exact nominal/tolerance rules.
+pub(super) fn adapter_paths(
+    near: AdapterInterface,
+    far: AdapterInterface,
+) -> &'static [AdapterPath] {
+    type Index = HashMap<(AdapterInterface, AdapterInterface), Vec<AdapterPath>>;
+    static INDEX: OnceLock<Index> = OnceLock::new();
+    INDEX
+        .get_or_init(|| {
+            let mut index = Index::new();
+            for source in FILES {
+                let Some(header) = source.header() else {
+                    continue;
+                };
+                if header.category != Category::Adapter {
+                    continue;
+                }
+                for a in &header.joints {
+                    for b in &header.joints {
+                        if a.id() != b.id() {
+                            index
+                                .entry((AdapterInterface::of(a), AdapterInterface::of(b)))
+                                .or_default()
+                                .push(AdapterPath {
+                                    source,
+                                    near: a,
+                                    far: b,
+                                });
+                        }
+                    }
+                }
+            }
+            index
+        })
+        .get(&(near, far))
+        .map_or(&[], Vec::as_slice)
+}
+
+pub(super) fn clip(size: &str) -> Option<Arc<Definition>> {
+    FILES.iter().find_map(|source| {
+        source
+            .header()?
+            .clip
+            .as_ref()
+            .filter(|clip| clip.size == size)?;
+        source.definition()
+    })
+}
+
+macro_rules! piece_files {
+    ($($name:literal),* $(,)?) => {{
+        // OnceLock needs explicit static storage: an interior-mutable array
+        // cannot be borrowed through const temporary promotion.
+        static SOURCES: [Source; [$($name),*].len()] = [$(Source {
+            id: concat!("reshiki/", $name),
+            text: include_str!(concat!("../../../../assets/pieces/", $name, ".reshiki-piece")),
+            definition: OnceLock::new(), header: OnceLock::new(),
+        }),*];
+        &SOURCES
+    }};
+}
+
+static FILES: &[Source] = piece_files![
     "rbf-50-15",
     "rbf-100-15",
     "rbf-100-29",
@@ -235,28 +360,59 @@ const FILES: &[&str] = piece_files![
 /// is a build error caught by the tests, so it is left out here.
 pub fn catalogue() -> &'static [Arc<Definition>] {
     static CATALOGUE: OnceLock<Vec<Arc<Definition>>> = OnceLock::new();
-    CATALOGUE.get_or_init(|| {
-        FILES
-            .iter()
-            .filter_map(|text| parse(text).ok())
-            .map(Arc::new)
-            .collect()
-    })
+    CATALOGUE.get_or_init(|| FILES.iter().filter_map(Source::definition).collect())
 }
 
 /// A built-in piece by ID.
 pub fn find(id: &str) -> Option<Arc<Definition>> {
-    catalogue().iter().find(|d| d.id == id).cloned()
+    FILES.iter().find(|source| source.id == id)?.definition()
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
+    fn lightweight_headers_match_checked_catalogue_interfaces() {
+        for source in super::FILES {
+            let definition = source.definition().unwrap();
+            let header = source.header().unwrap();
+            assert_eq!(header.category, definition.category);
+            assert_eq!(header.joints, definition.joints);
+            assert_eq!(header.clip, definition.clip);
+            assert!(std::sync::Arc::ptr_eq(
+                &definition,
+                &super::find(source.id).unwrap()
+            ));
+        }
+    }
+
+    #[test]
+    #[ignore = "isolated cold catalogue lookup; run this filter alone with --test-threads=1"]
+    fn isolated_find_parses_only_the_requested_definition() {
+        let loaded = || {
+            super::FILES
+                .iter()
+                .filter(|source| source.definition.get().is_some())
+                .count()
+        };
+        assert_eq!(loaded(), 0);
+        assert!(super::find("not/a-piece").is_none());
+        assert_eq!(loaded(), 0);
+        let first = super::find("reshiki/rbf-50-15").unwrap();
+        assert_eq!(loaded(), 1);
+        assert!(std::sync::Arc::ptr_eq(
+            &first,
+            &super::find("reshiki/rbf-50-15").unwrap()
+        ));
+        assert_eq!(loaded(), 1);
+    }
+
+    #[test]
     fn every_built_in_piece_passes_its_check() {
         let mut ids = std::collections::HashSet::new();
-        for (i, text) in super::FILES.iter().enumerate() {
+        for (i, source) in super::FILES.iter().enumerate() {
             let definition =
-                super::parse(text).unwrap_or_else(|e| panic!("built-in piece {i}: {e}"));
+                super::parse(source.text).unwrap_or_else(|e| panic!("built-in piece {i}: {e}"));
+            assert_eq!(definition.id, source.id);
             assert!(
                 ids.insert(definition.id.clone()),
                 "duplicate {}",

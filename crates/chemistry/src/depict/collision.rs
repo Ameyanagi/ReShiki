@@ -55,9 +55,19 @@ pub struct Report {
     pub total_density: f64,
 }
 
+struct DistanceRow {
+    values: Vec<usize>,
+    edge_work: usize,
+}
+
 pub(super) struct Session {
     remaining: usize,
-    distances: BTreeMap<usize, Vec<usize>>,
+    distances: BTreeMap<usize, DistanceRow>,
+    // Admission and logical work remain local to each original stage call,
+    // even when immutable topology rows survive into the next stage.
+    accessed: BTreeSet<usize>,
+    #[cfg(test)]
+    distance_builds: usize,
 }
 impl Session {
     fn spend(&mut self, count: usize) -> Result<(), Error> {
@@ -178,6 +188,9 @@ impl<'a> Input<'a> {
         let mut session = Session {
             remaining: initial,
             distances: BTreeMap::new(),
+            accessed: BTreeSet::new(),
+            #[cfg(test)]
+            distance_builds: 0,
         };
         let result = (|| {
             session.spend(graph.atoms.len())?;
@@ -288,6 +301,9 @@ impl<'a> Input<'a> {
         Session {
             remaining: self.work_limit,
             distances: BTreeMap::new(),
+            accessed: BTreeSet::new(),
+            #[cfg(test)]
+            distance_builds: 0,
         }
     }
     fn validate(&self, value: &Fragment, session: &mut Session) -> Result<(), Error> {
@@ -422,6 +438,27 @@ impl<'a> Input<'a> {
         *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
         result
     }
+    /// Reuse topology for the solver's detached fragments. On any error the
+    /// caller discards the entire repair, so no per-stage fragment copy is needed.
+    pub(super) fn apply_detached_with_work(
+        &self,
+        fragment: &mut Fragment,
+        stage: Stage,
+        remaining: &mut usize,
+        session: &mut Session,
+    ) -> Result<(), Error> {
+        session.remaining = self.work_limit.min(*remaining);
+        session.accessed.clear();
+        let initial = session.remaining;
+        let result = (|| {
+            self.validate(fragment, session)?;
+            self.complete(fragment, session)?;
+            self.apply_in_place(fragment, stage, session)
+        })();
+        let used = initial.checked_sub(session.remaining).ok_or(Error::Limit)?;
+        *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
+        result
+    }
     fn complete(&self, value: &Fragment, session: &mut Session) -> Result<(), Error> {
         for &id in value.atoms.keys() {
             for &(neighbor, _) in at(&self.neighbors, id)? {
@@ -446,10 +483,10 @@ impl<'a> Input<'a> {
         }
     }
     fn distance(&self, a: usize, b: usize, session: &mut Session) -> Result<usize, Error> {
-        if !session.distances.contains_key(&a) {
+        if !session.accessed.contains(&a) {
             let count = self.graph.atoms.len();
             if session
-                .distances
+                .accessed
                 .len()
                 .checked_add(1)
                 .and_then(|n| n.checked_mul(count))
@@ -459,29 +496,71 @@ impl<'a> Input<'a> {
                 return Err(Error::Limit);
             }
             session.spend(count)?;
-            let mut row = vec![100_000_000; count];
-            *row.get_mut(a).ok_or(Error::Invalid("distance source"))? = 0;
-            let mut queue = VecDeque::from([a]);
-            while let Some(id) = queue.pop_front() {
-                let next = *at(&row, id)? + 1;
-                for &(neighbor, _) in at(&self.neighbors, id)? {
-                    session.spend(1)?;
-                    let target = row
-                        .get_mut(neighbor)
-                        .ok_or(Error::Invalid("distance neighbor"))?;
-                    if *target == 100_000_000 {
-                        *target = next;
-                        queue.push_back(neighbor);
+            if let Some(row) = session.distances.get(&a) {
+                let edge_work = row.edge_work;
+                // A fresh BFS spends one unit per edge visit. On exhaustion it
+                // consumes every remaining unit before failing, unlike spend(n).
+                if edge_work > session.remaining {
+                    session.remaining = 0;
+                    return Err(Error::Limit);
+                }
+                session.spend(edge_work)?;
+            } else {
+                // Keep the same storage ceiling across stages. Only rows unused
+                // in this stage may be evicted; their recomputation is invisible.
+                while session
+                    .distances
+                    .len()
+                    .saturating_add(1)
+                    .saturating_mul(count)
+                    > MAX_DISTANCES
+                {
+                    let old = session
+                        .distances
+                        .keys()
+                        .copied()
+                        .find(|id| !session.accessed.contains(id))
+                        .ok_or(Error::Limit)?;
+                    session.distances.remove(&old);
+                }
+                let mut row = vec![100_000_000; count];
+                *row.get_mut(a).ok_or(Error::Invalid("distance source"))? = 0;
+                let mut queue = VecDeque::from([a]);
+                let mut edge_work = 0;
+                while let Some(id) = queue.pop_front() {
+                    let next = *at(&row, id)? + 1;
+                    for &(neighbor, _) in at(&self.neighbors, id)? {
+                        session.spend(1)?;
+                        edge_work += 1;
+                        let target = row
+                            .get_mut(neighbor)
+                            .ok_or(Error::Invalid("distance neighbor"))?;
+                        if *target == 100_000_000 {
+                            *target = next;
+                            queue.push_back(neighbor);
+                        }
                     }
                 }
+                session.distances.insert(
+                    a,
+                    DistanceRow {
+                        values: row,
+                        edge_work,
+                    },
+                );
+                #[cfg(test)]
+                {
+                    session.distance_builds += 1;
+                }
             }
-            session.distances.insert(a, row);
+            session.accessed.insert(a);
         }
         Ok(*at(
-            session
+            &session
                 .distances
                 .get(&a)
-                .ok_or(Error::Invalid("distance row"))?,
+                .ok_or(Error::Invalid("distance row"))?
+                .values,
             b,
         )?)
     }

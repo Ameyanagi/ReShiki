@@ -897,3 +897,63 @@ fn a_saved_view_reopens_without_raising_the_version_or_changing_the_drawing() {
         assert!(Document::from_native_file(broken.as_bytes()).is_ok());
     }
 }
+
+#[test]
+fn history_estimates_only_newly_stored_frames_and_keeps_cached_totals_exact() {
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::default());
+    doc.annotations.push(Annotation {
+        id: 99,
+        position: Point::default(),
+        text: String::new(),
+        format: Default::default(),
+        angle: 0.,
+    });
+    let mut history = History::with_limit(4);
+    let consistent = |history: &History| {
+        assert_eq!(
+            history.bytes(),
+            history
+                .undo_frames()
+                .chain(history.redo_frames())
+                .map(frame_bytes)
+                .sum::<usize>()
+        );
+    };
+    for length in 1..=8 {
+        let before = doc.clone();
+        doc.annotations[0].text = "x".repeat(length * 23);
+        FRAME_ESTIMATES.with(|count| count.set(0));
+        assert!(history.commit(before, &doc));
+        assert_eq!(FRAME_ESTIMATES.with(|count| count.get()), 1);
+        let _ = history.bytes();
+        let _ = history.bytes();
+        assert_eq!(FRAME_ESTIMATES.with(|count| count.get()), 1);
+        consistent(&history);
+    }
+    for redo in [false, false, true, false, true, true] {
+        FRAME_ESTIMATES.with(|count| count.set(0));
+        assert!(if redo {
+            history.redo(&mut doc)
+        } else {
+            history.undo(&mut doc)
+        });
+        assert_eq!(FRAME_ESTIMATES.with(|count| count.get()), 1);
+        consistent(&history);
+    }
+    assert!(history.undo(&mut doc));
+    let before = doc.clone();
+    doc.annotations[0].text.push('y');
+    FRAME_ESTIMATES.with(|count| count.set(0));
+    assert!(history.commit_continuing(before, &doc, true));
+    assert!(!history.can_redo());
+    assert_eq!(FRAME_ESTIMATES.with(|count| count.get()), 0);
+    let _ = history.release(usize::MAX, 1);
+    assert_eq!(FRAME_ESTIMATES.with(|count| count.get()), 0);
+    consistent(&history);
+    let before = doc.clone();
+    FRAME_ESTIMATES.with(|count| count.set(0));
+    assert!(!history.commit(before, &doc));
+    assert_eq!(FRAME_ESTIMATES.with(|count| count.get()), 0);
+    assert_eq!(history.bytes(), history.peek(false).map_or(0, frame_bytes));
+}

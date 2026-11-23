@@ -196,6 +196,13 @@ pub enum Edit {
         param: String,
         value: reshiki::equipment::eval::Value,
     },
+    /// Change a straight tube's Length while keeping its opposite end fixed.
+    TubeEnd {
+        id: u64,
+        param: String,
+        end: String,
+        value: reshiki::equipment::eval::Value,
+    },
     /// Drag a hose's end or middle to this point.
     HoseGrip {
         id: u64,

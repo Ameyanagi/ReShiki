@@ -127,6 +127,37 @@ jobs:
           }
           Write-Host "Verified Actions runtime: $version ($node)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # Native tests also read the Markdown API guides and website example/theme data.
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/*/
+            /.cargo/
+            /.config/
+            /.github/
+            /.signpath/
+            /assets/
+            /crates/
+            /data/
+            /docs/*.md
+            /examples/
+            /integrations/
+            /licenses/
+            /native/
+            /packages/
+            /packaging/
+            /presets/
+            /reference/
+            /resources/
+            /scripts/
+            /src/
+            /tests/
+            /tools/
+            /vendor/
+            /website/public/colors/
+            /website/public/examples/
+            /website/src/data/
       - run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:

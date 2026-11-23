@@ -107,6 +107,130 @@ fn tube_furnace_pointer_drags_carry_the_casing_chain_but_slide_the_bare_tube() {
 }
 
 #[test]
+fn either_tube_end_pointer_drag_matches_preview_and_undo_with_a_layout_group() {
+    use reshiki::equipment::{eval::Value, solve::adjust};
+    for end in ["a", "b"] {
+        for (id, layout) in [1, 2]
+            .into_iter()
+            .flat_map(|id| (0..3).map(move |layout| (id, layout)))
+        {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            app.tool = Tool::Select;
+            let tube = builtin::find("reshiki/compression-tube-60-1-4").unwrap();
+            let mm = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
+            app.tab
+                .doc
+                .graphics
+                .push(placed::graphic(1, tube.clone(), Point::default(), mm));
+            app.tab
+                .doc
+                .graphics
+                .push(placed::graphic(2, tube.clone(), Point::new(100., 0.), mm));
+            app.tab
+                .doc
+                .graphics
+                .push(placed::graphic(3, tube, Point::new(200., 0.), mm));
+            if layout > 0 {
+                reshiki::layouts::arrange(
+                    &mut app.tab.doc,
+                    &[1, 2],
+                    reshiki::layouts::Flow::Row,
+                    12.,
+                )
+                .unwrap();
+                if layout == 2 {
+                    reshiki::layouts::arrange(
+                        &mut app.tab.doc,
+                        &[1, 2, 3],
+                        reshiki::layouts::Flow::Row,
+                        12.,
+                    )
+                    .unwrap();
+                }
+            } else {
+                app.tab.doc.group_selection(&[1, 2]).unwrap();
+            }
+            app.tab.doc.piece_definitions = placed::used(&app.tab.doc);
+            app.tab.selected = vec![id];
+            let before = app.tab.doc.clone();
+            let endpoint = |doc: &Document, end: &str| {
+                solve::ports(doc.graphics.iter().find(|g| g.id == id).unwrap())
+                    .into_iter()
+                    .find(|p| p.at.joint == end)
+                    .unwrap()
+                    .point
+            };
+            let opposite = if end == "a" { "b" } else { "a" };
+            let pinned = endpoint(&before, opposite);
+            let g = before.graphics.iter().find(|g| g.id == id).unwrap();
+            let handle = adjust::handles(g)
+                .into_iter()
+                .find(|h| h.tube_end.as_deref() == Some(end))
+                .unwrap();
+            let direction = solve::ports(g)
+                .into_iter()
+                .find(|p| p.at.joint == end)
+                .unwrap()
+                .dir;
+            let from = Point::new(handle.at[0] as f32, handle.at[1] as f32);
+            let to = from.offset(
+                24. * mm * direction[0] as f32,
+                24. * mm * direction[1] as f32,
+            );
+            let preview =
+                crate::canvas::MoleculeCanvas::piece_handle_drag_candidate(&before, id, handle, to);
+            let edits = crate::canvas::select_drag(
+                &before,
+                &[id],
+                from,
+                to,
+                iced::keyboard::Modifiers::empty(),
+            );
+            assert!(edits.iter().any(|edit| matches!(edit, Edit::TubeEnd { id: actual, end: e, value: Value::Number(n), .. } if *actual == id && e == end && *n == 84.)), "{edits:?}");
+            for edit in edits {
+                let _ = app.update(Message::Canvas(edit));
+            }
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.tab.doc, preview, "{end} with layout={layout}");
+            let fixed = endpoint(&app.tab.doc, opposite);
+            assert!(
+                (fixed[0] - pinned[0]).hypot(fixed[1] - pinned[1]) < 1e-4,
+                "piece {id} {end} in layout {layout}"
+            );
+            let moved = endpoint(&app.tab.doc, end);
+            assert!((moved[0] - f64::from(to.x)).hypot(moved[1] - f64::from(to.y)) < 1e-4);
+            assert_eq!(app.tab.doc.groups, before.groups);
+            assert_eq!(app.tab.history.undo_frames().len(), 1);
+            let committed = app.tab.doc.clone();
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc, committed);
+            // The Properties field still uses its original pivot and exact
+            // numeric value, including in a non-first layout member.
+            let _ = app.update(Message::Undo);
+            let property_anchor = endpoint(&app.tab.doc, "a");
+            let _ = app.update(Message::Equipment(Action::Param {
+                id,
+                param: "length".into(),
+                value: Value::Number(84.25),
+            }));
+            assert!(!app.error, "{}", app.status);
+            let fixed = endpoint(&app.tab.doc, "a");
+            assert!((fixed[0] - property_anchor[0]).hypot(fixed[1] - property_anchor[1]) < 1e-4);
+            assert_eq!(
+                reshiki::equipment::parts_list::tube_row(&app.tab.doc, id)
+                    .unwrap()
+                    .unwrap()
+                    .cut_length_mm,
+                84.25
+            );
+        }
+    }
+}
+
+#[test]
 fn search_finds_pieces_by_any_name_keyword_or_size() {
     let found = |query: &str| -> Vec<&str> {
         (builtin::catalogue().iter())
