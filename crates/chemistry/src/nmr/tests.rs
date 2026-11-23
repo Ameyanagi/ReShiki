@@ -508,3 +508,274 @@ fn reshiki_hose_v1_ranking_options_pin_inherited_defaults() {
     assert!(include_ring_stereo, "include_ring_stereo");
     assert!(!fragment, "fragment");
 }
+
+// Captured pre-optimization encoder: full graph clone and per-radius BFS.
+impl Environment {
+    fn cloned_reference_code(
+        &self,
+        site: &Site,
+        nucleus: Nucleus,
+        radius: u8,
+        deadline: Instant,
+    ) -> Result<String, String> {
+        if Instant::now() > deadline {
+            return Err("NMR prediction exceeded its work deadline".into());
+        }
+        if !(MIN_RADIUS..=MAX_RADIUS).contains(&radius) {
+            return Err("Unsupported NMR sphere radius".into());
+        }
+        let parent = *self
+            .original_to_heavy
+            .get(&site.parent)
+            .ok_or("Invalid NMR site")?;
+        let mut graph = self.graph.clone();
+        let root = if nucleus == Nucleus::H1 {
+            let a = graph.atoms.get_mut(parent).ok_or("Missing H parent")?;
+            a.explicit_hydrogens = a
+                .explicit_hydrogens
+                .checked_sub(1)
+                .ok_or("Missing proton")?;
+            let root = graph.atoms.len();
+            graph.atoms.push(Atom {
+                atomic_number: 1,
+                no_implicit: true,
+                ..Atom::default()
+            });
+            graph.bonds.push(Bond {
+                a: root,
+                b: parent,
+                order: 1,
+                aromatic: false,
+            });
+            root
+        } else {
+            parent
+        };
+        let mut adjacent = vec![Vec::new(); graph.atoms.len()];
+        for b in &graph.bonds {
+            adjacent
+                .get_mut(b.a)
+                .ok_or("Invalid sphere bond")?
+                .push(b.b);
+            adjacent
+                .get_mut(b.b)
+                .ok_or("Invalid sphere bond")?
+                .push(b.a);
+        }
+        let mut distances = vec![u8::MAX; graph.atoms.len()];
+        *distances.get_mut(root).ok_or("Missing root")? = 0;
+        let mut pending = VecDeque::from([root]);
+        while let Some(a) = pending.pop_front() {
+            let d = *distances.get(a).ok_or("Missing distance")?;
+            if d == radius {
+                continue;
+            }
+            for &b in adjacent.get(a).ok_or("Missing neighbors")? {
+                if *distances.get(b).ok_or("Missing distance")? == u8::MAX {
+                    *distances.get_mut(b).ok_or("Missing distance")? = d + 1;
+                    pending.push_back(b);
+                }
+            }
+        }
+        let old: Vec<_> = distances
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| **d <= radius)
+            .map(|(i, _)| i)
+            .collect();
+        let indices: BTreeMap<_, _> = old.iter().enumerate().map(|(i, &a)| (a, i)).collect();
+        let sub = Graph {
+            atoms: old
+                .iter()
+                .map(|&a| graph.atoms.get(a).cloned().ok_or("Missing sphere atom"))
+                .collect::<Result<_, _>>()?,
+            bonds: graph
+                .bonds
+                .iter()
+                .filter_map(|b| {
+                    Some(Bond {
+                        a: *indices.get(&b.a)?,
+                        b: *indices.get(&b.b)?,
+                        ..b.clone()
+                    })
+                })
+                .collect(),
+        };
+        let mut meta = Metadata::unspecified(&sub);
+        meta.atoms
+            .get_mut(*indices.get(&root).ok_or("Missing sphere root")?)
+            .ok_or("Missing sphere metadata")?
+            .map_number = 1;
+        let ring_atoms = rings::perceive(&sub, Default::default())
+            .map_err(|e| e.to_string())?
+            .atoms;
+        let ranks = ranking::rank(
+            &sub,
+            &ring_atoms,
+            &meta,
+            ranking::Options {
+                include_chirality: false,
+                ..Default::default()
+            },
+        )?;
+        let mut order: Vec<_> = (0..sub.atoms.len()).collect();
+        order.sort_by_key(|&a| ranks.get(a).copied().unwrap_or(0));
+        let canonical: BTreeMap<_, _> = order.iter().enumerate().map(|(i, &a)| (a, i)).collect();
+        let mut code = format!("{ENCODER}|{}|{radius}|", nucleus.code());
+        for a in order {
+            let atom = sub.atoms.get(a).ok_or("Missing canonical atom")?;
+            let original = *old.get(a).ok_or("Missing sphere original")?;
+            code.push_str(&format!(
+                "{}:{}:{}:{}:{};",
+                atom.atomic_number,
+                atom.explicit_hydrogens,
+                u8::from(atom.aromatic),
+                distances.get(original).ok_or("Missing shell")?,
+                u8::from(original == root)
+            ));
+        }
+        let mut bonds: Vec<_> = sub
+            .bonds
+            .iter()
+            .map(|b| {
+                let a = *canonical.get(&b.a).ok_or("Missing canonical bond")?;
+                let c = *canonical.get(&b.b).ok_or("Missing canonical bond")?;
+                Ok((a.min(c), a.max(c), if b.aromatic { 4 } else { b.order }))
+            })
+            .collect::<Result<_, String>>()?;
+        bonds.sort_unstable();
+        for (a, b, o) in bonds {
+            code.push_str(&format!("{a}-{b}:{o};"));
+        }
+        if Instant::now() > deadline {
+            return Err("NMR prediction exceeded its work deadline".into());
+        }
+        Ok(format!("{:x}", Sha256::digest(code.as_bytes())))
+    }
+}
+
+#[test]
+fn reused_spheres_match_original_encoder_for_every_site_and_radius() {
+    for text in [
+        "C",
+        "CCO",
+        "[H]C([H])([H])O[H]",
+        "CC(=O)O",
+        "CC(C)(C)CCO",
+        "CCOC(C)=O",
+        "Cc1ccccc1",
+        "C1CCCCC1",
+        "C1CC2CCC1C2",
+        "CC.CCO",
+        "NCCO",
+        "O=P(O)(O)O",
+        "CS(=O)(=O)C",
+        "FC(Cl)(Br)I",
+    ] {
+        let env = environment(text);
+        for nucleus in [Nucleus::H1, Nucleus::C13] {
+            for site in env.sites(nucleus).unwrap() {
+                let mut cached = None;
+                let mut distance_storage = None;
+                for radius in (MIN_RADIUS..=MAX_RADIUS).rev() {
+                    let expected = env
+                        .cloned_reference_code(&site, nucleus, radius, Environment::deadline())
+                        .unwrap();
+                    assert_eq!(
+                        env.code(&site, nucleus, radius, Environment::deadline())
+                            .unwrap(),
+                        expected,
+                        "fresh {text} {nucleus:?} {} {radius}",
+                        site.parent
+                    );
+                    assert_eq!(
+                        env.code_with_sphere(
+                            &site,
+                            nucleus,
+                            radius,
+                            Environment::deadline(),
+                            &mut cached,
+                        )
+                        .unwrap(),
+                        expected,
+                        "reused {text} {nucleus:?} {} {radius}",
+                        site.parent
+                    );
+                    let storage = cached.as_ref().unwrap().distances.as_ptr();
+                    assert_eq!(*distance_storage.get_or_insert(storage), storage);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn reused_spheres_keep_deadline_and_input_error_order() {
+    let env = environment("CCO");
+    let site = &env.sites(Nucleus::H1).unwrap()[0];
+    let invalid = Site {
+        parent: usize::MAX,
+        ..site.clone()
+    };
+    let expired = Instant::now() - Duration::from_secs(1);
+    for site in [site, &invalid] {
+        for radius in [0, MIN_RADIUS, MAX_RADIUS, MAX_RADIUS + 1] {
+            for deadline in [expired, Environment::deadline()] {
+                assert_eq!(
+                    env.code(site, Nucleus::H1, radius, deadline),
+                    env.cloned_reference_code(site, Nucleus::H1, radius, deadline),
+                );
+            }
+        }
+    }
+    let mut cached = None;
+    env.code_with_sphere(
+        site,
+        Nucleus::H1,
+        MAX_RADIUS,
+        Environment::deadline(),
+        &mut cached,
+    )
+    .unwrap();
+    assert_eq!(
+        env.code_with_sphere(site, Nucleus::H1, MIN_RADIUS, expired, &mut cached),
+        Err("NMR prediction exceeded its work deadline".into())
+    );
+}
+
+#[test]
+#[ignore = "isolated process-wide allocation counter; run alone with --test-threads=1"]
+fn reused_spheres_reduce_fallback_allocations() {
+    use crate::allocation_metrics;
+    use std::hint::black_box;
+    let env = environment("CCCCCCCCCCCCCCCCCCCCCCCC");
+    let sites = env.sites(Nucleus::H1).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    allocation_metrics::reset();
+    for site in &sites {
+        for radius in (MIN_RADIUS..=MAX_RADIUS).rev() {
+            black_box(
+                env.cloned_reference_code(site, Nucleus::H1, radius, deadline)
+                    .unwrap(),
+            );
+        }
+    }
+    let old = allocation_metrics::snapshot();
+    allocation_metrics::reset();
+    for site in &sites {
+        let mut cached = None;
+        for radius in (MIN_RADIUS..=MAX_RADIUS).rev() {
+            black_box(
+                env.code_with_sphere(site, Nucleus::H1, radius, deadline, &mut cached)
+                    .unwrap(),
+            );
+        }
+    }
+    let new = allocation_metrics::snapshot();
+    println!(
+        "NMR full fallback allocations {} -> {}, bytes {} -> {}",
+        old.allocation_count, new.allocation_count, old.allocated_bytes, new.allocated_bytes
+    );
+    assert!(new.allocation_count < old.allocation_count);
+    assert!(new.allocated_bytes < old.allocated_bytes);
+}

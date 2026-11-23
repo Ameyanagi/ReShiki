@@ -168,8 +168,10 @@ impl Index {
                 limitation: None,
                 broad: false,
             };
+            let mut sphere = None;
             for radius in (MIN_RADIUS..=MAX_RADIUS).rev() {
-                let code = environment.code(&site, nucleus, radius, deadline)?;
+                let code =
+                    environment.code_with_sphere(&site, nucleus, radius, deadline, &mut sphere)?;
                 if let Some(statistics) = self
                     .entries
                     .get(&(nucleus, radius, code))
@@ -210,7 +212,15 @@ pub struct Environment {
     originals: Vec<usize>,
     original_to_heavy: BTreeMap<usize, usize>,
     hydrogens: Vec<Vec<usize>>,
+    adjacent: Vec<Vec<usize>>,
 }
+
+struct Sphere {
+    parent: usize,
+    root: usize,
+    distances: Vec<u8>,
+}
+
 impl Environment {
     /// Input must already be chemically prepared (aromaticity and valence).
     pub fn new(input: &Graph) -> Result<Self, String> {
@@ -298,8 +308,20 @@ impl Environment {
         for atom in &mut graph.atoms {
             atom.isotope = 0;
         }
+        let mut adjacent = vec![Vec::new(); graph.atoms.len()];
+        for bond in &graph.bonds {
+            adjacent
+                .get_mut(bond.a)
+                .ok_or("Invalid sphere bond")?
+                .push(bond.b);
+            adjacent
+                .get_mut(bond.b)
+                .ok_or("Invalid sphere bond")?
+                .push(bond.a);
+        }
         Ok(Self {
             graph,
+            adjacent,
             originals,
             original_to_heavy,
             hydrogens,
@@ -328,58 +350,27 @@ impl Environment {
             })
             .collect()
     }
-    pub fn code(
-        &self,
-        site: &Site,
-        nucleus: Nucleus,
-        radius: u8,
-        deadline: Instant,
-    ) -> Result<String, String> {
-        if Instant::now() > deadline {
-            return Err("NMR prediction exceeded its work deadline".into());
-        }
-        if !(MIN_RADIUS..=MAX_RADIUS).contains(&radius) {
-            return Err("Unsupported NMR sphere radius".into());
-        }
+    fn sphere(&self, site: &Site, nucleus: Nucleus, radius: u8) -> Result<Sphere, String> {
         let parent = *self
             .original_to_heavy
             .get(&site.parent)
             .ok_or("Invalid NMR site")?;
-        let mut graph = self.graph.clone();
-        let root = if nucleus == Nucleus::H1 {
-            let a = graph.atoms.get_mut(parent).ok_or("Missing H parent")?;
-            a.explicit_hydrogens = a
+        let proton = nucleus == Nucleus::H1;
+        if proton {
+            self.graph
+                .atoms
+                .get(parent)
+                .ok_or("Missing H parent")?
                 .explicit_hydrogens
                 .checked_sub(1)
                 .ok_or("Missing proton")?;
-            let root = graph.atoms.len();
-            graph.atoms.push(Atom {
-                atomic_number: 1,
-                no_implicit: true,
-                ..Atom::default()
-            });
-            graph.bonds.push(Bond {
-                a: root,
-                b: parent,
-                order: 1,
-                aromatic: false,
-            });
-            root
+        }
+        let root = if proton {
+            self.graph.atoms.len()
         } else {
             parent
         };
-        let mut adjacent = vec![Vec::new(); graph.atoms.len()];
-        for b in &graph.bonds {
-            adjacent
-                .get_mut(b.a)
-                .ok_or("Invalid sphere bond")?
-                .push(b.b);
-            adjacent
-                .get_mut(b.b)
-                .ok_or("Invalid sphere bond")?
-                .push(b.a);
-        }
-        let mut distances = vec![u8::MAX; graph.atoms.len()];
+        let mut distances = vec![u8::MAX; self.graph.atoms.len() + usize::from(proton)];
         *distances.get_mut(root).ok_or("Missing root")? = 0;
         let mut pending = VecDeque::from([root]);
         while let Some(a) = pending.pop_front() {
@@ -387,13 +378,64 @@ impl Environment {
             if d == radius {
                 continue;
             }
-            for &b in adjacent.get(a).ok_or("Missing neighbors")? {
+            // The virtual H bond follows every original bond, just as in the
+            // previous augmented graph. Its adjacency needs no copied graph.
+            for b in self
+                .adjacent
+                .get(a)
+                .into_iter()
+                .flatten()
+                .copied()
+                .chain((proton && a == parent).then_some(root))
+                .chain((proton && a == root).then_some(parent))
+            {
                 if *distances.get(b).ok_or("Missing distance")? == u8::MAX {
                     *distances.get_mut(b).ok_or("Missing distance")? = d + 1;
                     pending.push_back(b);
                 }
             }
         }
+        Ok(Sphere {
+            parent,
+            root,
+            distances,
+        })
+    }
+    pub fn code(
+        &self,
+        site: &Site,
+        nucleus: Nucleus,
+        radius: u8,
+        deadline: Instant,
+    ) -> Result<String, String> {
+        self.code_with_sphere(site, nucleus, radius, deadline, &mut None)
+    }
+    // The predictor requests radii in descending order and retains only this
+    // site's largest sphere. Canonicalization and clock checks still run once
+    // for each radius actually requested by longest-sphere fallback.
+    fn code_with_sphere(
+        &self,
+        site: &Site,
+        nucleus: Nucleus,
+        radius: u8,
+        deadline: Instant,
+        cached: &mut Option<Sphere>,
+    ) -> Result<String, String> {
+        if Instant::now() > deadline {
+            return Err("NMR prediction exceeded its work deadline".into());
+        }
+        if !(MIN_RADIUS..=MAX_RADIUS).contains(&radius) {
+            return Err("Unsupported NMR sphere radius".into());
+        }
+        if cached.is_none() {
+            *cached = Some(self.sphere(site, nucleus, radius)?);
+        }
+        let Sphere {
+            parent,
+            root,
+            distances,
+        } = cached.as_ref().ok_or("Missing NMR sphere")?;
+        let (parent, root) = (*parent, *root);
         let old: Vec<_> = distances
             .iter()
             .enumerate()
@@ -401,12 +443,35 @@ impl Environment {
             .map(|(i, _)| i)
             .collect();
         let indices: BTreeMap<_, _> = old.iter().enumerate().map(|(i, &a)| (a, i)).collect();
-        let sub = Graph {
+        let mut sub = Graph {
             atoms: old
                 .iter()
-                .map(|&a| graph.atoms.get(a).cloned().ok_or("Missing sphere atom"))
-                .collect::<Result<_, _>>()?,
-            bonds: graph
+                .map(|&a| {
+                    if a == self.graph.atoms.len() {
+                        Ok(Atom {
+                            atomic_number: 1,
+                            no_implicit: true,
+                            ..Atom::default()
+                        })
+                    } else {
+                        let mut atom = self
+                            .graph
+                            .atoms
+                            .get(a)
+                            .cloned()
+                            .ok_or("Missing sphere atom")?;
+                        if nucleus == Nucleus::H1 && a == parent {
+                            atom.explicit_hydrogens = atom
+                                .explicit_hydrogens
+                                .checked_sub(1)
+                                .ok_or("Missing proton")?;
+                        }
+                        Ok(atom)
+                    }
+                })
+                .collect::<Result<_, String>>()?,
+            bonds: self
+                .graph
                 .bonds
                 .iter()
                 .filter_map(|b| {
@@ -418,6 +483,14 @@ impl Environment {
                 })
                 .collect(),
         };
+        if nucleus == Nucleus::H1 {
+            sub.bonds.push(Bond {
+                a: *indices.get(&root).ok_or("Missing sphere root")?,
+                b: *indices.get(&parent).ok_or("Missing sphere parent")?,
+                order: 1,
+                aromatic: false,
+            });
+        }
         let mut meta = Metadata::unspecified(&sub);
         meta.atoms
             .get_mut(*indices.get(&root).ok_or("Missing sphere root")?)
