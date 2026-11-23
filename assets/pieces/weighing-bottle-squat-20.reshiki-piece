@@ -1,0 +1,201 @@
+{
+ "format": "reshiki-piece",
+ "format_version": 0,
+ "id": "reshiki/weighing-bottle-squat-20",
+ "revision": 1,
+ "family": "weighing-bottle",
+ "variant": {
+  "form": "squat",
+  "volume_ml": "20"
+ },
+ "names": {
+  "en": "Ground-lid weighing bottle, squat, 20 mL"
+ },
+ "category": "vessel",
+ "keywords": [
+  "weighing bottle",
+  "ground lid",
+  "ground glass",
+  "balance",
+  "weigh by difference",
+  "squat",
+  "sample vessel"
+ ],
+ "credits": {
+  "author": "ReShiki",
+  "license": "CC0-1.0"
+ },
+ "units": "mm",
+ "shapes": [
+  {
+   "id": "body",
+   "layer": "body",
+   "material": "glass",
+   "role": "glass",
+   "path": "M-25 1.2L-25 28Q-25 30 -23 30L23 30Q25 30 25 28L25 1.2C25 -0.4 -25 -0.4 -25 1.2Z"
+  },
+  {
+   "id": "inside-base",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-23.5 27Q-23.5 28.5 -22 28.5L22 28.5Q23.5 28.5 23.5 27"
+  },
+  {
+   "id": "mouth-front",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-25 1.2C-25 2.8 25 2.8 25 1.2"
+  },
+  {
+   "id": "mouth-inner",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-23.7 1.2C-23.7 0.3 23.7 0.3 23.7 1.2C23.7 2.1 -23.7 2.1 -23.7 1.2Z"
+  },
+  {
+   "id": "socket-bottom",
+   "layer": "body",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-23.7 8L23.7 8"
+  },
+  {
+   "id": "ground-plug",
+   "layer": "front",
+   "material": "frosted",
+   "role": "solid",
+   "path": "M-23.65 -0.4L23.65 -0.4L23.35 7.5Q0 8 -23.35 7.5Z",
+   "part": "closure"
+  },
+  {
+   "id": "lid-plate",
+   "layer": "front",
+   "material": "glass",
+   "role": "solid",
+   "path": "M-24.75 -3.2L24.75 -3.2Q25.65 -3.2 25.65 -2.3L25.65 -0.8Q25.65 0.1 24.75 0.1L-24.75 0.1Q-25.65 0.1 -25.65 -0.8L-25.65 -2.3Q-25.65 -3.2 -24.75 -3.2Z",
+   "part": "closure"
+  },
+  {
+   "id": "lid-knob",
+   "layer": "front",
+   "material": "glass",
+   "role": "solid",
+   "path": "M-5.6 -3.2L-6.5 -9.8Q-6.7 -11 0 -11Q6.7 -11 6.5 -9.8L5.6 -3.2Z",
+   "part": "closure"
+  },
+  {
+   "id": "knob-base",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-4.7 -5L4.7 -5",
+   "part": "closure"
+  },
+  {
+   "id": "ground-hatching",
+   "layer": "front",
+   "material": "glass",
+   "role": "detail",
+   "path": "M-20.65 5.9L-18.65 2M-11.825 5.9L-9.825 2M0 5.9L2 2M11.825 5.9L13.825 2M18.65 5.9L20.65 2",
+   "part": "closure"
+  }
+ ],
+ "params": [
+  {
+   "id": "closure",
+   "names": {
+    "en": "Ground lid"
+   },
+   "kind": "states",
+   "default": "closed",
+   "states": [
+    {
+     "id": "closed",
+     "names": {
+      "en": "Closed"
+     }
+    },
+    {
+     "id": "removed",
+     "names": {
+      "en": "Removed"
+     }
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "names": {
+    "en": "Liquid level"
+   },
+   "kind": "fill",
+   "liquid": "body",
+   "default": 0
+  },
+  {
+   "id": "liquid-color",
+   "names": {
+    "en": "Liquid color"
+   },
+   "kind": "color",
+   "liquid": "body",
+   "default": [
+    79,
+    143,
+    208
+   ]
+  }
+ ],
+ "parts": [
+  {
+   "id": "closure",
+   "param": "closure",
+   "motion": {
+    "per_state": {
+     "closed": [
+      1,
+      0,
+      0,
+      1,
+      0,
+      0
+     ],
+     "removed": [
+      1,
+      0,
+      0,
+      1,
+      64,
+      22.5
+     ]
+    }
+   },
+   "handle": {
+    "at": [
+     0,
+     -7
+    ],
+    "gesture": "toggle"
+   }
+  }
+ ],
+ "liquids": [
+  {
+   "id": "body",
+   "region": "M-23.5 9.3L23.5 9.3L23.5 26.9Q23.5 28.3 22.1 28.3L-22.1 28.3Q-23.5 28.3 -23.5 26.9Z",
+   "meniscus": "concave"
+  }
+ ],
+ "labels": [
+  {
+   "id": "sample",
+   "at": [
+    0,
+    19.5
+   ]
+  }
+ ]
+}
