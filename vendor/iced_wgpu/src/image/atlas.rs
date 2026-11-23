@@ -4,6 +4,9 @@ mod allocation;
 mod allocator;
 mod layer;
 
+#[cfg(test)]
+mod tests;
+
 pub use allocation::Allocation;
 pub use entry::Entry;
 pub use layer::Layer;
@@ -20,6 +23,7 @@ use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Atlas {
+    device: wgpu::Device,
     size: u32,
     backend: wgpu::Backend,
     texture: wgpu::Texture,
@@ -93,6 +97,7 @@ impl Atlas {
             });
 
         Atlas {
+            device: device.clone(),
             size,
             backend,
             texture,
@@ -105,6 +110,33 @@ impl Atlas {
 
     pub fn bind_group(&self) -> &Arc<wgpu::BindGroup> {
         &self.texture_bind_group
+    }
+
+    pub fn is_in_use(&self) -> bool {
+        Arc::strong_count(&self.texture_bind_group) > 1
+    }
+
+    pub fn trim(&mut self) {
+        let initial_layers = match self.backend {
+            wgpu::Backend::Gl => 2,
+            _ => 1,
+        };
+
+        // Never compact live regions or invalidate retained image batches.
+        // WGPU owns references for already recorded/submitted commands, so
+        // dropping these handles (without Texture::destroy) also preserves
+        // work that has not finished on the GPU yet.
+        if self.texture.depth_or_array_layers() as usize > initial_layers
+            && self.layers.iter().all(Layer::is_empty)
+            && !self.is_in_use()
+        {
+            *self = Self::with_size(
+                &self.device,
+                self.backend,
+                self.texture_layout.clone(),
+                self.size,
+            );
+        }
     }
 
     pub fn upload(

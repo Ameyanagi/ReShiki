@@ -304,6 +304,8 @@ impl Cache {
 
         #[cfg(feature = "svg")]
         self.vector.trim(&mut self.atlas); // TODO: Concurrency
+
+        self.atlas.trim();
     }
 
     #[cfg(feature = "image")]

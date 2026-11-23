@@ -38,7 +38,6 @@ pub struct Cache {
     rasterized: FxHashMap<(u64, u32, u32, ColorFilter), atlas::Entry>,
     svg_hits: FxHashSet<u64>,
     rasterized_hits: FxHashSet<(u64, u32, u32, ColorFilter)>,
-    should_trim: bool,
     fontdb: Option<Arc<usvg::fontdb::Database>>,
 }
 
@@ -47,6 +46,8 @@ type ColorFilter = Option<[u8; 4]>;
 impl Cache {
     /// Load svg
     pub fn load(&mut self, handle: &svg::Handle) -> &Svg {
+        let _ = self.svg_hits.insert(handle.id());
+
         if self.svgs.contains_key(&handle.id()) {
             return self.svgs.get(&handle.id()).unwrap();
         }
@@ -83,8 +84,6 @@ impl Cache {
                 }
             }
         };
-
-        self.should_trim = true;
 
         let _ = self.svgs.insert(handle.id(), svg);
         self.svgs.get(&handle.id()).unwrap()
@@ -188,7 +187,6 @@ impl Cache {
                 let _ = self.svg_hits.insert(id);
                 let _ = self.rasterized_hits.insert(key);
                 let _ = self.rasterized.insert(key, allocation);
-                self.should_trim = true;
 
                 self.rasterized.get(&key)
             }
@@ -198,16 +196,14 @@ impl Cache {
 
     /// Load svg and upload raster data
     pub fn trim(&mut self, atlas: &mut Atlas) {
-        if !self.should_trim {
-            return;
-        }
-
+        let atlas_in_use = atlas.is_in_use();
         let svg_hits = &self.svg_hits;
         let rasterized_hits = &self.rasterized_hits;
 
-        self.svgs.retain(|k, _| svg_hits.contains(k));
+        self.svgs
+            .retain(|k, _| atlas_in_use || svg_hits.contains(k));
         self.rasterized.retain(|k, entry| {
-            let retain = rasterized_hits.contains(k);
+            let retain = atlas_in_use || rasterized_hits.contains(k);
 
             if !retain {
                 atlas.remove(entry);
@@ -217,7 +213,6 @@ impl Cache {
         });
         self.svg_hits.clear();
         self.rasterized_hits.clear();
-        self.should_trim = false;
     }
 }
 
@@ -227,5 +222,83 @@ impl std::fmt::Debug for Svg {
             Svg::Loaded(_) => write!(f, "Svg::Loaded"),
             Svg::NotFound => write!(f, "Svg::NotFound"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::image::tests::Gpu;
+
+    #[test]
+    #[ignore = "requires a GPU adapter"]
+    fn trims_idle_sizes_but_retains_measurements_and_batches() {
+        let gpu = Gpu::new();
+        let mut atlas = gpu.atlas();
+        let mut cache = Cache {
+            fontdb: Some(Arc::new(usvg::fontdb::Database::new())),
+            ..Cache::default()
+        };
+        let handle = svg::Handle::from_memory(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><path d="M0 0h4v4H0z" fill="#fff"/></svg>"##.as_slice(),
+        );
+        let mut encoder =
+            gpu.device.create_command_encoder(&Default::default());
+        let mut belt = wgpu::util::StagingBelt::new(256);
+        for size in [4.0, 8.0] {
+            assert!(
+                cache
+                    .upload(
+                        &gpu.device,
+                        &mut encoder,
+                        &mut belt,
+                        &handle,
+                        None,
+                        Size::new(size, size),
+                        1.0,
+                        &mut atlas,
+                    )
+                    .is_some()
+            );
+        }
+        belt.finish();
+        let _ = gpu.queue.submit([encoder.finish()]);
+        cache.trim(&mut atlas);
+        assert_eq!(cache.rasterized.len(), 2);
+
+        let retained_batch = atlas.bind_group().clone();
+        cache.trim(&mut atlas);
+        assert_eq!(cache.rasterized.len(), 2);
+        drop(retained_batch);
+
+        for _ in 0..3 {
+            let mut encoder =
+                gpu.device.create_command_encoder(&Default::default());
+            assert!(
+                cache
+                    .upload(
+                        &gpu.device,
+                        &mut encoder,
+                        &mut belt,
+                        &handle,
+                        None,
+                        Size::new(4.0, 4.0),
+                        1.0,
+                        &mut atlas,
+                    )
+                    .is_some()
+            );
+            cache.trim(&mut atlas);
+            assert_eq!(cache.rasterized.len(), 1);
+            assert!(cache.svgs.contains_key(&handle.id()));
+        }
+
+        // Measurement alone also counts as use, independently of uploads.
+        let _ = cache.load(&handle);
+        cache.trim(&mut atlas);
+        assert!(cache.rasterized.is_empty());
+        assert!(cache.svgs.contains_key(&handle.id()));
+        cache.trim(&mut atlas);
+        assert!(cache.svgs.is_empty());
     }
 }
