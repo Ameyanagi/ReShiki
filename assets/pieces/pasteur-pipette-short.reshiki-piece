@@ -9,7 +9,7 @@
   "style": "Short"
  },
  "names": {
-  "en": "Pasteur pipette (short)"
+  "en": "Pasteur pipette, Short"
  },
  "category": "addition",
  "keywords": [
@@ -154,23 +154,6 @@
      -17.6
     ],
     "gesture": "toggle"
-   }
-  },
-  {
-   "id": "liquid-level",
-   "param": "fill",
-   "motion": {
-    "translate": [
-     0,
-     -147
-    ]
-   },
-   "handle": {
-    "at": [
-     10.6,
-     148.5
-    ],
-    "gesture": "drag"
    }
   }
  ],

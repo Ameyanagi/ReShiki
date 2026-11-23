@@ -8,7 +8,7 @@
   "capacity": "3 mL"
  },
  "names": {
-  "en": "Komagome pipette 3 mL"
+  "en": "Komagome pipette, 3 mL"
  },
  "category": "addition",
  "keywords": [
@@ -159,23 +159,6 @@
      -19.8
     ],
     "gesture": "toggle"
-   }
-  },
-  {
-   "id": "liquid-level",
-   "param": "fill",
-   "motion": {
-    "translate": [
-     0,
-     -272
-    ]
-   },
-   "handle": {
-    "at": [
-     12.0,
-     273.5
-    ],
-    "gesture": "drag"
    }
   }
  ],

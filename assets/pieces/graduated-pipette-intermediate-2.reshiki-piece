@@ -9,7 +9,7 @@
   "graduation": "Intermediate mark"
  },
  "names": {
-  "en": "Graduated pipette 2 mL (intermediate mark)"
+  "en": "Graduated pipette, 2 mL, Intermediate mark"
  },
  "category": "addition",
  "keywords": [
@@ -80,25 +80,7 @@
    ]
   }
  ],
- "parts": [
-  {
-   "id": "liquid-level",
-   "param": "fill",
-   "motion": {
-    "translate": [
-     0,
-     -357
-    ]
-   },
-   "handle": {
-    "at": [
-     10.75,
-     358.5
-    ],
-    "gesture": "drag"
-   }
-  }
- ],
+ "parts": [],
  "liquids": [
   {
    "id": "sample",

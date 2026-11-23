@@ -8,7 +8,7 @@
   "capacity": "10 mL"
  },
  "names": {
-  "en": "Volumetric pipette 10 mL"
+  "en": "Volumetric pipette, 10 mL"
  },
  "category": "addition",
  "keywords": [
@@ -71,25 +71,7 @@
    ]
   }
  ],
- "parts": [
-  {
-   "id": "liquid-level",
-   "param": "fill",
-   "motion": {
-    "translate": [
-     0,
-     -437
-    ]
-   },
-   "handle": {
-    "at": [
-     10.225,
-     438.5
-    ],
-    "gesture": "drag"
-   }
-  }
- ],
+ "parts": [],
  "liquids": [
   {
    "id": "sample",

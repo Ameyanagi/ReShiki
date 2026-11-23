@@ -8,7 +8,7 @@
   "capacity": "2 mL"
  },
  "names": {
-  "en": "Volumetric pipette 2 mL"
+  "en": "Volumetric pipette, 2 mL"
  },
  "category": "addition",
  "keywords": [
@@ -71,25 +71,7 @@
    ]
   }
  ],
- "parts": [
-  {
-   "id": "liquid-level",
-   "param": "fill",
-   "motion": {
-    "translate": [
-     0,
-     -352
-    ]
-   },
-   "handle": {
-    "at": [
-     9.625,
-     353.5
-    ],
-    "gesture": "drag"
-   }
-  }
- ],
+ "parts": [],
  "liquids": [
   {
    "id": "sample",

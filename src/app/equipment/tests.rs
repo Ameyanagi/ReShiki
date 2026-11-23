@@ -266,6 +266,10 @@ fn names_sizes_and_the_click_hint_come_from_the_definition() {
     let adapter = builtin::find("reshiki/red-29-15").unwrap();
     assert_eq!(size(&adapter), "29/42 · 15/25");
     assert_eq!(noun(&adapter), "adapter");
+    let pipette = builtin::find("reshiki/graduated-pipette-tip-5").unwrap();
+    assert_eq!(title(&pipette), "Graduated pipette");
+    assert_eq!(noun(&pipette), "pipette");
+    assert_eq!(size(&pipette), "5 mL · Tip graduated");
 }
 
 #[test]

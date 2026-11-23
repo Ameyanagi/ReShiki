@@ -9,7 +9,7 @@
   "style": "Long"
  },
  "names": {
-  "en": "Pasteur pipette (long)"
+  "en": "Pasteur pipette, Long"
  },
  "category": "addition",
  "keywords": [
@@ -154,23 +154,6 @@
      -17.6
     ],
     "gesture": "toggle"
-   }
-  },
-  {
-   "id": "liquid-level",
-   "param": "fill",
-   "motion": {
-    "translate": [
-     0,
-     -227
-    ]
-   },
-   "handle": {
-    "at": [
-     10.6,
-     228.5
-    ],
-    "gesture": "drag"
    }
   }
  ],

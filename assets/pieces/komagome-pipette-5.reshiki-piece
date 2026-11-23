@@ -8,7 +8,7 @@
   "capacity": "5 mL"
  },
  "names": {
-  "en": "Komagome pipette 5 mL"
+  "en": "Komagome pipette, 5 mL"
  },
  "category": "addition",
  "keywords": [
@@ -159,23 +159,6 @@
      -23.1
     ],
     "gesture": "toggle"
-   }
-  },
-  {
-   "id": "liquid-level",
-   "param": "fill",
-   "motion": {
-    "translate": [
-     0,
-     -272
-    ]
-   },
-   "handle": {
-    "at": [
-     12.5,
-     273.5
-    ],
-    "gesture": "drag"
    }
   }
  ],
