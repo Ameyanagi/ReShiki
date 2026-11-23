@@ -891,7 +891,13 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
         docs.push((format!("transformed/{name}"), doc));
     }
     docs.extend(cases::documents()?);
-    let (mut accepted, mut rejected, mut exact, mut invalid_inputs) = (0, 0, 0, 0);
+    let expected_layouts = reshiki::templates::LIBRARY
+        .iter()
+        .filter(|template| template.group == "Figure layouts")
+        .count();
+    assert!(expected_layouts > 0, "Missing built-in figure layouts");
+    let (mut accepted, mut rejected, mut exact, mut invalid_inputs, mut native_layouts) =
+        (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
     for (name, doc) in docs {
         let request = Request::molecule("export", doc.clone());
@@ -943,6 +949,16 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
             (Err(_), None) => {
                 rejected += 1;
             }
+            // Figure layouts use the panel records from the current document format.
+            (Ok(actual), None)
+                if name.starts_with("template/builtin:Figure layouts/")
+                    && doc.version > 15
+                    && doc.graphics.iter().any(|graphic| graphic.panel.is_some())
+                    && expected["error"] == "Unsupported document version" =>
+            {
+                check_figure_layout_exchange(&doc, &actual).with_context(|| name.clone())?;
+                native_layouts += 1;
+            }
             // #894: CDXML/CDX export asks to convert a Fischer projection first
             // "instead of dropping the stereo"; the original writer predates it.
             (Err(error), Some(_))
@@ -953,15 +969,20 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
             {
                 rejected += 1;
             }
-            (actual, expected) => failures.push(format!(
-                "{name}: [outcome] Rust {actual:?}; reference {expected:?}"
+            (actual, reference_output) => failures.push(format!(
+                "{name}: [outcome] Rust {actual:?}; reference {reference_output:?}, {}",
+                expected.get("error").unwrap_or(&Value::Null),
             )),
         }
     }
     eprintln!(
-        "Editable drawing comparisons: {accepted} accepted ({exact} byte-identical), {rejected} rejected; {invalid_inputs} invalid documents rejected"
+        "Editable drawing comparisons: {accepted} accepted ({exact} byte-identical), {rejected} rejected; {invalid_inputs} invalid documents rejected; {native_layouts} figure layouts verified"
     );
     assert!(accepted >= 400 && rejected >= 800);
+    assert_eq!(
+        native_layouts, expected_layouts,
+        "Every built-in figure layout needs a successful, checked CDXML export"
+    );
     if !failures.is_empty() {
         let mut categories = std::collections::BTreeMap::<String, usize>::new();
         for failure in &failures {
@@ -985,19 +1006,158 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn check_figure_layout_exchange(source: &Document, xml: &str) -> anyhow::Result<()> {
+    let tree = roxmltree::Document::parse(xml)?;
+    let style = &source.drawing_style;
+    let scale = f64::from(style.bond_length_pt) / f64::from(style.bond_length_world);
+    let panels = |doc: &Document| {
+        let mut panels: Vec<_> = doc
+            .graphics
+            .iter()
+            .filter_map(|graphic| graphic.panel.clone())
+            .collect();
+        panels.sort_by(|left, right| left.titles.cmp(&right.titles));
+        panels
+    };
+    let expected = panels(source);
+    let mut visible_titles = Vec::new();
+    for group in tree
+        .descendants()
+        .filter(|element| element.has_attribute("ReShikiPanel"))
+    {
+        anyhow::ensure!(group.has_tag_name("group"), "Panel needs a group");
+        let mut titles = Vec::new();
+        for title in group.children().filter(|node| node.has_tag_name("t")) {
+            anyhow::ensure!(
+                title.attribute("InterpretChemically") == Some("no"),
+                "Panel title needs editable caption text"
+            );
+            titles.push(
+                title
+                    .children()
+                    .filter(|node| node.has_tag_name("s"))
+                    .filter_map(|run| run.text())
+                    .collect::<String>(),
+            );
+        }
+        let graphic = source
+            .graphics
+            .iter()
+            .find(|graphic| {
+                graphic
+                    .panel
+                    .as_ref()
+                    .is_some_and(|panel| panel.titles == titles)
+            })
+            .context("Unexpected visible panel")?;
+        // The filled outline must cover the panel's frame even in a reader
+        // that ignores the private ReShikiPanel record.
+        let points = group
+            .children()
+            .filter(|node| {
+                node.has_tag_name("curve")
+                    && node.attribute("Closed") == Some("yes")
+                    && node
+                        .attribute("FillType")
+                        .is_some_and(|fill| fill != "None")
+            })
+            .filter_map(|curve| curve.attribute("CurvePoints"))
+            .flat_map(str::split_whitespace)
+            .map(str::parse::<f64>)
+            .collect::<Result<Vec<_>, _>>()?;
+        anyhow::ensure!(
+            !points.is_empty() && points.len() % 2 == 0 && points.iter().all(|p| p.is_finite()),
+            "Panel needs finite visible fill geometry"
+        );
+        for (axis, length) in [graphic.axis_x, graphic.axis_y].into_iter().enumerate() {
+            let values = points.iter().skip(axis).step_by(2).copied();
+            let extent = values.clone().fold(f64::NEG_INFINITY, f64::max)
+                - values.fold(f64::INFINITY, f64::min);
+            let expected = f64::from(length.distance(Point::default())) * scale;
+            anyhow::ensure!(
+                (extent - expected).abs() < 0.01,
+                "Visible panel size changed"
+            );
+        }
+        visible_titles.push(titles);
+    }
+    visible_titles.sort();
+    anyhow::ensure!(
+        visible_titles
+            == expected
+                .iter()
+                .map(|panel| panel.titles.clone())
+                .collect::<Vec<_>>(),
+        "Visible panel titles changed"
+    );
+    let restored = reshiki::chemistry::cdxml::import_cdxml(xml)?.document;
+    anyhow::ensure!(panels(&restored) == expected, "Panel records changed");
+    let mut original_labels = source
+        .annotations
+        .iter()
+        .map(|a| a.text.as_str())
+        .collect::<Vec<_>>();
+    let mut imported_labels = restored
+        .annotations
+        .iter()
+        .map(|a| a.text.as_str())
+        .collect::<Vec<_>>();
+    original_labels.sort_unstable();
+    imported_labels.sort_unstable();
+    anyhow::ensure!(
+        imported_labels == original_labels,
+        "Standalone captions changed"
+    );
+    let lines = |doc: &Document| {
+        doc.graphics
+            .iter()
+            .filter(|g| g.kind == reshiki::graphics::GraphicKind::Line)
+            .map(|g| g.style.pattern)
+            .collect::<Vec<_>>()
+    };
+    anyhow::ensure!(
+        lines(&restored) == lines(source),
+        "Layout separator lines changed"
+    );
+    anyhow::ensure!(
+        restored.atoms.len() == source.atoms.len()
+            && restored.bonds.len() == source.bonds.len()
+            && restored.arrows.len() == source.arrows.len(),
+        "Layout scheme object counts changed"
+    );
+    use reshiki::purpose::Purpose;
+    anyhow::ensure!(
+        restored
+            .atoms
+            .iter()
+            .all(|a| a.purpose == Purpose::Illustration)
+            && restored
+                .arrows
+                .iter()
+                .all(|a| a.purpose == Purpose::Illustration),
+        "Layout placeholders need to remain illustrations"
+    );
+    Ok(())
+}
+
 #[test]
 fn invalid_export_geometry_and_text_return_errors() -> anyhow::Result<()> {
     use reshiki::graphics::{Graphic, GraphicKind, PathCommand};
     let mut doc = Document::default();
-    doc.graphics.push(Graphic::dragged(
-        1,
-        GraphicKind::Line,
-        Point::default(),
-        Point::new(42., 28.),
-        Default::default(),
-        Default::default(),
-        false,
-    ));
+    let graphic = |kind| {
+        Graphic::dragged(
+            1,
+            kind,
+            Point::default(),
+            Point::new(42., 28.),
+            Default::default(),
+            Default::default(),
+            false,
+        )
+    };
+    doc.graphics.push(graphic(GraphicKind::Line));
+    assert!(drawing::write(&doc, drawing::Options::default())?.contains("GraphicType=\"Line\""));
+    doc.graphics[0] = graphic(GraphicKind::Curve);
     assert!(drawing::write(&doc, drawing::Options::default()).is_err());
     for commands in [
         vec![PathCommand::Line(Point::new(42., 28.))],

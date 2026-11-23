@@ -39,6 +39,7 @@ ReShiki keeps these behaviours where RDKit 2026.09.1 differs. The affected oracl
 
 - ChemDraw faded fills: the frozen graphics and arrow workers refuse a `FadePercent` other than 100. ChemDraw draws a plain closed shape's inside in its color at FadePercent tenths of a percent over white, and draws no fade on lines and arrows. ReShiki reads the fill as see-through and ignores the value elsewhere. `cdxml_graphics` and `cdxml_arrows` count these cases by name; a FadePercent that is not a number keeps the original error.
 - ChemDraw shading, shadows and wavy lines: the frozen graphics worker refuses CDXML `Shaded`, `Shadow` and `Shadowed` shapes, shaded curves and wavy lines. ReShiki imports them with their style. `cdxml_graphics` accepts a refused case only when ReShiki's graphic carries that style, and counts them.
+- ChemDraw caption rotation is decoded with position and bounds by the scene reader. `cdxml_presentation` compares atom-label rotation rejections with the original worker and separately checks caption style through the same angles. Native drawing exchange tests check the imported caption angle and centre.
 
 [rdkit#9484](https://github.com/rdkit/rdkit/pull/9484) (wedges on bridges) is in 2026.09.2, not 2026.09.1. It is not ported until it is checked against a 2026.09.2 build.
 

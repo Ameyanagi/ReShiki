@@ -229,8 +229,9 @@ def main():
         "-10",
     ]:
         emit(f"width/{width}", xml(text_attrs={"WordWrapWidth": width}))
+    # Atom labels still reject rotation. Caption geometry is read by the scene.
     for rotation in ["0", "-0", "1e-300", "1", "360", "nan", "inf", "bad"]:
-        emit(f"rotation/{rotation}", xml(text_attrs={"RotationAngle": rotation}))
+        emit(f"atom-rotation/{rotation}", xml(text_attrs={"RotationAngle": rotation}), atom=True)
     for atom in [False, True]:
         prefix = "Label" if atom else "Caption"
         for root_level, defaults_level, element_level, run_level in itertools.product(

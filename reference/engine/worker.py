@@ -915,25 +915,41 @@ def export_cdxml(
                 * format.get("line_spacing", 1.2),
                 "baseline": s["size_pt"] * 0.9,
             }
-        anchor = {"x": a["position"]["x"], "y": a["position"]["y"] + metrics["baseline"] / scale}
-        anchor["x"] += (
-            metrics["width"]
-            / scale
-            * {"center": 0.5, "right": 1.0}.get(format.get("alignment"), 0.0)
-        )
-        far = {
-            "x": a["position"]["x"] + metrics["width"] / scale,
-            "y": a["position"]["y"] + metrics["height"] / scale,
-        }
+        origin = a["position"]
+        width, height = metrics["width"] / scale, metrics["height"] / scale
+        anchor = {"x": origin["x"], "y": origin["y"] + metrics["baseline"] / scale}
+        anchor["x"] += width * {"center": 0.5, "right": 1.0}.get(format.get("alignment"), 0.0)
+        far = {"x": origin["x"] + width, "y": origin["y"] + height}
+        angle = a.get("angle", 0)
+        if angle:
+            # ChemDraw stores the turned baseline anchor and the enclosing box.
+            cx = origin["x"] + width / 2
+            cy = origin["y"] + height / 2
+            cosine, sine = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+
+            def turn(x, y):
+                return cx + cosine * (x - cx) - sine * (y - cy), cy + sine * (x - cx) + cosine * (
+                    y - cy
+                )
+
+            x, y = turn(anchor["x"], anchor["y"])
+            anchor = {"x": x, "y": y}
+            xs, ys = zip(
+                *(turn(x, y) for x in (origin["x"], far["x"]) for y in (origin["y"], far["y"]))
+            )
+            origin = {"x": min(xs), "y": min(ys)}
+            far = {"x": max(xs), "y": max(ys)}
         attrs = {
             "id": str(next_id),
             "p": position(anchor),
-            "BoundingBox": position(a["position"]) + " " + position(far),
+            "BoundingBox": position(origin) + " " + position(far),
             "CaptionJustification": {"center": "Center", "right": "Right", "justified": "Full"}.get(
                 format.get("alignment"), "Left"
             ),
             "CaptionLineHeight": str(round(s["size_pt"] * format.get("line_spacing", 1.2), 3)),
         }
+        if angle:
+            attrs["RotationAngle"] = str(round(angle * 65536))
         if format.get("width_pt"):
             attrs["WordWrapWidth"] = str(round(format["width_pt"]))
         object_map[a["id"]] = write_text(page, a["text"], format, **attrs)

@@ -84,3 +84,11 @@ async fn a_broken_turn_opens_upright() {
     let doc = crate::formats::read(xml.into(), "cdxml").await.unwrap();
     assert_eq!(doc.annotations[0].angle, 0.);
 }
+
+#[tokio::test]
+async fn a_nonnumeric_caption_turn_is_rejected_by_the_scene() {
+    let xml = r#"<CDXML BondLength="14.40"><page id="1">
+<t id="2" p="20 30" BoundingBox="20 20 40 32" RotationAngle="bad" InterpretChemically="no"><s font="3" size="10">A</s></t>
+</page></CDXML>"#;
+    assert!(crate::formats::read(xml.into(), "cdxml").await.is_err());
+}

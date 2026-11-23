@@ -2,7 +2,7 @@
 
 import math
 import xml.etree.ElementTree as ET
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING or __package__:
     from .pictures_exchange import read_picture, write_picture
@@ -293,9 +293,10 @@ def read_graphics(
                 value["id"] = first_id + len(result)
                 result.append(value)
                 objects[el] = [value["id"]]
-            elif el.tag == "fragment":
+            elif el.tag in ("fragment", "table", "page"):
                 # ChemDraw can move a curve into a molecular fragment when
-                # saving. Retain its geometry without giving it chemical meaning.
+                # saving, or into a table's cell page. Containers do not claim
+                # their contents; retain each unclaimed graphic's own identity.
                 collect(el)
 
     for page in root.findall("page"):
@@ -316,7 +317,7 @@ def write_graphics(
     *,
     write_partial_charge=None,
 ):
-    """Emit editable Bézier curves; a two-curve group retains separate fill/stroke."""
+    """Emit editable lines and Bézier curves with separate fill/stroke paint."""
     ordered = sorted(graphics, key=lambda g: g.get("layer", -1))
     middle = sum(g.get("layer", -1) < 0 for g in ordered) + 1
     objects = {}
@@ -373,6 +374,37 @@ def write_graphics(
             objects[g["id"]] = write_picture(page, g, position, next_id, z, prepared)
             next_id += 1
             continue
+        paint: dict[str, Any] = {
+            "stroke": [0, 0, 0],
+            "width_pt": 0.6,
+            "pattern": "solid",
+            **g.get("style", {}),
+        }
+        heads = g.get("heads") or {}
+        if (
+            g.get("kind") == "line"
+            and paint["pattern"] != "dotted"
+            and heads.get("head", "none") == "none"
+            and heads.get("tail", "none") == "none"
+            and not any((paint.get("effects") or {}).values())
+        ):
+            # A native Line keeps its start/end order, including for wavy
+            # strokes. Its frame is sufficient; no sampled path is needed.
+            origin, axis = g["origin"], g["axis_x"]
+            end = {key: origin[key] + axis[key] for key in ("x", "y")}
+            objects[g["id"]] = ET.SubElement(
+                page,
+                "graphic",
+                id=str(next_id),
+                Z=str(z),
+                GraphicType="Line",
+                LineType=paint["pattern"].capitalize(),
+                BoundingBox=f"{position(origin)} {position(end)}",
+                LineWidth=str(paint["width_pt"]),
+                color=color_id(paint["stroke"]),
+            )
+            next_id += 1
+            continue
         styled_parts = (parts or {}).get(str(g["id"]))
         if styled_parts is None:
             if isinstance(g.get("kind"), dict):
@@ -413,9 +445,10 @@ def write_graphics(
             parent = ET.SubElement(page, "group", id=str(next_id), Z=str(z))
             next_id += 1
 
-        def emit(target, points, closed, color, fill, width, dashed):
+        def emit(target, points, closed, color, fill, width, dashed, shaded=False):
             nonlocal next_id
-            flags = int(closed) | (2 if dashed else 0) | (128 if fill else 0)
+            shaded = fill and closed and shaded
+            flags = int(closed) | (2 if dashed else 0) | (256 if shaded else 128 if fill else 0)
             element = ET.SubElement(
                 target,
                 "curve",
@@ -424,7 +457,7 @@ def write_graphics(
                 CurvePoints=" ".join(position(p) for p in points),
                 CurveType=str(flags),
                 Closed="yes" if closed else "no",
-                FillType="Solid" if fill else "None",
+                FillType="Shaded" if shaded else "Solid" if fill else "None",
                 LineType="Dashed" if dashed else "Solid",
                 LineWidth=str(width),
                 color=color_id(color),
@@ -439,14 +472,24 @@ def write_graphics(
                     target = ET.SubElement(parent, "group", id=str(next_id), Z=str(z))
                     next_id += 1
                 if paint["fill"] is not None:
-                    emit(target, points, closed, paint["fill"], True, 0, False)
-                emit(
-                    target,
-                    points,
-                    closed,
-                    paint["stroke"],
-                    False,
-                    paint["width_pt"],
-                    paint["pattern"] == "dashed",
-                )
+                    emit(
+                        target,
+                        points,
+                        closed,
+                        paint["fill"],
+                        True,
+                        0,
+                        False,
+                        (paint.get("effects") or {}).get("shaded", False),
+                    )
+                if paint["width_pt"] > 0:
+                    emit(
+                        target,
+                        points,
+                        closed,
+                        paint["stroke"],
+                        False,
+                        paint["width_pt"],
+                        paint["pattern"] == "dashed",
+                    )
     return next_id, middle, objects
