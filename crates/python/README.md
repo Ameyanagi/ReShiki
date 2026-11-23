@@ -124,6 +124,14 @@ default. `width` and `height` optionally fit the image into a pixel box without
 changing its aspect ratio. `reshiki.styles()` lists the app's drawing presets;
 `reshiki.Style(name, **overrides)` makes a reusable style.
 
+Each PNG is limited to 16 million pixels. Batch PNG rendering also shares a
+128 MiB raw output bitmap budget across concurrent `render_many` calls in the
+same process. A row waits for enough space before allocating its RGBA bitmap
+and keeps that space through PNG encoding. This budget excludes documents,
+SVG trees, rasterizer/encoder scratch space and encoded results; it is not a
+limit on total process memory. Single-image rendering retains the per-image
+pixel limit.
+
 Install `reshiki[pandas]` and explicitly `import reshiki.pandas` to register
 the pandas Series `.reshiki` accessor with `png()`, `svg()` and `properties()`.
 Optional dependencies load when their integration is used.

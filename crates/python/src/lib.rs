@@ -2,6 +2,7 @@
 //! used by the browser. Python owns the public objects and integrations.
 #![forbid(unsafe_code)]
 
+mod bitmap_budget;
 mod drawing;
 mod render;
 mod styles;
@@ -245,7 +246,8 @@ fn render_many(
                 let result = drawing::run(async {
                     let (document, messages) = drawing::read(data, &input_format).await?;
                     warnings = messages;
-                    render::document(document, format, &options).await
+                    render::document_with_budget(document, format, &options, bitmap_budget::batch())
+                        .await
                 });
                 (result, warnings)
             })

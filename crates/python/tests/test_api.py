@@ -8,6 +8,7 @@ import subprocess
 import warnings
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import FrozenInstanceError, asdict
 from pathlib import Path
 from threading import Event, Thread
@@ -455,6 +456,27 @@ def test_batch_errors_and_order() -> None:
     assert reshiki.render_many([], format="svg").errors == []
     assert reshiki.render_many([], format="svg").warnings == []
     assert all(isinstance(item, str) for item in reshiki.render_many(["CCO", "O"], "svg"))
+
+
+@pytest.mark.parametrize("format", ["png", "svg", "mol", "sdf", "rsk"])
+def test_batch_output_matches_individual_renders(format: str) -> None:
+    molecules = [reshiki.Molecule.from_smiles(smiles) for smiles in ["CCO", "O", ASPIRIN]]
+    expected = [molecule.render(format, width=160) for molecule in molecules]
+    batch = reshiki.render_many(molecules, format, width=160)
+    assert batch == expected
+    assert not batch.errors and not batch.warnings
+
+
+def test_concurrent_png_batches_keep_results_and_failure_indexes() -> None:
+    inputs = ["CCO", "C1CC", "O", ASPIRIN, ANY_BOND_SMILES]
+    expected = reshiki.render_many(inputs, "png", width=180)
+    with ThreadPoolExecutor(max_workers=3) as workers:
+        calls = [workers.submit(reshiki.render_many, inputs, "png", width=180) for _ in range(3)]
+        for call in calls:
+            batch = call.result(timeout=30)
+            assert batch == expected
+            assert batch.errors == expected.errors
+            assert batch.warnings == expected.warnings
 
 
 @pytest.mark.parametrize("text", ["outline", "live"])
