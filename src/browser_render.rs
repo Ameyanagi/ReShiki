@@ -35,6 +35,35 @@ pub fn available() -> bool {
 
 /// Prefix a job's bytes with its ordered font snapshot. Caller buffers are copied.
 pub fn request_fonts(request: &[u8]) -> Result<Vec<u8>, String> {
+    font_envelope(request).map_err(EnvelopeError::message)
+}
+
+#[derive(Debug)]
+enum EnvelopeError {
+    TooLarge,
+    Invalid(String),
+}
+impl EnvelopeError {
+    fn message(self) -> String {
+        match self {
+            Self::TooLarge => "Browser export request exceeds 128 MiB".into(),
+            Self::Invalid(error) => error,
+        }
+    }
+}
+
+fn envelope_length(fonts: usize, request: usize) -> Result<usize, EnvelopeError> {
+    fonts
+        .checked_add(request)
+        .and_then(|n| n.checked_add(4))
+        .filter(|n| *n <= MAX_REQUEST_BYTES)
+        .ok_or(EnvelopeError::TooLarge)
+}
+
+fn font_envelope(request: &[u8]) -> Result<Vec<u8>, EnvelopeError> {
+    // Reject an oversized document before encoding fonts or allocating the
+    // packed copy. Font bytes can also take an otherwise valid request over.
+    envelope_length(0, request.len())?;
     let fonts: Vec<_> = crate::style::added_fonts(0)
         .into_iter()
         .filter_map(|source| {
@@ -45,17 +74,12 @@ pub fn request_fonts(request: &[u8]) -> Result<Vec<u8>, String> {
             }
         })
         .collect();
-    let fonts = serde_json::to_vec(&fonts).map_err(|e| e.to_string())?;
-    let length = fonts
-        .len()
-        .checked_add(request.len())
-        .and_then(|n| n.checked_add(4))
-        .filter(|n| *n <= MAX_REQUEST_BYTES)
-        .ok_or("Browser export request exceeds 128 MiB")?;
+    let fonts = serde_json::to_vec(&fonts).map_err(|e| EnvelopeError::Invalid(e.to_string()))?;
+    let length = envelope_length(fonts.len(), request.len())?;
     let mut output = Vec::with_capacity(length);
     output.extend_from_slice(
         &u32::try_from(fonts.len())
-            .map_err(|e| e.to_string())?
+            .map_err(|e| EnvelopeError::Invalid(e.to_string()))?
             .to_le_bytes(),
     );
     output.extend_from_slice(&fonts);
@@ -94,7 +118,10 @@ pub async fn exchange(
             "This page has no matching local render worker".into(),
         ));
     }
-    let request = request_fonts(request).map_err(Failure::Failed)?;
+    let request = font_envelope(request).map_err(|error| match error {
+        EnvelopeError::TooLarge => Failure::Unavailable(error.message()),
+        EnvelopeError::Invalid(error) => Failure::Failed(error),
+    })?;
     browser_worker::exchange(job, &request, cancel, web_time::Duration::from_secs(60)).await
 }
 
