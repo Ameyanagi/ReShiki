@@ -17,8 +17,8 @@ pub(crate) struct BitmapBudget {
 
 struct State {
     used: usize,
-    #[cfg(test)]
-    waiting: usize,
+    next_ticket: usize,
+    serving: usize,
 }
 
 impl BitmapBudget {
@@ -27,8 +27,8 @@ impl BitmapBudget {
             capacity,
             state: Mutex::new(State {
                 used: 0,
-                #[cfg(test)]
-                waiting: 0,
+                next_ticket: 0,
+                serving: 0,
             }),
             available: Condvar::new(),
         }
@@ -40,21 +40,23 @@ impl BitmapBudget {
             return Err("PNG exceeds the batch raw bitmap memory budget".into());
         }
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        while bytes > self.capacity - state.used {
-            #[cfg(test)]
-            {
-                state.waiting += 1;
-            }
+        // Admission in arrival order keeps a large bitmap from waiting behind
+        // a stream of smaller ones. Encoding never holds more than one permit.
+        let ticket = state.next_ticket;
+        state.next_ticket = state.next_ticket.wrapping_add(1);
+        while ticket != state.serving || bytes > self.capacity - state.used {
             state = self
                 .available
                 .wait(state)
                 .unwrap_or_else(|error| error.into_inner());
-            #[cfg(test)]
-            {
-                state.waiting -= 1;
-            }
         }
         state.used += bytes;
+        state.serving = state.serving.wrapping_add(1);
+        let queued = state.serving != state.next_ticket;
+        drop(state);
+        if queued {
+            self.available.notify_all();
+        }
         Ok(BitmapPermit {
             budget: self,
             bytes,
@@ -94,10 +96,15 @@ mod tests {
         budget.state.lock().unwrap().used
     }
 
-    fn wait_for_blocked(budget: &BitmapBudget) {
+    fn queued(budget: &BitmapBudget) -> usize {
+        let state = budget.state.lock().unwrap();
+        state.next_ticket.wrapping_sub(state.serving)
+    }
+
+    fn wait_for_queued(budget: &BitmapBudget, count: usize) {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            if budget.state.lock().unwrap().waiting > 0 {
+            if queued(budget) >= count {
                 return;
             }
             assert!(
@@ -123,7 +130,7 @@ mod tests {
                 acquired.send(()).unwrap();
                 released.recv().unwrap();
             });
-            wait_for_blocked(budget);
+            wait_for_queued(budget, 1);
             assert!(receipt.try_recv().is_err());
             drop(four);
             assert_eq!(used(budget), 6);
@@ -166,7 +173,7 @@ mod tests {
                 large_acquired.send(()).unwrap();
                 large_released.recv().unwrap();
             });
-            wait_for_blocked(budget);
+            wait_for_queued(budget, 1);
             assert!(large_receipt.try_recv().is_err());
             release_first.send(()).unwrap();
             large_receipt.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -178,12 +185,40 @@ mod tests {
     }
 
     #[test]
+    fn fitting_small_requests_cannot_overtake_a_waiting_large_bitmap() {
+        let budget = BitmapBudget::new(10);
+        thread::scope(|scope| {
+            let budget = &budget;
+            let existing = budget.acquire(6).unwrap();
+            let (acquired, receipt) = mpsc::channel();
+            let large = acquired.clone();
+            let (release, released) = mpsc::channel();
+            scope.spawn(move || {
+                let _permit = budget.acquire(9).unwrap();
+                large.send(9).unwrap();
+                released.recv_timeout(Duration::from_secs(5)).unwrap();
+            });
+            wait_for_queued(budget, 1);
+            scope.spawn(move || {
+                let _permit = budget.acquire(2).unwrap();
+                acquired.send(2).unwrap();
+            });
+            wait_for_queued(budget, 2);
+            assert!(receipt.try_recv().is_err());
+            drop(existing);
+            assert_eq!(receipt.recv_timeout(Duration::from_secs(5)).unwrap(), 9);
+            release.send(()).unwrap();
+            assert_eq!(receipt.recv_timeout(Duration::from_secs(5)).unwrap(), 2);
+        });
+    }
+
+    #[test]
     fn oversized_requests_fail_without_waiting_or_reserving_bytes() {
         let budget = BitmapBudget::new(10);
         let _full = budget.acquire(10).unwrap();
         assert!(budget.acquire(11).is_err());
         assert_eq!(used(&budget), 10);
-        assert_eq!(budget.state.lock().unwrap().waiting, 0);
+        assert_eq!(queued(&budget), 0);
     }
 
     #[test]
