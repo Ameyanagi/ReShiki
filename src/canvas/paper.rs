@@ -279,13 +279,14 @@ impl MoleculeCanvas<'_> {
             .as_ref();
         if let Some(fragment) = fragment {
             if !self.reviewing_pair {
-                markers::Markers::new(preview, selected).draw_with_nmr(
-                    frame,
-                    self.camera,
-                    bounds,
-                    true,
-                    &nmr_ids,
-                );
+                let live_markers;
+                let markers = if let Some(record) = &memo {
+                    record.markers(selected).as_ref()
+                } else {
+                    live_markers = markers::Markers::new(preview, selected);
+                    &live_markers
+                };
+                markers.draw_with_nmr(frame, self.camera, bounds, true, &nmr_ids);
             }
             // Its markers are empty: the preview's markers lie below both parts.
             state.fragment.borrow_mut().draw(
@@ -314,15 +315,12 @@ impl MoleculeCanvas<'_> {
                 self.reviewing_pair,
             );
         } else if let Some(record) = &memo {
-            let (markers, scene) = record.whole.get_or_init(|| {
-                (
-                    std::rc::Rc::new(markers::Markers::new(preview, selected)),
-                    reshiki::scene::primitives(preview).into(),
-                )
-            });
+            let scene = record
+                .whole
+                .get_or_init(|| reshiki::scene::primitives(preview).into());
             record.geometry.borrow_mut().draw(
                 frame,
-                (markers.clone(), scene.clone()),
+                (record.markers(selected).clone(), scene.clone()),
                 self.camera,
                 bounds,
                 &nmr_ids,

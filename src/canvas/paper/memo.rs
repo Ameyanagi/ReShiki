@@ -129,7 +129,8 @@ pub(in crate::canvas) struct Preview {
     piece: Option<Arc<Definition>>,
     pub(super) draft: Draft<'static>,
     pub(super) fragment: OnceCell<Option<Fragment>>,
-    pub(super) whole: OnceCell<(Rc<Markers>, Rc<[Primitive]>)>,
+    markers: OnceCell<Rc<Markers>>,
+    pub(super) whole: OnceCell<Rc<[Primitive]>>,
     pub(super) geometry: RefCell<SceneGeometryCache>,
     pub(super) matches_document: OnceCell<bool>,
 }
@@ -145,10 +146,16 @@ impl Preview {
             piece: piece.cloned(),
             draft,
             fragment: OnceCell::new(),
+            markers: OnceCell::new(),
             whole: OnceCell::new(),
             geometry: RefCell::default(),
             matches_document: OnceCell::new(),
         })
+    }
+
+    pub(super) fn markers(&self, selected: &[u64]) -> &Rc<Markers> {
+        self.markers
+            .get_or_init(|| Rc::new(Markers::new(&self.draft.preview, selected)))
     }
 
     pub(super) fn matches(&self, inputs: &Inputs<'_>, piece: Option<&Arc<Definition>>) -> bool {

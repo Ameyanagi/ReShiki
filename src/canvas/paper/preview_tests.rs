@@ -406,10 +406,43 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
         "an unchanged preview must preserve every pixel"
     );
     let (whole, full) = shot(&canvas, &tree, false);
-    assert!(
-        warm == whole,
-        "a separated ghost must match the complete preview"
-    );
+    let compare = |name: &str, retained: &[u8], full: &[u8]| {
+        if let Some(directory) = std::env::var_os("RESHIKI_PREVIEW_EVIDENCE") {
+            let directory = std::path::PathBuf::from(directory);
+            std::fs::create_dir_all(&directory).unwrap();
+            for (suffix, pixels) in [("retained", retained), ("full", full)] {
+                image::RgbaImage::from_raw(size.width, size.height, pixels.to_vec())
+                    .unwrap()
+                    .save(directory.join(format!("{name}-{suffix}.png")))
+                    .unwrap();
+            }
+        }
+        let (mut changed, mut largest) = (0, 0);
+        let mut rect = [size.width as usize, size.height as usize, 0, 0];
+        for (index, (a, b)) in retained
+            .chunks_exact(4)
+            .zip(full.chunks_exact(4))
+            .enumerate()
+        {
+            let delta = a.iter().zip(b).map(|(x, y)| x.abs_diff(*y)).max().unwrap();
+            if delta > 0 {
+                let (x, y) = (index % size.width as usize, index / size.width as usize);
+                changed += 1;
+                largest = largest.max(delta);
+                rect = [
+                    rect[0].min(x),
+                    rect[1].min(y),
+                    rect[2].max(x),
+                    rect[3].max(y),
+                ];
+            }
+        }
+        assert_eq!(
+            changed, 0,
+            "{name}: bounds {rect:?}, max channel difference {largest}"
+        );
+    };
+    compare("equipment", &warm, &whole);
     assert!(
         reduced < full,
         "a warm frame drew {reduced} of {full} primitives"
@@ -422,20 +455,6 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
             .preview
             .is_none()
     );
-
-    if let Some(directory) = std::env::var_os("RESHIKI_PREVIEW_EVIDENCE") {
-        let directory = std::path::PathBuf::from(directory);
-        std::fs::create_dir_all(&directory).unwrap();
-        for (name, pixels) in [
-            ("equipment-retained.png", warm.clone()),
-            ("equipment-full.png", whole),
-        ] {
-            image::RgbaImage::from_raw(size.width, size.height, pixels)
-                .unwrap()
-                .save(directory.join(name))
-                .unwrap();
-        }
-    }
 
     canvas.piece = None;
     let (base, _) = shot(&canvas, &tree, false);
@@ -463,7 +482,7 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
     let (panned, _) = shot(&canvas, &tree, true);
     assert!(!tree.state.downcast_ref::<State>().shifts().is_empty());
     let (panned_whole, _) = shot(&canvas, &tree, false);
-    assert!(panned == panned_whole);
+    compare("equipment-panned", &panned, &panned_whole);
 
     canvas.camera.zoom *= 1.25;
     shot(&canvas, &tree, true);
@@ -475,10 +494,7 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
     let (near, _) = shot(&canvas, &tree, true);
     assert!(cached(&tree).fragment.get().unwrap().is_none());
     let (near_whole, _) = shot(&canvas, &tree, false);
-    assert!(
-        near == near_whole,
-        "overlapping equipment must retain paint order"
-    );
+    compare("equipment-overlap", &near, &near_whole);
 
     shot(&canvas, &tree, true);
     let before_edit = cached(&tree);
