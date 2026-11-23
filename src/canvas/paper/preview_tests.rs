@@ -417,14 +417,18 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
                     .unwrap();
             }
         }
-        let (mut changed, mut largest) = (0, 0);
+        let (mut changed, mut largest, mut error, mut coverage) = (0, 0, 0, 0);
         let mut rect = [size.width as usize, size.height as usize, 0, 0];
         for (index, (a, b)) in retained
             .chunks_exact(4)
             .zip(full.chunks_exact(4))
             .enumerate()
         {
-            let delta = a.iter().zip(b).map(|(x, y)| x.abs_diff(*y)).max().unwrap();
+            let differences: [u8; 4] = std::array::from_fn(|i| a[i].abs_diff(b[i]));
+            let delta = differences.into_iter().max().unwrap();
+            error += differences.into_iter().map(usize::from).sum::<usize>();
+            let blank = |pixel: &[u8]| pixel == [255; 4];
+            coverage += usize::from(a[3] != b[3] || blank(a) != blank(b));
             if delta > 0 {
                 let (x, y) = (index % size.width as usize, index / size.width as usize);
                 changed += 1;
@@ -442,8 +446,8 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
         // clipping, and reject differences above two 8-bit levels.
         assert_eq!(retained.len(), full.len());
         assert!(
-            largest <= 2 && changed < size.width as usize * size.height as usize / 20,
-            "{name}: {changed} changed pixels, bounds {rect:?}, max channel difference {largest}"
+            largest <= 2 && coverage == 0 && error <= retained.len() / 100,
+            "{name}: {changed} changed pixels, bounds {rect:?}, max channel difference {largest}, coverage differences {coverage}, total channel difference {error}"
         );
     };
     compare("equipment", &warm, &whole);
