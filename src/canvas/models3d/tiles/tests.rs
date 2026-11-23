@@ -784,3 +784,132 @@ fn a_stick_joint_has_no_seam_between_its_sticks() {
         }
     }
 }
+
+// Keep the previous part-by-cell scan as an independent planner oracle.
+fn reference_plan_on(
+    run: &[Primitive],
+    camera: Camera,
+    bounds: Rectangle,
+    theme: reshiki::canvas_theme::CanvasTheme,
+) -> Vec<Tile> {
+    let scale = camera.zoom * SAMPLES.get();
+    let device = |p: World| [p.x * scale, p.y * scale];
+    // A contour strokes every bond's outline at once; each polygon is its own
+    // part so a tile copies and renders only the outlines reaching it.
+    let parts: Vec<_> = run
+        .iter()
+        .enumerate()
+        .flat_map(|(i, p)| match contour(p) {
+            Some(polygons) => (0..polygons.len())
+                .map(|j| ((i, Some(j)), Cow::Owned(keep_polygons(p, &[j]))))
+                .collect(),
+            None => vec![((i, None), Cow::Borrowed(p))],
+        })
+        .map(|(part, p)| {
+            let (lo, hi) = scene::bounds(std::slice::from_ref(&*p));
+            let ([x0, y0], [x1, y1]) = (
+                device(lo.offset(-MARGIN, -MARGIN)),
+                device(hi.offset(MARGIN, MARGIN)),
+            );
+            let mut hasher = DefaultHasher::new();
+            key(&p, &mut hasher);
+            (
+                [x0.floor(), y0.floor(), x1.ceil() + 1., y1.ceil() + 1.].map(|v| v as i64),
+                hasher.finish(),
+                part,
+            )
+        })
+        .collect();
+    let [lo, hi] = [Point::ORIGIN, Point::new(bounds.width, bounds.height)]
+        .map(|p| device(camera.world(p, bounds)).map(|v| (v.floor() as i64).div_euclid(TILE)));
+    let mut tiles = vec![];
+    for ty in lo[1]..=hi[1] {
+        for tx in lo[0]..=hi[0] {
+            let cell = [tx * TILE, ty * TILE, (tx + 1) * TILE, (ty + 1) * TILE];
+            let mut hasher = DefaultHasher::new();
+            scale.to_bits().hash(&mut hasher);
+            theme.is_dark().hash(&mut hasher);
+            let mut rect = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
+            let mut reaching = vec![];
+            for (b, key, part) in &parts {
+                if b[0] < cell[2] && b[2] > cell[0] && b[1] < cell[3] && b[3] > cell[1] {
+                    key.hash(&mut hasher);
+                    rect = [
+                        rect[0].min(b[0]),
+                        rect[1].min(b[1]),
+                        rect[2].max(b[2]),
+                        rect[3].max(b[3]),
+                    ];
+                    reaching.push(*part);
+                }
+            }
+            if reaching.is_empty() {
+                continue;
+            }
+            let rect = [
+                rect[0].max(cell[0]),
+                rect[1].max(cell[1]),
+                rect[2].min(cell[2]),
+                rect[3].min(cell[3]),
+            ];
+            rect.hash(&mut hasher);
+            tiles.push(Tile {
+                key: hasher.finish(),
+                rect,
+                parts: reaching,
+            });
+        }
+    }
+    tiles
+}
+
+#[test]
+fn prepared_tile_plans_match_the_previous_scan_and_reuse_unchanged_inputs() {
+    use reshiki::canvas_theme::CanvasTheme;
+    let bounds = Rectangle::with_size(Size::new(2000., 1300.));
+    for style in [Style::BallStick, Style::Stick, Style::SpaceFilling] {
+        let mut doc = model(style);
+        add_ethanol(&mut doc, -600.);
+        let run = scene::primitives(&doc);
+        let mut prepared = PreparedRun::new(&run);
+        for samples in [OVERSAMPLE, TURNING] {
+            SAMPLES.set(samples);
+            for zoom in [0.3, 1., 1.125, 3.] {
+                for center in [
+                    World::new(15., 17.),
+                    World::new(-250., 150.),
+                    World::new(2000., -2500.),
+                ] {
+                    let camera = Camera { center, zoom };
+                    for theme in CanvasTheme::ALL {
+                        let actual = prepared.plan(camera, bounds, theme);
+                        assert_eq!(&*actual, reference_plan_on(&run, camera, bounds, theme));
+                        let count = prepared.plans;
+                        let warm = prepared.plan(camera, bounds, theme);
+                        assert!(std::rc::Rc::ptr_eq(&actual, &warm));
+                        assert_eq!(count, prepared.plans);
+                    }
+                }
+            }
+        }
+        SAMPLES.set(OVERSAMPLE);
+        let camera = Camera {
+            center: World::new(15., 17.),
+            zoom: 1.,
+        };
+        let first = prepared.plan(camera, bounds, CanvasTheme::Light);
+        let panned = prepared.plan(
+            Camera {
+                center: camera.center.offset(1., -1.),
+                ..camera
+            },
+            bounds,
+            CanvasTheme::Light,
+        );
+        assert!(
+            std::rc::Rc::ptr_eq(&first, &panned),
+            "A pan within the same cells reuses its plan"
+        );
+    }
+    SAMPLES.set(OVERSAMPLE);
+}

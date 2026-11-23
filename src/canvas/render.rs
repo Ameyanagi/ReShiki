@@ -10,6 +10,8 @@ use reshiki::{
     graphics::PathCommand,
     scene::{Primitive, primitives},
 };
+mod culling;
+use culling::{picture_visible, text_visible};
 
 pub(super) fn draw_document(
     frame: &mut layered::Frame<'_>,
@@ -45,6 +47,8 @@ thread_local! {
     /// Primitives drawn by `draw_primitives`, so tests can see whether a
     /// redraw reused the scene geometry.
     pub(super) static DRAWN_PRIMITIVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Handle resolution may decode a mirrored picture; count it after culling.
+    pub(super) static PICTURE_HANDLES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 fn draw_primitives_with_opacity(
@@ -87,27 +91,31 @@ fn draw_primitives_with_opacity(
             ),
             Primitive::Picture(g) => {
                 if let Some(picture) = &g.picture {
+                    let width = g.axis_x.distance(World::default()) * camera.zoom;
+                    let height = g.axis_y.distance(World::default()) * camera.zoom;
+                    let center = camera.screen(
+                        g.origin.offset(
+                            (g.axis_x.x + g.axis_y.x) / 2.,
+                            (g.axis_x.y + g.axis_y.y) / 2.,
+                        ),
+                        bounds,
+                    );
+                    let rect = Rectangle {
+                        x: center.x - width / 2.,
+                        y: center.y - height / 2.,
+                        width,
+                        height,
+                    };
+                    let angle = g.axis_x.y.atan2(g.axis_x.x);
+                    if !picture_visible(rect, angle, bounds) {
+                        continue;
+                    }
                     let flip = g.axis_x.x * g.axis_y.y - g.axis_x.y * g.axis_y.x < 0.;
+                    #[cfg(test)]
+                    PICTURE_HANDLES.with(|n| n.set(n.get() + 1));
                     if let Some(handle) = picture.handle(flip) {
-                        let width = g.axis_x.distance(World::default()) * camera.zoom;
-                        let height = g.axis_y.distance(World::default()) * camera.zoom;
-                        let center = camera.screen(
-                            g.origin.offset(
-                                (g.axis_x.x + g.axis_y.x) / 2.,
-                                (g.axis_x.y + g.axis_y.y) / 2.,
-                            ),
-                            bounds,
-                        );
                         frame.split();
-                        frame.draw_image(
-                            Rectangle {
-                                x: center.x - width / 2.,
-                                y: center.y - height / 2.,
-                                width,
-                                height,
-                            },
-                            canvas::Image::new(handle).rotation(g.axis_x.y.atan2(g.axis_x.x)),
-                        );
+                        frame.draw_image(rect, canvas::Image::new(handle).rotation(angle));
                         frame.split();
                     }
                 }
@@ -225,13 +233,36 @@ fn draw_text(
         color
     };
     let at = camera.screen(*position, bounds);
-    let (paths, scale) = outlined_text(frame, text, *size, camera.zoom, *color, style);
+    let underline_width = style
+        .underline
+        .then(|| reshiki::style::styled_text_width(text, *size, style));
+    let underline = underline_width.map(|width| {
+        let start = camera.screen(position.offset(0., *size * 0.95), bounds);
+        let end = camera.screen(position.offset(width, *size * 0.95), bounds);
+        let stroke = (*size * 0.045 * camera.zoom).max(0.5);
+        Rectangle {
+            x: start.x - stroke / 2. - 1.,
+            y: start.y - stroke / 2. - 1.,
+            width: end.x - start.x + stroke + 2.,
+            height: stroke + 2.,
+        }
+    });
+    let Some((paths, scale)) = outlined_text_visible(
+        frame,
+        text,
+        *size,
+        camera.zoom,
+        *color,
+        style,
+        |rect, scale| text_visible(rect, at, scale, 0., turn, underline, bounds),
+    ) else {
+        return;
+    };
     let (pivot, degrees) = turn.unwrap_or((at, 0.));
     let turned = Transform::translation(-pivot.x, -pivot.y)
         .then_rotate(Angle::degrees(degrees))
         .then_translate(vector(pivot.x, pivot.y));
-    // Turned text is always drawn: its upright box says little about where it lands.
-    if turn.is_some() || on_screen(&paths, at, scale, 0., bounds) {
+    {
         let transform = text_transform(at, scale).then(&turned);
         for (path, color) in &paths.paths {
             frame.fill(&path.transform(&transform), alpha(*color));
@@ -258,8 +289,7 @@ fn draw_text(
             frame.split();
         }
     }
-    if style.underline {
-        let width = reshiki::style::styled_text_width(text, *size, style);
+    if let Some(width) = underline_width {
         frame.stroke(
             &Path::line(
                 camera.screen(position.offset(0.0, *size * 0.95), bounds),
@@ -274,21 +304,35 @@ fn draw_text(
 }
 
 /// Text outlined at the zoom step nearest `zoom`, and the scale from it to `zoom`.
-fn outlined_text(
+fn outlined_text_visible(
     frame: &layered::Frame<'_>,
     text: &str,
     size: f32,
     zoom: f32,
     color: [u8; 3],
     style: &reshiki::typography::TextStyle,
-) -> (std::rc::Rc<text_cache::OutlinedText>, f32) {
+    visible: impl Fn(Option<Rectangle>, f32) -> bool,
+) -> Option<(std::rc::Rc<text_cache::OutlinedText>, f32)> {
     let step = text_cache::zoom_step(zoom);
+    let scale = zoom / step;
     let paths = if let Some(cache) = frame.text_cache {
-        cache.borrow_mut().get(text, size, step, color, style)
+        cache
+            .borrow_mut()
+            .get_visible(text, size, step, color, style, |rect| visible(rect, scale))?
     } else {
-        std::rc::Rc::new(text_cache::outline(text, size, step, color, style))
+        if !visible(Some(text_cache::preflight_region(text, size, step)), scale)
+            && let Some(rect) = text_cache::conservative_bounds(text, size, step, style)
+            && !visible(Some(rect), scale)
+        {
+            return None;
+        }
+        let paths = std::rc::Rc::new(text_cache::outline(text, size, step, color, style));
+        if !visible(paths.bounds, scale) {
+            return None;
+        }
+        paths
     };
-    (paths, zoom / step)
+    Some((paths, scale))
 }
 
 fn text_transform(at: Point, scale: f32) -> Transform {
@@ -307,6 +351,7 @@ fn text_rect(rect: Rectangle, at: Point, scale: f32) -> Rectangle {
 
 /// Whether `paths` drawn at `at`, scaled by `scale` and widened by `pad`,
 /// reach the viewport `bounds`.
+#[cfg(test)]
 fn on_screen(
     paths: &text_cache::OutlinedText,
     at: Point,
@@ -314,15 +359,7 @@ fn on_screen(
     pad: f32,
     bounds: Rectangle,
 ) -> bool {
-    paths.bounds.is_some_and(|b| {
-        Rectangle {
-            x: b.x * scale + at.x - pad,
-            y: b.y * scale + at.y - pad,
-            width: b.width * scale + 2. * pad,
-            height: b.height * scale + 2. * pad,
-        }
-        .intersects(&Rectangle::with_size(bounds.size()))
-    })
+    text_visible(paths.bounds, at, scale, pad, None, None, bounds)
 }
 
 #[cfg(test)]
@@ -403,11 +440,20 @@ fn draw_halo(
                 color,
                 style,
             } => {
-                let (paths, scale) = outlined_text(frame, text, *size, camera.zoom, *color, style);
                 let at = camera.screen(*position, bounds);
-                if !on_screen(&paths, at, scale, spread(0.).width, bounds) && cull() {
+                let Some((paths, scale)) = outlined_text_visible(
+                    frame,
+                    text,
+                    *size,
+                    camera.zoom,
+                    *color,
+                    style,
+                    |rect, scale| {
+                        text_visible(rect, at, scale, spread(0.).width, None, None, bounds)
+                    },
+                ) else {
                     continue;
-                }
+                };
                 let transform = text_transform(at, scale);
                 for (path, _) in &paths.paths {
                     let path = path.transform(&transform);
