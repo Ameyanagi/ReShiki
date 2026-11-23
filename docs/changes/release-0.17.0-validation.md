@@ -18,7 +18,11 @@ packages using the same application version.
 - The local Python suite passed 279 tests and skipped 12. Rust formatting,
   JavaScript lint and the site build passed. Astro checked 18 files with no
   diagnostics, and the build verified 14,500 local links and assets in the checked documentation build.
-- The [package rehearsal](https://github.com/Ameyanagi/ReShiki/actions/runs/45179150561) uses `89bc0c32`. The follow-up commits update documentation.
+- The [package rehearsal](https://github.com/Ameyanagi/ReShiki/actions/runs/45179150561) uses `89bc0c32`.
+  Follow-up commits update documentation and allow 150 minutes for Windows x64
+  packaging in every release mode. The rehearsal reached the worker-pipe test
+  after 80 minutes. That test and the geometry check recently took just over
+  20 minutes in the [passing nightly build](https://github.com/Ameyanagi/ReShiki/actions/runs/45170775910/job/137679889278).
 - The stable [Release builds workflow](https://github.com/Ameyanagi/ReShiki/actions/workflows/release.yml)
   requires the six desktop targets, signed and notarized macOS downloads, and
   the full live RDKit reference suite before publishing.
