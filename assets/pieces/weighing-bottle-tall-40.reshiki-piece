@@ -60,7 +60,12 @@
    "layer": "body",
    "material": "glass",
    "role": "detail",
-   "path": "M-16.2 8L16.2 8"
+   "path": "M-16.2 8L16.2 8",
+   "when": {
+    "closure": [
+     "removed"
+    ]
+   }
   },
   {
    "id": "ground-plug",
