@@ -187,8 +187,12 @@ async fn early_culling_matches_unculled_text_pictures_and_halos() {
                                 let mut count = 0;
                                 let mut bounds = [240, 160, 0, 0];
                                 let mut worst = 0;
-                                for (i, (a, b)) in
-                                    a.chunks_exact(4).zip(b.chunks_exact(4)).enumerate()
+                                for (i, (a, b)) in a
+                                    .as_chunks::<4>()
+                                    .0
+                                    .iter()
+                                    .zip(b.as_chunks::<4>().0.iter())
+                                    .enumerate()
                                 {
                                     let delta =
                                         a.iter().zip(b).map(|(a, b)| a.abs_diff(*b)).max().unwrap();

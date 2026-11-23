@@ -119,7 +119,9 @@ async fn mixed_scene_retains_vectors_around_live_tiles_in_paint_order() {
                     }
                 }
                 let gold = warm
-                    .chunks_exact(4)
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
                     .filter(|p| p[0] > p[1].saturating_add(15) && p[1] > p[2].saturating_add(15))
                     .count();
                 assert!(
