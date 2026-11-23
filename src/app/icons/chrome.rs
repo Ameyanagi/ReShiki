@@ -190,12 +190,12 @@ pub(super) fn eye(f: &mut Frame<'_>, ink: Color) {
 }
 
 pub(super) fn search(f: &mut Frame<'_>, ink: Color) {
-    let stroke = Stroke::default().with_width(1.5).with_color(ink);
-    f.stroke(&Path::circle(Point::new(6.5, 6.5), 4.4), stroke);
-    f.stroke(
-        &Path::line(Point::new(9.7, 9.7), Point::new(14., 14.)),
-        stroke,
-    );
+    // The GitHub picker uses a 16-point frame and the main toolbar uses 24.
+    let scale = f.width().min(f.height()).min(24.) / 16.;
+    let at = |x: f32, y: f32| Point::new(x * scale, y * scale);
+    let stroke = Stroke::default().with_width(1.5 * scale).with_color(ink);
+    f.stroke(&Path::circle(at(6.5, 6.5), 4.4 * scale), stroke);
+    f.stroke(&Path::line(at(9.7, 9.7), at(14., 14.)), stroke);
 }
 
 /// Four rounded squares in a 16 × 16 box: the Tiles view.

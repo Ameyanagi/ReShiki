@@ -692,10 +692,11 @@ impl App {
                 reshiki::accessibility::button(
                     "header-search",
                     format!("Search commands, structures and names; {search_keys}"),
-                    canvas(Glyph(Icon::Search, true)).width(16).height(16),
+                    canvas(Glyph(Icon::Search, true)).width(24).height(24),
                 )
+                .width(36)
                 .height(36)
-                .padding([0, 10])
+                .padding(6)
                 .style(control(self.commands.open))
                 .on_press(search.clone()),
                 keyed("Search commands, structures and names", &search),
