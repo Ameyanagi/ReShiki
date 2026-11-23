@@ -28,6 +28,7 @@ fn cold_offscreen_ascii_does_not_create_outlines_and_warm_unicode_uses_exact_bou
 
 #[test]
 fn conservative_ascii_bounds_cover_shaped_ink_at_supported_sizes_and_fonts() {
+    let mut reused = bounds::Cache::default();
     for family in ["Arial", "Times New Roman", "Courier New"] {
         for bold in [false, true] {
             let style = TextStyle {
@@ -38,7 +39,9 @@ fn conservative_ascii_bounds_cover_shaped_ink_at_supported_sizes_and_fonts() {
             for size in [6., 14., 80.] {
                 for zoom in [0.25, 1., 4.] {
                     for text in ["AV office fi", "(NH2) + COOH", "gypjQ_ / [] {}"] {
-                        let Some(bound) = bounds::conservative(text, size, zoom, &style) else {
+                        let fresh = bounds::conservative(text, size, zoom, &style);
+                        assert_eq!(reused.conservative(text, size, zoom, &style), fresh);
+                        let Some(bound) = fresh else {
                             continue;
                         };
                         let paths = outline(text, size, zoom, [0, 0, 0], &style);
@@ -87,6 +90,34 @@ fn offscreen_text_extents_have_a_separate_bounded_budget() {
         assert!(cache.extents.len() <= LIMIT);
         assert!(cache.extent_cost <= 1024 * 1024);
     }
+    assert!(
+        cache.bounds.svg_queries <= 10,
+        "Offscreen captions must not resolve a font again for each occurrence of a digit"
+    );
+    assert!(cache.bounds.iced_queries <= 4);
+}
+
+#[test]
+fn nearby_cold_text_outlines_once_without_a_metrics_preflight() {
+    let mut cache = TextCache::default();
+    // The origin lies just left of the view, but its glyphs reach it.
+    let viewport = Rectangle {
+        x: 10.,
+        y: 0.,
+        width: 100.,
+        height: 100.,
+    };
+    assert!(
+        cache
+            .get_visible("office", 14., 1., [0, 0, 0], &Default::default(), |rect| {
+                rect.is_some_and(|rect| rect.intersects(&viewport))
+            })
+            .is_some()
+    );
+    assert!(cache.extents.is_empty());
+    assert_eq!(cache.bounds.svg_queries, 0);
+    assert_eq!(cache.bounds.iced_queries, 0);
+    assert_eq!(cache.entries.len(), 1);
 }
 
 #[test]

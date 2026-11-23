@@ -320,7 +320,8 @@ fn outlined_text_visible(
             .borrow_mut()
             .get_visible(text, size, step, color, style, |rect| visible(rect, scale))?
     } else {
-        if let Some(rect) = text_cache::conservative_bounds(text, size, step, style)
+        if !visible(Some(text_cache::preflight_region(text, size, step)), scale)
+            && let Some(rect) = text_cache::conservative_bounds(text, size, step, style)
             && !visible(Some(rect), scale)
         {
             return None;

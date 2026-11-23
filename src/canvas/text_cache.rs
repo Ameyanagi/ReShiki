@@ -3,7 +3,7 @@
 mod bounds;
 mod glyphs;
 use super::{Point, Rectangle, rgb};
-pub(super) use bounds::conservative as conservative_bounds;
+pub(super) use bounds::{conservative as conservative_bounds, preflight_region};
 use iced::{
     Color,
     widget::{
@@ -52,6 +52,7 @@ pub(super) struct TextCache {
     extents: HashMap<Key, Option<Rectangle>>,
     extent_cost: usize,
     fonts: usize,
+    bounds: bounds::Cache,
 }
 
 struct Entry {
@@ -107,15 +108,15 @@ impl TextCache {
             entry.used = self.clock;
             return Some(entry.text.clone());
         }
-        // An origin already in view favors the usual outline path. Only cold
-        // offscreen origins pay for a metrics preflight; visible text should
-        // not be shaped twice just to learn it still needs drawing.
-        let extent = if visible(Some(Rectangle::with_size(iced::Size::ZERO))) {
-            None
-        } else if let Some(extent) = self.extents.get(&key) {
+        // Known extents are cheap. Cold text near the view favors outlining
+        // once; only distant text pays for a conservative shaping preflight.
+        // The broad region selects work and never rejects any artwork.
+        let extent = if let Some(extent) = self.extents.get(&key) {
             *extent
+        } else if visible(Some(preflight_region(text, size, zoom))) {
+            None
         } else {
-            let extent = bounds::conservative(text, size, zoom, style);
+            let extent = self.bounds.conservative(text, size, zoom, style);
             let cost =
                 key.text.len() + key.family.len() + std::mem::size_of::<(Key, Option<Rectangle>)>();
             const EXTENT_BUDGET: usize = 1024 * 1024;
