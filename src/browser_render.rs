@@ -1,7 +1,9 @@
 //! Browser export jobs use the existing renderers in a separate worker memory.
 //! The font envelope also serves clipboard jobs, including fonts loaded from
 //! browser storage rather than through the JavaScript package wrapper.
-use crate::{document::Document, engine::LocalEngine, export, formats};
+#[cfg(any(target_arch = "wasm32", test))]
+use crate::document::Document;
+use crate::{engine::LocalEngine, export, formats};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
