@@ -52,6 +52,99 @@ fn arrow(doc: &mut Document, x: f32, y: f32) -> u64 {
 const GUTTER: f32 = 10.;
 
 #[test]
+fn a_tube_end_resize_preserves_connections_made_after_arranging_separate_units() {
+    use crate::equipment::{
+        builtin,
+        eval::Value,
+        format::HoldKind,
+        placed,
+        solve::{self, JointRef, adjust},
+    };
+    use crate::graphics::{Graphic, GraphicKind, Panel};
+    for end in ["a", "b"] {
+        let mut doc = Document::default();
+        let mm = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+        for (id, name) in [
+            (1, "reshiki/compression-tube-60-1-4"),
+            (2, "reshiki/tube-furnace-32"),
+            (3, "reshiki/compression-cap-1-4"),
+        ] {
+            doc.graphics.push(placed::graphic(
+                id,
+                builtin::find(name).unwrap(),
+                Point::new(id as f32 * 200., 0.),
+                mm,
+            ));
+        }
+        adjust::set(&mut doc, 1, "length", Value::Number(600.)).unwrap();
+        adjust::set(&mut doc, 2, "tube-od", Value::State("1-4-in".into())).unwrap();
+        arrange(&mut doc, &[1, 2, 3], Flow::Row, GUTTER).unwrap();
+        let endpoint = |piece, joint: &str| JointRef {
+            piece,
+            joint: joint.into(),
+        };
+        let port = |doc: &Document, endpoint: &JointRef| {
+            solve::ports(
+                doc.graphics
+                    .iter()
+                    .find(|g| g.id == endpoint.piece)
+                    .unwrap(),
+            )
+            .into_iter()
+            .find(|p| p.at == *endpoint)
+            .unwrap()
+        };
+        let bore = solve::ports(&doc.graphics[1])
+            .into_iter()
+            .find(|p| p.hold() == Some(HoldKind::ThroughBore))
+            .unwrap();
+        solve::connect(&mut doc, &[1], &bore.at, &endpoint(1, "span")).unwrap();
+        solve::connect(&mut doc, &[3], &endpoint(1, end), &endpoint(3, "tube")).unwrap();
+        let panel = doc.next_id();
+        let mut frame = Graphic::dragged(
+            panel,
+            GraphicKind::Rectangle,
+            Point::new(-20., -20.),
+            Point::new(1000., 100.),
+            Default::default(),
+            Default::default(),
+            false,
+        );
+        frame.panel = Some(Panel::default());
+        doc.graphics.push(frame);
+        doc.group_selection(&[1, 2, 3, panel]).unwrap();
+        crate::graphics::panel::fit(&mut doc, panel);
+        doc.piece_definitions = placed::used(&doc);
+        doc.validate().unwrap();
+        assert_eq!(doc.seats.len(), 2);
+        let before = doc.clone();
+        let opposite = endpoint(1, if end == "a" { "b" } else { "a" });
+        let pinned = port(&doc, &opposite).point;
+        let furnace = doc.graphics.iter().find(|g| g.id == 2).unwrap().clone();
+        adjust::set_end(&mut doc, 1, "length", end, Value::Number(660.)).unwrap();
+        let solved = doc.clone();
+        let _ =
+            crate::transaction::reconcile_with_layout_anchor(&mut doc, before.clone(), 1).unwrap();
+        assert_eq!(doc.seats, before.seats);
+        for graphic in solved.graphics.iter().filter(|g| g.piece.is_some()) {
+            assert_eq!(
+                doc.graphics.iter().find(|g| g.id == graphic.id).unwrap(),
+                graphic,
+                "mechanical poses survive incompatible layout slots"
+            );
+        }
+        assert_eq!(*doc.graphics.iter().find(|g| g.id == 2).unwrap(), furnace);
+        let after = port(&doc, &opposite).point;
+        assert!((after[0] - pinned[0]).hypot(after[1] - pinned[1]) < 1e-4);
+        let frame = doc.graphics.iter().find(|g| g.id == panel).unwrap();
+        let (lo, hi) = bounds(&doc, &[1, 2, 3]);
+        let pad = crate::style::DEFAULT.world(crate::graphics::panel::PADDING_PT);
+        assert!((frame.origin.x - (lo.x - pad)).abs() < 0.01);
+        assert!((frame.origin.x + frame.axis_x.x - (hi.x + pad)).abs() < 0.01);
+    }
+}
+
+#[test]
 fn a_row_keeps_shared_gutters_and_centers_units_without_resizing_them() {
     let mut doc = Document::default();
     let a = chain(&mut doc, 0., 0., 2);

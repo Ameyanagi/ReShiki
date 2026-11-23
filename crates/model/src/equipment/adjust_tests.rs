@@ -475,3 +475,239 @@ fn dragging_a_balloons_top_inflates_it_without_moving_its_needle_or_septum() {
     assert!(after_hi.y - after_lo.y > before_hi.y - before_lo.y);
     assert!(after_lo.y < before_lo.y);
 }
+
+#[test]
+fn either_straight_tube_end_changes_length_with_the_opposite_end_fixed() {
+    for stock in [60, 120] {
+        for size in ["1-16", "1-8", "1-4", "3-8", "6-mm"] {
+            for end in ["a", "b"] {
+                for flip in [false, true] {
+                    let mut doc = Document::default();
+                    let tube = add(
+                        &mut doc,
+                        &format!("reshiki/compression-tube-{stock}-{size}"),
+                        Point::new(42., -18.),
+                    );
+                    let g = doc.graphics.iter_mut().find(|g| g.id == tube).unwrap();
+                    let (s, c) = 37_f32.to_radians().sin_cos();
+                    let mm = g.axis_x.x;
+                    g.axis_x = Point::new(c * mm, s * mm);
+                    let sign = if flip { -1. } else { 1. };
+                    g.axis_y = Point::new(-s * mm * sign, c * mm * sign);
+                    let axes = (g.axis_x, g.axis_y);
+                    let handles = adjust::handles(g);
+                    assert_eq!(handles.len(), 2);
+                    let handle = handles
+                        .iter()
+                        .find(|h| h.tube_end.as_deref() == Some(end))
+                        .unwrap();
+                    let opposite = if end == "a" { "b" } else { "a" };
+                    let pinned = port(&doc, tube, opposite).point;
+                    let moving = port(&doc, tube, end);
+                    // Lateral pointer motion does not change the tube's axis.
+                    let to = [
+                        moving.point[0]
+                            + f64::from(mm) * (24. * moving.dir[0] - 9. * moving.dir[1]),
+                        moving.point[1]
+                            + f64::from(mm) * (24. * moving.dir[1] + 9. * moving.dir[0]),
+                    ];
+                    let value = adjust::dragged(graphic(&doc, tube), handle, to).unwrap();
+                    assert_eq!(value, Value::Number(f64::from(stock) + 24.));
+                    assert!(
+                        adjust::set_end(&mut doc, tube, "length", end, value)
+                            .unwrap()
+                            .is_empty()
+                    );
+                    assert_eq!(
+                        (graphic(&doc, tube).axis_x, graphic(&doc, tube).axis_y),
+                        axes
+                    );
+                    let after = port(&doc, tube, opposite).point;
+                    assert!((after[0] - pinned[0]).hypot(after[1] - pinned[1]) < 1e-4);
+                    let moved = port(&doc, tube, end).point;
+                    assert!(
+                        (moved[0] - moving.point[0] - f64::from(mm) * 24. * moving.dir[0]).abs()
+                            < 1e-4
+                    );
+                    assert!(
+                        (moved[1] - moving.point[1] - f64::from(mm) * 24. * moving.dir[1]).abs()
+                            < 1e-4
+                    );
+                    let row = super::parts_list::tube_row(&doc, tube).unwrap().unwrap();
+                    assert_eq!(row.cut_length_mm, f64::from(stock) + 24.);
+                    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+                    assert_eq!(
+                        super::parts_list::tube_row(&reopened, tube)
+                            .unwrap()
+                            .unwrap(),
+                        row
+                    );
+                    // Either end also shortens, with the original limits.
+                    adjust::set_end(&mut doc, tube, "length", end, Value::Number(-100.)).unwrap();
+                    assert_eq!(param(&doc, tube, "length"), Some(Value::Number(20.)));
+                    let after = port(&doc, tube, opposite).point;
+                    assert!((after[0] - pinned[0]).hypot(after[1] - pinned[1]) < 1e-4);
+                    adjust::set_end(&mut doc, tube, "length", end, Value::Number(2000.)).unwrap();
+                    assert_eq!(param(&doc, tube, "length"), Some(Value::Number(1000.)));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn tube_end_edits_carry_their_fitting_and_keep_the_opposite_fitting_and_seats() {
+    for end in ["a", "b"] {
+        let mut doc = Document::default();
+        let tube = add(
+            &mut doc,
+            "reshiki/compression-tube-60-1-4",
+            Point::default(),
+        );
+        let caps = ["a", "b"].map(|end| {
+            let cap = add(
+                &mut doc,
+                "reshiki/compression-cap-1-4",
+                Point::new(-100., -100.),
+            );
+            assert!(
+                solve::connect(
+                    &mut doc,
+                    &[cap],
+                    &JointRef {
+                        piece: tube,
+                        joint: end.into()
+                    },
+                    &JointRef {
+                        piece: cap,
+                        joint: "tube".into()
+                    }
+                )
+                .is_some()
+            );
+            cap
+        });
+        let fixed = if end == "a" { caps[1] } else { caps[0] };
+        let moving = if end == "a" { caps[0] } else { caps[1] };
+        let g = doc.graphics.iter_mut().find(|g| g.id == fixed).unwrap();
+        let mut definition = (**g.piece.as_ref().unwrap().linked.as_ref().unwrap()).clone();
+        definition.grounded = true;
+        definition.id = "test/grounded-opposite-cap".into();
+        let piece = g.piece.as_mut().unwrap();
+        piece.definition = placed::key(&definition);
+        piece.linked = Some(definition.into());
+        let before = doc.clone();
+        let opposite = if end == "a" { "b" } else { "a" };
+        let pinned = port(&doc, tube, opposite).point;
+        let direction = port(&doc, tube, end).dir;
+        let mm = f64::from(graphic(&doc, tube).axis_x.x);
+        assert!(
+            adjust::set_end(&mut doc, tube, "length", end, Value::Number(100.))
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(doc.seats, before.seats);
+        assert_eq!(graphic(&doc, fixed), graphic(&before, fixed));
+        let fixed = port(&doc, tube, opposite).point;
+        assert!((fixed[0] - pinned[0]).hypot(fixed[1] - pinned[1]) < 1e-4);
+        let old = graphic(&before, moving).origin;
+        let now = graphic(&doc, moving).origin;
+        assert!((f64::from(now.x - old.x) - 40. * mm * direction[0]).abs() < 1e-4);
+        assert!((f64::from(now.y - old.y) - 40. * mm * direction[1]).abs() < 1e-4);
+        seated(&doc);
+        let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+        let row = super::parts_list::tube_row(&doc, tube).unwrap().unwrap();
+        assert_eq!(row.cut_length_mm, 100.);
+        assert_eq!(row.ends.map(|e| e.connection.unwrap().id), caps);
+    }
+}
+
+#[test]
+fn tube_end_drag_releases_a_fixed_fitting_instead_of_moving_the_opposite_end() {
+    for end in ["a", "b"] {
+        let mut doc = Document::default();
+        let tube = add(
+            &mut doc,
+            "reshiki/compression-tube-60-1-4",
+            Point::default(),
+        );
+        let cap = add(
+            &mut doc,
+            "reshiki/compression-cap-1-4",
+            Point::new(-100., -100.),
+        );
+        solve::connect(
+            &mut doc,
+            &[cap],
+            &JointRef {
+                piece: tube,
+                joint: end.into(),
+            },
+            &JointRef {
+                piece: cap,
+                joint: "tube".into(),
+            },
+        )
+        .unwrap();
+        let g = doc.graphics.iter_mut().find(|g| g.id == cap).unwrap();
+        let mut definition = (**g.piece.as_ref().unwrap().linked.as_ref().unwrap()).clone();
+        definition.grounded = true;
+        definition.id = "test/grounded-compression-cap".into();
+        let piece = g.piece.as_mut().unwrap();
+        piece.definition = placed::key(&definition);
+        piece.linked = Some(definition.into());
+        let before = doc.clone();
+        let opposite = if end == "a" { "b" } else { "a" };
+        let pinned = port(&doc, tube, opposite).point;
+        let released = adjust::set_end(&mut doc, tube, "length", end, Value::Number(100.)).unwrap();
+        assert_eq!(released, before.seats);
+        assert!(doc.seats.is_empty());
+        assert_eq!(graphic(&doc, cap), graphic(&before, cap));
+        let fixed = port(&doc, tube, opposite).point;
+        assert!((fixed[0] - pinned[0]).hypot(fixed[1] - pinned[1]) < 1e-4);
+    }
+}
+
+#[test]
+fn tube_end_handles_accept_old_adjustable_definitions_and_reject_invalid_edits() {
+    let mut doc = Document::default();
+    let tube = add(
+        &mut doc,
+        "reshiki/compression-tube-60-1-4",
+        Point::default(),
+    );
+    let g = doc.graphics.iter_mut().find(|g| g.id == tube).unwrap();
+    let mut definition = (**g.piece.as_ref().unwrap().linked.as_ref().unwrap()).clone();
+    definition.tube_spec = None;
+    let piece = g.piece.as_mut().unwrap();
+    piece.definition = placed::key(&definition);
+    piece.linked = Some(definition.into());
+    let handles = adjust::handles(g);
+    assert_eq!(handles.len(), 2);
+    let before = doc.clone();
+    for (param, end, value) in [
+        ("length", "nope", Value::Number(100.)),
+        ("nope", "a", Value::Number(100.)),
+        ("length", "a", Value::Number(f64::NAN)),
+        ("length", "b", Value::State("long".into())),
+    ] {
+        assert!(adjust::set_end(&mut doc, tube, param, end, value).is_err());
+        assert_eq!(doc, before);
+    }
+    assert!(adjust::dragged(graphic(&doc, tube), &handles[0], [f64::NAN, 0.]).is_none());
+    adjust::set_end(&mut doc, tube, "length", "a", Value::Number(75.)).unwrap();
+    assert_eq!(param(&doc, tube, "length"), Some(Value::Number(75.)));
+    // The numeric Properties operation retains its original pivot.
+    let anchor = port(&doc, tube, "a").point;
+    adjust::set(&mut doc, tube, "length", Value::Number(90.)).unwrap();
+    assert_eq!(port(&doc, tube, "a").point, anchor);
+    let bend = add(
+        &mut doc,
+        "reshiki/compression-tube-bend-90-1-4",
+        Point::default(),
+    );
+    let handles = adjust::handles(graphic(&doc, bend));
+    assert_eq!(handles.len(), 2);
+    assert!(handles.iter().all(|h| h.tube_end.is_none()));
+    assert!(adjust::set_end(&mut doc, bend, "inlet_length", "a", Value::Number(100.)).is_err());
+}

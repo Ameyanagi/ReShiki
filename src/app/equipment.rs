@@ -560,7 +560,7 @@ impl App {
                 let note = carried.clone().unwrap_or_default()
                     + &self.set_piece_param_continuing(
                         id,
-                        &param,
+                        (&param, None),
                         Value::Number(value),
                         before,
                         carried.is_some(),
@@ -581,7 +581,18 @@ impl App {
     /// Set a parameter of the piece `id` as one Undo step, re-solving what is
     /// seated on its parts, and say what it is now and what it let go of.
     pub(super) fn set_piece_param(&mut self, id: u64, param: &str, value: Value, before: Document) {
-        self.set_piece_param_continuing(id, param, value, before, false);
+        self.set_piece_param_continuing(id, (param, None), value, before, false);
+    }
+
+    pub(super) fn set_tube_end(
+        &mut self,
+        id: u64,
+        param: &str,
+        end: &str,
+        value: Value,
+        before: Document,
+    ) {
+        self.set_piece_param_continuing(id, (param, Some(end)), value, before, false);
     }
 
     /// [`App::set_piece_param`], merged into the last Undo step while `continuing`.
@@ -589,12 +600,17 @@ impl App {
     fn set_piece_param_continuing(
         &mut self,
         id: u64,
-        param: &str,
+        target: (&str, Option<&str>),
         value: Value,
         before: Document,
         continuing: bool,
     ) -> String {
-        match adjust::set(&mut self.tab.doc, id, param, value) {
+        let (param, end) = target;
+        let result = match end {
+            Some(end) => adjust::set_end(&mut self.tab.doc, id, param, end, value),
+            None => adjust::set(&mut self.tab.doc, id, param, value),
+        };
+        match result {
             Err(error) => {
                 self.tab.doc = before;
                 self.status = error;
@@ -603,7 +619,7 @@ impl App {
             }
             Ok(_) => {
                 let (seats, names) = (before.seats.clone(), before.clone());
-                self.changed_continuing(before, continuing);
+                self.changed_continuing_anchored(before, continuing, end.map(|_| id));
                 if self.error {
                     return String::new();
                 }

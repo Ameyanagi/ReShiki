@@ -225,6 +225,16 @@ pub fn reflow(
     previous: Option<Flow>,
     reference: Option<&Document>,
 ) {
+    reflow_anchored(doc, group, previous, reference, None);
+}
+
+fn reflow_anchored(
+    doc: &mut Document,
+    group: u64,
+    previous: Option<Flow>,
+    reference: Option<&Document>,
+    fixed: Option<u64>,
+) {
     let Some(layout) = doc
         .groups
         .iter()
@@ -234,6 +244,23 @@ pub fn reflow(
         return;
     };
     let units = units(doc, group);
+    // A connection made after arranging can leave mechanically linked
+    // pieces in different layout slots. An explicit end resize preserves
+    // its solved assembly poses rather than separating those seats again.
+    let mut constrained = fixed.map(|id| crate::equipment::solve::assembly(doc, id));
+    if let (Some(id), Some(reference), Some(members)) = (fixed, reference, &mut constrained) {
+        members.extend(crate::equipment::solve::assembly(reference, id));
+    }
+    if constrained.as_ref().is_some_and(|members| {
+        units
+            .iter()
+            .filter(|unit| unit.iter().any(|id| members.contains(id)))
+            .count()
+            > 1
+    }) {
+        fit_panels(doc, group);
+        return;
+    }
     let bounds = crate::scene::selections_bounds(doc, &units);
     let cells: Vec<(Vec<u64>, (Point, Point))> = units
         .into_iter()
@@ -357,7 +384,7 @@ pub fn reflow(
         .iter()
         .flat_map(|cell| cell.0.iter().copied())
         .collect();
-    let moves: Vec<_> = cells
+    let mut moves: Vec<_> = cells
         .into_iter()
         .enumerate()
         .map(|(i, (unit, b, _))| {
@@ -373,6 +400,20 @@ pub fn reflow(
             (unit, x - b.0.x, y - b.0.y)
         })
         .collect();
+    // An explicit end resize already chose its fixed point. Keep that
+    // unit where the resize put it; the other units retain their gutters
+    // and alignment around it, including in nested layouts.
+    if let Some((_, dx, dy)) = moves.iter().find(|(unit, ..)| {
+        constrained
+            .as_ref()
+            .is_some_and(|members| unit.iter().any(|id| members.contains(id)))
+    }) {
+        let (dx, dy) = (*dx, *dy);
+        for (_, x, y) in &mut moves {
+            *x -= dx;
+            *y -= dy;
+        }
+    }
     doc.translate_units(&moves);
     if let Some(layout) = doc
         .groups
@@ -383,6 +424,10 @@ pub fn reflow(
         layout.order = order;
     }
     // A panel wrapped around the layout follows its new extent.
+    fit_panels(doc, group);
+}
+
+fn fit_panels(doc: &mut Document, group: u64) {
     let members = doc
         .groups
         .iter()
@@ -498,6 +543,16 @@ pub fn arrange(doc: &mut Document, ids: &[u64], flow: Flow, gutter_pt: f32) -> R
 /// After an edit, reflow each layout whose units changed size or number, so
 /// the gutters last. Moving a unit alone leaves the layout as placed.
 pub fn reconcile(doc: &mut Document, before: &Document) {
+    reconcile_inner(doc, before, None);
+}
+
+/// Reflow around an explicitly resized unit rather than moving that unit
+/// back to its layout slot. Ordinary parameter edits retain `reconcile`.
+pub(crate) fn reconcile_anchored(doc: &mut Document, before: &Document, anchor: u64) {
+    reconcile_inner(doc, before, Some(anchor));
+}
+
+fn reconcile_inner(doc: &mut Document, before: &Document, anchor: Option<u64>) {
     // Inner layouts first, so an outer one sees their new extent.
     let mut groups: Vec<(usize, u64)> = doc
         .groups
@@ -524,7 +579,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
                 .collect()
         };
         if before.groups.iter().any(|g| g.id == group) && sizes(doc) != sizes(before) {
-            reflow(doc, group, None, Some(before));
+            reflow_anchored(doc, group, None, Some(before), anchor);
         }
     }
 }

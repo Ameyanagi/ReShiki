@@ -576,7 +576,11 @@ impl MoleculeCanvas<'_> {
                     HandleShape::Diamond
                 };
                 let chosen = dragged.is_some_and(|(id, d)| {
-                    id == g.id && d.param == h.param && d.part == h.part && d.grip == h.grip
+                    id == g.id
+                        && d.param == h.param
+                        && d.part == h.part
+                        && d.grip == h.grip
+                        && d.tube_end == h.tube_end
                 });
                 draw_handle(frame, at, shape, chosen);
             }

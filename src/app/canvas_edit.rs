@@ -460,6 +460,14 @@ impl App {
             Edit::PieceParam { id, param, value } => {
                 return self.set_piece_param(id, &param, value, before);
             }
+            Edit::TubeEnd {
+                id,
+                param,
+                end,
+                value,
+            } => {
+                return self.set_tube_end(id, &param, &end, value, before);
+            }
         }
         if prepared_cycle {
             let candidate = std::mem::replace(&mut self.tab.doc, before);

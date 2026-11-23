@@ -133,10 +133,19 @@ impl MoleculeCanvas<'_> {
                 let Some(value) = value.filter(|_| inside && self.tool.selects()) else {
                     return Some(Action::request_redraw().and_capture());
                 };
-                Edit::PieceParam {
-                    id,
-                    param: handle.param,
-                    value,
+                if let Some(end) = handle.tube_end {
+                    Edit::TubeEnd {
+                        id,
+                        param: handle.param,
+                        end,
+                        value,
+                    }
+                } else {
+                    Edit::PieceParam {
+                        id,
+                        param: handle.param,
+                        value,
+                    }
                 }
             }
             Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),

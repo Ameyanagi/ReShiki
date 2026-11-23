@@ -4,7 +4,7 @@
 //! part or a liquid's surface, or by clicking a part that has states.
 use super::*;
 use crate::equipment::eval::{Values, part_transforms};
-use crate::equipment::format::{Gesture, Param, Unit};
+use crate::equipment::format::{Gesture, Motion, Param, Unit};
 use crate::equipment::geometry::{flatten, parse_path};
 use crate::equipment::plan;
 
@@ -21,6 +21,88 @@ pub struct Handle {
     pub part: Option<String>,
     /// A hose's end or middle, dragged to reshape it; `param` is empty then.
     pub grip: Option<super::hose::Grip>,
+    /// A straight tube's cut end. Dragging it keeps the opposite end fixed.
+    pub tube_end: Option<String>,
+}
+
+/// Recognize the ordinary single-span compression tube by its mechanics,
+/// including adjustable definitions embedded before `tube_spec` existed.
+/// Bent tubes retain their independently editable leg handles.
+fn straight_tube(d: &Definition) -> Option<(&str, &str, [&str; 2])> {
+    let [part] = d.parts.as_slice() else {
+        return None;
+    };
+    let [a, b] = d.joints.as_slice() else {
+        return None;
+    };
+    let [span] = d.holds.as_slice() else {
+        return None;
+    };
+    let Motion::Stretch {
+        pivot,
+        axis,
+        per_unit,
+    } = part.motion
+    else {
+        return None;
+    };
+    let Some(Param::Range {
+        min,
+        default,
+        unit: Unit::Mm,
+        ..
+    }) = d.params.iter().find(|p| p.id() == part.param)
+    else {
+        return None;
+    };
+    let compression = |j: &Joint| {
+        matches!(
+            j,
+            Joint::Plug {
+                family: PlugFamily::Compression,
+                gender: Gender::M,
+                ..
+            }
+        )
+    };
+    let delta = sub(b.at(), a.at());
+    let length = len(delta);
+    if d.grounded
+        || d.tube.is_some()
+        || !d.liquids.is_empty()
+        || part.parent.is_some()
+        || !compression(a)
+        || !compression(b)
+        || a.part() != Some(part.id.as_str())
+        || b.part() != Some(part.id.as_str())
+        || span.kind != HoldKind::TubeSpan
+        || span.part.as_deref() != Some(part.id.as_str())
+        || span.from != a.at()
+        || span.to != b.at()
+        || d.shapes
+            .iter()
+            .any(|s| s.part.as_deref() != Some(part.id.as_str()))
+        || *min <= 0.
+        || !length.is_finite()
+        || length <= 0.
+        || (length - default).abs() > 1e-6
+        || (per_unit * default - 1.).abs() > 1e-6
+        || pivot != a.at()
+        || !len(axis).is_finite()
+        || len(axis) <= 0.
+        || !len(a.dir()).is_finite()
+        || len(a.dir()) <= 0.
+        || !len(b.dir()).is_finite()
+        || len(b.dir()) <= 0.
+        || !a.poses().is_empty()
+        || !b.poses().is_empty()
+        || dot(normalize(axis), normalize(delta)).abs() < 1. - 1e-6
+        || dot(normalize(a.dir()), normalize(delta)) > -1. + 1e-6
+        || dot(normalize(b.dir()), normalize(delta)) < 1. - 1e-6
+    {
+        return None;
+    }
+    Some((&part.param, &part.id, [a.id(), b.id()]))
 }
 
 fn definition(g: &Graphic) -> Option<(&Arc<Definition>, Values)> {
@@ -67,9 +149,26 @@ pub fn handles(g: &Graphic) -> Vec<Handle> {
                 toggle: h.gesture == Gesture::Toggle,
                 part: Some(p.id.clone()),
                 grip: None,
+                tube_end: None,
             })
         })
         .collect();
+    if let Some((param, part, ends)) = straight_tube(d) {
+        out.retain(|h| h.part.as_deref() != Some(part));
+        let ports = ports(g);
+        for end in ends {
+            if let Some(port) = ports.iter().find(|p| p.at.joint == end) {
+                out.push(Handle {
+                    param: param.to_owned(),
+                    at: port.point,
+                    toggle: false,
+                    part: Some(part.to_owned()),
+                    grip: None,
+                    tube_end: Some(end.to_owned()),
+                });
+            }
+        }
+    }
     for (id, liquid) in fills(d) {
         let fill = match values.get(id) {
             Some(Value::Number(n)) => *n,
@@ -82,6 +181,7 @@ pub fn handles(g: &Graphic) -> Vec<Handle> {
                 toggle: false,
                 part: None,
                 grip: None,
+                tube_end: None,
             });
         }
     }
@@ -91,6 +191,7 @@ pub fn handles(g: &Graphic) -> Vec<Handle> {
         toggle: false,
         part: None,
         grip: Some(grip),
+        tube_end: None,
     }));
     out
 }
@@ -115,9 +216,28 @@ fn range(p: &Param) -> Option<(f64, f64, f64)> {
 /// The value a drag of `handle` to `to` (world units) sets: the one that
 /// brings the handle nearest the pointer, or a liquid's level to it.
 pub fn dragged(g: &Graphic, handle: &Handle, to: [f64; 2]) -> Option<Value> {
+    if !to.iter().all(|v| v.is_finite()) {
+        return None;
+    }
     let (d, mut values) = definition(g)?;
     let (lo, hi, step) = range(d.params.iter().find(|p| p.id() == handle.param)?)?;
     let round = |v: f64| ((v / step).round() * step).clamp(lo, hi);
+    if let Some(end) = &handle.tube_end {
+        let (param, _, ends) = straight_tube(d)?;
+        if param != handle.param || !ends.contains(&end.as_str()) {
+            return None;
+        }
+        let local = frame(g).inverse()?.apply(to);
+        let joints = crate::equipment::eval::joints(d, &values);
+        let current = joints.iter().find(|j| j.joint.id() == end)?;
+        let other = joints.iter().find(|j| j.joint.id() != end)?;
+        let Value::Number(length) = values.get(param)? else {
+            return None;
+        };
+        return Some(Value::Number(round(
+            length + dot(sub(local, current.at), normalize(sub(current.at, other.at))),
+        )));
+    }
     let Some(part) = &handle.part else {
         let (_, liquid) = fills(d).find(|(id, _)| *id == handle.param)?;
         return Some(Value::Number(round(plan::share_below(
@@ -324,10 +444,15 @@ fn choose(
     id: u64,
     c: &BTreeSet<u64>,
     class: &BTreeMap<JointRef, usize>,
+    pinned: bool,
 ) -> Option<Seat> {
     // Nodes: the component's pieces, then one per class of `id`'s ports.
     let pieces: Vec<u64> = c.iter().copied().collect();
-    let classes: Vec<usize> = touching(doc, id, c, class).into_iter().collect();
+    let mut classes = touching(doc, id, c, class);
+    if pinned && fixed(doc, c) {
+        classes.insert(0);
+    }
+    let classes: Vec<usize> = classes.into_iter().collect();
     let piece_count = pieces.len();
     let node = |j: &JointRef| -> Option<usize> {
         if j.piece == id {
@@ -346,12 +471,28 @@ fn choose(
         .filter_map(|s| Some(((node(&s.a)?, node(&s.b)?), s)))
         .collect();
     let n = piece_count + classes.len();
+    // For an explicit end drag the opposite end, and any grounded branch,
+    // stay. Include ground locks in the same weak-seat-first release rule.
+    let zero = classes
+        .iter()
+        .position(|k| *k == 0)
+        .map(|i| piece_count + i);
+    let locks: Vec<_> = pieces
+        .iter()
+        .enumerate()
+        .filter(|(_, piece)| pinned && grounded(doc, **piece))
+        .filter_map(|(i, _)| Some((i, zero?)))
+        .collect();
     let virtual_edges = (piece_count..n).flat_map(|u| (u + 1..n).map(move |v| (u, v)));
-    let edges = seats.iter().map(|&(edge, _)| edge).chain(virtual_edges);
+    let edges = seats
+        .iter()
+        .map(|&(edge, _)| edge)
+        .chain(locks.iter().copied())
+        .chain(virtual_edges);
     let comp = biconnected(n, edges);
     let between: BTreeSet<usize> = comp
         .iter()
-        .skip(seats.len())
+        .skip(seats.len() + locks.len())
         .copied()
         .filter(|&k| k != usize::MAX)
         .collect();
@@ -410,6 +551,48 @@ fn choose(
 /// the jaw of an opened clamp, lets go; one that moved or came back and now
 /// fits a free one is seated on it. Returns the seats released.
 pub fn set(doc: &mut Document, id: u64, param: &str, value: Value) -> Result<Vec<Seat>, String> {
+    set_inner(doc, id, param, value, None)
+}
+
+/// Set the same Length parameter by moving one cut end of a straight tube.
+/// The opposite end and any through-bore holders stay where they are.
+/// This is deliberately separate from the Properties parameter operation.
+pub fn set_end(
+    doc: &mut Document,
+    id: u64,
+    param: &str,
+    end: &str,
+    value: Value,
+) -> Result<Vec<Seat>, String> {
+    let g = doc
+        .graphics
+        .iter()
+        .find(|g| g.id == id)
+        .ok_or("The tube is not in the drawing.")?;
+    let (d, _) = definition(g).ok_or("The tube definition is missing.")?;
+    let (length, _, ends) = straight_tube(d).ok_or("This tube has no editable straight ends.")?;
+    if length != param
+        || !ends.contains(&end)
+        || !frame(g).0.iter().all(|v| v.is_finite())
+        || frame(g).inverse().is_none()
+    {
+        return Err("This tube end cannot be adjusted.".into());
+    }
+    let opposite = ends
+        .iter()
+        .find(|e| **e != end)
+        .ok_or("The opposite tube end is missing.")?
+        .to_string();
+    set_inner(doc, id, param, value, Some(&opposite))
+}
+
+fn set_inner(
+    doc: &mut Document,
+    id: u64,
+    param: &str,
+    value: Value,
+    pinned: Option<&str>,
+) -> Result<Vec<Seat>, String> {
     let g = (doc.graphics.iter())
         .find(|g| g.id == id)
         .ok_or("The piece is not in the drawing.")?;
@@ -428,16 +611,27 @@ pub fn set(doc: &mut Document, id: u64, param: &str, value: Value) -> Result<Vec
     }
     let old = ports(g);
     let anchor = anchor(doc, &assembly(doc, id));
-    if let Some(piece) = (doc.graphics.iter_mut())
-        .find(|g| g.id == id)
-        .and_then(|g| g.piece.as_mut())
-    {
+    let mut replacement = g.clone();
+    if let Some(piece) = replacement.piece.as_mut() {
         piece.params = params;
     }
-    let new = (doc.graphics.iter())
-        .find(|g| g.id == id)
-        .map(ports)
-        .unwrap_or_default();
+    if let Some(end) = pinned {
+        let before = old
+            .iter()
+            .find(|p| p.at.joint == end)
+            .ok_or("The opposite tube end is missing.")?;
+        let after = ports(&replacement)
+            .into_iter()
+            .find(|p| p.at.joint == end)
+            .ok_or("The opposite tube end is missing.")?;
+        let delta = sub(before.point, after.point);
+        replacement.origin.x += delta[0] as f32;
+        replacement.origin.y += delta[1] as f32;
+    }
+    let new = ports(&replacement);
+    if let Some(g) = doc.graphics.iter_mut().find(|g| g.id == id) {
+        *g = replacement;
+    }
     // How each port moved, by class.
     let mut motions = vec![Affine::IDENTITY];
     let mut class = BTreeMap::new();
@@ -446,7 +640,15 @@ pub fn set(doc: &mut Document, id: u64, param: &str, value: Value) -> Result<Vec
         let Some(n) = new.iter().find(|n| n.at == o.at) else {
             continue;
         };
-        let m = motion(o, n);
+        // A continuous span grows around its existing holders. They move
+        // only when the whole tube moves, not when one cut end is edited.
+        let m = if pinned.is_some_and(|end| o.at.joint == end)
+            || (pinned.is_some() && o.hold() == Some(HoldKind::TubeSpan))
+        {
+            Affine::IDENTITY
+        } else {
+            motion(o, n)
+        };
         let k = match motions.iter().position(|x| same(x, &m)) {
             Some(k) => k,
             None => {
@@ -454,7 +656,11 @@ pub fn set(doc: &mut Document, id: u64, param: &str, value: Value) -> Result<Vec
                 motions.len() - 1
             }
         };
-        if k != 0 {
+        if k != 0
+            || (pinned.is_some()
+                && o.hold() == Some(HoldKind::TubeSpan)
+                && (len(sub(o.point, n.point)) > 1e-6 || (o.length - n.length).abs() > 1e-6))
+        {
             changed.insert(n.at.clone());
         }
         class.insert(n.at.clone(), k);
@@ -473,11 +679,11 @@ pub fn set(doc: &mut Document, id: u64, param: &str, value: Value) -> Result<Vec
         .collect();
     release(doc, |s| gone.contains(s));
     let mut released = gone;
-    while let Some(c) = components(doc, id)
-        .into_iter()
-        .find(|c| touching(doc, id, c, &class).len() > 1)
-    {
-        let Some(s) = choose(doc, id, &c, &class) else {
+    while let Some(c) = components(doc, id).into_iter().find(|c| {
+        let classes = touching(doc, id, c, &class);
+        classes.len() > 1 || (pinned.is_some() && fixed(doc, c) && classes.iter().any(|k| *k != 0))
+    }) {
+        let Some(s) = choose(doc, id, &c, &class, pinned.is_some()) else {
             break;
         };
         release(doc, |x| *x == s);
@@ -494,7 +700,7 @@ pub fn set(doc: &mut Document, id: u64, param: &str, value: Value) -> Result<Vec
         .collect();
     // The anchor stays: when it would move, everything moves back by its motion.
     let back = (parts.iter())
-        .find(|(c, _)| anchor.is_some_and(|a| c.contains(&a)))
+        .find(|(c, _)| pinned.is_none() && anchor.is_some_and(|a| c.contains(&a)))
         .and_then(|(_, k)| motions.get(*k))
         .and_then(Affine::inverse)
         .unwrap_or(Affine::IDENTITY);
@@ -523,6 +729,9 @@ pub fn set(doc: &mut Document, id: u64, param: &str, value: Value) -> Result<Vec
             |doc: &Document, p: &Port| !p.shared() && doc.seats.iter().any(|s| s.holds(&p.at));
         let Some(b) = outer.iter().find(|b| {
             fits(a, b)
+                && (pinned.is_none()
+                    || crate::graphics::table::require_same_cell(doc, &[a.at.piece, b.at.piece])
+                        .is_ok())
                 && !taken(doc, b)
                 && !(!assembly(doc, id).contains(&b.at.piece)
                     && fixed(doc, &assembly(doc, id))
