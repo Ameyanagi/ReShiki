@@ -543,9 +543,17 @@ async fn prepare_copy_with_limit(
         }
     }
     let (images, oversized) = crate::task::spawn_blocking(move || {
-        let envelope = payload::encode(&doc)?;
-        let fits = envelope.len() <= embed_limit;
-        let drawing = (pictures.editable && fits).then_some(envelope.as_slice());
+        // Ordinary Copy already has its native representation. When pictures
+        // omit editable data it needs no compressed picture payload at all.
+        // Copy Image still uses the payload's size to gate its own native
+        // flavor, even when the external pictures are not editable.
+        let envelope = (pictures.editable || (image_only && native))
+            .then(|| payload::encode(&doc))
+            .transpose()?;
+        let fits = envelope
+            .as_ref()
+            .is_some_and(|bytes| bytes.len() <= embed_limit);
+        let drawing = envelope.as_deref().filter(|_| pictures.editable && fits);
         Ok::<_, String>((
             copy_images_with_drawing(&doc, image_only, browser, pictures, drawing, fits && native),
             pictures.editable && !fits,
@@ -657,21 +665,32 @@ fn copy_images_with_drawing(
     drawing: Option<&[u8]>,
     native: bool,
 ) -> Vec<(&'static str, Result<Representation, String>)> {
-    let mut images: Vec<_> = [
-        ("com.adobe.pdf", "pdf"),
-        ("public.png", "png"),
-        ("public.svg-image", "svg"),
-    ]
-    .into_iter()
-    .filter(|(_, format)| !browser || *format != "pdf")
-    .map(|(kind, format)| {
-        let image = clipboard_figure(doc, format, pictures, drawing);
-        (
-            format,
-            image.map(|figure| Representation::new(kind, &figure.bytes)),
-        )
-    })
-    .collect();
+    // Finish raster work before retaining the shared vector tree, so that
+    // tree does not overlap the PNG's full-size bitmap in memory.
+    let png = clipboard_figure(doc, "png", pictures, drawing)
+        .map(|figure| Representation::new("public.png", &figure.bytes));
+    let vectors = export::prepare_clipboard_vectors(doc, pictures.background);
+    let mut images = Vec::with_capacity(4);
+    if !browser {
+        let pdf = vectors
+            .as_ref()
+            .map_err(Clone::clone)
+            .and_then(|v| v.pdf(drawing));
+        images.push((
+            "pdf",
+            pdf.map(|figure| Representation::new("com.adobe.pdf", &figure.bytes)),
+        ));
+    }
+    images.push(("png", png));
+    let svg = vectors
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|v| v.svg(drawing));
+    images.push((
+        "svg",
+        svg.map(|figure| Representation::new("public.svg-image", &figure.bytes)),
+    ));
+    drop(vectors);
     #[cfg(windows)]
     if !image_only && !browser && pictures.editable {
         images.push((

@@ -900,6 +900,7 @@ explains how the crates and modules fit together.
 
 ## reshiki-python
 
+- `crates/python/src/bitmap_budget.rs`: Process-wide admission for batch PNGs' raw RGBA storage, not total RSS.
 - `crates/python/src/drawing.rs`
 - `crates/python/src/lib.rs`: Thin Python bindings over the same headless import, export and analysis API used by the browser.
 - `crates/python/src/render.rs`

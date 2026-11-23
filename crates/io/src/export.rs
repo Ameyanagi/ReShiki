@@ -367,6 +367,48 @@ pub fn clipboard_figure_with_drawing(
     )
 }
 
+/// One vector scene and parsed tree shared by the PDF and outlined SVG
+/// flavors of the same clipboard command. PNG keeps its filled-bond scene.
+pub struct ClipboardVectors {
+    tree: resvg::usvg::Tree,
+    attachment_notice: Option<String>,
+}
+
+pub fn prepare_clipboard_vectors(
+    doc: &Document,
+    background: Background,
+) -> Result<ClipboardVectors, String> {
+    doc.validate()?;
+    let (drawing, paper) = background.apply(doc);
+    let svg = scene::svg_of(
+        drawing.as_ref(),
+        scene::vector_primitives(drawing.as_ref()),
+        paper,
+    );
+    #[cfg(test)]
+    SCENES.with(|scenes| scenes.set(scenes.get() + 1));
+    Ok(ClipboardVectors {
+        tree: parse_svg(svg)?,
+        attachment_notice: crate::arrow_anchors::export_notice(doc),
+    })
+}
+
+impl ClipboardVectors {
+    pub fn pdf(&self, drawing: Option<&[u8]>) -> Result<Figure, String> {
+        with_notice(
+            vector_figure(&self.tree, "pdf", usize::MAX, drawing),
+            || self.attachment_notice.clone(),
+        )
+    }
+
+    pub fn svg(&self, drawing: Option<&[u8]>) -> Result<Figure, String> {
+        with_notice(
+            vector_figure(&self.tree, "svg-office", usize::MAX, drawing),
+            || self.attachment_notice.clone(),
+        )
+    }
+}
+
 /// Office's preview of an embedded drawing, rebuilt after it is edited, on
 /// the copy background and resolution set at the time of the rebuild.
 #[cfg(windows)]
@@ -385,8 +427,15 @@ fn with_attachment_notice(
     doc: &Document,
     result: Result<Figure, String>,
 ) -> Result<Figure, String> {
+    with_notice(result, || crate::arrow_anchors::export_notice(doc))
+}
+
+fn with_notice(
+    result: Result<Figure, String>,
+    notice: impl FnOnce() -> Option<String>,
+) -> Result<Figure, String> {
     let mut figure = result?;
-    if let Some(notice) = crate::arrow_anchors::export_notice(doc) {
+    if let Some(notice) = notice() {
         figure.detail = Some(
             figure
                 .detail
@@ -441,16 +490,7 @@ fn render_drawing(
     }
     let tree = parse_svg(svg)?;
     let mut figure = match format {
-        "svg-office" => {
-            // Before the outlines are written, which costs as much as parsing.
-            if outlined_floor(tree.root()) > max_bytes {
-                return Err(OVER_BYTES.into());
-            }
-            office_svg(&tree).map(|bytes| Figure {
-                bytes,
-                detail: None,
-            })
-        }
+        "svg-office" | "pdf" => vector_figure(&tree, format, max_bytes, drawing),
         #[cfg(windows)]
         "emf" => if clipboard {
             crate::native_windows::metafile(&tree, doc)
@@ -458,10 +498,6 @@ fn render_drawing(
             crate::native_windows::file_metafile(&tree, doc)
         }
         .map(|bytes| Figure {
-            bytes,
-            detail: None,
-        }),
-        "pdf" => single_pdf(&tree, drawing).map(|bytes| Figure {
             bytes,
             detail: None,
         }),
@@ -492,11 +528,39 @@ fn render_drawing(
         _ => Err("Unsupported drawing export".into()),
     }?;
     if let Some(drawing) = drawing
-        && matches!(format, "png" | "svg-office")
+        && format == "png"
     {
         figure.bytes = crate::payload::embed(format, figure.bytes, drawing)?;
     }
     Ok(figure)
+}
+
+fn vector_figure(
+    tree: &resvg::usvg::Tree,
+    format: &str,
+    max_bytes: usize,
+    drawing: Option<&[u8]>,
+) -> Result<Figure, String> {
+    let mut bytes = match format {
+        "svg-office" => {
+            // Before writing outlines, whose cost is comparable to parsing.
+            if outlined_floor(tree.root()) > max_bytes {
+                return Err(OVER_BYTES.into());
+            }
+            office_svg(tree)?
+        }
+        "pdf" => single_pdf(tree, drawing)?,
+        _ => return Err("Unsupported vector clipboard export".into()),
+    };
+    if let Some(drawing) = drawing
+        && format == "svg-office"
+    {
+        bytes = crate::payload::embed(format, bytes, drawing)?;
+    }
+    Ok(Figure {
+        bytes,
+        detail: None,
+    })
 }
 
 /// The PNG export's pixels at `dpi`: `size` pixels from pixel `origin` of
@@ -523,7 +587,7 @@ fn raster(
 }
 
 /// The pixmap's RGBA bytes with straight alpha.
-fn straight_alpha(mut pixmap: resvg::tiny_skia::Pixmap) -> Vec<u8> {
+pub fn straight_alpha(mut pixmap: resvg::tiny_skia::Pixmap) -> Vec<u8> {
     // tiny-skia stores premultiplied colors; PNG requires straight
     // alpha or antialiased colored edges acquire dark fringes.
     for index in 0..pixmap.pixels().len() {
