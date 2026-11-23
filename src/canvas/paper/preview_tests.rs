@@ -420,8 +420,10 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
         let (mut changed, mut largest, mut error, mut coverage) = (0, 0, 0, 0);
         let mut rect = [size.width as usize, size.height as usize, 0, 0];
         for (index, (a, b)) in retained
-            .chunks_exact(4)
-            .zip(full.chunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(full.as_chunks::<4>().0.iter())
             .enumerate()
         {
             let differences: [u8; 4] = std::array::from_fn(|i| a[i].abs_diff(b[i]));
