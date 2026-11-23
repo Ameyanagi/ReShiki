@@ -168,6 +168,7 @@ static FILES: &[Source] = piece_files![
     "volumetric-pipette-5",
     "volumetric-pipette-10",
     "volumetric-pipette-25",
+    "electric-pipette-controller",
     "graduated-pipette-intermediate-1",
     "graduated-pipette-intermediate-2",
     "graduated-pipette-intermediate-5",
