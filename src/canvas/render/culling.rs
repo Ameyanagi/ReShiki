@@ -1,3 +1,4 @@
+//! Conservative viewport tests for rendered picture and text ink.
 use super::*;
 
 /// Test the transformed corners of already padded ink bounds.

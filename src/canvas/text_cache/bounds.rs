@@ -27,12 +27,12 @@ fn font_box(font: swash::FontRef<'_>) -> Option<FontBox> {
     }
     let hhea = font.table(swash::Tag::from_be_bytes(*b"hhea"))?;
     let mut ascent = i16_at(hhea, 4)?;
-    if let Some(os2) = font.table(swash::Tag::from_be_bytes(*b"OS/2")) {
-        if u16_at(os2, 62)? & (1 << 7) != 0 || ascent == 0. {
-            ascent = i16_at(os2, 68)?;
-            if ascent == 0. {
-                ascent = i16_at(os2, 74)?;
-            }
+    if let Some(os2) = font.table(swash::Tag::from_be_bytes(*b"OS/2"))
+        && (u16_at(os2, 62)? & (1 << 7) != 0 || ascent == 0.)
+    {
+        ascent = i16_at(os2, 68)?;
+        if ascent == 0. {
+            ascent = i16_at(os2, 74)?;
         }
     }
     let lo = Point::new(i16_at(head, 36)? / em, i16_at(head, 38)? / em);

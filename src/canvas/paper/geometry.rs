@@ -147,16 +147,23 @@ impl SceneGeometryCache {
                 raster,
             });
         }
-        let entry = self.0.as_mut().expect("The scene was retained above");
-        let shift = Vector::new(
-            (entry.center.x - camera.center.x) * camera.zoom,
-            (entry.center.y - camera.center.y) * camera.zoom,
-        );
-        for layer in &entry.layers {
-            match layer {
-                Layer::Retained(geometry) => frame.retained(geometry, shift),
-                Layer::Raster { range, run } => {
-                    entry.raster[*run].draw(frame, &entry.scene[range.clone()], camera, bounds, 1.);
+        if let Some(entry) = self.0.as_mut() {
+            let shift = Vector::new(
+                (entry.center.x - camera.center.x) * camera.zoom,
+                (entry.center.y - camera.center.y) * camera.zoom,
+            );
+            for layer in &entry.layers {
+                match layer {
+                    Layer::Retained(geometry) => frame.retained(geometry, shift),
+                    Layer::Raster { range, run } => {
+                        // Both indices are authored together for this immutable
+                        // scene; checked access keeps their pairing explicit.
+                        if let (Some(prepared), Some(primitives)) =
+                            (entry.raster.get_mut(*run), entry.scene.get(range.clone()))
+                        {
+                            prepared.draw(frame, primitives, camera, bounds, 1.);
+                        }
+                    }
                 }
             }
         }

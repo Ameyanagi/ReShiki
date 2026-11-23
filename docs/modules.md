@@ -246,10 +246,12 @@ explains how the crates and modules fit together.
 - `src/canvas/previews.rs`: Thumbnail, inspector, palette and proposal canvas programs; they render through the same scene path as the paper.
 - `src/canvas/purpose.rs`: Editing marks for object purpose and the reaction preview.
 - `src/canvas/render.rs`: Tessellates scene primitives into a layered frame; shared by the paper and every preview program.
+- `src/canvas/render/culling.rs`: Conservative viewport tests for rendered picture and text ink.
 - `src/canvas/selection.rs`
 - `src/canvas/smart_guides.rs`: Smart guides
 - `src/canvas/snapping.rs`: Where a pointer gesture lands (move deltas under bond constraints and smart guides, arrow ends, ring/template anchors, chain plans), shared by event handling and the drag preview so a preview equals the committed edit.
 - `src/canvas/text_cache.rs`: Bounded, position-independent text outlines.
+- `src/canvas/text_cache/bounds.rs`: Cold text can be rejected using shaped positions and whole-font extents, without creating a glyph path or decoding a bitmap.
 - `src/canvas/text_cache/glyphs.rs`: Share hinted glyphs between captions without changing Iced's shaping or size.
 - `src/canvas/text_cache/glyphs/variable.rs`
 - `src/canvas/tilt.rs`: Screen-space tilt gestures share the same projection as the inspector tilt fields.

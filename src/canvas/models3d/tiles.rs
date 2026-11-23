@@ -206,6 +206,12 @@ struct PreparedPart {
     part: Part,
 }
 
+struct TileBuilder {
+    hasher: DefaultHasher,
+    rect: [i64; 4],
+    parts: Vec<Part>,
+}
+
 #[derive(PartialEq, Eq)]
 struct PlanKey {
     scale: u32,
@@ -275,7 +281,7 @@ impl PreparedRun {
         }
         // Visit only cells each part reaches, instead of testing every part
         // against every visible cell. Sorted cells preserve the old tile order.
-        let mut cells: BTreeMap<(i64, i64), (DefaultHasher, [i64; 4], Vec<Part>)> = BTreeMap::new();
+        let mut cells: BTreeMap<(i64, i64), TileBuilder> = BTreeMap::new();
         let [lo, hi] = key.cells;
         for part in &self.parts {
             let b = [
@@ -295,26 +301,35 @@ impl PreparedRun {
             ];
             for ty in first[1]..=last[1] {
                 for tx in first[0]..=last[0] {
-                    let (hasher, rect, reaching) = cells.entry((ty, tx)).or_insert_with(|| {
+                    let cell = cells.entry((ty, tx)).or_insert_with(|| {
                         let mut hasher = DefaultHasher::new();
                         key.scale.hash(&mut hasher);
                         key.dark.hash(&mut hasher);
-                        (hasher, [i64::MAX, i64::MAX, i64::MIN, i64::MIN], vec![])
+                        TileBuilder {
+                            hasher,
+                            rect: [i64::MAX, i64::MAX, i64::MIN, i64::MIN],
+                            parts: vec![],
+                        }
                     });
-                    part.key.hash(hasher);
-                    *rect = [
-                        rect[0].min(b[0]),
-                        rect[1].min(b[1]),
-                        rect[2].max(b[2]),
-                        rect[3].max(b[3]),
+                    part.key.hash(&mut cell.hasher);
+                    cell.rect = [
+                        cell.rect[0].min(b[0]),
+                        cell.rect[1].min(b[1]),
+                        cell.rect[2].max(b[2]),
+                        cell.rect[3].max(b[3]),
                     ];
-                    reaching.push(part.part);
+                    cell.parts.push(part.part);
                 }
             }
         }
         let tiles: std::rc::Rc<[Tile]> = cells
             .into_iter()
-            .map(|((ty, tx), (mut hasher, rect, parts))| {
+            .map(|((ty, tx), cell)| {
+                let TileBuilder {
+                    mut hasher,
+                    rect,
+                    parts,
+                } = cell;
                 let rect = [
                     rect[0].max(tx * TILE),
                     rect[1].max(ty * TILE),
