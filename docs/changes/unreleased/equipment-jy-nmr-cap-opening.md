@@ -3,4 +3,4 @@ section: Fixes
 issues: []
 ---
 
-- Give the J. Young NMR tube a yellow ribbed cap with a centered recessed opening and a continuous glass collar in both valve states.
+- Show the exposed bored PTFE stem, sealing rings, stepped yellow cap and rounded glass valve body on the J. Young NMR tube.
