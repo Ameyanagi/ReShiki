@@ -30,64 +30,115 @@ pub fn chemistry_changed(before: &Document, after: &Document) -> bool {
     before.generic != after.generic
         || before.bonds.len() != after.bonds.len()
         || before.bonds.iter().zip(&after.bonds).any(|(a, b)| {
-            let mut a = a.clone();
-            let mut b = b.clone();
-            a.distance_derived = false;
-            b.distance_derived = false;
-            a.z_order = 0;
-            b.z_order = 0;
-            a.color = Default::default();
-            b.color = Default::default();
-            a.highlight = None;
-            b.highlight = None;
-            a.double_position = Default::default();
-            b.double_position = Default::default();
-            a.secondary_display = None;
-            b.secondary_display = None;
-            a.indicator = Default::default();
-            b.indicator = Default::default();
-            a.cip_label = None;
-            a.undefined_stereo = false;
-            b.cip_label = None;
-            b.undefined_stereo = false;
-            if a.order == 4 && b.order == 4 || a.order == b.order && a.projection && b.projection {
-                a.display = "plain".into();
-                b.display = "plain".into();
-                a.projection = false;
-                b.projection = false;
-                if a.a > a.b {
-                    a.reverse();
+            let undirected =
+                a.order == 4 && b.order == 4 || a.order == b.order && a.projection && b.projection;
+            chemical_bond(a, undirected) != chemical_bond(b, undirected)
+                || match (undirected && a.a > a.b, undirected && b.a > b.b) {
+                    (false, false) | (true, true) => a.stereo_atoms != b.stereo_atoms,
+                    (true, false) => !a.stereo_atoms.iter().rev().eq(&b.stereo_atoms),
+                    (false, true) => !a.stereo_atoms.iter().eq(b.stereo_atoms.iter().rev()),
                 }
-                if b.a > b.b {
-                    b.reverse();
-                }
-            }
-            a != b
         })
         || before.atoms.len() != after.atoms.len()
-        || before.atoms.iter().zip(&after.atoms).any(|(a, b)| {
-            let mut a = a.clone();
-            let mut b = b.clone();
-            a.text_style = None;
-            b.text_style = None;
-            a.marks.clear();
-            b.marks.clear();
-            a.mark_serial = 0;
-            b.mark_serial = 0;
-            a.display = Default::default();
-            b.display = Default::default();
-            a.cip_label = None;
-            a.steroid_label = None;
-            a.undefined_stereo = false;
-            a.undefined_pseudoasymmetric = false;
-            b.cip_label = None;
-            b.steroid_label = None;
-            b.undefined_stereo = false;
-            b.undefined_pseudoasymmetric = false;
-            a.label_h = 0;
-            b.label_h = 0;
-            a != b
-        })
+        || before
+            .atoms
+            .iter()
+            .zip(&after.atoms)
+            .any(|(a, b)| chemical_atom(a) != chemical_atom(b))
+}
+
+/// Exhaustive patterns make a newly added field an explicit classification
+/// decision. Borrowed views avoid cloning strings and presentation payloads.
+fn chemical_atom(atom: &Atom) -> impl PartialEq + '_ {
+    let Atom {
+        display: _,
+        cip_label: _,
+        steroid_label: _,
+        undefined_stereo: _,
+        undefined_pseudoasymmetric: _,
+        marks: _,
+        mark_serial: _,
+        label_h: _,
+        text_style: _,
+        id,
+        element,
+        position,
+        depth,
+        centroid,
+        attachment,
+        charge,
+        radical_electrons,
+        singlet,
+        isotope,
+        explicit_h,
+        no_implicit,
+        aromatic,
+        stereo,
+        stereo_group,
+        map_num,
+        purpose,
+    } = atom;
+    (
+        (
+            id,
+            element,
+            position,
+            depth,
+            centroid,
+            attachment,
+            charge,
+            radical_electrons,
+            singlet,
+        ),
+        (
+            isotope,
+            explicit_h,
+            no_implicit,
+            aromatic,
+            stereo,
+            stereo_group,
+            map_num,
+            purpose,
+        ),
+    )
+}
+
+fn chemical_bond(bond: &crate::document::Bond, undirected: bool) -> impl PartialEq + '_ {
+    let crate::document::Bond {
+        distance_derived: _,
+        highlight: _,
+        z_order: _,
+        indicator: _,
+        cip_label: _,
+        undefined_stereo: _,
+        double_position: _,
+        secondary_display: _,
+        color: _,
+        stereo_atoms: _,
+        highlight_style,
+        ring_arc,
+        projection,
+        stereo_authoritative,
+        a,
+        b,
+        order,
+        display,
+        stereo,
+    } = bond;
+    let endpoints = if undirected && a > b {
+        (*b, *a)
+    } else {
+        (*a, *b)
+    };
+    (
+        (
+            highlight_style,
+            ring_arc,
+            !undirected && *projection,
+            stereo_authoritative,
+        ),
+        (endpoints, order, (!undirected).then_some(display), stereo),
+    )
 }
 
 /// The atoms whose valence inputs an edit from `before` changed: new atoms,
