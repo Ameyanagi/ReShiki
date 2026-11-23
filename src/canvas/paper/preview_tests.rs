@@ -512,6 +512,10 @@ async fn equipment_preview_reuses_the_draft_and_retains_separated_ink() {
     let (near_whole, _) = shot(&canvas, &tree, false);
     compare("equipment-overlap", &near, &near_whole);
     compare("equipment-overlap-warm", &near_warm, &near_whole);
+    assert!(
+        near_warm == near_whole,
+        "the overlapping preview replays in the enclosing frame"
+    );
 
     shot(&canvas, &tree, true);
     let before_edit = cached(&tree);

@@ -331,19 +331,17 @@ impl MoleculeCanvas<'_> {
         } else if let Some(record) = &memo
             && reuse
         {
-            // A changing drag draws the complete preview directly. Retain its
-            // geometry once the same inputs are requested again.
+            // Render a complete/overlapping preview into the enclosing frame.
+            // Rendering it in a separate layer changes coverage at clip edges.
+            if !self.reviewing_pair {
+                record
+                    .markers(selected)
+                    .draw_with_nmr(frame, self.camera, bounds, true, &nmr_ids);
+            }
             let scene = record
                 .whole
                 .get_or_init(|| reshiki::scene::primitives(preview).into());
-            record.geometry.borrow_mut().draw(
-                frame,
-                (record.markers(selected).clone(), scene.clone()),
-                self.camera,
-                bounds,
-                &nmr_ids,
-                self.reviewing_pair,
-            );
+            draw_primitives(frame, scene, self.camera, bounds, 0.);
         } else {
             if !self.reviewing_pair {
                 markers::Markers::new(preview, selected).draw_with_nmr(
