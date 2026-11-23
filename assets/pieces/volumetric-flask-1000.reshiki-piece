@@ -31,14 +31,44 @@
       "layer": "body",
       "material": "glass",
       "role": "glass",
-      "path": "M-14 1.5Q-14 3 -13 4V169C-13 188.5 -63.5 217.75 -63.5 266.5C-63.5 305.5 -50.8 325 -33.02 325H33.02C50.8 325 63.5 305.5 63.5 266.5C63.5 217.75 13 188.5 13 169V4Q14 3 14 1.5Q0 -1.5 -14 1.5Z"
+      "path": "M-14 1.5Q-14 3 -13.6 4L-13 16V169C-13 188.5 -63.5 217.75 -63.5 266.5C-63.5 305.5 -50.8 325 -33.02 325H33.02C50.8 325 63.5 305.5 63.5 266.5C63.5 217.75 13 188.5 13 169V16L13.6 4Q14 3 14 1.5Q0 -1.5 -14 1.5Z"
     },
     {
       "id": "mouth-front-rim",
       "layer": "body",
       "material": "glass",
       "role": "detail",
-      "path": "M-14 1.5Q0 4.5 14 1.5"
+      "path": "M-14 1.5Q0 4.5 14 1.5",
+      "when": {
+        "stopper": [
+          "removed"
+        ]
+      }
+    },
+    {
+      "id": "ground-socket-band",
+      "layer": "front",
+      "material": "frosted",
+      "role": "fill",
+      "path": "M-13.6 4L-12.3 4L-11.7 16L-13 16ZM12.3 4L13.6 4L13 16L11.7 16Z",
+      "color": [
+        222,
+        229,
+        233
+      ]
+    },
+    {
+      "id": "ground-socket-walls",
+      "layer": "front",
+      "depth": 1,
+      "material": "glass",
+      "role": "detail",
+      "path": "M-12.3 4L-11.7 16M12.3 4L11.7 16",
+      "when": {
+        "stopper": [
+          "removed"
+        ]
+      }
     },
     {
       "id": "single-calibration-ring",
@@ -59,16 +89,23 @@
       "layer": "front",
       "material": "glass",
       "role": "solid",
-      "path": "M-9.75 -2Q-5.2 -6 -5.2 -9H-13Q-15 -9 -15 -11V-15Q-15 -17 -13 -17H13Q15 -17 15 -15V-11Q15 -9 13 -9H5.2Q5.2 -6 9.75 -2Z",
-      "part": "stopper"
+      "path": "M-14.4 -2.5Q-14.4 -3.3 -13.6 -3.3H-9.75Q-5.2 -6 -5.2 -9H-13Q-15 -9 -15 -11V-15Q-15 -17 -13 -17H13Q15 -17 15 -15V-11Q15 -9 13 -9H5.2Q5.2 -6 9.75 -3.3H13.6Q14.4 -3.3 14.4 -2.5V.8Q14.4 1.5 13.7 1.5H-13.7Q-14.4 1.5 -14.4 .8Z",
+      "part": "stopper",
+      "depth": 1
     },
     {
       "id": "ground-stopper-cone",
       "layer": "front",
       "material": "frosted",
       "role": "solid",
-      "path": "M-9.75 -2L9.75 -2L7.15 14L-7.15 14Z",
-      "part": "stopper"
+      "path": "M-12.6 -2L12.6 -2L11.7 16L-11.7 16Z",
+      "part": "stopper",
+      "depth": 0,
+      "color": [
+        238,
+        242,
+        245
+      ]
     }
   ],
   "params": [

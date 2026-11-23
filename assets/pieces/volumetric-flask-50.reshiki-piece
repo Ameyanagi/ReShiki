@@ -31,14 +31,44 @@
       "layer": "body",
       "material": "glass",
       "role": "glass",
-      "path": "M-8 1.5Q-8 3 -7 4V78C-7 87 -25.5 100.5 -25.5 123C-25.5 141 -20.4 150 -13.26 150H13.26C20.4 150 25.5 141 25.5 123C25.5 100.5 7 87 7 78V4Q8 3 8 1.5Q0 -1.5 -8 1.5Z"
+      "path": "M-8 1.5Q-8 3 -7.6 4L-7 16V78C-7 87 -25.5 100.5 -25.5 123C-25.5 141 -20.4 150 -13.26 150H13.26C20.4 150 25.5 141 25.5 123C25.5 100.5 7 87 7 78V16L7.6 4Q8 3 8 1.5Q0 -1.5 -8 1.5Z"
     },
     {
       "id": "mouth-front-rim",
       "layer": "body",
       "material": "glass",
       "role": "detail",
-      "path": "M-8 1.5Q0 4.5 8 1.5"
+      "path": "M-8 1.5Q0 4.5 8 1.5",
+      "when": {
+        "stopper": [
+          "removed"
+        ]
+      }
+    },
+    {
+      "id": "ground-socket-band",
+      "layer": "front",
+      "material": "frosted",
+      "role": "fill",
+      "path": "M-7.6 4L-6.3 4L-5.7 16L-7 16ZM6.3 4L7.6 4L7 16L5.7 16Z",
+      "color": [
+        222,
+        229,
+        233
+      ]
+    },
+    {
+      "id": "ground-socket-walls",
+      "layer": "front",
+      "depth": 1,
+      "material": "glass",
+      "role": "detail",
+      "path": "M-6.3 4L-5.7 16M6.3 4L5.7 16",
+      "when": {
+        "stopper": [
+          "removed"
+        ]
+      }
     },
     {
       "id": "single-calibration-ring",
@@ -59,16 +89,23 @@
       "layer": "front",
       "material": "glass",
       "role": "solid",
-      "path": "M-5.25 -2Q-2.8 -6 -2.8 -9H-7Q-9 -9 -9 -11V-15Q-9 -17 -7 -17H7Q9 -17 9 -15V-11Q9 -9 7 -9H2.8Q2.8 -6 5.25 -2Z",
-      "part": "stopper"
+      "path": "M-8.4 -2.5Q-8.4 -3.3 -7.6 -3.3H-5.25Q-2.8 -6 -2.8 -9H-7Q-9 -9 -9 -11V-15Q-9 -17 -7 -17H7Q9 -17 9 -15V-11Q9 -9 7 -9H2.8Q2.8 -6 5.25 -3.3H7.6Q8.4 -3.3 8.4 -2.5V.8Q8.4 1.5 7.7 1.5H-7.7Q-8.4 1.5 -8.4 .8Z",
+      "part": "stopper",
+      "depth": 1
     },
     {
       "id": "ground-stopper-cone",
       "layer": "front",
       "material": "frosted",
       "role": "solid",
-      "path": "M-5.25 -2L5.25 -2L3.85 14L-3.85 14Z",
-      "part": "stopper"
+      "path": "M-6.6 -2L6.6 -2L5.7 16L-5.7 16Z",
+      "part": "stopper",
+      "depth": 0,
+      "color": [
+        238,
+        242,
+        245
+      ]
     }
   ],
   "params": [
