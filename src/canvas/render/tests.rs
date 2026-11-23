@@ -99,6 +99,10 @@ async fn early_culling_matches_unculled_text_pictures_and_halos() {
         for zoom in [0.45, 1.09, 2.5] {
             for angle in [0., 45., 180., -70.] {
                 for family in ["Arial", "Times New Roman"] {
+                    let case = format!("{theme:?} {zoom} {angle} {family}");
+                    if std::env::var("RESHIKI_CULL_CASE").is_ok_and(|wanted| wanted != case) {
+                        continue;
+                    }
                     let style = TextStyle {
                         family: family.into(),
                         italic: family == "Times New Roman",
@@ -142,22 +146,88 @@ async fn early_culling_matches_unculled_text_pictures_and_halos() {
                         center: World::new(120., 80.),
                         zoom,
                     };
-                    let mut capture = |enabled| {
+                    let mut capture = |enabled, primitives: &[Primitive]| {
                         CULL.set(enabled);
                         let cache = std::cell::RefCell::default();
                         renderer.reset(bounds);
                         let mut frame = layered::Frame::new(&renderer, bounds.size())
                             .with_canvas(theme)
                             .with_text_cache(&cache);
-                        draw_primitives(&mut frame, &scene, camera, bounds, 0.);
+                        draw_primitives(&mut frame, primitives, camera, bounds, 0.);
                         for layer in frame.finish() {
                             renderer.draw_geometry(layer);
                         }
                         Headless::screenshot(&mut renderer, Size::new(240, 160), 1., Color::WHITE)
                     };
-                    let unculled = capture(false);
-                    let culled = capture(true);
-                    assert_eq!(culled, unculled, "{theme:?} {zoom} {angle} {family}");
+                    let unculled = capture(false, &scene);
+                    let culled = capture(true, &scene);
+                    if culled != unculled {
+                        let difference = |a: &[u8], b: &[u8]| {
+                            let mut count = 0;
+                            let mut bounds = [240, 160, 0, 0];
+                            let mut worst = 0;
+                            for (i, (a, b)) in a.chunks_exact(4).zip(b.chunks_exact(4)).enumerate()
+                            {
+                                let delta =
+                                    a.iter().zip(b).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+                                if delta > 0 {
+                                    count += 1;
+                                    let (x, y) = (i % 240, i / 240);
+                                    bounds = [
+                                        bounds[0].min(x),
+                                        bounds[1].min(y),
+                                        bounds[2].max(x),
+                                        bounds[3].max(y),
+                                    ];
+                                    worst = worst.max(delta);
+                                }
+                            }
+                            (count, bounds, worst)
+                        };
+                        let repeated_reference = capture(false, &scene);
+                        let repeated_culled = capture(true, &scene);
+                        eprintln!(
+                            "CULL {case}: changed/count-bounds-max={:?}, reference repeat={:?}, culled repeat={:?}",
+                            difference(&unculled, &culled),
+                            difference(&unculled, &repeated_reference),
+                            difference(&culled, &repeated_culled)
+                        );
+                        if let Ok(path) = std::env::var("RESHIKI_CULL_PIXELS") {
+                            let path = std::path::PathBuf::from(path);
+                            std::fs::create_dir_all(&path).unwrap();
+                            for (name, pixels) in [
+                                ("reference", &unculled),
+                                ("culled", &culled),
+                                ("reference-repeat", &repeated_reference),
+                                ("culled-repeat", &repeated_culled),
+                            ] {
+                                image::save_buffer(
+                                    path.join(format!("{name}.png")),
+                                    pixels,
+                                    240,
+                                    160,
+                                    image::ColorType::Rgba8,
+                                )
+                                .unwrap();
+                            }
+                        }
+                        for (i, primitive) in scene.iter().enumerate() {
+                            let reference = capture(false, std::slice::from_ref(primitive));
+                            let culled = capture(true, std::slice::from_ref(primitive));
+                            if reference != culled {
+                                eprintln!(
+                                    "CULL primitive {i} {:?}: {:?}",
+                                    std::mem::discriminant(primitive),
+                                    difference(&reference, &culled)
+                                );
+                            }
+                        }
+                        CULL.set(true);
+                        panic!(
+                            "Culling changed pixels for {case}: {:?}",
+                            difference(&unculled, &culled)
+                        );
+                    }
                 }
             }
         }
