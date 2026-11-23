@@ -104,6 +104,20 @@ async fn mixed_scene_retains_vectors_around_live_tiles_in_paint_order() {
                 let (live, _) = render(None);
                 let (cold, _) = render(Some(&mut retained));
                 let (warm, drawn) = render(Some(&mut retained));
+                if theme == CanvasTheme::Light
+                    && zoom == 1.
+                    && step == 4
+                    && let Some(directory) = std::env::var_os("RESHIKI_RENDER_EVIDENCE")
+                {
+                    let directory = std::path::PathBuf::from(directory);
+                    std::fs::create_dir_all(&directory).unwrap();
+                    for (name, pixels) in [("live.png", &live), ("retained.png", &warm)] {
+                        image::RgbaImage::from_raw(320, 240, pixels.clone())
+                            .unwrap()
+                            .save(directory.join(name))
+                            .unwrap();
+                    }
+                }
                 let gold = warm
                     .chunks_exact(4)
                     .filter(|p| p[0] > p[1].saturating_add(15) && p[1] > p[2].saturating_add(15))
