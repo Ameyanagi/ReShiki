@@ -46,9 +46,8 @@ type ColorFilter = Option<[u8; 4]>;
 impl Cache {
     /// Load svg
     pub fn load(&mut self, handle: &svg::Handle) -> &Svg {
-        let _ = self.svg_hits.insert(handle.id());
-
         if self.svgs.contains_key(&handle.id()) {
+            let _ = self.svg_hits.insert(handle.id());
             return self.svgs.get(&handle.id()).unwrap();
         }
 
@@ -86,6 +85,7 @@ impl Cache {
         };
 
         let _ = self.svgs.insert(handle.id(), svg);
+        let _ = self.svg_hits.insert(handle.id());
         self.svgs.get(&handle.id()).unwrap()
     }
 
@@ -200,17 +200,23 @@ impl Cache {
         let svg_hits = &self.svg_hits;
         let rasterized_hits = &self.rasterized_hits;
 
-        self.svgs
-            .retain(|k, _| atlas_in_use || svg_hits.contains(k));
-        self.rasterized.retain(|k, entry| {
-            let retain = atlas_in_use || rasterized_hits.contains(k);
+        // Each hit set is a subset of its cache, so matching counts mean that
+        // every entry was used and a full map scan cannot evict anything.
+        if self.svgs.len() != svg_hits.len() {
+            self.svgs
+                .retain(|k, _| atlas_in_use || svg_hits.contains(k));
+        }
+        if self.rasterized.len() != rasterized_hits.len() {
+            self.rasterized.retain(|k, entry| {
+                let retain = atlas_in_use || rasterized_hits.contains(k);
 
-            if !retain {
-                atlas.remove(entry);
-            }
+                if !retain {
+                    atlas.remove(entry);
+                }
 
-            retain
-        });
+                retain
+            });
+        }
         self.svg_hits.clear();
         self.rasterized_hits.clear();
     }

@@ -17,6 +17,7 @@
   "local_changes": [
     "src/triangle/msaa.rs: recreate MSAA targets whenever the region size differs, including when it shrinks; leave the ratio calculation unchanged",
     "src/image/{cache,mod,raster,vector}.rs: expire cold raster and SVG entries independently of insertion, preserving live allocations and bind groups",
+    "src/image/{raster,vector}.rs: skip retention scans when every cached entry was used; exclude raster misses from hit counts and test idle eviction after missing/stale lookups",
     "src/image/atlas.rs: recreate an unreferenced empty atlas at its backend baseline",
     "src/image/{tests.rs,atlas/tests.rs} (added): regression checks for image cache aging, active resources, and GPU operations recorded before an idle reset",
     "LICENSE (added): Iced's MIT license, which the crate package does not include; the same text as licenses/iced/LICENSE"

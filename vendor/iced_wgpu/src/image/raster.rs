@@ -58,9 +58,10 @@ pub struct Cache {
 
 impl Cache {
     pub fn get_mut(&mut self, handle: &image::Handle) -> Option<&mut Memory> {
+        let memory = self.map.get_mut(&handle.id())?;
         let _ = self.hits.insert(handle.id());
 
-        self.map.get_mut(&handle.id())
+        Some(memory)
     }
 
     pub fn insert(&mut self, handle: &image::Handle, memory: Memory) {
@@ -77,6 +78,13 @@ impl Cache {
         atlas: &mut Atlas,
         on_drop: impl Fn(Arc<wgpu::BindGroup>),
     ) {
+        // Hits only contain cached entries. Equal counts mean every entry was
+        // used this frame, so no retention checks or map scan are necessary.
+        if self.hits.len() == self.map.len() {
+            self.hits.clear();
+            return;
+        }
+
         // A retained image batch may still address the shared atlas. Do not
         // recycle its regions until it releases the bind group.
         let atlas_in_use = atlas.is_in_use();
@@ -128,6 +136,43 @@ mod tests {
     use super::*;
     use crate::image::tests::Gpu;
     use std::cell::Cell;
+
+    #[test]
+    #[ignore = "requires a GPU adapter"]
+    fn missing_and_stale_lookups_do_not_prevent_idle_eviction() {
+        let gpu = Gpu::new();
+        let mut atlas = gpu.atlas();
+        let mut cache = Cache::default();
+        let used = image::Handle::from_rgba(8, 8, vec![255; 8 * 8 * 4]);
+        let idle = image::Handle::from_rgba(8, 8, vec![128; 8 * 8 * 4]);
+        let missing = image::Handle::from_path("missing-cache-entry.png");
+        for handle in [&used, &idle] {
+            cache.insert(
+                handle,
+                Memory::Device {
+                    entry: gpu.upload(&mut atlas),
+                    bind_group: None,
+                    allocation: None,
+                },
+            );
+        }
+        cache.trim(&mut atlas, |_| panic!("unexpected dedicated group"));
+        assert!(cache.contains(&used));
+        assert!(cache.contains(&idle));
+
+        // One current hit plus one miss must not look like two cached hits.
+        assert!(cache.get_mut(&used).is_some());
+        assert!(cache.get_mut(&missing).is_none());
+        cache.trim(&mut atlas, |_| panic!("unexpected dedicated group"));
+        assert!(cache.contains(&used));
+        assert!(!cache.contains(&idle));
+
+        // Querying the evicted handle must not count as use of the one entry
+        // left in the map. With no current use, that entry must also expire.
+        assert!(cache.get_mut(&idle).is_none());
+        cache.trim(&mut atlas, |_| panic!("unexpected dedicated group"));
+        assert!(!cache.contains(&used));
+    }
 
     #[test]
     #[ignore = "requires a GPU adapter"]
