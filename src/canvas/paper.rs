@@ -300,7 +300,9 @@ impl MoleculeCanvas<'_> {
                 &[],
                 self.reviewing_pair,
             );
-            if let Some(record) = &memo {
+            if let Some(record) = &memo
+                && self.tool == Tool::Equipment
+            {
                 record.geometry.borrow_mut().draw(
                     frame,
                     (fragment.remainder.markers.clone(), fragment.scene.clone()),
