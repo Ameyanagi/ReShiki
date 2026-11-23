@@ -904,7 +904,7 @@ grouped curves; 1 rotated caption upright".
 | In the ChemDraw file                                                         | In ReShiki                                                       |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Doubled curve                                                                | Two grouped parallel curves; with a fill or arrowheads, one line |
-| See-through object (alpha)                                                   | Opaque                                                           |
+| Supported ChemDraw faded fill                                                | An editable fade with its opacity                                |
 | Arc from an older ChemDraw file                                              | The same arc as a curve or curved arrow, without a message       |
 | Arc arrow without its centre or axes                                         | A straight arrow                                                 |
 | Curved arrow with a double shaft; longer curve with a no-go or dipole mark   | The curve without the mark                                       |

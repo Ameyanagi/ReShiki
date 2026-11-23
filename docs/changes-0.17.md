@@ -572,12 +572,10 @@ reference lists the individual feature rules. [Document format](architecture.md#
 
 ## Chemistry and file exchange
 
-- A ChemDraw file (CDX or CDXML) now opens even when it uses a drawing style
-  or object ReShiki cannot draw yet. Shaded orbitals, doubled curves,
-  see-through objects, rotated captions and similar styles import as the
-  nearest style. One message lists the substitutions and omissions, including
-  BioDraw shapes and gel plates. Supported TLC plates open as editable objects.
-  [ChemDraw import limits](graphics.md#chemdraw-styles-reshiki-cannot-draw-yet)
+- A ChemDraw file (CDX or CDXML) can open even when it contains unsupported
+  styles or objects. The import message lists substitutions and omissions,
+  including unsupported BioDraw shapes and gel plates. Supported TLC plates
+  open as editable objects. [ChemDraw import limits](graphics.md#chemdraw-styles-reshiki-cannot-draw-yet)
 - Arcs from older ChemDraw files, drawn bracket pairs, daggers, the lone pair
   bar and its hybrid and filled orbitals now import as drawn.
 - CDX files written by ChemDraw: no-go arrows keep their cross or hash, lone
