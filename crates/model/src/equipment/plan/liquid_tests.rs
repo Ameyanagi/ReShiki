@@ -119,16 +119,85 @@ fn unsafe_curves_share_a_straight_edge_near_walls_and_holes() {
         rectangle(0., 0., 20., 20.),
         rectangle(9., 10.15, 11., 10.25),
     ];
-    assert_eq!(
-        meniscus_edge([0., 10.], [20., 10.], 10., Meniscus::Concave, 1., &region),
-        Seg::Line([20., 10.])
-    );
+    let checked = liquid_surfaces(&below(&region, 10.), 10., Meniscus::Concave, 1., &region);
+    assert_eq!(checked.len(), 1);
+    assert_eq!(checked[0].segment(), Seg::Line([20., 10.]));
     let paths = liquid(&region, share_below(&region, 10.), Meniscus::Concave, 1.);
     assert_shared(&paths, 1);
     assert!(matches!(
         paths.last().unwrap().1.as_slice(),
         [Seg::Move(_), Seg::Line(_)]
     ));
+}
+
+#[test]
+fn one_batch_preserves_safe_curves_beside_unsafe_walls_and_holes() {
+    let region = vec![
+        rectangle(0., 0., 20., 20.),
+        rectangle(40., 9.99, 60., 10.01),
+        rectangle(80., 0., 100., 20.),
+        rectangle(120., 0., 140., 20.),
+        rectangle(129., 10.15, 131., 10.25),
+        rectangle(129., 9.75, 131., 9.85),
+    ];
+    for meniscus in [Meniscus::Concave, Meniscus::Convex] {
+        let paths = liquid(&region, share_below(&region, 10.), meniscus, 1.);
+        assert_shared(&paths, 4);
+        let mut curved: Vec<_> = paths
+            .iter()
+            .filter_map(|(ink, path)| {
+                if *ink != Ink::Stroke(Weight::Detail) {
+                    return None;
+                }
+                let [Seg::Move(a), edge] = path.as_slice() else {
+                    panic!("unexpected surface")
+                };
+                Some((a[0], matches!(edge, Seg::Cubic(..))))
+            })
+            .collect();
+        curved.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert_eq!(
+            curved,
+            [(0., true), (40., false), (80., true), (120., false)]
+        );
+    }
+}
+
+#[test]
+fn overlapping_and_degenerate_hulls_fall_back_without_cancelling_safe_hulls() {
+    let region = vec![rectangle(0., 0., 300., 30.)];
+    // Synthetic nested cut edges exercise the conservative overlap guard even
+    // though the overlay normally emits disjoint cut intervals itself.
+    let shapes = vec![
+        vec![rectangle(0., 10., 100., 20.)],
+        vec![rectangle(10., 10., 20., 20.)],
+        vec![rectangle(30., 10., 40., 20.)],
+        vec![rectangle(200., 10., 220., 20.)],
+    ];
+    for meniscus in [Meniscus::Concave, Meniscus::Convex] {
+        let checked = liquid_surfaces(&shapes, 10., meniscus, 1., &region);
+        assert_eq!(
+            checked
+                .iter()
+                .map(|s| s.controls.is_some())
+                .collect::<Vec<_>>(),
+            [false, false, false, true]
+        );
+        let touching = vec![
+            vec![rectangle(0., 10., 20., 20.)],
+            vec![rectangle(20., 10., 40., 20.)],
+        ];
+        assert!(
+            liquid_surfaces(&touching, 10., meniscus, 1., &region)
+                .iter()
+                .all(|s| s.controls.is_some())
+        );
+        assert!(
+            liquid_surfaces(&shapes, 10., meniscus, 0., &region)
+                .iter()
+                .all(|s| s.controls.is_none())
+        );
+    }
 }
 
 #[test]
