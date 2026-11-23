@@ -174,7 +174,10 @@ impl Source {
                     if read == 0 {
                         return Ok(digest.finalize().into());
                     }
-                    digest.update(&buffer[..read]);
+                    let bytes = buffer.get(..read).ok_or_else(|| {
+                        std::io::Error::other("recovery read exceeded its buffer")
+                    })?;
+                    digest.update(bytes);
                 }
             })();
             digest.is_ok_and(|digest| digest == self.identity)
