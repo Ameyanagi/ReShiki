@@ -451,3 +451,87 @@ fn spiro_refinement_ignores_an_irregular_pinned_ring_elsewhere() -> anyhow::Resu
     }
     Ok(())
 }
+
+#[test]
+fn reused_topology_preserves_stage_results_and_exact_work() -> anyhow::Result<()> {
+    for (points, edges) in [
+        (
+            vec![(-10., 0.), (1., 0.), (0., -1.), (0., 1.)],
+            vec![(0, 1), (1, 2), (2, 3)],
+        ),
+        (
+            vec![(0., 0.), (1.5, 0.), (0.1, 0.1), (1.6, 0.1), (3., 0.)],
+            vec![(0, 1), (1, 2), (2, 3), (3, 4)],
+        ),
+        (
+            vec![(0., 0.), (1.5, 0.), (0.75, 1.3), (0.1, 0.1)],
+            vec![(0, 1), (1, 2), (2, 0), (2, 3)],
+        ),
+    ] {
+        let (graph, fragment) = fixture(&points, &edges);
+        let metadata = Metadata::unspecified(&graph);
+        let rings = RingCache::default();
+        let input = Input::new(&graph, &metadata, &rings)?;
+        // Includes partial validation, initial row charges, interrupted BFS,
+        // later-stage failures and the complete successful pipeline.
+        for budget in (0..1_000).chain([MAX_WORK]) {
+            let mut expected = fragment.clone();
+            let mut actual = fragment.clone();
+            let mut old_remaining = budget;
+            let mut new_remaining = budget;
+            let mut session = input.session();
+            for stage in [
+                Stage::BondAndSpiroFlip,
+                Stage::OpenAngles,
+                Stage::ShortenBonds,
+                Stage::PathAngleExpansion,
+            ] {
+                let old = input.apply_with_work(&expected, stage, &mut old_remaining);
+                let new = input.apply_detached_with_work(
+                    &mut actual,
+                    stage,
+                    &mut new_remaining,
+                    &mut session,
+                );
+                assert_eq!(old_remaining, new_remaining, "{stage:?} budget {budget}");
+                match (old, new) {
+                    (Ok(value), Ok(())) => {
+                        assert_eq!(value, actual, "{stage:?} budget {budget}");
+                        expected = value;
+                    }
+                    (Err(old), Err(new)) => {
+                        assert_eq!(old, new, "{stage:?} budget {budget}");
+                        break;
+                    }
+                    (old, new) => panic!("different outcome: {old:?} {new:?}"),
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn cached_distances_avoid_bfs_but_charge_identical_partial_work() -> anyhow::Result<()> {
+    let (graph, _) = fixture(&[(0., 0.); 5], &[(0, 1), (1, 2), (2, 3)]);
+    let metadata = Metadata::unspecified(&graph);
+    let rings = RingCache::default();
+    let input = Input::new(&graph, &metadata, &rings)?;
+    let mut cached = input.session();
+    assert_eq!(input.distance(0, 3, &mut cached)?, 3);
+    assert_eq!(cached.distance_builds, 1);
+    for budget in 0..20 {
+        cached.accessed.clear();
+        cached.remaining = budget;
+        let mut fresh = input.session();
+        fresh.remaining = budget;
+        assert_eq!(
+            input.distance(0, 4, &mut cached),
+            input.distance(0, 4, &mut fresh),
+            "budget {budget}"
+        );
+        assert_eq!(cached.remaining, fresh.remaining, "budget {budget}");
+        assert_eq!(cached.distance_builds, 1);
+    }
+    Ok(())
+}

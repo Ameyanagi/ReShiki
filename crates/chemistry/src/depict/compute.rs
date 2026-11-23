@@ -190,21 +190,36 @@ fn repair(
     )?
     .with_path_angle_expansion_extra_trials(options.path_angle_expansion_extra_trials);
     let mut fragments = initial.fragments.clone();
+    let mut session = collision.session();
     // Native ordering completes flips for every fragment before opening angles
     // or shortening bonds. Never publish the temporary stereo/ring state.
     for fragment in &mut fragments {
-        *fragment =
-            collision.apply_with_work(fragment, collision::Stage::BondAndSpiroFlip, remaining)?;
+        collision.apply_detached_with_work(
+            fragment,
+            collision::Stage::BondAndSpiroFlip,
+            remaining,
+            &mut session,
+        )?;
     }
     for fragment in &mut fragments {
-        *fragment = collision.apply_with_work(fragment, collision::Stage::OpenAngles, remaining)?;
-        *fragment =
-            collision.apply_with_work(fragment, collision::Stage::ShortenBonds, remaining)?;
+        collision.apply_detached_with_work(
+            fragment,
+            collision::Stage::OpenAngles,
+            remaining,
+            &mut session,
+        )?;
+        collision.apply_detached_with_work(
+            fragment,
+            collision::Stage::ShortenBonds,
+            remaining,
+            &mut session,
+        )?;
         if options.path_angle_expansion {
-            *fragment = collision.apply_with_work(
+            collision.apply_detached_with_work(
                 fragment,
                 collision::Stage::PathAngleExpansion,
                 remaining,
+                &mut session,
             )?;
         }
     }
