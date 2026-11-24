@@ -66,11 +66,12 @@ fn npt_definition_serializes_its_type_and_rejects_unimplemented_nominal_sizes() 
             .unwrap()
             .contains("\"family\":\"npt\"")
     );
-    let error = format::parse(&text.replace("\"size_mm\":6.35", "\"size_mm\":3.175")).unwrap_err();
-    assert!(error.contains("only 1/4 in NPT"), "{error}");
+    let error = format::parse(&text.replace("\"size_mm\":6.35", "\"size_mm\":9.525")).unwrap_err();
+    assert!(error.contains("NPT: use nominal size_mm"), "{error}");
+    let with_depth = text.replace("\"size_mm\":6.35", "\"size_mm\":6.35,\"insertion_mm\":5");
+    assert!(format::parse(&with_depth).is_ok());
     let error =
-        format::parse(&text.replace("\"size_mm\":6.35", "\"size_mm\":6.35,\"insertion_mm\":5"))
-            .unwrap_err();
+        format::parse(&with_depth.replace("\"gender\":\"F\"", "\"gender\":\"M\"")).unwrap_err();
     assert!(error.contains("only on a female compression"), "{error}");
 }
 
@@ -102,6 +103,41 @@ fn connect(doc: &mut Document, fixed: u64, socket: &str, moving: u64, plug: &str
     assert!(matches!(snap.offer, solve::Offer::Seat));
     assert_eq!(snap.target.at, joint(fixed, socket));
     assert_eq!(snap.moving.at, joint(moving, plug));
+}
+
+#[test]
+fn sample_cylinders_keep_their_one_or_two_npt_seats_across_views() {
+    for (variant, sockets) in [
+        ("150", &["left", "right"][..]),
+        ("300", &["left", "right"][..]),
+        ("150-single-end", &["left"][..]),
+        ("300-single-end", &["left"][..]),
+    ] {
+        let mut doc = Document::default();
+        let cylinder = add(
+            &mut doc,
+            &format!("reshiki/gas-sample-cylinder-{variant}-1-4-npt"),
+        );
+        assert_eq!(solve::ports(graphic(&doc, cylinder)).len(), sockets.len());
+        for &port in sockets {
+            let adapter = add(&mut doc, "reshiki/gas-compression-npt-adapter-1-4");
+            connect(&mut doc, cylinder, port, adapter, "thread");
+            let socket = solve::ports(graphic(&doc, cylinder))
+                .into_iter()
+                .find(|p| p.at.joint == port)
+                .unwrap();
+            let tip = solve::ports(graphic(&doc, adapter))
+                .into_iter()
+                .find(|p| p.at.joint == "thread")
+                .unwrap();
+            let engaged_mm = (socket.point[0] - tip.point[0]) * socket.dir[0] / socket.mm;
+            assert!((engaged_mm - 8.).abs() < solve::TOLERANCE_MM);
+        }
+        let seats = doc.seats.clone();
+        let ports = all_ports(&doc);
+        set(&mut doc, cylinder, "view", "section");
+        assert_connected(&mut doc, &seats, &ports);
+    }
 }
 
 fn set(doc: &mut Document, id: u64, param: &str, state: &str) {
