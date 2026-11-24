@@ -166,6 +166,8 @@ struct ReducerSuggestion {
     /// Document epochs are unique across tabs and change when a tab is reopened.
     epoch: u64,
     base: Document,
+    /// Selection that made the offer, including non-equipment companions.
+    selected: Vec<u64>,
     candidate: Option<(Document, reshiki::transaction::Reconciled)>,
     snap: Snap,
 }
@@ -175,6 +177,8 @@ impl ReducerSuggestion {
         self.epoch == tab.file_epoch
             && tool.selects()
             && self.base == tab.doc
+            && (self.selected.len() <= 1
+                || self.selected.iter().all(|id| tab.selected.contains(id)))
             && tab
                 .selected
                 .iter()
@@ -524,8 +528,7 @@ impl App {
                 self.tab.doc = candidate;
                 self.commit_changed(reconciled, false);
                 if !self.error {
-                    self.tab.selected =
-                        solve::closure(&self.tab.doc, &[offer.snap.moving.at.piece]);
+                    self.tab.selected = solve::closure(&self.tab.doc, &offer.selected);
                     self.snapped(&offer.snap);
                 }
                 return super::focus_drawing();
@@ -941,9 +944,15 @@ impl App {
         self.equipment.reducer = None;
         if matches!(snap.offer, Offer::Reducer(_)) {
             let base = self.tab.doc.clone();
+            let selected = if end.is_some() {
+                vec![snap.moving.at.piece]
+            } else {
+                self.tab.selected.clone()
+            };
             self.equipment.reducer = Some(ReducerSuggestion {
                 epoch: self.tab.file_epoch,
                 base: base.clone(),
+                selected: selected.clone(),
                 candidate: None,
                 snap: snap.clone(),
             });
@@ -960,7 +969,7 @@ impl App {
                 ),
                 None => solve::connect(
                     &mut candidate,
-                    &[snap.moving.at.piece],
+                    &snap.reducer_ids,
                     &snap.target.at,
                     &snap.moving.at,
                 ),
@@ -987,6 +996,7 @@ impl App {
                     self.equipment.reducer = Some(ReducerSuggestion {
                         epoch: self.tab.file_epoch,
                         base,
+                        selected,
                         candidate: Some((candidate, reconciled)),
                         snap: inserted,
                     });

@@ -749,6 +749,9 @@ pub struct Snap {
     pub target: Port,
     /// The moving joint.
     pub moving: Port,
+    /// Effective moving IDs after ground locking, for a deferred reducer offer.
+    /// Other results leave this empty; ordinary seating retains no move set.
+    pub reducer_ids: Vec<u64>,
     pub offer: Offer,
     /// The moving pieces changed size to match.
     pub scaled: bool,
@@ -942,6 +945,7 @@ fn seat(
     let mut snap = Snap {
         target: s.clone(),
         moving: m.clone(),
+        reducer_ids: Vec::new(),
         offer: offer.clone(),
         scaled: (m.mm / s.mm - 1.).abs() > 1e-3,
         behind: None,
@@ -1185,6 +1189,7 @@ fn snap_inner(
             at: s.point,
             target: s,
             moving: m,
+            reducer_ids: ids,
             offer: Offer::Reducer(d),
             scaled: false,
             behind: None,
@@ -1197,6 +1202,7 @@ fn snap_inner(
             at: s.point,
             target: s,
             moving: m,
+            reducer_ids: Vec::new(),
             offer: Offer::Mismatch,
             scaled: false,
             behind: None,
@@ -1241,6 +1247,7 @@ fn clip_on(doc: &mut Document, id: u64, size: &str, at: Point, reach: f32) -> Op
         at: f.point,
         target: f,
         moving: m,
+        reducer_ids: Vec::new(),
         offer: Offer::Clip,
         scaled: false,
         behind: None,

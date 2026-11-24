@@ -743,10 +743,16 @@ pub fn snap_end(
 }
 
 fn end_snap(target: Port, moving: Port, offer: Offer, added: Option<u64>) -> Snap {
+    let reducer_ids = if matches!(offer, Offer::Reducer(_)) {
+        vec![moving.at.piece]
+    } else {
+        Vec::new()
+    };
     Snap {
         at: target.point,
         target,
         moving,
+        reducer_ids,
         offer,
         scaled: false,
         behind: None,

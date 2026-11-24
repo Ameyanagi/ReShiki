@@ -214,6 +214,103 @@ fn lasso_reducer_suggestions_stay_visible_and_can_be_approved() {
 }
 
 #[test]
+fn whole_move_reducer_approval_carries_companions_and_keeps_the_move_selection() {
+    use reshiki::equipment::geometry::{Affine, len, sub};
+    for tool in [Tool::Select, Tool::Lasso] {
+        for stale in ["none", "document", "selection"] {
+            let mut app = end_snap_app("b", true);
+            app.tool = tool;
+            let companion = app.tab.doc.next_id();
+            app.tab.doc.graphics.push(Graphic::dragged(
+                companion,
+                GraphicKind::Rectangle,
+                Point::new(120., 75.),
+                Point::new(144., 92.),
+                Default::default(),
+                Default::default(),
+                false,
+            ));
+            let ids = vec![1, companion];
+            reshiki::editing::transform_about(&mut app.tab.doc, &ids, Point::default(), 1., 27.);
+            app.tab.selected = ids.clone();
+            let ports =
+                |id| solve::ports(app.tab.doc.graphics.iter().find(|g| g.id == id).unwrap());
+            let moving = ports(1).into_iter().find(|p| p.at.joint == "b").unwrap();
+            let target = ports(2).into_iter().find(|p| p.at.joint == "tube").unwrap();
+            let before = app.tab.doc.clone();
+            let _ = app.update(Message::Canvas(Edit::Move(
+                ids,
+                (target.point[0] - moving.point[0] + 2.) as f32,
+                (target.point[1] - moving.point[1] + 1.) as f32,
+            )));
+            assert!(!app.error, "{}", app.status);
+            let offer = app.reducer_suggestion().expect("whole-move reducer offer");
+            assert!(offer.candidate.is_some());
+            assert!(offer.selected.contains(&companion));
+            let offered = app.tab.doc.clone();
+            let history = app.tab.history.undo_frames().len();
+            if stale != "none" {
+                if stale == "document" {
+                    app.tab.doc.translate(&[companion], 0., 1.);
+                } else {
+                    app.tab.selected.retain(|id| *id != companion);
+                }
+                let edited = app.tab.doc.clone();
+                assert!(app.reducer_suggestion().is_none());
+                let _ = app.update(Message::Equipment(Action::InsertReducer));
+                assert_eq!(app.tab.doc, edited);
+                assert_eq!(app.tab.history.undo_frames().len(), history);
+                continue;
+            }
+            let local_companion = |doc: &Document| {
+                let tube = doc.graphics.iter().find(|g| g.id == 1).unwrap();
+                let c = doc.graphics.iter().find(|g| g.id == companion).unwrap();
+                let f = f64::from;
+                let inverse = Affine([
+                    f(tube.axis_x.x),
+                    f(tube.axis_x.y),
+                    f(tube.axis_y.x),
+                    f(tube.axis_y.y),
+                    f(tube.origin.x),
+                    f(tube.origin.y),
+                ])
+                .inverse()
+                .unwrap();
+                [
+                    c.origin,
+                    c.origin.offset(c.axis_x.x, c.axis_x.y),
+                    c.origin.offset(c.axis_y.x, c.axis_y.y),
+                ]
+                .map(|p| inverse.apply([f(p.x), f(p.y)]))
+            };
+            let relative = local_companion(&offered);
+            let _ = app.update(Message::Equipment(Action::InsertReducer));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.tab.doc.graphics.len(), 4);
+            assert_eq!(app.tab.doc.seats.len(), 2);
+            assert_eq!(app.tab.selected.len(), 4);
+            assert!(app.tab.selected.contains(&companion));
+            for (before, after) in relative.into_iter().zip(local_companion(&app.tab.doc)) {
+                assert!(len(sub(before, after)) < 1e-3);
+            }
+            assert_eq!(
+                app.tab.doc.graphics.iter().find(|g| g.id == 2),
+                offered.graphics.iter().find(|g| g.id == 2),
+            );
+            assert_eq!(app.tab.history.undo_frames().len(), history + 1);
+            let accepted = app.tab.doc.clone();
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, offered);
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            let _ = app.update(Message::Redo);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc, accepted);
+        }
+    }
+}
+
+#[test]
 fn reducer_suggestions_do_not_follow_an_identical_drawing_to_another_tab_or_epoch() {
     for another_tab in [false, true] {
         let mut app = end_snap_app("b", true);
