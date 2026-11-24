@@ -172,10 +172,10 @@ pub struct Starts {
     pub conformers: Vec<EnsembleConformer>,
     /// Completed worker batches.
     pub batches: u32,
-    /// Whether all requested sampling ran. A deadline or any later-batch error
-    /// leaves earlier successful batches available with this set to false.
-    /// Completed sampling can still yield fewer valid conformers than requested.
-    pub complete: bool,
+    /// Why sampling stopped before every requested batch ran: the deadline or a
+    /// later batch's error, with earlier batches kept. `None` when all ran;
+    /// completed sampling can still yield fewer valid conformers than requested.
+    pub stopped: Option<String>,
 }
 
 #[derive(Clone, Debug)]

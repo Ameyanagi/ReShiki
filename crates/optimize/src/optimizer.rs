@@ -272,10 +272,12 @@ impl Engine {
             let trial = eval.trial(point, &s)?;
             let actual = trial.energy - point.energy;
             if actual > 1e-6 {
-                self.radius = 0.25 * length;
-                if self.radius < 1e-3 {
+                // A step already at the minimum radius cannot shrink further.
+                if length <= 1e-3 {
+                    self.radius = 1e-3;
                     break;
                 }
+                self.radius = (0.25 * length).max(1e-3);
                 continue;
             }
             let ratio = actual / predicted;
@@ -392,8 +394,8 @@ impl Engine {
 /// (g·s + s·Hs/2)/(1 + s·s). Actual/predicted below 0.25 quarters the radius
 /// (minimum 0.001 bohr); above 0.75 on the boundary doubles it (maximum 0.5).
 /// An energy rise above 1e-6 Eh rejects the trial and sets the radius to one
-/// quarter of the attempted step length.
-/// Ten successive rejections, a rejected trial shrinking below the minimum, or
+/// quarter of the attempted step length, but not below the minimum.
+/// Ten successive rejections, a rejected trial at the minimum radius, or
 /// an unusable ANC model switches to L-BFGS. Accepted BFGS updates require
 /// y·s > 1e-12 |y||s| and positive model curvature. Every 30 accepted steps
 /// the Lindh basis is rebuilt. Learned curvature is transformed into the new

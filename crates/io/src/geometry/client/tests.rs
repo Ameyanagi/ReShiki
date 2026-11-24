@@ -259,14 +259,17 @@ fi
     let expired = run(BatchInstant::now()).await.unwrap();
     assert_eq!(expired.batches, 0);
     assert!(expired.conformers.is_empty());
-    assert!(!expired.complete);
+    assert_eq!(
+        expired.stopped.as_deref(),
+        Some("Conformer search deadline reached")
+    );
     assert!(!executable.with_extension("first").exists());
 
     let result = run(BatchInstant::now() + Duration::from_secs(15))
         .await
         .unwrap();
     assert_eq!(result.batches, 2);
-    assert!(result.complete);
+    assert_eq!(result.stopped, None);
     assert_eq!(result.conformers.len(), 2);
     for (extension, expected_count, expected_seed) in [("first", 32, 31), ("second", 1, 7950)] {
         let path = executable.with_extension(extension);
@@ -308,7 +311,12 @@ fi
     assert_eq!(result.batches, 1);
     assert_eq!(result.conformers.len(), 1);
     assert_eq!(result.conformers[0].conformer.hydrogen_parents, [0]);
-    assert!(!result.complete);
+    assert!(
+        result
+            .stopped
+            .as_deref()
+            .is_some_and(|reason| reason.contains("hydrogen"))
+    );
 
     let rejected = wire::encode(
         &wire::Response {
@@ -335,7 +343,7 @@ fi
             .unwrap();
         assert_eq!(result.batches, 1);
         assert_eq!(result.conformers.len(), 1);
-        assert!(!result.complete);
+        assert!(result.stopped.is_some());
     }
     std::fs::remove_file(executable.with_extension("first")).unwrap();
     std::fs::write(executable.with_extension("response1"), rejected).unwrap();

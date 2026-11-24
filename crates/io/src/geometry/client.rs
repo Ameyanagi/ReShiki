@@ -172,10 +172,14 @@ impl Client {
         let mut result = Starts {
             conformers: Vec::new(),
             batches: 0,
-            complete: false,
+            stopped: None,
         };
         let mut hydrogen_parents = None;
-        while remaining > 0 && BatchInstant::now() < deadline {
+        while remaining > 0 {
+            if BatchInstant::now() >= deadline {
+                result.stopped = Some("Conformer search deadline reached".into());
+                break;
+            }
             operation.conformers = batch_size.min(remaining);
             operation.seed = (i64::from(base_seed) + i64::from(result.batches) * 7919)
                 .rem_euclid(seed_range) as i32;
@@ -184,18 +188,22 @@ impl Client {
                 .await
             {
                 Ok(batch) => batch,
-                Err(_) if result.batches > 0 => break,
+                Err(error) if result.batches > 0 => {
+                    result.stopped = Some(error.to_string());
+                    break;
+                }
                 Err(error) => return Err(error),
             };
             let parents = &batch.conformer.hydrogen_parents;
             if hydrogen_parents.get_or_insert_with(|| parents.clone()) != parents {
+                result.stopped =
+                    Some("Temporary hydrogen identities changed between batches".into());
                 break;
             }
             result.conformers.extend(batch.ensemble);
             result.batches += 1;
             remaining -= operation.conformers;
         }
-        result.complete = remaining == 0;
         Ok(result)
     }
 

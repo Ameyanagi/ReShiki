@@ -349,13 +349,42 @@ fn anc_rejections_retry_from_the_accepted_point_then_switch_methods() {
     });
     drop(p);
     assert_eq!(result.status, Status::MaxSteps);
-    assert_eq!(result.method, Method::Lbfgs);
+    // The sixth trial is clamped to the minimum radius and accepted by ANC.
+    assert_eq!(result.method, Method::AncRfo);
     assert_eq!(result.evaluations, 7);
     assert_eq!(accepted, [INITIAL.to_vec(), calls[6].clone()]);
-    for (retry, x) in calls[1..6].iter().enumerate() {
+    let length = |x: &[f64]| {
         let delta: Vec<_> = x.iter().zip(INITIAL).map(|(v, i)| v - i).collect();
-        assert!((crate::linalg::norm(&delta) - 0.3 * 0.25_f64.powi(retry as i32)).abs() < 1e-12);
+        crate::linalg::norm(&delta)
+    };
+    for (retry, x) in calls[1..6].iter().enumerate() {
+        assert!((length(x) - 0.3 * 0.25_f64.powi(retry as i32)).abs() < 1e-12);
     }
+    assert!((length(&calls[6]) - 1e-3).abs() < 1e-12);
+}
+
+#[test]
+fn anc_retries_at_the_minimum_radius_before_switching_methods() {
+    // A stiff bond: the first steps overshoot, a 0.001 bohr step is downhill.
+    let mut p = surface(|x, g, _| {
+        let (dx, y) = (x[3] - 1.4, x[4]);
+        g.fill(0.);
+        g[3] = 100_000. * dx + 5e-6;
+        g[4] = 0.001 * y + 3.5e-6;
+        Ok(50_000. * dx * dx + 5e-6 * dx + 0.0005 * y * y + 3.5e-6 * y)
+    });
+    let options = Options {
+        tight_final: false,
+        ..anchored(Method::AncRfo)
+    };
+    let result = optimize(
+        &mut p,
+        &[1, 1],
+        &[0., 0., 0., 1.4, 0., 0.],
+        &options,
+        proceed,
+    );
+    assert_eq!(result.status, Status::Converged);
 }
 
 #[test]
