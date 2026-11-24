@@ -26,7 +26,7 @@ use crate::{
 pub use crystal::{Adp, Cell, Crossing, Site};
 use ellipsoids::Ellipsoid;
 pub use ellipsoids::Probability;
-pub(crate) use polish::deserialize_models;
+pub(crate) use polish::{deserialize_models, fingerprint};
 pub use polish::{Generated, Labels};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
