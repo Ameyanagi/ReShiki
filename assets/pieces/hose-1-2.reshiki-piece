@@ -1,0 +1,71 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/hose-1-2",
+  "revision": 1,
+  "family": "hose",
+  "variant": {
+    "bore": "1/2 in ID"
+  },
+  "names": {
+    "en": "Flexible hose, 1/2 in ID"
+  },
+  "category": "other",
+  "keywords": [
+    "hose",
+    "flexible tubing",
+    "hose ID",
+    "1/2 in",
+    "12.7 mm ID"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "tube": {
+    "width_mm": 19.05,
+    "material": "rubber",
+    "color": [
+      196,
+      106,
+      58
+    ],
+    "ends": [
+      "a",
+      "b"
+    ]
+  },
+  "joints": [
+    {
+      "id": "a",
+      "kind": "plug",
+      "family": "hose",
+      "gender": "F",
+      "size_mm": 12.7,
+      "at": [
+        0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "b",
+      "kind": "plug",
+      "family": "hose",
+      "gender": "F",
+      "size_mm": 12.7,
+      "at": [
+        60,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ]
+}

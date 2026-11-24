@@ -1,0 +1,310 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/gas-hose-connector-1-2",
+  "revision": 1,
+  "family": "gas-hose-connector",
+  "variant": {
+    "tube_od": "1/2 in OD",
+    "hose_id": "1/2 in ID"
+  },
+  "names": {
+    "en": "Stainless-steel hose connector, 1/2 in tube adapter to 1/2 in hose ID"
+  },
+  "category": "other",
+  "keywords": [
+    "hose connector",
+    "hose barb",
+    "tube adapter",
+    "compression",
+    "gas line",
+    "316 stainless steel",
+    "1/2 in",
+    "SS-8-HC-A-811"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "connector-metal",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-29.45 -6.35L-6.45 -6.35L-6.45 -8.95L-5.25 -10.15L1.95 -10.15L3.15 -8.95L3.15 -8.8305L5.65 -8.8305L5.65 -7.6L9.5532 -6.35L10.41 -6.35L10.41 -7.6L14.3132 -6.35L15.17 -6.35L15.17 -7.6L19.0732 -6.35L19.93 -6.35L19.93 -7.6L23.8332 -6.35L24.69 -6.35L24.69 -7.6L28.5932 -6.35L29.45 -6.35L29.45 6.35L28.5932 6.35L24.69 7.6L24.69 6.35L23.8332 6.35L19.93 7.6L19.93 6.35L19.0732 6.35L15.17 7.6L15.17 6.35L14.3132 6.35L10.41 7.6L10.41 6.35L9.5532 6.35L5.65 7.6L5.65 8.8305L3.15 8.8305L3.15 8.95L1.95 10.15L-5.25 10.15L-6.45 8.95L-6.45 6.35L-29.45 6.35Z",
+      "color": [
+        203,
+        215,
+        224
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "connector-section-metal",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-29.45 -6.35L-6.45 -6.35L-6.45 -8.95L-5.25 -10.15L1.95 -10.15L3.15 -8.95L3.15 -8.8305L5.65 -8.8305L5.65 -7.6L9.5532 -6.35L10.41 -6.35L10.41 -7.6L14.3132 -6.35L15.17 -6.35L15.17 -7.6L19.0732 -6.35L19.93 -6.35L19.93 -7.6L23.8332 -6.35L24.69 -6.35L24.69 -7.6L28.5932 -6.35L29.45 -6.35L29.45 -4.85L5.65 -4.85L2.15 -4.85L-29.45 -4.85ZM-29.45 4.85L2.15 4.85L5.65 4.85L29.45 4.85L29.45 6.35L28.5932 6.35L24.69 7.6L24.69 6.35L23.8332 6.35L19.93 7.6L19.93 6.35L19.0732 6.35L15.17 7.6L15.17 6.35L14.3132 6.35L10.41 7.6L10.41 6.35L9.5532 6.35L5.65 7.6L5.65 8.8305L3.15 8.8305L3.15 8.95L1.95 10.15L-5.25 10.15L-6.45 8.95L-6.45 6.35L-29.45 6.35Z",
+      "color": [
+        203,
+        215,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outer-profile",
+      "layer": "back",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-29.45 -6.35L-6.45 -6.35L-6.45 -8.95L-5.25 -10.15L1.95 -10.15L3.15 -8.95L3.15 -8.8305L5.65 -8.8305L5.65 -7.6L9.5532 -6.35L10.41 -6.35L10.41 -7.6L14.3132 -6.35L15.17 -6.35L15.17 -7.6L19.0732 -6.35L19.93 -6.35L19.93 -7.6L23.8332 -6.35L24.69 -6.35L24.69 -7.6L28.5932 -6.35L29.45 -6.35M29.45 6.35L28.5932 6.35L24.69 7.6L24.69 6.35L23.8332 6.35L19.93 7.6L19.93 6.35L19.0732 6.35L15.17 7.6L15.17 6.35L14.3132 6.35L10.41 7.6L10.41 6.35L9.5532 6.35L5.65 7.6L5.65 8.8305L3.15 8.8305L3.15 8.95L1.95 10.15L-5.25 10.15L-6.45 8.95L-6.45 6.35L-29.45 6.35",
+      "depth": 5
+    },
+    {
+      "id": "shank-rim",
+      "layer": "back",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-29.45 -6.35L-29.45 -4.85M-29.45 4.85L-29.45 6.35",
+      "depth": 5
+    },
+    {
+      "id": "barb-rim",
+      "layer": "back",
+      "material": "ink",
+      "role": "outline",
+      "path": "M29.45 -6.35L29.45 -4.85M29.45 4.85L29.45 6.35",
+      "depth": 5
+    },
+    {
+      "id": "section-bore",
+      "layer": "back",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-29.45 -4.85L2.15 -4.85L5.65 -4.85L29.45 -4.85M-29.45 4.85L2.15 4.85L5.65 4.85L29.45 4.85",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "hex-flats",
+      "layer": "back",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-5.25 -10.15L-5.25 10.15M1.95 -10.15L1.95 10.15M-5.25 -5.684L1.95 -5.684M-5.25 5.684L1.95 5.684",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "shoulder-seam",
+      "layer": "back",
+      "material": "ink",
+      "role": "detail",
+      "path": "M3.15 -8.8305L3.15 8.8305M5.65 -8.8305L5.65 -7.6M5.65 7.6L5.65 8.8305",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "shank-highlight",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-28.45 -4.445L-6.75 -4.445L-6.75 -2.2225L-28.45 -2.2225Z",
+      "color": [
+        239,
+        244,
+        248
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 1,
+      "style": "shaded"
+    },
+    {
+      "id": "hex-highlight",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-5.25 -10.15L1.95 -10.15L1.95 -6.3945L-5.25 -6.3945Z",
+      "color": [
+        240,
+        245,
+        248
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2,
+      "style": "shaded"
+    },
+    {
+      "id": "hex-shadow",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-5.25 6.3945L1.95 6.3945L1.95 10.15L-5.25 10.15Z",
+      "color": [
+        164,
+        185,
+        199
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2,
+      "style": "shaded"
+    },
+    {
+      "id": "barb-rib-edges",
+      "layer": "back",
+      "material": "ink",
+      "role": "detail",
+      "path": "M5.65 -7.6L5.65 -3.81M5.65 3.81L5.65 7.6M10.41 -7.6L10.41 -3.81M10.41 3.81L10.41 7.6M15.17 -7.6L15.17 -3.81M15.17 3.81L15.17 7.6M19.93 -7.6L19.93 -3.81M19.93 3.81L19.93 7.6M24.69 -7.6L24.69 -3.81M24.69 3.81L24.69 7.6",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "barb-highlights",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M5.9 -7.25L9.1248 -6.1L8.6012 -5.65L5.9 -6.85ZM10.66 -7.25L13.8848 -6.1L13.3612 -5.65L10.66 -6.85ZM15.42 -7.25L18.6448 -6.1L18.1212 -5.65L15.42 -6.85ZM20.18 -7.25L23.4048 -6.1L22.8812 -5.65L20.18 -6.85ZM24.94 -7.25L28.1648 -6.1L27.6412 -5.65L24.94 -6.85Z",
+      "color": [
+        239,
+        244,
+        248
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2,
+      "style": "shaded"
+    },
+    {
+      "id": "section-hatch",
+      "layer": "back",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-5.45 -5.4L-3.594 -7.256M-5.45 9.35L-3.594 7.494M-2.25 -5.4L-0.394 -7.256M-2.25 9.35L-0.394 7.494",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    }
+  ],
+  "joints": [
+    {
+      "id": "compression",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 12.7,
+      "at": [
+        -29.45,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "hose",
+      "kind": "plug",
+      "family": "hose",
+      "gender": "M",
+      "size_mm": 12.7,
+      "at": [
+        29.45,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "compression",
+      "at": [
+        -29.45,
+        0
+      ]
+    },
+    {
+      "id": "hose",
+      "at": [
+        29.45,
+        0
+      ]
+    }
+  ]
+}
