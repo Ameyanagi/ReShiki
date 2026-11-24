@@ -2,7 +2,8 @@
 //! size arms one placement; Keep placing leaves it armed for more copies.
 use super::piece_libraries::{Entry, Libraries, Shelf, Source};
 use super::workspace::{
-    command, control, horizontal_line, hover_hint, muted_text, section, segment, segment_track,
+    accessible_command, command, control, horizontal_line, hover_hint, muted_text, section,
+    segment, segment_track,
 };
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
@@ -277,7 +278,9 @@ pub(crate) fn value_text(g: &Graphic, param: &str, value: Option<&Value>) -> Str
             },
             Value::Number(n),
         ) => format!("{n:.0}°"),
-        (Param::Range { unit: Unit::Mm, .. }, Value::Number(n)) => format!("{n} mm"),
+        (Param::Range { unit: Unit::Mm, .. }, Value::Number(n)) => {
+            format!("{} mm", cut_length::display_mm(*n))
+        }
         _ => return en(p.names(), param),
     };
     format!("{}: {shown}", en(p.names(), param))
@@ -1370,16 +1373,17 @@ impl App {
         if let Some(offer) = self.reducer_suggestion()
             && let Offer::Adapter(d) | Offer::Reducer(d) = &offer.snap.offer
         {
+            let label = if offer.candidate.is_some() {
+                "Insert reducer"
+            } else {
+                "Place reducer…"
+            };
             body = body
                 .push(text(format!("Different tube diameters · {}", name(d))).size(12))
-                .push(command(
-                    if offer.candidate.is_some() {
-                        "Insert reducer"
-                    } else {
-                        "Place reducer…"
-                    },
-                    Message::Equipment(Action::InsertReducer),
-                ));
+                .push(
+                    accessible_command("equipment-insert-reducer", label, label)
+                        .on_press(Message::Equipment(Action::InsertReducer)),
+                );
             if offer.candidate.is_none() {
                 body = body.push(
                     text("Place the reducer manually to keep the existing apparatus in position.")

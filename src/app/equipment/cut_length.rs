@@ -20,6 +20,13 @@ pub(in crate::app) struct Draft {
     value: String,
 }
 
+pub(super) fn display_mm(value: f64) -> String {
+    format!("{value:.4}")
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_owned()
+}
+
 impl App {
     pub(super) fn cut_length_input<'a>(
         &self,
@@ -34,7 +41,7 @@ impl App {
             .piece_lengths
             .iter()
             .find(|draft| draft.target == target)
-            .map_or_else(|| current.to_string(), |draft| draft.value.clone());
+            .map_or_else(|| display_mm(current), |draft| draft.value.clone());
         let edit = target.clone();
         let apply = Message::Equipment(Action::ApplyCutLength(target));
         let input = reshiki::accessibility::text_input(
