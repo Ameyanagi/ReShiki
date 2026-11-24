@@ -158,12 +158,19 @@ pub fn check_calculation(
             }
         }
     }
+    // 0 K is valid (g-xTB's default); an accuracy is a positive multiplier.
     if settings
         .electronic_temperature_k
-        .is_some_and(|x| !x.is_finite())
-        || settings.accuracy.is_some_and(|x| !x.is_finite())
+        .is_some_and(|t| !(t.is_finite() && t >= 0.0))
+        || settings
+            .accuracy
+            .is_some_and(|a| !(a.is_finite() && a > 0.0))
+        || settings.max_iterations == Some(0)
     {
-        return Err(Error::Invalid("non-finite SCF setting".into()));
+        return Err(Error::Invalid(
+            "electronic temperature must be finite and at least 0 K, accuracy positive, and iterations at least 1"
+                .into(),
+        ));
     }
     if settings.method == XtbMethod::GfnFf {
         if settings.electronic_temperature_k.is_some()
@@ -351,6 +358,29 @@ mod tests {
                 ),
                 Err(Error::Unsupported(_))
             ));
+        }
+    }
+
+    #[test]
+    fn scf_settings_have_physical_ranges() {
+        let base = settings(XtbMethod::Gfn2Xtb);
+        let check = |settings: &XtbSettings| {
+            check_calculation(Task::Energy, settings, &frame(3), OrbitalRequest::None)
+        };
+        for (temperature, accuracy, iterations, ok) in [
+            (Some(0.0), Some(1e-4), Some(1), true),
+            (Some(-300.0), None, None, false),
+            (None, Some(0.0), None, false),
+            (None, Some(-1.0), None, false),
+            (None, None, Some(0), false),
+        ] {
+            let settings = XtbSettings {
+                electronic_temperature_k: temperature,
+                accuracy,
+                max_iterations: iterations,
+                ..base.clone()
+            };
+            assert_eq!(check(&settings).is_ok(), ok, "{settings:?}");
         }
     }
 
