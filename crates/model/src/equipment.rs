@@ -11,10 +11,13 @@ pub use parts_list::parts_list;
 pub mod plan;
 pub mod revise;
 pub mod solve;
+pub mod tube_bend;
 pub mod validate;
 
 #[cfg(test)]
 mod adjust_tests;
+#[cfg(test)]
+mod bellows_shutoff_tests;
 #[cfg(test)]
 mod furnace_work_tubes_tests;
 #[cfg(test)]
@@ -29,6 +32,8 @@ mod placed_tests;
 mod solve_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tube_bend_tests;
 #[cfg(test)]
 mod tube_furnace_tests;
 #[cfg(test)]

@@ -98,6 +98,8 @@ pub(super) struct State {
     pub page: Page,
     /// Raw hit IDs; `None` denotes a menu opened from the context toolbar.
     pub hit: Option<Vec<u64>>,
+    /// The exact secondary-click position on the drawing, before group expansion.
+    pub at: Option<reshiki::document::Point>,
     children: Vec<Child>,
     focused: Option<(usize, usize)>,
     keyboard: bool,
@@ -115,6 +117,7 @@ impl State {
             position,
             page,
             hit: None,
+            at: None,
             children: vec![],
             focused: None,
             keyboard: false,
@@ -319,6 +322,15 @@ impl App {
             self.molecule_entries(atoms),
             self.structure_entries(atoms, bonds, tilt),
             self.generic_entries(),
+            self.tube_bend_context_command()
+                .map(|(label, action)| {
+                    vec![command(
+                        label,
+                        Message::Equipment(super::equipment::Action::Bend(action)),
+                        true,
+                    )]
+                })
+                .unwrap_or_default(),
             if self.selected_text_boxes() {
                 vec![command(
                     "Format as chemical name",

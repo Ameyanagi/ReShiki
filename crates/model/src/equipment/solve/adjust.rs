@@ -8,6 +8,10 @@ use crate::equipment::format::{Gesture, Motion, Param, Unit};
 use crate::equipment::geometry::{flatten, parse_path};
 use crate::equipment::plan;
 
+/// Synthetic parameter used by the existing cut-end drag path for a routed
+/// tube's actual terminal straight length, in local millimetres.
+pub const ROUTE_END_LENGTH_PARAM: &str = "tube-route-terminal-length";
+
 /// A handle on a placed piece: a movable part's, or a liquid's surface.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Handle {
@@ -21,7 +25,7 @@ pub struct Handle {
     pub part: Option<String>,
     /// A hose's end or middle, dragged to reshape it; `param` is empty then.
     pub grip: Option<super::hose::Grip>,
-    /// A straight tube's cut end. Dragging it keeps the opposite end fixed.
+    /// A tube's cut end. Dragging it keeps the opposite end fixed.
     pub tube_end: Option<String>,
 }
 
@@ -111,6 +115,52 @@ fn definition(g: &Graphic) -> Option<(&Arc<Definition>, Values)> {
     Some((d, resolve(d, &piece.params).ok()?))
 }
 
+fn routed_length(g: &Graphic, d: &Definition, param: &str) -> bool {
+    g.piece.as_ref().is_some_and(|p| p.tube_route.is_some())
+        && crate::equipment::parts_list::spec(d)
+            .is_some_and(|spec| spec.length.params.iter().any(|id| id == param))
+}
+
+struct RouteTerminal {
+    first: bool,
+    point: [f64; 2],
+    outward: [f64; 2],
+    length_mm: f64,
+}
+
+fn route_terminal(g: &Graphic, end: &str) -> Option<RouteTerminal> {
+    use crate::equipment::tube_bend::Segment;
+    let piece = g.piece.as_ref()?;
+    let route = piece.tube_route.as_ref()?;
+    let spec = crate::equipment::parts_list::spec(piece.linked.as_deref()?)?;
+    let [a, b] = spec.ends.each_ref();
+    let first = if a == end {
+        true
+    } else if b == end {
+        false
+    } else {
+        return None;
+    };
+    let centerline = route.centerline().ok()?;
+    let segment = if first {
+        centerline.segments.first()?
+    } else {
+        centerline.segments.last()?
+    };
+    let Segment::Straight { from, to } = *segment else {
+        return None;
+    };
+    let (point, inside) = if first { (from, to) } else { (to, from) };
+    let delta = sub(point, inside);
+    let length_mm = len(delta);
+    (length_mm.is_finite() && length_mm > 0.).then(|| RouteTerminal {
+        first,
+        point,
+        outward: normalize(delta),
+        length_mm,
+    })
+}
+
 /// A liquid's region on the page.
 fn region(g: &Graphic, d: &Definition, liquid: &str) -> Vec<Vec<[f64; 2]>> {
     let t = frame(g);
@@ -153,7 +203,9 @@ pub fn handles(g: &Graphic) -> Vec<Handle> {
             })
         })
         .collect();
-    if let Some((param, part, ends)) = straight_tube(d) {
+    if g.piece.as_ref().is_none_or(|p| p.tube_route.is_none())
+        && let Some((param, part, ends)) = straight_tube(d)
+    {
         out.retain(|h| h.part.as_deref() != Some(part));
         let ports = ports(g);
         for end in ends {
@@ -193,6 +245,23 @@ pub fn handles(g: &Graphic) -> Vec<Handle> {
         grip: Some(grip),
         tube_end: None,
     }));
+    out.retain(|handle| !routed_length(g, d, &handle.param));
+    if g.piece.as_ref().is_some_and(|p| p.tube_route.is_some())
+        && let Some(spec) = crate::equipment::parts_list::spec(d)
+    {
+        for end in &spec.ends {
+            if let Some(terminal) = route_terminal(g, end) {
+                out.push(Handle {
+                    param: ROUTE_END_LENGTH_PARAM.into(),
+                    at: t.apply(terminal.point),
+                    toggle: false,
+                    part: None,
+                    grip: None,
+                    tube_end: Some(end.clone()),
+                });
+            }
+        }
+    }
     out
 }
 
@@ -220,6 +289,17 @@ pub fn dragged(g: &Graphic, handle: &Handle, to: [f64; 2]) -> Option<Value> {
         return None;
     }
     let (d, mut values) = definition(g)?;
+    if handle.param == ROUTE_END_LENGTH_PARAM
+        && g.piece.as_ref().is_some_and(|p| p.tube_route.is_some())
+    {
+        let terminal = route_terminal(g, handle.tube_end.as_deref()?)?;
+        let local = frame(g).inverse()?.apply(to);
+        let value = terminal.length_mm + dot(sub(local, terminal.point), terminal.outward);
+        return value.is_finite().then_some(Value::Number(value));
+    }
+    if routed_length(g, d, &handle.param) {
+        return None;
+    }
     let (lo, hi, step) = range(d.params.iter().find(|p| p.id() == handle.param)?)?;
     let round = |v: f64| ((v / step).round() * step).clamp(lo, hi);
     if let Some(end) = &handle.tube_end {
@@ -554,7 +634,7 @@ pub fn set(doc: &mut Document, id: u64, param: &str, value: Value) -> Result<Vec
     set_inner(doc, id, param, value, None)
 }
 
-/// Set the same Length parameter by moving one cut end of a straight tube.
+/// Set a terminal length by moving one cut end of a tube.
 /// The opposite end and any through-bore holders stay where they are.
 /// This is deliberately separate from the Properties parameter operation.
 pub fn set_end(
@@ -569,6 +649,9 @@ pub fn set_end(
         .iter()
         .find(|g| g.id == id)
         .ok_or("The tube is not in the drawing.")?;
+    if g.piece.as_ref().is_some_and(|p| p.tube_route.is_some()) {
+        return set_routed_end(doc, id, param, end, value);
+    }
     let (d, _) = definition(g).ok_or("The tube definition is missing.")?;
     let (length, _, ends) = straight_tube(d).ok_or("This tube has no editable straight ends.")?;
     if length != param
@@ -600,9 +683,18 @@ pub fn snap_end(
         piece: id,
         joint: end.into(),
     };
+    let routed = doc
+        .graphics
+        .iter()
+        .find(|g| g.id == id)
+        .and_then(|g| g.piece.as_ref())
+        .is_some_and(|p| p.tube_route.is_some());
     let was_free = partner(doc, &joint).is_none();
     let released = set_end(doc, id, param, end, value)?;
-    if !was_free || !reach.is_finite() || reach < 0. {
+    // The snap planner changes a stock straight tube's Length parameter.
+    // Routed terminals retain their tangent-only edit and seat safeguards;
+    // their synthetic parameter cannot produce a stock reducer plan.
+    if routed || !was_free || !reach.is_finite() || reach < 0. {
         return Ok((released, None));
     }
     let Some(m) = port(doc, &joint) else {
@@ -810,6 +902,81 @@ fn plan_end(
     Some((candidate, snap))
 }
 
+fn set_routed_end(
+    doc: &mut Document,
+    id: u64,
+    param: &str,
+    end: &str,
+    value: Value,
+) -> Result<Vec<Seat>, String> {
+    let g = doc
+        .graphics
+        .iter()
+        .find(|g| g.id == id)
+        .ok_or("The tube is not in the drawing.")?;
+    if param != ROUTE_END_LENGTH_PARAM
+        || !frame(g).0.iter().all(|v| v.is_finite())
+        || frame(g).inverse().is_none()
+    {
+        return Err("This routed tube end cannot be adjusted.".into());
+    }
+    let Value::Number(length_mm) = value else {
+        return Err("The terminal straight length must be a number in millimetres.".into());
+    };
+    if !length_mm.is_finite() || length_mm <= 0. {
+        return Err("The terminal straight length must be positive and finite.".into());
+    }
+    let terminal = route_terminal(g, end).ok_or("This routed tube end cannot be adjusted.")?;
+    let endpoint = add(
+        terminal.point,
+        mul(terminal.outward, length_mm - terminal.length_mm),
+    );
+    if endpoint == terminal.point {
+        return Ok(Vec::new());
+    }
+    let moving = JointRef {
+        piece: id,
+        joint: end.to_owned(),
+    };
+    if doc.seats.iter().any(|s| s.a == moving || s.b == moving) {
+        return Err(
+            "Detach the fitting on this tube end before changing its terminal length.".into(),
+        );
+    }
+    let d = g
+        .piece
+        .as_ref()
+        .and_then(|p| p.linked.as_deref())
+        .ok_or("The tube definition is missing.")?;
+    let spec = crate::equipment::parts_list::spec(d).ok_or("Tube dimensions are missing.")?;
+    let mut replacement = g.clone();
+    let route = replacement
+        .piece
+        .as_mut()
+        .and_then(|p| p.tube_route.as_mut())
+        .ok_or("The tube has no custom route.")?;
+    if terminal.first {
+        route.start = endpoint;
+    } else {
+        route.end = endpoint;
+    }
+    route.validate(spec.od_mm)?;
+    if doc.seats.iter().any(|s| s.a.piece == id || s.b.piece == id) {
+        let mut candidate = doc.clone();
+        if let Some(g) = candidate.graphics.iter_mut().find(|g| g.id == id) {
+            *g = replacement.clone();
+        }
+        super::check(&mut candidate, Some(doc));
+        if candidate.seats != doc.seats {
+            return Err("This terminal length would release a seated support or fitting. Move or detach it before shortening the tube.".into());
+        }
+    }
+    if let Some(g) = doc.graphics.iter_mut().find(|g| g.id == id) {
+        *g = replacement;
+    }
+    Ok(Vec::new())
+}
+
 fn set_inner(
     doc: &mut Document,
     id: u64,
@@ -823,6 +990,9 @@ fn set_inner(
     let d = (g.piece.as_ref())
         .and_then(|p| p.linked.clone())
         .ok_or("Only an equipment piece has parameters.")?;
+    if routed_length(g, &d, param) {
+        return Err("A routed tube's cut length is set by its bends.".into());
+    }
     let mut params = g
         .piece
         .as_ref()

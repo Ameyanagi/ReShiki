@@ -292,6 +292,8 @@ impl App {
     }
 
     fn drawing_canvas(&self) -> Element<'_, Edit> {
+        let tube_bend = self.tube_bend_canvas();
+        let show_keyboard_target = tube_bend.is_none() && self.keyboard_drawing_active();
         canvas(MoleculeCanvas {
             nmr: self.nmr_canvas(),
             locant_highlight: self
@@ -299,17 +301,18 @@ impl App {
                 .unwrap_or_else(|| self.naming_canvas_highlight()),
             reaction_preview: self.reaction_preview(),
             optimizer: self.optimization_canvas(),
+            tube_bend,
             equipment_authoring: self
                 .tab
                 .equipment_authoring
                 .as_ref()
                 .map(|s| s.measurement()),
-            keyboard_target: if self.keyboard_drawing_active() {
+            keyboard_target: if show_keyboard_target {
                 self.tab.keyboard_drawing.point(self.display_document())
             } else {
                 None
             },
-            keyboard_marker: self.keyboard_drawing_active() && self.tab.keyboard_drawing.shown(),
+            keyboard_marker: show_keyboard_target && self.tab.keyboard_drawing.shown(),
             morph: self.model_morph(),
             model_generation: self.model_generation(),
             element: self.atom_tool_element(),
@@ -346,7 +349,10 @@ impl App {
             },
             doc: self.display_document(),
             reviewing_pair: self.tab.mapping.review_pair.is_some() && self.tool.selects(),
-            selected: if self.tab.inline_text.is_some() || self.tab.equipment_authoring.is_some() {
+            selected: if self.tab.inline_text.is_some()
+                || self.tab.equipment_authoring.is_some()
+                || self.tube_bend_active()
+            {
                 &[]
             } else {
                 &self.tab.selected
@@ -1315,6 +1321,9 @@ impl App {
     }
 
     pub(super) fn context_bar(&self) -> Element<'_, Message> {
+        if self.tube_bend_active() {
+            return context_frame(row![text("Tube bend").size(12)].align_y(Alignment::Center));
+        }
         if self.tab.optimization.is_some() {
             return context_frame(
                 row![
@@ -2074,6 +2083,7 @@ impl App {
         .spacing(HISTORY_GAP)
         .align_y(iced::Alignment::Center);
         let body = match self.inspector_tab {
+            _ if self.tube_bend_active() => self.tube_bend_panel(),
             _ if self.tab.equipment_authoring.is_some() => self.equipment_authoring_panel(),
             InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),

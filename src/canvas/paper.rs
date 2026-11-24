@@ -374,6 +374,7 @@ impl MoleculeCanvas<'_> {
         self.draw_mark_orbit(frame, state, preview, bounds);
         self.draw_arrow_handles(frame, preview, selected, bounds);
         self.draw_piece_handles(frame, preview, selected, state, bounds);
+        self.draw_tube_bend_handle(frame, state, bounds);
         self.draw_arrow_targets(frame, state, bounds, cursor);
         self.draw_notices(
             frame,
