@@ -30,6 +30,7 @@ has every help text as the program prints it.
 | [analyze](#analyze)         | Print molecular properties as one JSON line                       |
 | [predict-nmr](#predict-nmr) | Print predicted NMR shifts as one JSON line                       |
 | [name](#name)               | Print the systematic name of a structure                          |
+| [calc](#calc)               | Print a GFN2-xTB energy and optional gradient as one JSON line    |
 | [pieces](#pieces)           | Check or render equipment piece files                             |
 | [info](#info)               | Print versions, limits and formats as one JSON line               |
 | [tools](#tools)             | Print the agent tool catalog as one JSON line                     |
@@ -48,6 +49,9 @@ has every help text as the program prints it.
   whose name starts with `-` still works: `reshiki --cli analyze -- -sample.mol`.
 - A lone `-` means standard input, or standard output after `-o`.
 - Usage errors are found before anything is read or written.
+
+`calc` reads an XYZ file directly through the isolated xTB worker. It is a
+CLI-only exception to the shared MCP operations and has no MCP tool.
 
 ## Input
 
@@ -814,6 +818,32 @@ several lines:
 }
 ```
 
+## calc
+
+```text
+reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] FILE.xyz
+```
+
+Runs one GFN2-xTB calculation through the [isolated worker](xtb-worker.md).
+The XYZ file contains an atom count from 1 to 500, a comment line, and that
+many rows with an element symbol and three finite coordinates in angstroms.
+Only the first frame is read. Each atom row must have exactly four columns.
+
+| Option       | Commands | Meaning                                                                              |
+| ------------ | -------- | ------------------------------------------------------------------------------------ |
+| `--energy`   | calc     | Calculate the GFN2-xTB energy. Required.                                             |
+| `--gradient` | calc     | Include the Cartesian energy gradient in Eh/bohr.                                    |
+| `--charge N` | calc     | Molecular charge, default 0.                                                         |
+| `--uhf N`    | calc     | Nonnegative number of unpaired electrons. The default comes from the electron count. |
+
+The command prints one JSON line with `energy` in Eh, `gradient` in Eh/bohr
+when requested, `method`, `numerics` and `engine`. It uses the worker result
+format without an experimental envelope. `calc` is not exposed over MCP.
+
+In a build without xTB, it writes `reshiki: xTB is not included in this build`
+to stderr, prints nothing to stdout, and exits 1. See [xTB licensing and
+packaging](xtb-licensing.md) for the builds that include it.
+
 ## help
 
 ```text
@@ -838,7 +868,8 @@ Prints the overview, or one command's help. `--help` and `-h` work in place of
 Standard output carries only the result: the file, one JSON line, or one
 receipt line with `--receipt`. With `-o OUTPUT` and no `--receipt` it stays
 empty. Every JSON line has `"experimental": true` and an `api` object with
-`operation_api` and `stability`, except the raw schema from `schema proposal`.
+`operation_api` and `stability`, except the raw schema from `schema proposal`
+and the worker calculation result from `calc`.
 
 Messages go to standard error, one per line:
 

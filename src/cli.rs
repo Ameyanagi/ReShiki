@@ -1,9 +1,11 @@
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 //! `reshiki --cli`: experimental command-line access to the agent tools.
 //!
-//! Each command runs on an in-process `HeadlessHost` through
+//! Drawing commands run on an in-process `HeadlessHost` through
 //! `ToolHost::call`, the operation layer `reshiki --mcp` serves, so both
 //! share the same import, analyze, render, compose and export semantics.
+//! `calc` is a CLI-only exception: it calls the isolated xTB worker directly
+//! and has no MCP tool.
 //!
 //! # Output contract
 //!
@@ -12,7 +14,8 @@
 //!   JSON line when `--receipt` is given with `-o FILE`. With `-o FILE` and
 //!   no `--receipt`, stdout stays empty. Every JSON line carries
 //!   `"experimental": true` except `schema proposal`, which prints the raw
-//!   JSON Schema; plain-text output carries no banner.
+//!   JSON Schema, and `calc`, which prints the worker calculation result.
+//!   Plain-text output carries no banner.
 //! - Warnings go to stderr as `reshiki: warning: {message}`, an operation
 //!   error as `reshiki: error[{code}]: {message}` with the operation error
 //!   code, any other error as `reshiki: error: {message}` and usage errors
@@ -27,6 +30,7 @@
 
 mod analyze;
 mod args;
+mod calc;
 mod commands;
 mod compose;
 mod convert;
@@ -155,8 +159,18 @@ async fn run_command(
         }
         Command::Skill(skill) => skill::run(skill, out),
         Command::Info => info(out, err).await,
-        Command::Version => {
-            writeln!(out, "reshiki {}", crate::updates::CURRENT_VERSION).map_err(CliError::Stdout)
+        Command::Version => version(out).map_err(CliError::Stdout),
+        Command::Calc(command) => {
+            #[cfg(feature = "xtb")]
+            {
+                calc::run(command, out)
+            }
+            #[cfg(not(feature = "xtb"))]
+            {
+                let _ = command;
+                let _ = writeln!(err, "reshiki: xTB is not included in this build");
+                return Ok(FAILURE);
+            }
         }
         Command::Convert(convert) => convert::run(convert, out, err, terminal).await,
         Command::Render(render) => render::run(render, out, err, terminal).await,
@@ -183,6 +197,20 @@ async fn run_command(
             Ok(FAILURE)
         }
     }
+}
+
+fn version(out: &mut dyn Write) -> std::io::Result<()> {
+    writeln!(out, "reshiki {}", crate::updates::CURRENT_VERSION)?;
+    #[cfg(feature = "xtb")]
+    {
+        use reshiki_xtb_worker::{AXTB_LICENSE, AXTB_REV, AXTB_SOURCE, AXTB_VERSION};
+        writeln!(
+            out,
+            "xTB: included (axtb {AXTB_VERSION}, {AXTB_LICENSE}, source {AXTB_SOURCE}/tree/{AXTB_REV})"
+        )
+    }
+    #[cfg(not(feature = "xtb"))]
+    writeln!(out, "xTB: not included in this build")
 }
 
 /// The help text for `topic`, or the overview, after the [`NOTICE`] line.

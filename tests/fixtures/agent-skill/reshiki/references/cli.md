@@ -13,6 +13,7 @@ Commands:
   analyze      Print molecular properties as one JSON line
   predict-nmr  Print predicted NMR shifts as one JSON line
   name         Print the systematic name of a structure
+  calc         Print a GFN2-xTB energy and optional gradient as one JSON line
   pieces       Check or render equipment piece files
   info         Print versions, limits and formats as one JSON line
   tools        Print the agent tool catalog as one JSON line
@@ -242,6 +243,32 @@ value contains name, preferred, status, reason, detail, alternatives and aliases
   alternatives   Other verified names, each with name, status and reason.
 With --locants, value also contains locants: one string or null per imported
 atom, in input atom order. Atoms outside the principal parent have null.
+```
+
+## reshiki --cli calc
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] FILE.xyz
+
+Reads the first structure of an XYZ file, with coordinates in angstroms,
+and runs GFN2-xTB in an isolated worker process. The first line is an atom
+count (1 to 500), followed by a comment line and exactly that many atom
+rows, each with an element symbol and three finite coordinates.
+
+Options:
+  --energy    Calculate the energy. Required.
+  --gradient  Include the Cartesian energy gradient.
+  --charge N  Set the molecular charge (default 0).
+  --uhf N     Set a nonnegative number of unpaired electrons. The default
+              comes from the electron count.
+
+Prints one JSON line with energy (Eh), gradient (Eh/bohr) when requested,
+method, numerics and engine. This CLI-only command has no MCP tool and
+uses the worker result format without an experimental envelope.
+
+Requires a build with xTB. Otherwise it reports that xTB is not included
+and exits 1. See docs/xtb-worker.md and docs/xtb-licensing.md.
 ```
 
 ## reshiki --cli pieces

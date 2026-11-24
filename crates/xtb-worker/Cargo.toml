@@ -10,3 +10,10 @@ engine = ["dep:axtb-driver"]
 
 [dependencies]
 axtb-driver = { workspace = true, optional = true }
+reshiki-process-heap = { path = "../process-heap" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+thiserror = "2"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reshiki-process = { path = "../../native/process" }

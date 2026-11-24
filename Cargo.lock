@@ -4871,6 +4871,11 @@ name = "reshiki-xtb-worker"
 version = "0.17.1"
 dependencies = [
  "axtb-driver",
+ "reshiki-process",
+ "reshiki-process-heap",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
