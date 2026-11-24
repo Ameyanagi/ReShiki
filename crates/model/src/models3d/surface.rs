@@ -2,6 +2,7 @@
 //! docs/plans/xtb-surfaces.md).
 pub mod draw;
 pub mod mesh;
+pub mod snapshot;
 pub mod visible;
 
 pub use draw::{demo_on_this_thread, enable_demo};

@@ -2,6 +2,9 @@
 //! analytic π-like field around the model's atoms, meshed once and cached
 //! (never saved), then cut and merged for the model's view each time it is
 //! drawn. See docs/plans/xtb-surfaces.md.
+// Fixed three-axis arrays, and mesh and atom indices made by the mesher and
+// the model's own geometry.
+#![allow(clippy::indexing_slicing)]
 use super::mesh::{self, Grid, Mesh};
 use super::visible::{self, Input, Occluder, Visible};
 use crate::document::{Document, Point};
@@ -113,8 +116,10 @@ pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Rc<
 }
 
 const KEPT: usize = 4;
+/// Recent models' meshes by their geometry, switch and isovalue.
+type Kept = Vec<(Vec<u32>, Rc<[Mesh; 2]>)>;
 thread_local! {
-    static MESHES: RefCell<Vec<(Vec<u32>, Rc<[Mesh; 2]>)>> = Default::default();
+    static MESHES: RefCell<Kept> = Default::default();
 }
 
 /// A p function on every heavy atom along the normal of the molecule's
