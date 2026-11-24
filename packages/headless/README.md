@@ -68,7 +68,7 @@ await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 | `inchi(data, format)`                              | The standard InChI.                                                           |
 | `predictNmr(data, format, nucleus)`                | Offline `"1H"` or `"13C"` shifts, reference statistics and data credit.       |
 | `addFont(font)`                                    | Adds a font (a URL or bytes) that figures fall back to, such as for Japanese. |
-| `version()`                                        | The ReShiki release version, e.g. `0.17.0` (including any prerelease suffix). |
+| `version()`                                        | The ReShiki release version, e.g. `0.17.1` (including any prerelease suffix). |
 
 `data` is a string or a `Uint8Array`; `cdx` input must be bytes.
 

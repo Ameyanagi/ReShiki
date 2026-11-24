@@ -111,7 +111,7 @@ Extracted macOS archives and installed disk-image copies also run the actual app
 
 Before the native-runtime cutover, the [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
-Each release has a validation record, `docs/changes/release-<version>-validation.md`, with the release preparation, the checks run on it and its publication. The release notes link to it, and their **Build and verification** details go there, not in the notes. The newest record covers [0.17.0](changes/release-0.17.0-validation.md). [Earlier validation records](https://github.com/Ameyanagi/ReShiki/tree/main/docs/changes)
+Each release has a validation record, `docs/changes/release-<version>-validation.md`, with the release preparation, the checks run on it and its publication. The release notes link to it, and their **Build and verification** details go there, not in the notes. The newest record covers [0.17.1](changes/release-0.17.1-validation.md). [Earlier validation records](https://github.com/Ameyanagi/ReShiki/tree/main/docs/changes)
 
 ## Publish a version
 
@@ -153,7 +153,7 @@ The **pypi** job publishes the Python package `reshiki` (`crates/python`) after 
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 
 Packaging and macOS signing use Python's standard library. Windows signing uses
-the SignPath GitHub action and a PowerShell verification helper. Intel macOS runs the native Rust chemistry tests, packaging/clipboard/print checks and extracted-application tests without installing RDKit: the pinned reference release has no Intel macOS wheel. Full live RDKit comparisons remain required on macOS ARM64, Windows x64 and Linux x64 before any package is published.
+the SignPath GitHub action and a PowerShell verification helper. Intel macOS runs packaging, clipboard and print checks, extracted-application verification, and a naming smoke test using the built application. The pinned RDKit reference has no Intel macOS wheel. Full live RDKit comparisons remain required on macOS ARM64, Windows x64 and Linux x64 before any package is published.
 
 Reference/source HTTPS downloads use the locked certifi bundle; offline
 packaging/signing remain standard-library only. JavaScript actions use the
@@ -161,7 +161,7 @@ runner's embedded Node independently of `setup-node`, so that runtime must be
 patched. The [dated security review](changes/security-dependency-audit.md)
 records fixed versions and accepted exceptions.
 
-Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple Silicon. Intel's native tests exercise every predefined group as an isolated and attached fragment; these are application checks, not an independent Intel RDKit geometry capture. The updater selects a separate DMG for each Mac architecture.
+Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple Silicon. The release reference suite validates abbreviation layouts on supported targets. The updater selects a separate DMG for each Mac architecture.
 
 ## Configure npm publishing
 

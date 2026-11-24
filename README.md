@@ -9,16 +9,16 @@
 
 **ReShiki (リシキ)** means “REinvention of the wheel for drawing chemical structure.” _Shiki_ is 式, as in chemical equation.
 
-[Download](https://github.com/Ameyanagi/ReShiki/releases/latest) · [User guide](https://reshiki.com/guide/first-molecule/) · [Release notes](https://reshiki.com/developer/changes-0.17/) · [Try it in your browser](https://reshiki.com/demo/)
+[Download](https://github.com/Ameyanagi/ReShiki/releases/latest) · [User guide](https://reshiki.com/guide/first-molecule/) · [Release notes](https://reshiki.com/developer/changes-0.17.1/) · [Try it in your browser](https://reshiki.com/demo/)
 
 [![Sponsor this work](website/public/badges/sponsor.svg)](https://github.com/sponsors/Ameyanagi)
 [![Star on GitHub](website/public/badges/star.svg)](https://github.com/Ameyanagi/ReShiki)
 
 [![Watch the ReShiki tour](website/public/media/reshiki-promo-poster.png)](https://reshiki.com/#promo-video)
 
-## What's new in 0.17.0
+## What's new in 0.17.1
 
-Draw catalytic cycles, TLC plates, editable tables and laboratory setups with connected equipment. Properties follows the selection, and the GitHub picker searches repositories and opens pasted URLs. [File compatibility](docs/changes-0.17.md#file-compatibility)
+Bend stainless compression tubing at a point and extend a straight tube to snap it into a fitting. ReShiki offers a matching reducer for unequal sizes. The equipment library adds braided hoses, hose connectors, four-way joints, sample cylinders and air-actuated shutoff valves. [Patch notes and file compatibility](docs/changes-0.17.1.md) · [Changes in 0.17.0](docs/changes-0.17.md)
 
 ## Install
 
