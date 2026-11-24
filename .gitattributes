@@ -53,3 +53,7 @@ tests/fixtures/retained-plus-lactic-acid/import-dock-tests.log -text whitespace=
 
 # Preserve exact review-only native trace patches, including blank context lines.
 tests/fixtures/large-selection-copy-feedback/frame-trace-*.patch -text whitespace=-blank-at-eol
+
+# Keep third-party quantum chemistry fixtures byte for byte.
+tests/fixtures/qc/cclib/** -text whitespace=-blank-at-eof,-blank-at-eol
+tests/fixtures/qc/pymatgen/** -text whitespace=-blank-at-eof,-blank-at-eol
