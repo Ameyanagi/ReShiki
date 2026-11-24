@@ -109,6 +109,32 @@ pub struct Tube {
     pub color: Option<Rgb>,
     /// The two plug joints at the ends of the centre line.
     pub ends: [String; 2],
+    /// Optional crossed wire detail, laid along the current flexible route.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub braid: Option<TubeBraid>,
+    /// Rigid tube-adapter ends, measured inwards from each actual plug tip.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_fittings: Option<TubeEndFittings>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TubeBraid {
+    pub pitch_mm: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TubeEndFittings {
+    pub tip_length_mm: f64,
+    pub collar_length_mm: f64,
+    pub collar_width_mm: f64,
+}
+
+impl TubeEndFittings {
+    pub fn length_mm(&self) -> f64 {
+        self.tip_length_mm + self.collar_length_mm
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

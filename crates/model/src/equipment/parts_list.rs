@@ -3,7 +3,7 @@
 use super::eval::{self, Value, Values};
 use super::format::{Definition, HoldKind, Param, TubeLength, TubeMaterial, TubeSpec};
 use super::solve::{self, JointRef};
-use crate::document::Document;
+use crate::{document::Document, graphics::Graphic};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
@@ -17,6 +17,16 @@ pub struct PartRow {
     pub name: String,
     pub variant: BTreeMap<String, String>,
     pub tube: Option<TubeRow>,
+    /// Flexible assemblies report connections without turning a drawn route
+    /// into a fabricated physical cut length.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hose: Option<HoseRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HoseRow {
+    pub interfaces: [String; 2],
+    pub ends: [TubeEnd; 2],
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -78,6 +88,7 @@ pub fn parts_list(doc: &Document, selection: &[u64]) -> Result<Vec<PartRow>, Str
                 name: name(d).to_owned(),
                 variant: d.variant.clone(),
                 tube: tube_row(doc, g.id)?,
+                hose: hose_row(doc, g)?,
             })
         })
         .collect()
@@ -123,6 +134,64 @@ fn connection(doc: &Document, at: &JointRef) -> Result<PartConnection, String> {
     })
 }
 
+fn endpoint(doc: &Document, id: u64, joint: &str) -> Result<TubeEnd, String> {
+    let at = JointRef {
+        piece: id,
+        joint: joint.to_owned(),
+    };
+    let partner = doc.seats.iter().find_map(|s| {
+        if s.a == at {
+            Some(&s.b)
+        } else if s.b == at {
+            Some(&s.a)
+        } else {
+            None
+        }
+    });
+    Ok(TubeEnd {
+        joint: joint.to_owned(),
+        connection: partner.map(|p| connection(doc, p)).transpose()?,
+    })
+}
+
+fn hose_row(doc: &Document, g: &Graphic) -> Result<Option<HoseRow>, String> {
+    let id = g.id;
+    let Some(d) = g.piece.as_ref().and_then(|p| p.linked.as_ref()) else {
+        return Ok(None);
+    };
+    let Some(hose) = &d.tube else { return Ok(None) };
+    let ports = solve::ports(g);
+    let interface = |joint: &str| -> String {
+        ports
+            .iter()
+            .find(|p| p.at.joint == joint)
+            .map_or_else(String::new, |p| {
+                let size = match &p.kind {
+                    solve::Kind::Plug(super::format::PlugFamily::Hose, size) => {
+                        format!("Ø{size} mm hose")
+                    }
+                    _ => p.size(),
+                };
+                format!(
+                    "{} {}",
+                    size,
+                    if p.gender == super::format::Gender::M {
+                        "male"
+                    } else {
+                        "female"
+                    }
+                )
+            })
+    };
+    Ok(Some(HoseRow {
+        interfaces: [interface(&hose.ends[0]), interface(&hose.ends[1])],
+        ends: [
+            endpoint(doc, id, &hose.ends[0])?,
+            endpoint(doc, id, &hose.ends[1])?,
+        ],
+    }))
+}
+
 /// Calculate one placed tube's dimensions, endpoint connections and mechanical
 /// passages. Ordinary equipment and unrecognized older tubes return `None`.
 pub fn tube_row(doc: &Document, id: u64) -> Result<Option<TubeRow>, String> {
@@ -137,25 +206,6 @@ pub fn tube_row(doc: &Document, id: u64) -> Result<Option<TubeRow>, String> {
         .as_ref()
         .ok_or("The tube definition is missing.")?;
     let Some(spec) = spec(d) else { return Ok(None) };
-    let endpoint = |joint: &String| -> Result<TubeEnd, String> {
-        let at = JointRef {
-            piece: id,
-            joint: joint.clone(),
-        };
-        let partner = doc.seats.iter().find_map(|s| {
-            if s.a == at {
-                Some(&s.b)
-            } else if s.b == at {
-                Some(&s.a)
-            } else {
-                None
-            }
-        });
-        Ok(TubeEnd {
-            joint: joint.clone(),
-            connection: partner.map(|p| connection(doc, p)).transpose()?,
-        })
-    };
     let ports = solve::ports(g);
     let mut through = Vec::new();
     let mut seen = BTreeSet::new();
@@ -194,7 +244,10 @@ pub fn tube_row(doc: &Document, id: u64) -> Result<Option<TubeRow>, String> {
         od_mm: spec.od_mm,
         id_mm: spec.id_mm,
         cut_length_mm: length(d, &piece.params, &spec.length)?,
-        ends: [endpoint(&spec.ends[0])?, endpoint(&spec.ends[1])?],
+        ends: [
+            endpoint(doc, id, &spec.ends[0])?,
+            endpoint(doc, id, &spec.ends[1])?,
+        ],
         through,
     }))
 }

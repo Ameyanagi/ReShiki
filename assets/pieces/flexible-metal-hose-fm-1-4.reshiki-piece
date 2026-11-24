@@ -1,0 +1,71 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 1,
+  "id": "reshiki/flexible-metal-hose-fm-1-4",
+  "revision": 1,
+  "family": "flexible-metal-hose-fm",
+  "variant": {
+    "series": "FM series",
+    "hose_size": "1/4 in nominal hose",
+    "end_connections": "1/4 in tube adapters",
+    "reference_model": "SS-FM4TA4TA4-36",
+    "catalog_assembly_length": "36 in (914.4 mm) catalog assembly",
+    "route": "Editable schematic route"
+  },
+  "names": {
+    "en": "Stainless-steel braided flexible metal hose"
+  },
+  "category": "other",
+  "keywords": [
+    "hose",
+    "flexible metal hose",
+    "braided",
+    "stainless steel",
+    "FM series",
+    "Swagelok",
+    "SS-FM4TA4TA4-36",
+    "tube adapter",
+    "compression",
+    "1/4 in",
+    "6.35 mm"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "tube": {
+    "width_mm": 13.5,
+    "material": "metal",
+    "color": [186, 201, 212],
+    "ends": ["a", "b"],
+    "braid": {
+      "pitch_mm": 9
+    },
+    "end_fittings": {
+      "tip_length_mm": 18,
+      "collar_length_mm": 26.7,
+      "collar_width_mm": 20.6
+    }
+  },
+  "joints": [
+    {
+      "id": "a",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 6.35,
+      "at": [0, 0],
+      "dir": [-1, 0]
+    },
+    {
+      "id": "b",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 6.35,
+      "at": [180, 0],
+      "dir": [1, 0]
+    }
+  ]
+}

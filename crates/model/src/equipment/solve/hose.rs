@@ -1,10 +1,10 @@
 //! Hoses. A hose is a tube piece drawn along a centre line stored on each
-//! placed copy (see [`placed::centre_line`]). Its ends seat on hose barbs:
-//! an end pushed onto a barb leaves it along the barb, and the hose bends
+//! placed copy (see [`placed::centre_line`]). Its ends seat on matching ports:
+//! a seated end leaves along its port, and the hose bends
 //! smoothly through its middle to the other end. Dragging an end or the
 //! middle reshapes the hose; nothing else moves.
 use super::*;
-use crate::equipment::format::Xy;
+use crate::equipment::format::{Tube, Xy};
 
 /// One end of a hose, or its middle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +63,13 @@ fn unit(v: Xy, fallback: Xy) -> Xy {
 /// How far a hose runs straight on from each end, in millimetres, before it
 /// bends: room to turn when a barb faces away from the other end.
 const LEAD_MM: f64 = 20.;
+
+fn lead_mm(tube: &Tube) -> f64 {
+    // The rigid adapters stay straight, with a little hose beyond each weld.
+    tube.end_fittings
+        .as_ref()
+        .map_or(LEAD_MM, |f| LEAD_MM.max(f.length_mm() + tube.width_mm / 2.))
+}
 /// How far a new hose sags below the straight line between its leads, as a
 /// share of that line's length.
 const SAG: f64 = 0.15;
@@ -145,7 +152,8 @@ fn barb(
         .as_ref()?
         .ends
         .get(k)?;
-    let end = ports(g).into_iter().find(|q| q.at.joint == *joint)?;
+    let mut end = ports(g).into_iter().find(|q| q.at.joint == *joint)?;
+    end.point = p;
     let others = BTreeSet::from([id]);
     let mine = assembly(doc, id);
     let apart = |b: &Port| {
@@ -155,7 +163,7 @@ fn barb(
         .into_iter()
         .filter(|b| mates(&end, b) && (any_scale || (b.mm / end.mm - 1.).abs() <= 1e-3))
         .filter(|b| !apart(b))
-        .map(|b| (len(sub(b.point, p)), b))
+        .map(|b| (gap(&end, &b), b))
         .filter(|(d, b)| *d <= reach.max(b.diameter()))
         .min_by(|a, b| a.0.total_cmp(&b.0))
         .map(|(_, b)| b)
@@ -214,13 +222,20 @@ fn push_on(doc: &mut Document, id: u64, k: usize, barb: &Port) {
 /// Where each end of hose `id` goes and the way it leaves into the hose:
 /// along the barb it is on, else towards `m`.
 fn reshape(doc: &mut Document, id: u64, ends: [(Xy, Option<Port>); 2], m: Xy) {
-    let Some((mm, width)) = (doc.graphics.iter()).find(|g| g.id == id).and_then(|g| {
-        let tube = g.piece.as_ref()?.linked.as_ref()?.tube.as_ref()?;
-        Some((frame(g).scale_factor(), tube.width_mm))
-    }) else {
+    let Some((mm, width, lead, fitted)) =
+        (doc.graphics.iter()).find(|g| g.id == id).and_then(|g| {
+            let tube = g.piece.as_ref()?.linked.as_ref()?.tube.as_ref()?;
+            Some((
+                frame(g).scale_factor(),
+                tube.width_mm,
+                lead_mm(tube),
+                tube.end_fittings.is_some(),
+            ))
+        })
+    else {
         return;
     };
-    let (lead, turn) = (LEAD_MM * mm, TURN_WIDTHS * width * mm);
+    let (lead, turn) = (lead * mm, TURN_WIDTHS * width * mm);
     // On a barb the hose runs straight on along it and turns as it must; a
     // free end aims straight at the middle, with a lead and a turn short
     // enough to stay short of it.
@@ -231,7 +246,11 @@ fn reshape(doc: &mut Document, id: u64, ends: [(Xy, Option<Port>); 2], m: Xy) {
             (
                 *p,
                 unit(sub(m, *p), [1., 0.]),
-                lead.min(room).max(1e-3),
+                if fitted {
+                    lead
+                } else {
+                    lead.min(room).max(1e-3)
+                },
                 turn.min(room).max(1e-3),
             )
         }
@@ -253,7 +272,19 @@ pub fn place_hose(
     reach: f64,
 ) -> (u64, Vec<Port>) {
     let id = doc.next_id();
-    let width = definition.tube.as_ref().map_or(0., |t| t.width_mm);
+    let (width, lead, click_out) =
+        definition
+            .tube
+            .as_ref()
+            .map_or((0., LEAD_MM, CLICK_OUT_MM), |t| {
+                let lead = lead_mm(t);
+                let click_out = if t.end_fittings.is_some() {
+                    CLICK_OUT_MM.max(2. * lead + 4. * t.width_mm)
+                } else {
+                    CLICK_OUT_MM
+                };
+                (t.width_mm, lead, click_out)
+            });
     let scale = placed::world_per_mm(doc, placed::DEFAULT_PT_PER_MM);
     let mut g = placed::graphic(
         id,
@@ -271,7 +302,9 @@ pub fn place_hose(
         g.axis_y = Point::new(g.axis_y.x * k, g.axis_y.y * k);
     }
     let mm = first.as_ref().map_or(f64::from(scale), |b| b.mm);
-    let a = first.as_ref().map_or(from, |b| b.point);
+    // A male tube-adapter end reaches the receiving compression tube stop.
+    // Hose barbs have no insertion depth, so their legacy anchor is unchanged.
+    let a = first.as_ref().map_or(from, Port::contact);
     let clicked = len(sub(to, from)) < 1e-9;
     // A click on a barb hangs the hose: straight on, round a turn, then
     // down. Elsewhere it lays a straight one to the right.
@@ -280,13 +313,13 @@ pub fn place_hose(
         let along = |k: f64| add(a, mul(b.dir, k));
         let drop = CLICK_DOWN_MM * mm;
         (
-            add(along(LEAD_MM * mm + turn), [0., drop]),
-            add(along(LEAD_MM * mm + turn), [0., drop / 2.]),
+            add(along(lead * mm + turn), [0., drop]),
+            add(along(lead * mm + turn), [0., drop / 2.]),
         )
     });
     let b = match hang {
         Some((b, _)) => b,
-        None if clicked => add(a, [CLICK_OUT_MM * mm, 0.]),
+        None if clicked => add(a, [click_out * mm, 0.]),
         None => to,
     };
     // Seat the first end so the second cannot take the same barb.
@@ -296,13 +329,11 @@ pub fn place_hose(
     let second = (!clicked)
         .then(|| barb(doc, id, 1, b, reach, false))
         .flatten();
-    let b = second.as_ref().map_or(b, |s| s.point);
+    let b = second.as_ref().map_or(b, Port::contact);
     // Held at both ends, the middle sags below the leads' midpoint, as a
     // hose hangs.
-    let lead = |p: Xy, barb: &Option<Port>| {
-        barb.as_ref()
-            .map_or(p, |b| add(p, mul(b.dir, LEAD_MM * mm)))
-    };
+    let lead =
+        |p: Xy, barb: &Option<Port>| barb.as_ref().map_or(p, |b| add(p, mul(b.dir, lead * mm)));
     let (la, lb) = (lead(a, &first), lead(b, &second));
     let sag = if second.is_some() {
         SAG * len(sub(lb, la))
@@ -347,7 +378,7 @@ pub fn drag(doc: &mut Document, id: u64, grip: Grip, to: [f64; 2], reach: f64) -
             let j = refs.get(k)?.clone();
             release(doc, |s| s.holds(&j));
             let barb = barb(doc, id, k, to, reach, false);
-            let p = barb.as_ref().map_or(to, |b| b.point);
+            let p = barb.as_ref().map_or(to, Port::contact);
             let slot = now.get_mut(k)?;
             // The middle follows the end halfway, so the hose keeps its sag.
             let m = add(m, mul(sub(p, slot.0), 0.5));
