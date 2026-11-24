@@ -305,9 +305,15 @@ def pin_problems(root, locked_packages, xtb_metadata, revision):
         problems.append("xtb metadata is missing axtb-driver at the pinned revision")
     else:
         upstream = Path(driver["manifest_path"]).parent
-        for name in ("COPYING", "COPYING.LESSER", "NOTICE"):
-            if (notices / name).read_bytes() != (upstream / name).read_bytes():
-                problems.append(f"licenses/axtb/{name} must match axtb-driver byte for byte")
+        # The fork's notice of modification lives at its repository root.
+        for name, source in (
+            ("COPYING", upstream),
+            ("COPYING.LESSER", upstream),
+            ("NOTICE", upstream),
+            ("CHANGES-reshiki.md", upstream.parents[1]),
+        ):
+            if (notices / name).read_bytes() != (source / name).read_bytes():
+                problems.append(f"licenses/axtb/{name} must match the pinned fork byte for byte")
     return problems
 
 

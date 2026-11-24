@@ -88,7 +88,7 @@ def cargo(
                 {
                     **package(name, "0.2.0", "LGPL-3.0-or-later"),
                     "source": FORK_LOCK_SOURCE,
-                    "manifest_path": str(root / "upstream/Cargo.toml"),
+                    "manifest_path": str(root / "fork/crates/driver/Cargo.toml"),
                 }
                 for name in FORK_NAMES
             ]
@@ -135,10 +135,16 @@ class AgentDependencyTests(unittest.TestCase):
                 f"Revision:   {source_revision}\n",
                 encoding="utf-8",
             )
-            (root / "upstream").mkdir()
-            for name in ("COPYING", "COPYING.LESSER", "NOTICE"):
+            fork = root / "fork"
+            (fork / "crates/driver").mkdir(parents=True)
+            for name, source in (
+                ("COPYING", fork / "crates/driver"),
+                ("COPYING.LESSER", fork / "crates/driver"),
+                ("NOTICE", fork / "crates/driver"),
+                ("CHANGES-reshiki.md", fork),
+            ):
                 terms = f"Upstream {name}\r\n".encode()
-                (root / "upstream" / name).write_bytes(terms)
+                (source / name).write_bytes(terms)
                 (notices / name).write_bytes(terms)
             verify(root, {"packages": list(packages)})
 

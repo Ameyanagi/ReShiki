@@ -5,14 +5,18 @@ Component:  axtb, an implementation of the xTB methods (GFN2-xTB, GFN-FF, g-xTB)
 License:    LGPL-3.0-or-later (COPYING.LESSER, with the GPL-3.0 text in COPYING)
 Upstream:   https://github.com/atomsforhumanity/axtb (Colton Hicks)
 Fork:       https://github.com/Ameyanagi/axtb, branch reshiki
-Revision:   65d0f64a9a8211f73b0738ff908b7a414975f50b
+Revision:   06e29058416b26b69db9715728f637b43558adff
 Version:    0.2.0
 Crates:     axtb, axtb-base, axtb-d4, axtb-driver, axtb-gfnff, axtb-gxtb,
-            axtb-solvation
+            axtb-solvation; with the fork's patched copies of the MIT crates
+            gemm-common and private-gemm-x86 (third_party/ in the fork)
 
-The files COPYING, COPYING.LESSER and NOTICE here are copied unchanged from
-that revision. NOTICE lists the upstream projects axtb reproduces and the
-g-xTB authors' permission for its g-xTB parts.
+The fork is a modified version of axtb. The files COPYING, COPYING.LESSER,
+NOTICE and CHANGES-reshiki.md here are copied unchanged from that revision.
+NOTICE lists the upstream projects axtb reproduces and the g-xTB authors'
+permission for its g-xTB parts. CHANGES-reshiki.md is the fork's notice of
+modification: what changed relative to upstream commit
+65d0f64a9a8211f73b0738ff908b7a414975f50b (axtb 0.2.0), and when.
 
 Only ReShiki builds with the Cargo feature `xtb` contain axtb: the macOS and
 Linux desktop releases. Each such release publishes

@@ -10,7 +10,10 @@ implementation of the xTB methods licensed under the GNU Lesser General Public
 License, version 3 or later (LGPL-3.0-or-later). ReShiki uses its own fork,
 <https://github.com/Ameyanagi/axtb>, branch `reshiki`. This page records how the
 optional LGPL component is built, shipped and audited. The worker protocol is
-in [xTB worker](xtb-worker.md).
+documented in `docs/xtb-worker.md`, which arrives with the worker. The fork's
+numerical validation on macOS and Linux is in its
+[validation report](https://github.com/Ameyanagi/axtb/blob/reshiki/docs/reshiki/validation.md).
+g-xTB is on: the fork's `gxtb` feature is on by default and ReShiki keeps it.
 
 ## Which builds contain axtb
 
@@ -41,16 +44,17 @@ The fork revision is written once, in the root `Cargo.toml`
 (`[workspace.dependencies] axtb-driver`). `Cargo.lock` records the same
 revision. The dependency audit checks the other copies against `Cargo.lock`:
 `reshiki_xtb_worker::AXTB_REV` (shown by `--version`, About and the worker's
-`hello`), and `licenses/axtb/SOURCE`. To move the pin, change `Cargo.toml`, run
+`hello`), and `licenses/axtb/SOURCE`. To move the pin, change `Cargo.toml`
+(both the dependency and the two `gemm` patches below), run
 `cargo update -p axtb-driver`, and update the two copies the audit checks.
 
-The fork's workspace patches two `gemm` crates (`third_party/README.md` in the
-fork) to cut start-up time on machines with about 100 or more CPU threads.
-Cargo ignores a dependency's `[patch]` sections, so ReShiki builds the unpatched
-crates.io versions. Desktop machines have few enough threads that the cost is
-small, and keeping our patch list free of these copies keeps the source story
-simple. Reconsider if a measurement on a large Linux workstation shows a
-visible delay.
+The fork's workspace patches two `gemm` crates, `gemm-common` and
+`private-gemm-x86` (`third_party/README.md` in the fork), so they read one CPU's
+cache description instead of every CPU's. Cargo ignores a dependency's `[patch]`
+sections, so ReShiki's root `Cargo.toml` repeats them, taking the patched copies
+from the fork at the same revision. ReShiki then builds exactly what the fork
+validated. Only the xtb graph uses `gemm`. The copies are MIT and keep their own
+`LICENSE` files, which the notices include with the fork as their source.
 
 ## License texts and notices
 
@@ -59,8 +63,9 @@ visible delay.
 - `NOTICE` lists `licenses/axtb/`.
 - `licenses/axtb/` holds `COPYING` (GPL-3.0 text), `COPYING.LESSER`
   (LGPL-3.0 text), axtb's `NOTICE` (its upstream work, including the g-xTB
-  authors' permission), and `SOURCE` (fork URL, branch, revision, and where the
-  matching source archive is published).
+  authors' permission), `CHANGES-reshiki.md` (the fork's notice of
+  modification under GPLv3 section 5(a)), and `SOURCE` (fork URL, branch,
+  revision, and where the matching source archive is published).
 - `scripts/license_notices.py` writes `THIRD-PARTY-NOTICES.txt` from the
   dependency graph of the build being packaged. It includes `licenses/axtb/`
   only when that graph contains the fork's crates, so default builds and the
