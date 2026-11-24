@@ -586,6 +586,230 @@ pub fn set_end(
     set_inner(doc, id, param, value, Some(&opposite))
 }
 
+/// Drag a cut end, seating to a nearby socket by changing only the tube's
+/// length. A reducer is previewed as an explicit offer, never inserted here.
+pub fn snap_end(
+    doc: &mut Document,
+    id: u64,
+    param: &str,
+    end: &str,
+    value: Value,
+    reach: f32,
+) -> Result<(Vec<Seat>, Option<Snap>), String> {
+    let joint = JointRef {
+        piece: id,
+        joint: end.into(),
+    };
+    let was_free = partner(doc, &joint).is_none();
+    let released = set_end(doc, id, param, end, value)?;
+    if !was_free || !reach.is_finite() || reach < 0. {
+        return Ok((released, None));
+    }
+    let Some(m) = port(doc, &joint) else {
+        return Ok((released, None));
+    };
+    // Exact native auto-seating has already done the same length-only edit.
+    if let Some(other) = partner(doc, &joint)
+        && let Some(s) = port(doc, &other)
+    {
+        return Ok((released, Some(end_snap(s, m, Offer::Seat, None))));
+    }
+    let mut nearby = Vec::new();
+    for s in free(doc, &BTreeSet::from([id]), false) {
+        if !matches!(s.kind, Kind::Plug(PlugFamily::Compression, _))
+            || s.gender != Gender::F
+            || misalign(&s, &m) > TOLERANCE_DEG
+            || (s.mm / m.mm - 1.).abs() > 1e-3
+        {
+            continue;
+        }
+        let distance = gap(&s, &m);
+        if distance > f64::from(reach).max(REACH_DIAMETERS * s.diameter()) {
+            continue;
+        }
+        nearby.push((!mates(&s, &m), distance, s));
+    }
+    // Rank before copying a document. Reducer previews only need catalogue
+    // metadata; their complete placement plan is prepared once on release.
+    nearby.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+    for (mismatch, _, s) in nearby {
+        if !mismatch {
+            if let Some((candidate, snap)) = plan_end(doc, id, param, end, &s.at) {
+                *doc = candidate;
+                return Ok((released, Some(snap)));
+            }
+        } else if crate::graphics::table::require_same_cell(doc, &[id, s.at.piece]).is_ok()
+            && let Some(reducer) = compression_reducer(&s, &m)
+        {
+            return Ok((
+                released,
+                Some(end_snap(s, m, Offer::Reducer(reducer), None)),
+            ));
+        }
+    }
+    Ok((released, None))
+}
+
+fn end_snap(target: Port, moving: Port, offer: Offer, added: Option<u64>) -> Snap {
+    Snap {
+        at: target.point,
+        target,
+        moving,
+        offer,
+        scaled: false,
+        behind: None,
+        added,
+    }
+}
+
+/// Explicitly accept a reducer offer at an editable free tube end. The
+/// complete plan is checked on a copy, so a failed or stale action is atomic.
+pub fn connect_end(
+    doc: &mut Document,
+    id: u64,
+    param: &str,
+    end: &str,
+    target: &JointRef,
+) -> Option<Snap> {
+    let (candidate, snap) = plan_end(doc, id, param, end, target)?;
+    *doc = candidate;
+    Some(snap)
+}
+
+fn plan_end(
+    doc: &Document,
+    id: u64,
+    param: &str,
+    end: &str,
+    target: &JointRef,
+) -> Option<(Document, Snap)> {
+    let moving = JointRef {
+        piece: id,
+        joint: end.into(),
+    };
+    if target.piece == id
+        || partner(doc, &moving).is_some()
+        || partner(doc, target).is_some()
+        || crate::graphics::table::require_same_cell(doc, &[id, target.piece]).is_err()
+    {
+        return None;
+    }
+    let (m, s) = (port(doc, &moving)?, port(doc, target)?);
+    if !matches!(m.kind, Kind::Plug(PlugFamily::Compression, _))
+        || !matches!(s.kind, Kind::Plug(PlugFamily::Compression, _))
+        || s.gender != Gender::F
+        || m.gender != Gender::M
+        || misalign(&s, &m) > TOLERANCE_DEG
+        || (s.mm / m.mm - 1.).abs() > 1e-3
+        || (!assembly(doc, id).contains(&target.piece)
+            && fixed(doc, &assembly(doc, id))
+            && fixed(doc, &assembly(doc, target.piece)))
+    {
+        return None;
+    }
+    let g = doc.graphics.iter().find(|g| g.id == id)?;
+    let (d, values) = definition(g)?;
+    let (length, _, ends) = straight_tube(d)?;
+    if length != param || !ends.contains(&end) {
+        return None;
+    }
+    let Value::Number(current) = values.get(param)? else {
+        return None;
+    };
+    let opposite = ends.iter().find(|e| **e != end)?;
+    let pinned = ports(g).into_iter().find(|p| p.at.joint == *opposite)?;
+    let inverse = frame(g).inverse()?;
+    let local = inverse.apply(m.point);
+    let axis = normalize(sub(local, inverse.apply(pinned.point)));
+    let mut candidate = doc.clone();
+    let mut onto = s.clone();
+    let mut added = None;
+    let offer = if mates(&s, &m) {
+        Offer::Seat
+    } else {
+        compression_reducer(&s, &m)?;
+        let (d, near, far) = adapter(&s, &m)?;
+        let adapter_id = candidate.next_id();
+        let mut adapter = placed::graphic(adapter_id, d.clone(), Point::default(), s.mm as f32);
+        adapter.layer = doc.graphics.iter().find(|g| g.id == target.piece)?.layer;
+        let a = ports(&adapter).into_iter().find(|p| p.at.joint == near)?;
+        candidate.graphics.push(adapter);
+        apply(&mut candidate, &[adapter_id], &s, &a);
+        candidate.seats.push(Seat::new(s.at.clone(), a.at.clone()));
+        onto = port(
+            &candidate,
+            &JointRef {
+                piece: adapter_id,
+                joint: far,
+            },
+        )?;
+        added = Some(adapter_id);
+        Offer::Adapter(d)
+    };
+    // The length solver only seats joints within their current table cell.
+    // Give the planned reducer its ownership before trying that attachment.
+    if let Some(added) = added {
+        crate::graphics::table::inherit_attachment(
+            doc,
+            &mut candidate,
+            &[added],
+            &[id, target.piece],
+        )
+        .ok()?;
+    }
+    let requested = current + dot(sub(inverse.apply(onto.contact()), local), axis);
+    if !requested.is_finite() {
+        return None;
+    }
+    set_end(&mut candidate, id, param, end, Value::Number(requested)).ok()?;
+    // An already exact cut length has no moving ports for set_end's native
+    // auto-seat pass. Explicit acceptance can still join its two free ends.
+    if partner(&candidate, &moving).is_none()
+        && partner(&candidate, &onto.at).is_none()
+        && fits(&port(&candidate, &moving)?, &onto)
+    {
+        candidate
+            .seats
+            .push(Seat::new(onto.at.clone(), moving.clone()));
+        mark(&mut candidate);
+    }
+    let (_, values) = definition(candidate.graphics.iter().find(|g| g.id == id)?)?;
+    let Value::Number(actual) = values.get(param)? else {
+        return None;
+    };
+    if (actual - requested).abs() > 1e-6
+        || !fits(&port(&candidate, &moving)?, &onto)
+        || !candidate
+            .seats
+            .iter()
+            .any(|seat| seat.holds(&moving) && seat.holds(&onto.at))
+        || !doc.seats.iter().all(|seat| candidate.seats.contains(seat))
+        || candidate.graphics.len() != doc.graphics.len() + usize::from(added.is_some())
+        || doc
+            .graphics
+            .iter()
+            .zip(&candidate.graphics)
+            .any(|(before, after)| {
+                before.id != after.id
+                    || (before.id != id
+                        && (before.origin != after.origin
+                            || before.axis_x != after.axis_x
+                            || before.axis_y != after.axis_y
+                            || before.piece.as_ref().map(|p| &p.params)
+                                != after.piece.as_ref().map(|p| &p.params)))
+            })
+    {
+        return None;
+    }
+    let now_pinned = port(&candidate, &pinned.at)?;
+    if len(sub(pinned.point, now_pinned.point)) > TOLERANCE_MM * pinned.mm {
+        return None;
+    }
+    crate::graphics::table::validate(&candidate).ok()?;
+    let snap = end_snap(s, m, offer, added);
+    Some((candidate, snap))
+}
+
 fn set_inner(
     doc: &mut Document,
     id: u64,

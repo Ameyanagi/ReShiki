@@ -1344,7 +1344,7 @@ fn a_tube_end_drag_auto_seats_only_within_its_own_table_cell() {
             );
             let before = doc.clone();
             let owners = Membership::new(&doc).unwrap();
-            adjust::set_end(&mut doc, tube, "length", end, Value::Number(100.)).unwrap();
+            adjust::snap_end(&mut doc, tube, "length", end, Value::Number(98.5), 14.).unwrap();
             assert_eq!(doc.seats.len(), usize::from(together));
             assert_eq!(
                 Membership::new(&doc).unwrap().cell_of(tube),
@@ -1359,6 +1359,52 @@ fn a_tube_end_drag_auto_seats_only_within_its_own_table_cell() {
             assert_eq!(stored_table(&doc), stored_table(&before));
             commit(&mut doc, before);
             assert_eq!(doc.seats.len(), usize::from(together));
+        }
+    }
+}
+
+#[test]
+fn a_tube_end_reducer_inherits_its_table_cell_and_cross_cell_acceptance_is_atomic() {
+    use crate::graphics::table::Membership;
+    for end in ["a", "b"] {
+        for together in [false, true] {
+            let mut doc = Document::default();
+            let tube = add(
+                &mut doc,
+                "reshiki/compression-tube-60-1-4",
+                Point::default(),
+            );
+            let cap = add(&mut doc, "reshiki/compression-cap-1-8", Point::default());
+            // Position both real interfaces via the standard rigid adapter
+            // path, then let the user explicitly reinsert at the tube end.
+            let initial =
+                solve::connect(&mut doc, &[cap], &joint(tube, end), &joint(cap, "tube")).unwrap();
+            let adapter = initial.added.unwrap();
+            doc.seats.clear();
+            doc.graphics.retain(|g| g.id != adapter);
+            solve::check(&mut doc, None);
+            table_cells(
+                &mut doc,
+                if together {
+                    [vec![tube, cap], vec![]]
+                } else {
+                    [vec![tube], vec![cap]]
+                },
+            );
+            let before = doc.clone();
+            let snap =
+                solve::adjust::connect_end(&mut doc, tube, "length", end, &joint(cap, "tube"));
+            if !together {
+                assert!(snap.is_none());
+                assert_eq!(doc, before);
+                continue;
+            }
+            let adapter = snap.unwrap().added.unwrap();
+            let owners = Membership::new(&doc).unwrap();
+            assert_eq!(owners.cell_of(adapter), owners.cell_of(tube));
+            assert_eq!(owners.cell_of(adapter), owners.cell_of(cap));
+            commit(&mut doc, before);
+            assert_eq!(doc.seats.len(), 2);
         }
     }
 }

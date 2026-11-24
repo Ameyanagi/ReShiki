@@ -467,10 +467,19 @@ impl MoleculeCanvas<'_> {
         };
         let text = crate::app::equipment::value_text(g, &handle.param, Some(&value));
         let result = match &handle.tube_end {
-            Some(end) => adjust::set_end(draft.preview.to_mut(), *id, &handle.param, end, value),
-            None => adjust::set(draft.preview.to_mut(), *id, &handle.param, value),
+            Some(end) => adjust::snap_end(
+                draft.preview.to_mut(),
+                *id,
+                &handle.param,
+                end,
+                value,
+                self.camera.world_len(reshiki::equipment::solve::REACH_PX),
+            ),
+            None => {
+                adjust::set(draft.preview.to_mut(), *id, &handle.param, value).map(|r| (r, None))
+            }
         };
-        if let Ok(mut released) = result {
+        if let Ok((mut released, snap)) = result {
             if handle.tube_end.is_some() {
                 // Layout groups can reflow when the tube changes size. Show
                 // the same final layout and seats that release will commit.
@@ -493,6 +502,9 @@ impl MoleculeCanvas<'_> {
             }
             let note = crate::app::equipment::released_text(self.doc, *id, &released);
             draft.chain_badge = Some((p, text + &note, released.is_empty()));
+            if let Some(snap) = snap {
+                draft.seat_hint = Some(super::SeatHint::new(&draft.preview, &snap));
+            }
         }
     }
 

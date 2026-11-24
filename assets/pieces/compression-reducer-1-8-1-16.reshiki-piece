@@ -1,0 +1,210 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/compression-reducer-1-8-1-16",
+  "revision": 1,
+  "family": "compression-reducer",
+  "variant": {
+    "tube": "1/8 in OD",
+    "joint": "1/16 in adapter shank"
+  },
+  "names": {
+    "en": "Compression reducer, 1/8 in tube to 1/16 in joint"
+  },
+  "category": "adapter",
+  "keywords": [
+    "compression",
+    "reducer",
+    "reducing adapter",
+    "joint",
+    "tube fitting",
+    "1/8 in",
+    "1/16 in",
+    "SS-200-R-1"
+  ],
+  "units": "mm",
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "shapes": [
+    {
+      "id": "exterior-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-14.48 -4.256L-12.48 -5.6L-5.98 -5.6L-4.98 -4.256L-4.98 -2.1875L-2.48 -2.1875L-1.93 -5.2L6.83 -5.2L7.43 -0.7937L14.03 -0.7937L14.48 -0.6437L14.48 0.6437L14.03 0.7937L7.43 0.7937L6.83 5.2L-1.93 5.2L-2.48 2.1875L-4.98 2.1875L-4.98 4.256L-5.98 5.6L-12.48 5.6L-14.48 4.256Z",
+      "color": [
+        214,
+        221,
+        227
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "exterior-edges",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-14.48 -4.256L-12.48 -5.6L-5.98 -5.6L-4.98 -4.256L-4.98 -2.1875L-2.48 -2.1875L-1.93 -5.2L6.83 -5.2L7.43 -0.7937L14.03 -0.7937L14.48 -0.6437M14.48 0.6437L14.03 0.7937L7.43 0.7937L6.83 5.2L-1.93 5.2L-2.48 2.1875L-4.98 2.1875L-4.98 4.256L-5.98 5.6L-12.48 5.6L-14.48 4.256",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "exterior-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-12.48 -5.6L-12.48 -1.5875M-4.98 -4.256L-4.98 4.256M-1.93 -5.2L-1.93 -2.1875M-1.93 2.1875L-1.93 5.2",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "flats-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-12.13 -5.2L-6.13 -5.2L-6.43 -4.6L-11.93 -4.6Z",
+      "color": [
+        236,
+        240,
+        244
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "section-bore",
+      "layer": "back",
+      "material": "glass",
+      "role": "fill",
+      "path": "M-14.48 -1.5875L-3.98 -1.5875L-3.98 -0.381L14.48 -0.381L14.48 0.381L-3.98 0.381L-3.98 1.5875L-14.48 1.5875Z",
+      "color": [
+        246,
+        249,
+        252
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "section-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-14.48 -4.256L-12.48 -5.6L-5.98 -5.6L-4.98 -4.256L-4.98 -2.1875L-2.48 -2.1875L-1.93 -5.2L6.83 -5.2L7.43 -0.7937L14.03 -0.7937L14.48 -0.6437L14.48 -0.381L-3.98 -0.381L-3.98 -1.5875L-14.48 -1.5875ZM-14.48 4.256L-12.48 5.6L-5.98 5.6L-4.98 4.256L-4.98 2.1875L-2.48 2.1875L-1.93 5.2L6.83 5.2L7.43 0.7937L14.03 0.7937L14.48 0.6437L14.48 0.381L-3.98 0.381L-3.98 1.5875L-14.48 1.5875Z",
+      "color": [
+        214,
+        221,
+        227
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-12.08 -1.5875L-10.88 -1.5875L-9.28 -3.756L-10.48 -3.756ZM-12.08 1.5875L-10.88 1.5875L-9.28 3.756L-10.48 3.756Z",
+      "color": [
+        194,
+        205,
+        215
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "male-section-wall",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M6.83 -0.381L14.48 -0.381M6.83 0.381L14.48 0.381",
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    }
+  ],
+  "joints": [
+    {
+      "id": "tube",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 3.175,
+      "at": [
+        -14.48,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 10.5
+    },
+    {
+      "id": "joint",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 1.5875,
+      "at": [
+        14.48,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ]
+}

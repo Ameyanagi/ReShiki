@@ -9,6 +9,249 @@ fn k(id: &str) -> String {
     placed::key(&builtin::find(id).unwrap())
 }
 
+fn tube_snap_evidence(case: &str, stages: &[(&str, &Document)]) {
+    let Some(directory) = std::env::var_os("RESHIKI_TUBE_SNAP_EVIDENCE") else {
+        return;
+    };
+    let directory = std::path::PathBuf::from(directory);
+    std::fs::create_dir_all(&directory).unwrap();
+    for (stage, doc) in stages {
+        std::fs::write(
+            directory.join(format!("{case}-{stage}.rsk")),
+            serde_json::to_vec_pretty(&doc.current()).unwrap(),
+        )
+        .unwrap();
+    }
+}
+
+fn end_snap_app(end: &str, reducer: bool) -> App {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tool = Tool::Select;
+    let size = if reducer { "1-8" } else { "1-4" };
+    let tube = builtin::find(&format!("reshiki/compression-tube-60-{size}")).unwrap();
+    let cap = builtin::find(&format!("reshiki/compression-cap-{size}")).unwrap();
+    let mm = placed::world_per_mm(&app.tab.doc, placed::DEFAULT_PT_PER_MM);
+    app.tab
+        .doc
+        .graphics
+        .push(placed::graphic(1, tube, Point::default(), mm));
+    app.tab
+        .doc
+        .graphics
+        .push(placed::graphic(2, cap, Point::default(), mm));
+    solve::connect(
+        &mut app.tab.doc,
+        &[2],
+        &JointRef {
+            piece: 1,
+            joint: end.into(),
+        },
+        &JointRef {
+            piece: 2,
+            joint: "tube".into(),
+        },
+    )
+    .unwrap();
+    adjust::set_end(&mut app.tab.doc, 1, "length", end, Value::Number(100.25)).unwrap();
+    app.tab.doc.seats.clear();
+    adjust::set_end(&mut app.tab.doc, 1, "length", end, Value::Number(60.)).unwrap();
+    if reducer {
+        let definition = builtin::find("reshiki/compression-tube-60-1-4").unwrap();
+        let piece = app.tab.doc.graphics[0].piece.as_mut().unwrap();
+        piece.definition = placed::key(&definition);
+        piece.linked = Some(definition);
+    }
+    solve::check(&mut app.tab.doc, None);
+    app.tab.doc.piece_definitions = placed::used(&app.tab.doc);
+    app.tab.selected = vec![1];
+    app
+}
+
+#[test]
+fn tube_end_snap_pointer_preview_commit_and_undo_agree_for_both_ends() {
+    for end in ["a", "b"] {
+        let mut app = end_snap_app(end, false);
+        let before = app.tab.doc.clone();
+        let handle = adjust::handles(&before.graphics[0])
+            .into_iter()
+            .find(|h| h.tube_end.as_deref() == Some(end))
+            .unwrap();
+        let port = solve::ports(&before.graphics[0])
+            .into_iter()
+            .find(|p| p.at.joint == end)
+            .unwrap();
+        let from = Point::new(handle.at[0] as f32, handle.at[1] as f32);
+        let to = from.offset(
+            (38.5 * port.mm * port.dir[0]) as f32,
+            (38.5 * port.mm * port.dir[1]) as f32,
+        );
+        let preview =
+            crate::canvas::MoleculeCanvas::piece_handle_drag_candidate(&before, 1, handle, to);
+        for edit in
+            crate::canvas::select_drag(&before, &[1], from, to, iced::keyboard::Modifiers::empty())
+        {
+            let _ = app.update(Message::Canvas(edit));
+        }
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc, preview);
+        assert_eq!(app.tab.doc.seats.len(), 1);
+        assert!(app.status.contains("Seated"), "{}", app.status);
+        assert_eq!(
+            app.tab
+                .doc
+                .graphics
+                .iter()
+                .find(|g| g.id == 2)
+                .unwrap()
+                .origin,
+            before.graphics.iter().find(|g| g.id == 2).unwrap().origin
+        );
+        assert_eq!(app.tab.history.undo_frames().len(), 1);
+        let accepted = app.tab.doc.clone();
+        if end == "b" {
+            tube_snap_evidence(
+                "tube-end-snap",
+                &[("before", &before), ("committed", &accepted)],
+            );
+        }
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, accepted);
+    }
+}
+
+#[test]
+fn reducer_suggestion_is_explicit_stale_checked_and_a_single_undo_edit() {
+    for end in ["a", "b"] {
+        for stale in [false, true] {
+            let mut app = end_snap_app(end, true);
+            let before = app.tab.doc.clone();
+            let _ = app.update(Message::Canvas(Edit::TubeEnd {
+                id: 1,
+                param: "length".into(),
+                end: end.into(),
+                value: Value::Number(98.5),
+            }));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.tab.doc.graphics.len(), 2);
+            assert!(app.tab.doc.seats.is_empty());
+            assert!(app.status.contains("Compression reducer"), "{}", app.status);
+            assert!(app.inspector_open);
+            let offer = app
+                .equipment
+                .reducer
+                .as_ref()
+                .expect("actionable reducer suggestion");
+            assert!(
+                offer.candidate.is_some(),
+                "the aligned endpoint plan should insert"
+            );
+            let offered = app.tab.doc.clone();
+            if stale {
+                app.tab.doc.translate(&[2], 0., 1.);
+                let edited = app.tab.doc.clone();
+                let _ = app.update(Message::Equipment(Action::InsertReducer));
+                assert_eq!(app.tab.doc, edited);
+                continue;
+            }
+            let _ = app.update(Message::Equipment(Action::InsertReducer));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.tab.doc.graphics.len(), 3);
+            assert_eq!(app.tab.doc.seats.len(), 2);
+            assert_eq!(app.tab.history.undo_frames().len(), 2);
+            let accepted = app.tab.doc.clone();
+            if end == "b" {
+                tube_snap_evidence(
+                    "tube-reducer",
+                    &[
+                        ("before", &before),
+                        ("offered", &offered),
+                        ("accepted", &accepted),
+                    ],
+                );
+            }
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, offered);
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            let _ = app.update(Message::Redo);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc, accepted);
+        }
+    }
+}
+
+#[test]
+fn reducer_suggestions_do_not_follow_an_identical_drawing_to_another_tab_or_epoch() {
+    for another_tab in [false, true] {
+        let mut app = end_snap_app("b", true);
+        let _ = app.update(Message::Canvas(Edit::TubeEnd {
+            id: 1,
+            param: "length".into(),
+            end: "b".into(),
+            value: Value::Number(98.5),
+        }));
+        assert!(app.reducer_suggestion().is_some());
+        let (tab, epoch) = (app.tab.id, app.tab.file_epoch);
+        let offered = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        if another_tab {
+            app.add_tab();
+            assert_ne!(app.tab.id, tab);
+        } else {
+            app.reset_tab();
+            assert_eq!(app.tab.id, tab);
+        }
+        assert_ne!(app.tab.file_epoch, epoch);
+        // Recreate the exact snapshot and object IDs in the new document
+        // identity: content equality alone must not revive the old offer.
+        app.tab.doc = offered.clone();
+        app.tab.selected = selected;
+        app.tool = Tool::Select;
+        assert!(app.equipment.reducer.is_some());
+        assert!(
+            app.reducer_suggestion().is_none(),
+            "Properties must hide the stale offer"
+        );
+        let history = app.tab.history.undo_frames().len();
+        let _ = app.update(Message::Equipment(Action::InsertReducer));
+        assert_eq!(app.tab.doc, offered);
+        assert_eq!(app.tab.history.undo_frames().len(), history);
+        assert_eq!(app.tool, Tool::Select);
+    }
+}
+
+#[test]
+fn a_reducer_that_cannot_seat_without_moving_apparatus_offers_catalog_placement() {
+    for end in ["a", "b"] {
+        let mut app = end_snap_app(end, true);
+        app.tab.doc.translate(&[2], 0., 3.);
+        let _ = app.update(Message::Canvas(Edit::TubeEnd {
+            id: 1,
+            param: "length".into(),
+            end: end.into(),
+            value: Value::Number(98.5),
+        }));
+        assert!(!app.error, "{}", app.status);
+        let offer = app
+            .equipment
+            .reducer
+            .as_ref()
+            .expect("exact reducer suggestion");
+        assert!(offer.candidate.is_none());
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Equipment(Action::InsertReducer));
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tool, Tool::Equipment);
+        assert_eq!(
+            app.equipment.armed.as_ref().unwrap().id,
+            "reshiki/compression-reducer-1-4-1-8"
+        );
+    }
+}
+
 #[test]
 fn tube_furnace_pointer_drags_carry_the_casing_chain_but_slide_the_bare_tube() {
     use reshiki::equipment::eval::Value;
