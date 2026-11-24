@@ -93,7 +93,7 @@ pub struct Port {
     /// Required axial span for a holder, or available straight lead on a
     /// routed compression tube end, in world units. Zero imposes no limit.
     pub contact_length: f64,
-    /// Depth from a compression opening to its tube stop, in world units.
+    /// Depth from the opening to its seat, in world units.
     pub(super) insertion: f64,
 }
 
@@ -104,6 +104,7 @@ impl Port {
             Kind::Taper(size) => size.clone(),
             Kind::Plug(PlugFamily::Compression, size) => format!("Ø{size} mm compression"),
             Kind::Plug(PlugFamily::WorkTube, size) => format!("Ø{size} mm work tube"),
+            Kind::Plug(PlugFamily::Npt, size) if *size == 3.175 => "1/8 in NPT".into(),
             Kind::Plug(PlugFamily::Npt, size) if *size == 6.35 => "1/4 in NPT".into(),
             Kind::Plug(PlugFamily::Npt, size) => format!("{size} mm nominal NPT"),
             Kind::Plug(family, _) => format!("{family:?}").to_lowercase(),

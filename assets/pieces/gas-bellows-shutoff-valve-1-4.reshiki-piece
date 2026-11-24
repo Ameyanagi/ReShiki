@@ -1,0 +1,1643 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/gas-bellows-shutoff-valve-1-4",
+  "revision": 2,
+  "family": "gas-bellows-shutoff-valve",
+  "variant": {
+    "connection": "1/4 in compression",
+    "actuation": "pneumatic, normally closed",
+    "pilot": "1/8 in female NPT"
+  },
+  "names": {
+    "en": "Air-actuated bellows shutoff valve, 1/4 in compression"
+  },
+  "category": "other",
+  "grounded": false,
+  "keywords": [
+    "bellows-sealed valve",
+    "shutoff valve",
+    "air-actuated valve",
+    "pneumatic valve",
+    "normally closed",
+    "spring return",
+    "pilot air",
+    "1/8 in NPT",
+    "PCTFE conical tip",
+    "gas line",
+    "compression tube fitting",
+    "1/4 in",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "inlet-neck",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-11.9 -4.8L-21.25 -4.8L-21.25 4.8L-11.9 4.8Z",
+      "depth": 2,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "inlet-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-11.9 -4.8L-21.25 -4.8L-21.25 -3.175L-17.75 -3.175L-17.75 -2.05L-11.9 -2.05Z",
+      "depth": 2,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-neck-section-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-11.9 2.05L-17.75 2.05L-17.75 3.175L-21.25 3.175L-21.25 4.8L-11.9 4.8Z",
+      "depth": 2,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-nut-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-21.25 -5.776L-22.75 -7.6L-29.75 -7.6L-31.25 -5.776L-31.25 5.776L-29.75 7.6L-22.75 7.6L-21.25 5.776Z",
+      "depth": 2,
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "inlet-nut-section-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-21.25 -5.776L-22.75 -7.6L-29.75 -7.6L-31.25 -5.776L-31.25 -3.175L-21.25 -3.175Z",
+      "depth": 2,
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-nut-section-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-21.25 3.175L-31.25 3.175L-31.25 5.776L-29.75 7.6L-22.75 7.6L-21.25 5.776Z",
+      "depth": 2,
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-nut-upper-outline",
+      "layer": "front",
+      "material": "metal",
+      "role": "outline",
+      "path": "M-21.25 -5.776L-22.75 -7.6L-29.75 -7.6L-31.25 -5.776L-31.25 -3.175",
+      "depth": 6
+    },
+    {
+      "id": "inlet-nut-lower-outline",
+      "layer": "front",
+      "material": "metal",
+      "role": "outline",
+      "path": "M-31.25 3.175L-31.25 5.776L-29.75 7.6L-22.75 7.6L-21.25 5.776",
+      "depth": 6
+    },
+    {
+      "id": "inlet-mouth-rim-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M-29.65 -3.175L-31.25 -3.175",
+      "depth": 6
+    },
+    {
+      "id": "inlet-mouth-rim-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M-29.65 3.175L-31.25 3.175",
+      "depth": 6
+    },
+    {
+      "id": "inlet-exterior-back-seam",
+      "layer": "front",
+      "material": "metal",
+      "role": "outline",
+      "path": "M-21.25 -5.776L-21.25 5.776",
+      "depth": 6,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "inlet-section-back-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "outline",
+      "path": "M-21.25 -5.776L-21.25 -3.175",
+      "depth": 6,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-section-back-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "outline",
+      "path": "M-21.25 3.175L-21.25 5.776",
+      "depth": 6,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-nut-flat",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M-22.75 -7.6L-22.75 7.6",
+      "depth": 5,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "inlet-nut-mouth-flat-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M-29.75 -7.6L-29.75 -3.875",
+      "depth": 5,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "inlet-nut-mouth-flat-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M-29.75 3.875L-29.75 7.6",
+      "depth": 5,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "inlet-ferrules-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-29.25 -3.175L-26.25 -3.175L-23.25 -6L-26.85 -6Z",
+      "depth": 5,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-section-thread-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M-22.05 -6.6L-23.25 -5.6L-24.45 -6.6L-25.65 -5.6",
+      "depth": 5,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-ferrules-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-29.25 3.175L-26.25 3.175L-23.25 6L-26.85 6Z",
+      "depth": 5,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-section-thread-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M-22.05 6.6L-23.25 5.6L-24.45 6.6L-25.65 5.6",
+      "depth": 5,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "inlet-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-23.25 -7.1L-29.25 -7.1L-28.25 -6L-24.25 -6Z",
+      "depth": 4,
+      "color": [
+        242,
+        245,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "style": "shaded"
+    },
+    {
+      "id": "outlet-neck",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11.9 -4.8L21.25 -4.8L21.25 4.8L11.9 4.8Z",
+      "depth": 2,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "outlet-neck-section-material",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11.9 -4.8L21.25 -4.8L21.25 -3.175L17.75 -3.175L17.75 -2.05L11.9 -2.05Z",
+      "depth": 2,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-neck-section-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M11.9 2.05L17.75 2.05L17.75 3.175L21.25 3.175L21.25 4.8L11.9 4.8Z",
+      "depth": 2,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-nut-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M21.25 -5.776L22.75 -7.6L29.75 -7.6L31.25 -5.776L31.25 5.776L29.75 7.6L22.75 7.6L21.25 5.776Z",
+      "depth": 2,
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "outlet-nut-section-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M21.25 -5.776L22.75 -7.6L29.75 -7.6L31.25 -5.776L31.25 -3.175L21.25 -3.175Z",
+      "depth": 2,
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-nut-section-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M21.25 3.175L31.25 3.175L31.25 5.776L29.75 7.6L22.75 7.6L21.25 5.776Z",
+      "depth": 2,
+      "color": [
+        224,
+        230,
+        234
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-nut-upper-outline",
+      "layer": "front",
+      "material": "metal",
+      "role": "outline",
+      "path": "M21.25 -5.776L22.75 -7.6L29.75 -7.6L31.25 -5.776L31.25 -3.175",
+      "depth": 6
+    },
+    {
+      "id": "outlet-nut-lower-outline",
+      "layer": "front",
+      "material": "metal",
+      "role": "outline",
+      "path": "M31.25 3.175L31.25 5.776L29.75 7.6L22.75 7.6L21.25 5.776",
+      "depth": 6
+    },
+    {
+      "id": "outlet-mouth-rim-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M29.65 -3.175L31.25 -3.175",
+      "depth": 6
+    },
+    {
+      "id": "outlet-mouth-rim-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M29.65 3.175L31.25 3.175",
+      "depth": 6
+    },
+    {
+      "id": "outlet-exterior-back-seam",
+      "layer": "front",
+      "material": "metal",
+      "role": "outline",
+      "path": "M21.25 -5.776L21.25 5.776",
+      "depth": 6,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "outlet-section-back-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "outline",
+      "path": "M21.25 -5.776L21.25 -3.175",
+      "depth": 6,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-section-back-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "outline",
+      "path": "M21.25 3.175L21.25 5.776",
+      "depth": 6,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-nut-flat",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M22.75 -7.6L22.75 7.6",
+      "depth": 5,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "outlet-nut-mouth-flat-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M29.75 -7.6L29.75 -3.875",
+      "depth": 5,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "outlet-nut-mouth-flat-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M29.75 3.875L29.75 7.6",
+      "depth": 5,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "outlet-ferrules-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M29.25 -3.175L26.25 -3.175L23.25 -6L26.85 -6Z",
+      "depth": 5,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-section-thread-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M22.05 -6.6L23.25 -5.6L24.45 -6.6L25.65 -5.6",
+      "depth": 5,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-ferrules-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M29.25 3.175L26.25 3.175L23.25 6L26.85 6Z",
+      "depth": 5,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-section-thread-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "detail",
+      "path": "M22.05 6.6L23.25 5.6L24.45 6.6L25.65 5.6",
+      "depth": 5,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outlet-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M23.25 -7.1L29.25 -7.1L28.25 -6L24.25 -6Z",
+      "depth": 4,
+      "color": [
+        242,
+        245,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "style": "shaded"
+    },
+    {
+      "id": "body-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-12.7 -10L-11.5 -11.2L11.5 -11.2L12.7 -10L12.7 13.2L11.7 14.2L-11.7 14.2L-12.7 13.2Z",
+      "depth": 0,
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "body-top-face",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-11.2 -10.7L11.2 -10.7L10.3 -9.5L-10.3 -9.5Z",
+      "depth": 1,
+      "color": [
+        239,
+        243,
+        246
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "style": "shaded"
+    },
+    {
+      "id": "body-side-seams",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-11.1 -9.2V12.8M11.1 -9.2V12.8",
+      "depth": 2,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "body-section-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-12.7 -10L-11.5 -11.2L-5.8 -11.2L-5.8 -4.7L-4.7 -4.7L-4.7 -0.4L-1.7 0L-1.7 3.2L-4.7 3.2L-6.8 -2.05L-12.7 -2.05Z",
+      "depth": 0,
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "body-section-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M5.8 -11.2L11.5 -11.2L12.7 -10L12.7 -2.05L5.8 -2.05Z",
+      "depth": 0,
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "body-section-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-12.7 2.05L-8 2.05L-6 7.6L1.7 7.6L1.7 0L3.6 -0.4L3.6 2.05L12.7 2.05L12.7 13.2L11.7 14.2L-11.7 14.2L-12.7 13.2Z",
+      "depth": 0,
+      "color": [
+        215,
+        220,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "body-section-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-10.7 -8.7l2 2M-7.2 -8.7l2 2M6.7 -8.7l2 2M-4 11.2l1.7 1.7M0 11.2l1.7 1.7M4 11.2l1.7 1.7",
+      "depth": 3,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "seat-section-rims",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-3.7 -.4L-1.7 0M1.7 0L3.6 -.4",
+      "depth": 5,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "bonnet-nut-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-12.3 -20.8L-10.3 -22.6L10.3 -22.6L12.3 -20.8L12.3 -12.8L10.3 -11.2L-10.3 -11.2L-12.3 -12.8Z",
+      "depth": 2,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "bonnet-nut-flats",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-9.3 -21.4V-12.2M9.3 -21.4V-12.2",
+      "depth": 4,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "bonnet-nut-section-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-5.8 -22.6L-10.3 -22.6L-12.3 -20.8L-12.3 -12.8L-10.3 -11.2L-5.8 -11.2Z",
+      "depth": 2,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "bonnet-nut-section-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M5.8 -22.6L10.3 -22.6L12.3 -20.8L12.3 -12.8L10.3 -11.2L5.8 -11.2Z",
+      "depth": 2,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "bellows-base-gasket-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-2.2 -12.7L-6.6 -12.7L-6.6 -11.2L-2.2 -11.2Z",
+      "depth": 5,
+      "color": [
+        184,
+        193,
+        191
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "bellows-base-gasket-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M2.2 -12.7L6.6 -12.7L6.6 -11.2L2.2 -11.2Z",
+      "depth": 5,
+      "color": [
+        184,
+        193,
+        191
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-cap-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-22.25 -76.5Q-22.25 -78.5 -20.25 -78.5H20.25Q22.25 -78.5 22.25 -76.5V-53.5H-22.25Z",
+      "depth": 1,
+      "color": [
+        207,
+        216,
+        222
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-cap-top-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-21.3 -72.5H21.3",
+      "depth": 3,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-cap-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-20.6 -71.5L-17.5 -71.5L-17.5 -54.7L-20.6 -54.7Z",
+      "depth": 2,
+      "color": [
+        240,
+        244,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "style": "shaded"
+    },
+    {
+      "id": "pneumatic-barrel-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-16 -53.5L16 -53.5L16 -38.5L15 -37.5L-15 -37.5L-16 -38.5Z",
+      "depth": 2,
+      "color": [
+        190,
+        202,
+        211
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-barrel-bottom-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-14.8 -40H14.8",
+      "depth": 4,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-neck-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-6.8 -37.5L6.8 -37.5L6.8 -22.6L-6.8 -22.6Z",
+      "depth": 1,
+      "color": [
+        211,
+        220,
+        226
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "stem-position-collar-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-7.1 -31.5L7.1 -31.5L7.1 -29.5L-7.1 -29.5Z",
+      "depth": 3,
+      "color": [
+        143,
+        164,
+        180
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "pneumatic-cap-section-roof",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-20.25 -78.5L20.25 -78.5L22.25 -76.5L22.25 -74.3L19 -74.3L-19 -74.3L-22.25 -74.3L-22.25 -76.5Z",
+      "depth": 1,
+      "color": [
+        207,
+        216,
+        222
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-cap-section-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-19 -74.3L-22.25 -74.3L-22.25 -53.5L-16 -53.5L-16 -46.7L-12.5 -46.7L-12.5 -54.5L-19 -54.5ZM-16 -40.7L-12.5 -40.7L-12.5 -37.5L-16 -37.5Z",
+      "depth": 1,
+      "color": [
+        207,
+        216,
+        222
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pilot-process-partition-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-2.3 -40.5L-12.5 -40.5L-16 -39.5L-16 -37.5L-2.3 -37.5Z",
+      "depth": 3,
+      "color": [
+        172,
+        190,
+        202
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pilot-stem-seal-left",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M-1.6 -40.5L-2.3 -40.5L-2.3 -37.5L-1.6 -37.5Z",
+      "depth": 6,
+      "color": [
+        74,
+        85,
+        92
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "bellows-bonnet-section-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-7.5 -37.5L-7.5 -11.2L-5.4 -11.2L-5.4 -35.2L-2.3 -37.5Z",
+      "depth": 1,
+      "color": [
+        202,
+        214,
+        223
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-cap-section-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M19 -74.3L22.25 -74.3L22.25 -53.5L16 -53.5L16 -37.5L12.5 -37.5L12.5 -54.5L19 -54.5Z",
+      "depth": 1,
+      "color": [
+        207,
+        216,
+        222
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pilot-process-partition-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M2.3 -40.5L12.5 -40.5L16 -39.5L16 -37.5L2.3 -37.5Z",
+      "depth": 3,
+      "color": [
+        172,
+        190,
+        202
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pilot-stem-seal-right",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M1.6 -40.5L2.3 -40.5L2.3 -37.5L1.6 -37.5Z",
+      "depth": 6,
+      "color": [
+        74,
+        85,
+        92
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "bellows-bonnet-section-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M7.5 -37.5L7.5 -11.2L5.4 -11.2L5.4 -35.2L2.3 -37.5Z",
+      "depth": 1,
+      "color": [
+        202,
+        214,
+        223
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pilot-air-boss-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-27 -48.8435L-27 -50.7L-25.5 -51.7L-16 -51.7L-16 -46.7L-21 -46.7L-21 -48.8435Z",
+      "depth": 4,
+      "color": [
+        190,
+        203,
+        213
+      ]
+    },
+    {
+      "id": "pilot-air-female-thread-upper",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-26 -49.5l.6 -0.8M-24.65 -49.5l.6 -0.8M-23.3 -49.5l.6 -0.8M-21.95 -49.5l.6 -0.8",
+      "depth": 6
+    },
+    {
+      "id": "pilot-air-mouth-rim-upper",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-27 -48.8435H-25.9",
+      "depth": 7
+    },
+    {
+      "id": "pilot-air-boss-lower",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-27 -38.5565L-27 -36.7L-25.5 -35.7L-16 -35.7L-16 -40.7L-21 -40.7L-21 -38.5565Z",
+      "depth": 4,
+      "color": [
+        190,
+        203,
+        213
+      ]
+    },
+    {
+      "id": "pilot-air-female-thread-lower",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-26 -37.9l.6 0.8M-24.65 -37.9l.6 0.8M-23.3 -37.9l.6 0.8M-21.95 -37.9l.6 0.8",
+      "depth": 6
+    },
+    {
+      "id": "pilot-air-mouth-rim-lower",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-27 -38.5565H-25.9",
+      "depth": 7
+    },
+    {
+      "id": "pilot-air-chamber-closed",
+      "layer": "front",
+      "material": "paper",
+      "role": "fill",
+      "path": "M-19 -54.7L-1.6 -54.7L-1.6 -40.5L-12.5 -40.5L-12.5 -40.7L-21 -40.7L-21 -38.5565L-27 -38.5565L-27 -48.8435L-21 -48.8435L-21 -46.7L-12.5 -46.7L-12.5 -54.5L-19 -54.5ZM1.6 -54.7L19 -54.7L19 -54.5L12.5 -54.5L12.5 -40.5L1.6 -40.5Z",
+      "depth": 0,
+      "color": [
+        218,
+        238,
+        248
+      ],
+      "when": {
+        "view": [
+          "section"
+        ],
+        "valve": [
+          "closed"
+        ]
+      }
+    },
+    {
+      "id": "pilot-air-chamber-open",
+      "layer": "front",
+      "material": "paper",
+      "role": "fill",
+      "path": "M-19 -58.3L-1.6 -58.3L-1.6 -40.5L-12.5 -40.5L-12.5 -40.7L-21 -40.7L-21 -38.5565L-27 -38.5565L-27 -48.8435L-21 -48.8435L-21 -46.7L-12.5 -46.7L-12.5 -54.5L-19 -54.5ZM1.6 -58.3L19 -58.3L19 -54.5L12.5 -54.5L12.5 -40.5L1.6 -40.5Z",
+      "depth": 0,
+      "color": [
+        218,
+        238,
+        248
+      ],
+      "when": {
+        "view": [
+          "section"
+        ],
+        "valve": [
+          "open"
+        ]
+      }
+    },
+    {
+      "id": "piston-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-18.6 -58.1L18.6 -58.1L18.6 -54.7L-18.6 -54.7Z",
+      "depth": 5,
+      "color": [
+        143,
+        166,
+        183
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "piston-seal-section-left",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M-18.3 -57.7L-19 -57.7L-19 -55.1L-18.3 -55.1Z",
+      "depth": 7,
+      "color": [
+        74,
+        85,
+        92
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "piston-seal-section-right",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M18.3 -57.7L19 -57.7L19 -55.1L18.3 -55.1Z",
+      "depth": 7,
+      "color": [
+        74,
+        85,
+        92
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "piston-rod-section",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-1.6 -54.7L1.6 -54.7L1.6 -7.8L-1.6 -7.8Z",
+      "depth": 5,
+      "color": [
+        177,
+        193,
+        204
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "bellows-top-cap",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-4.3 -31L4.3 -31L4.3 -29.3L-4.3 -29.3Z",
+      "depth": 6,
+      "color": [
+        174,
+        188,
+        199
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "return-spring-section",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-8 -74.3L8 -73.6L-8 -72.685714L8 -71.985714L-8 -70.371429L8 -69.671429L-8 -68.057143L8 -67.357143L-8 -65.742857L8 -65.042857L-8 -63.428571L8 -62.728571L-8 -61.114286L8 -60.414286L-8 -58.8L8 -58.1",
+      "depth": 6,
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "return-spring"
+    },
+    {
+      "id": "spring-fixed-seat-section",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-10 -74.9H10",
+      "depth": 5,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "spring-piston-seat-section",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-10 -58.1H10",
+      "depth": 6,
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "bellows-section-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-3.9 -30.5L-4.6 -29.94375L-4.6 -29.3875L-3.9 -28.83125L-3.9 -28.275L-4.6 -27.71875L-4.6 -27.1625L-3.9 -26.60625L-3.9 -26.05L-4.6 -25.49375L-4.6 -24.9375L-3.9 -24.38125L-3.9 -23.825L-4.6 -23.26875L-4.6 -22.7125L-3.9 -22.15625L-3.9 -21.6L-4.6 -21.04375L-4.6 -20.4875L-3.9 -19.93125L-3.9 -19.375L-4.6 -18.81875L-4.6 -18.2625L-3.9 -17.70625L-3.9 -17.15L-4.6 -16.59375L-4.6 -16.0375L-3.9 -15.48125L-3.9 -14.925L-4.6 -14.36875L-4.6 -13.8125L-3.9 -13.25625L-3.9 -12.7L-3.35 -12.7L-3.35 -13.25625L-4.05 -13.8125L-4.05 -14.36875L-3.35 -14.925L-3.35 -15.48125L-4.05 -16.0375L-4.05 -16.59375L-3.35 -17.15L-3.35 -17.70625L-4.05 -18.2625L-4.05 -18.81875L-3.35 -19.375L-3.35 -19.93125L-4.05 -20.4875L-4.05 -21.04375L-3.35 -21.6L-3.35 -22.15625L-4.05 -22.7125L-4.05 -23.26875L-3.35 -23.825L-3.35 -24.38125L-4.05 -24.9375L-4.05 -25.49375L-3.35 -26.05L-3.35 -26.60625L-4.05 -27.1625L-4.05 -27.71875L-3.35 -28.275L-3.35 -28.83125L-4.05 -29.3875L-4.05 -29.94375L-3.35 -30.5Z",
+      "depth": 4,
+      "color": [
+        185,
+        199,
+        209
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "bellows"
+    },
+    {
+      "id": "bellows-section-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M3.9 -30.5L4.6 -29.94375L4.6 -29.3875L3.9 -28.83125L3.9 -28.275L4.6 -27.71875L4.6 -27.1625L3.9 -26.60625L3.9 -26.05L4.6 -25.49375L4.6 -24.9375L3.9 -24.38125L3.9 -23.825L4.6 -23.26875L4.6 -22.7125L3.9 -22.15625L3.9 -21.6L4.6 -21.04375L4.6 -20.4875L3.9 -19.93125L3.9 -19.375L4.6 -18.81875L4.6 -18.2625L3.9 -17.70625L3.9 -17.15L4.6 -16.59375L4.6 -16.0375L3.9 -15.48125L3.9 -14.925L4.6 -14.36875L4.6 -13.8125L3.9 -13.25625L3.9 -12.7L3.35 -12.7L3.35 -13.25625L4.05 -13.8125L4.05 -14.36875L3.35 -14.925L3.35 -15.48125L4.05 -16.0375L4.05 -16.59375L3.35 -17.15L3.35 -17.70625L4.05 -18.2625L4.05 -18.81875L3.35 -19.375L3.35 -19.93125L4.05 -20.4875L4.05 -21.04375L3.35 -21.6L3.35 -22.15625L4.05 -22.7125L4.05 -23.26875L3.35 -23.825L3.35 -24.38125L4.05 -24.9375L4.05 -25.49375L3.35 -26.05L3.35 -26.60625L4.05 -27.1625L4.05 -27.71875L3.35 -28.275L3.35 -28.83125L4.05 -29.3875L4.05 -29.94375L3.35 -30.5Z",
+      "depth": 4,
+      "color": [
+        185,
+        199,
+        209
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "bellows"
+    },
+    {
+      "id": "conical-soft-shutoff-tip-section",
+      "layer": "front",
+      "material": "ptfe",
+      "role": "solid",
+      "path": "M-3.4 -7.8L3.4 -7.8L3.4 -2.4L0 2.4L-3.4 -2.4Z",
+      "depth": 6,
+      "color": [
+        231,
+        233,
+        215
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "soft-tip-adapter-section",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-3.4 -6H3.4",
+      "depth": 7,
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    }
+  ],
+  "joints": [
+    {
+      "id": "inlet",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        -31.25,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 13.5
+    },
+    {
+      "id": "outlet",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        31.25,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ],
+      "insertion_mm": 13.5
+    },
+    {
+      "id": "pilot-air",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 3.175,
+      "at": [
+        -27,
+        -43.7
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 6
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    },
+    {
+      "id": "valve",
+      "kind": "states",
+      "names": {
+        "en": "Air actuation"
+      },
+      "states": [
+        {
+          "id": "closed",
+          "names": {
+            "en": "Closed, air off"
+          }
+        },
+        {
+          "id": "open",
+          "names": {
+            "en": "Open, air on"
+          }
+        }
+      ],
+      "default": "closed"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        5
+      ]
+    }
+  ],
+  "parts": [
+    {
+      "id": "actuator",
+      "param": "valve",
+      "motion": {
+        "per_state": {
+          "closed": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "open": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            -3.6
+          ]
+        }
+      },
+      "handle": {
+        "at": [
+          0,
+          -64.5
+        ],
+        "gesture": "toggle"
+      }
+    },
+    {
+      "id": "bellows",
+      "param": "valve",
+      "motion": {
+        "per_state": {
+          "closed": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "open": [
+            1,
+            0,
+            0,
+            1.202247191011236,
+            0,
+            2.568539325842697
+          ]
+        }
+      }
+    },
+    {
+      "id": "return-spring",
+      "param": "valve",
+      "motion": {
+        "per_state": {
+          "closed": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "open": [
+            1,
+            0,
+            0,
+            0.7777777777777777,
+            0,
+            -16.511111111111116
+          ]
+        }
+      }
+    }
+  ]
+}
