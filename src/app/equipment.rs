@@ -173,7 +173,7 @@ struct ReducerSuggestion {
 impl ReducerSuggestion {
     fn applies(&self, tab: &super::document_tab::DocumentTab, tool: Tool) -> bool {
         self.epoch == tab.file_epoch
-            && tool == Tool::Select
+            && tool.selects()
             && self.base == tab.doc
             && tab
                 .selected

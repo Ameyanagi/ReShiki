@@ -184,6 +184,36 @@ fn reducer_suggestion_is_explicit_stale_checked_and_a_single_undo_edit() {
 }
 
 #[test]
+fn lasso_reducer_suggestions_stay_visible_and_can_be_approved() {
+    for end in ["a", "b"] {
+        let mut app = end_snap_app(end, true);
+        app.tool = Tool::Lasso;
+        let _ = app.update(Message::Canvas(Edit::TubeEnd {
+            id: 1,
+            param: "length".into(),
+            end: end.into(),
+            value: Value::Number(98.5),
+        }));
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tool, Tool::Lasso);
+        assert!(app.inspector_open);
+        assert!(
+            app.reducer_suggestion()
+                .is_some_and(|offer| offer.candidate.is_some()),
+            "Properties must expose the actionable Lasso reducer offer",
+        );
+        let offered = app.tab.doc.clone();
+        let _ = app.update(Message::Equipment(Action::InsertReducer));
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tool, Tool::Lasso);
+        assert_eq!(app.tab.doc.graphics.len(), 3);
+        assert_eq!(app.tab.doc.seats.len(), 2);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, offered);
+    }
+}
+
+#[test]
 fn reducer_suggestions_do_not_follow_an_identical_drawing_to_another_tab_or_epoch() {
     for another_tab in [false, true] {
         let mut app = end_snap_app("b", true);
