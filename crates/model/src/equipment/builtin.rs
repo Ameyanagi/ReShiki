@@ -365,6 +365,7 @@ static FILES: &[Source] = piece_files![
     "compression-bulkhead-union-bored-through-1-8",
     "compression-tube-60-3-8",
     "compression-tube-120-3-8",
+    "compression-tube-120-1-2",
     "compression-tube-bend-90-3-8",
     "compression-union-3-8",
     "compression-elbow-3-8",
@@ -425,38 +426,59 @@ mod tests {
     #[test]
     fn compression_cross_seats_four_tubes_independently() {
         use crate::document::{Document, Point};
-        use crate::equipment::{placed, solve};
+        use crate::equipment::{eval::Value, placed, solve};
 
-        let mut doc = Document::default();
-        doc.graphics.push(placed::graphic(
-            1,
-            super::find("reshiki/compression-union-cross-1-4").unwrap(),
-            Point::default(),
-            1.,
-        ));
-        let tube = super::find("reshiki/compression-tube-60-1-4").unwrap();
-        for (i, name) in ["left", "right", "up", "down"].into_iter().enumerate() {
-            let id = i as u64 + 2;
+        for (cross, tubing, od_mm, id_mm) in [
+            ("1-4", "compression-tube-60-1-4", 6.35, 4.57),
+            ("1-2", "compression-tube-120-1-2", 12.7, 10.22),
+        ] {
+            let mut doc = Document::default();
             doc.graphics.push(placed::graphic(
-                id,
-                tube.clone(),
-                Point::new(100., 100.),
+                1,
+                super::find(&format!("reshiki/compression-union-cross-{cross}")).unwrap(),
+                Point::default(),
                 1.,
             ));
-            let socket = solve::JointRef {
-                piece: 1,
-                joint: name.into(),
-            };
-            let tip = solve::JointRef {
-                piece: id,
-                joint: "a".into(),
-            };
-            let seat = solve::connect(&mut doc, &[id], &socket, &tip).unwrap();
-            assert!(matches!(seat.offer, solve::Offer::Seat));
-            assert_eq!(solve::partner(&doc, &socket), Some(tip));
+            let tube = super::find(&format!("reshiki/{tubing}")).unwrap();
+            let spec = tube.tube_spec.as_ref().unwrap();
+            assert_eq!(spec.od_mm, od_mm);
+            assert_eq!(spec.id_mm, Some(id_mm));
+            assert_eq!(spec.ends, ["a", "b"]);
+            assert_eq!(spec.length.fixed_mm, 0.);
+            assert_eq!(spec.length.params, ["length"]);
+            for (i, name) in ["left", "right", "up", "down"].into_iter().enumerate() {
+                let id = i as u64 + 2;
+                doc.graphics.push(placed::graphic(
+                    id,
+                    tube.clone(),
+                    Point::new(100., 100.),
+                    1.,
+                ));
+                let socket = solve::JointRef {
+                    piece: 1,
+                    joint: name.into(),
+                };
+                let tip = solve::JointRef {
+                    piece: id,
+                    joint: "a".into(),
+                };
+                let seat = solve::connect(&mut doc, &[id], &socket, &tip).unwrap();
+                assert!(matches!(seat.offer, solve::Offer::Seat));
+                assert_eq!(solve::partner(&doc, &socket), Some(tip));
+            }
+            solve::check(&mut doc, None);
+            assert_eq!(doc.seats.len(), 4);
+            let seats = doc.seats.clone();
+            for id in 1..=5 {
+                assert!(
+                    solve::adjust::set(&mut doc, id, "view", Value::State("section".into()))
+                        .unwrap()
+                        .is_empty()
+                );
+            }
+            solve::check(&mut doc, None);
+            assert_eq!(doc.seats, seats);
         }
-        solve::check(&mut doc, None);
-        assert_eq!(doc.seats.len(), 4);
     }
 
     #[test]
