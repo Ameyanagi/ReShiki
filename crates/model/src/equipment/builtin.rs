@@ -402,6 +402,7 @@ static FILES: &[Source] = piece_files![
     "gas-gauge-tee-1-4",
     "gas-compression-npt-adapter-1-8",
     "gas-compression-npt-adapter-1-4",
+    "gas-compression-npt-adapter-1-4-to-1-8",
     "keck-clip-10",
     "boss-head",
 ];

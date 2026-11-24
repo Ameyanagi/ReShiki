@@ -2,26 +2,31 @@
   "format": "reshiki-piece",
   "format_version": 0,
   "id": "reshiki/gas-bellows-shutoff-valve-1-4",
-  "revision": 1,
+  "revision": 2,
   "family": "gas-bellows-shutoff-valve",
   "variant": {
     "connection": "1/4 in compression",
-    "handle": "round"
+    "actuation": "pneumatic, normally closed",
+    "pilot": "1/8 in female NPT"
   },
   "names": {
-    "en": "Gas bellows-sealed shutoff valve, 1/4 in compression"
+    "en": "Air-actuated bellows shutoff valve, 1/4 in compression"
   },
   "category": "other",
   "grounded": false,
   "keywords": [
     "bellows-sealed valve",
     "shutoff valve",
-    "manual valve",
+    "air-actuated valve",
+    "pneumatic valve",
+    "normally closed",
+    "spring return",
+    "pilot air",
+    "1/8 in NPT",
+    "PCTFE conical tip",
     "gas line",
     "compression tube fitting",
     "1/4 in",
-    "6.35 mm",
-    "round handle",
     "joint"
   ],
   "credits": {
@@ -683,7 +688,7 @@
       "layer": "front",
       "material": "metal",
       "role": "solid",
-      "path": "M-12.7 -10L-11.5 -11.2L-5.8 -11.2L-5.8 -4.7L-3.7 -4.7L-3.7 -0.4L-1.7 0L-1.7 3.2L-4.7 3.2L-6.8 -2.05L-12.7 -2.05Z",
+      "path": "M-12.7 -10L-11.5 -11.2L-5.8 -11.2L-5.8 -4.7L-4.7 -4.7L-4.7 -0.4L-1.7 0L-1.7 3.2L-4.7 3.2L-6.8 -2.05L-12.7 -2.05Z",
       "depth": 0,
       "color": [
         215,
@@ -826,146 +831,6 @@
       }
     },
     {
-      "id": "bonnet-housing-exterior",
-      "layer": "front",
-      "material": "metal",
-      "role": "solid",
-      "path": "M-8.1 -59.3L-6.6 -61L6.6 -61L8.1 -59.3L8.1 -21.1L-8.1 -21.1Z",
-      "depth": 1,
-      "color": [
-        204,
-        214,
-        222
-      ],
-      "when": {
-        "view": [
-          "exterior"
-        ]
-      }
-    },
-    {
-      "id": "bonnet-housing-highlight",
-      "layer": "front",
-      "material": "metal",
-      "role": "fill",
-      "path": "M-6.9 -59L-4.6 -59L-4.6 -25.1L-6.9 -25.1Z",
-      "depth": 2,
-      "color": [
-        240,
-        243,
-        246
-      ],
-      "when": {
-        "view": [
-          "exterior"
-        ]
-      },
-      "style": "shaded"
-    },
-    {
-      "id": "bonnet-housing-section-left",
-      "layer": "front",
-      "material": "metal",
-      "role": "solid",
-      "path": "M-8.1 -59.3L-6.6 -61L-2.6 -61L-2.6 -45L-5.5 -42L-5.5 -11.2L-8.1 -11.2Z",
-      "depth": 1,
-      "color": [
-        204,
-        214,
-        222
-      ],
-      "when": {
-        "view": [
-          "section"
-        ]
-      }
-    },
-    {
-      "id": "bonnet-housing-section-right",
-      "layer": "front",
-      "material": "metal",
-      "role": "solid",
-      "path": "M8.1 -59.3L6.6 -61L2.6 -61L2.6 -45L5.5 -42L5.5 -11.2L8.1 -11.2Z",
-      "depth": 1,
-      "color": [
-        204,
-        214,
-        222
-      ],
-      "when": {
-        "view": [
-          "section"
-        ]
-      }
-    },
-    {
-      "id": "housing-exterior-threads",
-      "layer": "front",
-      "material": "ink",
-      "role": "detail",
-      "path": "M-8.1 -32.6L8.1 -33.2M-8.1 -31L8.1 -31.6M-8.1 -29.4L8.1 -30M-8.1 -27.8L8.1 -28.4M-8.1 -26.2L8.1 -26.8",
-      "depth": 3,
-      "when": {
-        "view": [
-          "exterior"
-        ]
-      }
-    },
-    {
-      "id": "panel-mount-nut-exterior",
-      "layer": "front",
-      "material": "metal",
-      "role": "solid",
-      "path": "M-10.1 -29.6L-8.6 -30.6L8.6 -30.6L10.1 -29.6L10.1 -28.1L8.6 -27.1L-8.6 -27.1L-10.1 -28.1Z",
-      "depth": 4,
-      "color": [
-        174,
-        188,
-        199
-      ],
-      "when": {
-        "view": [
-          "exterior"
-        ]
-      }
-    },
-    {
-      "id": "panel-mount-nut-section-left",
-      "layer": "front",
-      "material": "metal",
-      "role": "solid",
-      "path": "M-8.1 -30.6L-10.1 -29.6L-10.1 -28.1L-8.1 -27.1Z",
-      "depth": 3,
-      "color": [
-        174,
-        188,
-        199
-      ],
-      "when": {
-        "view": [
-          "section"
-        ]
-      }
-    },
-    {
-      "id": "panel-mount-nut-section-right",
-      "layer": "front",
-      "material": "metal",
-      "role": "solid",
-      "path": "M8.1 -30.6L10.1 -29.6L10.1 -28.1L8.1 -27.1Z",
-      "depth": 3,
-      "color": [
-        174,
-        188,
-        199
-      ],
-      "when": {
-        "view": [
-          "section"
-        ]
-      }
-    },
-    {
       "id": "bellows-base-gasket-left",
       "layer": "front",
       "material": "metal",
@@ -1002,115 +867,396 @@
       }
     },
     {
-      "id": "bellows-section-left",
+      "id": "pneumatic-cap-exterior",
       "layer": "front",
       "material": "metal",
       "role": "solid",
-      "path": "M-3.9 -46L-4.6 -45.1675L-4.6 -44.335L-3.9 -43.5025L-3.9 -42.67L-4.6 -41.8375L-4.6 -41.005L-3.9 -40.1725L-3.9 -39.34L-4.6 -38.5075L-4.6 -37.675L-3.9 -36.8425L-3.9 -36.01L-4.6 -35.1775L-4.6 -34.345L-3.9 -33.5125L-3.9 -32.68L-4.6 -31.8475L-4.6 -31.015L-3.9 -30.1825L-3.9 -29.35L-4.6 -28.5175L-4.6 -27.685L-3.9 -26.8525L-3.9 -26.02L-4.6 -25.1875L-4.6 -24.355L-3.9 -23.5225L-3.9 -22.69L-4.6 -21.8575L-4.6 -21.025L-3.9 -20.1925L-3.9 -19.36L-4.6 -18.5275L-4.6 -17.695L-3.9 -16.8625L-3.9 -16.03L-4.6 -15.1975L-4.6 -14.365L-3.9 -13.5325L-3.9 -12.7L-3.35 -12.7L-3.35 -13.5325L-4.05 -14.365L-4.05 -15.1975L-3.35 -16.03L-3.35 -16.8625L-4.05 -17.695L-4.05 -18.5275L-3.35 -19.36L-3.35 -20.1925L-4.05 -21.025L-4.05 -21.8575L-3.35 -22.69L-3.35 -23.5225L-4.05 -24.355L-4.05 -25.1875L-3.35 -26.02L-3.35 -26.8525L-4.05 -27.685L-4.05 -28.5175L-3.35 -29.35L-3.35 -30.1825L-4.05 -31.015L-4.05 -31.8475L-3.35 -32.68L-3.35 -33.5125L-4.05 -34.345L-4.05 -35.1775L-3.35 -36.01L-3.35 -36.8425L-4.05 -37.675L-4.05 -38.5075L-3.35 -39.34L-3.35 -40.1725L-4.05 -41.005L-4.05 -41.8375L-3.35 -42.67L-3.35 -43.5025L-4.05 -44.335L-4.05 -45.1675L-3.35 -46Z",
+      "path": "M-22.25 -76.5Q-22.25 -78.5 -20.25 -78.5H20.25Q22.25 -78.5 22.25 -76.5V-53.5H-22.25Z",
+      "depth": 1,
+      "color": [
+        207,
+        216,
+        222
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-cap-top-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-21.3 -72.5H21.3",
+      "depth": 3,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-cap-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-20.6 -71.5L-17.5 -71.5L-17.5 -54.7L-20.6 -54.7Z",
+      "depth": 2,
+      "color": [
+        240,
+        244,
+        247
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "style": "shaded"
+    },
+    {
+      "id": "pneumatic-barrel-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-16 -53.5L16 -53.5L16 -38.5L15 -37.5L-15 -37.5L-16 -38.5Z",
+      "depth": 2,
+      "color": [
+        190,
+        202,
+        211
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-barrel-bottom-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-14.8 -40H14.8",
+      "depth": 4,
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-neck-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-6.8 -37.5L6.8 -37.5L6.8 -22.6L-6.8 -22.6Z",
+      "depth": 1,
+      "color": [
+        211,
+        220,
+        226
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "stem-position-collar-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-7.1 -31.5L7.1 -31.5L7.1 -29.5L-7.1 -29.5Z",
+      "depth": 3,
+      "color": [
+        143,
+        164,
+        180
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "pneumatic-cap-section-roof",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-20.25 -78.5L20.25 -78.5L22.25 -76.5L22.25 -74.3L19 -74.3L-19 -74.3L-22.25 -74.3L-22.25 -76.5Z",
+      "depth": 1,
+      "color": [
+        207,
+        216,
+        222
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-cap-section-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-19 -74.3L-22.25 -74.3L-22.25 -53.5L-16 -53.5L-16 -46.7L-12.5 -46.7L-12.5 -54.5L-19 -54.5ZM-16 -40.7L-12.5 -40.7L-12.5 -37.5L-16 -37.5Z",
+      "depth": 1,
+      "color": [
+        207,
+        216,
+        222
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pilot-process-partition-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-2.3 -40.5L-12.5 -40.5L-16 -39.5L-16 -37.5L-2.3 -37.5Z",
+      "depth": 3,
+      "color": [
+        172,
+        190,
+        202
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pilot-stem-seal-left",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M-1.6 -40.5L-2.3 -40.5L-2.3 -37.5L-1.6 -37.5Z",
+      "depth": 6,
+      "color": [
+        74,
+        85,
+        92
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "bellows-bonnet-section-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-7.5 -37.5L-7.5 -11.2L-5.4 -11.2L-5.4 -35.2L-2.3 -37.5Z",
+      "depth": 1,
+      "color": [
+        202,
+        214,
+        223
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pneumatic-cap-section-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M19 -74.3L22.25 -74.3L22.25 -53.5L16 -53.5L16 -37.5L12.5 -37.5L12.5 -54.5L19 -54.5Z",
+      "depth": 1,
+      "color": [
+        207,
+        216,
+        222
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pilot-process-partition-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M2.3 -40.5L12.5 -40.5L16 -39.5L16 -37.5L2.3 -37.5Z",
+      "depth": 3,
+      "color": [
+        172,
+        190,
+        202
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pilot-stem-seal-right",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M1.6 -40.5L2.3 -40.5L2.3 -37.5L1.6 -37.5Z",
+      "depth": 6,
+      "color": [
+        74,
+        85,
+        92
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "bellows-bonnet-section-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M7.5 -37.5L7.5 -11.2L5.4 -11.2L5.4 -35.2L2.3 -37.5Z",
+      "depth": 1,
+      "color": [
+        202,
+        214,
+        223
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "pilot-air-boss-upper",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-27 -48.8435L-27 -50.7L-25.5 -51.7L-16 -51.7L-16 -46.7L-21 -46.7L-21 -48.8435Z",
       "depth": 4,
       "color": [
-        185,
-        199,
-        209
-      ],
-      "when": {
-        "view": [
-          "section"
-        ]
-      },
-      "part": "bellows"
+        190,
+        203,
+        213
+      ]
     },
     {
-      "id": "bellows-convolution-roots-left",
+      "id": "pilot-air-female-thread-upper",
       "layer": "front",
       "material": "ink",
       "role": "detail",
-      "path": "M-3.9 -43.5025L-3.1 -43.5025M-3.9 -40.1725L-3.1 -40.1725M-3.9 -36.8425L-3.1 -36.8425M-3.9 -33.5125L-3.1 -33.5125M-3.9 -30.1825L-3.1 -30.1825M-3.9 -26.8525L-3.1 -26.8525M-3.9 -23.5225L-3.1 -23.5225M-3.9 -20.1925L-3.1 -20.1925M-3.9 -16.8625L-3.1 -16.8625M-3.9 -13.5325L-3.1 -13.5325",
-      "depth": 5,
-      "when": {
-        "view": [
-          "section"
-        ]
-      },
-      "part": "bellows"
+      "path": "M-26 -49.5l.6 -0.8M-24.65 -49.5l.6 -0.8M-23.3 -49.5l.6 -0.8M-21.95 -49.5l.6 -0.8",
+      "depth": 6
     },
     {
-      "id": "bellows-section-right",
+      "id": "pilot-air-mouth-rim-upper",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-27 -48.8435H-25.9",
+      "depth": 7
+    },
+    {
+      "id": "pilot-air-boss-lower",
       "layer": "front",
       "material": "metal",
       "role": "solid",
-      "path": "M3.9 -46L4.6 -45.1675L4.6 -44.335L3.9 -43.5025L3.9 -42.67L4.6 -41.8375L4.6 -41.005L3.9 -40.1725L3.9 -39.34L4.6 -38.5075L4.6 -37.675L3.9 -36.8425L3.9 -36.01L4.6 -35.1775L4.6 -34.345L3.9 -33.5125L3.9 -32.68L4.6 -31.8475L4.6 -31.015L3.9 -30.1825L3.9 -29.35L4.6 -28.5175L4.6 -27.685L3.9 -26.8525L3.9 -26.02L4.6 -25.1875L4.6 -24.355L3.9 -23.5225L3.9 -22.69L4.6 -21.8575L4.6 -21.025L3.9 -20.1925L3.9 -19.36L4.6 -18.5275L4.6 -17.695L3.9 -16.8625L3.9 -16.03L4.6 -15.1975L4.6 -14.365L3.9 -13.5325L3.9 -12.7L3.35 -12.7L3.35 -13.5325L4.05 -14.365L4.05 -15.1975L3.35 -16.03L3.35 -16.8625L4.05 -17.695L4.05 -18.5275L3.35 -19.36L3.35 -20.1925L4.05 -21.025L4.05 -21.8575L3.35 -22.69L3.35 -23.5225L4.05 -24.355L4.05 -25.1875L3.35 -26.02L3.35 -26.8525L4.05 -27.685L4.05 -28.5175L3.35 -29.35L3.35 -30.1825L4.05 -31.015L4.05 -31.8475L3.35 -32.68L3.35 -33.5125L4.05 -34.345L4.05 -35.1775L3.35 -36.01L3.35 -36.8425L4.05 -37.675L4.05 -38.5075L3.35 -39.34L3.35 -40.1725L4.05 -41.005L4.05 -41.8375L3.35 -42.67L3.35 -43.5025L4.05 -44.335L4.05 -45.1675L3.35 -46Z",
+      "path": "M-27 -38.5565L-27 -36.7L-25.5 -35.7L-16 -35.7L-16 -40.7L-21 -40.7L-21 -38.5565Z",
       "depth": 4,
       "color": [
-        185,
-        199,
-        209
-      ],
-      "when": {
-        "view": [
-          "section"
-        ]
-      },
-      "part": "bellows"
+        190,
+        203,
+        213
+      ]
     },
     {
-      "id": "bellows-convolution-roots-right",
+      "id": "pilot-air-female-thread-lower",
       "layer": "front",
       "material": "ink",
       "role": "detail",
-      "path": "M3.9 -43.5025L3.1 -43.5025M3.9 -40.1725L3.1 -40.1725M3.9 -36.8425L3.1 -36.8425M3.9 -33.5125L3.1 -33.5125M3.9 -30.1825L3.1 -30.1825M3.9 -26.8525L3.1 -26.8525M3.9 -23.5225L3.1 -23.5225M3.9 -20.1925L3.1 -20.1925M3.9 -16.8625L3.1 -16.8625M3.9 -13.5325L3.1 -13.5325",
-      "depth": 5,
-      "when": {
-        "view": [
-          "section"
-        ]
-      },
-      "part": "bellows"
+      "path": "M-26 -37.9l.6 0.8M-24.65 -37.9l.6 0.8M-23.3 -37.9l.6 0.8M-21.95 -37.9l.6 0.8",
+      "depth": 6
     },
     {
-      "id": "actuator-section",
-      "layer": "front",
-      "material": "metal",
-      "role": "solid",
-      "path": "M-1.6 -62.7L1.6 -62.7L1.6 -48L-1.6 -48Z",
-      "depth": 5,
-      "color": [
-        174,
-        188,
-        199
-      ],
-      "when": {
-        "view": [
-          "section"
-        ]
-      },
-      "part": "actuator"
-    },
-    {
-      "id": "actuator-section-threads",
+      "id": "pilot-air-mouth-rim-lower",
       "layer": "front",
       "material": "ink",
       "role": "detail",
-      "path": "M-1.6 -55L1.6 -55.8M-1.6 -53.4L1.6 -54.2M-1.6 -51.8L1.6 -52.6M-1.6 -50.2L1.6 -51M-1.6 -48.6L1.6 -49.4",
-      "depth": 6,
+      "path": "M-27 -38.5565H-25.9",
+      "depth": 7
+    },
+    {
+      "id": "pilot-air-chamber-closed",
+      "layer": "front",
+      "material": "paper",
+      "role": "fill",
+      "path": "M-19 -54.7L-1.6 -54.7L-1.6 -40.5L-12.5 -40.5L-12.5 -40.7L-21 -40.7L-21 -38.5565L-27 -38.5565L-27 -48.8435L-21 -48.8435L-21 -46.7L-12.5 -46.7L-12.5 -54.5L-19 -54.5ZM1.6 -54.7L19 -54.7L19 -54.5L12.5 -54.5L12.5 -40.5L1.6 -40.5Z",
+      "depth": 0,
+      "color": [
+        218,
+        238,
+        248
+      ],
       "when": {
         "view": [
           "section"
+        ],
+        "valve": [
+          "closed"
         ]
-      },
-      "part": "actuator"
+      }
     },
     {
-      "id": "actuator-stem-coupling",
+      "id": "pilot-air-chamber-open",
+      "layer": "front",
+      "material": "paper",
+      "role": "fill",
+      "path": "M-19 -58.3L-1.6 -58.3L-1.6 -40.5L-12.5 -40.5L-12.5 -40.7L-21 -40.7L-21 -38.5565L-27 -38.5565L-27 -48.8435L-21 -48.8435L-21 -46.7L-12.5 -46.7L-12.5 -54.5L-19 -54.5ZM1.6 -58.3L19 -58.3L19 -54.5L12.5 -54.5L12.5 -40.5L1.6 -40.5Z",
+      "depth": 0,
+      "color": [
+        218,
+        238,
+        248
+      ],
+      "when": {
+        "view": [
+          "section"
+        ],
+        "valve": [
+          "open"
+        ]
+      }
+    },
+    {
+      "id": "piston-section",
       "layer": "front",
       "material": "metal",
       "role": "solid",
-      "path": "M-2.8 -49L2.8 -49L2.8 -45L-2.8 -45Z",
-      "depth": 6,
+      "path": "M-18.6 -58.1L18.6 -58.1L18.6 -54.7L-18.6 -54.7Z",
+      "depth": 5,
       "color": [
-        153,
-        173,
-        187
+        143,
+        166,
+        183
       ],
       "when": {
         "view": [
@@ -1120,16 +1266,16 @@
       "part": "actuator"
     },
     {
-      "id": "bellows-top-cap",
+      "id": "piston-seal-section-left",
       "layer": "front",
-      "material": "metal",
+      "material": "rubber",
       "role": "solid",
-      "path": "M-4.3 -46.5L4.3 -46.5L4.3 -44.8L-4.3 -44.8Z",
-      "depth": 6,
+      "path": "M-18.3 -57.7L-19 -57.7L-19 -55.1L-18.3 -55.1Z",
+      "depth": 7,
       "color": [
-        174,
-        188,
-        199
+        74,
+        85,
+        92
       ],
       "when": {
         "view": [
@@ -1139,11 +1285,30 @@
       "part": "actuator"
     },
     {
-      "id": "nonrotating-stem-section",
+      "id": "piston-seal-section-right",
+      "layer": "front",
+      "material": "rubber",
+      "role": "solid",
+      "path": "M18.3 -57.7L19 -57.7L19 -55.1L18.3 -55.1Z",
+      "depth": 7,
+      "color": [
+        74,
+        85,
+        92
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "piston-rod-section",
       "layer": "front",
       "material": "metal",
       "role": "solid",
-      "path": "M-1.6 -44.8L1.6 -44.8L1.6 -7.8L-1.6 -7.8Z",
+      "path": "M-1.6 -54.7L1.6 -54.7L1.6 -7.8L-1.6 -7.8Z",
       "depth": 5,
       "color": [
         177,
@@ -1158,45 +1323,12 @@
       "part": "actuator"
     },
     {
-      "id": "spherical-shutoff-tip-section",
+      "id": "bellows-top-cap",
       "layer": "front",
       "material": "metal",
       "role": "solid",
-      "path": "M-2.7 -9L2.7 -9L2.7 -3.2C2.7 -1.6 2.7 -.7 1.7 0Q0 2 -1.7 0C-2.7 -.7 -2.7 -1.6 -2.7 -3.2Z",
+      "path": "M-4.3 -31L4.3 -31L4.3 -29.3L-4.3 -29.3Z",
       "depth": 6,
-      "color": [
-        161,
-        181,
-        195
-      ],
-      "when": {
-        "view": [
-          "section"
-        ]
-      },
-      "part": "actuator"
-    },
-    {
-      "id": "stem-tip-adapter-section",
-      "layer": "front",
-      "material": "ink",
-      "role": "detail",
-      "path": "M-2.7 -6.4H2.7M-2.4 -4.8H2.4",
-      "depth": 7,
-      "when": {
-        "view": [
-          "section"
-        ]
-      },
-      "part": "actuator"
-    },
-    {
-      "id": "stem-exterior",
-      "layer": "front",
-      "material": "metal",
-      "role": "solid",
-      "path": "M-1.6 -60.5L1.6 -60.5L1.6 -55L-1.6 -55Z",
-      "depth": 0,
       "color": [
         174,
         188,
@@ -1204,70 +1336,121 @@
       ],
       "when": {
         "view": [
-          "exterior"
+          "section"
         ]
       },
       "part": "actuator"
     },
     {
-      "id": "round-handle-hub",
-      "layer": "front",
-      "material": "plastic",
-      "role": "solid",
-      "path": "M-7 -67.7L7 -67.7L7 -59.7L6 -58.7L-6 -58.7L-7 -59.7Z",
-      "depth": 6,
-      "color": [
-        47,
-        101,
-        79
-      ],
-      "part": "actuator"
-    },
-    {
-      "id": "round-handle",
-      "layer": "front",
-      "material": "plastic",
-      "role": "solid",
-      "path": "M-23.9 -73.3Q-23.9 -74.7 -22.4 -74.7H22.4Q23.9 -74.7 23.9 -73.3V-68.9Q23.9 -67.7 22.4 -67.7H-22.4Q-23.9 -67.7 -23.9 -68.9Z",
-      "depth": 6,
-      "color": [
-        47,
-        101,
-        79
-      ],
-      "part": "actuator"
-    },
-    {
-      "id": "round-handle-knurling",
+      "id": "return-spring-section",
       "layer": "front",
       "material": "ink",
       "role": "detail",
-      "path": "M-21 -73.3V-68.7M-18.9 -73.3V-68.7M-16.8 -73.3V-68.7M-14.7 -73.3V-68.7M-12.6 -73.3V-68.7M-10.5 -73.3V-68.7M-8.4 -73.3V-68.7M-6.3 -73.3V-68.7M-4.2 -73.3V-68.7M-2.1 -73.3V-68.7M0 -73.3V-68.7M2.1 -73.3V-68.7M4.2 -73.3V-68.7M6.3 -73.3V-68.7M8.4 -73.3V-68.7M10.5 -73.3V-68.7M12.6 -73.3V-68.7M14.7 -73.3V-68.7M16.8 -73.3V-68.7M18.9 -73.3V-68.7M21 -73.3V-68.7",
-      "depth": 7,
-      "part": "actuator"
+      "path": "M-8 -74.3L8 -73.6L-8 -72.685714L8 -71.985714L-8 -70.371429L8 -69.671429L-8 -68.057143L8 -67.357143L-8 -65.742857L8 -65.042857L-8 -63.428571L8 -62.728571L-8 -61.114286L8 -60.414286L-8 -58.8L8 -58.1",
+      "depth": 6,
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "return-spring"
     },
     {
-      "id": "round-handle-highlight",
-      "layer": "front",
-      "material": "plastic",
-      "role": "fill",
-      "path": "M-21.7 -74L21.7 -74L21.7 -73.2L-21.7 -73.2Z",
-      "depth": 7,
-      "color": [
-        89,
-        140,
-        110
-      ],
-      "part": "actuator",
-      "style": "shaded"
-    },
-    {
-      "id": "round-handle-hub-set-screw",
+      "id": "spring-fixed-seat-section",
       "layer": "front",
       "material": "ink",
       "role": "detail",
-      "path": "M-1 -62.4A1 1 0 1 0 1 -62.4A1 1 0 1 0 -1 -62.4",
+      "path": "M-10 -74.9H10",
+      "depth": 5,
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "spring-piston-seat-section",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-10 -58.1H10",
+      "depth": 6,
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "bellows-section-left",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-3.9 -30.5L-4.6 -29.94375L-4.6 -29.3875L-3.9 -28.83125L-3.9 -28.275L-4.6 -27.71875L-4.6 -27.1625L-3.9 -26.60625L-3.9 -26.05L-4.6 -25.49375L-4.6 -24.9375L-3.9 -24.38125L-3.9 -23.825L-4.6 -23.26875L-4.6 -22.7125L-3.9 -22.15625L-3.9 -21.6L-4.6 -21.04375L-4.6 -20.4875L-3.9 -19.93125L-3.9 -19.375L-4.6 -18.81875L-4.6 -18.2625L-3.9 -17.70625L-3.9 -17.15L-4.6 -16.59375L-4.6 -16.0375L-3.9 -15.48125L-3.9 -14.925L-4.6 -14.36875L-4.6 -13.8125L-3.9 -13.25625L-3.9 -12.7L-3.35 -12.7L-3.35 -13.25625L-4.05 -13.8125L-4.05 -14.36875L-3.35 -14.925L-3.35 -15.48125L-4.05 -16.0375L-4.05 -16.59375L-3.35 -17.15L-3.35 -17.70625L-4.05 -18.2625L-4.05 -18.81875L-3.35 -19.375L-3.35 -19.93125L-4.05 -20.4875L-4.05 -21.04375L-3.35 -21.6L-3.35 -22.15625L-4.05 -22.7125L-4.05 -23.26875L-3.35 -23.825L-3.35 -24.38125L-4.05 -24.9375L-4.05 -25.49375L-3.35 -26.05L-3.35 -26.60625L-4.05 -27.1625L-4.05 -27.71875L-3.35 -28.275L-3.35 -28.83125L-4.05 -29.3875L-4.05 -29.94375L-3.35 -30.5Z",
+      "depth": 4,
+      "color": [
+        185,
+        199,
+        209
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "bellows"
+    },
+    {
+      "id": "bellows-section-right",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M3.9 -30.5L4.6 -29.94375L4.6 -29.3875L3.9 -28.83125L3.9 -28.275L4.6 -27.71875L4.6 -27.1625L3.9 -26.60625L3.9 -26.05L4.6 -25.49375L4.6 -24.9375L3.9 -24.38125L3.9 -23.825L4.6 -23.26875L4.6 -22.7125L3.9 -22.15625L3.9 -21.6L4.6 -21.04375L4.6 -20.4875L3.9 -19.93125L3.9 -19.375L4.6 -18.81875L4.6 -18.2625L3.9 -17.70625L3.9 -17.15L4.6 -16.59375L4.6 -16.0375L3.9 -15.48125L3.9 -14.925L4.6 -14.36875L4.6 -13.8125L3.9 -13.25625L3.9 -12.7L3.35 -12.7L3.35 -13.25625L4.05 -13.8125L4.05 -14.36875L3.35 -14.925L3.35 -15.48125L4.05 -16.0375L4.05 -16.59375L3.35 -17.15L3.35 -17.70625L4.05 -18.2625L4.05 -18.81875L3.35 -19.375L3.35 -19.93125L4.05 -20.4875L4.05 -21.04375L3.35 -21.6L3.35 -22.15625L4.05 -22.7125L4.05 -23.26875L3.35 -23.825L3.35 -24.38125L4.05 -24.9375L4.05 -25.49375L3.35 -26.05L3.35 -26.60625L4.05 -27.1625L4.05 -27.71875L3.35 -28.275L3.35 -28.83125L4.05 -29.3875L4.05 -29.94375L3.35 -30.5Z",
+      "depth": 4,
+      "color": [
+        185,
+        199,
+        209
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "bellows"
+    },
+    {
+      "id": "conical-soft-shutoff-tip-section",
+      "layer": "front",
+      "material": "ptfe",
+      "role": "solid",
+      "path": "M-3.4 -7.8L3.4 -7.8L3.4 -2.4L0 2.4L-3.4 -2.4Z",
+      "depth": 6,
+      "color": [
+        231,
+        233,
+        215
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "part": "actuator"
+    },
+    {
+      "id": "soft-tip-adapter-section",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-3.4 -6H3.4",
       "depth": 7,
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
       "part": "actuator"
     }
   ],
@@ -1303,6 +1486,22 @@
         0
       ],
       "insertion_mm": 13.5
+    },
+    {
+      "id": "pilot-air",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 3.175,
+      "at": [
+        -27,
+        -43.7
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 6
     }
   ],
   "params": [
@@ -1332,19 +1531,19 @@
       "id": "valve",
       "kind": "states",
       "names": {
-        "en": "Valve position"
+        "en": "Air actuation"
       },
       "states": [
         {
           "id": "closed",
           "names": {
-            "en": "Closed"
+            "en": "Closed, air off"
           }
         },
         {
           "id": "open",
           "names": {
-            "en": "Open"
+            "en": "Open, air on"
           }
         }
       ],
@@ -1387,7 +1586,7 @@
       "handle": {
         "at": [
           0,
-          -71.2
+          -64.5
         ],
         "gesture": "toggle"
       }
@@ -1409,9 +1608,33 @@
             1,
             0,
             0,
-            1.1081081081081083,
+            1.202247191011236,
             0,
-            1.3729729729729758
+            2.568539325842697
+          ]
+        }
+      }
+    },
+    {
+      "id": "return-spring",
+      "param": "valve",
+      "motion": {
+        "per_state": {
+          "closed": [
+            1,
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "open": [
+            1,
+            0,
+            0,
+            0.7777777777777777,
+            0,
+            -16.511111111111116
           ]
         }
       }

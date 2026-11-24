@@ -43,6 +43,10 @@ fn npt_requires_the_same_thread_family_nominal_size_and_opposite_gender() {
     }
     assert_eq!(socket.size(), "1/4 in NPT");
     assert_eq!(socket.diameter(), 13.716);
+    let pilot = port(PlugFamily::Npt, 3.175, F);
+    assert!(solve::mates(&pilot, &port(PlugFamily::Npt, 3.175, M)));
+    assert_eq!(pilot.size(), "1/8 in NPT");
+    assert_eq!(pilot.diameter(), 10.287);
     assert_eq!(
         port(PlugFamily::Compression, 6.35, Gender::F).diameter(),
         6.35
@@ -66,11 +70,14 @@ fn npt_definition_serializes_its_type_and_rejects_unimplemented_nominal_sizes() 
             .unwrap()
             .contains("\"family\":\"npt\"")
     );
-    let error = format::parse(&text.replace("\"size_mm\":6.35", "\"size_mm\":3.175")).unwrap_err();
-    assert!(error.contains("only 1/4 in NPT"), "{error}");
+    let pilot = text.replace("\"size_mm\":6.35", "\"size_mm\":3.175,\"insertion_mm\":6");
+    assert!(format::parse(&pilot).is_ok());
+    let error = format::parse(&text.replace("\"size_mm\":6.35", "\"size_mm\":9.525")).unwrap_err();
+    assert!(error.contains("supports 1/8 and 1/4 in NPT"), "{error}");
+    let with_depth = text.replace("\"size_mm\":6.35", "\"size_mm\":6.35,\"insertion_mm\":5");
+    assert!(format::parse(&with_depth).is_ok());
     let error =
-        format::parse(&text.replace("\"size_mm\":6.35", "\"size_mm\":6.35,\"insertion_mm\":5"))
-            .unwrap_err();
+        format::parse(&with_depth.replace("\"gender\":\"F\"", "\"gender\":\"M\"")).unwrap_err();
     assert!(error.contains("only on a female compression"), "{error}");
 }
 
