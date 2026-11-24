@@ -1,3 +1,5 @@
+//! Calculation results, settings, provenance, and the saved (light) form.
+
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashSet},
@@ -525,6 +527,17 @@ impl CalcResult {
                 ));
             }
         }
+        if self.trajectory.is_some()
+            && !matches!(
+                self.task,
+                Task::Optimize | Task::Conformers | Task::TransitionState
+            )
+        {
+            return Err(Error::Invalid(
+                "only optimization, conformer and transition-state results carry a trajectory"
+                    .into(),
+            ));
+        }
         if let Some(path) = &self.trajectory {
             path.validate()?;
             let steps = path.steps();
@@ -682,13 +695,16 @@ impl CalcResult {
         } else {
             let mut light = self.light(pinned);
             let dropped_bytes = bytes.saturating_sub(light.heavy_bytes());
-            if dropped_bytes > 0 {
-                light.omitted_bytes = Some(
-                    self.omitted_bytes
-                        .unwrap_or(0)
-                        .saturating_add(dropped_bytes),
-                );
+            // Pinned rows alone can encode larger than the whole set
+            // (deflate's stored fallback); then keep everything.
+            if dropped_bytes == 0 {
+                return Cow::Borrowed(self);
             }
+            light.omitted_bytes = Some(
+                self.omitted_bytes
+                    .unwrap_or(0)
+                    .saturating_add(dropped_bytes),
+            );
             Cow::Owned(light)
         }
     }

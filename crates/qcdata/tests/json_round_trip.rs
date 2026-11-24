@@ -611,3 +611,13 @@ fn thermo_checks_gibbs_correction_temperature_and_pressure() {
         assert!(result.validate(&frame).is_err());
     }
 }
+
+#[test]
+fn only_path_tasks_carry_a_trajectory() {
+    let (frame, mut result) = imported();
+    result.validate(&frame).unwrap();
+    for task in [Task::Energy, Task::Gradient, Task::Hessian] {
+        result.task = task;
+        assert!(result.validate(&frame).is_err());
+    }
+}

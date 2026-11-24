@@ -1,3 +1,5 @@
+//! Exact molecular frames, their SHA-256 identity, and trajectories.
+
 use std::{collections::HashSet, fmt, mem::size_of_val};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

@@ -1,3 +1,5 @@
+//! Basis sets, molecular orbitals and the canonical atomic-orbital contract.
+
 use std::{f64::consts::PI, mem::size_of_val};
 
 use serde::{Deserialize, Serialize};

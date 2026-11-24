@@ -918,6 +918,16 @@ explains how the crates and modules fit together.
 - `crates/python/src/render.rs`
 - `crates/python/src/styles.rs`
 
+## reshiki-qcdata
+
+- `crates/qcdata/src/basis.rs`: Basis sets, molecular orbitals and the canonical atomic-orbital contract.
+- `crates/qcdata/src/capabilities.rs`: Method × task capabilities and calculation admission checks.
+- `crates/qcdata/src/compact.rs`: Compact encodings for floating-point arrays in their field's declared units.
+- `crates/qcdata/src/frame.rs`: Exact molecular frames, their SHA-256 identity, and trajectories.
+- `crates/qcdata/src/lib.rs`: Quantum chemistry data, canonical orbital conventions, and storage formats.
+- `crates/qcdata/src/molden.rs`: Conversion between Molden and canonical atomic-orbital order and normalization.
+- `crates/qcdata/src/result.rs`: Calculation results, settings, provenance, and the saved (light) form.
+
 ## reshiki-web
 
 - `crates/web/src/lib.rs`: Headless ReShiki for the browser

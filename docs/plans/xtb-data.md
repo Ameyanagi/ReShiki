@@ -81,10 +81,13 @@ serializes as 64 lowercase hex digits. A golden hash for water is pinned in the 
 A sequence of geometries of one molecule: an optimization, a scan, a reaction path, a
 conformer set, a multi-frame file.
 `Trajectory { numbers, isotopes, masses_amu, charge, multiplicity, positions_angstrom, energies_hartree, labels, minimizer_energies_hartree, cluster_sizes }`.
-The atoms are stored once; `positions_angstrom` is flat (steps × atoms × 3) and is a heavy
-array saved as `f32` ([File size](#file-size)), or empty when the steps were not saved;
-`energies_hartree` and `labels` are empty or one per step, and decide the step count when the
-positions are absent. For a conformer set, `minimizer_energies_hartree` (the energy from the
+The atoms are stored once; `positions_angstrom` is flat (steps × atoms × 3), saved as `f32`, and
+heavy except in a conformer result, where the positions are the result
+([File size](#file-size)); it is empty when the steps were not saved. `energies_hartree`,
+`labels`, `minimizer_energies_hartree` and `cluster_sizes` are empty or one per step and decide
+the step count when the positions are absent. Only optimization, conformer and
+transition-state results carry a trajectory; the last step of an optimization and the first
+conformer equal the result frame at `f32` precision. For a conformer set, `minimizer_energies_hartree` (the energy from the
 minimizer that made the starts, such as MMFF94s) and `cluster_sizes` (how many starts fell into
 each conformer's cluster) are empty or one per step; other trajectories leave them empty.
 `Trajectory::frame(i)` builds the frame of step `i`.
@@ -203,13 +206,13 @@ file.
 
 ### `Vibrations`
 
-| Field                   | Meaning                                                                                                                                                                                                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `frequencies_cm1`       | Harmonic frequencies in ascending order; imaginary ones negative. Rigid-body modes removed.                                                                                                                                                                                    |
-| `ir_intensities_km_mol` | Empty or one per mode.                                                                                                                                                                                                                                                         |
-| `modes`                 | Empty, or one mode per frequency, flat (modes × 3N, atom-major): Cartesian displacements, **not mass-weighted**, with unit Euclidean norm as produced. Consumers renormalize before use, and validation checks only the [−1, 1] component range. The sign is arbitrary. Heavy. |
-| `reduced_masses_amu`    | Empty or one per mode. Heavy.                                                                                                                                                                                                                                                  |
-| `masses_amu`            | Empty, or the masses the analysis used (needed to return to mass-weighted coordinates). Heavy.                                                                                                                                                                                 |
+| Field                   | Meaning                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frequencies_cm1`       | Harmonic frequencies in ascending order; imaginary ones negative. Rigid-body modes removed.                                                                                                                                                                                                                                              |
+| `ir_intensities_km_mol` | Empty or one per mode.                                                                                                                                                                                                                                                                                                                   |
+| `modes`                 | Empty, or one mode per frequency, flat (modes × 3N, atom-major): Cartesian displacements, **not mass-weighted**, with unit Euclidean norm as produced. Consumers renormalize before use; validation checks the [−1, 1] component range and that every mode keeps a non-zero component after 16-bit saving. The sign is arbitrary. Heavy. |
+| `reduced_masses_amu`    | Empty or one per mode. Heavy.                                                                                                                                                                                                                                                                                                            |
+| `masses_amu`            | Empty, or the masses the analysis used (needed to return to mass-weighted coordinates). Heavy.                                                                                                                                                                                                                                           |
 
 `imaginary_count()` counts negative frequencies, however small; the warning threshold for
 near-zero negative modes belongs to the user interface.
@@ -287,11 +290,11 @@ comparable when their `settings` and engine revision are equal.
 Native `.rsk` files are pretty-printed, uncompressed JSON, one number per line: the normal modes
 of a 200-atom molecule would take 8.2 MB that way. The owner's policy is binding for every lane.
 
-| Data                                                                                                                                                                                                                                                                                                                                                                                         | Saved                                                                                                                                                                                                 |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Settings, provenance (method, engine version), status, energies and terms, charges, dipole, bond orders of bonded pairs, orbital energies and occupations, core electrons, frequencies and IR intensities, thermochemistry, trajectory energies, labels, minimizer energies and cluster sizes, transition-state endpoints; the positions of kept conformers (at most `MAX_SAVED_CONFORMERS`) | Always ("light result"). Target ≤ 50 KB at 50 atoms, ≤ 200 KB at 200 atoms. The input and final frames are stored as frames of the document.                                                          |
-| Normal modes, reduced and analysis masses, orbital basis and coefficients, Hessian, gradient, trajectory positions ("heavy")                                                                                                                                                                                                                                                                 | Not by default: recomputed on demand from the saved frame and settings. Kept when `keep_full` is set, or for imported results within the budget below. Rows that placed surfaces use are always kept. |
-| Grids, meshes, animation frames                                                                                                                                                                                                                                                                                                                                                              | Never.                                                                                                                                                                                                |
+| Data                                                                                                                                                                                                                                                                                                                                                                                         | Saved                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Settings, provenance (method, engine version), status, energies and terms, charges, dipole, bond orders of bonded pairs, orbital energies and occupations, core electrons, frequencies and IR intensities, thermochemistry, trajectory energies, labels, minimizer energies and cluster sizes, transition-state endpoints; the positions of kept conformers (at most `MAX_SAVED_CONFORMERS`) | Always ("light result"). Target ≤ 50 KB at 50 atoms, ≤ 200 KB at 200 atoms. The input and final frames are stored as frames of the document.                                                                                                                                                                                                                                                                                          |
+| Normal modes, reduced and analysis masses, orbital basis and coefficients, Hessian, gradient, trajectory positions ("heavy")                                                                                                                                                                                                                                                                 | Not by default: properties at a saved geometry are recomputed on demand from the frame and settings. Rerunning a conformer search or a path search needs that search's own settings (minimizer, seeds, clustering, images), which the Phase 3 and Phase 6 work adds to `Settings` before relying on it. Kept when `keep_full` is set, or for imported results within the budget below. Rows that placed surfaces use are always kept. |
+| Grids, meshes, animation frames                                                                                                                                                                                                                                                                                                                                                              | Never.                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 - **Compact arrays.** Heavy arrays never serialize as JSON number lists. Each is one JSON string:
   a tag, a colon and base64 (standard alphabet, padded) of raw deflate (`miniz_oxide`) of
@@ -312,7 +315,9 @@ of a 200-atom molecule would take 8.2 MB that way. The owner's policy is binding
 - **Saved form.** `CalcResult::for_file(heavy_budget, pinned)` returns what a document writes:
   the result itself when `keep_full` is set; the light result when it is recomputable
   (`Settings::Xtb`); for an imported result, the result itself when `heavy_bytes()` ≤
-  `heavy_budget`, else the light result with `omitted_bytes` set. `pinned` lists
+  `heavy_budget`, else the light result with `omitted_bytes` increased by the bytes this save
+  drops (unchanged, and the full result kept, when dropping saves nothing). Pinned rows count
+  against nothing: they are always kept. `pinned` lists
   `(Spin, row)` orbitals that placed surfaces use: the light result keeps their rows and the
   basis. The document passes `MAX_IMPORTED_HEAVY_BYTES` (2 MB) minus what the molecule's
   other imported results already keep. The light result keeps bond orders of at least
@@ -329,20 +334,24 @@ of a 200-atom molecule would take 8.2 MB that way. The owner's policy is binding
 `XtbMethod::capabilities()` returns this table as data, from axtb's documented behaviour; the
 worker and the user interface both read it, and `check_calculation` enforces it.
 
-| Method   | Energy | Gradient | Optimize | Hessian        | Orbitals | Bond orders | ALPB solvent              | Open shells   |
-| -------- | ------ | -------- | -------- | -------------- | -------- | ----------- | ------------------------- | ------------- |
-| GFN2-xTB | yes    | yes      | yes      | yes (analytic) | yes      | yes         | native                    | yes           |
-| GFN-FF   | yes    | yes      | yes      | yes (analytic) | no       | no          | no                        | no (singlets) |
-| g-xTB    | yes    | yes      | yes      | yes (analytic) | yes      | yes         | GFN2 correction composite | yes           |
+| Method   | Energy | Gradient | Optimize | Hessian        | Conformers | Transition state | Orbitals | Bond orders | ALPB solvent              | Open shells   |
+| -------- | ------ | -------- | -------- | -------------- | ---------- | ---------------- | -------- | ----------- | ------------------------- | ------------- |
+| GFN2-xTB | yes    | yes      | yes      | yes (analytic) | yes        | yes              | yes      | yes         | native                    | yes           |
+| GFN-FF   | yes    | yes      | yes      | yes (analytic) | yes        | no               | no       | no          | no                        | no (singlets) |
+| g-xTB    | yes    | yes      | yes      | yes (analytic) | yes        | no               | yes      | yes         | GFN2 correction composite | yes           |
+
+Transition-state searches use GFN2-xTB gradients and Hessians, as Phase 6 plans; the other
+methods can be added when that pipeline is validated with them.
 
 g-xTB's orbitals, charges and dipole in solvent are those of its g-xTB part.
 
 `check_calculation(task, &settings, &frame, orbitals: OrbitalRequest)` validates the frame, the size limit of
 the task, the solvent rule, the SCF settings rule, open-shell support, orbital support and the
 GFN-FF topology. Energy and optimization are admitted independently of orbitals: `orbitals` is
-`OrbitalRequest::None`, `Levels` (energies and occupations only) or `Rows(n)` (coefficients of n
-MOs), and `Rows` is refused when the number of AOs times n would exceed `MAX_COEFFICIENTS`;
-the worker computes the AO count before it allocates. Every boundary that admits a
+`OrbitalRequest::None`, `Levels` (energies and occupations only) or `Rows { n_ao, rows }`
+(coefficients of `rows` MOs over `n_ao` AOs), and `Rows` is refused when `n_ao` is zero, above
+`MAX_BASIS_FUNCTIONS`, or `n_ao × rows` exceeds `MAX_COEFFICIENTS`; the worker computes the AO
+count before it allocates. Every boundary that admits a
 calculation (worker request, CLI, MCP, Python, the Calculate panel) calls it; the worker calls
 it again on its side.
 

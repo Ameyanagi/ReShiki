@@ -1,3 +1,5 @@
+//! Conversion between Molden and canonical atomic-orbital order and normalization.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{

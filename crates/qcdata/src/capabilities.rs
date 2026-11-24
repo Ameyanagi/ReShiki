@@ -1,3 +1,5 @@
+//! Method × task capabilities and calculation admission checks.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -28,6 +30,10 @@ pub struct Capabilities {
     pub optimize: bool,
     /// Analytic Hessian.
     pub hessian: bool,
+    /// Conformer search with re-ranking.
+    pub conformers: bool,
+    /// Transition-state search (path, saddle refinement and IRC).
+    pub transition_state: bool,
     /// Orbital energies, occupations, and coefficients.
     pub orbitals: bool,
     /// Wiberg–Mayer bond orders.
@@ -68,6 +74,8 @@ impl XtbMethod {
             gradient: true,
             optimize: true,
             hessian: true,
+            conformers: true,
+            transition_state: matches!(self, Self::Gfn2Xtb),
             orbitals: electronic,
             bond_orders: electronic,
             open_shell: electronic,
@@ -111,8 +119,8 @@ pub fn check_calculation(
         Task::Gradient => (capabilities.gradient, MAX_CALC_ATOMS),
         Task::Optimize => (capabilities.optimize, MAX_CALC_ATOMS),
         Task::Hessian => (capabilities.hessian, MAX_HESSIAN_ATOMS),
-        Task::Conformers => (capabilities.optimize, MAX_HESSIAN_ATOMS),
-        Task::TransitionState => (capabilities.hessian, MAX_TS_ATOMS),
+        Task::Conformers => (capabilities.conformers, MAX_HESSIAN_ATOMS),
+        Task::TransitionState => (capabilities.transition_state, MAX_TS_ATOMS),
     };
     if !supported {
         return Err(Error::Unsupported(format!(
@@ -294,6 +302,8 @@ mod tests {
                     gradient: true,
                     optimize: true,
                     hessian: true,
+                    conformers: true,
+                    transition_state: method == XtbMethod::Gfn2Xtb,
                     orbitals,
                     bond_orders,
                     open_shell,
@@ -318,6 +328,28 @@ mod tests {
             assert!(matches!(
                 check_calculation(task, &settings, &frame(limit + 1), OrbitalRequest::None),
                 Err(Error::TooLarge { count, max, .. }) if count == limit + 1 && max == limit
+            ));
+        }
+    }
+
+    #[test]
+    fn transition_states_need_gfn2() {
+        for method in [XtbMethod::GfnFf, XtbMethod::GXtb] {
+            let mut settings = settings(method);
+            if method == XtbMethod::GfnFf {
+                settings.gfnff = Some(GfnFfTopology {
+                    reference: frame(3).hash(),
+                    fragment_charges: vec![],
+                });
+            }
+            assert!(matches!(
+                check_calculation(
+                    Task::TransitionState,
+                    &settings,
+                    &frame(3),
+                    OrbitalRequest::None
+                ),
+                Err(Error::Unsupported(_))
             ));
         }
     }
