@@ -309,6 +309,44 @@ fn grid_bounds_and_drawing_budget() {
 }
 
 #[test]
+fn collapse_into_an_unmoved_high_degree_vertex() {
+    // Split one wide sector of a flat fan. Collapsing the split into the
+    // centre moves one surviving face, and leaves the rest of the fan in place.
+    const SECTORS: u32 = 20_000;
+    let centre = [0.; 3];
+    let split = [0.25, 0.25, 0.];
+    let mut positions = vec![centre, split, [0., 0., -0.01], [1., 0., 0.]];
+    positions.extend((0..SECTORS - 1).map(|i| {
+        let quarter_turn = std::f64::consts::FRAC_PI_2;
+        let angle = quarter_turn + 3. * quarter_turn * f64::from(i) / f64::from(SECTORS - 1);
+        let (sin, cos) = angle.sin_cos();
+        let radius = if i == 0 { 1. } else { 0.02 };
+        [(radius * cos) as f32, (radius * sin) as f32, 0.]
+    }));
+    let mut triangles = vec![[0, 3, 1], [0, 1, 4], [1, 3, 4]];
+    for i in 0..SECTORS {
+        let a = i + 3;
+        let b = (i + 1) % SECTORS + 3;
+        if i > 0 {
+            triangles.push([0, a, b]);
+        }
+        triangles.push([2, b, a]);
+    }
+    let mesh = Mesh {
+        normals: vec![[0., 0., 1.]; positions.len()],
+        positive: vec![true; triangles.len()],
+        positions,
+        triangles,
+        truncated: false,
+    };
+    let target = mesh.triangles.len() - 2;
+    let reduced = simplify(&mesh, target);
+    assert_eq!(reduced.triangles.len(), target);
+    assert!(reduced.positions.contains(&centre));
+    assert!(!reduced.positions.contains(&split));
+}
+
+#[test]
 fn checkerboard_retries_at_double_spacing() {
     let field = |p: [f32; 3]| {
         let ijk = p.map(|x| (x * 8.).round() as i32);
@@ -387,6 +425,41 @@ fn collapses_preserve_embedding_between_incident_faces() {
             [0.303625, -1.859955, -0.714529],
             [0.302908, 0.236536, 0.607518],
             [0.028060, 0.062259, -0.205521],
+        ],
+        triangles: vec![
+            [0, 1, 4],
+            [1, 0, 5],
+            [1, 2, 4],
+            [2, 1, 5],
+            [2, 3, 4],
+            [3, 2, 5],
+            [3, 0, 4],
+            [0, 3, 5],
+        ],
+        normals: vec![[0., 0., 1.]; 6],
+        positive: vec![true; 8],
+        truncated: false,
+    };
+    assert_eq!(topology(&mesh), [(true, 2)]);
+    check_embedded(&mesh);
+    let reduced = simplify(&mesh, 6);
+    assert_eq!(reduced.triangles.len(), 6);
+    assert_eq!(topology(&reduced), [(true, 2)]);
+    check_embedded(&reduced);
+}
+
+#[test]
+fn collapses_preserve_embedding_against_spatial_neighbours() {
+    // Checking affected faces against each other does not reject edge (1, 5):
+    // a changed face crosses an untouched face outside the collapsing edge's fan.
+    let mesh = Mesh {
+        positions: vec![
+            [12., -3., -4.],
+            [7., 9., 0.],
+            [9., 0., 3.],
+            [-1., 0., -14.],
+            [16., 2., 7.],
+            [3., 14., 8.],
         ],
         triangles: vec![
             [0, 1, 4],

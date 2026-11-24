@@ -1155,8 +1155,10 @@ fn simplify_open(points: &[[f64; 2]], tolerance: f64) -> Vec<[f64; 2]> {
 }
 
 pub(super) fn simplify_closed(points: &[[f64; 2]], tolerance: f64) -> Vec<[f32; 2]> {
+    const MAX_THINNING_POINTS: usize = 2048;
     let original = || points.iter().map(|p| p.map(|x| x as f32)).collect();
-    if points.len() < 3 || tolerance <= 0. {
+    // Bound the cost of the quadratic intersection check below.
+    if !(3..=MAX_THINNING_POINTS).contains(&points.len()) || tolerance <= 0. {
         return original();
     }
     let opposite = (1..points.len())

@@ -3042,8 +3042,14 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     let fade = |z: f32| model.depth_fade * ((reach - z) / (2. * reach)).clamp(0., 1.);
     let line = (model.size / 400.).clamp(0.6, 1.1);
     let glossy = model.look == Look::Glossy;
-    // The balls' painted outline reaches half its width past their discs.
-    let orbital = surface::draw::Prepared::new(doc, model, &view, if glossy { 0. } else { line });
+    // The balls' painted outline reaches half its width past their discs;
+    // Stick draws a contour twice as wide.
+    let painted = match (glossy, style) {
+        (true, _) => 0.,
+        (false, Style::Stick) => line * 2.,
+        (false, _) => line,
+    };
+    let orbital = surface::draw::Prepared::new(doc, model, &view, painted);
     // Labels of atoms in front of the surface, drawn after it.
     let mut late = vec![];
     let outline = |width| {

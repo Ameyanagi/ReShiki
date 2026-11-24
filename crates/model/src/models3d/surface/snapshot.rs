@@ -47,6 +47,12 @@ pub fn encode(surface: &Primitive, origin: Point) -> Option<String> {
         return None;
     }
 
+    let layers = layers.iter().filter(|(contours, _)| {
+        contours
+            .iter()
+            .any(|contour| contour.len() >= MIN_CONTOUR_POINTS)
+    });
+    let layer_count = u32::try_from(layers.clone().count()).ok()?.to_le_bytes();
     let mut bytes = Vec::new();
     for tolerance in [0., 0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8] {
         bytes.clear();
@@ -57,8 +63,8 @@ pub fn encode(surface: &Primitive, origin: Point) -> Option<String> {
             bytes.extend_from_slice(&outline.alpha.to_le_bytes());
             bytes.extend_from_slice(&outline.width.to_le_bytes());
         }
-        bytes.extend_from_slice(&u32::try_from(layers.len()).ok()?.to_le_bytes());
-        for (contours, color) in layers {
+        bytes.extend_from_slice(&layer_count);
+        for (contours, color) in layers.clone() {
             bytes.extend_from_slice(color);
             write_paths(&mut bytes, contours, origin, tolerance, true)?;
         }
@@ -282,11 +288,16 @@ pub fn decode(text: &str, origin: Point) -> Result<Primitive, String> {
         }
         _ => return Err("Invalid snapshot outline flag".into()),
     };
-    let layer_count = read_count(&mut bytes, 7)?;
+    // Each layer needs a color, both counts, and at least one contour.
+    let layer_count = read_count(&mut bytes, 3 + 4 + 4 + 8 * MIN_CONTOUR_POINTS)?;
     let mut layers = Vec::with_capacity(layer_count);
     for _ in 0..layer_count {
         let color = take(&mut bytes)?;
-        layers.push((read_paths(&mut bytes, origin, MIN_CONTOUR_POINTS)?, color));
+        let contours = read_paths(&mut bytes, origin, MIN_CONTOUR_POINTS)?;
+        if contours.is_empty() {
+            return Err("Snapshot layer has no contours".into());
+        }
+        layers.push((contours, color));
     }
     let rims = read_paths(&mut bytes, origin, MIN_RIM_POINTS)?;
     if !bytes.is_empty() {
@@ -567,6 +578,33 @@ mod tests {
         rims.extend([vec![], vec![point]]);
         let text = encode(&surface, point).unwrap();
         assert_surface_eq(small_surface(None), decode(&text, point).unwrap());
+    }
+
+    #[test]
+    fn rejects_empty_layers_on_decode() {
+        let mut bytes = b"RSF1\0".to_vec();
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // Layer count.
+        bytes.extend_from_slice(&[0; 7]); // Layer color and zero contours.
+        bytes.extend_from_slice(&1u32.to_le_bytes()); // Rim count.
+        bytes.extend_from_slice(&3u32.to_le_bytes()); // Enough data for the layer-count bound.
+        bytes.extend_from_slice(&[0; 24]);
+        assert_eq!(
+            decode_bytes(&bytes).unwrap_err(),
+            "Snapshot layer has no contours"
+        );
+    }
+
+    #[test]
+    fn drops_empty_layers_on_encode() {
+        let mut surface = small_surface(None);
+        let Primitive::Surface { layers, .. } = &mut surface else {
+            panic!("Expected a surface");
+        };
+        let origin = Point::default();
+        layers.insert(0, (vec![], [1, 2, 3]));
+        layers.insert(2, (vec![vec![origin; 2]], [4, 5, 6]));
+        let text = encode(&surface, origin).unwrap();
+        assert_surface_eq(small_surface(None), decode(&text, origin).unwrap());
     }
 
     #[test]

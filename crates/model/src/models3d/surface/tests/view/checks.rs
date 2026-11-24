@@ -56,6 +56,18 @@ fn contour_thinning_rejects_excessive_area_loss() {
 }
 
 #[test]
+fn contour_thinning_skips_large_contours() {
+    let contour: Vec<_> = (0..3000)
+        .map(|i| {
+            let (sin, cos) = (std::f64::consts::TAU * f64::from(i) / 3000.).sin_cos();
+            [cos, sin]
+        })
+        .collect();
+    let original: Vec<_> = contour.iter().map(|p| p.map(|x| x as f32)).collect();
+    assert_eq!(simplify_closed(&contour, 0.01), original);
+}
+
+#[test]
 fn translated_depth_plane_recovers_its_anchor_depth() {
     let origin = 16_384.;
     let input = Input {

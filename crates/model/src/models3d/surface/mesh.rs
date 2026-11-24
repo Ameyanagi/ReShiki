@@ -518,26 +518,32 @@ pub fn simplify(mesh: &Mesh, target: usize) -> Mesh {
             for &id in incident[a].iter().chain(&incident[b]) {
                 omitted[id] = true;
             }
-            'faces: for (index, &(_, new, bound, points, moved, normal)) in
-                changes.iter().enumerate()
-            {
-                for &(_, other, _, other_points, other_moved, other_normal) in &changes[index + 1..]
+            'faces: for (index, change) in changes.iter().enumerate() {
+                let &(_, new, bound, points, moved, normal) = change;
+                if !moved {
+                    continue;
+                }
+                // Earlier moved faces have already checked this pair.
+                let earlier = changes[..index]
+                    .iter()
+                    .filter(|other| !other.4)
+                    .map(|other| (other, change));
+                let later = changes[index + 1..].iter().map(|other| (change, other));
+                for (
+                    &(_, first, _, first_points, _, first_normal),
+                    &(_, second, _, second_points, _, second_normal),
+                ) in earlier.chain(later)
                 {
-                    if (moved || other_moved)
-                        && qem_triangles_intersect(
-                            points,
-                            normal,
-                            other_points,
-                            other_normal,
-                            (new, other),
-                        )
-                    {
+                    if qem_triangles_intersect(
+                        first_points,
+                        first_normal,
+                        second_points,
+                        second_normal,
+                        (first, second),
+                    ) {
                         legal = false;
                         break 'faces;
                     }
-                }
-                if !moved {
-                    continue;
                 }
                 grid.query(
                     bound,

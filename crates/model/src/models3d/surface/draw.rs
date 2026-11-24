@@ -98,24 +98,24 @@ pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Rc<
     {
         return found;
     }
-    let found = field(&points, &bonds, demo).and_then(|field| {
-        let (lo, hi) = points.iter().filter(|(s, _)| *s != "H").fold(
-            ([f32::MAX; 3], [f32::MIN; 3]),
-            |(lo, hi), (_, p)| {
-                (
-                    std::array::from_fn(|k| lo[k].min(p[k] - MARGIN)),
-                    std::array::from_fn(|k| hi[k].max(p[k] + MARGIN)),
-                )
-            },
-        );
-        let raw = mesh::isosurface(&field, Grid::around(lo, hi), iso);
-        // A lobe the grown box still cuts would show a flat cap: draw nothing.
-        if raw.truncated {
-            return None;
-        }
+    // No heavy atom, no field: cheap to find again, so not kept.
+    let field = field(&points, &bonds, demo)?;
+    let (lo, hi) = points.iter().filter(|(s, _)| *s != "H").fold(
+        ([f32::MAX; 3], [f32::MIN; 3]),
+        |(lo, hi), (_, p)| {
+            (
+                std::array::from_fn(|k| lo[k].min(p[k] - MARGIN)),
+                std::array::from_fn(|k| hi[k].max(p[k] + MARGIN)),
+            )
+        },
+    );
+    let raw = mesh::isosurface(&field, Grid::around(lo, hi), iso);
+    // A lobe the grown box still cuts would show a flat cap: draw nothing,
+    // and remember that.
+    let found = (!raw.truncated).then(|| {
         let fine = mesh::simplify(&raw, DETAIL[0]);
         let coarse = mesh::simplify(&fine, DETAIL[1]);
-        Some(Rc::new([fine, coarse]))
+        Rc::new([fine, coarse])
     });
     MESHES.with_borrow_mut(|kept| {
         if kept.len() >= KEPT {
@@ -392,7 +392,7 @@ fn occluders(view: &View, model: &Model3d, rim: f32) -> Vec<Occluder> {
             let width = |q: [f32; 3]| r * view.scale * view.project(q).1;
             // A half seen nearly end-on is not painted (`View::joints`, the
             // BallStick length check); its atom's ball covers it.
-            if (m[0] - s[0]).hypot(m[1] - s[1]) < width(start) {
+            if (m[0] - s[0]).hypot(m[1] - s[1]) < crate::models3d::END_ON * width(start) {
                 continue;
             }
             out.push(Occluder::Stick {

@@ -548,6 +548,25 @@ demo picks it by traversal order), and building the mesh on the calling
 thread (about 0.4 to 1.4 s once per model in release on an idle machine;
 Phase 5 builds orbital meshes off the UI thread).
 
+A third pass (gpt-6.2-sol) on the fixes led to: the end-on rule now uses
+the painter's own threshold; Stick's twice-as-wide contour counts in the
+outline margin; molecules without a field are no longer cached (they could
+evict real meshes); the simplifier tests only moved faces against the
+others; very long contours skip the thinning guard; empty snapshot layers
+are rejected. Known and accepted for the prototype:
+
+- Thinning checks each contour on its own, so a hole within 0.05 drawing
+  units of its outer contour could cross it.
+- A label drawn over the surface is checked against nearer balls at its
+  anchor only, not against a nearer bond crossing it or a ball covering
+  part of a wide glyph.
+- Outline runs shorter than 2 % of the model are dropped as mesh folds;
+  a genuinely short visible piece of outline is dropped with them.
+- The coarse detail can stay above 4 000 triangles when the simplifier has
+  no legal collapse left (ethylene and benzene π: 5 130 and 7 412).
+- The export dialog does not call `export_estimate` yet; wiring it is the
+  UI lane's work.
+
 ## References
 
 - W. E. Lorensen, H. E. Cline, Marching cubes, SIGGRAPH 1987; tetrahedral
