@@ -21,7 +21,7 @@ impl MoleculeCanvas<'_> {
         cursor: mouse::Cursor,
     ) -> Option<Action<Edit>> {
         if let Event::Touch(event) = event {
-            if self.tube_bend.is_some() {
+            if state.tube_bend_capture.is_some() {
                 return Some(Action::capture());
             }
             return self.touch_event(state, *event, bounds);
@@ -61,10 +61,24 @@ impl MoleculeCanvas<'_> {
         {
             state.modifiers = *modifiers;
         }
-        let point = state
-            .cursor
-            .or(cursor.position())
-            .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
+        let bend_release = state.tube_bend_capture.is_some()
+            && matches!(
+                event,
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+            );
+        let position = if bend_release {
+            // A button-up can carry a new cursor even when no motion packet
+            // preceded it. Do not substitute an old off-canvas position.
+            cursor
+                .position()
+                .or_else(|| state.cursor.filter(|point| bounds.contains(*point)))
+        } else {
+            state.cursor.or(cursor.position())
+        };
+        if bend_release {
+            state.cursor = position;
+        }
+        let point = position.map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
         let inside = point.is_some_and(|p| Rectangle::with_size(bounds.size()).contains(p));
         if let Some(action) = self.tube_bend_event(state, event, bounds, point, inside) {
             return Some(action);
@@ -212,20 +226,20 @@ impl MoleculeCanvas<'_> {
     ) -> mouse::Interaction {
         let bounds = self.guides.paper(bounds);
         if let Some(bend) = self.tube_bend {
-            return if matches!(state.gesture, Some(Gesture::Pan { .. }))
+            if matches!(state.gesture, Some(Gesture::Pan { .. }))
                 || bend.can_rotate
                     && state
                         .tube_bend_capture
                         .is_some_and(|capture| capture.token == bend.token)
             {
-                mouse::Interaction::Grabbing
-            } else if cursor.position_in(bounds).is_some_and(|point| {
-                bend.hit(self.camera.world(point, bounds), self.camera.world_len(10.))
-            }) {
-                mouse::Interaction::Grab
-            } else {
-                mouse::Interaction::default()
-            };
+                return mouse::Interaction::Grabbing;
+            } else if state.gesture.is_none()
+                && cursor.position_in(bounds).is_some_and(|point| {
+                    bend.hit(self.camera.world(point, bounds), self.camera.world_len(10.))
+                })
+            {
+                return mouse::Interaction::Grab;
+            }
         }
         if self.equipment_authoring.is_some() {
             return mouse::Interaction::Crosshair;

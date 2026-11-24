@@ -141,7 +141,16 @@ pub enum Edit {
     /// A disposable tube-bend handle updates the app-owned preview only.
     TubeBendDrag {
         token: (u64, u64),
+        at: World,
+    },
+    /// Release the rotating leg, committing the final preview only after a drag.
+    TubeBendFinish {
+        token: (u64, u64),
         at: Option<World>,
+    },
+    /// The pointer capture was lost; discard this uncommitted rotation.
+    TubeBendAbort {
+        token: (u64, u64),
     },
     /// Mouse edits emitted together when a pending touch becomes a tap or drag.
     Touch(Vec<Edit>),

@@ -1,5 +1,5 @@
-//! Pointer ownership for a rigid-tube bend preview. Selection and ordinary
-//! equipment handles stay inactive until the user applies or cancels it.
+//! Pointer ownership only while the rotating leg is being dragged. Other
+//! canvas presses and context menus retain their ordinary behavior.
 use crate::canvas::{Edit, Gesture, MoleculeCanvas, State};
 use iced::{Event, Point, Rectangle, mouse, widget::canvas::Action};
 
@@ -50,16 +50,8 @@ impl Capture {
         )
     }
 
-    fn ended(self) -> Action<Edit> {
-        if self.dragged {
-            Action::publish(Edit::TubeBendDrag {
-                token: self.token,
-                at: None,
-            })
-            .and_capture()
-        } else {
-            Action::capture()
-        }
+    fn abort(self) -> Action<Edit> {
+        Action::publish(Edit::TubeBendAbort { token: self.token }).and_capture()
     }
 }
 
@@ -82,76 +74,76 @@ impl MoleculeCanvas<'_> {
         {
             state.tube_bend_capture = None;
         }
-        if matches!(state.gesture, Some(Gesture::Pan { .. })) {
+        if state.tube_bend_capture.is_none() && state.gesture.is_some() {
             return None;
         }
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                if let Some(capture) = state.tube_bend_capture.take() {
+                    return Some(capture.abort());
+                }
+                let at = point
+                    .filter(|_| inside)
+                    .map(|point| self.camera.world(point, bounds))?;
+                if !bend.hit(at, self.camera.world_len(10.)) {
+                    return None;
+                }
+                let capture = Capture::new(bend, at)?;
                 state.end_gesture();
                 state.last_click = None;
-                state.tube_bend_capture = None;
-                if inside && let Some(point) = point {
-                    let at = self.camera.world(point, bounds);
-                    if bend.hit(at, self.camera.world_len(10.)) {
-                        state.tube_bend_capture = Capture::new(bend, at);
-                    }
-                }
+                state.tube_bend_capture = Some(capture);
                 Some(Action::request_redraw().and_capture())
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) if state.tube_bend_capture.is_some() => {
-                if !inside {
-                    return Some(state.tube_bend_capture.take()?.ended());
-                }
                 let threshold = self.camera.world_len(crate::canvas::pick::DRAG_SLOP_PX);
-                let at = self.camera.world(point?, bounds);
+                let Some(point) = point else {
+                    return Some(Action::capture());
+                };
+                let at = self.camera.world(point, bounds);
                 let at = state.tube_bend_capture.as_mut()?.corrected(at, threshold);
                 Some(at.map_or_else(Action::capture, |at| {
                     Action::publish(Edit::TubeBendDrag {
                         token: bend.token,
-                        at: Some(at),
+                        at,
                     })
                     .and_capture()
                 }))
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                let Some(mut capture) = state.tube_bend_capture.take() else {
-                    return Some(Action::capture());
-                };
-                let at = point
-                    .filter(|_| inside)
-                    .map(|point| self.camera.world(point, bounds));
+                let mut capture = state.tube_bend_capture.take()?;
+                let at = point.map(|point| self.camera.world(point, bounds));
                 let threshold = self.camera.world_len(crate::canvas::pick::DRAG_SLOP_PX);
-                Some(
-                    if let Some(at) = at.and_then(|at| capture.corrected(at, threshold)) {
-                        Action::publish(Edit::TubeBendDrag {
-                            token: capture.token,
-                            at: Some(at),
-                        })
-                        .and_capture()
-                    } else {
-                        capture.ended()
-                    },
-                )
+                let at = at.and_then(|at| capture.corrected(at, threshold));
+                Some(if capture.dragged {
+                    Action::publish(Edit::TubeBendFinish {
+                        token: capture.token,
+                        at,
+                    })
+                    .and_capture()
+                } else {
+                    Action::capture()
+                })
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
-                state.tube_bend_capture = None;
-                None
+                let capture = state.tube_bend_capture.take()?;
+                if inside && let Some(point) = point {
+                    state.gesture = Some(Gesture::Pan { last: point });
+                }
+                Some(capture.abort())
             }
             Event::Mouse(mouse::Event::WheelScrolled { .. }) => {
                 state.tube_bend_capture.map(|_| Action::capture())
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
-                state.tube_bend_capture = None;
-                Some(Action::request_redraw().and_capture())
+                state.tube_bend_capture.take().map(Capture::abort)
             }
             Event::Mouse(mouse::Event::CursorLeft)
             | Event::Window(iced::window::Event::Unfocused) => {
                 state.cursor = None;
                 state.hovering = false;
                 state.bond_text_hover = None;
-                Some(state.tube_bend_capture.take()?.ended())
+                Some(state.tube_bend_capture.take()?.abort())
             }
-            Event::Mouse(mouse::Event::CursorMoved { .. }) => Some(Action::request_redraw()),
             _ => None,
         }
     }
@@ -165,7 +157,7 @@ mod tests {
     use reshiki::{chains::ChainMode, document::Document};
 
     #[test]
-    fn bend_capture_uses_world_coordinates_with_inset_rulers_and_never_starts_selection() {
+    fn bend_capture_projects_moves_and_final_release_with_inset_rulers() {
         let doc = Document::default();
         let mut canvas = chain_canvas(&doc, ChainMode::Straight);
         canvas.tool = crate::canvas::Tool::Select;
@@ -237,23 +229,38 @@ mod tests {
             .into_inner()
             .0
             .unwrap();
-        assert!(matches!(edit, Edit::TubeBendDrag { token: (7, 2), at: Some(at) } if at == to));
+        assert!(matches!(edit, Edit::TubeBendDrag { token: (7, 2), at } if at == to));
         assert!(state.gesture.is_none());
+        let final_at = World::new(60., 60.);
+        let release = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(screen(final_at)),
+            )
+            .unwrap()
+            .into_inner()
+            .0
+            .unwrap();
+        assert!(
+            matches!(release, Edit::TubeBendFinish { token: (7, 2), at: Some(at) } if at == final_at)
+        );
+        assert!(state.tube_bend_capture.is_none());
+        // A press elsewhere follows the ordinary Select tool again.
         canvas.update(
             &mut state,
-            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            &Event::Mouse(mouse::Event::CursorMoved { position: motion }),
             bounds,
             mouse::Cursor::Available(motion),
         );
-        assert!(state.tube_bend_capture.is_none());
-        // A press elsewhere is consumed, not a new selection or tube move.
         canvas.update(
             &mut state,
             &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
             bounds,
             mouse::Cursor::Available(motion),
         );
-        assert!(state.gesture.is_none());
+        assert!(matches!(state.gesture, Some(Gesture::Select { .. })));
         assert!(state.tube_bend_capture.is_none());
     }
 
@@ -372,12 +379,18 @@ mod tests {
             cursor,
         );
         assert!(state.tube_bend_capture.is_some());
-        canvas.update(
-            &mut state,
-            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)),
-            bounds,
-            cursor,
-        );
+        let abort = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)),
+                bounds,
+                cursor,
+            )
+            .unwrap()
+            .into_inner()
+            .0
+            .unwrap();
+        assert!(matches!(abort, Edit::TubeBendAbort { token: (8, 3) }));
         assert!(state.tube_bend_capture.is_none());
         assert!(matches!(state.gesture, Some(Gesture::Pan { .. })));
         canvas.update(
@@ -400,13 +413,181 @@ mod tests {
             cursor,
         );
         assert!(state.tube_bend_capture.is_some());
-        canvas.update(
-            &mut state,
-            &Event::Mouse(mouse::Event::CursorLeft),
-            bounds,
-            mouse::Cursor::Unavailable,
-        );
+        let abort = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::CursorLeft),
+                bounds,
+                mouse::Cursor::Unavailable,
+            )
+            .unwrap()
+            .into_inner()
+            .0
+            .unwrap();
+        assert!(matches!(abort, Edit::TubeBendAbort { token: (8, 3) }));
         assert!(state.tube_bend_capture.is_none());
         assert!(state.cursor.is_none());
+    }
+
+    #[test]
+    fn release_without_a_motion_uses_its_cursor_and_tiny_drags_are_no_ops() {
+        let doc = Document::default();
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = crate::canvas::Tool::Select;
+        canvas.tube_bend = Some(TubeBend {
+            token: (6, 1),
+            pivot: World::default(),
+            leg: Some([World::new(20., 0.), World::new(80., 0.)]),
+            can_rotate: true,
+        });
+        let bounds = Rectangle::with_size(Size::new(400., 300.));
+        let start = canvas.camera.screen(World::new(40., 0.), bounds);
+        for (at, expect_finish) in [(World::new(40.5, 0.), false), (World::new(20., 35.), true)] {
+            let mut state = State::default();
+            let cursor = mouse::Cursor::Available(start);
+            canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::CursorMoved { position: start }),
+                bounds,
+                cursor,
+            );
+            canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                bounds,
+                cursor,
+            );
+            let release = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(canvas.camera.screen(at, bounds)),
+                )
+                .unwrap()
+                .into_inner()
+                .0;
+            if expect_finish {
+                assert!(
+                    matches!(release, Some(Edit::TubeBendFinish { token: (6, 1), at: Some(actual) }) if actual == at)
+                );
+            } else {
+                assert!(release.is_none());
+            }
+            assert!(state.tube_bend_capture.is_none());
+        }
+    }
+
+    #[test]
+    fn an_outside_move_keeps_capture_until_finish_but_real_focus_loss_aborts() {
+        let doc = Document::default();
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = crate::canvas::Tool::Select;
+        canvas.tube_bend = Some(TubeBend {
+            token: (5, 2),
+            pivot: World::default(),
+            leg: Some([World::new(20., 0.), World::new(80., 0.)]),
+            can_rotate: true,
+        });
+        let bounds = Rectangle::with_size(Size::new(400., 300.));
+        let start = canvas.camera.screen(World::new(40., 0.), bounds);
+        for focus_loss in [false, true] {
+            let mut state = State::default();
+            let cursor = mouse::Cursor::Available(start);
+            canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::CursorMoved { position: start }),
+                bounds,
+                cursor,
+            );
+            canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                bounds,
+                cursor,
+            );
+            let outside = Point::new(450., 320.);
+            let motion = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::CursorMoved { position: outside }),
+                    bounds,
+                    mouse::Cursor::Available(outside),
+                )
+                .unwrap()
+                .into_inner()
+                .0
+                .unwrap();
+            assert!(matches!(motion, Edit::TubeBendDrag { token: (5, 2), .. }));
+            assert!(state.tube_bend_capture.is_some());
+            let event = if focus_loss {
+                Event::Window(iced::window::Event::Unfocused)
+            } else {
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
+            };
+            let edit = canvas
+                .update(&mut state, &event, bounds, mouse::Cursor::Unavailable)
+                .unwrap()
+                .into_inner()
+                .0
+                .unwrap();
+            if focus_loss {
+                assert!(matches!(edit, Edit::TubeBendAbort { token: (5, 2) }));
+            } else {
+                assert!(matches!(
+                    edit,
+                    Edit::TubeBendFinish {
+                        token: (5, 2),
+                        at: None
+                    }
+                ));
+            }
+            assert!(state.tube_bend_capture.is_none());
+        }
+    }
+
+    #[test]
+    fn ordinary_clicks_and_context_menus_fall_through_outside_the_rotating_leg() {
+        let doc = Document::default();
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = crate::canvas::Tool::Select;
+        canvas.tube_bend = Some(TubeBend {
+            token: (4, 7),
+            pivot: World::default(),
+            leg: Some([World::new(20., 0.), World::new(80., 0.)]),
+            can_rotate: true,
+        });
+        let bounds = Rectangle::new(Point::new(10., 20.), Size::new(400., 300.));
+        let at = World::new(-50., 30.);
+        let point = canvas.camera.screen(at, bounds) + iced::Vector::new(bounds.x, bounds.y);
+        let cursor = mouse::Cursor::Available(point);
+        let mut state = State::default();
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::CursorMoved { position: point }),
+            bounds,
+            cursor,
+        );
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor,
+        );
+        assert!(matches!(state.gesture, Some(Gesture::Select { .. })));
+        assert!(state.tube_bend_capture.is_none());
+        let edit = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+                bounds,
+                cursor,
+            )
+            .unwrap()
+            .into_inner()
+            .0
+            .unwrap();
+        assert!(matches!(edit, Edit::ContextMenu { at: actual, .. } if actual == at));
+        assert!(state.gesture.is_none());
     }
 }

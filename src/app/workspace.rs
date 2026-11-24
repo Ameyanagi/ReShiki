@@ -1322,16 +1322,7 @@ impl App {
 
     pub(super) fn context_bar(&self) -> Element<'_, Message> {
         if self.tube_bend_active() {
-            return context_frame(
-                row![
-                    text("Tube bend preview").size(12),
-                    text("Enter to apply · Esc to cancel")
-                        .size(11)
-                        .style(muted_text),
-                ]
-                .spacing(CONTEXT_GAP)
-                .align_y(Alignment::Center),
-            );
+            return context_frame(row![text("Tube bend").size(12)].align_y(Alignment::Center));
         }
         if self.tab.optimization.is_some() {
             return context_frame(
@@ -2137,10 +2128,6 @@ impl App {
                     .height(Length::Fill),
             )
         };
-        if self.tube_bend_active() {
-            content = content.push(container(self.tube_bend_footer()).padding([10, 16]));
-            return self.inspector_frame(reshiki::accessibility::focus_scope(content));
-        }
         if self.tab.equipment_authoring.is_some() {
             content = content.push(container(self.equipment_authoring_footer()).padding([10, 16]));
             return self.inspector_frame(reshiki::accessibility::focus_scope(content));

@@ -313,8 +313,26 @@ enum Target {
     },
 }
 
+enum Location {
+    Click(Point),
+    Bend(usize),
+}
+
 impl Draft {
     pub fn new(doc: &Document, id: u64, world: Point) -> Result<Self, String> {
+        Self::at_location(doc, id, Location::Click(world))
+    }
+
+    /// Keep editing the same bend after committing it, even when the point at
+    /// the intersection of its tangent lines lies outside the rounded tube.
+    pub fn after_commit(&self, doc: &Document) -> Result<Self, String> {
+        let index = match self.target {
+            Target::Insert(index) | Target::Existing { index, .. } => index,
+        };
+        Self::at_location(doc, self.original.id, Location::Bend(index))
+    }
+
+    fn at_location(doc: &Document, id: u64, location: Location) -> Result<Self, String> {
         let g = doc
             .graphics
             .iter()
@@ -357,18 +375,25 @@ impl Draft {
             minimum_lead.reverse();
         }
         let frame = frame(g);
-        let local = frame
-            .inverse()
-            .ok_or("The tube has an invalid drawing scale.")?
-            .apply(xy(world));
         let path = route.centerline()?;
-        let (index, nearest) = path
-            .segments
-            .iter()
-            .enumerate()
-            .map(|(i, &s)| (i, closest(s, local)))
-            .min_by(|(_, a), (_, b)| len(sub(*a, local)).total_cmp(&len(sub(*b, local))))
-            .ok_or("The tube has no straight legs.")?;
+        let (index, nearest) = match location {
+            Location::Click(world) => {
+                let local = frame
+                    .inverse()
+                    .ok_or("The tube has an invalid drawing scale.")?
+                    .apply(xy(world));
+                path.segments
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &s)| (i, closest(s, local)))
+                    .min_by(|(_, a), (_, b)| len(sub(*a, local)).total_cmp(&len(sub(*b, local))))
+                    .ok_or("The tube has no straight legs.")?
+            }
+            Location::Bend(bend) => {
+                let corner = route.bends.get(bend).ok_or("The bend is missing.")?.corner;
+                (2 * bend + 1, corner)
+            }
+        };
         let vertices = route.vertices();
         let leg = index / 2;
         let before = *vertices.get(leg).ok_or("The bend location is missing.")?;

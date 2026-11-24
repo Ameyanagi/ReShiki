@@ -56,6 +56,14 @@ impl App {
                 let _ = self.tube_bend_action(super::equipment::bend::Action::Drag(token, at));
                 return;
             }
+            Edit::TubeBendFinish { token, at } => {
+                let _ = self.tube_bend_action(super::equipment::bend::Action::Finish(token, at));
+                return;
+            }
+            Edit::TubeBendAbort { token } => {
+                let _ = self.tube_bend_action(super::equipment::bend::Action::Abort(token));
+                return;
+            }
             Edit::EquipmentAuthoringPoint(point) => {
                 let _ = self
                     .equipment_authoring_action(super::equipment_authoring::Action::Point(point));
@@ -458,6 +466,8 @@ impl App {
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
             Edit::EquipmentAuthoringPoint(_)
             | Edit::TubeBendDrag { .. }
+            | Edit::TubeBendFinish { .. }
+            | Edit::TubeBendAbort { .. }
             | Edit::EquipmentAuthoringShape { .. }
             | Edit::EquipmentAuthoringTestStart(_)
             | Edit::EquipmentAuthoringTestCancel(_)

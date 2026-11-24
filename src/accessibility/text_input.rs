@@ -16,6 +16,7 @@ pub struct TextInput<'a, Message> {
     value: String,
     inner: input::TextInput<'a, Message>,
     on_input: Option<Rc<dyn Fn(String) -> Message + 'a>>,
+    on_unfocus: Option<Message>,
 }
 
 pub fn text_input<'a, Message: Clone + 'static>(
@@ -31,6 +32,7 @@ pub fn text_input<'a, Message: Clone + 'static>(
         name: name.into(),
         value: value.into(),
         on_input: None,
+        on_unfocus: None,
     }
 }
 
@@ -53,6 +55,11 @@ impl<'a, Message: Clone + 'static> TextInput<'a, Message> {
     }
     pub fn on_submit_maybe(mut self, message: Option<Message>) -> Self {
         self.inner = self.inner.on_submit_maybe(message);
+        self
+    }
+    /// Publish when the input loses focus through normal widget interaction.
+    pub fn on_unfocus(mut self, message: Message) -> Self {
+        self.on_unfocus = Some(message);
         self
     }
     pub fn font(mut self, font: Font) -> Self {
@@ -80,6 +87,7 @@ impl<'a, Message: Clone + 'static> TextInput<'a, Message> {
 struct Identity {
     id: String,
     enabled: bool,
+    was_focused: bool,
 }
 impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_, Message> {
     fn tag(&self) -> tree::Tag {
@@ -89,6 +97,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
         tree::State::new(Identity {
             id: self.id.clone(),
             enabled: self.on_input.is_some(),
+            was_focused: false,
         })
     }
     fn children(&self) -> Vec<Tree> {
@@ -102,6 +111,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
             *state = Identity {
                 id: self.id.clone(),
                 enabled: self.on_input.is_some(),
+                was_focused: false,
             };
             tree.children = self.children();
         } else {
@@ -187,6 +197,16 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
         viewport: &Rectangle,
     ) {
         if let Some(child) = tree.children.first_mut() {
+            let identity = tree.state.downcast_mut::<Identity>();
+            let before =
+                self.on_unfocus.is_some() && child.state.downcast_ref::<InputState>().is_focused();
+            if !before
+                && identity.was_focused
+                && let Some(message) = &self.on_unfocus
+            {
+                // Focus operations such as Tab traversal run between events.
+                shell.publish(message.clone());
+            }
             Widget::update(
                 &mut self.inner,
                 child,
@@ -198,6 +218,13 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
                 shell,
                 viewport,
             );
+            if let Some(message) = &self.on_unfocus {
+                let after = child.state.downcast_ref::<InputState>().is_focused();
+                if before && !after {
+                    shell.publish(message.clone());
+                }
+                identity.was_focused = after;
+            }
         }
     }
     fn draw(

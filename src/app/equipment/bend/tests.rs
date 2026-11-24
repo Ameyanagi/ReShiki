@@ -70,6 +70,14 @@ fn seat_cap(app: &mut App, end: &str) {
     doc.piece_definitions = placed::used(doc);
 }
 
+fn input_finished(token: Token, field: Field, unfocused: bool) -> Message {
+    message(Action::FinishInput {
+        token,
+        field,
+        unfocused,
+    })
+}
+
 #[test]
 fn context_bend_uses_the_exact_hit_and_world_click_even_in_an_expanded_group() {
     let mut app = source();
@@ -82,84 +90,223 @@ fn context_bend_uses_the_exact_hit_and_world_click_even_in_an_expanded_group() {
     assert_eq!(state.model.pivot(), target.at);
     assert_eq!(state.angle, "0");
     assert!(state.notice.is_none());
-    assert!(!state.can_apply());
     assert!(app.tube_bend_preview().is_none());
-    let token = state.token;
+    let token = state.input_token;
     let canvas = app.tube_bend_canvas().unwrap();
     let [from, to] = canvas.leg.unwrap();
     assert!(canvas.can_rotate);
     assert_eq!(from, target.at);
     assert!(to.x > from.x && to.y == from.y);
-    let _ = app.update(message(Action::Apply(token)));
-    let _ = app.update(message(Action::Angle(token, "45".into())));
-    assert!(app.current_tube_bend().unwrap().can_apply());
-    let _ = app.update(message(Action::Angle(token, "0".into())));
+    let _ = app.update(input_finished(token, Field::Angle, false));
+    let _ = app.update(message(Action::Input(token, Field::Angle, "45".into())));
+    assert!(app.tube_bend_preview().is_some());
+    let _ = app.update(message(Action::Input(token, Field::Angle, "0".into())));
+    let _ = app.update(input_finished(token, Field::Angle, true));
     assert!(app.tube_bend_preview().is_none());
-    assert!(!app.current_tube_bend().unwrap().can_apply());
     assert_eq!(app.tab.doc, before);
     assert_eq!(app.tab.history.undo_frames().len(), 0);
 }
 
 #[test]
-fn invalid_bend_is_feedback_only_and_apply_records_one_undo_with_existing_seats() {
+fn release_commits_once_per_drag_keeps_seats_and_rebinds_the_same_bend() {
     let mut app = source();
     seat_cap(&mut app, "a");
     let target = menu(&mut app);
     let before = app.tab.doc.clone();
     let _ = app.update(message(Action::Begin(target)));
-    let state = app.current_tube_bend().unwrap();
-    let (token, radius) = (state.token, state.radius.clone());
-    let _ = app.update(message(Action::Angle(token, "45".into())));
-    let last_valid = app.tube_bend_preview().unwrap().clone();
-    let _ = app.update(message(Action::Radius(token, "NaN".into())));
-    assert_eq!(app.tube_bend_preview(), Some(&last_valid));
-    assert!(!app.current_tube_bend().unwrap().can_apply());
-    assert!(app.current_tube_bend().unwrap().notice.is_some());
-    let _ = app.update(message(Action::Apply(token)));
+    let token = app.current_tube_bend().unwrap().token;
+    for y in [15., 30., 45.] {
+        let _ = app.update(Message::Canvas(Edit::TubeBendDrag {
+            token,
+            at: target.at.offset(80., y),
+        }));
+    }
     assert_eq!(app.tab.doc, before);
     assert_eq!(app.tab.history.undo_frames().len(), 0);
-    let _ = app.update(message(Action::Radius(token, radius)));
-    let expected = app
-        .tube_bend_preview()
-        .unwrap_or_else(|| panic!("{}", app.status))
-        .clone();
-    let _ = app.update(message(Action::Apply(token)));
-    assert!(!app.error, "{}", app.status);
-    assert_eq!(app.tab.doc, expected);
-    assert_eq!(app.tab.doc.seats, before.seats);
+    let _ = app.update(Message::Canvas(Edit::TubeBendFinish {
+        token,
+        at: Some(target.at.offset(80., 80.)),
+    }));
+    let first = app.tab.doc.clone();
+    assert_ne!(first, before);
+    assert_eq!(first.seats, before.seats);
     assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let state = app.current_tube_bend().unwrap();
+    assert!(state.model.is_existing_bend());
+    assert_eq!(state.model.pivot(), target.at);
+    assert!((state.model.default_angle_deg() - 45.).abs() < 1e-8);
+    let next = state.token;
+    assert_ne!(token, next);
+    let _ = app.update(Message::Canvas(Edit::TubeBendFinish {
+        token,
+        at: Some(target.at.offset(80., 30.)),
+    }));
+    assert_eq!(app.tab.doc, first);
+    let _ = app.update(Message::Canvas(Edit::TubeBendFinish {
+        token: next,
+        at: Some(target.at.offset(80., -55.)),
+    }));
+    let second = app.tab.doc.clone();
+    assert_ne!(second, first);
+    let tube = second.graphics.iter().find(|g| g.id == 2).unwrap();
+    let route = tube.piece.as_ref().unwrap().tube_route.as_ref().unwrap();
+    assert_eq!(route.bends.len(), 1);
+    assert_eq!(app.tab.history.undo_frames().len(), 2);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, first);
     assert!(!app.tube_bend_active());
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     let _ = app.update(Message::Redo);
-    assert_eq!(app.tab.doc, expected);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, second);
 }
 
 #[test]
-fn bend_drag_and_numeric_input_share_the_same_preview_and_stale_actions_are_ignored() {
+fn input_submit_and_blur_commit_once_and_the_current_grip_can_still_drag() {
+    let mut app = source();
+    let target = menu(&mut app);
+    let before = app.tab.doc.clone();
+    let _ = app.update(message(Action::Begin(target)));
+    let state = app.current_tube_bend().unwrap();
+    let (token, input_token) = (state.token, state.input_token);
+    let _ = app.update(message(Action::Input(
+        input_token,
+        Field::Angle,
+        "4".into(),
+    )));
+    let _ = app.update(message(Action::Input(
+        input_token,
+        Field::Angle,
+        "45".into(),
+    )));
+    let preview = app.tube_bend_preview().unwrap().clone();
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(input_finished(input_token, Field::Angle, false));
+    let _ = app.update(input_finished(input_token, Field::Angle, true));
+    assert_eq!(app.tab.doc, preview);
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let state = app.current_tube_bend().unwrap();
+    assert_eq!(
+        state.token, token,
+        "a grip pressed when the field blurs stays valid"
+    );
+    let input_token = state.input_token;
+    let _ = app.update(message(Action::Input(
+        input_token,
+        Field::Radius,
+        "14".into(),
+    )));
+    let _ = app.update(input_finished(input_token, Field::Radius, true));
+    assert_eq!(app.tab.history.undo_frames().len(), 2);
+    let _ = app.update(Message::Canvas(Edit::TubeBendFinish {
+        token,
+        at: Some(target.at.offset(45., 80.)),
+    }));
+    assert_eq!(app.tab.history.undo_frames().len(), 3);
+}
+
+#[test]
+fn changing_fields_keeps_the_first_keystroke_and_keeps_edits_separate() {
+    for blur_arrives_first in [true, false] {
+        let mut app = source();
+        let target = menu(&mut app);
+        let _ = app.update(message(Action::Begin(target)));
+        let token = app.current_tube_bend().unwrap().input_token;
+        let _ = app.update(message(Action::Input(token, Field::Angle, "30".into())));
+        let angle_only = app.tube_bend_preview().unwrap().clone();
+        if blur_arrives_first {
+            let _ = app.update(input_finished(token, Field::Angle, true));
+        }
+        let _ = app.update(message(Action::Input(token, Field::Radius, "18".into())));
+        if !blur_arrives_first {
+            let _ = app.update(input_finished(token, Field::Angle, true));
+        }
+        assert_eq!(app.tab.doc, angle_only);
+        assert_eq!(app.current_tube_bend().unwrap().radius, "18");
+        assert_eq!(app.tab.history.undo_frames().len(), 1);
+        let _ = app.update(input_finished(token, Field::Radius, true));
+        assert_eq!(app.tab.history.undo_frames().len(), 2);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, angle_only);
+    }
+}
+
+#[test]
+fn right_click_finishes_a_pending_value_and_opens_the_normal_context_menu() {
     let mut app = source();
     let target = menu(&mut app);
     let _ = app.update(message(Action::Begin(target)));
+    let token = app.current_tube_bend().unwrap().input_token;
+    let _ = app.update(message(Action::Input(token, Field::Angle, "35".into())));
+    let expected = app.tube_bend_preview().unwrap().clone();
+    let _ = app.update(Message::Canvas(Edit::ContextMenu {
+        position: iced::Point::new(340., 230.),
+        at: target.at,
+        selected: vec![2],
+        hit: vec![2],
+    }));
+    assert_eq!(app.tab.doc, expected);
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    assert!(!app.tube_bend_active());
+    assert!(app.context_menu.is_some());
+}
+
+#[test]
+fn invalid_fields_and_aborted_or_invalid_drags_leave_the_document_unchanged() {
+    let mut app = source();
+    let target = menu(&mut app);
+    let before = app.tab.doc.clone();
+    let _ = app.update(message(Action::Begin(target)));
     let state = app.current_tube_bend().unwrap();
-    let token = state.token;
-    let point = state.model.pivot().offset(20., 15.);
+    let (token, input_token) = (state.token, state.input_token);
+    let _ = app.update(message(Action::Input(
+        input_token,
+        Field::Angle,
+        "45".into(),
+    )));
+    let valid = app.tube_bend_preview().unwrap().clone();
+    let _ = app.update(message(Action::Input(
+        input_token,
+        Field::Angle,
+        "NaN".into(),
+    )));
+    assert_eq!(app.tube_bend_preview(), Some(&valid));
+    let _ = app.update(input_finished(input_token, Field::Angle, false));
+    let _ = app.update(input_finished(input_token, Field::Angle, true));
+    assert!(app.current_tube_bend().unwrap().notice.is_some());
+    assert!(app.tube_bend_preview().is_none());
+    assert_eq!(app.tab.doc, before);
+
     let _ = app.update(Message::Canvas(Edit::TubeBendDrag {
         token,
-        at: Some(point),
+        at: target.at.offset(80., 80.),
     }));
-    let angle = app.current_tube_bend().unwrap().angle.clone();
-    let preview = app.tube_bend_preview().unwrap().clone();
-    let _ = app.update(message(Action::Cancel(token)));
-    let _ = app.update(message(Action::Begin(target)));
-    let current = app.current_tube_bend().unwrap().token;
-    assert_ne!(token, current);
-    let _ = app.update(message(Action::Angle(current, angle)));
-    assert_eq!(app.tube_bend_preview().unwrap(), &preview);
-    let _ = app.update(message(Action::Apply(token)));
-    assert!(app.tube_bend_active());
+    assert!(app.tube_bend_preview().is_some());
+    let _ = app.update(Message::Canvas(Edit::TubeBendAbort { token }));
+    let _ = app.update(Message::Canvas(Edit::TubeBendFinish {
+        token,
+        at: Some(target.at.offset(80., 80.)),
+    }));
+    assert!(app.tube_bend_preview().is_none());
+    assert_eq!(app.tab.doc, before);
+    let token = app.current_tube_bend().unwrap().token;
+    let _ = app.update(Message::Canvas(Edit::TubeBendDrag {
+        token,
+        at: target.at.offset(80., 80.),
+    }));
+    let _ = app.update(Message::Canvas(Edit::TubeBendFinish {
+        token,
+        at: Some(target.at.offset(-80., 0.)),
+    }));
+    assert!(app.current_tube_bend().unwrap().notice.is_some());
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.history.undo_frames().len(), 0);
     app.begin_file_epoch();
-    let before = app.tab.doc.clone();
-    let _ = app.update(message(Action::Apply(current)));
+    let _ = app.update(Message::Canvas(Edit::TubeBendFinish {
+        token,
+        at: Some(target.at.offset(80., 80.)),
+    }));
     assert_eq!(app.tab.doc, before);
     assert!(!app.tube_bend_active());
 }
@@ -224,48 +371,40 @@ async fn native_bend_controls_snapshot_and_exercised_documents() {
     let before = app.tab.doc.clone();
     let _ = app.update(message(Action::Begin(target)));
     let state = app.current_tube_bend().unwrap();
-    let (token, radius) = (state.token, state.radius.clone());
+    let token = state.token;
     let neutral = semantics(&app, &renderer);
     assert!(
-        neutral
+        !neutral
             .nodes
             .iter()
-            .any(|node| node.id == "tube-bend-apply" && !node.enabled)
+            .any(|node| matches!(node.id.as_str(), "tube-bend-apply" | "tube-bend-cancel"))
     );
     assert!(app.tube_bend_preview().is_none());
     capture(&mut app, &mut renderer, "02-bend-point-placed");
     let pivot = target.at;
     let _ = app.update(Message::Canvas(Edit::TubeBendDrag {
         token,
-        at: Some(pivot.offset(80., 80.)),
+        at: pivot.offset(80., 80.),
     }));
     let valid = semantics(&app, &renderer);
     capture(&mut app, &mut renderer, "03-rotate-preview");
     assert!(valid.duplicate_ids.is_empty());
-    for id in [
-        "tube-bend-angle",
-        "tube-bend-radius",
-        "tube-bend-apply",
-        "tube-bend-cancel",
-    ] {
+    for id in ["tube-bend-angle", "tube-bend-radius"] {
         assert!(
             valid.nodes.iter().any(|node| node.id == id && node.enabled),
             "{id}"
         );
     }
     let preview = app.tube_bend_preview().unwrap().clone();
-    let _ = app.update(message(Action::Radius(token, "-1".into())));
-    let invalid = semantics(&app, &renderer);
-    assert!(
-        invalid
-            .nodes
-            .iter()
-            .any(|node| node.id == "tube-bend-apply" && !node.enabled)
-    );
-    let _ = app.update(message(Action::Radius(token, radius)));
-    let _ = app.update(message(Action::Apply(token)));
+    let _ = app.update(Message::Canvas(Edit::TubeBendFinish { token, at: None }));
     assert_eq!(app.tab.doc, preview);
-    capture(&mut app, &mut renderer, "04-bend-applied");
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    capture(&mut app, &mut renderer, "04-bend-released");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    capture(&mut app, &mut renderer, "05-bend-undone");
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, preview);
     if let Some(directory) = &directory {
         for (stage, doc) in [
             ("before", &before),
@@ -280,7 +419,7 @@ async fn native_bend_controls_snapshot_and_exercised_documents() {
         }
         std::fs::write(
             directory.join("tube-bend-controls.txt"),
-            format!("VALID\n{valid:#?}\nINVALID\n{invalid:#?}\n"),
+            format!("NEUTRAL\n{neutral:#?}\nROTATING\n{valid:#?}\n"),
         )
         .unwrap();
     }
@@ -292,7 +431,7 @@ async fn native_bend_controls_snapshot_and_exercised_documents() {
     let _ = locked.update(message(Action::Begin(target)));
     assert!(locked.status.contains("Both tube ends are seated"));
     assert!(!locked.tube_bend_canvas().unwrap().can_rotate);
-    capture(&mut locked, &mut renderer, "05-bend-blocked-by-fittings");
+    capture(&mut locked, &mut renderer, "06-bend-blocked-by-fittings");
 }
 
 fn show_sections(doc: &mut Document) {

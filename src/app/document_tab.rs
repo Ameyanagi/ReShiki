@@ -174,7 +174,6 @@ impl DocumentTab {
 
     pub(super) fn drawing_edit_active(&self) -> bool {
         self.equipment_authoring.is_some()
-            || self.tube_bend.is_some()
             || self.joining.is_some()
             || self.optimization.is_some()
             || self.inline_text.is_some()

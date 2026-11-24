@@ -1515,9 +1515,7 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let preview = (self.tab.optimization.is_some()
-            || self.tab.equipment_authoring.is_some()
-            || self.tube_bend_active())
+        let preview = (self.tab.optimization.is_some() || self.tab.equipment_authoring.is_some())
             && self.inspector_open
             && self.inspector_tab == InspectorTab::Properties;
         #[cfg(not(target_arch = "wasm32"))]
@@ -1569,8 +1567,6 @@ impl App {
                     Some(command_palette::modal_key)
                 } else if self.tab.equipment_authoring.is_some() {
                     Some(equipment_authoring::modal_key)
-                } else if self.tube_bend_active() {
-                    Some(equipment::bend::modal_key)
                 } else {
                     None
                 },
@@ -1583,8 +1579,6 @@ impl App {
                     None
                 } else if self.tab.equipment_authoring.is_some() {
                     Some(equipment_authoring::leftover_key)
-                } else if self.tube_bend_active() {
-                    Some(equipment::bend::leftover_key)
                 } else {
                     None
                 },
@@ -1592,8 +1586,9 @@ impl App {
                 self.updates.open,
                 self.tab.atom_text.is_some(),
                 self.inspector_open
-                    && ((self.inspector_tab == InspectorTab::DrawingStyle
-                        && self.tab.styles.editor.is_some())
+                    && (self.tube_bend_active()
+                        || (self.inspector_tab == InspectorTab::DrawingStyle
+                            && self.tab.styles.editor.is_some())
                         || (self.inspector_tab == InspectorTab::Properties
                             && self.requested_molecular_properties())
                         || self.inspector_tab == InspectorTab::Icons)
