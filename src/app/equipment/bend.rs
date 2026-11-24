@@ -335,9 +335,10 @@ impl App {
             return;
         };
         self.error = state.notice.is_some();
-        self.status = state.notice.clone().unwrap_or_else(|| {
-            "Drag the outgoing leg or bend handle, or enter angle and radius, then Apply".into()
-        });
+        self.status = state
+            .notice
+            .clone()
+            .unwrap_or_else(|| "Adjust the bend, then Apply".into());
     }
 
     pub(in crate::app) fn tube_bend_gate(&mut self, message: &Message) -> Option<Task<Message>> {
