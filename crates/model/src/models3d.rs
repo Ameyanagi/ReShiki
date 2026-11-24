@@ -17,6 +17,7 @@ mod contact;
 pub mod crystal;
 mod ellipsoids;
 mod polish;
+pub mod surface;
 use crate::scene::Contact;
 use crate::{
     depth_appearance::Scope,
@@ -1153,7 +1154,9 @@ impl View<'_> {
             0.
         } else {
             model.cell_reach(doc, c)
-        });
+        })
+        // A surface lies wholly inside the reach, so the camera stays out of it.
+        .max(surface::draw::meshes(doc, model).map_or(0., |m| surface::draw::reach(&m, c)));
         Some(View {
             center: c,
             rotated: points
@@ -3022,6 +3025,9 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     if model.style == Style::Ellipsoids {
         bonds.retain(|&(a, b)| view.half_bond(a, b).is_some());
     }
+    let orbital = surface::draw::Prepared::new(doc, model, &view);
+    // Labels of atoms in front of the surface, drawn after it.
+    let mut late = vec![];
     let (rotated, reach, style) = (&view.rotated, view.reach, model.style);
     let paper = doc.canvas_theme.background();
     let dark = doc.canvas_theme.is_dark();
@@ -3228,7 +3234,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 let lightness = surface[0] * 0.2126 + surface[1] * 0.7152 + surface[2] * 0.0722;
                 let ink = if lightness < 135. { WHITE } else { [24.; 3] };
                 let color = rgb(mix(ink, float(backdrop), fade(z)));
-                Primitive::Text {
+                let text = Primitive::Text {
                     position: center.offset(-width / 2., -size * 0.6),
                     text: symbol.into(),
                     size,
@@ -3237,7 +3243,14 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     // already resolved model color exactly.
                     color: doc.canvas_theme.color(color),
                     style,
+                };
+                let p = *rotated.get(i)?;
+                let front = [p[0], p[1], p[2] + model.style.atom_radius(symbol)];
+                if orbital.as_ref().is_some_and(|s| s.clear(&view, front)) {
+                    late.push((alpha, text));
+                    continue;
                 }
+                text
             }
             Item::Crossing(i, end) => {
                 let (start, f) = view.project(*rotated.get(i)?);
@@ -3541,6 +3554,13 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 });
             }
         }
+    }
+    if let Some(orbital) = orbital {
+        drawn.push((
+            1.,
+            orbital.primitive(dark, float(backdrop), fade(0.), outline(line)),
+        ));
+        drawn.extend(late);
     }
     out.extend(drawn.into_iter().map(|(alpha, p)| {
         if alpha < 1. {

@@ -169,12 +169,30 @@ fn primitives(run: &[Primitive], parts: &[Part]) -> Vec<Primitive> {
 }
 
 /// Hash every coordinate and colour of `primitive` exactly: its `Debug`
-/// output, but a ball's contact by its bits, as that output would be long.
+/// output, but a ball's contact and a surface by their bits, as that output
+/// would be long.
 fn key(primitive: &Primitive, hasher: &mut DefaultHasher) {
     match primitive {
         Primitive::Opacity { alpha, primitive } => {
             alpha.to_bits().hash(hasher);
             key(primitive, hasher);
+        }
+        Primitive::Surface {
+            layers,
+            rims,
+            outline,
+        } => {
+            format!("{outline:?}").hash(hasher);
+            for (region, color) in layers {
+                (color, region.len()).hash(hasher);
+            }
+            for run in layers.iter().flat_map(|(region, _)| region).chain(rims) {
+                run.len().hash(hasher);
+                for p in run {
+                    p.x.to_bits().hash(hasher);
+                    p.y.to_bits().hash(hasher);
+                }
+            }
         }
         Primitive::Sphere {
             center,

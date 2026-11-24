@@ -58,6 +58,13 @@ fn main() -> iced::Result {
         Some(code) => std::process::exit(code),
         None => {}
     }
+    // Developer-only analytic orbital surface (docs/plans/xtb-surfaces.md);
+    // drawn on every supported 3D model, never saved.
+    if let Some(spec) = std::env::var_os("RESHIKI_DEV_ORBITAL_SURFACE")
+        && let Err(error) = reshiki::models3d::surface::enable_demo(&spec.to_string_lossy())
+    {
+        eprintln!("{error}");
+    }
     // Headless modes enter before Office registration, graphics, Apple events
     // and the std::env::args() checks below.
     match launch::mode(std::env::args_os().skip(1)) {

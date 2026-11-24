@@ -303,9 +303,9 @@ ball); otherwise it stays in the molecule order and the surface covers it.
   two phases never overlap (visible parts are disjoint), so their order
   does not matter. Contours are then thinned with Douglas–Peucker at 0.05
   drawing units.
-- Depth fade: each phase's band colours use the fade at that phase's mean
-  visible depth, so a lobe fades as a whole like a ball does, and cuts never
-  change a colour.
+- Depth fade: band colours use the model's fade at its centre depth, so the
+  surface fades as a whole (lobes span the model's depth, unlike one ball)
+  and cuts never change a colour.
 - Outline (flat look, not Glossy): silhouette edges (between a front and a
   back face) keep a flag through every cut. A silhouette segment of piece
   A is visible where no piece in front of A covers it (the same pairwise
