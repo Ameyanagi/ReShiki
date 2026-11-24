@@ -2,7 +2,8 @@
 //! size arms one placement; Keep placing leaves it armed for more copies.
 use super::piece_libraries::{Entry, Libraries, Shelf, Source};
 use super::workspace::{
-    command, control, horizontal_line, hover_hint, muted_text, section, segment, segment_track,
+    accessible_command, command, control, horizontal_line, hover_hint, muted_text, section,
+    segment, segment_track,
 };
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
@@ -61,6 +62,8 @@ pub enum Action {
     Step(i32),
     /// … seat the shown one, or stop.
     Seat,
+    /// Accept the current, prevalidated compression reducer suggestion.
+    InsertReducer,
     Cancel,
     /// Release the seat at this joint and pull the pieces apart.
     Detach(JointRef),
@@ -156,6 +159,31 @@ pub struct State {
     /// The library shown; all when none.
     pub shelf: Option<Source>,
     pub libraries: Libraries,
+    reducer: Option<ReducerSuggestion>,
+}
+
+struct ReducerSuggestion {
+    /// Document epochs are unique across tabs and change when a tab is reopened.
+    epoch: u64,
+    base: Document,
+    /// Selection that made the offer, including non-equipment companions.
+    selected: Vec<u64>,
+    candidate: Option<(Document, reshiki::transaction::Reconciled)>,
+    snap: Snap,
+}
+
+impl ReducerSuggestion {
+    fn applies(&self, tab: &super::document_tab::DocumentTab, tool: Tool) -> bool {
+        self.epoch == tab.file_epoch
+            && tool.selects()
+            && self.base == tab.doc
+            && (self.selected.len() <= 1
+                || self.selected.iter().all(|id| tab.selected.contains(id)))
+            && tab
+                .selected
+                .iter()
+                .any(|id| *id == self.snap.moving.at.piece || *id == self.snap.target.at.piece)
+    }
 }
 impl Default for State {
     fn default() -> Self {
@@ -166,6 +194,7 @@ impl Default for State {
             repeat: false,
             shelf: None,
             libraries: Libraries::load(),
+            reducer: None,
         }
     }
 }
@@ -260,7 +289,9 @@ pub(crate) fn value_text(g: &Graphic, param: &str, value: Option<&Value>) -> Str
             },
             Value::Number(n),
         ) => format!("{n:.0}°"),
-        (Param::Range { unit: Unit::Mm, .. }, Value::Number(n)) => format!("{n} mm"),
+        (Param::Range { unit: Unit::Mm, .. }, Value::Number(n)) => {
+            format!("{} mm", cut_length::display_mm(*n))
+        }
         _ => return en(p.names(), param),
     };
     format!("{}: {shown}", en(p.names(), param))
@@ -356,6 +387,7 @@ pub(crate) fn snap_text(doc: &Document, snap: &Snap) -> String {
         Offer::Seat => format!("Seat on {target} · {}", snap.target.size()),
         Offer::Clip => format!("Clip the {target} · {}", snap.target.size()),
         Offer::Adapter(d) => format!("Insert {} on {target}", name(d).replace(" to ", " → ")),
+        Offer::Reducer(d) => format!("Use {} · Choose in Properties", name(d)),
         Offer::Mismatch if snap.target.gender == snap.moving.gender => format!(
             "Two {} do not seat · no adapter fits",
             if snap.target.gender == Gender::F {
@@ -379,6 +411,41 @@ pub(crate) fn snap_text(doc: &Document, snap: &Snap) -> String {
         None => {}
     }
     text
+}
+
+/// Layout reconciliation must keep an accepted end plan's fixed apparatus
+/// and the tube's opposite cut position, including for reflected frames.
+fn end_placements_kept(before: &Document, after: &Document, tube: u64, end: &str) -> bool {
+    let by_id: BTreeMap<_, _> = after.graphics.iter().map(|g| (g.id, g)).collect();
+    let Some(old) = before.graphics.iter().find(|g| g.id == tube) else {
+        return false;
+    };
+    let Some(new) = by_id.get(&tube) else {
+        return false;
+    };
+    if old.axis_x != new.axis_x || old.axis_y != new.axis_y {
+        return false;
+    }
+    let Some(pinned) = solve::ports(old).into_iter().find(|port| {
+        port.at.joint != end
+            && matches!(
+                port.kind,
+                solve::Kind::Plug(reshiki::equipment::format::PlugFamily::Compression, _)
+            )
+    }) else {
+        return false;
+    };
+    let pinned_kept = solve::ports(new).iter().any(|port| {
+        port.at == pinned.at
+            && (port.point[0] - pinned.point[0]).hypot(port.point[1] - pinned.point[1])
+                <= solve::TOLERANCE_MM * pinned.mm
+    });
+    pinned_kept
+        && before.graphics.iter().filter(|g| g.id != tube).all(|old| {
+            by_id.get(&old.id).is_some_and(|new| {
+                old.origin == new.origin && old.axis_x == new.axis_x && old.axis_y == new.axis_y
+            })
+        })
 }
 
 /// The size fields, volume first: "100 mL · 15/25".
@@ -428,12 +495,44 @@ impl App {
             .filter(|_| self.tool == Tool::Equipment)
     }
 
+    fn reducer_suggestion(&self) -> Option<&ReducerSuggestion> {
+        self.equipment
+            .reducer
+            .as_ref()
+            .filter(|offer| offer.applies(&self.tab, self.tool))
+    }
+
     pub(super) fn equipment_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Bend(action) => return self.tube_bend_action(action),
             Action::Search(query) => self.equipment.query = query,
             Action::Category(filter) => self.equipment.category = filter,
             Action::Repeat(on) => self.equipment.repeat = on,
+            Action::InsertReducer => {
+                let Some(offer) = self
+                    .equipment
+                    .reducer
+                    .take()
+                    .filter(|offer| offer.applies(&self.tab, self.tool))
+                else {
+                    return Task::none();
+                };
+                let Some((candidate, reconciled)) = offer.candidate else {
+                    if let Offer::Reducer(d) = offer.snap.offer {
+                        return self.equipment_action(Action::Arm(placed::key(&d)));
+                    }
+                    return Task::none();
+                };
+                self.prepare_document_change(true);
+                self.tab.erase_stroke = false;
+                self.tab.doc = candidate;
+                self.commit_changed(reconciled, false);
+                if !self.error {
+                    self.tab.selected = solve::closure(&self.tab.doc, &offer.selected);
+                    self.snapped(&offer.snap);
+                }
+                return super::focus_drawing();
+            }
             Action::Arm(k) => {
                 let Some(definition) = (self.equipment.libraries.entries.iter())
                     .find(|e| e.key == k)
@@ -600,7 +699,35 @@ impl App {
         value: Value,
         before: Document,
     ) {
-        self.set_piece_param_continuing(id, (param, Some(end)), value, before, false);
+        let reach = solve::REACH_PX / self.tab.camera.zoom;
+        let result = adjust::snap_end(&mut self.tab.doc, id, param, end, value, reach);
+        match result {
+            Err(error) => {
+                self.tab.doc = before;
+                self.status = error;
+                self.error = true;
+            }
+            Ok((_, snap)) => {
+                let names = before.clone();
+                self.changed_continuing_anchored(before, false, Some(id));
+                if self.error {
+                    return;
+                }
+                let released: Vec<_> = names
+                    .seats
+                    .iter()
+                    .filter(|s| !self.tab.doc.seats.contains(s))
+                    .cloned()
+                    .collect();
+                if let Some(g) = self.tab.doc.graphics.iter().find(|g| g.id == id) {
+                    self.status =
+                        value_text(g, param, None) + &released_text(&names, id, &released);
+                }
+                if let Some(snap) = snap {
+                    self.snapped_with_end(&snap, Some((param, end)));
+                }
+            }
+        }
     }
 
     /// [`App::set_piece_param`], merged into the last Undo step while `continuing`.
@@ -810,6 +937,72 @@ impl App {
 
     /// Say what a snap did once it is committed.
     pub(super) fn snapped(&mut self, snap: &Snap) {
+        self.snapped_with_end(snap, None);
+    }
+
+    fn snapped_with_end(&mut self, snap: &Snap, end: Option<(&str, &str)>) {
+        self.equipment.reducer = None;
+        if matches!(snap.offer, Offer::Reducer(_)) {
+            let base = self.tab.doc.clone();
+            let selected = if end.is_some() {
+                vec![snap.moving.at.piece]
+            } else {
+                self.tab.selected.clone()
+            };
+            self.equipment.reducer = Some(ReducerSuggestion {
+                epoch: self.tab.file_epoch,
+                base: base.clone(),
+                selected: selected.clone(),
+                candidate: None,
+                snap: snap.clone(),
+            });
+            self.inspector_open = true;
+            self.inspector_tab = InspectorTab::Properties;
+            let mut candidate = base.clone();
+            let inserted = match end {
+                Some((param, end)) => adjust::connect_end(
+                    &mut candidate,
+                    snap.moving.at.piece,
+                    param,
+                    end,
+                    &snap.target.at,
+                ),
+                None => solve::connect(
+                    &mut candidate,
+                    &snap.reducer_ids,
+                    &snap.target.at,
+                    &snap.moving.at,
+                ),
+            };
+            if let Some(inserted) = inserted {
+                let anchor = snap.moving.at.piece;
+                let reconciled = match end {
+                    Some(_) => reshiki::transaction::reconcile_with_layout_anchor(
+                        &mut candidate,
+                        base.clone(),
+                        anchor,
+                    ),
+                    None => reshiki::transaction::reconcile(&mut candidate, base.clone()),
+                };
+                let kept = solve::partner(&candidate, &snap.moving.at).is_some()
+                    && solve::partner(&candidate, &snap.target.at).is_some();
+                let poses =
+                    end.is_none_or(|(_, end)| end_placements_kept(&base, &candidate, anchor, end));
+                if let Ok(reconciled) = reconciled
+                    && kept
+                    && poses
+                    && base.seats.iter().all(|seat| candidate.seats.contains(seat))
+                {
+                    self.equipment.reducer = Some(ReducerSuggestion {
+                        epoch: self.tab.file_epoch,
+                        base,
+                        selected,
+                        candidate: Some((candidate, reconciled)),
+                        snap: inserted,
+                    });
+                }
+            }
+        }
         let doc = &self.tab.doc;
         let moving = joint_name(doc, &snap.moving.at);
         let target = joint_name(doc, &snap.target.at);
@@ -842,6 +1035,7 @@ impl App {
             Offer::Adapter(d) => {
                 format!("Inserted the {}", title(d).to_lowercase())
             }
+            Offer::Reducer(_) => snap_text(doc, snap),
             Offer::Mismatch => snap_text(doc, snap),
         };
         self.error = false;
@@ -1201,6 +1395,28 @@ impl App {
             .align_y(Alignment::Center),
         ]
         .spacing(6);
+        if let Some(offer) = self.reducer_suggestion()
+            && let Offer::Adapter(d) | Offer::Reducer(d) = &offer.snap.offer
+        {
+            let label = if offer.candidate.is_some() {
+                "Insert reducer"
+            } else {
+                "Place reducer…"
+            };
+            body = body
+                .push(text(format!("Different tube diameters · {}", name(d))).size(12))
+                .push(
+                    accessible_command("equipment-insert-reducer", label, label)
+                        .on_press(Message::Equipment(Action::InsertReducer)),
+                );
+            if offer.candidate.is_none() {
+                body = body.push(
+                    text("Place the reducer manually to keep the existing apparatus in position.")
+                        .size(11)
+                        .style(muted_text),
+                );
+            }
+        }
         let movable: Vec<_> = pieces
             .iter()
             .copied()

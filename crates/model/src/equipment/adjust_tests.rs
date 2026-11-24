@@ -79,6 +79,253 @@ fn seated(doc: &Document) {
     }
 }
 
+/// A free socket whose stop lies at this end's eventual cut position.
+fn end_socket(doc: &mut Document, tube: u64, end: &str, kind: &str, length: f64) -> u64 {
+    let current = param(doc, tube, "length").unwrap_or(Value::Number(60.));
+    adjust::set_end(doc, tube, "length", end, Value::Number(length)).unwrap();
+    let m = port(doc, tube, end);
+    let socket = add(doc, kind, Point::default());
+    let s = port(doc, socket, "tube");
+    let turn = (-m.dir[1]).atan2(-m.dir[0]).to_degrees() - s.dir[1].atan2(s.dir[0]).to_degrees();
+    let pivot = graphic(doc, socket).origin;
+    crate::editing::transform_about(doc, &[socket], pivot, 1., turn as f32);
+    let s = port(doc, socket, "tube");
+    doc.translate(
+        &[socket],
+        (m.point[0] - s.point[0] + s.dir[0] * s.insertion) as f32,
+        (m.point[1] - s.point[1] + s.dir[1] * s.insertion) as f32,
+    );
+    adjust::set_end(doc, tube, "length", end, current).unwrap();
+    socket
+}
+
+#[test]
+fn either_tube_end_snaps_to_the_exact_stop_without_moving_its_other_end_or_fittings() {
+    for end in ["a", "b"] {
+        for (turn, mirror) in [(0., false), (33., false), (33., true)] {
+            let mut doc = Document::default();
+            let tube = add(
+                &mut doc,
+                "reshiki/compression-tube-60-1-4",
+                Point::new(100., 120.),
+            );
+            crate::editing::transform_about(&mut doc, &[tube], Point::new(100., 120.), 1., turn);
+            if mirror {
+                let g = doc.graphics.iter_mut().find(|g| g.id == tube).unwrap();
+                g.axis_x.x = -g.axis_x.x;
+                g.axis_x.y = -g.axis_x.y;
+            }
+            let opposite = if end == "a" { "b" } else { "a" };
+            let fixed = add(&mut doc, "reshiki/compression-cap-1-4", Point::default());
+            let fixed_joint = port(&doc, tube, opposite).at;
+            solve::connect(
+                &mut doc,
+                &[fixed],
+                &fixed_joint,
+                &JointRef {
+                    piece: fixed,
+                    joint: "tube".into(),
+                },
+            )
+            .unwrap();
+            let socket = end_socket(&mut doc, tube, end, "reshiki/compression-cap-1-4", 100.25);
+            let pinned = port(&doc, tube, opposite).point;
+            let cap = graphic(&doc, socket).clone();
+            let fixed_cap = graphic(&doc, fixed).clone();
+            let old_seats = doc.seats.clone();
+            let (_, snap) =
+                adjust::snap_end(&mut doc, tube, "length", end, Value::Number(98.5), 14.).unwrap();
+            assert!(matches!(snap.unwrap().offer, solve::Offer::Seat));
+            assert!(
+                matches!(param(&doc, tube, "length"), Some(Value::Number(n)) if (n - 100.25).abs() < 1e-4)
+            );
+            assert!(old_seats.iter().all(|s| doc.seats.contains(s)));
+            assert_eq!(graphic(&doc, socket).origin, cap.origin);
+            assert_eq!(graphic(&doc, fixed).origin, fixed_cap.origin);
+            let now = port(&doc, tube, opposite).point;
+            assert!((now[0] - pinned[0]).hypot(now[1] - pinned[1]) < 1e-4);
+            assert_eq!(doc.seats.len(), 2);
+            seated(&doc);
+        }
+    }
+}
+
+#[test]
+fn invalid_end_snap_keeps_the_native_length_edit_and_existing_placements() {
+    for end in ["a", "b"] {
+        for invalid in ["sideways", "angle", "occupied", "out of range", "scale"] {
+            let mut doc = Document::default();
+            let tube = add(
+                &mut doc,
+                "reshiki/compression-tube-60-1-4",
+                Point::default(),
+            );
+            let length = if invalid == "out of range" {
+                1000.
+            } else {
+                100.25
+            };
+            let socket = end_socket(&mut doc, tube, end, "reshiki/compression-cap-1-4", length);
+            match invalid {
+                "out of range" => {
+                    let m = port(&doc, tube, end);
+                    doc.translate(
+                        &[socket],
+                        (m.dir[0] * m.mm) as f32,
+                        (m.dir[1] * m.mm) as f32,
+                    );
+                }
+                "sideways" => doc.translate(&[socket], 0., 3.),
+                "angle" | "scale" => {
+                    let pivot = graphic(&doc, socket).origin;
+                    crate::editing::transform_about(
+                        &mut doc,
+                        &[socket],
+                        pivot,
+                        if invalid == "scale" { 1.2 } else { 1. },
+                        if invalid == "angle" { 3. } else { 0. },
+                    );
+                }
+                "occupied" => {
+                    let other = add(
+                        &mut doc,
+                        "reshiki/compression-tube-60-1-4",
+                        Point::default(),
+                    );
+                    solve::connect(
+                        &mut doc,
+                        &[other],
+                        &JointRef {
+                            piece: socket,
+                            joint: "tube".into(),
+                        },
+                        &JointRef {
+                            piece: other,
+                            joint: "a".into(),
+                        },
+                    )
+                    .unwrap();
+                }
+                _ => {}
+            }
+            let value = Value::Number(if invalid == "out of range" {
+                999.5
+            } else {
+                98.5
+            });
+            let mut native = doc.clone();
+            adjust::set_end(&mut native, tube, "length", end, value.clone()).unwrap();
+            let (_, snap) = adjust::snap_end(&mut doc, tube, "length", end, value, 14.).unwrap();
+            assert!(snap.is_none(), "{end}: {invalid}");
+            assert_eq!(doc, native, "{end}: {invalid}");
+        }
+    }
+}
+
+#[test]
+fn either_end_suggests_an_exact_reducer_and_inserts_only_on_explicit_acceptance() {
+    for end in ["a", "b"] {
+        let mut doc = Document::default();
+        let tube = add(
+            &mut doc,
+            "reshiki/compression-tube-60-1-4",
+            Point::default(),
+        );
+        let socket = end_socket(&mut doc, tube, end, "reshiki/compression-cap-1-8", 100.25);
+        let opposite = if end == "a" { "b" } else { "a" };
+        let pinned = port(&doc, tube, opposite).point;
+        let target = graphic(&doc, socket).clone();
+        let mut native = doc.clone();
+        adjust::set_end(&mut native, tube, "length", end, Value::Number(98.5)).unwrap();
+        let (_, snap) =
+            adjust::snap_end(&mut doc, tube, "length", end, Value::Number(98.5), 14.).unwrap();
+        let solve::Offer::Reducer(d) = snap.unwrap().offer else {
+            panic!("expected reducer suggestion");
+        };
+        assert_eq!(d.id, "reshiki/compression-reducer-1-4-1-8");
+        assert_eq!(doc, native);
+        let snap = adjust::connect_end(
+            &mut doc,
+            tube,
+            "length",
+            end,
+            &JointRef {
+                piece: socket,
+                joint: "tube".into(),
+            },
+        )
+        .unwrap();
+        assert!(snap.added.is_some());
+        assert_eq!(doc.seats.len(), 2);
+        let now = port(&doc, tube, opposite).point;
+        assert!((now[0] - pinned[0]).hypot(now[1] - pinned[1]) < 1e-4);
+        assert_eq!(graphic(&doc, socket).origin, target.origin);
+        assert_eq!(graphic(&doc, socket).axis_x, target.axis_x);
+        seated(&doc);
+        let accepted = doc.clone();
+        assert!(
+            adjust::connect_end(
+                &mut doc,
+                tube,
+                "length",
+                end,
+                &JointRef {
+                    piece: socket,
+                    joint: "tube".into()
+                }
+            )
+            .is_none()
+        );
+        assert_eq!(doc, accepted);
+    }
+}
+
+#[test]
+fn compression_reducer_move_offers_keep_geometry_and_require_exact_both_ends() {
+    for (tube_size, socket_size, expected) in [
+        ("1-4", "1-8", Some("reshiki/compression-reducer-1-4-1-8")),
+        ("1-8", "1-4", Some("reshiki/compression-reducer-1-8-1-4")),
+        ("6-mm", "1-4", None),
+        ("1-4", "6-mm", None),
+    ] {
+        let mut doc = Document::default();
+        let tube = add(
+            &mut doc,
+            &format!("reshiki/compression-tube-60-{tube_size}"),
+            Point::default(),
+        );
+        let socket = end_socket(
+            &mut doc,
+            tube,
+            "b",
+            &format!("reshiki/compression-cap-{socket_size}"),
+            100.25,
+        );
+        adjust::set_end(&mut doc, tube, "length", "b", Value::Number(98.5)).unwrap();
+        let before = doc.clone();
+        let snap = solve::snap(&mut doc, &[tube], 14., false).unwrap();
+        assert_eq!(
+            doc, before,
+            "a reducer offer must not move equipment or insert"
+        );
+        match expected {
+            Some(expected) => {
+                let solve::Offer::Reducer(d) = snap.offer else {
+                    panic!("expected exact reducer");
+                };
+                assert_eq!(d.id, expected);
+                assert_eq!(
+                    solve::compression_reducer(&port(&doc, socket, "tube"), &port(&doc, tube, "b"))
+                        .unwrap()
+                        .id,
+                    expected
+                );
+            }
+            None => assert!(matches!(snap.offer, solve::Offer::Mismatch)),
+        }
+    }
+}
+
 #[test]
 fn a_tube_follows_a_moving_compression_stop_inside_a_fixed_mouth() {
     use super::format::{Joint, Motion, Param, Part, Unit};

@@ -737,6 +737,8 @@ pub enum Offer {
     Seat,
     /// They fit through this adapter, inserted between them.
     Adapter(Arc<Definition>),
+    /// An exact compression reducer is available; insertion needs an explicit action.
+    Reducer(Arc<Definition>),
     /// A joint clip goes on the seat.
     Clip,
     /// Nothing fits.
@@ -750,6 +752,9 @@ pub struct Snap {
     pub target: Port,
     /// The moving joint.
     pub moving: Port,
+    /// Effective moving IDs after ground locking, for a deferred reducer offer.
+    /// Other results leave this empty; ordinary seating retains no move set.
+    pub reducer_ids: Vec<u64>,
     pub offer: Offer,
     /// The moving pieces changed size to match.
     pub scaled: bool,
@@ -882,6 +887,18 @@ fn adapter(s: &Port, m: &Port) -> Option<(Arc<Definition>, String, String)> {
         })
 }
 
+/// A catalogue reducer that mates both compression interfaces exactly.
+/// Reducing unions with two sockets cannot substitute for a male/female reducer.
+pub fn compression_reducer(s: &Port, m: &Port) -> Option<Arc<Definition>> {
+    let (Kind::Plug(PlugFamily::Compression, a), Kind::Plug(PlugFamily::Compression, b)) =
+        (&s.kind, &m.kind)
+    else {
+        return None;
+    };
+    (a != b).then_some(())?;
+    Some(adapter(s, m)?.0)
+}
+
 fn plug_mates(family: PlugFamily, size: f64, other: PlugFamily, other_size: f64) -> bool {
     family == other
         && if matches!(
@@ -931,6 +948,7 @@ fn seat(
     let mut snap = Snap {
         target: s.clone(),
         moving: m.clone(),
+        reducer_ids: Vec::new(),
         offer: offer.clone(),
         scaled: (m.mm / s.mm - 1.).abs() > 1e-3,
         behind: None,
@@ -1046,8 +1064,8 @@ fn fixed(doc: &Document, pieces: &BTreeSet<u64>) -> bool {
 /// After the pieces `ids` moved: release their seats to pieces that stayed,
 /// unless they still fit (a clamp slid along a rod), then snap them to the
 /// best joint or hold within `reach` world units of one of their own. A
-/// compatible one seats; a joint mismatch inserts the adapter that fits, or
-/// only says why nothing fits. `any_angle` lets a new piece turn to fit; a
+/// compatible one seats; a joint mismatch offers an exact compression reducer,
+/// inserts another fitting adapter, or says why nothing fits. `any_angle` lets a new piece turn to fit; a
 /// dragged one must already point within 40°. A clip moved on its own goes
 /// onto the nearest seat of its size.
 pub fn snap(doc: &mut Document, ids: &[u64], reach: f32, any_angle: bool) -> Option<Snap> {
@@ -1167,6 +1185,19 @@ fn snap_inner(
     let (ids, s, m) = ground_lock(doc, ids, held, s.clone(), m.clone())?;
     let offer = if mates(&s, &m) {
         Offer::Seat
+    } else if let Some(d) = compression_reducer(&s, &m) {
+        // A diameter change is a choice: preview and offer it without moving
+        // either apparatus or silently adding a reducer on release.
+        return Some(Snap {
+            at: s.point,
+            target: s,
+            moving: m,
+            reducer_ids: ids,
+            offer: Offer::Reducer(d),
+            scaled: false,
+            behind: None,
+            added: None,
+        });
     } else if let Some((d, ..)) = adapter(&s, &m) {
         Offer::Adapter(d)
     } else {
@@ -1174,6 +1205,7 @@ fn snap_inner(
             at: s.point,
             target: s,
             moving: m,
+            reducer_ids: Vec::new(),
             offer: Offer::Mismatch,
             scaled: false,
             behind: None,
@@ -1218,6 +1250,7 @@ fn clip_on(doc: &mut Document, id: u64, size: &str, at: Point, reach: f32) -> Op
         at: f.point,
         target: f,
         moving: m,
+        reducer_ids: Vec::new(),
         offer: Offer::Clip,
         scaled: false,
         behind: None,

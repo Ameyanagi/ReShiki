@@ -422,6 +422,58 @@ fn a_routed_end_needs_room_for_a_fittings_insertion_depth() {
 }
 
 #[test]
+fn routed_terminal_drags_keep_their_native_edit_without_an_unusable_reducer_offer() {
+    for (end, other) in [("a", "b"), ("b", "a")] {
+        let mut doc = Document::default();
+        let tube = add_piece(&mut doc, STRAIGHT);
+        let g = graphic(&doc, tube);
+        let bent = Draft::new(&doc, tube, world(g, [54., 0.]))
+            .unwrap()
+            .preview(68., 14.)
+            .unwrap();
+        replace(&mut doc, bent);
+        cap(&mut doc, tube, other);
+        let handle = adjust::handles(graphic(&doc, tube))
+            .into_iter()
+            .find(|h| h.tube_end.as_deref() == Some(end))
+            .unwrap();
+        let moving = port(&doc, tube, end);
+        let value = adjust::dragged(
+            graphic(&doc, tube),
+            &handle,
+            add(moving.point, mul(moving.dir, 12. * moving.mm)),
+        )
+        .unwrap();
+        let mut desired = doc.clone();
+        adjust::set_end(&mut desired, tube, &handle.param, end, value.clone()).unwrap();
+        let moving = port(&desired, tube, end);
+        let socket = add_piece(&mut doc, "reshiki/compression-cap-1-8");
+        let old = port(&doc, socket, "tube");
+        let turn = (-moving.dir[1]).atan2(-moving.dir[0]).to_degrees()
+            - old.dir[1].atan2(old.dir[0]).to_degrees();
+        let pivot = graphic(&doc, socket).origin;
+        crate::editing::transform_about(&mut doc, &[socket], pivot, 1., turn as f32);
+        let target = port(&doc, socket, "tube");
+        doc.translate(
+            &[socket],
+            (moving.point[0] - target.point[0]) as f32,
+            (moving.point[1] - target.point[1]) as f32,
+        );
+        assert!(solve::compression_reducer(&port(&doc, socket, "tube"), &moving).is_some());
+        let mut expected = doc.clone();
+        adjust::set_end(&mut expected, tube, &handle.param, end, value.clone()).unwrap();
+        let (released, offer) =
+            adjust::snap_end(&mut doc, tube, &handle.param, end, value, 14.).unwrap();
+        assert!(released.is_empty());
+        assert!(offer.is_none());
+        assert_eq!(doc, expected);
+        let seated = doc.clone();
+        solve::check(&mut doc, None);
+        assert_eq!(doc.seats, seated.seats);
+    }
+}
+
+#[test]
 fn separate_runs_of_a_custom_tube_cannot_cross_each_other() {
     let mut route = Route {
         start: [0., 0.],
