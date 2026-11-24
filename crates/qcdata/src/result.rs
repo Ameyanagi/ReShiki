@@ -695,16 +695,22 @@ impl CalcResult {
         } else {
             let mut light = self.light(pinned);
             let dropped_bytes = bytes.saturating_sub(light.heavy_bytes());
-            // Pinned rows alone can encode larger than the whole set
-            // (deflate's stored fallback); then keep everything.
-            if dropped_bytes == 0 {
-                return Cow::Borrowed(self);
-            }
             light.omitted_bytes = Some(
                 self.omitted_bytes
                     .unwrap_or(0)
                     .saturating_add(dropped_bytes),
             );
+            // Dropping data must make the file smaller: pinned rows can
+            // encode larger than the whole set (deflate's stored fallback),
+            // and the counter itself takes room.
+            let size = |result: &Self| {
+                serde_json::to_vec_pretty(result)
+                    .expect("saved result serializes to JSON")
+                    .len()
+            };
+            if dropped_bytes == 0 || size(&light) >= size(self) {
+                return Cow::Borrowed(self);
+            }
             Cow::Owned(light)
         }
     }

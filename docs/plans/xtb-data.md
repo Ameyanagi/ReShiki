@@ -89,7 +89,8 @@ the step count when the positions are absent. Only optimization, conformer and
 transition-state results carry a trajectory; the last step of an optimization and the first
 conformer equal the result frame at `f32` precision. For a conformer set, `minimizer_energies_hartree` (the energy from the
 minimizer that made the starts, such as MMFF94s) and `cluster_sizes` (how many starts fell into
-each conformer's cluster) are empty or one per step; other trajectories leave them empty.
+each conformer's cluster) are empty or one per step; by convention other producers leave them
+empty.
 `Trajectory::frame(i)` builds the frame of step `i`.
 
 Result identity never depends on a trajectory: the input and final frames of an optimization
@@ -316,8 +317,8 @@ of a 200-atom molecule would take 8.2 MB that way. The owner's policy is binding
   the result itself when `keep_full` is set; the light result when it is recomputable
   (`Settings::Xtb`); for an imported result, the result itself when `heavy_bytes()` ≤
   `heavy_budget`, else the light result with `omitted_bytes` increased by the bytes this save
-  drops (unchanged, and the full result kept, when dropping saves nothing). Pinned rows count
-  against nothing: they are always kept. `pinned` lists
+  drops; the full result is kept instead when the light form, counter included, would not be
+  smaller. Pinned rows are kept even when the budget is exceeded. `pinned` lists
   `(Spin, row)` orbitals that placed surfaces use: the light result keeps their rows and the
   basis. The document passes `MAX_IMPORTED_HEAVY_BYTES` (2 MB) minus what the molecule's
   other imported results already keep. The light result keeps bond orders of at least

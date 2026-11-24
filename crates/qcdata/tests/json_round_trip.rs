@@ -621,3 +621,25 @@ fn only_path_tasks_carry_a_trajectory() {
         assert!(result.validate(&frame).is_err());
     }
 }
+
+#[test]
+fn imported_save_never_drops_data_without_shrinking_the_file() {
+    let (frame, original) = imported();
+    let rows = original.orbitals.as_ref().unwrap().alpha.rows.clone();
+    let both = [(Spin::Alpha, rows[0]), (Spin::Alpha, rows[1])];
+    let mut result = original.light(&both);
+    result.keep_full = false;
+    result.omitted_bytes = None;
+    // Zero rows compress to almost nothing, so dropping one saves less
+    // than the omission counter would add.
+    result
+        .orbitals
+        .as_mut()
+        .unwrap()
+        .alpha
+        .coefficients
+        .fill(0.0);
+    result.validate(&frame).unwrap();
+    let saved = result.for_file(0, &[(Spin::Alpha, rows[0])]);
+    assert_eq!(*saved, result);
+}
