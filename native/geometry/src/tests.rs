@@ -90,6 +90,7 @@ fn ethanol(field: ForceField) -> Request {
         field,
         relaxed: false,
         operation: Operation::Generate,
+        ensemble: None,
         coordinates: Vec::new(),
         fixed_atoms: Vec::new(),
         conformers: 2,
@@ -131,6 +132,7 @@ fn molecule(numbers: &[u32], edges: &[(usize, usize, u32)], field: ForceField) -
 fn evaluate(request: &Request, coordinates: Vec<[f64; 3]>) -> Response {
     let mut evaluation = request.clone();
     evaluation.operation = Operation::Evaluate;
+    evaluation.ensemble = None;
     evaluation.coordinates = coordinates;
     evaluation.fixed_atoms.clear();
     solve(&evaluation).unwrap()
@@ -228,6 +230,236 @@ fn seeded_sampling_is_repeatable_and_does_not_substitute_force_fields() {
         borane.field = field;
         assert!(solve(&borane).unwrap_err().contains("MMFF parameters"));
     }
+}
+
+#[test]
+fn minimized_ensembles_preserve_candidates_mapping_and_lowest_energy_selection() {
+    for count in [4, 5] {
+        let edges: Vec<_> = (0..count - 1).map(|a| (a, a + 1, 1)).collect();
+        let mut request = molecule(&vec![6; count], &edges, ForceField::MMFF94s);
+        request.conformers = 16;
+        request.seed = 0x52534b;
+        let single = solve(&request).unwrap();
+        assert!(single.ensemble.is_empty());
+        request.ensemble = Some(Ensemble::Minimized);
+        let result = solve(&request).unwrap();
+        assert!(
+            result.ensemble.len() > 1,
+            "{count}: {:?}",
+            result.diagnostics
+        );
+        assert!(result.ensemble.len() <= request.conformers as usize);
+        assert_eq!(result.original_count, count);
+        let parents: Vec<_> = (0..count)
+            .flat_map(|index| {
+                std::iter::repeat_n(
+                    index,
+                    if index == 0 || index == count - 1 {
+                        3
+                    } else {
+                        2
+                    },
+                )
+            })
+            .collect();
+        assert_eq!(result.hydrogen_parents, parents);
+        assert_eq!(result.hydrogen_parents, single.hydrogen_parents);
+        for member in &result.ensemble {
+            assert_eq!(member.coordinates.len(), count + parents.len());
+            assert!(member.coordinates.iter().all(valid_coordinate));
+            assert!(member.energy.is_finite());
+            close(
+                member.energy,
+                evaluate(&request, member.coordinates.clone()).energy,
+                1e-9,
+                1e-12,
+            );
+        }
+        let lowest = result
+            .ensemble
+            .iter()
+            .min_by(|a, b| a.energy.total_cmp(&b.energy))
+            .unwrap();
+        assert_eq!(result.energy, lowest.energy);
+        assert_eq!(result.coordinates, lowest.coordinates);
+        assert_eq!(result.converged, lowest.converged);
+        assert_eq!(result.coordinates, single.coordinates);
+        assert_eq!(result.energy, single.energy);
+        assert_eq!(result.initial_energy, single.initial_energy);
+        assert_eq!(result.converged, single.converged);
+        assert!(result.energy <= result.initial_energy + 1e-6);
+        assert!(result.diagnostics.iter().any(|line| {
+            line.contains("ensemble=Minimized")
+                && line.contains(&format!("ensemble_count={}", result.ensemble.len()))
+        }));
+    }
+}
+
+#[test]
+fn embedded_ensembles_are_exactly_seeded_and_skip_force_field_minimization() {
+    let mut request = molecule(
+        &[6; 5],
+        &[(0, 1, 1), (1, 2, 1), (2, 3, 1), (3, 4, 1)],
+        ForceField::MMFF94s,
+    );
+    request.conformers = 16;
+    request.seed = 0x52534b;
+    request.ensemble = Some(Ensemble::Embedded);
+    request.max_iterations = 1;
+    let first = solve(&request).unwrap();
+    let repeated = solve(&request).unwrap();
+    request.max_iterations = MAX_ITERATIONS;
+    let more_iterations = solve(&request).unwrap();
+    assert!(first.ensemble.len() > 1, "{:?}", first.diagnostics);
+    assert!(first.ensemble.len() <= request.conformers as usize);
+    assert_eq!(first.ensemble, repeated.ensemble);
+    assert_eq!(first.ensemble, more_iterations.ensemble);
+    assert_eq!(first.coordinates, repeated.coordinates);
+    assert_eq!(first.energy, repeated.energy);
+    assert_eq!(first.initial_energy, first.energy);
+    assert!(!first.converged);
+    assert_eq!(first.hydrogen_parents, [0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4]);
+    for member in &first.ensemble {
+        assert_eq!(member.coordinates.len(), first.coordinates.len());
+        assert!(member.coordinates.iter().all(valid_coordinate));
+        assert!(member.energy.is_finite());
+        assert!(!member.converged);
+        close(
+            member.energy,
+            evaluate(&request, member.coordinates.clone()).energy,
+            1e-9,
+            1e-12,
+        );
+    }
+    let lowest = first
+        .ensemble
+        .iter()
+        .min_by(|a, b| a.energy.total_cmp(&b.energy))
+        .unwrap();
+    assert_eq!(first.energy, lowest.energy);
+    assert_eq!(first.coordinates, lowest.coordinates);
+    assert!(first.diagnostics.iter().any(|line| {
+        line.contains("ensemble=Embedded")
+            && line.contains(&format!("ensemble_count={}", first.ensemble.len()))
+    }));
+    request.ensemble = Some(Ensemble::Minimized);
+    let minimized = solve(&request).unwrap();
+    assert_eq!(first.ensemble.len(), minimized.ensemble.len());
+    // Both modes use the same embedded-ID order, and each minimized candidate
+    // must reduce the energy of the corresponding raw embedded geometry.
+    for (embedded, minimized) in first.ensemble.iter().zip(&minimized.ensemble) {
+        assert!(minimized.energy <= embedded.energy + 1e-6);
+        assert_ne!(embedded.coordinates, minimized.coordinates);
+    }
+}
+
+#[test]
+fn ensemble_batches_at_the_public_seed_ceiling_are_exactly_repeatable() {
+    let mut request = molecule(
+        &[6; 5],
+        &[(0, 1, 1), (1, 2, 1), (2, 3, 1), (3, 4, 1)],
+        ForceField::MMFF94s,
+    );
+    request.conformers = MAX_CONFORMERS;
+    request.seed = i32::MAX - 8;
+    for mode in [Ensemble::Minimized, Ensemble::Embedded] {
+        request.ensemble = Some(mode);
+        let first = solve(&request).unwrap();
+        // Interleave a different batch to catch accidental reuse of RNG state.
+        let mut other_seed = request.clone();
+        other_seed.seed = 42;
+        solve(&other_seed).unwrap();
+        let repeated = solve(&request).unwrap();
+        assert!(
+            first.ensemble.len() > 1,
+            "{mode:?}: {:?}",
+            first.diagnostics
+        );
+        assert!(first.ensemble.len() <= MAX_CONFORMERS as usize);
+        assert_eq!(first.ensemble, repeated.ensemble);
+        assert_eq!(first.coordinates, repeated.coordinates);
+        assert_eq!(first.energy, repeated.energy);
+    }
+}
+
+#[test]
+fn ensembles_require_strict_unseeded_generation_and_bound_atom_sampling() {
+    for mode in [Ensemble::Minimized, Ensemble::Embedded] {
+        let mut request = ethanol(ForceField::UFF);
+        request.ensemble = Some(mode);
+        assert!(request.validate().is_ok());
+        for operation in [Operation::Relax, Operation::Evaluate] {
+            let mut invalid = request.clone();
+            invalid.operation = operation;
+            invalid.coordinates = vec![[0.; 3]; request.atoms.len()];
+            assert!(solve(&invalid).unwrap_err().contains("strict generation"));
+        }
+        let mut seeded = request.clone();
+        seeded.coordinates = vec![[0.; 3]; request.atoms.len()];
+        assert!(solve(&seeded).unwrap_err().contains("starting coordinates"));
+        request.relaxed = true;
+        assert!(solve(&request).unwrap_err().contains("strict generation"));
+        request.relaxed = false;
+        request.bonds.clear();
+        request.conformers = MAX_CONFORMERS;
+        let allowed_atoms = ENSEMBLE_ATOM_BUDGET / MAX_CONFORMERS as usize;
+        request
+            .atoms
+            .resize(allowed_atoms, request.atoms[0].clone());
+        assert!(request.validate().is_ok());
+        request.atoms.push(request.atoms[0].clone());
+        assert!(
+            solve(&request)
+                .unwrap_err()
+                .contains("atom/conformer budget")
+        );
+    }
+}
+
+#[test]
+fn ensemble_wire_fields_are_optional_and_modes_and_members_are_strict() {
+    let request = ethanol(ForceField::UFF);
+    let legacy = serde_json::to_value(&request).unwrap();
+    assert!(legacy.get("ensemble").is_none());
+    assert_eq!(
+        serde_json::from_value::<Request>(legacy).unwrap().ensemble,
+        None
+    );
+    for mode in [Ensemble::Minimized, Ensemble::Embedded] {
+        let request = Request {
+            ensemble: Some(mode),
+            ..request.clone()
+        };
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(json["ensemble"], format!("{mode:?}"));
+        assert_eq!(
+            serde_json::from_value::<Request>(json).unwrap().ensemble,
+            Some(mode)
+        );
+    }
+    assert!(serde_json::from_str::<Ensemble>("\"embedded\"").is_err());
+    assert!(serde_json::from_str::<Ensemble>("\"Other\"").is_err());
+    let member = EnsembleMember {
+        coordinates: vec![[1., 2., 3.]],
+        energy: 4.,
+        converged: false,
+    };
+    let mut json = serde_json::to_value(&member).unwrap();
+    assert_eq!(
+        serde_json::from_value::<EnsembleMember>(json.clone()).unwrap(),
+        member
+    );
+    json["extra"] = true.into();
+    assert!(serde_json::from_value::<EnsembleMember>(json).is_err());
+    let result = solve(&request).unwrap();
+    let json = serde_json::to_value(&result).unwrap();
+    assert!(json.get("ensemble").is_none());
+    assert!(
+        serde_json::from_value::<Response>(json)
+            .unwrap()
+            .ensemble
+            .is_empty()
+    );
 }
 
 #[test]

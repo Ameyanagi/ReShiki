@@ -15,6 +15,8 @@ pub const MAX_COORDINATES: usize = 4096;
 pub const MAX_BONDS: usize = 4096;
 pub const MAX_CONFORMERS: u32 = 32;
 pub const MAX_ITERATIONS: u32 = 10_000;
+/// Maximum original-atom count times requested conformers for an ensemble.
+pub const ENSEMBLE_ATOM_BUDGET: usize = 6400;
 
 /// Periodic-table metals used by relaxed geometry and coordination admission.
 /// Keep this shared with callers so alkali ions such as crown-bound K are
@@ -103,6 +105,14 @@ pub enum Operation {
     Evaluate,
 }
 
+/// Return every valid generated conformer, with optional force-field relaxation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum Ensemble {
+    Minimized,
+    Embedded,
+}
+
 /// Tetrahedral tags use RDKit's bond insertion order: 0 unspecified, 1 CW, 2 CCW.
 /// The caller must translate its graph's neighbor order before setting a tag.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -144,6 +154,9 @@ pub struct Request {
     pub bonds: Vec<BondInput>,
     pub field: ForceField,
     pub operation: Operation,
+    /// Ensembles require strict generation without starting coordinates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ensemble: Option<Ensemble>,
     /// Generate accepts either no coordinates or an optional original-atom 3D
     /// starting geometry. Relax/Evaluate require original+added-H coordinates.
     pub coordinates: Vec<[f64; 3]>,
@@ -151,6 +164,15 @@ pub struct Request {
     pub conformers: u32,
     pub seed: i32,
     pub max_iterations: u32,
+}
+
+/// One valid generated conformer, in embedding conformer-ID order.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnsembleMember {
+    pub coordinates: Vec<[f64; 3]>,
+    pub energy: f64,
+    pub converged: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -166,6 +188,9 @@ pub struct Response {
     pub converged: bool,
     pub field: ForceField,
     pub diagnostics: Vec<String>,
+    /// All valid generated candidates; top-level fields retain the lowest energy.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ensemble: Vec<EnsembleMember>,
     /// Disclosed force-field and preparation approximations in relaxed mode.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub approximations: Vec<String>,
@@ -202,6 +227,18 @@ impl Request {
             || self.seed < 0
         {
             return Err("Invalid geometry sampling/minimization limits".into());
+        }
+        if self.ensemble.is_some() {
+            if self.relaxed || self.operation != Operation::Generate || !self.coordinates.is_empty()
+            {
+                return Err(
+                    "Geometry ensembles require strict generation without starting coordinates"
+                        .into(),
+                );
+            }
+            if n.saturating_mul(self.conformers as usize) > ENSEMBLE_ATOM_BUDGET {
+                return Err("Geometry ensemble atom/conformer budget exceeded".into());
+            }
         }
         if self.atoms.iter().any(|a| {
             a.atomic_number == 0

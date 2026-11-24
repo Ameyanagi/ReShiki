@@ -37,6 +37,7 @@ fn result(session: &Session) -> Optimized {
         force_field: session.field,
         diagnostics: vec![],
         approximations: vec![],
+        ensemble: vec![],
     }
 }
 

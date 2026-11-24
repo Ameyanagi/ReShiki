@@ -186,6 +186,132 @@ async fn ready_deadline_wins_before_worker_spawn() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn conformer_starts_wraps_seeds_and_requires_consistent_hydrogens() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let executable = directory.path().join("worker");
+    std::fs::write(
+        &executable,
+        r#"#!/bin/sh
+if [ -f "$0.first" ]; then
+    /bin/cat > "$0.second"
+    /bin/cat "$0.response2"
+else
+    /bin/cat > "$0.first"
+    /bin/cat "$0.response1"
+fi
+"#,
+    )
+    .unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let limits = Limits {
+        timeout: Duration::from_secs(10),
+        heap_bytes: 64 * 1024 * 1024,
+    };
+    let client = Client::new(executable.clone(), limits).unwrap();
+    let mut document = crate::document::Document::default();
+    let a = document.add_atom("C", crate::document::Point::new(0., 0.));
+    let b = document.add_atom("C", crate::document::Point::new(42., 0.));
+    document.add_bond(a, b, 1, "plain");
+    let prepared = Prepared::with_limits(&document, &[], limits).unwrap();
+    let coordinates = vec![[0., 0., 0.], [1.5, 0., 0.], [0., 1., 0.]];
+    let mut response = reshiki_geometry::Response {
+        coordinates: coordinates.clone(),
+        hydrogen_parents: vec![0],
+        original_count: 2,
+        initial_energy: 1.,
+        energy: 1.,
+        gradient: None,
+        converged: false,
+        field: reshiki_geometry::ForceField::UFF,
+        diagnostics: Vec::new(),
+        approximations: Vec::new(),
+        ensemble: vec![reshiki_geometry::EnsembleMember {
+            coordinates,
+            energy: 1.,
+            converged: false,
+        }],
+    };
+    let write_response = |extension, response| {
+        let frame = wire::Response {
+            version: reshiki_geometry::RDKIT_VERSION.into(),
+            result: Ok(response),
+        };
+        std::fs::write(
+            executable.with_extension(extension),
+            wire::encode(&frame, wire::MAX_RESPONSE_BYTES).unwrap(),
+        )
+        .unwrap();
+    };
+    write_response("response1", response.clone());
+    write_response("response2", response.clone());
+    let run = |deadline| {
+        client.conformer_starts(
+            &prepared,
+            ForceField::Uff,
+            33,
+            GENERATION_SEED_MAX,
+            Ensemble::Embedded,
+            deadline,
+        )
+    };
+    let expired = run(BatchInstant::now()).await.unwrap();
+    assert_eq!(expired.batches, 0);
+    assert!(expired.conformers.is_empty());
+    assert!(!expired.complete);
+    assert!(!executable.with_extension("first").exists());
+
+    let result = run(BatchInstant::now() + Duration::from_secs(15))
+        .await
+        .unwrap();
+    assert_eq!(result.batches, 2);
+    assert!(result.complete);
+    assert_eq!(result.conformers.len(), 2);
+    for (extension, expected_count, expected_seed) in
+        [("first", 32, GENERATION_SEED_MAX), ("second", 1, 7918)]
+    {
+        let path = executable.with_extension(extension);
+        let bytes = std::fs::read(&path).unwrap();
+        let request: wire::Request = wire::decode(&bytes, wire::MAX_REQUEST_BYTES).unwrap();
+        assert_eq!(request.operation.conformers, expected_count);
+        assert_eq!(request.operation.seed, expected_seed);
+        assert_eq!(request.operation.ensemble, Some(Ensemble::Embedded));
+        std::fs::remove_file(path).unwrap();
+    }
+    assert!(matches!(
+        client.generate(&prepared, ForceField::Uff).await,
+        Err(Error::Protocol(_))
+    ));
+    let mut malformed = response.clone();
+    malformed.ensemble[0].coordinates.pop();
+    write_response("response2", malformed);
+    assert!(matches!(
+        client
+            .ensemble(&prepared, ForceField::Uff, 0, 1, Ensemble::Embedded)
+            .await,
+        Err(Error::Protocol(_))
+    ));
+    let mut missing = response.clone();
+    missing.ensemble.clear();
+    write_response("response2", missing);
+    assert!(matches!(
+        client
+            .ensemble(&prepared, ForceField::Uff, 0, 1, Ensemble::Embedded)
+            .await,
+        Err(Error::Protocol(_))
+    ));
+    std::fs::remove_file(executable.with_extension("first")).unwrap();
+    response.hydrogen_parents = vec![1];
+    write_response("response2", response);
+    assert!(matches!(
+        run(BatchInstant::now() + Duration::from_secs(15)).await,
+        Err(Error::Protocol(_))
+    ));
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn relaxed_operations_forward_mode_and_return_bounded_approximation_notes() {
     use std::os::unix::fs::PermissionsExt;
     let directory = tempfile::tempdir().unwrap();
@@ -226,6 +352,7 @@ async fn relaxed_operations_forward_mode_and_return_bounded_approximation_notes(
         version: reshiki_geometry::RDKIT_VERSION.into(),
         result: Ok(reshiki_geometry::Response {
             coordinates: vec![[0., 0., 0.]],
+            ensemble: Vec::new(),
             hydrogen_parents: Vec::new(),
             original_count: 1,
             initial_energy: 0.,
