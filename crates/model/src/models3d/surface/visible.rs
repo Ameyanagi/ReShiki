@@ -45,6 +45,7 @@ pub struct Input<'a> {
     pub tolerance: f32,
 }
 
+/// The visible region of one sign in this band and all lighter bands.
 #[derive(Clone, Debug)]
 pub struct Layer {
     pub positive: bool,
@@ -63,6 +64,8 @@ pub struct Stats {
 
 #[derive(Clone, Debug, Default)]
 pub struct Visible {
+    /// Layers for each sign are in ascending band order, starting with its
+    /// whole visible region. Empty bands are omitted.
     pub layers: Vec<Layer>,
     pub rims: Vec<Vec<[f32; 2]>>,
     pub stats: Stats,
@@ -1014,17 +1017,9 @@ pub fn visible(input: &Input<'_>) -> Visible {
             for sign in range {
                 let raw = &raw[sign];
                 let mut cumulative = Vec::<Vec<[f64; 2]>>::new();
-                let mut previous = Vec::<Vec<[f32; 2]>>::new();
                 let mut layers = Vec::new();
                 for band in (0..bands).rev() {
                     if raw[band].is_empty() {
-                        if !previous.is_empty() {
-                            layers.push(Layer {
-                                positive: sign == 0,
-                                band,
-                                region: previous.clone(),
-                            });
-                        }
                         continue;
                     }
                     cumulative.extend(raw[band].iter().cloned());
@@ -1055,7 +1050,6 @@ pub fn visible(input: &Input<'_>) -> Visible {
                                     > 2. * AREA
                         })
                         .collect();
-                    previous.clone_from(&region);
                     if region.is_empty() {
                         continue;
                     }

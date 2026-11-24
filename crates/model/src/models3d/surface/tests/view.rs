@@ -2,6 +2,7 @@ use super::super::{mesh::*, visible::*};
 
 mod budget;
 mod checks;
+mod evidence;
 
 type V3 = [f64; 3];
 
@@ -20,6 +21,16 @@ enum Molecule {
     Ball { center: V3, radius: f64 },
     Stick { a: V3, b: V3, half: f64 },
 }
+
+const PIERCING_BALL: Molecule = Molecule::Ball {
+    center: [1.65, 0.1, 1.65],
+    radius: 0.72,
+};
+const CROSSING_STICK: Molecule = Molecule::Stick {
+    a: [-2.5, -0.15, 1.1],
+    b: [2.5, 0.15, -1.1],
+    half: 0.27,
+};
 
 #[derive(Clone, Copy)]
 enum Paint {
@@ -461,11 +472,17 @@ fn distance_to_segment(point: [f64; 2], a: [f32; 2], b: [f32; 2]) -> f64 {
     ((point[0] - a[0] - t * d[0]).powi(2) + (point[1] - a[1] - t * d[1]).powi(2)).sqrt()
 }
 
-fn near_contour(result: &Visible, point: [f64; 2], delta: f64) -> bool {
+fn first_layer(result: &Visible, positive: bool) -> Option<&Layer> {
     result
         .layers
         .iter()
-        .filter(|layer| layer.band == 0)
+        .find(|layer| layer.positive == positive)
+}
+
+fn near_contour(layers: [Option<&Layer>; 2], point: [f64; 2], delta: f64) -> bool {
+    layers
+        .into_iter()
+        .flatten()
         .flat_map(|layer| &layer.region)
         .any(|contour| {
             contour
@@ -488,20 +505,24 @@ struct Counts {
     phases_overlap: usize,
 }
 
-fn check_oracle(label: &str, result: &Visible, oracle: &Oracle<'_>, seed: u64) -> Counts {
-    const SAMPLES: usize = 3_000;
+const ORACLE_SAMPLES: usize = 3_000;
+
+fn classify_samples(result: &Visible, oracle: &Oracle<'_>, seed: u64) -> (Counts, Vec<[f64; 2]>) {
     let mut random = Random(seed);
     let mut counts = Counts::default();
+    let mut disagreements = Vec::new();
+    let phases = [false, true];
+    let layers = phases.map(|sign| first_layer(result, sign));
     let delta =
         0.0075 * (oracle.bounds[2] - oracle.bounds[0]).max(oracle.bounds[3] - oracle.bounds[1]);
-    for _ in 0..SAMPLES {
+    for _ in 0..ORACLE_SAMPLES {
         let point = [0, 1]
             .map(|i| oracle.bounds[i] + random.unit() * (oracle.bounds[i + 2] - oracle.bounds[i]));
         let first = oracle.first(point);
         if [[delta, 0.], [-delta, 0.], [0., delta], [0., -delta]]
             .iter()
             .any(|offset| oracle.first([point[0] + offset[0], point[1] + offset[1]]) != first)
-            || near_contour(result, point, delta)
+            || near_contour(layers, point, delta)
         {
             counts.skipped += 1;
             continue;
@@ -522,22 +543,27 @@ fn check_oracle(label: &str, result: &Visible, oracle: &Oracle<'_>, seed: u64) -
             Hit::Stick => counts.stick_hides += usize::from(surface.is_some()),
             Hit::Nothing => {}
         }
-        for sign in [false, true] {
-            let drawn = result
-                .layers
-                .iter()
-                .filter(|layer| layer.band == 0 && layer.positive == sign)
-                .any(|layer| contains(&layer.region, point));
-            assert_eq!(
-                drawn,
-                first == Hit::Surface(sign),
-                "{label}: point={point:?}, first={first:?}, phase={sign}, surface={surface:?}"
-            );
+        if phases.into_iter().zip(layers).any(|(sign, layer)| {
+            let drawn = layer.is_some_and(|layer| contains(&layer.region, point));
+            drawn != (first == Hit::Surface(sign))
+        }) {
+            disagreements.push(point);
         }
     }
-    eprintln!("surface oracle {label}: {counts:?}, delta={delta:.4}");
+    (counts, disagreements)
+}
+
+fn check_oracle(label: &str, result: &Visible, oracle: &Oracle<'_>, seed: u64) -> Counts {
+    let (counts, disagreements) = classify_samples(result, oracle, seed);
+    eprintln!("surface oracle {label}: {counts:?}");
     assert!(
-        counts.skipped * 100 < SAMPLES * 15,
+        disagreements.is_empty(),
+        "{label}: {} disagreements, first at {:?}",
+        disagreements.len(),
+        disagreements.first()
+    );
+    assert!(
+        counts.skipped * 100 < ORACLE_SAMPLES * 15,
         "{label}: approximation band skipped >=15%: {counts:?}"
     );
     counts
@@ -560,17 +586,7 @@ fn p_mesh() -> Mesh {
 #[test]
 fn analytic_rays_agree_with_layers_through_balls_sticks_and_overlapping_lobes() {
     let mesh = p_mesh();
-    let molecule = [
-        Molecule::Ball {
-            center: [1.65, 0.1, 1.65],
-            radius: 0.72,
-        },
-        Molecule::Stick {
-            a: [-2.5, -0.15, 1.1],
-            b: [2.5, 0.15, -1.1],
-            half: 0.27,
-        },
-    ];
+    let molecule = [PIERCING_BALL, CROSSING_STICK];
     let mut hidden_by_ball = 0;
     let mut hidden_by_stick = 0;
     let mut front_of_ball = 0;
@@ -614,8 +630,7 @@ fn analytic_rays_agree_with_layers_through_balls_sticks_and_overlapping_lobes() 
     );
 }
 
-#[test]
-fn a_lobe_enclosed_by_a_slightly_larger_painted_ball_is_fully_hidden() {
+fn enclosed_lobe() -> (Mesh, [Molecule; 1]) {
     let radius = 0.9_f32;
     let mesh = isosurface(
         |p| (-p.iter().map(|x| x * x).sum::<f32>()).exp(),
@@ -631,6 +646,12 @@ fn a_lobe_enclosed_by_a_slightly_larger_painted_ball_is_fully_hidden() {
         center: [0.; 3],
         radius: f64::from(radius) * 1.12,
     }];
+    (mesh, molecule)
+}
+
+#[test]
+fn a_lobe_enclosed_by_a_slightly_larger_painted_ball_is_fully_hidden() {
+    let (mesh, molecule) = enclosed_lobe();
     let mut hidden = 0;
     for perspective in [false, true] {
         for (index, rotation) in rotations().into_iter().enumerate() {
@@ -655,6 +676,90 @@ fn a_lobe_enclosed_by_a_slightly_larger_painted_ball_is_fully_hidden() {
         hidden > 1_000,
         "the enclosure test must cast rays through the lobe"
     );
+}
+
+#[test]
+#[ignore = "writes SVG evidence to RESHIKI_SURFACE_EVIDENCE_DIR"]
+fn occlusion_evidence_images() -> std::io::Result<()> {
+    use std::{fmt::Write, fs, path::PathBuf};
+
+    const BANDS: usize = 10;
+    let dir = PathBuf::from(
+        std::env::var_os("RESHIKI_SURFACE_EVIDENCE_DIR")
+            .expect("set RESHIKI_SURFACE_EVIDENCE_DIR to the output directory"),
+    );
+    fs::create_dir_all(&dir)?;
+    let mesh = p_mesh();
+    let (enclosed_mesh, enclosing_ball) = enclosed_lobe();
+    let scenes: [(_, _, &Mesh, &[Molecule], _); 4] = [
+        (
+            "ball",
+            "A lobe piercing a ball",
+            &mesh,
+            &[PIERCING_BALL],
+            [5, 6],
+        ),
+        (
+            "stick",
+            "A stick running through a lobe",
+            &mesh,
+            &[CROSSING_STICK],
+            [3, 4],
+        ),
+        (
+            "enclosed",
+            "A lobe enclosed in a slightly larger ball",
+            &enclosed_mesh,
+            &enclosing_ball,
+            [0, 2],
+        ),
+        (
+            "overlap",
+            "Two lobes overlapping on screen",
+            &mesh,
+            &[],
+            [1, 6],
+        ),
+    ];
+    let rotations = rotations();
+    let light = [-0.38, 0.42, 0.82];
+    let light = mul(light, 1. / norm(light));
+    let mut readme = String::new();
+    let mut total_disagreements = 0;
+    for (name, description, mesh, molecule, views) in scenes {
+        for (view, index) in (1..).zip(views) {
+            let rotation = rotations[index];
+            let (mut frame, oracle) = prepare(mesh, molecule, rotation, true);
+            frame.lightness = mesh
+                .normals
+                .iter()
+                .map(|&n| (0.35 + 0.65 * dot(rotate(f64s(n), rotation), light).max(0.)) as f32)
+                .collect();
+            let output = visible(&frame.input(mesh, BANDS));
+            let (counts, disagreements) =
+                classify_samples(&output, &oracle, 0x7ab3_91a5 + index as u64);
+            let file = format!("occlusion-{name}-{view}.svg");
+            fs::write(
+                dir.join(&file),
+                evidence::svg(&oracle, &output, BANDS, &counts, &disagreements),
+            )?;
+            writeln!(
+                readme,
+                "{file} — {description}, perspective rotation {index}."
+            )
+            .unwrap();
+            eprintln!("{file}: {counts:?}, {} disagreements", disagreements.len());
+            total_disagreements += disagreements.len();
+        }
+    }
+    fs::write(dir.join("README.txt"), readme)?;
+    assert_eq!(
+        total_disagreements,
+        0,
+        "see marked points in {}",
+        dir.display()
+    );
+    Ok(())
 }
 
 #[test]
@@ -766,11 +871,8 @@ fn cyclic_long_thin_triangles_are_visible_without_a_global_depth_order() {
             );
             assert!(oracle.triangle_depth((front + 2) % 3, point).is_none());
             for sign in [false, true] {
-                let drawn = result
-                    .layers
-                    .iter()
-                    .filter(|layer| layer.band == 0 && layer.positive == sign)
-                    .any(|layer| contains(&layer.region, point));
+                let drawn =
+                    first_layer(&result, sign).is_some_and(|layer| contains(&layer.region, point));
                 assert_eq!(
                     drawn,
                     (front == positive_triangle) == sign,

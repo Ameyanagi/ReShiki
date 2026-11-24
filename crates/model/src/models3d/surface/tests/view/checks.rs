@@ -124,6 +124,55 @@ fn nested_shading_layers_follow_the_continuous_vertex_lightness_field() {
 }
 
 #[test]
+fn empty_shading_bands_do_not_repeat_the_previous_region() {
+    let lightness = [
+        0.35, 0.35, 0.35, 0.85, 0.85, 0.85, 0.45, 0.45, 0.45, 0.95, 0.95, 0.95,
+    ];
+    assert!(lightness.iter().all(|&light| light >= 0.35));
+    let result = visible(&Input {
+        positions: &[
+            [0., 0., 0.],
+            [10., 0., 0.],
+            [0., 10., 0.],
+            [20., 0., 0.],
+            [30., 0., 0.],
+            [20., 10., 0.],
+            [0., 20., 0.],
+            [10., 20., 0.],
+            [0., 30., 0.],
+            [20., 20., 0.],
+            [30., 20., 0.],
+            [20., 30., 0.],
+        ],
+        triangles: &[[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]],
+        positive: &[true, true, false, false],
+        front: &[true; 4],
+        lightness: &lightness,
+        occluders: &[],
+        bands: 10,
+        tolerance: 0.0001,
+    });
+    for positive in [true, false] {
+        let layers: Vec<_> = result
+            .layers
+            .iter()
+            .filter(|layer| layer.positive == positive)
+            .collect();
+        assert!(layers.len() >= 2, "must compare layers for sign {positive}");
+        assert!(layers.iter().all(|layer| !layer.region.is_empty()));
+        assert!(layers[0].band > 0, "unoccupied ambient bands are omitted");
+        for pair in layers.windows(2) {
+            assert!(pair[0].band < pair[1].band);
+            assert_ne!(
+                pair[0].region, pair[1].region,
+                "sign {positive} repeats regions in bands {} and {}",
+                pair[0].band, pair[1].band
+            );
+        }
+    }
+}
+
+#[test]
 fn depth_queries_use_the_mesh_plane_even_below_paint_area_or_behind_a_ball() {
     let edge = 1e-5;
     let input = Input {

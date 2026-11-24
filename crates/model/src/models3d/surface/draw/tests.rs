@@ -93,8 +93,7 @@ fn covered(surface: &Primitive, p: Point) -> bool {
         }
         odd
     };
-    // Layer 0 of each phase (blue positive, grey negative) is its whole
-    // region; later layers lie inside it.
+    // The first layer of each phase (blue positive, grey negative) covers its whole region.
     let blue = |c: &[u8; 3]| i32::from(c[2]) > i32::from(c[0]) + 40;
     [true, false].iter().any(|&positive| {
         layers
@@ -259,6 +258,60 @@ fn svg_has_only_vector_paths() {
     let svg = scene::svg(&tilted(benzene(), 50.));
     assert!(svg.contains("fill-rule=\"evenodd\""));
     assert!(!svg.contains("<image"));
+    demo_on_this_thread(None).unwrap();
+}
+
+/// Release-mode numbers for the PR: mesh build, frame, SVG and snapshot
+/// bytes at both details, for each demo molecule. Run with
+/// `cargo test --release -p reshiki-model export_budgets -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn export_budgets() {
+    use std::time::Instant;
+    println!(
+        "| molecule | demo | detail | triangles | mesh ms | frame ms | layers | points | SVG KB | snapshot KB |"
+    );
+    println!("|---|---|---|---:|---:|---:|---:|---:|---:|---:|");
+    for (name, doc) in [("ethylene", ethylene()), ("benzene", benzene())] {
+        let doc = tilted(doc, 55.);
+        for demo in ["pi", "pistar"] {
+            demo_on_this_thread(Some(demo)).unwrap();
+            MESHES.with_borrow_mut(Vec::clear);
+            let started = Instant::now();
+            let meshes = meshes(&doc, &doc.models[0]).unwrap();
+            let mesh_ms = started.elapsed().as_secs_f32() * 1000.;
+            for (k, turning) in [false, true].into_iter().enumerate() {
+                let mut doc = doc.clone();
+                doc.models[0].turning = turning;
+                let started = Instant::now();
+                let all = scene::primitives(&doc);
+                let frame_ms = started.elapsed().as_secs_f32() * 1000.;
+                let svg = scene::svg_of(&doc, all.clone(), None);
+                let surface = all
+                    .iter()
+                    .find(|p| matches!(p, Primitive::Surface { .. }))
+                    .unwrap();
+                let Primitive::Surface { layers, rims, .. } = surface else {
+                    unreachable!()
+                };
+                let points: usize = layers
+                    .iter()
+                    .flat_map(|(r, _)| r)
+                    .chain(rims)
+                    .map(Vec::len)
+                    .sum();
+                let snapshot = super::super::snapshot::encode(surface, Point::default()).unwrap();
+                println!(
+                    "| {name} | {demo} | {} | {} | {mesh_ms:.0} | {frame_ms:.0} | {} | {points} | {:.0} | {:.0} |",
+                    DETAIL[k],
+                    meshes[k].triangles.len(),
+                    layers.len(),
+                    svg.len() as f32 / 1024.,
+                    snapshot.len() as f32 / 1024.,
+                );
+            }
+        }
+    }
     demo_on_this_thread(None).unwrap();
 }
 
