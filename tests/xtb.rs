@@ -6,11 +6,13 @@ use reshiki_xtb_worker::client::{Error, Limits, Session};
 use std::{path::Path, time::Duration};
 
 #[cfg(feature = "xtb")]
-use reshiki_xtb_worker::protocol::{ErrorKind, Solvent, SolventModel};
+use reshiki_xtb_worker::protocol::{
+    ErrorKind, HARTREE_TO_EV, NEAR_DEGENERATE_GAP_EV, Solvent, SolventModel,
+};
 #[cfg(any(feature = "xtb", unix))]
 use reshiki_xtb_worker::{
     client::Cancel,
-    protocol::{Compute, Method, Open, Units},
+    protocol::{Compute, Conventions, Method, Open, Units},
 };
 #[cfg(feature = "xtb")]
 use serde::Deserialize;
@@ -72,6 +74,7 @@ fn molecule(name: &str) -> Open {
         charge: 0,
         uhf: None,
         method: Method::Gfn2,
+        conventions: Conventions::Axtb,
         solvent: None,
         threads: 1,
         heap_bytes: limits().heap_bytes,
@@ -90,7 +93,9 @@ fn compute(positions: Option<Vec<[f64; 3]>>, gradient: bool) -> Compute {
 #[cfg(feature = "xtb")]
 #[derive(Deserialize)]
 struct Reference {
-    molecules: BTreeMap<String, Values>,
+    axtb: BTreeMap<String, Values>,
+    #[serde(rename = "xtb-6.8")]
+    xtb_68: BTreeMap<String, Values>,
 }
 
 #[cfg(feature = "xtb")]
@@ -98,98 +103,175 @@ struct Reference {
 struct Values {
     energy: f64,
     gradient: Vec<[f64; 3]>,
+    homo_lumo_gap: f64,
 }
 
 #[cfg(feature = "xtb")]
-fn assert_reference(name: &str, path: &str, actual: &Values, expected: &Values) {
-    assert_eq!(
-        actual.gradient.len(),
-        expected.gradient.len(),
-        "{name}/{path}"
-    );
-    assert!(actual.energy.is_finite(), "{name}/{path}: nonfinite energy");
-    let energy_difference = (actual.energy - expected.energy).abs();
+fn assert_reference(
+    label: &str,
+    energy: f64,
+    gap_ev: f64,
+    gradient: &[[f64; 3]],
+    expected: &Values,
+) {
+    assert_eq!(gradient.len(), expected.gradient.len(), "{label}");
+    let energy_difference = (energy - expected.energy).abs();
+    let gap_difference = (gap_ev - expected.homo_lumo_gap * HARTREE_TO_EV).abs();
     let mut maximum_gradient_difference = 0.0_f64;
-    for (actual, expected) in actual.gradient.iter().zip(&expected.gradient) {
+    for (actual, expected) in gradient.iter().zip(&expected.gradient) {
         for axis in 0..3 {
-            assert!(
-                actual[axis].is_finite(),
-                "{name}/{path}: nonfinite gradient"
-            );
+            assert!(actual[axis].is_finite(), "{label}: nonfinite gradient");
             maximum_gradient_difference =
                 maximum_gradient_difference.max((actual[axis] - expected[axis]).abs());
         }
     }
     eprintln!(
-        "xTB reference {name}/{path}: |ΔE|={energy_difference:.16e} Eh, max |Δgradient|={maximum_gradient_difference:.16e} Eh/bohr"
+        "xTB reference {label}: |ΔE|={energy_difference:.16e} Eh, |Δgap|={gap_difference:.16e} eV, max |Δgradient|={maximum_gradient_difference:.16e} Eh/bohr"
     );
     assert!(
         energy_difference <= 1e-10,
-        "{name}/{path}: |ΔE|={energy_difference:.16e} Eh"
+        "{label}: |ΔE|={energy_difference:.16e} Eh"
     );
     assert!(
-        maximum_gradient_difference <= 1e-9,
-        "{name}/{path}: max |Δgradient|={maximum_gradient_difference:.16e} Eh/bohr"
+        gap_difference <= 1e-9,
+        "{label}: |Δgap|={gap_difference:.16e} eV"
+    );
+    // The fork's cross-platform validation measured differences of up to
+    // 7e-8 Eh/bohr per gradient component and 4e-12 Eh in energy.
+    assert!(
+        maximum_gradient_difference <= 1e-7,
+        "{label}: max |Δgradient|={maximum_gradient_difference:.16e} Eh/bohr"
     );
 }
 
 #[cfg(feature = "xtb")]
 #[test]
-fn worker_and_cli_match_reference_energy_and_gradients() {
+fn worker_and_cli_match_reference_energies_gradients_and_gaps() {
     let reference: Reference = serde_json::from_str(include_str!("fixtures/xtb/reference.json"))
         .expect("xTB reference JSON");
-    for (name, expected) in &reference.molecules {
-        let (mut session, hello) =
-            Session::start(executable(), limits()).expect("start xTB worker");
-        assert!(
-            hello.engine.is_some(),
-            "feature-enabled worker has an engine"
-        );
-        session
-            .open(&molecule(name), &Cancel::default())
-            .expect("open fixture");
-        let result = session
-            .compute(&compute(None, true), &Cancel::default())
-            .expect("compute fixture");
-        assert_reference(
-            name,
-            "Session/angstrom",
-            &Values {
-                energy: result.energy,
-                gradient: result.gradient.expect("requested gradient"),
-            },
-            expected,
-        );
-        session.close().expect("close worker");
+    for (label, conventions, molecules) in [
+        ("axtb", Conventions::Axtb, &reference.axtb),
+        ("xtb-6.8", Conventions::Xtb68, &reference.xtb_68),
+    ] {
+        assert_eq!(molecules.len(), 3);
+        for name in ["water", "caffeine", "ferrocene"] {
+            let expected = &molecules[name];
+            let (mut session, hello) =
+                Session::start(executable(), limits()).expect("start xTB worker");
+            assert!(
+                hello.engine.is_some(),
+                "feature-enabled worker has an engine"
+            );
+            let mut open = molecule(name);
+            open.conventions = conventions;
+            let opened = session
+                .open(&open, &Cancel::default())
+                .expect("open fixture");
+            assert_eq!(opened.method, Method::Gfn2);
+            assert_eq!(opened.conventions, conventions);
+            assert_eq!(opened.numerics, "gfn2:1");
+            let result = session
+                .compute(&compute(None, true), &Cancel::default())
+                .expect("compute fixture");
+            assert_eq!(result.method, opened.method);
+            assert_eq!(result.conventions, conventions);
+            assert_eq!(result.numerics, opened.numerics);
+            assert!(!result.near_degenerate, "{label}/{name}");
+            assert_reference(
+                &format!("{label}/{name}/Session"),
+                result.energy,
+                result.homo_lumo_gap_ev.expect("HOMO-LUMO gap"),
+                result.gradient.as_deref().expect("requested gradient"),
+                expected,
+            );
+            session.close().expect("close worker");
 
-        let dir = tempfile::tempdir().expect("CLI working folder");
-        let xyz = fixtures().join(format!("{name}.xyz"));
-        let output = headless::run_cli(
-            dir.path(),
-            &[
+            let dir = tempfile::tempdir().expect("CLI working folder");
+            let xyz = fixtures().join(format!("{name}.xyz"));
+            let mut args = vec![
                 "calc",
                 "--energy",
                 "--gradient",
                 xyz.to_str().expect("fixture path"),
-            ],
-            b"",
-            Duration::from_secs(120),
-        );
-        assert!(
-            output.status.success(),
-            "{name}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let stdout = std::str::from_utf8(&output.stdout).expect("UTF-8 calc output");
-        assert_eq!(stdout.lines().count(), 1, "one calc result line");
-        let result: serde_json::Value = serde_json::from_str(stdout).expect("calc JSON output");
-        assert_eq!(result["method"], "gfn2");
-        assert_eq!(result["numerics"], "gfn2:1");
-        assert_eq!(result["engine"]["name"], "axtb");
-        assert_eq!(result["engine"]["rev"], reshiki_xtb_worker::AXTB_REV);
-        let actual: Values = serde_json::from_value(result).expect("calc energy and gradient");
-        assert_reference(name, "CLI", &actual, expected);
+            ];
+            if conventions == Conventions::Xtb68 {
+                args.extend(["--conventions", label]);
+            }
+            let output = headless::run_cli(dir.path(), &args, b"", Duration::from_secs(120));
+            assert!(
+                output.status.success() && output.stderr.is_empty(),
+                "{label}/{name}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let stdout = std::str::from_utf8(&output.stdout).expect("UTF-8 calc output");
+            assert_eq!(stdout.lines().count(), 1, "one calc result line");
+            let mut result: serde_json::Value =
+                serde_json::from_str(stdout).expect("calc JSON output");
+            assert_eq!(result["method"], "gfn2");
+            assert_eq!(result["conventions"], label);
+            assert_eq!(result["numerics"], "gfn2:1");
+            assert_eq!(result["engine"]["name"], "axtb");
+            assert_eq!(result["engine"]["rev"], reshiki_xtb_worker::AXTB_REV);
+            assert_eq!(result["near_degenerate"], false, "{label}/{name}");
+            let gradient: Vec<[f64; 3]> =
+                serde_json::from_value(result["gradient"].take()).expect("calc gradient");
+            assert_reference(
+                &format!("{label}/{name}/CLI"),
+                result["energy"].as_f64().expect("calc energy"),
+                result["homo_lumo_gap_ev"].as_f64().expect("calc gap"),
+                &gradient,
+                expected,
+            );
+        }
     }
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn calc_prints_the_near_degenerate_warning_and_preserves_success() {
+    let dir = tempfile::tempdir().expect("CLI working folder");
+    std::fs::write(
+        dir.path().join("h2.xyz"),
+        "2\nStretched H2\nH 0 0 0\nH 4 0 0\n",
+    )
+    .expect("write near-degenerate XYZ");
+    let output = headless::run_cli(
+        dir.path(),
+        &["calc", "--energy", "h2.xyz"],
+        b"",
+        Duration::from_secs(120),
+    );
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        output.stderr,
+        b"reshiki: Near-degenerate electronic structure: results can differ between computers. Try a higher electronic temperature or more unpaired electrons.\n"
+    );
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).expect("calc JSON");
+    let gap = result["homo_lumo_gap_ev"].as_f64().expect("numeric gap");
+    assert!((0.0..NEAR_DEGENERATE_GAP_EV).contains(&gap));
+    assert_eq!(result["near_degenerate"], true);
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn calc_reports_a_null_gap_without_a_lumo() {
+    let dir = tempfile::tempdir().expect("CLI working folder");
+    std::fs::write(dir.path().join("hydride.xyz"), "1\nHydride ion\nH 0 0 0\n")
+        .expect("write hydride XYZ");
+    let output = headless::run_cli(
+        dir.path(),
+        &["calc", "--energy", "--charge", "-1", "hydride.xyz"],
+        b"",
+        Duration::from_secs(120),
+    );
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    let result: serde_json::Value = serde_json::from_slice(&output.stdout).expect("calc JSON");
+    assert_eq!(
+        result.get("homo_lumo_gap_ev"),
+        Some(&serde_json::Value::Null)
+    );
+    assert_eq!(result["near_degenerate"], false);
 }
 
 #[cfg(feature = "xtb")]
@@ -414,7 +496,12 @@ fn cancellation_after_the_compute_frame_kills_and_reaps_the_worker() {
         receive(2, RequestOp::Open(open.clone())),
         response(serde_json::json!({
             "id": 2,
-            "ok": {"atoms": open.numbers.len(), "method": "gfn2", "numerics": "gfn2:1"}
+            "ok": {
+                "atoms": open.numbers.len(),
+                "method": "gfn2",
+                "conventions": "axtb",
+                "numerics": "gfn2:1"
+            }
         })),
         receive(3, RequestOp::Compute(request.clone())),
     );

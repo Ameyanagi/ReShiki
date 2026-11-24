@@ -1,11 +1,26 @@
 use super::*;
+use crate::protocol::{Conventions, Method};
 
 fn computed(gradient: Option<Vec<[f64; 3]>>) -> Computed {
     Computed {
+        method: Method::Gfn2,
+        conventions: Conventions::Xtb68,
+        numerics: "gfn2:1".into(),
         energy: -1.0,
         gradient,
+        homo_lumo_gap_ev: None,
+        near_degenerate: false,
         scf_iterations: 3,
         seconds: 0.1,
+    }
+}
+
+fn opened() -> Opened {
+    Opened {
+        atoms: 2,
+        method: Method::Gfn2,
+        conventions: Conventions::Xtb68,
+        numerics: "gfn2:1".into(),
     }
 }
 
@@ -83,21 +98,54 @@ fn hello_metadata_distinguishes_unavailable_and_inconsistent_workers() {
 
 #[test]
 fn computed_validation_requires_exact_requested_finite_gradient() {
-    assert!(validate_computed(&computed(None), Some(2), false).is_ok());
-    assert!(validate_computed(&computed(None), Some(2), true).is_err());
-    assert!(validate_computed(&computed(Some(vec![[0.0; 3]; 2])), Some(2), true).is_ok());
-    assert!(validate_computed(&computed(Some(vec![[0.0; 3]; 1])), Some(2), true).is_err());
-    assert!(validate_computed(&computed(Some(vec![[0.0; 3]; 2])), Some(2), false).is_err());
-    assert!(validate_computed(&computed(Some(vec![[f64::NAN; 3]; 2])), Some(2), true).is_err());
+    let opened = Some(&opened());
+    assert!(validate_computed(&computed(None), opened, false).is_ok());
+    assert!(validate_computed(&computed(None), opened, true).is_err());
+    assert!(validate_computed(&computed(Some(vec![[0.0; 3]; 2])), opened, true).is_ok());
+    assert!(validate_computed(&computed(Some(vec![[0.0; 3]; 1])), opened, true).is_err());
+    assert!(validate_computed(&computed(Some(vec![[0.0; 3]; 2])), opened, false).is_err());
+    assert!(validate_computed(&computed(Some(vec![[f64::NAN; 3]; 2])), opened, true).is_err());
     assert!(validate_computed(&computed(None), None, false).is_err());
     let mut invalid = computed(None);
     invalid.energy = f64::INFINITY;
-    assert!(validate_computed(&invalid, Some(2), false).is_err());
+    assert!(validate_computed(&invalid, opened, false).is_err());
     invalid.energy = -1.0;
     invalid.seconds = f64::NAN;
-    assert!(validate_computed(&invalid, Some(2), false).is_err());
+    assert!(validate_computed(&invalid, opened, false).is_err());
     invalid.seconds = -0.1;
-    assert!(validate_computed(&invalid, Some(2), false).is_err());
+    assert!(validate_computed(&invalid, opened, false).is_err());
+}
+
+#[test]
+fn computed_validation_checks_the_gap_and_its_flag() {
+    let opened = Some(&opened());
+    let mut result = computed(None);
+    result.near_degenerate = true;
+    assert!(validate_computed(&result, opened, false).is_err());
+    for gap in [-0.1, f64::INFINITY, f64::NAN] {
+        result.homo_lumo_gap_ev = Some(gap);
+        result.near_degenerate = protocol::is_near_degenerate(Some(gap));
+        assert!(validate_computed(&result, opened, false).is_err());
+    }
+    result.homo_lumo_gap_ev = Some(0.05);
+    assert!(validate_computed(&result, opened, false).is_err());
+    result.near_degenerate = true;
+    assert!(validate_computed(&result, opened, false).is_ok());
+    result.homo_lumo_gap_ev = Some(protocol::NEAR_DEGENERATE_GAP_EV);
+    assert!(validate_computed(&result, opened, false).is_err());
+    result.near_degenerate = false;
+    assert!(validate_computed(&result, opened, false).is_ok());
+}
+
+#[test]
+fn computed_validation_checks_open_session_metadata() {
+    let opened = Some(&opened());
+    let mut result = computed(None);
+    result.conventions = Conventions::Axtb;
+    assert!(validate_computed(&result, opened, false).is_err());
+    result.conventions = Conventions::Xtb68;
+    result.numerics = "gfn2:2".into();
+    assert!(validate_computed(&result, opened, false).is_err());
 }
 
 #[test]

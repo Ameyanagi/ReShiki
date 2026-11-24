@@ -119,7 +119,7 @@ pub struct Session {
     limits: Limits,
     next_id: u64,
     max_atoms: usize,
-    atoms: Option<usize>,
+    opened: Option<Opened>,
     stderr: VecDeque<u8>,
     _thread: PhantomData<*const ()>,
 }
@@ -144,7 +144,7 @@ impl Session {
             limits,
             next_id: 1,
             max_atoms: 0,
-            atoms: None,
+            opened: None,
             stderr: VecDeque::with_capacity(STDERR_BYTES),
             _thread: PhantomData,
         };
@@ -172,7 +172,7 @@ impl Session {
         if let Err(message) = validate_opened(&opened, open, self.max_atoms) {
             return Err(self.protocol_error(message));
         }
-        self.atoms = Some(opened.atoms);
+        self.opened = Some(opened.clone());
         Ok(opened)
     }
 
@@ -180,7 +180,11 @@ impl Session {
         if let Some(positions) = &compute.positions {
             protocol::validate_atom_count(positions.len(), self.max_atoms)
                 .and_then(|()| {
-                    protocol::validate_positions(positions, self.atoms.unwrap_or(positions.len()))
+                    let atoms = self
+                        .opened
+                        .as_ref()
+                        .map_or(positions.len(), |open| open.atoms);
+                    protocol::validate_positions(positions, atoms)
                 })
                 .map_err(|error| Error::Input(error.message))?;
         }
@@ -190,7 +194,7 @@ impl Session {
             cancel,
             false,
         )?;
-        if let Err(message) = validate_computed(&computed, self.atoms, compute.gradient) {
+        if let Err(message) = validate_computed(&computed, self.opened.as_ref(), compute.gradient) {
             return Err(self.protocol_error(message));
         }
         Ok(computed)
@@ -606,7 +610,10 @@ fn validate_opened(
     if opened.atoms == 0 || opened.atoms > max_atoms || opened.atoms != open.numbers.len() {
         return Err("Worker returned an inconsistent atom count".into());
     }
-    if opened.method != open.method || opened.numerics.trim().is_empty() {
+    if opened.method != open.method
+        || opened.conventions != open.conventions
+        || opened.numerics.trim().is_empty()
+    {
         return Err("Worker returned inconsistent method metadata".into());
     }
     Ok(())
@@ -614,19 +621,34 @@ fn validate_opened(
 
 fn validate_computed(
     computed: &Computed,
-    atoms: Option<usize>,
+    opened: Option<&Opened>,
     gradient: bool,
 ) -> std::result::Result<(), String> {
-    let atoms = atoms.ok_or_else(|| "Worker computed before opening a molecule".to_owned())?;
+    let opened = opened.ok_or_else(|| "Worker computed before opening a molecule".to_owned())?;
+    if computed.method != opened.method
+        || computed.conventions != opened.conventions
+        || computed.numerics != opened.numerics
+    {
+        return Err("Worker returned inconsistent method metadata".into());
+    }
     if !computed.energy.is_finite() {
         return Err("Worker returned a non-finite energy".into());
+    }
+    if computed
+        .homo_lumo_gap_ev
+        .is_some_and(|gap| !gap.is_finite() || gap < 0.0)
+    {
+        return Err("Worker returned an invalid HOMO-LUMO gap".into());
+    }
+    if computed.near_degenerate != protocol::is_near_degenerate(computed.homo_lumo_gap_ev) {
+        return Err("Worker returned an inconsistent near-degenerate flag".into());
     }
     if !computed.seconds.is_finite() || computed.seconds < 0.0 {
         return Err("Worker returned an invalid elapsed time".into());
     }
     match (gradient, &computed.gradient) {
         (true, Some(rows))
-            if rows.len() == atoms && rows.iter().flatten().all(|x| x.is_finite()) =>
+            if rows.len() == opened.atoms && rows.iter().flatten().all(|x| x.is_finite()) =>
         {
             Ok(())
         }

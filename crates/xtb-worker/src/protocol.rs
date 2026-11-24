@@ -6,7 +6,15 @@ pub const VERSION: u16 = 1;
 pub const MAX_ATOMS: usize = 500;
 pub const MAX_JSON_BYTES: usize = 4 * 1024 * 1024;
 pub const HEADER_LEN: usize = 16;
+/// CODATA 2022 Hartree energy in eV.
+pub const HARTREE_TO_EV: f64 = 27.211386245981;
+pub const NEAR_DEGENERATE_GAP_EV: f64 = 0.1;
 const MAGIC: &[u8; 8] = b"RSHXTBWK";
+
+#[cfg(any(not(target_arch = "wasm32"), feature = "engine", test))]
+pub(crate) fn is_near_degenerate(gap_ev: Option<f64>) -> bool {
+    gap_ev.is_some_and(|gap| gap < NEAR_DEGENERATE_GAP_EV)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum FrameError {
@@ -114,6 +122,15 @@ pub enum Method {
     Gfn2,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Conventions {
+    #[default]
+    Axtb,
+    #[serde(rename = "xtb-6.8")]
+    Xtb68,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Operation {
@@ -145,6 +162,8 @@ pub struct Open {
     pub charge: i32,
     pub uhf: Option<u32>,
     pub method: Method,
+    #[serde(default)]
+    pub conventions: Conventions,
     pub solvent: Option<Solvent>,
     #[serde(default = "one_thread")]
     pub threads: u32,
@@ -279,20 +298,27 @@ pub struct Engine {
     pub rev: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Opened {
     pub atoms: usize,
     pub method: Method,
+    pub conventions: Conventions,
     pub numerics: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Computed {
+    pub method: Method,
+    pub conventions: Conventions,
+    pub numerics: String,
     pub energy: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gradient: Option<Vec<[f64; 3]>>,
+    #[serde(deserialize_with = "Deserialize::deserialize")]
+    pub homo_lumo_gap_ev: Option<f64>,
+    pub near_degenerate: bool,
     pub scf_iterations: usize,
     pub seconds: f64,
 }

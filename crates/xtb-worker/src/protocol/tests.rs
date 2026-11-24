@@ -64,8 +64,18 @@ fn strict_json_messages() {
     };
     assert_eq!(opened.charge, 0);
     assert_eq!(opened.uhf, None);
+    assert_eq!(opened.conventions, Conventions::Axtb);
     assert_eq!(opened.threads, 1);
     assert_eq!(opened.positions[0][0].to_bits(), 0.1_f64.to_bits());
+    let compatible = open.replace("\"heap_bytes\"", r#""conventions":"xtb-6.8","heap_bytes""#);
+    let request: Request = serde_json::from_str(&compatible).unwrap();
+    assert!(matches!(
+        request.op,
+        RequestOp::Open(Open {
+            conventions: Conventions::Xtb68,
+            ..
+        })
+    ));
 
     for malformed in [
         r#"{"id":1,"op":"hello","extra":1}"#,
@@ -75,6 +85,8 @@ fn strict_json_messages() {
         r#"{"id":5,"op":"compute","units":"nm","gradient":false}"#,
         r#"{"id":6,"op":"compute","units":"bohr","gradient":false,"positions":[[1e400,0,0]]}"#,
         &open.replace("\"gfn2\"", "\"gfn1\""),
+        &compatible.replace("\"xtb-6.8\"", "\"xtb\""),
+        &compatible.replace("\"xtb-6.8\"", "null"),
         &open.replace("\"heap_bytes\"", "\"other\":0,\"heap_bytes\""),
         &open.replace(
             "\"heap_bytes\"",
@@ -101,6 +113,38 @@ fn strict_json_messages() {
 }
 
 #[test]
+fn computed_wire_requires_a_gap_field_even_without_a_lumo() {
+    let mut value = serde_json::to_value(Computed {
+        method: Method::Gfn2,
+        conventions: Conventions::Xtb68,
+        numerics: "gfn2:1".into(),
+        energy: -1.0,
+        gradient: None,
+        homo_lumo_gap_ev: None,
+        near_degenerate: false,
+        scf_iterations: 1,
+        seconds: 0.0,
+    })
+    .unwrap();
+    assert_eq!(value["conventions"], "xtb-6.8");
+    assert_eq!(
+        value.get("homo_lumo_gap_ev"),
+        Some(&serde_json::Value::Null)
+    );
+    assert!(serde_json::from_value::<Computed>(value.clone()).is_ok());
+    value.as_object_mut().unwrap().remove("homo_lumo_gap_ev");
+    assert!(serde_json::from_value::<Computed>(value).is_err());
+}
+
+#[test]
+fn near_degenerate_requires_a_gap_strictly_below_the_threshold() {
+    assert!(is_near_degenerate(Some(NEAR_DEGENERATE_GAP_EV.next_down())));
+    assert!(!is_near_degenerate(Some(NEAR_DEGENERATE_GAP_EV)));
+    assert!(!is_near_degenerate(Some(NEAR_DEGENERATE_GAP_EV.next_up())));
+    assert!(!is_near_degenerate(None));
+}
+
+#[test]
 fn invalid_request_values() {
     let mut open = Open {
         numbers: vec![1; MAX_ATOMS + 1],
@@ -109,6 +153,7 @@ fn invalid_request_values() {
         charge: 0,
         uhf: None,
         method: Method::Gfn2,
+        conventions: Conventions::Axtb,
         solvent: None,
         threads: 1,
         heap_bytes: 1 << 20,

@@ -163,7 +163,7 @@ async fn run_command(
         Command::Calc(command) => {
             #[cfg(feature = "xtb")]
             {
-                calc::run(command, out)
+                calc::run(command, out, err)
             }
             #[cfg(not(feature = "xtb"))]
             {

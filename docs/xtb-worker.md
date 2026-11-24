@@ -7,8 +7,9 @@ solvent), evaluated at one geometry after another so that each SCF can start
 from the previous wavefunction. Licensing and packaging are in
 [xTB licensing](xtb-licensing.md).
 
-Protocol version 1 covers energy and gradient. Larger results (Hessians,
-orbitals) use the binary chunks planned below.
+Protocol version 1 covers GFN2-xTB energy, gradient, and a HOMO–LUMO gap
+diagnostic. Larger results (Hessians, orbitals) use the binary chunks planned
+below.
 
 ## Frames
 
@@ -39,29 +40,43 @@ increases with every request; the response repeats it.
   "max_atoms": 500 } }
 ```
 
-| `op`      | Fields                                                                                         | `ok` result                                                                                            |
-| --------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `hello`   | none                                                                                           | protocol, engine, methods, operations, max_atoms                                                       |
-| `open`    | `numbers`, `positions`, `units`, `charge`, `uhf`, `method`, `solvent`, `threads`, `heap_bytes` | `atoms`, `method`, `numerics` (axtb's numerics identity, e.g. `gfn2:1`)                                |
-| `compute` | `positions` (optional: the last geometry), `units`, `gradient`                                 | `energy` (Eh), `gradient` (Eh/bohr, one `[x, y, z]` per atom, when asked), `scf_iterations`, `seconds` |
-| `close`   | none                                                                                           | `{}`; the worker then exits 0                                                                          |
+| `op`      | Fields                                                                                                        | `ok` result                                                                                                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hello`   | none                                                                                                          | protocol, engine, methods, operations, max_atoms                                                                                                                                   |
+| `open`    | `numbers`, `positions`, `units`, `charge`, `uhf`, `method`, `conventions`, `solvent`, `threads`, `heap_bytes` | `atoms`, `method`, `conventions`, `numerics` (axtb's numerics identity, e.g. `gfn2:1`)                                                                                             |
+| `compute` | `positions` (optional: the last geometry), `units`, `gradient`                                                | `energy` (Eh), `gradient` (Eh/bohr, one `[x, y, z]` per atom, when asked), `method`, `conventions`, `numerics`, `homo_lumo_gap_ev`, `near_degenerate`, `scf_iterations`, `seconds` |
+| `close`   | none                                                                                                          | `{}`; the worker then exits 0                                                                                                                                                      |
 
 - `numbers`: atomic numbers, 1 to 500 atoms. `positions`: one `[x, y, z]` per
   atom, finite. `units`: `"angstrom"` or `"bohr"`, always explicit. Ångström
-  is converted with the factor axtb's XYZ reader uses for the method's
-  conventions, so a geometry read from an XYZ file gives the axtb CLI's numbers
-  bit for bit.
+  is converted with the factor axtb's XYZ reader uses for the selected
+  `conventions`, so a geometry read from an XYZ file gives the corresponding
+  axtb CLI's numbers bit for bit. The same conversion applies to replacement
+  geometries in `compute`.
+- The `conventions` field accepts `"axtb"` (default) or `"xtb-6.8"` (xtb 6.8 compatible).
+  These protocol names map to the axtb driver's `"axtb"` and `"xtb"`
+  conventions, respectively. Both `Opened` and every `Computed` response
+  include `method`, `conventions`, and `numerics` using protocol spellings.
 - `charge`: integer, default 0. The total electron count is the sum of the
   atomic numbers minus the charge. `uhf`: unpaired electrons, default from
   the electron count. `open` returns `input` if the electron count is negative
-  or if `uhf` exceeds it or differs in parity. `method`: `"gfn2"` (the only
-  one in version 1). `solvent`: `null` or
+  or if `uhf` exceeds it or differs in parity. Version 1 requires
+  `"method": "gfn2"`. GFN2-xTB is the default method and the only one
+  available in version 1. The planned name `"gfnff"` means GFN-FF, whose
+  results will carry a null gap and a false near-degenerate flag. The planned
+  name `"gxtb"` means g-xTB 2.0.1 only. g-xTB v1.1 will never be offered.
+  `solvent`: `null` or
   `{ "model": "alpb" | "gbsa", "name": "<solvent>" }`. The name can be any
   solvent axtb accepts for the selected model. An unknown name returns `input`.
   `threads`: 1 to 64, default 1. `heap_bytes`: the worker's allocator budget.
 - `open` is allowed once per process; `compute` only after a successful open.
   A failed `compute` (for example an SCF that did not converge) keeps the
   session open at the last successful geometry.
+- Every `Computed` response reports `homo_lumo_gap_ev` as a finite,
+  non-negative number in eV or `null` when there is no LUMO. Conversion from
+  axtb's Eh value uses `27.211386245981` eV/Eh (CODATA 2022). It also includes
+  `near_degenerate`, which is `true` if and only if a numeric gap is strictly
+  below `0.1` eV. A gap of exactly `0.1` eV and a null gap both give `false`.
 - Without xTB, `hello` gives `engine: null` and empty `methods` and
   `operations` lists. Every other operation returns `unavailable`.
 
@@ -112,8 +127,12 @@ fixed message with the same ID and error kind.
   atom limit from `hello`, the number and finiteness of the positions, and
   the `open` thread count. A local `Error::Input` leaves the worker running
   with its current geometry intact.
-- The client checks every response: matching `id`, finite energy, one
-  finite gradient row per atom.
+- The client checks response IDs and verifies that an `open` response matches
+  the requested method and conventions and provides a non-empty numerics
+  identity. It checks that each result matches all three fields from `open`
+  and has finite energy, one finite gradient row per atom when requested,
+  a gap that is null or finite and non-negative, and a `near_degenerate`
+  flag that agrees with the gap threshold.
 
 ## Planned: binary chunks (not implemented)
 
@@ -139,10 +158,20 @@ Arrays too large for a JSON frame travel as raw little-endian `f64`:
 
 ## Command line
 
-`reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] FILE.xyz`
+`reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz`
 reads the first structure of an XYZ file (Ångström, case-insensitive element
-symbols), runs one GFN2-xTB calculation through the worker, and prints one
-JSON object: `energy`
-(Eh), `gradient` (Eh/bohr) when asked, `method`, `numerics` and `engine`. In a
-build without xTB it prints `reshiki: xTB is not included in this build`
-on stderr and exits 1.
+symbols) and runs one GFN2-xTB calculation through the worker. The JSON
+result includes `energy` (Eh), `gradient` (Eh/bohr) when asked, `method`,
+`conventions`, `numerics`, `engine`, `homo_lumo_gap_ev`, and `near_degenerate`.
+`--conventions` defaults to `axtb`. The `xtb-6.8` option selects xtb 6.8 compatible
+conventions and their Ångström-to-bohr conversion.
+
+When `near_degenerate` is `true`, stderr carries the warning below.
+
+```text
+reshiki: Near-degenerate electronic structure: results can differ between computers. Try a higher electronic temperature or more unpaired electrons.
+```
+
+The warning leaves the calculation's exit status unchanged. In a build
+without xTB the CLI prints `reshiki: xTB is not included in this build` on
+stderr and exits 1.

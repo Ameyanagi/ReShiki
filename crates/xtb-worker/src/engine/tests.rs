@@ -18,11 +18,18 @@ fn angstrom_conversion_matches_the_driver_bit_for_bit() {
             })
             .collect();
         let method = axtb_driver::Method::Gfn2;
-        let (_, expected) = axtb_driver::read_xyz(xyz, method, None).unwrap();
-        let actual = to_bohr(angstrom, Units::Angstrom, angstrom_to_bohr(method).unwrap()).unwrap();
-        assert_eq!(actual.len(), expected.len());
-        for (actual, expected) in actual.into_iter().zip(expected) {
-            assert_eq!(actual.map(f64::to_bits), expected.map(f64::to_bits));
+        for conventions in ["axtb", "xtb"] {
+            let (_, expected) = axtb_driver::read_xyz(xyz, method, Some(conventions)).unwrap();
+            let scale = angstrom_to_bohr(method, conventions).unwrap();
+            let actual = to_bohr(angstrom.clone(), Units::Angstrom, scale).unwrap();
+            assert_eq!(actual.len(), expected.len());
+            for (actual, expected) in actual.into_iter().zip(expected) {
+                assert_eq!(
+                    actual.map(f64::to_bits),
+                    expected.map(f64::to_bits),
+                    "{conventions}"
+                );
+            }
         }
     }
 }

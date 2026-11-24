@@ -824,7 +824,7 @@ several lines:
 ## calc
 
 ```text
-reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] FILE.xyz
+reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz
 ```
 
 Runs one GFN2-xTB calculation through the [isolated worker](xtb-worker.md).
@@ -832,16 +832,19 @@ The XYZ file contains an atom count from 1 to 500, a comment line, and that
 many rows with an element symbol and three finite coordinates in angstroms.
 Only the first frame is read. Each atom row must have exactly four columns.
 
-| Option       | Commands | Meaning                                                                              |
-| ------------ | -------- | ------------------------------------------------------------------------------------ |
-| `--energy`   | calc     | Calculate the GFN2-xTB energy. Required.                                             |
-| `--gradient` | calc     | Include the Cartesian energy gradient in Eh/bohr.                                    |
-| `--charge N` | calc     | Molecular charge, default 0.                                                         |
-| `--uhf N`    | calc     | Nonnegative number of unpaired electrons. The default comes from the electron count. |
+| Option               | Commands | Meaning                                                                              |
+| -------------------- | -------- | ------------------------------------------------------------------------------------ |
+| `--energy`           | calc     | Calculate the GFN2-xTB energy. Required.                                             |
+| `--gradient`         | calc     | Include the Cartesian energy gradient in Eh/bohr.                                    |
+| `--charge N`         | calc     | Molecular charge, default 0.                                                         |
+| `--uhf N`            | calc     | Nonnegative number of unpaired electrons. The default comes from the electron count. |
+| `--conventions MODE` | calc     | Use `axtb` (default) or `xtb-6.8` (xtb 6.8 compatible) conventions.                  |
 
 The command prints one JSON line with `energy` in Eh, `gradient` in Eh/bohr
-when requested, `method`, `numerics` and `engine`. It uses the worker result
-format without an experimental envelope. `calc` is not exposed over MCP.
+when requested, `method`, `conventions`, `numerics`, `engine`,
+`homo_lumo_gap_ev` (null without a LUMO), and `near_degenerate`. The command
+also writes a warning to stderr when the gap is below 0.1 eV. `calc` is
+CLI-only and prints its result without an experimental envelope.
 
 In a build without xTB, it writes `reshiki: xTB is not included in this build`
 to stderr, prints nothing to stdout, and exits 1. See [xTB licensing and

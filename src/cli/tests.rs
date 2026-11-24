@@ -9,6 +9,7 @@ use reshiki_agent::ops::{
     budget::Budgets,
     documents::{EXPORT_FORMATS, IMPORT_FORMATS},
 };
+use reshiki_xtb_worker::protocol::Conventions;
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -533,7 +534,7 @@ async fn version_prints_the_app_version_and_exits() {
 }
 
 #[test]
-fn calc_parses_its_required_operation_and_optional_spin_and_charge() {
+fn calc_parses_its_required_operation_and_optional_settings() {
     assert_eq!(
         parsed(&["calc", "--energy", "water.xyz"]),
         Ok(Command::Calc(Calc {
@@ -541,6 +542,7 @@ fn calc_parses_its_required_operation_and_optional_spin_and_charge() {
             gradient: false,
             charge: 0,
             uhf: None,
+            conventions: Conventions::Axtb,
         }))
     );
     assert_eq!(
@@ -552,6 +554,8 @@ fn calc_parses_its_required_operation_and_optional_spin_and_charge() {
             "water.XYZ",
             "--uhf",
             "1",
+            "--conventions",
+            "xtb-6.8",
             "--energy"
         ]),
         Ok(Command::Calc(Calc {
@@ -559,15 +563,24 @@ fn calc_parses_its_required_operation_and_optional_spin_and_charge() {
             gradient: true,
             charge: -1,
             uhf: Some(1),
+            conventions: Conventions::Xtb68,
         }))
     );
     assert_eq!(
-        parsed(&["calc", "--energy", "--", "-water.xyz"]),
+        parsed(&[
+            "calc",
+            "--energy",
+            "--conventions",
+            "axtb",
+            "--",
+            "-water.xyz"
+        ]),
         Ok(Command::Calc(Calc {
             file: "-water.xyz".into(),
             gradient: false,
             charge: 0,
             uhf: None,
+            conventions: Conventions::Axtb,
         }))
     );
     for tokens in [
@@ -588,6 +601,28 @@ fn calc_parses_its_required_operation_and_optional_spin_and_charge() {
         vec!["calc", "--energy", "--from", "xyz", "water.xyz"],
     ] {
         assert!(parsed(&tokens).is_err(), "{tokens:?}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn calc_conventions_usage_errors() {
+    for (options, expected) in [
+        (
+            &["--conventions", "xtb"][..],
+            "--conventions must be axtb or xtb-6.8",
+        ),
+        (&["--conventions"][..], "--conventions needs a value"),
+        (
+            &["--conventions", "axtb", "--conventions", "xtb-6.8"][..],
+            "--conventions given more than once",
+        ),
+    ] {
+        let mut tokens = vec!["calc", "--energy", "water.xyz"];
+        tokens.extend_from_slice(options);
+        let (code, out, err) = call(&tokens).await;
+        assert_eq!(code, USAGE);
+        assert!(out.is_empty());
+        assert_eq!(err, format!("reshiki: {expected}\n"));
     }
 }
 

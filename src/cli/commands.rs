@@ -321,7 +321,7 @@ const NAME: CommandSpec = CommandSpec {
 const CALC: CommandSpec = CommandSpec {
     name: "calc",
     summary: "Print a GFN2-xTB energy and optional gradient as one JSON line",
-    usage: "reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] FILE.xyz",
+    usage: "reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz",
     options: &[
         OptionSpec {
             flag: "--energy",
@@ -352,6 +352,14 @@ const CALC: CommandSpec = CommandSpec {
             value: Some("N"),
             help: "Set the number of unpaired electrons. The default comes from the electron count.",
             default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--conventions",
+            value: Some("MODE"),
+            help: "Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.",
+            default: Some(|| json!("axtb")),
             sets: None,
             equivalent: None,
         },
@@ -822,10 +830,14 @@ Options:
   --charge N  Set the molecular charge (default 0).
   --uhf N     Set a nonnegative number of unpaired electrons. The default
               comes from the electron count.
+  --conventions axtb|xtb-6.8
+              Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.
 
 Prints one JSON line with energy (Eh), gradient (Eh/bohr) when requested,
-method, numerics and engine. This CLI-only command has no MCP tool and
-uses the worker result format without an experimental envelope.
+homo_lumo_gap_ev (null without a LUMO), near_degenerate, method, conventions,
+numerics and engine. A gap below 0.1 eV also prints a warning on stderr.
+This CLI-only command has no MCP tool and uses the worker result format
+without an experimental envelope.
 
 Requires a build with xTB. Otherwise it reports that xTB is not included
 and exits 1. See docs/xtb-worker.md and docs/xtb-licensing.md.

@@ -8,6 +8,7 @@ use super::{
     commands::{self, CommandSpec},
     input_format, input_formats, output_formats, render_formats,
 };
+use reshiki_xtb_worker::protocol::Conventions;
 use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
@@ -43,6 +44,7 @@ pub(crate) struct Calc {
     pub(crate) gradient: bool,
     pub(crate) charge: i32,
     pub(crate) uhf: Option<u32>,
+    pub(crate) conventions: Conventions,
 }
 
 /// A schema the CLI can print without a tool host.
@@ -263,11 +265,17 @@ fn calc(options: &Options) -> Result<Command, String> {
                 .ok_or("--uhf must be a nonnegative whole number in the unsigned 32-bit range")
         })
         .transpose()?;
+    let conventions = match options.conventions.as_deref().map(OsStr::to_str) {
+        None | Some(Some("axtb")) => Conventions::Axtb,
+        Some(Some("xtb-6.8")) => Conventions::Xtb68,
+        _ => return Err("--conventions must be axtb or xtb-6.8".into()),
+    };
     Ok(Command::Calc(Calc {
         file,
         gradient: options.gradient,
         charge,
         uhf,
+        conventions,
     }))
 }
 
@@ -394,6 +402,7 @@ struct Options {
     decimals: Option<OsString>,
     charge: Option<OsString>,
     uhf: Option<OsString>,
+    conventions: Option<OsString>,
     svg_text: SvgText,
     pages: bool,
     dark: bool,
@@ -462,6 +471,7 @@ fn parse_options(
                 "--decimals" => options.decimals = Some(value),
                 "--charge" => options.charge = Some(value),
                 "--uhf" => options.uhf = Some(value),
+                "--conventions" => options.conventions = Some(value),
                 "--svg-text" => {
                     options.svg_text = match value.to_str() {
                         Some("live") => SvgText::Live,

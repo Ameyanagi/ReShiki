@@ -70,6 +70,7 @@ fn xyz(input: impl std::io::BufRead) -> Result<Geometry, String> {
 pub(super) fn run(
     command: super::args::Calc,
     out: &mut dyn std::io::Write,
+    err: &mut dyn std::io::Write,
 ) -> Result<(), super::host::CliError> {
     use super::host::CliError;
     use reshiki_xtb_worker::{
@@ -113,6 +114,7 @@ pub(super) fn run(
         charge: command.charge,
         uhf: command.uhf,
         method: Method::Gfn2,
+        conventions: command.conventions,
         solvent: None,
         threads: 1,
         heap_bytes: limits.heap_bytes,
@@ -122,7 +124,7 @@ pub(super) fn run(
     }
     let (mut session, hello) = Session::start(&executable, limits).map_err(failed)?;
     let cancel = Cancel::default();
-    let opened = session.open(&open, &cancel).map_err(failed)?;
+    session.open(&open, &cancel).map_err(failed)?;
     let computed = session
         .compute(
             &Compute {
@@ -136,8 +138,11 @@ pub(super) fn run(
     session.close().map_err(failed)?;
     let mut result = serde_json::Map::from_iter([
         ("energy".into(), json!(computed.energy)),
-        ("method".into(), json!(opened.method)),
-        ("numerics".into(), json!(opened.numerics)),
+        ("homo_lumo_gap_ev".into(), json!(computed.homo_lumo_gap_ev)),
+        ("near_degenerate".into(), json!(computed.near_degenerate)),
+        ("method".into(), json!(computed.method)),
+        ("conventions".into(), json!(computed.conventions)),
+        ("numerics".into(), json!(computed.numerics)),
         ("engine".into(), json!(hello.engine)),
     ]);
     if command.gradient {
@@ -146,7 +151,14 @@ pub(super) fn run(
             .ok_or_else(|| CliError::Failed("the xTB worker returned no gradient".into()))?;
         result.insert("gradient".into(), json!(gradient));
     }
-    writeln!(out, "{}", serde_json::Value::Object(result)).map_err(CliError::Stdout)
+    writeln!(out, "{}", serde_json::Value::Object(result)).map_err(CliError::Stdout)?;
+    if computed.near_degenerate {
+        let _ = writeln!(
+            err,
+            "reshiki: Near-degenerate electronic structure: results can differ between computers. Try a higher electronic temperature or more unpaired electrons."
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]

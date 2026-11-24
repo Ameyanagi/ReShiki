@@ -1,8 +1,8 @@
 //! Warm-started GFN2-xTB calculations through the axtb driver.
 
 use crate::protocol::{
-    self, Compute, Computed, Engine, ErrorKind, Hello, Method, Open, Opened, Operation,
-    ResponseError, SolventModel, Units,
+    self, Compute, Computed, Conventions, Engine, ErrorKind, Hello, Method, Open, Opened,
+    Operation, ResponseError, SolventModel, Units,
 };
 use axtb_driver::{Calculator, Request, Task};
 
@@ -28,6 +28,8 @@ pub(crate) struct Session {
     calculator: Calculator,
     positions: Vec<[f64; 3]>,
     angstrom_to_bohr: f64,
+    method: Method,
+    conventions: Conventions,
 }
 
 impl Session {
@@ -36,7 +38,11 @@ impl Session {
         let method = match open.method {
             Method::Gfn2 => axtb_driver::Method::Gfn2,
         };
-        let angstrom_to_bohr = angstrom_to_bohr(method)?;
+        let conventions = match open.conventions {
+            Conventions::Axtb => "axtb",
+            Conventions::Xtb68 => "xtb",
+        };
+        let angstrom_to_bohr = angstrom_to_bohr(method, conventions)?;
         let positions = to_bohr(open.positions, open.units, angstrom_to_bohr)?;
         let (alpb, gbsa) = match open.solvent {
             Some(solvent) if solvent.model == SolventModel::Alpb => (Some(solvent.name), None),
@@ -49,6 +55,7 @@ impl Session {
             charge: f64::from(open.charge),
             uhf: open.uhf.map(i64::from),
             method: Some(method.name().into()),
+            conventions: Some(conventions.into()),
             alpb,
             gbsa,
             threads: Some(open.threads as usize),
@@ -59,13 +66,16 @@ impl Session {
         let opened = Opened {
             atoms: request.numbers.len(),
             method: open.method,
-            numerics: axtb_driver::numerics(method, false),
+            conventions: open.conventions,
+            numerics: calculator.numerics().to_owned(),
         };
         Ok((
             Self {
                 calculator,
                 positions: request.positions,
                 angstrom_to_bohr,
+                method: open.method,
+                conventions: open.conventions,
             },
             opened,
         ))
@@ -97,23 +107,34 @@ impl Session {
                 "axtb returned an incomplete GFN2 result",
             ));
         };
+        let homo_lumo_gap_ev = scf.homo_lumo_gap.map(|gap| gap * protocol::HARTREE_TO_EV);
+        if homo_lumo_gap_ev.is_some_and(|gap| !gap.is_finite() || gap < 0.0) {
+            return Err(ResponseError::new(
+                ErrorKind::Numerical,
+                "axtb returned an invalid HOMO-LUMO gap",
+            ));
+        }
         if let Some(positions) = positions {
             self.positions = positions;
         }
         Ok(Computed {
+            method: self.method,
+            conventions: self.conventions,
+            numerics: response.numerics,
             energy,
             gradient: response.gradient,
+            homo_lumo_gap_ev,
+            near_degenerate: protocol::is_near_degenerate(homo_lumo_gap_ev),
             scf_iterations: scf.iterations,
             seconds,
         })
     }
 }
 
-fn angstrom_to_bohr(method: axtb_driver::Method) -> Result<f64, ResponseError> {
-    // Ask the driver's XYZ reader for its scale at 1 Å under the default
-    // conventions, so even a change to the pinned constants stays in sync.
+fn angstrom_to_bohr(method: axtb_driver::Method, conventions: &str) -> Result<f64, ResponseError> {
+    // Ask the driver's XYZ reader for its scale at 1 Å in the selected conventions.
     let (_, positions) =
-        axtb_driver::read_xyz("1\n\nH 1 0 0\n", method, None).map_err(engine_error)?;
+        axtb_driver::read_xyz("1\n\nH 1 0 0\n", method, Some(conventions)).map_err(engine_error)?;
     Ok(positions[0][0])
 }
 

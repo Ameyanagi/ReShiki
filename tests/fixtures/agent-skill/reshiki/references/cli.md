@@ -249,7 +249,7 @@ atom, in input atom order. Atoms outside the principal parent have null.
 
 ```text
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
-Usage: reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] FILE.xyz
+Usage: reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz
 
 Reads the first structure of an XYZ file, with coordinates in angstroms,
 and runs GFN2-xTB in an isolated worker process. The first line is an atom
@@ -262,10 +262,14 @@ Options:
   --charge N  Set the molecular charge (default 0).
   --uhf N     Set a nonnegative number of unpaired electrons. The default
               comes from the electron count.
+  --conventions axtb|xtb-6.8
+              Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.
 
 Prints one JSON line with energy (Eh), gradient (Eh/bohr) when requested,
-method, numerics and engine. This CLI-only command has no MCP tool and
-uses the worker result format without an experimental envelope.
+homo_lumo_gap_ev (null without a LUMO), near_degenerate, method, conventions,
+numerics and engine. A gap below 0.1 eV also prints a warning on stderr.
+This CLI-only command has no MCP tool and uses the worker result format
+without an experimental envelope.
 
 Requires a build with xTB. Otherwise it reports that xTB is not included
 and exits 1. See docs/xtb-worker.md and docs/xtb-licensing.md.
