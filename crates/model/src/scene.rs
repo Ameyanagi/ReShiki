@@ -157,6 +157,14 @@ pub enum Primitive {
         spread: f32,
         blur: f32,
     },
+    /// A 3D model's orbital surface as seen in its view: shading layers,
+    /// each a region filled even-odd in an exact colour and drawn over the
+    /// last, then the visible outline runs stroked with `outline`.
+    Surface {
+        layers: Vec<(Vec<Vec<Point>>, [u8; 3])>,
+        rims: Vec<Vec<Point>>,
+        outline: Option<Outline>,
+    },
     /// A 3D model's soft background card: a rounded rectangle in exact colors.
     Card {
         lo: Point,
@@ -4385,6 +4393,17 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
             } => {
                 let r = width / 2.;
                 for p in [from, to] {
+                    points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                }
+            }
+            Primitive::Surface {
+                layers,
+                rims,
+                outline,
+            } => {
+                let r = outline.map_or(0., |o| o.width / 2.);
+                let contours = layers.iter().flat_map(|(region, _)| region);
+                for p in contours.chain(rims).flatten() {
                     points.extend([p.offset(-r, -r), p.offset(r, r)]);
                 }
             }

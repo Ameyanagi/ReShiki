@@ -583,6 +583,37 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     2. * spread
                 ));
             }
+            Primitive::Surface {
+                layers,
+                rims,
+                outline,
+            } => {
+                let data = |runs: &[Vec<super::Point>], closed: bool| {
+                    let mut d = String::new();
+                    for run in runs {
+                        for (k, p) in run.iter().enumerate() {
+                            push_command(&mut d, if k == 0 { 'M' } else { 'L' }, &[p.x, p.y]);
+                        }
+                        if closed {
+                            d.push('Z');
+                        }
+                    }
+                    d
+                };
+                for (region, [r, g, b]) in &layers {
+                    s.push_str(&format!(
+                        "<path d=\"{}\" fill=\"rgb({r},{g},{b})\" fill-rule=\"evenodd\"/>",
+                        data(region, true)
+                    ));
+                }
+                if outline.is_some() && !rims.is_empty() {
+                    s.push_str(&format!(
+                        "<path d=\"{}\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{}/>",
+                        data(&rims, false),
+                        outline_paint(outline)
+                    ));
+                }
+            }
             Primitive::Card {
                 lo,
                 hi,
@@ -759,6 +790,7 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. }
+            | Primitive::Surface { .. }
             | Primitive::Gradient { .. }
             | Primitive::Glow { .. } => {}
         }
