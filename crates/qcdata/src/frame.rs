@@ -213,13 +213,23 @@ pub struct Trajectory {
     /// Labels, if recorded for each step.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub labels: Vec<String>,
+    /// Starting minimizer energies in hartree, if recorded for each conformer.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub minimizer_energies_hartree: Vec<f64>,
+    /// Number of starts in each conformer's cluster, if recorded.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cluster_sizes: Vec<u32>,
 }
 
 impl Trajectory {
-    /// Return the step count, using energies or labels when positions were omitted.
+    /// Return the step count, using the other step arrays when positions were omitted.
     pub fn steps(&self) -> usize {
         if self.positions_angstrom.is_empty() {
-            self.energies_hartree.len().max(self.labels.len())
+            self.energies_hartree
+                .len()
+                .max(self.labels.len())
+                .max(self.minimizer_energies_hartree.len())
+                .max(self.cluster_sizes.len())
         } else {
             self.positions_angstrom
                 .len()
@@ -293,6 +303,22 @@ impl Trajectory {
                 "invalid trajectory positions, energies, or labels".into(),
             ));
         }
+        if (!self.minimizer_energies_hartree.is_empty()
+            && self.minimizer_energies_hartree.len() != steps)
+            || self
+                .minimizer_energies_hartree
+                .iter()
+                .any(|x| !x.is_finite())
+        {
+            return Err(Error::Invalid(
+                "invalid trajectory minimizer energies".into(),
+            ));
+        }
+        if (!self.cluster_sizes.is_empty() && self.cluster_sizes.len() != steps)
+            || self.cluster_sizes.contains(&0)
+        {
+            return Err(Error::Invalid("invalid trajectory cluster sizes".into()));
+        }
         Ok(())
     }
 
@@ -305,6 +331,8 @@ impl Trajectory {
             + size_of_val(self.energies_hartree.as_slice())
             + size_of_val(self.labels.as_slice())
             + self.labels.iter().map(String::len).sum::<usize>()
+            + size_of_val(self.minimizer_energies_hartree.as_slice())
+            + size_of_val(self.cluster_sizes.as_slice())
     }
 }
 
@@ -452,6 +480,8 @@ mod tests {
             positions_angstrom: (0..18).map(f64::from).collect(),
             energies_hartree: vec![-10.0, -11.0],
             labels: vec!["first".into(), "second".into()],
+            minimizer_energies_hartree: vec![],
+            cluster_sizes: vec![],
         }
     }
 
@@ -487,6 +517,56 @@ mod tests {
         assert_eq!(path.steps(), 2);
         path.energies_hartree.push(0.0);
         assert!(path.validate().is_err());
+    }
+
+    #[test]
+    fn trajectory_conformer_metadata_counts_steps_and_validates() {
+        let mut path = trajectory();
+        path.minimizer_energies_hartree = vec![-0.5];
+        assert!(path.validate().is_err());
+        path.minimizer_energies_hartree.push(-0.25);
+        path.cluster_sizes = vec![3];
+        assert!(path.validate().is_err());
+        path.cluster_sizes.push(1);
+        path.validate().unwrap();
+
+        path.positions_angstrom.clear();
+        path.energies_hartree.clear();
+        path.labels.clear();
+        path.minimizer_energies_hartree[1] = f64::INFINITY;
+        assert!(path.validate().is_err());
+        path.minimizer_energies_hartree.clear();
+        assert_eq!(path.steps(), 2);
+        assert!(path.frame(0).is_none());
+        path.validate().unwrap();
+        path.cluster_sizes[1] = 0;
+        assert!(path.validate().is_err());
+        path.cluster_sizes.clear();
+        path.minimizer_energies_hartree = vec![-0.5, -0.25];
+        assert_eq!(path.steps(), 2);
+        path.validate().unwrap();
+    }
+
+    #[test]
+    fn trajectory_conformer_metadata_uses_plain_json_and_counts_heap_bytes() {
+        let mut path = trajectory();
+        path.positions_angstrom.clear();
+        let legacy = serde_json::to_value(&path).unwrap();
+        assert!(legacy.get("minimizer_energies_hartree").is_none());
+        assert!(legacy.get("cluster_sizes").is_none());
+        assert_eq!(serde_json::from_value::<Trajectory>(legacy).unwrap(), path);
+
+        let original_bytes = path.heap_bytes();
+        path.minimizer_energies_hartree = vec![-0.123456789, -0.25];
+        path.cluster_sizes = vec![3, 1];
+        assert_eq!(path.heap_bytes() - original_bytes, 2 * (8 + 4));
+        let json = serde_json::to_value(&path).unwrap();
+        assert_eq!(
+            json["minimizer_energies_hartree"],
+            serde_json::json!([-0.123456789, -0.25])
+        );
+        assert_eq!(json["cluster_sizes"], serde_json::json!([3, 1]));
+        assert_eq!(serde_json::from_value::<Trajectory>(json).unwrap(), path);
     }
 
     #[test]

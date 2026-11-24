@@ -8,18 +8,18 @@ Rust xTB implementation. The data model is fixed in [xtb-data.md](xtb-data.md).
 
 ## Decisions
 
-| Topic            | Decision                                                                                                                                                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Engine           | A fork of axtb (LGPL-3.0-or-later) pinned by revision: `Ameyanagi/axtb`, branch `reshiki`.                                                                                                                                     |
-| Linking          | The `reshiki` executable links the fork only under the Cargo feature `xtb`. The feature is off by default and exists only on the root application crate; library crates never enable it.                                       |
-| Process          | Calculations run in a child process of the same executable (`reshiki --xtb-worker`), like `--geometry-worker`. There is no separate helper executable on the desktop.                                                          |
-| Desktop builds   | macOS and Linux desktop releases include xTB. Windows desktop releases do not until code signing for them works.                                                                                                               |
-| Packages         | Python, npm and crates stay MIT OR Apache-2.0 and calculate nothing unless a package opts in. The Python opt-in package is `reshiki-xtb` (TestPyPI first). Web/WebAssembly calculations come later.                            |
-| Methods          | GFN2-xTB (default), GFN-FF and g-xTB. Each method supports a different set of tasks; the table is data in `reshiki-qcdata` ([capabilities](xtb-data.md#method--task-capabilities)).                                            |
-| Limits           | Energy, gradient and optimization up to 500 atoms; Hessians up to 200 atoms; trajectories up to 1000 frames; orbital surfaces simplified to about 20,000 triangles for export.                                                 |
-| Orbital surfaces | Both an interactive viewer and vector shapes in the drawing (SVG and PDF export).                                                                                                                                              |
-| Optimizer        | Our own (MIT OR Apache-2.0), reusable with MMFF.                                                                                                                                                                               |
-| Files            | Read Molden, Gaussian fchk, Gaussian `.log` and ORCA `.out`; read and write XYZ (multi-frame), SDF/V3000 3D, and Gaussian, ORCA and GAMESS inputs. Files come before calculations, but every phase runs now in parallel lanes. |
+| Topic            | Decision                                                                                                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Engine           | A fork of axtb (LGPL-3.0-or-later) pinned by revision: `Ameyanagi/axtb`, branch `reshiki`.                                                                                                                                                 |
+| Linking          | The `reshiki` executable links the fork only under the Cargo feature `xtb`. The feature is off by default and exists only on the root application crate; library crates never enable it.                                                   |
+| Process          | Calculations run in a child process of the same executable (`reshiki --xtb-worker`), like `--geometry-worker`. There is no separate helper executable on the desktop.                                                                      |
+| Desktop builds   | macOS and Linux desktop releases include xTB. Windows desktop releases do not until code signing for them works.                                                                                                                           |
+| Packages         | Python, npm and crates stay MIT OR Apache-2.0 and calculate nothing unless a package opts in. The Python opt-in package is `reshiki-xtb` (TestPyPI first). Web/WebAssembly calculations come later.                                        |
+| Methods          | GFN2-xTB (default), GFN-FF and g-xTB. Each method supports a different set of tasks; the table is data in `reshiki-qcdata` ([capabilities](xtb-data.md#method--task-capabilities)).                                                        |
+| Limits           | Energy, gradient and optimization up to 500 atoms; Hessians and conformer re-ranking up to 200 atoms; transition states up to 120 atoms; trajectories up to 1000 frames; orbital surfaces simplified to about 20,000 triangles for export. |
+| Orbital surfaces | Both an interactive viewer and vector shapes in the drawing (SVG and PDF export).                                                                                                                                                          |
+| Optimizer        | Our own (MIT OR Apache-2.0), reusable with MMFF.                                                                                                                                                                                           |
+| Files            | Read Molden, Gaussian fchk, Gaussian `.log` and ORCA `.out`; read and write XYZ (multi-frame), SDF/V3000 3D, and Gaussian, ORCA and GAMESS inputs. Files come before calculations, but every phase runs now in parallel lanes.             |
 
 ### Licensing
 
@@ -84,13 +84,53 @@ request before packaging depends on it, and user interface after file support.
 - Worker protocol: versioned frames with request IDs, size and dimension checks before
   allocation, per-request, idle and whole-job deadlines, cancellation by ending the child
   process. Energy and gradient first.
-- Optimizer crate: bounded Cartesian L-BFGS with diagonal preconditioning and a documented
-  stopping rule first; approximate normal coordinates only if benchmarks justify them.
+- Optimizer crate (MIT OR Apache-2.0, reusable with MMFF), built for few and cheap steps
+  ([Optimizer speed](#optimizer-speed)). Held atoms: "Hold selected atoms fixed" freezes their
+  Cartesian coordinates. Optimization runs live, step by step, on the 3D model.
+- Stereo check after every optimization or applied conformer: stereocentres and E/Z double bonds
+  are compared with the drawing; if any changed, nothing is applied automatically and a warning
+  ("Optimization changed the configuration at C3 (R → S)") offers Apply anyway or Discard.
+- Conformer search: ETKDG starts (100 by default, at most 300, seeded and deterministic) →
+  minimization with the chosen minimizer (MMFF94s by default; MMFF94, UFF, GFN-FF or GFN2-xTB;
+  molecules MMFF cannot type fall back to UFF with a note; GFN2-xTB for every start up to 120
+  atoms, with a time estimate) → exact duplicates dropped (heavy-atom RMSD < 0.125 Å and
+  ΔE < 0.1 kcal/mol) → Butina clustering on a symmetry-aware heavy-atom RMSD after optimal
+  superposition (0.5 / 0.75 / 1.25 Å for fine / normal / coarse) → the lowest one (or three)
+  members of each cluster within a 15 kcal/mol window optimized with xTB (at most 20 by
+  default, 60 at most) and re-ranked → a final 0.25 Å deduplication. xTB re-ranking up to 200
+  atoms. Results list ΔE by xTB and by the minimizer, Boltzmann weights at 298 K, cluster size,
+  RMSD to the best and the stereo check; at most 32 kept conformers are saved.
 - Calculate panel, results palette, stale-result display on the document storage Phase 2a owns, CLI
   `reshiki calc`, MCP tools and the Python API, all through the existing admission, cancellation
   and revision-checked commit of the agent API.
 - Validation against `xtb --opt` on the test set: atom-mapped aligned RMSD and energy
   differences, with basin changes diagnosed.
+
+### Optimizer speed
+
+Few steps and cheap steps, written fresh from the literature:
+
+- Fewer steps: L-BFGS preconditioned with a model Hessian (Lindh et al., Chem. Phys. Lett. 241,
+  423 (1995)) built from bonds, angles and torsions, with steps in the approximate normal
+  coordinates of that model Hessian under rational-function (RFO) step control. Plain Cartesian
+  L-BFGS stays as the fallback; redundant internal coordinates (TRIC, Wang and Song 2016) only if
+  benchmarks show a gap.
+- Cheaper steps: each SCF restarts from the previous step's wavefunction; loose SCF accuracy
+  early, tightened near convergence; optimization starts from the MMFF (or GFN-FF) minimum.
+- Independent optimizations (conformers) run side by side, one thread each.
+- Gate: on the validation set, step counts within 1.5 × those of `xtb --opt` and final energies
+  within 1e-6 Eh of the same minimum, with wall time per molecule reported against xtb.
+
+### File size
+
+Native files stay small ([details](xtb-data.md#file-size)). Saved by default: settings, method,
+engine version, the final frame, energies, charges, dipole, bond orders of bonded pairs, orbital
+energies and occupations, frequencies and IR intensities, thermochemistry and convergence
+(target ≤ 50 KB at 50 atoms, ≤ 200 KB at 200 atoms). Normal modes, orbital coefficients and
+basis, Hessians and intermediate optimization steps are recomputed on demand unless the user
+keeps full results. Results imported from other programs keep their heavy arrays as compact
+binary up to 2 MB per molecule; above that the file records the source file name and hash.
+Grids, meshes and animation frames are never saved.
 
 ### Phase 4: frequencies
 
@@ -107,6 +147,30 @@ request before packaging depends on it, and user interface after file support.
 - Validation: signed grid values at known points against PySCF's Molden loader and `cubegen`
   (development-only, through uv) for identical coefficients, with mixed-shell fixtures and a
   separate fchk check.
+
+### Phase 6: transition states
+
+- Entry: a reaction arrow whose reactants and products are atom-mapped ("Find transition state
+  (xTB)…"; unmapped reactions offer Auto-map first). Hydrogens that move are inferred by least
+  motion when not drawn and shown for review.
+- Pipeline (MIT OR Apache-2.0, written from the papers): endpoints built in 3D and optimized with
+  xTB, superimposed by the atom map → IDPP interpolation (Smidstrup et al. 2014) → climbing-image
+  NEB on GFN2-xTB gradients (10 to 20 images) → P-RFO saddle refinement with the analytic
+  Hessian and Bofill updates → frequency check (exactly one imaginary) → IRC in both directions,
+  which must connect reactant and product.
+- Path tab in the results palette: energy profile, clickable images, path animation, and a TS
+  card with forward and backward barriers, the imaginary mode, forming and breaking bonds, and
+  the IRC check.
+- Export of transition-state inputs: Gaussian TS guess with `opt=(ts,calcfc,noeigentest) freq`,
+  QST2, QST3 and IRC; ORCA `OptTS Freq` with the xTB Hessian written as an ORCA `.hess` file
+  (`InHess Read`), NEB-TS and IRC; GAMESS `RUNTYP=SADPOINT`. Keywords are checked against the
+  current manuals and permissively licensed sample files before release.
+- Limits: up to 120 atoms; intramolecular and 1 → 2 / 2 → 1 reactions first. Saved: the TS
+  frame, both endpoints, path energies and settings; path images, IRC points and the Hessian are
+  recomputed or regenerated on export.
+- Validation: known reactions (Claisen, Diels–Alder, SN2, HCN → HNC) give one imaginary mode and
+  an IRC that connects; barriers compared with NEB references driven by xtb where available;
+  exported inputs parse in independent checks.
 
 Later, only if asked: web/WebAssembly calculations and an npm package, GFN-FF for live
 relaxation, Q-Chem and Turbomole writers.

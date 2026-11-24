@@ -1,7 +1,7 @@
 use reshiki_qcdata::{
     AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Frame,
     LIGHT_BOND_ORDER_MIN, MAX_IMPORTED_HEAVY_BYTES, OrbitalSet, Orbitals, Provenance, Settings,
-    Shell, Source, Spin, Status, Task, Thermo, Vibrations, XtbMethod, XtbSettings, compact,
+    Shell, Source, Spin, Status, Task, Thermo, Vibrations, XtbMethod, XtbSettings,
 };
 
 fn unit_modes(n_modes: usize, width: usize, random: &mut impl FnMut() -> f64) -> Vec<f64> {
@@ -67,6 +67,7 @@ fn fixture(n_atoms: u32) -> (Frame, CalcResult) {
         frame: frame.hash(),
         input_frame: None,
         task: Task::Hessian,
+        endpoints: None,
         settings: Settings::Xtb(XtbSettings {
             method: XtbMethod::Gfn2Xtb,
             solvent: None,
@@ -150,14 +151,10 @@ fn encoded_modes_for_200_atoms_fit_budget() {
     result.validate(&frame).unwrap();
     let values = &result.vibrations.as_ref().unwrap().modes;
     assert_eq!(values.len(), 594 * 600);
-    let bytes = compact::encoded_len_q16(values);
-    assert_eq!(
-        bytes,
-        serde_json::to_value(&result).unwrap()["vibrations"]["modes"]
-            .as_str()
-            .unwrap()
-            .len()
-    );
+    let bytes = serde_json::to_value(result.vibrations.as_ref().unwrap()).unwrap()["modes"]
+        .as_str()
+        .unwrap()
+        .len();
     let pretty = serde_json::to_vec_pretty(values).unwrap().len();
     println!("200-atom normal modes: {bytes} bytes as q16, {pretty} bytes as pretty JSON numbers");
     assert!(bytes <= 1_500_000);

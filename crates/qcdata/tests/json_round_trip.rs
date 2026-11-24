@@ -1,8 +1,8 @@
 use reshiki_qcdata::{
-    AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Frame, OrbitalSet,
-    Orbitals, Provenance, Settings, Shell, SolvationState, Solvent, SolventCorrection,
-    SolventModel, Source, Spin, Status, Task, Thermo, Trajectory, Vibrations, XtbMethod,
-    XtbSettings, compact,
+    AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Endpoints, Error, Frame,
+    MAX_SAVED_CONFORMERS, OrbitalSet, Orbitals, Provenance, Settings, Shell, SolvationState,
+    Solvent, SolventCorrection, SolventModel, Source, Spin, Status, Task, Thermo, Trajectory,
+    Vibrations, XtbMethod, XtbSettings,
 };
 
 fn assert_compact(expected: &[f64], decoded: &mut [f64], quantized: bool) {
@@ -49,6 +49,8 @@ fn imported() -> (Frame, CalcResult) {
             .collect(),
         energies_hartree: vec![-75.918_438_688, -76.023_452_819],
         labels: vec!["start".into(), "final".into()],
+        minimizer_energies_hartree: vec![],
+        cluster_sizes: vec![],
     };
     let basis = BasisSet {
         shells: [(0, 0, false), (1, 1, false), (0, 2, true), (2, 3, false)]
@@ -81,6 +83,7 @@ fn imported() -> (Frame, CalcResult) {
         frame: frame.hash(),
         input_frame: Some(input_frame.hash()),
         task: Task::Optimize,
+        endpoints: None,
         settings: Settings::Imported {
             keywords: vec!["opt".into(), "freq".into()],
         },
@@ -184,6 +187,7 @@ fn full_imported_result_round_trips() {
     original.validate(&frame).unwrap();
     let json = serde_json::to_vec_pretty(&original).unwrap();
     let value: serde_json::Value = serde_json::from_slice(&json).unwrap();
+    assert!(value.get("endpoints").is_none());
     assert!(
         value["hessian_hartree_per_bohr2"]
             .as_str()
@@ -329,14 +333,13 @@ fn trajectory_matches_result_frame_metadata_and_last_step() {
     let path = result.trajectory.as_mut().unwrap();
     path.isotopes.fill(0);
     let last = path.positions_angstrom.len() - 1;
-    path.positions_angstrom[last] += 5e-4;
     result.validate(&frame).unwrap();
 
     let path = result.trajectory.as_ref().unwrap();
     let mut wrong_masses = path.clone();
     wrong_masses.masses_amu[0] += 0.01;
     let mut wrong_geometry = path.clone();
-    wrong_geometry.positions_angstrom[last] += 1e-3;
+    wrong_geometry.positions_angstrom[last] += 1e-4;
     for invalid in [
         Trajectory {
             isotopes: vec![16, 0, 0],
@@ -349,6 +352,124 @@ fn trajectory_matches_result_frame_metadata_and_last_step() {
         result.trajectory = Some(invalid);
         assert!(result.validate(&frame).is_err());
     }
+}
+
+#[test]
+fn full_optimization_validates_after_f32_reload() {
+    let (mut frame, mut result) = imported();
+    frame.positions_angstrom[2][2] = 65_536.003;
+    result.frame = frame.hash();
+    let path = result.trajectory.as_mut().unwrap();
+    let last = path.positions_angstrom.len() - 1;
+    path.positions_angstrom[last] = frame.positions_angstrom[2][2];
+    result.validate(&frame).unwrap();
+
+    let saved = result.for_file(0, &[]);
+    let json = serde_json::to_vec_pretty(&saved).unwrap();
+    let decoded: CalcResult = serde_json::from_slice(&json).unwrap();
+    assert_eq!(
+        decoded.trajectory.as_ref().unwrap().positions_angstrom[last],
+        65_536.0
+    );
+    decoded.validate(&frame).unwrap();
+}
+
+#[test]
+fn transition_state_endpoints_are_required_and_exclusive() {
+    let (frame, mut result) = imported();
+    result.task = Task::TransitionState;
+    assert!(result.validate(&frame).is_err());
+
+    result.endpoints = Some(Endpoints {
+        reactant: result.input_frame.unwrap(),
+        product: result.frame,
+    });
+    result.validate(&frame).unwrap();
+    result.task = Task::Optimize;
+    assert!(result.validate(&frame).is_err());
+}
+
+#[test]
+fn transition_state_path_round_trips_and_light_drops_positions() {
+    let (frame, mut result) = imported();
+    result.task = Task::TransitionState;
+    result.input_frame = None;
+    let path = result.trajectory.as_mut().unwrap();
+    *path.positions_angstrom.last_mut().unwrap() += 0.2;
+    let endpoints = Endpoints {
+        reactant: path.frame(0).unwrap().hash(),
+        product: path.frame(1).unwrap().hash(),
+    };
+    result.endpoints = Some(endpoints);
+    result.validate(&frame).unwrap();
+
+    let json = serde_json::to_vec_pretty(&result).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&json).unwrap();
+    assert_eq!(value["task"], "transition_state");
+    assert_eq!(
+        value["endpoints"]["reactant"],
+        endpoints.reactant.to_string()
+    );
+    assert_eq!(value["endpoints"]["product"], endpoints.product.to_string());
+    let decoded: CalcResult = serde_json::from_slice(&json).unwrap();
+    decoded.validate(&frame).unwrap();
+    assert_eq!(decoded.endpoints, Some(endpoints));
+    assert_eq!(serde_json::to_vec_pretty(&decoded).unwrap(), json);
+
+    let light = result.light(&[]);
+    light.validate(&frame).unwrap();
+    assert_eq!(light.endpoints, Some(endpoints));
+    let full_path = result.trajectory.as_ref().unwrap();
+    let light_path = light.trajectory.unwrap();
+    assert!(light_path.positions_angstrom.is_empty());
+    assert_eq!(light_path.energies_hartree, full_path.energies_hartree);
+}
+
+#[test]
+fn conformers_match_first_step_and_keep_trajectory_in_light_results() {
+    let (frame, mut result) = imported();
+    result.task = Task::Conformers;
+    assert!(result.validate(&frame).is_err());
+
+    let path = result.trajectory.as_mut().unwrap();
+    path.positions_angstrom.rotate_left(frame.numbers.len() * 3);
+    path.energies_hartree.reverse();
+    path.labels.reverse();
+    path.minimizer_energies_hartree = vec![-0.03, -0.02];
+    path.cluster_sizes = vec![3, 2];
+    result.validate(&frame).unwrap();
+
+    let light = result.light(&[]);
+    light.validate(&frame).unwrap();
+    assert_eq!(light.trajectory, result.trajectory);
+    assert_eq!(serde_json::to_value(&light).unwrap()["task"], "conformers");
+}
+
+#[test]
+fn conformer_result_limits_saved_steps() {
+    let (frame, mut result) = imported();
+    result.task = Task::Conformers;
+    let positions: Vec<_> = frame.positions_angstrom.iter().flatten().copied().collect();
+    let path = result.trajectory.as_mut().unwrap();
+    path.energies_hartree.clear();
+    path.labels.clear();
+    path.positions_angstrom = positions.repeat(MAX_SAVED_CONFORMERS);
+    result.validate(&frame).unwrap();
+    result
+        .trajectory
+        .as_mut()
+        .unwrap()
+        .positions_angstrom
+        .extend(positions);
+
+    assert!(matches!(
+        result.validate(&frame),
+        Err(Error::TooLarge {
+            count,
+            max: MAX_SAVED_CONFORMERS,
+            ..
+        }) if count == MAX_SAVED_CONFORMERS + 1
+    ));
 }
 
 #[test]
@@ -420,17 +541,32 @@ fn xtb_settings_require_calculated_provenance_with_revision() {
 }
 
 #[test]
-fn heavy_bytes_counts_pretty_json_basis() {
+fn heavy_bytes_measures_pretty_json_difference() {
     let (frame, original) = imported();
     let light = original.light(&[(Spin::Alpha, 0)]);
     light.validate(&frame).unwrap();
-    let orbitals = light.orbitals.as_ref().unwrap();
-    let basis = orbitals.basis.as_ref().unwrap();
-    assert_eq!(
-        light.heavy_bytes(),
-        serde_json::to_vec_pretty(basis).unwrap().len()
-            + compact::encoded_len_f32(&orbitals.alpha.coefficients)
-    );
+    let with_basis = serde_json::to_vec_pretty(&light).unwrap().len();
+    let without_basis = serde_json::to_vec_pretty(&light.light(&[])).unwrap().len();
+    assert!(with_basis > without_basis);
+    assert_eq!(light.heavy_bytes(), with_basis - without_basis);
+}
+
+#[test]
+fn imported_result_with_only_a_pinned_row_leaves_omitted_bytes_unset() {
+    let (frame, original) = imported();
+    let pins = [(Spin::Alpha, 0)];
+    let mut result = original.light(&pins);
+    result.keep_full = false;
+    result.omitted_bytes = None;
+    result.validate(&frame).unwrap();
+    assert!(result.heavy_bytes() > 0);
+
+    let saved = result.for_file(0, &pins);
+    assert_eq!(*saved, result);
+    let json = serde_json::to_value(&saved).unwrap();
+    assert_eq!(json["orbitals"]["alpha"]["rows"], serde_json::json!([0]));
+    assert!(json["orbitals"]["basis"].is_object());
+    assert!(json.get("omitted_bytes").is_none());
 }
 
 #[test]

@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Beta, Error, Frame, FrameHash, LIGHT_BOND_ORDER_MIN, MAX_COMPACT_VALUES, MAX_HESSIAN_ATOMS,
-    OrbitalRequest, OrbitalSet, Orbitals, Spin, Trajectory, XtbMethod, check_calculation, compact,
+    MAX_SAVED_CONFORMERS, OrbitalRequest, OrbitalSet, Orbitals, Spin, Trajectory, XtbMethod,
+    check_calculation, compact::Q16_SCALE,
 };
 
 /// One calculation or imported job step tied to an exact frame.
@@ -21,6 +22,9 @@ pub struct CalcResult {
     pub input_frame: Option<FrameHash>,
     /// Requested calculation task.
     pub task: Task,
+    /// Optimized reactant and product for a transition-state search.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoints: Option<Endpoints>,
     /// Settings or imported job keywords.
     pub settings: Settings,
     /// Producer and source information.
@@ -65,7 +69,7 @@ pub struct CalcResult {
     /// Thermochemical corrections and their analysis settings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thermo: Option<Thermo>,
-    /// Geometry path, from input to final geometry for an optimization.
+    /// Optimization path, ranked conformers, or transition-state path images.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trajectory: Option<Trajectory>,
     /// User choice to keep full results in the saved file.
@@ -88,6 +92,19 @@ pub enum Task {
     Optimize,
     /// Evaluate second energy derivatives.
     Hessian,
+    /// Search for and rank conformers.
+    Conformers,
+    /// Search for a transition state between two geometries.
+    TransitionState,
+}
+
+/// Optimized endpoints of a transition-state search.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Endpoints {
+    /// Geometry of the reactant.
+    pub reactant: FrameHash,
+    /// Geometry of the product.
+    pub product: FrameHash,
 }
 
 /// Calculation or import outcome.
@@ -377,6 +394,11 @@ impl CalcResult {
                 "result frame hash does not match geometry".into(),
             ));
         }
+        if self.endpoints.is_some() != (self.task == Task::TransitionState) {
+            return Err(Error::Invalid(
+                "endpoints are required exactly for transition-state results".into(),
+            ));
+        }
         let n_atoms = frame.numbers.len();
         let axes = n_atoms * 3;
         if (self.task == Task::Hessian
@@ -463,6 +485,15 @@ impl CalcResult {
             {
                 return Err(Error::Invalid("invalid vibrational array values".into()));
             }
+            if !v.modes.is_empty()
+                && v.modes
+                    .chunks_exact(axes)
+                    .any(|mode| !mode.iter().any(|x| (x.abs() * Q16_SCALE).round() >= 1.0))
+            {
+                return Err(Error::Invalid(
+                    "vibrational mode is zero at q16 precision".into(),
+                ));
+            }
         }
         if let Some(t) = &self.thermo {
             if [
@@ -496,6 +527,14 @@ impl CalcResult {
         }
         if let Some(path) = &self.trajectory {
             path.validate()?;
+            let steps = path.steps();
+            if self.task == Task::Conformers && steps > MAX_SAVED_CONFORMERS {
+                return Err(Error::TooLarge {
+                    what: "saved conformers",
+                    count: steps,
+                    max: MAX_SAVED_CONFORMERS,
+                });
+            }
             if path.numbers != frame.numbers
                 || (0..n_atoms).any(|i| {
                     path.isotopes.get(i).copied().unwrap_or(0)
@@ -509,15 +548,22 @@ impl CalcResult {
                     "trajectory and result frame describe different atoms or states".into(),
                 ));
             }
-            if !path.positions_angstrom.is_empty()
-                && path.positions_angstrom[path.positions_angstrom.len() - axes..]
+            let positions = &path.positions_angstrom;
+            if !positions.is_empty() {
+                let step = match self.task {
+                    Task::Optimize => &positions[positions.len() - axes..],
+                    Task::Conformers => &positions[..axes],
+                    _ => &[],
+                };
+                if step
                     .iter()
                     .zip(frame.positions_angstrom.iter().flatten())
-                    .any(|(a, b)| (a - b).abs() > 1e-3)
-            {
-                return Err(Error::Invalid(
-                    "trajectory final positions differ from the result frame".into(),
-                ));
+                    .any(|(&a, &b)| a as f32 != b as f32)
+                {
+                    return Err(Error::Invalid(
+                        "trajectory positions differ from the result frame".into(),
+                    ));
+                }
             }
         }
         Ok(())
@@ -574,6 +620,7 @@ impl CalcResult {
             frame: self.frame,
             input_frame: self.input_frame,
             task: self.task,
+            endpoints: self.endpoints,
             settings: self.settings.clone(),
             provenance: self.provenance.clone(),
             status: self.status.clone(),
@@ -604,9 +651,15 @@ impl CalcResult {
                 masses_amu: path.masses_amu.clone(),
                 charge: path.charge,
                 multiplicity: path.multiplicity,
-                positions_angstrom: Vec::new(),
+                positions_angstrom: if self.task == Task::Conformers {
+                    path.positions_angstrom.clone()
+                } else {
+                    Vec::new()
+                },
                 energies_hartree: path.energies_hartree.clone(),
                 labels: path.labels.clone(),
+                minimizer_energies_hartree: path.minimizer_energies_hartree.clone(),
+                cluster_sizes: path.cluster_sizes.clone(),
             }),
             keep_full: self.keep_full,
             omitted_bytes: self.omitted_bytes,
@@ -629,41 +682,28 @@ impl CalcResult {
         } else {
             let mut light = self.light(pinned);
             let dropped_bytes = bytes.saturating_sub(light.heavy_bytes());
-            light.omitted_bytes = Some(
-                self.omitted_bytes
-                    .unwrap_or(0)
-                    .saturating_add(dropped_bytes),
-            );
+            if dropped_bytes > 0 {
+                light.omitted_bytes = Some(
+                    self.omitted_bytes
+                        .unwrap_or(0)
+                        .saturating_add(dropped_bytes),
+                );
+            }
             Cow::Owned(light)
         }
     }
 
-    /// Measure encoded heavy payload bytes, including the basis when present.
+    /// Measure the additional pretty-printed JSON bytes of the full result.
     ///
     /// Expects a validated result and may panic otherwise.
     pub fn heavy_bytes(&self) -> usize {
-        let mut bytes = compact::encoded_len_f32(&self.gradient_hartree_per_bohr)
-            + compact::encoded_len_f32(&self.hessian_hartree_per_bohr2);
-        if let Some(path) = &self.trajectory {
-            bytes += compact::encoded_len_f32(&path.positions_angstrom);
-        }
-        if let Some(v) = &self.vibrations {
-            bytes += compact::encoded_len_q16(&v.modes)
-                + compact::encoded_len_f32(&v.reduced_masses_amu)
-                + compact::encoded_len_f32(&v.masses_amu);
-        }
-        if let Some(orbitals) = &self.orbitals {
-            bytes += compact::encoded_len_f32(&orbitals.alpha.coefficients);
-            if let Beta::Unrestricted(set) = &orbitals.beta {
-                bytes += compact::encoded_len_f32(&set.coefficients);
-            }
-            if let Some(basis) = &orbitals.basis {
-                bytes += serde_json::to_vec_pretty(basis)
-                    .expect("basis serializes to JSON")
-                    .len();
-            }
-        }
-        bytes
+        let full = serde_json::to_vec_pretty(self)
+            .expect("full result serializes to JSON")
+            .len();
+        let light = serde_json::to_vec_pretty(&self.light(&[]))
+            .expect("light result serializes to JSON")
+            .len();
+        full.saturating_sub(light)
     }
 
     /// Measure the pretty-printed JSON for the saved form in bytes.
@@ -763,6 +803,7 @@ mod tests {
             frame: frame.hash(),
             input_frame: None,
             task: Task::Hessian,
+            endpoints: None,
             settings: Settings::Imported { keywords: vec![] },
             provenance: Provenance {
                 program: "test".into(),
@@ -858,6 +899,20 @@ mod tests {
         let mut result = valid;
         result.vibrations.as_mut().unwrap().modes[0] = 1.0001;
         assert!(result.validate(&frame).is_err());
+    }
+
+    #[test]
+    fn every_vibrational_mode_must_survive_q16_rounding() {
+        let (frame, mut result) = result();
+        for component in [0.0, 1e-6] {
+            result.vibrations.as_mut().unwrap().modes[..9].fill(component);
+            assert!(result.validate(&frame).is_err());
+        }
+        result.vibrations.as_mut().unwrap().modes[0] = -0.5 / Q16_SCALE;
+        result.validate(&frame).unwrap();
+        let json = serde_json::to_vec(&result).unwrap();
+        let decoded: CalcResult = serde_json::from_slice(&json).unwrap();
+        decoded.validate(&frame).unwrap();
     }
 
     #[test]

@@ -78,12 +78,16 @@ serializes as 64 lowercase hex digits. A golden hash for water is pinned in the 
 
 ### `Trajectory`
 
-A display path of one molecule: an optimization, a scan, a multi-frame file.
-`Trajectory { numbers, isotopes, masses_amu, charge, multiplicity, positions_angstrom, energies_hartree, labels }`.
+A sequence of geometries of one molecule: an optimization, a scan, a reaction path, a
+conformer set, a multi-frame file.
+`Trajectory { numbers, isotopes, masses_amu, charge, multiplicity, positions_angstrom, energies_hartree, labels, minimizer_energies_hartree, cluster_sizes }`.
 The atoms are stored once; `positions_angstrom` is flat (steps × atoms × 3) and is a heavy
 array saved as `f32` ([File size](#file-size)), or empty when the steps were not saved;
 `energies_hartree` and `labels` are empty or one per step, and decide the step count when the
-positions are absent. `Trajectory::frame(i)` builds the frame of step `i`.
+positions are absent. For a conformer set, `minimizer_energies_hartree` (the energy from the
+minimizer that made the starts, such as MMFF94s) and `cluster_sizes` (how many starts fell into
+each conformer's cluster) are empty or one per step; other trajectories leave them empty.
+`Trajectory::frame(i)` builds the frame of step `i`.
 
 Result identity never depends on a trajectory: the input and final frames of an optimization
 are stored exactly as frames of their own. A frame built from a saved step carries `f32`
@@ -223,24 +227,25 @@ including the electronic entropy term); the total free energy is E plus the Gibb
 
 One calculation or one imported job step, bound to the frame it describes.
 
-| Field                              | Meaning                                                                                                              |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `frame`                            | `FrameHash` of the geometry the values belong to (for an optimization, the final geometry).                          |
-| `input_frame`                      | `FrameHash` the calculation started from, when it differs from `frame`.                                              |
-| `task`                             | `Energy`, `Gradient`, `Optimize` or `Hessian`.                                                                       |
-| `settings`                         | `Settings::Xtb(XtbSettings)` or `Settings::Imported { keywords }`.                                                   |
-| `provenance`                       | `Provenance`.                                                                                                        |
-| `status`                           | `Converged`, `NotConverged { reason }` or `Failed { reason }`.                                                       |
-| `energy_hartree`, `energy_terms`   | Total energy and named components (`BTreeMap<String, f64>`, Eh), for example the parts of a solvent composite.       |
-| `gradient_hartree_per_bohr`        | Empty or one vector per atom. Heavy.                                                                                 |
-| `hessian_hartree_per_bohr2`        | Empty or (3N)² values, row-major, atom-major axes, not mass-weighted. Heavy.                                         |
-| `charges`                          | `Vec<AtomicCharges { scheme, values }>`; scheme `Mulliken`, `Eeq`, `Cm5`, `Hirshfeld`, `Loewdin` or `Other(String)`. |
-| `dipole_e_bohr`                    | Optional, about the origin of the frame.                                                                             |
-| `bond_orders`                      | `Vec<BondOrder { a, b, order }>` (Wiberg–Mayer), sparse, `a < b`, no repeated pair.                                  |
-| `orbitals`, `vibrations`, `thermo` | Optional.                                                                                                            |
-| `trajectory`                       | Optional path; for an optimization its first step is `input_frame` and its last is `frame`.                          |
-| `keep_full`                        | The user's "Keep full results in this file" choice; `false` by default.                                              |
-| `omitted_bytes`                    | Set on a saved copy that left out heavy arrays which cannot be recomputed: their encoded size, for the palette.      |
+| Field                              | Meaning                                                                                                                                                                                                                                      |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frame`                            | `FrameHash` of the geometry the values belong to (for an optimization, the final geometry).                                                                                                                                                  |
+| `input_frame`                      | `FrameHash` the calculation started from, when it differs from `frame`.                                                                                                                                                                      |
+| `task`                             | `Energy`, `Gradient`, `Optimize`, `Hessian`, `Conformers` or `TransitionState`.                                                                                                                                                              |
+| `endpoints`                        | For a transition state: `Endpoints { reactant, product }`, the `FrameHash`es of the optimized endpoints.                                                                                                                                     |
+| `settings`                         | `Settings::Xtb(XtbSettings)` or `Settings::Imported { keywords }`.                                                                                                                                                                           |
+| `provenance`                       | `Provenance`.                                                                                                                                                                                                                                |
+| `status`                           | `Converged`, `NotConverged { reason }` or `Failed { reason }`.                                                                                                                                                                               |
+| `energy_hartree`, `energy_terms`   | Total energy and named components (`BTreeMap<String, f64>`, Eh), for example the parts of a solvent composite.                                                                                                                               |
+| `gradient_hartree_per_bohr`        | Empty or one vector per atom. Heavy.                                                                                                                                                                                                         |
+| `hessian_hartree_per_bohr2`        | Empty or (3N)² values, row-major, atom-major axes, not mass-weighted. Heavy.                                                                                                                                                                 |
+| `charges`                          | `Vec<AtomicCharges { scheme, values }>`; scheme `Mulliken`, `Eeq`, `Cm5`, `Hirshfeld`, `Loewdin` or `Other(String)`.                                                                                                                         |
+| `dipole_e_bohr`                    | Optional, about the origin of the frame.                                                                                                                                                                                                     |
+| `bond_orders`                      | `Vec<BondOrder { a, b, order }>` (Wiberg–Mayer), sparse, `a < b`, no repeated pair.                                                                                                                                                          |
+| `orbitals`, `vibrations`, `thermo` | Optional.                                                                                                                                                                                                                                    |
+| `trajectory`                       | Optional. Optimization: the path, first step `input_frame`, last step `frame`. Conformers: the kept conformers in rank order, first step `frame` (the best). Transition state: the path images from reactant to product with their energies. |
+| `keep_full`                        | The user's "Keep full results in this file" choice; `false` by default.                                                                                                                                                                      |
+| `omitted_bytes`                    | Set on a saved copy that left out heavy arrays which cannot be recomputed: their encoded size, for the palette.                                                                                                                              |
 
 `CalcResult::validate(&frame)` checks the hash, every array length against the frame and the
 basis, orbital consistency and limits.
@@ -282,11 +287,11 @@ comparable when their `settings` and engine revision are equal.
 Native `.rsk` files are pretty-printed, uncompressed JSON, one number per line: the normal modes
 of a 200-atom molecule would take 8.2 MB that way. The owner's policy is binding for every lane.
 
-| Data                                                                                                                                                                                                                                                       | Saved                                                                                                                                                                                                 |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Settings, provenance (method, engine version), status, energies and terms, charges, dipole, bond orders of bonded pairs, orbital energies and occupations, core electrons, frequencies and IR intensities, thermochemistry, trajectory energies and labels | Always ("light result"). Target ≤ 50 KB at 50 atoms, ≤ 200 KB at 200 atoms. The input and final frames are stored as frames of the document.                                                          |
-| Normal modes, reduced and analysis masses, orbital basis and coefficients, Hessian, gradient, trajectory positions ("heavy")                                                                                                                               | Not by default: recomputed on demand from the saved frame and settings. Kept when `keep_full` is set, or for imported results within the budget below. Rows that placed surfaces use are always kept. |
-| Grids, meshes, animation frames                                                                                                                                                                                                                            | Never.                                                                                                                                                                                                |
+| Data                                                                                                                                                                                                                                                                                                                                                                                         | Saved                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Settings, provenance (method, engine version), status, energies and terms, charges, dipole, bond orders of bonded pairs, orbital energies and occupations, core electrons, frequencies and IR intensities, thermochemistry, trajectory energies, labels, minimizer energies and cluster sizes, transition-state endpoints; the positions of kept conformers (at most `MAX_SAVED_CONFORMERS`) | Always ("light result"). Target ≤ 50 KB at 50 atoms, ≤ 200 KB at 200 atoms. The input and final frames are stored as frames of the document.                                                          |
+| Normal modes, reduced and analysis masses, orbital basis and coefficients, Hessian, gradient, trajectory positions ("heavy")                                                                                                                                                                                                                                                                 | Not by default: recomputed on demand from the saved frame and settings. Kept when `keep_full` is set, or for imported results within the budget below. Rows that placed surfaces use are always kept. |
+| Grids, meshes, animation frames                                                                                                                                                                                                                                                                                                                                                              | Never.                                                                                                                                                                                                |
 
 - **Compact arrays.** Heavy arrays never serialize as JSON number lists. Each is one JSON string:
   a tag, a colon and base64 (standard alphabet, padded) of raw deflate (`miniz_oxide`) of
@@ -312,9 +317,10 @@ of a 200-atom molecule would take 8.2 MB that way. The owner's policy is binding
   basis. The document passes `MAX_IMPORTED_HEAVY_BYTES` (2 MB) minus what the molecule's
   other imported results already keep. The light result keeps bond orders of at least
   `LIGHT_BOND_ORDER_MIN` (0.3); the document may filter by drawn bonds instead.
-- **Size estimates.** `heavy_bytes()` is the encoded size of the heavy arrays ("Keep full
-  results in this file (+1.4 MB)"); `saved_bytes(heavy_budget, pinned)` is the length of the
-  pretty JSON of the saved form ("Saved in file: 84 KB").
+- **Size estimates.** `heavy_bytes()` is what keeping the heavy data adds to the file: the
+  pretty JSON length of the full result minus that of its light form ("Keep full results in
+  this file (+1.4 MB)"); `saved_bytes(heavy_budget, pinned)` is the length of the pretty JSON
+  of the saved form ("Saved in file: 84 KB").
 - **Recomputing** gives a new result. Recomputed orbitals may differ in sign or within a
   degenerate set, which is why placed surfaces keep their own rows.
 
@@ -345,7 +351,9 @@ it again on its side.
 | Constant                   | Value     | Applies to                                                                                                         |
 | -------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------ |
 | `MAX_CALC_ATOMS`           | 500       | Energy, gradient and optimization.                                                                                 |
-| `MAX_HESSIAN_ATOMS`        | 200       | Hessians and vibrational analysis.                                                                                 |
+| `MAX_HESSIAN_ATOMS`        | 200       | Hessians and vibrational analysis; conformer re-ranking with xTB.                                                  |
+| `MAX_TS_ATOMS`             | 120       | Transition-state searches.                                                                                         |
+| `MAX_SAVED_CONFORMERS`     | 32        | Conformers a conformer result keeps.                                                                               |
 | `MAX_FRAMES`               | 1000      | Steps in a trajectory, and frames read from one file.                                                              |
 | `MAX_FRAME_ATOMS`          | 10,000    | Any stored frame (imported files larger than this keep their drawing and get no scientific frame, with a warning). |
 | `MAX_TRAJECTORY_ATOMS`     | 1,000,000 | Atoms summed over a trajectory's steps.                                                                            |

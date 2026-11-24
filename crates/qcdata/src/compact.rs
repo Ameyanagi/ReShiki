@@ -5,17 +5,7 @@ use miniz_oxide::{deflate::compress_to_vec, inflate::decompress_to_vec_with_limi
 
 use crate::{MAX_COMPACT_EXPANSION, MAX_COMPACT_VALUES};
 
-const Q16_SCALE: f64 = i16::MAX as f64;
-
-/// Encoded string length in bytes for single-precision values, or zero on encoding failure.
-pub fn encoded_len_f32(values: &[f64]) -> usize {
-    encode_f32(values).map_or(0, |encoded| encoded.len())
-}
-
-/// Encoded string length in bytes for unitless signed fractions, or zero on encoding failure.
-pub fn encoded_len_q16(values: &[f64]) -> usize {
-    encode_q16(values).map_or(0, |encoded| encoded.len())
-}
+pub(crate) const Q16_SCALE: f64 = i16::MAX as f64;
 
 fn encode_f32(values: &[f64]) -> Result<String, &'static str> {
     encode("f32:", values, |value| {
@@ -144,7 +134,7 @@ pub mod q16 {
 mod tests {
     use super::{
         MAX_COMPACT_EXPANSION, MAX_COMPACT_VALUES, Q16_SCALE, STANDARD, compress_to_vec,
-        encode_f32, encode_q16, encoded_len_f32, encoded_len_q16,
+        encode_f32, encode_q16,
     };
     use base64::Engine;
     use serde::{Deserialize, Serialize};
@@ -159,7 +149,6 @@ mod tests {
     fn f32_round_trip() {
         let samples = F32(vec![-100.125, 0.0, 1.0 / 3.0, 1.0e-20, 1.0e10]);
         let json = serde_json::to_string(&samples).unwrap();
-        assert_eq!(encoded_len_f32(&samples.0), json.len() - 2);
         let decoded: F32 = serde_json::from_str(&json).unwrap();
         assert_eq!(
             decoded.0,
@@ -175,7 +164,6 @@ mod tests {
     fn q16_round_trip() {
         let samples = Q16(vec![-1.0, -0.125, 0.0, 1.0 / 3.0, 1.0]);
         let json = serde_json::to_string(&samples).unwrap();
-        assert_eq!(encoded_len_q16(&samples.0), json.len() - 2);
         let decoded: Q16 = serde_json::from_str(&json).unwrap();
         for (expected, observed) in samples.0.iter().zip(decoded.0) {
             assert!((expected - observed).abs() <= 1.0 / Q16_SCALE);

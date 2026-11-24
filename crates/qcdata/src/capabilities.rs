@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Error, Frame, MAX_BASIS_FUNCTIONS, MAX_CALC_ATOMS, MAX_COEFFICIENTS, MAX_HESSIAN_ATOMS,
-    SolventCorrection, Task, XtbSettings,
+    MAX_TS_ATOMS, SolventCorrection, Task, XtbSettings,
 };
 
 /// An xTB engine method.
@@ -111,6 +111,8 @@ pub fn check_calculation(
         Task::Gradient => (capabilities.gradient, MAX_CALC_ATOMS),
         Task::Optimize => (capabilities.optimize, MAX_CALC_ATOMS),
         Task::Hessian => (capabilities.hessian, MAX_HESSIAN_ATOMS),
+        Task::Conformers => (capabilities.optimize, MAX_HESSIAN_ATOMS),
+        Task::TransitionState => (capabilities.hessian, MAX_TS_ATOMS),
     };
     if !supported {
         return Err(Error::Unsupported(format!(
@@ -195,7 +197,7 @@ pub fn check_calculation(
         ));
     }
     if let OrbitalRequest::Rows { n_ao, rows } = orbitals {
-        if rows > 0 && n_ao == 0 {
+        if n_ao == 0 {
             return Err(Error::Invalid(
                 "orbital rows require a nonempty basis".into(),
             ));
@@ -309,11 +311,13 @@ mod tests {
             (Task::Gradient, 500),
             (Task::Optimize, 500),
             (Task::Hessian, 200),
+            (Task::Conformers, 200),
+            (Task::TransitionState, 120),
         ] {
             check_calculation(task, &settings, &frame(limit), OrbitalRequest::None).unwrap();
             assert!(matches!(
                 check_calculation(task, &settings, &frame(limit + 1), OrbitalRequest::None),
-                Err(Error::TooLarge { .. })
+                Err(Error::TooLarge { count, max, .. }) if count == limit + 1 && max == limit
             ));
         }
     }
@@ -441,15 +445,16 @@ mod tests {
     fn requested_orbital_rows_need_a_nonzero_basis_width() {
         let settings = settings(XtbMethod::Gfn2Xtb);
         let frame = frame(2);
-        let check = |rows| {
+        let check = |n_ao, rows| {
             check_calculation(
                 Task::Energy,
                 &settings,
                 &frame,
-                OrbitalRequest::Rows { n_ao: 0, rows },
+                OrbitalRequest::Rows { n_ao, rows },
             )
         };
-        check(0).unwrap();
-        assert!(check(1).is_err());
+        assert!(matches!(check(0, 0), Err(Error::Invalid(_))));
+        assert!(matches!(check(0, 1), Err(Error::Invalid(_))));
+        check(1, 0).unwrap();
     }
 }
