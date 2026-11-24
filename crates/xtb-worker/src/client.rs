@@ -12,6 +12,7 @@ use serde::de::DeserializeOwned;
 use std::{
     collections::VecDeque,
     io,
+    marker::PhantomData,
     path::Path,
     process::{Command, ExitStatus},
     sync::{
@@ -91,6 +92,8 @@ pub enum Error {
     Exited { status: ExitStatus, stderr: String },
     #[error("xTB resource limit: {0}")]
     Limit(String),
+    #[error("xTB input: {0}")]
+    Input(String),
     #[error("xTB worker protocol error: {0}")]
     Protocol(String),
     #[error("xTB {kind}: {message}")]
@@ -102,6 +105,14 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// One molecule and its warm-started engine in one supervised child process.
+///
+/// A session must stay on the thread that started it. On Linux, the worker
+/// receives a parent-death signal when that thread exits.
+///
+/// ```compile_fail
+/// fn require_send<T: Send>() {}
+/// require_send::<reshiki_xtb_worker::client::Session>();
+/// ```
 pub struct Session {
     child: Option<reshiki_process::Child>,
     pid: u32,
@@ -110,6 +121,7 @@ pub struct Session {
     max_atoms: usize,
     atoms: Option<usize>,
     stderr: VecDeque<u8>,
+    _thread: PhantomData<*const ()>,
 }
 
 impl Session {
@@ -123,8 +135,7 @@ impl Session {
         if limits.heap_bytes == 0 {
             return Err(Error::Limit("Heap budget must be positive".into()));
         }
-        let mut command = Command::new(executable);
-        command.arg("--xtb-worker");
+        let mut command = worker_command(executable);
         let child =
             reshiki_process::spawn_session(&mut command, limits.process()).map_err(Error::Spawn)?;
         let mut session = Self {
@@ -135,6 +146,7 @@ impl Session {
             max_atoms: 0,
             atoms: None,
             stderr: VecDeque::with_capacity(STDERR_BYTES),
+            _thread: PhantomData,
         };
         let hello: Hello =
             session.request(RequestOp::Hello {}, limits.hello, &Cancel::default(), false)?;
@@ -151,6 +163,8 @@ impl Session {
 
     /// The session's heap policy replaces `open.heap_bytes` on the wire.
     pub fn open(&mut self, open: &Open, cancel: &Cancel) -> Result<Opened> {
+        open.validate_geometry_and_threads(self.max_atoms)
+            .map_err(|error| Error::Input(error.message))?;
         let mut request = open.clone();
         request.heap_bytes = self.limits.heap_bytes;
         let opened: Opened =
@@ -163,6 +177,13 @@ impl Session {
     }
 
     pub fn compute(&mut self, compute: &Compute, cancel: &Cancel) -> Result<Computed> {
+        if let Some(positions) = &compute.positions {
+            protocol::validate_atom_count(positions.len(), self.max_atoms)
+                .and_then(|()| {
+                    protocol::validate_positions(positions, self.atoms.unwrap_or(positions.len()))
+                })
+                .map_err(|error| Error::Input(error.message))?;
+        }
         let computed: Computed = self.request(
             RequestOp::Compute(compute.clone()),
             self.limits.compute,
@@ -433,24 +454,15 @@ impl Session {
     fn exited(&mut self) -> Error {
         // Windows uses 75 to terminate a job during our own cleanup. Only a
         // status observed before that cleanup identifies worker heap failure.
-        let natural_limit = self
-            .child
-            .as_mut()
-            .and_then(|child| child.try_wait().ok().flatten())
-            .is_some_and(|status| status.code() == Some(75));
+        let observed = if cfg!(windows) {
+            self.child
+                .as_mut()
+                .and_then(|child| child.try_wait().ok().flatten())
+        } else {
+            None
+        };
         match self.terminate() {
-            Some(_) if natural_limit => {
-                let stderr = self.stderr_text();
-                Error::Limit(if stderr.is_empty() {
-                    "Worker exhausted its heap budget (exit 75)".into()
-                } else {
-                    format!("Worker exhausted its heap budget (exit 75): {stderr}")
-                })
-            }
-            Some(status) => Error::Exited {
-                status,
-                stderr: self.stderr_text(),
-            },
+            Some(status) => classify_exit(status, observed, self.stderr_text()),
             None => Error::Protocol("Could not reap the xTB worker".into()),
         }
     }
@@ -484,6 +496,35 @@ impl Session {
 impl Drop for Session {
     fn drop(&mut self) {
         self.terminate();
+    }
+}
+
+fn worker_command(executable: &Path) -> Command {
+    let mut command = Command::new(executable);
+    command
+        .arg("--xtb-worker")
+        .env_remove("AXTB_LAPACK")
+        .env_remove("AXTB_LAPACK_BLAS");
+    command
+}
+
+fn classify_exit(reaped: ExitStatus, observed: Option<ExitStatus>, stderr: String) -> Error {
+    let natural_status = if cfg!(windows) {
+        observed
+    } else {
+        Some(reaped)
+    };
+    if natural_status.is_some_and(|status| status.code() == Some(75)) {
+        Error::Limit(if stderr.is_empty() {
+            "Worker exhausted its heap budget (exit 75)".into()
+        } else {
+            format!("Worker exhausted its heap budget (exit 75): {stderr}")
+        })
+    } else {
+        Error::Exited {
+            status: reaped,
+            stderr,
+        }
     }
 }
 

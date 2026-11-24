@@ -266,6 +266,7 @@ explains how the crates and modules fit together.
 - `src/cli.rs`: `reshiki --cli`
 - `src/cli/analyze.rs`: `reshiki --cli analyze`
 - `src/cli/args.rs`: Token parsing for the grammar in `commands::COMMANDS`, described by `reshiki --cli help`.
+- `src/cli/calc.rs`: CLI-only calculation sessions call the xTB worker directly.
 - `src/cli/commands.rs`: The command grammar and help text for `reshiki --cli`.
 - `src/cli/compose.rs`: `reshiki --cli compose`
 - `src/cli/convert.rs`: `reshiki --cli convert`
@@ -928,7 +929,11 @@ explains how the crates and modules fit together.
 
 ## reshiki-xtb-worker
 
-- `crates/xtb-worker/src/lib.rs`: Home of the xTB protocol, client and engine-backed worker.
+- `crates/xtb-worker/src/client.rs`: Persistent, synchronous supervision of one bounded xTB worker.
+- `crates/xtb-worker/src/engine.rs`: Warm-started GFN2-xTB calculations through the axtb driver.
+- `crates/xtb-worker/src/lib.rs`: The xTB protocol, client and engine-backed worker.
+- `crates/xtb-worker/src/protocol.rs`: Version 1 of the ReShiki xTB worker wire format.
+- `crates/xtb-worker/src/worker.rs`: Request dispatch and error responses for the xTB worker.
 
 ## reshiki-geometry
 
@@ -956,7 +961,7 @@ explains how the crates and modules fit together.
 
 ## reshiki-process
 
-- `native/process/src/lib.rs`: Safe, naming-specific child limits.
+- `native/process/src/lib.rs`: Safe child process supervision.
 - `native/process/src/unix.rs`
 - `native/process/src/windows.rs`: Windows 10+ creation-time job membership; no spawn/assign interval.
 

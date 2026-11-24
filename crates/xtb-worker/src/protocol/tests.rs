@@ -163,6 +163,26 @@ fn malformed_request_exits_with_protocol_error() {
     assert!(output.is_empty());
 }
 
+#[test]
+fn oversized_unknown_operation_still_returns_a_protocol_error_frame() {
+    let prefix = r#"{"id":1,"op":""#;
+    let suffix = r#""}"#;
+    let name = "水".repeat((MAX_JSON_BYTES - prefix.len() - suffix.len()) / "水".len());
+    let input = raw_frame(&format!("{prefix}{name}{suffix}"));
+    let mut output = Vec::new();
+    assert_eq!(serve_io(&mut input.as_slice(), &mut output), 2);
+    let mut output = output.as_slice();
+    let response: Response<Closed> = read_frame(&mut output).unwrap().unwrap();
+    assert_eq!(response.id, 0);
+    let Outcome::Error { error } = response.result else {
+        panic!("expected protocol error");
+    };
+    assert_eq!(error.kind, ErrorKind::Protocol);
+    assert!(error.message.contains("unknown variant"));
+    assert!(error.message.len() <= 1024);
+    assert!(output.is_empty());
+}
+
 #[cfg(not(feature = "engine"))]
 #[test]
 fn disabled_worker_answers_hello_and_refuses_open() {

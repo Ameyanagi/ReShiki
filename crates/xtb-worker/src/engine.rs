@@ -1,3 +1,5 @@
+//! Warm-started GFN2-xTB calculations through the axtb driver.
+
 use crate::protocol::{
     self, Compute, Computed, Engine, ErrorKind, Hello, Method, Open, Opened, Operation,
     ResponseError, SolventModel, Units,

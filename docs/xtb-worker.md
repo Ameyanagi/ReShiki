@@ -51,10 +51,14 @@ increases with every request; the response repeats it.
   is converted with the factor axtb's XYZ reader uses for the method's
   conventions, so a geometry read from an XYZ file gives the axtb CLI's numbers
   bit for bit.
-- `charge`: integer, default 0. `uhf`: unpaired electrons, default from the
-  electron count. `method`: `"gfn2"` (the only one in version 1). `solvent`:
-  `null` or `{ "model": "alpb" | "gbsa", "name": "water" }`. `threads`: 1 to
-  64, default 1. `heap_bytes`: the worker's allocator budget.
+- `charge`: integer, default 0. The total electron count is the sum of the
+  atomic numbers minus the charge. `uhf`: unpaired electrons, default from
+  the electron count. `open` returns `input` if the electron count is negative
+  or if `uhf` exceeds it or differs in parity. `method`: `"gfn2"` (the only
+  one in version 1). `solvent`: `null` or
+  `{ "model": "alpb" | "gbsa", "name": "<solvent>" }`. The name can be any
+  solvent axtb accepts for the selected model. An unknown name returns `input`.
+  `threads`: 1 to 64, default 1. `heap_bytes`: the worker's allocator budget.
 - `open` is allowed once per process; `compute` only after a successful open.
   A failed `compute` (for example an SCF that did not converge) keeps the
   session open at the last successful geometry.
@@ -72,7 +76,9 @@ Kinds: `input` (the request), `unsupported_element`, `topology`, `scf`,
 order, such as `compute` before `open`), `unavailable` (this build has no xTB),
 and `protocol`. After a `protocol` error (bad header, version, kind, length,
 JSON, or a non-positive or non-increasing ID) the worker writes the error
-frame with `id` 0 and exits 2.
+frame with `id` 0 and exits 2. Error messages are limited to 1 KiB of UTF-8
+text. If encoding would exceed the frame limit, the worker sends a short
+fixed message with the same ID and error kind.
 
 ## Lifecycle, deadlines and cancellation
 
@@ -81,7 +87,12 @@ frame with `id` 0 and exits 2.
   resident-memory, address-space (Linux) and file-size limits. Defaults: 2 GiB
   heap budget, 3 GiB resident memory, one hour of CPU time for the whole
   session, 64 GiB address space on Linux, and 1 MiB file size. The client
-  takes the `open` request's heap budget from its session limits.
+  takes the `open` request's heap budget from its session limits. The worker
+  always uses axtb's built-in eigensolver. The client removes `AXTB_LAPACK`
+  and `AXTB_LAPACK_BLAS` from the worker's environment.
+- A client session stays on the thread that started it. On Linux the worker
+  receives a parent-death signal if that thread exits. A `Cancel` handle can
+  be shared with other threads.
 - Deadlines are per request: `hello` 10 s, `open` 30 s, `compute` 600 s by
   default (callers may shorten them). Closing uses the hello deadline.
   The client drains stdout and stderr while it waits, so a blocked pipe
@@ -92,9 +103,15 @@ frame with `id` 0 and exits 2.
 - **Crash or EOF**: if the worker exits or closes stdout before a complete
   response, the client reports the exit status and the last 4 KiB of stderr.
   The session is gone. If the worker reads EOF on stdin between requests,
-  it exits 0. Exit 75 is the heap budget (`reshiki_process_heap`).
+  it exits 0. Exit 75 is the heap budget (`reshiki_process_heap`). On Unix
+  the client uses the final reaped status. On Windows the client uses an
+  exit 75 observed before cleanup because job termination also uses 75.
 - An incomplete response on an open pipe is subject to the request deadline.
   If the worker closes the pipe first, the client reports EOF.
+- Before sending an `open` or replacement geometry, the client checks the
+  atom limit from `hello`, the number and finiteness of the positions, and
+  the `open` thread count. A local `Error::Input` leaves the worker running
+  with its current geometry intact.
 - The client checks every response: matching `id`, finite energy, one
   finite gradient row per atom.
 
@@ -123,8 +140,9 @@ Arrays too large for a JSON frame travel as raw little-endian `f64`:
 ## Command line
 
 `reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] FILE.xyz`
-reads the first structure of an XYZ file (Ångström), runs one GFN2-xTB
-calculation through the worker, and prints one JSON object: `energy`
+reads the first structure of an XYZ file (Ångström, case-insensitive element
+symbols), runs one GFN2-xTB calculation through the worker, and prints one
+JSON object: `energy`
 (Eh), `gradient` (Eh/bohr) when asked, `method`, `numerics` and `engine`. In a
 build without xTB it prints `reshiki: xTB is not included in this build`
 on stderr and exits 1.

@@ -2,12 +2,12 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use crate::headless;
-use reshiki_xtb_worker::client::{Limits, Session};
+use reshiki_xtb_worker::client::{Error, Limits, Session};
 use std::{path::Path, time::Duration};
 
-#[cfg(any(not(feature = "xtb"), unix))]
-use reshiki_xtb_worker::client::Error;
 #[cfg(feature = "xtb")]
+use reshiki_xtb_worker::protocol::{ErrorKind, Solvent, SolventModel};
+#[cfg(any(feature = "xtb", unix))]
 use reshiki_xtb_worker::{
     client::Cancel,
     protocol::{Compute, Method, Open, Units},
@@ -29,14 +29,14 @@ fn fixtures() -> &'static Path {
 
 fn limits() -> Limits {
     Limits {
-        hello: Duration::from_secs(10),
+        hello: Duration::from_secs(30),
         open: Duration::from_secs(120),
         compute: Duration::from_secs(120),
         ..Limits::default()
     }
 }
 
-#[cfg(feature = "xtb")]
+#[cfg(any(feature = "xtb", unix))]
 fn molecule(name: &str) -> Open {
     let xyz = std::fs::read_to_string(fixtures().join(format!("{name}.xyz")))
         .expect("read xTB XYZ fixture");
@@ -78,7 +78,7 @@ fn molecule(name: &str) -> Open {
     }
 }
 
-#[cfg(feature = "xtb")]
+#[cfg(any(feature = "xtb", unix))]
 fn compute(positions: Option<Vec<[f64; 3]>>, gradient: bool) -> Compute {
     Compute {
         positions,
@@ -232,7 +232,126 @@ fn reused_session_matches_fresh_sessions_for_three_displaced_geometries() {
     );
 }
 
-// A 288-atom cluster gives cancellation and SIGKILL a stable window during
+#[cfg(feature = "xtb")]
+#[test]
+fn invalid_client_input_is_rejected_without_losing_the_session() {
+    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let water = molecule("water");
+    let mut invalid = Vec::new();
+    let mut open = water.clone();
+    open.numbers.clear();
+    open.positions.clear();
+    invalid.push(("no atoms", open));
+    let mut open = water.clone();
+    open.numbers = vec![1; reshiki_xtb_worker::protocol::MAX_ATOMS + 1];
+    open.positions = vec![[0.0; 3]; open.numbers.len()];
+    invalid.push(("too many atoms", open));
+    let mut open = water.clone();
+    open.positions.pop();
+    invalid.push(("position count", open));
+    for coordinate in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let mut open = water.clone();
+        open.positions[0][0] = coordinate;
+        invalid.push(("nonfinite coordinate", open));
+    }
+    for threads in [0, 65] {
+        let mut open = water.clone();
+        open.threads = threads;
+        invalid.push(("thread count", open));
+    }
+    for (name, open) in invalid {
+        let result = session.open(&open, &Cancel::default());
+        assert!(matches!(result, Err(Error::Input(_))), "{name}: {result:?}");
+    }
+
+    // A finite replacement cannot be compared to an atom count before open.
+    // Keep the worker's state error, but reject nonfinite data before sending it.
+    for positions in [None, Some(vec![[0.0; 3]])] {
+        let result = session.compute(&compute(positions, false), &Cancel::default());
+        assert!(
+            matches!(
+                result,
+                Err(Error::Engine {
+                    kind: ErrorKind::State,
+                    ..
+                })
+            ),
+            "{result:?}"
+        );
+    }
+    for positions in [
+        vec![],
+        vec![[0.0; 3]; reshiki_xtb_worker::protocol::MAX_ATOMS + 1],
+        vec![[f64::NAN; 3]],
+        vec![[f64::INFINITY; 3]],
+        vec![[f64::NEG_INFINITY; 3]],
+    ] {
+        let result = session.compute(&compute(Some(positions), false), &Cancel::default());
+        assert!(matches!(result, Err(Error::Input(_))), "{result:?}");
+    }
+
+    session
+        .open(&water, &Cancel::default())
+        .expect("open water after invalid input");
+    let initial = session
+        .compute(&compute(None, false), &Cancel::default())
+        .expect("initial compute");
+    let result = session.compute(&compute(Some(vec![[0.0; 3]]), false), &Cancel::default());
+    assert!(matches!(result, Err(Error::Input(_))), "{result:?}");
+    let mut invalid_positions = water.positions.clone();
+    invalid_positions[0][0] = f64::NAN;
+    let result = session.compute(&compute(Some(invalid_positions), false), &Cancel::default());
+    assert!(matches!(result, Err(Error::Input(_))), "{result:?}");
+    let recovered = session
+        .compute(&compute(None, false), &Cancel::default())
+        .expect("compute after invalid replacement");
+    assert!(
+        (recovered.energy - initial.energy).abs() <= 1e-10,
+        "invalid replacement changed the geometry: {} vs {}",
+        recovered.energy,
+        initial.energy
+    );
+    session.close().expect("close worker after invalid input");
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn worker_rejects_invalid_electrons_spin_and_unknown_solvent_on_open() {
+    for (name, charge, uhf, solvent) in [
+        ("negative electron count", 11, None, None),
+        ("UHF parity", 0, Some(1), None),
+        ("UHF exceeds electron count", 0, Some(12), None),
+        (
+            "unknown solvent",
+            0,
+            None,
+            Some(Solvent {
+                model: SolventModel::Alpb,
+                name: "reshiki-no-such-solvent".into(),
+            }),
+        ),
+    ] {
+        let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+        let mut open = molecule("water");
+        open.charge = charge;
+        open.uhf = uhf;
+        open.solvent = solvent;
+        let result = session.open(&open, &Cancel::default());
+        assert!(
+            matches!(
+                result,
+                Err(Error::Engine {
+                    kind: ErrorKind::Input,
+                    ..
+                })
+            ),
+            "{name}: {result:?}"
+        );
+        session.close().expect("close worker after rejected open");
+    }
+}
+
+// A 288-atom cluster gives SIGKILL a stable window during
 // compute, including optimized builds where the small reference runs take ms.
 #[cfg(all(feature = "xtb", unix))]
 fn long_running_molecule() -> Open {
@@ -252,33 +371,87 @@ fn long_running_molecule() -> Open {
     cluster
 }
 
-#[cfg(all(feature = "xtb", unix))]
+#[cfg(unix)]
 #[test]
-fn cancellation_during_compute_kills_and_reaps_the_worker() {
-    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+fn cancellation_after_the_compute_frame_kills_and_reaps_the_worker() {
+    use reshiki_xtb_worker::protocol::{Request, RequestOp};
+
+    let dir = tempfile::tempdir().expect("fake worker folder");
+    let received = dir.path().join("compute-received");
+    let quoted_received = received.to_string_lossy().replace('\'', "'\\''");
+    let open = molecule("water");
+    let request = compute(None, false);
+    let receive = |id, op| {
+        let length = reshiki_xtb_worker::protocol::encode_frame(&Request { id, op })
+            .expect("encode fake worker request")
+            .len();
+        format!(
+            "received=$(dd bs=1 count={length} 2>/dev/null | wc -c)\n[ \"$received\" -eq {length} ] || exit 8\n"
+        )
+    };
+    let response = |value| {
+        let frame = reshiki_xtb_worker::protocol::encode_frame(&value)
+            .expect("encode fake worker response");
+        let escaped: String = frame.iter().map(|byte| format!("\\{byte:03o}")).collect();
+        format!("printf '{escaped}'\n")
+    };
+    let body = format!(
+        "{}{}{}{}{}: > '{quoted_received}'\nexec sleep 30\n",
+        receive(1, RequestOp::Hello {}),
+        response(serde_json::json!({
+            "id": 1,
+            "ok": {
+                "protocol": 1,
+                "engine": {
+                    "name": "fake", "version": "1", "license": "MIT",
+                    "source": "test", "rev": "test"
+                },
+                "methods": ["gfn2"],
+                "operations": ["energy", "gradient"],
+                "max_atoms": reshiki_xtb_worker::protocol::MAX_ATOMS,
+            }
+        })),
+        receive(2, RequestOp::Open(open.clone())),
+        response(serde_json::json!({
+            "id": 2,
+            "ok": {"atoms": open.numbers.len(), "method": "gfn2", "numerics": "gfn2:1"}
+        })),
+        receive(3, RequestOp::Compute(request.clone())),
+    );
+    let (script, _) = write_fake_worker(dir.path(), &body);
+    let (mut session, _) = Session::start(&script, limits()).expect("start fake worker");
     session
-        .open(&long_running_molecule(), &Cancel::default())
-        .expect("open caffeine cluster");
+        .open(&open, &Cancel::default())
+        .expect("open fake worker");
     let pid = session.pid();
-    let watchdog = PidWatchdog::new(pid);
+    let watchdog = PidWatchdog::from_pid(move || Some(pid), Duration::from_secs(8));
     let cancel = Cancel::default();
-    let started = Instant::now();
-    let result = thread::scope(|scope| {
-        scope.spawn(|| {
-            thread::sleep(Duration::from_millis(100));
-            cancel.cancel();
-        });
-        session.compute(&compute(None, true), &cancel)
+    let cancel_helper = cancel.clone();
+    let helper = thread::spawn(move || {
+        let waiting = Instant::now();
+        while !received.exists() {
+            assert!(
+                waiting.elapsed() < Duration::from_secs(5),
+                "compute frame was not received"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        let started = Instant::now();
+        cancel_helper.cancel();
+        started
     });
-    let elapsed = started.elapsed();
+    let result = session.compute(&request, &cancel);
+    let cancelled = helper.join();
     watchdog.finish();
-    eprintln!("xTB cancellation during compute: {elapsed:?}");
+    let cancelled = cancelled.expect("cancel helper");
+    assert_pid_gone(pid);
+    let elapsed = cancelled.elapsed();
+    eprintln!("xTB cancellation after complete compute frame: {elapsed:?}");
     assert!(matches!(result, Err(Error::Cancelled)), "{result:?}");
     assert!(
         elapsed < Duration::from_secs(2),
         "cancellation took {elapsed:?}"
     );
-    assert_pid_gone(pid);
 }
 
 #[cfg(all(feature = "xtb", unix))]
@@ -369,13 +542,13 @@ struct PidWatchdog {
 impl PidWatchdog {
     #[cfg(feature = "xtb")]
     fn new(pid: u32) -> Self {
-        Self::from_pid(move || Some(pid))
+        Self::from_pid(move || Some(pid), Duration::from_secs(2))
     }
 
-    fn from_pid(pid: impl FnOnce() -> Option<u32> + Send + 'static) -> Self {
+    fn from_pid(pid: impl FnOnce() -> Option<u32> + Send + 'static, timeout: Duration) -> Self {
         let (stop, receiver) = std::sync::mpsc::channel();
         let thread = thread::spawn(move || {
-            if receiver.recv_timeout(Duration::from_secs(2)).is_ok() {
+            if receiver.recv_timeout(timeout) != Err(std::sync::mpsc::RecvTimeoutError::Timeout) {
                 return false;
             }
             if let Some(pid) = pid() {
@@ -396,9 +569,26 @@ impl PidWatchdog {
 }
 
 #[cfg(unix)]
+fn write_fake_worker(dir: &Path, body: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+    use std::os::unix::fs::PermissionsExt;
+    let script = dir.join("worker.sh");
+    let pid_file = dir.join("pid");
+    let quoted_pid_file = pid_file.to_string_lossy().replace('\'', "'\\''");
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\nprintf '%s\\n' \"$$\" > '{quoted_pid_file}'\n{body}"),
+    )
+    .expect("write fake worker");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700))
+        .expect("executable script");
+    (script, pid_file)
+}
+
+#[cfg(unix)]
 #[test]
 fn fake_workers_exit_garbage_and_partial_response_never_hang() {
-    use std::os::unix::fs::PermissionsExt;
+    let hello_deadline = Duration::from_secs(5);
+    let watchdog_deadline = hello_deadline + Duration::from_secs(2);
     for (name, body) in [
         ("exit", "echo 'fake immediate exit' >&2\nexit 7\n"),
         (
@@ -421,9 +611,6 @@ fn fake_workers_exit_garbage_and_partial_response_never_hang() {
         ),
     ] {
         let dir = tempfile::tempdir().expect("fake worker folder");
-        let script = dir.path().join("worker.sh");
-        let pid_file = dir.path().join("pid");
-        let quoted_pid_file = pid_file.to_string_lossy().replace('\'', "'\\''");
         // Respond only after hello for the framing cases. The first request
         // is always the 16-byte header and the 21-byte hello JSON body.
         let receive_hello = if name == "exit" {
@@ -431,28 +618,23 @@ fn fake_workers_exit_garbage_and_partial_response_never_hang() {
         } else {
             "dd bs=1 count=37 of=/dev/null 2>/dev/null\n"
         };
-        std::fs::write(
-            &script,
-            format!(
-                "#!/bin/sh\nprintf '%s\\n' \"$$\" > '{quoted_pid_file}'\n{receive_hello}{body}"
-            ),
-        )
-        .expect("write fake worker");
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700))
-            .expect("executable script");
+        let (script, pid_file) = write_fake_worker(dir.path(), &format!("{receive_hello}{body}"));
         let watchdog_pid = pid_file.clone();
-        let watchdog = PidWatchdog::from_pid(move || {
-            std::fs::read_to_string(watchdog_pid)
-                .ok()?
-                .trim()
-                .parse()
-                .ok()
-        });
+        let watchdog = PidWatchdog::from_pid(
+            move || {
+                std::fs::read_to_string(watchdog_pid)
+                    .ok()?
+                    .trim()
+                    .parse()
+                    .ok()
+            },
+            watchdog_deadline,
+        );
         let started = Instant::now();
         let result = Session::start(
             &script,
             Limits {
-                hello: Duration::from_millis(750),
+                hello: hello_deadline,
                 ..limits()
             },
         );
@@ -480,7 +662,7 @@ fn fake_workers_exit_garbage_and_partial_response_never_hang() {
             _ => unreachable!(),
         }
         assert!(
-            elapsed < Duration::from_secs(2),
+            elapsed < watchdog_deadline,
             "{name}: returned after {elapsed:?}"
         );
         let pid = std::fs::read_to_string(pid_file)

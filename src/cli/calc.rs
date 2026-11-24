@@ -38,7 +38,12 @@ fn xyz(input: impl std::io::BufRead) -> Result<Geometry, String> {
             .iter()
             .enumerate()
             .skip(1)
-            .find_map(|(number, element)| (element.symbol == symbol).then_some(number))
+            .find_map(|(number, element)| {
+                element
+                    .symbol
+                    .eq_ignore_ascii_case(symbol)
+                    .then_some(number)
+            })
             .and_then(|number| u8::try_from(number).ok())
             .ok_or_else(|| format!("XYZ line {row}: `{symbol}` is not an element symbol"))?;
         let coordinate = |value: Option<&str>| {
@@ -160,6 +165,12 @@ mod tests {
             geometry.positions,
             [[0., 0., 0.], [0.9584, 0., 0.], [-0.2396, 0.9271, 0.]]
         );
+    }
+
+    #[test]
+    fn reads_element_symbols_without_ascii_case_sensitivity() {
+        let geometry = xyz(b"3\ncase variants\nh 0 0 0\nCL 1 0 0\ncl 2 0 0\n".as_slice()).unwrap();
+        assert_eq!(geometry.numbers, [1, 17, 17]);
     }
 
     #[test]

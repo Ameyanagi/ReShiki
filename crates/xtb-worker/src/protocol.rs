@@ -155,27 +155,46 @@ fn one_thread() -> u32 {
     1
 }
 
-#[cfg(any(feature = "engine", test))]
+#[cfg(any(not(target_arch = "wasm32"), feature = "engine", test))]
 impl Open {
-    pub(crate) fn validate(&self) -> Result<usize, ResponseError> {
-        let atoms = self.numbers.len();
-        if atoms == 0 {
-            return Err(ResponseError::new(
-                ErrorKind::Input,
-                "expected at least one atom",
-            ));
-        }
-        if atoms > MAX_ATOMS {
-            return Err(ResponseError::new(
-                ErrorKind::Limit,
-                "expected at most 500 atoms",
-            ));
-        }
-        validate_positions(&self.positions, atoms)?;
+    pub(crate) fn validate_geometry_and_threads(
+        &self,
+        max_atoms: usize,
+    ) -> Result<(), ResponseError> {
+        validate_atom_count(self.numbers.len(), max_atoms)?;
+        validate_positions(&self.positions, self.numbers.len())?;
         if !(1..=64).contains(&self.threads) {
             return Err(ResponseError::new(
                 ErrorKind::Input,
                 "expected 1 to 64 threads",
+            ));
+        }
+        Ok(())
+    }
+
+    #[cfg(any(feature = "engine", test))]
+    pub(crate) fn validate(&self) -> Result<usize, ResponseError> {
+        self.validate_geometry_and_threads(MAX_ATOMS)?;
+        let electrons = self
+            .numbers
+            .iter()
+            .map(|&number| i64::from(number))
+            .sum::<i64>()
+            - i64::from(self.charge);
+        if electrons < 0 {
+            return Err(ResponseError::new(
+                ErrorKind::Input,
+                "charge leaves a negative electron count",
+            ));
+        }
+        if self
+            .uhf
+            .map(i64::from)
+            .is_some_and(|uhf| uhf > electrons || uhf % 2 != electrons % 2)
+        {
+            return Err(ResponseError::new(
+                ErrorKind::Input,
+                "uhf must have the same parity as the electron count and cannot exceed it",
             ));
         }
         usize::try_from(self.heap_bytes)
@@ -194,7 +213,24 @@ pub struct Compute {
     pub gradient: bool,
 }
 
-#[cfg(any(feature = "engine", test))]
+#[cfg(any(not(target_arch = "wasm32"), feature = "engine", test))]
+pub(crate) fn validate_atom_count(atoms: usize, max_atoms: usize) -> Result<(), ResponseError> {
+    if atoms == 0 {
+        return Err(ResponseError::new(
+            ErrorKind::Input,
+            "expected at least one atom",
+        ));
+    }
+    if atoms > max_atoms {
+        return Err(ResponseError::new(
+            ErrorKind::Limit,
+            format!("expected at most {max_atoms} atoms"),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(any(not(target_arch = "wasm32"), feature = "engine", test))]
 pub(crate) fn validate_positions(
     positions: &[[f64; 3]],
     atoms: usize,

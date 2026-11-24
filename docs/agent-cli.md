@@ -610,9 +610,12 @@ limits and formats under `value`. `cli`, beside `value`, lists the formats the
 command line reads and writes. `grants` and `files` describe the file tools of
 the MCP server; the command line uses neither.
 
-`reshiki --version` (or `reshiki --cli --version`) prints only the
-application version, such as `reshiki 0.17.1`, and exits without opening a
-window.
+`reshiki --version` (or `reshiki --cli --version`) prints the application
+version, such as `reshiki 0.17.1`, followed by an xTB status line, and exits
+without opening a window. The second line is `xTB: not included in this build`
+or `xTB: included (axtb VERSION, LICENSE, source URL)`, with the engine version,
+license and pinned fork source URL. See [xTB licensing and packaging](xtb-licensing.md)
+for the builds that include it.
 
 <details>
 <summary>Output of <code>reshiki --cli info</code>, shown on several lines</summary>

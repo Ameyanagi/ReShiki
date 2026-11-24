@@ -1,8 +1,12 @@
+//! Request dispatch and error responses for the xTB worker.
+
 use crate::protocol::{
     self, Closed, ErrorKind, Outcome, Request, RequestOp, Response, ResponseError,
 };
 use serde::Serialize;
 use std::io::{self, Read, Write};
+
+const MAX_ERROR_MESSAGE_BYTES: usize = 1024;
 
 /// Run the worker on stdin and stdout, returning the worker's exit code.
 pub fn serve() -> i32 {
@@ -136,11 +140,32 @@ fn respond<T: Serialize>(
     id: u64,
     result: Result<T, ResponseError>,
 ) -> Result<(), protocol::FrameError> {
-    let result = match result {
-        Ok(ok) => Outcome::Ok { ok },
-        Err(error) => Outcome::Error { error },
-    };
-    writer.write_all(&protocol::encode_frame(&Response { id, result })?)?;
+    let frame = match result {
+        Ok(ok) => protocol::encode_frame(&Response {
+            id,
+            result: Outcome::Ok { ok },
+        }),
+        Err(mut error) => {
+            let kind = error.kind;
+            error
+                .message
+                .truncate(error.message.floor_char_boundary(MAX_ERROR_MESSAGE_BYTES));
+            let encode = |error| {
+                protocol::encode_frame(&Response::<Closed> {
+                    id,
+                    result: Outcome::Error { error },
+                })
+            };
+            match encode(error) {
+                Err(protocol::FrameError::Length) => encode(ResponseError::new(
+                    kind,
+                    "worker error message exceeds frame limit",
+                )),
+                result => result,
+            }
+        }
+    }?;
+    writer.write_all(&frame)?;
     writer.flush()?;
     Ok(())
 }

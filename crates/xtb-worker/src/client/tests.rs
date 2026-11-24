@@ -20,6 +20,41 @@ fn cancel_is_shared_and_sticky() {
 }
 
 #[test]
+fn worker_command_removes_lapack_overrides() {
+    let command = worker_command(Path::new("reshiki"));
+    for name in ["AXTB_LAPACK", "AXTB_LAPACK_BLAS"] {
+        assert!(
+            command
+                .get_envs()
+                .any(|(key, value)| key == name && value.is_none())
+        );
+    }
+}
+
+#[test]
+fn heap_exit_classification_accounts_for_supervisor_cleanup() {
+    #[cfg(unix)]
+    use std::os::unix::process::ExitStatusExt;
+    #[cfg(windows)]
+    use std::os::windows::process::ExitStatusExt;
+
+    #[cfg(unix)]
+    let status = ExitStatus::from_raw(75 << 8);
+    #[cfg(windows)]
+    let status = ExitStatus::from_raw(75);
+
+    assert!(
+        matches!(classify_exit(status, Some(status), "heap diagnostic".into()),
+        Error::Limit(message) if message.contains("heap diagnostic"))
+    );
+    let error = classify_exit(status, None, String::new());
+    #[cfg(unix)]
+    assert!(matches!(error, Error::Limit(_)));
+    #[cfg(windows)]
+    assert!(matches!(error, Error::Exited { status: reaped, .. } if reaped == status));
+}
+
+#[test]
 fn hello_metadata_distinguishes_unavailable_and_inconsistent_workers() {
     let mut hello = Hello {
         protocol: protocol::VERSION,
