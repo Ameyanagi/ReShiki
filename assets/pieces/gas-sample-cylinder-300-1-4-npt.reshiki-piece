@@ -37,6 +37,7 @@
     {
       "id": "cylinder-exterior",
       "layer": "front",
+      "depth": 5,
       "material": "metal",
       "role": "fill",
       "path": "M-113.5 -13.5H-97.5C-92.5 -13.5 -85.5 -25.4 -73.5 -25.4H73.5C85.5 -25.4 92.5 -13.5 97.5 -13.5H113.5V13.5H97.5C92.5 13.5 85.5 25.4 73.5 25.4H-73.5C-85.5 25.4 -92.5 13.5 -97.5 13.5H-113.5Z",
@@ -67,7 +68,7 @@
         242,
         245
       ],
-      "depth": 1,
+      "depth": 6,
       "style": "shaded"
     },
     {
@@ -86,7 +87,7 @@
         192,
         204
       ],
-      "depth": 1,
+      "depth": 6,
       "style": "shaded"
     },
     {
@@ -100,7 +101,7 @@
           "exterior"
         ]
       },
-      "depth": 3
+      "depth": 7
     },
     {
       "id": "female-npt-mouth-rims",
@@ -113,7 +114,7 @@
           "exterior"
         ]
       },
-      "depth": 4
+      "depth": 8
     },
     {
       "id": "section-upper-wall",
@@ -183,6 +184,7 @@
       "family": "npt",
       "gender": "F",
       "size_mm": 6.35,
+      "insertion_mm": 8,
       "at": [
         -113.5,
         0
@@ -198,6 +200,7 @@
       "family": "npt",
       "gender": "F",
       "size_mm": 6.35,
+      "insertion_mm": 8,
       "at": [
         113.5,
         0

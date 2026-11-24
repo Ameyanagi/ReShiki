@@ -315,7 +315,7 @@ pub enum Joint {
         size_mm: f64,
         at: Xy,
         dir: Xy,
-        /// Tube stop measured inwards from a female compression or work-tube opening.
+        /// Drawn seating depth inward from a female compression, work-tube or NPT mouth.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         insertion_mm: Option<f64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]

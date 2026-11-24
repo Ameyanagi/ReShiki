@@ -135,7 +135,7 @@ fn tube_furnace_work_tube_interfaces_are_exact_and_distinct_from_gas_seats() {
     assert!(
         super::validate::validate(&invalid)
             .unwrap_err()
-            .contains("female compression or work-tube")
+            .contains("female compression, work-tube or NPT")
     );
 }
 
