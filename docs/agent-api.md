@@ -38,10 +38,6 @@ This page explains the concepts both modes share. The other pages:
 Both modes call the same operations, so a `convert` on the command line makes
 the same file as `convert`, or `import` and `export`, over MCP.
 
-`reshiki --cli calc` is a CLI-only exception: it runs GFN2-xTB through the
-isolated [xTB worker](xtb-worker.md), requires a build with xTB, and has no
-MCP tool. Its calculation JSON uses the worker result format.
-
 ## Starting the server
 
 ```text

@@ -50,9 +50,6 @@ has every help text as the program prints it.
 - A lone `-` means standard input, or standard output after `-o`.
 - Usage errors are found before anything is read or written.
 
-`calc` reads an XYZ file directly through the isolated xTB worker. It is a
-CLI-only exception to the shared MCP operations and has no MCP tool.
-
 ## Input
 
 `convert`, `render`, `analyze`, `predict-nmr` and `name` read exactly one input:
@@ -827,10 +824,9 @@ several lines:
 reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz
 ```
 
-Runs one GFN2-xTB calculation through the [isolated worker](xtb-worker.md).
-The XYZ file contains an atom count from 1 to 500, a comment line, and that
-many rows with an element symbol and three finite coordinates in angstroms.
-Only the first frame is read. Each atom row must have exactly four columns.
+Runs one GFN2-xTB calculation through the [isolated worker](xtb-worker.md)
+on the first frame of an XYZ file (1 to 500 atoms, Ångström). It has no MCP
+tool.
 
 | Option               | Commands | Meaning                                                                              |
 | -------------------- | -------- | ------------------------------------------------------------------------------------ |
@@ -847,8 +843,7 @@ also writes a warning to stderr when the gap is below 0.1 eV. `calc` is
 CLI-only and prints its result without an experimental envelope.
 
 In a build without xTB, it writes `reshiki: xTB is not included in this build`
-to stderr, prints nothing to stdout, and exits 1. See [xTB licensing and
-packaging](xtb-licensing.md) for the builds that include it.
+to stderr and exits 1.
 
 ## help
 
