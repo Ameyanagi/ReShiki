@@ -87,7 +87,8 @@ positions are absent. `Trajectory::frame(i)` builds the frame of step `i`.
 
 Result identity never depends on a trajectory: the input and final frames of an optimization
 are stored exactly as frames of their own. A frame built from a saved step carries `f32`
-precision (about 1e-5 Å) and gets its own hash; "Use this geometry" makes such a new frame.
+precision (about 1e-7 relative, 6e-5 Å at 1000 Å) and gets its own hash; "Use this geometry"
+makes such a new frame.
 
 Readers split a file whose frames have different atoms. The frame limit applies before
 splitting (all frames of one file) and to every producer, including the optimizer while it
@@ -198,13 +199,13 @@ file.
 
 ### `Vibrations`
 
-| Field                   | Meaning                                                                                                                                                                                                                      |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `frequencies_cm1`       | Harmonic frequencies in ascending order; imaginary ones negative. Rigid-body modes removed.                                                                                                                                  |
-| `ir_intensities_km_mol` | Empty or one per mode.                                                                                                                                                                                                       |
-| `modes`                 | Empty, or one mode per frequency, flat (modes × 3N, atom-major): Cartesian displacements, **not mass-weighted**, unit Euclidean norm over all 3N components (within 1e-3 after 16-bit saving). The sign is arbitrary. Heavy. |
-| `reduced_masses_amu`    | Empty or one per mode. Heavy.                                                                                                                                                                                                |
-| `masses_amu`            | Empty, or the masses the analysis used (needed to return to mass-weighted coordinates). Heavy.                                                                                                                               |
+| Field                   | Meaning                                                                                                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `frequencies_cm1`       | Harmonic frequencies in ascending order; imaginary ones negative. Rigid-body modes removed.                                                                                                                                                                                    |
+| `ir_intensities_km_mol` | Empty or one per mode.                                                                                                                                                                                                                                                         |
+| `modes`                 | Empty, or one mode per frequency, flat (modes × 3N, atom-major): Cartesian displacements, **not mass-weighted**, with unit Euclidean norm as produced. Consumers renormalize before use, and validation checks only the [−1, 1] component range. The sign is arbitrary. Heavy. |
+| `reduced_masses_amu`    | Empty or one per mode. Heavy.                                                                                                                                                                                                                                                  |
+| `masses_amu`            | Empty, or the masses the analysis used (needed to return to mass-weighted coordinates). Heavy.                                                                                                                                                                                 |
 
 `imaginary_count()` counts negative frequencies, however small; the warning threshold for
 near-zero negative modes belongs to the user interface.
@@ -270,7 +271,8 @@ pins what that default is.
 `Source::Calculated { engine_revision }` or
 `Source::Imported { format, file_name, file_sha256, job }` (`job` is the job or step index in a
 multi-job log; the file name and hash say which file to reopen when heavy arrays were not
-saved).
+saved). `Settings::Xtb` requires `Source::Calculated` provenance with a non-empty
+`engine_revision` so the result is recomputable.
 
 A result belongs to a frame exactly when `result.frame == frame.hash()`. Two results are
 comparable when their `settings` and engine revision are equal.

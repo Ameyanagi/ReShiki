@@ -2,7 +2,7 @@ use std::{f64::consts::PI, mem::size_of_val};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Error, MAX_BASIS_FUNCTIONS, MAX_COEFFICIENTS, MAX_L, MAX_PRIMITIVES};
+use crate::{Error, Frame, MAX_BASIS_FUNCTIONS, MAX_COEFFICIENTS, MAX_L, MAX_PRIMITIVES};
 
 /// An atomic-orbital basis in canonical shell order.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -151,15 +151,21 @@ pub enum Spin {
 }
 
 impl Orbitals {
-    /// Checks the basis and both spin channels against the frame atom count and atomic numbers.
-    pub fn validate(&self, n_atoms: usize, numbers: &[u8]) -> Result<(), Error> {
-        if numbers.len() != n_atoms
-            || (!self.core_electrons.is_empty() && self.core_electrons.len() != n_atoms)
+    /// Checks the basis, core electron counts, and spin channels against the frame.
+    pub fn validate(&self, frame: &Frame) -> Result<(), Error> {
+        let n_atoms = frame.numbers.len();
+        if (!self.core_electrons.is_empty() && self.core_electrons.len() != n_atoms)
             || self
                 .core_electrons
                 .iter()
-                .zip(numbers)
+                .zip(&frame.numbers)
                 .any(|(&core, &z)| core > u32::from(z))
+            || self
+                .core_electrons
+                .iter()
+                .map(|&core| i64::from(core))
+                .sum::<i64>()
+                > frame.electrons()
         {
             return Err(Error::Invalid(
                 "invalid orbital core electron counts".into(),
@@ -188,8 +194,18 @@ impl Orbitals {
                 }
             }
         }
+        if has_rows && n_ao == 0 {
+            return Err(Error::Invalid(
+                "orbital rows require a nonempty basis".into(),
+            ));
+        }
 
         let alpha_max_occupation = if matches!(self.beta, Beta::Restricted) {
+            if frame.multiplicity != 1 {
+                return Err(Error::Invalid(
+                    "restricted orbitals require a singlet".into(),
+                ));
+            }
             2.0
         } else {
             1.0
@@ -367,8 +383,17 @@ mod tests {
         }
     }
 
-    fn orbitals() -> Orbitals {
-        Orbitals {
+    fn orbitals() -> (Frame, Orbitals) {
+        let frame = Frame {
+            numbers: vec![8],
+            positions_angstrom: vec![[0.0; 3]],
+            isotopes: vec![],
+            masses_amu: vec![],
+            charge: 0,
+            multiplicity: 1,
+            drawing_atoms: vec![],
+        };
+        let orbitals = Orbitals {
             basis: Some(BasisSet {
                 shells: vec![shell(0)],
             }),
@@ -381,7 +406,8 @@ mod tests {
                 coefficients: vec![0.3, 0.6],
             },
             beta: Beta::Restricted,
-        }
+        };
+        (frame, orbitals)
     }
 
     #[test]
@@ -512,8 +538,8 @@ mod tests {
 
     #[test]
     fn orbital_validation_checks_core_electrons_and_basis_presence() {
-        let valid = orbitals();
-        valid.validate(1, &[8]).unwrap();
+        let (frame, valid) = orbitals();
+        valid.validate(&frame).unwrap();
         for invalid in [
             Orbitals {
                 core_electrons: vec![9],
@@ -532,13 +558,13 @@ mod tests {
                 ..valid.clone()
             },
         ] {
-            assert!(invalid.validate(1, &[8]).is_err(), "{invalid:?}");
+            assert!(invalid.validate(&frame).is_err(), "{invalid:?}");
         }
     }
 
     #[test]
     fn orbital_validation_checks_rows_and_spectrum() {
-        let valid = orbitals();
+        let (frame, valid) = orbitals();
         for alpha in [
             OrbitalSet {
                 rows: vec![2, 0],
@@ -570,7 +596,7 @@ mod tests {
                     alpha,
                     ..valid.clone()
                 }
-                .validate(1, &[8])
+                .validate(&frame)
                 .is_err()
             );
         }
@@ -578,31 +604,31 @@ mod tests {
 
     #[test]
     fn orbital_validation_checks_each_spin_occupation_range() {
-        let mut valid = orbitals();
+        let (frame, mut valid) = orbitals();
         valid.alpha.occupations = vec![2.0 + 0.5e-6, 0.3, -0.5e-6];
-        valid.validate(1, &[8]).unwrap();
+        valid.validate(&frame).unwrap();
         valid.alpha.occupations[0] = 2.0 + 2e-6;
-        assert!(valid.validate(1, &[8]).is_err());
+        assert!(valid.validate(&frame).is_err());
 
         valid.alpha.occupations = vec![1.0 + 0.5e-6, 0.3, 0.0];
         valid.beta = Beta::SameOrbitals {
             occupations: vec![0.7, 1.0 + 0.5e-6, -0.5e-6],
         };
-        valid.validate(1, &[8]).unwrap();
+        valid.validate(&frame).unwrap();
         valid.beta = Beta::SameOrbitals {
             occupations: vec![0.7, 1.0 + 2e-6, 0.0],
         };
-        assert!(valid.validate(1, &[8]).is_err());
+        assert!(valid.validate(&frame).is_err());
 
         let mut beta = valid.alpha.clone();
         beta.occupations = vec![0.25, 0.75, -0.5e-6];
         valid.beta = Beta::Unrestricted(beta.clone());
-        valid.validate(1, &[8]).unwrap();
+        valid.validate(&frame).unwrap();
         valid.alpha.occupations[0] = 1.0 + 2e-6;
-        assert!(valid.validate(1, &[8]).is_err());
+        assert!(valid.validate(&frame).is_err());
         valid.alpha.occupations[0] = 1.0;
         beta.occupations[2] = -2e-6;
         valid.beta = Beta::Unrestricted(beta);
-        assert!(valid.validate(1, &[8]).is_err());
+        assert!(valid.validate(&frame).is_err());
     }
 }

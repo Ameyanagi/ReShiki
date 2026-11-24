@@ -158,7 +158,8 @@ fn encoded_modes_for_200_atoms_fit_budget() {
             .unwrap()
             .len()
     );
-    println!("200-atom q16 modes: {bytes} bytes");
+    let pretty = serde_json::to_vec_pretty(values).unwrap().len();
+    println!("200-atom normal modes: {bytes} bytes as q16, {pretty} bytes as pretty JSON numbers");
     assert!(bytes <= 1_500_000);
     assert!(bytes <= 950_400 * 101 / 100);
 }

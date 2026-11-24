@@ -166,6 +166,11 @@ pub fn check_calculation(
             .gfnff
             .as_ref()
             .ok_or_else(|| Error::Invalid("GFN-FF requires a reference topology".into()))?;
+        if topology.fragment_charges.len() > count {
+            return Err(Error::Invalid(
+                "GFN-FF has more fragment charges than atoms".into(),
+            ));
+        }
         if !topology.fragment_charges.is_empty()
             && topology
                 .fragment_charges
@@ -190,6 +195,11 @@ pub fn check_calculation(
         ));
     }
     if let OrbitalRequest::Rows { n_ao, rows } = orbitals {
+        if rows > 0 && n_ao == 0 {
+            return Err(Error::Invalid(
+                "orbital rows require a nonempty basis".into(),
+            ));
+        }
         if n_ao as usize > MAX_BASIS_FUNCTIONS {
             return Err(Error::TooLarge {
                 what: "basis functions",
@@ -364,6 +374,19 @@ mod tests {
     }
 
     #[test]
+    fn gfnff_fragment_count_cannot_exceed_atom_count() {
+        let frame = frame(2);
+        let mut settings = settings(XtbMethod::GfnFf);
+        settings.gfnff = Some(GfnFfTopology {
+            reference: frame.hash(),
+            fragment_charges: vec![-1, 1],
+        });
+        check_calculation(Task::Energy, &settings, &frame, OrbitalRequest::None).unwrap();
+        settings.gfnff.as_mut().unwrap().fragment_charges.push(0);
+        assert!(check_calculation(Task::Energy, &settings, &frame, OrbitalRequest::None).is_err());
+    }
+
+    #[test]
     fn solvent_rules() {
         let frame = frame(3);
         let mut settings = settings(XtbMethod::GXtb);
@@ -412,5 +435,21 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn requested_orbital_rows_need_a_nonzero_basis_width() {
+        let settings = settings(XtbMethod::Gfn2Xtb);
+        let frame = frame(2);
+        let check = |rows| {
+            check_calculation(
+                Task::Energy,
+                &settings,
+                &frame,
+                OrbitalRequest::Rows { n_ao: 0, rows },
+            )
+        };
+        check(0).unwrap();
+        assert!(check(1).is_err());
     }
 }

@@ -76,6 +76,9 @@ fn decode<const WIDTH: usize>(
     let payload = encoded
         .strip_prefix(tag)
         .ok_or("unexpected compact array tag")?;
+    if encoded.len() > tag.len() + 2 * MAX_COMPACT_VALUES * WIDTH {
+        return Err("compact array encoded size limit exceeded");
+    }
     let compressed = STANDARD
         .decode(payload)
         .map_err(|_| "invalid compact array base64")?;
@@ -224,6 +227,26 @@ mod tests {
         let q16_json = format!(r#""q16:{}""#, STANDARD.encode(compress_to_vec(&[0], 6)));
         assert!(serde_json::from_str::<F32>(&f32_json).is_err());
         assert!(serde_json::from_str::<Q16>(&q16_json).is_err());
+    }
+
+    #[test]
+    fn oversized_encoded_payload_is_rejected() {
+        let tag = "q16:";
+        let mut compressed = compress_to_vec(&[0, 0], 6);
+        // Pad the deflate stream with trailing bytes that the inflater ignores.
+        compressed.resize(3 * MAX_COMPACT_VALUES, 0);
+        let mut encoded = format!("{tag}{}", STANDARD.encode(compressed));
+        assert_eq!(encoded.len(), tag.len() + 2 * MAX_COMPACT_VALUES * 2);
+        assert_eq!(
+            super::decode::<2>(tag, &encoded, |_| Ok(0.0)),
+            Ok(vec![0.0])
+        );
+
+        encoded.push_str("AAAA");
+        assert_eq!(
+            super::decode::<2>(tag, &encoded, |_| Ok(0.0)),
+            Err("compact array encoded size limit exceeded")
+        );
     }
 
     #[test]

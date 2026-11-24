@@ -1,7 +1,8 @@
 use reshiki_qcdata::{
     AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Frame, OrbitalSet,
     Orbitals, Provenance, Settings, Shell, SolvationState, Solvent, SolventCorrection,
-    SolventModel, Source, Status, Task, Thermo, Trajectory, Vibrations, XtbMethod, XtbSettings,
+    SolventModel, Source, Spin, Status, Task, Thermo, Trajectory, Vibrations, XtbMethod,
+    XtbSettings, compact,
 };
 
 fn assert_compact(expected: &[f64], decoded: &mut [f64], quantized: bool) {
@@ -318,4 +319,159 @@ fn minimal_result_deserializes_from_only_required_fields() {
         serde_json::to_value(result).unwrap(),
         serde_json::from_str::<serde_json::Value>(json).unwrap()
     );
+}
+
+#[test]
+fn trajectory_matches_result_frame_metadata_and_last_step() {
+    let (mut frame, mut result) = imported();
+    frame.isotopes.clear();
+    result.frame = frame.hash();
+    let path = result.trajectory.as_mut().unwrap();
+    path.isotopes.fill(0);
+    let last = path.positions_angstrom.len() - 1;
+    path.positions_angstrom[last] += 5e-4;
+    result.validate(&frame).unwrap();
+
+    let path = result.trajectory.as_ref().unwrap();
+    let mut wrong_masses = path.clone();
+    wrong_masses.masses_amu[0] += 0.01;
+    let mut wrong_geometry = path.clone();
+    wrong_geometry.positions_angstrom[last] += 1e-3;
+    for invalid in [
+        Trajectory {
+            isotopes: vec![16, 0, 0],
+            ..path.clone()
+        },
+        wrong_masses,
+        wrong_geometry,
+    ] {
+        let mut result = result.clone();
+        result.trajectory = Some(invalid);
+        assert!(result.validate(&frame).is_err());
+    }
+}
+
+#[test]
+fn orbital_validation_checks_frame_spin_electrons_and_nonempty_basis() {
+    let (frame, mut result) = imported();
+    result.trajectory = None;
+    result.validate(&frame).unwrap();
+    let valid = result.orbitals.take().unwrap();
+    for (frame, orbitals) in [
+        (
+            Frame {
+                multiplicity: 3,
+                ..frame.clone()
+            },
+            Orbitals {
+                beta: Beta::Restricted,
+                ..valid.clone()
+            },
+        ),
+        (
+            Frame {
+                charge: 8,
+                ..frame.clone()
+            },
+            Orbitals {
+                core_electrons: vec![2, 1, 0],
+                ..valid.clone()
+            },
+        ),
+        (
+            frame,
+            Orbitals {
+                basis: Some(BasisSet { shells: vec![] }),
+                alpha: OrbitalSet {
+                    coefficients: vec![],
+                    ..valid.alpha.clone()
+                },
+                beta: Beta::Restricted,
+                ..valid
+            },
+        ),
+    ] {
+        result.frame = frame.hash();
+        result.orbitals = Some(orbitals);
+        assert!(result.validate(&frame).is_err());
+    }
+}
+
+#[test]
+fn xtb_settings_require_calculated_provenance_with_revision() {
+    let (frame, mut result) = imported();
+    result.settings = Settings::Xtb(XtbSettings {
+        method: XtbMethod::Gfn2Xtb,
+        solvent: None,
+        electronic_temperature_k: None,
+        accuracy: None,
+        max_iterations: None,
+        gfnff: None,
+    });
+    assert!(result.validate(&frame).is_err());
+    result.provenance.source = Source::Calculated {
+        engine_revision: String::new(),
+    };
+    assert!(result.validate(&frame).is_err());
+    result.provenance.source = Source::Calculated {
+        engine_revision: "v1.2.3".into(),
+    };
+    result.validate(&frame).unwrap();
+}
+
+#[test]
+fn heavy_bytes_counts_pretty_json_basis() {
+    let (frame, original) = imported();
+    let light = original.light(&[(Spin::Alpha, 0)]);
+    light.validate(&frame).unwrap();
+    let orbitals = light.orbitals.as_ref().unwrap();
+    let basis = orbitals.basis.as_ref().unwrap();
+    assert_eq!(
+        light.heavy_bytes(),
+        serde_json::to_vec_pretty(basis).unwrap().len()
+            + compact::encoded_len_f32(&orbitals.alpha.coefficients)
+    );
+}
+
+#[test]
+fn imported_pinned_row_keeps_omitted_bytes_across_saves() {
+    let (frame, mut result) = imported();
+    result.keep_full = false;
+    result.validate(&frame).unwrap();
+    let pins = [(Spin::Alpha, 0)];
+    let saved = result.for_file(0, &pins);
+    assert_eq!(saved.orbitals.as_ref().unwrap().alpha.rows, [0]);
+    let json = serde_json::to_vec_pretty(&saved).unwrap();
+    let loaded: CalcResult = serde_json::from_slice(&json).unwrap();
+    loaded.validate(&frame).unwrap();
+    assert_eq!(loaded.for_file(0, &pins).omitted_bytes, saved.omitted_bytes);
+    assert_eq!(
+        saved.omitted_bytes,
+        Some(result.omitted_bytes.unwrap() + result.heavy_bytes() - saved.heavy_bytes())
+    );
+}
+
+#[test]
+fn thermo_checks_gibbs_correction_temperature_and_pressure() {
+    let (frame, mut result) = imported();
+    result.validate(&frame).unwrap();
+    let valid = result.thermo.take().unwrap();
+    for invalid in [
+        Thermo {
+            gibbs_correction_hartree: valid.gibbs_correction_hartree + 2e-5,
+            ..valid.clone()
+        },
+        Thermo {
+            temperature_k: 0.0,
+            gibbs_correction_hartree: valid.enthalpy_correction_hartree,
+            ..valid.clone()
+        },
+        Thermo {
+            pressure_pa: 0.0,
+            ..valid
+        },
+    ] {
+        result.thermo = Some(invalid);
+        assert!(result.validate(&frame).is_err());
+    }
 }

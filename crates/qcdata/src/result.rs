@@ -71,7 +71,7 @@ pub struct CalcResult {
     /// User choice to keep full results in the saved file.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub keep_full: bool,
-    /// Encoded bytes of heavy imported data before omission.
+    /// Total encoded bytes of heavy imported data omitted from the saved result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub omitted_bytes: Option<usize>,
 }
@@ -154,7 +154,8 @@ pub struct Vibrations {
     /// Infrared intensities in kilometres per mole, one per frequency if available.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ir_intensities_km_mol: Vec<f64>,
-    /// Unit-norm Cartesian displacement vectors, mode-major and atom-major within each mode.
+    /// Cartesian displacement vectors, mode-major and atom-major within each mode.
+    /// Modes are unit norm as produced. Renormalize each mode before use.
     #[serde(
         with = "crate::compact::q16",
         default,
@@ -351,6 +352,12 @@ impl CalcResult {
     /// Check the frame identity, physical arrays, settings, and size limits.
     pub fn validate(&self, frame: &Frame) -> Result<(), Error> {
         if let Settings::Xtb(settings) = &self.settings {
+            if !matches!(&self.provenance.source, Source::Calculated { engine_revision } if !engine_revision.is_empty())
+            {
+                return Err(Error::Invalid(
+                    "xTB settings require calculated provenance with an engine revision".into(),
+                ));
+            }
             let request = if self.orbitals.is_some() {
                 OrbitalRequest::Levels
             } else {
@@ -427,11 +434,11 @@ impl CalcResult {
             }
         }
         if let Some(orbitals) = &self.orbitals {
-            orbitals.validate(n_atoms, &frame.numbers)?;
+            orbitals.validate(frame)?;
         }
         if let Some(v) = &self.vibrations {
             let modes = v.frequencies_cm1.len();
-            if modes > axes
+            if modes > axes.saturating_sub(5)
                 || v.frequencies_cm1.iter().any(|v| !v.is_finite())
                 || v.frequencies_cm1.windows(2).any(|w| w[0] > w[1])
             {
@@ -448,27 +455,17 @@ impl CalcResult {
                 }
             }
             if v.ir_intensities_km_mol.iter().any(|v| !v.is_finite())
-                || v.reduced_masses_amu
-                    .iter()
-                    .chain(&v.masses_amu)
-                    .any(|&v| !(v as f32).is_finite())
+                || v.reduced_masses_amu.iter().chain(&v.masses_amu).any(|&v| {
+                    let mass = v as f32;
+                    !mass.is_finite() || mass <= 0.0
+                })
                 || v.modes.iter().any(|v| !(-1.0..=1.0).contains(v))
             {
                 return Err(Error::Invalid("invalid vibrational array values".into()));
             }
-            if !v.modes.is_empty() {
-                for mode in v.modes.chunks_exact(axes) {
-                    let norm = mode.iter().map(|x| x * x).sum::<f64>().sqrt();
-                    if (norm - 1.0).abs() > 1e-3 {
-                        return Err(Error::Invalid(
-                            "vibrational mode must have unit norm".into(),
-                        ));
-                    }
-                }
-            }
         }
-        if let Some(t) = &self.thermo
-            && ([
+        if let Some(t) = &self.thermo {
+            if [
                 t.temperature_k,
                 t.pressure_pa,
                 t.zero_point_energy_hartree,
@@ -482,13 +479,29 @@ impl CalcResult {
             .into_iter()
             .any(|v| !v.is_finite())
                 || t.heat_capacity_hartree_per_k
-                    .is_some_and(|v| !v.is_finite()))
-        {
-            return Err(Error::Invalid("non-finite thermochemistry value".into()));
+                    .is_some_and(|v| !v.is_finite())
+            {
+                return Err(Error::Invalid("non-finite thermochemistry value".into()));
+            }
+            let gibbs_correction =
+                t.enthalpy_correction_hartree - t.temperature_k * t.entropy_hartree_per_k;
+            if t.temperature_k <= 0.0
+                || t.pressure_pa <= 0.0
+                || (t.gibbs_correction_hartree - gibbs_correction).abs() > 1e-5
+            {
+                return Err(Error::Invalid(
+                    "invalid thermochemistry temperature, pressure, or Gibbs correction".into(),
+                ));
+            }
         }
         if let Some(path) = &self.trajectory {
             path.validate()?;
             if path.numbers != frame.numbers
+                || (0..n_atoms).any(|i| {
+                    path.isotopes.get(i).copied().unwrap_or(0)
+                        != frame.isotopes.get(i).copied().unwrap_or(0)
+                })
+                || path.masses_amu != frame.masses_amu
                 || path.charge != frame.charge
                 || path.multiplicity != frame.multiplicity
             {
@@ -496,11 +509,23 @@ impl CalcResult {
                     "trajectory and result frame describe different atoms or states".into(),
                 ));
             }
+            if !path.positions_angstrom.is_empty()
+                && path.positions_angstrom[path.positions_angstrom.len() - axes..]
+                    .iter()
+                    .zip(frame.positions_angstrom.iter().flatten())
+                    .any(|(a, b)| (a - b).abs() > 1e-3)
+            {
+                return Err(Error::Invalid(
+                    "trajectory final positions differ from the result frame".into(),
+                ));
+            }
         }
         Ok(())
     }
 
     /// Copy the light data, retaining the basis and the requested coefficient rows if present.
+    ///
+    /// Expects a validated result and may panic otherwise.
     pub fn light(&self, pinned: &[(Spin, u32)]) -> Self {
         let orbitals = self.orbitals.as_ref().map(|orbitals| {
             let n_ao = orbitals.basis.as_ref().map_or(0, |basis| {
@@ -589,6 +614,8 @@ impl CalcResult {
     }
 
     /// Select the saved form using the encoded imported-data budget in bytes.
+    ///
+    /// Expects a validated result and may panic otherwise.
     pub fn for_file(&self, heavy_budget: usize, pinned: &[(Spin, u32)]) -> Cow<'_, Self> {
         if self.keep_full {
             return Cow::Borrowed(self);
@@ -601,12 +628,19 @@ impl CalcResult {
             Cow::Borrowed(self)
         } else {
             let mut light = self.light(pinned);
-            light.omitted_bytes = Some(bytes);
+            let dropped_bytes = bytes.saturating_sub(light.heavy_bytes());
+            light.omitted_bytes = Some(
+                self.omitted_bytes
+                    .unwrap_or(0)
+                    .saturating_add(dropped_bytes),
+            );
             Cow::Owned(light)
         }
     }
 
     /// Measure encoded heavy payload bytes, including the basis when present.
+    ///
+    /// Expects a validated result and may panic otherwise.
     pub fn heavy_bytes(&self) -> usize {
         let mut bytes = compact::encoded_len_f32(&self.gradient_hartree_per_bohr)
             + compact::encoded_len_f32(&self.hessian_hartree_per_bohr2);
@@ -624,7 +658,7 @@ impl CalcResult {
                 bytes += compact::encoded_len_f32(&set.coefficients);
             }
             if let Some(basis) = &orbitals.basis {
-                bytes += serde_json::to_vec(basis)
+                bytes += serde_json::to_vec_pretty(basis)
                     .expect("basis serializes to JSON")
                     .len();
             }
@@ -634,7 +668,7 @@ impl CalcResult {
 
     /// Measure the pretty-printed JSON for the saved form in bytes.
     ///
-    /// Panics if the saved result contains values that cannot be serialized.
+    /// Expects a validated result and may panic otherwise.
     pub fn saved_bytes(&self, heavy_budget: usize, pinned: &[(Spin, u32)]) -> usize {
         serde_json::to_vec_pretty(&self.for_file(heavy_budget, pinned))
             .expect("saved result serializes to JSON")
@@ -807,7 +841,7 @@ mod tests {
     }
 
     #[test]
-    fn checks_vibration_lengths_and_mode_norm() {
+    fn checks_vibration_lengths_and_mode_range() {
         let (frame, valid) = result();
         assert_eq!(valid.vibrations.as_ref().unwrap().imaginary_count(), 1);
         let arrays: [fn(&mut Vibrations) -> &mut Vec<f64>; 4] = [
@@ -822,9 +856,65 @@ mod tests {
             assert!(result.validate(&frame).is_err());
         }
         let mut result = valid;
-        result.vibrations.as_mut().unwrap().modes[0] = 0.9991;
-        result.validate(&frame).unwrap();
-        result.vibrations.as_mut().unwrap().modes[0] = 0.9989;
+        result.vibrations.as_mut().unwrap().modes[0] = 1.0001;
         assert!(result.validate(&frame).is_err());
+    }
+
+    #[test]
+    fn vibrational_mode_at_old_norm_limit_round_trips() {
+        let (mut frame, original) = result();
+        frame.numbers = vec![1, 1];
+        frame.positions_angstrom = vec![[0.0; 3], [0.74, 0.0, 0.0]];
+        let a = 0.707_813_180_860_952_8;
+        let result = CalcResult {
+            frame: frame.hash(),
+            gradient_hartree_per_bohr: vec![],
+            hessian_hartree_per_bohr2: vec![],
+            charges: vec![],
+            vibrations: Some(Vibrations {
+                frequencies_cm1: vec![1600.0],
+                ir_intensities_km_mol: vec![],
+                modes: vec![a, 0.0, 0.0, -a, 0.0, 0.0],
+                reduced_masses_amu: vec![],
+                masses_amu: vec![],
+            }),
+            ..original
+        };
+        result.validate(&frame).unwrap();
+        let json = serde_json::to_vec(&result).unwrap();
+        let decoded: CalcResult = serde_json::from_slice(&json).unwrap();
+        decoded.validate(&frame).unwrap();
+    }
+
+    #[test]
+    fn vibrational_mode_count_respects_cartesian_limit() {
+        let (frame, mut result) = result();
+        let vibrations = result.vibrations.as_mut().unwrap();
+        vibrations.ir_intensities_km_mol.clear();
+        vibrations.modes.clear();
+        vibrations.reduced_masses_amu.clear();
+        vibrations.frequencies_cm1.push(1700.0);
+        result.validate(&frame).unwrap();
+        result
+            .vibrations
+            .as_mut()
+            .unwrap()
+            .frequencies_cm1
+            .push(1800.0);
+        assert!(result.validate(&frame).is_err());
+    }
+
+    #[test]
+    fn vibrational_masses_must_be_positive() {
+        let (frame, valid) = result();
+        for mass in [0.0, -1.0, f64::MIN_POSITIVE] {
+            let mut result = valid.clone();
+            result.vibrations.as_mut().unwrap().masses_amu[0] = mass;
+            assert!(result.validate(&frame).is_err());
+
+            let mut result = valid.clone();
+            result.vibrations.as_mut().unwrap().reduced_masses_amu[0] = mass;
+            assert!(result.validate(&frame).is_err());
+        }
     }
 }
