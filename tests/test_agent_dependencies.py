@@ -130,7 +130,11 @@ class AgentDependencyTests(unittest.TestCase):
             worker.write_text(f'pub const AXTB_REV: &str = "{REVISION}";\n', encoding="utf-8")
             notices = root / "licenses/axtb"
             notices.mkdir(parents=True)
-            (notices / "SOURCE").write_text(f"Revision:   {source_revision}\n", encoding="utf-8")
+            (notices / "SOURCE").write_text(
+                "Fork:       https://github.com/Ameyanagi/axtb, branch reshiki\n"
+                f"Revision:   {source_revision}\n",
+                encoding="utf-8",
+            )
             (root / "upstream").mkdir()
             for name in ("COPYING", "COPYING.LESSER", "NOTICE"):
                 terms = f"Upstream {name}\r\n".encode()
@@ -153,12 +157,17 @@ class AgentDependencyTests(unittest.TestCase):
             ("AGPL-3.0-only", True),
             ("GPL-3.0+ WITH Classpath-exception-2.0", True),
             ("LGPL-2.1", True),
-            ("MIT/(Apache-2.0 AND LGPL-3.0-only)", True),
+            ("MIT/(Apache-2.0 AND LGPL-3.0-only)", False),
             # An OR with a non-GPL alternative is used under that alternative.
             ("Apache-2.0 OR GPL-2.0-only", False),
             ("Apache-2.0/GPL-2.0-only", False),
             ("GPL-2.0-only OR LGPL-3.0-only", True),
             ("MIT AND LGPL-2.1", True),
+            ("MIT AND gpl-3.0-only", True),
+            ("(Apache-2.0 OR GPL-2.0-only)", False),
+            ("MIT OR (Apache-2.0 AND LGPL-3.0-only)", False),
+            ("(MIT OR GPL-3.0-only) AND LGPL-2.1-or-later", True),
+            ("GPL-2.0-only WITH Classpath-exception-2.0 OR MIT", False),
         ):
             with self.subTest(expression=expression):
                 self.assertEqual(copyleft(expression), expected)
@@ -166,7 +175,8 @@ class AgentDependencyTests(unittest.TestCase):
     def test_default_graph_rejects_copyleft_and_the_fork(self):
         default_licenses = DEFAULT_LICENSE_TREE + (
             "transitive v1.2.0|LGPL-2.1\n"
-            f"other-name v0.2.0 ({FORK_TREE_SOURCE}) (proc-macro)|MIT (*)\n"
+            # Cargo's order: the proc-macro marker comes before the source.
+            f"other-name v0.2.0 (proc-macro) ({FORK_TREE_SOURCE})|MIT (*)\n"
         )
         with self.assertRaisesRegex(ValueError, "xTB rule 1") as raised:
             self.audit(cargo(tree(SERVER), default_licenses=default_licenses))
@@ -215,7 +225,7 @@ class AgentDependencyTests(unittest.TestCase):
 
     def test_pin_consistency_rejects_a_different_source_revision(self):
         with self.assertRaisesRegex(
-            ValueError, r"licenses/axtb/SOURCE Revision must match AXTB_REV"
+            ValueError, r"licenses/axtb/SOURCE must have one Revision line"
         ):
             self.audit(cargo(tree(SERVER)), source_revision="0" * 40)
 

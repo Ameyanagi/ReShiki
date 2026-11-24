@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -81,7 +82,7 @@ def consolidated_notices(root, metadata):
     source_root = root / "licenses"
     includes_axtb = any(
         (package["name"] == "axtb" or package["name"].startswith("axtb-"))
-        and (package.get("source") or "").startswith(AXTB_GIT_SOURCE)
+        and re.split(r"[?#]", package.get("source") or "", maxsplit=1)[0] == AXTB_GIT_SOURCE
         for package in metadata["packages"]
     )
     index.append("SOURCE ATTRIBUTIONS\n-------------------\n")

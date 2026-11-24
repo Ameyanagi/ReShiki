@@ -43,6 +43,16 @@ class LicenseNoticeTests(unittest.TestCase):
                 ([{**package, "name": "axtb", "source": fork}], True),
                 ([{**package, "name": "axtb-driver", "source": fork}], True),
                 ([{**package, "name": "axtb-x", "source": "git+https://example.test/axtb"}], False),
+                (
+                    [
+                        {
+                            **package,
+                            "name": "axtb-driver",
+                            "source": "git+https://github.com/Ameyanagi/axtb-repack?rev=1#1",
+                        }
+                    ],
+                    False,
+                ),
             ):
                 with self.subTest(packages=packages):
                     content = consolidated_notices(root, {"packages": packages})

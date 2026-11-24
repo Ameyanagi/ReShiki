@@ -109,12 +109,12 @@ def parse_features(text):
     return features
 
 
-def production_features(root, target):
+def production_features(root, target, *features):
     # Without dev edges Cargo also leaves dev-dependency features unresolved.
     return parse_features(
         run(
             root,
-            *("cargo", "tree", "--locked", "-p", "reshiki", "-e", "normal,build"),
+            *("cargo", "tree", "--locked", "-p", "reshiki", *features, "-e", "normal,build"),
             *("--target", target, "--prefix", "none", "--format", "{p}|{f}"),
         )
     )
@@ -142,21 +142,48 @@ def license_allowed(expression):
 
 
 def copyleft(expression):
-    """Whether GPL-family terms bind: every OR alternative names GPL, LGPL or AGPL.
+    """Whether a GPL-family license (GPL, LGPL, AGPL, any case) binds the package.
 
-    `Apache-2.0 OR GPL-2.0-only` (self_cell) is used under Apache-2.0. A
-    parenthesized expression with any GPL-family term counts as binding, so
-    nesting can never hide one.
+    SPDX precedence: WITH, then AND, then OR (Cargo's legacy `/` is OR). An OR
+    binds only if every alternative does, so `Apache-2.0 OR GPL-2.0-only`
+    (self_cell) is used under Apache-2.0; an AND binds if any part does.
     """
-    gpl = re.compile(r"(?:A|L)?GPL(?:[-+ ]|$)")
-    expression = expression or ""
-    if "(" in expression:
-        return any(gpl.match(term) for term in license_terms(expression))
-    alternatives = re.split(r"\s+OR\s+|\s*/\s*", expression.strip())
-    return all(
-        any(gpl.match(term.strip()) for term in re.split(r"\s+AND\s+", alternative))
-        for alternative in alternatives
-    )
+    tokens = re.findall(r"\(|\)|/|[^\s()/]+", expression or "")
+    position = 0
+
+    def peek():
+        return tokens[position].upper() if position < len(tokens) else None
+
+    def term():
+        nonlocal position
+        if peek() == "(":
+            position += 1
+            binding = either()
+            position += 1  # ")"
+        else:
+            binding = bool(re.match(r"(?:A|L)?GPL(?:[-+]|$)", tokens[position], re.I))
+            position += 1
+        if peek() == "WITH":
+            position += 2
+        return binding
+
+    def both():
+        nonlocal position
+        binding = term()
+        while peek() == "AND":
+            position += 1
+            binding = term() or binding
+        return binding
+
+    def either():
+        nonlocal position
+        binding = both()
+        while peek() in {"OR", "/"}:
+            position += 1
+            binding = both() and binding
+        return binding
+
+    return bool(tokens) and either()
 
 
 def license_tree(root, target, *packages):
@@ -180,8 +207,10 @@ def license_tree(root, target, *packages):
         if not line.strip():
             continue
         package, separator, license = line.removesuffix(" (*)").rpartition("|")
+        # Cargo prints `name vX (proc-macro) (source)`; accept either order.
         identity = re.fullmatch(
-            r"(\S+) v(\S+)(?: \((.*)\))?", package.removesuffix(" (proc-macro)")
+            r"(\S+) v(\S+)(?: \((.*)\))?",
+            package.replace(" (proc-macro)", ""),
         )
         if not separator or not identity:
             raise ValueError(f"Unexpected cargo tree line: {line!r}")
@@ -259,11 +288,10 @@ def pin_problems(root, locked_packages, xtb_metadata, revision):
     if driver_sources != [expected_source]:
         problems.append(f"Cargo.lock axtb-driver source must match AXTB_REV ({revision})")
     notices = root / "licenses/axtb"
-    source_revision = re.search(
-        r"^Revision:[ \t]*(\S+)[ \t]*$", (notices / "SOURCE").read_text(encoding="utf-8"), re.M
-    )
-    if not source_revision or source_revision[1] != revision:
-        problems.append(f"licenses/axtb/SOURCE Revision must match AXTB_REV ({revision})")
+    source = (notices / "SOURCE").read_text(encoding="utf-8")
+    for field, value in (("Revision", revision), ("Fork", f"{AXTB_SOURCE}, branch reshiki")):
+        if re.findall(rf"^{field}:[ \t]*(.+?)[ \t]*$", source, re.M) != [value]:
+            problems.append(f"licenses/axtb/SOURCE must have one {field} line: {value}")
 
     driver = next(
         (
@@ -378,6 +406,12 @@ def verify(root=ROOT, metadata=None):
         features = production_features(root, target)
         problems += feature_problems(target, features, serde_json_allowed, rmcp_allowed)
         problems += network_problems(target, rmcp_packages(root, target))
+        # The xtb build must not drift either (macOS and Linux releases).
+        if RELEASE_TARGETS[target][0] in {"macos", "linux"}:
+            features = production_features(root, target, "--features", "xtb")
+            problems += feature_problems(
+                f"{target} with xtb", features, serde_json_allowed, rmcp_allowed
+            )
     if metadata is None:
         metadata = json.loads(run(root, "cargo", "metadata", "--locked", "--format-version", "1"))
     lock = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
