@@ -42,8 +42,9 @@ pub(super) fn paths(owner: usize, instance: &Instance, tube: &Tube) -> Vec<PlanP
             if k == 1 {
                 line.reverse();
             }
-            let a = line[0];
-            if let Some(b) = line.iter().find(|p| len(sub(**p, a)) > 1e-9) {
+            if let Some(a) = line.first().copied()
+                && let Some(b) = line.iter().find(|p| len(sub(**p, a)) > 1e-9)
+            {
                 line.insert(0, add(a, mul(normalize(sub(a, *b)), HOSE_CUFF_MM)));
             }
             if k == 1 {
@@ -160,8 +161,12 @@ struct Route<'a> {
 impl<'a> Route<'a> {
     fn new(line: &'a [Xy]) -> Self {
         let mut distances = vec![0.];
+        let mut distance = 0.;
         for pair in line.windows(2) {
-            distances.push(distances.last().unwrap() + len(sub(pair[1], pair[0])));
+            if let [a, b] = pair {
+                distance += len(sub(*b, *a));
+                distances.push(distance);
+            }
         }
         Self { line, distances }
     }
@@ -179,7 +184,13 @@ impl<'a> Route<'a> {
             .distances
             .partition_point(|d| *d < distance)
             .clamp(1, self.line.len() - 1);
-        let (a, b) = (self.line[k - 1], self.line[k]);
+        let (Some(&a), Some(&b), Some(&start)) = (
+            self.line.get(k - 1),
+            self.line.get(k),
+            self.distances.get(k - 1),
+        ) else {
+            return self.line.first().copied().unwrap_or_default();
+        };
         let delta = sub(b, a);
         let segment = len(delta);
         let along = if segment > 1e-9 {
@@ -189,10 +200,7 @@ impl<'a> Route<'a> {
         };
         add(
             a,
-            add(
-                mul(along, distance - self.distances[k - 1]),
-                mul(perp(along), offset),
-            ),
+            add(mul(along, distance - start), mul(perp(along), offset)),
         )
     }
 
