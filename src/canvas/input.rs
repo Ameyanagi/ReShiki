@@ -21,7 +21,10 @@ impl MoleculeCanvas<'_> {
         cursor: mouse::Cursor,
     ) -> Option<Action<Edit>> {
         if let Event::Touch(event) = event {
-            if state.tube_bend_capture.is_some() {
+            // The owning finger must keep feeding touch_mouse after its press
+            // captures a bend. An unrelated touch cannot release a mouse drag.
+            if state.tube_bend_capture.is_some() && !state.touch.owns_mouse() {
+                state.touch = Default::default();
                 return Some(Action::capture());
             }
             return self.touch_event(state, *event, bounds);

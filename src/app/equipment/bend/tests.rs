@@ -163,6 +163,35 @@ fn release_commits_once_per_drag_keeps_seats_and_rebinds_the_same_bend() {
 }
 
 #[test]
+fn batched_touch_motion_and_lift_commit_one_bend() {
+    let mut app = source();
+    let target = menu(&mut app);
+    let before = app.tab.doc.clone();
+    let _ = app.update(message(Action::Begin(target)));
+    let token = app.current_tube_bend().unwrap().token;
+    let interim = target.at.offset(80., 40.);
+    let _ = app.update(Message::Canvas(Edit::Touch(vec![
+        Edit::Hover(Some(interim)),
+        Edit::TubeBendDrag { token, at: interim },
+    ])));
+    assert!(app.tube_bend_preview().is_some());
+    assert_eq!(app.tab.doc, before);
+    let end = target.at.offset(80., 80.);
+    let _ = app.update(Message::Canvas(Edit::Touch(vec![
+        Edit::TubeBendDrag { token, at: end },
+        Edit::TubeBendFinish {
+            token,
+            at: Some(end),
+        },
+    ])));
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let bend = &app.current_tube_bend().unwrap().model;
+    assert!((bend.default_angle_deg() - 45.).abs() < 1e-8);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn input_submit_and_blur_commit_once_and_the_current_grip_can_still_drag() {
     let mut app = source();
     let target = menu(&mut app);

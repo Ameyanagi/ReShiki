@@ -1,5 +1,5 @@
 use super::*;
-use crate::canvas::{Camera, EquipmentAuthoring, Tool, World, tests::chain_canvas};
+use crate::canvas::{Camera, EquipmentAuthoring, Tool, TubeBend, World, tests::chain_canvas};
 use iced::widget::canvas::Program;
 use reshiki::{chains::ChainMode, document::Document};
 
@@ -24,6 +24,384 @@ fn send(
         bounds,
         mouse::Cursor::Available(Point::new(-100., -100.)),
     ))
+}
+
+fn bend_canvas(doc: &Document) -> MoleculeCanvas<'_> {
+    let mut canvas = chain_canvas(doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    canvas.tube_bend = Some(TubeBend {
+        token: (9, 4),
+        pivot: World::default(),
+        leg: Some([World::new(20., 0.), World::new(100., 0.)]),
+        can_rotate: true,
+    });
+    canvas
+}
+
+fn screen(canvas: &MoleculeCanvas<'_>, bounds: Rectangle, world: World) -> Point {
+    let paper = canvas.guides.paper(bounds);
+    canvas.camera.screen(world, paper) + Vector::new(paper.x, paper.y)
+}
+
+#[test]
+fn owning_touch_continues_a_bend_and_lift_commits_once_at_its_own_position() {
+    let doc = Document::default();
+    let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(500., 350.));
+    for rulers in [false, true] {
+        for zoom in [0.5, 2.] {
+            let mut canvas = bend_canvas(&doc);
+            canvas.guides.rulers = rulers;
+            canvas.camera.zoom = zoom;
+            let mut state = State::default();
+            let owner = touch::Finger(7);
+            let start = screen(&canvas, bounds, World::new(60., 0.));
+            assert!(
+                send(
+                    &canvas,
+                    &mut state,
+                    bounds,
+                    touch::Event::FingerPressed {
+                        id: owner,
+                        position: start
+                    }
+                )
+                .is_empty()
+            );
+            let first = send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerMoved {
+                    id: owner,
+                    position: screen(&canvas, bounds, World::new(55., 15.)),
+                },
+            );
+            assert!(
+                first
+                    .iter()
+                    .any(|edit| matches!(edit, Edit::TubeBendDrag { token: (9, 4), .. }))
+            );
+            assert!(state.tube_bend_capture.is_some());
+            assert!(state.touch.owns_mouse());
+            // A finger that never pressed on this canvas cannot lift the owner.
+            for event in [
+                touch::Event::FingerPressed {
+                    id: touch::Finger(99),
+                    position: Point::ORIGIN,
+                },
+                touch::Event::FingerMoved {
+                    id: touch::Finger(99),
+                    position: start,
+                },
+                touch::Event::FingerLifted {
+                    id: touch::Finger(99),
+                    position: start,
+                },
+            ] {
+                assert!(send(&canvas, &mut state, bounds, event).is_empty());
+            }
+            assert!(state.tube_bend_capture.is_some());
+            let moved = World::new(50., 25.);
+            let motion = send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerMoved {
+                    id: owner,
+                    position: screen(&canvas, bounds, moved),
+                },
+            );
+            assert!(
+                matches!(motion.last(), Some(Edit::TubeBendDrag { token: (9, 4), at }) if at.distance(moved) < 1e-4)
+            );
+            let final_at = World::new(40., 35.);
+            let released = send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerLifted {
+                    id: owner,
+                    position: screen(&canvas, bounds, final_at),
+                },
+            );
+            assert_eq!(
+                released
+                    .iter()
+                    .filter(|edit| matches!(edit, Edit::TubeBendFinish { .. }))
+                    .count(),
+                1
+            );
+            assert!(
+                matches!(released.last(), Some(Edit::TubeBendFinish { token: (9, 4), at: Some(at) }) if at.distance(final_at) < 1e-4)
+            );
+            assert!(
+                !released
+                    .iter()
+                    .any(|edit| matches!(edit, Edit::TubeBendAbort { .. }))
+            );
+            assert!(state.tube_bend_capture.is_none());
+            assert!(state.touch.fingers.is_empty());
+            assert!(!state.touch.mouse_down);
+            assert!(state.cursor.is_none());
+        }
+    }
+}
+
+#[test]
+fn losing_the_owning_finger_aborts_the_bend_instead_of_committing_a_release() {
+    let doc = Document::default();
+    let canvas = bend_canvas(&doc);
+    let bounds = Rectangle::with_size(iced::Size::new(500., 350.));
+    for blur in [false, true] {
+        let mut state = State::default();
+        let owner = touch::Finger(3);
+        let start = screen(&canvas, bounds, World::new(60., 0.));
+        send(
+            &canvas,
+            &mut state,
+            bounds,
+            touch::Event::FingerPressed {
+                id: owner,
+                position: start,
+            },
+        );
+        send(
+            &canvas,
+            &mut state,
+            bounds,
+            touch::Event::FingerMoved {
+                id: owner,
+                position: screen(&canvas, bounds, World::new(50., 20.)),
+            },
+        );
+        assert!(state.tube_bend_capture.is_some());
+        let result = if blur {
+            edits(canvas.update(
+                &mut state,
+                &Event::Window(iced::window::Event::Unfocused),
+                bounds,
+                mouse::Cursor::Unavailable,
+            ))
+        } else {
+            send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerLost {
+                    id: owner,
+                    position: screen(&canvas, bounds, World::new(35., 40.)),
+                },
+            )
+        };
+        assert!(matches!(
+            result.as_slice(),
+            [Edit::TubeBendAbort { token: (9, 4) }]
+        ));
+        assert!(state.tube_bend_capture.is_none());
+        assert!(state.touch.fingers.is_empty());
+        assert!(state.cursor.is_none());
+        assert!(
+            send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerLifted {
+                    id: owner,
+                    position: start
+                }
+            )
+            .is_empty()
+        );
+    }
+}
+
+#[test]
+fn a_second_finger_aborts_the_bend_then_uses_normal_navigation_until_all_lift() {
+    let doc = Document::default();
+    let canvas = bend_canvas(&doc);
+    let bounds = Rectangle::with_size(iced::Size::new(500., 350.));
+    for first_lifted in [1, 2] {
+        let mut state = State::default();
+        let start = screen(&canvas, bounds, World::new(60., 0.));
+        let second = screen(&canvas, bounds, World::new(-60., 0.));
+        send(
+            &canvas,
+            &mut state,
+            bounds,
+            touch::Event::FingerPressed {
+                id: touch::Finger(1),
+                position: start,
+            },
+        );
+        send(
+            &canvas,
+            &mut state,
+            bounds,
+            touch::Event::FingerMoved {
+                id: touch::Finger(1),
+                position: start + Vector::new(-10., 20.),
+            },
+        );
+        assert!(state.tube_bend_capture.is_some());
+        let abort = send(
+            &canvas,
+            &mut state,
+            bounds,
+            touch::Event::FingerPressed {
+                id: touch::Finger(2),
+                position: second,
+            },
+        );
+        assert!(matches!(
+            abort.as_slice(),
+            [Edit::TubeBendAbort { token: (9, 4) }]
+        ));
+        assert!(state.tube_bend_capture.is_none());
+        assert!(state.touch.navigating);
+        assert!(!state.touch.mouse_down);
+        assert!(state.touch.deadline().is_none());
+        let navigation = send(
+            &canvas,
+            &mut state,
+            bounds,
+            touch::Event::FingerMoved {
+                id: touch::Finger(2),
+                position: second + Vector::new(10., 20.),
+            },
+        );
+        assert!(matches!(navigation.as_slice(), [Edit::Navigate(..)]));
+        // A third finger is tracked but cannot release or restart the bend.
+        let third = screen(&canvas, bounds, World::new(0., -60.));
+        let pressed = send(
+            &canvas,
+            &mut state,
+            bounds,
+            touch::Event::FingerPressed {
+                id: touch::Finger(3),
+                position: third,
+            },
+        );
+        assert!(pressed.iter().all(Edit::is_hover));
+        assert!(
+            send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerMoved {
+                    id: touch::Finger(3),
+                    position: third + Vector::new(10., 0.),
+                }
+            )
+            .is_empty()
+        );
+        assert!(
+            send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerLost {
+                    id: touch::Finger(3),
+                    position: third
+                }
+            )
+            .is_empty()
+        );
+        assert!(
+            send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerLifted {
+                    id: touch::Finger(first_lifted),
+                    position: start,
+                }
+            )
+            .is_empty()
+        );
+        let remaining = touch::Finger(3 - first_lifted);
+        assert!(
+            send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerMoved {
+                    id: remaining,
+                    position: start + Vector::new(0., 60.),
+                }
+            )
+            .is_empty()
+        );
+        assert!(
+            send(
+                &canvas,
+                &mut state,
+                bounds,
+                touch::Event::FingerLifted {
+                    id: remaining,
+                    position: start,
+                }
+            )
+            .is_empty()
+        );
+        assert!(state.touch.fingers.is_empty());
+        assert!(!state.touch.navigating);
+    }
+}
+
+#[test]
+fn unrelated_touch_cannot_release_a_mouse_owned_bend_capture() {
+    let doc = Document::default();
+    let canvas = bend_canvas(&doc);
+    let bounds = Rectangle::with_size(iced::Size::new(500., 350.));
+    let start = screen(&canvas, bounds, World::new(60., 0.));
+    let moved = screen(&canvas, bounds, World::new(50., 20.));
+    let mut state = State::default();
+    for event in [
+        mouse::Event::CursorMoved { position: start },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::CursorMoved { position: moved },
+    ] {
+        canvas.update(
+            &mut state,
+            &Event::Mouse(event),
+            bounds,
+            mouse::Cursor::Unavailable,
+        );
+    }
+    assert!(state.tube_bend_capture.is_some());
+    assert!(!state.touch.owns_mouse());
+    for event in [
+        touch::Event::FingerPressed {
+            id: touch::Finger(8),
+            position: start,
+        },
+        touch::Event::FingerMoved {
+            id: touch::Finger(8),
+            position: moved,
+        },
+        touch::Event::FingerLost {
+            id: touch::Finger(8),
+            position: moved,
+        },
+        touch::Event::FingerLifted {
+            id: touch::Finger(8),
+            position: moved,
+        },
+    ] {
+        assert!(send(&canvas, &mut state, bounds, event).is_empty());
+        assert!(state.tube_bend_capture.is_some());
+    }
+    let final_at = World::new(40., 35.);
+    let released = edits(canvas.update(
+        &mut state,
+        &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        bounds,
+        mouse::Cursor::Available(screen(&canvas, bounds, final_at)),
+    ));
+    assert!(
+        matches!(released.as_slice(), [Edit::TubeBendFinish { token: (9, 4), at: Some(at) }] if at.distance(final_at) < 1e-4)
+    );
+    assert!(state.tube_bend_capture.is_none());
 }
 
 #[test]
