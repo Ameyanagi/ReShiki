@@ -372,10 +372,16 @@ orbital figure placed in a drawing stores only:
 
 Snapshot encoding (one JSON string field, so the file stays JSON):
 
-    base64( deflate( version u8, scale f32,
-                     layer count u16, per layer: colour [u8;3], contour count u32,
-                         per contour: point count u32, points as f32 x, y …,
-                     rim count u32, per rim: point count u32, points … ) )
+    base64( deflate(  // little-endian, as `surface::snapshot` writes it
+        magic "RSF1",
+        outline flag u8, then if 1: colour [u8; 3], alpha f32, width f32,
+        layer count u32, per layer: colour [u8; 3], contour count u32,
+            per contour: point count u32, then x f32, y f32 per point,
+        rim count u32, per rim: point count u32, then x f32, y f32 per point ) )
+
+Points are relative to the model frame's centre. The magic carries the
+version; contours have at least 3 points, rims at least 2, layers at least
+one contour.
 
 `miniz_oxide` (deflate) and `base64` are already dependencies of the model
 crate. Points could be quantised to 1/100 unit as i16 deltas later if the
