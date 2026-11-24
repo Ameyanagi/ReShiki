@@ -8,18 +8,18 @@ Rust xTB implementation. The data model is fixed in [xtb-data.md](xtb-data.md).
 
 ## Decisions
 
-| Topic | Decision |
-| --- | --- |
-| Engine | A fork of axtb (LGPL-3.0-or-later) pinned by revision: `Ameyanagi/axtb`, branch `reshiki`. |
-| Linking | The `reshiki` executable links the fork only under the Cargo feature `xtb`. The feature is off by default and exists only on the root application crate; library crates never enable it. |
-| Process | Calculations run in a child process of the same executable (`reshiki --xtb-worker`), like `--geometry-worker`. There is no separate helper executable on the desktop. |
-| Desktop builds | macOS and Linux desktop releases include xTB. Windows desktop releases do not until code signing for them works. |
-| Packages | Python, npm and crates stay MIT OR Apache-2.0 and calculate nothing unless a package opts in. The Python opt-in package is `reshiki-xtb` (TestPyPI first). Web/WebAssembly calculations come later. |
-| Methods | GFN2-xTB (default), GFN-FF and g-xTB. Each method supports a different set of tasks; the table is data in `reshiki-qcdata` ([capabilities](xtb-data.md#method--task-capabilities)). |
-| Limits | Energy, gradient and optimization up to 500 atoms; Hessians up to 200 atoms; trajectories up to 1000 frames; orbital surfaces simplified to about 20,000 triangles for export. |
-| Orbital surfaces | Both an interactive viewer and vector shapes in the drawing (SVG and PDF export). |
-| Optimizer | Our own (MIT OR Apache-2.0), reusable with MMFF. |
-| Files | Read Molden, Gaussian fchk, Gaussian `.log` and ORCA `.out`; read and write XYZ (multi-frame), SDF/V3000 3D, and Gaussian, ORCA and GAMESS inputs. Files come before calculations, but every phase runs now in parallel lanes. |
+| Topic            | Decision                                                                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Engine           | A fork of axtb (LGPL-3.0-or-later) pinned by revision: `Ameyanagi/axtb`, branch `reshiki`.                                                                                                                                     |
+| Linking          | The `reshiki` executable links the fork only under the Cargo feature `xtb`. The feature is off by default and exists only on the root application crate; library crates never enable it.                                       |
+| Process          | Calculations run in a child process of the same executable (`reshiki --xtb-worker`), like `--geometry-worker`. There is no separate helper executable on the desktop.                                                          |
+| Desktop builds   | macOS and Linux desktop releases include xTB. Windows desktop releases do not until code signing for them works.                                                                                                               |
+| Packages         | Python, npm and crates stay MIT OR Apache-2.0 and calculate nothing unless a package opts in. The Python opt-in package is `reshiki-xtb` (TestPyPI first). Web/WebAssembly calculations come later.                            |
+| Methods          | GFN2-xTB (default), GFN-FF and g-xTB. Each method supports a different set of tasks; the table is data in `reshiki-qcdata` ([capabilities](xtb-data.md#method--task-capabilities)).                                            |
+| Limits           | Energy, gradient and optimization up to 500 atoms; Hessians up to 200 atoms; trajectories up to 1000 frames; orbital surfaces simplified to about 20,000 triangles for export.                                                 |
+| Orbital surfaces | Both an interactive viewer and vector shapes in the drawing (SVG and PDF export).                                                                                                                                              |
+| Optimizer        | Our own (MIT OR Apache-2.0), reusable with MMFF.                                                                                                                                                                               |
+| Files            | Read Molden, Gaussian fchk, Gaussian `.log` and ORCA `.out`; read and write XYZ (multi-frame), SDF/V3000 3D, and Gaussian, ORCA and GAMESS inputs. Files come before calculations, but every phase runs now in parallel lanes. |
 
 ### Licensing
 
@@ -67,7 +67,7 @@ request before packaging depends on it, and user interface after file support.
 
 ### Phase 2: 3D files (every build, no LGPL code)
 
-- 2a, data types (this lane): the `reshiki-qcdata` crate and [xtb-data.md](xtb-data.md). It
+- 2a, data types: the `reshiki-qcdata` crate and [xtb-data.md](xtb-data.md), then the document integration. It
   alone owns the scientific types, the native format floor and the atom mapping; other lanes
   build on it.
 - 2b, writers: XYZ and multi-frame XYZ, SDF/V3000 3D, Gaussian `.gjf`/`.com`, ORCA `.inp`, GAMESS
@@ -86,7 +86,7 @@ request before packaging depends on it, and user interface after file support.
   process. Energy and gradient first.
 - Optimizer crate: bounded Cartesian L-BFGS with diagonal preconditioning and a documented
   stopping rule first; approximate normal coordinates only if benchmarks justify them.
-- Calculate panel, results palette, stale-result display, native-file persistence, CLI
+- Calculate panel, results palette, stale-result display on the document storage Phase 2a owns, CLI
   `reshiki calc`, MCP tools and the Python API, all through the existing admission, cancellation
   and revision-checked commit of the agent API.
 - Validation against `xtb --opt` on the test set: atom-mapped aligned RMSD and energy
