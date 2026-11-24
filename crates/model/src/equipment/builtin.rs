@@ -405,6 +405,7 @@ static FILES: &[Source] = piece_files![
     "gas-safety-relief-1-4-npt",
     "gas-pressure-reducing-regulator-1-4-npt",
     "gas-back-pressure-regulator-1-4-npt",
+    "flexible-metal-hose-fm-1-4",
     "gas-pressure-gauge-1-4-npt",
     "gas-pressure-transducer-1-4-npt",
     "gas-sample-cylinder-150-1-4-npt",

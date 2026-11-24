@@ -11,6 +11,7 @@ use i_overlay::core::overlay_rule::OverlayRule;
 use i_overlay::float::overlay::FloatOverlay;
 use std::collections::BTreeSet;
 
+mod flexible_tube;
 #[cfg(test)]
 mod liquid_tests;
 
@@ -148,8 +149,6 @@ impl Default for Settings {
     }
 }
 
-/// How far a hose pushed onto a barb reaches past the barb's tip, over its ribs.
-const HOSE_CUFF_MM: f64 = 12.;
 pub(super) const GLASS_OUTLINE_PT: f32 = 0.6;
 pub(super) const JOINT_HATCH_PT: f32 = 0.25;
 const SOCKET_GROUND_START_MM: f64 = 1.2;
@@ -515,38 +514,7 @@ fn piece(
     if let Some(tube) = &instance.definition.tube
         && instance.centre_line.len() >= 2
     {
-        // A seated end is pushed over its barb's ribs.
-        let mut line = instance.centre_line.clone();
-        for (k, end) in tube.ends.iter().enumerate() {
-            if instance.seated.contains(end) {
-                if k == 1 {
-                    line.reverse();
-                }
-                let a = line.first().copied().unwrap_or_default();
-                // The first point apart from the end gives its direction.
-                if let Some(b) = line
-                    .iter()
-                    .find(|p| sub(**p, a).iter().any(|v| v.abs() > 1e-9))
-                {
-                    line.insert(0, add(a, mul(normalize(sub(a, *b)), HOSE_CUFF_MM)));
-                }
-                if k == 1 {
-                    line.reverse();
-                }
-            }
-        }
-        let path = tube_outline(&line, tube.width_mm);
-        push(
-            items,
-            Pass::Front,
-            0,
-            tube.material,
-            tube.color,
-            Ink::FillStroke(Weight::Outline),
-            None,
-            &path,
-            false,
-        );
+        items.extend(flexible_tube::paths(owner, instance, tube));
     }
     for l in &e.liquids {
         // The surface stays level on the page, so liquid is cut in world space.

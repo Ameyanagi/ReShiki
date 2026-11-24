@@ -343,3 +343,219 @@ fn a_hose_doubling_back_to_a_barb_loops_clear_of_itself() {
         .fold(f64::INFINITY, f64::min);
     assert!(clear >= 9. * f64::from(scale), "{clear}");
 }
+
+fn flexible_metal_hose() -> std::sync::Arc<super::format::Definition> {
+    std::sync::Arc::new(
+        super::format::parse(include_str!(
+            "../../../../assets/pieces/flexible-metal-hose-fm-1-4.reshiki-piece"
+        ))
+        .unwrap(),
+    )
+}
+
+fn connected_metal_hose() -> (Document, u64, [Port; 2]) {
+    let mut doc = Document::default();
+    let scale = placed::world_per_mm(&doc, placed::DEFAULT_PT_PER_MM);
+    let mut ends = Vec::new();
+    for (x, joint) in [(200., "right"), (700., "left")] {
+        let id = doc.next_id();
+        doc.graphics.push(placed::graphic(
+            id,
+            builtin::find("reshiki/compression-union-1-4").unwrap(),
+            Point::new(x, 200.),
+            scale,
+        ));
+        ends.push(port(&doc, id, joint));
+    }
+    let ends: [Port; 2] = ends.try_into().unwrap();
+    let (hose, matched) = hose::place_hose(
+        &mut doc,
+        flexible_metal_hose(),
+        ends[0].point,
+        ends[1].point,
+        REACH,
+    );
+    assert_eq!(matched.len(), 2);
+    (doc, hose, ends)
+}
+
+#[test]
+fn flexible_metal_tube_adapters_seat_at_compression_stops_and_survive_reshaping() {
+    let (mut doc, hose, ends) = connected_metal_hose();
+    let seats = doc.seats.clone();
+    for (joint, socket) in ["a", "b"].into_iter().zip(&ends) {
+        let end = port(&doc, hose, joint);
+        assert_seated(&doc, &end, socket);
+        assert_near(
+            end.point,
+            sub(socket.point, mul(socket.dir, socket.insertion)),
+        );
+        assert!(matches!(
+            end.kind,
+            solve::Kind::Plug(super::format::PlugFamily::Compression, size) if size == 6.35
+        ));
+    }
+    let to = add(hose::grips(graphic(&doc, hose))[1].1, [30., 110.]);
+    hose::drag(&mut doc, hose, Grip::Middle, to, REACH);
+    solve::check(&mut doc, None);
+    assert_eq!(doc.seats, seats);
+    for (joint, socket) in ["a", "b"].into_iter().zip(&ends) {
+        assert_seated(&doc, &port(&doc, hose, joint), socket);
+    }
+    let g = graphic(&doc, hose);
+    assert!(g.hit(Point::new(to[0] as f32, to[1] as f32), 0.1));
+    let plan = placed::plan(g);
+    let braid = plan
+        .iter()
+        .find(|p| p.pass == super::plan::Pass::Front && p.depth == 1)
+        .unwrap();
+    assert!(braid.path.len() > 12);
+    assert!(braid.path.len() <= 3072, "braid complexity stays bounded");
+    let max_y = super::geometry::flatten(&braid.path)
+        .iter()
+        .flat_map(|(points, _)| points)
+        .map(|p| p[1])
+        .fold(f64::NEG_INFINITY, f64::max);
+    assert!(max_y >= to[1] - 13.5 * f64::from(g.axis_x.x).abs());
+
+    let bytes = doc.file_json().unwrap();
+    let reopened = Document::from_json(&bytes).unwrap();
+    assert_eq!(reopened.seats, seats);
+    assert_eq!(
+        graphic(&reopened, hose).piece.as_ref().unwrap().centre_line,
+        g.piece.as_ref().unwrap().centre_line
+    );
+    assert_eq!(
+        placed::plan(graphic(&reopened, hose)).as_ref(),
+        plan.as_ref()
+    );
+}
+
+#[test]
+fn dragging_a_metal_hose_end_releases_and_reseats_at_the_internal_stop() {
+    let (mut doc, hose, ends) = connected_metal_hose();
+    let away = add(ends[1].point, [80., 90.]);
+    assert!(hose::drag(&mut doc, hose, Grip::End(1), away, REACH).is_none());
+    assert_eq!(doc.seats.len(), 1);
+    assert_near(port(&doc, hose, "b").point, away);
+    assert_seated(&doc, &port(&doc, hose, "a"), &ends[0]);
+    // Both the visible mouth and the inserted tip are valid snap targets.
+    let inserted = sub(ends[1].point, mul(ends[1].dir, ends[1].insertion));
+    assert!(hose::drag(&mut doc, hose, Grip::End(1), inserted, REACH).is_some());
+    solve::check(&mut doc, None);
+    assert_eq!(doc.seats.len(), 2);
+    assert_seated(&doc, &port(&doc, hose, "b"), &ends[1]);
+}
+
+#[test]
+fn metal_hose_tips_need_enough_straight_length_for_the_compression_stop() {
+    let (doc, hose, ends) = connected_metal_hose();
+    let tip = port(&doc, hose, "a");
+    assert!((tip.contact_length / tip.mm - 18.).abs() < 1e-6);
+    let mut socket = ends[0].clone();
+    socket.insertion = 18. * socket.mm;
+    assert!(solve::mates(&tip, &socket));
+    socket.insertion = 18.1 * socket.mm;
+    assert!(!solve::mates(&tip, &socket));
+}
+
+#[test]
+fn metal_hose_tips_do_not_get_rubber_cuffs_and_free_clicks_leave_room_for_collars() {
+    let mut doc = Document::default();
+    let d = flexible_metal_hose();
+    let (id, matched) = hose::place_hose(&mut doc, d.clone(), [0., 0.], [0., 0.], REACH);
+    assert!(matched.is_empty());
+    let g = graphic(&doc, id);
+    let line = &g.piece.as_ref().unwrap().centre_line;
+    let fitting = d.tube.as_ref().unwrap().end_fittings.as_ref().unwrap();
+    assert!(len(sub(line[0], *line.last().unwrap())) > 2. * fitting.length_mm());
+    assert!(placed::sampled(line).iter().all(|p| p[1].abs() < 1e-6));
+    let free_plan = placed::plan(g);
+    let g = doc.graphics.iter_mut().find(|g| g.id == id).unwrap();
+    g.piece.as_mut().unwrap().seated.insert("a".into());
+    let seated_plan = placed::plan(g);
+    assert_eq!(free_plan.as_ref(), seated_plan.as_ref());
+    assert_eq!(
+        free_plan
+            .iter()
+            .filter(|p| p.pass == super::plan::Pass::Back)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn flexible_hose_parts_lists_report_end_connections_without_inventing_cut_lengths() {
+    let (mut doc, hose, ends) = connected_metal_hose();
+    let report = super::parts_list::parts_list(&doc, &[hose]).unwrap();
+    assert_eq!(report.len(), 1);
+    let row = &report[0];
+    assert!(row.tube.is_none());
+    let assembly = row.hose.as_ref().unwrap();
+    assert_eq!(assembly.interfaces, ["Ø6.35 mm compression male"; 2]);
+    for (reported, socket) in assembly.ends.iter().zip(&ends) {
+        let connection = reported.connection.as_ref().unwrap();
+        assert_eq!(connection.id, socket.at.piece);
+        assert_eq!(connection.port, socket.at.joint);
+    }
+    assert_eq!(
+        row.variant["catalog_assembly_length"],
+        "36 in (914.4 mm) catalog assembly"
+    );
+    assert_eq!(
+        super::parts_list::cut_length_mm(&flexible_metal_hose(), &Default::default()).unwrap(),
+        None
+    );
+    hose::drag(&mut doc, hose, Grip::Middle, [450., 500.], REACH);
+    assert_eq!(
+        super::parts_list::parts_list(&doc, &[hose]).unwrap(),
+        report
+    );
+}
+
+#[test]
+fn optional_braid_and_end_fittings_keep_legacy_definitions_unchanged_and_validate_dimensions() {
+    let old = builtin::find("reshiki/hose-7").unwrap();
+    let json = serde_json::to_value(old.as_ref()).unwrap();
+    assert!(json["tube"].get("braid").is_none());
+    assert!(json["tube"].get("end_fittings").is_none());
+    let tube = old.tube.as_ref().unwrap();
+    assert!(tube.braid.is_none() && tube.end_fittings.is_none());
+    let mut invalid = (*flexible_metal_hose()).clone();
+    invalid
+        .tube
+        .as_mut()
+        .unwrap()
+        .braid
+        .as_mut()
+        .unwrap()
+        .pitch_mm = 0.;
+    assert!(
+        super::validate::validate(&invalid)
+            .unwrap_err()
+            .contains("positive pitch")
+    );
+    let mut invalid = (*flexible_metal_hose()).clone();
+    invalid
+        .tube
+        .as_mut()
+        .unwrap()
+        .end_fittings
+        .as_mut()
+        .unwrap()
+        .collar_width_mm = 1.;
+    assert!(
+        super::validate::validate(&invalid)
+            .unwrap_err()
+            .contains("at least as wide")
+    );
+    let mut invalid = (*flexible_metal_hose()).clone();
+    if let super::format::Joint::Plug { family, .. } = &mut invalid.joints[0] {
+        *family = super::format::PlugFamily::Hose;
+    }
+    assert!(
+        super::validate::validate(&invalid)
+            .unwrap_err()
+            .contains("male compression joint")
+    );
+}

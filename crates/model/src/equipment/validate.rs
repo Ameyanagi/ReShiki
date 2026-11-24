@@ -261,6 +261,26 @@ pub fn validate(d: &Definition) -> Result<(), String> {
         if !(t.width_mm.is_finite() && t.width_mm > 0.) {
             return Err("The tube needs a positive width.".into());
         }
+        if let Some(braid) = &t.braid
+            && !(braid.pitch_mm.is_finite() && braid.pitch_mm > 0.)
+        {
+            return Err("The tube braid needs a positive pitch.".into());
+        }
+        if let Some(fittings) = &t.end_fittings {
+            if ![
+                fittings.tip_length_mm,
+                fittings.collar_length_mm,
+                fittings.collar_width_mm,
+            ]
+            .iter()
+            .all(|v| v.is_finite() && *v > 0. && *v <= MAX_COORDINATE)
+            {
+                return Err("The tube end fittings need positive, finite dimensions.".into());
+            }
+            if fittings.collar_width_mm < t.width_mm {
+                return Err("The tube end collars must be at least as wide as the hose.".into());
+            }
+        }
         for end in &t.ends {
             if !d
                 .joints
@@ -269,6 +289,24 @@ pub fn validate(d: &Definition) -> Result<(), String> {
             {
                 return Err(format!(
                     "The tube end \"{end}\" must be a plug joint of this piece."
+                ));
+            }
+            if let Some(fittings) = &t.end_fittings
+                && !d.joints.iter().any(|j| {
+                    j.id() == end
+                        && matches!(
+                            j,
+                            Joint::Plug {
+                                family: PlugFamily::Compression,
+                                gender: Gender::M,
+                                size_mm,
+                                ..
+                            } if *size_mm <= fittings.collar_width_mm
+                        )
+                })
+            {
+                return Err(format!(
+                    "The fitted tube end \"{end}\" must be a male compression joint no wider than its collar."
                 ));
             }
         }

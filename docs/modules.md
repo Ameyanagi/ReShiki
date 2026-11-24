@@ -765,6 +765,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/equipment/parts_list.rs`: A report of placed equipment, with actual cut lengths and endpoint seats.
 - `crates/model/src/equipment/placed.rs`: Pieces placed in a drawing.
 - `crates/model/src/equipment/plan.rs`: The paint plan
+- `crates/model/src/equipment/plan/flexible_tube.rs`: Flexible tubing and optional rigid tube-adapter ends share the same route.
 - `crates/model/src/equipment/revise.rs`: Moving placed pieces to another revision of their definition, as a library offers it.
 - `crates/model/src/equipment/solve.rs`: Seats join the joints and holds of placed pieces.
 - `crates/model/src/equipment/solve/adjust.rs`: Movable parts.

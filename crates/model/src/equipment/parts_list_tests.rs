@@ -43,6 +43,67 @@ fn near(a: f64, b: f64) {
 }
 
 #[test]
+fn braided_hoses_and_custom_rigid_bends_keep_distinct_inventory_lengths_and_connections() {
+    use crate::equipment::tube_bend::{Bend, Route};
+
+    let mut doc = Document::default();
+    let tube = add(&mut doc, TUBE);
+    doc.graphics
+        .iter_mut()
+        .find(|g| g.id == tube)
+        .unwrap()
+        .piece
+        .as_mut()
+        .unwrap()
+        .tube_route = Some(Route {
+        start: [0., 0.],
+        bends: vec![Bend {
+            corner: [70., 0.],
+            radius_mm: 12.,
+        }],
+        end: [70., 50.],
+    });
+    let hose = add(&mut doc, "reshiki/flexible-metal-hose-fm-1-4");
+    doc.translate(&[hose], 600., 300.);
+    let mut caps = Vec::new();
+    for (piece, end) in [(tube, "b"), (hose, "a")] {
+        let cap = add(&mut doc, "reshiki/compression-cap-1-4");
+        let (end, socket) = (port(&doc, piece, end).at, port(&doc, cap, "tube").at);
+        solve::connect(&mut doc, &[cap], &end, &socket).unwrap();
+        caps.push(cap);
+    }
+    let rows = parts_list(&doc, &[tube, hose]).unwrap();
+    assert_eq!(rows.len(), 2);
+    let [rigid, flexible] = rows.as_slice() else {
+        panic!("the selection contains one rigid tube and one flexible hose");
+    };
+    assert_eq!(rigid.variant["geometry"], "1 custom bend");
+    assert!(!rigid.variant.contains_key("length"));
+    assert!(rigid.hose.is_none());
+    let rigid_tube = rigid.tube.as_ref().unwrap();
+    near(rigid_tube.cut_length_mm, 96. + 6. * std::f64::consts::PI);
+    assert_eq!(rigid_tube.ends[1].connection.as_ref().unwrap().id, caps[0]);
+    assert!(flexible.tube.is_none());
+    assert_eq!(
+        flexible.variant["catalog_assembly_length"],
+        "36 in (914.4 mm) catalog assembly"
+    );
+    let flexible_hose = flexible.hose.as_ref().unwrap();
+    assert_eq!(flexible_hose.interfaces, ["Ø6.35 mm compression male"; 2]);
+    assert_eq!(
+        flexible_hose.ends[0].connection.as_ref().unwrap().id,
+        caps[1]
+    );
+    assert_eq!(
+        graphic_cut_length_mm(doc.graphics.iter().find(|g| g.id == hose).unwrap()).unwrap(),
+        None
+    );
+    doc.piece_definitions = placed::used(&doc);
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(parts_list(&reopened, &[tube, hose]).unwrap(), rows);
+}
+
+#[test]
 fn a_parts_report_counts_physical_items_and_separates_ends_from_passages() {
     let mut doc = Document::default();
     let tube = add(&mut doc, TUBE);

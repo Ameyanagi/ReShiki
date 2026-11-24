@@ -174,6 +174,18 @@ fn cells(row: &PartRow, listed: &BTreeSet<u64>) -> Cells {
             .map(|pass| link(&pass.fitting))
             .collect::<Vec<_>>()
             .join("\n");
+    } else if let Some(hose) = &row.hose {
+        for ((at, end), interface) in values[4..6]
+            .iter_mut()
+            .zip(&hose.ends)
+            .zip(&hose.interfaces)
+        {
+            let connection = end
+                .connection
+                .as_ref()
+                .map_or_else(|| "Free end".to_owned(), link);
+            *at = format!("{interface}\n{connection}");
+        }
     }
     values
 }
@@ -301,6 +313,21 @@ mod tests {
         assert!(!app.error);
         assert!(app.clipboard_working());
         app
+    }
+
+    #[test]
+    fn flexible_assembly_lists_its_ports_without_a_cut_length() {
+        let mut doc = Document::default();
+        let definition = builtin::find("reshiki/flexible-metal-hose-fm-1-4").unwrap();
+        let (id, _) =
+            solve::hose::place_hose(&mut doc, definition, [100., 100.], [400., 150.], 14.);
+        let report = reshiki::equipment::parts_list(&doc, &[id]).unwrap();
+        let values = cells(&report[0], &BTreeSet::from([id]));
+        assert!(values[1].contains("SS-FM4TA4TA4-36"));
+        assert!(values[1].contains("36 in (914.4 mm) catalog assembly"));
+        assert!(values[3].is_empty());
+        assert_eq!(values[4], "Ø6.35 mm compression male\nFree end");
+        assert_eq!(values[5], "Ø6.35 mm compression male\nFree end");
     }
 
     #[test]

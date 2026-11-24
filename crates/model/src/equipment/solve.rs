@@ -207,6 +207,9 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             if let Some(p) = out.iter_mut().find(|p| p.at.joint == *end) {
                 let (at, dir) = placed::end(&line, k);
                 (p.point, p.dir) = (t.apply(at), t.apply_dir(dir));
+                if let Some(fittings) = &tube.end_fittings {
+                    p.contact_length = fittings.tip_length_mm * p.mm;
+                }
             }
         }
     }
