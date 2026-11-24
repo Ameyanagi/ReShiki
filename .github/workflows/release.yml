@@ -367,14 +367,19 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: cargo test --release --locked -p reshiki-macos --target ${{ matrix.target }}
-      - name: Test native chemistry on Intel macOS
+      # The release reference job runs the full chemistry suites. Exercise
+      # Intel naming in the built application alongside the package checks above.
+      - name: Smoke-test naming in the Intel Mac application
         if: matrix.artifact == 'macos-x64'
+        timeout-minutes: 2
         env:
-          MACOSX_DEPLOYMENT_TARGET: "14.0"
-          RESHIKI_REQUIRE_INCHI_HELPER: "1"
-          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/dist/reshiki
-          RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/dist/reshiki
-        run: cargo test --release --locked --no-default-features --lib --target x86_64-apple-darwin
+          RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/x86_64-apple-darwin/dist/reshiki
+        run: |
+          compound_name="$("$RESHIKI_TEST_PACKAGED_APP" --cli name --smiles 'CCC#N')"
+          if [[ "$compound_name" != "propanenitrile" ]]; then
+            printf 'Expected propanenitrile from the Intel Mac application, got %s\n' "$compound_name" >&2
+            exit 1
+          fi
       - name: Test the nightly application and renderer regressions
         if: inputs.nightly
         env:
