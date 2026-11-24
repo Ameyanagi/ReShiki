@@ -299,7 +299,8 @@ of a 200-atom molecule would take 8.2 MB that way. The owner's policy is binding
     10–15 % on such data.
   - Decoding rejects an unknown tag, an odd byte count, more than `MAX_COMPACT_VALUES` values,
     and a decoded size above `MAX_COMPACT_EXPANSION` (32) times the encoded string, so a small
-    file cannot inflate into a large allocation. Encoding a `q16` value outside [−1, 1] is an
+    file cannot inflate into a large allocation. The encoder stores data uncompressed when
+    deflate would exceed that ratio, so every saved array reloads. `q16` decoding rejects −32768. Encoding a `q16` value outside [−1, 1] is an
     error.
 - **Saved form.** `CalcResult::for_file(heavy_budget, pinned)` returns what a document writes:
   the result itself when `keep_full` is set; the light result when it is recomputable
