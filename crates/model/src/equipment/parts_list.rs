@@ -2,8 +2,10 @@
 //! View and illustration scale never change an item's identity or dimensions.
 use super::eval::{self, Value, Values};
 use super::format::{Definition, HoldKind, Param, TubeLength, TubeMaterial, TubeSpec};
+use super::placed::PieceRef;
 use super::solve::{self, JointRef};
 use crate::document::Document;
+use crate::graphics::Graphic;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
@@ -87,6 +89,25 @@ pub fn parts_list(doc: &Document, selection: &[u64]) -> Result<Vec<PartRow>, Str
 /// It never uses graphic bounds, world coordinates or the drawing scale.
 pub fn cut_length_mm(d: &Definition, values: &Values) -> Result<Option<f64>, String> {
     spec(d).map(|s| length(d, values, &s.length)).transpose()
+}
+
+/// The cut length of one placed tube, including its custom route when present.
+pub fn graphic_cut_length_mm(g: &Graphic) -> Result<Option<f64>, String> {
+    let Some(piece) = &g.piece else {
+        return Ok(None);
+    };
+    let d = piece
+        .linked
+        .as_ref()
+        .ok_or("The tube definition is missing.")?;
+    spec(d).map(|s| placed_length(d, piece, s)).transpose()
+}
+
+fn placed_length(d: &Definition, piece: &PieceRef, spec: &TubeSpec) -> Result<f64, String> {
+    match &piece.tube_route {
+        Some(route) => Ok(route.centerline()?.length_mm),
+        None => length(d, &piece.params, &spec.length),
+    }
 }
 
 fn length(d: &Definition, values: &Values, length: &TubeLength) -> Result<f64, String> {
@@ -193,13 +214,13 @@ pub fn tube_row(doc: &Document, id: u64) -> Result<Option<TubeRow>, String> {
         material: spec.material,
         od_mm: spec.od_mm,
         id_mm: spec.id_mm,
-        cut_length_mm: length(d, &piece.params, &spec.length)?,
+        cut_length_mm: placed_length(d, piece, spec)?,
         ends: [endpoint(&spec.ends[0])?, endpoint(&spec.ends[1])?],
         through,
     }))
 }
 
-fn spec(d: &Definition) -> Option<&TubeSpec> {
+pub(super) fn spec(d: &Definition) -> Option<&TubeSpec> {
     d.tube_spec.as_ref().or_else(|| legacy_spec(d))
 }
 

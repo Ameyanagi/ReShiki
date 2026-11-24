@@ -68,6 +68,29 @@ fn draw_direction_line(frame: &mut layered::Frame<'_>, from: Point, to: Point) {
 }
 
 impl MoleculeCanvas<'_> {
+    pub(super) fn draw_tube_bend_handle(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        let Some(bend) = self.tube_bend else {
+            return;
+        };
+        let at = self.camera.screen(bend.handle(), bounds);
+        let chosen = state.tube_bend_capture == Some(bend.token);
+        draw_handle(frame, at, HandleShape::Ring(7.), chosen);
+        let cross = Path::new(|path| {
+            path.move_to(at - Vector::new(3., 0.));
+            path.line_to(at + Vector::new(3., 0.));
+            path.move_to(at - Vector::new(0., 3.));
+            path.line_to(at + Vector::new(0., 3.));
+        });
+        frame.stroke(
+            &cross,
+            Stroke::default().with_width(1.).with_color(ACCENT_STRONG),
+        );
+    }
     pub(super) fn draw_model_generation(
         &self,
         frame: &mut layered::Frame<'_>,

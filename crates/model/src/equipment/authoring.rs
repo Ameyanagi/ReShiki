@@ -550,6 +550,7 @@ impl Draft {
         let mut instance = plan::Instance::new(&self.definition, self.frame);
         if let Some(piece) = self.source.first().and_then(|g| g.piece.as_ref()) {
             instance.centre_line = piece.centre_line.clone();
+            instance.tube_route = piece.tube_route.clone();
         }
         plan::paint_plan(&[instance], plan::Settings::default())
     }
@@ -564,6 +565,7 @@ impl Draft {
             graphic.piece.as_mut(),
         ) {
             draft.centre_line = piece.centre_line.clone();
+            draft.tube_route = piece.tube_route.clone();
         }
         graphic.validate()?;
         Ok(graphic)

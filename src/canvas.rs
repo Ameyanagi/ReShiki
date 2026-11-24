@@ -138,6 +138,11 @@ pub enum TransformField {
 
 #[derive(Debug, Clone)]
 pub enum Edit {
+    /// A disposable tube-bend handle updates the app-owned preview only.
+    TubeBendDrag {
+        token: (u64, u64),
+        at: Option<World>,
+    },
     /// Mouse edits emitted together when a pending touch becomes a tap or drag.
     Touch(Vec<Edit>),
     ContextMenu {
@@ -436,6 +441,7 @@ pub struct State {
     hovering: bool,
     touch: input::touch::Touch,
     equipment_trial: Option<input::equipment_trial::Capture>,
+    tube_bend_capture: Option<(u64, u64)>,
     /// Only caption transitions during a bond drag need an application hint.
     bond_text_hover: Option<u64>,
     last_click: Option<(iced::time::Instant, u64)>,
@@ -456,6 +462,7 @@ pub(crate) fn reset_menu_pointer(tree: &mut iced::advanced::widget::Tree) {
         state.end_gesture();
         state.touch = Default::default();
         state.equipment_trial = None;
+        state.tube_bend_capture = None;
         state.cursor = None;
         state.last_click = None;
         state.last_transform_click = None;
@@ -694,6 +701,26 @@ pub(crate) struct EquipmentAuthoring<'a> {
     pub shape: &'a [reshiki::equipment::geometry::Seg],
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct TubeBend {
+    pub token: (u64, u64),
+    pub pivot: World,
+    pub leg: Option<[World; 2]>,
+}
+
+impl TubeBend {
+    fn handle(self) -> World {
+        self.leg.map_or(self.pivot, |[a, b]| a.lerp(b, 0.5))
+    }
+
+    fn hit(self, at: World, reach: f32) -> bool {
+        at.distance(self.pivot) <= reach
+            || self
+                .leg
+                .is_some_and(|[a, b]| hit::distance_to_segment(at, a, b) <= reach)
+    }
+}
+
 pub struct MoleculeCanvas<'a> {
     pub(crate) nmr: Option<nmr::Context<'a>>,
     /// Session-only feedback from the hovered locant in a chemical name.
@@ -702,6 +729,7 @@ pub struct MoleculeCanvas<'a> {
     pub(crate) reaction_preview: Option<&'a reshiki::reactions::Reaction>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
     pub(crate) equipment_authoring: Option<EquipmentAuthoring<'a>>,
+    pub(crate) tube_bend: Option<TubeBend>,
     /// Keyboard input routing; the marker waits for pointer or key interaction.
     pub(crate) keyboard_target: Option<World>,
     pub(crate) keyboard_marker: bool,
@@ -766,6 +794,7 @@ impl<'a> MoleculeCanvas<'a> {
             reaction_preview: None,
             optimizer: None,
             equipment_authoring: None,
+            tube_bend: None,
             keyboard_target: None,
             keyboard_marker: false,
             morph: None,

@@ -299,6 +299,7 @@ impl App {
                 .unwrap_or_else(|| self.naming_canvas_highlight()),
             reaction_preview: self.reaction_preview(),
             optimizer: self.optimization_canvas(),
+            tube_bend: self.tube_bend_canvas(),
             equipment_authoring: self
                 .tab
                 .equipment_authoring
@@ -346,7 +347,10 @@ impl App {
             },
             doc: self.display_document(),
             reviewing_pair: self.tab.mapping.review_pair.is_some() && self.tool.selects(),
-            selected: if self.tab.inline_text.is_some() || self.tab.equipment_authoring.is_some() {
+            selected: if self.tab.inline_text.is_some()
+                || self.tab.equipment_authoring.is_some()
+                || self.tube_bend_active()
+            {
                 &[]
             } else {
                 &self.tab.selected
@@ -1315,6 +1319,18 @@ impl App {
     }
 
     pub(super) fn context_bar(&self) -> Element<'_, Message> {
+        if self.tube_bend_active() {
+            return context_frame(
+                row![
+                    text("Tube bend preview").size(12),
+                    text("Drag the outgoing leg · Apply or Cancel in Properties")
+                        .size(11)
+                        .style(muted_text),
+                ]
+                .spacing(CONTEXT_GAP)
+                .align_y(Alignment::Center),
+            );
+        }
         if self.tab.optimization.is_some() {
             return context_frame(
                 row![
@@ -2074,6 +2090,7 @@ impl App {
         .spacing(HISTORY_GAP)
         .align_y(iced::Alignment::Center);
         let body = match self.inspector_tab {
+            _ if self.tube_bend_active() => self.tube_bend_panel(),
             _ if self.tab.equipment_authoring.is_some() => self.equipment_authoring_panel(),
             InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),
@@ -2118,6 +2135,10 @@ impl App {
                     .height(Length::Fill),
             )
         };
+        if self.tube_bend_active() {
+            content = content.push(container(self.tube_bend_footer()).padding([10, 16]));
+            return self.inspector_frame(reshiki::accessibility::focus_scope(content));
+        }
         if self.tab.equipment_authoring.is_some() {
             content = content.push(container(self.equipment_authoring_footer()).padding([10, 16]));
             return self.inspector_frame(reshiki::accessibility::focus_scope(content));

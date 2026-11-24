@@ -27,6 +27,9 @@ impl App {
         if let Some(task) = self.equipment_authoring_gate(&message) {
             return Break(task);
         }
+        if let Some(task) = self.tube_bend_gate(&message) {
+            return Break(task);
+        }
         if self.recovery_manager.open() {
             match &message {
                 Message::Recovery(_) => {}

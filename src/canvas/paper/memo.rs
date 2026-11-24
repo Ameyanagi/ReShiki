@@ -53,6 +53,7 @@ impl<'a> Inputs<'a> {
             || canvas.hidden_annotation.is_some()
             || canvas.morph.is_some()
             || canvas.equipment_authoring.is_some()
+            || canvas.tube_bend.is_some()
             || canvas.reviewing_pair
         {
             return None;

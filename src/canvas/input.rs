@@ -5,6 +5,7 @@ mod motion;
 mod press;
 mod release;
 pub(super) mod touch;
+mod tube_bend;
 
 use crate::canvas::pick::{HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::{Edit, Gesture, Handle, MoleculeCanvas, Navigation, State, Tool, optimization};
@@ -20,6 +21,9 @@ impl MoleculeCanvas<'_> {
         cursor: mouse::Cursor,
     ) -> Option<Action<Edit>> {
         if let Event::Touch(event) = event {
+            if self.tube_bend.is_some() {
+                return Some(Action::capture());
+            }
             return self.touch_event(state, *event, bounds);
         }
         if matches!(
@@ -62,6 +66,9 @@ impl MoleculeCanvas<'_> {
             .or(cursor.position())
             .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
         let inside = point.is_some_and(|p| Rectangle::with_size(bounds.size()).contains(p));
+        if let Some(action) = self.tube_bend_event(state, event, bounds, point, inside) {
+            return Some(action);
+        }
         if let Some(action) = self.equipment_trial_event(state, event, bounds, point, inside) {
             return Some(action);
         }
@@ -204,6 +211,19 @@ impl MoleculeCanvas<'_> {
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
         let bounds = self.guides.paper(bounds);
+        if self.tube_bend.is_some() {
+            return if state.tube_bend_capture.is_some() {
+                mouse::Interaction::Grabbing
+            } else if self.tube_bend.is_some_and(|bend| {
+                cursor.position_in(bounds).is_some_and(|point| {
+                    bend.hit(self.camera.world(point, bounds), self.camera.world_len(10.))
+                })
+            }) {
+                mouse::Interaction::Grab
+            } else {
+                mouse::Interaction::Crosshair
+            };
+        }
         if self.equipment_authoring.is_some() {
             return mouse::Interaction::Crosshair;
         }
