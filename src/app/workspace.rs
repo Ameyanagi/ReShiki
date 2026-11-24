@@ -292,6 +292,8 @@ impl App {
     }
 
     fn drawing_canvas(&self) -> Element<'_, Edit> {
+        let tube_bend = self.tube_bend_canvas();
+        let show_keyboard_target = tube_bend.is_none() && self.keyboard_drawing_active();
         canvas(MoleculeCanvas {
             nmr: self.nmr_canvas(),
             locant_highlight: self
@@ -299,18 +301,18 @@ impl App {
                 .unwrap_or_else(|| self.naming_canvas_highlight()),
             reaction_preview: self.reaction_preview(),
             optimizer: self.optimization_canvas(),
-            tube_bend: self.tube_bend_canvas(),
+            tube_bend,
             equipment_authoring: self
                 .tab
                 .equipment_authoring
                 .as_ref()
                 .map(|s| s.measurement()),
-            keyboard_target: if self.keyboard_drawing_active() {
+            keyboard_target: if show_keyboard_target {
                 self.tab.keyboard_drawing.point(self.display_document())
             } else {
                 None
             },
-            keyboard_marker: self.keyboard_drawing_active() && self.tab.keyboard_drawing.shown(),
+            keyboard_marker: show_keyboard_target && self.tab.keyboard_drawing.shown(),
             morph: self.model_morph(),
             model_generation: self.model_generation(),
             element: self.atom_tool_element(),
@@ -1323,7 +1325,7 @@ impl App {
             return context_frame(
                 row![
                     text("Tube bend preview").size(12),
-                    text("Drag the outgoing leg · Apply or Cancel in Properties")
+                    text("Enter to apply · Esc to cancel")
                         .size(11)
                         .style(muted_text),
                 ]

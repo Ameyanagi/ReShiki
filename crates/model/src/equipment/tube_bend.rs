@@ -294,6 +294,7 @@ pub struct Draft {
     reversed: bool,
     origin: Xy,
     direction: Xy,
+    starting_leg: Option<[Point; 2]>,
     handedness: f64,
     target: Target,
     od_mm: f64,
@@ -390,12 +391,24 @@ impl Draft {
                 },
             )
         };
+        let starting_leg = match target {
+            Target::Insert(_) => match path.segments.get(index) {
+                Some(Segment::Straight { to, .. }) => Some([origin, *to]),
+                _ => None,
+            },
+            Target::Existing { .. } => match path.segments.get(index + 1) {
+                Some(Segment::Straight { from, to }) => Some([*from, *to]),
+                _ => None,
+            },
+        }
+        .map(|leg| leg.map(|at| point(frame.apply(at))));
         Ok(Self {
             original: g.clone(),
             route,
             reversed,
             origin,
             direction: normalize(sub(after, before)),
+            starting_leg,
             target,
             od_mm: spec.od_mm,
             minimum_lead,
@@ -411,7 +424,7 @@ impl Draft {
 
     pub fn default_angle_deg(&self) -> f64 {
         match self.target {
-            Target::Insert(_) => 45.,
+            Target::Insert(_) => 0.,
             Target::Existing { angle, .. } => angle.to_degrees() * self.handedness,
         }
     }
@@ -425,6 +438,25 @@ impl Draft {
 
     pub fn pivot(&self) -> Point {
         point(frame(&self.original).apply(self.origin))
+    }
+
+    /// The original outgoing leg, before the user rotates the new bend point.
+    pub fn starting_leg(&self) -> Option<[Point; 2]> {
+        self.starting_leg
+    }
+
+    pub fn blocked_edit(&self) -> Option<&'static str> {
+        if self.seated_hold {
+            Some("Release the tube from its clamp or through fitting before bending it.")
+        } else if self.fixed_ends == 2 && !self.is_existing_bend() {
+            Some("Both tube ends are seated. Detach one end to add a bend point.")
+        } else {
+            None
+        }
+    }
+
+    pub fn can_rotate(&self) -> bool {
+        self.fixed_ends < 2 && !self.seated_hold
     }
 
     /// The first straight beyond this bend, in canvas units. A drag anywhere
@@ -454,6 +486,9 @@ impl Draft {
     }
 
     pub fn preview(&self, angle_deg: f64, radius_mm: f64) -> Result<Graphic, String> {
+        if let Some(reason) = self.blocked_edit() {
+            return Err(reason.into());
+        }
         let angle = angle_deg.to_radians() * self.handedness;
         if !(EPS..PI - EPS).contains(&angle.abs()) {
             return Err("Enter a bend angle greater than 0° and less than 180°.".into());
@@ -461,9 +496,6 @@ impl Draft {
         let mut route = self.route.clone();
         let (index, delta) = match self.target {
             Target::Insert(index) => {
-                if self.fixed_ends == 2 {
-                    return Err("Both tube ends are seated. A new bend at this point would move a connection.".into());
-                }
                 if route.bends.len() >= MAX_BENDS {
                     return Err(format!("A tube can have at most {MAX_BENDS} bends."));
                 }
@@ -502,11 +534,6 @@ impl Draft {
                 )
             }
         };
-        if self.seated_hold {
-            return Err(
-                "Release the tube from its clamp or through fitting before bending it.".into(),
-            );
-        }
         let move_point = |p| add(self.origin, rotate(sub(p, self.origin), delta));
         if delta != 0. {
             for bend in route.bends.iter_mut().skip(index + 1) {

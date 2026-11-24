@@ -441,7 +441,7 @@ pub struct State {
     hovering: bool,
     touch: input::touch::Touch,
     equipment_trial: Option<input::equipment_trial::Capture>,
-    tube_bend_capture: Option<(u64, u64)>,
+    tube_bend_capture: Option<input::tube_bend::Capture>,
     /// Only caption transitions during a bond drag need an application hint.
     bond_text_hover: Option<u64>,
     last_click: Option<(iced::time::Instant, u64)>,
@@ -706,18 +706,26 @@ pub(crate) struct TubeBend {
     pub token: (u64, u64),
     pub pivot: World,
     pub leg: Option<[World; 2]>,
+    pub can_rotate: bool,
 }
 
 impl TubeBend {
-    fn handle(self) -> World {
-        self.leg.map_or(self.pivot, |[a, b]| a.lerp(b, 0.5))
+    fn handle(self) -> Option<World> {
+        self.leg.map(|[a, b]| a.lerp(b, 0.5))
     }
 
     fn hit(self, at: World, reach: f32) -> bool {
-        at.distance(self.pivot) <= reach
-            || self
-                .leg
-                .is_some_and(|[a, b]| hit::distance_to_segment(at, a, b) <= reach)
+        let Some([a, b]) = self.leg.filter(|_| self.can_rotate) else {
+            return false;
+        };
+        let direction = [b.x - a.x, b.y - a.y];
+        let length = direction[0].hypot(direction[1]);
+        let from_pivot = [at.x - self.pivot.x, at.y - self.pivot.y];
+        length.is_finite() && length > 1e-6
+            // The fixed pivot and the other side of the bend are never grips.
+            && at.distance(self.pivot) > reach * 0.6
+            && from_pivot[0] * direction[0] + from_pivot[1] * direction[1] > 0.
+            && hit::distance_to_segment(at, a, b) <= reach
     }
 }
 

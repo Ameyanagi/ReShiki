@@ -62,16 +62,23 @@ impl State {
     }
 
     fn refresh(&mut self) {
-        self.candidate = None;
-        self.notice = None;
-        let result = self.prepare();
-        match result {
-            Ok(candidate) => self.candidate = Some(candidate),
+        match self.prepare() {
+            Ok(candidate) => {
+                self.candidate = candidate;
+                self.notice = None;
+            }
             Err(error) => self.notice = Some(error),
         }
     }
 
-    fn prepare(&self) -> Result<Candidate, String> {
+    fn can_apply(&self) -> bool {
+        self.candidate.is_some() && self.notice.is_none()
+    }
+
+    fn prepare(&self) -> Result<Option<Candidate>, String> {
+        if let Some(reason) = self.model.blocked_edit() {
+            return Err(reason.into());
+        }
         let angle = self
             .angle
             .trim()
@@ -86,7 +93,18 @@ impl State {
             .ok()
             .filter(|n| n.is_finite() && *n > 0.)
             .ok_or("Enter a positive bend radius in millimetres.")?;
+        if angle == 0. && !self.model.is_existing_bend() {
+            return Ok(None);
+        }
         let replacement = self.model.preview(angle, radius)?;
+        let original = self
+            .base
+            .graphics
+            .iter()
+            .find(|g| g.id == self.target.piece);
+        if original == Some(&replacement) {
+            return Ok(None);
+        }
         let cut_length = reshiki::equipment::parts_list::graphic_cut_length_mm(&replacement)?;
         let mut doc = self.base.clone();
         let graphic = doc
@@ -128,11 +146,11 @@ impl State {
                     .into(),
             );
         }
-        Ok(Candidate {
+        Ok(Some(Candidate {
             doc,
             reconciled,
             cut_length,
-        })
+        }))
     }
 }
 
@@ -161,18 +179,23 @@ impl App {
 
     pub(in crate::app) fn tube_bend_canvas(&self) -> Option<TubeBend> {
         let state = self.current_tube_bend()?;
-        let leg = state.candidate.as_ref().and_then(|candidate| {
-            candidate
-                .doc
-                .graphics
-                .iter()
-                .find(|g| g.id == state.target.piece)
-                .and_then(|graphic| state.model.outgoing_leg(graphic))
-        });
+        let leg = state
+            .candidate
+            .as_ref()
+            .and_then(|candidate| {
+                candidate
+                    .doc
+                    .graphics
+                    .iter()
+                    .find(|g| g.id == state.target.piece)
+                    .and_then(|graphic| state.model.outgoing_leg(graphic))
+            })
+            .or_else(|| state.model.starting_leg());
         Some(TubeBend {
             token: state.token,
             pivot: state.model.pivot(),
             leg,
+            can_rotate: state.model.can_rotate(),
         })
     }
 
@@ -199,7 +222,7 @@ impl App {
             if editing {
                 "Edit Bend…"
             } else {
-                "Add Bend…"
+                "Add Bend Point…"
             },
             Action::Begin(target),
         ))
@@ -262,6 +285,9 @@ impl App {
         }
         match action {
             Action::Apply(_) | Action::ApplyCurrent => {
+                if !state.can_apply() {
+                    return Task::none();
+                }
                 let Some(mut state) = self.tab.tube_bend.take() else {
                     return Task::none();
                 };
@@ -315,6 +341,7 @@ impl App {
             }
             Action::Drag(_, at) => {
                 if let Some(state) = &mut self.tab.tube_bend
+                    && state.model.can_rotate()
                     && let Some(angle) = at.and_then(|at| state.model.angle_to(at))
                 {
                     let angle = ((angle * 10.).round() / 10.).to_string();
@@ -335,10 +362,16 @@ impl App {
             return;
         };
         self.error = state.notice.is_some();
-        self.status = state
-            .notice
-            .clone()
-            .unwrap_or_else(|| "Adjust the bend, then Apply".into());
+        self.status = state.notice.clone().unwrap_or_else(|| {
+            if state.can_apply() {
+                "Adjust the bend, then Apply"
+            } else if state.model.can_rotate() {
+                "Drag the round handle to rotate"
+            } else {
+                "Change the bend radius"
+            }
+            .into()
+        });
     }
 
     pub(in crate::app) fn tube_bend_gate(&mut self, message: &Message) -> Option<Task<Message>> {
@@ -383,17 +416,19 @@ impl App {
         };
         let token = state.token;
         let apply = message(Action::Apply(token));
+        let can_rotate = state.model.can_rotate();
+        let can_edit = state.model.blocked_edit().is_none();
         let angle = reshiki::accessibility::text_input(
             "tube-bend-angle",
             "Bend angle (degrees)",
-            "45",
+            "0",
             &state.angle,
         )
         .size(12)
         .padding([5, 7])
         .width(92)
-        .on_input(move |value| message(Action::Angle(token, value)))
-        .on_submit(apply.clone());
+        .on_input_maybe(can_rotate.then_some(move |value| message(Action::Angle(token, value))))
+        .on_submit_maybe(state.can_apply().then_some(apply.clone()));
         let radius = reshiki::accessibility::text_input(
             "tube-bend-radius",
             "Bend centerline radius (mm)",
@@ -403,15 +438,14 @@ impl App {
         .size(12)
         .padding([5, 7])
         .width(92)
-        .on_input(move |value| message(Action::Radius(token, value)))
-        .on_submit(apply);
+        .on_input_maybe(can_edit.then_some(move |value| message(Action::Radius(token, value))))
+        .on_submit_maybe(state.can_apply().then_some(apply));
         let mut body = column![
             workspace::section(if state.model.is_existing_bend() {
                 "Edit tube bend"
             } else {
-                "Add tube bend"
+                "Bend point"
             }),
-            text("Drag the outgoing leg or the round bend handle, or enter exact values.").size(12),
             row![
                 text("Angle").size(12).width(Length::Fill),
                 angle,
@@ -426,20 +460,26 @@ impl App {
             ]
             .spacing(6)
             .align_y(Alignment::Center),
-            text(
-                "Positive angles turn clockwise on the page. A negative angle bends the other way."
-            )
-            .size(11)
-            .style(workspace::muted_text),
-            text("Existing snapped connections stay in place.")
-                .size(11)
-                .style(workspace::muted_text),
         ]
         .spacing(10);
-        if let Some(length) = state
-            .candidate
-            .as_ref()
-            .and_then(|candidate| candidate.cut_length)
+        if can_rotate {
+            body = body.push(
+                text("Positive angles turn clockwise.")
+                    .size(11)
+                    .style(workspace::muted_text),
+            );
+        } else if can_edit {
+            body = body.push(
+                text("Both ends are seated. You can still change the radius.")
+                    .size(11)
+                    .style(workspace::muted_text),
+            );
+        }
+        if state.notice.is_none()
+            && let Some(length) = state
+                .candidate
+                .as_ref()
+                .and_then(|candidate| candidate.cut_length)
         {
             body = body.push(text(format!("Cut length {length:.3} mm")).size(12));
         }
@@ -464,8 +504,7 @@ impl App {
                 .style(crate::appearance::primary)
                 .on_press_maybe(
                     state
-                        .candidate
-                        .is_some()
+                        .can_apply()
                         .then_some(message(Action::Apply(state.token)))
                 ),
         ]
