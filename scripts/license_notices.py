@@ -10,6 +10,7 @@ from pathlib import Path
 PROJECT_FILES = ("LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE")
 THIRD_PARTY_FILE = "THIRD-PARTY-NOTICES.txt"
 NOTICE_PREFIXES = ("LICENSE", "LICENCE", "COPYING", "NOTICE", "COPYRIGHT", "UNLICENSE", "AUTHORS")
+AXTB_GIT_SOURCE = "git+https://github.com/Ameyanagi/axtb"
 
 
 def dependency_metadata(metadata):
@@ -78,8 +79,15 @@ def consolidated_notices(root, metadata):
         index.append(f"  {label}\n    Text SHA-256: {digest}\n")
 
     source_root = root / "licenses"
+    includes_axtb = any(
+        (package["name"] == "axtb" or package["name"].startswith("axtb-"))
+        and (package.get("source") or "").startswith(AXTB_GIT_SOURCE)
+        for package in metadata["packages"]
+    )
     index.append("SOURCE ATTRIBUTIONS\n-------------------\n")
     for source in sorted(source_root.rglob("*")):
+        if not includes_axtb and source.is_relative_to(source_root / "axtb"):
+            continue
         if source.is_file():
             record(source.relative_to(root).as_posix(), source.read_bytes())
     supplements_root = source_root / "rust"
@@ -168,6 +176,7 @@ def main():
     parser.add_argument("--manifest-path", type=Path, default=Path("crates/python/Cargo.toml"))
     parser.add_argument("--destination", type=Path, default=Path("crates/python/wheel-licenses"))
     parser.add_argument("--target", help="Cargo target triple (defaults to the Rust host)")
+    parser.add_argument("--features", help="Cargo features to enable for the selected manifest")
     args = parser.parse_args()
     target = args.target
     if target is None:
@@ -188,6 +197,8 @@ def main():
         "--filter-platform",
         target,
     ]
+    if args.features is not None:
+        command.extend(["--features", args.features])
     metadata = json.loads(subprocess.check_output(command, encoding="utf-8"))
     scoped = dependency_metadata(metadata)
     write_notices(Path(metadata["workspace_root"]), args.destination, scoped)

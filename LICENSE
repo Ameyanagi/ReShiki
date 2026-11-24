@@ -18,3 +18,24 @@ Choosing a license for original ReShiki code does not remove obligations
 under the licenses of included third-party material. Preserve the applicable
 copyright notices, license texts, disclaimers, and attribution records when
 redistributing source or binaries.
+
+Optional LGPL component: axtb (xTB calculations)
+------------------------------------------------
+
+Builds made with the Cargo feature `xtb`, which include the official macOS
+and Linux desktop releases, also contain axtb, an implementation of the xTB
+methods, built from the fork at https://github.com/Ameyanagi/axtb at the
+revision recorded in Cargo.lock and licenses/axtb/SOURCE. axtb is licensed
+under the GNU Lesser General Public License, version 3 or later
+(LGPL-3.0-or-later). It is not covered by the MIT OR Apache-2.0 grant above,
+which applies to original ReShiki code only, including the code that calls
+axtb. ReShiki builds without that feature, and the Python, npm, crates and
+web packages, do not contain axtb.
+
+licenses/axtb/ holds the GNU license texts, axtb's own notice and the pinned
+revision. Each release that contains axtb publishes the complete
+corresponding source and the steps to rebuild ReShiki with a modified axtb;
+see docs/xtb-licensing.md.
+
+(This section is pending outside review before the first release that
+includes xTB.)

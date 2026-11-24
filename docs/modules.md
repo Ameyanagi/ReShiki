@@ -926,6 +926,10 @@ explains how the crates and modules fit together.
 
 - `crates/web-worker/src/lib.rs`: The browser editor's Web Worker for heavy jobs, as a WebAssembly module of its own that `packages/editor/src/worker.js` runs.
 
+## reshiki-xtb-worker
+
+- `crates/xtb-worker/src/lib.rs`: Home of the xTB protocol, client and engine-backed worker.
+
 ## reshiki-geometry
 
 - `native/geometry/src/cage.rs`: Conservative admission of closed sp2 carbon cages and their geometry.
