@@ -370,7 +370,7 @@ fn covariance(u: [f32; 6], cell: &Cell) -> [[f64; 3]; 3] {
 
 /// Symmetric 3×3 Jacobi eigendecomposition; eigenvectors are returned as rows.
 #[allow(clippy::indexing_slicing)] // Jacobi pivots are fixed pairs within a 3×3 matrix.
-fn eigen(mut a: [[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
+pub(in crate::models3d) fn eigen(mut a: [[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
     let mut v = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
     for _ in 0..32 {
         let mut pair = (0, 1);

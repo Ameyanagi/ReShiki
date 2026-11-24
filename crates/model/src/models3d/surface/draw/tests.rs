@@ -236,6 +236,60 @@ fn an_isovalue_above_the_peak_draws_nothing_and_keeps_labels_in_place() {
 }
 
 #[test]
+fn export_estimate_counts_the_surface_and_stays_under_the_warning() {
+    demo_on_this_thread(None).unwrap();
+    let doc = tilted(benzene(), 50.);
+    let (plain, ..) = super::super::export_estimate(&doc);
+    demo_on_this_thread(Some("pistar")).unwrap();
+    let (svg, pdf, warn) = super::super::export_estimate(&doc);
+    assert_eq!(svg, scene::svg(&doc).len());
+    assert!(svg > plain && pdf >= svg && !warn, "{plain} {svg} {pdf}");
+    demo_on_this_thread(None).unwrap();
+}
+
+#[test]
+fn the_plane_normal_is_the_direction_of_least_spread() {
+    let square = [[1., 1., 0.], [1., -1., 0.], [-1., 1., 0.], [-1., -1., 0.]];
+    assert!(plane_normal(&square)[2].abs() > 0.999);
+    let turned = square.map(|[x, y, z]| [x, 0.6 * y - 0.8 * z, 0.8 * y + 0.6 * z]);
+    let n = plane_normal(&turned);
+    assert!((n[1] * -0.8 + n[2] * 0.6).abs() > 0.999, "{n:?}");
+}
+
+#[test]
+fn a_label_behind_another_ball_stays_behind_it() {
+    demo_on_this_thread(Some("pi")).unwrap();
+    let mut doc = planar(
+        &[
+            ("O", [-0.8, 0., 0.]),
+            ("C", [0., 1.4, 0.]),
+            ("N", [0.8, 0., 0.]),
+        ],
+        &[(0, 1, 1), (1, 2, 1)],
+        &[],
+    );
+    doc.models[0].labels = Labels::All;
+    doc.models[0].perspective = 0.;
+    // A quarter turn about y puts N straight behind O.
+    let half = std::f32::consts::FRAC_PI_4;
+    doc.models[0].rotation = [half.cos(), 0., half.sin(), 0.];
+    let all = scene::primitives(&doc);
+    let at = all
+        .iter()
+        .position(|p| matches!(p, Primitive::Surface { .. }))
+        .unwrap();
+    let late: Vec<_> = all[at..]
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(!late.contains(&"N"), "{late:?}");
+    demo_on_this_thread(None).unwrap();
+}
+
+#[test]
 fn unsupported_models_get_no_surface() {
     demo_on_this_thread(Some("pi")).unwrap();
     for style in [Style::Wireframe, Style::Ellipsoids] {

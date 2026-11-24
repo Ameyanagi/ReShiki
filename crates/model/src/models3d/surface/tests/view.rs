@@ -479,20 +479,6 @@ fn first_layer(result: &Visible, positive: bool) -> Option<&Layer> {
         .find(|layer| layer.positive == positive)
 }
 
-fn near_contour(layers: [Option<&Layer>; 2], point: [f64; 2], delta: f64) -> bool {
-    layers
-        .into_iter()
-        .flatten()
-        .flat_map(|layer| &layer.region)
-        .any(|contour| {
-            contour
-                .iter()
-                .zip(contour.iter().cycle().skip(1))
-                .take(contour.len())
-                .any(|(&a, &b)| distance_to_segment(point, a, b) <= delta)
-        })
-}
-
 #[derive(Default, Debug)]
 struct Counts {
     checked: usize,
@@ -519,10 +505,11 @@ fn classify_samples(result: &Visible, oracle: &Oracle<'_>, seed: u64) -> (Counts
         let point = [0, 1]
             .map(|i| oracle.bounds[i] + random.unit() * (oracle.bounds[i + 2] - oracle.bounds[i]));
         let first = oracle.first(point);
+        // Only ground-truth transitions define the approximation band. A
+        // returned contour must never excuse its own false hole or island.
         if [[delta, 0.], [-delta, 0.], [0., delta], [0., -delta]]
             .iter()
             .any(|offset| oracle.first([point[0] + offset[0], point[1] + offset[1]]) != first)
-            || near_contour(layers, point, delta)
         {
             counts.skipped += 1;
             continue;
@@ -567,6 +554,62 @@ fn check_oracle(label: &str, result: &Visible, oracle: &Oracle<'_>, seed: u64) -
         "{label}: approximation band skipped >=15%: {counts:?}"
     );
     counts
+}
+
+#[test]
+fn ray_oracle_rejects_a_false_hole_inside_a_uniformly_visible_square() {
+    let square = vec![[10., 10.], [90., 10.], [90., 90.], [10., 90.]];
+    let mesh = Mesh {
+        positions: square.iter().map(|&[x, y]| [x, -y, 0.]).collect(),
+        normals: vec![[0., 0., 1.]; 4],
+        triangles: vec![[0, 2, 1], [0, 3, 2]],
+        positive: vec![true; 2],
+        truncated: false,
+    };
+    let oracle = Oracle {
+        view: mesh.positions.iter().copied().map(f64s).collect(),
+        mesh: &mesh,
+        camera: Camera {
+            perspective: false,
+            c: 100.,
+            scale: 1.,
+        },
+        paint: Vec::new(),
+        bounds: [0., 0., 100., 100.],
+        buckets: vec![vec![0, 1]; 64 * 64],
+    };
+    let mut result = Visible {
+        layers: vec![Layer {
+            positive: true,
+            band: 0,
+            region: vec![square],
+        }],
+        ..Visible::default()
+    };
+    let seed = 0xfa15_e401;
+    let (counts, disagreements) = classify_samples(&result, &oracle, seed);
+    assert!(disagreements.is_empty(), "the true square must agree");
+    assert!(counts.surface > 1_500);
+
+    // The entire false hole is narrower than 2δ (δ = 0.75 here). An
+    // exemption near returned contours would conceal every missing point.
+    result.layers[0]
+        .region
+        .push(vec![[49.5, 20.], [50.5, 20.], [50.5, 80.], [49.5, 80.]]);
+    let (counts, disagreements) = classify_samples(&result, &oracle, seed);
+    eprintln!(
+        "surface oracle false-hole self-test: {counts:?}, {} disagreements",
+        disagreements.len()
+    );
+    assert!(
+        !disagreements.is_empty(),
+        "the oracle must reject a false hole even beside returned contours"
+    );
+    assert!(
+        disagreements
+            .iter()
+            .all(|p| { (49.5..50.5).contains(&p[0]) && (20.0..80.0).contains(&p[1]) })
+    );
 }
 
 fn p_mesh() -> Mesh {
@@ -819,6 +862,36 @@ fn cap_facets_cannot_leak_either_phase_just_inside_the_analytic_ball() {
         result.layers.iter().all(|layer| layer.region.is_empty()),
         "an inscribed cap leaked a near-contact phase patch"
     );
+}
+
+#[test]
+fn cap_tangent_planes_clip_a_straddling_triangle() {
+    // At z = 80, x² + y² + z² = 100² meets y = 0 at x = 60. The
+    // triangle crosses that boundary, so whole-triangle containment cannot
+    // bypass the cap planes. The witnesses lie on opposite sides of the cap.
+    let result = visible(&Input {
+        positions: &[[59., -1., 80.], [61., -1., 80.], [60., 1., 80.]],
+        triangles: &[[0, 1, 2]],
+        positive: &[true],
+        front: &[true],
+        lightness: &[0.7; 3],
+        occluders: &[Occluder::Ball {
+            center: [0.; 3],
+            radius: 100.,
+            depth: 100.,
+        }],
+        bands: 1,
+        tolerance: 0.00001,
+    });
+    for (point, expected) in [([59.98_f64, 0.], false), ([60.5, -0.4], true)] {
+        assert_eq!(
+            point[0].powi(2) + point[1].powi(2) + 80_f64.powi(2) > 100_f64.powi(2),
+            expected,
+            "analytic sphere witness"
+        );
+        let drawn = first_layer(&result, true).is_some_and(|layer| contains(&layer.region, point));
+        assert_eq!(drawn, expected, "cap clipping witness at {point:?}");
+    }
 }
 
 #[test]

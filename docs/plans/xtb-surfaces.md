@@ -280,11 +280,21 @@ visibility. The molecule's own paint order is today's, including its known
 approximations (a long tilted half-bond sorted by its middle depth); the
 surface does not make those better or worse.
 
-Labels: a label is ink over the picture, not a solid. Its atom's centre is
-tested against the surface along its sight line: if no surface piece is in
-front of the atom there, the label is drawn after the surface (so a lobe
-behind the atom never cuts the parts of a wide label that reach past the
-ball); otherwise it stays in the molecule order and the surface covers it.
+Labels: a label is ink over the picture, not a solid. On the sight line
+through its atom's centre, if no surface piece is in front of the front of
+the atom's ball and no other, nearer ball covers that point, the label is
+drawn after the surface (so a lobe behind the atom never cuts the parts of a
+wide label that reach past the ball); otherwise it stays in the molecule
+order, where the surface or the nearer ball covers it.
+
+Painted outlines: a ball's occluder is its disc grown by half its outline
+width, so a lobe behind it never paints over the outer half of the outline.
+A half-bond seen nearly end-on (shorter on screen than its width) is not
+painted (`View::joints`, the Ball-and-stick length check), so it casts no
+shadow; its atom's ball covers that spot.
+
+Outline runs shorter than 2 % of the model's size are folds of the
+simplified mesh rather than the lobe's outline and are not drawn.
 
 ### 5. Shade and merge
 
@@ -511,6 +521,32 @@ An adversarial review (gpt-6.2-astra, read-only) of the first draft raised
 | 16  | Raw triangle count and simplifier exhaustion unbounded      | 3 M raw cap with coarser retry; over-target result reported (mesh)          |
 | 17  | No signed-field contract for Phase 5                        | Phase 5 contract above                                                      |
 | 18  | Cuts change shading                                         | Shading is a continuous vertex field; per-phase fade (§5)                   |
+
+## Second review round
+
+An adversarial review of the implementation (gpt-6.2-sol on the geometry
+core, gpt-6.2-astra on the integration and snapshot) raised 31 findings.
+Fixed: a simplifier collapse that could make the mesh pass through itself
+(new faces are now also tested against each other and against faces sharing
+only a vertex); duplicate vertices after clipping that hid an overlap; a
+non-transitive depth tie rule (now exact sign, ties by index); rims dropped
+with fully covered fills; contour thinning that could drop a thin hole or
+make a contour cross itself (such contours stay unthinned); non-finite field
+samples; an oracle that let a wrong contour exempt itself; a cap test that
+never reached the cap planes; the best-fit plane on symmetric molecules (now
+the existing Jacobi solver); a label promoted over a nearer ball; outline
+margins; end-on half-bonds; box-capped (truncated) meshes are not drawn;
+snapshot decoding bounds, outline validation and thinning; the switch now
+also reaches render workers; the export estimate (`export_estimate`,
+`EXPORT_WARNING_BYTES`).
+
+Left as is, with reasons: coordinates far outside drawing scale (offsets of
+2⁴⁰ or 10¹⁵ drawing units, grid origins at 10⁹ Å, isovalues of 10⁻⁹),
+20 000 pieces sharing one bounding box (a closed surface cannot produce
+it), `pistar` on odd rings (one bond necessarily joins equal signs; the
+demo picks it by traversal order), and building the mesh on the calling
+thread (about 0.4 to 1.4 s once per model in release on an idle machine;
+Phase 5 builds orbital meshes off the UI thread).
 
 ## References
 

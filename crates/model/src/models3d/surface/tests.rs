@@ -70,16 +70,47 @@ fn check_embedded(mesh: &Mesh) {
             if bl[0] > hi[0] {
                 break;
             }
-            if (1..3).any(|d| bh[d] < lo[d] || hi[d] < bl[d])
-                || mesh.triangles[i]
-                    .iter()
-                    .any(|v| mesh.triangles[j].contains(v))
-            {
+            if (1..3).any(|d| bh[d] < lo[d] || hi[d] < bl[d]) {
                 continue;
             }
+            let a = mesh.triangles[i];
+            let b = mesh.triangles[j];
+            let shared = a.iter().filter(|v| b.contains(v)).count();
+            let forbidden = match shared {
+                0 => intersect(faces[i], faces[j]),
+                1 => {
+                    // Any intersection extending from the common vertex reaches
+                    // the opposite edge of at least one of the two triangles.
+                    let ia = a.iter().position(|v| b.contains(v)).unwrap();
+                    let ib = b.iter().position(|v| a.contains(v)).unwrap();
+                    let opposite = |t: [[f64; 3]; 3], common: usize| {
+                        [
+                            t[(common + 1) % 3],
+                            t[(common + 2) % 3],
+                            t[(common + 2) % 3],
+                        ]
+                    };
+                    intersect(opposite(faces[i], ia), faces[j])
+                        || intersect(opposite(faces[j], ib), faces[i])
+                }
+                2 => {
+                    let ia = a.iter().position(|v| !b.contains(v)).unwrap();
+                    let ib = b.iter().position(|v| !a.contains(v)).unwrap();
+                    let origin = faces[i][(ia + 1) % 3];
+                    let edge = sub(faces[i][(ia + 2) % 3], origin);
+                    let ua = sub(faces[i][ia], origin);
+                    let ub = sub(faces[j][ib], origin);
+                    let na = cross(edge, ua);
+                    // Shared-edge faces can overlap only when coplanar, with
+                    // their third vertices on the same side of that edge.
+                    dot(na, ub).abs() <= 1e-12 * (dot(na, na) * dot(ub, ub)).sqrt()
+                        && dot(na, cross(edge, ub)) > 0.
+                }
+                _ => true,
+            };
             assert!(
-                !intersect(faces[i], faces[j]),
-                "nonincident triangles {i} and {j} intersect"
+                !forbidden,
+                "triangles {i} and {j} intersect beyond their shared vertices"
             );
         }
     }
@@ -347,6 +378,85 @@ fn tetrahedron_survives_an_unreachable_budget() {
 }
 
 #[test]
+fn collapses_preserve_embedding_between_incident_faces() {
+    let mesh = Mesh {
+        positions: vec![
+            [0.922003, -0.444820, 1.067303],
+            [-0.160357, 0.187812, -0.154576],
+            [-0.144974, 0.029406, 0.047445],
+            [0.303625, -1.859955, -0.714529],
+            [0.302908, 0.236536, 0.607518],
+            [0.028060, 0.062259, -0.205521],
+        ],
+        triangles: vec![
+            [0, 1, 4],
+            [1, 0, 5],
+            [1, 2, 4],
+            [2, 1, 5],
+            [2, 3, 4],
+            [3, 2, 5],
+            [3, 0, 4],
+            [0, 3, 5],
+        ],
+        normals: vec![[0., 0., 1.]; 6],
+        positive: vec![true; 8],
+        truncated: false,
+    };
+    assert_eq!(topology(&mesh), [(true, 2)]);
+    check_embedded(&mesh);
+    let reduced = simplify(&mesh, 6);
+    assert_eq!(reduced.triangles.len(), 6);
+    assert_eq!(topology(&reduced), [(true, 2)]);
+    check_embedded(&reduced);
+}
+
+#[test]
+fn nonfinite_samples_are_outside_the_surface() {
+    let g = grid([-1.25; 3], 0.25, [11; 3]);
+    let reference = isosurface(|p| if p == [0.75, 0., 0.] { 0. } else { sphere(p) }, g, 0.2);
+    for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let empty = isosurface(|_| invalid, g, 0.2);
+        assert!(empty.triangles.is_empty());
+        assert!(!empty.truncated);
+        let mesh = isosurface(
+            |p| {
+                if p == [0.75, 0., 0.] {
+                    invalid
+                } else {
+                    sphere(p)
+                }
+            },
+            g,
+            0.2,
+        );
+        assert!(mesh.positions.iter().flatten().all(|x| x.is_finite()));
+        assert_eq!(mesh.positions, reference.positions);
+        assert_eq!(mesh.triangles, reference.triangles);
+        assert_eq!(topology(&mesh), [(true, 2)]);
+        check_embedded(&mesh);
+    }
+}
+
+#[test]
+fn nonfinite_gradients_use_face_normals() {
+    for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let mesh = isosurface(
+            |p| {
+                if p.iter().all(|x| (x * 4.).fract() == 0.) {
+                    sphere(p)
+                } else {
+                    invalid
+                }
+            },
+            grid([-1.25; 3], 0.25, [11; 3]),
+            0.2,
+        );
+        assert_eq!(topology(&mesh), [(true, 2)]);
+        check_embedded(&mesh);
+    }
+}
+
+#[test]
 fn translated_level_ties_have_distinct_edge_crossings() {
     let offset = 12.;
     let mesh = isosurface(
@@ -406,8 +516,64 @@ fn triangle_contacts_include_coplanar_edges_and_piercings() {
         ([[1.5, 1.5, 0.], [2., 1.5, 0.], [1.5, 2., 0.]], false),
         (a.map(|[x, y, _]| [x, y, 1e-9]), false),
     ] {
-        assert_eq!(qem_triangles_intersect(a, n(a), b, n(b)), hit);
+        assert_eq!(
+            qem_triangles_intersect(a, n(a), b, n(b), ([0, 1, 2], [3, 4, 5])),
+            hit
+        );
     }
+}
+
+#[test]
+fn triangle_contacts_allow_only_the_topologically_shared_simplex() {
+    use super::mesh::qem_triangles_intersect;
+    let a = [[0., 0., 0.], [2., 0., 0.], [0., 2., 0.]];
+    let n = |t: [[f64; 3]; 3]| cross(sub(t[1], t[0]), sub(t[2], t[0]));
+    for (b, vertices, hit) in [
+        (
+            [[0., 0., 0.], [-1., 0., 0.], [0., -1., 0.]],
+            [0, 3, 4],
+            false,
+        ),
+        (
+            [[0., 0., 0.], [-1., 0., 0.], [0., 0., 1.]],
+            [0, 3, 4],
+            false,
+        ),
+        (
+            [[0., 0., 0.], [1., 0.5, -1.], [1., 0.5, 1.]],
+            [0, 3, 4],
+            true,
+        ),
+        (
+            [[0., 0., 0.], [2., 0., 0.], [0., -2., 0.]],
+            [0, 1, 3],
+            false,
+        ),
+        ([[0., 0., 0.], [2., 0., 0.], [1., 1., 1.]], [0, 1, 3], false),
+        ([[0., 0., 0.], [2., 0., 0.], [1., 1., 0.]], [0, 1, 3], true),
+        ([[0., 0., 0.], [2., 0., 0.], [0., -2., 0.]], [0, 3, 4], true),
+    ] {
+        assert_eq!(
+            qem_triangles_intersect(a, n(a), b, n(b), ([0, 1, 2], vertices)),
+            hit,
+            "{b:?}, {vertices:?}"
+        );
+    }
+}
+
+#[test]
+fn near_coplanar_incident_faces_cannot_cross() {
+    use super::mesh::qem_triangles_intersect;
+    let a = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
+    let b = [[0., 0., 0.], [1., 1., 4e-14], [-1., -0.5, -4.04e-14]];
+    let n = |t: [[f64; 3]; 3]| cross(sub(t[1], t[0]), sub(t[2], t[0]));
+    assert!(qem_triangles_intersect(
+        a,
+        n(a),
+        b,
+        n(b),
+        ([0, 1, 2], [0, 3, 4])
+    ));
 }
 
 #[test]

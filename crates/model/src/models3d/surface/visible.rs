@@ -72,9 +72,8 @@ pub struct Visible {
 }
 
 #[derive(Clone, Copy)]
-struct Vertex {
+pub(super) struct Vertex {
     p: [f32; 3],
-    light: f32,
     // The incoming edge is a surviving mesh silhouette, rather than a cut.
     rim: bool,
     cut: usize,
@@ -83,8 +82,8 @@ struct Vertex {
 struct Piece {
     vertices: Vec<Vertex>,
     bounds: [f32; 4],
-    z: [f64; 3],
-    light: [f64; 3],
+    z: Affine,
+    light: Affine,
     positive: bool,
 }
 
@@ -325,7 +324,7 @@ impl Volume {
                 })
         })) {
             let plane = self.planes[index];
-            let (inside, _) = split(remaining, plane, index);
+            let (inside, _) = split::<false>(remaining, plane, index);
             if inside.len() < 3 {
                 out.push(original);
                 return;
@@ -347,7 +346,7 @@ impl Volume {
         }
         let mut remaining = original;
         for index in active {
-            let (inside, outside) = split(remaining, self.planes[index], index);
+            let (inside, outside) = split::<true>(remaining, self.planes[index], index);
             if valid_vertices(&outside) {
                 out.push(outside);
             }
@@ -359,7 +358,12 @@ impl Volume {
     }
 }
 
-fn split(vertices: Vec<Vertex>, plane: Plane, cut_id: usize) -> (Vec<Vertex>, Vec<Vertex>) {
+// The hidden-polygon probe needs only the inside, without outside allocation.
+fn split<const BOTH: bool>(
+    vertices: Vec<Vertex>,
+    plane: Plane,
+    cut_id: usize,
+) -> (Vec<Vertex>, Vec<Vertex>) {
     let mut below = false;
     let mut above = false;
     for v in &vertices {
@@ -371,10 +375,10 @@ fn split(vertices: Vec<Vertex>, plane: Plane, cut_id: usize) -> (Vec<Vertex>, Ve
         return (vertices, Vec::new());
     }
     if !below {
-        return (Vec::new(), vertices);
+        return (Vec::new(), if BOTH { vertices } else { Vec::new() });
     }
     let mut inside = Vec::with_capacity(vertices.len() + 1);
-    let mut outside = Vec::with_capacity(vertices.len() + 1);
+    let mut outside = Vec::with_capacity(if BOTH { vertices.len() + 1 } else { 0 });
     let mut previous = vertices.len() - 1;
     for current in 0..vertices.len() {
         let a = vertices[previous];
@@ -387,24 +391,17 @@ fn split(vertices: Vec<Vertex>, plane: Plane, cut_id: usize) -> (Vec<Vertex>, Ve
                 p: std::array::from_fn(|i| {
                     (a.p[i] as f64 + t * (b.p[i] as f64 - a.p[i] as f64)) as f32
                 }),
-                light: (a.light as f64 + t * (b.light as f64 - a.light as f64)) as f32,
                 rim: b.rim,
                 cut: b.cut,
             };
-            if da < 0. {
-                inside.push(cut);
-                outside.push(Vertex {
-                    rim: false,
-                    cut: cut_id,
-                    ..cut
-                });
-            } else {
-                outside.push(cut);
-                inside.push(Vertex {
-                    rim: false,
-                    cut: cut_id,
-                    ..cut
-                });
+            let boundary = Vertex {
+                rim: false,
+                cut: cut_id,
+                ..cut
+            };
+            inside.push(if da < 0. { cut } else { boundary });
+            if BOTH {
+                outside.push(if da < 0. { boundary } else { cut });
             }
         }
         if db <= 0. {
@@ -414,7 +411,7 @@ fn split(vertices: Vec<Vertex>, plane: Plane, cut_id: usize) -> (Vec<Vertex>, Ve
                 ..b
             });
         }
-        if db >= 0. {
+        if BOTH && db >= 0. {
             outside.push(Vertex {
                 rim: b.rim && !(db == 0. && da < 0.),
                 cut: if db == 0. && da < 0. { cut_id } else { b.cut },
@@ -423,7 +420,23 @@ fn split(vertices: Vec<Vertex>, plane: Plane, cut_id: usize) -> (Vec<Vertex>, Ve
         }
         previous = current;
     }
+    dedup_vertices(&mut inside);
+    if BOTH {
+        dedup_vertices(&mut outside);
+    }
     (inside, outside)
+}
+
+fn dedup_vertices(vertices: &mut Vec<Vertex>) {
+    // An intersection can round onto its neighbour in f32. Keep the first
+    // vertex: its incoming edge precedes the collapsed, zero-length edge.
+    vertices.dedup_by(|a, b| a.p[..2] == b.p[..2]);
+    if vertices.len() > 1 && vertices[0].p[..2] == vertices[vertices.len() - 1].p[..2] {
+        let last = vertices[vertices.len() - 1];
+        vertices[0].rim = last.rim;
+        vertices[0].cut = last.cut;
+        vertices.pop();
+    }
 }
 
 fn vertex_bounds(v: &[Vertex]) -> [f32; 4] {
@@ -473,7 +486,13 @@ fn valid_vertices(v: &[Vertex]) -> bool {
         > 2. * AREA
 }
 
-fn affine(p: [[f32; 3]; 3], value: [f32; 3]) -> Option<[f64; 3]> {
+#[derive(Clone, Copy)]
+struct Affine {
+    anchor: [f64; 3],
+    gradient: [f64; 2],
+}
+
+fn affine(p: [[f32; 3]; 3], value: [f32; 3]) -> Option<Affine> {
     let x = p[1][0] as f64 - p[0][0] as f64;
     let y = p[1][1] as f64 - p[0][1] as f64;
     let u = p[2][0] as f64 - p[0][0] as f64;
@@ -486,15 +505,17 @@ fn affine(p: [[f32; 3]; 3], value: [f32; 3]) -> Option<[f64; 3]> {
         ((value[1] as f64 - value[0] as f64) * v - (value[2] as f64 - value[0] as f64) * y) / det;
     let b =
         (x * (value[2] as f64 - value[0] as f64) - u * (value[1] as f64 - value[0] as f64)) / det;
-    Some([
-        a,
-        b,
-        value[0] as f64 - a * p[0][0] as f64 - b * p[0][1] as f64,
-    ])
+    Some(Affine {
+        anchor: [p[0][0], p[0][1], value[0]].map(f64::from),
+        gradient: [a, b],
+    })
 }
 
-fn at(plane: [f64; 3], p: [f64; 2]) -> f64 {
-    plane[0] * p[0] + plane[1] * p[1] + plane[2]
+impl Affine {
+    fn at(self, p: [f64; 2]) -> f64 {
+        let [x, y, value] = self.anchor;
+        self.gradient[0] * (p[0] - x) + self.gradient[1] * (p[1] - y) + value
+    }
 }
 
 fn area(contour: &[[f64; 2]]) -> f64 {
@@ -518,15 +539,15 @@ fn cross(a: [f64; 2], b: [f64; 2]) -> f64 {
     a[0] * b[1] - a[1] * b[0]
 }
 
-fn half_plane(contour: &[[f64; 2]], plane: [f64; 3]) -> Vec<[f64; 2]> {
+fn half_plane(contour: &[[f64; 2]], distance: impl Fn([f64; 2]) -> f64) -> Vec<[f64; 2]> {
     let Some(&last) = contour.last() else {
         return Vec::new();
     };
     let mut result = Vec::with_capacity(contour.len() + 1);
     let mut a = last;
-    let mut da = at(plane, a);
+    let mut da = distance(a);
     for &b in contour {
-        let db = at(plane, b);
+        let db = distance(b);
         if (da < 0. && db > 0.) || (da > 0. && db < 0.) {
             let t = da / (da - db);
             result.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
@@ -549,6 +570,9 @@ pub(super) fn intersection_centroid(
         for i in 0..contour.len() {
             let p = contour[i];
             let q = contour[(i + 1) % contour.len()];
+            if p == q {
+                continue;
+            }
             if other
                 .iter()
                 .all(|v| (q[0] - p[0]) * (v[1] - p[1]) - (q[1] - p[1]) * (v[0] - p[0]) <= 0.)
@@ -778,7 +802,6 @@ pub fn visible(input: &Input<'_>) -> Visible {
                 let b = indices[j];
                 Vertex {
                     p: input.positions[b as usize],
-                    light: input.lightness[b as usize],
                     rim: back_edges.contains(&(a.min(b), a.max(b))),
                     cut: usize::MAX,
                 }
@@ -821,6 +844,10 @@ pub fn visible(input: &Input<'_>) -> Visible {
             })
             .collect();
         let areas: Vec<_> = polygons.iter().map(|p| area(p)).collect();
+        let in_front = |i: usize, j: usize, point| {
+            let dz = pieces[i].z.at(point) - pieces[j].z.at(point);
+            dz > 0. || (dz == 0. && i < j)
+        };
         let mut nearer = vec![Vec::new(); pieces.len()];
         let mut covered = vec![false; pieces.len()];
         let comparisons = batches(pieces.len(), 512, |range| {
@@ -840,8 +867,11 @@ pub fn visible(input: &Input<'_>) -> Visible {
                     else {
                         continue;
                     };
-                    let difference = at(piece.z, center) - at(pieces[j].z, center);
-                    let (back, front) = if difference < -1e-7 { (i, j) } else { (j, i) };
+                    let (back, front) = if in_front(j, i, center) {
+                        (i, j)
+                    } else {
+                        (j, i)
+                    };
                     comparisons.push((back, front, overlap_area));
                 }
             }
@@ -890,10 +920,9 @@ pub fn visible(input: &Input<'_>) -> Visible {
             let mut stamp = 0;
             for i in range {
                 let piece = &pieces[i];
-                if covered[i] {
-                    continue;
-                }
-                let regions = if nearer[i].is_empty() {
+                let regions = if covered[i] {
+                    Vec::new()
+                } else if nearer[i].is_empty() {
                     vec![polygons[i].clone()]
                 } else {
                     let clips: Vec<_> = nearer[i]
@@ -919,7 +948,7 @@ pub fn visible(input: &Input<'_>) -> Visible {
                     let (min, max) = contour.iter().fold(
                         (f64::INFINITY, f64::NEG_INFINITY),
                         |(min, max), &p| {
-                            let l = at(piece.light, p);
+                            let l = piece.light.at(p);
                             (min.min(l), max.max(l))
                         },
                     );
@@ -933,24 +962,12 @@ pub fn visible(input: &Input<'_>) -> Visible {
                     {
                         let mut cut = contour.clone();
                         if band > 0 {
-                            cut = half_plane(
-                                &cut,
-                                [
-                                    -piece.light[0],
-                                    -piece.light[1],
-                                    band as f64 / bands as f64 - piece.light[2],
-                                ],
-                            );
+                            let lower = band as f64 / bands as f64;
+                            cut = half_plane(&cut, |p| lower - piece.light.at(p));
                         }
                         if band + 1 < bands {
-                            cut = half_plane(
-                                &cut,
-                                [
-                                    piece.light[0],
-                                    piece.light[1],
-                                    piece.light[2] - (band + 1) as f64 / bands as f64,
-                                ],
-                            );
+                            let upper = (band + 1) as f64 / bands as f64;
+                            cut = half_plane(&cut, |p| piece.light.at(p) - upper);
                         }
                         if cut.len() >= 3 && area(&cut).abs() > AREA {
                             target.push(cut);
@@ -981,7 +998,7 @@ pub fn visible(input: &Input<'_>) -> Visible {
                         if let Some((start, end)) = segment_interval(a, b, &polygons[j]) {
                             let t = (start + end) * 0.5;
                             let midpoint = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
-                            if at(pieces[j].z, midpoint) > at(piece.z, midpoint) + 1e-7 {
+                            if in_front(j, i, midpoint) {
                                 hidden.push((start, end));
                             }
                         }
@@ -1037,18 +1054,6 @@ pub fn visible(input: &Input<'_>) -> Visible {
                     let region: Vec<_> = cumulative
                         .iter()
                         .map(|c| simplify_closed(c, input.tolerance as f64))
-                        .filter(|c| {
-                            c.len() >= 3
-                                && (0..c.len())
-                                    .map(|i| {
-                                        let a = c[i];
-                                        let b = c[(i + 1) % c.len()];
-                                        a[0] as f64 * b[1] as f64 - a[1] as f64 * b[0] as f64
-                                    })
-                                    .sum::<f64>()
-                                    .abs()
-                                    > 2. * AREA
-                        })
                         .collect();
                     if region.is_empty() {
                         continue;
@@ -1149,9 +1154,10 @@ fn simplify_open(points: &[[f64; 2]], tolerance: f64) -> Vec<[f64; 2]> {
         .collect()
 }
 
-fn simplify_closed(points: &[[f64; 2]], tolerance: f64) -> Vec<[f32; 2]> {
+pub(super) fn simplify_closed(points: &[[f64; 2]], tolerance: f64) -> Vec<[f32; 2]> {
+    let original = || points.iter().map(|p| p.map(|x| x as f32)).collect();
     if points.len() < 3 || tolerance <= 0. {
-        return points.iter().map(|p| p.map(|x| x as f32)).collect();
+        return original();
     }
     let opposite = (1..points.len())
         .max_by(|&i, &j| {
@@ -1160,13 +1166,43 @@ fn simplify_closed(points: &[[f64; 2]], tolerance: f64) -> Vec<[f32; 2]> {
             distance(points[i]).total_cmp(&distance(points[j]))
         })
         .unwrap_or(1);
-    let mut a = simplify_open(&points[..=opposite], tolerance);
+    let mut thinned = simplify_open(&points[..=opposite], tolerance);
     let mut rest = points[opposite..].to_vec();
     rest.push(points[0]);
     let b = simplify_open(&rest, tolerance);
-    a.pop();
-    a.extend_from_slice(&b[..b.len() - 1]);
-    a.iter().map(|p| p.map(|x| x as f32)).collect()
+    thinned.pop();
+    thinned.extend_from_slice(&b[..b.len() - 1]);
+    if thinned.len() < 3 || thinned.len() == points.len() {
+        return original();
+    }
+    // Check the coordinates that will actually be painted.
+    for p in &mut thinned {
+        *p = p.map(|v| f64::from(v as f32));
+    }
+    let original_area = area(points);
+    if (area(&thinned) - original_area).abs() > 0.1 * original_area.abs() {
+        return original();
+    }
+    let side = |a: [f64; 2], b: [f64; 2], p: [f64; 2]| {
+        cross([b[0] - a[0], b[1] - a[1]], [p[0] - a[0], p[1] - a[1]])
+    };
+    let n = thinned.len();
+    for i in 0..n {
+        let a = thinned[i];
+        let b = thinned[(i + 1) % n];
+        // A contour's adjacent edges meet by construction, including at its start.
+        for j in i + 2..n - usize::from(i == 0) {
+            let c = thinned[j];
+            let d = thinned[(j + 1) % n];
+            if (0..2).all(|k| a[k].min(b[k]) <= c[k].max(d[k]) && c[k].min(d[k]) <= a[k].max(b[k]))
+                && side(a, b, c) * side(a, b, d) <= 0.
+                && side(c, d, a) * side(c, d, b) <= 0.
+            {
+                return original();
+            }
+        }
+    }
+    thinned.iter().map(|p| p.map(|x| x as f32)).collect()
 }
 
 fn chain(segments: Vec<([f64; 2], [f64; 2])>, tolerance: f64) -> Vec<Vec<[f32; 2]>> {
@@ -1263,7 +1299,7 @@ pub fn front_depth(input: &Input<'_>, point: [f32; 2]) -> Option<f32> {
             }
         }
         if inside && let Some(plane) = affine(p, p.map(|v| v[2])) {
-            let z = at(plane, point64);
+            let z = plane.at(point64);
             nearest = Some(nearest.map_or(z, |old| old.max(z)));
         }
     }

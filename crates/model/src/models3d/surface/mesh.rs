@@ -140,6 +140,7 @@ pub fn isosurface(field: impl Fn([f32; 3]) -> f32, mut grid: Grid, iso: f32) -> 
                     let value = field(std::array::from_fn(|i| {
                         (grid.origin[i] as f64 + ijk[i] as f64 * grid.step as f64) as f32
                     }));
+                    let value = if value.is_finite() { value } else { 0. };
                     peak = peak.max(value.abs());
                     if value.abs() >= iso {
                         for i in 0..3 {
@@ -312,12 +313,14 @@ pub fn isosurface(field: impl Fn([f32; 3]) -> f32, mut grid: Grid, iso: f32) -> 
                                 / f64::from(grid.step);
                             if positive { -diff } else { diff }
                         });
-                        mesh.normals.push(if dot(n, n) < 1e-18 {
-                            needs_face_normals = true;
-                            [0.; 3]
-                        } else {
-                            unit_normal(n).map(|v| v as f32)
-                        });
+                        let length2 = dot(n, n);
+                        mesh.normals
+                            .push(if !length2.is_finite() || length2 < 1e-18 {
+                                needs_face_normals = true;
+                                [0.; 3]
+                            } else {
+                                unit_normal(n).map(|v| v as f32)
+                            });
                         id
                     })
                 });
@@ -515,7 +518,24 @@ pub fn simplify(mesh: &Mesh, target: usize) -> Mesh {
             for &id in incident[a].iter().chain(&incident[b]) {
                 omitted[id] = true;
             }
-            'faces: for &(_, new, bound, points, moved, normal) in &changes {
+            'faces: for (index, &(_, new, bound, points, moved, normal)) in
+                changes.iter().enumerate()
+            {
+                for &(_, other, _, other_points, other_moved, other_normal) in &changes[index + 1..]
+                {
+                    if (moved || other_moved)
+                        && qem_triangles_intersect(
+                            points,
+                            normal,
+                            other_points,
+                            other_normal,
+                            (new, other),
+                        )
+                    {
+                        legal = false;
+                        break 'faces;
+                    }
+                }
                 if !moved {
                     continue;
                 }
@@ -529,7 +549,6 @@ pub fn simplify(mesh: &Mesh, target: usize) -> Mesh {
                 for &other in &candidates {
                     if (0..3)
                         .any(|k| bound.1[k] < bounds[other].0[k] || bounds[other].1[k] < bound.0[k])
-                        || new.iter().any(|v| triangles[other].contains(v))
                     {
                         continue;
                     }
@@ -538,6 +557,7 @@ pub fn simplify(mesh: &Mesh, target: usize) -> Mesh {
                         normal,
                         triangles[other].map(|v| positions[v as usize].map(f64::from)),
                         face_normals[other],
+                        (new, triangles[other]),
                     ) {
                         legal = false;
                         break 'faces;
@@ -872,13 +892,74 @@ fn qem_bounds(points: [[f64; 3]; 3]) -> QemBounds {
     )
 }
 
-/// Separating axes include in-plane edge normals, so coplanar overlap counts.
+/// Report intersections beyond the faces' topologically shared edge or vertex.
 pub(super) fn qem_triangles_intersect(
     a: [[f64; 3]; 3],
     normal_a: [f64; 3],
     b: [[f64; 3]; 3],
     normal_b: [f64; 3],
+    vertices: ([u32; 3], [u32; 3]),
 ) -> bool {
+    let shared_a = vertices.0.map(|v| vertices.1.contains(&v));
+    let shared_b = vertices.1.map(|v| vertices.0.contains(&v));
+    let common = shared_a.iter().filter(|&&shared| shared).count();
+    if common == 0 {
+        return qem_overlap(a, normal_a, b, normal_b);
+    }
+    if common == 3 {
+        return true;
+    }
+    if common == 2 {
+        let ia = shared_a.iter().position(|&shared| !shared).unwrap_or(0);
+        let ib = shared_b.iter().position(|&shared| !shared).unwrap_or(0);
+        let same_winding = vertices.0[(ia + 1) % 3] == vertices.1[(ib + 1) % 3];
+        let sides = dot(normal_a, normal_b) * if same_winding { 1. } else { -1. };
+        if sides <= 0. {
+            return false;
+        }
+        // Noncoplanar faces can meet only on the common edge. Coplanar faces
+        // with their third corners on the same side overlap beyond that edge.
+        let offset = sub(b[ib], a[(ia + 1) % 3]);
+        let tolerance = 64.
+            * f64::EPSILON
+            * normal_a.iter().map(|v| v.abs()).sum::<f64>()
+            * offset.into_iter().fold(0_f64, |v, x| v.max(x.abs()));
+        return dot(normal_a, offset).abs() <= tolerance;
+    }
+    let ia = shared_a.iter().position(|&shared| shared).unwrap_or(0);
+    let ib = shared_b.iter().position(|&shared| shared).unwrap_or(0);
+    let origin = a[ia];
+    let a = a.map(|p| sub(p, origin));
+    let b = b.map(|p| sub(p, origin));
+    let extent = a
+        .iter()
+        .chain(&b)
+        .flatten()
+        .fold(0_f64, |largest, &v| largest.max(v.abs()));
+    let same_side = |normal: [f64; 3], points: [[f64; 3]; 3], common: usize| {
+        let p = dot(normal, points[(common + 1) % 3]);
+        let q = dot(normal, points[(common + 2) % 3]);
+        let tolerance = 64. * f64::EPSILON * normal.iter().map(|v| v.abs()).sum::<f64>() * extent;
+        (p > tolerance && q > tolerance) || (p < -tolerance && q < -tolerance)
+    };
+    if same_side(normal_a, b, ib) || same_side(normal_b, a, ia) {
+        return false;
+    }
+    // Any intersection extending from the common vertex reaches the opposite
+    // edge of at least one face. Treat that edge as a degenerate triangle.
+    let opposite = |t: [[f64; 3]; 3], common: usize| {
+        [
+            t[(common + 1) % 3],
+            t[(common + 2) % 3],
+            t[(common + 2) % 3],
+        ]
+    };
+    qem_overlap(opposite(a, ia), [0.; 3], b, normal_b)
+        || qem_overlap(a, normal_a, opposite(b, ib), [0.; 3])
+}
+
+/// Separating axes include in-plane edge normals, so coplanar overlap counts.
+fn qem_overlap(a: [[f64; 3]; 3], normal_a: [f64; 3], b: [[f64; 3]; 3], normal_b: [f64; 3]) -> bool {
     let origin = a[0];
     let a = a.map(|p| sub(p, origin));
     let b = b.map(|p| sub(p, origin));

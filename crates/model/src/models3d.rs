@@ -3025,9 +3025,6 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     if model.style == Style::Ellipsoids {
         bonds.retain(|&(a, b)| view.half_bond(a, b).is_some());
     }
-    let orbital = surface::draw::Prepared::new(doc, model, &view);
-    // Labels of atoms in front of the surface, drawn after it.
-    let mut late = vec![];
     let (rotated, reach, style) = (&view.rotated, view.reach, model.style);
     let paper = doc.canvas_theme.background();
     let dark = doc.canvas_theme.is_dark();
@@ -3045,6 +3042,10 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     let fade = |z: f32| model.depth_fade * ((reach - z) / (2. * reach)).clamp(0., 1.);
     let line = (model.size / 400.).clamp(0.6, 1.1);
     let glossy = model.look == Look::Glossy;
+    // The balls' painted outline reaches half its width past their discs.
+    let orbital = surface::draw::Prepared::new(doc, model, &view, if glossy { 0. } else { line });
+    // Labels of atoms in front of the surface, drawn after it.
+    let mut late = vec![];
     let outline = |width| {
         (!glossy)
             .then_some(if dark { RIM } else { OUTLINE })
@@ -3244,9 +3245,21 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     color: doc.canvas_theme.color(color),
                     style,
                 };
+                // Over the surface only when nothing nearer covers the label's
+                // anchor: neither the surface nor another ball.
                 let p = *rotated.get(i)?;
                 let radius = model.style.atom_radius(symbol);
-                if orbital.as_ref().is_some_and(|s| s.clear(&view, p, radius)) {
+                let under_ball = || {
+                    view.balls().any(|(j, q, r)| {
+                        j != i
+                            && q.distance(center) < r
+                            && rotated.get(j).is_some_and(|o| o[2] > p[2])
+                    })
+                };
+                if orbital
+                    .as_ref()
+                    .is_some_and(|s| s.clear(&view, p, radius) && !under_ball())
+                {
                     late.push((alpha, text));
                     continue;
                 }

@@ -20,6 +20,8 @@ pub const DETAIL: [usize; 2] = [20_000, 4_000];
 const BANDS: usize = 10;
 /// Outline thinning, in drawing units.
 const TOLERANCE: f32 = 0.05;
+/// The shortest outline run drawn, as a fraction of the model's size.
+const SHORTEST: f32 = 0.02;
 /// The demo's p-function decay, per ångström.
 const DECAY: f32 = 1.6;
 /// Box margin around the atoms before the mesher grows it, in ångström.
@@ -85,7 +87,7 @@ pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Rc<
     }
     let points = model.points(doc)?;
     let bonds = model.geometry_bonds(doc);
-    let mut key: Vec<u32> = vec![demo as u32, iso.to_bits()];
+    let mut key: Vec<u32> = vec![demo as u32, iso.to_bits(), points.len() as u32];
     key.extend(points.iter().flat_map(|(s, p)| {
         let [x, y, z] = p.map(f32::to_bits);
         [u32::from(*s == "H"), x, y, z]
@@ -94,34 +96,39 @@ pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Rc<
     if let Some(found) =
         MESHES.with_borrow(|kept| kept.iter().find(|(k, _)| *k == key).map(|(_, m)| m.clone()))
     {
-        return Some(found);
+        return found;
     }
-    let field = field(&points, &bonds, demo)?;
-    let (lo, hi) = points.iter().filter(|(s, _)| *s != "H").fold(
-        ([f32::MAX; 3], [f32::MIN; 3]),
-        |(lo, hi), (_, p)| {
-            (
-                std::array::from_fn(|k| lo[k].min(p[k] - MARGIN)),
-                std::array::from_fn(|k| hi[k].max(p[k] + MARGIN)),
-            )
-        },
-    );
-    let raw = mesh::isosurface(&field, Grid::around(lo, hi), iso);
-    let fine = mesh::simplify(&raw, DETAIL[0]);
-    let coarse = mesh::simplify(&fine, DETAIL[1]);
-    let found = Rc::new([fine, coarse]);
+    let found = field(&points, &bonds, demo).and_then(|field| {
+        let (lo, hi) = points.iter().filter(|(s, _)| *s != "H").fold(
+            ([f32::MAX; 3], [f32::MIN; 3]),
+            |(lo, hi), (_, p)| {
+                (
+                    std::array::from_fn(|k| lo[k].min(p[k] - MARGIN)),
+                    std::array::from_fn(|k| hi[k].max(p[k] + MARGIN)),
+                )
+            },
+        );
+        let raw = mesh::isosurface(&field, Grid::around(lo, hi), iso);
+        // A lobe the grown box still cuts would show a flat cap: draw nothing.
+        if raw.truncated {
+            return None;
+        }
+        let fine = mesh::simplify(&raw, DETAIL[0]);
+        let coarse = mesh::simplify(&fine, DETAIL[1]);
+        Some(Rc::new([fine, coarse]))
+    });
     MESHES.with_borrow_mut(|kept| {
         if kept.len() >= KEPT {
             kept.remove(0);
         }
         kept.push((key, found.clone()));
     });
-    Some(found)
+    found
 }
 
 const KEPT: usize = 4;
 /// Recent models' meshes by their geometry, switch and isovalue.
-type Kept = Vec<(Vec<u32>, Rc<[Mesh; 2]>)>;
+type Kept = Vec<(Vec<u32>, Option<Rc<[Mesh; 2]>>)>;
 thread_local! {
     static MESHES: RefCell<Kept> = Default::default();
 }
@@ -178,8 +185,7 @@ fn field(
     })
 }
 
-/// The unit normal of the plane that fits `points` best: the direction of
-/// least spread, from the two directions of most spread.
+/// The unit normal of the plane that fits `points` best.
 fn plane_normal(points: &[[f32; 3]]) -> [f32; 3] {
     let n = points.len().max(1) as f64;
     let mean: [f64; 3] =
@@ -193,36 +199,12 @@ fn plane_normal(points: &[[f32; 3]]) -> [f32; 3] {
             }
         }
     }
-    let largest = |c: &[[f64; 3]; 3]| {
-        let mut v = [0.6, 0.7, 0.4];
-        for _ in 0..100 {
-            let w: [f64; 3] = std::array::from_fn(|i| (0..3).map(|j| c[i][j] * v[j]).sum());
-            let length = w.iter().map(|x| x * x).sum::<f64>().sqrt();
-            if length < 1e-12 {
-                break;
-            }
-            v = w.map(|x| x / length);
-        }
-        v
-    };
-    let a = largest(&c);
-    let la: f64 = (0..3)
-        .map(|i| a[i] * (0..3).map(|j| c[i][j] * a[j]).sum::<f64>())
-        .sum();
-    let deflated: [[f64; 3]; 3] =
-        std::array::from_fn(|i| std::array::from_fn(|j| c[i][j] - la * a[i] * a[j]));
-    let b = largest(&deflated);
-    let n = [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ];
-    let length = n.iter().map(|x| x * x).sum::<f64>().sqrt();
-    if length < 1e-9 {
-        // Collinear or a single atom: any direction across the line.
-        return [0., 0., 1.];
-    }
-    n.map(|x| (x / length) as f32)
+    // The direction of least spread; a line or a lone atom gets one across it.
+    let (values, vectors) = crate::models3d::ellipsoids::eigen(c);
+    let least = (0..3)
+        .min_by(|&i, &j| values[i].total_cmp(&values[j]))
+        .unwrap_or(2);
+    vectors[least].map(|x| x as f32)
 }
 
 /// The surface cut and merged for `view`, ready to draw after the molecule.
@@ -231,12 +213,21 @@ pub(in crate::models3d) struct Prepared {
     triangles: Vec<[u32; 3]>,
     front: Vec<bool>,
     visible: Visible,
+    /// Outline runs shorter than this are folds of the simplified mesh,
+    /// not the lobe's outline.
+    shortest: f32,
 }
 
 impl Prepared {
     /// Cuts the model's surface for the view, or `None` without one or
     /// during the 2D → 3D morph.
-    pub(in crate::models3d) fn new(doc: &Document, model: &Model3d, view: &View) -> Option<Self> {
+    /// `outline` is the width of the balls' painted outline.
+    pub(in crate::models3d) fn new(
+        doc: &Document,
+        model: &Model3d,
+        view: &View,
+        outline: f32,
+    ) -> Option<Self> {
         if model.morph.is_some_and(|m| m < 1.) {
             return None;
         }
@@ -272,7 +263,7 @@ impl Prepared {
                 0.35 + 0.65 * (n[0] * light[0] + n[1] * light[1] + n[2] * light[2]).max(0.)
             })
             .collect();
-        let occluders = occluders(view, model);
+        let occluders = occluders(view, model, outline / 2.);
         let visible = visible::visible(&Input {
             positions: &positions,
             triangles: &mesh.triangles,
@@ -289,6 +280,7 @@ impl Prepared {
             triangles: mesh.triangles.clone(),
             front,
             visible,
+            shortest: SHORTEST * model.size,
         })
     }
 
@@ -350,6 +342,12 @@ impl Prepared {
             .visible
             .rims
             .iter()
+            .filter(|r| {
+                r.windows(2)
+                    .map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]))
+                    .sum::<f32>()
+                    >= self.shortest
+            })
             .map(|r| r.iter().map(point).collect())
             .collect();
         Primitive::Surface {
@@ -368,8 +366,8 @@ fn screen(view: &View, q: [f32; 3]) -> [f32; 3] {
 }
 
 /// The balls and half-bonds as painted, as convex solids in screen-depth
-/// space (design §2).
-fn occluders(view: &View, model: &Model3d) -> Vec<Occluder> {
+/// space (design §2); balls reach `rim` further, for their outline.
+fn occluders(view: &View, model: &Model3d, rim: f32) -> Vec<Occluder> {
     let depth = |q: [f32; 3], r: f32| screen(view, [q[0], q[1], q[2] + r])[2] - screen(view, q)[2];
     let mut out: Vec<Occluder> = view
         .balls()
@@ -378,7 +376,7 @@ fn occluders(view: &View, model: &Model3d) -> Vec<Occluder> {
             let r = model.style.atom_radius(view.symbols.get(i)?);
             Some(Occluder::Ball {
                 center: [q.x, q.y, screen(view, p)[2]],
-                radius,
+                radius: radius + rim,
                 depth: depth(p, r),
             })
         })
@@ -392,6 +390,11 @@ fn occluders(view: &View, model: &Model3d) -> Vec<Occluder> {
         for start in [pa, pb] {
             let [s, m] = [start, middle].map(|q| screen(view, q));
             let width = |q: [f32; 3]| r * view.scale * view.project(q).1;
+            // A half seen nearly end-on is not painted (`View::joints`, the
+            // BallStick length check); its atom's ball covers it.
+            if (m[0] - s[0]).hypot(m[1] - s[1]) < width(start) {
+                continue;
+            }
             out.push(Occluder::Stick {
                 a: s,
                 b: m,
