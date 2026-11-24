@@ -1,0 +1,310 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/gas-hose-connector-1-4",
+  "revision": 1,
+  "family": "gas-hose-connector",
+  "variant": {
+    "tube_od": "1/4 in OD",
+    "hose_id": "1/4 in ID"
+  },
+  "names": {
+    "en": "Stainless-steel hose connector, 1/4 in tube adapter to 1/4 in hose ID"
+  },
+  "category": "other",
+  "keywords": [
+    "hose connector",
+    "hose barb",
+    "tube adapter",
+    "compression",
+    "gas line",
+    "316 stainless steel",
+    "1/4 in",
+    "SS-4-HC-A-401"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "connector-metal",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-23.5 -3.175L-5.5 -3.175L-5.5 -5.65L-4.7 -6.45L0.6 -6.45L1.4 -5.65L1.4 -5.6115L3.4 -5.6115L3.4 -3.8L6.6964 -3.175L7.42 -3.175L7.42 -3.8L10.7164 -3.175L11.44 -3.175L11.44 -3.8L14.7364 -3.175L15.46 -3.175L15.46 -3.8L18.7564 -3.175L19.48 -3.175L19.48 -3.8L22.7764 -3.175L23.5 -3.175L23.5 3.175L22.7764 3.175L19.48 3.8L19.48 3.175L18.7564 3.175L15.46 3.8L15.46 3.175L14.7364 3.175L11.44 3.8L11.44 3.175L10.7164 3.175L7.42 3.8L7.42 3.175L6.6964 3.175L3.4 3.8L3.4 5.6115L1.4 5.6115L1.4 5.65L0.6 6.45L-4.7 6.45L-5.5 5.65L-5.5 3.175L-23.5 3.175Z",
+      "color": [
+        203,
+        215,
+        224
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "connector-section-metal",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-23.5 -3.175L-5.5 -3.175L-5.5 -5.65L-4.7 -6.45L0.6 -6.45L1.4 -5.65L1.4 -5.6115L3.4 -5.6115L3.4 -3.8L6.6964 -3.175L7.42 -3.175L7.42 -3.8L10.7164 -3.175L11.44 -3.175L11.44 -3.8L14.7364 -3.175L15.46 -3.175L15.46 -3.8L18.7564 -3.175L19.48 -3.175L19.48 -3.8L22.7764 -3.175L23.5 -3.175L23.5 -2.4L3.4 -2.4L-0.1 -2.05L-23.5 -2.05ZM-23.5 2.05L-0.1 2.05L3.4 2.4L23.5 2.4L23.5 3.175L22.7764 3.175L19.48 3.8L19.48 3.175L18.7564 3.175L15.46 3.8L15.46 3.175L14.7364 3.175L11.44 3.8L11.44 3.175L10.7164 3.175L7.42 3.8L7.42 3.175L6.6964 3.175L3.4 3.8L3.4 5.6115L1.4 5.6115L1.4 5.65L0.6 6.45L-4.7 6.45L-5.5 5.65L-5.5 3.175L-23.5 3.175Z",
+      "color": [
+        203,
+        215,
+        224
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "outer-profile",
+      "layer": "back",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-23.5 -3.175L-5.5 -3.175L-5.5 -5.65L-4.7 -6.45L0.6 -6.45L1.4 -5.65L1.4 -5.6115L3.4 -5.6115L3.4 -3.8L6.6964 -3.175L7.42 -3.175L7.42 -3.8L10.7164 -3.175L11.44 -3.175L11.44 -3.8L14.7364 -3.175L15.46 -3.175L15.46 -3.8L18.7564 -3.175L19.48 -3.175L19.48 -3.8L22.7764 -3.175L23.5 -3.175M23.5 3.175L22.7764 3.175L19.48 3.8L19.48 3.175L18.7564 3.175L15.46 3.8L15.46 3.175L14.7364 3.175L11.44 3.8L11.44 3.175L10.7164 3.175L7.42 3.8L7.42 3.175L6.6964 3.175L3.4 3.8L3.4 5.6115L1.4 5.6115L1.4 5.65L0.6 6.45L-4.7 6.45L-5.5 5.65L-5.5 3.175L-23.5 3.175",
+      "depth": 5
+    },
+    {
+      "id": "shank-rim",
+      "layer": "back",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-23.5 -3.175L-23.5 -2.05M-23.5 2.05L-23.5 3.175",
+      "depth": 5
+    },
+    {
+      "id": "barb-rim",
+      "layer": "back",
+      "material": "ink",
+      "role": "outline",
+      "path": "M23.5 -3.175L23.5 -2.4M23.5 2.4L23.5 3.175",
+      "depth": 5
+    },
+    {
+      "id": "section-bore",
+      "layer": "back",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-23.5 -2.05L-0.1 -2.05L3.4 -2.4L23.5 -2.4M-23.5 2.05L-0.1 2.05L3.4 2.4L23.5 2.4",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "hex-flats",
+      "layer": "back",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-4.7 -6.45L-4.7 6.45M0.6 -6.45L0.6 6.45M-4.7 -3.612L0.6 -3.612M-4.7 3.612L0.6 3.612",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "shoulder-seam",
+      "layer": "back",
+      "material": "ink",
+      "role": "detail",
+      "path": "M1.4 -5.6115L1.4 5.6115M3.4 -5.6115L3.4 -3.8M3.4 3.8L3.4 5.6115",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "shank-highlight",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-22.5 -2.2225L-5.8 -2.2225L-5.8 -1.1112L-22.5 -1.1112Z",
+      "color": [
+        239,
+        244,
+        248
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 1,
+      "style": "shaded"
+    },
+    {
+      "id": "hex-highlight",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-4.7 -6.45L0.6 -6.45L0.6 -4.0635L-4.7 -4.0635Z",
+      "color": [
+        240,
+        245,
+        248
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2,
+      "style": "shaded"
+    },
+    {
+      "id": "hex-shadow",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-4.7 4.0635L0.6 4.0635L0.6 6.45L-4.7 6.45Z",
+      "color": [
+        164,
+        185,
+        199
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2,
+      "style": "shaded"
+    },
+    {
+      "id": "barb-rib-edges",
+      "layer": "back",
+      "material": "ink",
+      "role": "detail",
+      "path": "M3.4 -3.8L3.4 -1.905M3.4 1.905L3.4 3.8M7.42 -3.8L7.42 -1.905M7.42 1.905L7.42 3.8M11.44 -3.8L11.44 -1.905M11.44 1.905L11.44 3.8M15.46 -3.8L15.46 -1.905M15.46 1.905L15.46 3.8M19.48 -3.8L19.48 -1.905M19.48 1.905L19.48 3.8",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "barb-highlights",
+      "layer": "back",
+      "material": "metal",
+      "role": "fill",
+      "path": "M3.65 -3.45L6.3346 -2.925L5.8924 -2.475L3.65 -3.05ZM7.67 -3.45L10.3546 -2.925L9.9124 -2.475L7.67 -3.05ZM11.69 -3.45L14.3746 -2.925L13.9324 -2.475L11.69 -3.05ZM15.71 -3.45L18.3946 -2.925L17.9524 -2.475L15.71 -3.05ZM19.73 -3.45L22.4146 -2.925L21.9724 -2.475L19.73 -3.05Z",
+      "color": [
+        239,
+        244,
+        248
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 2,
+      "style": "shaded"
+    },
+    {
+      "id": "section-hatch",
+      "layer": "back",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-4.5 -2.95L-3.166 -4.284M-4.5 5.65L-3.166 4.316M-2.2 -2.95L-0.866 -4.284M-2.2 5.65L-0.866 4.316",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    }
+  ],
+  "joints": [
+    {
+      "id": "compression",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "M",
+      "size_mm": 6.35,
+      "at": [
+        -23.5,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "hose",
+      "kind": "plug",
+      "family": "hose",
+      "gender": "M",
+      "size_mm": 6.35,
+      "at": [
+        23.5,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "compression",
+      "at": [
+        -23.5,
+        0
+      ]
+    },
+    {
+      "id": "hose",
+      "at": [
+        23.5,
+        0
+      ]
+    }
+  ]
+}

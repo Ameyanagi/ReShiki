@@ -181,6 +181,8 @@ static FILES: &[Source] = piece_files![
     "cow-15",
     "hose-7",
     "hose-9",
+    "hose-1-4",
+    "hose-1-2",
     "stand",
     "clamp-3finger",
     "ring",
@@ -413,6 +415,8 @@ static FILES: &[Source] = piece_files![
     "gas-compression-npt-adapter-1-8",
     "gas-compression-npt-adapter-1-4",
     "gas-compression-npt-adapter-1-4-to-1-8",
+    "gas-hose-connector-1-4",
+    "gas-hose-connector-1-2",
     "keck-clip-10",
     "boss-head",
 ];
@@ -431,6 +435,44 @@ pub fn find(id: &str) -> Option<Arc<Definition>> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn hose_connectors_seat_nominal_hose_and_compression_ends() {
+        use crate::document::{Document, Point};
+        use crate::equipment::{placed, solve};
+
+        let mut doc = Document::default();
+        let mut add = |id, name| {
+            doc.graphics.push(placed::graphic(
+                id,
+                super::find(name).unwrap(),
+                Point::default(),
+                1.,
+            ));
+        };
+        add(1, "reshiki/compression-union-1-4");
+        add(2, "reshiki/gas-hose-connector-1-4");
+        add(3, "reshiki/hose-1-4");
+        let joint = |piece: u64, name: &str| solve::JointRef {
+            piece,
+            joint: name.into(),
+        };
+        let seat =
+            solve::connect(&mut doc, &[2], &joint(1, "right"), &joint(2, "compression")).unwrap();
+        assert!(matches!(seat.offer, solve::Offer::Seat));
+        let seat = solve::connect(&mut doc, &[3], &joint(2, "hose"), &joint(3, "a")).unwrap();
+        assert!(matches!(seat.offer, solve::Offer::Seat));
+        solve::check(&mut doc, None);
+        assert_eq!(doc.seats.len(), 2);
+
+        let half = super::find("reshiki/gas-hose-connector-1-2").unwrap();
+        let hose = super::find("reshiki/hose-1-2").unwrap();
+        for definition in [half, hose] {
+            assert!(definition.joints.iter().all(|port| {
+                matches!(port, super::Joint::Plug { size_mm, .. } if *size_mm == 12.7)
+            }));
+        }
+    }
+
     #[test]
     fn compression_cross_seats_four_tubes_independently() {
         use crate::document::{Document, Point};
