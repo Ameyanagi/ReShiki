@@ -398,6 +398,8 @@ static FILES: &[Source] = piece_files![
     "gas-pressure-transducer-1-4-npt",
     "gas-sample-cylinder-150-1-4-npt",
     "gas-sample-cylinder-300-1-4-npt",
+    "gas-sample-cylinder-150-single-end-1-4-npt",
+    "gas-sample-cylinder-300-single-end-1-4-npt",
     "gas-gauge-tee-1-4",
     "gas-compression-npt-adapter-1-8",
     "gas-compression-npt-adapter-1-4",

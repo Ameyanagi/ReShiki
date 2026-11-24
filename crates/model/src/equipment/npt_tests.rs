@@ -106,14 +106,20 @@ fn connect(doc: &mut Document, fixed: u64, socket: &str, moving: u64, plug: &str
 }
 
 #[test]
-fn sample_cylinder_accepts_npt_adapters_on_both_ends_across_views() {
-    for size in [150, 300] {
+fn sample_cylinders_keep_their_one_or_two_npt_seats_across_views() {
+    for (variant, sockets) in [
+        ("150", &["left", "right"][..]),
+        ("300", &["left", "right"][..]),
+        ("150-single-end", &["left"][..]),
+        ("300-single-end", &["left"][..]),
+    ] {
         let mut doc = Document::default();
         let cylinder = add(
             &mut doc,
-            &format!("reshiki/gas-sample-cylinder-{size}-1-4-npt"),
+            &format!("reshiki/gas-sample-cylinder-{variant}-1-4-npt"),
         );
-        for port in ["left", "right"] {
+        assert_eq!(solve::ports(graphic(&doc, cylinder)).len(), sockets.len());
+        for &port in sockets {
             let adapter = add(&mut doc, "reshiki/gas-compression-npt-adapter-1-4");
             connect(&mut doc, cylinder, port, adapter, "thread");
             let socket = solve::ports(graphic(&doc, cylinder))
