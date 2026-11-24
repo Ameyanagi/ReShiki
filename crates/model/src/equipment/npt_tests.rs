@@ -43,6 +43,10 @@ fn npt_requires_the_same_thread_family_nominal_size_and_opposite_gender() {
     }
     assert_eq!(socket.size(), "1/4 in NPT");
     assert_eq!(socket.diameter(), 13.716);
+    let pilot = port(PlugFamily::Npt, 3.175, F);
+    assert!(solve::mates(&pilot, &port(PlugFamily::Npt, 3.175, M)));
+    assert_eq!(pilot.size(), "1/8 in NPT");
+    assert_eq!(pilot.diameter(), 10.287);
     assert_eq!(
         port(PlugFamily::Compression, 6.35, Gender::F).diameter(),
         6.35

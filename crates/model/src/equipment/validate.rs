@@ -717,9 +717,9 @@ fn joint(
         if !(size_mm.is_finite() && *size_mm > 0.) {
             return Err(format!("{owner} needs a positive size."));
         }
-        if *family == PlugFamily::Npt && *size_mm != 6.35 {
+        if *family == PlugFamily::Npt && !matches!(*size_mm, 3.175 | 6.35) {
             return Err(format!(
-                "{owner} supports only 1/4 in NPT: use nominal size_mm 6.35."
+                "{owner} supports 1/8 and 1/4 in NPT: use nominal size_mm 3.175 or 6.35."
             ));
         }
         if let Some(depth) = insertion_mm {

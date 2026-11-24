@@ -389,6 +389,9 @@ static FILES: &[Source] = piece_files![
     "gas-ball-valve-1-4",
     "gas-needle-valve-1-8",
     "gas-needle-valve-1-4",
+    "gas-bellows-shutoff-valve-1-4",
+    "gas-bellows-shutoff-valve-3-8",
+    "gas-bellows-shutoff-valve-1-2",
     "gas-check-valve-1-8",
     "gas-check-valve-1-4",
     "gas-safety-relief-1-4-npt",
@@ -403,6 +406,7 @@ static FILES: &[Source] = piece_files![
     "gas-gauge-tee-1-4",
     "gas-compression-npt-adapter-1-8",
     "gas-compression-npt-adapter-1-4",
+    "gas-compression-npt-adapter-1-4-to-1-8",
     "keck-clip-10",
     "boss-head",
 ];
