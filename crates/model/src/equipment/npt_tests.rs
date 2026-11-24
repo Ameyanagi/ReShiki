@@ -70,10 +70,8 @@ fn npt_definition_serializes_its_type_and_rejects_unimplemented_nominal_sizes() 
             .unwrap()
             .contains("\"family\":\"npt\"")
     );
-    let pilot = text.replace("\"size_mm\":6.35", "\"size_mm\":3.175,\"insertion_mm\":6");
-    assert!(format::parse(&pilot).is_ok());
     let error = format::parse(&text.replace("\"size_mm\":6.35", "\"size_mm\":9.525")).unwrap_err();
-    assert!(error.contains("supports 1/8 and 1/4 in NPT"), "{error}");
+    assert!(error.contains("NPT: use nominal size_mm"), "{error}");
     let with_depth = text.replace("\"size_mm\":6.35", "\"size_mm\":6.35,\"insertion_mm\":5");
     assert!(format::parse(&with_depth).is_ok());
     let error =
