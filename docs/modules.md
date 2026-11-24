@@ -72,6 +72,7 @@ explains how the crates and modules fit together.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
+- `src/app/equipment/bend.rs`: Direct manipulation for rigid tube bends.
 - `src/app/equipment/cut_length.rs`: Exact numeric inputs for tube lengths.
 - `src/app/equipment/parts_list.rs`: Insert the equipment inventory as native table cells with editable text.
 - `src/app/equipment_authoring.rs`: A detached equipment draft, measured and reviewed on the ordinary canvas.
@@ -227,6 +228,7 @@ explains how the crates and modules fit together.
 - `src/canvas/input/press.rs`: Mouse presses on the paper
 - `src/canvas/input/release.rs`: Pointer releases
 - `src/canvas/input/touch.rs`: Touch ownership and gestures, using the ordinary mouse paths for editing.
+- `src/canvas/input/tube_bend.rs`: Pointer ownership only while the rotating leg is being dragged.
 - `src/canvas/layered.rs`: Retain the canvas program's geometry order across vector and raster layers.
 - `src/canvas/markers.rs`: Selection decorations in world coordinates, retained with the current scene.
 - `src/canvas/models3d.rs`: 3D models on the paper (#386)
@@ -763,10 +765,12 @@ explains how the crates and modules fit together.
 - `crates/model/src/equipment/parts_list.rs`: A report of placed equipment, with actual cut lengths and endpoint seats.
 - `crates/model/src/equipment/placed.rs`: Pieces placed in a drawing.
 - `crates/model/src/equipment/plan.rs`: The paint plan
+- `crates/model/src/equipment/plan/flexible_tube.rs`: Flexible tubing and optional rigid tube-adapter ends share the same route.
 - `crates/model/src/equipment/revise.rs`: Moving placed pieces to another revision of their definition, as a library offers it.
 - `crates/model/src/equipment/solve.rs`: Seats join the joints and holds of placed pieces.
 - `crates/model/src/equipment/solve/adjust.rs`: Movable parts.
 - `crates/model/src/equipment/solve/hose.rs`: Hoses.
+- `crates/model/src/equipment/tube_bend.rs`: Per-instance circular bends in local millimetres.
 - `crates/model/src/equipment/validate.rs`: Checks the schema cannot express
 - `crates/model/src/erasing.rs`: Erase the geometry crossed by a pointer stroke, including between motion events.
 - `crates/model/src/fischer.rs`: Explicit Fischer projections

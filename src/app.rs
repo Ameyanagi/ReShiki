@@ -588,6 +588,7 @@ impl App {
         self.tab.file_epoch = self.next_epoch();
         self.tab.stereo_notes.clear();
         self.tab.equipment_authoring = None;
+        self.tab.tube_bend = None;
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
         self.tab.mapping.clear_pending();
@@ -1103,6 +1104,9 @@ impl App {
         focus_drawing()
     }
     fn display_document(&self) -> &Document {
+        if let Some(preview) = self.tube_bend_preview() {
+            return preview;
+        }
         if let Some(preview) = self
             .tab
             .equipment_authoring
@@ -1582,8 +1586,9 @@ impl App {
                 self.updates.open,
                 self.tab.atom_text.is_some(),
                 self.inspector_open
-                    && ((self.inspector_tab == InspectorTab::DrawingStyle
-                        && self.tab.styles.editor.is_some())
+                    && (self.tube_bend_active()
+                        || (self.inspector_tab == InspectorTab::DrawingStyle
+                            && self.tab.styles.editor.is_some())
                         || (self.inspector_tab == InspectorTab::Properties
                             && self.requested_molecular_properties())
                         || self.inspector_tab == InspectorTab::Icons)

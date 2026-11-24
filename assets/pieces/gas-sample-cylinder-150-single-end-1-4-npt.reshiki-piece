@@ -1,0 +1,221 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/gas-sample-cylinder-150-single-end-1-4-npt",
+  "revision": 1,
+  "family": "gas-sample-cylinder",
+  "variant": {
+    "capacity": "150 mL",
+    "connection": "1/4 in female NPT",
+    "material": "304L stainless steel",
+    "reference": "Swagelok 304L-05SF4-150"
+  },
+  "names": {
+    "en": "Single-ended sample cylinder, 150 mL, 1/4 in NPT"
+  },
+  "category": "vessel",
+  "keywords": [
+    "sample cylinder",
+    "sampling cylinder",
+    "single-ended",
+    "304L",
+    "stainless steel",
+    "150 mL",
+    "NPT",
+    "1/4 in",
+    "Swagelok",
+    "304L-05SF4-150",
+    "gas line",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "cylinder-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-62 -13.5H-46C-41 -13.5 -34 -25.4 -22 -25.4H60.8C61.46 -25.4 62 -24.86 62 -24.2V24.2C62 24.86 61.46 25.4 60.8 25.4H-22C-34 25.4 -41 13.5 -46 13.5H-62Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "color": [
+        207,
+        216,
+        223
+      ],
+      "depth": 5
+    },
+    {
+      "id": "cylinder-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-46 -10C-41 -10 -34 -20 -22 -20H59.6V-10H-22C-34 -10 -41 -5 -46 -5Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "color": [
+        238,
+        242,
+        245
+      ],
+      "depth": 6,
+      "style": "shaded"
+    },
+    {
+      "id": "cylinder-lower-reflection",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-46 7C-41 7 -34 14 -22 14H59.6V21H-22C-34 21 -41 10 -46 10Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "color": [
+        177,
+        192,
+        204
+      ],
+      "depth": 6,
+      "style": "shaded"
+    },
+    {
+      "id": "cylinder-outer-profile",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-62 -6.858V-13.5H-46C-41 -13.5 -34 -25.4 -22 -25.4H60.8C61.46 -25.4 62 -24.86 62 -24.2V24.2C62 24.86 61.46 25.4 60.8 25.4H-22C-34 25.4 -41 13.5 -46 13.5H-62V6.858",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 7
+    },
+    {
+      "id": "female-npt-mouth-rims",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-62 -6.858H-59.6M-62 6.858H-59.6M-59.6 -13.5V-8.5M-59.6 8.5V13.5",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 8
+    },
+    {
+      "id": "section-closed-end-shell",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-62 -13.5H-46C-41 -13.5 -34 -25.4 -22 -25.4H60.8C61.46 -25.4 62 -24.86 62 -24.2V24.2C62 24.86 61.46 25.4 60.8 25.4H-22C-34 25.4 -41 13.5 -46 13.5H-62V6.858L-46 6.358C-40 6.358 -32 23 -22 23H58.4C59.06 23 59.6 22.46 59.6 21.8V-21.8C59.6 -22.46 59.06 -23 58.4 -23H-22C-32 -23 -40 -6.358 -46 -6.358L-62 -6.858Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "color": [
+        207,
+        216,
+        223
+      ]
+    },
+    {
+      "id": "section-wall-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-19 -24.8L-17.8 -23.6M-19 24.8L-20.2 23.6M-11 -24.8L-9.8 -23.6M-11 24.8L-12.2 23.6M-3 -24.8L-1.8 -23.6M-3 24.8L-4.2 23.6M5 -24.8L6.2 -23.6M5 24.8L3.8 23.6M13 -24.8L14.2 -23.6M13 24.8L11.8 23.6M21 -24.8L22.2 -23.6M21 24.8L19.8 23.6M29 -24.8L30.2 -23.6M29 24.8L27.8 23.6M37 -24.8L38.2 -23.6M37 24.8L35.8 23.6M45 -24.8L46.2 -23.6M45 24.8L43.8 23.6M53 -24.8L54.2 -23.6M53 24.8L51.8 23.6M-56 -12.4L-52 -8.4M-56 12.4L-52 8.4M-30.6 -23.4L-29.4 -21.5M-30.6 23.4L-29.4 21.5M60.2 -18L61.4 -16.8M60.2 -10L61.4 -8.8M60.2 -2L61.4 -0.8M60.2 6L61.4 7.2M60.2 14L61.4 15.2",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "section-female-npt-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-59.5 -6.7799L-58.3 -7.7799M-56.5 -6.6861L-55.3 -7.6861M-53.5 -6.5924L-52.3 -7.5924M-50.5 -6.4986L-49.3 -7.4986M-59.5 6.7799L-58.3 7.7799M-56.5 6.6861L-55.3 7.6861M-53.5 6.5924L-52.3 7.5924M-50.5 6.4986L-49.3 7.4986",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    }
+  ],
+  "joints": [
+    {
+      "id": "left",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 6.35,
+      "insertion_mm": 8,
+      "at": [
+        -62.0,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "left",
+      "at": [
+        -62.0,
+        0
+      ]
+    }
+  ]
+}

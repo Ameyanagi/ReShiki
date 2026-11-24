@@ -48,6 +48,7 @@ impl std::fmt::Display for Filter {
 
 #[derive(Debug, Clone)]
 pub enum Action {
+    Bend(bend::Action),
     Search(String),
     Category(Filter),
     /// Arm the piece with this key (`id@revision#hash`).
@@ -219,6 +220,12 @@ fn hose_text(doc: &Document, barbs: &[solve::Port]) -> String {
 /// "Tilt: 25°", "Valve: Open", "Liquid level: 40 %": a parameter of the
 /// piece `g` at `value`; its current value when `value` is `None`.
 pub(crate) fn value_text(g: &Graphic, param: &str, value: Option<&Value>) -> String {
+    if param == adjust::ROUTE_END_LENGTH_PARAM {
+        return match value {
+            Some(Value::Number(length)) => format!("Straight leg {length:.2} mm"),
+            _ => "Straight leg".into(),
+        };
+    }
     let Some((piece, d)) = g.piece.as_ref().and_then(|p| Some((p, p.linked.as_ref()?))) else {
         return String::new();
     };
@@ -423,6 +430,7 @@ impl App {
 
     pub(super) fn equipment_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::Bend(action) => return self.tube_bend_action(action),
             Action::Search(query) => self.equipment.query = query,
             Action::Category(filter) => self.equipment.category = filter,
             Action::Repeat(on) => self.equipment.repeat = on,
@@ -1164,6 +1172,13 @@ impl App {
             .collect();
         let (heading, detail) = match pieces.as_slice() {
             [] => return None,
+            [(_, piece, d)] if piece.tube_route.is_some() => (
+                title(d).to_owned(),
+                d.variant.get("tube_od").map_or_else(
+                    || "Custom bends".to_owned(),
+                    |size| format!("Custom bends · {size}"),
+                ),
+            ),
             // A library piece names its revision, so the one exported or
             // updated is plain.
             [(_, _, d)] if d.id.starts_with("reshiki/") => (title(d).to_owned(), size(d)),
@@ -1201,17 +1216,27 @@ impl App {
                     body = body.push(text(name(d)).size(12));
                 }
                 for param in &d.params {
+                    if piece.tube_route.is_some()
+                        && d.tube_spec.as_ref().map_or_else(
+                            || matches!(param, Param::Range { unit: Unit::Mm, .. }),
+                            |spec| spec.length.params.iter().any(|id| id == param.id()),
+                        )
+                    {
+                        continue;
+                    }
                     if let Some(current) = values.get(param.id())
                         && let Some(control) = self.piece_param(g, param, current)
                     {
                         body = body.push(control);
                     }
                 }
-                if d.tube_spec
-                    .as_ref()
-                    .is_some_and(|spec| spec.length.params.len() > 1)
+                let show_cut_length = piece.tube_route.is_some()
+                    || d.tube_spec
+                        .as_ref()
+                        .is_some_and(|spec| spec.length.params.len() > 1);
+                if show_cut_length
                     && let Ok(Some(length)) =
-                        reshiki::equipment::parts_list::cut_length_mm(d, &values)
+                        reshiki::equipment::parts_list::graphic_cut_length_mm(g)
                 {
                     body = body.push(
                         text(format!("Cut length {length:.2} mm"))
@@ -1329,6 +1354,7 @@ impl App {
     }
 }
 
+pub(super) mod bend;
 mod cut_length;
 mod parts_list;
 pub(super) use cut_length::Draft as CutLengthDraft;

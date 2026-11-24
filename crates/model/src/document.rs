@@ -343,6 +343,8 @@ pub const CAPTION_PLACES: u32 = 40;
 /// figure panels and lasting row, column and grid layouts; catalytic cycles;
 /// lab equipment pieces with their embedded definitions; editable chemistry tables.
 pub const DRAWING_ELEMENTS: u32 = 40;
+/// Editable circular bends on placed compression tubing.
+pub const TUBE_BENDS: u32 = 41;
 
 /// The newest document format this build reads. Native output uses version 30
 /// unless a custom reaction-label gap requires version 31, ORTEP settings
@@ -356,7 +358,8 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// on lines, corner radii, gradient and see-through fills, glows, a
 /// Reference or Illustration molecule or arrow, color by origin settings, figure panels,
 /// lasting layouts, arrow bodies, arcs, callout leaders, condition icons, catalytic
-/// cycles or equipment pieces require version 40.
+/// cycles or equipment pieces require version 40. Custom compression-tube
+/// routes require version 41.
 /// Optional atom-label settings, including steroid α/β display, retain this
 /// version; older readers may ignore those presentation preferences.
 /// Optional per-highlight style overrides belong to version 40's highlight
@@ -398,7 +401,8 @@ pub const DRAWING_ELEMENTS: u32 = 40;
 /// | 38 | Property captions linked to their molecules (#1175). |
 /// | 39 | Names in property captions: a name line and custom names. |
 /// | 40 | Property-caption decimal places and compound-number metadata; drawing styles, object purpose, color by origin, panels and lasting layouts, arrow bodies, callout leaders, condition icons, cycles and equipment. |
-pub const VERSION: u32 = 40;
+/// | 41 | Custom compression-tube routes with editable circular bends. |
+pub const VERSION: u32 = TUBE_BENDS;
 
 /// Bytes of text in one annotation. Layout time grows faster than the text.
 pub const MAX_ANNOTATION_TEXT: usize = 64 * 1024;
@@ -675,7 +679,13 @@ impl Document {
     /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
         use crate::graphics::{GraphicKind, LinePattern};
-        if !self.compound_numbers.is_empty() {
+        if self.graphics.iter().any(|g| {
+            g.piece
+                .as_ref()
+                .is_some_and(|piece| piece.tube_route.is_some())
+        }) {
+            TUBE_BENDS
+        } else if !self.compound_numbers.is_empty() {
             // Shared format 40: unknown optional metadata may flatten to text.
             CAPTION_PLACES
         } else if self

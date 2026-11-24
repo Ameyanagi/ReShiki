@@ -18,6 +18,10 @@ pub(in crate::canvas) struct Touch {
 }
 
 impl Touch {
+    pub(super) fn owns_mouse(&self) -> bool {
+        self.mouse_down && !self.navigating && self.fingers.len() == 1
+    }
+
     pub(super) fn deadline(&self) -> Option<Instant> {
         self.pending.map(|(_, pressed)| pressed + LONG_PRESS)
     }
@@ -118,7 +122,7 @@ impl MoleculeCanvas<'_> {
                     .position(|(finger, _)| *finger == id)?;
                 let mut events = Vec::new();
                 if matches!(event, touch::Event::FingerLost { .. })
-                    && state.equipment_trial.is_some()
+                    && (state.equipment_trial.is_some() || state.tube_bend_capture.is_some())
                 {
                     let action = Self::cancel_touch_edit(state);
                     state.touch.fingers.remove(index);
@@ -173,6 +177,12 @@ impl MoleculeCanvas<'_> {
     }
 
     fn cancel_touch_edit(state: &mut State) -> Action<Edit> {
+        let bend = state
+            .tube_bend_capture
+            .take()
+            .map(|capture| Edit::TubeBendAbort {
+                token: capture.token,
+            });
         let trial = state
             .equipment_trial
             .take()
@@ -180,7 +190,8 @@ impl MoleculeCanvas<'_> {
         let erasing = matches!(state.end_gesture(), Some(Gesture::Erase { .. }));
         state.last_click = None;
         state.last_transform_click = None;
-        match trial
+        match bend
+            .or(trial)
             .or_else(|| optimization::cancelled(state))
             .or(erasing.then_some(Edit::EraseEnd))
         {

@@ -68,6 +68,67 @@ fn draw_direction_line(frame: &mut layered::Frame<'_>, from: Point, to: Point) {
 }
 
 impl MoleculeCanvas<'_> {
+    pub(super) fn draw_tube_bend_handle(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        bounds: Rectangle,
+    ) {
+        let Some(bend) = self.tube_bend else {
+            return;
+        };
+        let pivot = self.camera.screen(bend.pivot, bounds);
+        let cross = Path::new(|path| {
+            path.move_to(pivot - Vector::new(6., 0.));
+            path.line_to(pivot + Vector::new(6., 0.));
+            path.move_to(pivot - Vector::new(0., 6.));
+            path.line_to(pivot + Vector::new(0., 6.));
+        });
+        frame.stroke(
+            &cross,
+            Stroke::default().with_width(1.).with_color(ACCENT_STRONG),
+        );
+        frame.fill(&Path::circle(pivot, 3.5), Color::WHITE);
+        frame.fill(&Path::circle(pivot, 2.3), ACCENT_STRONG);
+        let Some(grip) = bend.handle().filter(|_| bend.can_rotate) else {
+            return;
+        };
+        let at = self.camera.screen(grip, bounds);
+        if at.distance(pivot) < 0.01 {
+            return;
+        }
+        let chosen = state
+            .tube_bend_capture
+            .is_some_and(|capture| capture.token == bend.token);
+        let hovered = state
+            .cursor
+            .filter(|point| bounds.contains(*point))
+            .is_some_and(|point| {
+                let local = Point::new(point.x - bounds.x, point.y - bounds.y);
+                bend.hit(self.camera.world(local, bounds), self.camera.world_len(10.))
+            });
+        // A light guide connects the fixed point to a separate hollow grip.
+        // The marker remains on the last visible leg during invalid input.
+        let offset = at - pivot;
+        let length = offset.x.hypot(offset.y);
+        let unit = offset / length;
+        if length > 12. {
+            frame.stroke(
+                &Path::line(pivot + unit * 7., at - unit * 7.),
+                Stroke::default()
+                    .with_width(1.)
+                    .with_color(if chosen || hovered {
+                        ACCENT
+                    } else {
+                        ACCENT.scale_alpha(0.45)
+                    }),
+            );
+        }
+        if chosen || hovered {
+            frame.fill(&Path::circle(at, 9.), ACCENT.scale_alpha(0.12));
+        }
+        draw_handle(frame, at, HandleShape::Ring(6.), chosen || hovered);
+    }
     pub(super) fn draw_model_generation(
         &self,
         frame: &mut layered::Frame<'_>,

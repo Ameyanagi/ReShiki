@@ -104,7 +104,12 @@ pub(in crate::app) fn pass(
 }
 
 /// Lets the view settle (canvas viewport etc.), then saves the screenshot.
-fn snapshot(app: &mut App, renderer: &mut iced::Renderer, size: Size, output: &Path) {
+pub(in crate::app) fn snapshot(
+    app: &mut App,
+    renderer: &mut iced::Renderer,
+    size: Size,
+    output: &Path,
+) {
     let mut tree = Tree::empty();
     for _ in 0..3 {
         let messages = pass(app, renderer, &mut tree, size, None);

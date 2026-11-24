@@ -37,6 +37,9 @@ pub struct PieceRef {
     /// points from one end to the other. Empty draws the definition's line.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub centre_line: Vec<Xy>,
+    /// Rounded bends on one rigid tube, in the piece's physical millimetres.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tube_route: Option<super::tube_bend::Route>,
     /// The definition itself, linked by key when the drawing is read or the
     /// piece is placed.
     #[serde(skip)]
@@ -53,6 +56,7 @@ impl PartialEq for PieceRef {
         self.definition == other.definition
             && self.params == other.params
             && self.centre_line == other.centre_line
+            && self.tube_route == other.tube_route
     }
 }
 
@@ -62,6 +66,7 @@ impl PieceRef {
             definition: key(&definition),
             params: Values::new(),
             centre_line: Vec::new(),
+            tube_route: None,
             linked: Some(definition),
             seated: BTreeSet::new(),
         }
@@ -172,6 +177,7 @@ pub fn graphic_keyed(
         definition: key,
         params: Values::new(),
         centre_line: Vec::new(),
+        tube_route: None,
         linked: Some(definition),
         seated: BTreeSet::new(),
     }));
@@ -287,6 +293,7 @@ pub(crate) fn validate(g: &Graphic) -> Result<(), String> {
         ));
     };
     resolve(d, &piece.params)?;
+    super::tube_bend::validate_piece(g, d)?;
     let (x, y) = (g.axis_x, g.axis_y);
     let (sx, sy) = (x.distance(Point::default()), y.distance(Point::default()));
     let dot = x.x * y.x + x.y * y.y;
@@ -343,7 +350,8 @@ pub fn plan(g: &Graphic) -> Rc<Vec<PlanPath>> {
     let [x, y, o] = [g.axis_x, g.axis_y, g.origin];
     let key: CacheKey = (
         piece.definition.clone(),
-        serde_json::to_string(&(&piece.params, &piece.centre_line)).unwrap_or_default(),
+        serde_json::to_string(&(&piece.params, &piece.centre_line, &piece.tube_route))
+            .unwrap_or_default(),
         [x.x, x.y, y.x, y.y, o.x, o.y].map(f32::to_bits),
         piece.seated.clone(),
     );
@@ -360,6 +368,7 @@ pub fn plan(g: &Graphic) -> Rc<Vec<PlanPath>> {
     instance.values = piece.params.clone();
     instance.seated = piece.seated.clone();
     instance.centre_line = centre_line(d, piece).map_or_else(Vec::new, |l| sampled(&l));
+    instance.tube_route = piece.tube_route.clone();
     let plan: Vec<PlanPath> = paint_plan(&[instance], Settings::default())
         .unwrap_or_default()
         .into_iter()

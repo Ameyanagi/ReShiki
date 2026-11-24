@@ -2,6 +2,7 @@
 //! View and illustration scale never change an item's identity or dimensions.
 use super::eval::{self, Value, Values};
 use super::format::{Definition, HoldKind, Param, TubeLength, TubeMaterial, TubeSpec};
+use super::placed::PieceRef;
 use super::solve::{self, JointRef};
 use crate::{document::Document, graphics::Graphic};
 use serde::Serialize;
@@ -76,17 +77,24 @@ pub fn parts_list(doc: &Document, selection: &[u64]) -> Result<Vec<PartRow>, Str
         .iter()
         .filter(|g| g.piece.is_some() && (selection.is_empty() || selection.contains(&g.id)))
         .map(|g| {
-            let d = g
+            let (piece, d) = g
                 .piece
                 .as_ref()
-                .and_then(|p| p.linked.as_ref())
+                .and_then(|p| Some((p, p.linked.as_ref()?)))
                 .ok_or_else(|| format!("Equipment #{} has no linked definition.", g.id))?;
+            let mut variant = d.variant.clone();
+            if let Some(route) = &piece.tube_route {
+                let count = route.bends.len();
+                let bends = if count == 1 { "bend" } else { "bends" };
+                variant.insert("geometry".into(), format!("{count} custom {bends}"));
+                variant.remove("length");
+            }
             Ok(PartRow {
                 id: g.id,
                 label: label(d, g.id),
                 definition_id: d.id.clone(),
                 name: name(d).to_owned(),
-                variant: d.variant.clone(),
+                variant,
                 tube: tube_row(doc, g.id)?,
                 hose: hose_row(doc, g)?,
             })
@@ -98,6 +106,25 @@ pub fn parts_list(doc: &Document, selection: &[u64]) -> Result<Vec<PartRow>, Str
 /// It never uses graphic bounds, world coordinates or the drawing scale.
 pub fn cut_length_mm(d: &Definition, values: &Values) -> Result<Option<f64>, String> {
     spec(d).map(|s| length(d, values, &s.length)).transpose()
+}
+
+/// The cut length of one placed tube, including its custom route when present.
+pub fn graphic_cut_length_mm(g: &Graphic) -> Result<Option<f64>, String> {
+    let Some(piece) = &g.piece else {
+        return Ok(None);
+    };
+    let d = piece
+        .linked
+        .as_ref()
+        .ok_or("The tube definition is missing.")?;
+    spec(d).map(|s| placed_length(d, piece, s)).transpose()
+}
+
+fn placed_length(d: &Definition, piece: &PieceRef, spec: &TubeSpec) -> Result<f64, String> {
+    match &piece.tube_route {
+        Some(route) => Ok(route.centerline()?.length_mm),
+        None => length(d, &piece.params, &spec.length),
+    }
 }
 
 fn length(d: &Definition, values: &Values, length: &TubeLength) -> Result<f64, String> {
@@ -243,7 +270,7 @@ pub fn tube_row(doc: &Document, id: u64) -> Result<Option<TubeRow>, String> {
         material: spec.material,
         od_mm: spec.od_mm,
         id_mm: spec.id_mm,
-        cut_length_mm: length(d, &piece.params, &spec.length)?,
+        cut_length_mm: placed_length(d, piece, spec)?,
         ends: [
             endpoint(doc, id, &spec.ends[0])?,
             endpoint(doc, id, &spec.ends[1])?,
@@ -252,7 +279,7 @@ pub fn tube_row(doc: &Document, id: u64) -> Result<Option<TubeRow>, String> {
     }))
 }
 
-fn spec(d: &Definition) -> Option<&TubeSpec> {
+pub(super) fn spec(d: &Definition) -> Option<&TubeSpec> {
     d.tube_spec.as_ref().or_else(|| legacy_spec(d))
 }
 

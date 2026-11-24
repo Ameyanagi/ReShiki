@@ -38,6 +38,8 @@ pub struct Instance<'a> {
     pub seated: BTreeSet<String>,
     /// A tube piece's centre line, in the piece's millimetres.
     pub centre_line: Vec<Xy>,
+    /// An edited rigid tube's rounded route in physical millimetres.
+    pub tube_route: Option<super::tube_bend::Route>,
 }
 
 impl<'a> Instance<'a> {
@@ -48,6 +50,7 @@ impl<'a> Instance<'a> {
             transform,
             seated: BTreeSet::new(),
             centre_line: Vec::new(),
+            tube_route: None,
         }
     }
 }
@@ -155,11 +158,191 @@ pub fn paint_plan(group: &[Instance], settings: Settings) -> Result<Vec<PlanPath
     let mut items = Vec::new();
     for (owner, instance) in group.iter().enumerate() {
         let values = resolve(instance.definition, &instance.values)?;
+        if let Some(route) = &instance.tube_route {
+            items.extend(routed_tube(owner, instance, &values, route)?);
+            continue;
+        }
         let evaluated = evaluate(instance.definition, &values)?;
         piece(owner, instance, &evaluated, settings, &mut items)?;
     }
     order(&mut items);
     Ok(items)
+}
+
+/// A rigid tube's physical route replaces its stock shapes. Circular offsets
+/// keep the same wall thickness through each bend in Exterior and Section.
+fn routed_tube(
+    owner: usize,
+    instance: &Instance,
+    values: &Values,
+    route: &super::tube_bend::Route,
+) -> Result<Vec<PlanPath>, String> {
+    let spec = super::parts_list::spec(instance.definition)
+        .ok_or("A routed tube needs its physical tube specification.")?;
+    let centerline = route.centerline()?;
+    let sides = |width: f64| routed_sides(&centerline.segments, width);
+    let (outer_left, outer_right) = sides(spec.od_mm);
+    let mut out = Vec::new();
+    let mut push = |depth, material, color, ink, path: Vec<Seg>| {
+        if !path.is_empty() {
+            out.push(PlanPath {
+                owner,
+                pass: Pass::Body,
+                material,
+                color,
+                ink,
+                style: None,
+                depth,
+                flat_caps: false,
+                path: instance.transform.map(&path),
+            });
+        }
+    };
+    let color = instance
+        .definition
+        .shapes
+        .iter()
+        .find(|shape| shape.material == Material::Metal && shape.role.filled())
+        .and_then(|shape| shape.color);
+    push(
+        0,
+        Material::Metal,
+        color,
+        Ink::Fill,
+        routed_band(&outer_left, &outer_right),
+    );
+    let section =
+        matches!(values.get("view"), Some(super::eval::Value::State(view)) if view == "section");
+    let inner = spec.id_mm.map(sides);
+    if section && let Some((left, right)) = &inner {
+        push(
+            1,
+            Material::Paper,
+            None,
+            Ink::Fill,
+            routed_band(left, right),
+        );
+    }
+    push(
+        2,
+        Material::Ink,
+        None,
+        Ink::Stroke(Weight::Outline),
+        [outer_left.clone(), outer_right.clone()].concat(),
+    );
+    if let Some((inner_left, inner_right)) = &inner {
+        if section {
+            push(
+                2,
+                Material::Ink,
+                None,
+                Ink::Stroke(Weight::Detail),
+                [inner_left.clone(), inner_right.clone()].concat(),
+            );
+        }
+        let mut rims = Vec::new();
+        for (outer, inner) in [(&outer_left, inner_left), (&outer_right, inner_right)] {
+            for (a, b) in [
+                (routed_endpoint(outer, false), routed_endpoint(inner, false)),
+                (routed_endpoint(outer, true), routed_endpoint(inner, true)),
+            ] {
+                if let (Some(a), Some(b)) = (a, b) {
+                    rims.extend([Seg::Move(a), Seg::Line(b)]);
+                }
+            }
+        }
+        push(2, Material::Ink, None, Ink::Stroke(Weight::Detail), rims);
+    }
+    Ok(out)
+}
+
+fn routed_endpoint(path: &[Seg], last: bool) -> Option<Xy> {
+    match if last { path.last() } else { path.first() } {
+        Some(Seg::Move(p) | Seg::Line(p) | Seg::Cubic(_, _, p)) => Some(*p),
+        _ => None,
+    }
+}
+
+pub(super) fn routed_band(left: &[Seg], right: &[Seg]) -> Vec<Seg> {
+    let Some(at) = routed_endpoint(right, false) else {
+        return Vec::new();
+    };
+    let mut out = left.to_vec();
+    out.push(Seg::Line(at));
+    out.extend(right.iter().skip(1).copied());
+    out.push(Seg::Close);
+    out
+}
+
+pub(super) fn routed_sides(
+    segments: &[super::tube_bend::Segment],
+    width: f64,
+) -> (Vec<Seg>, Vec<Seg>) {
+    (
+        routed_side(segments, width / 2., false),
+        routed_side(segments, width / 2., true),
+    )
+}
+
+/// The side on the left of a route, or on its right when traced backwards.
+fn routed_side(segments: &[super::tube_bend::Segment], offset: f64, reverse: bool) -> Vec<Seg> {
+    use super::tube_bend::Segment;
+    let rotate = |p: Xy, angle: f64| {
+        let (sin, cos) = angle.sin_cos();
+        [p[0] * cos - p[1] * sin, p[0] * sin + p[1] * cos]
+    };
+    let mut out = Vec::new();
+    let mut append = |segment: &Segment| match *segment {
+        Segment::Straight { from, to } => {
+            let (from, to) = if reverse { (to, from) } else { (from, to) };
+            let normal = mul(perp(normalize(sub(to, from))), offset);
+            if out.is_empty() {
+                out.push(Seg::Move(add(from, normal)));
+            }
+            out.push(Seg::Line(add(to, normal)));
+        }
+        Segment::Arc {
+            center,
+            from,
+            sweep_rad,
+        } => {
+            let radial = sub(from, center);
+            let (radial, sweep) = if reverse {
+                (rotate(radial, sweep_rad), -sweep_rad)
+            } else {
+                (radial, sweep_rad)
+            };
+            let radius = super::geometry::len(radial);
+            let radial = mul(radial, (radius - sweep.signum() * offset) / radius);
+            if out.is_empty() {
+                out.push(Seg::Move(add(center, radial)));
+            }
+            // Circle offsets remain concentric; only the final paint paths
+            // use the same cubic approximation as authored SVG arc commands.
+            let steps = (sweep.abs() / std::f64::consts::FRAC_PI_2).ceil().max(1.) as usize;
+            let step = sweep / steps as f64;
+            let control = 4. / 3. * (step / 4.).tan();
+            for k in 0..steps {
+                let a = rotate(radial, k as f64 * step);
+                let b = rotate(radial, (k + 1) as f64 * step);
+                out.push(Seg::Cubic(
+                    add(center, add(a, mul(perp(a), control))),
+                    add(center, sub(b, mul(perp(b), control))),
+                    add(center, b),
+                ));
+            }
+        }
+    };
+    if reverse {
+        for segment in segments.iter().rev() {
+            append(segment);
+        }
+    } else {
+        for segment in segments {
+            append(segment);
+        }
+    }
+    out
 }
 
 /// Put a group's paths in paint order: every piece's back layer, then each

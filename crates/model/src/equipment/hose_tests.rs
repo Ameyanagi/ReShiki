@@ -448,6 +448,18 @@ fn dragging_a_metal_hose_end_releases_and_reseats_at_the_internal_stop() {
 }
 
 #[test]
+fn metal_hose_tips_need_enough_straight_length_for_the_compression_stop() {
+    let (doc, hose, ends) = connected_metal_hose();
+    let tip = port(&doc, hose, "a");
+    assert!((tip.contact_length / tip.mm - 18.).abs() < 1e-6);
+    let mut socket = ends[0].clone();
+    socket.insertion = 18. * socket.mm;
+    assert!(solve::mates(&tip, &socket));
+    socket.insertion = 18.1 * socket.mm;
+    assert!(!solve::mates(&tip, &socket));
+}
+
+#[test]
 fn metal_hose_tips_do_not_get_rubber_cuffs_and_free_clicks_leave_room_for_collars() {
     let mut doc = Document::default();
     let d = flexible_metal_hose();
