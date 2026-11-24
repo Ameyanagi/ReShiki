@@ -4224,6 +4224,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "reshiki-optimize"
+version = "0.1.0"
+dependencies = [
+ "cosmolkit",
+ "reshiki-qcdata",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "reshiki-process"
 version = "0.1.0"
 dependencies = [
