@@ -8,6 +8,7 @@ import os
 import plistlib
 import subprocess
 import sys
+import tarfile
 import tempfile
 import tomllib
 import unittest
@@ -28,7 +29,11 @@ from build_release import (
     verify_binary,
     version,
 )
+from check_agent_dependencies import AXTB_LICENSE, AXTB_SOURCE, axtb_locked_source
 from sign_macos import is_macho, private_run
+
+AXTB_REV = "a" * 40
+AXTB_DRIVER = dict(name="axtb-driver", version="0.2.0", source=axtb_locked_source(AXTB_REV))
 
 
 class ReleaseTests(unittest.TestCase):
@@ -262,6 +267,34 @@ class ReleaseTests(unittest.TestCase):
             )
             self.assertIn("Version 2.0, January 2004", (destination / "LICENSE-APACHE").read_text())
 
+    def test_xtb_notices_use_feature_metadata_after_default_audits(self):
+        root = Path(__file__).resolve().parents[1]
+        default = {"packages": []}
+        xtb = {"packages": [AXTB_DRIVER]}
+        target = "aarch64-unknown-linux-gnu"
+        destination = Path("Licenses")
+        with (
+            patch(
+                "build_release.run",
+                side_effect=[
+                    subprocess.CompletedProcess([], 0, stdout=json.dumps(metadata))
+                    for metadata in (default, xtb)
+                ],
+            ) as run,
+            patch("build_release.verify_agent_dependencies") as dependencies,
+            patch("geometry_source.verify") as geometry,
+            patch("build_release.write_notices") as write,
+        ):
+            notices(destination, ("xtb",), target=target)
+        command = ["cargo", "metadata", "--format-version", "1", "--locked"]
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [command, command + ["--features", "xtb", "--filter-platform", target]],
+        )
+        dependencies.assert_called_once_with(root, default)
+        geometry.assert_called_once_with(root, cargo_metadata=default)
+        write.assert_called_once_with(root, destination, xtb)
+
     @staticmethod
     def pe_image(machine):
         header = bytearray(64)
@@ -279,6 +312,7 @@ class ReleaseTests(unittest.TestCase):
             patch("build_release.platform.machine", return_value="AMD64"),
             patch("build_release.target_directory", return_value=root / "target"),
             patch("build_release.notices"),
+            patch("build_release.cargo_metadata", return_value={"packages": [AXTB_DRIVER]}),
             patch(
                 "build_inchi_helper.dependency",
                 return_value={"name": "cosmolkit-inchi", "version": "0.3.0"},
@@ -296,6 +330,7 @@ class ReleaseTests(unittest.TestCase):
             patch("build_release.verify_archive"),
             patch("build_release.run") as run,
             patch("sys.argv", ["build_release.py", "--target", target]),
+            patch.dict(os.environ, RELEASE_TAG="v1.2.3"),
             contextlib.redirect_stdout(io.StringIO()),
         ):
             main()
@@ -311,9 +346,15 @@ class ReleaseTests(unittest.TestCase):
             elf[:6] = b"\x7fELF\x02\x01"
             elf[18:20] = (62).to_bytes(2, "little")
             (build / "reshiki").write_bytes(elf)
+            (root / "Cargo.lock").write_text(
+                "[[package]]\n"
+                + "".join(f'{key} = "{value}"\n' for key, value in AXTB_DRIVER.items()),
+                encoding="utf-8",
+            )
             run = self.package(root, target, "Linux")
             packaged = root / "build/release-bundles/reshiki-1.2.3-linux-x64/reshiki"
             symbols = build / "reshiki.debug"
+            self.assertEqual(run.call_args_list[0].args[0][-2:], ["--features", "xtb"])
             self.assertEqual(
                 [call.args[0] for call in run.call_args_list[1:]],
                 [
@@ -321,6 +362,24 @@ class ReleaseTests(unittest.TestCase):
                     ["objcopy", "--strip-all", f"--add-gnu-debuglink={symbols}", packaged],
                 ],
             )
+            name = "reshiki-1.2.3-linux-x64"
+            with tarfile.open(root / "dist/releases" / f"{name}.tar.gz") as stream:
+                metadata = json.loads(stream.extractfile(f"{name}/build.json").read())
+                readme = stream.extractfile(f"{name}/README.txt").read().decode()
+            self.assertEqual(
+                metadata["xtb"],
+                dict(
+                    included=True,
+                    engine="axtb",
+                    version=AXTB_DRIVER["version"],
+                    license=AXTB_LICENSE,
+                    source=AXTB_SOURCE,
+                    rev=AXTB_REV,
+                    source_archive="reshiki-1.2.3-source.tar.gz",
+                ),
+            )
+            self.assertIn("reshiki-1.2.3-source.tar.gz", readme)
+            self.assertIn("https://github.com/Ameyanagi/ReShiki/releases/tag/v1.2.3", readme)
 
     def test_windows_arm_package_uses_rust_target_under_x64_python(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -355,6 +414,8 @@ class ReleaseTests(unittest.TestCase):
                 metadata = json.loads(stream.read("reshiki-1.2.3-windows-arm64/build.json"))
                 self.assertEqual(metadata["architecture"], "arm64")
                 self.assertEqual(metadata["rust_target"], target)
+                self.assertEqual(metadata["xtb"], {"included": False})
+                self.assertNotIn("axtb", stream.read(f"{package.stem}/README.txt").decode())
                 self.assertNotIn("chemistry_architecture", metadata)
                 self.assertFalse(any("chemistry/" in name for name in stream.namelist()))
                 self.assertFalse(
@@ -389,7 +450,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual([entry["name"] for entry in manifest["bin"]], ["reshiki-inchi-helper"])
         script = (root / "scripts/build_release.py").read_text(encoding="utf-8")
         self.assertEqual(script.count('"--bin"'), 1)
-        self.assertIn('"--bin", "reshiki", "--target"', script)
+        self.assertRegex(script, r'"--bin",\s*"reshiki",\s*"--target"')
 
     def test_release_profile_strips_symbols_into_a_separate_file(self):
         root = Path(__file__).resolve().parents[1]
@@ -438,7 +499,7 @@ class ReleaseTests(unittest.TestCase):
         ):
             self.assertIn(path, workflow)
         script = (root / "scripts/build_release.py").read_text(encoding="utf-8")
-        self.assertIn('"cargo", "build", "--profile", "dist", "--locked"', script)
+        self.assertRegex(script, r'"cargo",\s*"build",\s*"--profile",\s*"dist",\s*"--locked"')
         self.assertIn('target_directory() / target / "dist"', script)
 
     def test_each_npm_package_ships_only_its_own_webassembly(self):
@@ -513,6 +574,11 @@ class ReleaseTests(unittest.TestCase):
         check_tag(f"v{version()}")
         with self.assertRaisesRegex(ValueError, "must match"):
             check_tag("v0.0.0-unrelated")
+        nightly = "0.9.1-nightly.20260929.36501221724.1"
+        with patch("build_release.version", return_value=nightly):
+            check_tag(f"nightly-{nightly}")
+            with self.assertRaisesRegex(ValueError, "must match"):
+                check_tag(f"v{nightly}")
 
     def test_archive_name_preserves_all_version_components(self):
         with tempfile.TemporaryDirectory() as temporary:

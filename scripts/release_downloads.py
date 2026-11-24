@@ -49,7 +49,7 @@ def filenames(version: str) -> list[str]:
         for _, _, platform, installer, portable in platforms(version)
         for suffix in (installer, portable)
         if suffix
-    ]
+    ] + [f"reshiki-{version}-source.tar.gz"]
 
 
 def verify_assets(directory: Path, version: str, windows_signing: str = "unsigned") -> list[str]:
@@ -153,6 +153,12 @@ def prepare(directory: Path, repository: str, tag: str, windows_signing: str = "
         )
         archive = link(stem + portable, "ZIP" if portable == ".zip" else "tar.gz")
         lines.append(f"| {system} | {architecture} | {installation} | {archive} |")
+    lines.extend(
+        [
+            "",
+            link(f"reshiki-{version}-source.tar.gz", "Source code with xTB (tar.gz)"),
+        ]
+    )
     if len(platforms(version)) < len(PLATFORMS):
         lines.extend(
             [

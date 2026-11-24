@@ -448,13 +448,17 @@ class HelperTests(unittest.TestCase):
                 patch("build_release.notices") as notices,
             ):
 
-                def write_notice(destination):
+                def write_notice(destination, features, *, target):
+                    self.assertEqual(features, ())
+                    self.assertIsNone(target)
                     destination.mkdir(parents=True)
                     (destination / "NOTICE").write_text("Native licenses")
 
                 notices.side_effect = write_notice
                 build_release.mac_bundle(app, "debug")
-                notices.assert_called_once_with(app / "Contents/Resources/Licenses")
+                notices.assert_called_once_with(
+                    app / "Contents/Resources/Licenses", (), target=None
+                )
             with (
                 patch(
                     "sign_macos.signing_keychain",

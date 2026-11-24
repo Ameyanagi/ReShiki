@@ -234,6 +234,7 @@ class WindowsSigningWorkflowTests(unittest.TestCase):
                     result="success", outputs=SimpleNamespace(windows_signing_enabled=enabled)
                 ),
                 build=SimpleNamespace(result="success"),
+                source=SimpleNamespace(result="success"),
                 sign=SimpleNamespace(result="success"),
                 sign_windows=SimpleNamespace(result=signing_result),
                 reference=SimpleNamespace(result="success"),
@@ -243,7 +244,7 @@ class WindowsSigningWorkflowTests(unittest.TestCase):
                     evaluate(gate, github=SimpleNamespace(event_name="push"), needs=needs), expected
                 )
             if expected:
-                for required in ("validate", "build", "sign", "reference"):
+                for required in ("validate", "build", "source", "sign", "reference"):
                     getattr(needs, required).result = "failure"
                     self.assertFalse(
                         evaluate(gate, github=SimpleNamespace(event_name="push"), needs=needs)

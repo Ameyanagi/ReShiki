@@ -50,7 +50,7 @@ class ReleaseDownloadTests(unittest.TestCase):
 
     def test_stable_and_nightly_tables_link_every_verified_asset(self):
         # Nightlies have no Intel macOS DMG or ZIP.
-        for tag, count in (("v0.9.1", 10), ("nightly-0.9.1-nightly.20260929.36501221724.1", 8)):
+        for tag, count in (("v0.9.1", 11), ("nightly-0.9.1-nightly.20260929.36501221724.1", 9)):
             with self.subTest(tag=tag):
                 for path in self.directory.iterdir():
                     path.unlink()
@@ -64,10 +64,28 @@ class ReleaseDownloadTests(unittest.TestCase):
                     len((self.directory / "SHA256SUMS").read_text().splitlines()), count
                 )
                 self.assertEqual(len(filenames(version)), count)
-                self.assertEqual("macos-x64" in notes, count == 10)
-                self.assertEqual("not made for Intel Macs" in notes, count == 8)
+                self.assertEqual("macos-x64" in notes, count == 11)
+                self.assertEqual("not made for Intel Macs" in notes, count == 9)
+                self.assertIn("Source code with xTB", notes)
                 self.assertIn("Windows and Linux downloads are unsigned", notes)
                 self.assertIn("/releases/latest", notes)
+
+    def test_source_archive_and_checksum_are_required_and_verified(self):
+        for tag in ("v0.9.1", "nightly-0.9.1-nightly.20260929.36501221724.1"):
+            version = release_version(tag)
+            source = self.directory / f"reshiki-{version}-source.tar.gz"
+            for missing in (source, Path(str(source) + ".sha256")):
+                with self.subTest(tag=tag, missing=missing.name):
+                    for path in self.directory.iterdir():
+                        path.unlink()
+                    self.assets(version)
+                    missing.unlink()
+                    with self.assertRaisesRegex(ValueError, "missing=.*source\\.tar\\.gz"):
+                        prepare(self.directory, "Ameyanagi/ReShiki", tag)
+            self.assets(version)
+            source.write_bytes(b"damaged source archive")
+            with self.assertRaisesRegex(ValueError, "checksum mismatch: .*source\\.tar\\.gz"):
+                prepare(self.directory, "Ameyanagi/ReShiki", tag)
 
     def test_a_nightly_with_an_intel_mac_package_cannot_publish(self):
         version = "0.9.1-nightly.20260929.36501221724.1"
