@@ -380,58 +380,84 @@ it again on its side.
 
 ## Documents
 
-Owned by Phase 2a; implemented in `reshiki-model` in a follow-up pull request.
+Implemented in `crates/model/src/science.rs` (Phase 2a, part 2). The user interface, the worker
+and the agent API call the functions named here.
 
-- **Storage apart from the drawing.** `Document` gains `science: Science` (skipped when empty)
-  with `frames: Vec<Arc<Frame>>`, `results: Vec<Arc<CalcResult>>` and
-  `attachments: Vec<Attachment>`. Frames and results are immutable; an edit or an optimization
-  adds a new frame.
-- **Attachments, not frame hashes, link to the drawing.** Two copies of one geometry hash
-  alike, so the hash cannot say which molecule a frame belongs to. An
-  `Attachment { id, frame: FrameHash, atoms: Vec<Option<u64>>, baseline: String }` has its own
-  document object ID (from the shared ID counter), its own live map from frame atoms to drawing
-  atoms, and the drawing fingerprint of the mapped atoms when it was made (element, charge,
-  isotope, bonds, and the molecule's full membership, so an added atom also counts). Results
-  are shown through attachments; `Model3d` gains an optional attachment ID to display a
-  scientific frame, and its own `f32` atoms stay the display copy.
-- **Staleness.** An attachment is current when every mapped atom still exists, the molecule has
-  no other atoms, and the fingerprint matches its baseline. Deleting a mapped atom clears that
-  entry in the same edit, so a reused ID never re-links. A stale attachment's results stay
-  readable and greyed ("The molecule changed after this calculation"). A worker reply is
-  committed only through the agent API's revision-checked commit, bound to the attachment,
-  input frame hash, task and settings it was launched with; a reply after Undo or an edit is
-  discarded.
-- **Native version.** A new constant (the next free document version when this lands) is the
-  floor for any document whose `science` is non-empty. One function stamps the version for
-  every route that serializes a document with science: `file_json` (through `current()`),
-  clipboard payloads (`payload::encode`), recovery drafts and templates. Older ReShiki reads the
-  version before parsing and asks the user to update, so it cannot open such a document and
-  save it without the data. Drawing-only representations (the clipboard's drawing flavours,
-  images) strip `science` and every attachment reference instead. Documents without science
-  keep their current version; the floor drops only when the last science field and reference
-  are gone. Tests cover older-reader rejection through each route, legacy reads, save and
-  reopen in a build without xTB, copy and paste, recovery, and removing the final result.
-- **Admission.** Attach, native open, recovery, clipboard paste, worker replies and import share
-  one admission check: bounded reads (native open reads at most `MAX_NATIVE_BYTES`, to be set
-  with the integration), compact-array decoding limits, `validate` for every frame and result,
-  and a document science budget.
-- **Undo history.** History snapshots clone the `Arc`s, never the payloads. The history counts
-  each distinct payload's `heap_bytes()` once while any snapshot or the live document holds it
-  (tracked by pointer), and releases it only when the last holder goes; snapshot-owned
-  containers are counted per snapshot. A hard science budget (256 MiB of `heap_bytes()`) covers
-  the live document and the retained history together and is enforced at attach time, before
-  the minimum undo depth applies; the agent API's quotas count the same bytes.
-- **Saved size.** Each result is written as `for_file(budget, pinned)`
-  ([File size](#file-size)). Save warns once when a document's results exceed 5 MB and offers
-  "Make lighter", which clears `keep_full` everywhere.
+- **Storage apart from the drawing.** `Document::science: Science` (absent from the file when
+  empty) holds `frames: Vec<Arc<Frame>>`, `results: Vec<Arc<CalcResult>>` and
+  `attachments: Vec<Attachment>`. Frames and results are immutable; an edit, an optimization or
+  "Keep full results" makes a new one. A frame is stored once per hash.
+- **Attachments, not frame hashes, link to the drawing.** Two copies of one geometry hash alike,
+  so the hash cannot say which molecule a frame belongs to. An
+  `Attachment { id, frame: FrameHash, atoms: Vec<Option<u64>>, baseline: String }` maps each frame
+  atom to its drawing atom (`None` for hydrogens the drawing does not show) and keeps the
+  chemistry fingerprint of the mapped atoms when the frame was made: the same digest that marks
+  3D models out of date (element, charge, isotope, radicals, hydrogens, bonds and perceived
+  stereo, in frame order, so the atom count counts too). Attachment IDs are unique among the
+  document's attachments; they are not drawing object IDs, so selection, hit testing and ID
+  remapping of drawing objects never meet them. A result is shown through the attachments of its
+  own frame or its input frame. `Model3d` is unchanged: applying a geometry writes the model's
+  `f32` display coordinates, and its own fingerprint keeps deciding when the model is out of date.
+- **Starting a calculation.** `science::launch(doc, atom, charge, multiplicity)` builds the input
+  frame from the molecule's 3D model (model atoms in model order, then the model's added
+  hydrogens) and returns a `Launch { frame, atoms, baseline }` without changing the document.
+  `drawn_state(doc, atom)` gives the charge and multiplicity the drawing implies. When the model
+  still shows an attached frame exactly (an applied optimization), the launch reuses that `f64`
+  frame, so chained calculations keep full precision. A missing, out-of-date or periodic model is
+  an error.
+- **Staleness.** `Attachment::freshness(doc)` is `Current` when the mapped atoms still exist, form
+  one whole molecule with no other atoms, and match the baseline; otherwise `Stale`. Every
+  transaction runs `science::prune`: deleted atoms leave their map entries in the same edit, so a
+  reused ID never links again, and attachments without drawing atoms go, with the results and
+  frames nothing else needs. Undo restores the snapshot, and with it the fresh state.
+- **Storing a result.** `science::attach(doc, &launch, new_frames, result)` stores the launch
+  frame, the result's new frames, the result and the attachments (input frame and, when its atoms
+  match, the result frame) as one edit, after validating everything. It returns
+  `Attached { freshness, attachment }`: the launch's baseline is the revision the reply is checked
+  against, so a reply for a molecule edited since launch is stored `Stale` (greyed, with
+  Recalculate) and becomes current if Undo returns to the launch state; a reply for a deleted
+  molecule is refused (`Gone`). The caller commits the edit to history; the agent API commits it
+  through its revision-checked store commit.
+- **Applying a geometry.** `science::apply_geometry(doc, attachment)` moves the molecule's 3D model
+  to the attached frame ("Apply xTB geometry", one undo step for the caller); the 2D drawing does
+  not move. It refuses a stale attachment and a model whose atoms no longer match the frame.
+  Before applying, `science::stereo_changes(doc, &atoms, &frame)` lists drawn stereocentres the
+  frame inverts or flattens and drawn E/Z double bonds it flips, comparing the drawing's perceived
+  configurations with the configurations perceived from the frame's coordinates on the same graph.
+- **Native version.** `CALCULATIONS` (42) is the floor for any document whose `science` is
+  non-empty; `Document::file_version` derives it, so every route that marks a document with
+  `current()` (files, recovery drafts, templates, the native clipboard flavour) carries it. Older
+  ReShiki reads the version before parsing and asks the user to update, so it cannot open such a
+  document and save it without the data. Documents without science keep their version; the floor
+  drops when the last attachment goes.
+- **Admission.** `Science` deserializes through one check used by every reading route (files,
+  recovery, the clipboard, pasted payloads): compact-array limits while decoding, `validate` for
+  every frame and every result against its frame, every referenced frame present (input frame,
+  endpoints, GFN-FF topology reference), attachments matching their frame's atom count with
+  distinct atoms, no repeated frame, unknown fields refused, and at most `MAX_SCIENCE_BYTES`
+  (256 MiB) of payload heap. Native open is already bounded by the file reader's size limit.
+- **Undo history.** Snapshots clone the `Arc`s, never the payloads. `History` counts each distinct
+  payload's `heap_bytes()` once while any snapshot holds it (by address) and releases it with the
+  last holder; each snapshot counts its own lists and attachments. `History::bytes()` includes
+  the shared payloads, so the editor's per-tab budget sees them. `History::science_bytes(live)`
+  covers the live document and its history together, and `History::fit_science(live)` drops the
+  oldest steps, below the minimum undo depth if needed, until they fit `MAX_SCIENCE_BYTES`.
+- **Saved size.** Each result is written in its saved form (`CalcResult::for_file`): imported
+  results keep heavy arrays while their molecule's imported data stays within
+  `MAX_IMPORTED_HEAVY_BYTES`, in arrival order. `Science::saved_bytes(&result)` is the palette's
+  "Saved in file: 84 KB" and `Science::file_bytes()` the document total; Save offers "Make lighter"
+  above `LIGHTER_BYTES` (5 MB). `science::make_lighter(doc)` turns every recomputable (xTB) result
+  that keeps full data into its light form; imported results, which cannot be recomputed, are
+  left alone. `science::set_keep_full(doc, &result, keep)` is the per-result toggle.
 - **Generated data.** Grids, isosurface meshes and simplified meshes are never saved and never
   enter history: they are an editor-side cache keyed by result, spin, MO row, isovalue and grid
   settings. A surface placed in the drawing saves its request (result, spin, MO row, isovalue,
   colours), pins that MO's row and the basis in the saved result, and saves a simplified
   projected outline (a compact array, at most 300 KB) so it prints and exports in builds
-  without xTB. Its 3D surface is rebuilt from the pinned row.
-- **Clipboard.** Copies never carry heavy arrays; the first integration carries no science
-  through the clipboard at all.
+  without xTB. Its 3D surface is rebuilt from the pinned row. (Phase 5.)
+- **Clipboard.** Copies carry no calculation data: `editing::selection` drops `science`, so every
+  clipboard flavour leaves it out. Inserting a native file that has results remaps the
+  attachments' atom IDs with the drawing and keeps the results.
 
 ## Not in this crate
 

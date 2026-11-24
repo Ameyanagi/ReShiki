@@ -64,6 +64,8 @@ pub enum ScienceError {
     Stale,
     #[error("The 3D model no longer matches this calculation")]
     ModelMismatch,
+    #[error("Stereo check: {0}")]
+    Chemistry(String),
     #[error("Calculation results would exceed {} MiB in this document", MAX_SCIENCE_BYTES >> 20)]
     TooLarge,
     #[error("Unknown calculation data")]
@@ -157,7 +159,10 @@ impl Science {
             .results
             .iter()
             .map(|r| (Arc::as_ptr(r) as *const () as usize, r.heap_bytes()));
-        frames.chain(results)
+        let mut seen = HashSet::new();
+        frames
+            .chain(results)
+            .filter(move |(address, _)| seen.insert(*address))
     }
 
     /// Bytes a snapshot owns itself: the `Arc` lists and the attachments.
@@ -176,11 +181,7 @@ impl Science {
 
     /// Heap bytes of the frames and results, each counted once.
     pub fn heap_bytes(&self) -> usize {
-        let mut seen = HashSet::new();
-        self.payloads()
-            .filter(|(address, _)| seen.insert(*address))
-            .map(|(_, bytes)| bytes)
-            .sum()
+        self.payloads().map(|(_, bytes)| bytes).sum()
     }
 
     /// The form each result is saved in. Imported results that cannot be
@@ -221,9 +222,9 @@ impl Science {
     /// file: 84 KB"). Results compare by pointer, as the palette holds them.
     pub fn saved_bytes(&self, result: &Arc<CalcResult>) -> Option<usize> {
         let index = self.results.iter().position(|r| Arc::ptr_eq(r, result))?;
-        let forms = self.saved_forms();
+        let form = self.saved_forms().into_iter().nth(index)?;
         Some(
-            serde_json::to_vec_pretty(&forms[index])
+            serde_json::to_vec_pretty(&form)
                 .map(|json| json.len())
                 .unwrap_or(0),
         )
@@ -261,7 +262,11 @@ impl Science {
             let mut atoms = HashSet::new();
             if !ids.insert(attachment.id)
                 || attachment.atoms.len() != frame.numbers.len()
-                || !attachment.atoms.iter().flatten().all(|id| atoms.insert(*id))
+                || !attachment
+                    .atoms
+                    .iter()
+                    .flatten()
+                    .all(|id| atoms.insert(*id))
                 || attachment.baseline.is_empty()
             {
                 return Err("Invalid calculation attachment".into());
@@ -506,7 +511,9 @@ pub fn launch(
     charge: i32,
     multiplicity: u32,
 ) -> Result<Launch, ScienceError> {
-    let model = &doc.models[model_of(doc, atom).ok_or(ScienceError::NoModel)?];
+    let model = model_of(doc, atom)
+        .and_then(|index| doc.models.get(index))
+        .ok_or(ScienceError::NoModel)?;
     if model.cell.is_some() {
         return Err(ScienceError::Periodic);
     }
@@ -592,7 +599,12 @@ pub fn attach(
     frames: Vec<Frame>,
     result: CalcResult,
 ) -> Result<Attached, ScienceError> {
-    if !launch.atoms.iter().flatten().any(|id| doc.atom(*id).is_some()) {
+    if !launch
+        .atoms
+        .iter()
+        .flatten()
+        .any(|id| doc.atom(*id).is_some())
+    {
         return Err(ScienceError::Gone);
     }
     let mut science = doc.science.clone();
@@ -681,7 +693,7 @@ pub fn apply_geometry(doc: &mut Document, attachment: u64) -> Result<(), Science
     let index = first
         .and_then(|atom| model_of(doc, atom))
         .ok_or(ScienceError::NoModel)?;
-    let model = &doc.models[index];
+    let model = doc.models.get(index).ok_or(ScienceError::NoModel)?;
     let heavy = model.atoms.len();
     let matches = model.cell.is_none()
         && heavy + model.hydrogens.len() == frame.numbers.len()
@@ -702,11 +714,8 @@ pub fn apply_geometry(doc: &mut Document, attachment: u64) -> Result<(), Science
     if !matches {
         return Err(ScienceError::ModelMismatch);
     }
-    let model = &mut doc.models[index];
-    let mut positions = frame
-        .positions_angstrom
-        .iter()
-        .map(|p| p.map(|x| x as f32));
+    let model = doc.models.get_mut(index).ok_or(ScienceError::NoModel)?;
+    let mut positions = frame.positions_angstrom.iter().map(|p| p.map(|x| x as f32));
     for (atom, xyz) in model.atoms.iter_mut().zip(positions.by_ref()) {
         atom.xyz = xyz;
     }
@@ -714,6 +723,159 @@ pub fn apply_geometry(doc: &mut Document, attachment: u64) -> Result<(), Science
         hydrogen.xyz = xyz;
     }
     Ok(())
+}
+
+/// Stereocentres and E/Z double bonds the drawing defines that `frame` does
+/// not reproduce. `atoms` maps frame atoms to drawing atoms (a Launch's or an
+/// Attachment's map). Empty when they all agree.
+pub fn stereo_changes(
+    doc: &Document,
+    atoms: &[Option<u64>],
+    frame: &Frame,
+) -> Result<Vec<StereoChange>, ScienceError> {
+    use crate::chemistry::{
+        kekulize::Direction,
+        stereo::{self, Point3, SpatialAnnotations, SpatialOptions, wedging::Conformer},
+    };
+
+    if atoms.len() != frame.numbers.len() || atoms.len() != frame.positions_angstrom.len() {
+        return Err(ScienceError::ModelMismatch);
+    }
+    let ids: Vec<_> = atoms.iter().flatten().copied().collect();
+    let mut part = crate::editing::analysis_document(doc, &ids);
+    part.models.clear();
+    let molecule = crate::chemistry::document::prepare(&part)
+        .map_err(|e| ScienceError::Chemistry(e.to_string()))?;
+    let state = &molecule.state;
+    let positions: HashMap<_, _> = atoms
+        .iter()
+        .zip(&frame.positions_angstrom)
+        .filter_map(|(&id, &[x, y, z])| id.map(|id| (id, Point3 { x, y, z })))
+        .collect();
+    let positions = molecule
+        .ids
+        .iter()
+        .map(|id| {
+            positions
+                .get(id)
+                .copied()
+                .ok_or(ScienceError::ModelMismatch)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let conformer = Conformer {
+        positions,
+        is_3d: true,
+    };
+    let directions: Vec<_> = state
+        .directions
+        .iter()
+        .map(|&direction| match direction {
+            Direction::Wedge | Direction::Hash => Direction::None,
+            other => other,
+        })
+        .collect();
+    let geometry = stereo::from_3d(
+        &state.graph,
+        &state.metadata,
+        &directions,
+        Some(&conformer),
+        &SpatialAnnotations {
+            non_explicit: vec![None; molecule.ids.len()],
+            done: None,
+        },
+        SpatialOptions {
+            replace_existing: true,
+            allow_nontetrahedral: false,
+        },
+    )
+    .map_err(|e| ScienceError::Chemistry(e.to_string()))?;
+
+    // A wavy single bond leaves the centres it touches unspecified.
+    let wiggly: HashSet<usize> = state
+        .graph
+        .bonds
+        .iter()
+        .zip(&directions)
+        .zip(&state.metadata.bonds)
+        .filter(|((bond, direction), meta)| {
+            bond.order == 1 && (**direction == Direction::Unknown || meta.unknown_stereo)
+        })
+        .flat_map(|((bond, _), _)| [bond.a, bond.b])
+        .collect();
+    let id = |i: usize| {
+        molecule
+            .ids
+            .get(i)
+            .copied()
+            .ok_or(ScienceError::ModelMismatch)
+    };
+    let position = |i: usize| {
+        conformer
+            .positions
+            .get(i)
+            .copied()
+            .ok_or(ScienceError::ModelMismatch)
+    };
+    let mut changes = Vec::new();
+    let centres = state.metadata.atoms.iter().zip(&geometry.metadata.atoms);
+    for (i, (drawn, spatial)) in centres.enumerate() {
+        // Non-tetrahedral tags are outside this comparison.
+        if wiggly.contains(&i) || !matches!(drawn.chiral_tag, 1 | 2) {
+            continue;
+        }
+        let spatial = spatial.chiral_tag;
+        if matches!(spatial, 0..=2) && spatial != drawn.chiral_tag {
+            let change = StereoChange::Centre {
+                atom: id(i)?,
+                inverted: spatial != 0,
+            };
+            changes.push((i, change));
+        }
+    }
+    for (bond, drawn) in state.graph.bonds.iter().zip(&state.metadata.bonds) {
+        let expected_cis = match drawn.stereo {
+            2 | 4 => true,
+            3 | 5 => false,
+            _ => continue,
+        };
+        let &[s0, s1] = drawn.stereo_atoms.as_slice() else {
+            continue;
+        };
+        let angle = dihedral(
+            position(s0)?,
+            position(bond.a)?,
+            position(bond.b)?,
+            position(s1)?,
+        );
+        if angle.is_some_and(|angle| (angle < std::f64::consts::FRAC_PI_2) != expected_cis) {
+            let change = StereoChange::DoubleBond {
+                atoms: [id(bond.a)?, id(bond.b)?],
+            };
+            changes.push((bond.a.min(bond.b), change));
+        }
+    }
+    changes.sort_by_key(|(index, _)| *index);
+    Ok(changes.into_iter().map(|(_, change)| change).collect())
+}
+
+/// Unsigned dihedral between the substituents around the bond axis.
+fn dihedral(
+    s0: crate::chemistry::stereo::Point3,
+    a: crate::chemistry::stereo::Point3,
+    b: crate::chemistry::stereo::Point3,
+    s1: crate::chemistry::stereo::Point3,
+) -> Option<f64> {
+    let axis = [b.x - a.x, b.y - a.y, b.z - a.z];
+    let normal = |[x, y, z]: [f64; 3]| {
+        let [u, v, w] = axis;
+        let cross = [v * z - w * y, w * x - u * z, u * y - v * x];
+        let length = cross[0].hypot(cross[1]).hypot(cross[2]);
+        (length != 0.0).then(|| cross.map(|component| component / length))
+    };
+    let left = normal([s0.x - a.x, s0.y - a.y, s0.z - a.z])?;
+    let right = normal([s1.x - b.x, s1.y - b.y, s1.z - b.z])?;
+    let cosine = left.into_iter().zip(right).map(|(l, r)| l * r).sum::<f64>();
+    Some(cosine.clamp(-1.0, 1.0).acos())
 }
 
 /// Set "Keep full results in this file" on one result.
