@@ -5,7 +5,7 @@ Component:  axtb, an implementation of the xTB methods (GFN2-xTB, GFN-FF, g-xTB)
 License:    LGPL-3.0-or-later (COPYING.LESSER, with the GPL-3.0 text in COPYING)
 Upstream:   https://github.com/atomsforhumanity/axtb (Colton Hicks)
 Fork:       https://github.com/Ameyanagi/axtb, branch reshiki
-Revision:   06e29058416b26b69db9715728f637b43558adff
+Revision:   9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91
 Version:    0.2.0
 Crates:     axtb, axtb-base, axtb-d4, axtb-driver, axtb-gfnff, axtb-gxtb,
             axtb-solvation; with the fork's patched copies of the MIT crates

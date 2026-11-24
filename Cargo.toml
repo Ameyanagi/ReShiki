@@ -58,7 +58,7 @@ version = "0.17.1"
 
 [workspace.dependencies]
 # Pin axtb only here. The dependency audit checks the recorded copies.
-axtb-driver = { git = "https://github.com/Ameyanagi/axtb", rev = "06e29058416b26b69db9715728f637b43558adff" }
+axtb-driver = { git = "https://github.com/Ameyanagi/axtb", rev = "9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91" }
 nazuchem-ir = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }
 nazuchem-kernel = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }
 nazuchem-n2s = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }
@@ -367,8 +367,8 @@ miniz_oxide = "0.8"
 # cache files. Cargo ignores a dependency's [patch], so ReShiki repeats them to
 # build what the fork validated. Only the xtb graph uses gemm. Same revision as
 # axtb-driver above.
-gemm-common = { git = "https://github.com/Ameyanagi/axtb", rev = "06e29058416b26b69db9715728f637b43558adff" }
-private-gemm-x86 = { git = "https://github.com/Ameyanagi/axtb", rev = "06e29058416b26b69db9715728f637b43558adff" }
+gemm-common = { git = "https://github.com/Ameyanagi/axtb", rev = "9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91" }
+private-gemm-x86 = { git = "https://github.com/Ameyanagi/axtb", rev = "9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91" }
 # Preserve libjpeg's small-component and edge chroma sampling semantics.
 zune-jpeg = { path = "vendor/zune-jpeg" }
 # Preserve requested variable-font weights through SVG and selectable PDF text.

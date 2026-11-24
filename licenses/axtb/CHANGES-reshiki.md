@@ -20,5 +20,9 @@ separate commit on this branch; `git log 65d0f64..reshiki` lists them.
   `README.md`. A g-xTB request to a build without the feature is refused before any other
   validation (`run`). Known limit: a Python wheel built without the feature still lists the
   g-xTB methods and reports them as unsupported elements; ReShiki builds only the Rust crates.
+- **`third_party/` excluded from the workspace.** The patched `gemm-common` and
+  `private-gemm-x86` copies are `[patch]` sources, not members; `exclude = ["third_party"]`
+  in `Cargo.toml` lets a project that takes them from this repository (ReShiki mirrors the
+  patches) build them with Nix's `importCargoLock`. No code or numerical change.
 - **ReShiki validation.** New `reshiki/` directory (scripts, test structures) and
   `docs/reshiki/validation.md` (results). No engine code changes.
