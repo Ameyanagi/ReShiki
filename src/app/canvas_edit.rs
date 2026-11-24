@@ -52,6 +52,18 @@ impl App {
             self.path_click = None;
         }
         match edit {
+            Edit::TubeBendDrag { token, at } => {
+                let _ = self.tube_bend_action(super::equipment::bend::Action::Drag(token, at));
+                return;
+            }
+            Edit::TubeBendFinish { token, at } => {
+                let _ = self.tube_bend_action(super::equipment::bend::Action::Finish(token, at));
+                return;
+            }
+            Edit::TubeBendAbort { token } => {
+                let _ = self.tube_bend_action(super::equipment::bend::Action::Abort(token));
+                return;
+            }
             Edit::EquipmentAuthoringPoint(point) => {
                 let _ = self
                     .equipment_authoring_action(super::equipment_authoring::Action::Point(point));
@@ -122,6 +134,7 @@ impl App {
                 }
                 let mut menu = context_menu::State::new(position, Default::default());
                 menu.hit = Some(hit);
+                menu.at = Some(at);
                 self.context_menu = Some(menu);
                 return;
             }
@@ -452,6 +465,9 @@ impl App {
             Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
             Edit::EquipmentAuthoringPoint(_)
+            | Edit::TubeBendDrag { .. }
+            | Edit::TubeBendFinish { .. }
+            | Edit::TubeBendAbort { .. }
             | Edit::EquipmentAuthoringShape { .. }
             | Edit::EquipmentAuthoringTestStart(_)
             | Edit::EquipmentAuthoringTestCancel(_)

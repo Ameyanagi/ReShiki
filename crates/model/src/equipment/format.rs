@@ -254,7 +254,7 @@ pub enum PlugFamily {
     /// A terminating work-tube seal, sized by the tube's exact nominal OD.
     WorkTube,
     /// NPT pipe thread. size_mm stores nominal pipe size in millimetres,
-    /// not the thread's outside diameter. Initially only 1/4 in is supported.
+    /// rather than the thread's outside diameter.
     Npt,
     Stopper,
     Septum,
@@ -268,6 +268,7 @@ impl PlugFamily {
     /// nominal pipe size differs from its outside diameter.
     pub fn opening_mm(self, size_mm: f64) -> f64 {
         match self {
+            Self::Npt if size_mm == 3.175 => 10.287,
             Self::Npt if size_mm == 6.35 => 13.716,
             _ => size_mm,
         }
@@ -315,7 +316,7 @@ pub enum Joint {
         size_mm: f64,
         at: Xy,
         dir: Xy,
-        /// Tube stop measured inwards from a female compression or work-tube opening.
+        /// Drawn seating depth inward from a female compression, work-tube or NPT mouth.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         insertion_mm: Option<f64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -66,6 +66,8 @@ pub(super) struct DocumentTab {
     pub(super) atom_text: Option<atom_text::State>,
     pub(super) joining: Option<joining::State>,
     pub(super) equipment_authoring: Option<super::equipment_authoring::State>,
+    pub(super) tube_bend: Option<super::equipment::bend::State>,
+    pub(super) tube_bend_serial: u64,
     /// The revision, piece and parameter an equipment slider drag has
     /// reached, and what it let go of; the drag is one Undo step until
     /// release or any other commit.
@@ -216,6 +218,8 @@ impl DocumentTab {
             atom_text: None,
             joining: None,
             equipment_authoring: None,
+            tube_bend: None,
+            tube_bend_serial: 0,
             piece_sliding: None,
             piece_lengths: Vec::new(),
             erase_stroke: false,
