@@ -1,0 +1,258 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/gas-sample-cylinder-300-1-4-npt",
+  "revision": 1,
+  "family": "gas-sample-cylinder",
+  "variant": {
+    "capacity": "300 mL",
+    "connection": "1/4 in female NPT",
+    "material": "316L stainless steel",
+    "reference": "Swagelok 316L-HDF4-300"
+  },
+  "names": {
+    "en": "Double-ended sample cylinder, 300 mL, 1/4 in NPT"
+  },
+  "category": "vessel",
+  "keywords": [
+    "sample cylinder",
+    "sampling cylinder",
+    "double-ended",
+    "316L",
+    "stainless steel",
+    "300 mL",
+    "NPT",
+    "1/4 in",
+    "Swagelok",
+    "316L-HDF4-300",
+    "gas line",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "cylinder-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-113.5 -13.5H-97.5C-92.5 -13.5 -85.5 -25.4 -73.5 -25.4H73.5C85.5 -25.4 92.5 -13.5 97.5 -13.5H113.5V13.5H97.5C92.5 13.5 85.5 25.4 73.5 25.4H-73.5C-85.5 25.4 -92.5 13.5 -97.5 13.5H-113.5Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "color": [
+        207,
+        216,
+        223
+      ]
+    },
+    {
+      "id": "cylinder-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-97.5 -10C-92.5 -10 -85.5 -20 -73.5 -20H73.5C85.5 -20 92.5 -10 97.5 -10V-5C92.5 -5 85.5 -10 73.5 -10H-73.5C-85.5 -10 -92.5 -5 -97.5 -5Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "color": [
+        238,
+        242,
+        245
+      ],
+      "depth": 1,
+      "style": "shaded"
+    },
+    {
+      "id": "cylinder-lower-reflection",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-97.5 7C-92.5 7 -85.5 14 -73.5 14H73.5C85.5 14 92.5 7 97.5 7V10C92.5 10 85.5 21 73.5 21H-73.5C-85.5 21 -92.5 10 -97.5 10Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "color": [
+        177,
+        192,
+        204
+      ],
+      "depth": 1,
+      "style": "shaded"
+    },
+    {
+      "id": "cylinder-outer-profile",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-113.5 -6.858V-13.5H-97.5C-92.5 -13.5 -85.5 -25.4 -73.5 -25.4H73.5C85.5 -25.4 92.5 -13.5 97.5 -13.5H113.5V-6.858M113.5 6.858V13.5H97.5C92.5 13.5 85.5 25.4 73.5 25.4H-73.5C-85.5 25.4 -92.5 13.5 -97.5 13.5H-113.5V6.858",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "female-npt-mouth-rims",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-113.5 -6.858H-111.1M-113.5 6.858H-111.1M-111.1 -13.5V-8.5M-111.1 8.5V13.5M113.5 -6.858H111.1M113.5 6.858H111.1M111.1 -13.5V-8.5M111.1 8.5V13.5",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "section-upper-wall",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-113.5 -13.5H-97.5C-92.5 -13.5 -85.5 -25.4 -73.5 -25.4H73.5C85.5 -25.4 92.5 -13.5 97.5 -13.5H113.5V-6.858L97.5 -6.358C91.5 -6.358 83.5 -23 73.5 -23H-73.5C-83.5 -23 -91.5 -6.358 -97.5 -6.358L-113.5 -6.858Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "color": [
+        207,
+        216,
+        223
+      ]
+    },
+    {
+      "id": "section-lower-wall",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M113.5 13.5H97.5C92.5 13.5 85.5 25.4 73.5 25.4H-73.5C-85.5 25.4 -92.5 13.5 -97.5 13.5H-113.5V6.858L-97.5 6.358C-91.5 6.358 -83.5 23 -73.5 23H73.5C83.5 23 91.5 6.358 97.5 6.358L113.5 6.858Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "color": [
+        207,
+        216,
+        223
+      ]
+    },
+    {
+      "id": "section-wall-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-70.5 -24.8L-69.3 -23.6M-70.5 24.8L-71.7 23.6M-62.5 -24.8L-61.3 -23.6M-62.5 24.8L-63.7 23.6M-54.5 -24.8L-53.3 -23.6M-54.5 24.8L-55.7 23.6M-46.5 -24.8L-45.3 -23.6M-46.5 24.8L-47.7 23.6M-38.5 -24.8L-37.3 -23.6M-38.5 24.8L-39.7 23.6M-30.5 -24.8L-29.3 -23.6M-30.5 24.8L-31.7 23.6M-22.5 -24.8L-21.3 -23.6M-22.5 24.8L-23.7 23.6M-14.5 -24.8L-13.3 -23.6M-14.5 24.8L-15.7 23.6M-6.5 -24.8L-5.3 -23.6M-6.5 24.8L-7.7 23.6M1.5 -24.8L2.7 -23.6M1.5 24.8L0.3 23.6M9.5 -24.8L10.7 -23.6M9.5 24.8L8.3 23.6M17.5 -24.8L18.7 -23.6M17.5 24.8L16.3 23.6M25.5 -24.8L26.7 -23.6M25.5 24.8L24.3 23.6M33.5 -24.8L34.7 -23.6M33.5 24.8L32.3 23.6M41.5 -24.8L42.7 -23.6M41.5 24.8L40.3 23.6M49.5 -24.8L50.7 -23.6M49.5 24.8L48.3 23.6M57.5 -24.8L58.7 -23.6M57.5 24.8L56.3 23.6M65.5 -24.8L66.7 -23.6M65.5 24.8L64.3 23.6M-107.5 -12.4L-103.5 -8.4M-107.5 12.4L-103.5 8.4M-82.1 -23.4L-80.9 -21.5M-82.1 23.4L-80.9 21.5M103.5 -12.4L107.5 -8.4M103.5 12.4L107.5 8.4M80.9 -23.4L82.1 -21.5M80.9 23.4L82.1 21.5",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "section-female-npt-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-111 -6.7799L-109.8 -7.7799M-108 -6.6861L-106.8 -7.6861M-105 -6.5924L-103.8 -7.5924M-102 -6.4986L-100.8 -7.4986M-111 6.7799L-109.8 7.7799M-108 6.6861L-106.8 7.6861M-105 6.5924L-103.8 7.5924M-102 6.4986L-100.8 7.4986M111 -6.7799L109.8 -7.7799M108 -6.6861L106.8 -7.6861M105 -6.5924L103.8 -7.5924M102 -6.4986L100.8 -7.4986M111 6.7799L109.8 7.7799M108 6.6861L106.8 7.6861M105 6.5924L103.8 7.5924M102 6.4986L100.8 7.4986",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    }
+  ],
+  "joints": [
+    {
+      "id": "left",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        -113.5,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "right",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        113.5,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "left",
+      "at": [
+        -113.5,
+        0
+      ]
+    },
+    {
+      "id": "right",
+      "at": [
+        113.5,
+        0
+      ]
+    }
+  ]
+}

@@ -104,6 +104,25 @@ fn connect(doc: &mut Document, fixed: u64, socket: &str, moving: u64, plug: &str
     assert_eq!(snap.moving.at, joint(moving, plug));
 }
 
+#[test]
+fn sample_cylinder_accepts_npt_adapters_on_both_ends_across_views() {
+    for size in [150, 300] {
+        let mut doc = Document::default();
+        let cylinder = add(
+            &mut doc,
+            &format!("reshiki/gas-sample-cylinder-{size}-1-4-npt"),
+        );
+        for port in ["left", "right"] {
+            let adapter = add(&mut doc, "reshiki/gas-compression-npt-adapter-1-4");
+            connect(&mut doc, cylinder, port, adapter, "thread");
+        }
+        let seats = doc.seats.clone();
+        let ports = all_ports(&doc);
+        set(&mut doc, cylinder, "view", "section");
+        assert_connected(&mut doc, &seats, &ports);
+    }
+}
+
 fn set(doc: &mut Document, id: u64, param: &str, state: &str) {
     assert!(
         solve::adjust::set(doc, id, param, Value::State(state.into()))

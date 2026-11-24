@@ -1,0 +1,258 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/gas-sample-cylinder-150-1-4-npt",
+  "revision": 1,
+  "family": "gas-sample-cylinder",
+  "variant": {
+    "capacity": "150 mL",
+    "connection": "1/4 in female NPT",
+    "material": "316L stainless steel",
+    "reference": "Swagelok 316L-HDF4-150"
+  },
+  "names": {
+    "en": "Double-ended sample cylinder, 150 mL, 1/4 in NPT"
+  },
+  "category": "vessel",
+  "keywords": [
+    "sample cylinder",
+    "sampling cylinder",
+    "double-ended",
+    "316L",
+    "stainless steel",
+    "150 mL",
+    "NPT",
+    "1/4 in",
+    "Swagelok",
+    "316L-HDF4-150",
+    "gas line",
+    "joint"
+  ],
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "units": "mm",
+  "shapes": [
+    {
+      "id": "cylinder-exterior",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-66.5 -13.5H-50.5C-45.5 -13.5 -38.5 -25.4 -26.5 -25.4H26.5C38.5 -25.4 45.5 -13.5 50.5 -13.5H66.5V13.5H50.5C45.5 13.5 38.5 25.4 26.5 25.4H-26.5C-38.5 25.4 -45.5 13.5 -50.5 13.5H-66.5Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "color": [
+        207,
+        216,
+        223
+      ]
+    },
+    {
+      "id": "cylinder-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-50.5 -10C-45.5 -10 -38.5 -20 -26.5 -20H26.5C38.5 -20 45.5 -10 50.5 -10V-5C45.5 -5 38.5 -10 26.5 -10H-26.5C-38.5 -10 -45.5 -5 -50.5 -5Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "color": [
+        238,
+        242,
+        245
+      ],
+      "depth": 1,
+      "style": "shaded"
+    },
+    {
+      "id": "cylinder-lower-reflection",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-50.5 7C-45.5 7 -38.5 14 -26.5 14H26.5C38.5 14 45.5 7 50.5 7V10C45.5 10 38.5 21 26.5 21H-26.5C-38.5 21 -45.5 10 -50.5 10Z",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "color": [
+        177,
+        192,
+        204
+      ],
+      "depth": 1,
+      "style": "shaded"
+    },
+    {
+      "id": "cylinder-outer-profile",
+      "layer": "front",
+      "material": "ink",
+      "role": "outline",
+      "path": "M-66.5 -6.858V-13.5H-50.5C-45.5 -13.5 -38.5 -25.4 -26.5 -25.4H26.5C38.5 -25.4 45.5 -13.5 50.5 -13.5H66.5V-6.858M66.5 6.858V13.5H50.5C45.5 13.5 38.5 25.4 26.5 25.4H-26.5C-38.5 25.4 -45.5 13.5 -50.5 13.5H-66.5V6.858",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 3
+    },
+    {
+      "id": "female-npt-mouth-rims",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-66.5 -6.858H-64.1M-66.5 6.858H-64.1M-64.1 -13.5V-8.5M-64.1 8.5V13.5M66.5 -6.858H64.1M66.5 6.858H64.1M64.1 -13.5V-8.5M64.1 8.5V13.5",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      },
+      "depth": 4
+    },
+    {
+      "id": "section-upper-wall",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M-66.5 -13.5H-50.5C-45.5 -13.5 -38.5 -25.4 -26.5 -25.4H26.5C38.5 -25.4 45.5 -13.5 50.5 -13.5H66.5V-6.858L50.5 -6.358C44.5 -6.358 36.5 -23 26.5 -23H-26.5C-36.5 -23 -44.5 -6.358 -50.5 -6.358L-66.5 -6.858Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "color": [
+        207,
+        216,
+        223
+      ]
+    },
+    {
+      "id": "section-lower-wall",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M66.5 13.5H50.5C45.5 13.5 38.5 25.4 26.5 25.4H-26.5C-38.5 25.4 -45.5 13.5 -50.5 13.5H-66.5V6.858L-50.5 6.358C-44.5 6.358 -36.5 23 -26.5 23H26.5C36.5 23 44.5 6.358 50.5 6.358L66.5 6.858Z",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "color": [
+        207,
+        216,
+        223
+      ]
+    },
+    {
+      "id": "section-wall-hatching",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-23.5 -24.8L-22.3 -23.6M-23.5 24.8L-24.7 23.6M-15.5 -24.8L-14.3 -23.6M-15.5 24.8L-16.7 23.6M-7.5 -24.8L-6.3 -23.6M-7.5 24.8L-8.7 23.6M0.5 -24.8L1.7 -23.6M0.5 24.8L-0.7 23.6M8.5 -24.8L9.7 -23.6M8.5 24.8L7.3 23.6M16.5 -24.8L17.7 -23.6M16.5 24.8L15.3 23.6M-60.5 -12.4L-56.5 -8.4M-60.5 12.4L-56.5 8.4M-35.1 -23.4L-33.9 -21.5M-35.1 23.4L-33.9 21.5M56.5 -12.4L60.5 -8.4M56.5 12.4L60.5 8.4M33.9 -23.4L35.1 -21.5M33.9 23.4L35.1 21.5",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 2
+    },
+    {
+      "id": "section-female-npt-threads",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-64 -6.7799L-62.8 -7.7799M-61 -6.6861L-59.8 -7.6861M-58 -6.5924L-56.8 -7.5924M-55 -6.4986L-53.8 -7.4986M-64 6.7799L-62.8 7.7799M-61 6.6861L-59.8 7.6861M-58 6.5924L-56.8 7.5924M-55 6.4986L-53.8 7.4986M64 -6.7799L62.8 -7.7799M61 -6.6861L59.8 -7.6861M58 -6.5924L56.8 -7.5924M55 -6.4986L53.8 -7.4986M64 6.7799L62.8 7.7799M61 6.6861L59.8 7.6861M58 6.5924L56.8 7.5924M55 6.4986L53.8 7.4986",
+      "when": {
+        "view": [
+          "section"
+        ]
+      },
+      "depth": 3
+    }
+  ],
+  "joints": [
+    {
+      "id": "left",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        -66.5,
+        0
+      ],
+      "dir": [
+        -1,
+        0
+      ]
+    },
+    {
+      "id": "right",
+      "kind": "plug",
+      "family": "npt",
+      "gender": "F",
+      "size_mm": 6.35,
+      "at": [
+        66.5,
+        0
+      ],
+      "dir": [
+        1,
+        0
+      ]
+    }
+  ],
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "labels": [
+    {
+      "id": "body",
+      "at": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "left",
+      "at": [
+        -66.5,
+        0
+      ]
+    },
+    {
+      "id": "right",
+      "at": [
+        66.5,
+        0
+      ]
+    }
+  ]
+}
