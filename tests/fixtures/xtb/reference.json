@@ -1,5 +1,5 @@
 {
-  "engine": {"name": "axtb", "version": "0.2.0", "rev": "06e29058416b26b69db9715728f637b43558adff"},
+  "engine": {"name": "axtb", "version": "0.2.0", "rev": "9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91"},
   "method": "gfn2",
   "numerics": "gfn2:1",
   "energy_units": "Eh",

@@ -19,7 +19,7 @@ is in Eh/bohr. Shared engine, method, numerics, and unit metadata remain at the
 top level.
 
 The reference runs used axtb `0.2.0`, revision
-`06e29058416b26b69db9715728f637b43558adff` (the fork's `reshiki` branch), on
+`9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91` (the fork's `reshiki` branch), on
 macOS arm64, with one thread, built from the fork's workspace with its `gemm`
 patches. For the original `axtb` set, upstream revision
 `65d0f64a9a8211f73b0738ff908b7a414975f50b` gives the same bits. The source CLI

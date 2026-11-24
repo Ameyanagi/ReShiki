@@ -36,7 +36,7 @@ increases with every request; the response repeats it.
 { "id": 1, "op": "hello" }
 { "id": 1, "ok": { "protocol": 1, "engine": { "name": "axtb", "version": "0.2.0",
   "license": "LGPL-3.0-or-later", "source": "https://github.com/Ameyanagi/axtb",
-  "rev": "06e29058…" }, "methods": ["gfn2"], "operations": ["energy", "gradient"],
+  "rev": "9d0388c9…" }, "methods": ["gfn2"], "operations": ["energy", "gradient"],
   "max_atoms": 500 } }
 ```
 
