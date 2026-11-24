@@ -90,8 +90,8 @@ pub struct Port {
     pub mm: f64,
     /// A hold's length in world units; 0 for a joint.
     pub length: f64,
-    /// Axial span that must lie inside the held segment, in world units.
-    /// Zero retains the original centre-only hold semantics.
+    /// Required axial span for a holder, or available straight lead on a
+    /// routed compression tube end, in world units. Zero imposes no limit.
     pub contact_length: f64,
     /// Depth from the opening to its seat, in world units.
     pub(super) insertion: f64,
@@ -210,7 +210,37 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             }
         }
     }
+    let routed = if let Some(route) = &piece.tube_route {
+        let Some(spec) = super::parts_list::spec(d) else {
+            return Vec::new();
+        };
+        let Some(poses) = route.end_poses() else {
+            return Vec::new();
+        };
+        let Ok(centerline) = route.centerline() else {
+            return Vec::new();
+        };
+        // Only the pose changes: the tube's real end IDs, fitting families,
+        // genders and nominal sizes remain those of its original definition.
+        let leads = [centerline.segments.first(), centerline.segments.last()];
+        for ((end, (point, dir)), lead) in spec.ends.iter().zip(poses).zip(leads) {
+            if let Some(port) = out.iter_mut().find(|p| p.at.joint == *end) {
+                (port.point, port.dir) = (t.apply(point), t.apply_dir(dir));
+                if let Some(super::tube_bend::Segment::Straight { from, to }) = lead {
+                    port.contact_length = len(sub(*to, *from)) * port.mm;
+                }
+            }
+        }
+        Some((spec, centerline))
+    } else {
+        None
+    };
     out.extend(holds(d, &values).into_iter().filter_map(|h| {
+        // A routed tube cannot offer the definition's old straight support
+        // across its bends. The analytic straight legs are added below.
+        if routed.is_some() && h.hold.kind == HoldKind::TubeSpan {
+            return None;
+        }
         let (from, to) = (t.apply(h.from), t.apply(h.to));
         let length = len(sub(to, from));
         // A part's motion can squash a hold to nothing; it holds nothing then.
@@ -247,6 +277,44 @@ pub fn ports(g: &Graphic) -> Vec<Port> {
             insertion: 0.,
         })
     }));
+    if let Some((spec, centerline)) = routed {
+        let first = d
+            .holds
+            .iter()
+            .find(|h| h.kind == HoldKind::TubeSpan)
+            .map_or("span", |h| h.id.as_str());
+        for (leg, (from, to)) in centerline
+            .segments
+            .iter()
+            .filter_map(|segment| match *segment {
+                super::tube_bend::Segment::Straight { from, to } => Some((from, to)),
+                super::tube_bend::Segment::Arc { .. } => None,
+            })
+            .enumerate()
+        {
+            let (from, to) = (t.apply(from), t.apply(to));
+            let delta = sub(to, from);
+            let length = len(delta);
+            if !length.is_finite() || length <= 0. {
+                continue;
+            }
+            out.push(Port {
+                at: at(&if leg == 0 {
+                    first.to_owned()
+                } else {
+                    format!("route-span-{leg}")
+                }),
+                kind: Kind::Hold(HoldKind::TubeSpan, [spec.od_mm; 2]),
+                gender: Gender::F,
+                point: from,
+                dir: normalize(delta),
+                mm: t.scale_factor(),
+                length,
+                contact_length: 0.,
+                insertion: 0.,
+            });
+        }
+    }
     out
 }
 
@@ -257,7 +325,10 @@ pub fn mates(a: &Port, b: &Port) -> bool {
     a.gender != b.gender
         && match (&a.kind, &b.kind) {
             (Kind::Taper(x), Kind::Taper(y)) => x == y,
-            (Kind::Plug(f, x), Kind::Plug(g, y)) => plug_mates(*f, *x, *g, *y),
+            (Kind::Plug(f, x), Kind::Plug(g, y)) => {
+                let (socket, plug) = sides(a, b);
+                plug_mates(*f, *x, *g, *y) && fits_insertion(socket.insertion / socket.mm, plug)
+            }
             (Kind::Hold(x, dx), Kind::Hold(y, dy)) if x.mate() == *y => {
                 let (held, holder) = if x.held() { (dx, dy) } else { (dy, dx) };
                 let d = (held[0] + held[1]) / 2.;
@@ -271,6 +342,10 @@ pub fn mates(a: &Port, b: &Port) -> bool {
             }
             _ => false,
         }
+}
+
+fn fits_insertion(depth_mm: f64, plug: &Port) -> bool {
+    plug.contact_length == 0. || plug.contact_length / plug.mm + 1e-6 >= depth_mm
 }
 
 /// Both are holds, or both are joints: only these can ever be paired.
@@ -824,10 +899,16 @@ fn joint_mates(joint: &Joint, port: &Port) -> bool {
             (Joint::Taper { size, .. }, Kind::Taper(other)) => size == other,
             (
                 Joint::Plug {
-                    family, size_mm, ..
+                    family,
+                    size_mm,
+                    insertion_mm,
+                    ..
                 },
                 Kind::Plug(other, size),
-            ) => plug_mates(*family, *size_mm, *other, *size),
+            ) => {
+                plug_mates(*family, *size_mm, *other, *size)
+                    && fits_insertion(insertion_mm.unwrap_or(0.), port)
+            }
             _ => false,
         }
 }
