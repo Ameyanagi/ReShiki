@@ -925,13 +925,11 @@ impl super::App {
                     if let Some(view) = view {
                         self.restore_view(view);
                     }
-                    let science = &self.tab.doc.science;
-                    if !science.results.is_empty() {
+                    let results = self.tab.doc.science.results.len();
+                    if results > 0 {
                         self.status = format!(
-                            "{} calculation result{} in this file ({} KB)",
-                            science.results.len(),
-                            if science.results.len() == 1 { "" } else { "s" },
-                            science.file_bytes().div_ceil(1000)
+                            "{results} calculation result{} in this file",
+                            if results == 1 { "" } else { "s" }
                         );
                     }
                 }

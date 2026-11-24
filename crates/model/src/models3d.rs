@@ -504,7 +504,7 @@ const MAX_ATOMS: usize = 100_000;
 const LABEL_AHEAD: f32 = 0.1;
 /// Room for the labels' text around the cell's bounding sphere.
 const LABEL_ROOM: f32 = 0.2;
-const MAX_COORDINATE: f32 = 10_000.;
+pub(crate) const MAX_COORDINATE: f32 = 10_000.;
 const GREY: [u8; 3] = [0x99; 3];
 const BOND_RADIUS: f32 = 0.085;
 const STICK_RADIUS: f32 = 0.16;

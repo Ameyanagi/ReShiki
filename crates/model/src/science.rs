@@ -2,13 +2,14 @@
 //!
 //! The drawing never changes for a calculation: frames (exact `f64`
 //! geometries) and results live in [`Science`] beside it, immutable and shared
-//! by `Arc` between the live document, undo history and clipboard copies of
-//! the document. An [`Attachment`] links one frame's atoms to drawing atoms
-//! and records the molecule's chemistry when the frame was made, so any
-//! chemical edit makes its results stale and Undo makes them current again.
-//! The design is `docs/plans/xtb-data.md`, section Documents.
+//! by `Arc` between the live document and undo history. An [`Attachment`]
+//! links one frame's atoms to drawing atoms and records the molecule's
+//! chemistry when the frame was made; every result belongs to one attachment.
+//! Any chemical edit makes the attachment's results stale and Undo makes them
+//! current again. The design is `docs/plans/xtb-data.md`, section Documents.
 use std::{
     borrow::Cow,
+    cell::Cell,
     collections::{HashMap, HashSet},
     sync::Arc,
 };
@@ -18,25 +19,29 @@ use serde::{Deserialize, Serialize};
 
 use crate::document::Document;
 
-/// Heap bytes of frames and results the live document may hold.
+/// Heap bytes of frames and results one document may hold, each stored
+/// result counted, as a file stores them.
 pub const MAX_SCIENCE_BYTES: usize = 256 << 20;
+/// Frames, attachments and results one document may hold.
+pub const MAX_SCIENCE_RECORDS: usize = 10_000;
 /// Saved results above this size make Save offer "Make lighter".
 pub const LIGHTER_BYTES: usize = 5_000_000;
 
 /// Frames, results and their links to the drawing. Empty in drawings
 /// without calculations, and then absent from the file.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct Science {
     /// Every stored geometry, at most once per hash.
     pub frames: Vec<Arc<Frame>>,
-    /// Results in the order they arrived.
-    pub results: Vec<Arc<CalcResult>>,
     /// Links from frames to drawing atoms.
     pub attachments: Vec<Attachment>,
+    /// Results in the order they arrived.
+    pub results: Vec<Stored>,
 }
 
 /// One frame linked to one molecule of the drawing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Attachment {
     /// Unique among the document's attachments.
     pub id: u64,
@@ -45,8 +50,51 @@ pub struct Attachment {
     /// The drawing atom of each frame atom; `None` for atoms the drawing
     /// does not show (implicit hydrogens) and for deleted atoms.
     pub atoms: Vec<Option<u64>>,
-    /// Chemistry fingerprint of the linked atoms when the frame was made.
+    /// Chemistry of the linked atoms when the frame was made.
     pub baseline: String,
+}
+
+/// A result and the attachment it was calculated for.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "StoredWire")]
+pub struct Stored {
+    pub attachment: u64,
+    /// "Keep full results in this file". Kept here, not in the shared
+    /// result, so toggling it never copies the arrays.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub keep_full: bool,
+    /// Always has `keep_full` false; the flag above decides.
+    pub result: Arc<CalcResult>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StoredWire {
+    attachment: u64,
+    #[serde(default)]
+    keep_full: bool,
+    result: CalcResult,
+}
+
+impl From<StoredWire> for Stored {
+    fn from(wire: StoredWire) -> Self {
+        let mut result = wire.result;
+        let keep_full = wire.keep_full || result.keep_full;
+        result.keep_full = false;
+        Self {
+            attachment: wire.attachment,
+            keep_full,
+            result: Arc::new(result),
+        }
+    }
+}
+
+impl PartialEq for Stored {
+    fn eq(&self, other: &Self) -> bool {
+        self.attachment == other.attachment
+            && self.keep_full == other.keep_full
+            && (Arc::ptr_eq(&self.result, &other.result) || self.result == other.result)
+    }
 }
 
 /// Why a calculation cannot start or its result cannot be stored or applied.
@@ -82,8 +130,8 @@ pub struct Launch {
     pub frame: Arc<Frame>,
     /// Drawing atom of each frame atom.
     pub atoms: Vec<Option<u64>>,
-    /// The molecule's chemistry fingerprint at launch: the revision a late
-    /// result is checked against.
+    /// The molecule's chemistry at launch: the revision a late result is
+    /// checked against.
     pub baseline: String,
 }
 
@@ -99,15 +147,17 @@ pub enum Freshness {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Attached {
     pub freshness: Freshness,
-    /// The attachment of the result's own frame (an optimization's final
-    /// geometry), for [`apply_geometry`].
+    /// The attachment the result belongs to.
     pub attachment: u64,
 }
 
 /// A result as the results palette shows it.
 #[derive(Debug, Clone)]
 pub struct ResultView<'a> {
-    pub result: &'a Arc<CalcResult>,
+    /// Index into [`Science::results`].
+    pub index: usize,
+    pub stored: &'a Stored,
+    /// The geometry the result's values describe.
     pub frame: &'a Arc<Frame>,
     pub attachment: &'a Attachment,
     pub freshness: Freshness,
@@ -126,13 +176,70 @@ impl PartialEq for Science {
     /// Snapshots share their payloads, so pointer equality decides almost
     /// every comparison without reading the arrays.
     fn eq(&self, other: &Self) -> bool {
-        fn same<T: PartialEq>(a: &[Arc<T>], b: &[Arc<T>]) -> bool {
-            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| Arc::ptr_eq(a, b) || a == b)
-        }
-        same(&self.frames, &other.frames)
-            && same(&self.results, &other.results)
+        self.frames.len() == other.frames.len()
+            && self
+                .frames
+                .iter()
+                .zip(&other.frames)
+                .all(|(a, b)| Arc::ptr_eq(a, b) || a == b)
             && self.attachments == other.attachments
+            && self.results == other.results
     }
+}
+
+thread_local! {
+    /// Bytes and records still admitted while one `Science` is decoded.
+    static ROOM: Cell<(usize, usize)> = const { Cell::new((0, 0)) };
+}
+
+/// Heap bytes a decoded record takes, for the admission budget.
+trait Weight {
+    fn weight(&self) -> usize;
+}
+impl Weight for Arc<Frame> {
+    fn weight(&self) -> usize {
+        size_of::<Frame>() + self.heap_bytes()
+    }
+}
+impl Weight for Attachment {
+    fn weight(&self) -> usize {
+        size_of::<Self>() + size_of_val(self.atoms.as_slice()) + self.baseline.len()
+    }
+}
+impl Weight for Stored {
+    fn weight(&self) -> usize {
+        size_of::<CalcResult>() + self.result.heap_bytes()
+    }
+}
+
+/// A list decoded one record at a time, refused as soon as the document's
+/// records together pass [`MAX_SCIENCE_BYTES`] or [`MAX_SCIENCE_RECORDS`].
+fn admitted<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Weight,
+{
+    struct Records<T>(std::marker::PhantomData<T>);
+    impl<'de, T: Deserialize<'de> + Weight> serde::de::Visitor<'de> for Records<T> {
+        type Value = Vec<T>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a list of calculation records")
+        }
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<T>, A::Error> {
+            let mut records = Vec::new();
+            while let Some(record) = seq.next_element::<T>()? {
+                let (bytes, count) = ROOM.get();
+                let weight = record.weight();
+                if weight > bytes || count == 0 {
+                    return Err(serde::de::Error::custom(ScienceError::TooLarge));
+                }
+                ROOM.set((bytes - weight, count - 1));
+                records.push(record);
+            }
+            Ok(records)
+        }
+    }
+    deserializer.deserialize_seq(Records(std::marker::PhantomData))
 }
 
 impl Science {
@@ -155,112 +262,131 @@ impl Science {
             .frames
             .iter()
             .map(|f| (Arc::as_ptr(f) as *const () as usize, f.heap_bytes()));
-        let results = self
-            .results
-            .iter()
-            .map(|r| (Arc::as_ptr(r) as *const () as usize, r.heap_bytes()));
+        let results = self.results.iter().map(|s| {
+            (
+                Arc::as_ptr(&s.result) as *const () as usize,
+                s.result.heap_bytes(),
+            )
+        });
         let mut seen = HashSet::new();
         frames
             .chain(results)
             .filter(move |(address, _)| seen.insert(*address))
     }
 
-    /// Bytes a snapshot owns itself: the `Arc` lists and the attachments.
+    /// Bytes a snapshot owns itself: the lists and the attachments.
     pub(crate) fn container_bytes(&self) -> usize {
-        use std::mem::{size_of, size_of_val};
         size_of_val(self.frames.as_slice())
             + size_of_val(self.results.as_slice())
-            + size_of_val(self.attachments.as_slice())
-            + self
-                .attachments
-                .iter()
-                .map(|a| size_of_val(a.atoms.as_slice()) + a.baseline.len())
-                .sum::<usize>()
+            + self.attachments.iter().map(Weight::weight).sum::<usize>()
             + size_of::<Self>()
     }
 
-    /// Heap bytes of the frames and results, each counted once.
+    /// Heap bytes as a file stores them: every stored result counted, even
+    /// when two share one payload in memory.
     pub fn heap_bytes(&self) -> usize {
-        self.payloads().map(|(_, bytes)| bytes).sum()
+        self.frames.iter().map(Weight::weight).sum::<usize>()
+            + self.attachments.iter().map(Weight::weight).sum::<usize>()
+            + self.results.iter().map(Weight::weight).sum::<usize>()
     }
 
-    /// The form each result is saved in. Imported results that cannot be
-    /// recomputed keep their heavy arrays while their molecule's imported
-    /// data stays within [`MAX_IMPORTED_HEAVY_BYTES`], in arrival order.
-    fn saved_forms(&self) -> Vec<Cow<'_, CalcResult>> {
+    /// Refuse a document whose calculation data a file could not hold.
+    pub(crate) fn check_budget(&self) -> Result<(), String> {
+        let records = self.frames.len() + self.attachments.len() + self.results.len();
+        if self.heap_bytes() > MAX_SCIENCE_BYTES || records > MAX_SCIENCE_RECORDS {
+            return Err(ScienceError::TooLarge.to_string());
+        }
+        Ok(())
+    }
+
+    /// What a file stores: each result in its saved form. Imported results
+    /// that cannot be recomputed keep their heavy arrays while their
+    /// molecule's imported data stays within [`MAX_IMPORTED_HEAVY_BYTES`],
+    /// in arrival order.
+    pub fn saved(&self) -> Self {
         let mut budgets = HashMap::<Vec<u64>, usize>::new();
-        self.results
+        let results = self
+            .results
             .iter()
-            .map(|result| {
-                let budget = budgets
-                    .entry(self.molecule_key(result))
-                    .or_insert(MAX_IMPORTED_HEAVY_BYTES);
-                let saved = result.for_file(*budget, &[]);
-                if matches!(result.settings, Settings::Imported { .. })
-                    && matches!(saved, Cow::Borrowed(_))
-                {
-                    *budget = budget.saturating_sub(result.heavy_bytes());
+            .map(|stored| {
+                if stored.keep_full {
+                    return stored.clone();
                 }
-                saved
+                let budget = budgets
+                    .entry(self.molecule_key(stored.attachment))
+                    .or_insert(MAX_IMPORTED_HEAVY_BYTES);
+                let result = match stored.result.for_file(*budget, &[]) {
+                    Cow::Borrowed(_) => {
+                        if matches!(stored.result.settings, Settings::Imported { .. }) {
+                            *budget = budget.saturating_sub(stored.result.heavy_bytes());
+                        }
+                        stored.result.clone()
+                    }
+                    Cow::Owned(light) => Arc::new(light),
+                };
+                Stored {
+                    result,
+                    ..stored.clone()
+                }
             })
-            .collect()
+            .collect();
+        Self {
+            frames: self.frames.clone(),
+            attachments: self.attachments.clone(),
+            results,
+        }
     }
 
-    /// The sorted drawing atoms of the molecule a result belongs to.
-    fn molecule_key(&self, result: &CalcResult) -> Vec<u64> {
+    /// The sorted drawing atoms of an attachment's molecule.
+    fn molecule_key(&self, attachment: u64) -> Vec<u64> {
         let mut key: Vec<u64> = self
-            .attachments
-            .iter()
-            .find(|a| belongs(result, a))
+            .attachment(attachment)
             .map(|a| a.atoms.iter().flatten().copied().collect())
             .unwrap_or_default();
         key.sort_unstable();
         key
     }
 
-    /// Pretty-printed JSON bytes the file spends on this result ("Saved in
-    /// file: 84 KB"). Results compare by pointer, as the palette holds them.
-    pub fn saved_bytes(&self, result: &Arc<CalcResult>) -> Option<usize> {
-        let index = self.results.iter().position(|r| Arc::ptr_eq(r, result))?;
-        let form = self.saved_forms().into_iter().nth(index)?;
-        Some(
-            serde_json::to_vec_pretty(&form)
-                .map(|json| json.len())
-                .unwrap_or(0),
-        )
+    /// Pretty-printed JSON bytes the file spends on each result, in
+    /// [`Science::results`] order ("Saved in file: 84 KB"). One pass for the
+    /// whole palette; slow for large imported results, so callers cache it
+    /// per document revision off the UI thread.
+    pub fn saved_sizes(&self) -> Vec<usize> {
+        self.saved()
+            .results
+            .iter()
+            .map(|stored| {
+                serde_json::to_vec_pretty(stored)
+                    .map(|json| json.len())
+                    .unwrap_or(0)
+            })
+            .collect()
     }
 
-    /// Pretty-printed JSON bytes of everything this block saves; Save offers
-    /// [`make_lighter`] above [`LIGHTER_BYTES`].
+    /// Pretty-printed JSON bytes the file spends on calculation data; Save
+    /// offers [`make_lighter`] above [`LIGHTER_BYTES`].
     pub fn file_bytes(&self) -> usize {
-        serde_json::to_vec_pretty(self)
+        serde_json::to_vec_pretty(&self.saved())
             .map(|json| json.len())
             .unwrap_or(0)
     }
 
-    /// Check what a file, the clipboard or a draft supplied: every frame and
-    /// result valid, every reference resolved, the heap budget kept.
+    /// Check what a file, a draft or an inserted drawing supplied: every
+    /// frame and result valid, every reference resolved.
     fn validate(&self) -> Result<(), String> {
-        let mut hashes = HashSet::new();
+        let mut frames = HashMap::new();
         for frame in &self.frames {
             frame.validate().map_err(|e| e.to_string())?;
-            if !hashes.insert(frame.hash()) {
+            if frames.insert(frame.hash(), frame).is_some() {
                 return Err("Calculation data repeats a frame".into());
             }
         }
         let missing = || "Calculation data refers to a missing frame".to_string();
-        for result in &self.results {
-            let frame = self.frame(&result.frame).ok_or_else(missing)?;
-            result.validate(frame).map_err(|e| e.to_string())?;
-            if referenced(result).any(|hash| !hashes.contains(&hash)) {
-                return Err(missing());
-            }
-        }
-        let mut ids = HashSet::new();
+        let mut attachments = HashMap::new();
         for attachment in &self.attachments {
-            let frame = self.frame(&attachment.frame).ok_or_else(missing)?;
+            let frame = frames.get(&attachment.frame).ok_or_else(missing)?;
             let mut atoms = HashSet::new();
-            if !ids.insert(attachment.id)
+            if attachments.insert(attachment.id, attachment).is_some()
                 || attachment.atoms.len() != frame.numbers.len()
                 || !attachment
                     .atoms
@@ -272,39 +398,35 @@ impl Science {
                 return Err("Invalid calculation attachment".into());
             }
         }
-        if self.heap_bytes() > MAX_SCIENCE_BYTES {
-            return Err(ScienceError::TooLarge.to_string());
+        for stored in &self.results {
+            let result = &stored.result;
+            attachments
+                .get(&stored.attachment)
+                .filter(|a| belongs(result, a))
+                .ok_or("A calculation result has no matching attachment")?;
+            let frame = frames.get(&result.frame).ok_or_else(missing)?;
+            result.validate(frame).map_err(|e| e.to_string())?;
+            if referenced(result).any(|hash| !frames.contains_key(&hash)) {
+                return Err(missing());
+            }
         }
-        Ok(())
+        self.check_budget()
     }
 
-    /// Drop attachments without drawing atoms, then results no attachment
-    /// shows and frames nothing refers to.
+    /// Drop attachments without drawing atoms, then their results and the
+    /// frames nothing refers to.
     fn collect_garbage(&mut self) {
         self.attachments
             .retain(|a| a.atoms.iter().any(Option::is_some));
-        let attachments = &self.attachments;
-        self.results
-            .retain(|r| attachments.iter().any(|a| belongs(r, a)));
+        let ids: HashSet<u64> = self.attachments.iter().map(|a| a.id).collect();
+        self.results.retain(|s| ids.contains(&s.attachment));
         let kept: HashSet<FrameHash> = self
             .attachments
             .iter()
             .map(|a| a.frame)
-            .chain(self.results.iter().flat_map(|r| referenced(r)))
+            .chain(self.results.iter().flat_map(|s| referenced(&s.result)))
             .collect();
         self.frames.retain(|f| kept.contains(&f.hash()));
-    }
-
-    /// Take in a pasted or inserted drawing's data, its atom IDs already
-    /// remapped; its attachments get new IDs.
-    pub(crate) fn extend(&mut self, other: Self) {
-        for frame in other.frames {
-            self.insert_frame(frame);
-        }
-        self.results.extend(other.results);
-        for attachment in other.attachments {
-            self.link(attachment.frame, &attachment.atoms, &attachment.baseline);
-        }
     }
 
     fn insert_frame(&mut self, frame: Arc<Frame>) -> FrameHash {
@@ -316,7 +438,7 @@ impl Science {
     }
 
     /// The attachment linking `frame` to these atoms with this baseline,
-    /// added when there is none.
+    /// added under the smallest free ID when there is none.
     fn link(&mut self, frame: FrameHash, atoms: &[Option<u64>], baseline: &str) -> u64 {
         if let Some(found) = self
             .attachments
@@ -325,12 +447,8 @@ impl Science {
         {
             return found.id;
         }
-        let id = self
-            .attachments
-            .iter()
-            .map(|a| a.id)
-            .max()
-            .map_or(1, |id| id.saturating_add(1));
+        let used: HashSet<u64> = self.attachments.iter().map(|a| a.id).collect();
+        let id = (1..).find(|id| !used.contains(id)).unwrap_or_default();
         self.attachments.push(Attachment {
             id,
             frame,
@@ -339,11 +457,33 @@ impl Science {
         });
         id
     }
+
+    /// Take in an inserted drawing's data, its atom IDs already remapped;
+    /// its attachments get new IDs.
+    pub(crate) fn extend(&mut self, other: Self) {
+        for frame in other.frames {
+            self.insert_frame(frame);
+        }
+        let mut ids = HashMap::new();
+        for attachment in &other.attachments {
+            let id = self.link(attachment.frame, &attachment.atoms, &attachment.baseline);
+            ids.insert(attachment.id, id);
+        }
+        for stored in other.results {
+            if let Some(&attachment) = ids.get(&stored.attachment) {
+                self.results.push(Stored {
+                    attachment,
+                    ..stored
+                });
+            }
+        }
+    }
 }
 
-/// Results are shown through the attachment of their own or their input frame.
+/// A result belongs to the attachment of its input frame, or of its own
+/// frame when it has none.
 fn belongs(result: &CalcResult, attachment: &Attachment) -> bool {
-    result.frame == attachment.frame || result.input_frame == Some(attachment.frame)
+    result.input_frame.unwrap_or(result.frame) == attachment.frame
 }
 
 /// Every frame a result refers to, which must stay stored while it exists.
@@ -363,43 +503,27 @@ fn referenced(result: &CalcResult) -> impl Iterator<Item = FrameHash> + '_ {
         )
 }
 
-/// Files, drafts and engine round trips save each result in its saved form.
-impl Serialize for Science {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        #[derive(Serialize)]
-        struct Wire<'a> {
-            frames: &'a [Arc<Frame>],
-            results: Vec<Cow<'a, CalcResult>>,
-            attachments: &'a [Attachment],
-        }
-        Wire {
-            frames: &self.frames,
-            results: self.saved_forms(),
-            attachments: &self.attachments,
-        }
-        .serialize(serializer)
-    }
-}
-
-/// Every route that reads a document (files, recovery, the clipboard)
-/// validates its calculation data here, once.
+/// Every route that reads a document (files, recovery, inserted drawings)
+/// validates its calculation data here, once, and never decodes more than
+/// the document budget.
 impl<'de> Deserialize<'de> for Science {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
         struct Wire {
-            #[serde(default)]
+            #[serde(default, deserialize_with = "admitted")]
             frames: Vec<Arc<Frame>>,
-            #[serde(default)]
-            results: Vec<Arc<CalcResult>>,
-            #[serde(default)]
+            #[serde(default, deserialize_with = "admitted")]
             attachments: Vec<Attachment>,
+            #[serde(default, deserialize_with = "admitted")]
+            results: Vec<Stored>,
         }
+        ROOM.set((MAX_SCIENCE_BYTES, MAX_SCIENCE_RECORDS));
         let wire = Wire::deserialize(deserializer)?;
         let science = Self {
             frames: wire.frames,
-            results: wire.results,
             attachments: wire.attachments,
+            results: wire.results,
         };
         science.validate().map_err(serde::de::Error::custom)?;
         Ok(science)
@@ -426,9 +550,22 @@ pub fn prune(doc: &mut Document) {
     doc.science = science;
 }
 
-/// The drawing atoms in frame order, and whether they are still exactly
-/// one whole molecule with the chemistry of `baseline`.
-fn freshness(doc: &Document, atoms: &[Option<u64>], baseline: &str) -> Freshness {
+/// The chemistry digest 3D models use, plus each linked atom's singlet
+/// choice, which sets the spin a calculation describes.
+fn baseline(doc: &Document, ids: &[u64]) -> String {
+    let singlets: String = ids
+        .iter()
+        .map(|id| match doc.atom(*id) {
+            Some(atom) if atom.singlet => '1',
+            _ => '0',
+        })
+        .collect();
+    format!("{}/{singlets}", crate::models3d::fingerprint(doc, ids))
+}
+
+/// Whether the drawing atoms of `atoms` are still exactly one whole molecule
+/// with the chemistry of `expected`.
+fn freshness(doc: &Document, atoms: &[Option<u64>], expected: &str) -> Freshness {
     let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
     let whole = !ids.is_empty() && ids.iter().all(|id| doc.atom(*id).is_some()) && {
         let set: HashSet<u64> = ids.iter().copied().collect();
@@ -440,7 +577,7 @@ fn freshness(doc: &Document, atoms: &[Option<u64>], baseline: &str) -> Freshness
         }
         component == set
     };
-    if whole && crate::models3d::fingerprint(doc, &ids) == baseline {
+    if whole && baseline(doc, &ids) == expected {
         Freshness::Current
     } else {
         Freshness::Stale
@@ -491,20 +628,24 @@ pub fn drawn_state(doc: &Document, atom: u64) -> (i32, u32) {
         .into_iter()
         .collect();
     let atoms = doc.atoms.iter().filter(|a| ids.contains(&a.id));
-    atoms.fold((0, 1), |(charge, multiplicity), a| {
+    atoms.fold((0i32, 1u32), |(charge, multiplicity), a| {
         let unpaired = if a.singlet {
             0
         } else {
             u32::from(a.radical_electrons)
         };
-        (charge + a.charge, multiplicity + unpaired)
+        (
+            charge.saturating_add(a.charge),
+            multiplicity.saturating_add(unpaired),
+        )
     })
 }
 
 /// The calculation input for the molecule of `atom`: its 3D model's
 /// geometry in model order, then the model's added hydrogens. A model that
-/// still shows an attached frame exactly (an applied optimization) starts
-/// from that frame, so chained calculations keep full precision.
+/// still shows a frame stored for this molecule exactly (an applied
+/// optimization) starts from that frame, so chained calculations keep full
+/// precision.
 pub fn launch(
     doc: &Document,
     atom: u64,
@@ -557,13 +698,14 @@ pub fn launch(
     };
     frame.validate()?;
     let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
-    let baseline = crate::models3d::fingerprint(doc, &ids);
+    let baseline = baseline(doc, &ids);
     if freshness(doc, &atoms, &baseline) == Freshness::Stale {
         return Err(ScienceError::StaleModel);
     }
     let shown = |stored: &Frame| {
         stored.numbers == frame.numbers
             && stored.isotopes == frame.isotopes
+            && stored.masses_amu.is_empty()
             && stored.charge == frame.charge
             && stored.multiplicity == frame.multiplicity
             && stored
@@ -573,12 +715,29 @@ pub fn launch(
                 .all(|(a, b)| a.map(|x| x as f32) == b.map(|x| x as f32))
     };
     let science = &doc.science;
-    let frame = science
+    let mine: HashSet<u64> = science
         .attachments
         .iter()
         .filter(|a| a.atoms == atoms && a.baseline == baseline)
-        .filter_map(|a| science.frame(&a.frame))
-        .find(|stored| stored.masses_amu.is_empty() && shown(stored))
+        .map(|a| a.id)
+        .collect();
+    let candidates: HashSet<FrameHash> = science
+        .attachments
+        .iter()
+        .filter(|a| mine.contains(&a.id))
+        .map(|a| a.frame)
+        .chain(
+            science
+                .results
+                .iter()
+                .filter(|s| mine.contains(&s.attachment))
+                .map(|s| s.result.frame),
+        )
+        .collect();
+    let frame = science
+        .frames
+        .iter()
+        .find(|stored| candidates.contains(&stored.hash()) && shown(stored))
         .cloned()
         .unwrap_or_else(|| Arc::new(frame));
     Ok(Launch {
@@ -590,14 +749,15 @@ pub fn launch(
 
 /// Store a finished calculation with the molecule it was launched for, as
 /// one edit. `frames` are the new geometries the result refers to (an
-/// optimization's final frame). A molecule edited since launch gets the
-/// result as [`Freshness::Stale`]; Undo back to the launch state makes it
-/// current. Nothing changes on error.
+/// optimization's final frame); the result must start from the launch
+/// frame. A molecule edited since launch gets the result as
+/// [`Freshness::Stale`]; Undo back to the launch state makes it current.
+/// Nothing changes on error.
 pub fn attach(
     doc: &mut Document,
     launch: &Launch,
     frames: Vec<Frame>,
-    result: CalcResult,
+    mut result: CalcResult,
 ) -> Result<Attached, ScienceError> {
     if !launch
         .atoms
@@ -609,6 +769,9 @@ pub fn attach(
     }
     let mut science = doc.science.clone();
     let input = science.insert_frame(launch.frame.clone());
+    if result.input_frame.unwrap_or(result.frame) != input {
+        return Err(ScienceError::Unknown);
+    }
     for frame in frames {
         frame.validate()?;
         science.insert_frame(Arc::new(frame));
@@ -621,16 +784,14 @@ pub fn attach(
     if referenced(&result).any(|hash| science.frame(&hash).is_none()) {
         return Err(ScienceError::Unknown);
     }
-    let input_attachment = science.link(input, &launch.atoms, &launch.baseline);
-    let attachment = if result.frame == input {
-        input_attachment
-    } else if frame.numbers == launch.frame.numbers {
-        science.link(result.frame, &launch.atoms, &launch.baseline)
-    } else {
-        input_attachment
-    };
-    science.results.push(Arc::new(result));
-    // Deleted atoms leave the new links as they would on any edit.
+    let attachment = science.link(input, &launch.atoms, &launch.baseline);
+    let keep_full = std::mem::take(&mut result.keep_full);
+    science.results.push(Stored {
+        attachment,
+        keep_full,
+        result: Arc::new(result),
+    });
+    // Atoms deleted since launch leave the link, as on any edit.
     let present: HashSet<u64> = doc.atoms.iter().map(|a| a.id).collect();
     for link in &mut science.attachments {
         for atom in &mut link.atoms {
@@ -639,9 +800,7 @@ pub fn attach(
             }
         }
     }
-    if science.heap_bytes() > MAX_SCIENCE_BYTES {
-        return Err(ScienceError::TooLarge);
-    }
+    science.check_budget().map_err(|_| ScienceError::TooLarge)?;
     doc.science = science;
     Ok(Attached {
         freshness: freshness(doc, &launch.atoms, &launch.baseline),
@@ -652,49 +811,81 @@ pub fn attach(
 /// Every result shown for the molecule of `atom`, oldest first.
 pub fn results_for(doc: &Document, atom: u64) -> Vec<ResultView<'_>> {
     let science = &doc.science;
-    let mut views = Vec::new();
-    for result in &science.results {
-        let Some(attachment) = science
-            .attachments
-            .iter()
-            .find(|a| a.atoms.contains(&Some(atom)) && belongs(result, a))
-        else {
-            continue;
-        };
-        let Some(frame) = science.frame(&result.frame) else {
-            continue;
-        };
-        views.push(ResultView {
-            result,
-            frame,
-            attachment,
-            freshness: attachment.freshness(doc),
-        });
+    let attachments: HashMap<u64, (&Attachment, Freshness)> = science
+        .attachments
+        .iter()
+        .filter(|a| a.atoms.contains(&Some(atom)))
+        .map(|a| (a.id, (a, a.freshness(doc))))
+        .collect();
+    if attachments.is_empty() {
+        return vec![];
     }
-    views
+    let frames: HashMap<FrameHash, &Arc<Frame>> =
+        science.frames.iter().map(|f| (f.hash(), f)).collect();
+    science
+        .results
+        .iter()
+        .enumerate()
+        .filter_map(|(index, stored)| {
+            let (attachment, freshness) = *attachments.get(&stored.attachment)?;
+            Some(ResultView {
+                index,
+                stored,
+                frame: frames.get(&stored.result.frame)?,
+                attachment,
+                freshness,
+            })
+        })
+        .collect()
 }
 
-/// Move the molecule's 3D model to the attached frame ("Apply xTB
-/// geometry", one undo step for the caller). The 2D drawing does not move.
-pub fn apply_geometry(doc: &mut Document, attachment: u64) -> Result<(), ScienceError> {
-    let link = doc
-        .science
+/// Move the molecule's 3D model to `frame`, a geometry stored for
+/// `attachment` (its own frame or a result's, such as an optimization's
+/// final frame): "Apply xTB geometry", one undo step for the caller. The 2D
+/// drawing does not move. Nothing changes on error.
+pub fn apply_geometry(
+    doc: &mut Document,
+    attachment: u64,
+    frame: &FrameHash,
+) -> Result<(), ScienceError> {
+    let science = &doc.science;
+    let link = science
         .attachment(attachment)
+        .ok_or(ScienceError::Unknown)?;
+    let own = link.frame == *frame
+        || science
+            .results
+            .iter()
+            .any(|s| s.attachment == attachment && s.result.frame == *frame);
+    let frame = science
+        .frame(frame)
+        .filter(|_| own)
         .ok_or(ScienceError::Unknown)?;
     if link.freshness(doc) == Freshness::Stale {
         return Err(ScienceError::Stale);
     }
-    let frame = doc
-        .science
-        .frame(&link.frame)
-        .ok_or(ScienceError::Unknown)?
-        .clone();
-    let first = link.atoms.iter().flatten().next().copied();
-    let index = first
-        .and_then(|atom| model_of(doc, atom))
+    let index = link
+        .atoms
+        .iter()
+        .flatten()
+        .next()
+        .and_then(|atom| model_of(doc, *atom))
         .ok_or(ScienceError::NoModel)?;
     let model = doc.models.get(index).ok_or(ScienceError::NoModel)?;
     let heavy = model.atoms.len();
+    let positions: Vec<[f32; 3]> = frame
+        .positions_angstrom
+        .iter()
+        .map(|p| p.map(|x| x as f32))
+        .collect();
+    let parent_of = |h: &crate::models3d::Hydrogen| -> Option<usize> {
+        // Generated models index their parents; imported ones use drawing IDs.
+        if model.generated.is_some() {
+            usize::try_from(h.parent).ok()
+        } else {
+            model.atoms.iter().position(|a| a.id == h.parent)
+        }
+    };
     let matches = model.cell.is_none()
         && heavy + model.hydrogens.len() == frame.numbers.len()
         && model
@@ -710,12 +901,31 @@ pub fn apply_geometry(doc: &mut Document, attachment: u64) -> Result<(), Science
                 Some("H")
             };
             element.and_then(atomic_number) == Some(*z)
+        })
+        && positions.iter().flatten().all(|v| {
+            v.is_finite() && v.abs() <= crate::models3d::MAX_COORDINATE
+        })
+        // Each added hydrogen sits nearest its own parent in the frame, so
+        // the model's hydrogen order still matches the frame's.
+        && model.hydrogens.iter().enumerate().all(|(i, h)| {
+            let at = frame.positions_angstrom.get(heavy + i);
+            let nearest = at.and_then(|at| {
+                (0..heavy).min_by(|&a, &b| {
+                    let d = |j: usize| {
+                        frame.positions_angstrom.get(j).map_or(f64::INFINITY, |p| {
+                            p.iter().zip(at).map(|(a, b)| (a - b).powi(2)).sum::<f64>()
+                        })
+                    };
+                    d(a).total_cmp(&d(b))
+                })
+            });
+            nearest.is_some() && nearest == parent_of(h)
         });
     if !matches {
         return Err(ScienceError::ModelMismatch);
     }
     let model = doc.models.get_mut(index).ok_or(ScienceError::NoModel)?;
-    let mut positions = frame.positions_angstrom.iter().map(|p| p.map(|x| x as f32));
+    let mut positions = positions.into_iter();
     for (atom, xyz) in model.atoms.iter_mut().zip(positions.by_ref()) {
         atom.xyz = xyz;
     }
@@ -878,35 +1088,26 @@ fn dihedral(
     Some(cosine.clamp(-1.0, 1.0).acos())
 }
 
-/// Set "Keep full results in this file" on one result.
-pub fn set_keep_full(doc: &mut Document, result: &Arc<CalcResult>, keep: bool) -> bool {
-    let Some(slot) = doc
-        .science
-        .results
-        .iter_mut()
-        .find(|r| Arc::ptr_eq(r, result))
-    else {
-        return false;
-    };
-    if slot.keep_full == keep {
-        return false;
+/// Set "Keep full results in this file" on the result at `index`.
+pub fn set_keep_full(doc: &mut Document, index: usize, keep: bool) -> bool {
+    match doc.science.results.get_mut(index) {
+        Some(stored) if stored.keep_full != keep => {
+            stored.keep_full = keep;
+            true
+        }
+        _ => false,
     }
-    let mut changed = (**slot).clone();
-    changed.keep_full = keep;
-    *slot = Arc::new(changed);
-    true
 }
 
 /// "Make lighter": results the engine can recompute stop keeping their full
-/// data in the file and in this document. Imported results, which cannot be
-/// recomputed, are left alone. Returns how many results changed.
+/// data, in the file and in this document. Imported results, which cannot
+/// be recomputed, are left alone. Returns how many results changed.
 pub fn make_lighter(doc: &mut Document) -> usize {
     let mut changed = 0;
-    for slot in &mut doc.science.results {
-        if slot.keep_full && matches!(slot.settings, Settings::Xtb(_)) {
-            let mut light = slot.light(&[]);
-            light.keep_full = false;
-            *slot = Arc::new(light);
+    for stored in &mut doc.science.results {
+        if stored.keep_full && matches!(stored.result.settings, Settings::Xtb(_)) {
+            stored.result = Arc::new(stored.result.light(&[]));
+            stored.keep_full = false;
             changed += 1;
         }
     }

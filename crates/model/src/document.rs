@@ -678,9 +678,12 @@ impl Document {
     }
     /// A copy marked with its required native version, for files, clipboard
     /// data and recovery drafts, so reading them back never migrates again.
+    /// Calculation results take their saved form here, so every stored
+    /// copy saves only what the file policy keeps.
     pub fn current(&self) -> Self {
         Self {
             version: self.file_version(),
+            science: self.science.saved(),
             ..self.clone()
         }
     }
@@ -1169,6 +1172,7 @@ impl Document {
             || !generic.is_empty()
     }
     pub fn validate(&self) -> Result<(), String> {
+        self.science.check_budget()?;
         let pieces = crate::equipment::placed::used(self).len();
         if pieces > crate::equipment::placed::MAX_DEFINITIONS {
             return Err(format!(
@@ -1651,6 +1655,7 @@ impl History {
             let _ = self.undo.pop_front(&mut self.shared);
         }
         self.cap();
+        self.fit_science(after);
         true
     }
     /// Keeps this history within its own byte limit.

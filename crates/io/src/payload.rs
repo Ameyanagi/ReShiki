@@ -23,6 +23,8 @@ const CLOSE: &str = "</reshiki:drawing>";
 /// Preserve the visible figure while removing editor history and provenance.
 pub fn visible(doc: &Document) -> Document {
     let mut doc = doc.clone();
+    // Figures carry the drawing, never calculation data.
+    doc.science = Default::default();
     doc.recent_colors.clear();
     doc.page_layout = None;
     for model in &mut doc.models {
@@ -258,3 +260,5 @@ fn base64(text: &[u8]) -> Result<Document, String> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) use tests::calculated_water;

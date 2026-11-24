@@ -259,6 +259,7 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
         .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
     part.models
         .retain(|m| m.linked_ids(doc).iter().all(|id| ids.contains(id)));
+    crate::science::prune(&mut part);
     part.generic.alternatives.retain(|a| ids.contains(&a.atom));
     part.generic.links.retain(|a| ids.contains(&a.atom));
     part.generic.repeats.retain(|r| {
@@ -658,8 +659,11 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
     for model in models {
         model.remap(mapping)?;
     }
+    // An atom outside the mapping is gone, as after a delete.
     for attachment in &mut science.attachments {
-        attachment.atoms.iter_mut().flatten().try_for_each(map)?;
+        for atom in &mut attachment.atoms {
+            *atom = atom.and_then(|id| mapping.get(&id).copied());
+        }
     }
     *depth_appearance = crate::depth_appearance::remap(depth_appearance, mapping);
     Some(())

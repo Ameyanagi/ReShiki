@@ -99,6 +99,11 @@ impl Library {
     ) -> Result<usize, String> {
         let mut next = self.clone();
         let id = new_id();
+        // Templates hold structures, not calculation data.
+        let document = Document {
+            science: Default::default(),
+            ..document
+        };
         next.templates.push(Template {
             id,
             name: name.trim().into(),

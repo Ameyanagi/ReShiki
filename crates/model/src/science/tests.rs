@@ -34,6 +34,12 @@ fn water() -> (Document, u64) {
     (doc, oxygen)
 }
 
+fn water_pair() -> (Document, [u64; 2]) {
+    let (mut doc, first) = water();
+    let second = editing::append(&mut doc, &water().0, Point::new(150., 0.))[0];
+    (doc, [first, second])
+}
+
 fn ethanol() -> (Document, [u64; 3]) {
     let mut doc = Document::default();
     let ids = ["C", "C", "O"].map(|element| {
@@ -207,7 +213,7 @@ fn result(frame: &Frame, task: Task, full: bool) -> CalcResult {
                 order: 1.,
             })
             .collect(),
-        orbitals: Some(Orbitals {
+        orbitals: (frame.multiplicity == 1).then(|| Orbitals {
             basis: full.then_some(BasisSet { shells }),
             core_electrons: frame
                 .numbers
@@ -325,6 +331,17 @@ fn launch_maps_model_atoms_then_hydrogens() {
 }
 
 #[test]
+fn drawn_state_saturates_charges() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("C", Point::new(36., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.atom_mut(a).unwrap().charge = i32::MAX;
+    doc.atom_mut(b).unwrap().charge = 1;
+    assert_eq!(drawn_state(&doc, a), (i32::MAX, 1));
+}
+
+#[test]
 fn launch_refuses_without_model_stale_model_or_crystal() {
     let (doc, oxygen) = water();
     let mut no_model = doc.clone();
@@ -382,7 +399,7 @@ fn attach_stores_frames_results_and_attachments_once() {
     assert_eq!(ids[0], ids[1]);
     assert_eq!(doc.science.frames.len(), 2);
     assert_eq!(doc.science.results.len(), 2);
-    assert_eq!(doc.science.attachments.len(), 2);
+    assert_eq!(doc.science.attachments.len(), 1);
     assert!(Arc::ptr_eq(
         doc.science.frame(&start.frame.hash()).unwrap(),
         &start.frame
@@ -391,14 +408,76 @@ fn attach_stores_frames_results_and_attachments_once() {
         doc.science.frame(&final_frame.hash()).unwrap().as_ref(),
         &final_frame
     );
-    assert_eq!(doc.science.results[0].energy_hartree, Some(-7.5));
-    assert_eq!(doc.science.results[1].energy_hartree, Some(-7.6));
+    for (stored, energy) in doc.science.results.iter().zip([-7.5, -7.6]) {
+        assert_eq!(stored.attachment, ids[0]);
+        assert_eq!(stored.result.energy_hartree, Some(energy));
+    }
     assert_eq!(
         doc.science.attachment(ids[0]).unwrap().frame,
-        final_frame.hash()
+        start.frame.hash()
     );
     assert_eq!(results_for(&doc, oxygen).len(), 2);
     assert_eq!(history.frames(), 2);
+}
+
+#[test]
+fn identical_geometries_keep_their_own_results() {
+    let (mut doc, [a, b]) = water_pair();
+    let first = launch(&doc, a, 0, 1).unwrap();
+    let second = launch(&doc, b, 0, 1).unwrap();
+    assert_eq!(first.frame.hash(), second.frame.hash());
+
+    let one = add_result(&mut doc, &first, result(&first.frame, Task::Energy, false));
+    let mut other = result(&second.frame, Task::Energy, false);
+    other.energy_hartree = Some(-8.);
+    let two = add_result(&mut doc, &second, other);
+    assert_ne!(one.attachment, two.attachment);
+    assert_eq!(doc.science.frames.len(), 1);
+
+    for (atom, index, attachment, energy) in
+        [(a, 0, one.attachment, -7.5), (b, 1, two.attachment, -8.)]
+    {
+        let views = results_for(&doc, atom);
+        let [view] = views.as_slice() else {
+            panic!("expected one result for atom {atom}, found {}", views.len());
+        };
+        assert_eq!(view.index, index);
+        assert_eq!(view.attachment.id, attachment);
+        assert_eq!(view.stored.result.energy_hartree, Some(energy));
+    }
+
+    let surviving = doc.science.results[1].clone();
+    reconciled_edit(&mut doc, &mut History::default(), |doc| doc.delete(&[a]));
+    assert!(results_for(&doc, a).is_empty());
+    assert_eq!(doc.science.results, [surviving]);
+    let views = results_for(&doc, b);
+    assert_eq!(views.len(), 1);
+    assert_eq!(views[0].index, 0);
+    assert_eq!(views[0].attachment.id, two.attachment);
+    assert_eq!(views[0].freshness, Freshness::Current);
+}
+
+#[test]
+fn attachment_ids_reuse_the_smallest_free_id() {
+    let (mut doc, [a, b]) = water_pair();
+    let start = launch(&doc, a, 0, 1).unwrap();
+    add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
+    let mut saved: Value = serde_json::from_slice(&doc.file_json().unwrap()).unwrap();
+    saved["science"]["attachments"][0]["id"] = json!(u64::MAX);
+    saved["science"]["results"][0]["attachment"] = json!(u64::MAX);
+    let mut reopened = Document::from_native_file(&serde_json::to_vec(&saved).unwrap()).unwrap();
+    assert_eq!(results_for(&reopened, a)[0].attachment.id, u64::MAX);
+
+    let start = launch(&reopened, b, 0, 1).unwrap();
+    let added = add_result(
+        &mut reopened,
+        &start,
+        result(&start.frame, Task::Energy, false),
+    );
+    assert_eq!(added.attachment, 1);
+    let reopened = Document::from_native_file(&reopened.file_json().unwrap()).unwrap();
+    assert_eq!(results_for(&reopened, a)[0].attachment.id, u64::MAX);
+    assert_eq!(results_for(&reopened, b)[0].attachment.id, 1);
 }
 
 #[test]
@@ -411,17 +490,11 @@ fn save_and_reopen_keeps_results() {
     assert_eq!(reopened.version, CALCULATIONS);
     assert_eq!(reopened.science.frames, doc.science.frames);
     assert_eq!(reopened.science.attachments, doc.science.attachments);
-    assert_eq!(reopened.science.results[0].as_ref(), &full.light(&[]));
+    let light = &reopened.science.results[0].result;
+    assert_eq!(light.as_ref(), &full.light(&[]));
+    assert!(light.vibrations.as_ref().unwrap().modes.is_empty());
     assert!(
-        reopened.science.results[0]
-            .vibrations
-            .as_ref()
-            .unwrap()
-            .modes
-            .is_empty()
-    );
-    assert!(
-        reopened.science.results[0]
+        light
             .orbitals
             .as_ref()
             .unwrap()
@@ -434,7 +507,7 @@ fn save_and_reopen_keeps_results() {
     assert!(small_import.heavy_bytes() <= MAX_IMPORTED_HEAVY_BYTES);
     add_result(&mut doc, &start, small_import.clone());
     let reopened = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
-    assert_eq!(reopened.science.results[1].as_ref(), &small_import);
+    assert_eq!(reopened.science.results[1].result.as_ref(), &small_import);
     assert_eq!(reopened.science.attachments, doc.science.attachments);
 
     let (mut large, ids) = chain(120);
@@ -466,15 +539,58 @@ fn save_and_reopen_keeps_results() {
     let reopened = Document::from_native_file(&large.file_json().unwrap()).unwrap();
     let mut light = large_import.light(&[]);
     light.omitted_bytes = Some(heavy_bytes);
-    assert_eq!(reopened.science.results[0].as_ref(), &light);
-    let stored = Arc::clone(&large.science.results[0]);
+    assert_eq!(reopened.science.results[0].result.as_ref(), &light);
     reconciled_edit(&mut large, &mut History::default(), |doc| {
-        assert!(set_keep_full(doc, &stored, true));
+        assert!(set_keep_full(doc, 0, true));
     });
     let reopened = Document::from_native_file(&large.file_json().unwrap()).unwrap();
-    let mut kept = large_import;
-    kept.keep_full = true;
-    assert_eq!(reopened.science.results[0].as_ref(), &kept);
+    let stored = &reopened.science.results[0];
+    assert!(stored.keep_full);
+    assert_eq!(stored.result.as_ref(), &large_import);
+}
+
+#[test]
+fn internal_round_trip_keeps_full_data() {
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let full = result(&start.frame, Task::Hessian, true);
+    add_result(&mut doc, &start, full.clone());
+    assert!(!doc.science.results[0].keep_full);
+
+    let internal: Document = serde_json::from_slice(&serde_json::to_vec(&doc).unwrap()).unwrap();
+    // The fixture already uses exactly representable f32 and q16 array values.
+    assert_eq!(internal.science.results, doc.science.results);
+    assert_eq!(internal.science.results[0].result.as_ref(), &full);
+
+    let native = Document::from_native_file(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(native.science.results[0].result.as_ref(), &full.light(&[]));
+}
+
+#[test]
+fn keep_full_toggle_shares_the_payload() {
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    add_result(&mut doc, &start, result(&start.frame, Task::Hessian, true));
+    let old = doc.science.results[0].result.clone();
+
+    assert!(set_keep_full(&mut doc, 0, true));
+    assert!(Arc::ptr_eq(&old, &doc.science.results[0].result));
+    let bytes = doc.file_json().unwrap();
+    let saved: Value = serde_json::from_slice(&bytes).unwrap();
+    let stored = &saved["science"]["results"][0];
+    assert_eq!(stored["keep_full"], true);
+    assert!(
+        stored["result"]["hessian_hartree_per_bohr2"]
+            .as_str()
+            .unwrap()
+            .starts_with("f32:")
+    );
+
+    let reopened = Document::from_native_file(&bytes).unwrap();
+    let stored = &reopened.science.results[0];
+    assert!(stored.keep_full);
+    assert!(!stored.result.keep_full);
+    assert_eq!(stored.result, old);
 }
 
 #[test]
@@ -531,6 +647,20 @@ fn older_reader_refuses_result_files() {
 }
 
 #[test]
+fn newer_version_is_refused_before_reading_science() {
+    let mut newer = serde_json::to_value(Document::default()).unwrap();
+    newer["version"] = json!(43);
+    newer["science"] = json!({"results": "invalid"});
+    assert_eq!(
+        Document::from_native_file(&serde_json::to_vec(&newer).unwrap()).unwrap_err(),
+        "This drawing was made with a newer version of ReShiki (document version 43). Update ReShiki to open it."
+    );
+    newer["version"] = json!(VERSION);
+    let error = Document::from_native_file(&serde_json::to_vec(&newer).unwrap()).unwrap_err();
+    assert!(error.contains("a list of calculation records"), "{error}");
+}
+
+#[test]
 fn native_file_excerpt_uses_compact_arrays() {
     let (mut doc, oxygen) = water();
     let start = launch(&doc, oxygen, 0, 1).unwrap();
@@ -543,7 +673,7 @@ fn native_file_excerpt_uses_compact_arrays() {
     assert!(text.contains("\"coefficients\": \"f32:"));
     assert!(!text.contains("\"modes\": ["));
     let json: Value = serde_json::from_slice(&bytes).unwrap();
-    let saved = &json["science"]["results"][0];
+    let saved = &json["science"]["results"][0]["result"];
     assert!(
         saved["vibrations"]["modes"]
             .as_str()
@@ -582,6 +712,26 @@ fn chemical_edit_makes_results_stale_and_undo_restores() {
     assert!(history.undo(&mut doc));
     reconciled_edit(&mut doc, &mut history, |doc| doc.translate(&ids, 30., -20.));
     assert_eq!(results_for(&doc, ids[0])[0].freshness, Freshness::Current);
+}
+
+#[test]
+fn singlet_toggle_makes_results_stale() {
+    let (mut doc, ids) = ethanol();
+    let atom = ids[0];
+    doc.atom_mut(atom).unwrap().radical_electrons = 2;
+    doc.models[0].fingerprint = Some(crate::models3d::fingerprint(&doc, &ids));
+    let (charge, multiplicity) = drawn_state(&doc, atom);
+    let start = launch(&doc, atom, charge, multiplicity).unwrap();
+    add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
+    assert_eq!(results_for(&doc, atom)[0].freshness, Freshness::Current);
+
+    let mut history = History::default();
+    reconciled_edit(&mut doc, &mut history, |doc| {
+        doc.atom_mut(atom).unwrap().singlet = true;
+    });
+    assert_eq!(results_for(&doc, atom)[0].freshness, Freshness::Stale);
+    assert!(history.undo(&mut doc));
+    assert_eq!(results_for(&doc, atom)[0].freshness, Freshness::Current);
 }
 
 #[test]
@@ -646,7 +796,7 @@ fn history_counts_shared_payloads_once() {
     let (mut doc, ids) = chain(100);
     let start = launch(&doc, ids[0], 0, 1).unwrap();
     add_result(&mut doc, &start, result(&start.frame, Task::Hessian, true));
-    let heap = doc.science.heap_bytes();
+    let heap = start.frame.heap_bytes() + doc.science.results[0].result.heap_bytes();
     assert!(heap > 2_000_000);
     let mut plain = doc.clone();
     plain.science = Science::default();
@@ -666,20 +816,19 @@ fn history_counts_shared_payloads_once() {
     );
     assert!(history.bytes() < heap * 3);
     assert_eq!(history.science_bytes(&doc), heap);
-    assert!(
-        history
-            .undo_frames()
-            .all(|snapshot| Arc::ptr_eq(&snapshot.science.results[0], &doc.science.results[0]))
-    );
+    assert!(history.undo_frames().all(|snapshot| Arc::ptr_eq(
+        &snapshot.science.results[0].result,
+        &doc.science.results[0].result,
+    )));
     // MAX_SCIENCE_BYTES is fixed: verify the exact accounting used by fit_science
     // instead of allocating hundreds of MiB solely to cross its production limit.
     assert!(history.fit_science(&doc));
     assert_eq!(history.frames(), 30);
     let mut separate = doc.clone();
-    separate.science.results[0] = Arc::new((*doc.science.results[0]).clone());
+    separate.science.results[0].result = Arc::new((*doc.science.results[0].result).clone());
     assert_eq!(
         history.science_bytes(&separate),
-        heap + doc.science.results[0].heap_bytes()
+        heap + doc.science.results[0].result.heap_bytes()
     );
     let bytes = history.bytes();
     assert_eq!(history.release(usize::MAX, 0), bytes);
@@ -687,6 +836,63 @@ fn history_counts_shared_payloads_once() {
     assert_eq!(history.bytes(), 0);
     assert_eq!(history.science_bytes(&doc), heap);
     assert_eq!(history.science_bytes(&plain), 0);
+}
+
+#[test]
+fn history_commit_keeps_science_within_budget() {
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let full = result(&start.frame, Task::Hessian, true);
+    let bytes = full.heap_bytes() + start.frame.heap_bytes();
+    add_result(&mut doc, &start, full);
+    let mut history = History::default();
+    for _ in 0..3 {
+        let before = doc.clone();
+        doc.translate(&[oxygen], 1., 0.);
+        assert!(history.commit(before, &doc));
+        assert_eq!(history.science_bytes(&doc), bytes);
+    }
+    assert!(history.fit_science(&doc));
+    assert_eq!(history.frames(), 3);
+}
+
+#[test]
+fn combined_documents_over_budget_are_refused() {
+    let (mut doc, ids) = chain(50);
+    let start = launch(&doc, ids[0], 0, 1).unwrap();
+    add_result(&mut doc, &start, result(&start.frame, Task::Hessian, true));
+    doc.validate().unwrap();
+    let shared = doc.science.results[0].clone();
+    let count = MAX_SCIENCE_BYTES / shared.result.heap_bytes() + 1;
+    assert!(count + doc.science.attachments.len() + doc.science.frames.len() < MAX_SCIENCE_RECORDS);
+    doc.science.results.resize(count, shared);
+    assert!(doc.science.heap_bytes() > MAX_SCIENCE_BYTES);
+    assert_eq!(
+        doc.validate().unwrap_err(),
+        ScienceError::TooLarge.to_string()
+    );
+
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
+    let mut file = serde_json::to_value(&doc).unwrap();
+    let attachment = &doc.science.attachments[0];
+    // One frame and these attachments fill the record budget. The first
+    // result exceeds it, before the decoder reaches the malformed tail.
+    file["science"]["attachments"] = json!(
+        (1..MAX_SCIENCE_RECORDS)
+            .map(|id| Attachment {
+                id: id as u64,
+                ..attachment.clone()
+            })
+            .collect::<Vec<_>>()
+    );
+    file["science"]["results"]
+        .as_array_mut()
+        .unwrap()
+        .push(Value::Null);
+    let error = Document::from_native_file(&serde_json::to_vec(&file).unwrap()).unwrap_err();
+    assert!(error.contains("exceed"), "{error}");
 }
 
 #[test]
@@ -727,8 +933,8 @@ fn clipboard_selection_carries_no_science() {
         Freshness::Current
     );
     assert!(Arc::ptr_eq(
-        &target.science.results[0],
-        &source.science.results[0]
+        &target.science.results[0].result,
+        &source.science.results[0].result
     ));
     assert!(Arc::ptr_eq(
         &target.science.frames[0],
@@ -739,13 +945,84 @@ fn clipboard_selection_carries_no_science() {
         assert_eq!(editing::append(doc, &source, Point::new(150., 0.)).len(), 3);
     });
     assert!(Arc::ptr_eq(
-        &duplicated.science.results[0],
-        &duplicated.science.results[1]
+        &duplicated.science.results[0].result,
+        &duplicated.science.results[1].result
     ));
     assert_eq!(
         History::default().science_bytes(&duplicated),
-        source.science.heap_bytes()
+        start.frame.heap_bytes() + source.science.results[0].result.heap_bytes()
     );
+}
+
+#[test]
+fn calculated_fragment_can_still_be_joined() {
+    use crate::{
+        joining::Prepared,
+        templates::{Anchor, Connection},
+    };
+
+    let (mut doc, fragment) = chain(2);
+    let host_point = Point::new(180., 0.);
+    let host = doc.add_atom("C", host_point);
+    let neighbor = doc.add_atom("C", Point::new(222., 0.));
+    doc.add_bond(host, neighbor, 1, "plain");
+    let start = launch(&doc, fragment[0], 0, 1).unwrap();
+    add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
+    assert_eq!(
+        results_for(&doc, fragment[0])[0].freshness,
+        Freshness::Current
+    );
+
+    let (mut joined, _) = Prepared::new(&doc, &fragment)
+        .unwrap()
+        .place(
+            host_point,
+            None,
+            5.,
+            Anchor::Atom(fragment[0]),
+            Connection::Connect,
+        )
+        .unwrap();
+    assert!(joined.bond_position(host, fragment[0]).is_some());
+    assert!(
+        transaction::reconcile(&mut joined, doc)
+            .unwrap()
+            .commit(&mut joined, &mut History::default(), false)
+            .recorded
+    );
+    assert!(joined.science.is_empty());
+    assert!(results_for(&joined, fragment[0]).is_empty());
+    joined.validate().unwrap();
+}
+
+#[test]
+fn expansion_of_another_molecule_ignores_unrelated_results() {
+    use crate::{atom_text, generic};
+
+    let (mut doc, oxygen) = water();
+    let carbon = doc.add_atom("C", Point::new(180., 0.));
+    let alternative = doc.add_atom("*", Point::new(222., 0.));
+    doc.add_bond(carbon, alternative, 1, "plain");
+    let mut doc = atom_text::apply(&doc, alternative, "[Cl,Br]", atom_text::Mode::Auto).unwrap();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
+
+    let input =
+        generic::prepare_component_expansion_input(&doc, &[carbon], generic::Limits::default())
+            .unwrap();
+    let expanded = generic::expand_prepared(input).unwrap();
+    assert_eq!(expanded.count(), 2);
+    let expanded = expanded.take().unwrap();
+    let mut elements: Vec<_> = expanded
+        .atoms
+        .iter()
+        .map(|atom| atom.element.as_str())
+        .collect();
+    elements.sort_unstable();
+    assert_eq!(elements, ["Br", "C", "C", "Cl"]);
+    assert!(expanded.science.is_empty());
+    assert_eq!(results_for(&doc, oxygen)[0].freshness, Freshness::Current);
+    expanded.validate().unwrap();
 }
 
 #[test]
@@ -765,9 +1042,10 @@ fn apply_geometry_moves_model_not_drawing() {
         attached = Some(attach(doc, &start, vec![final_frame.clone()], optimized).unwrap());
     });
     let attachment = attached.unwrap().attachment;
+    let final_hash = final_frame.hash();
     let mut history = History::default();
     reconciled_edit(&mut doc, &mut history, |doc| {
-        apply_geometry(doc, attachment).unwrap()
+        apply_geometry(doc, attachment, &final_hash).unwrap()
     });
     assert_eq!(history.frames(), 1);
     assert_eq!(doc.atoms, drawing);
@@ -785,7 +1063,7 @@ fn apply_geometry_moves_model_not_drawing() {
     let applied = launch(&doc, oxygen, 0, 1).unwrap();
     assert!(Arc::ptr_eq(
         &applied.frame,
-        doc.science.frame(&final_frame.hash()).unwrap()
+        doc.science.frame(&final_hash).unwrap()
     ));
     assert_eq!(applied.frame.as_ref(), &final_frame);
     assert!(history.undo(&mut doc));
@@ -796,16 +1074,88 @@ fn apply_geometry_moves_model_not_drawing() {
         doc.models[0].hydrogens.pop();
     });
     assert!(matches!(
-        apply_geometry(&mut mismatch, attachment),
+        apply_geometry(&mut mismatch, attachment, &final_hash),
         Err(ScienceError::ModelMismatch)
     ));
     reconciled_edit(&mut doc, &mut history, |doc| {
         doc.atom_mut(oxygen).unwrap().element = "S".into();
     });
     assert!(matches!(
-        apply_geometry(&mut doc, attachment),
+        apply_geometry(&mut doc, attachment, &final_hash),
         Err(ScienceError::Stale)
     ));
+}
+
+#[test]
+fn optimization_view_applies_the_final_geometry() {
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let mut final_frame = (*start.frame).clone();
+    final_frame.positions_angstrom[0][0] += 0.234_567_891;
+    let final_hash = final_frame.hash();
+    let mut optimized = result(&final_frame, Task::Optimize, false);
+    optimized.input_frame = Some(start.frame.hash());
+    attach(&mut doc, &start, vec![final_frame.clone()], optimized).unwrap();
+
+    let views = results_for(&doc, oxygen);
+    assert_eq!(views.len(), 1);
+    let view = &views[0];
+    assert_eq!(view.attachment.frame, start.frame.hash());
+    assert_eq!(view.frame.as_ref(), &final_frame);
+    let (attachment, frame) = (view.attachment.id, view.stored.result.frame);
+    apply_geometry(&mut doc, attachment, &frame).unwrap();
+    let model = &doc.models[0];
+    let coordinates: Vec<_> = model
+        .atoms
+        .iter()
+        .map(|a| a.xyz)
+        .chain(model.hydrogens.iter().map(|h| h.xyz))
+        .collect();
+    let expected: Vec<_> = final_frame
+        .positions_angstrom
+        .iter()
+        .map(|p| p.map(|x| x as f32))
+        .collect();
+    assert_eq!(coordinates, expected);
+    assert_ne!(
+        coordinates[0],
+        start.frame.positions_angstrom[0].map(|x| x as f32)
+    );
+    assert_eq!(launch(&doc, oxygen, 0, 1).unwrap().frame.hash(), final_hash);
+}
+
+#[test]
+fn apply_geometry_refuses_out_of_range_coordinates_and_swapped_hydrogens() {
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let mut far = (*start.frame).clone();
+    far.positions_angstrom[1][0] = 20_000.;
+    let hash = far.hash();
+    let mut optimized = result(&far, Task::Optimize, false);
+    optimized.input_frame = Some(start.frame.hash());
+    let attachment = attach(&mut doc, &start, vec![far], optimized)
+        .unwrap()
+        .attachment;
+    let original = doc.models[0].clone();
+    assert!(matches!(
+        apply_geometry(&mut doc, attachment, &hash),
+        Err(ScienceError::ModelMismatch)
+    ));
+    assert_eq!(doc.models[0], original);
+
+    let (mut doc, ids) = ethanol();
+    let start = launch(&doc, ids[0], 0, 1).unwrap();
+    let attachment =
+        add_result(&mut doc, &start, result(&start.frame, Task::Energy, false)).attachment;
+    let hash = start.frame.hash();
+    apply_geometry(&mut doc, attachment, &hash).unwrap();
+    doc.models[0].hydrogens.reverse();
+    let reversed = doc.models[0].clone();
+    assert!(matches!(
+        apply_geometry(&mut doc, attachment, &hash),
+        Err(ScienceError::ModelMismatch)
+    ));
+    assert_eq!(doc.models[0], reversed);
 }
 
 #[test]
@@ -817,20 +1167,20 @@ fn make_lighter_and_keep_full() {
     let mut imported = imported(full);
     imported.keep_full = true;
     add_result(&mut doc, &start, imported);
-    let xtb = Arc::clone(&doc.science.results[0]);
-    let light_bytes = doc.science.saved_bytes(&xtb).unwrap();
+    let light_sizes = doc.science.saved_sizes();
     reconciled_edit(&mut doc, &mut History::default(), |doc| {
-        assert!(set_keep_full(doc, &xtb, true));
+        assert!(set_keep_full(doc, 0, true));
     });
-    let xtb = Arc::clone(&doc.science.results[0]);
-    assert!(doc.science.saved_bytes(&xtb).unwrap() > light_bytes);
-    let imported = Arc::clone(&doc.science.results[1]);
+    let full_sizes = doc.science.saved_sizes();
+    assert!(full_sizes[0] > light_sizes[0]);
+    assert_eq!(full_sizes[1], light_sizes[1]);
+    let imported = Arc::clone(&doc.science.results[1].result);
     let file_bytes = doc.science.file_bytes();
     reconciled_edit(&mut doc, &mut History::default(), |doc| {
         assert_eq!(make_lighter(doc), 1)
     });
-    let light = &doc.science.results[0];
-    assert!(!light.keep_full);
+    assert!(!doc.science.results[0].keep_full);
+    let light = &doc.science.results[0].result;
     assert!(light.hessian_hartree_per_bohr2.is_empty());
     assert!(light.gradient_hartree_per_bohr.is_empty());
     assert!(light.vibrations.as_ref().unwrap().modes.is_empty());
@@ -843,8 +1193,8 @@ fn make_lighter_and_keep_full() {
             .coefficients
             .is_empty()
     );
-    assert_eq!(doc.science.saved_bytes(light).unwrap(), light_bytes);
-    assert!(Arc::ptr_eq(&doc.science.results[1], &imported));
+    assert_eq!(doc.science.saved_sizes(), light_sizes);
+    assert!(Arc::ptr_eq(&doc.science.results[1].result, &imported));
     assert!(doc.science.file_bytes() < file_bytes);
     assert_eq!(make_lighter(&mut doc), 0);
 }
@@ -856,7 +1206,9 @@ fn invalid_science_is_refused_on_read() {
     add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
     let valid: Value = serde_json::from_slice(&doc.file_json().unwrap()).unwrap();
     let mut missing = valid.clone();
-    missing["science"]["results"][0]["frame"] = json!("00".repeat(32));
+    let result = &mut missing["science"]["results"][0]["result"];
+    result["input_frame"] = result["frame"].clone();
+    result["frame"] = json!("00".repeat(32));
     let mut duplicate = valid.clone();
     let frame = duplicate["science"]["frames"][0].clone();
     duplicate["science"]["frames"]
@@ -914,9 +1266,8 @@ fn saved_size_budgets() {
             increment <= n * 1_000,
             "{n} atoms: light increment {increment} bytes"
         );
-        let result = Arc::clone(&doc.science.results[0]);
         reconciled_edit(&mut doc, &mut History::default(), |doc| {
-            assert!(set_keep_full(doc, &result, true));
+            assert!(set_keep_full(doc, 0, true));
         });
         let full_bytes = doc.file_json().unwrap().len();
         assert!(full_bytes > light_bytes);
