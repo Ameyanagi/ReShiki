@@ -3245,8 +3245,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     style,
                 };
                 let p = *rotated.get(i)?;
-                let front = [p[0], p[1], p[2] + model.style.atom_radius(symbol)];
-                if orbital.as_ref().is_some_and(|s| s.clear(&view, front)) {
+                let radius = model.style.atom_radius(symbol);
+                if orbital.as_ref().is_some_and(|s| s.clear(&view, p, radius)) {
                     late.push((alpha, text));
                     continue;
                 }

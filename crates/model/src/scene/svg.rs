@@ -590,7 +590,7 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
             } => {
                 let data = |runs: &[Vec<super::Point>], closed: bool| {
                     let mut d = String::new();
-                    for run in runs {
+                    for run in runs.iter().filter(|run| !run.is_empty()) {
                         for (k, p) in run.iter().enumerate() {
                             push_command(&mut d, if k == 0 { 'M' } else { 'L' }, &[p.x, p.y]);
                         }

@@ -49,8 +49,9 @@ pub fn enable_demo(spec: &str) -> Result<(), String> {
         .map_err(|_| "The demo surface is already on".to_string())
 }
 
-/// Turns the demo surface on or off for this thread only, ahead of the
-/// process-wide switch: for tests, which share one process.
+/// Turns the demo surface on for this thread only, ahead of the
+/// process-wide switch, or with `None` goes back to that switch: for tests,
+/// which share one process and never set the process-wide switch.
 pub fn demo_on_this_thread(spec: Option<&str>) -> Result<(), String> {
     THREAD.set(spec.map(parse).transpose()?);
     Ok(())
@@ -85,7 +86,10 @@ pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Rc<
     let points = model.points(doc)?;
     let bonds = model.geometry_bonds(doc);
     let mut key: Vec<u32> = vec![demo as u32, iso.to_bits()];
-    key.extend(points.iter().flat_map(|(_, p)| p.map(f32::to_bits)));
+    key.extend(points.iter().flat_map(|(s, p)| {
+        let [x, y, z] = p.map(f32::to_bits);
+        [u32::from(*s == "H"), x, y, z]
+    }));
     key.extend(bonds.iter().flatten().map(|&i| i as u32));
     if let Some(found) =
         MESHES.with_borrow(|kept| kept.iter().find(|(k, _)| *k == key).map(|(_, m)| m.clone()))
@@ -279,7 +283,8 @@ impl Prepared {
             bands: BANDS,
             tolerance: TOLERANCE,
         });
-        Some(Prepared {
+        // An isovalue above the field's peak leaves nothing to draw.
+        (!visible.layers.is_empty()).then_some(Prepared {
             positions,
             triangles: mesh.triangles.clone(),
             front,
@@ -287,10 +292,12 @@ impl Prepared {
         })
     }
 
-    /// Whether nothing of the surface lies in front of the rotated point
-    /// `q`, so a label there is drawn over the surface.
-    pub(in crate::models3d) fn clear(&self, view: &View, q: [f32; 3]) -> bool {
-        let [x, y, z] = screen(view, q);
+    /// Whether nothing of the surface lies in front of the ball of `radius`
+    /// about the rotated point `q`, on the sight line through its centre,
+    /// so the label there is drawn over the surface.
+    pub(in crate::models3d) fn clear(&self, view: &View, q: [f32; 3], radius: f32) -> bool {
+        let [x, y, _] = screen(view, q);
+        let z = screen(view, [q[0], q[1], q[2] + radius])[2];
         let input = Input {
             positions: &self.positions,
             triangles: &self.triangles,

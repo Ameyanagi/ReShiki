@@ -459,6 +459,17 @@ existing render tests confirm.
   during the 2D → 3D morph (see section 2).
 - The molecule's own paint order is unchanged, with its existing
   approximations.
+- Occluders follow the painted disc `r·scale·f`. Balls that touch another
+  ball are painted from their true perspective outline instead
+  (`contact.rs`), which is larger by `1/√(1 − (r/d)²)` for a ball at
+  distance `d` from the eye: under 1 % of the radius at the default
+  perspective, more at full perspective, where a lobe just behind such a
+  ball's rim can show by that margin. Stick joints' mitre tips and the
+  trimmed start of a half-bond in front of its ball are likewise covered
+  only approximately (sub-pixel at normal sizes).
+- The surface counts toward the view's reach also during the morph, so the
+  molecule keeps one size from the first frame of the morph to the end,
+  when the surface appears.
 
 ## Phase 5 contract (for the orbital lanes)
 

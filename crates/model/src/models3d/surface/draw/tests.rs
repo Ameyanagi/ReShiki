@@ -218,6 +218,24 @@ fn labels_in_front_of_the_surface_come_after_it() {
 }
 
 #[test]
+fn an_isovalue_above_the_peak_draws_nothing_and_keeps_labels_in_place() {
+    let mut doc = tilted(ethylene(), 90.);
+    doc.models[0].labels = Labels::All;
+    demo_on_this_thread(None).unwrap();
+    let plain = scene::primitives(&doc);
+    demo_on_this_thread(Some("pi:1000")).unwrap();
+    let all = scene::primitives(&doc);
+    assert!(surfaces(&doc).is_empty());
+    let texts = |all: &[Primitive]| {
+        all.iter()
+            .map(|p| matches!(p, Primitive::Text { .. }))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(texts(&all), texts(&plain));
+    demo_on_this_thread(None).unwrap();
+}
+
+#[test]
 fn unsupported_models_get_no_surface() {
     demo_on_this_thread(Some("pi")).unwrap();
     for style in [Style::Wireframe, Style::Ellipsoids] {
