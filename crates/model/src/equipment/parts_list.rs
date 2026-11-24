@@ -68,17 +68,24 @@ pub fn parts_list(doc: &Document, selection: &[u64]) -> Result<Vec<PartRow>, Str
         .iter()
         .filter(|g| g.piece.is_some() && (selection.is_empty() || selection.contains(&g.id)))
         .map(|g| {
-            let d = g
+            let (piece, d) = g
                 .piece
                 .as_ref()
-                .and_then(|p| p.linked.as_ref())
+                .and_then(|p| Some((p, p.linked.as_ref()?)))
                 .ok_or_else(|| format!("Equipment #{} has no linked definition.", g.id))?;
+            let mut variant = d.variant.clone();
+            if let Some(route) = &piece.tube_route {
+                let count = route.bends.len();
+                let bends = if count == 1 { "bend" } else { "bends" };
+                variant.insert("geometry".into(), format!("{count} custom {bends}"));
+                variant.remove("length");
+            }
             Ok(PartRow {
                 id: g.id,
                 label: label(d, g.id),
                 definition_id: d.id.clone(),
                 name: name(d).to_owned(),
-                variant: d.variant.clone(),
+                variant,
                 tube: tube_row(doc, g.id)?,
             })
         })

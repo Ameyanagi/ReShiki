@@ -110,11 +110,11 @@ fn first_bend_uses_the_clicked_leg_and_analytic_cut_length() {
         35.,
     );
     assert!(ports.iter().any(|p| p.at.joint == "route-span-1"));
+    let report = parts_list::parts_list(&doc, &[tube]).unwrap();
+    assert_eq!(report[0].variant["geometry"], "1 custom bend");
+    assert!(!report[0].variant.contains_key("length"));
     near(
-        parts_list::tube_row(&doc, tube)
-            .unwrap()
-            .unwrap()
-            .cut_length_mm,
+        report[0].tube.as_ref().unwrap().cut_length_mm,
         line.length_mm,
     );
 }
