@@ -378,6 +378,11 @@ static FILES: &[Source] = piece_files![
     "compression-union-6-mm",
     "compression-elbow-6-mm",
     "compression-tee-6-mm",
+    "compression-union-cross-1-8",
+    "compression-union-cross-1-4",
+    "compression-union-cross-3-8",
+    "compression-union-cross-6-mm",
+    "compression-union-cross-1-2",
     "compression-cap-6-mm",
     "compression-bulkhead-union-6-mm",
     "compression-bulkhead-union-bored-through-6-mm",
@@ -417,6 +422,43 @@ pub fn find(id: &str) -> Option<Arc<Definition>> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn compression_cross_seats_four_tubes_independently() {
+        use crate::document::{Document, Point};
+        use crate::equipment::{placed, solve};
+
+        let mut doc = Document::default();
+        doc.graphics.push(placed::graphic(
+            1,
+            super::find("reshiki/compression-union-cross-1-4").unwrap(),
+            Point::default(),
+            1.,
+        ));
+        let tube = super::find("reshiki/compression-tube-60-1-4").unwrap();
+        for (i, name) in ["left", "right", "up", "down"].into_iter().enumerate() {
+            let id = i as u64 + 2;
+            doc.graphics.push(placed::graphic(
+                id,
+                tube.clone(),
+                Point::new(100., 100.),
+                1.,
+            ));
+            let socket = solve::JointRef {
+                piece: 1,
+                joint: name.into(),
+            };
+            let tip = solve::JointRef {
+                piece: id,
+                joint: "a".into(),
+            };
+            let seat = solve::connect(&mut doc, &[id], &socket, &tip).unwrap();
+            assert!(matches!(seat.offer, solve::Offer::Seat));
+            assert_eq!(solve::partner(&doc, &socket), Some(tip));
+        }
+        solve::check(&mut doc, None);
+        assert_eq!(doc.seats.len(), 4);
+    }
+
     #[test]
     fn lightweight_headers_match_checked_catalogue_interfaces() {
         for source in super::FILES {

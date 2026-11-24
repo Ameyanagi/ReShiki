@@ -1,0 +1,355 @@
+{
+  "format": "reshiki-piece",
+  "format_version": 0,
+  "id": "reshiki/compression-union-cross-3-8",
+  "revision": 1,
+  "family": "compression-union-cross",
+  "variant": {
+    "connection": "3/8 in compression"
+  },
+  "names": {
+    "en": "Compression union cross, 3/8 in"
+  },
+  "category": "other",
+  "keywords": [
+    "compression",
+    "tube fitting",
+    "four-way",
+    "cross",
+    "joint",
+    "3/8 in",
+    "SS-600-4"
+  ],
+  "units": "mm",
+  "credits": {
+    "author": "ReShiki",
+    "license": "CC0-1.0"
+  },
+  "params": [
+    {
+      "id": "view",
+      "kind": "states",
+      "names": {
+        "en": "View"
+      },
+      "states": [
+        {
+          "id": "exterior",
+          "names": {
+            "en": "Exterior"
+          }
+        },
+        {
+          "id": "section",
+          "names": {
+            "en": "Section"
+          }
+        }
+      ],
+      "default": "exterior"
+    }
+  ],
+  "shapes": [
+    {
+      "id": "metal-body",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M7.9375 -7.9375L14.88 -7.9375L14.88 -5.6625L18.98 -5.6625L18.98 -7.7L20.58 -9.3L28.68 -9.3L30.48 -7.7L30.48 7.7L28.68 9.3L20.58 9.3L18.98 7.7L18.98 5.6625L14.88 5.6625L14.88 7.9375L7.9375 7.9375L7.9375 14.88L5.6625 14.88L5.6625 18.98L7.7 18.98L9.3 20.58L9.3 28.68L7.7 30.48L-7.7 30.48L-9.3 28.68L-9.3 20.58L-7.7 18.98L-5.6625 18.98L-5.6625 14.88L-7.9375 14.88L-7.9375 7.9375L-14.88 7.9375L-14.88 5.6625L-18.98 5.6625L-18.98 7.7L-20.58 9.3L-28.68 9.3L-30.48 7.7L-30.48 -7.7L-28.68 -9.3L-20.58 -9.3L-18.98 -7.7L-18.98 -5.6625L-14.88 -5.6625L-14.88 -7.9375L-7.9375 -7.9375L-7.9375 -14.88L-5.6625 -14.88L-5.6625 -18.98L-7.7 -18.98L-9.3 -20.58L-9.3 -28.68L-7.7 -30.48L7.7 -30.48L9.3 -28.68L9.3 -20.58L7.7 -18.98L5.6625 -18.98L5.6625 -14.88L7.9375 -14.88Z",
+      "color": [
+        214,
+        221,
+        227
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "section-passages",
+      "layer": "back",
+      "material": "glass",
+      "role": "fill",
+      "path": "M30.48 -4.7625L15.48 -4.7625L15.48 -3.556L3.556 -3.556L3.556 -15.48L4.7625 -15.48L4.7625 -30.48L-4.7625 -30.48L-4.7625 -15.48L-3.556 -15.48L-3.556 -3.556L-15.48 -3.556L-15.48 -4.7625L-30.48 -4.7625L-30.48 4.7625L-15.48 4.7625L-15.48 3.556L-3.556 3.556L-3.556 15.48L-4.7625 15.48L-4.7625 30.48L4.7625 30.48L4.7625 15.48L3.556 15.48L3.556 3.556L15.48 3.556L15.48 4.7625L30.48 4.7625Z",
+      "color": [
+        246,
+        249,
+        252
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "section-metal",
+      "layer": "front",
+      "material": "metal",
+      "role": "solid",
+      "path": "M7.9375 7.9375L14.88 7.9375L14.88 5.6625L18.98 5.6625L18.98 7.7L20.58 9.3L28.68 9.3L30.48 7.7L30.48 4.7625L15.48 4.7625L15.48 3.556L3.556 3.556L3.556 15.48L4.7625 15.48L4.7625 30.48L7.7 30.48L9.3 28.68L9.3 20.58L7.7 18.98L5.6625 18.98L5.6625 14.88L7.9375 14.88ZM-7.9375 7.9375L-7.9375 14.88L-5.6625 14.88L-5.6625 18.98L-7.7 18.98L-9.3 20.58L-9.3 28.68L-7.7 30.48L-4.7625 30.48L-4.7625 15.48L-3.556 15.48L-3.556 3.556L-15.48 3.556L-15.48 4.7625L-30.48 4.7625L-30.48 7.7L-28.68 9.3L-20.58 9.3L-18.98 7.7L-18.98 5.6625L-14.88 5.6625L-14.88 7.9375ZM-7.9375 -7.9375L-14.88 -7.9375L-14.88 -5.6625L-18.98 -5.6625L-18.98 -7.7L-20.58 -9.3L-28.68 -9.3L-30.48 -7.7L-30.48 -4.7625L-15.48 -4.7625L-15.48 -3.556L-3.556 -3.556L-3.556 -15.48L-4.7625 -15.48L-4.7625 -30.48L-7.7 -30.48L-9.3 -28.68L-9.3 -20.58L-7.7 -18.98L-5.6625 -18.98L-5.6625 -14.88L-7.9375 -14.88ZM7.9375 -7.9375L7.9375 -14.88L5.6625 -14.88L5.6625 -18.98L7.7 -18.98L9.3 -20.58L9.3 -28.68L7.7 -30.48L4.7625 -30.48L4.7625 -15.48L3.556 -15.48L3.556 -3.556L15.48 -3.556L15.48 -4.7625L30.48 -4.7625L30.48 -7.7L28.68 -9.3L20.58 -9.3L18.98 -7.7L18.98 -5.6625L14.88 -5.6625L14.88 -7.9375Z",
+      "color": [
+        214,
+        221,
+        227
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "right-nut-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M20.58 -9.3L20.58 9.3",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "right-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M20.88 -8.95L28.23 -8.95L27.88 -8.35L21.13 -8.35Z",
+      "color": [
+        236,
+        240,
+        244
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "right-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M27.98 4.7625L23.98 4.7625L25.68 8.05L28.28 8.05ZM27.98 -4.7625L23.98 -4.7625L25.68 -8.05L28.28 -8.05Z",
+      "color": [
+        194,
+        205,
+        215
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "down-nut-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M9.3 20.58L-9.3 20.58",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "down-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M8.95 20.88L8.95 28.23L8.35 27.88L8.35 21.13Z",
+      "color": [
+        236,
+        240,
+        244
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "down-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-4.7625 27.98L-4.7625 23.98L-8.05 25.68L-8.05 28.28ZM4.7625 27.98L4.7625 23.98L8.05 25.68L8.05 28.28Z",
+      "color": [
+        194,
+        205,
+        215
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "left-nut-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-20.58 9.3L-20.58 -9.3",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "left-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-20.88 8.95L-28.23 8.95L-27.88 8.35L-21.13 8.35Z",
+      "color": [
+        236,
+        240,
+        244
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "left-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-27.98 -4.7625L-23.98 -4.7625L-25.68 -8.05L-28.28 -8.05ZM-27.98 4.7625L-23.98 4.7625L-25.68 8.05L-28.28 8.05Z",
+      "color": [
+        194,
+        205,
+        215
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    },
+    {
+      "id": "up-nut-seam",
+      "layer": "front",
+      "material": "ink",
+      "role": "detail",
+      "path": "M-9.3 -20.58L9.3 -20.58",
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "up-nut-highlight",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M-8.95 -20.88L-8.95 -28.23L-8.35 -27.88L-8.35 -21.13Z",
+      "color": [
+        236,
+        240,
+        244
+      ],
+      "when": {
+        "view": [
+          "exterior"
+        ]
+      }
+    },
+    {
+      "id": "up-section-ferrules",
+      "layer": "front",
+      "material": "metal",
+      "role": "fill",
+      "path": "M4.7625 -27.98L4.7625 -23.98L8.05 -25.68L8.05 -28.28ZM-4.7625 -27.98L-4.7625 -23.98L-8.05 -25.68L-8.05 -28.28Z",
+      "color": [
+        194,
+        205,
+        215
+      ],
+      "when": {
+        "view": [
+          "section"
+        ]
+      }
+    }
+  ],
+  "joints": [
+    {
+      "id": "right",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 9.525,
+      "at": [
+        30.48,
+        0.0
+      ],
+      "dir": [
+        1,
+        0
+      ],
+      "insertion_mm": 15.0
+    },
+    {
+      "id": "down",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 9.525,
+      "at": [
+        0.0,
+        30.48
+      ],
+      "dir": [
+        0,
+        1
+      ],
+      "insertion_mm": 15.0
+    },
+    {
+      "id": "left",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 9.525,
+      "at": [
+        -30.48,
+        0.0
+      ],
+      "dir": [
+        -1,
+        0
+      ],
+      "insertion_mm": 15.0
+    },
+    {
+      "id": "up",
+      "kind": "plug",
+      "family": "compression",
+      "gender": "F",
+      "size_mm": 9.525,
+      "at": [
+        0.0,
+        -30.48
+      ],
+      "dir": [
+        0,
+        -1
+      ],
+      "insertion_mm": 15.0
+    }
+  ]
+}
