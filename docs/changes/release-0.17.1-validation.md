@@ -29,3 +29,6 @@ sets the same version for both npm packages and the browser demo.
   on the published Intel application under Rosetta. The Intel package, worker,
   clipboard and print checks and the ARM and live reference coverage continue.
   [PR #1409](https://github.com/Ameyanagi/ReShiki/pull/1409) · [Timing evidence](https://github.com/Ameyanagi/ReShiki/actions/runs/45269955885/job/138099388694)
+- The browser demo packager includes and hashes both helper modules. It checks the
+  editor and worker imports before creating an archive. Packaging tests cover the
+  missing-dependency rejection and the files needed by a cached earlier page.

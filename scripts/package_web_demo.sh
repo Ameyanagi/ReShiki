@@ -48,7 +48,8 @@ if grep -q '"\.\./' "$demo/index.html" || ! grep -q "data-bytes=\"$size\"" "$dem
 fi
 # release.yml compares this with the published demo's.
 awk -F '"' '/^version = / { print $2; exit }' "$root/Cargo.toml" > "$demo/VERSION"
-cp "$package/src/editor.js" "$package/src/fonts.js" "$package/src/worker.js" "$demo/src/"
+cp "$package/src/editor.js" "$package/src/fonts.js" "$package/src/initialization.js" \
+  "$package/src/worker.js" "$package/src/worker-handler.js" "$demo/src/"
 cp "$package/dist/editor/reshiki.js" "$package/dist/editor/reshiki_bg.wasm" "$demo/dist/editor/"
 # The worker for naming loads only when first used.
 cp "$package/dist/worker/reshiki_web_worker.js" "$package/dist/worker/reshiki_web_worker_bg.wasm" \
@@ -75,16 +76,39 @@ hashed() {
 hashed dist/editor/reshiki_bg.wasm
 hashed dist/worker/reshiki_web_worker_bg.wasm
 hashed dist/worker/reshiki_web_worker.js
+hashed src/worker-handler.js
 hashed src/worker.js
 hashed dist/editor/reshiki.js
 hashed src/fonts.js
+hashed src/initialization.js
 hashed src/editor.js
 
-# The first load is these four files; the worker and CJK fonts load on demand.
+# Check the actual ESM imports of both entry points before publishing. Worker
+# entry points use new URL(), so check that graph explicitly as well. A parser
+# avoids treating wasm-bindgen's import-object keys as JavaScript imports.
+bun - "$demo"/src/editor.*.js "$demo"/src/worker.*.js << 'JS'
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+
+const parser = new Bun.Transpiler({ loader: "js" });
+const queue = process.argv.slice(2);
+const seen = new Set();
+for (const file of queue) {
+  if (seen.has(file)) continue;
+  seen.add(file);
+  for (const dependency of parser.scanImports(readFileSync(file, "utf8"))) {
+    if (dependency.path.startsWith(".")) {
+      queue.push(resolve(dirname(file), dependency.path));
+    }
+  }
+}
+JS
+
+# The first load is these five files; the worker and CJK fonts load on demand.
 # Estimate transfer with deterministic gzip -9, after hashing rewrites imports.
 # The host may choose another encoding, so the page labels this an estimate.
 estimate=0
-for file in "$demo"/src/editor.*.js "$demo"/src/fonts.*.js \
+for file in "$demo"/src/editor.*.js "$demo"/src/fonts.*.js "$demo"/src/initialization.*.js \
   "$demo"/dist/editor/reshiki.*.js "$demo"/dist/editor/reshiki_bg.*.wasm; do
   compressed=$(gzip -9nc "$file" | wc -c | tr -d ' ')
   estimate=$((estimate + compressed))
