@@ -172,8 +172,9 @@ pub struct Starts {
     pub conformers: Vec<EnsembleConformer>,
     /// Completed worker batches.
     pub batches: u32,
-    /// Whether all requested sampling ran. Embedding and validation can yield
-    /// fewer valid conformers than requested.
+    /// Whether all requested sampling ran. A deadline or any later-batch error
+    /// leaves earlier successful batches available with this set to false.
+    /// Completed sampling can still yield fewer valid conformers than requested.
     pub complete: bool,
 }
 

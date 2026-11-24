@@ -11,10 +11,13 @@ and {threads} to request matching settings. Relative executable paths resolve
 from the invocation directory. Other relative paths resolve in the temporary
 folder used by each program, so quote absolute paths for additional input files.
 The JSON file must contain nonnegative integer steps and finite energy_hartree.
+It must report convergence with the JSON boolean "converged": true or the
+case-insensitive string "status": "converged". If both fields are present, both
+must indicate convergence.
 Optional positions_angstrom must follow the input atom order. RMSD aligns heavy
 atoms by a proper rotation and translation, without remapping equivalent atoms.
-Only the step ratio and energy difference gate the comparison. Run failures,
-missing xTB convergence, and malformed results also fail the gate.
+The gate checks convergence, step ratio, and energy difference. Run failures
+and malformed results also fail the gate.
 """
 
 import argparse
@@ -111,7 +114,13 @@ def parse_ours(path: Path, atom_count: int) -> Optimization:
     if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
         raise ValueError("JSON steps must be a nonnegative integer")
     result = Optimization(steps=steps, energy_hartree=finite_number(data["energy_hartree"]))
-    if data.get("converged") is False:
+    status = data.get("status", "converged")
+    if (
+        ("converged" not in data and "status" not in data)
+        or data.get("converged", True) is not True
+        or not isinstance(status, str)
+        or status.casefold() != "converged"
+    ):
         result.problems.append("optimizer reports not converged")
     if "positions_angstrom" in data:
         positions = data["positions_angstrom"]
@@ -120,7 +129,7 @@ def parse_ours(path: Path, atom_count: int) -> Optimization:
         if any(not isinstance(row, list) or len(row) != 3 for row in positions):
             raise ValueError("positions_angstrom must contain three coordinates per atom")
         result.positions_angstrom = [
-            tuple(finite_number(value) for value in row) for row in positions
+            (finite_number(x), finite_number(y), finite_number(z)) for x, y, z in positions
         ]
     return result
 

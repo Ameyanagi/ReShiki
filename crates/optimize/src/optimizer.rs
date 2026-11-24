@@ -70,6 +70,8 @@ pub struct Options {
     pub max_steps: usize,
     /// Zero-based atom indices whose input coordinates are held exactly fixed.
     pub fixed_atoms: Vec<usize>,
+    /// Recheck convergence with [`Accuracy::Tight`]. With `false`,
+    /// [`Status::Converged`] reflects only Normal-accuracy evaluations.
     pub tight_final: bool,
 }
 
@@ -264,13 +266,13 @@ impl Engine {
         };
         for _ in 0..10 {
             let radius = self.radius;
-            let Some((s, predicted, boundary)) = direction.restricted(radius) else {
+            let Some((s, predicted, length)) = direction.restricted(radius) else {
                 return Ok(None);
             };
             let trial = eval.trial(point, &s)?;
             let actual = trial.energy - point.energy;
             if actual > 1e-6 {
-                self.radius *= 0.25;
+                self.radius = 0.25 * length;
                 if self.radius < 1e-3 {
                     break;
                 }
@@ -279,7 +281,7 @@ impl Engine {
             let ratio = actual / predicted;
             if ratio < 0.25 {
                 self.radius = (0.25 * radius).max(1e-3);
-            } else if ratio > 0.75 && boundary {
+            } else if ratio > 0.75 && length == radius {
                 self.radius = (2. * radius).min(0.5);
             }
             return Ok(Some((trial, radius)));
@@ -389,7 +391,8 @@ impl Engine {
 /// to a Euclidean trust radius, initially 0.3 bohr. The rational prediction is
 /// (g·s + s·Hs/2)/(1 + s·s). Actual/predicted below 0.25 quarters the radius
 /// (minimum 0.001 bohr); above 0.75 on the boundary doubles it (maximum 0.5).
-/// An energy rise above 1e-6 Eh rejects the trial and quarters the radius.
+/// An energy rise above 1e-6 Eh rejects the trial and sets the radius to one
+/// quarter of the attempted step length.
 /// Ten successive rejections, a rejected trial shrinking below the minimum, or
 /// an unusable ANC model switches to L-BFGS. Accepted BFGS updates require
 /// y·s > 1e-12 |y||s| and positive model curvature. Every 30 accepted steps

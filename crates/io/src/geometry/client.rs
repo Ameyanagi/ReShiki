@@ -142,8 +142,9 @@ impl Client {
         .await
     }
 
-    /// Sample sequential seeded batches up to the caller's deadline. A timeout
-    /// after a successful batch returns the conformers already collected.
+    /// Sample sequential seeded batches up to the caller's deadline. Any error
+    /// after a successful batch returns the conformers already collected with
+    /// [`Starts::complete`] set to false. First-batch errors propagate.
     /// In a browser, the deadline is checked between in-process batches.
     pub async fn conformer_starts(
         &self,
@@ -162,8 +163,11 @@ impl Client {
         let originals = prepared.ids().len();
         let batch_size = reshiki_geometry::MAX_CONFORMERS
             .min((reshiki_geometry::ENSEMBLE_ATOM_BUDGET / originals) as u32);
-        let mut operation =
-            prepared.ensemble_request(field, base_seed, batch_size.min(starts), mode)?;
+        // Validate the caller's base seed using a one-member template before
+        // assigning the actual batch sizes and wrapped seeds below.
+        let mut operation = prepared.ensemble_request(field, base_seed, 1, mode)?;
+        let seed_range =
+            i64::from(GENERATION_SEED_MAX) - i64::from(reshiki_geometry::MAX_CONFORMERS) + 1;
         let mut remaining = starts;
         let mut result = Starts {
             conformers: Vec::new(),
@@ -174,20 +178,18 @@ impl Client {
         while remaining > 0 && BatchInstant::now() < deadline {
             operation.conformers = batch_size.min(remaining);
             operation.seed = (i64::from(base_seed) + i64::from(result.batches) * 7919)
-                .rem_euclid(i64::from(GENERATION_SEED_MAX) + 1) as i32;
+                .rem_euclid(seed_range) as i32;
             let batch = match self
                 .execute(operation.clone(), originals, None, Some(deadline))
                 .await
             {
                 Ok(batch) => batch,
-                Err(Error::Timeout) if result.batches > 0 => break,
+                Err(_) if result.batches > 0 => break,
                 Err(error) => return Err(error),
             };
             let parents = &batch.conformer.hydrogen_parents;
             if hydrogen_parents.get_or_insert_with(|| parents.clone()) != parents {
-                return Err(Error::Protocol(
-                    "Temporary hydrogen identities changed between ensemble batches".into(),
-                ));
+                break;
             }
             result.conformers.extend(batch.ensemble);
             result.batches += 1;

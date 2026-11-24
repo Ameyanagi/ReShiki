@@ -20,10 +20,10 @@ pub use reshiki_qcdata::ANGSTROM_PER_BOHR;
 
 /// Accuracy a potential should use for one evaluation.
 ///
-/// Optimization steps use `Normal`. After the criteria are met once, the optimizer
-/// switches to `Tight` and keeps stepping until a fresh `Tight` evaluation also meets
-/// them. Potentials without an adjustable accuracy (force fields, analytic test
-/// functions) ignore it.
+/// Optimization starts at `Normal`. With [`Options::tight_final`] enabled, the
+/// optimizer switches to `Tight` once the criteria are met and keeps stepping
+/// until a fresh `Tight` evaluation also meets them. Potentials without an
+/// adjustable accuracy (force fields, analytic test functions) ignore it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Accuracy {
     /// Ordinary accuracy for optimization steps.
@@ -48,6 +48,12 @@ pub enum EvalError {
 /// Positions are Cartesian coordinates in bohr, `[x0, y0, z0, x1, ...]`, in atom
 /// order. Implementations return the energy in hartree and write the gradient in
 /// hartree/bohr, same layout, into `gradient` (already sized `positions.len()`).
+///
+/// With no fixed atoms, the energy must be invariant under rigid translations
+/// and rotations because the optimizer projects out those motions. For a surface
+/// that breaks this invariance, such as an external restraint, set at least one
+/// index in [`Options::fixed_atoms`].
+///
 /// A potential may keep state between calls (xTB restarts its SCF from the
 /// previous wavefunction); the optimizer may evaluate trial geometries that it
 /// later rejects, so that state must only be a starting guess.

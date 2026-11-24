@@ -225,6 +225,8 @@ impl Request {
             || self.max_iterations == 0
             || self.max_iterations > MAX_ITERATIONS
             || self.seed < 0
+            || (self.operation == Operation::Generate
+                && i64::from(self.seed) + i64::from(self.conformers) > i64::from(i32::MAX))
         {
             return Err("Invalid geometry sampling/minimization limits".into());
         }

@@ -479,13 +479,14 @@ fn embedding_parameters(request: &Request) -> EmbedParams {
     parameters.max_iterations = 100;
     parameters.timeout = 10;
     parameters.enforce_chirality = true;
-    parameters.prune_rms_thresh = 0.1;
+    parameters.prune_rms_thresh = if request.ensemble.is_some() {
+        -1.0
+    } else {
+        0.1
+    };
     parameters.clear_conformers = true;
-    // COSMolKit adds each one-based conformer index in signed i32. Keep the
-    // established seed stream except for ensemble batches that would overflow;
-    // those use its deterministic multiplication/folded-hash seed policy.
-    parameters.enable_sequential_random_seeds = request.ensemble.is_none()
-        || i64::from(request.seed) + i64::from(request.conformers) <= i64::from(i32::MAX);
+    // Validation leaves room for each one-based conformer index in signed i32.
+    parameters.enable_sequential_random_seeds = true;
     parameters.track_failures = true;
     parameters
 }

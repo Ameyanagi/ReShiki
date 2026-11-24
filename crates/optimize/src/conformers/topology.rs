@@ -134,12 +134,14 @@ impl Topology {
         self.atom_count
     }
 
-    /// Enumerate at most `cap` symmetry mappings, always placing identity first.
+    /// Enumerate up to `cap` symmetry mappings, then add their missing inverses.
     ///
     /// Each permutation maps positions in [`Self::heavy_atoms`] to positions in
-    /// the same list. Remaining mappings follow deterministic breadth-first
-    /// backtracking order, with at most 200,000 candidate assignments examined.
-    /// Hydrogen-only topologies have one empty mapping.
+    /// the same list. Identity comes first, followed by deterministic breadth-first
+    /// backtracking order, then missing inverses in that same order. At most
+    /// 200,000 candidate assignments are examined, and inverse completion can
+    /// retain up to twice `cap` mappings so RMSD remains symmetric after truncation.
+    /// Hydrogen-only topologies have one empty mapping when `cap` is positive.
     pub fn automorphisms(&self, cap: usize) -> Automorphisms {
         if cap == 0 {
             return Automorphisms {
@@ -168,6 +170,19 @@ impl Topology {
             },
         };
         search.enumerate();
+        if search.result.truncated {
+            let retained = search.result.perms.len();
+            let mut seen: BTreeSet<_> = search.result.perms.iter().cloned().collect();
+            for i in 0..retained {
+                let mut inverse = vec![0; self.heavy_atoms.len()];
+                for (source, &target) in search.result.perms[i].iter().enumerate() {
+                    inverse[target as usize] = source as u32;
+                }
+                if seen.insert(inverse.clone()) {
+                    search.result.perms.push(inverse);
+                }
+            }
+        }
         search.result
     }
 
@@ -208,9 +223,10 @@ impl Automorphisms {
         &self.perms
     }
 
-    /// Whether the cap omitted mappings or the assignment budget was exhausted.
+    /// Whether enumeration omitted mappings at the cap or exhausted its work budget.
     ///
-    /// When the budget is exhausted, additional mappings may or may not exist.
+    /// This describes enumeration before inverse completion, which can restore
+    /// omitted mappings. When the budget is exhausted, more mappings may or may not exist.
     pub fn truncated(&self) -> bool {
         self.truncated
     }
@@ -417,6 +433,25 @@ mod tests {
             .automorphisms(1);
         assert_eq!(asymmetric.perms(), vec![vec![0, 1]]);
         assert!(!asymmetric.truncated());
+    }
+
+    #[test]
+    fn truncated_mappings_include_each_inverse_once() {
+        let topology = Topology::new(vec![7, 6, 6, 6], vec![[0, 1], [0, 2], [0, 3]]).unwrap();
+        let group = topology.automorphisms(4);
+        assert!(group.truncated());
+        assert_eq!(group.perms().len(), 5);
+        assert_eq!(group.perms()[0], vec![0, 1, 2, 3]);
+        let unique: BTreeSet<_> = group.perms().iter().collect();
+        assert_eq!(unique.len(), group.perms().len());
+        for permutation in group.perms() {
+            let mut inverse = vec![0; permutation.len()];
+            for (source, &target) in permutation.iter().enumerate() {
+                inverse[target as usize] = source as u32;
+            }
+            assert!(unique.contains(&inverse));
+        }
+        assert_eq!(group, topology.automorphisms(4));
     }
 
     #[test]

@@ -53,6 +53,8 @@ pub struct Settings {
     pub max_representatives: usize,
     pub final_dedupe_angstrom: f64,
     pub temperature_k: f64,
+    /// Enumeration cap before adding missing inverses. At most twice this many
+    /// mappings are retained to keep truncated RMSD comparisons symmetric.
     pub automorphism_cap: usize,
 }
 

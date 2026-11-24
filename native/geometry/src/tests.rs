@@ -283,15 +283,50 @@ fn minimized_ensembles_preserve_candidates_mapping_and_lowest_energy_selection()
         assert_eq!(result.energy, lowest.energy);
         assert_eq!(result.coordinates, lowest.coordinates);
         assert_eq!(result.converged, lowest.converged);
-        assert_eq!(result.coordinates, single.coordinates);
-        assert_eq!(result.energy, single.energy);
-        assert_eq!(result.initial_energy, single.initial_energy);
-        assert_eq!(result.converged, single.converged);
+        // Unpruned ensemble starts can improve on ordinary generation's choice.
+        assert!(result.energy <= single.energy + 1e-6);
         assert!(result.energy <= result.initial_energy + 1e-6);
         assert!(result.diagnostics.iter().any(|line| {
             line.contains("ensemble=Minimized")
                 && line.contains(&format!("ensemble_count={}", result.ensemble.len()))
         }));
+    }
+}
+
+#[test]
+fn embedded_butane_ensemble_retains_unpruned_sampling_starts() {
+    let mut request = molecule(
+        &[6; 4],
+        &[(0, 1, 1), (1, 2, 1), (2, 3, 1)],
+        ForceField::MMFF94s,
+    );
+    request.conformers = 16;
+    request.seed = 0x52534b;
+    request.ensemble = Some(Ensemble::Embedded);
+    let response = solve(&request).unwrap();
+    assert!(response.ensemble.len() >= 12, "{:?}", response.diagnostics);
+}
+
+#[test]
+fn sampling_seeds_leave_room_for_every_sequential_conformer() {
+    for ensemble in [None, Some(Ensemble::Embedded), Some(Ensemble::Minimized)] {
+        let mut request = ethanol(ForceField::MMFF94s);
+        request.ensemble = ensemble;
+        request.conformers = MAX_CONFORMERS;
+        request.seed = i32::MAX - MAX_CONFORMERS as i32;
+        assert!(request.validate().is_ok());
+        request.seed += 1;
+        assert!(request.validate().is_err());
+        request.seed = i32::MAX;
+        assert!(request.validate().is_err());
+    }
+    // These operations do not embed conformers or add sequential seed offsets.
+    for operation in [Operation::Relax, Operation::Evaluate] {
+        let mut request = ethanol(ForceField::MMFF94s);
+        request.operation = operation;
+        request.seed = i32::MAX;
+        request.coordinates = vec![[0.; 3]; request.atoms.len()];
+        assert!(request.validate().is_ok());
     }
 }
 
@@ -354,14 +389,14 @@ fn embedded_ensembles_are_exactly_seeded_and_skip_force_field_minimization() {
 }
 
 #[test]
-fn ensemble_batches_at_the_public_seed_ceiling_are_exactly_repeatable() {
+fn ensemble_batches_at_the_sequential_seed_ceiling_are_exactly_repeatable() {
     let mut request = molecule(
         &[6; 5],
         &[(0, 1, 1), (1, 2, 1), (2, 3, 1), (3, 4, 1)],
         ForceField::MMFF94s,
     );
     request.conformers = MAX_CONFORMERS;
-    request.seed = i32::MAX - 8;
+    request.seed = i32::MAX - MAX_CONFORMERS as i32;
     for mode in [Ensemble::Minimized, Ensemble::Embedded] {
         request.ensemble = Some(mode);
         let first = solve(&request).unwrap();

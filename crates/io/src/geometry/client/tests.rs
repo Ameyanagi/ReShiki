@@ -186,7 +186,7 @@ async fn ready_deadline_wins_before_worker_spawn() {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn conformer_starts_wraps_seeds_and_requires_consistent_hydrogens() {
+async fn conformer_starts_wraps_seeds_and_preserves_successful_batches_after_later_errors() {
     use std::os::unix::fs::PermissionsExt;
 
     let directory = tempfile::tempdir().unwrap();
@@ -268,9 +268,7 @@ fi
     assert_eq!(result.batches, 2);
     assert!(result.complete);
     assert_eq!(result.conformers.len(), 2);
-    for (extension, expected_count, expected_seed) in
-        [("first", 32, GENERATION_SEED_MAX), ("second", 1, 7918)]
-    {
+    for (extension, expected_count, expected_seed) in [("first", 32, 31), ("second", 1, 7950)] {
         let path = executable.with_extension(extension);
         let bytes = std::fs::read(&path).unwrap();
         let request: wire::Request = wire::decode(&bytes, wire::MAX_REQUEST_BYTES).unwrap();
@@ -304,9 +302,46 @@ fi
     std::fs::remove_file(executable.with_extension("first")).unwrap();
     response.hydrogen_parents = vec![1];
     write_response("response2", response);
+    let result = run(BatchInstant::now() + Duration::from_secs(15))
+        .await
+        .unwrap();
+    assert_eq!(result.batches, 1);
+    assert_eq!(result.conformers.len(), 1);
+    assert_eq!(result.conformers[0].conformer.hydrogen_parents, [0]);
+    assert!(!result.complete);
+
+    let rejected = wire::encode(
+        &wire::Response {
+            version: reshiki_geometry::RDKIT_VERSION.into(),
+            result: Err("embedding failed".into()),
+        },
+        wire::MAX_RESPONSE_BYTES,
+    )
+    .unwrap();
+    for failed in [
+        Some(rejected.clone()),
+        Some(b"invalid frame".to_vec()),
+        None,
+    ] {
+        std::fs::remove_file(executable.with_extension("first")).unwrap();
+        let path = executable.with_extension("response2");
+        if let Some(bytes) = failed {
+            std::fs::write(path, bytes).unwrap();
+        } else {
+            std::fs::remove_file(path).unwrap();
+        }
+        let result = run(BatchInstant::now() + Duration::from_secs(15))
+            .await
+            .unwrap();
+        assert_eq!(result.batches, 1);
+        assert_eq!(result.conformers.len(), 1);
+        assert!(!result.complete);
+    }
+    std::fs::remove_file(executable.with_extension("first")).unwrap();
+    std::fs::write(executable.with_extension("response1"), rejected).unwrap();
     assert!(matches!(
         run(BatchInstant::now() + Duration::from_secs(15)).await,
-        Err(Error::Protocol(_))
+        Err(Error::Invalid(message)) if message == "embedding failed"
     ));
 }
 

@@ -1,5 +1,7 @@
 //! Deduplicate optimized candidates, compute thermal populations, and save aligned geometries.
 
+use std::collections::BTreeSet;
+
 use reshiki_qcdata::{MAX_SAVED_CONFORMERS, Trajectory};
 
 use super::{Error, Settings, Topology, alignment::Centered, validate_positions};
@@ -12,6 +14,9 @@ pub struct Candidate {
     pub positions: Vec<[f64; 3]>,
     pub energy_hartree: f64,
     pub start_energy_hartree: f64,
+    /// Index of the initial cluster in [`super::Clustering::clusters`].
+    pub cluster: usize,
+    /// Number of minimized starts in that initial cluster.
     pub cluster_size: u32,
 }
 
@@ -22,7 +27,7 @@ pub struct Ranked {
     pub energy_hartree: f64,
     pub relative_kcal: f64,
     pub start_energy_hartree: f64,
-    /// Sum of the cluster sizes represented by this geometry.
+    /// Sum of the distinct initial cluster sizes represented by this geometry.
     pub cluster_size: u32,
     pub boltzmann: f64,
     /// Symmetry-aware heavy-atom RMSD in ångströms.
@@ -30,6 +35,7 @@ pub struct Ranked {
 }
 
 /// Keep the lowest final energy per duplicate group and align survivors onto the best.
+/// Each initial cluster contributes its size once to each retained geometry it represents.
 pub fn rank(
     topology: &Topology,
     mut candidates: Vec<Candidate>,
@@ -52,17 +58,21 @@ pub fn rank(
     let autos = topology.automorphisms(settings.automorphism_cap);
     let mut kept: Vec<Candidate> = Vec::new();
     let mut centered: Vec<Centered> = Vec::new();
+    let mut clusters: Vec<BTreeSet<usize>> = Vec::new();
     for candidate in candidates {
         let mobile = Centered::new(topology, &candidate.positions);
         if let Some(i) = centered
             .iter()
             .position(|c| c.distance(&mobile, &autos) < settings.final_dedupe_angstrom)
         {
-            kept[i].cluster_size = kept[i]
-                .cluster_size
-                .checked_add(candidate.cluster_size)
-                .ok_or_else(|| Error::Invalid("merged cluster_size exceeds u32".into()))?;
+            if clusters[i].insert(candidate.cluster) {
+                kept[i].cluster_size = kept[i]
+                    .cluster_size
+                    .checked_add(candidate.cluster_size)
+                    .ok_or_else(|| Error::Invalid("merged cluster_size exceeds u32".into()))?;
+            }
         } else {
+            clusters.push(BTreeSet::from([candidate.cluster]));
             kept.push(candidate);
             centered.push(mobile);
         }

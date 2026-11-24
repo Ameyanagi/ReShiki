@@ -26,7 +26,7 @@ pub(super) struct RfoDirection {
 
 impl RfoDirection {
     /// Scale the same eigenvector on all retries from this accepted point.
-    pub fn restricted(&self, radius: f64) -> Option<(Vec<f64>, f64, bool)> {
+    pub fn restricted(&self, radius: f64) -> Option<(Vec<f64>, f64, f64)> {
         let scale = (radius / self.length).min(1.);
         let length = self.length.min(radius);
         let predicted = scale * (self.linear + scale * self.quadratic) / (1. + length * length);
@@ -34,7 +34,7 @@ impl RfoDirection {
             return None;
         }
         let cart = self.cartesian.iter().map(|x| scale * x).collect();
-        Some((cart, predicted, self.length >= radius))
+        Some((cart, predicted, length))
     }
 }
 
@@ -290,8 +290,9 @@ mod tests {
             let slope = dot(&gradient, &direction.cartesian);
             assert!(slope < 0.);
             assert!((slope - root).abs() < 1e-12);
-            let (step, predicted, boundary) = direction.restricted(0.1).unwrap();
-            assert!(boundary && predicted < 0. && dot(&gradient, &step) < 0.);
+            let (step, predicted, length) = direction.restricted(0.1).unwrap();
+            assert_eq!(length, 0.1);
+            assert!(predicted < 0. && dot(&gradient, &step) < 0.);
         }
     }
 

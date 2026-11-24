@@ -63,12 +63,20 @@ class ParserTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "result.json"
             path.write_text(
-                json.dumps({"steps": 23, "energy_hartree": -8.25, "positions_angstrom": POSITIONS}),
+                json.dumps(
+                    {
+                        "steps": 23,
+                        "energy_hartree": -8.25,
+                        "converged": True,
+                        "positions_angstrom": POSITIONS,
+                    }
+                ),
                 encoding="utf-8",
             )
             result = gate.parse_ours(path, 4)
             self.assertEqual((result.steps, result.energy_hartree), (23, -8.25))
             self.assertEqual(result.positions_angstrom, [tuple(row) for row in POSITIONS])
+            self.assertEqual(result.problems, [])
             path.write_text('{"steps":0,"energy_hartree":0,"converged":false}', encoding="utf-8")
             self.assertIn("optimizer reports not converged", gate.parse_ours(path, 4).problems)
 
@@ -184,6 +192,7 @@ class RunnerTests(unittest.TestCase):
             str(self.out),
         ]
         self.calls = []
+        self.ours_convergence = {"converged": True}
 
     def answer(self, command, **options):
         self.calls.append((command, options))
@@ -196,7 +205,14 @@ class RunnerTests(unittest.TestCase):
         else:
             path = Path(command[command.index("--json") + 1])
             path.write_text(
-                json.dumps({"steps": 30, "energy_hartree": -8.25, "positions_angstrom": POSITIONS}),
+                json.dumps(
+                    {
+                        "steps": 30,
+                        "energy_hartree": -8.25,
+                        "positions_angstrom": POSITIONS,
+                        **self.ours_convergence,
+                    }
+                ),
                 encoding="utf-8",
             )
             output = ""
@@ -260,6 +276,27 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("not converged", output)
         self.assertIn("| FAIL |", output)
+
+    def test_ours_requires_explicit_convergence_even_when_the_command_succeeds(self):
+        for fields in (
+            {"status": "MaxSteps"},
+            {"status": True},
+            {"converged": "false"},
+            {"converged": False},
+            {"converged": 1},
+            {"converged": True, "status": "MaxSteps"},
+            {},
+        ):
+            with self.subTest(fields=fields):
+                self.ours_convergence = fields
+                code, output = self.run_main()
+                self.assertEqual(code, 1)
+                self.assertIn("optimizer reports not converged", output)
+
+        self.ours_convergence = {"status": "Converged"}
+        code, output = self.run_main()
+        self.assertEqual(code, 0)
+        self.assertIn("| PASS |", output)
 
     def test_failed_command_and_missing_json_are_reported(self):
         def answer(command, **options):

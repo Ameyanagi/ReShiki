@@ -118,6 +118,29 @@ fn anchored_phenyl_flip_requires_a_ring_automorphism() {
 }
 
 #[test]
+fn truncated_automorphisms_give_symmetric_rmsd() {
+    let topology = Topology::new(vec![7, 6, 6, 6], vec![[0, 1], [0, 2], [0, 3]]).unwrap();
+    let autos = topology.automorphisms(4);
+    assert!(autos.truncated());
+    let a = vec![
+        [0.0, 0.0, 0.0],
+        [1.5, 0.0, 0.0],
+        [0.0, 2.0, 0.5],
+        [0.25, -0.5, 3.0],
+    ];
+    // The retained prefix contains this three-cycle and the cap omits its inverse.
+    let permutation = [0, 2, 3, 1];
+    let mut b = a.clone();
+    for (source, &target) in permutation.iter().enumerate() {
+        b[target] = a[source];
+    }
+    let forward = rmsd(&topology, &autos, &a, &b).unwrap();
+    let reverse = rmsd(&topology, &autos, &b, &a).unwrap();
+    near(forward, 0.0, 1e-9);
+    near(reverse, forward, 1e-9);
+}
+
+#[test]
 fn duplicate_filter_keeps_lower_energy_and_requires_both_close_energy_and_geometry() {
     let topology = pair_topology();
     let duplicate = cluster(
@@ -239,18 +262,21 @@ fn rank_deduplicates_strictly_and_aggregates_onto_the_lower_energy_geometry() {
             positions: pair(1.25),
             energy_hartree: -1.0,
             start_energy_hartree: -0.5,
+            cluster: 0,
             cluster_size: 3,
         },
         Candidate {
             positions: best.clone(),
             energy_hartree: -2.0,
             start_energy_hartree: -1.5,
+            cluster: 1,
             cluster_size: 7,
         },
         Candidate {
             positions: vec![[20.0, -1.5, -4.0], [20.0, 1.5, -4.0]],
             energy_hartree: -1.5,
             start_energy_hartree: -0.75,
+            cluster: 2,
             cluster_size: 11,
         },
     ];
@@ -307,6 +333,53 @@ fn boltzmann_weights_normalize_rt_log_two_and_large_energy_spreads() {
 }
 
 #[test]
+fn three_reoptimized_representatives_count_their_initial_cluster_once() {
+    let topology = pair_topology();
+    let starts = [start(1.0, 0.0), start(1.25, 0.25), start(1.5, 0.5)];
+    let clustered = cluster(&topology, &starts, &settings()).unwrap();
+    assert_eq!(clustered.clusters, vec![vec![0, 1, 2]]);
+    assert_eq!(clustered.representatives, vec![0, 1, 2]);
+    let candidates = clustered
+        .representatives
+        .iter()
+        .map(|&index| Candidate {
+            positions: pair(1.0),
+            energy_hartree: -1.0,
+            start_energy_hartree: starts[index].energy_hartree,
+            cluster: 0,
+            cluster_size: clustered.clusters[0].len() as u32,
+        })
+        .collect();
+    let ranked = rank(&topology, candidates, &settings()).unwrap();
+    assert_eq!(ranked.len(), 1);
+    assert_eq!(ranked[0].cluster_size, 3);
+}
+
+#[test]
+fn initial_cluster_sizes_are_counted_once_for_each_final_geometry() {
+    let candidates = [
+        (0, 3, 1.0),
+        (0, 3, 1.125),
+        (0, 3, 2.0),
+        (1, 5, 1.0),
+        (1, 5, 2.0),
+    ]
+    .into_iter()
+    .map(|(cluster, cluster_size, half_length)| Candidate {
+        positions: pair(half_length),
+        energy_hartree: -1.0,
+        start_energy_hartree: -0.5,
+        cluster,
+        cluster_size,
+    })
+    .collect();
+    let ranked = rank(&pair_topology(), candidates, &settings()).unwrap();
+    assert_eq!(ranked.len(), 2);
+    assert_eq!(ranked[0].cluster_size, 8);
+    assert_eq!(ranked[1].cluster_size, 8);
+}
+
+#[test]
 fn boltzmann_weights_reject_invalid_energies_and_temperatures() {
     for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert!(boltzmann_weights(&[0.0, invalid], 298.15).is_err());
@@ -325,12 +398,14 @@ fn equal_energy_candidates_keep_the_first_input_geometry_and_metadata() {
             positions: first.clone(),
             energy_hartree: -1.0,
             start_energy_hartree: -0.5,
+            cluster: 0,
             cluster_size: 2,
         },
         Candidate {
             positions: vec![[9.0, 0.0, 0.0], [11.0, 0.0, 0.0]],
             energy_hartree: -1.0,
             start_energy_hartree: -0.75,
+            cluster: 1,
             cluster_size: 3,
         },
     ];
@@ -348,6 +423,7 @@ fn trajectory_saves_the_first_32_conformers_and_reconstructs_valid_frames() {
             positions: pair(1.0 + i as f64),
             energy_hartree: -10.0 + i as f64 * 0.001,
             start_energy_hartree: -9.0 + i as f64 * 0.001,
+            cluster: i as usize,
             cluster_size: i + 1,
         })
         .collect();
@@ -446,6 +522,7 @@ fn pipeline_rejects_invalid_settings_coordinates_and_energies() {
         positions: pair(1.0),
         energy_hartree: -1.0,
         start_energy_hartree: f64::NAN,
+        cluster: 0,
         cluster_size: 1,
     };
     assert!(rank(&topology, vec![invalid_start_energy], &settings()).is_err());
@@ -455,10 +532,12 @@ fn pipeline_rejects_invalid_settings_coordinates_and_energies() {
 fn merged_cluster_sizes_cannot_overflow() {
     let candidates = [u32::MAX, 1]
         .into_iter()
-        .map(|cluster_size| Candidate {
+        .enumerate()
+        .map(|(cluster, cluster_size)| Candidate {
             positions: pair(1.0),
             energy_hartree: -1.0,
             start_energy_hartree: -0.5,
+            cluster,
             cluster_size,
         })
         .collect();

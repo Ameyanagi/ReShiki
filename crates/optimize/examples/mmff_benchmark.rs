@@ -95,12 +95,25 @@ impl Potential for MmffPotential {
 struct Run {
     label: &'static str,
     status: Status,
+    method: Method,
     steps: usize,
     evaluations: usize,
     energy: f64,
     max_gradient: f64,
     wall_ms: f64,
     energies: Vec<f64>,
+}
+
+impl Run {
+    fn marked_evaluations(&self, requested: Method) -> String {
+        let status = match self.status {
+            Status::Converged => "",
+            Status::MaxSteps => "*",
+            _ => "‡",
+        };
+        let fallback = if self.method != requested { "†" } else { "" };
+        format!("{}{status}{fallback}", self.evaluations)
+    }
 }
 
 struct Benchmark {
@@ -177,6 +190,7 @@ fn benchmark(name: &'static str, smiles: &str) -> Result<Benchmark, Box<dyn Erro
         runs.push(Run {
             label,
             status: outcome.status,
+            method: outcome.method,
             steps: outcome.steps,
             evaluations: outcome.evaluations,
             energy: outcome.energy * KCAL_PER_HARTREE,
@@ -293,6 +307,7 @@ fn markdown(benchmarks: &[Benchmark]) -> String {
     ));
     let mut total_steps = [0; 4];
     let mut total_evals = [0; 4];
+    let mut non_converged = [0; 4];
     let mut total_atoms = 0;
     let mut total_iterations = 0;
     let mut deltas_lbfgs = Vec::with_capacity(benchmarks.len());
@@ -310,11 +325,11 @@ fn markdown(benchmarks: &[Benchmark]) -> String {
             bench.name,
             bench.atoms,
             anc.steps,
-            anc.evaluations,
+            anc.marked_evaluations(Method::AncRfo),
             lbfgs.steps,
-            lbfgs.evaluations,
-            bench.runs[2].evaluations,
-            bench.runs[3].evaluations,
+            lbfgs.marked_evaluations(Method::Lbfgs),
+            bench.runs[2].marked_evaluations(Method::AncRfo),
+            bench.runs[3].marked_evaluations(Method::Lbfgs),
             bench.reference_iterations,
             delta_lbfgs,
             delta_reference,
@@ -326,6 +341,7 @@ fn markdown(benchmarks: &[Benchmark]) -> String {
         for (i, run) in bench.runs.iter().enumerate() {
             total_steps[i] += run.steps;
             total_evals[i] += run.evaluations;
+            non_converged[i] += usize::from(run.status != Status::Converged);
         }
     }
     writeln!(
@@ -342,6 +358,12 @@ fn markdown(benchmarks: &[Benchmark]) -> String {
         median(deltas_lbfgs.into_iter()),
         median(deltas_reference.into_iter()),
         total_evals[1] as f64 / total_evals[0] as f64,
+    )
+    .unwrap();
+    writeln!(
+        table,
+        "\n\\* stopped at MaxSteps.\n\n† finished with L-BFGS after starting with ANC-RFO.\n\n‡ stopped with an error or was cancelled.\n\nNon-converged runs by method — ANC-RFO {}, L-BFGS {}, ANC-RFO Tight {}, L-BFGS Tight {}.",
+        non_converged[0], non_converged[1], non_converged[2], non_converged[3],
     )
     .unwrap();
     table
@@ -370,4 +392,48 @@ fn main() -> Result<(), Box<dyn Error>> {
     fs::write(out.join("results.md"), &table)?;
     print!("{table}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn markdown_marks_unconverged_runs_and_counts_them_by_method() {
+        let runs = RUNS
+            .into_iter()
+            .enumerate()
+            .map(|(i, (label, method, _))| Run {
+                label,
+                status: match i {
+                    0 => Status::MaxSteps,
+                    3 => Status::Cancelled,
+                    _ => Status::Converged,
+                },
+                method: if i == 0 { Method::Lbfgs } else { method },
+                steps: 500,
+                evaluations: 507,
+                energy: 0.,
+                max_gradient: 0.,
+                wall_ms: 0.,
+                energies: Vec::new(),
+            })
+            .collect();
+        let report = markdown(&[Benchmark {
+            name: "test",
+            atoms: 10,
+            heavy_atoms: 10,
+            runs,
+            reference_iterations: 500,
+            reference_energy: 0.,
+        }]);
+        assert!(
+            report.contains("| 500/507*† | 500/507 | 507 | 507‡ |"),
+            "{report}"
+        );
+        assert!(report.contains("| **Totals / median ΔE** | 10 | 500/507 | 500/507 | 507 | 507 |"));
+        assert!(report.contains("\\* stopped at MaxSteps."));
+        assert!(report.contains("† finished with L-BFGS after starting with ANC-RFO."));
+        assert!(report.contains("ANC-RFO 1, L-BFGS 0, ANC-RFO Tight 0, L-BFGS Tight 1"));
+    }
 }

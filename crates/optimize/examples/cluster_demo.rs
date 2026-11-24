@@ -137,16 +137,18 @@ fn write_molecule(report: &mut String, name: &str, smiles: &str) -> Result<(), B
         }
         if (diversity, per_cluster) == (Diversity::Normal, PerCluster::One) {
             for &index in &clustered.representatives {
-                let members = clustered
+                let (cluster, members) = clustered
                     .clusters
                     .iter()
-                    .find(|members| members[0] == index)
+                    .enumerate()
+                    .find(|(_, members)| members[0] == index)
                     .expect("each Normal/One representative is the first member of its cluster");
                 let start = &starts[index];
                 candidates.push(Candidate {
                     positions: start.positions.clone(),
                     energy_hartree: start.energy_hartree,
                     start_energy_hartree: start.energy_hartree,
+                    cluster,
                     cluster_size: members.len() as u32,
                 });
             }

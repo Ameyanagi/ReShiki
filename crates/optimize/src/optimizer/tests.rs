@@ -320,6 +320,14 @@ fn tight_failure_keeps_the_normal_sample() {
     assert_eq!(result.evaluations, 2);
     assert_eq!(result.energy, 3.);
     assert_eq!(result.energies, [3.]);
+
+    let options = Options {
+        tight_final: false,
+        ..Options::default()
+    };
+    let result = optimize(&mut p, &[1, 1], &INITIAL, &options, proceed);
+    assert_eq!(result.status, Status::Converged);
+    assert_eq!(result.evaluations, 1);
 }
 
 #[test]
@@ -348,6 +356,36 @@ fn anc_rejections_retry_from_the_accepted_point_then_switch_methods() {
         let delta: Vec<_> = x.iter().zip(INITIAL).map(|(v, i)| v - i).collect();
         assert!((crate::linalg::norm(&delta) - 0.3 * 0.25_f64.powi(retry as i32)).abs() < 1e-12);
     }
+}
+
+#[test]
+fn anc_rejection_does_not_repeat_an_interior_trial() {
+    let mut evaluated = Vec::new();
+    let mut p = surface(|x, g, _| {
+        let positions: [f64; 6] = x.try_into().unwrap();
+        assert!(!evaluated.contains(&positions), "repeated trial at {x:?}");
+        evaluated.push(positions);
+        let bond: [f64; 3] = std::array::from_fn(|i| x[3 + i] - x[i]);
+        let r = crate::linalg::norm(&bond);
+        let d = r - 1.4;
+        for (i, component) in bond.into_iter().enumerate() {
+            g[3 + i] = (20. * d + 0.00027) * component / r;
+            g[i] = -g[3 + i];
+        }
+        Ok(10. * d * d + 0.00027 * d)
+    });
+    let options = Options {
+        tight_final: false,
+        ..anchored(Method::AncRfo)
+    };
+    let result = optimize(
+        &mut p,
+        &[1, 1],
+        &[0., 0., 0., 1.4, 0., 0.],
+        &options,
+        proceed,
+    );
+    assert_eq!(result.status, Status::Converged);
 }
 
 #[test]
