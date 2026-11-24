@@ -32,11 +32,11 @@ The [xTB licensing guide](xtb-licensing.md) describes the notices and source ter
 
 Each release publishes `reshiki-<version>-source.tar.gz` and its `.sha256` on the
 same release page as the applications, with the source archive also listed in
-`SHA256SUMS`. It contains ReShiki at the release commit, the pinned axtb source,
+`SHA256SUMS`. It contains ReShiki's tracked release sources, the pinned axtb source,
 vendored Cargo dependencies, file hashes and `BUILD-WITH-XTB.md` with offline
-rebuild instructions, including how to use a modified axtb. The source job builds
-this archive and tests the modified-library rebuild offline with an empty
-`CARGO_HOME` before publication can proceed. Nightly archives use the same unique
+rebuild instructions, including how to use a modified axtb. With an empty
+`CARGO_HOME`, the source job checks the shipped sources and tests a rebuild with
+a modified axtb offline before publication. Nightly archives use the same unique
 version as their applications. Keep each source archive and checksum available
 for as long as its release's application downloads remain available.
 

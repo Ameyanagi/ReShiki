@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shlex
 import sys
 import tarfile
@@ -16,15 +17,21 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from prepare_nightly import stamp
 from xtb_source_archive import (
+    DIST_ENV,
+    EXCLUDED_MEDIA,
     FIXED_MTIME,
     MANIFEST,
+    build,
     build_instructions,
     check,
+    evidence_media,
     exclude_axtb_source,
     file_hashes,
     merge_vendor_config,
     modify_driver_version,
+    output,
     patch_arguments,
     verify_checksum,
     verify_manifest,
@@ -33,6 +40,7 @@ from xtb_source_archive import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github/workflows/release.yml"
 CRATES = {
     "axtb": "axtb",
     "axtb-base": "base",
@@ -52,6 +60,26 @@ def fork_fixture(root):
     response = root / "crates/driver/src/response.rs"
     response.parent.mkdir()
     response.write_text('pub const VERSION: &str = env!("CARGO_PKG_VERSION");\n', encoding="utf-8")
+
+
+def workflow_job(workflow, job):
+    return re.search(rf"^  {job}:\n(.*?)(?=^  [\w-]+:\n|\Z)", workflow, re.M | re.S)[1]
+
+
+def artifact_setting(expression, artifact):
+    for branch in expression.split(" || "):
+        match = re.fullmatch(r"startsWith\(matrix\.artifact, '([^']+)'\) && '([^']+)'", branch)
+        if match:
+            if artifact.startswith(match[1]):
+                return match[2]
+            continue
+        match = re.fullmatch(r"matrix\.artifact == '([^']+)' && '([^']+)'", branch)
+        if match:
+            if artifact == match[1]:
+                return match[2]
+            continue
+        return re.fullmatch(r"'([^']+)'", branch)[1]
+    raise ValueError(f"No matching workflow setting for {artifact}: {expression}")
 
 
 class XtbSourceArchiveTests(unittest.TestCase):
@@ -224,6 +252,11 @@ directory = "vendored-crates"
             self.assertIn("libxkbcommon-dev", instructions)
             self.assertIn("libudev-dev", instructions)
             self.assertIn("xcode-select --install", instructions)
+            for environment in DIST_ENV.values():
+                self.assertIn(
+                    "\n".join(f"export {key}={value}" for key, value in environment.items()),
+                    instructions,
+                )
             self.assertIn(
                 "cargo build --profile dist --locked --offline --features xtb --bin reshiki",
                 instructions,
@@ -242,6 +275,152 @@ directory = "vendored-crates"
             self.assertIn("codesign --force --sign - target/dist/reshiki", instructions)
             self.assertIn("bundle_metadata", instructions)
             self.assertIn("licenses/axtb/", instructions)
+            for directory in EXCLUDED_MEDIA:
+                self.assertIn(f"`{directory}**`", instructions)
+
+    def test_dist_environment_matches_release_workflow(self):
+        job = workflow_job(WORKFLOW.read_text(encoding="utf-8"), "build")
+        expressions = dict(
+            re.findall(r"^      (CARGO_PROFILE_DIST_\w+): \$\{\{ (.+) \}\}$", job, re.M)
+        )
+        deployment_target = re.search(
+            r"^      - name: Build and test extracted portable archive\n"
+            r'        env:\n          MACOSX_DEPLOYMENT_TARGET: "([^"]+)"$',
+            job,
+            re.M,
+        )[1]
+        platforms = {
+            "macos-arm64": "macOS (Apple Silicon and Intel)",
+            "macos-x64": "macOS (Apple Silicon and Intel)",
+            "linux-arm64": "Linux arm64",
+            "linux-x64": "Linux x64",
+        }
+        self.assertEqual(
+            set(re.findall(r'"artifact": "((?:macos|linux)-[^"]+)"', job)), platforms.keys()
+        )
+        self.assertEqual(set(platforms.values()), DIST_ENV.keys())
+        for artifact, platform in platforms.items():
+            with self.subTest(artifact=artifact):
+                environment = {
+                    key: artifact_setting(expression, artifact)
+                    for key, expression in expressions.items()
+                }
+                if artifact.startswith("macos-"):
+                    environment["MACOSX_DEPLOYMENT_TARGET"] = deployment_target
+                self.assertEqual(DIST_ENV[platform], environment)
+
+    def test_source_and_desktop_jobs_share_nightly_stamp_before_packaging(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        validate = workflow_job(workflow, "validate")
+        source = workflow_job(workflow, "source")
+        desktop = workflow_job(workflow, "build")
+        self.assertIn("nightly_version: ${{ steps.nightly.outputs.version }}", validate)
+        self.assertRegex(
+            source,
+            r"(?m)^      - &stamp_nightly_version\n"
+            r"        name: Stamp nightly package version\n"
+            r"        if: inputs\.nightly\n"
+            r"        shell: bash\n"
+            r"        env:\n"
+            r"          NIGHTLY_VERSION: \$\{\{ needs\.validate\.outputs\.nightly_version \}\}\n"
+            r"        run: .*scripts/prepare_nightly\.py --version \"\$NIGHTLY_VERSION\"$",
+        )
+        self.assertLess(
+            source.index("&stamp_nightly_version"), source.index("xtb_source_archive.py build")
+        )
+        self.assertLess(
+            desktop.index("*stamp_nightly_version"),
+            desktop.index("scripts/build_release.py --target"),
+        )
+
+    def test_archive_uses_stamped_working_tree_and_excludes_unused_media(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            repo = base / "repo"
+            repo.mkdir()
+            for name in ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "docs/development.md"):
+                path = repo / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes((ROOT / name).read_bytes())
+            kept = "docs/images/fixture.jpg"
+            omitted = ["docs/images/screenshot.jpg", "website/public/media/promo.webp"]
+            for name in [kept, *omitted]:
+                path = repo / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"media")
+            tracked = repo / "tracked.txt"
+            tracked.write_bytes(b"committed")
+
+            def git(*args):
+                return output(["git", *args], cwd=repo)
+
+            git("init", "-q")
+            git("add", "--all")
+            git(
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "-c",
+                f"core.hooksPath={base / 'disabled-hooks'}",
+                "commit",
+                "--no-gpg-sign",
+                "-qm",
+                "Base",
+            )
+            version = stamp(repo, identifier="20261125.12.1")
+            tracked.write_bytes(b"working tree")
+            (repo / "untracked").touch()
+
+            def cargo_output(command, **kwargs):
+                if command[0] == "git":
+                    return output(command, **kwargs)
+                if command[:2] == ["cargo", "vendor"]:
+                    return "[source.vendored-sources]\ndirectory = 'vendored-crates'"
+                return "test tool version"
+
+            with (
+                patch("xtb_source_archive.ROOT", repo),
+                patch("build_release.ROOT", repo),
+                patch("xtb_source_archive.evidence_media", return_value={kept}),
+                patch("xtb_source_archive.fork_checkout", return_value=(repo, "a" * 40, "0.2.0")),
+                patch(
+                    "xtb_source_archive.git_archive",
+                    side_effect=lambda _, __, dest: fork_fixture(dest),
+                ),
+                patch("xtb_source_archive.output", side_effect=cargo_output),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                archive = build(base / "artifacts")
+            top = f"reshiki-{version}-source"
+            self.assertEqual(archive.name, f"{top}.tar.gz")
+            with tarfile.open(archive) as stream:
+                self.assertEqual(
+                    stream.extractfile(f"{top}/{tracked.name}").read(), b"working tree"
+                )
+                for name in ("Cargo.toml", "Cargo.lock"):
+                    self.assertNotIn(version, git("show", f"HEAD:{name}"))
+                    actual = tomllib.loads(stream.extractfile(f"{top}/{name}").read().decode())
+                    expected = tomllib.loads((repo / name).read_text(encoding="utf-8"))
+                    if name == "Cargo.toml":
+                        expected["workspace"]["exclude"] = ["axtb-source"]
+                    self.assertEqual(actual, expected)
+                manifest = json.load(stream.extractfile(f"{top}/{MANIFEST}"))
+                self.assertEqual(manifest["reshiki"]["version"], version)
+                self.assertEqual(manifest["exclusions"], [f"{path}**" for path in EXCLUDED_MEDIA])
+                self.assertEqual(manifest["retained_media"], [kept])
+                self.assertIn(f"{top}/{kept}", stream.getnames())
+                for name in [*omitted, "untracked"]:
+                    self.assertNotIn(f"{top}/{name}", stream.getnames())
+
+    def test_media_read_by_evidence_verifiers_is_retained(self):
+        retained = evidence_media(ROOT)
+        for name in (
+            "docs/images/coordination/co-en3-assembled-reopened.jpg",
+            "docs/images/nmr/mock-alignment/approved-generated-mock.png",
+            "docs/images/retained-plus-lactic-acid/02-plus-lactic-inserted.jpg",
+        ):
+            self.assertIn(name, retained)
 
     def test_modify_driver_version_changes_only_the_constant_line(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -265,18 +444,38 @@ directory = "vendored-crates"
             archive = temporary / "fixture.tar.gz"
             write_archive(root, archive)
 
-            def build(command, *, cwd, env):
+            calls = []
+
+            def cargo(command, *, cwd, env):
+                calls.append((command, env["CARGO_HOME"]))
                 self.assertIn(" ", str(cwd))
+                self.assertEqual(env["CARGO_NET_OFFLINE"], "true")
+                self.assertEqual(Path(env["CARGO_TARGET_DIR"]), cwd / "target")
+                response = (cwd / "axtb-source/crates/driver/src/response.rs").read_text()
+                if len(calls) == 1:
+                    self.assertEqual(
+                        command,
+                        [
+                            "cargo",
+                            "check",
+                            "--locked",
+                            "--offline",
+                            "--features",
+                            "xtb",
+                            "--bin",
+                            "reshiki",
+                        ],
+                    )
+                    self.assertEqual(list(Path(env["CARGO_HOME"]).iterdir()), [])
+                    self.assertIn('env!("CARGO_PKG_VERSION")', response)
+                    return
+                self.assertEqual(env["CARGO_HOME"], calls[0][1])
                 self.assertEqual(
                     command[:7],
                     ["cargo", "build", "--offline", "--features", "xtb", "--bin", "reshiki"],
                 )
                 self.assertEqual(command[7:], patch_arguments(cwd / "axtb-source"))
                 self.assertNotIn("--locked", command)
-                self.assertEqual(env["CARGO_NET_OFFLINE"], "true")
-                self.assertEqual(list(Path(env["CARGO_HOME"]).iterdir()), [])
-                self.assertEqual(Path(env["CARGO_TARGET_DIR"]), cwd / "target")
-                response = (cwd / "axtb-source/crates/driver/src/response.rs").read_text()
                 self.assertIn('"0.2.0+modified"', response)
 
             def verify(binary, metadata):
@@ -289,14 +488,15 @@ directory = "vendored-crates"
 
             summary = io.StringIO()
             with (
-                patch("xtb_source_archive.run", side_effect=build) as builder,
+                patch("xtb_source_archive.run", side_effect=cargo) as builder,
                 patch("build_release.verify_xtb_worker", side_effect=verify) as verifier,
                 contextlib.redirect_stdout(summary),
             ):
                 self.assertGreaterEqual(check(archive), 0)
-            builder.assert_called_once()
+            self.assertEqual(builder.call_count, 2)
             verifier.assert_called_once()
-            self.assertEqual(len(summary.getvalue().splitlines()), 1)
+            self.assertIn("Pristine offline cargo check passed in", summary.getvalue())
+            self.assertIn("Modified axtb build passed in", summary.getvalue())
             self.assertIn("0.2.0+modified", summary.getvalue())
             self.assertIn("water energy verified", summary.getvalue())
 

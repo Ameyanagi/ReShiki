@@ -105,24 +105,26 @@ byte.
 
 Each release that contains axtb also publishes
 `reshiki-<version>-source.tar.gz` (and its `.sha256`) on the same GitHub
-release page. `scripts/xtb_source_archive.py` builds it from the release
-commit:
+release page. `scripts/xtb_source_archive.py` packages the tracked working-tree
+files from the release checkout. For nightlies, the source and desktop build
+jobs stamp the same version into `Cargo.toml` and `Cargo.lock` first.
 
 ```
 reshiki-<version>-source/
-  …                     ReShiki's tracked files at the release commit (git archive)
+  …                     ReShiki's tracked working-tree files, with media exclusions
   axtb-source/          the fork's tracked files at the pinned revision
   vendored-crates/      `cargo vendor --locked` of every dependency
   .cargo/config.toml    source replacement to vendored-crates/
   BUILD-WITH-XTB.md     build and rebuild steps
-  SOURCE-MANIFEST.json  commits, revision, and SHA-256 of every file
+  SOURCE-MANIFEST.json  commits, revision, exclusions, and SHA-256 of every file
 ```
 
 The release workflow publishes binaries only after this archive is built,
 checked and uploaded. The archive is kept as long as the release it belongs
 to; nightly releases that ship axtb carry their own archive.
 
-`BUILD-WITH-XTB.md` gives two procedures, offline:
+`BUILD-WITH-XTB.md` lists the release profile settings for macOS, Linux arm64,
+and Linux x64, and gives two offline procedures:
 
 - **Rebuild as shipped:**
   `cargo build --profile dist --locked --offline --features xtb --bin reshiki`.
@@ -134,10 +136,11 @@ to; nightly releases that ship axtb carry their own archive.
   macOS, sign it ad hoc (`codesign --force --sign - …`) or wrap it as described
   in the file; the system may ask once before running an unsigned app.
 
-`xtb_source_archive.py check` repeats the second procedure in a clean
-directory with a one-line change to axtb (its reported program version) and
-requires the rebuilt worker to answer `hello` with the changed version and a
-water energy. The release workflow runs this check on Linux x64 before
+`xtb_source_archive.py check` first runs `cargo check --locked --offline
+--features xtb --bin reshiki` in the pristine extracted tree with an empty
+`CARGO_HOME`. It then builds with a one-line change to axtb's reported program
+version and verifies that the rebuilt worker reports that version and computes
+a water energy. The release workflow runs both steps on Linux x64 before
 publishing.
 
 LGPL-3.0 section 4(d)(0) is met by giving the complete source of the combined

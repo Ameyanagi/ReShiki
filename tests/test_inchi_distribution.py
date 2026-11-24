@@ -507,19 +507,27 @@ class HelperTests(unittest.TestCase):
                 with (
                     patch("installers.run", side_effect=run),
                     patch("installers.verify_inchi_worker", side_effect=helper),
+                    patch("installers.verify_xtb_worker") as xtb,
                     patch("installers.verify_runtime") as runtime,
                     patch("installers.verify_macos_workers") as native_workers,
                     patch("installers.verify_agent_api") as agent,
                 ):
                     installers.verify_mac_disk_image(
-                        Path("fixture.dmg"), False, architecture=architecture
+                        Path("fixture.dmg"),
+                        False,
+                        architecture=architecture,
+                        metadata={"xtb": {"included": False}},
                     )
                     other = "x64" if architecture == "arm64" else "arm64"
                     with self.assertRaisesRegex(ValueError, "Expected macos"):
                         installers.verify_mac_disk_image(
-                            Path("fixture.dmg"), False, architecture=other
+                            Path("fixture.dmg"),
+                            False,
+                            architecture=other,
+                            metadata={"xtb": {"included": False}},
                         )
                 self.assertEqual(len(checked), 1)
+                xtb.assert_called_once_with(checked[0], {"xtb": {"included": False}})
                 runtime.assert_called_once_with(
                     checked[0].with_name("reshiki"), checked[0].parents[2]
                 )

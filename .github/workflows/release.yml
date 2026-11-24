@@ -214,14 +214,18 @@ jobs:
           enable-cache: false
       - run: rustup toolchain install 1.99.1 --profile minimal
       - run: rustup default 1.99.1
-      - name: Build the complete source archive with xTB
+      - &stamp_nightly_version
+        name: Stamp nightly package version
+        if: inputs.nightly
+        shell: bash
         env:
           NIGHTLY_VERSION: ${{ needs.validate.outputs.nightly_version }}
-        run: |
-          args=(--output dist/releases)
-          if [[ -n "$NIGHTLY_VERSION" ]]; then args+=(--version "$NIGHTLY_VERSION"); fi
-          uv run --no-project --python 3.12.15 python scripts/xtb_source_archive.py build "${args[@]}"
-      - name: Rebuild offline against a modified axtb from the source archive
+        run: uv run --no-project --python 3.12.15 python scripts/prepare_nightly.py --version "$NIGHTLY_VERSION"
+      - name: Test source packaging and release rebuild settings
+        run: uv run --no-project --python 3.12.15 python -m unittest tests.test_xtb_source_archive
+      - name: Build the complete source archive with xTB
+        run: uv run --no-project --python 3.12.15 python scripts/xtb_source_archive.py build --output dist/releases
+      - name: Check shipped sources and rebuild offline against a modified axtb
         run: uv run --no-project --python 3.12.15 python scripts/xtb_source_archive.py check dist/releases/reshiki-*-source.tar.gz
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -318,12 +322,7 @@ jobs:
         with:
           version: "0.13.5"
           python-version: ${{ matrix.python }}
-      - name: Stamp nightly package version
-        if: inputs.nightly
-        shell: bash
-        env:
-          NIGHTLY_VERSION: ${{ needs.validate.outputs.nightly_version }}
-        run: uv run --no-project --python 3.12.15 python scripts/prepare_nightly.py --version "$NIGHTLY_VERSION"
+      - *stamp_nightly_version
       - name: Install Linux libraries
         if: matrix.artifact == 'linux-arm64'
         run: sudo apt-get update && sudo apt-get install -y binutils libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev

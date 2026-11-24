@@ -9,13 +9,16 @@ import platform
 import plistlib
 import re
 import shutil
+import signal
 import struct
 import subprocess
 import tarfile
 import tempfile
+import threading
+import time
 import tomllib
 import zipfile
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future
 from pathlib import Path
 
 from build_inchi_helper import RELEASE_TARGETS
@@ -28,12 +31,13 @@ from check_runtime_dependencies import (
     verify_runtime,
     verify_single_executable,
 )
-from license_notices import write_notices
+from license_notices import dependency_metadata, write_notices
 
 ROOT = Path(__file__).resolve().parents[1]
 XTB_SYSTEMS = {"macos", "linux"}
 XTB_FIXTURES = ROOT / "tests/fixtures/xtb"
 XTB_HEADER = struct.Struct("<8sHHI")
+XTB_VERIFY_TIMEOUT_SECONDS = 60
 
 
 def run(command, **kwargs):
@@ -65,9 +69,8 @@ def numeric_version(value):
 
 def check_tag(tag):
     package_version = version()
-    expected = f"v{package_version}"
-    if "-nightly." in package_version:
-        expected = f"nightly-{package_version}"
+    prefix = "nightly-" if tag.startswith("nightly-") else "v"
+    expected = f"{prefix}{package_version}"
     if tag != expected:
         raise ValueError(f"Tag {tag!r} must match Cargo.toml version {expected}")
 
@@ -178,23 +181,38 @@ def xtb_water_geometry():
 
 XTB_WATER_NUMBERS, XTB_WATER_POSITIONS = xtb_water_geometry()
 XTB_WATER_ENERGY = json.loads((XTB_FIXTURES / "reference.json").read_text(encoding="utf-8"))[
-    "molecules"
+    "axtb"
 ]["water"]["energy"]
 
 
 def verify_xtb_worker(binary, metadata):
     """Evaluate water through the packaged app's framed xTB worker protocol."""
     xtb = metadata["xtb"]
-    with (
-        tempfile.TemporaryDirectory(prefix="ReShiki xTB check ") as temporary,
-        subprocess.Popen(
+    deadline = time.monotonic() + XTB_VERIFY_TIMEOUT_SECONDS
+    temporary = tempfile.TemporaryDirectory(prefix="ReShiki xTB check ")
+    try:
+        process = subprocess.Popen(
             [Path(binary).resolve(), "--xtb-worker"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            cwd=temporary,
-        ) as process,
-        ThreadPoolExecutor(max_workers=1) as executor,
-    ):
+            cwd=temporary.name,
+            start_new_session=os.name == "posix",
+        )
+    except BaseException:
+        temporary.cleanup()
+        raise
+
+    def stop():
+        if os.name == "posix":
+            # The worker may already have exited while a child holds its stdout.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        elif process.poll() is None:
+            process.kill()
+
+    def exchange():
         stdin, stdout = process.stdin, process.stdout
         assert stdin is not None and stdout is not None
 
@@ -216,7 +234,7 @@ def verify_xtb_worker(binary, metadata):
                 raise ValueError(f"xTB worker failed {op}: {response}")
             return response["ok"]
 
-        def exchange():
+        def evaluate():
             hello = request(1, "hello")
             if hello["protocol"] != 1:
                 raise ValueError(f"xTB worker reported an incompatible protocol: {hello}")
@@ -229,16 +247,21 @@ def verify_xtb_worker(binary, metadata):
                     or "gfn2" not in hello["methods"]
                 ):
                     raise ValueError(f"xTB worker reported an unexpected engine: {hello}")
-                request(
+                opened = request(
                     2,
                     "open",
                     numbers=XTB_WATER_NUMBERS,
                     positions=XTB_WATER_POSITIONS,
                     units="angstrom",
                     method="gfn2",
+                    conventions="axtb",
                     heap_bytes=256 * 1024 * 1024,
                 )
+                if opened.get("conventions") != "axtb":
+                    raise ValueError(f"xTB worker returned unexpected water conventions: {opened}")
                 result = request(3, "compute", units="angstrom", gradient=True)
+                if result.get("conventions") != "axtb":
+                    raise ValueError(f"xTB worker returned unexpected water conventions: {result}")
                 energy = result["energy"]
                 if not math.isclose(energy, XTB_WATER_ENERGY, rel_tol=0, abs_tol=1e-9):
                     raise ValueError(f"xTB worker returned an unexpected water energy: {energy} Eh")
@@ -249,6 +272,14 @@ def verify_xtb_worker(binary, metadata):
                     for row in gradient
                 ):
                     raise ValueError(f"xTB worker returned an invalid water gradient: {gradient}")
+                gap = result.get("homo_lumo_gap_ev")
+                if (
+                    type(gap) not in (int, float)
+                    or not math.isfinite(gap)
+                    or gap < 0.1
+                    or result.get("near_degenerate") is not False
+                ):
+                    raise ValueError(f"xTB worker returned invalid water gap diagnostics: {result}")
                 request(4, "close")
                 summary = (
                     f"xTB worker axtb {engine['version']}: water {energy:.15f} Eh, gradient OK."
@@ -266,14 +297,37 @@ def verify_xtb_worker(binary, metadata):
                 raise ValueError(f"xTB worker exited with status {process.returncode}")
             return summary
 
-        result = executor.submit(exchange)
         try:
-            print(result.result(timeout=60))
-        except TimeoutError as error:
-            raise ValueError("xTB worker did not complete within 60 seconds") from error
-        finally:
-            if process.poll() is None:
-                process.kill()
+            summary = evaluate()
+        except BaseException as error:
+            result.set_exception(error)
+            summary = None
+        try:
+            process.wait()
+            stdin.close()
+            stdout.close()
+            temporary.cleanup()
+        except BaseException as error:
+            if not result.done():
+                result.set_exception(error)
+        if not result.done():
+            result.set_result(summary)
+
+    # A descendant outside the worker's process group can keep a pipe open even
+    # after SIGKILL. A daemon reader and no blocking cleanup on the caller keep
+    # the one deadline effective on POSIX and on platforms without killpg.
+    result = Future()
+    threading.Thread(target=exchange, name="ReShiki xTB check", daemon=True).start()
+    try:
+        print(result.result(timeout=max(0, deadline - time.monotonic())))
+    except TimeoutError as error:
+        stop()
+        raise ValueError(
+            f"xTB worker did not complete within {XTB_VERIFY_TIMEOUT_SECONDS} seconds"
+        ) from error
+    except BaseException:
+        stop()
+        raise
 
 
 def verify_geometry_dependencies(binary):
@@ -559,6 +613,9 @@ def notices(destination, features=(), *, target=None):
     if features:
         # The unfiltered feature graph includes dependencies outside the target's cfg.
         metadata = cargo_metadata(features, target=target or host_target())
+        metadata = dependency_metadata(metadata)
+    # Keep the default workspace-wide notices path unchanged; feature packages
+    # carry only the application's normal/build dependency closure.
     write_notices(ROOT, destination, metadata)
 
 
@@ -815,6 +872,7 @@ def main():
 
     metadata = dict(
         version=package_version,
+        release_tag=tag,
         platform=system,
         architecture=arch,
         rust_target=target,

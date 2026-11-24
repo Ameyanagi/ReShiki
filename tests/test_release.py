@@ -6,15 +6,19 @@ import io
 import json
 import os
 import plistlib
+import signal
 import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
+import time
 import tomllib
 import unittest
 import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -270,7 +274,24 @@ class ReleaseTests(unittest.TestCase):
     def test_xtb_notices_use_feature_metadata_after_default_audits(self):
         root = Path(__file__).resolve().parents[1]
         default = {"packages": []}
-        xtb = {"packages": [AXTB_DRIVER]}
+        driver = {**AXTB_DRIVER, "id": "xtb"}
+        xtb = {
+            "packages": [
+                {"id": "app", "name": "reshiki"},
+                driver,
+                {"id": "python", "name": "reshiki-python"},
+                {"id": "pyo3", "name": "pyo3"},
+            ],
+            "resolve": {
+                "root": "app",
+                "nodes": [
+                    {"id": "app", "deps": [{"pkg": "xtb", "dep_kinds": [{"kind": None}]}]},
+                    {"id": "xtb", "deps": []},
+                    {"id": "python", "deps": [{"pkg": "pyo3", "dep_kinds": [{"kind": None}]}]},
+                    {"id": "pyo3", "deps": []},
+                ],
+            },
+        }
         target = "aarch64-unknown-linux-gnu"
         destination = Path("Licenses")
         with (
@@ -293,7 +314,7 @@ class ReleaseTests(unittest.TestCase):
         )
         dependencies.assert_called_once_with(root, default)
         geometry.assert_called_once_with(root, cargo_metadata=default)
-        write.assert_called_once_with(root, destination, xtb)
+        write.assert_called_once_with(root, destination, {**xtb, "packages": [driver]})
 
     @staticmethod
     def pe_image(machine):
@@ -574,11 +595,26 @@ class ReleaseTests(unittest.TestCase):
         check_tag(f"v{version()}")
         with self.assertRaisesRegex(ValueError, "must match"):
             check_tag("v0.0.0-unrelated")
-        nightly = "0.9.1-nightly.20260929.36501221724.1"
-        with patch("build_release.version", return_value=nightly):
-            check_tag(f"nightly-{nightly}")
-            with self.assertRaisesRegex(ValueError, "must match"):
-                check_tag(f"v{nightly}")
+        for package_version, tag in (
+            ("0.17.1", "v0.17.1"),
+            ("0.17.1-nightly.1", "v0.17.1-nightly.1"),
+            ("0.17.1-nightly.1", "nightly-0.17.1-nightly.1"),
+            (
+                "0.9.1-nightly.20260929.36501221724.1",
+                "nightly-0.9.1-nightly.20260929.36501221724.1",
+            ),
+        ):
+            with (
+                self.subTest(tag=tag),
+                patch("build_release.version", return_value=package_version),
+            ):
+                check_tag(tag)
+                for invalid in ("v0.0.0-unrelated", "nightly-0.0.0-unrelated", package_version):
+                    with (
+                        self.subTest(invalid=invalid),
+                        self.assertRaisesRegex(ValueError, "must match"),
+                    ):
+                        check_tag(invalid)
 
     def test_archive_name_preserves_all_version_components(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -621,6 +657,238 @@ class ReleaseTests(unittest.TestCase):
             self.assertTrue(is_macho(binary))
             binary.write_bytes(b"text file")
             self.assertFalse(is_macho(binary))
+
+
+class XtbReleaseWorkerTests(unittest.TestCase):
+    WORKER = r"""
+import json
+import struct
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+config = json.loads(sys.argv[1])
+if config["mode"] == "no_reply":
+    time.sleep(30)
+if config["mode"] == "inherited_pipe":
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        start_new_session=config["detached"],
+    )
+    Path(config["child_pid"]).write_text(str(child.pid))
+header = struct.Struct("<8sHHI")
+while data := sys.stdin.buffer.read(header.size):
+    _, _, _, length = header.unpack(data)
+    request = json.loads(sys.stdin.buffer.read(length))
+    with open(config["requests"], "a") as stream:
+        stream.write(json.dumps(request) + "\n")
+    response = json.dumps({"id": request["id"], "ok": config["replies"][request["op"]]}).encode()
+    sys.stdout.buffer.write(header.pack(b"RSHXTBWK", 1, 0, len(response)) + response)
+    sys.stdout.buffer.flush()
+    if request["op"] == "close":
+        break
+"""
+
+    @staticmethod
+    def replies():
+        from build_release import XTB_WATER_ENERGY
+
+        return {
+            "hello": {
+                "protocol": 1,
+                "engine": {"name": "axtb", "version": "0.2.0", "rev": AXTB_REV},
+                "methods": ["gfn2"],
+            },
+            "open": {"conventions": "axtb"},
+            "compute": {
+                "conventions": "axtb",
+                "energy": XTB_WATER_ENERGY,
+                "gradient": [[0.0, 0.0, 0.0] for _ in range(3)],
+                "homo_lumo_gap_ev": 14.0,
+                "near_degenerate": False,
+            },
+            "close": {},
+        }
+
+    def verify_fixture(
+        self, *, replies=None, included=True, mode="normal", detached=False, portable=False
+    ):
+        import build_release
+
+        popen = subprocess.Popen
+        killpg = getattr(os, "killpg", None)
+        processes = []
+        threads = set(threading.enumerate())
+        self.group_kills = []
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            worker = root / "worker.py"
+            worker.write_text(self.WORKER, encoding="utf-8")
+            config = dict(
+                replies=self.replies() if replies is None else replies,
+                mode=mode,
+                detached=detached,
+                requests=str(root / "requests.jsonl"),
+                child_pid=str(root / "child.pid"),
+            )
+
+            def launch(command, **kwargs):
+                self.assertEqual(command, [Path("fixture-reshiki").resolve(), "--xtb-worker"])
+                self.assertEqual(kwargs["start_new_session"], os.name == "posix" and not portable)
+                process = popen([sys.executable, worker, json.dumps(config)], **kwargs)
+                processes.append(process)
+                return process
+
+            def kill_group(pid, sig):
+                self.group_kills.append((pid, sig, processes[0].poll()))
+                return killpg(pid, sig)
+
+            try:
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(patch("build_release.subprocess.Popen", side_effect=launch))
+                    stack.enter_context(
+                        patch(
+                            "build_release.XTB_VERIFY_TIMEOUT_SECONDS", 5 if mode == "normal" else 1
+                        )
+                    )
+                    if portable:
+                        stack.enter_context(patch("build_release.os", SimpleNamespace(name="nt")))
+                    elif killpg is not None:
+                        stack.enter_context(
+                            patch("build_release.os.killpg", side_effect=kill_group)
+                        )
+                    stack.enter_context(redirect_stdout(output))
+                    started = time.monotonic()
+                    try:
+                        build_release.verify_xtb_worker(
+                            Path("fixture-reshiki"),
+                            {"xtb": dict(included=included, version="0.2.0", rev=AXTB_REV)},
+                        )
+                    finally:
+                        self.verification_elapsed = time.monotonic() - started
+                requests = [
+                    json.loads(line) for line in (root / "requests.jsonl").read_text().splitlines()
+                ]
+                return requests, output.getvalue()
+            finally:
+                if detached and (root / "child.pid").exists():
+                    try:
+                        os.kill(int((root / "child.pid").read_text()), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                for process in processes:
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait(timeout=2)
+                for thread in set(threading.enumerate()) - threads:
+                    if thread.name == "ReShiki xTB check":
+                        thread.join(timeout=2)
+
+    def test_water_uses_axtb_conventions_and_checks_gap_diagnostics(self):
+        requests, summary = self.verify_fixture()
+        self.assertEqual(
+            [request["op"] for request in requests], ["hello", "open", "compute", "close"]
+        )
+        self.assertEqual(requests[1]["conventions"], "axtb")
+        self.assertIn("xTB worker axtb 0.2.0: water -5.070222289327834 Eh, gradient OK.", summary)
+
+    def test_stub_reports_protocol_without_opening_a_session(self):
+        replies = self.replies()
+        replies["hello"].update(engine=None, methods=[])
+        requests, summary = self.verify_fixture(replies=replies, included=False)
+        self.assertEqual([request["op"] for request in requests], ["hello"])
+        self.assertEqual(summary, "xTB worker protocol 1 verified with no engine.\n")
+
+    def test_water_rejects_wrong_conventions_and_gap_diagnostics(self):
+        cases = [
+            ("open", "conventions", "xtb-6.8", "conventions"),
+            ("compute", "conventions", "xtb-6.8", "conventions"),
+            ("compute", "conventions", None, "conventions"),
+            ("compute", "near_degenerate", True, "gap diagnostics"),
+            ("compute", "near_degenerate", None, "gap diagnostics"),
+        ] + [
+            ("compute", "homo_lumo_gap_ev", gap, "gap diagnostics")
+            for gap in (None, float("nan"), float("inf"), -1.0, 0.05, True)
+        ]
+        for operation, field, value, message in cases:
+            with self.subTest(operation=operation, field=field, value=value):
+                replies = self.replies()
+                replies[operation][field] = value
+                with self.assertRaisesRegex(ValueError, message):
+                    self.verify_fixture(replies=replies)
+
+    def test_timeout_kills_worker_process_group(self):
+        with self.assertRaisesRegex(ValueError, "did not complete within 1 seconds"):
+            self.verify_fixture(mode="no_reply")
+        self.assertLess(self.verification_elapsed, 3)
+        if os.name == "posix":
+            self.assertTrue(self.group_kills)
+            self.assertTrue(all(sig == signal.SIGKILL for _, sig, _ in self.group_kills))
+
+    @unittest.skipUnless(os.name == "posix", "POSIX inherited-pipe regression")
+    def test_timeout_kills_group_after_worker_exits_with_inherited_stdout(self):
+        replies = self.replies()
+        replies["hello"].update(engine=None, methods=[])
+        with self.assertRaisesRegex(ValueError, "did not complete within 1 seconds"):
+            self.verify_fixture(replies=replies, included=False, mode="inherited_pipe")
+        self.assertLess(self.verification_elapsed, 3)
+        self.assertTrue(any(status == 0 for _, _, status in self.group_kills))
+
+    @unittest.skipUnless(os.name == "posix", "POSIX inherited-pipe regression")
+    def test_detached_descendant_cannot_stall_timeout_cleanup(self):
+        replies = self.replies()
+        replies["hello"].update(engine=None, methods=[])
+        with self.assertRaisesRegex(ValueError, "did not complete within 1 seconds"):
+            self.verify_fixture(
+                replies=replies, included=False, mode="inherited_pipe", detached=True
+            )
+        self.assertLess(self.verification_elapsed, 3)
+
+    def test_platform_without_process_groups_still_has_a_bounded_timeout(self):
+        with self.assertRaisesRegex(ValueError, "did not complete within 1 seconds"):
+            self.verify_fixture(mode="no_reply", portable=True)
+        self.assertLess(self.verification_elapsed, 3)
+
+
+class MacXtbDiskImageTests(unittest.TestCase):
+    def test_installation_text_reuses_zip_xtb_notice_and_metadata(self):
+        import installers
+        from build_release import xtb_readme
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / "reshiki-1.2.3-macos-arm64"
+            folder.mkdir()
+            xtb = dict(included=True, source_archive="reshiki-1.2.3-source.tar.gz")
+            metadata = dict(
+                version="1.2.3",
+                platform="macos",
+                architecture="arm64",
+                release_tag="v1.2.3",
+                xtb=xtb,
+            )
+            (folder / "build.json").write_text(json.dumps(metadata), encoding="utf-8")
+            instructions = []
+
+            def create(staging, output):
+                instructions.append((staging / "Install ReShiki.txt").read_text(encoding="utf-8"))
+                output.write_bytes(b"disk image fixture")
+
+            with (
+                patch("installers.run"),
+                patch("installers.create_disk_image", side_effect=create),
+                patch("installers.verify_mac_disk_image") as verify,
+            ):
+                output = installers.mac_disk_image(folder, root / "output")
+            self.assertTrue(instructions[0].endswith(xtb_readme(xtb, "v1.2.3", "macos")))
+            self.assertIn("ReShiki.app/Contents/Resources/Licenses/", instructions[0])
+            self.assertIn("reshiki-1.2.3-source.tar.gz", instructions[0])
+            self.assertIn(
+                "https://github.com/Ameyanagi/ReShiki/releases/tag/v1.2.3", instructions[0]
+            )
+            verify.assert_called_once_with(output, False, architecture="arm64", metadata=metadata)
 
 
 class TransientRetryTests(unittest.TestCase):

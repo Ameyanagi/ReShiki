@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -40,6 +41,28 @@ AXTB_CRATES = {
     "axtb-gfnff": "gfnff",
     "axtb-gxtb": "gxtb",
     "axtb-solvation": "solvation",
+}
+EXCLUDED_MEDIA = ("docs/images/", "website/public/media/")
+DIST_ENV = {
+    "macOS (Apple Silicon and Intel)": {
+        "CARGO_PROFILE_DIST_LTO": "thin",
+        "CARGO_PROFILE_DIST_CODEGEN_UNITS": "1",
+        "CARGO_PROFILE_DIST_STRIP": "symbols",
+        "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO": "packed",
+        "MACOSX_DEPLOYMENT_TARGET": "14.0",
+    },
+    "Linux arm64": {
+        "CARGO_PROFILE_DIST_LTO": "false",
+        "CARGO_PROFILE_DIST_CODEGEN_UNITS": "16",
+        "CARGO_PROFILE_DIST_STRIP": "none",
+        "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO": "off",
+    },
+    "Linux x64": {
+        "CARGO_PROFILE_DIST_LTO": "fat",
+        "CARGO_PROFILE_DIST_CODEGEN_UNITS": "1",
+        "CARGO_PROFILE_DIST_STRIP": "none",
+        "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO": "off",
+    },
 }
 
 
@@ -183,6 +206,44 @@ def git_archive(repository, revision, destination):
             stream.extractall(destination, filter="data")
 
 
+def evidence_media(repository):
+    """Keep media read by the standalone evidence verifiers under tests/fixtures."""
+    fixtures = repository / "tests/fixtures"
+    coordination = json.loads(
+        (fixtures / "coordination/join-shortcut/manifest.json").read_text(encoding="utf-8")
+    )
+    nmr = fixtures / "nmr/mock-alignment/evidence"
+    nmr_index = json.loads((nmr / "index.json").read_text(encoding="utf-8"))
+    paths = (
+        set(coordination["existing_reference_files"])
+        | {entry["path"] for entry in coordination["files"]}
+        | nmr_index["files"].keys()
+        | nmr_index["authored_sha256"].keys()
+        | json.loads((nmr / "build/source-manifest.json").read_text(encoding="utf-8")).keys()
+        | json.loads(
+            (fixtures / "retained-plus-lactic-acid/sha256.json").read_text(encoding="utf-8")
+        ).keys()
+    )
+    return {path for path in paths if path.startswith(EXCLUDED_MEDIA)}
+
+
+def copy_tracked_source(repository, destination, retained_media):
+    """Stage tracked working-tree files, including the release job's nightly stamp."""
+    tracked = run(["git", "ls-files", "-z"], cwd=repository, stdout=subprocess.PIPE).stdout
+    kept_media = []
+    for name in os.fsdecode(tracked).split("\0"):
+        if not name:
+            continue
+        if name.startswith(EXCLUDED_MEDIA):
+            if name not in retained_media:
+                continue
+            kept_media.append(name)
+        staged = destination / name
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repository / name, staged, follow_symlinks=False)
+    return kept_media
+
+
 def fork_checkout(root):
     metadata = json.loads(
         output(
@@ -232,6 +293,14 @@ def build_instructions(root):
     for index in range(first_patch, len(arguments), 2):
         lines.append(shlex.join(arguments[index : index + 2]))
     command = (" \\" + "\n  ").join(lines)
+    settings = []
+    for platform, environment in DIST_ENV.items():
+        exports = "\n".join(
+            f"export {name}={shlex.quote(value)}" for name, value in environment.items()
+        )
+        settings.append(f"**{platform}**\n\n```sh\n{exports}\n```")
+    dist_environment = "\n\n".join(settings)
+    exclusions = " and ".join(f"`{directory}**`" for directory in EXCLUDED_MEDIA)
     return f"""# Rebuilding ReShiki with xTB
 
 This archive contains ReShiki, the pinned axtb fork, and all locked Cargo
@@ -250,6 +319,13 @@ prerequisites below and run the commands from this directory.
   ```
 
 - On macOS, run `xcode-select --install` to install Xcode Command Line Tools.
+
+## Release profile settings
+
+Run the exports for your platform in the same shell as either rebuild command.
+These settings match the desktop release workflow.
+
+{dist_environment}
 
 ## Rebuild as shipped
 
@@ -301,6 +377,11 @@ crate's `COPYING`, `COPYING.LESSER` and `NOTICE`). `SOURCE-MANIFEST.json`
 records SHA-256 hashes of all files other than itself (symlinks hash their
 target text), the commits, and the Cargo and rustc versions used to package
 this archive.
+
+The archive excludes promotional media and screenshot evidence under
+{exclusions}. It retains tracked inputs read by the standalone NMR,
+coordination shortcut, and retained lactic acid evidence verifiers. The
+manifest records the exclusion patterns and the retained media paths.
 """
 
 
@@ -311,7 +392,7 @@ def build(destination, package_version=None):
     commit = output(["git", "rev-parse", "HEAD"], cwd=ROOT)
     with tempfile.TemporaryDirectory(prefix="ReShiki source archive ") as temporary:
         root = Path(temporary) / f"reshiki-{package_version}-source"
-        git_archive(ROOT, commit, root)
+        retained_media = copy_tracked_source(ROOT, root, evidence_media(ROOT))
         staged_version = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))[
             "package"
         ]["version"]
@@ -334,6 +415,8 @@ def build(destination, package_version=None):
                 "format": 1,
                 "reshiki": {"commit": commit, "version": package_version},
                 "axtb": {"source": AXTB_SOURCE, "rev": revision, "version": engine_version},
+                "exclusions": [f"{directory}**" for directory in EXCLUDED_MEDIA],
+                "retained_media": retained_media,
                 "tools": {
                     "cargo": output(["cargo", "--version"], cwd=root),
                     "rustc": output(["rustc", "--version"], cwd=root),
@@ -386,7 +469,6 @@ def check(archive):
         root = roots[0]
         manifest = verify_manifest(root)
         source = root / "axtb-source"
-        modified = modify_driver_version(source, manifest["axtb"]["version"])
         cargo_home = extracted / "empty-cargo-home"
         cargo_home.mkdir()
         environment = {
@@ -395,7 +477,20 @@ def check(archive):
             "CARGO_NET_OFFLINE": "true",
             "CARGO_TARGET_DIR": str(root / "target"),
         }
+        pristine_started = time.monotonic()
+        run(
+            ["cargo", "check", "--locked", "--offline", "--features", "xtb", "--bin", "reshiki"],
+            cwd=root,
+            env=environment,
+        )
+        print(
+            f"Pristine offline cargo check passed in {time.monotonic() - pristine_started:.1f}s.",
+            flush=True,
+        )
+        modified = modify_driver_version(source, manifest["axtb"]["version"])
+        build_started = time.monotonic()
         run(modified_build_command(source), cwd=root, env=environment)
+        print(f"Modified axtb build passed in {time.monotonic() - build_started:.1f}s.", flush=True)
         binary = root / "target/debug" / ("reshiki.exe" if os.name == "nt" else "reshiki")
         metadata = {"xtb": {"included": True, "rev": manifest["axtb"]["rev"], "version": modified}}
         summary = io.StringIO()
@@ -415,7 +510,8 @@ def main():
         "--version", help="Release version, or a nightly version to stamp in staging"
     )
     checker = commands.add_parser(
-        "check", help="Rebuild and exercise a modified fork entirely offline"
+        "check",
+        help="Check the shipped sources and exercise a rebuild with a modified fork offline",
     )
     checker.add_argument("archive", type=Path)
     args = parser.parse_args()
