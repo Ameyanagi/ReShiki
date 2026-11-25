@@ -21,6 +21,8 @@ use reshiki::qcread::{self, Format, QcFile};
 use std::path::PathBuf;
 
 const KCAL_PER_HARTREE: f64 = 627.509_474_063;
+/// The sheet previews frames up to this many atoms.
+const PREVIEW_ATOMS: usize = 500;
 
 /// Which frame opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -197,6 +199,11 @@ impl Dialog {
         let Some(step) = steps.get(index) else {
             return;
         };
+        // Bonds are perceived for the preview; large frames open without one.
+        if step.frame.numbers.len() > PREVIEW_ATOMS {
+            self.preview = None;
+            return;
+        }
         let rotation = self
             .preview
             .as_ref()
@@ -244,14 +251,20 @@ impl App {
         match action {
             Action::Choose(Choice::Lowest) if dialog.file.energies().is_none() => {}
             Action::Choose(choice) => {
+                let before = dialog.index();
                 dialog.choice = choice;
-                dialog.refresh();
+                if dialog.index() != before {
+                    dialog.refresh();
+                }
             }
             Action::Move(step) => {
                 let count = dialog.file.steps().len() as isize;
-                let index = (dialog.index() as isize + step).clamp(0, count - 1);
-                dialog.choice = Choice::Frame(index as usize);
-                dialog.refresh();
+                let before = dialog.index();
+                let index = (before as isize + step).clamp(0, count - 1) as usize;
+                dialog.choice = Choice::Frame(index);
+                if index != before {
+                    dialog.refresh();
+                }
             }
             Action::Keep(keep) => dialog.keep = keep && dialog.file.energies().is_some(),
             Action::Overlay(on) => {
@@ -539,10 +552,12 @@ impl App {
                 .width(Length::Fill)
                 .height(250)
                 .into(),
-            None => text("This frame cannot be shown")
-                .size(12)
-                .style(muted_text)
-                .into(),
+            None => text(format!(
+                "Frames of up to {PREVIEW_ATOMS} atoms are previewed here."
+            ))
+            .size(12)
+            .style(muted_text)
+            .into(),
         };
         let lowest_frame = file.lowest();
         let overlay = accessible_checkbox(
@@ -642,9 +657,10 @@ impl canvas::Program<Message> for FramePreview<'_> {
                 state.1 = Some(cursor.position_in(bounds)?);
                 Some(canvas::Action::capture())
             }
-            mouse::Event::CursorMoved { .. } => {
+            // Each move's own position: one batch can hold several moves.
+            mouse::Event::CursorMoved { position } => {
                 let last = state.1?;
-                let now = cursor.position_in(bounds)?;
+                let now = *position - (bounds.position() - iced::Point::ORIGIN);
                 state.1 = Some(now);
                 Some(
                     canvas::Action::publish(Message::FramesImport(Action::Turn(
