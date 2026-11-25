@@ -1,8 +1,9 @@
 //! The Calculate card's settings, a run's progress and the finish decision,
 //! kept free of iced and the worker so they can be tested alone.
+use reshiki::qcdata::{self, XtbMethod};
 use reshiki::science::StereoChange;
 
-/// A task the xTB worker (protocol v1) can run.
+/// A task the Calculate card runs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum Task {
     Energy,
@@ -15,19 +16,16 @@ impl Task {
         [(Self::Energy, "Energy"), (Self::Optimize, "Optimize")];
 }
 
-/// Shown disabled, each with the reason, until the worker supports them.
+/// Shown disabled, each with the reason, until their tabs arrive.
 pub(crate) const LATER_TASKS: [(&str, &str); 3] = [
-    ("Opt + freq", "Needs frequencies support in the xTB worker"),
-    ("Orbitals", "Needs orbital output from the xTB worker"),
-    ("Conformers", "Needs the conformer search in the xTB worker"),
+    ("Opt + freq", "Coming in the Vibrations tab"),
+    ("Orbitals", "Coming in the Orbitals tab"),
+    ("Conformers", "Coming with the conformer search"),
 ];
-pub(crate) const LATER_METHODS: [(&str, &str); 2] = [
-    ("g-xTB", "Needs g-xTB in the xTB worker"),
-    ("GFN-FF", "Needs GFN-FF in the xTB worker"),
-];
-/// Advanced settings the worker cannot take yet.
-pub(crate) const LATER_SETTINGS: &str =
-    "Coming later: accuracy, electronic temperature and maximum SCF iterations.";
+/// The methods in the card's order; GFN2-xTB is the default.
+pub(crate) const METHODS: [XtbMethod; 3] = [XtbMethod::Gfn2Xtb, XtbMethod::GXtb, XtbMethod::GfnFf];
+/// The electronic temperature "Retry at 1000 K" uses.
+pub(crate) const RETRY_TEMPERATURE_K: f64 = 1000.;
 /// ALPB solvents offered first; xtb also accepts these names.
 pub(crate) const SOLVENTS: [&str; 9] = [
     "water",
@@ -40,15 +38,199 @@ pub(crate) const SOLVENTS: [&str; 9] = [
     "THF",
     "hexane",
 ];
-/// Energy and optimization limit of the worker (protocol v1).
+/// Energy and optimization limit of the worker.
 pub(crate) const MAX_ATOMS: usize = 500;
 pub(crate) const NEAR_DEGENERATE: &str = "Near-degenerate electronic structure: results can differ between computers. Try a higher electronic temperature or more unpaired electrons.";
 
-/// The card's choices. Charge and unpaired electrons hold what was typed;
-/// an empty field means the value from the drawing.
-#[derive(Clone, Debug, Default, PartialEq)]
+/// Whether `method` runs an SCF, and so has orbitals and SCF settings.
+pub(crate) fn electronic(method: XtbMethod) -> bool {
+    method.capabilities().orbitals
+}
+
+/// The one-line note under Method, if the method limits the card.
+pub(crate) fn method_note(method: XtbMethod, solvent: bool) -> Option<&'static str> {
+    match method {
+        XtbMethod::GfnFf => {
+            Some("No orbitals, bond orders or solvent with GFN-FF; closed shells only.")
+        }
+        XtbMethod::GXtb if solvent => Some(
+            "g-xTB in solvent: the GFN2-xTB solvation energy (ALPB) is added to the gas-phase g-xTB energy.",
+        ),
+        _ => None,
+    }
+}
+
+/// What one run calculates and how: from the card, a stored result's
+/// Recalculate, or an entry point with the card's last settings.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Config {
+    pub task: Task,
+    pub method: XtbMethod,
+    pub charge: i32,
+    pub unpaired: u32,
+    /// One of [`SOLVENTS`]; `None` for the gas phase and for GFN-FF.
+    pub solvent: Option<&'static str>,
+    /// "xtb 6.8 compatible" numerical conventions.
+    pub xtb68: bool,
+    /// SCF overrides; `None` is the method's default. Always `None` for GFN-FF.
+    pub accuracy: Option<f64>,
+    pub temperature_k: Option<f64>,
+    pub max_iterations: Option<u32>,
+    pub threads: u32,
+    pub tight: bool,
+    /// Drawing atoms the optimizer holds fixed.
+    pub fixed: Vec<u64>,
+}
+
+impl Config {
+    /// A stored result's settings, to calculate it again; what the file
+    /// does not keep comes from `info` (this session's run), else defaults.
+    pub(crate) fn from_result(
+        result: &qcdata::CalcResult,
+        frame: &qcdata::Frame,
+        info: Option<&super::results::RunInfo>,
+        threads: u32,
+    ) -> Self {
+        let mut config = Self {
+            task: if result.task == qcdata::Task::Optimize {
+                Task::Optimize
+            } else {
+                Task::Energy
+            },
+            method: XtbMethod::Gfn2Xtb,
+            charge: frame.charge,
+            unpaired: frame.multiplicity.saturating_sub(1),
+            solvent: None,
+            xtb68: false,
+            accuracy: None,
+            temperature_k: None,
+            max_iterations: None,
+            threads: info.map_or(threads, |info| info.threads),
+            tight: info.is_some_and(|info| info.tight),
+            fixed: info.map_or_else(Vec::new, |info| info.fixed.clone()),
+        };
+        if let qcdata::Settings::Xtb(settings) = &result.settings {
+            config.method = settings.method;
+            config.solvent = settings.solvent.as_ref().and_then(|s| {
+                SOLVENTS
+                    .into_iter()
+                    .find(|name| name.eq_ignore_ascii_case(&s.name))
+            });
+            config.xtb68 = settings.conventions == qcdata::XtbConventions::Xtb68;
+            config.accuracy = settings.accuracy;
+            config.temperature_k = settings.electronic_temperature_k;
+            config.max_iterations = settings.max_iterations;
+        }
+        config
+    }
+
+    /// The same calculation at the retry electronic temperature, unless it
+    /// already runs that hot (or has no SCF).
+    pub(crate) fn hotter(&self) -> Option<Self> {
+        (electronic(self.method)
+            && self
+                .temperature_k
+                .is_none_or(|kelvin| kelvin < RETRY_TEMPERATURE_K))
+        .then(|| Self {
+            temperature_k: Some(RETRY_TEMPERATURE_K),
+            ..self.clone()
+        })
+    }
+}
+
+/// Why a run failed, as the error card says it.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Failure {
+    /// The SCF did not converge; the worker's message.
+    Scf(String),
+    /// The method has no parameters for this atomic number.
+    Element {
+        z: u8,
+    },
+    TooMany {
+        count: usize,
+        limit: usize,
+    },
+    /// The worker stopped: exited, timed out or broke the protocol.
+    Crashed(String),
+    /// The method's valence model needs `valence` unpaired electrons.
+    Spin {
+        valence: u32,
+    },
+    Other(String),
+}
+
+impl Failure {
+    /// The error card's plain sentence and its grey second line. `numbers`
+    /// are the frame's atomic numbers, when the run got that far.
+    pub(crate) fn explain(&self, method: XtbMethod, numbers: &[u8]) -> (String, String) {
+        match self {
+            Self::Scf(message) => (
+                "The SCF did not converge.".into(),
+                format!(
+                    "{}. Nothing was applied to the drawing.",
+                    capitalized(message.trim_end_matches('.'))
+                ),
+            ),
+            Self::Element { z } => {
+                let symbol = symbol(*z);
+                let title = match numbers.iter().position(|n| n == z) {
+                    Some(index) => format!(
+                        "Atom {} is {symbol} (Z = {z}). {} has no parameters for it.",
+                        index + 1,
+                        method.label()
+                    ),
+                    None => format!("{} has no parameters for {symbol} (Z = {z}).", method.label()),
+                };
+                let detail = if method == XtbMethod::Gfn2Xtb {
+                    "GFN2-xTB covers elements up to radon (Z = 86); g-xTB and GFN-FF go further."
+                } else {
+                    "Change or remove that atom to calculate."
+                };
+                (title, detail.into())
+            }
+            Self::TooMany { count, limit } => (
+                format!("This molecule has {count} atoms. The limit is {limit} atoms."),
+                "Split the structure or calculate a fragment.".into(),
+            ),
+            Self::Crashed(_) => (
+                "The calculation stopped unexpectedly. Your drawing is safe.".into(),
+                "Run again, or copy the details for a bug report.".into(),
+            ),
+            Self::Spin { valence } => (
+                format!(
+                    "xTB's valence model gives {valence} unpaired electron{} for this molecule, which its full electron count cannot have.",
+                    if *valence == 1 { "" } else { "s" }
+                ),
+                "GFN2-xTB keeps the lanthanides' f electrons in the core. Use g-xTB, or GFN-FF for a closed shell.".into(),
+            ),
+            Self::Other(message) => (capitalized(message), String::new()),
+        }
+    }
+}
+
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
+}
+
+/// "U" for 92.
+pub(crate) fn symbol(z: u8) -> &'static str {
+    reshiki::editing::ELEMENTS
+        .get(usize::from(z).wrapping_sub(1))
+        .copied()
+        .unwrap_or("?")
+}
+
+/// The card's choices. Charge, unpaired electrons and the SCF fields hold
+/// what was typed; an empty field means the drawing's value or the
+/// method's default.
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Settings {
     pub task: Task,
+    pub method: XtbMethod,
     pub charge: String,
     pub unpaired: String,
     /// One of [`SOLVENTS`]; `None` is the gas phase.
@@ -58,8 +240,33 @@ pub(crate) struct Settings {
     /// Zero is Auto.
     pub threads: u32,
     pub advanced: bool,
+    pub accuracy: String,
+    pub temperature: String,
+    pub iterations: String,
+    pub xtb68: bool,
     /// The molecule the typed values belong to: tab, file epoch, first atom.
     pub molecule: Option<[u64; 3]>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            task: Task::default(),
+            method: XtbMethod::Gfn2Xtb,
+            charge: String::new(),
+            unpaired: String::new(),
+            solvent: None,
+            hold_fixed: false,
+            tight: false,
+            threads: 0,
+            advanced: false,
+            accuracy: String::new(),
+            temperature: String::new(),
+            iterations: String::new(),
+            xtb68: false,
+            molecule: None,
+        }
+    }
 }
 
 impl Settings {
@@ -89,6 +296,84 @@ impl Settings {
                 .map_err(|_| "Unpaired electrons must be a whole number from 0")?,
         };
         Ok((charge, unpaired))
+    }
+
+    /// The run these settings describe for a molecule drawn with `drawn`
+    /// (charge, unpaired electrons); `typed` says whether the typed charge
+    /// and unpaired electrons belong to it.
+    pub(crate) fn config(
+        &self,
+        drawn: (i32, u32),
+        typed: bool,
+        fixed: Vec<u64>,
+    ) -> Result<Config, &'static str> {
+        let (charge, unpaired) = if typed { self.state(drawn)? } else { drawn };
+        let electronic = electronic(self.method);
+        if !electronic && unpaired > 0 {
+            return Err("GFN-FF calculates closed shells only: set Unpaired electrons to 0");
+        }
+        let (accuracy, temperature_k, max_iterations) = if electronic {
+            self.scf()?
+        } else {
+            (None, None, None)
+        };
+        let solvents = self.method.capabilities().solvent != qcdata::SolventSupport::None;
+        Ok(Config {
+            task: self.task,
+            method: self.method,
+            charge,
+            unpaired,
+            solvent: self.solvent.filter(|_| solvents),
+            xtb68: self.xtb68,
+            accuracy,
+            temperature_k,
+            max_iterations,
+            threads: self.threads(),
+            tight: self.tight,
+            fixed: if self.task == Task::Optimize {
+                fixed
+            } else {
+                vec![]
+            },
+        })
+    }
+
+    /// The typed SCF overrides: accuracy, electronic temperature (K) and
+    /// maximum iterations. Empty fields are the method's defaults.
+    pub(crate) fn scf(&self) -> Result<(Option<f64>, Option<f64>, Option<u32>), &'static str> {
+        fn typed<T: std::str::FromStr + PartialOrd>(
+            text: &str,
+            range: std::ops::RangeInclusive<T>,
+            error: &'static str,
+        ) -> Result<Option<T>, &'static str> {
+            match text.trim() {
+                "" => Ok(None),
+                text => text
+                    .replace('−', "-")
+                    .parse()
+                    .ok()
+                    .filter(|value| range.contains(value))
+                    .map(Some)
+                    .ok_or(error),
+            }
+        }
+        Ok((
+            typed(
+                &self.accuracy,
+                1e-4..=1e3,
+                "Accuracy must be a number from 0.0001 to 1000",
+            )?,
+            typed(
+                &self.temperature,
+                0.0..=1e5,
+                "Electronic temperature must be from 0 to 100000 K",
+            )?,
+            typed(
+                &self.iterations,
+                1..=10_000,
+                "Max SCF iterations must be a whole number from 1 to 10000",
+            )?,
+        ))
     }
 
     pub(crate) fn threads(&self) -> u32 {
@@ -127,11 +412,7 @@ pub(crate) fn electrons(protons: u32, charge: i32, unpaired: u32) -> Result<Stri
 pub(crate) fn formula(numbers: &[u8]) -> String {
     let mut counts = std::collections::BTreeMap::<&str, usize>::new();
     for &z in numbers {
-        let symbol = reshiki::editing::ELEMENTS
-            .get(usize::from(z).wrapping_sub(1))
-            .copied()
-            .unwrap_or("?");
-        *counts.entry(symbol).or_default() += 1;
+        *counts.entry(symbol(z)).or_default() += 1;
     }
     let carbon = counts.contains_key("C");
     let mut text = String::new();

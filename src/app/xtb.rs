@@ -40,6 +40,7 @@ pub(crate) enum Page {
 pub(crate) enum Action {
     Page(Page),
     Task(CalcTask),
+    Method(qcdata::XtbMethod),
     Charge(String),
     Unpaired(String),
     Solvent(Option<&'static str>),
@@ -47,13 +48,41 @@ pub(crate) enum Action {
     Tight(bool),
     Threads(u32),
     Advanced,
+    Accuracy(String),
+    Temperature(String),
+    Iterations(String),
+    Xtb68(bool),
     Run,
+    /// Start from a menu, the context row or the keyboard.
+    Entry(Entry),
     Cancel,
     ApplyAnyway,
     Discard,
     Palette(palette::Action),
     #[cfg(not(target_arch = "wasm32"))]
     Event(u64, run::Event),
+}
+
+/// Ways to start a calculation without the card's Run button. Each shows
+/// the card, sets what it names and runs with the card's other settings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Entry {
+    /// Right-click → Calculate (xTB) ▸ Energy / Optimize.
+    Task(CalcTask),
+    /// The context row's "Optimize with GFN2-xTB".
+    OptimizeGfn2,
+    /// ⌘R: the last calculation again, on the selected molecule.
+    Rerun,
+}
+
+/// ⌘R, as menus and tooltips show it.
+pub(super) fn rerun_keys() -> String {
+    super::shortcuts::label(&Message::Xtb(Action::Entry(Entry::Rerun))).unwrap_or_default()
+}
+
+/// Whether this build can calculate; the entry points hide otherwise.
+pub(super) fn available() -> bool {
+    unavailable().is_none()
 }
 
 /// The window's card settings and page; the last used task stays chosen.
@@ -195,6 +224,7 @@ impl App {
     pub(super) fn xtb_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Run => return self.xtb_run(),
+            Action::Entry(entry) => return self.xtb_entry(entry),
             Action::Cancel => self.xtb_cancel(),
             Action::ApplyAnyway => self.xtb_apply_anyway(),
             Action::Discard => {
@@ -225,6 +255,11 @@ impl App {
                     Action::Tight(tight) => settings.tight = tight,
                     Action::Threads(threads) => settings.threads = threads,
                     Action::Advanced => settings.advanced = !settings.advanced,
+                    Action::Method(method) => settings.method = method,
+                    Action::Accuracy(value) => settings.accuracy = value,
+                    Action::Temperature(value) => settings.temperature = value,
+                    Action::Iterations(value) => settings.iterations = value,
+                    Action::Xtb68(on) => settings.xtb68 = on,
                     _ => {}
                 }
             }
@@ -306,6 +341,23 @@ impl App {
             return false;
         }
         true
+    }
+
+    fn xtb_entry(&mut self, entry: Entry) -> Task<Message> {
+        if !available() {
+            return Task::none();
+        }
+        match entry {
+            Entry::Task(task) => self.xtb.settings.task = task,
+            Entry::OptimizeGfn2 => {
+                self.xtb.settings.task = CalcTask::Optimize;
+                self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+            }
+            Entry::Rerun => {}
+        }
+        self.xtb.page = Page::Xtb;
+        let _ = self.show_inspector_tab(super::InspectorTab::Predict);
+        self.xtb_run()
     }
 
     fn xtb_run(&mut self) -> Task<Message> {
