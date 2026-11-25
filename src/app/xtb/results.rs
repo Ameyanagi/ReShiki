@@ -405,7 +405,7 @@ pub(crate) fn config(
         temperature_k: settings.electronic_temperature_k,
         max_iterations: settings.max_iterations,
         threads: settings.threads.unwrap_or(threads),
-        tight: settings.convergence == Convergence::Tight,
+        tight: settings.convergence == Some(Convergence::Tight),
         fixed: settings
             .fixed_atoms
             .iter()
@@ -482,10 +482,11 @@ pub(crate) fn log(
             task_line.push_str(&format!(" · {threads} threads"));
         }
         if result.task == Task::Optimize {
-            task_line.push_str(if settings.convergence == Convergence::Tight {
-                " · tight convergence"
-            } else {
-                " · normal convergence"
+            // Files from before it was recorded say nothing rather than Normal.
+            task_line.push_str(match settings.convergence {
+                Some(Convergence::Tight) => " · tight convergence",
+                Some(Convergence::Normal) => " · normal convergence",
+                None => "",
             });
             if !settings.fixed_atoms.is_empty() {
                 task_line.push_str(&format!(

@@ -981,9 +981,11 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         .map_err(|error| state::Failure::Other(error.to_string()))?;
     if let qcdata::Settings::Xtb(settings) = &mut result.settings {
         settings.threads = Some(run.config.threads);
-        if optimized && run.config.tight {
-            settings.convergence = qcdata::Convergence::Tight;
-        }
+        settings.convergence = optimized.then_some(if run.config.tight {
+            qcdata::Convergence::Tight
+        } else {
+            qcdata::Convergence::Normal
+        });
         settings.fixed_atoms = fixed_indices(&launch.atoms, &run.config.fixed)
             .map(|index| index as u32)
             .collect();

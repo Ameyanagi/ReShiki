@@ -276,9 +276,9 @@ basis, orbital consistency and limits.
 `XtbSettings { method, conventions, solvent, electronic_temperature_k, accuracy, max_iterations, scf_retries, gfnff, threads, convergence, fixed_atoms }`.
 Conventions default to `axtb`, omitted overrides use the defaults pinned by the engine revision, and `scf_retries` lists temperature or iteration overrides tried after a failed SCF.
 `threads` records the worker thread count.
-`convergence` is `normal` or `tight`.
+`convergence` is `normal` or `tight` for optimizations, and absent when not recorded.
 `fixed_atoms` lists the zero-based frame atoms held fixed in ascending order.
-Files without these fields load with threads unknown, Normal convergence, nothing held fixed, and no run summary.
+Files without these fields load with threads and convergence unknown (Recalculate then uses the card's threads and Normal), nothing held fixed, and no run summary. A run summary lists at most 100,000 evaluations.
 
 - `method`: `XtbMethod::{Gfn2Xtb, GfnFf, GXtb}`. `GXtb` is g-xTB 2.0.1.
 - `solvent`: `Solvent { model, name, state, correction }`, with `model: SolventModel::{Alpb, Gbsa}` and

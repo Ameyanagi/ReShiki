@@ -46,7 +46,7 @@ fn optimized(full: bool) -> CalcResult {
             max_iterations: None,
             gfnff: None,
             threads: Some(4),
-            convergence: Convergence::Tight,
+            convergence: Some(Convergence::Tight),
             fixed_atoms: vec![0],
         }),
         provenance: Provenance {

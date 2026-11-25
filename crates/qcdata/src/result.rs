@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Beta, Error, Frame, FrameHash, LIGHT_BOND_ORDER_MIN, MAX_COMPACT_VALUES, MAX_HESSIAN_ATOMS,
-    MAX_SAVED_CONFORMERS, OrbitalRequest, OrbitalSet, Orbitals, Spin, Trajectory, XtbMethod,
-    check_calculation, compact::Q16_SCALE,
+    MAX_RUN_EVALUATIONS, MAX_SAVED_CONFORMERS, OrbitalRequest, OrbitalSet, Orbitals, Spin,
+    Trajectory, XtbMethod, check_calculation, compact::Q16_SCALE,
 };
 
 /// One calculation or imported job step tied to an exact frame.
@@ -297,29 +297,22 @@ pub struct XtbSettings {
     /// Worker threads the calculation used; `None` in results saved before it was recorded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub threads: Option<u32>,
-    /// Optimizer convergence level; Normal unless the run asked for Tight.
-    #[serde(default, skip_serializing_if = "Convergence::is_default")]
-    pub convergence: Convergence,
+    /// Optimizer convergence level of an optimization; `None` when not recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub convergence: Option<Convergence>,
     /// Zero-based frame atoms the optimizer held fixed, ascending.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fixed_atoms: Vec<u32>,
 }
 
 /// Optimizer convergence level.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Convergence {
     /// Normal convergence criteria.
-    #[default]
     Normal,
     /// Tight convergence criteria.
     Tight,
-}
-
-impl Convergence {
-    fn is_default(&self) -> bool {
-        *self == Self::default()
-    }
 }
 
 /// Numerical conventions for xTB calculations.
@@ -491,11 +484,11 @@ impl CalcResult {
                     "run time must be finite and nonnegative".into(),
                 ));
             }
-            if run.scf_iterations.len() > MAX_COMPACT_VALUES {
+            if run.scf_iterations.len() > MAX_RUN_EVALUATIONS {
                 return Err(Error::TooLarge {
                     what: "SCF iteration counts",
                     count: run.scf_iterations.len(),
-                    max: MAX_COMPACT_VALUES,
+                    max: MAX_RUN_EVALUATIONS,
                 });
             }
         }
