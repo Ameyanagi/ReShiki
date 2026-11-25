@@ -635,3 +635,31 @@ fn write_evidence_documents() {
         std::fs::write(dir.join(format!("{name}.rsk")), doc.file_json().unwrap()).unwrap();
     }
 }
+
+/// Writes the demo surfaces' SVG for each look to
+/// `RESHIKI_SURFACE_EVIDENCE_DIR`, for rendering them in other viewers.
+#[test]
+#[ignore]
+fn write_look_svgs() {
+    let dir = std::path::PathBuf::from(std::env::var("RESHIKI_SURFACE_EVIDENCE_DIR").unwrap());
+    for (name, demo, doc) in [
+        ("ethylene", "pi", tilted(ethylene(), 55.)),
+        ("benzene", "pistar", tilted(benzene(), 55.)),
+    ] {
+        for look in [
+            "",
+            ",look=solid",
+            ",look=outline",
+            ",look=mesh",
+            ",look=shaded+mesh",
+            ",opacity=60",
+            ",opacity=30",
+            ",look=mesh,opacity=30",
+        ] {
+            demo_on_this_thread(Some(&format!("{demo}{look}"))).unwrap();
+            let file = format!("{name}{}.svg", look.replace([',', '=', '+'], "-"));
+            std::fs::write(dir.join(file), scene::svg(&doc)).unwrap();
+        }
+    }
+    demo_on_this_thread(None).unwrap();
+}
