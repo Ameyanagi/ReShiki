@@ -22,20 +22,21 @@ has every help text as the program prints it.
 
 ## Commands
 
-| Command                     | What it does                                                      |
-| --------------------------- | ----------------------------------------------------------------- |
-| [convert](#convert)         | Convert a structure or drawing to another file format             |
-| [render](#render)           | Render a preview image of a structure or drawing                  |
-| [compose](#compose)         | Lay out a Proposal (JSON) and write it as a file                  |
-| [analyze](#analyze)         | Print molecular properties as one JSON line                       |
-| [predict-nmr](#predict-nmr) | Print predicted NMR shifts as one JSON line                       |
-| [name](#name)               | Print the systematic name of a structure                          |
-| [pieces](#pieces)           | Check or render equipment piece files                             |
-| [info](#info)               | Print versions, limits and formats as one JSON line               |
-| [tools](#tools)             | Print the agent tool catalog as one JSON line                     |
-| [schema](#schema)           | Print the Proposal JSON Schema                                    |
-| [skill](#skill)             | Write an Agent Skill folder that teaches AI agents to use ReShiki |
-| [help](#help)               | Show the help, or one command's help, as text or JSON             |
+| Command                       | What it does                                                      |
+| ----------------------------- | ----------------------------------------------------------------- |
+| [convert](#convert)           | Convert a structure or drawing to another file format             |
+| [render](#render)             | Render a preview image of a structure or drawing                  |
+| [compose](#compose)           | Lay out a Proposal (JSON) and write it as a file                  |
+| [analyze](#analyze)           | Print molecular properties as one JSON line                       |
+| [predict-nmr](#predict-nmr)   | Print predicted NMR shifts as one JSON line                       |
+| [export-input](#export-input) | Write a quantum-chemistry input from an XYZ structure             |
+| [name](#name)                 | Print the systematic name of a structure                          |
+| [pieces](#pieces)             | Check or render equipment piece files                             |
+| [info](#info)                 | Print versions, limits and formats as one JSON line               |
+| [tools](#tools)               | Print the agent tool catalog as one JSON line                     |
+| [schema](#schema)             | Print the Proposal JSON Schema                                    |
+| [skill](#skill)               | Write an Agent Skill folder that teaches AI agents to use ReShiki |
+| [help](#help)                 | Show the help, or one command's help, as text or JSON             |
 
 ## Rules for every command
 
@@ -493,6 +494,29 @@ the nucleus fail with `error[failed]`; a site without reference data is a row
 with `null` values. The result has the same fields as the MCP `predict_nmr`
 tool's [result](agent-api.md#results), plus `experimental` and `api`. When you
 publish predicted values, cite `credit` with them.
+
+## export-input
+
+```text
+reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz [--job JOB] [--template N|--method M --basis B] [--charge C] [--multiplicity M] [--cores N] [--memory-gb G] [--title T] [--extra TEXT] [--out PATH]
+```
+
+`reshiki --cli help export-input` prints the [full help](agent-reference.md#reshiki---cli-export-input).
+
+| Option              | Commands     | Meaning                                                 |
+| ------------------- | ------------ | ------------------------------------------------------- |
+| `--program PROGRAM` | export-input | gaussian, orca, gamess or xyz                           |
+| `--job JOB`         | export-input | single-point, optimize, opt-freq, transition-state, irc |
+| `--template N`      | export-input | Built-in template 1 to 3                                |
+| `--method M`        | export-input | Method, with `--basis`                                  |
+| `--basis B`         | export-input | Basis; empty for ORCA composites                        |
+| `--charge C`        | export-input | Total charge (0)                                        |
+| `--multiplicity M`  | export-input | 2S + 1 (1)                                              |
+| `--cores N`         | export-input | Cores (8)                                               |
+| `--memory-gb G`     | export-input | Memory in GB (16)                                       |
+| `--title T`         | export-input | Title                                                   |
+| `--extra TEXT`      | export-input | More keywords                                           |
+| `--out PATH`        | export-input | Replaces PATH; companions go beside it                  |
 
 ## name
 

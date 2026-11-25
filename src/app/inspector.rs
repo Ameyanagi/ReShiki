@@ -2,7 +2,7 @@
 use super::workspace::{control, hover_hint, keyed_command, muted_text, panel_action};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
-use iced::widget::{button, checkbox, column, container, row, text, tooltip};
+use iced::widget::{Space, button, checkbox, column, container, row, text, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task};
 use reshiki::{
     bonds::{BondPreset, DoublePosition},
@@ -2692,15 +2692,22 @@ impl App {
                 .style(muted_text),
             )
             .push(
-                container(
+                row![
+                    panel_action(
+                        "Input for Gaussian / ORCA / GAMESS…",
+                        Message::QcExport(super::qc_export::Action::Open),
+                    )
+                    .padding([3, 0])
+                    .style(button::text),
+                    Space::new().width(Length::Fill),
                     panel_action(
                         "Reaction roles & export…",
                         Message::Reaction(super::reactions::Action::Open),
                     )
                     .padding([3, 0])
                     .style(button::text),
-                )
-                .align_right(Length::Fill),
+                ]
+                .align_y(Alignment::Center),
             );
         let background = self.export_tab_background;
         let default = self.appearance.export_editable_drawing;

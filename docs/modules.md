@@ -166,6 +166,7 @@ explains how the crates and modules fit together.
 - `src/app/popover.rs`: A menu or panel anchored to a toolbar button, drawn over the surrounding rows so that nothing moves.
 - `src/app/printing.rs`
 - `src/app/prompt.rs`: Questions the app asks in its own dialog
+- `src/app/qc_export.rs`: Export input for Gaussian, ORCA and GAMESS
 - `src/app/reaction_mapping.rs`: The reaction inspector edits chemical map numbers and reviews detached fits.
 - `src/app/reactions.rs`
 - `src/app/recovery_capture.rs`: Opt-in real-renderer recovery fixtures, also runnable on the unmodified base.
@@ -269,6 +270,7 @@ explains how the crates and modules fit together.
 - `src/cli/commands.rs`: The command grammar and help text for `reshiki --cli`.
 - `src/cli/compose.rs`: `reshiki --cli compose`
 - `src/cli/convert.rs`: `reshiki --cli convert`
+- `src/cli/export_input.rs`: Cartesian XYZ to quantum-chemistry input, without a drawing import.
 - `src/cli/host.rs`: The in-process `HeadlessHost` a CLI command runs on, called through `ToolHost::call` like `reshiki --mcp` calls it.
 - `src/cli/io.rs`: The CLI's file and standard-input access
 - `src/cli/mcp_usage.rs`: Shared MCP help and heap limits for headless entry points.
@@ -652,6 +654,13 @@ explains how the crates and modules fit together.
 - `crates/io/src/payload.rs`: Editable drawing snapshots carried by ordinary PNG, SVG, and PDF figures.
 - `crates/io/src/piece_library.rs`: Libraries of equipment pieces
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
+- `crates/io/src/qc_input.rs`: Quantum chemistry input files and Cartesian geometry exports.
+- `crates/io/src/qc_input/gamess.rs`: GAMESS-US input
+- `crates/io/src/qc_input/gaussian.rs`: Gaussian 16 input
+- `crates/io/src/qc_input/hess.rs`: ORCA `.hess` files from a Cartesian Hessian, for `InHess Read`.
+- `crates/io/src/qc_input/orca.rs`: ORCA 6 input
+- `crates/io/src/qc_input/sdf.rs`: SDF records with V3000 3D connection tables.
+- `crates/io/src/qc_input/xyz.rs`: XYZ files, one frame or a trajectory.
 - `crates/io/src/recovery.rs`
 - `crates/io/src/svg_drawing.rs`: Bounded SVG import as ordinary, editable vector graphics.
 - `crates/io/src/svg_drawing/css.rs`: Remove unsupported CSS effects without changing selectors or the cascade.

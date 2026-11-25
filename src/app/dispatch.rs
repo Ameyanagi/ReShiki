@@ -173,6 +173,7 @@ impl App {
                 return Some(self.copy_native(false, true, Some((background, editable))));
             }
             Message::Settings(action) => return Some(self.settings_action(action)),
+            Message::QcExport(action) => return Some(self.qc_export_action(action)),
             Message::CopyAs(format) => return Some(self.copy_as(format)),
             Message::Copy(cut) => return Some(self.copy_selection(cut)),
             Message::PastePicture => return Some(self.paste_native(true)),
@@ -358,6 +359,7 @@ impl App {
             } => return self.engine_done(revision, kind, *result),
             Message::EngineFinished { key, result } => return self.engine_finished(key, *result),
             Message::Exported(result) => self.structure_exported(result),
+            Message::QcExport(action) => return self.qc_export_action(action),
             _ => {}
         }
         Task::none()

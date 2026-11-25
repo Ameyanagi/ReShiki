@@ -369,6 +369,20 @@ fn extended_xyz_reads_the_lattice_and_properties() {
 }
 
 #[test]
+fn extended_xyz_reads_quoted_keys_and_reordered_properties() {
+    for (flags, periodic) in [("F F F", false), ("T T T", true)] {
+        let text = format!(
+            "1\n\"Properties\"=\"charge:R:1:pos:R:3:species:S:1\" \"Lattice\"=\"10 0 0 0 10 0 0 0 10\" \"pbc\"=\"{flags}\"\n0.2 1 2 3 Ar\n"
+        );
+        let structure = super::xyz::read(&text).unwrap();
+        assert_eq!(structure.lattice.is_some(), periodic);
+        assert_eq!(structure.atoms.len(), 1);
+        assert_eq!(structure.atoms[0].element, "Ar");
+        assert_eq!(structure.atoms[0].xyz, [1., 2., 3.]);
+    }
+}
+
+#[test]
 fn saved_drawings_keep_the_structure_and_drop_the_rest_of_the_file() {
     for (format, text) in [("cif", NACL), ("cif", CO2), ("xyz", SILICON), ("pdb", UREA)] {
         let (doc, _) = open(format, text);

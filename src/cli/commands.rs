@@ -307,6 +307,108 @@ const PREDICT_NMR: CommandSpec = CommandSpec {
     body: predict_nmr_help,
 };
 
+const QC_OPTION: OptionSpec = OptionSpec {
+    flag: "",
+    value: Some("TEXT"),
+    help: "",
+    default: None,
+    sets: None,
+    equivalent: None,
+};
+
+const EXPORT_INPUT: CommandSpec = CommandSpec {
+    name: "export-input",
+    summary: "Write a quantum-chemistry input from an XYZ structure",
+    usage: "reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+                                  [--job JOB] [--template N|--method M --basis B]
+                                  [--charge C] [--multiplicity M] [--cores N]
+                                  [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--out PATH]",
+    options: &[
+        OptionSpec {
+            flag: "--program",
+            value: Some("PROGRAM"),
+            help: "gaussian, orca, gamess or xyz. Required.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--job",
+            value: Some("JOB"),
+            help: "single-point, optimize, opt-freq, transition-state or irc.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--template",
+            value: Some("N"),
+            help: "Built-in template, 1 to 3.",
+            default: Some(|| json!(1)),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--method",
+            value: Some("M"),
+            help: "Method, given with --basis.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--basis",
+            value: Some("B"),
+            help: "Basis; empty for an ORCA composite method.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--charge",
+            value: Some("C"),
+            help: "Total charge.",
+            default: Some(|| json!(0)),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--multiplicity",
+            value: Some("M"),
+            help: "2S + 1.",
+            default: Some(|| json!(1)),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--cores",
+            value: Some("N"),
+            help: "Cores (8).",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--memory-gb",
+            value: Some("G"),
+            help: "Total memory in GB (16).",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--title",
+            value: Some("T"),
+            help: "Title (the input file name).",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--extra",
+            help: "More keywords, or GAMESS groups.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--out",
+            value: Some("PATH"),
+            help: "Main file, replaced if it exists; companions go beside it.",
+            ..QC_OPTION
+        },
+    ],
+    tools: &[],
+    operand: Some(Operand {
+        name: "INPUT.xyz",
+        help: "Read the first frame of a Cartesian XYZ file, in angstroms.",
+        sets: None,
+    }),
+    body: export_input_help,
+};
+
 const NAME: CommandSpec = CommandSpec {
     name: "name",
     summary: "Print the systematic name of a structure",
@@ -459,6 +561,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     COMPOSE,
     ANALYZE,
     PREDICT_NMR,
+    EXPORT_INPUT,
     NAME,
     PIECES,
     INFO,
@@ -779,6 +882,29 @@ A molecule with no sites for the nucleus, or with metals, charges,
 radicals or isotope labels, is an error.
 ";
     format!("Usage: {}\n\n{body}", PREDICT_NMR.usage)
+}
+
+fn export_input_help() -> String {
+    let mut text = format!(
+        "Usage: {}\n\nWrites input for another program from the first frame of INPUT.xyz (Å);\nstdout without --out. An existing companion file stops the export.\nWarnings go to stderr.\n\nOptions:\n",
+        EXPORT_INPUT.usage,
+    );
+    for option in EXPORT_INPUT.options {
+        let flag = match option.value {
+            Some(value) => format!("{} {value}", option.flag),
+            None => option.flag.into(),
+        };
+        text.push_str(&format!("  {flag:<19} {}\n", option.help));
+    }
+    text.push_str("\nTemplates:\n");
+    for (index, template) in reshiki_io::qc_input::builtin_templates().iter().enumerate() {
+        let only = template
+            .only
+            .map(|program| format!(" ({} only)", program.label()))
+            .unwrap_or_default();
+        text.push_str(&format!("  {}  {}{only}\n", index + 1, template.name));
+    }
+    text
 }
 
 fn name_help() -> String {
