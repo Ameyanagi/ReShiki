@@ -642,15 +642,16 @@ fn preview(doc: &Document, launch: &Launch, positions: &[[f64; 3]]) -> Option<Do
     if model.atoms.len() + model.hydrogens.len() != positions.len() {
         return None;
     }
-    if model.display == reshiki::models3d::Display::TwoD {
-        model.display = reshiki::models3d::Display::Both;
-    }
     let mut xyz = positions.iter().map(|p| p.map(|x| x as f32));
     for (atom, p) in model.atoms.iter_mut().zip(xyz.by_ref()) {
         atom.xyz = p;
     }
     for (hydrogen, p) in model.hydrogens.iter_mut().zip(xyz) {
         hydrogen.xyz = p;
+    }
+    // A model shown as 2D only appears beside the drawing while it moves.
+    if model.display == reshiki::models3d::Display::TwoD {
+        reshiki::models3d::set_display(&mut doc, index, reshiki::models3d::Display::Both);
     }
     Some(doc)
 }
