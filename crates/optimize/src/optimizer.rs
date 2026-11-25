@@ -150,8 +150,8 @@ impl Level {
     }
 }
 
-/// The defaults used 2,818 evaluations on 154 GFN2-xTB starts, versus 6,689
-/// for ANC-RFO. Alternative methods and policies remain selectable for benchmarking.
+/// With the Tight recheck off, the defaults used 2,663 evaluations on 154
+/// GFN2-xTB starts (0.85× `xtb --opt` by geometric mean across starts).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Options {
     /// Search method. Defaults to [`Method::Internal`].
@@ -194,8 +194,9 @@ pub struct Options {
     /// Zero-based atom indices whose input coordinates are held bit-identical.
     /// Empty by default.
     pub fixed_atoms: Vec<usize>,
-    /// Recheck convergence with [`Accuracy::Tight`]. Enabled by default and
-    /// independent of the convergence [`Level`].
+    /// Recheck convergence with [`Accuracy::Tight`]. Off by default. Turn it on
+    /// when frequencies or other properties follow, so the final geometry is
+    /// converged with Tight SCF.
     pub tight_final: bool,
 }
 
@@ -216,7 +217,7 @@ impl Default for Options {
             convergence: Convergence::Standard,
             max_steps: 500,
             fixed_atoms: Vec::new(),
-            tight_final: true,
+            tight_final: false,
         }
     }
 }
@@ -749,11 +750,12 @@ impl<'a> Engine<'a> {
 /// waives its energy-change and displacement-pair tests. Only Normal or Tight
 /// can converge.
 ///
-/// By default, evaluations start at [`Accuracy::Normal`]. The Tight recheck
-/// evaluates the same geometry with a fresh gradient and uses the preceding
-/// Normal displacement and energy change if available. Further steps stay at
-/// Tight. With adaptive accuracy enabled, a Coarse start switches to Normal
-/// at the gradient cutoff and resets the convergence displacement.
+/// Evaluations start at [`Accuracy::Normal`] by default. With
+/// [`Options::tight_final`] enabled, the optimizer rechecks the converged
+/// geometry with a fresh Tight gradient, using the preceding Normal
+/// displacement and energy change if available. Further steps stay at Tight.
+/// Adaptive accuracy starts at Coarse, then switches to Normal at the gradient
+/// cutoff and resets the convergence displacement.
 ///
 /// Atomic numbers must be in 1..=118, with three finite Cartesian components
 /// per atom. Held indices must be unique and in range, with at least one free

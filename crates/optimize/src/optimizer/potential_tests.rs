@@ -354,6 +354,7 @@ fn a_tight_recheck_at_the_input_can_recover_below_the_trust_floor() {
         let options = Options {
             method,
             fixed_atoms: vec![0],
+            tight_final: true,
             ..Options::default()
         };
         let mut potential = super::tests::surface(|x, g, accuracy| {

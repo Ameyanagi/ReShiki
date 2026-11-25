@@ -221,7 +221,7 @@ Test set: 77 molecules, 154 starts (Baker-set molecules rebuilt from SMILES, 20 
 floppy chains, 5 rings/macrocycles, 11 ions and radicals, 8 metal complexes; ETKDG and
 ETKDG+MMFF94 starts for SMILES cases, given and noised (σ = 0.1 Å) starts for XYZ cases).
 GFN2-xTB from axtb, one thread per optimization. "Evaluations" are energy+gradient calls,
-including rejected trials and the Tight recheck. xtb counts are its `CYCLE` blocks (each one
+including rejected trials and, where enabled, the Tight recheck. xtb counts are its `CYCLE` blocks (each one
 SCC + gradient), not counting its separate initial and final single points (308 more calls).
 Ratio = geometric mean over starts of our evaluations / xtb's. Quality: final energy within
 1 µEh of a tight reference (lowest minimum found from that start by any method, re-optimized
@@ -229,14 +229,15 @@ at Tight), or heavy-atom RMSD < 0.1 Å to it.
 
 ### Winner and the two baselines
 
-| Optimizer                            | Evaluations (sum / median) | Ratio vs xtb | Within 1 µEh | Same minimum | Wall, serial, Arch Linux x64 |
-| ------------------------------------ | -------------------------: | -----------: | -----------: | -----------: | ---------------------------: |
-| `xtb --opt normal` (6.8.0)           |                 3,674 / 16 |         1.00 |           58 |          126 |             34.5 s (process) |
-| #1415 ANC-RFO                        |                 6,689 / 23 |         1.57 |          128 |          141 |                       43.6 s |
-| **TRIC internal (new default)**      |           **2,818 / 15.5** |     **0.93** |      **143** |      **144** |                   **17.2 s** |
-| TRIC + energy-gradient stop (option) |                 2,251 / 12 |         0.79 |          113 |          142 |                       13.1 s |
+| Optimizer                                          | Evaluations (sum / median) | Ratio vs xtb | Within 1 µEh | Same minimum | Wall, serial, Arch Linux x64 |
+| -------------------------------------------------- | -------------------------: | -----------: | -----------: | -----------: | ---------------------------: |
+| `xtb --opt normal` (6.8.0)                         |                 3,674 / 16 |         1.00 |           58 |          126 |             34.5 s (process) |
+| #1415 ANC-RFO                                      |                 6,689 / 23 |         1.57 |          128 |          141 |                       43.6 s |
+| **TRIC internal (new default, Tight recheck off)** |           **2,663 / 14.5** |     **0.85** |      **143** |      **144** |                   **17.2 s** |
+| TRIC internal + Tight recheck (before frequencies) |               2,818 / 15.5 |         0.93 |          143 |          144 |                       17.2 s |
+| TRIC + energy-gradient stop (option)               |                 2,251 / 12 |         0.79 |          113 |          142 |                       13.1 s |
 
-Per set (ratio vs xtb, new default): drugs 0.71, floppy 0.80, rings 0.81, charged/open 0.99,
+Per set (ratio vs xtb, TRIC with the Tight recheck): drugs 0.71, floppy 0.80, rings 0.81, charged/open 0.99,
 metals 1.04, Baker 1.10. Wall time includes the engine: axtb's GFN2 gradient here is about
 5 ms per call against xtb's about 7 ms (both including SCF), so the evaluation ratio is the
 fair optimizer comparison and the wall ratio is what a user sees.
@@ -246,28 +247,28 @@ fair optimizer comparison and the wall ratio is what a user sees.
 Against the method it modifies (sum of evaluations over the 154 starts; Hessian cost in
 gradient equivalents measured by time):
 
-| Change                                                            | Base → with change                      | Verdict                                         |
-| ----------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------- |
-| TRIC delocalized internals instead of ANC                         | 6,689 → 2,818                           | **won** (all sets)                              |
-| TRIC overhead work (sparse B, factor reuse, cheap chart checks)   | optimizer 25.0 s → 1.9 s                | **won**                                         |
-| SCF restart from the previous wavefunction (axtb default) vs cold | 70k → 34k SCF iterations                | **won** (kept, potential side)                  |
-| Tight final recheck off                                           | 2,818 → 2,663                           | same quality; kept on (#1415 design)            |
-| Energy+gradient stop instead of displacement test                 | 2,818 → 2,258                           | faster, 30 fewer endpoints within 1 µEh; option |
-| GFN2 analytic Hessian start                                       | 2,818 → 3,291 + 1,442 Hessian           | lost                                            |
-| GFN-FF analytic Hessian start (after the seed repair)             | 2,818 → 3,452 + 120                     | lost                                            |
-| GFN2 Hessian below 20 atoms                                       | 2,818 → 2,919 + 467                     | lost                                            |
-| GFN-FF pre-optimization                                           | 17.4 s → 23.2 s                         | lost                                            |
-| Adaptive SCF accuracy (Coarse early)                              | ANC 6,689 → 7,005                       | lost                                            |
-| Bofill SR1/BFGS update                                            | 2,818 → 2,785                           | tie (more optimizer time)                       |
-| Damped BFGS                                                       | ANC 6,689 → 6,676                       | tie                                             |
-| GDIIS / GEDIIS                                                    | ANC 6,689 → 6,789 / 6,609; TRIC → 2,835 | tie or lost                                     |
-| Per-atom trust radius                                             | TRIC 2,818 → 3,576; ANC 6,689 → 6,677   | lost                                            |
-| Global trust 0.5 start / 1.0 max                                  | 2,818 → 2,770                           | small win, not adopted (ANC fallback untested)  |
-| Nonbonded contact curvature                                       | 2,818 → 2,850                           | tie                                             |
-| Rebuild on poor prediction instead of every 30 steps              | 2,818 → 2,822                           | tie                                             |
-| Curvature floor 1e-4 / 1e-2 (ANC)                                 | 6,689 → 6,466 / 7,193                   | small / lost                                    |
-| Reject ratio 0.05 (ANC)                                           | 6,689 → 6,680                           | tie                                             |
-| Cartesian L-BFGS                                                  | 10,281                                  | lost                                            |
+| Change                                                            | Base → with change                      | Verdict                                                                                       |
+| ----------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
+| TRIC delocalized internals instead of ANC                         | 6,689 → 2,818                           | **won** (all sets)                                                                            |
+| TRIC overhead work (sparse B, factor reuse, cheap chart checks)   | optimizer 25.0 s → 1.9 s                | **won**                                                                                       |
+| SCF restart from the previous wavefunction (axtb default) vs cold | 70k → 34k SCF iterations                | **won** (kept, potential side)                                                                |
+| Tight final recheck off                                           | 2,818 → 2,663                           | same quality; **adopted** for plain optimization (owner, 25 Nov); stays on before frequencies |
+| Energy+gradient stop instead of displacement test                 | 2,818 → 2,258                           | faster, 30 fewer endpoints within 1 µEh; option                                               |
+| GFN2 analytic Hessian start                                       | 2,818 → 3,291 + 1,442 Hessian           | lost                                                                                          |
+| GFN-FF analytic Hessian start (after the seed repair)             | 2,818 → 3,452 + 120                     | lost                                                                                          |
+| GFN2 Hessian below 20 atoms                                       | 2,818 → 2,919 + 467                     | lost                                                                                          |
+| GFN-FF pre-optimization                                           | 17.4 s → 23.2 s                         | lost                                                                                          |
+| Adaptive SCF accuracy (Coarse early)                              | ANC 6,689 → 7,005                       | lost                                                                                          |
+| Bofill SR1/BFGS update                                            | 2,818 → 2,785                           | tie (more optimizer time)                                                                     |
+| Damped BFGS                                                       | ANC 6,689 → 6,676                       | tie                                                                                           |
+| GDIIS / GEDIIS                                                    | ANC 6,689 → 6,789 / 6,609; TRIC → 2,835 | tie or lost                                                                                   |
+| Per-atom trust radius                                             | TRIC 2,818 → 3,576; ANC 6,689 → 6,677   | lost                                                                                          |
+| Global trust 0.5 start / 1.0 max                                  | 2,818 → 2,770                           | small win, not adopted (ANC fallback untested)                                                |
+| Nonbonded contact curvature                                       | 2,818 → 2,850                           | tie                                                                                           |
+| Rebuild on poor prediction instead of every 30 steps              | 2,818 → 2,822                           | tie                                                                                           |
+| Curvature floor 1e-4 / 1e-2 (ANC)                                 | 6,689 → 6,466 / 7,193                   | small / lost                                                                                  |
+| Reject ratio 0.05 (ANC)                                           | 6,689 → 6,680                           | tie                                                                                           |
+| Cartesian L-BFGS                                                  | 10,281                                  | lost                                                                                          |
 
 MMFF94 (20 drugs, `examples/mmff_benchmark.rs`): TRIC 571 evaluations vs ANC 1,797, but on a
 0.1 ms force field ANC is still faster in wall time; GFN-FF: TRIC 3,736 vs ANC 7,709

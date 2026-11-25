@@ -26,6 +26,13 @@ fn anchored(method: Method) -> Options {
     }
 }
 
+fn anchored_tight(method: Method) -> Options {
+    Options {
+        tight_final: true,
+        ..anchored(method)
+    }
+}
+
 fn well(x: &[f64], g: &mut [f64]) -> f64 {
     g.copy_from_slice(x);
     dot(x, x) * 0.5
@@ -197,6 +204,49 @@ fn nonfinite_or_unwritten_results_fail_even_on_fixed_atoms() {
 }
 
 #[test]
+fn tight_final_is_opt_in() {
+    let run = |options: &Options| {
+        let mut calls = Vec::new();
+        let mut p = surface(|x, g, accuracy| {
+            calls.push((x.to_vec(), accuracy));
+            let bond: [f64; 3] = std::array::from_fn(|i| x[3 + i] - x[i]);
+            let length = norm(&bond);
+            let displacement = length - 1.4;
+            for (i, component) in bond.into_iter().enumerate() {
+                g[3 + i] = displacement * component / length;
+                g[i] = -g[3 + i];
+            }
+            Ok(0.5 * displacement.powi(2))
+        });
+        let initial = [0., 0., 0., 2., 0., 0.];
+        let result = optimize(&mut p, &[1, 1], &initial, options, proceed);
+        drop(p);
+        (result, calls)
+    };
+
+    let options = Options::default();
+    assert!(!options.tight_final);
+    assert_eq!(options.convergence, Convergence::Standard);
+    let (normal, mut calls) = run(&options);
+    assert_eq!(normal.status, Status::Converged);
+    assert!(normal.steps > 0);
+    assert!(
+        calls
+            .iter()
+            .all(|(_, accuracy)| *accuracy == Accuracy::Normal)
+    );
+
+    let (tight, tight_calls) = run(&Options {
+        tight_final: true,
+        ..options
+    });
+    assert_eq!(tight.status, Status::Converged);
+    assert_eq!(tight.positions, normal.positions);
+    calls.push((normal.positions, Accuracy::Tight));
+    assert_eq!(tight_calls, calls);
+}
+
+#[test]
 fn tight_recheck_can_resume_and_counts_once_at_the_same_point() {
     for method in [Method::AncRfo, Method::Internal, Method::Lbfgs] {
         let mut calls = Vec::new();
@@ -211,7 +261,7 @@ fn tight_recheck_can_resume_and_counts_once_at_the_same_point() {
                 Ok(0.5 * g[3] * g[3] - 4.)
             }
         });
-        let result = optimize(&mut p, &[1, 1], &INITIAL, &anchored(method), |s| {
+        let result = optimize(&mut p, &[1, 1], &INITIAL, &anchored_tight(method), |s| {
             callbacks.push(s.accuracy);
             proceed(s)
         });
@@ -238,7 +288,11 @@ fn tight_recheck_reports_the_replacement_sample_before_convergence() {
         Ok(if a == Accuracy::Normal { 2. } else { -4. })
     });
     let mut callbacks = Vec::new();
-    let result = optimize(&mut p, &[1, 1], &INITIAL, &Options::default(), |s| {
+    let options = Options {
+        tight_final: true,
+        ..Options::default()
+    };
+    let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
         callbacks.push((s.index, s.accuracy, s.energy, s.positions.to_vec()));
         assert_eq!(s.delta_energy, 0.);
         assert_eq!(s.max_step, 0.);
@@ -292,7 +346,7 @@ fn callback_can_cancel_a_tight_recheck_at_initial_or_accepted_points() {
                 };
                 let options = Options {
                     initial_hessian: InitialHessian::Potential,
-                    ..anchored(method)
+                    ..anchored_tight(method)
                 };
                 let mut last_normal = Vec::new();
                 let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
@@ -341,7 +395,7 @@ fn tight_resume_preserves_anc_curvature_and_radius_but_clears_lbfgs_history() {
             Ok(offset - (*calls - 1) as f64)
         });
         let mut callbacks = Vec::new();
-        let result = optimize(&mut p, &[1, 1], &INITIAL, &anchored(method), |s| {
+        let result = optimize(&mut p, &[1, 1], &INITIAL, &anchored_tight(method), |s| {
             callbacks.push((s.index, s.accuracy, s.positions.to_vec(), s.trust_radius));
             proceed(s)
         });
@@ -385,18 +439,18 @@ fn tight_failure_keeps_the_normal_sample() {
             Accuracy::Tight => Err(EvalError::Scf("tight".into())),
         }
     });
-    let result = optimize(&mut p, &[1, 1], &INITIAL, &Options::default(), proceed);
+    let options = Options {
+        tight_final: true,
+        ..Options::default()
+    };
+    let result = optimize(&mut p, &[1, 1], &INITIAL, &options, proceed);
     assert_eq!(result.status, Status::ScfFailure("tight".into()));
     assert_eq!(result.steps, 0);
     assert_eq!(result.evaluations, 2);
     assert_eq!(result.energy, 3.);
     assert_eq!(result.energies, [3.]);
 
-    let options = Options {
-        tight_final: false,
-        ..Options::default()
-    };
-    let result = optimize(&mut p, &[1, 1], &INITIAL, &options, proceed);
+    let result = optimize(&mut p, &[1, 1], &INITIAL, &Options::default(), proceed);
     assert_eq!(result.status, Status::Converged);
     assert_eq!(result.evaluations, 1);
 }
@@ -518,7 +572,7 @@ fn rigid_gradient_is_removed_even_for_oblique_linear_geometries() {
             proceed(s)
         });
         assert_eq!(result.status, Status::Converged);
-        assert_eq!(result.evaluations, 2);
+        assert_eq!(result.evaluations, 1);
         assert_eq!(result.steps, 0);
         assert!(result.gradient.iter().any(|v| v.abs() >= 1.));
     }
@@ -601,8 +655,8 @@ fn singular_model_falls_back_without_evaluating_the_input_twice() {
     assert_eq!(result.status, Status::Converged);
     assert_eq!(result.method, Method::Lbfgs);
     assert!((result.positions[3] - 1.).abs() < 1e-10);
-    // Each capped descent step is accepted. The other calls initialize and tighten.
-    assert_eq!(result.evaluations, result.steps + 2);
+    // Each capped descent step is accepted, plus one evaluation at the input.
+    assert_eq!(result.evaluations, result.steps + 1);
 }
 
 #[test]
@@ -613,7 +667,8 @@ fn tight_final_reuses_the_normal_displacement_with_a_fresh_tight_gradient() {
         Ok(g[3] * x[3] + if a == Accuracy::Tight { 100. } else { 0. })
     });
     let mut callbacks = Vec::new();
-    let result = optimize(&mut p, &[1, 1], &INITIAL, &anchored(Method::Lbfgs), |s| {
+    let options = anchored_tight(Method::Lbfgs);
+    let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
         callbacks.push((s.index, s.accuracy, s.rms_gradient, s.delta_energy));
         proceed(s)
     });
@@ -642,6 +697,7 @@ fn energy_gradient_small_gradient_converges_at_a_constant_minimum() {
         convergence: Convergence::EnergyGradient {
             gradient_norm: 1e-3,
         },
+        tight_final: true,
         ..Options::default()
     };
     let mut trace = Vec::new();
@@ -667,7 +723,7 @@ fn energy_gradient_small_gradient_converges_after_one_harmonic_step() {
             gradient_norm: 1e-3,
         },
         max_steps: 1,
-        ..anchored(Method::Lbfgs)
+        ..anchored_tight(Method::Lbfgs)
     };
     let mut trace = Vec::new();
     let out = optimize(
@@ -708,7 +764,7 @@ fn energy_gradient_small_gradient_rechecks_the_threshold_and_norm_at_tight() {
         let options = Options {
             convergence: Convergence::EnergyGradient { gradient_norm },
             max_steps: 0,
-            ..anchored(Method::Lbfgs)
+            ..anchored_tight(Method::Lbfgs)
         };
         let out = optimize(&mut p, &[1, 1], &INITIAL, &options, proceed);
         assert_eq!(out.status, status, "{tight_gradient}, {gradient_norm}");
@@ -734,7 +790,7 @@ fn energy_gradient_small_gradient_failed_tight_recheck_requires_a_fresh_pair() {
             gradient_norm: 1.5e-5,
         },
         max_steps: 3,
-        ..anchored(Method::Lbfgs)
+        ..anchored_tight(Method::Lbfgs)
     };
     let mut trace = Vec::new();
     let out = optimize(
@@ -874,7 +930,7 @@ fn energy_gradient_tight_recheck_preserves_or_resets_the_normal_pair() {
             convergence: Convergence::EnergyGradient {
                 gradient_norm: 1.5e-5,
             },
-            ..anchored(Method::Lbfgs)
+            ..anchored_tight(Method::Lbfgs)
         };
         let mut trace = Vec::new();
         let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
@@ -1161,8 +1217,8 @@ fn internal_build_failure_preserves_the_potential_hessian_for_anc() {
     assert_eq!(fallback.method, Method::AncRfo);
     assert!(fallback.steps > 0);
     assert_eq!(fallback.hessian_evaluations, 1);
-    assert_eq!(fallback.evaluations, fallback.steps + 2);
-    assert_eq!(fallback_callbacks.len(), fallback.steps + 2);
+    assert_eq!(fallback.evaluations, fallback.steps + 1);
+    assert_eq!(fallback_callbacks.len(), fallback.steps + 1);
     assert!((fallback.positions[3] - 1.4).abs() < 1e-5);
     assert_eq!(fallback, direct);
     assert_eq!(fallback_calls, direct_calls);

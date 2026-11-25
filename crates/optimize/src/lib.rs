@@ -25,11 +25,10 @@ pub use reshiki_qcdata::ANGSTROM_PER_BOHR;
 
 /// Accuracy a potential should use for one evaluation.
 ///
-/// Optimization starts at `Normal`, or `Coarse` with [`Options::adaptive_accuracy`].
-/// With [`Options::tight_final`] enabled, the
-/// optimizer switches to `Tight` once the criteria are met and keeps stepping
-/// until a fresh `Tight` evaluation also meets them. Potentials without an
-/// adjustable accuracy (force fields, analytic test functions) ignore it.
+/// Optimization starts at [`Accuracy::Normal`], or [`Accuracy::Coarse`] with
+/// [`Options::adaptive_accuracy`]. Opt in with [`Options::tight_final`] to
+/// switch to [`Accuracy::Tight`] once the convergence criteria are met.
+/// Potentials with fixed accuracy ignore this setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Accuracy {
     /// Looser early SCF convergence. Potentials with fixed accuracy treat this as `Normal`.
