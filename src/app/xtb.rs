@@ -228,6 +228,9 @@ impl Failed {
                 config.threads,
                 if config.tight { "tight" } else { "normal" },
             ));
+            if !config.fixed.is_empty() {
+                parts.push(format!("{} atoms held fixed", config.fixed.len()));
+            }
         }
         if !self.numbers.is_empty() {
             parts.push(format!(
