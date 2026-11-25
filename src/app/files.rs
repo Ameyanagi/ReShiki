@@ -525,7 +525,7 @@ pub(super) fn is_qc_file(path: &std::path::Path, extension: &str) -> bool {
 /// geometry, as an unsaved drawing named after the file. Its results are not
 /// shown yet, and the status says so.
 fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, String> {
-    use reshiki::qcread::read;
+    use reshiki::qcread::{Format, read};
     let name = super::import::name(path);
     let file = read(&name, contents).map_err(|e| e.to_string())?;
     let (index, job, step) = file
@@ -538,7 +538,8 @@ fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, Strin
     for (number, [x, y, z]) in frame.numbers.iter().zip(&frame.positions_angstrom) {
         xyz.push_str(&format!("{number} {x} {y} {z}\n"));
     }
-    let (drawing, mut warnings) = reshiki::crystal::read("xyz", &xyz).map_err(|e| e.to_string())?;
+    let (mut drawing, mut warnings) =
+        reshiki::crystal::read("xyz", &xyz).map_err(|e| e.to_string())?;
     let what = if file.jobs.len() > 1 {
         format!("Final geometry of job {} of {}", index + 1, file.jobs.len())
     } else if job.steps.len() > 1 {
@@ -552,6 +553,22 @@ fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, Strin
     };
     if file.format.has_results() {
         notice.push_str(" · Results can't be shown yet");
+    }
+    // Molden files rarely record charge and spin; the reader's warning says what it assumed.
+    // Other formats give the totals, but not which atoms carry them, unless there is one atom.
+    if file.format != Format::Molden {
+        let mut omitted = Vec::new();
+        match drawing.atoms.as_mut_slice() {
+            [atom] if frame.numbers.len() == 1 => atom.charge = frame.charge,
+            _ if frame.charge != 0 => omitted.push(format!("total charge {:+}", frame.charge)),
+            _ => {}
+        }
+        if frame.multiplicity != 1 {
+            omitted.push(format!("spin multiplicity {}", frame.multiplicity));
+        }
+        if !omitted.is_empty() {
+            notice.push_str(&format!(" · Not drawn: {}", omitted.join(", ")));
+        }
     }
     warnings.insert(0, notice);
     warnings.extend(file.warnings);

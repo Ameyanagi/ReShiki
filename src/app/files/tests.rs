@@ -863,6 +863,39 @@ fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
         batch.warnings[0],
         "Geometry from the Molden file · Results can't be shown yet"
     );
+
+    // The anion radical's "-1 2" line: the drawing cannot say which atom carries them.
+    let Ok(Prepared::Records(batch)) = open(
+        "MethylPyrrolidine_drawn.gjf",
+        "pymatgen/MethylPyrrolidine_drawn.gjf",
+    ) else {
+        panic!("a Gaussian Z-matrix input opens as a drawing");
+    };
+    assert_eq!(
+        batch.warnings[0],
+        "Geometry from the Gaussian input file · Not drawn: total charge -1, spin multiplicity 2"
+    );
+    // Charge only, spin only, and a single ion whose charge is drawn on its atom (in memory).
+    let input = |charge_spin: &str, atoms: &str| {
+        let text = format!("#p hf/sto-3g\n\nion\n\n{charge_spin}\n{atoms}\n\n");
+        let (_, opened) = runtime
+            .block_on(prepare_contents("ion.gjf".into(), Ok(text.into_bytes())))
+            .unwrap();
+        let Ok(Prepared::Records(batch)) = opened else {
+            panic!("{charge_spin}");
+        };
+        batch
+    };
+    let hydroxide = input("-1 1", "O 0 0 0\nH 0 0 0.96");
+    assert!(hydroxide.warnings[0].ends_with(" · Not drawn: total charge -1"));
+    let oxygen = input("0 3", "O 0 0 0\nO 0 0 1.21");
+    assert!(oxygen.warnings[0].ends_with(" · Not drawn: spin multiplicity 3"));
+    let chloride = input("-1 1", "Cl 0 0 0");
+    assert_eq!(chloride.drawings[0].atoms[0].charge, -1);
+    assert_eq!(
+        chloride.warnings[0],
+        "Geometry from the Gaussian input file"
+    );
 }
 
 #[tokio::test]
