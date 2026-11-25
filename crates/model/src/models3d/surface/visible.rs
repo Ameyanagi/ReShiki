@@ -757,7 +757,7 @@ impl Buckets {
 }
 
 // Each batch owns its scratch buffers; the browser path stays sequential.
-fn batches<T: Send>(
+pub(super) fn batches<T: Send>(
     len: usize,
     minimum: usize,
     make: impl Fn(std::ops::Range<usize>) -> T + Sync,
@@ -777,7 +777,9 @@ fn batches<T: Send>(
     std::thread::scope(|scope| {
         for (i, slot) in output.iter_mut().enumerate() {
             let make = &make;
-            scope.spawn(move || *slot = Some(make(i * size..((i + 1) * size).min(len))));
+            // Rounding the size up can leave the last workers nothing to do.
+            let range = (i * size).min(len)..((i + 1) * size).min(len);
+            scope.spawn(move || *slot = Some(make(range)));
         }
     });
     output.into_iter().flatten().collect()
@@ -956,9 +958,41 @@ fn merge_layers(
     adapter: &FloatPointAdapter<[f64; 2], i64>,
     tolerance: f64,
 ) -> Vec<Layer> {
+    let union = |sources: &[Polygon]| {
+        // All cuts stay inside the shared adapter's bounds.
+        FloatOverlay::<[f64; 2], i64>::with_adapter(adapter.clone(), 0)
+            .unsafe_add_source(sources, ShapeType::Subject)
+            .overlay(OverlayRule::Subject, FillRule::NonZero)
+            .into_iter()
+            .flatten()
+            .filter(|c| area(c).abs() > AREA)
+            .collect::<Vec<Polygon>>()
+    };
+    // Each tone's fragments merge on their own first, all in parallel, so
+    // the sequential nesting below unions a few contours per tone rather
+    // than thousands of fragments.
+    let jobs: Vec<(usize, usize)> = shades
+        .iter()
+        .enumerate()
+        .flat_map(|(group, tones)| (0..tones.len()).map(move |tone| (group, tone)))
+        .filter(|&(group, tone)| !shades[group][tone].is_empty())
+        .collect();
+    let mut merged = vec![Vec::new(); shades.len()];
+    for (group, tones) in merged.iter_mut().zip(shades) {
+        *group = vec![Vec::new(); tones.len()];
+    }
+    for done in batches(jobs.len(), 4, |range| {
+        jobs[range]
+            .iter()
+            .map(|&(group, tone)| (group, tone, union(&shades[group][tone])))
+            .collect::<Vec<_>>()
+    }) {
+        for (group, tone, polygons) in done {
+            merged[group][tone] = polygons;
+        }
+    }
     batches(shades.len(), 1, |range| {
         let mut output = Vec::new();
-        let mut overlay = FloatOverlay::<[f64; 2], i64>::with_adapter(adapter.clone(), 0);
         for group in range {
             let Some(first) = shades[group]
                 .iter()
@@ -968,8 +1002,8 @@ fn merge_layers(
             };
             let mut cumulative = Vec::<Polygon>::new();
             let mut layers = Vec::new();
-            for (tone, polygons) in shades[group].iter().enumerate().rev() {
-                if polygons.is_empty() {
+            for (tone, polygons) in merged[group].iter().enumerate().rev() {
+                if shades[group][tone].is_empty() {
                     continue;
                 }
                 if tone == first {
@@ -981,15 +1015,7 @@ fn merge_layers(
                 } else {
                     cumulative.extend(polygons.iter().cloned());
                 }
-                overlay.clear();
-                // All cuts stay inside the shared adapter's bounds.
-                overlay = overlay.unsafe_add_source(&cumulative, ShapeType::Subject);
-                cumulative = overlay
-                    .overlay(OverlayRule::Subject, FillRule::NonZero)
-                    .into_iter()
-                    .flatten()
-                    .filter(|c| area(c).abs() > AREA)
-                    .collect();
+                cumulative = union(&cumulative);
                 if !cumulative.is_empty() {
                     layers.push(Layer {
                         positive: group % 2 == 0,

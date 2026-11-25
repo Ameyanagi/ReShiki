@@ -20,14 +20,17 @@ pub const DETAIL: [usize; 2] = [20_000, 4_000];
 /// Fit error of outlines, outline runs and mesh lines, and of shading-tone
 /// contours (clipped to their region, so they may stray further), in
 /// drawing units.
-const FIT_ERROR: f32 = 0.12;
+pub(super) const FIT_ERROR: f32 = 0.12;
 const TONE_FIT_ERROR: f32 = 0.5;
-const MIN_AREA: f32 = 0.05;
-const MIN_WIDTH: f32 = 0.12;
+pub(super) const MIN_AREA: f32 = 0.05;
+pub(super) const MIN_WIDTH: f32 = 0.12;
 const MIN_RUN: f32 = 1.;
 const TOLERANCE: f32 = 0.03;
 const MAX_TONES: usize = 128;
 const MAX_GROUPS: usize = 6;
+/// Tones while the model turns: frames stay fast, and the full shading
+/// returns when it stops.
+const TURNING_TONES: usize = 24;
 const TONE_STEP: f32 = 1.;
 /// The distance between mesh planes, in ångströms.
 const MESH_SPACING: f64 = 0.3;
@@ -479,7 +482,12 @@ impl Prepared {
                 ramps[phase].tone(dot(rotate(model.rotation, *n), light).clamp(0., 1.))
             })
             .collect();
-        let tones = tone_counts(look, dark, backdrop, fade);
+        let mut tones = tone_counts(look, dark, backdrop, fade);
+        if model.turning {
+            for count in &mut tones {
+                *count = (*count).min(TURNING_TONES);
+            }
+        }
         let lines = if look.mesh {
             let atoms: Vec<_> = model
                 .atoms
@@ -545,6 +553,24 @@ impl Prepared {
         line_width: f32,
     ) -> Option<Primitive> {
         let alpha = self.look.alpha();
+        // Layers fit independently: in parallel. A sign and depth's first
+        // layer is its outline; later ones are tone contours under a clip.
+        let layers = &self.visible.layers;
+        let fitted: Vec<_> = visible::batches(layers.len(), 4, |range| {
+            range
+                .map(|i| {
+                    let first = i == 0 || {
+                        let (a, b) = (&layers[i - 1], &layers[i]);
+                        (a.depth, a.positive) != (b.depth, b.positive)
+                    };
+                    let error = if first { FIT_ERROR } else { TONE_FIT_ERROR };
+                    fit::region(&layers[i].region, error, MIN_AREA, MIN_WIDTH)
+                })
+                .collect::<Vec<_>>()
+        })
+        .into_iter()
+        .flatten()
+        .collect();
         let mut groups = Vec::new();
         for (depth, &count) in self.tones.iter().enumerate().rev() {
             let mut fills = Vec::new();
@@ -560,27 +586,22 @@ impl Prepared {
                     Fill::Solid => rgb(mix(base, backdrop, fade)),
                     Fill::Outline | Fill::None => rgb(backdrop),
                 };
-                let mut layers = self
-                    .visible
-                    .layers
+                let mut layers = layers
                     .iter()
-                    .filter(|layer| layer.depth == depth && layer.positive == positive);
-                if let Some(first) = layers.next() {
-                    let region = fit::region(&first.region, FIT_ERROR, MIN_AREA, MIN_WIDTH);
-                    if !region.is_empty() {
-                        let tones = layers
-                            .filter_map(|layer| {
-                                let path =
-                                    fit::region(&layer.region, TONE_FIT_ERROR, MIN_AREA, MIN_WIDTH);
-                                (!path.is_empty()).then(|| (path, color(layer.tone)))
-                            })
-                            .collect();
-                        fills.push(SurfaceFill {
-                            region,
-                            color: color(first.tone),
-                            tones,
-                        });
-                    }
+                    .zip(&fitted)
+                    .filter(|(layer, _)| layer.depth == depth && layer.positive == positive);
+                if let Some((first, region)) = layers.next()
+                    && !region.is_empty()
+                {
+                    let tones = layers
+                        .filter(|(_, path)| !path.is_empty())
+                        .map(|(layer, path)| (path.clone(), color(layer.tone)))
+                        .collect();
+                    fills.push(SurfaceFill {
+                        region: region.clone(),
+                        color: color(first.tone),
+                        tones,
+                    });
                 }
                 if self.look.mesh {
                     let paths = fit::runs(&self.visible.lines[depth][sign], FIT_ERROR, MIN_RUN);

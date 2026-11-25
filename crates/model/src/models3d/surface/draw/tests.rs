@@ -627,17 +627,22 @@ fn export_budgets() {
             demo_on_this_thread(Some(demo)).unwrap();
             MESHES.with_borrow_mut(Vec::clear);
             let meshes = meshes(&doc, &doc.models[0]).unwrap();
-            for (look, opacity) in [
-                ("shaded", 100),
-                ("shaded+mesh", 100),
-                ("shaded", 60),
-                ("mesh", 100),
-                ("mesh", 30),
-                ("solid", 100),
-                ("outline", 100),
+            for (look, opacity, turning) in [
+                ("shaded", 100, false),
+                ("shaded", 100, true),
+                ("shaded+mesh", 100, false),
+                ("shaded", 60, false),
+                ("shaded", 60, true),
+                ("mesh", 100, false),
+                ("mesh", 30, false),
+                ("mesh", 30, true),
+                ("solid", 100, false),
+                ("outline", 100, false),
             ] {
                 demo_on_this_thread(Some(&format!("{demo},look={look},opacity={opacity}")))
                     .unwrap();
+                let mut doc = doc.clone();
+                doc.models[0].turning = turning;
                 let started = Instant::now();
                 let all = scene::primitives(&doc);
                 let frame_ms = started.elapsed().as_secs_f32() * 1000.;
@@ -672,8 +677,9 @@ fn export_budgets() {
                     .sum();
                 let snapshot = super::super::snapshot::encode(surface, Point::default()).unwrap();
                 println!(
-                    "| {name} | {demo} | {look} {opacity} | {} | {frame_ms:.1} | {} | {tones} | {commands} | {:.1} | {:.1} |",
-                    meshes[0].triangles.len(),
+                    "| {name} | {demo} | {look} {opacity}{} | {} | {frame_ms:.1} | {} | {tones} | {commands} | {:.1} | {:.1} |",
+                    if turning { " (turning)" } else { "" },
+                    meshes[usize::from(turning)].triangles.len(),
                     groups.len(),
                     svg.len() as f32 / 1024.,
                     snapshot.len() as f32 / 1024.,

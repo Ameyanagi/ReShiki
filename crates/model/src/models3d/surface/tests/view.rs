@@ -508,6 +508,48 @@ fn distance_to_segment(point: [f64; 2], a: [f32; 2], b: [f32; 2]) -> f64 {
     ((point[0] - a[0] - t * d[0]).powi(2) + (point[1] - a[1] - t * d[1]).powi(2)).sqrt()
 }
 
+/// The layers as drawn: fitted with the drawing's error and sliver limits,
+/// then flattened finely enough that flattening adds no visible error.
+fn fitted(mut result: Visible) -> Visible {
+    use super::super::draw::{FIT_ERROR, MIN_AREA, MIN_WIDTH};
+    use super::super::fit;
+    use crate::graphics::PathCommand;
+    for layer in &mut result.layers {
+        let mut contours: Vec<Vec<[f32; 2]>> = Vec::new();
+        let mut at = [0.; 2];
+        for command in fit::region(&layer.region, FIT_ERROR, MIN_AREA, MIN_WIDTH) {
+            match command {
+                PathCommand::Move(p) => {
+                    at = [p.x, p.y];
+                    contours.push(vec![at]);
+                }
+                PathCommand::Line(p) => {
+                    at = [p.x, p.y];
+                    contours.last_mut().unwrap().push(at);
+                }
+                PathCommand::Cubic(b, c, d) => {
+                    let [a, b, c, d] = [at, [b.x, b.y], [c.x, c.y], [d.x, d.y]];
+                    let contour = contours.last_mut().unwrap();
+                    for i in 1..=32 {
+                        let t = i as f32 / 32.;
+                        let s = 1. - t;
+                        contour.push(std::array::from_fn(|k| {
+                            s * s * s * a[k]
+                                + 3. * s * s * t * b[k]
+                                + 3. * s * t * t * c[k]
+                                + t * t * t * d[k]
+                        }));
+                    }
+                    at = d;
+                }
+                PathCommand::Close => {}
+            }
+        }
+        layer.region = contours;
+    }
+    result
+}
+
 fn first_layer_at_depth(result: &Visible, positive: bool, depth: usize) -> Option<&Layer> {
     result
         .layers
@@ -842,6 +884,15 @@ fn analytic_rays_agree_with_layers_through_balls_sticks_and_overlapping_lobes() 
                     &oracle,
                     0x7ab3_91a5 + index as u64,
                 );
+                // The fitted, drawn outlines must agree too.
+                let fitted = check_oracle(
+                    &format!("fitted {name}, perspective={perspective}, rotation={index}"),
+                    &fitted(output),
+                    &oracle,
+                    0x5eed_f17d + index as u64,
+                );
+                checked += fitted.checked;
+                skipped += fitted.skipped;
                 hidden_by_ball += counts.ball_hides;
                 hidden_by_stick += counts.stick_hides;
                 front_of_ball += counts.front_of_ball;
@@ -852,7 +903,9 @@ fn analytic_rays_agree_with_layers_through_balls_sticks_and_overlapping_lobes() 
             }
         }
     }
-    eprintln!("surface oracle total G=1: checked={checked}, skipped={skipped}, disagreements=0");
+    eprintln!(
+        "surface oracle total G=1, polygons and fitted paths: checked={checked}, skipped={skipped}, disagreements=0"
+    );
     assert!(hidden_by_ball > 30, "ball must hide mesh: {hidden_by_ball}");
     assert!(
         hidden_by_stick > 30,

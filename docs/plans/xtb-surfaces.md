@@ -502,47 +502,68 @@ optionally `+mesh`).
 - After simplification the mesh is relaxed with Taubin's λ|μ smoothing
   (no shrinking), then every vertex is moved back onto its level set by
   Newton steps along ∇f, and normals are taken from ∇f again. Moves that
-  would flip a face or make the mesh pass through itself are undone, so the
-  embedding the visibility step relies on is kept. This removes the lumps
-  that the quadric simplifier leaves at lobe tips.
+  would flip a face, make a needle or make the mesh pass through itself
+  are undone, so the embedding the visibility step relies on is kept. This
+  removes the lumps that the quadric simplifier leaves at lobe tips
+  (25 ms for 20 000 triangles).
 - Every merged contour, outline run and mesh line is fitted with cubic
-  Béziers (Schneider 1990) to an error of 0.08 drawing units at its input
-  points, C1 except at real corners (a turn over 40°, such as where a ball
-  cuts a lobe). Outlines are round at any zoom and paths get shorter.
-  A fitted span is split again at its worst input point if its end control
-  segments cross or either handle is longer than its endpoint chord. Low
-  error at the sampled points alone cannot rule out a loop between them.
-  Interpolated fallback spans bound their handles by one third of each
-  source edge. A neighbouring straight segment uses a collinear cubic when
-  needed to share that shorter derivative and keep the join C1.
+  Béziers (Schneider 1990): outlines, outline runs and mesh lines to 0.12
+  drawing units at their input points, shading-tone contours to 0.5 units
+  (they are one-level edges under a clip, see below). The result is C1
+  except at real corners: a turn over 40° measured over chords at least
+  max(3 × error, 1 unit) long, such as where a ball cuts a lobe, so the
+  zig-zag of a triangle mesh's silhouette is not a corner. Every span
+  between smooth knots is a cubic sharing its neighbours' tangent; a line
+  appears only between corners on collinear points. A fitted span is split
+  again at its worst input point if its end control segments cross or a
+  handle is longer than its chord (low error at the input points alone
+  cannot rule out a loop between them), and a contour whose fit crosses
+  itself is refitted at half the error before it falls back to its input
+  polygon. On benzene π* the fill paths shrink from 72 622 to about 30 700
+  commands, 4 % of them lines, with no polygon fallbacks.
+- Fills use the nonzero rule: fitted contours of one region may touch or
+  cross by twice the error, which even-odd would turn into small holes;
+  holes keep the opposite winding through merging and fitting.
 - Slivers and stray marks: contours under 0.05 square units or thinner than
   0.12 units (2·area / perimeter) and outline runs shorter than 1 unit are
   dropped before fitting. These replace the old rule that dropped outline
   runs shorter than 2 % of the model, which cut legitimate short outline
   runs between two crossing lobes and left the gaps seen in the review.
 - Fitting moves a boundary by at most the fit error; the ray oracle checks
-  the fitted paths too, with the same approximation band as before.
+  the fitted outlines too, with the same approximation band as before.
+- Paths are written in relative SVG commands to a hundredth of a unit, the
+  offsets taken between rounded points so rounding never accumulates.
 
 ### Smooth shading
 
 The shading is still nested regions of the interpolated Lambert lightness
-(cuts never change the shading field). The endpoint colour range sets the
-tone count to target one 8-bit level per step in the composited picture:
+(cuts never change the shading field), each drawn over the last, but with
+enough tones that one step is at most one 8-bit level, which no 8-bit
+display or viewer can show as a step. The tone axis is even in colour, not
+in lightness: each phase's ramp (darkening below lightness 0.6, lightening
+above) is measured along its steepest channel in each piece, and every
+vertex's lightness is mapped onto that measure, so equal tone steps are
+equal colour steps:
 
-    tones = clamp(ceil(channel range in levels × weight), 2, 128)
+    tones = clamp(ceil(levels × weight), 2, 128)
 
-where the channel range is that of the phase's colour ramp from the darkest
-to the lightest lightness (about 110 levels for the blue phase, 55 for the
-pale one before fading) and `weight` is the group's share of the final colour
-(1 when opaque, α(1 − α)^d for depth group d below). Uniform lightness steps
-sample the piecewise colour ramp. The endpoint range measures average
-change, so adjacent samples on a steeper part can differ by two levels
-after rounding at the default fade. Each tone region is clipped
-to its phase's whole region (an SVG `clipPath`), so independently fitted
-tone outlines can never reach past the lobe's edge.
-The whole region is merged directly from the resolved fragments before
-shade cuts, so its contour and fitted commands stay identical when opacity
-changes the tone count.
+where `levels` is that measure for the steeper phase (114 for the blue
+phase at the default depth fade, about 45 for the pale one) and `weight` is
+the group's share of the final colour (1 when opaque, α(1 − α)^d for depth
+group d below). While the model turns, tones are capped at 24; the full
+shading returns when it stops.
+
+Each tone region is clipped to its phase's whole region (an SVG
+`clipPath`), so tone outlines fitted with the looser error never reach
+past the lobe's edge, and nested regions keep any fitting error to a local
+tone shift. (Strips of two or three tones were tried to avoid repeating
+the region's edge in every tone; where tones crowd near a silhouette the
+independently fitted strip edges left gaps that showed the darkest tone,
+so nesting stays.) The whole region is merged directly from the resolved
+fragments before shade cuts, so its contour and fitted commands stay
+identical when opacity changes the tone count. Each tone's fragments are
+merged in parallel before the sequential nesting, and the layers are
+fitted in parallel.
 
 Considered and not used:
 
@@ -554,8 +575,9 @@ Considered and not used:
   from the usvg tree that the clipboard, page export and Python share;
   usvg has no mesh paint, so this would mean patching the vendored usvg and
   svg2pdf (and resvg, which matches on usvg's paints) or splitting every
-  page into interleaved SVG and shading chunks. PDF uses the same nested
-  vector regions as SVG.
+  page into interleaved SVG and shading chunks. At one level per step the
+  vector regions already render like a smooth shading in 8-bit viewers, so
+  PDF uses the same regions as SVG.
 - A linear gradient per band: a band is curved, so one gradient direction
   is wrong along most of it.
 

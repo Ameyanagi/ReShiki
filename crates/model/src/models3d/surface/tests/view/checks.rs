@@ -1168,3 +1168,12 @@ fn clipped_vertices_only_store_geometry_and_edge_metadata() {
         "clipped vertex uses {bytes} bytes, budget {budget}"
     );
 }
+
+#[test]
+fn batches_cover_every_index_once_when_sizes_round_up() {
+    for (len, minimum) in [(34, 4), (0, 1), (1, 1), (7, 1), (4100, 512)] {
+        let ranges = super::super::super::visible::batches(len, minimum, |range| range);
+        let covered: Vec<usize> = ranges.into_iter().flatten().collect();
+        assert_eq!(covered, (0..len).collect::<Vec<_>>(), "len={len}");
+    }
+}
