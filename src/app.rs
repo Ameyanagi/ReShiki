@@ -84,6 +84,7 @@ mod tlc;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 mod add_panel;
+mod frames_import;
 #[cfg(test)]
 mod hover_qa;
 mod models3d;
@@ -266,6 +267,8 @@ pub enum Message {
     Settings(settings_page::Action),
     /// Export input for Gaussian, ORCA or GAMESS.
     QcExport(qc_export::Action),
+    /// The "Choose what to import" sheet for a file of several frames.
+    FramesImport(frames_import::Action),
     /// Predict → xTB: the Calculate card and its runs.
     Xtb(xtb::Action),
     Help(help::Action),
@@ -553,6 +556,7 @@ pub struct App {
     help_open: bool,
     settings: settings_page::State,
     qc_export: Option<qc_export::Dialog>,
+    frames_import: Option<frames_import::Dialog>,
     xtb: xtb::Window,
     help: help::State,
     commands: command_palette::State,
@@ -689,6 +693,7 @@ impl App {
             help_open: false,
             settings: settings_page::State::default(),
             qc_export: None,
+            frames_import: None,
             xtb: xtb::Window::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
@@ -1545,6 +1550,7 @@ impl App {
             || self.help_open
             || self.settings.open
             || self.qc_export.is_some()
+            || self.frames_import.is_some()
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
         // The command palette's Tab cycles its filter, unless a dialog is over it.
@@ -1559,9 +1565,9 @@ impl App {
                 // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_github_dialog(self.with_recovery_manager(
                     self.with_updates(self.with_assistant_image(self.with_settings(
-                        self.with_qc_export(self.with_commands(
+                        self.with_qc_export(self.with_frames_import(self.with_commands(
                             self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
-                        )),
+                        ))),
                     ))),
                 ))),
                 if self.prompt.is_some() {
@@ -1579,6 +1585,8 @@ impl App {
                     Some(settings_page::modal_key)
                 } else if self.qc_export.is_some() {
                     Some(qc_export::modal_key)
+                } else if self.frames_import.is_some() {
+                    Some(frames_import::modal_key)
                 } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {
