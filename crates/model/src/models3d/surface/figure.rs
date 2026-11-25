@@ -30,8 +30,30 @@ pub struct OrbitalRef {
 #[serde(deny_unknown_fields)]
 pub struct Snapshot {
     pub view: String,
+    #[serde(deserialize_with = "positive_reach")]
     pub reach: f32,
+    #[serde(deserialize_with = "bounded_shapes")]
     pub shapes: String,
+}
+
+fn positive_reach<'de, D: Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
+    let reach = f32::deserialize(d)?;
+    if reach.is_finite() && reach > 0. {
+        Ok(reach)
+    } else {
+        Err(serde::de::Error::custom(
+            "Snapshot reach must be finite and positive",
+        ))
+    }
+}
+
+fn bounded_shapes<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    let shapes = String::deserialize(d)?;
+    if shapes.len() <= super::snapshot::MAX_BYTES {
+        Ok(shapes)
+    } else {
+        Err(serde::de::Error::custom("Snapshot is too large"))
+    }
 }
 
 fn isovalue<'de, D: Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
@@ -85,6 +107,25 @@ mod tests {
         for iso in [0., 0.0049, 0.201, f64::NAN, f64::INFINITY] {
             value["iso"] = json!(iso);
             assert!(from_value::<Figure>(value.clone()).is_err(), "{iso}");
+        }
+    }
+
+    #[test]
+    fn snapshot_requires_bounded_shapes_and_finite_positive_reach() {
+        let mut value = json!({
+            "orbital": {"result": "0123456789abcdef", "spin": "alpha", "index": 0},
+            "iso": 0.05,
+            "snapshot": {
+                "view": "1234", "reach": 2.0, "shapes": "A".repeat(super::super::snapshot::MAX_BYTES)
+            }
+        });
+        assert!(from_value::<Figure>(value.clone()).is_ok());
+        value["snapshot"]["shapes"] = json!("A".repeat(super::super::snapshot::MAX_BYTES + 1));
+        assert!(from_value::<Figure>(value.clone()).is_err());
+        value["snapshot"]["shapes"] = json!("test");
+        for reach in [0., -1., 1e40, -1e40, f64::NAN] {
+            value["snapshot"]["reach"] = json!(reach);
+            assert!(from_value::<Figure>(value.clone()).is_err(), "{reach}");
         }
     }
 }

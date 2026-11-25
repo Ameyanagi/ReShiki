@@ -4,11 +4,12 @@
 #![allow(clippy::indexing_slicing)]
 use super::mesh::{self, Grid, Mesh};
 use super::visible::{self, Input, Line, Occluder, Visible};
-use super::{Fill, Look, fit, snapshot};
+use super::{Figure, Fill, Look, OrbitalRef, fit};
 use crate::document::{Document, Point};
 use crate::models3d::{BLACK, Model3d, Style, View, WHITE, dot, mix, rgb, rotate, sub};
 use crate::scene::{Outline, Primitive, SurfaceFill, SurfaceGroup, SurfaceStroke};
 use crate::science::{self, Freshness};
+use serde::{Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -105,7 +106,7 @@ fn parse(spec: &str) -> Result<(Demo, f32, Look), String> {
 
 type Meshes = Arc<[Mesh; 2]>;
 static REGISTERED: Mutex<Vec<(u64, Meshes)>> = Mutex::new(Vec::new());
-const REGISTERED_LIMIT: usize = 8;
+const REGISTERED_LIMIT: usize = 24;
 
 /// The mesh identity of the model's placed orbital and geometry.
 pub fn key(doc: &Document, model: &Model3d) -> Option<u64> {
@@ -128,8 +129,18 @@ pub fn key(doc: &Document, model: &Model3d) -> Option<u64> {
     Some(hash.finish())
 }
 
+/// Counts registrations, so a cached picture of an unchanged drawing knows a
+/// new mesh may change it.
+static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many meshes have been registered in this process.
+pub fn generation() -> u64 {
+    GENERATION.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Registers drawing and turning meshes, in that order.
 pub fn register(key: u64, meshes: Arc<[Mesh; 2]>) {
+    GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let Ok(mut entries) = REGISTERED.lock() else {
         return;
     };
@@ -152,18 +163,105 @@ pub fn registered(key: u64) -> Option<Arc<[Mesh; 2]>> {
 
 /// Identity of the rendered view, independent of the frame's position.
 pub fn view_signature(doc: &Document, model: &Model3d) -> String {
-    let mut model = model.clone();
-    model.offset = Point::default();
-    if let Some(figure) = &mut model.surface {
-        figure.snapshot = None;
+    use crate::models3d as m;
+
+    // Keep the original wire representation so existing snapshots still match.
+    #[derive(Serialize)]
+    #[serde(remote = "Model3d")]
+    struct SignatureModel {
+        display: m::Display,
+        atoms: Vec<m::Placed>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        hydrogens: Vec<m::Hydrogen>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fingerprint: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        generated: Option<m::Generated>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        linked_atoms: Vec<u64>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        file_geometry: bool,
+        #[serde(skip_serializing_if = "m::polish::is_zero")]
+        seed: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cell: Option<m::Cell>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        sites: Vec<m::Site>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        notes: Vec<String>,
+        rotation: [f32; 4],
+        #[serde(getter = "default_offset")]
+        offset: Point,
+        size: f32,
+        style: Style,
+        #[serde(skip_serializing_if = "m::is_fifty")]
+        probability: m::Probability,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        molecule_only: bool,
+        #[serde(skip_serializing_if = "m::is_included")]
+        include_solvent: bool,
+        look: m::Look,
+        #[serde(skip_serializing_if = "m::Labels::is_none")]
+        labels: m::Labels,
+        depth_fade: f32,
+        perspective: f32,
+        show_hydrogens: m::Hydrogens,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        charges: bool,
+        #[serde(skip_serializing_if = "m::is_one_cell")]
+        repeat: [u8; 3],
+        #[serde(skip_serializing_if = "m::is_copy_opacity")]
+        copy_opacity: f32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        along: Option<m::Along>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        manual_along: bool,
+        background: m::Background,
+        #[serde(
+            skip_serializing_if = "Option::is_none",
+            serialize_with = "serialize_figure"
+        )]
+        surface: Option<Figure>,
+        force_field: m::ForceField,
+        #[serde(skip_serializing_if = "m::is_original")]
+        layout: m::Layout,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        drawn: Option<m::Drawn>,
     }
+    fn default_offset(_: &Model3d) -> Point {
+        Point::default()
+    }
+    fn serialize_figure<S: Serializer>(
+        figure: &Option<Figure>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct SignatureFigure<'a> {
+            orbital: &'a OrbitalRef,
+            iso: f32,
+            #[serde(flatten)]
+            look: Look,
+        }
+        figure
+            .as_ref()
+            .map(|figure| SignatureFigure {
+                orbital: &figure.orbital,
+                iso: figure.iso,
+                look: figure.look,
+            })
+            .serialize(serializer)
+    }
+    #[derive(Serialize)]
+    struct WithoutSnapshot<'a>(#[serde(with = "SignatureModel")] &'a Model3d);
+
     let points = model.points(doc).map(|points| {
         points
             .into_iter()
             .map(|(element, xyz)| (element, xyz.map(f32::to_bits)))
             .collect::<Vec<_>>()
     });
-    let bytes = serde_json::to_vec(&(&model, doc.canvas_theme, points)).unwrap_or_default();
+    let bytes =
+        serde_json::to_vec(&(WithoutSnapshot(model), doc.canvas_theme, points)).unwrap_or_default();
     format!("{:x}", Sha256::digest(bytes))
 }
 
@@ -171,51 +269,56 @@ fn supported(model: &Model3d) -> bool {
     model.cell.is_none() && !matches!(model.style, Style::Wireframe | Style::Ellipsoids)
 }
 
-fn current(doc: &Document, model: &Model3d, key: &str) -> bool {
-    let Some(&atom) = model.linked_atoms.first() else {
-        return false;
-    };
-    // Copies can share a result key but have distinct attachments.
-    doc.science
-        .results
-        .iter()
-        .rev()
-        .find_map(|stored| {
-            let attachment = doc.science.attachment(stored.attachment)?;
-            (attachment.atoms.contains(&Some(atom)) && science::result_key(&stored.result) == key)
-                .then_some(attachment)
-        })
-        .is_some_and(|attachment| attachment.freshness(doc) == Freshness::Current)
+/// Whether this figure's molecule and displayed geometry still match its result.
+pub fn figure_ready(doc: &Document, model: &Model3d) -> bool {
+    supported(model) && current(doc, model).is_some()
+}
+
+fn current(doc: &Document, model: &Model3d) -> Option<()> {
+    let (_, stored) = science::figure_result(doc, model)?;
+    let attachment = doc.science.attachment(stored.attachment)?;
+    if attachment.freshness(doc) != Freshness::Current {
+        return None;
+    }
+    let frame = doc.science.frame(&stored.result.frame)?;
+    let points = model.points(doc)?;
+    (points.len() == frame.numbers.len()
+        && points.len() == frame.positions_angstrom.len()
+        && points
+            .iter()
+            .zip(&frame.numbers)
+            .zip(&frame.positions_angstrom)
+            .all(|(((element, p), &number), q)| {
+                number
+                    .checked_sub(1)
+                    .and_then(|i| crate::editing::ELEMENTS.get(usize::from(i)))
+                    == Some(element)
+                    && p.iter()
+                        .zip(q)
+                        .map(|(&a, &b)| (f64::from(a) - b).powi(2))
+                        .sum::<f64>()
+                        <= 1e-6
+            }))
+    .then_some(())
 }
 
 pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Meshes> {
-    if !supported(model) {
-        return None;
-    }
-    if let Some(figure) = &model.surface {
-        registered(key(doc, model)?).filter(|_| current(doc, model, &figure.orbital.result))
-    } else {
+    if model.surface.is_some() {
+        registered(key(doc, model)?).filter(|_| figure_ready(doc, model))
+    } else if supported(model) {
         demo_meshes(doc, model)
-    }
-}
-
-pub(in crate::models3d) fn saved(
-    doc: &Document,
-    model: &Model3d,
-    origin: Point,
-) -> Option<(f32, Primitive)> {
-    let figure = model.surface.as_ref()?;
-    let saved = figure.snapshot.as_ref()?;
-    if supported(model)
-        && saved.reach.is_finite()
-        && saved.reach > 0.
-        && current(doc, model, &figure.orbital.result)
-        && saved.view == view_signature(doc, model)
-    {
-        Some((saved.reach, snapshot::decode(&saved.shapes, origin).ok()?))
     } else {
         None
     }
+}
+
+pub(in crate::models3d) fn snapshot_reach(doc: &Document, model: &Model3d) -> Option<f32> {
+    let saved = model.surface.as_ref()?.snapshot.as_ref()?;
+    (saved.reach.is_finite()
+        && saved.reach > 0.
+        && figure_ready(doc, model)
+        && saved.view == view_signature(doc, model))
+    .then_some(saved.reach)
 }
 
 fn demo_meshes(doc: &Document, model: &Model3d) -> Option<Meshes> {

@@ -334,17 +334,46 @@ fn result_key_uses_identity_and_ignores_result_values() {
 }
 
 #[test]
-fn find_result_returns_the_newest_matching_identity() {
+fn figure_result_and_pinning_follow_the_model_across_paste() {
+    use crate::models3d::surface::{Figure, OrbitalRef, draw::figure_ready};
+
     let (mut doc, oxygen) = water();
     let start = launch(&doc, oxygen, 0, 1).unwrap();
     let full = result(&start.frame, Task::Energy, true);
-    let key = result_key(&full);
-    add_result(&mut doc, &start, full.clone());
+    let basis = full.orbitals.as_ref().unwrap().basis.as_ref().unwrap();
+    let n_ao = basis.shells.iter().map(Shell::n_functions).sum();
+    doc.models[0].surface = Some(Figure {
+        orbital: OrbitalRef {
+            result: result_key(&full),
+            spin: Spin::Alpha,
+            index: 3,
+        },
+        iso: 0.05,
+        look: Default::default(),
+        snapshot: None,
+    });
     add_result(&mut doc, &start, full.light(&[]));
-    let (index, stored) = find_result(&doc, &key).unwrap();
-    assert_eq!(index, 1);
-    assert!(Arc::ptr_eq(&stored.result, &doc.science.results[1].result));
-    assert!(find_result(&doc, "unknown").is_none());
+    add_result(&mut doc, &start, full.light(&[]));
+    let part = editing::selection(&doc, &[oxygen]);
+    let pasted = editing::append(&mut doc, &part, Point::new(150., 0.))[0];
+    doc.atom_mut(pasted).unwrap().isotope = 18;
+    let (original_index, original) = figure_result(&doc, &doc.models[0]).unwrap();
+    let (copy_index, copy) = figure_result(&doc, &doc.models[1]).unwrap();
+    assert_eq!(original_index, 1);
+    assert_eq!(copy_index, 3);
+    assert_ne!(original.attachment, copy.attachment);
+    assert_eq!(result_key(&original.result), result_key(&copy.result));
+    assert!(figure_ready(&doc, &doc.models[0]));
+    assert!(!figure_ready(&doc, &doc.models[1]));
+
+    let row = vec![0.25; n_ao];
+    pin_orbital(&mut doc, original_index, Spin::Alpha, 3, basis, &row).unwrap();
+    let orbitals = |index: usize| doc.science.results[index].result.orbitals.as_ref().unwrap();
+    assert_eq!(orbitals(original_index).alpha.rows, [3]);
+    assert_eq!(orbitals(original_index).alpha.coefficients, row);
+    assert!(orbitals(copy_index).alpha.rows.is_empty());
+    doc.models[0].surface.as_mut().unwrap().orbital.result = "unknown".into();
+    assert!(figure_result(&doc, &doc.models[0]).is_none());
 }
 
 #[test]
@@ -359,7 +388,7 @@ fn pin_orbital_inserts_sorted_rows_and_keeps_the_result_key() {
     let key = result_key(&original);
     for index in [4, 1, 3] {
         let row = vec![f64::from(index) * -0.125; n_ao];
-        pin_orbital(&mut doc, &key, Spin::Alpha, index, basis, &row).unwrap();
+        pin_orbital(&mut doc, 0, Spin::Alpha, index, basis, &row).unwrap();
         assert_eq!(result_key(&doc.science.results[0].result), key);
     }
     let pinned = doc.science.results[0].result.clone();
@@ -376,7 +405,7 @@ fn pin_orbital_inserts_sorted_rows_and_keeps_the_result_key() {
     }
     assert!(original.orbitals.as_ref().unwrap().alpha.rows.is_empty());
     // A second calculation of an existing row cannot change its signs.
-    pin_orbital(&mut doc, &key, Spin::Alpha, 3, basis, &[f64::NAN]).unwrap();
+    pin_orbital(&mut doc, 0, Spin::Alpha, 3, basis, &[f64::NAN]).unwrap();
     assert!(Arc::ptr_eq(&pinned, &doc.science.results[0].result));
     doc.science.validate().unwrap();
 }
@@ -389,7 +418,6 @@ fn pin_orbital_rejects_invalid_rows_and_mismatched_bases_without_changes() {
     let basis = full.orbitals.as_ref().unwrap().basis.as_ref().unwrap();
     let n_ao: usize = basis.shells.iter().map(Shell::n_functions).sum();
     add_result(&mut doc, &start, full.light(&[]));
-    let key = result_key(&full);
     let original = doc.science.results[0].result.clone();
     for (index, row) in [
         (0, vec![0.; n_ao - 1]),
@@ -397,7 +425,7 @@ fn pin_orbital_rejects_invalid_rows_and_mismatched_bases_without_changes() {
         (0, vec![f64::INFINITY; n_ao]),
     ] {
         assert!(matches!(
-            pin_orbital(&mut doc, &key, Spin::Alpha, index, basis, &row),
+            pin_orbital(&mut doc, 0, Spin::Alpha, index, basis, &row),
             Err(ScienceError::Invalid(_))
         ));
         assert!(Arc::ptr_eq(&original, &doc.science.results[0].result));
@@ -405,36 +433,22 @@ fn pin_orbital_rejects_invalid_rows_and_mismatched_bases_without_changes() {
     let mut invalid_basis = basis.clone();
     invalid_basis.shells[0].atom = start.frame.numbers.len() as u32;
     assert!(matches!(
-        pin_orbital(
-            &mut doc,
-            &key,
-            Spin::Alpha,
-            0,
-            &invalid_basis,
-            &vec![0.; n_ao]
-        ),
+        pin_orbital(&mut doc, 0, Spin::Alpha, 0, &invalid_basis, &vec![0.; n_ao]),
         Err(ScienceError::Invalid(_))
     ));
     assert!(Arc::ptr_eq(&original, &doc.science.results[0].result));
 
-    pin_orbital(&mut doc, &key, Spin::Alpha, 0, basis, &vec![0.25; n_ao]).unwrap();
+    pin_orbital(&mut doc, 0, Spin::Alpha, 0, basis, &vec![0.25; n_ao]).unwrap();
     let pinned = doc.science.results[0].result.clone();
     let mut other_basis = basis.clone();
     other_basis.shells[0].exponents_per_bohr2[0] *= 2.;
     assert!(matches!(
-        pin_orbital(
-            &mut doc,
-            &key,
-            Spin::Alpha,
-            1,
-            &other_basis,
-            &vec![0.; n_ao]
-        ),
+        pin_orbital(&mut doc, 0, Spin::Alpha, 1, &other_basis, &vec![0.; n_ao]),
         Err(ScienceError::Invalid(_))
     ));
     assert!(Arc::ptr_eq(&pinned, &doc.science.results[0].result));
     assert!(matches!(
-        pin_orbital(&mut doc, "unknown", Spin::Alpha, 0, basis, &vec![0.; n_ao]),
+        pin_orbital(&mut doc, 1, Spin::Alpha, 0, basis, &vec![0.; n_ao]),
         Err(ScienceError::Unknown)
     ));
 }
@@ -458,9 +472,8 @@ fn pin_orbital_uses_separate_beta_rows_only_for_unrestricted_orbitals() {
                 occupations: vec![],
             }
         };
-        let key = result_key(&light);
         add_result(&mut doc, &start, light);
-        pin_orbital(&mut doc, &key, Spin::Beta, 2, basis, &vec![-0.5; n_ao]).unwrap();
+        pin_orbital(&mut doc, 0, Spin::Beta, 2, basis, &vec![-0.5; n_ao]).unwrap();
         let orbitals = doc.science.results[0].result.orbitals.as_ref().unwrap();
         match &orbitals.beta {
             Beta::Unrestricted(set) => {

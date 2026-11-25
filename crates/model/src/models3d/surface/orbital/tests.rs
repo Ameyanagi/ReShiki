@@ -98,8 +98,29 @@ fn diffuse_h_shell_keeps_its_angular_tail() {
     let mut row = vec![0.; basis.shells[0].n_functions()];
     row[0] = 1.; // x^5 in canonical Cartesian order.
     let field = OrbitalField::new(&basis, &row, &[[0.; 3]]).unwrap();
-    let value = field.value([(50. * ANGSTROM_PER_BOHR) as f32, 0., 0.]);
-    assert!((f64::from(value) - 0.002_393_001_56).abs() < 1e-9);
+    let radius_bohr = 155.;
+    assert!(radius_bohr * radius_bohr > 10. * std::f64::consts::LN_10 / 0.001);
+    let value = field.value([(radius_bohr * ANGSTROM_PER_BOHR) as f32, 0., 0.]);
+    assert!(value > 1e-10);
+    assert!((f64::from(value) - 3.072_999_683_60e-10).abs() < 1e-16);
+}
+
+#[test]
+fn new_rejects_nonfinite_derived_primitive_normalizations_and_weights() {
+    for (exponents, coefficients) in [(vec![1e100], vec![1.]), (vec![5e94, 4.9e94], vec![1., -1.])]
+    {
+        let basis = BasisSet {
+            shells: vec![Shell {
+                exponents_per_bohr2: exponents,
+                coefficients,
+                ..shell(5, false)
+            }],
+        };
+        basis.shells[0].validate(1).unwrap();
+        let mut row = vec![0.; basis.shells[0].n_functions()];
+        row[0] = 1.;
+        assert!(OrbitalField::new(&basis, &row, &[[0.; 3]]).is_err());
+    }
 }
 
 #[test]
@@ -226,10 +247,34 @@ fn translated_p_orbital_keeps_phase_and_closed_meshes() {
 }
 
 #[test]
+fn diffuse_cartesian_h_lobes_outside_atom_padding_have_closed_meshes() {
+    let basis = BasisSet {
+        shells: vec![Shell {
+            exponents_per_bohr2: vec![0.02],
+            coefficients: vec![1.],
+            ..shell(5, false)
+        }],
+    };
+    let mut row = vec![0.; basis.shells[0].n_functions()];
+    row[0] = 1.; // Normalized Cartesian x^5.
+    let field = OrbitalField::new(&basis, &row, &[[0.; 3]]).unwrap();
+    let iso = 0.02;
+    assert!(field.value([3., 0., 0.]) < iso);
+    let peak = ((5. / (2. * 0.02_f64)).sqrt() * ANGSTROM_PER_BOHR) as f32;
+    assert!(field.value([peak, 0., 0.]) > iso);
+    let meshes = orbital_meshes(&field, &[[0.; 3]], iso).expect("diffuse h lobes must fit");
+    for mesh in &meshes {
+        assert!(!mesh.triangles.is_empty());
+        assert!(!mesh.truncated);
+        assert_eq!(topology(mesh), [(false, 2), (true, 2)]);
+    }
+}
+
+#[test]
 fn orbital_meshes_distinguish_above_peak_from_persistent_truncation() {
     let basis = BasisSet {
         shells: vec![Shell {
-            exponents_per_bohr2: vec![0.001],
+            exponents_per_bohr2: vec![0.00001],
             coefficients: vec![1.],
             ..shell(0, false)
         }],
@@ -244,7 +289,7 @@ fn orbital_meshes_distinguish_above_peak_from_persistent_truncation() {
     }
     // This diffuse lobe still crosses the final box after all three growths.
     let iso = 0.25 * peak;
-    assert!(field.value([10.125, 0., 0.]) > iso);
+    assert!(field.value([50.625, 0., 0.]) > iso);
     assert!(orbital_meshes(&field, &[[0.; 3]], iso).is_none());
 }
 
