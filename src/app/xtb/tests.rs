@@ -159,7 +159,7 @@ fn cancel_stops_the_preview_and_ignores_late_replies() {
     );
     let _ = app.update(Message::Escape);
     assert!(!app.xtb_running());
-    assert_eq!(app.status, "Calculation cancelled");
+    assert_eq!(app.status, "Calculation canceled");
     assert_eq!(model(app.display_document()), f32s(&START));
     send(&mut app, Action::Event(serial, optimized(&START, &MOVED)));
     assert!(app.tab.xtb.outcome.is_none());

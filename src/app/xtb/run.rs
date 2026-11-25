@@ -157,7 +157,7 @@ fn run(
         });
         let remaining = batch.flush();
         if remaining.is_some_and(|event| tx.unbounded_send(event).is_err()) {
-            return Err("Calculation cancelled".into());
+            return Err("Calculation canceled".into());
         }
         match outcome.status {
             Status::Converged | Status::MaxSteps => {}
@@ -165,7 +165,7 @@ fn run(
                 return Err(format!("SCF did not converge: {message}").into());
             }
             Status::Failed(message) => return Err(message.into()),
-            Status::Cancelled => return Err("Calculation cancelled".into()),
+            Status::Cancelled => return Err("Calculation canceled".into()),
         }
         if path.len() != open.numbers.len() * 3 * outcome.energies.len() {
             path.clear();

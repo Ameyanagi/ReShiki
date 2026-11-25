@@ -364,7 +364,7 @@ impl App {
     }
 
     /// The model generation `key` ended, in any way (done, failed, dropped,
-    /// cancelled or replaced): a run waiting for it starts or stops.
+    /// canceled or replaced): a run waiting for it starts or stops.
     pub(super) fn xtb_model_finished(&mut self, key: super::models3d::Key) -> Task<Message> {
         let waiting = self
             .tab
@@ -487,7 +487,7 @@ impl App {
         if run.launch.is_none() {
             self.tab.model_job.take_if(|job| Some(job.key) == run.model);
         }
-        self.status = "Calculation cancelled".into();
+        self.status = "Calculation canceled".into();
         self.error = false;
     }
 
