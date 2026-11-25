@@ -1,0 +1,64 @@
+axtb: upstream work
+===================
+
+axtb is written in Rust. It reproduces the parameters and algorithms of the programs and
+libraries below, parts of it are ports of their code, and it carries data taken from them.
+Their source code, or for g-xTB 2.0.1 the released program, was read for that purpose. The
+specifications in docs/ say, term by term, where each part comes from. Paths below are
+relative to the repository, https://github.com/atomsforhumanity/axtb.
+
+xtb (https://github.com/grimme-lab/xtb), LGPL-3.0-or-later
+  GFN2-xTB as the xtb 6.8.0 and 6.7.1 programs compute it (conventions "xtb" and
+  "xtb-6.7.1"), including the parameter and element tables of src/param; the ALPB/GBSA
+  implicit solvation (src/solv, crates/solvation); GFN-FF (src/gfnff, crates/gfnff);
+  the vibrational analysis and quasi-RRHO thermochemistry of `xtb --hess` and `xtb thermo`
+  (the point-group detection is an independent implementation). The xtb side of the g-xTB
+  2.0.1 build (https://github.com/thfroitzheim/xtb, branch gxtb) was read too.
+  C. Bannwarth et al., WIREs Comput. Mol. Sci. 11, e1493 (2021), doi:10.1002/wcms.1493.
+  GFN-FF: S. Spicher, S. Grimme, Angew. Chem. Int. Ed. 59, 15665 (2020),
+  doi:10.1002/anie.202004239.
+
+tblite (https://github.com/tblite/tblite), LGPL-3.0-or-later
+  The GFN2-xTB parameters (xtb/gfn2.f90) and Slater-type orbital expansions (basis/slater.f90)
+  in crates/axtb; GFN2-xTB as tblite 0.8.0 computes it (conventions "tblite"). The g-xTB
+  branches of https://github.com/thfroitzheim/tblite were read for the g-xTB specifications.
+
+dftd4 (https://github.com/dftd4/dftd4), LGPL-3.0-or-later
+  The DFT-D4 model of dftd4 4.3.1 and its reference tables (src/dftd4/reference.inc,
+  src/dftd4/data) in crates/d4, which GFN-FF's dispersion (crates/gfnff) uses too; the revD4
+  tables that g-xTB shares with it.
+
+simple-dftd3 (https://github.com/dftd3/simple-dftd3), LGPL-3.0-or-later
+  Five test structures in tests/structures (tests/structures/README.md).
+
+mctc-lib (https://github.com/grimme-lab/mctc-lib), Apache-2.0
+  Element data (Pauling electronegativities, covalent and atomic radii) and the CODATA 2018
+  constants of src/mctc in crates/base, crates/axtb and crates/d4; the coordination-number
+  counting functions of src/mctc/ncoord (as xtb, tblite and dftd4 use them) in crates/base;
+  the Angstrom-to-bohr factor of the programs that read structures through it.
+
+multicharge (https://github.com/grimme-lab/multicharge), Apache-2.0
+  The EEQ 2019 parameters (param/eeq2019.f90) in crates/axtb; the EEQ-BC 2025 model that
+  g-xTB uses.
+
+g-xTB (https://github.com/grimme-lab/g-xtb), GPL-3.0
+  crates/gxtb/param holds the parameter files of the g-xTB 1.1.0 release (gxtb_parameters,
+  basisq, eeq). crates/gxtb/src/data/v1_1.rs and data/runtime.rs hold tables read from the
+  g-xTB 1.1.0 program; crates/gxtb/src/data/v2_0_1.rs holds the g-xTB 2.0.1 parameters read
+  from the 2.0.1 release binary (docs/gxtb-v2.0.1-spec.md says how).
+  g-xTB is distributed under GPL-3.0. axtb distributes its g-xTB parts (crates/gxtb, these
+  parameters included) under LGPL-3.0-or-later, with the explicit permission the g-xTB
+  authors gave on 13 November 2026:
+    "In the meantime, you have our explicit permission to use g-xTB, including its
+    parameters (1.1 and 2.0.1), in your axtb implementation and to distribute your
+    implementation under LGPL-3.0-or-later."
+    (Thomas Froitzheim and Stefan Grimme)
+  T. Froitzheim, M. Mueller, A. Hansen, S. Grimme, ChemRxiv 2025,
+  doi:10.26434/chemrxiv-2025-bjxvt.
+
+gemm (https://github.com/sarah-quinones/gemm, https://github.com/sarah-quinones/gemm-x64-v2), MIT
+  third_party/gemm-common (0.18.2) and third_party/private-gemm-x86 (0.1.22) are copies of
+  these crates, dependencies of faer, with a patch to their cache-size detection
+  (third_party/README.md). They keep their own LICENSE files. The patch applies to builds of
+  this repository (the axtb program and the Python wheels), not to crates that depend on axtb
+  from crates.io.

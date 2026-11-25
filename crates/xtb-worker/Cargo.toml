@@ -1,0 +1,12 @@
+[package]
+name = "reshiki-xtb-worker"
+version.workspace = true
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[features]
+engine = ["dep:axtb-driver"]
+
+[dependencies]
+axtb-driver = { workspace = true, optional = true }

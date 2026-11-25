@@ -20,6 +20,8 @@ rdkit-reference = [
 ]
 # Opt-in state observation for disposable compositor integration tests.
 wayland-qa = ["reshiki-linux/wayland-qa"]
+# Off by default. Only macOS and Linux releases enable it. Library crates never enable it.
+xtb = ["reshiki-xtb-worker/engine"]
 
 [workspace]
 members = [
@@ -41,6 +43,7 @@ members = [
   "crates/optimize",
   "crates/web",
   "crates/python",
+  "crates/xtb-worker",
 ]
 default-members = [
   ".",
@@ -56,6 +59,8 @@ default-members = [
 version = "0.17.1"
 
 [workspace.dependencies]
+# Pin axtb only here. The dependency audit checks the recorded copies.
+axtb-driver = { git = "https://github.com/Ameyanagi/axtb", rev = "9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91" }
 nazuchem-ir = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }
 nazuchem-kernel = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }
 nazuchem-n2s = { git = "https://github.com/Ameyanagi/nazuchem", rev = "5dd39d8245b43d3437c9bb2ab881eeafca8221d7" }
@@ -145,6 +150,7 @@ miniz_oxide = "0.8"
 reshiki-process = { path = "native/process" }
 reshiki-agent = { path = "crates/agent" }
 reshiki-mcp = { path = "crates/mcp" }
+reshiki-xtb-worker = { path = "crates/xtb-worker" }
 tokio = { version = "1", features = [
   "process",
   "fs",
@@ -359,6 +365,12 @@ anyhow = "1"
 miniz_oxide = "0.8"
 
 [patch.crates-io]
+# The axtb fork's own patches (its third_party/README.md): gemm reads only cpu0's
+# cache files. Cargo ignores a dependency's [patch], so ReShiki repeats them to
+# build what the fork validated. Only the xtb graph uses gemm. Same revision as
+# axtb-driver above.
+gemm-common = { git = "https://github.com/Ameyanagi/axtb", rev = "9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91" }
+private-gemm-x86 = { git = "https://github.com/Ameyanagi/axtb", rev = "9d0388c9e9d81c43c0e7bba01c0ccf706a88fc91" }
 # Preserve libjpeg's small-component and edge chroma sampling semantics.
 zune-jpeg = { path = "vendor/zune-jpeg" }
 # Preserve requested variable-font weights through SVG and selectable PDF text.

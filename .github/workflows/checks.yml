@@ -459,9 +459,10 @@ jobs:
         run: cargo build --locked --no-default-features --bin reshiki
       - name: Check Rust heap and byte protocol boundaries
         run: uv run --no-project --with certifi==2026.10.23 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
-      - name: Audit agent API dependencies for every release target
-        # cargo tree resolves all six release triples from one host.
-        if: runner.os == 'macOS'
+      - name: Audit dependencies and licences for every release target
+        # cargo tree resolves all six release triples from one host. Linux runs
+        # on every native PR; macOS only on stacked and main runs.
+        if: runner.os == 'Linux'
         run: uv run --no-project python scripts/check_agent_dependencies.py
       - name: Test with the real renderer on Windows
         if: runner.os == 'Windows'

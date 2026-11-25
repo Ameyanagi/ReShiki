@@ -8,6 +8,8 @@ ignorePatterns = [
   "output/**",
   "assets/**",
   "tests/fixtures/**",
+  # Upstream texts kept byte for byte (the licence audit compares them).
+  "licenses/axtb/**",
   "crates/model/src/chemistry/abbreviations/catalog.json",
   "docs/agent-reference.md",
   "vendor/usvg/**",

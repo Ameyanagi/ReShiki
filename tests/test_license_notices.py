@@ -10,10 +10,56 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from license_notices import PROJECT_FILES, THIRD_PARTY_FILE, dependency_metadata, write_notices
+from license_notices import (
+    PROJECT_FILES,
+    THIRD_PARTY_FILE,
+    consolidated_notices,
+    dependency_metadata,
+    write_notices,
+)
 
 
 class LicenseNoticeTests(unittest.TestCase):
+    def test_axtb_attributions_follow_the_fork_in_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            notices = root / "licenses"
+            (notices / "rust").mkdir(parents=True)
+            (notices / "rust/manifest.json").write_text("{}", encoding="utf-8")
+            (notices / "axtb").mkdir()
+            filenames = ("COPYING", "COPYING.LESSER", "NOTICE", "SOURCE")
+            for name in filenames:
+                (notices / "axtb" / name).write_text(f"Fork {name}\n", encoding="utf-8")
+
+            package_dir = root / "dependency"
+            package_dir.mkdir()
+            manifest = package_dir / "Cargo.toml"
+            manifest.write_text('[package]\nname = "fixture"\n', encoding="utf-8")
+            (package_dir / "LICENSE").write_text("Fixture license\n", encoding="utf-8")
+            package = {"version": "0.2.0", "manifest_path": str(manifest)}
+            fork = "git+https://github.com/Ameyanagi/axtb?rev=123#123"
+            for packages, expected in (
+                ([], False),
+                ([{**package, "name": "axtb", "source": fork}], True),
+                ([{**package, "name": "axtb-driver", "source": fork}], True),
+                ([{**package, "name": "axtb-x", "source": "git+https://example.test/axtb"}], False),
+                (
+                    [
+                        {
+                            **package,
+                            "name": "axtb-driver",
+                            "source": "git+https://github.com/Ameyanagi/axtb-repack?rev=1#1",
+                        }
+                    ],
+                    False,
+                ),
+            ):
+                with self.subTest(packages=packages):
+                    content = consolidated_notices(root, {"packages": packages})
+                    for name in filenames:
+                        self.assertEqual(f"  licenses/axtb/{name}\n".encode() in content, expected)
+                    self.assertIn(b"  licenses/rust/manifest.json\n", content)
+
     def test_package_scope_keeps_transitive_normal_and_build_dependencies(self):
         def dependency(package, *kinds):
             return {"pkg": package, "dep_kinds": [{"kind": kind} for kind in kinds]}
@@ -137,6 +183,8 @@ class LicenseNoticeTests(unittest.TestCase):
             opsin_source = sources["nazuchem-n2s"]
             root_terms = {name: repository / name for name in ("LICENSE-MIT", "LICENSE-APACHE")}
             # License grants remain identical to the retained root copies.
+            # Both naming crates retain the project license from their extraction.
+            naming_license = sources["nazuchem-kernel"] / "LICENSE"
             # Attribution notices also describe the extracted source layout,
             # so their canonical bytes come from the corresponding git crate.
             openclatura_terms = {
@@ -174,14 +222,14 @@ class LicenseNoticeTests(unittest.TestCase):
             copies = {
                 "nazuchem-ir": root_terms,
                 "nazuchem-s2n": {
-                    "LICENSE": repository / "LICENSE",
+                    "LICENSE": naming_license,
                     **root_terms,
                     **openclatura_terms,
                     **opsin_terms,
                     **cpython_terms,
                 },
                 "nazuchem-kernel": {
-                    "LICENSE": repository / "LICENSE",
+                    "LICENSE": naming_license,
                     **root_terms,
                     **kernel_terms,
                 },
