@@ -14,7 +14,16 @@ from pathlib import Path
 
 from agent_api_client import StdioClient, result
 from build_inchi_helper import INCHI_VERSION
-from build_release import ROOT, checksum, numeric_version, run, verify_binary, verify_inchi_worker
+from build_release import (
+    ROOT,
+    checksum,
+    numeric_version,
+    run,
+    verify_binary,
+    verify_inchi_worker,
+    verify_xtb_worker,
+    xtb_readme,
+)
 from check_runtime_dependencies import (
     AGENT_CALL,
     verify_agent_api,
@@ -466,7 +475,8 @@ def mac_disk_image(folder, output_dir, signed=False):
         (staging / "Install ReShiki.txt").write_text(
             "Drag ReShiki.app to Applications.\n\n"
             "Drawing and chemistry tools are included and work offline.\n"
-            "https://reshiki.com/guide/install/\n",
+            "https://reshiki.com/guide/install/\n"
+            + xtb_readme(metadata["xtb"], metadata.get("release_tag"), "macos"),
             encoding="utf-8",
         )
         create_disk_image(staging, output)
@@ -474,7 +484,7 @@ def mac_disk_image(folder, output_dir, signed=False):
         from sign_macos import sign_disk_image
 
         sign_disk_image(output)
-    verify_mac_disk_image(output, signed, architecture=architecture)
+    verify_mac_disk_image(output, signed, architecture=architecture, metadata=metadata)
     checksum(output)
     return output
 
@@ -532,7 +542,7 @@ def create_disk_image(staging, output, *, sleep=time.sleep):
                     break
 
 
-def verify_mac_disk_image(output, signed, *, architecture):
+def verify_mac_disk_image(output, signed, *, architecture, metadata):
     with tempfile.TemporaryDirectory(prefix="ReShiki mount check ") as temporary:
         root = Path(temporary)
         mount = root / "mounted"
@@ -549,6 +559,7 @@ def verify_mac_disk_image(output, signed, *, architecture):
             run(["hdiutil", "detach", mount])
         verify_binary(installed / "Contents/MacOS/reshiki", "macos", architecture)
         verify_inchi_worker(installed / "Contents/MacOS/reshiki", INCHI_VERSION)
+        verify_xtb_worker(installed / "Contents/MacOS/reshiki", metadata)
         verify_runtime(installed / "Contents/MacOS/reshiki", installed)
         verify_macos_workers(installed / "Contents/MacOS/reshiki")
         verify_agent_api(installed / "Contents/MacOS/reshiki", installed)
