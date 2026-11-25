@@ -661,6 +661,14 @@ explains how the crates and modules fit together.
 - `crates/io/src/qc_input/orca.rs`: ORCA 6 input
 - `crates/io/src/qc_input/sdf.rs`: SDF records with V3000 3D connection tables.
 - `crates/io/src/qc_input/xyz.rs`: XYZ files, one frame or a trajectory.
+- `crates/io/src/qcread.rs`: Readers for quantum chemistry files, from geometries to calculated results.
+- `crates/io/src/qcread/fchk.rs`: Gaussian formatted checkpoints, read from the documented record layout.
+- `crates/io/src/qcread/gaussian.rs`: Gaussian log jobs, coordinate steps, and results.
+- `crates/io/src/qcread/input.rs`: Geometry sections of Gaussian, ORCA and GAMESS input files.
+- `crates/io/src/qcread/molden.rs`: Molden records, converted at the boundary to the canonical AO convention.
+- `crates/io/src/qcread/orca.rs`: ORCA output read job by job into geometries, energies, orbital levels and vibrations.
+- `crates/io/src/qcread/sdf.rs`: Molecular geometries from native MOL and SD records.
+- `crates/io/src/qcread/xyz.rs`: Molecular geometries from plain and extended XYZ.
 - `crates/io/src/recovery.rs`
 - `crates/io/src/svg_drawing.rs`: Bounded SVG import as ordinary, editable vector graphics.
 - `crates/io/src/svg_drawing/css.rs`: Remove unsupported CSS effects without changing selectors or the cascade.

@@ -14,7 +14,7 @@ mod cif;
 mod elements;
 mod pdb;
 mod poscar;
-mod xyz;
+pub(crate) mod xyz;
 
 /// The most atoms a structure may have in its cell.
 pub const MAX_ATOMS: usize = 2_000;

@@ -1,0 +1,12 @@
+pymatgen test files
+===================
+
+tests/fixtures/qc/pymatgen/ holds unmodified copies of Gaussian input and
+output files from materialsproject/pymatgen-test-files
+(https://github.com/materialsproject/pymatgen-test-files), commit
+85005108e99e40cbd59e78f067459b0ca664efc6, directory io/gaussian/.
+tests/fixtures/qc/README.md lists each copy and its SHA-256.
+
+The files are test data only. They are not part of any ReShiki binary or
+package, keep their MIT terms (see LICENSE in this directory) and are not
+represented as original dual-licensed ReShiki material.
