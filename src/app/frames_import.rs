@@ -163,7 +163,11 @@ impl Dialog {
                 .file
                 .energies()
                 .and_then(|energies| {
-                    (0..energies.len()).min_by(|&a, &b| energies[a].total_cmp(&energies[b]))
+                    energies
+                        .iter()
+                        .enumerate()
+                        .min_by(|a, b| a.1.total_cmp(b.1))
+                        .map(|(i, _)| i)
                 })
                 .unwrap_or(0),
             Choice::Frame(index) => index.min(last),
@@ -241,9 +245,11 @@ impl App {
         if frame.multiplicity != 1 {
             omitted.push(format!("spin multiplicity {}", frame.multiplicity));
         }
-        let not_drawn = (!omitted.is_empty())
-            .then(|| format!("Not drawn: {}", omitted.join(", ")))
-            .unwrap_or_default();
+        let not_drawn = if omitted.is_empty() {
+            String::new()
+        } else {
+            format!("Not drawn: {}", omitted.join(", "))
+        };
         if !not_drawn.is_empty() {
             warnings.insert(0, not_drawn.clone());
         }
@@ -420,10 +426,16 @@ impl App {
             steps.len(),
             match (dialog.choice, energies.as_ref()) {
                 (Choice::Lowest, _) => " (lowest energy)".to_owned(),
-                (_, Some(energies)) => format!(
-                    ", {:.2} kcal/mol above the lowest",
-                    (energies[index] - lowest.unwrap_or(energies[index])) * KCAL_PER_HARTREE
-                ),
+                (_, Some(energies)) => energies
+                    .get(index)
+                    .zip(lowest)
+                    .map(|(energy, low)| {
+                        format!(
+                            ", {:.2} kcal/mol above the lowest",
+                            (energy - low) * KCAL_PER_HARTREE
+                        )
+                    })
+                    .unwrap_or_default(),
                 _ => String::new(),
             }
         );
@@ -541,16 +553,23 @@ fn ensemble(
     if !same {
         return Err("the 3D model's atoms are not in the file's order".into());
     }
-    let mut kept: Vec<usize> = (0..steps.len()).collect();
-    kept.sort_by(|&a, &b| energies[a].total_cmp(&energies[b]));
+    // (energy, frame number, step), the lowest first.
+    let mut kept: Vec<_> = energies
+        .iter()
+        .copied()
+        .zip(steps)
+        .enumerate()
+        .map(|(i, (energy, step))| (energy, i, step))
+        .collect();
+    kept.sort_by(|a, b| a.0.total_cmp(&b.0));
     kept.truncate(MAX_SAVED_CONFORMERS);
+    let &(lowest_energy, _, lowest_step) = kept.first().ok_or("the file has no frames")?;
     let lowest = Frame {
-        positions_angstrom: steps[kept[0]].frame.positions_angstrom.clone(),
+        positions_angstrom: lowest_step.frame.positions_angstrom.clone(),
         ..(*launch.frame).clone()
     };
-    let label = |i: usize| {
-        steps[i]
-            .label
+    let label = |i: usize, step: &qcread::Step| {
+        step.label
             .clone()
             .unwrap_or_else(|| format!("Frame {}", i + 1))
     };
@@ -562,10 +581,10 @@ fn ensemble(
         multiplicity: lowest.multiplicity,
         positions_angstrom: kept
             .iter()
-            .flat_map(|&i| steps[i].frame.positions_angstrom.iter().flatten().copied())
+            .flat_map(|(_, _, step)| step.frame.positions_angstrom.iter().flatten().copied())
             .collect(),
-        energies_hartree: kept.iter().map(|&i| energies[i]).collect(),
-        labels: kept.iter().map(|&i| label(i)).collect(),
+        energies_hartree: kept.iter().map(|(energy, ..)| *energy).collect(),
+        labels: kept.iter().map(|&(_, i, step)| label(i, step)).collect(),
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
     };
@@ -597,7 +616,7 @@ fn ensemble(
             },
         },
         status: Status::Converged,
-        energy_hartree: Some(energies[kept[0]]),
+        energy_hartree: Some(lowest_energy),
         energy_terms: Default::default(),
         gradient_hartree_per_bohr: vec![],
         hessian_hartree_per_bohr2: vec![],
