@@ -81,7 +81,7 @@ impl From<&Computed> for Evaluation {
     fn from(computed: &Computed) -> Self {
         Self {
             energy: computed.energy,
-            scf_iterations: computed.scf_iterations,
+            scf_iterations: computed.scf.as_ref().map_or(0, |scf| scf.iterations),
             seconds: computed.seconds,
         }
     }
@@ -124,7 +124,7 @@ fn run(
     tx: &mpsc::UnboundedSender<Event>,
 ) -> Result<Report, Box<dyn std::error::Error>> {
     let limits = Limits::default();
-    let (mut session, hello) = Session::start(&std::env::current_exe()?, limits)?;
+    let (mut session, hello) = Session::start(&std::env::current_exe()?, limits, cancel)?;
     let engine = hello.engine.ok_or(Error::Unavailable)?;
     let open = Open {
         numbers: job.numbers,
@@ -137,7 +137,11 @@ fn run(
         solvent: job.solvent.map(|name| Solvent {
             model: SolventModel::Alpb,
             name,
+            state: Default::default(),
+            correction: None,
         }),
+        scf: Default::default(),
+        gfnff: None,
         threads: job.threads,
         heap_bytes: limits.heap_bytes,
     };
@@ -195,7 +199,7 @@ fn run(
     };
     let final_xyz = outcome.as_ref().map(|outcome| outcome.positions.as_slice());
     let computed = session.compute(&request(final_xyz, false), cancel)?;
-    let _ = session.close();
+    let _ = session.close(cancel);
     evaluations.push(Evaluation::from(&computed));
     let energy = outcome
         .as_ref()
@@ -237,6 +241,7 @@ fn request(bohr: Option<&[f64]>, gradient: bool) -> Compute {
         positions,
         units,
         gradient,
+        ..Compute::default()
     }
 }
 

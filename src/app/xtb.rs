@@ -795,6 +795,8 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, String> {
         endpoints: None,
         settings: qcdata::Settings::Xtb(qcdata::XtbSettings {
             method: qcdata::XtbMethod::Gfn2Xtb,
+            conventions: Default::default(),
+            scf_retries: vec![],
             solvent: run.solvent.map(|name| qcdata::Solvent {
                 model: qcdata::SolventModel::Alpb,
                 name: name.to_lowercase(),

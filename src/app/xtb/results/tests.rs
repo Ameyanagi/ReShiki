@@ -33,6 +33,8 @@ fn optimized(full: bool) -> CalcResult {
         endpoints: None,
         settings: Settings::Xtb(XtbSettings {
             method: qcdata::XtbMethod::Gfn2Xtb,
+            conventions: Default::default(),
+            scf_retries: vec![],
             solvent: Some(qcdata::Solvent {
                 model: qcdata::SolventModel::Alpb,
                 name: "water".into(),
