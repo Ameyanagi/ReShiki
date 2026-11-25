@@ -16,6 +16,7 @@ use results::RunInfo;
 use state::{Progress, Settings};
 use std::sync::{Arc, Weak};
 
+pub(super) mod orbitals;
 pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
@@ -65,6 +66,7 @@ pub(crate) enum Action {
     ApplyAnyway,
     Discard,
     Palette(palette::Action),
+    Orbitals(orbitals::Action),
     #[cfg(not(target_arch = "wasm32"))]
     Event(u64, run::Event),
 }
@@ -107,6 +109,7 @@ pub(crate) struct State {
     pub(super) outcome: Option<Outcome>,
     serial: u64,
     pub(super) palette: palette::Palette,
+    pub(super) orbitals: orbitals::Orbitals,
     /// What this session knows about stored results' runs, by result.
     infos: Vec<(Weak<CalcResult>, Arc<RunInfo>)>,
 }
@@ -333,6 +336,7 @@ impl App {
             Action::Event(serial, event) => self.xtb_event(serial, event),
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => return self.xtb_palette(action),
+            Action::Orbitals(action) => return self.xtb_orbitals(action),
             setting => {
                 let target = self.xtb_key();
                 let settings = &mut self.xtb.settings;
@@ -394,7 +398,9 @@ impl App {
     /// The model preview while a run is current, else a previewed step.
     pub(super) fn xtb_preview(&self) -> Option<&Document> {
         let Some(run) = self.tab.xtb.run.as_ref() else {
-            return self.xtb_step_preview();
+            return self
+                .xtb_step_preview()
+                .or_else(|| self.xtb_orbital_preview());
         };
         (run.revision == (self.tab.file_epoch, self.tab.revision))
             .then_some(run.preview.as_deref())

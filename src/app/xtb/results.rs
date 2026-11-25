@@ -14,7 +14,7 @@ pub(crate) const LIMITATIONS: &str = "Semi-empirical: geometries good, frequenci
 /// The gap under which the electronic structure counts as near-degenerate.
 const NEAR_DEGENERATE_EV: f64 = 0.1;
 /// CODATA 2022, as the worker converts its gap.
-const EV_PER_HARTREE: f64 = 27.211386245981;
+pub(crate) const EV_PER_HARTREE: f64 = 27.211386245981;
 /// Debye per e·bohr.
 const DEBYE_PER_E_BOHR: f64 = 2.541746473;
 /// Bond orders listed from this order up: what the worker reports and a
@@ -28,6 +28,7 @@ pub(crate) enum View {
     #[default]
     Summary,
     Steps,
+    Orbitals,
     Log,
 }
 
@@ -38,6 +39,13 @@ impl View {
         if energies(result).len() > 1 {
             views.push(Self::Steps);
         }
+        if result
+            .orbitals
+            .as_ref()
+            .is_some_and(|o| !o.alpha.energies_hartree.is_empty())
+        {
+            views.push(Self::Orbitals);
+        }
         views.push(Self::Log);
         views
     }
@@ -46,6 +54,7 @@ impl View {
         match self {
             Self::Summary => "Summary",
             Self::Steps => "Steps",
+            Self::Orbitals => "Orbitals",
             Self::Log => "Log",
         }
     }
