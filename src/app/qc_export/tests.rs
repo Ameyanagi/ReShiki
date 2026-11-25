@@ -41,6 +41,7 @@ fn finish_model(app: &mut App) {
             original_atom_count: n,
             hydrogen_parents: vec![0],
         },
+        ensemble: vec![],
         initial_energy: 1.,
         energy: 1.,
         gradient: None,
@@ -49,7 +50,6 @@ fn finish_model(app: &mut App) {
         force_field: job.force_field,
         diagnostics: vec![],
         approximations: vec![],
-        ensemble: vec![],
     };
     let key = job.key;
     let _ = app.update(Message::Models3d(ModelAction::Generated(

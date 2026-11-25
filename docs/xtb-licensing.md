@@ -105,24 +105,49 @@ byte.
 
 Each release that contains axtb also publishes
 `reshiki-<version>-source.tar.gz` (and its `.sha256`) on the same GitHub
-release page. `scripts/xtb_source_archive.py` builds it from the release
-commit:
+release page. `scripts/xtb_source_archive.py` packages the tracked working-tree
+files from the release checkout. For nightlies, the source and desktop build
+jobs stamp the same version into `Cargo.toml` and `Cargo.lock` first.
+
+The archive is for building and testing the ReShiki application. It excludes
+`docs/images/` assets used by the website, so building the website requires
+the full repository.
 
 ```
 reshiki-<version>-source/
-  …                     ReShiki's tracked files at the release commit (git archive)
+  …                     ReShiki's tracked working-tree files, with media exclusions
   axtb-source/          the fork's tracked files at the pinned revision
   vendored-crates/      `cargo vendor --locked` of every dependency
   .cargo/config.toml    source replacement to vendored-crates/
   BUILD-WITH-XTB.md     build and rebuild steps
-  SOURCE-MANIFEST.json  commits, revision, and SHA-256 of every file
+  SOURCE-MANIFEST.json  commits, revision, exclusions, and SHA-256 of every file
 ```
 
 The release workflow publishes binaries only after this archive is built,
-checked and uploaded. The archive is kept as long as the release it belongs
-to; nightly releases that ship axtb carry their own archive.
+checked and uploaded.
 
-`BUILD-WITH-XTB.md` gives two procedures, offline:
+**Each published binary has its source available for as long as the binary
+is.** The archive is an asset of the same GitHub release as the binaries it
+corresponds to, uploaded by the same `gh release create` call (stable releases
+in `release.yml`, nightlies in `nightly.yml`). The GitHub CLI publishes the
+release only after every asset has uploaded, so a published release never has
+one without the other. Deleting a release deletes all of its assets, so the
+archive and its binaries disappear together:
+
+- Tagged releases keep their archive permanently.
+- Nightlies are pruned with their binaries. No workflow or script deletes
+  nightly releases today (the oldest still published dates from
+  2026-09-29), so a nightly's archive stays as long as its nightly does. When a
+  nightly is removed, by hand or by a future pruning step, it must be removed
+  as a whole release (`gh release delete`), which takes its archive with it.
+- Workflows and scripts never add, replace or delete single assets of an
+  application release (only the separate `web-demo` release replaces its own
+  asset). A test fails on the usual ways of doing so: `gh release upload`,
+  `--clobber`, `gh release delete-asset`, and the REST `releases/assets`
+  endpoint from the shell or Python.
+
+`BUILD-WITH-XTB.md` lists the release profile settings for macOS, Linux arm64,
+and Linux x64, and gives two offline procedures:
 
 - **Rebuild as shipped:**
   `cargo build --profile dist --locked --offline --features xtb --bin reshiki`.
@@ -134,10 +159,11 @@ to; nightly releases that ship axtb carry their own archive.
   macOS, sign it ad hoc (`codesign --force --sign - …`) or wrap it as described
   in the file; the system may ask once before running an unsigned app.
 
-`xtb_source_archive.py check` repeats the second procedure in a clean
-directory with a one-line change to axtb (its reported program version) and
-requires the rebuilt worker to answer `hello` with the changed version and a
-water energy. The release workflow runs this check on Linux x64 before
+`xtb_source_archive.py check` first runs `cargo check --locked --offline
+--features xtb --bin reshiki` in the pristine extracted tree with an empty
+`CARGO_HOME`. It then builds with a one-line change to axtb's reported program
+version and verifies that the rebuilt worker reports that version and computes
+a water energy. The release workflow runs both steps on Linux x64 before
 publishing.
 
 LGPL-3.0 section 4(d)(0) is met by giving the complete source of the combined

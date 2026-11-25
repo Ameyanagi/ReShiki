@@ -132,6 +132,40 @@ class LicenseNoticeTests(unittest.TestCase):
                     source = Path(package["manifest_path"]).parent
                     self.assertIn((source / relative).read_bytes(), notices)
 
+    def test_native_xtb_scope_excludes_python_and_unrelated_workspace_packages(self):
+        repository = Path(__file__).resolve().parents[1]
+        metadata = json.loads(
+            subprocess.check_output(
+                [
+                    "cargo",
+                    "metadata",
+                    "--locked",
+                    "--format-version",
+                    "1",
+                    "--features",
+                    "xtb",
+                    "--filter-platform",
+                    "x86_64-unknown-linux-gnu",
+                ],
+                cwd=repository,
+                text=True,
+            )
+        )
+        scoped = dependency_metadata(metadata)
+        names = {package["name"] for package in scoped["packages"]}
+        excluded = {"reshiki", "reshiki-python", "reshiki-web", "pyo3", "pyo3-ffi"}
+        self.assertTrue(excluded <= {package["name"] for package in metadata["packages"]})
+        self.assertTrue(names.isdisjoint(excluded))
+        self.assertIn("axtb-driver", names)
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary)
+            write_notices(repository, destination, scoped)
+            notices = (destination / THIRD_PARTY_FILE).read_bytes()
+        self.assertIn(b"DEPENDENCY: axtb-driver@", notices)
+        for name in excluded:
+            with self.subTest(package=name):
+                self.assertNotIn(f"DEPENDENCY: {name}@".encode(), notices)
+
     def test_git_naming_components_collect_complete_crate_local_terms(self):
         repository = Path(__file__).resolve().parents[1]
         metadata = json.loads(
