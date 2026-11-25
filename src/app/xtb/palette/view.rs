@@ -134,6 +134,7 @@ impl App {
         let body = match view {
             View::Summary => summary(&shown, inspector),
             View::Steps => self.xtb_steps(&shown, inspector),
+            View::Orbitals => self.xtb_orbitals_tab(&shown, inspector),
             View::Log => log(&shown, &method),
         };
         let body: Element<'_, Message> = if inspector {
@@ -141,7 +142,11 @@ impl App {
         } else {
             scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
                 .id("xtb-results-body")
-                .height(BODY_HEIGHT)
+                .height(if view == View::Orbitals {
+                    super::super::orbitals::HEIGHT
+                } else {
+                    BODY_HEIGHT
+                })
                 .into()
         };
         content = content.push(container(body).padding([6, 0]));
@@ -492,6 +497,7 @@ impl App {
                     Tone::Muted,
                 ));
             }
+            View::Orbitals => footer = footer.push(self.xtb_orbitals_note(shown)),
             View::Log => {
                 footer = footer.push(
                     accessible_command("xtb-copy-log", "Copy the log", "Copy")

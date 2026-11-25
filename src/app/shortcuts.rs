@@ -385,6 +385,12 @@ impl App {
                     !self.guides.crosshair,
                 )));
             }
+            // ↑ and ↓ choose orbitals in the xTB results' Orbitals tab.
+            Action::Nudge(x, y) if x == 0. && self.xtb_orbital_keys() => {
+                return self.xtb_action(super::xtb::Action::Orbitals(
+                    super::xtb::orbitals::Action::Step(if y < 0. { 1 } else { -1 }),
+                ));
+            }
             Action::Nudge(x, y) if self.connecting().is_some() => {
                 return self.equipment_action(super::equipment::Action::Step(if x + y < 0. {
                     -1

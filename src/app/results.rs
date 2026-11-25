@@ -762,6 +762,11 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Discard => None,
                 Action::Palette(super::xtb::palette::Action::Exported(..)) => Some(Completion::Xtb),
                 Action::Palette(..) => None,
+                Action::Orbitals(
+                    super::xtb::orbitals::Action::Computed(..)
+                    | super::xtb::orbitals::Action::Built(..),
+                ) => Some(Completion::Xtb),
+                Action::Orbitals(..) => None,
             }
         }
         Message::FigureExported(..) => Some(Completion::FigureExport),
