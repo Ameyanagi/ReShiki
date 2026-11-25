@@ -240,3 +240,21 @@ fn a_sorted_file_is_an_ensemble_with_a_turnable_preview_and_the_lowest_overlaid(
     send(&mut app, Action::Move(-1));
     assert_eq!(preview(&app).models[0].rotation, after);
 }
+
+#[test]
+fn files_opened_together_ask_in_turn() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    for name in ["a.xyz", "b.xyz", "c.xyz"] {
+        open(&mut app, name, CREST);
+    }
+    let path = |app: &App| app.frames_import.as_ref().map(|d| d.path.clone());
+    assert_eq!(path(&app), Some(PathBuf::from("a.xyz")));
+    send(&mut app, Action::Close);
+    assert_eq!(path(&app), Some(PathBuf::from("b.xyz")));
+    send(&mut app, Action::Import);
+    assert_eq!(model(&app).len(), 3, "b opened");
+    assert_eq!(path(&app), Some(PathBuf::from("c.xyz")));
+    send(&mut app, Action::Close);
+    assert!(app.frames_import.is_none());
+}
