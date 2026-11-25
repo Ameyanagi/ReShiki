@@ -4,19 +4,63 @@ mod anc;
 mod coordinates;
 mod lbfgs;
 
-use std::ops::ControlFlow;
+use std::{cell::LazyCell, ops::ControlFlow};
 
 use crate::{Accuracy, EvalError, Potential, linalg::dot};
-use anc::Anc;
+use anc::{Anc, History};
 use coordinates::{Coordinates, metrics, project};
 use lbfgs::Lbfgs;
 
-/// ANC-RFO uses a Lindh model Hessian and falls back to Cartesian L-BFGS.
+/// ANC-RFO uses a projected Hessian and falls back to Cartesian L-BFGS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Method {
     #[default]
     AncRfo,
     Lbfgs,
+}
+
+/// Starting curvature for ANC-RFO. Rebuilds always use the Lindh basis and carry
+/// the learned curvature (Lindh et al., Chem. Phys. Lett. 241, 423, 1995).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InitialHessian {
+    /// Construct the Lindh model at the input geometry.
+    #[default]
+    Model,
+    /// Request the potential's Hessian once, falling back to Lindh when unavailable.
+    /// Use max(|λ|, 0.001) on internal modes to preserve stiffness and start BFGS
+    /// with positive curvature (Nocedal & Wright, Numerical Optimization, §3.4).
+    Potential,
+    /// Use `Potential` up to and including `max_atoms`, counting fixed atoms too.
+    Auto { max_atoms: usize },
+}
+
+/// Secant update of the ANC Hessian after an accepted displacement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Update {
+    /// Direct BFGS with a positive-curvature test (Nocedal & Wright, §6.1).
+    #[default]
+    Bfgs,
+    /// Powell's damping enforces sᵀr ≥ 0.2 sᵀHs (Nocedal & Wright, 2nd ed., Procedure 18.2).
+    DampedBfgs,
+    /// Blend SR1 and BFGS for minimization (Farkas & Schlegel, JCP 111, 10806, 1999).
+    /// The model may become indefinite, in which case RFO uses the lowest augmented root.
+    Bofill,
+}
+
+/// Extrapolate from up to five accepted points in a single ANC frame so errors,
+/// gradients and the trust radius share the same projected coordinates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Acceleration {
+    /// Use the usual RFO step (Banerjee et al., J. Phys. Chem. 89, 52, 1985).
+    #[default]
+    None,
+    /// Minimize the interpolated quasi-Newton error (Császár & Pulay, J. Mol. Struct.
+    /// 114, 31, 1984) with safeguards from Farkas & Schlegel (PCCP 4, 11, 2002).
+    Gdiis,
+    /// Li & Frisch's hybrid (JCTC 2, 835, 2006) uses RFO above an RMS force of
+    /// 0.001 Eh/bohr, then energy DIIS and finally GDIIS below an RMS step of
+    /// 0.0025 bohr (switches reported by Sanz García, Toulouse, 2016, pp. 53–54).
+    Gediis,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -66,6 +110,16 @@ impl Level {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
     pub method: Method,
+    /// Source of the first ANC Hessian.
+    pub initial_hessian: InitialHessian,
+    /// ANC Hessian update applied after each accepted step.
+    pub update: Update,
+    /// DIIS-family trial steps for ANC-RFO.
+    pub acceleration: Acceleration,
+    /// Start at Coarse and request Normal when the maximum free gradient is within
+    /// 20× its convergence threshold. This cutoff is a benchmark heuristic for
+    /// inexact evaluations (cf. Carter, SIAM J. Sci. Comput. 14, 368, 1993).
+    pub adaptive_accuracy: bool,
     pub level: Level,
     pub max_steps: usize,
     /// Zero-based atom indices whose input coordinates are held exactly fixed.
@@ -79,6 +133,10 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             method: Method::AncRfo,
+            initial_hessian: InitialHessian::Model,
+            update: Update::Bfgs,
+            acceleration: Acceleration::None,
+            adaptive_accuracy: false,
             level: Level::Normal,
             max_steps: 500,
             fixed_atoms: Vec::new(),
@@ -87,7 +145,7 @@ impl Default for Options {
     }
 }
 
-/// An accepted geometry, including a Tight re-evaluation at the same index.
+/// An accepted geometry, including re-evaluations at a new accuracy at the same index.
 /// Index zero has zero energy change and step lengths.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Step<'a> {
@@ -122,10 +180,13 @@ pub struct Outcome {
     pub energy: f64,
     pub gradient: Vec<f64>,
     pub steps: usize,
+    /// Energy/gradient calls, including rejected trials and failed calls.
     pub evaluations: usize,
+    /// Calls to [`Potential::hessian`], including errors and unavailability probes.
+    pub hessian_evaluations: usize,
     pub method: Method,
     /// One energy per accepted geometry, including the input. A successful
-    /// Tight re-evaluation replaces the entry at the same geometry.
+    /// accuracy change replaces the entry at the same geometry.
     pub energies: Vec<f64>,
 }
 
@@ -164,7 +225,8 @@ impl Point {
 
 impl Step<'_> {
     fn converged(&self, c: Criteria) -> bool {
-        self.max_gradient <= c.max_gradient
+        self.accuracy != Accuracy::Coarse
+            && self.max_gradient <= c.max_gradient
             && self.rms_gradient <= c.rms_gradient
             && (self.max_gradient < c.max_gradient / 100.
                 || (self.index > 0
@@ -174,11 +236,22 @@ impl Step<'_> {
     }
 }
 
+impl From<EvalError> for Status {
+    fn from(error: EvalError) -> Self {
+        match error {
+            EvalError::Cancelled => Self::Cancelled,
+            EvalError::Scf(m) => Self::ScfFailure(m),
+            EvalError::Failed(m) => Self::Failed(m),
+        }
+    }
+}
+
 struct Evaluator<'a, P: ?Sized> {
     potential: &'a mut P,
     coords: Coordinates,
     accuracy: Accuracy,
     count: usize,
+    hessian_count: usize,
 }
 
 impl<P: Potential + ?Sized> Evaluator<'_, P> {
@@ -190,12 +263,7 @@ impl<P: Potential + ?Sized> Evaluator<'_, P> {
         self.count += 1;
         let energy = self
             .potential
-            .evaluate(&positions, &mut gradient, self.accuracy)
-            .map_err(|e| match e {
-                EvalError::Cancelled => Status::Cancelled,
-                EvalError::Scf(m) => Status::ScfFailure(m),
-                EvalError::Failed(m) => Status::Failed(m),
-            })?;
+            .evaluate(&positions, &mut gradient, self.accuracy)?;
         if !energy.is_finite() || !gradient.iter().all(|x| x.is_finite()) {
             return Err(Status::Failed(
                 "non-finite potential energy or gradient".into(),
@@ -221,6 +289,34 @@ impl<P: Potential + ?Sized> Evaluator<'_, P> {
         })
     }
 
+    fn hessian(&mut self, positions: &[f64]) -> Result<Option<Vec<f64>>, Status> {
+        let n = positions.len();
+        let size = n
+            .checked_mul(n)
+            .ok_or_else(|| Status::Failed("Hessian dimension overflow".into()))?;
+        let mut h = Vec::new();
+        h.try_reserve_exact(size)
+            .map_err(|e| Status::Failed(e.to_string()))?;
+        h.resize(size, f64::NAN);
+        self.hessian_count += 1;
+        let Some(result) = self.potential.hessian(positions, &mut h) else {
+            return Ok(None);
+        };
+        result?;
+        if !h.iter().all(|x| x.is_finite()) {
+            return Err(Status::Failed("non-finite potential Hessian".into()));
+        }
+        // Finite differences of analytic gradients can have small antisymmetric errors.
+        for i in 0..n {
+            for j in 0..i {
+                let entry = f64::midpoint(h[i * n + j], h[j * n + i]);
+                h[i * n + j] = entry;
+                h[j * n + i] = entry;
+            }
+        }
+        Ok(Some(h))
+    }
+
     fn trial(&mut self, point: &Point, step: &[f64]) -> Result<Point, Status> {
         let mut positions = point.positions.clone();
         for (&i, s) in self.coords.indices.iter().zip(step) {
@@ -230,18 +326,24 @@ impl<P: Potential + ?Sized> Evaluator<'_, P> {
     }
 }
 
-struct Engine {
+struct Engine<'a> {
+    options: &'a Options,
     method: Method,
     anc: Option<Anc>,
+    initial_hessian: Option<Vec<f64>>,
+    history: History,
     lbfgs: Lbfgs,
     radius: f64,
 }
 
-impl Engine {
-    fn new(method: Method) -> Self {
+impl<'a> Engine<'a> {
+    fn new(options: &'a Options) -> Self {
         Self {
-            method,
+            options,
+            method: options.method,
             anc: None,
+            initial_hessian: None,
+            history: History::default(),
             lbfgs: Lbfgs::default(),
             radius: 0.3,
         }
@@ -255,25 +357,43 @@ impl Engine {
         steps: usize,
     ) -> Result<Option<(Point, f64)>, Status> {
         if self.anc.as_ref().is_none_or(|a| steps - a.built_at >= 30) {
-            self.anc = Anc::build(numbers, &eval.coords, point, steps, self.anc.as_ref()).ok();
+            self.anc = Anc::build(
+                numbers,
+                &eval.coords,
+                point,
+                steps,
+                self.anc.as_ref(),
+                self.initial_hessian.take(),
+            )
+            .ok();
+            self.history.clear();
         }
-        let Some(direction) = self
-            .anc
-            .as_ref()
-            .and_then(|a| a.direction(&point.active_gradient))
-        else {
+        let Some(anc) = &self.anc else {
             return Ok(None);
         };
+        let mut diis = if self.options.acceleration == Acceleration::None {
+            None
+        } else {
+            self.history.push(anc, point, &eval.coords);
+            self.history
+                .direction(anc, self.options.acceleration, self.radius)
+        };
+        // Compute the ordinary direction only if needed; reuse it on smaller-radius retries.
+        let rfo = LazyCell::new(|| anc.direction(&point.active_gradient));
         for _ in 0..10 {
             let radius = self.radius;
-            let Some((s, predicted, length)) = direction.restricted(radius) else {
+            let accelerated = diis.take().and_then(|d| d.restricted(radius));
+            let used_diis = accelerated.is_some();
+            let Some((s, predicted, length)) =
+                accelerated.or_else(|| rfo.as_ref()?.restricted(radius))
+            else {
                 return Ok(None);
             };
             let trial = eval.trial(point, &s)?;
             let actual = trial.energy - point.energy;
             if actual > 1e-6 {
-                // A step already at the minimum radius cannot shrink further.
-                if length <= 1e-3 {
+                // Give ordinary RFO one try even if DIIS reached the radius floor.
+                if length <= 1e-3 && !used_diis {
                     self.radius = 1e-3;
                     break;
                 }
@@ -356,7 +476,7 @@ impl Engine {
             rms,
         };
         if let Some(anc) = &mut self.anc {
-            anc.update(&s, &y);
+            anc.update(&s, &y, self.options.update);
         } else {
             self.lbfgs.update(s, y);
         }
@@ -365,7 +485,7 @@ impl Engine {
 }
 
 /// Minimize an energy in atomic units, reporting the input, every accepted step,
-/// and each successful Tight re-evaluation at the same accepted-step index.
+/// and each successful accuracy change at the same accepted-step index.
 ///
 /// Atomic numbers must be in 1..=118. Positions must be finite, with three
 /// components per atom. Fixed indices must be unique and in range, leaving at
@@ -384,11 +504,15 @@ impl Engine {
 /// geometry. Its gradient is tested with the preceding accepted displacement and
 /// energy change. The callback receives the Tight sample before convergence is
 /// tested and may cancel. If minimization continues, all trials use Tight.
-/// ANC keeps its basis, curvature and trust radius. L-BFGS clears its history
-/// at the accuracy change.
+/// With `adaptive_accuracy`, Coarse and Normal trials are selected from the most
+/// recent accepted gradient. A switch refreshes the energy and gradient at that
+/// geometry before taking another step. Each reported ΔE belongs to the last
+/// displacement, evaluated at one accuracy. Convergence requires Normal or Tight.
+/// ANC keeps its curvature and radius across accuracy changes. DIIS and L-BFGS
+/// discard their histories.
 ///
-/// ANC starts from the projected Lindh curvature, flooring internal eigenvalues
-/// at 0.001 Eh/bohr². Davidson iteration finds the lowest augmented-Hessian
+/// By default ANC starts from the projected Lindh curvature, flooring internal
+/// eigenvalues at 0.001 Eh/bohr². Davidson iteration finds the lowest augmented-Hessian
 /// eigenvector, with a dense solve on nonconvergence. ANC scales the step
 /// to a Euclidean trust radius, initially 0.3 bohr. The rational prediction is
 /// (g·s + s·Hs/2)/(1 + s·s). Actual/predicted below 0.25 quarters the radius
@@ -409,8 +533,8 @@ impl Engine {
 /// Nonpositive curvature or a non-descent direction clears the history.
 ///
 /// A callback break, failed trial, or failed accuracy change returns the last
-/// accepted point. All potential calls count as evaluations. Only accepted
-/// displacements count toward `max_steps`.
+/// accepted point. Energy/gradient and Hessian calls have separate counts.
+/// Only accepted displacements count toward `max_steps`.
 pub fn optimize<P: Potential + ?Sized>(
     potential: &mut P,
     numbers: &[u8],
@@ -425,6 +549,7 @@ pub fn optimize<P: Potential + ?Sized>(
         gradient: vec![f64::NAN; positions.len()],
         steps: 0,
         evaluations: 0,
+        hessian_evaluations: 0,
         method: options.method,
         energies: Vec::new(),
     };
@@ -438,8 +563,13 @@ pub fn optimize<P: Potential + ?Sized>(
     let mut eval = Evaluator {
         potential,
         coords,
-        accuracy: Accuracy::Normal,
+        accuracy: if options.adaptive_accuracy {
+            Accuracy::Coarse
+        } else {
+            Accuracy::Normal
+        },
         count: 0,
+        hessian_count: 0,
     };
     let mut point = match eval.evaluate(positions.to_vec()) {
         Ok(p) => p,
@@ -449,27 +579,55 @@ pub fn optimize<P: Potential + ?Sized>(
             return out;
         }
     };
-    let mut engine = Engine::new(options.method);
+    let mut engine = Engine::new(options);
+    let request_hessian = options.method == Method::AncRfo
+        && match options.initial_hessian {
+            InitialHessian::Model => false,
+            InitialHessian::Potential => true,
+            InitialHessian::Auto { max_atoms } => numbers.len() <= max_atoms,
+        };
     let criteria = options.level.criteria();
     let mut motion = Motion::default();
     let mut radius = 0.3;
+    let mut new_geometry = true;
     out.energies.push(point.energy);
     out.status = loop {
         let info = point.step(out.steps, motion, radius, eval.accuracy);
         if on_step(&info).is_break() {
             break Status::Cancelled;
         }
-        if info.converged(criteria) {
+        if request_hessian && out.steps == 0 && new_geometry {
+            engine.initial_hessian = match eval.hessian(&point.positions) {
+                Ok(h) => h,
+                Err(status) => break status,
+            };
+        }
+        // Choose once per accepted geometry. A noisy replacement gradient can lie
+        // across the cutoff; use its accuracy for the next trial before reconsidering.
+        let next_accuracy = if info.converged(criteria) {
             if !options.tight_final || eval.accuracy == Accuracy::Tight {
                 break Status::Converged;
             }
-            eval.accuracy = Accuracy::Tight;
+            Accuracy::Tight
+        } else if new_geometry && options.adaptive_accuracy && eval.accuracy != Accuracy::Tight {
+            if info.max_gradient > 20. * criteria.max_gradient {
+                Accuracy::Coarse
+            } else {
+                Accuracy::Normal
+            }
+        } else {
+            eval.accuracy
+        };
+        if next_accuracy != eval.accuracy {
+            eval.accuracy = next_accuracy;
             point = match eval.evaluate(point.positions.clone()) {
                 Ok(p) => p,
                 Err(status) => break status,
             };
             out.energies[out.steps] = point.energy;
             engine.lbfgs.clear();
+            engine.history.clear();
+            new_geometry = false;
             continue;
         }
         if out.steps == options.max_steps {
@@ -480,12 +638,14 @@ pub fn optimize<P: Potential + ?Sized>(
             Err(status) => break status,
         }
         out.steps += 1;
+        new_geometry = true;
         out.energies.push(point.energy);
     };
     out.positions = point.positions;
     out.energy = point.energy;
     out.gradient = point.gradient;
     out.evaluations = eval.count;
+    out.hessian_evaluations = eval.hessian_count;
     out.method = engine.method;
     out
 }

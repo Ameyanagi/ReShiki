@@ -8,15 +8,16 @@ use std::collections::HashMap;
 // and T. Helgaker, J. Chem. Phys. 117, 9160–9174 (2002),
 // doi:10.1063/1.1515483 (author copy: trygvehelgaker.no/Publications/
 // JChemPhys_117_09160_2002.pdf). No implementation source was used.
-const ALPHA: [[f64; 3]; 3] = [
+pub(crate) const ALPHA: [[f64; 3]; 3] = [
     [1.0, 0.3949, 0.3949],
     [0.3949, 0.28, 0.28],
     [0.3949, 0.28, 0.28],
 ];
-const R_REF: [[f64; 3]; 3] = [[1.35, 2.10, 2.53], [2.10, 2.87, 3.40], [2.53, 3.40, 3.40]];
-const STRETCH: f64 = 0.45;
-const BEND: f64 = 0.15;
-const TORSION: f64 = 0.005;
+pub(crate) const R_REF: [[f64; 3]; 3] =
+    [[1.35, 2.10, 2.53], [2.10, 2.87, 3.40], [2.53, 3.40, 3.40]];
+pub(crate) const STRETCH: f64 = 0.45;
+pub(crate) const BEND: f64 = 0.15;
+pub(crate) const TORSION: f64 = 0.005;
 
 // Numerical pruning choices, rather than fitted parameters. Discard bends and
 // torsions within one degree of collinearity, where their coordinates become
@@ -149,7 +150,7 @@ pub(crate) fn model_hessian(numbers: &[u8], positions: &[f64]) -> Result<Vec<f64
     Ok(hessian)
 }
 
-fn period(number: u8) -> usize {
+pub(crate) fn period(number: u8) -> usize {
     match number {
         1..=2 => 0,
         3..=10 => 1,

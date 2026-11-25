@@ -179,7 +179,7 @@ impl AugmentedHessian<'_> {
         Some(correction)
     }
 
-    fn dense_lowest_eigenvector(&self) -> Option<Vec<f64>> {
+    pub(super) fn dense_lowest_eigenvector(&self) -> Option<Vec<f64>> {
         let n = self.gradient.len();
         let stride = n + 1;
         let mut matrix = vec![0.; stride * stride];

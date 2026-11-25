@@ -176,6 +176,19 @@ impl<P: Potential> Potential for FixedGuard<P> {
         gradient: &mut [f64],
         accuracy: Accuracy,
     ) -> Result<f64, EvalError> {
+        self.assert_fixed(positions);
+        self.evaluations += 1;
+        self.inner.evaluate(positions, gradient, accuracy)
+    }
+
+    fn hessian(&mut self, positions: &[f64], hessian: &mut [f64]) -> Option<Result<(), EvalError>> {
+        self.assert_fixed(positions);
+        self.inner.hessian(positions, hessian)
+    }
+}
+
+impl<P> FixedGuard<P> {
+    fn assert_fixed(&self, positions: &[f64]) {
         for &atom in &self.atoms {
             let start = 3 * atom;
             for (axis, (&actual, &initial)) in positions[start..start + 3]
@@ -192,9 +205,23 @@ impl<P: Potential> Potential for FixedGuard<P> {
                 );
             }
         }
-        self.evaluations += 1;
-        self.inner.evaluate(positions, gradient, accuracy)
     }
+}
+
+fn optimizer_variants() -> impl Iterator<Item = (Method, Update, Acceleration)> {
+    std::iter::once((Method::Lbfgs, Update::Bfgs, Acceleration::None)).chain(
+        [Update::Bfgs, Update::DampedBfgs, Update::Bofill]
+            .into_iter()
+            .flat_map(|update| {
+                [
+                    Acceleration::None,
+                    Acceleration::Gdiis,
+                    Acceleration::Gediis,
+                ]
+                .into_iter()
+                .map(move |acceleration| (Method::AncRfo, update, acceleration))
+            }),
+    )
 }
 
 fn atom(positions: &[Jet], index: usize) -> [Jet; 3] {
@@ -244,18 +271,18 @@ fn values(positions: &[f64]) -> Vec<Jet> {
     positions.iter().copied().map(Jet::constant).collect()
 }
 
-fn assert_converged(outcome: &Outcome, method: Method) {
+fn assert_converged(outcome: &Outcome, options: &Options) {
     assert_eq!(
         outcome.status,
         Status::Converged,
-        "{method:?}: status {:?}, steps {}, energy {}",
+        "{options:?}: status {:?}, steps {}, energy {}",
         outcome.status,
         outcome.steps,
         outcome.energy
     );
     assert_eq!(
-        outcome.method, method,
-        "{method:?} benchmark converged through an unexpected fallback"
+        outcome.method, options.method,
+        "{options:?}: benchmark converged through an unexpected fallback"
     );
     assert!(
         outcome
@@ -314,13 +341,135 @@ fn harmonic_constrained_minimum(initial: &[f64]) -> [f64; 3] {
     })
 }
 
+#[derive(Default)]
+struct CoupledHarmonic {
+    gradient_evaluations: usize,
+    hessian_evaluations: usize,
+}
+
+impl Potential for CoupledHarmonic {
+    fn evaluate(
+        &mut self,
+        positions: &[f64],
+        gradient: &mut [f64],
+        accuracy: Accuracy,
+    ) -> Result<f64, EvalError> {
+        self.gradient_evaluations += 1;
+        AnalyticPotential {
+            energy: coupled_harmonic_energy,
+        }
+        .evaluate(positions, gradient, accuracy)
+    }
+
+    fn hessian(&mut self, positions: &[f64], hessian: &mut [f64]) -> Option<Result<(), EvalError>> {
+        assert_eq!(positions.len(), 9);
+        assert_eq!(hessian.len(), 81);
+        self.hessian_evaluations += 1;
+        hessian.fill(0.0);
+        for i in 0..6 {
+            hessian[i * 9 + i] = 5.0 + i as f64;
+        }
+        for i in 0..3 {
+            for j in 0..3 {
+                hessian[(6 + i) * 9 + 6 + j] = FREE_HESSIAN[i][j];
+            }
+            for j in 0..6 {
+                hessian[(6 + i) * 9 + j] = ANCHOR_COUPLING[i][j];
+                hessian[j * 9 + 6 + i] = ANCHOR_COUPLING[i][j];
+            }
+        }
+        Some(Ok(()))
+    }
+}
+
+fn run_coupled_harmonic_with_hessian(initial_hessian: InitialHessian) -> Outcome {
+    let initial = [0.0, -0.0, 0.0, 2.4, 0.2, 0.1, 0.4, 2.7, -0.3];
+    let expected = harmonic_constrained_minimum(&initial);
+    let mut potential = FixedGuard {
+        inner: CoupledHarmonic::default(),
+        initial: initial.to_vec(),
+        atoms: vec![0, 1],
+        evaluations: 0,
+    };
+    let options = Options {
+        initial_hessian,
+        level: Level::Tight,
+        fixed_atoms: vec![0, 1],
+        ..Options::default()
+    };
+    let outcome = optimize(&mut potential, &[6, 6, 6], &initial, &options, |step| {
+        assert_fixed_anchors(step.positions, &initial);
+        ControlFlow::Continue(())
+    });
+    assert_converged(&outcome, &options);
+    assert_fixed_anchors(&outcome.positions, &initial);
+    for (actual, expected) in outcome.positions[6..].iter().zip(expected) {
+        assert!(
+            (actual - expected).abs() < 1.0e-6,
+            "{initial_hessian:?}: {:?}, expected {expected}",
+            outcome.positions
+        );
+    }
+    let mut minimum = initial;
+    minimum[6..].copy_from_slice(&expected);
+    let minimum_energy = coupled_harmonic_energy(&values(&minimum)).value;
+    assert!((outcome.energy - minimum_energy).abs() < 1.0e-11);
+    assert!(
+        outcome.gradient[..6]
+            .iter()
+            .any(|value| value.abs() > 1.0e-2)
+    );
+    assert_eq!(outcome.evaluations, potential.evaluations);
+    assert_eq!(outcome.evaluations, potential.inner.gradient_evaluations);
+    assert_eq!(
+        outcome.hessian_evaluations,
+        potential.inner.hessian_evaluations
+    );
+    outcome
+}
+
+fn assert_fixed_anchors(positions: &[f64], initial: &[f64]) {
+    for (actual, initial) in positions[..6].iter().zip(&initial[..6]) {
+        assert_eq!(actual.to_bits(), initial.to_bits());
+    }
+}
+
+#[test]
+fn exact_coupled_harmonic_hessian_uses_fewer_gradient_evaluations_than_lindh() {
+    let model = run_coupled_harmonic_with_hessian(InitialHessian::Model);
+    let potential = run_coupled_harmonic_with_hessian(InitialHessian::Potential);
+    assert_eq!(model.hessian_evaluations, 0);
+    assert_eq!(potential.hessian_evaluations, 1);
+    assert!(
+        potential.evaluations < model.evaluations,
+        "exact Hessian used {} gradients, Lindh used {}",
+        potential.evaluations,
+        model.evaluations
+    );
+}
+
+#[test]
+fn automatic_hessian_threshold_counts_all_atoms_including_fixed_anchors() {
+    let model = run_coupled_harmonic_with_hessian(InitialHessian::Model);
+    let above_threshold = run_coupled_harmonic_with_hessian(InitialHessian::Auto { max_atoms: 2 });
+    assert_eq!(above_threshold.hessian_evaluations, 0);
+    assert_eq!(above_threshold.evaluations, model.evaluations);
+    assert_eq!(above_threshold.positions, model.positions);
+
+    let potential = run_coupled_harmonic_with_hessian(InitialHessian::Potential);
+    let at_threshold = run_coupled_harmonic_with_hessian(InitialHessian::Auto { max_atoms: 3 });
+    assert_eq!(at_threshold.hessian_evaluations, 1);
+    assert_eq!(at_threshold.evaluations, potential.evaluations);
+    assert_eq!(at_threshold.positions, potential.positions);
+}
+
 #[test]
 fn unanchored_coupled_harmonic_reaches_known_cartesian_coordinates() {
     let reference = [-2.25, 0.0, 0.0, 0.25, 0.0, 0.0, 2.0, 0.0, 0.0];
     let initial = [-2.75, 0.0, 0.0, -0.5, 0.0, 0.0, 3.25, 0.0, 0.0];
     // Zero-centroid axial displacements stay perpendicular to all rigid modes.
     // Distinct stretch curvatures and their coupling move all three atoms.
-    for method in [Method::AncRfo, Method::Lbfgs] {
+    for (method, update, acceleration) in optimizer_variants() {
         let mut potential = AnalyticPotential {
             energy: |positions: &[Jet]| {
                 let displacement: [Jet; 9] = std::array::from_fn(|i| positions[i] - reference[i]);
@@ -337,6 +486,8 @@ fn unanchored_coupled_harmonic_reaches_known_cartesian_coordinates() {
         };
         let options = Options {
             method,
+            update,
+            acceleration,
             level: Level::Tight,
             max_steps: 200,
             ..Options::default()
@@ -344,7 +495,7 @@ fn unanchored_coupled_harmonic_reaches_known_cartesian_coordinates() {
         let outcome = optimize(&mut potential, &[6, 6, 6], &initial, &options, |_| {
             ControlFlow::Continue(())
         });
-        assert_converged(&outcome, method);
+        assert_converged(&outcome, &options);
         for (&actual, expected) in outcome.positions.iter().zip(reference) {
             assert!(
                 (actual - expected).abs() < 1.0e-5,
@@ -362,7 +513,7 @@ fn coupled_anisotropic_harmonic_reaches_the_constrained_minimum() {
     let initial = [0.0, -0.0, 0.0, 2.4, 0.2, 0.1, 0.4, 2.7, -0.3];
     let expected = harmonic_constrained_minimum(&initial);
     assert!((expected[2] - HARMONIC_REFERENCE[8]).abs() > 1.0e-3);
-    for method in [Method::AncRfo, Method::Lbfgs] {
+    for (method, update, acceleration) in optimizer_variants() {
         let mut potential = FixedGuard {
             inner: AnalyticPotential {
                 energy: coupled_harmonic_energy,
@@ -373,6 +524,8 @@ fn coupled_anisotropic_harmonic_reaches_the_constrained_minimum() {
         };
         let options = Options {
             method,
+            update,
+            acceleration,
             level: Level::Tight,
             max_steps: 400,
             fixed_atoms: vec![0, 1],
@@ -381,7 +534,7 @@ fn coupled_anisotropic_harmonic_reaches_the_constrained_minimum() {
         let outcome = optimize(&mut potential, &[6, 6, 6], &initial, &options, |_| {
             ControlFlow::Continue(())
         });
-        assert_converged(&outcome, method);
+        assert_converged(&outcome, &options);
         for (&actual, &original) in outcome.positions[..6].iter().zip(&initial[..6]) {
             assert_eq!(actual.to_bits(), original.to_bits());
         }
@@ -393,6 +546,7 @@ fn coupled_anisotropic_harmonic_reaches_the_constrained_minimum() {
             );
         }
         assert!(potential.evaluations > 2);
+        assert_eq!(outcome.evaluations, potential.evaluations);
         let mut gradient = [0.0; 9];
         potential
             .evaluate(&outcome.positions, &mut gradient, Accuracy::Tight)
@@ -411,7 +565,7 @@ fn rosenbrock_energy(positions: &[Jet]) -> Jet {
 #[test]
 fn both_methods_follow_a_coupled_rosenbrock_valley() {
     let initial = [-3.0, -0.0, 0.0, -3.0, 2.0, 0.0, -1.1, 1.2, 0.2];
-    for method in [Method::AncRfo, Method::Lbfgs] {
+    for (method, update, acceleration) in optimizer_variants() {
         let mut potential = FixedGuard {
             inner: AnalyticPotential {
                 energy: rosenbrock_energy,
@@ -422,6 +576,8 @@ fn both_methods_follow_a_coupled_rosenbrock_valley() {
         };
         let options = Options {
             method,
+            update,
+            acceleration,
             level: Level::Tight,
             max_steps: 800,
             fixed_atoms: vec![0, 1],
@@ -430,7 +586,7 @@ fn both_methods_follow_a_coupled_rosenbrock_valley() {
         let outcome = optimize(&mut potential, &[6, 6, 6], &initial, &options, |_| {
             ControlFlow::Continue(())
         });
-        assert_converged(&outcome, method);
+        assert_converged(&outcome, &options);
         for (actual, expected) in outcome.positions[6..].iter().zip([1.0, 1.0, 0.5]) {
             assert!(
                 (actual - expected).abs() < 1.0e-4,
@@ -479,12 +635,14 @@ fn chain_geometry(bonds: [f64; 3], angles: [f64; 2], phi: f64) -> [f64; 12] {
 #[test]
 fn a_stiff_four_atom_chain_relaxes_to_a_staggered_torsion() {
     let initial = chain_geometry([2.95, 2.62, 2.90], [1.78, 2.04], 0.43);
-    for method in [Method::AncRfo, Method::Lbfgs] {
+    for (method, update, acceleration) in optimizer_variants() {
         let mut potential = AnalyticPotential {
             energy: torsion_energy,
         };
         let options = Options {
             method,
+            update,
+            acceleration,
             level: Level::Tight,
             max_steps: 600,
             ..Options::default()
@@ -492,7 +650,7 @@ fn a_stiff_four_atom_chain_relaxes_to_a_staggered_torsion() {
         let outcome = optimize(&mut potential, &[6; 4], &initial, &options, |_| {
             ControlFlow::Continue(())
         });
-        assert_converged(&outcome, method);
+        assert_converged(&outcome, &options);
         let geometry = values(&outcome.positions);
         for first in 0..3 {
             assert!((distance(&geometry, first, first + 1).value - TORSION_BOND).abs() < 1.0e-4);
@@ -529,13 +687,15 @@ fn linear_and_bent_carbon_dioxide_geometries_converge() {
         [-2.5, 0.0, 0.0, 0.1, 0.0, 0.0, 2.0, 0.0, 0.0],
         [-2.2, 0.3, 0.1, 0.1, -0.2, 0.0, 2.0, 0.4, -0.1],
     ];
-    for method in [Method::AncRfo, Method::Lbfgs] {
+    for (method, update, acceleration) in optimizer_variants() {
         for initial in initial_geometries {
             let mut potential = AnalyticPotential {
                 energy: carbon_dioxide_energy,
             };
             let options = Options {
                 method,
+                update,
+                acceleration,
                 level: Level::Tight,
                 max_steps: 400,
                 ..Options::default()
@@ -543,7 +703,7 @@ fn linear_and_bent_carbon_dioxide_geometries_converge() {
             let outcome = optimize(&mut potential, &[8, 6, 8], &initial, &options, |_| {
                 ControlFlow::Continue(())
             });
-            assert_converged(&outcome, method);
+            assert_converged(&outcome, &options);
             let geometry = values(&outcome.positions);
             for end in [0, 2] {
                 assert!((distance(&geometry, end, 1).value - 2.2).abs() < 1.0e-4);
@@ -567,12 +727,14 @@ fn disconnected_fragments_relax_without_a_linking_potential() {
     let initial = [
         -7.2, 0.2, 0.1, -4.7, -0.3, 0.0, 5.2, 1.0, 0.4, 6.8, 1.8, -0.2,
     ];
-    for method in [Method::AncRfo, Method::Lbfgs] {
+    for (method, update, acceleration) in optimizer_variants() {
         let mut potential = AnalyticPotential {
             energy: disconnected_energy,
         };
         let options = Options {
             method,
+            update,
+            acceleration,
             level: Level::Tight,
             max_steps: 400,
             ..Options::default()
@@ -580,7 +742,7 @@ fn disconnected_fragments_relax_without_a_linking_potential() {
         let outcome = optimize(&mut potential, &[1, 1, 17, 17], &initial, &options, |_| {
             ControlFlow::Continue(())
         });
-        assert_converged(&outcome, method);
+        assert_converged(&outcome, &options);
         let geometry = values(&outcome.positions);
         assert!((distance(&geometry, 0, 1).value - 1.8).abs() < 1.0e-5);
         assert!((distance(&geometry, 2, 3).value - 2.6).abs() < 1.0e-5);

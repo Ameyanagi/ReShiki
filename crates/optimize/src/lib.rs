@@ -8,10 +8,16 @@
 
 pub mod conformers;
 mod linalg;
+
+#[allow(dead_code)]
+mod internal;
 mod model_hessian;
 mod optimizer;
 
-pub use optimizer::{Criteria, Level, Method, Options, Outcome, Status, Step, optimize};
+pub use optimizer::{
+    Acceleration, Criteria, InitialHessian, Level, Method, Options, Outcome, Status, Step, Update,
+    optimize,
+};
 
 /// Hartree in kcal/mol (CODATA 2022 hartree, thermochemical calorie).
 pub const KCAL_PER_HARTREE: f64 = 627.509_474_063;
@@ -20,12 +26,15 @@ pub use reshiki_qcdata::ANGSTROM_PER_BOHR;
 
 /// Accuracy a potential should use for one evaluation.
 ///
-/// Optimization starts at `Normal`. With [`Options::tight_final`] enabled, the
+/// Optimization starts at `Normal`, or `Coarse` with [`Options::adaptive_accuracy`].
+/// With [`Options::tight_final`] enabled, the
 /// optimizer switches to `Tight` once the criteria are met and keeps stepping
 /// until a fresh `Tight` evaluation also meets them. Potentials without an
 /// adjustable accuracy (force fields, analytic test functions) ignore it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Accuracy {
+    /// Looser early SCF convergence. Potentials with fixed accuracy treat this as `Normal`.
+    Coarse,
     /// Ordinary accuracy for optimization steps.
     Normal,
     /// Tighter accuracy (for xTB: tighter SCF convergence) for the final geometry.
@@ -65,4 +74,14 @@ pub trait Potential {
         gradient: &mut [f64],
         accuracy: Accuracy,
     ) -> Result<f64, EvalError>;
+
+    /// Write the Cartesian Hessian in hartree/bohr² at `positions` into the sized,
+    /// row-major 3N × 3N buffer, in the same atom order. Return `None` if unavailable.
+    fn hessian(
+        &mut self,
+        _positions: &[f64],
+        _hessian: &mut [f64],
+    ) -> Option<Result<(), EvalError>> {
+        None
+    }
 }

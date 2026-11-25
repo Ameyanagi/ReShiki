@@ -262,6 +262,7 @@ fn tight_resume_preserves_anc_curvature_and_radius_but_clears_lbfgs_history() {
         let mut p = surface(|_, g, a| {
             g.fill(0.);
             let (calls, initial_gradient, offset) = match a {
+                Accuracy::Coarse => unreachable!("adaptive accuracy is disabled"),
                 Accuracy::Normal => (&mut normal_calls, 0.2, 1.),
                 Accuracy::Tight => (&mut tight_calls, 0.01, -1.),
             };
@@ -310,6 +311,7 @@ fn tight_failure_keeps_the_normal_sample() {
     let mut p = surface(|_, g, a| {
         g.fill(0.);
         match a {
+            Accuracy::Coarse => unreachable!("adaptive accuracy is disabled"),
             Accuracy::Normal => Ok(3.),
             Accuracy::Tight => Err(EvalError::Scf("tight".into())),
         }
@@ -559,4 +561,210 @@ fn tight_final_uses_the_last_displacement_and_same_accuracy_energy_difference() 
     assert!((rms - 4e-5 / 3f64.sqrt()).abs() < 1e-18);
     assert!(de.abs() < Level::Normal.criteria().energy);
     assert_eq!(result.energy, 100. + result.positions[3] * 4e-5);
+}
+
+#[test]
+fn unavailable_hessian_reproduces_the_model_run() {
+    let run = |initial_hessian| {
+        let mut p = surface(|x, g, _| Ok(well(x, g)));
+        let options = Options {
+            initial_hessian,
+            ..anchored(Method::AncRfo)
+        };
+        optimize(&mut p, &[1, 1], &INITIAL, &options, proceed)
+    };
+    let model = run(InitialHessian::Model);
+    let requested = run(InitialHessian::Potential);
+    assert_eq!(model.hessian_evaluations, 0);
+    assert_eq!(
+        requested,
+        Outcome {
+            hessian_evaluations: 1,
+            ..model
+        }
+    );
+}
+
+#[test]
+fn rejected_short_diis_step_retries_rfo_at_the_radius_floor() {
+    let options = Options {
+        acceleration: Acceleration::Gdiis,
+        ..anchored(Method::AncRfo)
+    };
+    let mut engine = Engine::new(&options);
+    let mut trials = Vec::new();
+    let mut p = surface(|x, g, _| {
+        trials.push(x.to_vec());
+        g.fill(0.);
+        Ok(if trials.len() == 1 { 1. } else { -1. })
+    });
+    let mut eval = Evaluator {
+        potential: &mut p,
+        coords: Coordinates::new(&[1, 1], &[0.; 6], &[0]).unwrap(),
+        accuracy: Accuracy::Normal,
+        count: 0,
+        hessian_count: 0,
+    };
+    let point = |x: [f64; 3], g: [f64; 3]| Point {
+        positions: [[0.; 3], x].concat(),
+        gradient: [[0.; 3], g].concat(),
+        active_gradient: g.to_vec(),
+        energy: 0.,
+        rigid: Vec::new(),
+    };
+    let d = 5e-4;
+    let current = point([0.; 3], [0., 0., d]);
+    let mut h = vec![0.; 36];
+    for i in 0..6 {
+        h[i * 6 + i] = 1.;
+    }
+    let anc = Anc::build(&[1, 1], &eval.coords, &current, 0, None, Some(h)).unwrap();
+    for sample in [
+        point([d, 0., -d], [d, 0., 0.]),
+        point([0., d, -d], [0., d, 0.]),
+    ] {
+        engine.history.push(&anc, &sample, &eval.coords);
+    }
+    engine.anc = Some(anc);
+    let (_, radius) = engine
+        .search_anc(&mut eval, &[1, 1], &current, 2)
+        .unwrap()
+        .unwrap();
+    drop(p);
+    assert_eq!(radius, 1e-3);
+    assert_eq!(trials.len(), 2);
+    assert!((trials[0][5] + d).abs() < 1e-15);
+    assert!(trials[1][5] > trials[0][5]); // The ordinary RFO step is shorter.
+}
+
+#[test]
+fn hessian_failures_preserve_the_initial_energy_and_gradient() {
+    struct BrokenHessian(Option<EvalError>);
+    impl Potential for BrokenHessian {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            Ok(well(x, g))
+        }
+        fn hessian(&mut self, x: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+            assert_eq!(x, INITIAL);
+            assert_eq!(h.len(), x.len() * x.len());
+            // A successful return with an unwritten matrix must also fail.
+            Some(self.0.take().map_or(Ok(()), Err))
+        }
+    }
+    for (error, status) in [
+        (Some(EvalError::Cancelled), Status::Cancelled),
+        (
+            Some(EvalError::Scf("scf".into())),
+            Status::ScfFailure("scf".into()),
+        ),
+        (
+            Some(EvalError::Failed("worker".into())),
+            Status::Failed("worker".into()),
+        ),
+        (None, Status::Failed("non-finite potential Hessian".into())),
+    ] {
+        let options = Options {
+            initial_hessian: InitialHessian::Potential,
+            ..anchored(Method::AncRfo)
+        };
+        let out = optimize(
+            &mut BrokenHessian(error),
+            &[1, 1],
+            &INITIAL,
+            &options,
+            proceed,
+        );
+        assert_eq!(out.status, status);
+        assert_eq!(
+            (out.steps, out.evaluations, out.hessian_evaluations),
+            (0, 1, 1)
+        );
+        assert_eq!(out.positions, INITIAL);
+        assert_eq!(out.gradient, INITIAL);
+        assert_eq!(out.energies, [0.5 * dot(&INITIAL, &INITIAL)]);
+    }
+}
+
+#[test]
+fn adaptive_accuracy_uses_one_energy_scale_per_displacement() {
+    for method in [Method::AncRfo, Method::Lbfgs] {
+        for tight_final in [false, true] {
+            let energy = |x: &[f64], accuracy| {
+                let (center, offset) = match accuracy {
+                    Accuracy::Coarse => (0., -100.),
+                    Accuracy::Normal => (0.004, 100.),
+                    Accuracy::Tight => (0.004, 200.),
+                };
+                offset + 0.5 * (x[3] - center).powi(2)
+            };
+            let mut calls = Vec::new();
+            let mut p = surface(|x, g, a| {
+                calls.push((x.to_vec(), a));
+                g.fill(0.);
+                g[0] = 10.; // Fixed-atom forces do not set accuracy.
+                g[3] = x[3] - if a == Accuracy::Coarse { 0. } else { 0.004 };
+                Ok(energy(x, a))
+            });
+            let options = Options {
+                adaptive_accuracy: true,
+                tight_final,
+                ..anchored(method)
+            };
+            let mut previous: Option<(usize, Vec<f64>, Accuracy, f64)> = None;
+            let mut transitions = Vec::new();
+            let out = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
+                if let Some((index, x, accuracy, delta)) = &previous {
+                    if *index == s.index {
+                        assert_eq!(x, s.positions);
+                        assert_eq!(*delta, s.delta_energy);
+                        transitions.push((*accuracy, s.accuracy));
+                    } else {
+                        assert_eq!(*accuracy, s.accuracy);
+                        assert_eq!(s.delta_energy, s.energy - energy(x, s.accuracy));
+                    }
+                }
+                previous = Some((s.index, s.positions.to_vec(), s.accuracy, s.delta_energy));
+                proceed(s)
+            });
+            drop(p);
+            assert_eq!(out.status, Status::Converged);
+            assert_eq!(out.evaluations, calls.len());
+            assert_eq!(calls[0].1, Accuracy::Coarse);
+            assert_eq!(transitions[0], (Accuracy::Coarse, Accuracy::Normal));
+            assert_eq!(
+                previous.unwrap().2,
+                if tight_final {
+                    Accuracy::Tight
+                } else {
+                    Accuracy::Normal
+                }
+            );
+            assert!((out.positions[3] - 0.004).abs() < 1e-5);
+        }
+    }
+}
+
+#[test]
+fn apparently_stationary_coarse_input_requires_a_normal_gradient() {
+    let mut calls = Vec::new();
+    let mut p = surface(|x, g, a| {
+        calls.push(a);
+        g.fill(0.);
+        if a == Accuracy::Normal {
+            g[3] = 1.;
+        }
+        Ok(x[3] * g[3])
+    });
+    let options = Options {
+        adaptive_accuracy: true,
+        tight_final: false,
+        max_steps: 0,
+        ..anchored(Method::AncRfo)
+    };
+    let out = optimize(&mut p, &[1, 1], &INITIAL, &options, proceed);
+    drop(p);
+    assert_eq!(calls, [Accuracy::Coarse, Accuracy::Normal]);
+    assert_eq!(out.status, Status::MaxSteps);
+    assert_eq!(out.gradient[3], 1.);
+    assert_eq!(out.energies, [INITIAL[3]]);
 }

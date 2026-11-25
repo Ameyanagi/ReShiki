@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::model_hessian::model_hessian;
-use crate::optimizer::{Coordinates, Point, anc::Anc};
+use crate::optimizer::{Coordinates, Point, Update, anc::Anc};
 
 // An all-trans n-hexane geometry with tetrahedral C/H directions, in bohr.
 // Twenty atoms leave 54 internal modes, exceeding Davidson's subspace size.
@@ -39,7 +39,7 @@ fn small_gradient_lindh_anc_with_bfgs_updates_converges_without_dense_fallback()
         energy: 0.,
         positions,
     };
-    let mut anc = Anc::build(&numbers, &coordinates, &point, 0, None).unwrap();
+    let mut anc = Anc::build(&numbers, &coordinates, &point, 0, None, None).unwrap();
     let dim = anc.hessian.len().isqrt();
     assert!(dim > MAX_SUBSPACE);
 
@@ -63,7 +63,7 @@ fn small_gradient_lindh_anc_with_bfgs_updates_converges_without_dense_fallback()
         let s = anc.to_anc(&displacement);
         let y = anc.to_anc(&gradient_change);
         assert!(dot(&s, &y) > 1e-12 * norm(&s) * norm(&y));
-        anc.update(&displacement, &gradient_change);
+        anc.update(&displacement, &gradient_change, Update::Bfgs);
     }
     assert!(
         anc.hessian
