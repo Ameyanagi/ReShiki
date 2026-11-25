@@ -257,7 +257,9 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<CalcRequest, OpEr
             fragment_charges: Vec::new(),
         }),
         threads: args.threads,
-        convergence: args.convergence.unwrap_or_default(),
+        convergence: tasks
+            .contains(&Task::Optimize)
+            .then(|| args.convergence.unwrap_or(Convergence::Normal)),
         fixed_atoms,
     };
     for &task in tasks {
