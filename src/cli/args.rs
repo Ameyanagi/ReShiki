@@ -480,6 +480,11 @@ fn ts(options: &Options) -> Result<Command, String> {
     let reactant = path("--reactant", options.reactant.as_deref())?;
     let product = path("--product", options.product.as_deref())?;
     let has_edits = !options.form.is_empty() || !options.break_.is_empty();
+    if options.remap_hydrogens && has_edits {
+        return Err(
+            "--remap-hydrogens requires two XYZ endpoints without --form or --break".into(),
+        );
+    }
     match (&reactant, &product, has_edits) {
         (None, None, _) => return Err("ts needs --reactant or --product".into()),
         (Some(_), Some(_), true) => {

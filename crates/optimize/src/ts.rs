@@ -146,9 +146,11 @@ pub struct TsReport {
     pub neb_converged: bool,
     pub climbing_image: usize,
     pub ts: Minimum,
-    /// Whether P-RFO met the Normal projected gradient tolerances and its followed-mode
+    /// Whether P-RFO met the Normal projected gradient tolerances and its IRC launch-mode
     /// Newton displacement was below one tenth of the mass-weighted IRC step.
     pub saddle_converged: bool,
+    /// Rebuilt Cartesian Hessian at the fitted TS in Eh/bohr², stored row-major.
+    pub hessian: Vec<f64>,
     /// Ascending projected harmonic wavenumbers, with imaginary values negative.
     pub frequencies_cm1: Vec<f64>,
     /// Number of projected frequencies strictly below −[`IMAGINARY_CM1`].
@@ -158,6 +160,9 @@ pub struct TsReport {
     /// Branches along +transition_mode and −transition_mode, respectively.
     /// Present only for a converged candidate with one qualifying imaginary frequency.
     pub irc: Option<[IrcBranch; 2]>,
+    /// Failure during IRC verification after characterization. Cancellation is
+    /// returned as [`TsError::Cancelled`] instead of being recorded here.
+    pub irc_error: Option<String>,
     /// Whether the two relaxed IRC ends classify as the two requested endpoints.
     pub connects: bool,
     /// All energy/gradient calls, including central differences and minimizations.
@@ -393,9 +398,9 @@ pub fn search<P: Potential + Send>(
         .iter()
         .filter(|&&f| f < -IMAGINARY_CM1)
         .count();
-    let irc = if saddle_converged && imaginary == 1 {
+    let (irc, irc_error) = if saddle_converged && imaginary == 1 {
         emit(&mut on_event, Event::Stage(Stage::Irc))?;
-        Some(irc::branches(
+        match irc::branches(
             &mut pool[0],
             search,
             [&reactant, &product],
@@ -403,9 +408,13 @@ pub fn search<P: Potential + Send>(
             &hessian,
             &transition_mode,
             &mut on_event,
-        )?)
+        ) {
+            Ok(branches) => (Some(branches), None),
+            Err(TsError::Cancelled) => return Err(TsError::Cancelled),
+            Err(error) => (None, Some(error.to_string())),
+        }
     } else {
-        None
+        (None, None)
     };
     let connects = irc.as_ref().is_some_and(|[plus, minus]| {
         matches!(
@@ -421,10 +430,12 @@ pub fn search<P: Potential + Send>(
         climbing_image: band.climbing,
         ts,
         saddle_converged,
+        hessian,
         imaginary,
         frequencies_cm1,
         transition_mode,
         irc,
+        irc_error,
         connects,
         evaluations: pool.iter().map(|p| p.evaluations).sum(),
         hessians: pool.iter().map(|p| p.hessians).sum(),

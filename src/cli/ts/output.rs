@@ -70,9 +70,13 @@ mod report {
     use reshiki_optimize::ts::{IMAGINARY_CM1, TsReport};
     use reshiki_xtb_worker::protocol::Engine;
     use serde_json::json;
-    use std::{fs, io::Write, path::Path};
+    use std::{
+        fs,
+        io::Write,
+        path::{Path, PathBuf},
+    };
 
-    use crate::cli::ts::geometry::MovingHydrogen;
+    use crate::cli::ts::{geometry::MovingHydrogen, worker::HessianAnalysis};
 
     const XYZ_AND_HESS: [&str; 6] = [
         "reactant.xyz",
@@ -83,6 +87,31 @@ mod report {
         "ts.hess",
     ];
 
+    fn resolve_destination(path: &Path) -> std::io::Result<PathBuf> {
+        // Resolve existing symlinks and retain missing components, since the
+        // output directory and its files may all be new.
+        match path.canonicalize() {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let Some(parent) = path.parent() else {
+                    return Err(error);
+                };
+                let mut resolved = resolve_destination(parent)?;
+                if let Some(name) = path.file_name() {
+                    resolved.push(name);
+                } else {
+                    // `absolute` and `Path` iteration omit redundant dots and
+                    // separators. The remaining component is `..`.
+                    resolved.pop();
+                }
+                match resolved.canonicalize() {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(resolved),
+                    result => result,
+                }
+            }
+            result => result,
+        }
+    }
+
     pub(in crate::cli::ts) fn check_destinations(command: &Ts) -> Result<(), String> {
         let vacant = |path: &Path| match fs::symlink_metadata(path) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -90,14 +119,27 @@ mod report {
             Ok(_) => Err(format!("{} already exists", path.display())),
         };
         if let Some(dir) = &command.out_dir {
-            for name in XYZ_AND_HESS {
-                let target = dir.join(name);
-                if command.json.as_ref() == Some(&target) {
+            let targets = XYZ_AND_HESS.map(|name| dir.join(name));
+            if let Some(json) = &command.json {
+                let resolve = |path: &Path| {
+                    std::path::absolute(path)
+                        .and_then(|path| resolve_destination(&path))
+                        .map_err(|error| format!("cannot resolve {}: {error}", path.display()))
+                };
+                let json = resolve(json)?;
+                for target in
+                    std::iter::once(dir.as_path()).chain(targets.iter().map(PathBuf::as_path))
+                {
+                    if json != resolve(target)? {
+                        continue;
+                    }
                     return Err(format!(
                         "--json and --out-dir both target {}",
                         target.display()
                     ));
                 }
+            }
+            for target in targets {
                 vacant(&target)?;
             }
         }
@@ -114,8 +156,7 @@ mod report {
         pub report: TsReport,
         pub engine: Engine,
         pub uhf: u32,
-        pub worker_frequencies: Vec<f64>,
-        pub worker_hessian: Vec<f64>,
+        pub worker_check: Result<HessianAnalysis, String>,
         pub iterations: usize,
         pub steps: usize,
         pub evaluations: usize,
@@ -166,11 +207,34 @@ mod report {
     }
 
     impl Summary<'_> {
+        fn worker_failure_reason(&self) -> Option<String> {
+            match &self.worker_check {
+                Err(reason) => Some(format!("worker check failed: {reason}")),
+                Ok(analysis) => {
+                    let worker = imaginary(&analysis.frequencies_cm1);
+                    (worker != self.report.imaginary).then(|| {
+                        format!(
+                            "engine/worker imaginary frequency counts disagree: engine {}, worker {worker}",
+                            self.report.imaginary
+                        )
+                    })
+                }
+            }
+        }
+
         pub fn failure_reason(&self) -> Option<String> {
-            skipped_irc_reason(self.report.saddle_converged, self.report.imaginary).or_else(|| {
-                (!self.report.connects)
-                    .then(|| "IRC did not connect the reactant and product".into())
-            })
+            self.worker_failure_reason()
+                .or_else(|| {
+                    self.report
+                        .irc_error
+                        .as_ref()
+                        .map(|reason| format!("IRC failed: {reason}"))
+                })
+                .or_else(|| skipped_irc_reason(self.report.saddle_converged, self.report.imaginary))
+                .or_else(|| {
+                    (!self.report.connects)
+                        .then(|| "IRC did not connect the reactant and product".into())
+                })
         }
 
         pub fn write_table(&self, out: &mut dyn Write) -> Result<(), CliError> {
@@ -184,8 +248,11 @@ mod report {
                         reached(minus.reached)
                     )
                 }
-                None => skipped_irc_reason(report.saddle_converged, report.imaginary)
-                    .map_or_else(|| "skipped".into(), |reason| format!("skipped ({reason})")),
+                None => match &report.irc_error {
+                    Some(reason) => format!("failed: {reason}"),
+                    None => skipped_irc_reason(report.saddle_converged, report.imaginary)
+                        .map_or_else(|| "skipped".into(), |reason| format!("skipped ({reason})")),
+                },
             };
             if let Some(branches) = &report.irc {
                 for (branch, mode) in branches.iter().zip(["+mode", "-mode"]) {
@@ -194,6 +261,20 @@ mod report {
                     }
                 }
             }
+            let worker_check = match &self.worker_check {
+                Ok(analysis) => {
+                    let mut text = format!(
+                        "worker check: {} · {}",
+                        imaginary(&analysis.frequencies_cm1),
+                        lowest(&analysis.frequencies_cm1)
+                    );
+                    if let Some(reason) = self.worker_failure_reason() {
+                        let _ = write!(text, " · {reason}");
+                    }
+                    text
+                }
+                Err(reason) => format!("worker check failed: {reason}"),
+            };
             let neb = if report.neb_converged {
                 "converged in"
             } else {
@@ -211,7 +292,7 @@ Reactant      {:.8} Eh\n\
 Product       {:.8} Eh\n\
 TS            {:.8} Eh\n\
 Barrier       forward {:.2} kcal/mol · reverse {:.2} kcal/mol\n\
-Imaginary     {} · {} (worker check: {} · {})\n\
+Imaginary     {} · {} ({worker_check})\n\
 IRC           {irc}\n\
 Path          {} images · NEB {neb} {} iterations · saddle {saddle} {} steps\n\
 Work          {} gradients · {} Hessians · {:.1} s",
@@ -227,8 +308,6 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 report.reverse_barrier_kcal(),
                 report.imaginary,
                 lowest(&report.frequencies_cm1),
-                imaginary(&self.worker_frequencies),
-                lowest(&self.worker_frequencies),
                 report.path.len(),
                 self.iterations,
                 self.steps,
@@ -269,8 +348,11 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 multiplicity: self.uhf + 1,
                 drawing_atoms: Vec::new(),
             };
-            let hessian =
-                write_orca_hess(&frame, &self.worker_hessian).map_err(|error| error.to_string())?;
+            let hessian = self
+                .worker_check
+                .as_ref()
+                .map_or(&report.hessian, |analysis| &analysis.hessian);
+            let hessian = write_orca_hess(&frame, hessian).map_err(|error| error.to_string())?;
             let single = |geometry: &Minimum, comment: String| {
                 let mut text = String::new();
                 xyz(&mut text, self.numbers, &geometry.positions, &comment);
@@ -341,8 +423,13 @@ Work          {} gradients · {} Hessians · {:.1} s",
                     "reverse": report.reverse_barrier_kcal(),
                 },
                 "frequencies_cm1": report.frequencies_cm1,
-                "worker_frequencies_cm1": self.worker_frequencies,
+                "worker_frequencies_cm1": self.worker_check.as_ref().ok().map(|analysis| &analysis.frequencies_cm1),
+                "worker_imaginary_count": self.worker_check.as_ref().ok().map(|analysis| imaginary(&analysis.frequencies_cm1)),
+                "worker_check_error": self.worker_failure_reason(),
+                "hessian_source": if self.worker_check.is_ok() { "worker" } else { "engine" },
                 "imaginary_count": report.imaginary,
+                "failure_reason": self.failure_reason(),
+                "irc_error": report.irc_error,
                 "irc": report.irc.as_ref().map(|[plus, minus]| json!({
                     "plus": branch(plus),
                     "minus": branch(minus),

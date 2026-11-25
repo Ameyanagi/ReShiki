@@ -1114,10 +1114,12 @@ fn ts_help() -> String {
 Search using gas-phase GFN2-xTB with axtb conventions. Requires the xtb feature.\n\
 Supply two atom-mapped XYZ files or one XYZ file with the bond changes.\n\
 Each structure must have 2 to {} atoms. With two files, atom order\n\
-defines the map. --remap-hydrogens keeps heavy atoms mapped by order.\n\n\
+defines the map. --remap-hydrogens requires two files and keeps heavy atoms\n\
+mapped by order.\n\n\
 {}\n\
-Exit 0 requires one engine frequency below -50 cm-1 and IRC branches that\n\
-reach both endpoints. Progress and the hydrogen mapping review go to stderr.\n\n\
+Exit 0 requires a converged saddle, one frequency below -50 cm-1 in both\n\
+checks, and IRC branches whose relaxed ends match both endpoints. Progress\n\
+and the hydrogen mapping review go to stderr.\n\n\
 Examples:\n  \
 reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results\n  \
 reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json\n",

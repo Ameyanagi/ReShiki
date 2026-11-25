@@ -3,7 +3,7 @@
 use reshiki_optimize::{Accuracy, EvalError, Potential};
 use reshiki_xtb_worker::{
     client::{Cancel, Error, Limits, Session},
-    protocol::{Compute, Computed, Engine, ErrorKind, HessianRequest, Open, Units},
+    protocol::{Compute, Computed, Engine, ErrorKind, HessianRequest, Open, ThermoRequest, Units},
 };
 use std::{
     path::Path,
@@ -17,7 +17,24 @@ pub(super) struct Worker {
     pub(super) gradients: usize,
 }
 
+pub(super) struct HessianAnalysis {
+    pub frequencies_cm1: Vec<f64>,
+    pub hessian: Vec<f64>,
+}
+
 impl Worker {
+    #[cfg(test)]
+    pub(super) fn with_transport(
+        requests: Sender<Compute>,
+        results: Receiver<Result<Computed, Error>>,
+    ) -> Self {
+        Self {
+            requests,
+            results,
+            gradients: 0,
+        }
+    }
+
     pub(super) fn start<'scope, 'env>(
         scope: &'scope Scope<'scope, 'env>,
         executable: &'env Path,
@@ -76,12 +93,40 @@ impl Worker {
             .map_err(eval_error)
     }
 
-    pub(super) fn analyze_hessian(&mut self, positions: &[f64]) -> Result<Computed, EvalError> {
+    fn analyze_hessian(
+        &mut self,
+        positions: &[f64],
+        request: HessianRequest,
+    ) -> Result<Computed, EvalError> {
         self.compute(Compute {
             positions: Some(positions.as_chunks::<3>().0.to_vec()),
             units: Units::Bohr,
-            hessian: Some(HessianRequest::default()),
+            hessian: Some(request),
             ..Compute::default()
+        })
+    }
+
+    pub(super) fn check_hessian(
+        &mut self,
+        positions: &[f64],
+        masses_amu: &[f64],
+    ) -> Result<HessianAnalysis, EvalError> {
+        let computed = self.analyze_hessian(
+            positions,
+            HessianRequest {
+                masses_amu: Some(masses_amu.to_vec()),
+                thermo: ThermoRequest {
+                    symmetry_number: Some(1),
+                    ..ThermoRequest::default()
+                },
+            },
+        )?;
+        let vibrations = computed.vibrations.ok_or_else(|| {
+            EvalError::Failed("the xTB worker returned no vibrational analysis".into())
+        })?;
+        Ok(HessianAnalysis {
+            frequencies_cm1: vibrations.frequencies_cm1,
+            hessian: computed.hessian,
         })
     }
 }
@@ -111,15 +156,18 @@ impl Potential for Worker {
     }
 
     fn hessian(&mut self, positions: &[f64], out: &mut [f64]) -> Option<Result<(), EvalError>> {
-        Some(self.analyze_hessian(positions).and_then(|computed| {
-            if computed.hessian.len() != out.len() {
-                return Err(EvalError::Failed(
-                    "the xTB worker returned an invalid Hessian".into(),
-                ));
-            }
-            out.copy_from_slice(&computed.hessian);
-            Ok(())
-        }))
+        Some(
+            self.analyze_hessian(positions, HessianRequest::default())
+                .and_then(|computed| {
+                    if computed.hessian.len() != out.len() {
+                        return Err(EvalError::Failed(
+                            "the xTB worker returned an invalid Hessian".into(),
+                        ));
+                    }
+                    out.copy_from_slice(&computed.hessian);
+                    Ok(())
+                }),
+        )
     }
 }
 

@@ -886,8 +886,9 @@ The command requires the `xtb` feature. [xTB worker reference](xtb-worker.md)
 
 Each endpoint uses the first plain XYZ frame with 2 to 120 atoms and
 coordinates in ångströms. Two files must have the same element sequence.
-Their atom order defines the map. With one file, supply at least one bond
-change in the reactant-to-product direction to construct the missing endpoint.
+Their atom order defines the map. `--remap-hydrogens` requires two XYZ files.
+With one file, supply at least one bond change in the reactant-to-product
+direction to construct the missing endpoint.
 
 | Option              | Command | Meaning                                                                                                                |
 | ------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -906,21 +907,25 @@ change in the reactant-to-product direction to construct the missing endpoint.
 
 The table on stdout gives energies in hartree, barriers in kcal/mol and
 frequencies in cm⁻¹. The worker independently checks the frequencies at the
-reported TS. Both imaginary counts use the same cutoff of −50 cm⁻¹. Exit 0
-requires a converged saddle refinement, exactly one engine mode below the
-cutoff, and IRC branches whose relaxed ends match the two endpoints. Other
-candidates produce a report and exit 1. Progress appears on stderr.
+reported TS with the same atomic masses and cutoff of −50 cm⁻¹. Exit 0
+requires a converged saddle refinement, exactly one imaginary mode in each
+check, and IRC branches whose relaxed ends match the two endpoints. A failed
+worker check or a count disagreement appears in the table and JSON report
+and exits 1. Progress appears on stderr.
 
 `path.xyz` contains the final NEB band. When IRC connects, `irc.xyz` runs
 from the reactant side through the TS to the product side. When refinement
-is unconverged or the imaginary count differs from one, IRC is skipped and
-the file contains just the TS frame. `ts.hess` uses the
-worker's Cartesian Hessian and can be read with ORCA's `InHess Read`. The
-JSON report includes both spectra, IRC branch labels and energies, convergence,
-work counts and the hydrogen mapping review. Each branch’s `completed` field
+is unconverged or the engine imaginary count differs from one, IRC is skipped.
+If IRC is skipped or fails, `irc.xyz` contains the TS frame. `ts.hess` can be
+read with ORCA's `InHess Read`. It uses the worker's Cartesian Hessian when
+available and the engine's Cartesian Hessian if the worker computation fails.
+The JSON report includes spectra, IRC branch labels and energies, convergence,
+work counts and the hydrogen mapping review. `irc_error` and `worker_check_error`
+record verification failures when present. Each branch’s `completed` field
 records whether the downhill trace reached its gradient tolerance before final
 relaxation.
-Output files must be new.
+Output files must be new. The JSON destination must differ from the output
+directory and its six generated files.
 
 ```sh
 reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
