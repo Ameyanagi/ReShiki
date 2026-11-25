@@ -7,8 +7,9 @@ Usage: reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
 
 Reads the first Cartesian frame from INPUT.xyz (angstroms) and writes a
 quantum-chemistry input. Without --out, the main file goes to stdout.
-With --out, companion files go beside the main file and existing output
-files are replaced. Warnings go to stderr as `warning: MESSAGE`.
+With --out, the main file replaces PATH and companion files go beside it;
+an existing companion file stops the export before anything is written.
+Warnings go to stderr as `warning: MESSAGE`.
 
 Options:
   --program PROGRAM   Required program. Choose gaussian, orca, gamess or xyz.

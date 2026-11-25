@@ -886,7 +886,7 @@ radicals or isotope labels, is an error.
 
 fn export_input_help() -> String {
     let mut text = format!(
-        "Usage: {}\n\nReads the first Cartesian frame from INPUT.xyz (angstroms) and writes a\nquantum-chemistry input. Without --out, the main file goes to stdout.\nWith --out, companion files go beside the main file and existing output\nfiles are replaced. Warnings go to stderr as `warning: MESSAGE`.\n\nOptions:\n",
+        "Usage: {}\n\nReads the first Cartesian frame from INPUT.xyz (angstroms) and writes a\nquantum-chemistry input. Without --out, the main file goes to stdout.\nWith --out, the main file replaces PATH and companion files go beside it;\nan existing companion file stops the export before anything is written.\nWarnings go to stderr as `warning: MESSAGE`.\n\nOptions:\n",
         EXPORT_INPUT.usage,
     );
     for option in EXPORT_INPUT.options {

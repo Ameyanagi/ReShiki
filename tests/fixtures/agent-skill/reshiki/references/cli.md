@@ -7,18 +7,19 @@ Experimental: ReShiki's agent tools, schemas and results may change between rele
 Usage: reshiki --cli <command> [options]
 
 Commands:
-  convert      Convert a structure or drawing to another file format
-  render       Render a preview image of a structure or drawing
-  compose      Lay out an assistant Proposal (JSON) and write it as a file
-  analyze      Print molecular properties as one JSON line
-  predict-nmr  Print predicted NMR shifts as one JSON line
-  name         Print the systematic name of a structure
-  pieces       Check or render equipment piece files
-  info         Print versions, limits and formats as one JSON line
-  tools        Print the agent tool catalog as one JSON line
-  schema       Print a JSON Schema: reshiki --cli schema proposal
-  skill        Write an Agent Skill folder that teaches AI agents to use ReShiki
-  help         Show this help, or a command's help: reshiki --cli help <command>
+  convert       Convert a structure or drawing to another file format
+  render        Render a preview image of a structure or drawing
+  compose       Lay out an assistant Proposal (JSON) and write it as a file
+  analyze       Print molecular properties as one JSON line
+  predict-nmr   Print predicted NMR shifts as one JSON line
+  export-input  Write a quantum-chemistry input from an XYZ structure
+  name          Print the systematic name of a structure
+  pieces        Check or render equipment piece files
+  info          Print versions, limits and formats as one JSON line
+  tools         Print the agent tool catalog as one JSON line
+  schema        Print a JSON Schema: reshiki --cli schema proposal
+  skill         Write an Agent Skill folder that teaches AI agents to use ReShiki
+  help          Show this help, or a command's help: reshiki --cli help <command>
 
 Options are allowed once each; -- ends the options.
 
@@ -208,6 +209,46 @@ credit; cite credit with published values.
 
 A molecule with no sites for the nucleus, or with metals, charges,
 radicals or isotope labels, is an error.
+```
+
+## reshiki --cli export-input
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+                                  [--job JOB] [--template N|--method M --basis B]
+                                  [--charge C] [--multiplicity M] [--cores N]
+                                  [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--out PATH]
+
+Reads the first Cartesian frame from INPUT.xyz (angstroms) and writes a
+quantum-chemistry input. Without --out, the main file goes to stdout.
+With --out, the main file replaces PATH and companion files go beside it;
+an existing companion file stops the export before anything is written.
+Warnings go to stderr as `warning: MESSAGE`.
+
+Options:
+  --program PROGRAM   Required program. Choose gaussian, orca, gamess or xyz.
+  --job JOB           Choose single-point, optimize, opt-freq, transition-state or irc. Defaults to the template's job.
+  --template N        Built-in template number, from 1 to 3.
+  --method M          Specify a method and --basis together.
+  --basis B           Basis set. Use an empty string for an ORCA composite method.
+  --charge C          Total charge in elementary charge units.
+  --multiplicity M    Spin multiplicity, 2S + 1.
+  --cores N           Number of cores. Defaults to 8 from the template.
+  --memory-gb G       Total memory in GB. Defaults to 16 from the template.
+  --title T           Calculation title. Defaults to the input file stem.
+  --extra TEXT        Additional program keywords or GAMESS groups.
+  --out PATH          Write the main file to PATH and companions beside it. Omit for stdout.
+
+Templates:
+  1  B3LYP-D3BJ/def2-SVP opt+freq
+  2  r2SCAN-3c opt+freq (ORCA only)
+  3  HF/6-31G(d) single point
+
+For GAMESS, choose template 3 or supply a method and built-in basis.
+
+QST2, QST3 and NEB-TS need a transition-state result; export them from the app.
 ```
 
 ## reshiki --cli name
