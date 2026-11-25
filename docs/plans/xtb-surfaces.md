@@ -1,8 +1,8 @@
 # Orbital surfaces as vector shapes (xTB Phase 2d prototype)
 
-Status: prototype design, behind a developer switch. No user interface, no
-document format change. Later lanes add real orbitals (Phase 5) and the
-viewer and controls (UI lane).
+Status: the renderer below, and since Phase 5 real orbitals chosen in the
+results palette (see [Phase 5](#phase-5-real-orbitals-in-the-drawing)). The
+floating viewer is not built yet.
 
 The owner chose two ways to show orbital isosurfaces: an interactive viewer
 that turns smoothly, and vector shapes in the drawing that export to SVG and
@@ -703,6 +703,121 @@ signed scalar field `f(x)` in the model's own frame (Å, the coordinates of
 - a test on an asymmetric, translated molecule with one nodal plane known
   independently, so a unit, axis or atom-order mistake cannot produce a
   well-formed lobe on the wrong atom.
+
+## Phase 5: real orbitals in the drawing
+
+The prototype above drew an analytic field behind a developer switch. Phase 5
+draws calculated orbitals, chosen in the results palette's Orbitals tab.
+
+### Two states: preview and placed figure
+
+- **Preview.** Choosing an orbital in the Orbitals tab draws it on the
+  molecule's 3D model at once. The preview is editor state, not a drawing
+  edit: it lives on the canvas's drawing copy (like the optimization step
+  preview), costs no Undo step, is not saved and goes away when the palette
+  closes, another molecule's result is shown or the result turns stale. A
+  molecule shown as 2D only is shown as Both in the preview.
+- **Placed figure.** "Place on canvas" turns the preview into part of the
+  drawing in one Undo step ("Place orbital"): the model's `surface` field
+  (below) is set, a 2D-only model becomes Both, and an xTB result gains the
+  orbital's coefficient row (pinned, see Storage). From then on the tab edits
+  the placed figure: choosing another orbital, the isovalue, the look, mesh
+  lines and opacity are each one Undo step (a slider drag is one step, live
+  while dragging), and "Remove from canvas" takes it away. A placed figure
+  moves, rotates, copies with its model in the document, saves, prints and
+  exports like the rest of the model.
+
+### The figure
+
+    Model3d::surface: Option<Figure>      // serde: absent when None
+
+    Figure {
+        orbital: OrbitalRef { result: String, spin: Spin, index: u32 },
+        iso: f32,                      // a.u. (bohr^-3/2), 0.005..=0.2
+        #[serde(flatten)] look: Look,  // {"fill","mesh","opacity"}
+        snapshot: Option<Snapshot>,    // written by Document::current()
+    }
+    Snapshot { view: String, reach: f32, shapes: String }   // shapes: RSF2
+
+- `OrbitalRef::result` is `science::result_key(result)`: 16 hex digits of
+  SHA-256 over the result's frame hash, input frame hash, task, settings and
+  provenance (not its orbitals, so pinning rows keeps the key). `index` is
+  the zero-based MO index in that spin's spectrum (`Spin::Alpha` for
+  restricted and same-orbital results).
+- A figure is drawn only while its result is in `Document::science` and its
+  attachment is current; a stale or deleted result draws nothing (the
+  palette says why).
+- Documents with a figure need version 42 (`CALCULATIONS`), like results.
+
+### Meshes: an editor-side registry
+
+Meshes are never stored in the document or its history. A process-wide
+registry (`surface::draw::register`, `surface::draw::registered`), keyed by
+`surface::draw::key(doc, model)`, holds the last few `Arc<[Mesh; 2]>`
+(drawing and turning detail). The key hashes the figure's result key, spin,
+index and isovalue bits with the model's points (elements and position bits,
+in frame order): any change of geometry or orbital is a new key. The
+renderer only looks meshes up; the editor builds them off the UI thread and
+registers them, then asks for a redraw:
+
+    coefficients (stored rows, or recomputed by the xTB worker)
+      -> OrbitalField (basis, one MO row, centres)        surface::orbital
+      -> orbital_meshes(field, points, iso)               grid, mesh, simplify, refine
+      -> register(key, meshes)
+
+The canvas, figure export, clipboard images and printing in the editor
+process all find the mesh there. Python, the web build, the CLI and builds
+without the data find none and draw the snapshot.
+
+### Evaluating orbitals
+
+`surface::orbital::OrbitalField::new(basis, row, centres)` evaluates one MO
+of the canonical AO contract (`docs/plans/xtb-data.md`) at points in the
+model frame (Å; converted to bohr inside), in atomic units, so isovalues
+match cube files and other programs (default 0.05, presets 0.02, 0.05, 0.10).
+It is written from the contract's formulas (Cartesian monomials or real solid
+harmonics without the Condon–Shortley phase, unit-norm AOs), not ported from
+any program. Shells are screened by distance (a shell is skipped where its
+most diffuse primitive is below 1e-10 of its peak). The grid is sampled in
+parallel; the box is the atoms ± 3 Å and grows as for the demo. Proof: the
+signed PySCF and ORCA reference values in `tests/fixtures/qc/reference`
+(the same points the readers' tests use) agree to 1e-6 relative, and an
+asymmetric, translated molecule with a known nodal plane puts each lobe on
+the right atom.
+
+### Snapshot
+
+`Document::current()` (every file, clipboard document and recovery draft)
+refreshes each figure's snapshot when its mesh is registered: the surface
+primitive for the model's current view, RSF2-encoded relative to the model
+frame's centre (≤ 300 KB), the view signature (a hash of everything that
+changes the picture except the frame's position: the model's settings,
+rotation, size, style, look, points, the figure's parameters and the
+canvas theme) and the view reach. Without a registered mesh, the renderer
+draws the snapshot when the signature matches the model now, and nothing
+when it does not (the model was turned in a build without the data). The
+reach keeps the molecule the same size whether the mesh or the snapshot is
+drawn.
+
+### Storage
+
+`Science::saved` keeps the coefficient row of every placed figure: the
+document passes the pins (`(Spin, index)` per result key) to
+`CalcResult::for_file`, so the light form keeps that row and the basis.
+Placing a figure on an xTB result adds the recomputed row and the basis to
+the stored result (`science::pin_orbital`), so the figure reopens with the
+same signs even where recomputing could rotate a degenerate pair.
+
+### Colours
+
+Positive lobes blue, negative orange (the mock's phase colours), each with a
+light- and a dark-canvas variant; the swatches in the tab show them. The
+analytic demo keeps its own colours.
+
+### Developer switch
+
+`RESHIKI_DEV_ORBITAL_SURFACE` is gone from `main`, so no user path reaches
+the analytic demo. Tests keep `surface::demo_on_this_thread`.
 
 ## Review outcomes
 
