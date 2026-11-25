@@ -1,0 +1,141 @@
+---
+title: Calculate with xTB
+description: Energies and optimized 3D geometries with GFN2-xTB, g-xTB and GFN-FF, on your computer.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+:::caution[Not released yet]
+xTB calculations are being built on the `xtb/next` branch and are not in a released version of ReShiki yet. This page describes that branch.
+:::
+
+ReShiki can calculate the energy of a molecule and optimize its 3D geometry with the semi-empirical xTB methods. The calculation runs on your computer in a separate process, so you can keep drawing, and a crash cannot take the drawing with it.
+
+## What xTB is good for
+
+xTB methods are fast approximations to quantum chemistry from Stefan Grimme's group. They give good geometries for organic and organometallic molecules in seconds, and useful trends for energies, charges and frontier orbitals. They do not replace DFT:
+
+- Geometries: good. Use them as figures, or as starting structures for DFT.
+- Relative energies: semi-quantitative. Compare conformers or isomers; check reaction energies with DFT.
+- Frequencies: approximate, but enough to tell a minimum from a saddle point.
+- Orbitals: qualitative (minimal basis).
+
+The results palette repeats this in one line under every result.
+
+## Methods
+
+| Method                    | Use it for                                                                          | Not available                                  |
+| ------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **GFN2-xTB** (default)    | Most molecules, elements up to radon (Z = 86)                                       | Lanthanide f electrons (they stay in the core) |
+| **g-xTB** (version 2.0.1) | Energies closer to DFT; in solvent, the GFN2-xTB solvation energy is added          | Transition-state search                        |
+| **GFN-FF**                | Large molecules and metal complexes; a force field, the fastest; closed shells only | Orbitals, bond orders, solvent, SCF settings   |
+
+Solvents use the ALPB model: water, methanol, DMSO, chloroform, toluene and others. The card turns off what the chosen method cannot do and says why under the field.
+
+## Run a calculation
+
+1. Select the molecule. If the drawing holds only one molecule, you can leave the selection empty.
+2. Open **Predict → xTB**. You can also right-click the molecule and choose **Calculate (xTB) → Energy** or **Optimize**, click **Optimize with GFN2-xTB** in the row above the canvas, or search the command palette for **Calculate (xTB)…**.
+3. Choose the **Task** (**Energy** or **Optimize**) and the **Method**.
+4. Check **Charge** and **Unpaired electrons**. Both come from the drawing: the charges and radicals you drew. The line below checks the electron count, for example `40 electrons · multiplicity 1`.
+5. Pick a **Solvent**, or leave **None (gas phase)**.
+6. Click **Run**. ⌘R (Ctrl+R on Linux) repeats the last calculation on the selected molecule.
+
+<Screenshot
+  src="/manual/xtb-card.webp"
+  alt="The xTB calculation card for acetic acid under Predict: Task Optimize, Method GFN2-xTB, Charge 0 and Unpaired electrons 0 from the drawing, Solvent None (gas phase), the note that no 3D model exists yet, Hold selected atoms fixed, and the open Advanced settings: Accuracy 1.0, Electronic temp. 300 K, Max SCF iterations 250, xtb 6.8 compatible, Threads Auto (8), Optimizer convergence Normal, and the Run (⌘R) button."
+/>
+
+If the molecule has no 3D model yet, **Run** first makes one with MMFF94s. The 2D drawing never moves.
+
+While it runs, the card shows the step, the energy change and the time, for example `Optimizing · step 12 · ΔE −2.1 × 10⁻⁵ Eh · 3.2 s`, and the 3D model follows the optimization. **Cancel** stops at once and applies nothing.
+
+### Advanced settings
+
+- **Accuracy** and **Max SCF iterations** tighten or loosen the SCF.
+- **Electronic temp.** (default 300 K) smears the orbital occupations. Raise it when the SCF does not converge.
+- **xtb 6.8 compatible** uses the numerical conventions of the xtb 6.8 program instead of axtb's own. The result records the choice.
+- **Threads**: **Auto** uses the computer's cores.
+- **Optimizer convergence**: **Normal** or **Tight**.
+
+### Hold atoms in place
+
+Select atoms, turn on **Hold selected atoms fixed**, then **Run**. The optimizer keeps their coordinates.
+
+## Read the results
+
+Results open in the **xTB results** palette at the bottom of the window, like the NMR palette.
+
+<Screenshot
+  src="/manual/xtb-results.webp"
+  alt="Glycine with g-xTB in water. The Summary tab of the results palette shows the method line g-xTB · axtb 0.2.0 · water (ALPB, GFN2-xTB correction) · charge 0 · multiplicity 1, total energy −284.473836 Eh, HOMO–LUMO gap 10.20 eV, dipole 1.94 D, Mulliken charges from −0.498 to +0.488, run time 0.1 s, a table of bond orders of at least 0.1 and the orbital levels from HOMO−2 to LUMO+2."
+/>
+
+- **Summary**: total energy (Eh), HOMO–LUMO gap (eV), dipole (D), atomic charges, bond orders of at least 0.1, orbital levels from HOMO−2 to LUMO+2, the optimization (steps and RMSD from the start), the RMS gradient and the run time. Rows without data are left out.
+- **Steps** (optimizations): the energy at every step. Click a step to preview it on the 3D model; **Use this geometry** applies it, and Esc returns to the result.
+- **Log**: what ran, with the settings and SCF iterations, ready to copy into a lab notebook.
+- **Show as labels** writes the energy under the molecule and the charges next to its atoms on the canvas. The labels stay on screen; they are not part of exports. **Copy table** and **Export…** give the numbers as text.
+- **Dock right** moves the palette into the Predict tab; **Collapse** and **Close** hide it. **Show results** on the card brings it back.
+
+<Screenshot
+  src="/manual/xtb-steps.webp"
+  alt="The Steps tab for caffeine: an energy-versus-step chart from −42.14742 to −42.15394 Eh and a list of steps 0 to 6 with their energies and energy changes. Step 2 is selected and previewed, with Use this geometry and Back to result beside it."
+/>
+
+When the HOMO–LUMO gap is below 0.1 eV, a warning appears under the header: _Near-degenerate electronic structure: results can differ between computers. Try a higher electronic temperature or more unpaired electrons._
+
+## Optimized geometries
+
+An optimization updates the molecule's 3D model as one Undo step (`Applied xTB geometry · ⌘Z undoes`). The 2D drawing does not move.
+
+ReShiki then compares stereocentres and double-bond geometry with the drawing. If one changed, nothing is applied until you choose **Apply anyway** or **Discard**.
+
+If you edit the molecule later, its results stay readable but greyed, with **Recalculate**.
+
+## When something goes wrong
+
+Errors appear in the palette with one action:
+
+- **The SCF did not converge.** → **Retry at 1000 K**, a higher electronic temperature.
+- An element the method has no parameters for: the message names the atom. GFN2-xTB covers elements up to radon; g-xTB and GFN-FF go further.
+- Too many atoms: the message gives the limit.
+- **The calculation stopped unexpectedly. Your drawing is safe.** → **Run again**, or copy the details for a bug report.
+
+## Limits
+
+- Energy and optimization: up to 500 atoms.
+- Frequencies and conformer re-ranking: up to 200 atoms. Transition states: up to 120 atoms.
+- One molecule per calculation. To calculate part of a structure, split it or select a fragment.
+
+## File size
+
+Results are saved in the `.rsk` file with the molecule and kept small on purpose: the settings, the final geometry, energies, charges, dipole, bond orders and orbital energies. Intermediate optimization steps, gradients and other large arrays are not saved; ReShiki recomputes them when needed, because the engine version is fixed. The palette footer shows **Saved in file** for each result.
+
+- **Keep full results in this file** saves everything for one result, at the size it shows.
+- When the results in a document exceed 5 MB, Save asks once and offers **Make lighter**, which drops the data you chose to keep. Data imported from other programs cannot be recomputed, so it stays.
+
+<Screenshot
+  src="/manual/xtb-save-warning.webp"
+  alt="The Save dialog: Calculation results in this document take 5.8 MB. Make lighter drops the full data you chose to keep for 1 result (optimization steps, gradients), leaving 153 KB of results; energies and final geometries stay. Buttons Save as is and Make lighter."
+/>
+
+## Platforms and licence
+
+xTB calculations are in the macOS and Linux downloads. Windows builds do not include them yet; they will once Windows code signing covers the calculation engine.
+
+The engine is [axtb](https://github.com/atomsforhumanity/axtb), a Rust implementation of the xTB methods, used through ReShiki's fork. axtb is licensed under the GNU Lesser General Public License, version 3 or later (LGPL-3.0-or-later); ReShiki's own code stays MIT OR Apache-2.0. See [Licence and source](/guide/calculation-scripts/#licence-and-source).
+
+## Cite the methods
+
+If you publish xTB results, cite the method you used:
+
+- GFN2-xTB: C. Bannwarth, S. Ehlert, S. Grimme, _J. Chem. Theory Comput._ **15**, 1652 (2019), doi:10.1021/acs.jctc.8b01176.
+- GFN-FF: S. Spicher, S. Grimme, _Angew. Chem. Int. Ed._ **59**, 15665 (2020), doi:10.1002/anie.202004239.
+- g-xTB: T. Froitzheim, M. Müller, A. Hansen, S. Grimme, _ChemRxiv_ (2025), doi:10.26434/chemrxiv-2025-bjxvt.
+- ALPB solvation: S. Ehlert, M. Stahn, S. Spicher, S. Grimme, _J. Chem. Theory Comput._ **17**, 4250 (2021), doi:10.1021/acs.jctc.1c00471.
+
+## More
+
+- In progress: [frequencies](/guide/calculation-frequencies/), [orbitals](/guide/calculation-orbitals/), [conformer search](/guide/calculation-conformers/) and [transition states](/guide/calculation-transition-states/).
+- [Gaussian, ORCA and GAMESS files](/guide/calculation-files/): export inputs and open outputs.
+- [xTB from scripts](/guide/calculation-scripts/).
