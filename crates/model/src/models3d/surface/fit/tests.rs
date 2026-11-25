@@ -393,58 +393,171 @@ fn circle_64_uses_at_most_eight_cubics_and_stays_radially_accurate() {
 }
 
 #[test]
+fn unit_circle_64_does_not_turn_smooth_samples_into_corners_or_lines() {
+    let points = circle(64, 1.0);
+    let error = 0.12_f32;
+    let prepared = super::prepare(&super::clean(&points), f64::from(error), true);
+    assert!(
+        prepared.iter().all(|knot| !knot.corner),
+        "a coarse circle must not acquire corners from the tangent search window"
+    );
+    let commands = closed(&points, error);
+    assert_vertices_within(&points, &commands, f64::from(error));
+    assert!(cubic_count(&commands) > 0);
+    assert!(
+        commands
+            .iter()
+            .all(|command| !matches!(command, PathCommand::Line(_))),
+        "a smooth circular contour must contain only cubic segments"
+    );
+    assert_smooth_closed(&commands);
+    assert_equal_control_handles_closed(&commands);
+}
+
+#[test]
 fn dense_square_interpolates_all_four_corners() {
-    let corners = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
+    for (side, error) in [(10.0_f32, 0.1_f32), (0.5, 0.12)] {
+        let corners = [[0.0, 0.0], [side, 0.0], [side, side], [0.0, side]];
+        let mut points = Vec::new();
+        for edge in 0..4 {
+            let a = corners[edge];
+            let b = corners[(edge + 1) % 4];
+            for step in 0..40 {
+                let t = step as f32 / 40.0;
+                points.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
+            }
+        }
+        // Dense samples localize each actual corner even when the whole
+        // half-unit square fits within the tangent search window.
+        let prepared = super::prepare(&super::clean(&points), f64::from(error), true);
+        let detected: Vec<_> = prepared[..prepared.len() - 1]
+            .iter()
+            .filter(|knot| knot.corner)
+            .map(|knot| [knot.p.x as f32, knot.p.y as f32])
+            .collect();
+        assert_eq!(
+            detected.len(),
+            4,
+            "side-{side} square must retain exactly its four corners: {detected:?}"
+        );
+        let commands = closed(&points, error);
+        assert_vertices_within(&points, &commands, f64::from(error));
+        let endpoints: Vec<DPoint> = commands
+            .iter()
+            .filter_map(|command| match *command {
+                PathCommand::Move(p) | PathCommand::Line(p) | PathCommand::Cubic(_, _, p) => {
+                    Some(dp(p))
+                }
+                PathCommand::Close => None,
+            })
+            .collect();
+        for corner in corners {
+            assert!(
+                detected.contains(&corner),
+                "side-{side} square corner {corner:?} must be detected"
+            );
+            let corner = [f64::from(corner[0]), f64::from(corner[1])];
+            assert!(
+                endpoints.iter().any(|&p| distance(p, corner) < 0.000_01),
+                "side-{side} square corner {corner:?} was not interpolated by a segment endpoint"
+            );
+        }
+        assert!(flatten(&commands).iter().all(|path| path.closed));
+    }
+}
+
+#[test]
+fn square_with_small_zigzags_detects_only_its_four_actual_corners() {
+    let corners = rectangle(0.0, 0.0, 10.0, 10.0);
     let mut points = Vec::new();
     for edge in 0..4 {
         let a = corners[edge];
         let b = corners[(edge + 1) % 4];
         for step in 0..40 {
             let t = step as f32 / 40.0;
-            points.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
+            let noise = if step == 0 {
+                0.0
+            } else if step % 2 == 0 {
+                0.05
+            } else {
+                -0.05
+            };
+            points.push([
+                a[0] + t * (b[0] - a[0]) - noise * (b[1] - a[1]) / 10.0,
+                a[1] + t * (b[1] - a[1]) + noise * (b[0] - a[0]) / 10.0,
+            ]);
         }
     }
-    let commands = closed(&points, 0.1);
-    assert_vertices_within(&points, &commands, 0.1);
-    let endpoints: Vec<DPoint> = commands
+    let error = 0.12_f32;
+    let prepared = super::prepare(&super::clean(&points), f64::from(error), true);
+    // prepare repeats the seam knot for a closed chain; count it only once.
+    let detected: Vec<_> = prepared[..prepared.len() - 1]
+        .iter()
+        .filter(|knot| knot.corner)
+        .map(|knot| [knot.p.x as f32, knot.p.y as f32])
+        .collect();
+    assert_eq!(
+        detected.len(),
+        4,
+        "the edge zigzags must not create additional corners: {detected:?}"
+    );
+    for corner in &corners {
+        assert!(
+            detected.contains(corner),
+            "actual square corner {corner:?} was not detected"
+        );
+    }
+    let commands = closed(&points, error);
+    assert_vertices_within(&points, &commands, f64::from(error));
+    let endpoints: Vec<_> = commands
         .iter()
         .filter_map(|command| match *command {
             PathCommand::Move(p) | PathCommand::Line(p) | PathCommand::Cubic(_, _, p) => {
-                Some(dp(p))
+                Some([p.x, p.y])
             }
             PathCommand::Close => None,
         })
         .collect();
-    for corner in corners {
-        let corner = [f64::from(corner[0]), f64::from(corner[1])];
+    for corner in &corners {
         assert!(
-            endpoints.iter().any(|&p| distance(p, corner) < 0.000_01),
-            "square corner {corner:?} was not interpolated by a segment endpoint"
+            endpoints.contains(corner),
+            "actual square corner {corner:?} must remain a segment endpoint"
         );
     }
-    assert!(flatten(&commands).iter().all(|path| path.closed));
+    let paths = flatten(&commands);
+    assert_eq!(paths.len(), 1);
+    assert!(paths[0].closed);
 }
 
 #[test]
 fn noisy_circle_does_not_create_corners() {
-    let points: Vec<_> = circle(512, 10.0)
-        .iter()
-        .enumerate()
-        .map(|(i, p)| {
-            let radius = 10.0 + if i % 2 == 0 { 0.03 } else { -0.03 };
-            [p[0] * radius / 10.0, p[1] * radius / 10.0]
-        })
-        .collect();
-    let commands = closed(&points, 0.1);
-    assert_vertices_within(&points, &commands, 0.1);
-    assert!(cubic_count(&commands) > 0);
-    assert!(
-        commands
+    for count in [48, 512] {
+        let points: Vec<_> = circle(count, 10.0)
             .iter()
-            .all(|command| !matches!(command, PathCommand::Line(_)))
-    );
-    assert_smooth_closed(&commands);
-    assert_equal_control_handles_closed(&commands);
+            .enumerate()
+            .map(|(i, p)| {
+                let radius = 10.0 + if i % 2 == 0 { 0.3 } else { -0.3 };
+                [p[0] * radius / 10.0, p[1] * radius / 10.0]
+            })
+            .collect();
+        let error = 0.25_f32;
+        let prepared = super::prepare(&super::clean(&points), f64::from(error), true);
+        assert!(
+            prepared.iter().all(|knot| !knot.corner),
+            "alternating radial noise must not create corners with {count} samples"
+        );
+        let commands = closed(&points, error);
+        assert_vertices_within(&points, &commands, f64::from(error));
+        assert!(cubic_count(&commands) > 0);
+        assert!(
+            commands
+                .iter()
+                .all(|command| !matches!(command, PathCommand::Line(_))),
+            "noise must not introduce line segments with {count} samples"
+        );
+        assert_smooth_closed(&commands);
+        assert_equal_control_handles_closed(&commands);
+    }
 }
 
 #[test]
@@ -602,27 +715,27 @@ fn interpolated_short_edges_bound_shared_handles_without_losing_smooth_joins() {
 
 fn topology_retry_points() -> [[f32; 2]; 21] {
     [
-        [3.1191733, 0.0],
-        [7.6095057, 2.3472216],
-        [3.6243758, 2.4710577],
-        [2.7517486, 3.4505837],
-        [0.9611632, 2.449004],
-        [0.32987934, 4.4019337],
-        [-2.191362, 9.600984],
-        [-0.787649, 1.364248],
-        [-2.3451524, 2.1759834],
-        [-4.931342, 2.3748093],
-        [-3.3837335, 0.5100158],
-        [-4.3017406, -0.6483831],
-        [-4.009836, -1.9310354],
-        [-0.41734597, -0.38724047],
-        [-4.429225, -7.6716423],
-        [-0.26370347, -1.1553603],
-        [0.57963693, -7.7347174],
-        [2.2531633, -5.740967],
-        [1.2817415, -1.607253],
-        [3.2504408, -2.216113],
-        [9.216352, -2.8428683],
+        [6.6268587, 0.0],
+        [3.6215594, 1.1171031],
+        [0.20376891, 0.1389273],
+        [1.4661759, 1.8385265],
+        [1.1586034, 2.9520733],
+        [0.5000431, 6.672611],
+        [-0.8884022, 3.8923445],
+        [-4.3805947, 7.5874124],
+        [-3.2550445, 3.0202398],
+        [-8.607507, 4.145157],
+        [-1.4203819, 0.21408813],
+        [-2.0537448, -0.30955222],
+        [-7.2432675, -3.4881737],
+        [-5.1018667, -4.7338405],
+        [-0.5582003, -0.9668312],
+        [-0.9101922, -3.9878125],
+        [0.68779165, -9.177942],
+        [2.580135, -6.574077],
+        [5.0543323, -6.337932],
+        [1.2242402, -0.8346728],
+        [0.62970054, -0.19423689],
     ]
 }
 
@@ -637,8 +750,9 @@ fn topology_guard_retries_at_half_tolerance_before_returning_a_curve() {
         .collect();
     assert!(!independent_intersects(&input, true));
     // Both candidates retain the same designated corners and closing seam.
-    let prepared = super::prepare(&clean, f64::from(error), true);
+    let mut prepared = super::prepare(&clean, f64::from(error), true);
     let first = super::fit_path(&prepared, f64::from(error), true);
+    super::protect_close_edges(&mut prepared, f64::from(error) * 0.5, true);
     let half = super::fit_path(&prepared, f64::from(error) * 0.5, true);
     assert!(
         independent_intersects(&sample_steps(&first, 8), true),
@@ -666,51 +780,116 @@ fn topology_guard_retries_at_half_tolerance_before_returning_a_curve() {
 #[test]
 fn topology_guard_falls_back_to_the_input_polygon_after_two_crossing_fits() {
     let points = [
-        [7.2255573, 0.0],
-        [8.371476, 4.833274],
-        [2.4225998, 4.196066],
-        [6.349441e-17, 1.0369424],
-        [-3.170093, 5.490762],
-        [-2.2222433, 1.2830129],
-        [-7.5454183, 9.240472e-16],
-        [-6.9599996, -4.0183578],
-        [-3.7434454, -6.4838376],
-        [-2.055205e-17, -0.111880146],
-        [4.5579934, -7.894676],
-        [0.24648629, -0.14230894],
+        [0.83473796, 0.0],
+        [3.893268, 3.893268],
+        [2.518849e-16, 4.1135926],
+        [-2.6385393, 2.6385393],
+        [-0.07743218, 9.482707e-18],
+        [-0.055554464, -0.055554464],
+        [-6.612783e-16, -3.5998313],
+        [0.14615715, -0.14615715],
     ];
-    let error = 3.043504_f32;
+    let error = 0.01_f32;
     let clean = super::clean(&points);
     let input: Vec<_> = points
         .iter()
         .map(|p| [f64::from(p[0]), f64::from(p[1])])
         .collect();
-    assert!(!independent_intersects(&input, true));
-    for tolerance in [f64::from(error), f64::from(error) * 0.5] {
-        let candidate = super::fit_path(
-            &super::prepare(&clean, f64::from(error), true),
-            tolerance,
-            true,
-        );
+    for cyclic in [false, true] {
+        assert!(!independent_intersects(&input, cyclic));
+        let mut prepared = super::prepare(&clean, f64::from(error), cyclic);
+        let first = super::fit_path(&prepared, f64::from(error), cyclic);
         assert!(
-            independent_intersects(&sample_steps(&candidate, 8), true),
-            "fixture must reject tolerance {tolerance}"
+            independent_intersects(&sample_steps(&first, 8), cyclic),
+            "fixture must reject its first fit (cyclic={cyclic})"
+        );
+        super::protect_close_edges(&mut prepared, f64::from(error) * 0.5, cyclic);
+        let half = super::fit_path(&prepared, f64::from(error) * 0.5, cyclic);
+        assert!(
+            independent_intersects(&sample_steps(&half, 8), cyclic),
+            "fixture must also reject its protected half-error fit (cyclic={cyclic})"
+        );
+        let commands = if cyclic {
+            closed(&points, error)
+        } else {
+            open(&points, error)
+        };
+        let mut expected = vec![PathCommand::Move(Point::new(points[0][0], points[0][1]))];
+        expected.extend(
+            points[1..]
+                .iter()
+                .map(|p| PathCommand::Line(Point::new(p[0], p[1]))),
+        );
+        if cyclic {
+            expected.push(PathCommand::Close);
+        }
+        assert_eq!(
+            commands, expected,
+            "guard must return the exact original polygon (cyclic={cyclic})"
+        );
+        assert_vertices_within(&points, &commands, 0.0);
+        let paths = flatten(&commands);
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].closed, cyclic);
+        assert!(!independent_intersects(&paths[0].points, cyclic));
+    }
+}
+
+#[test]
+fn topology_guard_protects_a_thin_strip_when_unprotected_half_error_still_crosses() {
+    // Two matching sampled sine arcs separated by 0.02 drawing units form a
+    // simple strip. Independent smooth fits can cross this narrow clearance.
+    let mut points: Vec<_> = (0..=4)
+        .map(|i| {
+            let x = f64::from(i) * 0.5;
+            [x as f32, (x.sin() + 0.01) as f32]
+        })
+        .collect();
+    points.extend((0..=4).rev().map(|i| {
+        let x = f64::from(i) * 0.5;
+        [x as f32, (x.sin() - 0.01) as f32]
+    }));
+    let error = 0.12_f32;
+    let clean = super::clean(&points);
+    let input: Vec<_> = points
+        .iter()
+        .map(|p| [f64::from(p[0]), f64::from(p[1])])
+        .collect();
+    for cyclic in [false, true] {
+        assert!(!independent_intersects(&input, cyclic));
+        let mut prepared = super::prepare(&clean, f64::from(error), cyclic);
+        for tolerance in [f64::from(error), f64::from(error) * 0.5] {
+            let unprotected = super::fit_path(&prepared, tolerance, cyclic);
+            assert!(
+                independent_intersects(&sample_steps(&unprotected, 8), cyclic),
+                "unprotected tolerance {tolerance} must cross the strip (cyclic={cyclic})"
+            );
+        }
+        super::protect_close_edges(&mut prepared, f64::from(error) * 0.5, cyclic);
+        let half = super::fit_path(&prepared, f64::from(error) * 0.5, cyclic);
+        assert!(
+            !independent_intersects(&sample_steps(&half, 8), cyclic),
+            "clearance-limited retry must pass the guard (cyclic={cyclic})"
+        );
+        let commands = if cyclic {
+            closed(&points, error)
+        } else {
+            open(&points, error)
+        };
+        assert_eq!(
+            commands, half,
+            "guard must preserve the protected cubic fit (cyclic={cyclic})"
+        );
+        assert!(cubic_count(&commands) > 0);
+        assert_vertices_within(&points, &commands, f64::from(error) * 0.5);
+        let paths = flatten(&commands);
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].closed, cyclic);
+        assert!(
+            !independent_intersects(&paths[0].points, cyclic),
+            "adaptive flattening must also remain simple (cyclic={cyclic})"
         );
     }
-    let commands = closed(&points, error);
-    let mut expected = vec![PathCommand::Move(Point::new(points[0][0], points[0][1]))];
-    expected.extend(
-        points[1..]
-            .iter()
-            .map(|p| PathCommand::Line(Point::new(p[0], p[1]))),
-    );
-    expected.push(PathCommand::Close);
-    assert_eq!(
-        commands, expected,
-        "guard must return the exact original polygon"
-    );
-    assert_vertices_within(&points, &commands, 0.0);
-    assert!(!independent_intersects(&flatten(&commands)[0].points, true));
 }
 
 #[test]
@@ -834,10 +1013,12 @@ fn topology_open_guard_retries_after_a_crossing_fit() {
         .map(|p| [f64::from(p[0]), f64::from(p[1])])
         .collect();
     assert!(!independent_intersects(&input, false));
-    let prepared = super::prepare(&super::clean(&points), f64::from(error), false);
+    let mut prepared = super::prepare(&super::clean(&points), f64::from(error), false);
     let first = super::fit_path(&prepared, f64::from(error), false);
     assert!(independent_intersects(&sample_steps(&first, 8), false));
+    super::protect_close_edges(&mut prepared, f64::from(error) * 0.5, false);
     let half = super::fit_path(&prepared, f64::from(error) * 0.5, false);
+    assert!(!independent_intersects(&sample_steps(&half, 8), false));
     let commands = open(&points, error);
     assert_eq!(
         commands, half,
@@ -859,6 +1040,60 @@ fn two_point_open_normalizes_to_an_exact_line() {
     ];
     assert_eq!(open(&[a, b], 0.1), expected);
     assert_eq!(open(&[a, a, b, b], 0.1), expected);
+}
+
+#[test]
+fn two_point_span_between_smooth_knots_is_cubic_and_follows_both_tangents() {
+    // Unevenly spaced samples force a one-edge subdivision between the two
+    // interior knots. Their smooth tangents both differ from that edge's chord.
+    let points: Vec<_> = [0.0_f64, 0.3, 0.6, 1.5]
+        .into_iter()
+        .map(|angle| [(20.0 * angle.cos()) as f32, (20.0 * angle.sin()) as f32])
+        .collect();
+    let error = 0.12_f32;
+    let prepared = super::prepare(&super::clean(&points), f64::from(error), false);
+    assert!(prepared.iter().all(|knot| !knot.corner));
+    let start = dp(prepared[1].p.point());
+    let end = dp(prepared[2].p.point());
+    let commands = open(&points, error);
+    assert_vertices_within(&points, &commands, f64::from(error));
+    let mut cursor = None;
+    let mut checked = false;
+    for command in commands {
+        match command {
+            PathCommand::Move(p) => cursor = Some(dp(p)),
+            PathCommand::Line(p) => {
+                assert!(
+                    cursor != Some(start) || dp(p) != end,
+                    "a two-point span between smooth knots must remain cubic"
+                );
+                cursor = Some(dp(p));
+            }
+            PathCommand::Cubic(b, c, p) => {
+                if cursor == Some(start) && dp(p) == end {
+                    let left = unit_direction(start, &[dp(b)]);
+                    let reverse_right = unit_direction(end, &[dp(c)]);
+                    let right = [-reverse_right[0], -reverse_right[1]];
+                    for (name, actual, knot) in
+                        [("start", left, prepared[1]), ("end", right, prepared[2])]
+                    {
+                        let tangent = knot.tangent();
+                        assert!(
+                            distance(actual, [tangent.x, tangent.y]) < 0.000_01,
+                            "{name} handle {actual:?} must follow its smooth knot tangent {tangent:?}"
+                        );
+                    }
+                    checked = true;
+                }
+                cursor = Some(dp(p));
+            }
+            PathCommand::Close => panic!("an open fit must not close the path"),
+        }
+    }
+    assert!(
+        checked,
+        "fixture must emit the interior one-edge cubic span"
+    );
 }
 
 #[test]

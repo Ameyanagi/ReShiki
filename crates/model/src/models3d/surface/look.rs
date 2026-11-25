@@ -1,3 +1,5 @@
+//! How an orbital surface is drawn: fill, mesh lines and opacity, stored
+//! with a placed figure's parameters.
 use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 

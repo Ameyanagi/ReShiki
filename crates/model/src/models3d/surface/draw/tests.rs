@@ -460,9 +460,10 @@ fn tone_counts_follow_the_faded_endpoint_range_and_group_weights() {
     let fade = 0.175;
     assert_eq!(shaded(POSITIVE, 0.35, backdrop, fade), [86, 119, 188]);
     assert_eq!(shaded(POSITIVE, 1., backdrop, fade), [175, 196, 238]);
-    assert_eq!(tone_counts(Look::default(), false, backdrop, fade), [89]);
+    // The ramp bends at lightness 0.6: 33 levels below it (blue), 80 above (red).
+    assert_eq!(tone_counts(Look::default(), false, backdrop, fade), [114]);
     let film = Look::new(Fill::Shaded, false, 60).unwrap();
-    assert_eq!(tone_counts(film, false, backdrop, fade), [54, 22, 9, 4]);
+    assert_eq!(tone_counts(film, false, backdrop, fade), [68, 28, 11, 5]);
 }
 
 #[test]
@@ -500,7 +501,7 @@ fn svg_composites_groups_with_clipped_vector_tones() {
     assert!(svg.contains("clip-rule=\"nonzero\""));
     assert!(svg.split("<path d=\"").skip(1).any(|element| {
         element.split_once('"').is_some_and(|(path, rest)| {
-            path.contains('C')
+            path.contains('c')
                 && rest
                     .split('>')
                     .next()
@@ -534,8 +535,9 @@ fn opaque_shaded_svg_preserves_fitted_region_commands() {
             let (_, path) = clip.split_once("<path d=\"").unwrap();
             let (data, _) = path.split_once('"').unwrap();
             regions += 1;
-            cubics += data.matches('C').count();
-            lines += data.matches('L').count();
+            // Relative commands: lower case.
+            cubics += data.matches('c').count();
+            lines += data.matches('l').count();
         }
         assert_eq!(regions, groups[0].fills.len());
         assert_eq!((cubics, lines), expected, "{degrees}°");
@@ -547,6 +549,66 @@ fn opaque_shaded_svg_preserves_fitted_region_commands() {
         }
     }
     demo_on_this_thread(None).unwrap();
+}
+
+/// Reports fitting quality for the shaded benzene π* surface, including
+/// every phase region, tone path and surface stroke.
+#[test]
+#[ignore]
+fn benzene_fit_diagnostic() {
+    fn counts<'a>(commands: impl Iterator<Item = &'a PathCommand>) -> [usize; 5] {
+        let mut counts = [0; 5];
+        for command in commands {
+            counts[0] += 1;
+            counts[match command {
+                PathCommand::Cubic(..) => 1,
+                PathCommand::Line(_) => 2,
+                PathCommand::Move(_) => 3,
+                PathCommand::Close => 4,
+            }] += 1;
+        }
+        counts
+    }
+
+    let _ = fit::take_diagnostics();
+    let groups = groups(&tilted(benzene(), 55.), "pistar");
+    let diagnostics = fit::take_diagnostics();
+    let fills = counts(
+        groups
+            .iter()
+            .flat_map(|group| &group.fills)
+            .flat_map(|fill| {
+                std::iter::once(&fill.region).chain(fill.tones.iter().map(|(path, _)| path))
+            })
+            .flatten(),
+    );
+    let strokes = counts(
+        groups
+            .iter()
+            .flat_map(|group| &group.strokes)
+            .flat_map(|stroke| &stroke.paths),
+    );
+    for ((label, [commands, cubics, lines, moves, closes]), (corners, fallbacks)) in
+        [("fills (regions + tones)", fills), ("strokes", strokes)]
+            .into_iter()
+            .zip(diagnostics)
+    {
+        println!(
+            "{label}: {commands} commands ({moves} moves, {closes} closes), {cubics} cubics, {lines} lines, {corners} corners detected, {fallbacks} topology-fallback contours"
+        );
+    }
+
+    let [commands, cubics, lines, ..] = fills;
+    assert!(cubics + lines > 0 && strokes[0] > 0);
+    assert!(
+        lines * 100 <= (cubics + lines) * 5,
+        "fills: {lines} of {} segments are lines, exceeding 5%",
+        cubics + lines,
+    );
+    assert!(
+        commands <= 36_311,
+        "{commands} fill commands exceed budget 36311"
+    );
 }
 
 /// Release-mode frame and export budgets at drawing detail. Run with

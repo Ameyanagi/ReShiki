@@ -17,7 +17,11 @@ use std::sync::OnceLock;
 
 /// Triangles for the drawing and export, and while the model turns.
 pub const DETAIL: [usize; 2] = [20_000, 4_000];
-const FIT_ERROR: f32 = 0.08;
+/// Fit error of outlines, outline runs and mesh lines, and of shading-tone
+/// contours (clipped to their region, so they may stray further), in
+/// drawing units.
+const FIT_ERROR: f32 = 0.12;
+const TONE_FIT_ERROR: f32 = 0.5;
 const MIN_AREA: f32 = 0.05;
 const MIN_WIDTH: f32 = 0.12;
 const MIN_RUN: f32 = 1.;
@@ -316,12 +320,70 @@ fn phase_base(positive: bool, dark: bool) -> [f32; 3] {
 }
 
 fn shaded(base: [f32; 3], light: f32, backdrop: [f32; 3], fade: f32) -> [u8; 3] {
+    rgb(shade(base, light, backdrop, fade))
+}
+
+fn shade(base: [f32; 3], light: f32, backdrop: [f32; 3], fade: f32) -> [f32; 3] {
     let color = if light < 0.6 {
         mix(base, BLACK, (0.6 - light) / 0.6 * 0.45)
     } else {
         mix(base, WHITE, (light - 0.6) / 0.4 * 0.5)
     };
-    rgb(mix(color, backdrop, fade))
+    mix(color, backdrop, fade)
+}
+
+/// The bend of every shading ramp (lightness 0.6) on the Lambert axis
+/// (lightness 0.35 + 0.65·u).
+const BEND: f32 = 0.25 / 0.65;
+
+/// One phase's shading ramp measured along its steepest colour channel, so
+/// that equal tone steps are equal colour steps. The ramp is two straight
+/// pieces in lightness: darkening below the bend, lightening above it.
+#[derive(Clone, Copy)]
+struct Ramp {
+    /// Levels from the darkest lightness (0.35) to the bend, and from the
+    /// bend to the lightest (1).
+    below: f32,
+    above: f32,
+}
+
+impl Ramp {
+    fn new(base: [f32; 3], backdrop: [f32; 3], fade: f32) -> Self {
+        let [dark, bend, light] = [0.35, 0.6, 1.].map(|l| shade(base, l, backdrop, fade));
+        let levels =
+            |a: [f32; 3], b: [f32; 3]| (0..3).map(|k| (a[k] - b[k]).abs()).fold(0., f32::max);
+        Ramp {
+            below: levels(dark, bend),
+            above: levels(bend, light),
+        }
+    }
+
+    fn levels(self) -> f32 {
+        self.below + self.above
+    }
+
+    /// The tone coordinate (0 to 1, even in colour) of Lambert term `u`.
+    fn tone(self, u: f32) -> f32 {
+        let total = self.levels().max(f32::MIN_POSITIVE);
+        if u < BEND {
+            self.below * u / BEND / total
+        } else {
+            (self.below + self.above * (u - BEND) / (1. - BEND)) / total
+        }
+    }
+
+    /// The lightness (0.35 to 1) at tone coordinate `t`.
+    fn lightness(self, t: f32) -> f32 {
+        let at = t * self.levels();
+        let u = if at < self.below {
+            at / self.below * BEND
+        } else if self.above > 0. {
+            BEND + (at - self.below) / self.above * (1. - BEND)
+        } else {
+            BEND
+        };
+        0.35 + 0.65 * u.clamp(0., 1.)
+    }
 }
 
 fn group_weight(alpha: f32, depth: usize) -> f32 {
@@ -338,18 +400,12 @@ fn tone_counts(look: Look, dark: bool, backdrop: [f32; 3], fade: f32) -> Vec<usi
         Fill::Solid | Fill::Outline => vec![1; groups],
         Fill::Shaded => {
             let levels = [true, false]
+                .map(|positive| Ramp::new(phase_base(positive, dark), backdrop, fade).levels())
                 .into_iter()
-                .flat_map(|positive| {
-                    let base = phase_base(positive, dark);
-                    let low = shaded(base, 0.35, backdrop, fade);
-                    let high = shaded(base, 1., backdrop, fade);
-                    low.into_iter().zip(high).map(|(lo, hi)| lo.abs_diff(hi))
-                })
-                .max()
-                .unwrap_or_default();
+                .fold(0., f32::max);
             (0..groups)
                 .map(|depth| {
-                    let tones = f32::from(levels) * group_weight(alpha, depth) / TONE_STEP;
+                    let tones = levels * group_weight(alpha, depth) / TONE_STEP;
                     (tones.ceil() as usize).clamp(2, MAX_TONES)
                 })
                 .collect()
@@ -406,12 +462,21 @@ impl Prepared {
         let l = [-0.38f32, 0.42, 0.82];
         let length = dot(l, l).sqrt();
         let light = l.map(|v| v / length);
+        // Tone coordinates even in colour, by each vertex's phase.
+        let ramps =
+            [true, false].map(|positive| Ramp::new(phase_base(positive, dark), backdrop, fade));
+        let mut phase = vec![0; mesh.positions.len()];
+        for (t, &positive) in mesh.triangles.iter().zip(&mesh.positive) {
+            for &v in t {
+                phase[v as usize] = usize::from(!positive);
+            }
+        }
         let lightness: Vec<f32> = mesh
             .normals
             .iter()
-            .map(|n| {
-                // Removing the ambient term and scaling maps Lambert lightness to the tone axis.
-                dot(rotate(model.rotation, *n), light).clamp(0., 1.)
+            .zip(&phase)
+            .map(|(n, &phase)| {
+                ramps[phase].tone(dot(rotate(model.rotation, *n), light).clamp(0., 1.))
             })
             .collect();
         let tones = tone_counts(look, dark, backdrop, fade);
@@ -486,9 +551,10 @@ impl Prepared {
             let mut strokes = Vec::new();
             for (sign, positive) in [true, false].into_iter().enumerate() {
                 let base = phase_base(positive, dark);
+                let ramp = Ramp::new(base, backdrop, fade);
                 let color = |tone: usize| match self.look.fill {
                     Fill::Shaded => {
-                        let light = 0.35 + 0.65 * (tone as f32 + 0.5) / count as f32;
+                        let light = ramp.lightness((tone as f32 + 0.5) / count as f32);
                         shaded(base, light, backdrop, fade)
                     }
                     Fill::Solid => rgb(mix(base, backdrop, fade)),
@@ -505,7 +571,7 @@ impl Prepared {
                         let tones = layers
                             .filter_map(|layer| {
                                 let path =
-                                    fit::region(&layer.region, FIT_ERROR, MIN_AREA, MIN_WIDTH);
+                                    fit::region(&layer.region, TONE_FIT_ERROR, MIN_AREA, MIN_WIDTH);
                                 (!path.is_empty()).then(|| (path, color(layer.tone)))
                             })
                             .collect();

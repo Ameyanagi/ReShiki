@@ -1,4 +1,5 @@
-//! Fits orbital contours using P. J. Schneider's digitized-curve algorithm (Graphics Gems, 1990).
+//! Smooth cubic outlines for merged surface regions and runs, after Schneider's
+//! digitized-curve fitting (Graphics Gems, 1990).
 //! Fits use drawing units. Smooth joins share a derivative on the cubic unit interval.
 //! The topology guard samples each cubic in eight steps and may return the source polygon.
 
@@ -8,6 +9,26 @@
 use crate::document::Point;
 use crate::graphics::PathCommand;
 use std::ops::{Add, Mul, Sub};
+
+#[cfg(test)]
+thread_local! {
+    static STROKE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static DIAGNOSTICS: std::cell::Cell<[(usize, usize); 2]> = const { std::cell::Cell::new([(0, 0); 2]) };
+}
+
+#[cfg(test)]
+pub(super) fn take_diagnostics() -> [(usize, usize); 2] {
+    DIAGNOSTICS.take()
+}
+
+#[cfg(test)]
+fn record_fit(corners: usize, fallback: bool) {
+    let mut counts = DIAGNOSTICS.get();
+    let (total, fallbacks) = &mut counts[usize::from(STROKE.get())];
+    *total += corners;
+    *fallbacks += usize::from(fallback);
+    DIAGNOSTICS.set(counts);
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct V {
@@ -131,6 +152,8 @@ pub fn region(
     min_area: f32,
     min_width: f32,
 ) -> Vec<PathCommand> {
+    #[cfg(test)]
+    STROKE.set(false);
     let mut out = Vec::new();
     for contour in contours {
         let mut p = clean(contour);
@@ -157,6 +180,8 @@ pub fn region(
 
 /// Fits runs meeting the length threshold, closing those with coincident endpoints.
 pub fn runs(runs: &[Vec<[f32; 2]>], error: f32, min_length: f32) -> Vec<PathCommand> {
+    #[cfg(test)]
+    STROKE.set(true);
     let mut out = Vec::new();
     for run in runs {
         let mut p = clean(run);
@@ -191,22 +216,34 @@ fn guarded(p: &[V], error: f32, cyclic: bool) -> Vec<PathCommand> {
     }
     let error = f64::from(error.max(0.0));
     let simple = !intersects(p, cyclic);
-    let k = prepare(p, error, cyclic);
-    for tolerance in [error, error * 0.5] {
-        let path = fit_path(&k, tolerance, cyclic);
-        if !simple || !intersects(&flatten(&path, cyclic), cyclic) {
-            return path;
-        }
+    let mut k = prepare(p, error, cyclic);
+    #[cfg(test)]
+    record_fit(
+        k[..p.len()].iter().filter(|knot| knot.corner).count(),
+        false,
+    );
+    let path = fit_path(&k, error, cyclic);
+    if !simple || !intersects(&flatten(&path, cyclic), cyclic) {
+        return path;
     }
+    let retry_error = error * 0.5;
+    protect_close_edges(&mut k, retry_error, cyclic);
+    let path = fit_path(&k, retry_error, cyclic);
+    if !intersects(&flatten(&path, cyclic), cyclic) {
+        return path;
+    }
+    #[cfg(test)]
+    record_fit(0, true);
     polygon(p, cyclic)
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy)]
 struct Knot {
     p: V,
     incoming: V,
     outgoing: V,
     corner: bool,
+    max_handle: f64,
 }
 
 impl Knot {
@@ -259,16 +296,35 @@ fn knots(p: &[V], radius: f64, cyclic: bool) -> Vec<Knot> {
             } else {
                 hi
             };
+            let enter = (p[i] - p[j.saturating_sub(1) % n]).unit();
+            let leave = (p[(j + 1).min(count - 1) % n] - p[i]).unit();
             let mut incoming = (p[i] - p[left % n]).unit();
             let mut outgoing = (p[right % n] - p[i]).unit();
             if incoming == V::default() {
-                incoming = (p[i] - p[j.saturating_sub(1) % n]).unit();
+                incoming = enter;
             }
             if outgoing == V::default() {
-                outgoing = (p[(j + 1).min(count - 1) % n] - p[i]).unit();
+                outgoing = leave;
             }
-            let corner = before > lo && after <= hi && incoming.dot(outgoing) < cos_limit;
+            // Both flanks must support the wide turn at this vertex. Two-edge
+            // chords cancel alternating noise when one edge spans the window.
+            let enter2 = (p[i] - p[j.saturating_sub(2) % n]).unit();
+            let leave2 = (p[(j + 2).min(count - 1) % n] - p[i]).unit();
+            let turn_cos = incoming.dot(outgoing).max(enter.dot(leave));
+            let corner = before > lo
+                && after <= hi
+                && turn_cos < cos_limit
+                && (n < 5 || enter2.dot(leave2) < cos_limit)
+                && enter.dot(incoming).min(leave.dot(outgoing)) > turn_cos.max(0.0)
+                && enter.cross(leave) * incoming.cross(outgoing) >= 0.0;
+            // At a narrow turn the chord window can reach the returning side.
+            let tangent = incoming + outgoing;
+            if tangent.dot(enter) <= 0.0 || tangent.dot(leave) <= 0.0 {
+                incoming = enter;
+                outgoing = leave;
+            }
             Knot {
+                max_handle: f64::INFINITY,
                 p: p[i],
                 incoming,
                 outgoing,
@@ -279,7 +335,7 @@ fn knots(p: &[V], radius: f64, cyclic: bool) -> Vec<Knot> {
 }
 
 fn prepare(p: &[V], error: f64, cyclic: bool) -> Vec<Knot> {
-    let mut k = knots(p, 3.0 * error, cyclic);
+    let mut k = knots(p, (3.0 * error).max(1.0), cyclic);
     if cyclic {
         let start = k.iter().position(|v| v.corner).unwrap_or_else(|| {
             let center =
@@ -314,6 +370,16 @@ fn fit_path(k: &[Knot], error: f64, cyclic: bool) -> Vec<PathCommand> {
 struct Cubic([V; 4]);
 
 impl Cubic {
+    fn controls_outside_samples(self, k: &[Knot], error: f64) -> bool {
+        let [_, b, c, _] = self.0;
+        let outside = |coord: fn(V) -> f64| {
+            let lo = coord(b).min(coord(c)) - error;
+            let hi = coord(b).max(coord(c)) + error;
+            k.iter().all(|v| coord(v.p) < lo) || k.iter().all(|v| coord(v.p) > hi)
+        };
+        k.len() > 2 && (outside(|v| v.x) || outside(|v| v.y))
+    }
+
     fn valid_controls(self) -> bool {
         let [a, b, c, d] = self.0;
         let chord2 = (d - a).norm2();
@@ -435,16 +501,12 @@ fn worst(k: &[Knot], t: &[f64], c: Cubic, tolerance2: f64) -> (f64, usize) {
 struct Span {
     first: usize,
     last: usize,
-    curve: Cubic,
+    left: f64,
+    right: f64,
     t: Vec<f64>,
-    interpolate: bool,
 }
 
 impl Span {
-    fn line(&self) -> bool {
-        self.last == self.first + 1
-    }
-
     fn fit(k: &[Knot], first: usize, last: usize, seam: bool, tol2: f64) -> Self {
         let left = if first == 0 && !seam {
             k[first].outgoing
@@ -457,6 +519,27 @@ impl Span {
             k[last].tangent()
         };
         let k = &k[first..=last];
+        if k.len() == 2 {
+            let chord2 = (k[1].p - k[0].p).norm2();
+            // Disjoint half-chord disks keep even the rounded control edges apart.
+            let handle = |knot: Knot, dir: V| {
+                let mut len = (chord2.sqrt() / 3.0).min(knot.max_handle);
+                while [-len, len]
+                    .iter()
+                    .any(|&h| ((knot.p + dir * h).rounded() - knot.p).norm2() >= chord2 * 0.25)
+                {
+                    len *= 0.5;
+                }
+                len
+            };
+            return Self {
+                first,
+                last,
+                left: handle(k[0], left),
+                right: handle(k[1], right),
+                t: Vec::new(),
+            };
+        }
         let mut t = chord_parameters(k);
         let mut curve = least_squares(k, &t, left, right);
         let mut err = worst(k, &t, curve, f64::INFINITY).0;
@@ -479,101 +562,38 @@ impl Span {
             }
             (curve, t, err) = (candidate, next, next_err);
         }
+        let [a, b, c, d] = curve.0;
         Self {
             first,
             last,
-            curve,
-            interpolate: false,
+            left: (b - a).length().min(k[0].max_handle),
+            right: (d - c).length().min(k[k.len() - 1].max_handle),
             t,
         }
     }
 }
 
 fn straight(k: &[Knot], tol2: f64) -> bool {
-    let a = k[0].p;
-    let ab = k[k.len() - 1].p - a;
-    let length2 = ab.norm2();
-    length2 > 0.0
-        && k[1..k.len() - 1].iter().all(|v| {
-            let ap = v.p - a;
-            let t = (ap.dot(ab) / length2).clamp(0.0, 1.0);
-            (ap - ab * t).norm2() <= tol2
-        })
-}
-
-fn common_handle(prev: &Span, next: &Span, knot: Knot, k: &[Knot]) -> V {
-    let incoming = prev.curve.0[3] - prev.curve.0[2];
-    let outgoing = next.curve.0[1] - next.curve.0[0];
-    let left = (prev.curve.0[3] - prev.curve.0[0]) * (1.0 / 3.0);
-    let right = (next.curve.0[3] - next.curve.0[0]) * (1.0 / 3.0);
-    let handle = match (prev.line(), next.line()) {
-        (true, _) => left,
-        (false, true) => right,
-        // A long neighbour must not pull a short span past its samples.
-        (false, false) => knot.tangent() * incoming.length().min(outgoing.length()),
+    let chord = Edge {
+        a: k[0].p,
+        b: k[k.len() - 1].p,
     };
-    if !prev.interpolate && !next.interpolate {
-        return handle;
-    }
-    // An interpolated span emits one cubic per source edge. Its shared
-    // endpoint handle must fit that edge, rather than the span's whole chord.
-    let original = handle.length();
-    let mut length = original;
-    if prev.interpolate {
-        length = length.min((k[prev.last].p - k[prev.last - 1].p).length() / 3.0);
-    }
-    if next.interpolate {
-        length = length.min((k[next.first + 1].p - k[next.first].p).length() / 3.0);
-    }
-    if length < original {
-        handle * (length / original)
-    } else {
-        handle
-    }
-}
-
-// A proposed pair of one-edge children can demand different derivatives at
-// one smooth knot. Keep their multi-point parent and interpolate its samples.
-fn conflicting_split(spans: &[Span], cuts: &[Option<usize>], i: usize, seam: bool) -> bool {
-    let Some(mid) = cuts[i] else { return false };
-    let span = &spans[i];
-    if span.last == span.first + 2 {
-        return true;
-    }
-    let n = spans.len();
-    let prev = (i + n - 1) % n;
-    let next = (i + 1) % n;
-    let left_line = spans[prev].line() || cuts[prev] == Some(spans[prev].last - 1);
-    let right_line = spans[next].line() || cuts[next] == Some(spans[next].first + 1);
-    (mid == span.first + 1 && (seam || i > 0) && left_line)
-        || (mid + 1 == span.last && (seam || i + 1 < n) && right_line)
-}
-
-fn interpolate(k: &[Knot], curve: Cubic, out: &mut Vec<PathCommand>) {
-    let [_, mut control, end_control, _] = curve.0;
-    for i in 1..k.len() {
-        let p = k[i].p;
-        let end = if i + 1 == k.len() {
-            end_control
-        } else {
-            let shorter = (p - k[i - 1].p).length().min((k[i + 1].p - p).length());
-            p - k[i].tangent() * (shorter / 3.0)
-        };
-        out.push(PathCommand::Cubic(control.point(), end.point(), p.point()));
-        control = p + (p - end);
-    }
+    chord.a != chord.b
+        && k[1..k.len() - 1]
+            .iter()
+            .all(|v| chord.distance2(v.p) <= tol2)
 }
 
 fn fit_chain(k: &[Knot], error: f64, seam: bool, out: &mut Vec<PathCommand>) {
     let last = k.len() - 1;
     let tol2 = error * error;
-    if !seam && straight(k, tol2) {
+    if !seam && k[1..last].iter().all(|v| v.max_handle.is_infinite()) && straight(k, tol2) {
         out.push(PathCommand::Line(k[last].p.point()));
         return;
     }
-    // With coincident endpoints and one shared tangent, a single cubic is collinear.
-    // Split the zero chord at its largest error before fitting the two arcs.
-    let mut spans = if seam {
+    let mut cuts: Vec<_> = (1..last).filter(|&i| k[i].max_handle.is_finite()).collect();
+    if seam && cuts.is_empty() {
+        // A closed cubic with one shared tangent is collinear. Start with two arcs.
         let mid = (1..last)
             .max_by(|&a, &b| {
                 (k[a].p - k[0].p)
@@ -581,66 +601,48 @@ fn fit_chain(k: &[Knot], error: f64, seam: bool, out: &mut Vec<PathCommand>) {
                     .total_cmp(&(k[b].p - k[0].p).norm2())
             })
             .unwrap_or(last / 2);
-        vec![
-            Span::fit(k, 0, mid, seam, tol2),
-            Span::fit(k, mid, last, seam, tol2),
-        ]
-    } else {
-        vec![Span::fit(k, 0, last, seam, tol2)]
-    };
+        cuts.push(mid);
+    }
+    let mut start = 0;
+    let mut spans: Vec<_> = cuts
+        .into_iter()
+        .chain([last])
+        .map(|end| {
+            let span = Span::fit(k, start, end, seam, tol2);
+            start = end;
+            span
+        })
+        .collect();
     // Process one recursion level at a time to share derivatives between siblings.
-    for depth in usize::from(seam)..=24 {
+    let mut depth = 0;
+    loop {
         let n = spans.len();
         let mut cuts = Vec::with_capacity(n);
         let mut commands = Vec::with_capacity(n);
         for (i, span) in spans.iter().enumerate() {
-            let [a, b, c, d] = span.curve.0;
-            let l = (i > 0 || seam)
-                .then(|| common_handle(&spans[(i + n - 1) % n], span, k[span.first], k));
-            let r = (i + 1 < n || seam)
-                .then(|| common_handle(span, &spans[(i + 1) % n], k[span.last], k));
-            if span.line() {
-                let third = (d - a) * (1.0 / 3.0);
-                if l.is_none_or(|h| h == third) && r.is_none_or(|h| h == third) {
-                    commands.push(PathCommand::Line(d.point()));
-                } else {
-                    // A shorter shared derivative still traces this exact line.
-                    commands.push(
-                        Cubic([
-                            a,
-                            (a + l.unwrap_or(third)).rounded(),
-                            (d - r.unwrap_or(third)).rounded(),
-                            d,
-                        ])
-                        .command(),
-                    );
-                }
-                cuts.push(None);
-                continue;
-            }
-            let curve = Cubic([
-                a,
-                l.map_or(b, |h| (a + h).rounded()),
-                r.map_or(c, |h| (d - h).rounded()),
-                d,
-            ]);
             let sub = &k[span.first..=span.last];
-            if span.interpolate {
-                interpolate(sub, curve, &mut commands);
-                cuts.push(None);
-                continue;
-            }
+            let (a, d) = (sub[0], sub[sub.len() - 1]);
+            let left = if i > 0 || seam {
+                a.tangent() * span.left.min(spans[(i + n - 1) % n].right)
+            } else {
+                a.outgoing * span.left
+            };
+            let right = if i + 1 < n || seam {
+                d.tangent() * span.right.min(spans[(i + 1) % n].left)
+            } else {
+                d.incoming * span.right
+            };
+            let curve = Cubic([a.p, (a.p + left).rounded(), (d.p - right).rounded(), d.p]);
             let (err, split) = worst(sub, &span.t, curve, tol2);
             // A small point error can still hide a loop between samples.
-            // Refine suspect control polygons at the same worst-point split.
-            if err <= tol2 && curve.valid_controls() {
+            if err > tol2 || !curve.valid_controls() {
+                cuts.push(Some(span.first + split));
+            } else if curve.controls_outside_samples(sub, error) {
+                // A long arch can put both controls beyond the drawing bounds.
+                cuts.push(Some(span.first + sub.len() / 2));
+            } else {
                 commands.push(curve.command());
                 cuts.push(None);
-            } else if depth == 24 {
-                commands.extend(sub[1..].iter().map(|v| PathCommand::Line(v.p.point())));
-                cuts.push(None);
-            } else {
-                cuts.push(Some(span.first + split));
             }
         }
         if cuts.iter().all(Option::is_none) {
@@ -648,29 +650,23 @@ fn fit_chain(k: &[Knot], error: f64, seam: bool, out: &mut Vec<PathCommand>) {
             return;
         }
         let mut refined = Vec::with_capacity(n + cuts.iter().flatten().count());
-        let conflicts: Vec<_> = (0..n)
-            .map(|i| conflicting_split(&spans, &cuts, i, seam))
-            .collect();
-        for ((mut span, cut), conflict) in spans.into_iter().zip(cuts).zip(conflicts) {
-            if conflict {
-                let a = k[span.first].p;
-                let d = k[span.last].p;
-                let l = (k[span.first + 1].p - a).length() / 3.0;
-                let r = (k[span.last - 1].p - d).length() / 3.0;
-                span.curve.0[1] = a + (span.curve.0[1] - a).unit() * l;
-                span.curve.0[2] = d + (span.curve.0[2] - d).unit() * r;
-                span.interpolate = true;
-                refined.push(span);
-                continue;
-            }
+        for (span, cut) in spans.into_iter().zip(cuts) {
             if let Some(mid) = cut {
-                refined.push(Span::fit(k, span.first, mid, seam, tol2));
-                refined.push(Span::fit(k, mid, span.last, seam, tol2));
+                if depth >= 24 {
+                    // Bound recursion on unevenly spaced data while retaining shared tangents.
+                    for i in span.first..span.last {
+                        refined.push(Span::fit(k, i, i + 1, seam, tol2));
+                    }
+                } else {
+                    refined.push(Span::fit(k, span.first, mid, seam, tol2));
+                    refined.push(Span::fit(k, mid, span.last, seam, tol2));
+                }
             } else {
                 refined.push(span);
             }
         }
         spans = refined;
+        depth += 1;
     }
 }
 
@@ -701,6 +697,12 @@ struct Edge {
 }
 
 impl Edge {
+    fn distance2(self, point: V) -> f64 {
+        let ab = self.b - self.a;
+        let ap = point - self.a;
+        let t = (ab.dot(ap) / ab.norm2()).clamp(0.0, 1.0);
+        (ap - ab * t).norm2()
+    }
     fn xmin(self) -> f64 {
         self.a.x.min(self.b.x)
     }
@@ -720,6 +722,55 @@ impl Edge {
         // The sweep has already established overlap on both axes.
         straddles(ab.cross(other.a - self.a), ab.cross(other.b - self.a))
             && straddles(cd.cross(self.a - other.a), cd.cross(self.b - other.a))
+    }
+}
+
+// Where two source edges can approach within the retry error on each side,
+// interpolate their endpoints and keep their handles inside the gap.
+fn protect_close_edges(k: &mut [Knot], error: f64, cyclic: bool) {
+    let edges: Vec<_> = k
+        .windows(2)
+        .map(|w| Edge {
+            a: w[0].p,
+            b: w[1].p,
+        })
+        .collect();
+    let n = edges.len();
+    let mut order: Vec<_> = (0..n).collect();
+    order.sort_unstable_by(|&i, &j| edges[i].xmin().total_cmp(&edges[j].xmin()).then(i.cmp(&j)));
+    let reach = 2.0 * error;
+    for (rank, &i) in order.iter().enumerate() {
+        let a = edges[i];
+        for &j in &order[rank + 1..] {
+            let b = edges[j];
+            if b.xmin() > a.xmax() + reach {
+                break;
+            }
+            let gap = i.abs_diff(j);
+            if gap == 1
+                || (cyclic && gap + 1 == n)
+                || b.ymin() > a.ymax() + reach
+                || a.ymin() > b.ymax() + reach
+            {
+                continue;
+            }
+            let d2 = a
+                .distance2(b.a)
+                .min(a.distance2(b.b))
+                .min(b.distance2(a.a))
+                .min(b.distance2(a.b));
+            if d2 <= reach * reach {
+                let limit = d2.sqrt() / 3.0;
+                for index in [i, i + 1, j, j + 1] {
+                    k[index].max_handle = k[index].max_handle.min(limit);
+                }
+            }
+        }
+    }
+    if cyclic {
+        let limit = k[0].max_handle.min(k[n].max_handle);
+        k[0].max_handle = limit;
+        k[n].max_handle = limit;
     }
 }
 

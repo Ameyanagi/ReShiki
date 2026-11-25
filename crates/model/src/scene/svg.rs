@@ -149,18 +149,42 @@ fn push_command(d: &mut String, letter: char, numbers: &[f32]) {
     }
 }
 
-/// Fitted surface paths use the compact 3D-model coordinate format too.
+/// Fitted surface paths in relative commands, to a hundredth of a unit:
+/// they are long, and small offsets print shorter. Offsets are taken between
+/// rounded points, so rounding never accumulates along a path.
 fn surface_data(commands: &[crate::graphics::PathCommand]) -> String {
     use crate::graphics::PathCommand;
+    let hundredths = |p: super::Point| [p.x, p.y].map(|v| (v * 100.).round());
     let mut d = String::new();
+    let (mut at, mut start) = ([0.; 2], [0.; 2]);
+    let push = |d: &mut String, letter, points: &[super::Point], at: &mut [f32; 2]| {
+        let from = *at;
+        let numbers: Vec<f32> = points
+            .iter()
+            .flat_map(|&p| {
+                let [x, y] = hundredths(p);
+                [(x - from[0]) / 100., (y - from[1]) / 100.]
+            })
+            .collect();
+        if let Some(&last) = points.last() {
+            *at = hundredths(last);
+        }
+        push_command(d, letter, &numbers);
+    };
     for command in commands {
         match command {
-            PathCommand::Move(p) => push_command(&mut d, 'M', &[p.x, p.y]),
-            PathCommand::Line(p) => push_command(&mut d, 'L', &[p.x, p.y]),
-            PathCommand::Cubic(a, b, c) => {
-                push_command(&mut d, 'C', &[a.x, a.y, b.x, b.y, c.x, c.y]);
+            PathCommand::Move(p) => {
+                // An absolute move keeps each subpath independent of the last.
+                push_command(&mut d, 'M', &[p.x, p.y]);
+                at = hundredths(*p);
+                start = at;
             }
-            PathCommand::Close => push_command(&mut d, 'Z', &[]),
+            PathCommand::Line(p) => push(&mut d, 'l', &[*p], &mut at),
+            PathCommand::Cubic(a, b, c) => push(&mut d, 'c', &[*a, *b, *c], &mut at),
+            PathCommand::Close => {
+                d.push('z');
+                at = start;
+            }
         }
     }
     d
