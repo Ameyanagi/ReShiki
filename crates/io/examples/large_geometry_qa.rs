@@ -48,6 +48,11 @@ fn qa(args: &[String]) -> anyhow::Result<()> {
                 continue;
             }
             ran += 1;
+            // Names become output file names: keep them inside the directory.
+            anyhow::ensure!(
+                std::path::Path::new(name).file_name() == Some(name.as_ref()),
+                "case name {name:?} must be a plain file name"
+            );
             let _ = std::fs::remove_file(output.join(format!("{name}.rsk")));
             let row = run(&client, &output, name, smiles)
                 .await

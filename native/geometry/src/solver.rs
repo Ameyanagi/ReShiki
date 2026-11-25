@@ -481,9 +481,11 @@ fn embedding_parameters(request: &Request) -> EmbedParams {
     parameters.prune_rms_thresh = 0.1;
     // Symmetry-aware pruning first enumerates the molecule's automorphisms,
     // with no deadline; for a symmetric C96H24 flake that search alone
-    // outlasts the worker. Compare in atom order instead. A molecule without
-    // symmetry prunes exactly as before; a symmetric one may keep a symmetry
-    // copy of a seed, which only costs another minimization.
+    // outlasts the worker. Compare heavy atoms in atom order instead. Most
+    // molecules prune as before. A symmetric one, or one whose nitro or
+    // carboxylate oxygens could swap, may keep a symmetry copy of a seed,
+    // which costs one more minimization; isotopic hydrogens (D, T) no longer
+    // count toward the RMS.
     parameters.use_symmetry_for_pruning = false;
     parameters.clear_conformers = true;
     parameters.enable_sequential_random_seeds = true;
@@ -602,7 +604,11 @@ fn embed(
                     request.conformers, request.seed, embedding_failures(&embedded.params)
                 ));
                 parameters.use_basic_knowledge = false;
-                method = "Rust ETDG fallback";
+                method = if parameters.use_random_coords {
+                    "Rust random-start ETDG"
+                } else {
+                    "Rust ETDG fallback"
+                };
             }
             Some(EmbeddingRetry::RandomCoordinates) => {
                 diagnostics.push(format!(
