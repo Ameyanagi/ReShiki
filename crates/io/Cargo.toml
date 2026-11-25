@@ -17,6 +17,7 @@ rdkit-reference = ["reshiki-model/rdkit-reference"]
 reshiki-model = { path = "../model" }
 reshiki-geometry = { path = "../../native/geometry" }
 reshiki-process-heap = { path = "../process-heap" }
+reshiki-qcdata = { path = "../qcdata" }
 base64 = "0.22"
 directories-next = "2"
 # Large embedded data is stored deflated (build.rs) and inflated on first use.
