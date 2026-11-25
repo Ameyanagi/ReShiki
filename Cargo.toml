@@ -37,6 +37,7 @@ members = [
   "crates/metafile",
   "crates/web-worker",
   "crates/process-heap",
+  "crates/qcdata",
   "crates/web",
   "crates/python",
 ]
