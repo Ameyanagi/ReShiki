@@ -264,7 +264,7 @@ impl App {
         match ensemble(&mut self.tab.doc, &dialog.file, index) {
             Ok(kept) => {
                 self.status = format!(
-                    "Frame {} of {count} opened · {kept} frames kept as an ensemble in the Conformers tab",
+                    "Frame {} of {count} opened · {kept} kept as an ensemble",
                     index + 1
                 );
                 self.error = false;
@@ -274,7 +274,7 @@ impl App {
             }
             Err(reason) => {
                 self.status = format!(
-                    "Frame {} of {count} opened · The ensemble was not kept: {reason}",
+                    "Frame {} of {count} · Ensemble not kept: {reason}",
                     index + 1
                 );
                 self.error = false;
