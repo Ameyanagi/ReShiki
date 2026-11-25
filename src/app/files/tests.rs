@@ -785,3 +785,68 @@ async fn a_drawing_reopens_at_the_view_it_was_saved_in() {
         assert_eq!(app.tab.pages.fit.is_none(), saved);
     }
 }
+
+#[test]
+fn program_outputs_use_the_qc_reader_byte_limit() {
+    let limit = reshiki::qcread::MAX_FILE_BYTES as u64;
+    for path in [
+        "run.log",
+        "run.OUT",
+        "run.fchk",
+        "run.fch",
+        "run.molden",
+        "run.mold",
+        "run.gjf",
+        "run.com",
+        "run.gau",
+        "run.inp",
+    ] {
+        let open_limit = super::super::import::open_limit(std::path::Path::new(path));
+        assert_eq!(read_length(u64::MAX, open_limit), limit + 1, "{path}");
+    }
+}
+
+#[test]
+fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let open = |name: &str, path: &str| {
+        let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/qc/");
+        let bytes = std::fs::read(format!("{fixtures}{path}")).unwrap();
+        let (_, opened) = runtime
+            .block_on(prepare_contents(name.into(), Ok(bytes)))
+            .unwrap();
+        opened
+    };
+    // Three Gaussian jobs (Link1 and an internal step): the last one that ended normally opens.
+    let Ok(Prepared::Records(batch)) = open("CH2O_CO2.log", "pymatgen/CH2O_CO2.log") else {
+        panic!("a Gaussian log opens as a drawing");
+    };
+    assert_eq!(batch.drawings.len(), 1);
+    // The last Standard orientation lists atomic numbers 6, 8, 8:
+    //      1          6           0        0.000000    0.000000    0.000000
+    //      2          8           0        0.000000    0.000000    1.187890
+    //      3          8           0        0.000000    0.000000   -1.187890
+    let doc = &batch.drawings[0];
+    let elements: Vec<_> = doc.atoms.iter().map(|atom| atom.element.as_str()).collect();
+    assert_eq!(elements, ["C", "O", "O"]);
+    let notice = &batch.warnings[0];
+    assert!(
+        notice.starts_with("Final geometry of job 3 of 3: "),
+        "{notice}"
+    );
+    assert!(
+        notice.ends_with("Normal termination · Results can't be shown yet"),
+        "{notice}"
+    );
+    // An input has no results to mention.
+    let Ok(Prepared::Records(batch)) = open("water.com", "cclib/g16_water_mp2.com") else {
+        panic!("a Gaussian input opens as a drawing");
+    };
+    assert_eq!(batch.warnings[0], "Geometry from the Gaussian input file");
+    // A .log that no reader recognizes is refused by name.
+    let error = open("notes.log", "README.md").err().unwrap_or_default();
+    assert!(error.contains("not a format ReShiki reads"), "{error}");
+}

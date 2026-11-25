@@ -481,6 +481,8 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             Box::new(doc),
             reshiki::document::View::read(&contents),
         ))
+    } else if QC_EXTENSIONS.contains(&extension.as_str()) {
+        prepare_qc(path, &contents)
     } else {
         // An SD file's records are read next, in `records`. Its extension
         // comes first, as for Insert: POSCAR is told by its name.
@@ -504,6 +506,50 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             contents,
         })
     }
+}
+
+/// Quantum chemistry program outputs and inputs that Open reads.
+pub(super) const QC_EXTENSIONS: [&str; 10] = [
+    "log", "out", "fchk", "fch", "molden", "mold", "gjf", "com", "gau", "inp",
+];
+
+/// A program output or input opens as the 3D model of its default job's last
+/// geometry, as an unsaved drawing named after the file. Its results are not
+/// shown yet, and the status says so.
+fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, String> {
+    use reshiki::qcread::read;
+    let name = super::import::name(path);
+    let file = read(&name, contents).map_err(|e| e.to_string())?;
+    let (index, job, step) = file
+        .default_job()
+        .and_then(|i| file.jobs.get(i).map(|job| (i, job)))
+        .and_then(|(i, job)| Some((i, job, job.steps.last()?)))
+        .ok_or("The file has no geometry")?;
+    let frame = &step.frame;
+    let mut xyz = format!("{}\n\n", frame.numbers.len());
+    for (number, [x, y, z]) in frame.numbers.iter().zip(&frame.positions_angstrom) {
+        xyz.push_str(&format!("{number} {x} {y} {z}\n"));
+    }
+    let (drawing, mut warnings) = reshiki::crystal::read("xyz", &xyz).map_err(|e| e.to_string())?;
+    let what = if file.jobs.len() > 1 {
+        format!("Final geometry of job {} of {}", index + 1, file.jobs.len())
+    } else if job.steps.len() > 1 {
+        "Final geometry".into()
+    } else {
+        "Geometry".into()
+    };
+    let mut notice = match &job.completion {
+        Some(completion) => format!("{what}: {}, {}", job.title(), completion.name()),
+        None => format!("{what} from the {} file", file.format.name()),
+    };
+    if file.format.has_results() {
+        notice.push_str(" · Results can't be shown yet");
+    }
+    warnings.insert(0, notice);
+    warnings.extend(file.warnings);
+    Ok(Prepared::Records(Box::new(super::import::Batch::one(
+        drawing, warnings,
+    ))))
 }
 
 /// Every record of an SD file, read as Insert reads them, before the file
@@ -559,7 +605,7 @@ pub(super) async fn read(path: PathBuf) -> Opened {
 }
 
 /// The Open dialog's title, which names what it opens: it has no filter.
-const OPEN_TITLE: &str = "Open a ReShiki, editable PNG/SVG/PDF, MOL, SDF, RXN, CDXML, CDX, CDS, SMILES, CIF, PDB, POSCAR or XYZ file";
+const OPEN_TITLE: &str = "Open a ReShiki, editable PNG/SVG/PDF, MOL, SDF, RXN, CDXML, CDX, CDS, SMILES, CIF, PDB, POSCAR, XYZ, Molden, fchk, or Gaussian/ORCA/GAMESS file";
 
 /// Opens the files the user chooses, each in a tab.
 pub(super) fn open_dialog(

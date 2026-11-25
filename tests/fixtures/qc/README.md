@@ -47,8 +47,11 @@ Source paths are relative to the repository root, so the original of
 | `gamess_dvb_gopt_a.inp`             | `data/GAMESS/basicGAMESS-US2018/dvb_gopt_a.inp`       | GAMESS input      | `02234bf42a34`     |
 | `gamess_nh3_ts_ir.inp`              | `data/GAMESS/basicGAMESS-US2018/nh3_ts_ir.inp`        | GAMESS input      | `f759f4687a5b`     |
 
-The Molden 5.7 files and the Gaussian 09 fchk files of the same name come from
-the same calculations, so the tests compare orbital values read from both.
+The Molden 5.7 files were written from GAMESS-US runs (cclib compares them with
+GAMESS output), not from the Gaussian runs of the fchk files of the same name.
+They are not same-calculation pairs: the tests use them for the Molden
+Cartesian normalization (orthonormal orbitals) and for cross-program checks of
+counts and energies only.
 
 ## pymatgen-test-files (`pymatgen/`)
 
