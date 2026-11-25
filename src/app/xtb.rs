@@ -28,6 +28,7 @@ mod view;
 #[cfg(test)]
 pub(super) use results::{Evaluation, View};
 pub(crate) use state::Task as CalcTask;
+pub(crate) use vibrations::Action as VibrationsAction;
 
 /// The Predict tab's two pages.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -66,6 +67,7 @@ pub(crate) enum Action {
     ApplyAnyway,
     Discard,
     Palette(palette::Action),
+    Vibrations(vibrations::Action),
     #[cfg(not(target_arch = "wasm32"))]
     Event(u64, run::Event),
 }
@@ -108,6 +110,7 @@ pub(crate) struct State {
     pub(super) outcome: Option<Outcome>,
     serial: u64,
     pub(super) palette: palette::Palette,
+    pub(super) vibrations: vibrations::State,
     /// What this session knows about stored results' runs, by result.
     infos: Vec<(Weak<CalcResult>, Arc<RunInfo>)>,
 }
@@ -140,6 +143,9 @@ pub(crate) struct Request {
     config: state::Config,
     /// "Keep full results in this file" for the new result.
     keep_full: bool,
+    /// Start here (Å, frame order) instead of the model: "Push along mode".
+    /// Only a converged optimization from here replaces the model geometry.
+    start: Option<Vec<[f64; 3]>>,
 }
 
 pub(crate) struct Run {
@@ -147,6 +153,7 @@ pub(crate) struct Run {
     atoms: Vec<u64>,
     config: state::Config,
     keep_full: bool,
+    start: Option<Vec<[f64; 3]>>,
     /// Absent while the 3D model is made first.
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
@@ -258,6 +265,8 @@ pub(crate) struct Review {
 
 /// A finished calculation, not yet stored.
 struct Pending {
+    /// Started away from the model ("Push along mode").
+    pushed: bool,
     launch: Launch,
     frames: Vec<Frame>,
     result: CalcResult,
@@ -269,7 +278,10 @@ struct Pending {
 /// A run's progress, which never closes menus or moves focus.
 pub(super) fn is_progress(message: &Message) -> bool {
     #[cfg(not(target_arch = "wasm32"))]
-    return matches!(message, Message::Xtb(Action::Event(..)));
+    return matches!(
+        message,
+        Message::Xtb(Action::Event(..) | Action::Vibrations(vibrations::Action::Tick))
+    );
     #[cfg(target_arch = "wasm32")]
     false
 }
@@ -333,7 +345,16 @@ impl App {
             #[cfg(not(target_arch = "wasm32"))]
             Action::Event(serial, event) => self.xtb_event(serial, event),
             Action::Page(page) => self.xtb.page = page,
-            Action::Palette(action) => return self.xtb_palette(action),
+            Action::Palette(action) => {
+                let opened = matches!(action, palette::Action::View(results::View::Vibrations));
+                let task = self.xtb_palette(action);
+                if opened {
+                    return Task::batch([task, self.xtb_vibrations_opened()]);
+                }
+                self.xtb_vibrations_sync();
+                return task;
+            }
+            Action::Vibrations(action) => return self.xtb_vibrations_action(action),
             setting => {
                 let target = self.xtb_key();
                 let settings = &mut self.xtb.settings;
@@ -392,10 +413,13 @@ impl App {
         (!self.model_stale(index)).then_some(index)
     }
 
-    /// The model preview while a run is current, else a previewed step.
+    /// The model preview while a run is current, else a previewed step,
+    /// else an animated vibration.
     pub(super) fn xtb_preview(&self) -> Option<&Document> {
         let Some(run) = self.tab.xtb.run.as_ref() else {
-            return self.xtb_step_preview();
+            return self
+                .xtb_step_preview()
+                .or_else(|| self.xtb_vibration_preview());
         };
         (run.revision == (self.tab.file_epoch, self.tab.revision))
             .then_some(run.preview.as_deref())
@@ -506,6 +530,7 @@ impl App {
             atoms,
             config,
             keep_full: false,
+            start: None,
         };
         self.xtb_begin(request)
     }
@@ -528,6 +553,7 @@ impl App {
             atoms: request.atoms,
             config: request.config,
             keep_full: request.keep_full,
+            start: request.start,
             launch: None,
             model: None,
             started: iced::time::Instant::now(),
@@ -612,10 +638,6 @@ impl App {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn xtb_start(&mut self, launch: Launch) -> Task<Message> {
-        use reshiki_xtb_worker::protocol::{
-            Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
-        };
-
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = &mut self.tab.xtb.run else {
             return Task::none();
@@ -627,46 +649,23 @@ impl App {
             self.xtb_fail(state::Failure::TooMany { count, limit });
             return Task::none();
         }
-        let method = match config.method {
-            qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
-            qcdata::XtbMethod::GXtb => Method::Gxtb,
-            qcdata::XtbMethod::GfnFf => Method::Gfnff,
-        };
-        let job = run::Job {
-            optimize: config.task.optimizes(),
-            frequencies: config.task.frequencies(),
-            numbers: launch.frame.numbers.clone(),
-            positions: launch.frame.positions_angstrom.clone(),
-            charge: config.charge,
-            uhf: config.unpaired,
-            method,
-            conventions: if config.xtb68 {
-                Conventions::Xtb68
-            } else {
-                Conventions::Axtb
-            },
-            scf: ScfSettings {
-                accuracy: config.accuracy,
-                electronic_temperature_k: config.temperature_k,
-                max_iterations: config.max_iterations,
-                retries: vec![],
-            },
-            solvent: config.solvent.map(|name| Solvent {
-                model: SolventModel::Alpb,
-                name: name.to_lowercase(),
-                state: Default::default(),
-                correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
-            }),
-            threads: config.threads,
-            fixed: launch
-                .atoms
-                .iter()
-                .enumerate()
-                .filter(|(_, id)| id.is_some_and(|id| config.fixed.contains(&id)))
-                .map(|(index, _)| index)
-                .collect(),
-            tight: config.tight,
-        };
+        let fixed = launch
+            .atoms
+            .iter()
+            .enumerate()
+            .filter(|(_, id)| id.is_some_and(|id| config.fixed.contains(&id)))
+            .map(|(index, _)| index)
+            .collect();
+        let mut job = job(config, &launch.frame, fixed);
+        if let Some(start) = &run.start {
+            if start.len() != count {
+                self.xtb_fail(state::Failure::Other(
+                    "The molecule changed after this calculation".into(),
+                ));
+                return Task::none();
+            }
+            job.positions = start.clone();
+        }
         run.label = format!("xTB · {}", state::formula(&launch.frame.numbers));
         run.launch = Some(launch);
         run.revision = (epoch, revision);
@@ -744,6 +743,7 @@ impl App {
                 atoms: std::mem::take(&mut run.atoms),
                 config: run.config.clone(),
                 keep_full: run.keep_full,
+                start: run.start.take(),
             })
         });
         let failed = Failed {
@@ -840,7 +840,16 @@ impl App {
                 return;
             }
         }
+        // A push that did not converge never replaces the accepted structure.
+        let unconverged_push =
+            pending.pushed && !matches!(pending.result.status, qcdata::Status::Converged);
+        if unconverged_push {
+            notes.push(
+                "The re-optimization did not converge: the accepted structure is unchanged.".into(),
+            );
+        }
         let applied = optimized
+            && !unconverged_push
             && !moved
             && attached.freshness == Freshness::Current
             && match science::apply_geometry(&mut doc, attached.attachment, &pending.result.frame) {
@@ -866,6 +875,11 @@ impl App {
         {
             self.tab.xtb.remember(&result, Arc::new(pending.info));
             self.tab.xtb.palette.show(&result);
+            self.tab.xtb.vibrations.mode = 0;
+            // After a push the question was the imaginary mode: show its answer.
+            if pending.pushed {
+                self.tab.xtb.palette.view = results::View::Vibrations;
+            }
         }
         self.status = if applied {
             format!("Applied xTB geometry · {} · ⌘Z undoes", pending.line)
@@ -876,6 +890,8 @@ impl App {
             line: pending.line,
             notes,
         });
+        // A fresh result holds its modes, so nothing needs recomputing.
+        self.xtb_vibrations_sync();
     }
 
     /// "C3" for the third frame atom, and the drawing's CIP code there.
@@ -905,6 +921,48 @@ impl Run {
     }
 }
 
+/// The worker job for `config` on `frame`, holding frame atoms `fixed`.
+#[cfg(not(target_arch = "wasm32"))]
+fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
+    use reshiki_xtb_worker::protocol::{
+        Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
+    };
+    let method = match config.method {
+        qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
+        qcdata::XtbMethod::GXtb => Method::Gxtb,
+        qcdata::XtbMethod::GfnFf => Method::Gfnff,
+    };
+    run::Job {
+        optimize: config.task.optimizes(),
+        frequencies: config.task.frequencies(),
+        numbers: frame.numbers.clone(),
+        positions: frame.positions_angstrom.clone(),
+        charge: config.charge,
+        uhf: config.unpaired,
+        method,
+        conventions: if config.xtb68 {
+            Conventions::Xtb68
+        } else {
+            Conventions::Axtb
+        },
+        scf: ScfSettings {
+            accuracy: config.accuracy,
+            electronic_temperature_k: config.temperature_k,
+            max_iterations: config.max_iterations,
+            retries: vec![],
+        },
+        solvent: config.solvent.map(|name| Solvent {
+            model: SolventModel::Alpb,
+            name: name.to_lowercase(),
+            state: Default::default(),
+            correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
+        }),
+        threads: config.threads,
+        fixed,
+        tight: config.tight,
+    }
+}
+
 /// Whether the molecule's model still has the geometry `launch` started from.
 fn shows(doc: &Document, launch: &Launch) -> bool {
     model_shows(doc, &launch.atoms, &launch.frame.positions_angstrom)
@@ -927,7 +985,7 @@ fn model_shows(doc: &Document, atoms: &[Option<u64>], positions: &[[f64; 3]]) ->
 
 /// The document with the model of `atom`'s molecule at `positions` (Å,
 /// frame order), shown beside the drawing if it was 2D only.
-fn preview(doc: &Document, atom: u64, positions: &[[f64; 3]]) -> Option<Document> {
+pub(super) fn preview(doc: &Document, atom: u64, positions: &[[f64; 3]]) -> Option<Document> {
     let index = doc
         .models
         .iter()
@@ -1024,6 +1082,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         result.vibrations.as_ref(),
     );
     Ok(Pending {
+        pushed: run.start.is_some(),
         info,
         launch,
         frames,

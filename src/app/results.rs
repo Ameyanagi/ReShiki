@@ -762,6 +762,11 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Discard => None,
                 Action::Palette(super::xtb::palette::Action::Exported(..)) => Some(Completion::Xtb),
                 Action::Palette(..) => None,
+                #[cfg(not(target_arch = "wasm32"))]
+                Action::Vibrations(super::xtb::VibrationsAction::Recomputed(..)) => {
+                    Some(Completion::Xtb)
+                }
+                Action::Vibrations(..) => None,
             }
         }
         Message::FigureExported(..) => Some(Completion::FigureExport),

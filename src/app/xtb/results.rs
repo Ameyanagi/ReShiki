@@ -292,7 +292,8 @@ pub(crate) fn summary_rows(
     rows
 }
 
-fn point_group(group: &str) -> String {
+/// "C2v", "D∞h": the engine's label as chemists write it.
+pub(crate) fn point_group(group: &str) -> String {
     match group.to_ascii_lowercase().as_str() {
         "cinfv" | "c∞v" => "C∞v".into(),
         "dinfh" | "d∞h" => "D∞h".into(),

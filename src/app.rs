@@ -785,6 +785,7 @@ impl App {
             self.star_subscription(),
             self.properties_subscription(),
             self.engine_subscription(),
+            self.xtb_subscription(),
             self.pulse_subscription(),
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),

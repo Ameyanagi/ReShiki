@@ -571,6 +571,7 @@ impl App {
             atoms: reshiki::molecule_names::component(&self.tab.doc, first),
             config,
             keep_full: shown.stored.keep_full,
+            start: None,
         };
         self.xtb_end_preview();
         self.xtb_begin(request)
@@ -690,6 +691,7 @@ pub(in crate::app) fn size_question(
 }
 
 mod view;
+pub(super) use view::alert;
 
 #[cfg(test)]
 pub(in crate::app) mod tests;
