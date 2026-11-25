@@ -537,6 +537,10 @@ fn a_crash_offers_run_again_and_details_without_the_structure() {
         details.contains("GFN2-xTB · Energy · charge 0"),
         "{details}"
     );
+    assert!(
+        details.contains("solvent none · conventions axtb"),
+        "{details}"
+    );
     assert!(details.contains("H2O, 3 atoms"), "{details}");
     assert!(details.contains("signal: 11"), "{details}");
     assert!(!details.contains("0.96"), "no coordinates: {details}");

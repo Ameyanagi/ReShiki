@@ -212,12 +212,21 @@ impl Failed {
         parts.push(format!("axtb {}", reshiki_xtb_worker::AXTB_REV));
         if let Some(request) = &self.request {
             let config = &request.config;
+            let default = |value: Option<String>| value.unwrap_or_else(|| "default".into());
             parts.push(format!(
-                "{} · {:?} · charge {} · unpaired electrons {}",
+                "{} · {:?} · charge {} · unpaired electrons {} · solvent {} · conventions {} · \
+                 accuracy {} · electronic temperature {} · max SCF iterations {} · {} threads · {}",
                 config.method.label(),
                 config.task,
                 config.charge,
-                config.unpaired
+                config.unpaired,
+                config.solvent.unwrap_or("none"),
+                if config.xtb68 { "xtb 6.8" } else { "axtb" },
+                default(config.accuracy.map(|x| x.to_string())),
+                default(config.temperature_k.map(|k| format!("{k} K"))),
+                default(config.max_iterations.map(|n| n.to_string())),
+                config.threads,
+                if config.tight { "tight" } else { "normal" },
             ));
         }
         if !self.numbers.is_empty() {
@@ -742,6 +751,8 @@ impl App {
         self.status = format!("xTB calculation failed: {}", failed.explain().0);
         self.error = true;
         self.tab.xtb.palette.open = true;
+        // The card's actions must show, so a collapsed dock opens.
+        self.xtb.dock.collapsed = false;
         self.tab.xtb.outcome = Some(Outcome::Failed(Box::new(failed)));
     }
 
