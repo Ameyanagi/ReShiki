@@ -381,7 +381,6 @@ fn water_hessian_crosses_binary_chunks_and_converts_to_a_valid_calc_result() {
 
 #[cfg(feature = "xtb")]
 #[test]
-#[ignore = "requires the xTB worker executable"]
 fn xtb_agent_calculates_water_energy_and_frequencies() {
     let dir = tempfile::tempdir().expect("CLI folder");
     let xyz = fixtures().join("water.xyz");
