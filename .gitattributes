@@ -57,3 +57,6 @@ tests/fixtures/large-selection-copy-feedback/frame-trace-*.patch -text whitespac
 # Keep third-party quantum chemistry fixtures byte for byte.
 tests/fixtures/qc/cclib/** -text whitespace=-blank-at-eof,-blank-at-eol
 tests/fixtures/qc/pymatgen/** -text whitespace=-blank-at-eof,-blank-at-eol
+# Preserve upstream inputs and Gaussian's terminating blank line.
+crates/io/tests/fixtures/qc_input/third_party/** -text whitespace=-blank-at-eof,-blank-at-eol
+crates/io/tests/fixtures/qc_input/*.gjf whitespace=-blank-at-eof

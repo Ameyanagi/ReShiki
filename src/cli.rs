@@ -16,13 +16,14 @@
 //! - Warnings go to stderr as `reshiki: warning: {message}`, an operation
 //!   error as `reshiki: error[{code}]: {message}` with the operation error
 //!   code, any other error as `reshiki: error: {message}` and usage errors
-//!   as `reshiki: {message}`.
+//!   as `reshiki: {message}`. `export-input` warnings use `warning: {message}`.
 //! - An operation, input or file error exits [`FAILURE`] (1), a usage error
 //!   [`USAGE`] (2), and a failed write to stdout [`FAILURE`].
 //!
 //! Paths on the command line are read and written with the user's own
-//! authority (no folder grants, no extension allowlist). An existing output
-//! file is replaced only with `--force`. Release builds on Windows are GUI
+//! authority (no folder grants, no extension allowlist). Commands that offer
+//! `--force` require it to replace existing files. `export-input --out` replaces
+//! its output. Release builds on Windows are GUI
 //! programs without a console, so their output must be redirected.
 
 mod analyze;
@@ -30,6 +31,7 @@ mod args;
 mod commands;
 mod compose;
 mod convert;
+mod export_input;
 mod host;
 mod io;
 mod mcp_usage;
@@ -163,6 +165,7 @@ async fn run_command(
         Command::Compose(compose) => compose::run(compose, out, err, terminal).await,
         Command::Analyze(input) => analyze::run(input, out, err).await,
         Command::PredictNmr(command) => predict_nmr::run(command, out, err).await,
+        Command::ExportInput(command) => export_input::run(command, out, err),
         Command::Name(name) => name::run(name, out, err).await,
         Command::PiecesCheck(files) => pieces::check(&files, out),
         Command::PiecesRender(render) => pieces::render(render, out, err, terminal).await,

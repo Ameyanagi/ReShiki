@@ -189,6 +189,8 @@ fn changed_atoms(
         piece_definitions,
         on_other_canvas: _,
         seats,
+        // Calculation data is never drawn.
+        science: _,
     } = preview;
     let same = depth_appearance.is_empty()
         && base.depth_appearance.is_empty()

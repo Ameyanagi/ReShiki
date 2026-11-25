@@ -6,16 +6,20 @@ use super::build::Lattice;
 use super::{Atom, Error, Structure, V3, elements, number};
 use reshiki_qcdata::MAX_FRAMES;
 
-/// The `key=value` pairs of an extended XYZ comment line; values may be
-/// quoted with double quotes.
-fn pairs(comment: &str) -> Vec<(String, String)> {
+/// The `key=value` pairs of an extended XYZ comment line; keys and values
+/// may be quoted with double quotes.
+pub(crate) fn pairs(comment: &str) -> Vec<(String, String)> {
     let mut out = vec![];
     let mut rest = comment.trim();
     while !rest.is_empty() {
         let Some((key, after)) = rest.split_once('=') else {
             break;
         };
-        let key = key.split_whitespace().last().unwrap_or_default();
+        let key = key
+            .split_whitespace()
+            .last()
+            .unwrap_or_default()
+            .trim_matches('"');
         let after = after.trim_start();
         let (value, tail) = if let Some(quoted) = after.strip_prefix('"') {
             quoted.split_once('"').unwrap_or((quoted, ""))
@@ -29,7 +33,7 @@ fn pairs(comment: &str) -> Vec<(String, String)> {
 }
 
 /// The element (species or atomic number) and position columns from `Properties`.
-fn columns(properties: &str) -> Option<(usize, bool, usize)> {
+pub(crate) fn columns(properties: &str) -> Option<(usize, bool, usize)> {
     let fields: Vec<&str> = properties.split(':').collect();
     let (mut column, mut species, mut atomic_number, mut position) = (0usize, None, None, None);
     for chunk in fields.chunks(3) {
@@ -51,6 +55,24 @@ fn columns(properties: &str) -> Option<(usize, bool, usize)> {
         .map(|column| (column, false))
         .or_else(|| atomic_number.map(|column| (column, true)))?;
     Some((element, atomic_numbers, position?))
+}
+
+impl crate::qc_input::XyzColumns {
+    /// Read extended XYZ columns, using ordinary XYZ columns when absent.
+    pub fn from_comment(comment: &str) -> Option<Self> {
+        let (species, position) = match pairs(comment)
+            .into_iter()
+            .find(|(key, _)| key == "properties")
+        {
+            // Export reads element symbols, so a Z-only column is not accepted.
+            Some((_, properties)) => match columns(&properties)? {
+                (species, false, position) => (species, position),
+                (_, true, _) => return None,
+            },
+            None => (0, 1),
+        };
+        Some(Self { species, position })
+    }
 }
 
 /// Numbered XYZ lines, shared by the crystal and quantum chemistry readers.

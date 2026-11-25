@@ -1,9 +1,11 @@
 use super::*;
 use crate::{
-    document::{Annotation, Point},
-    models3d::{ForceField, Model3d, Placed},
+    document::{Annotation, CALCULATIONS, Point},
+    models3d::{ForceField, Hydrogen, Model3d, Placed},
+    science,
     theme_files::ThemeFile,
 };
+use serde_json::json;
 
 fn drawing() -> Document {
     let mut doc = Document::default();
@@ -18,6 +20,42 @@ fn drawing() -> Document {
         format: Default::default(),
     });
     doc
+}
+
+pub(crate) fn calculated_water() -> (Document, u64) {
+    let mut doc = Document::default();
+    let oxygen = doc.add_atom("O", Point::default());
+    let placed = vec![Placed {
+        id: oxygen,
+        xyz: [0., 0., 0.],
+    }];
+    let hydrogens = vec![
+        Hydrogen {
+            parent: oxygen,
+            xyz: [0.96, 0., 0.],
+        },
+        Hydrogen {
+            parent: oxygen,
+            xyz: [-0.24, 0.93, 0.],
+        },
+    ];
+    doc.models
+        .push(Model3d::new(&doc, placed, hydrogens, ForceField::Mmff94s));
+    let launch = science::launch(&doc, oxygen, 0, 1).unwrap();
+    let result = serde_json::from_value(json!({
+        "frame": launch.frame.hash(),
+        "task": "energy",
+        "settings": {"xtb": {"method": "gfn2_xtb"}},
+        "provenance": {"program": "xTB", "source": {"calculated": {"engine_revision": "test"}}},
+        "status": "converged",
+        "energy_hartree": -5.0
+    }))
+    .unwrap();
+    science::attach(&mut doc, &launch, vec![], result).unwrap();
+    doc.require_version(CALCULATIONS);
+    doc.validate().unwrap();
+    assert_eq!(doc.science.results.len(), 1);
+    (doc, oxygen)
 }
 
 fn envelope(json: &[u8], declared: usize) -> Vec<u8> {
@@ -69,6 +107,17 @@ fn envelope_round_trip_has_compact_json_length_and_hash() {
     );
     assert_eq!(&bytes[9..HEADER_LEN], Sha256::digest(&json).as_slice());
     assert_eq!(decode(&bytes).unwrap(), doc);
+}
+
+#[test]
+fn figure_payload_carries_no_science() {
+    let (doc, _) = calculated_water();
+    let decoded = decode(&encode(&doc.current()).unwrap()).unwrap();
+    assert!(decoded.science.is_empty());
+    // Without the calculation data the embedded drawing needs no newer reader.
+    assert!(decoded.version < CALCULATIONS);
+    assert_eq!(decoded.atoms, doc.atoms);
+    assert_eq!(decoded.models, doc.models);
 }
 
 #[test]

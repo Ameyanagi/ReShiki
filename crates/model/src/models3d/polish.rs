@@ -225,7 +225,7 @@ struct PerceivedChemistry {
 
 /// FNV-1a over dedicated chemistry records in persistent geometry/source order.
 /// Presentation fields and nondirectional endpoint order never enter the digest.
-fn fingerprint(doc: &Document, ids: &[u64]) -> String {
+pub(crate) fn fingerprint(doc: &Document, ids: &[u64]) -> String {
     let mapping: HashMap<_, _> = ids.iter().enumerate().map(|(i, id)| (*id, i)).collect();
     let index = |id| mapping.get(&id).copied().unwrap_or_default();
     let mut ordered = crate::editing::analysis_document(doc, ids);

@@ -15,6 +15,7 @@ rdkit-reference = ["reshiki-chemistry/rdkit-reference"]
 nazuchem-ir = { workspace = true }
 reshiki-chemistry = { path = "../chemistry" }
 reshiki-metafile = { path = "../metafile" }
+reshiki-qcdata = { path = "../qcdata" }
 iced_core = "0.14"
 # Already used by the renderer; cycle perimeters share its cubic arc-length solver.
 kurbo = "0.11.3"

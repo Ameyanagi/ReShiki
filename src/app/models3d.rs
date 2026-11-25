@@ -82,7 +82,7 @@ pub(crate) enum Setting {
 /// The generation in flight; dropping it aborts the worker.
 pub(crate) struct Job {
     /// The key the worker answers with; it never changes.
-    key: Key,
+    pub(super) key: Key,
     /// The drawing state the result still applies to: `key` until switching
     /// another molecule's display moves it on.
     current: Key,
@@ -90,8 +90,8 @@ pub(crate) struct Job {
     /// An existing model to replace, keeping its view at completion.
     target: Option<usize>,
     seed: i32,
-    force_field: ForceField,
-    prepared: Arc<Prepared>,
+    pub(super) force_field: ForceField,
+    pub(super) prepared: Arc<Prepared>,
     started: iced::time::Instant,
     _handle: iced::task::Handle,
 }
@@ -746,7 +746,7 @@ impl App {
             .flatten()
     }
 
-    fn model_stale(&self, index: usize) -> bool {
+    pub(super) fn model_stale(&self, index: usize) -> bool {
         let key = (self.tab.id, self.tab.file_epoch, self.tab.revision);
         let mut cache = self.tab.model_stale.borrow_mut();
         if cache.key != Some(key) || cache.values.len() != self.tab.doc.models.len() {
@@ -1571,6 +1571,7 @@ impl App {
             force_field: job.force_field,
             diagnostics: vec![],
             approximations: vec![],
+            ensemble: vec![],
         };
         let key = job.key;
         self.update(Message::Models3d(Action::Generated(

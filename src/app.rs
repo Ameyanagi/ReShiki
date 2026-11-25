@@ -99,6 +99,7 @@ mod piece_libraries;
 mod popover;
 mod printing;
 mod prompt;
+mod qc_export;
 mod reaction_mapping;
 mod reactions;
 #[cfg(test)]
@@ -262,6 +263,8 @@ pub enum Message {
     InsertInput,
     ToggleHelp,
     Settings(settings_page::Action),
+    /// Export input for Gaussian, ORCA or GAMESS.
+    QcExport(qc_export::Action),
     Help(help::Action),
     Commands(command_palette::Action),
     OpenShortcutExamples,
@@ -546,6 +549,7 @@ pub struct App {
     export_tab_background: Option<crate::appearance::Background>,
     help_open: bool,
     settings: settings_page::State,
+    qc_export: Option<qc_export::Dialog>,
     help: help::State,
     commands: command_palette::State,
     viewport: iced::Size,
@@ -680,6 +684,7 @@ impl App {
             export_tab_background: None,
             help_open: false,
             settings: settings_page::State::default(),
+            qc_export: None,
             help: help::State::default(),
             commands: command_palette::State::default(),
             viewport: iced::Size::new(850.0, 600.0),
@@ -1529,6 +1534,7 @@ impl App {
             || self.assistant.viewed_image.is_some()
             || self.help_open
             || self.settings.open
+            || self.qc_export.is_some()
             || self.tab.atom_text.is_some()
             || self.palette.is_some();
         // The command palette's Tab cycles its filter, unless a dialog is over it.
@@ -1543,9 +1549,9 @@ impl App {
                 // panel so their modals also keep that panel from taking clicks.
                 self.with_prompt(self.with_github_dialog(self.with_recovery_manager(
                     self.with_updates(self.with_assistant_image(self.with_settings(
-                        self.with_commands(
+                        self.with_qc_export(self.with_commands(
                             self.with_nmr(self.with_atom_text(self.with_palette(self.workspace()))),
-                        ),
+                        )),
                     ))),
                 ))),
                 if self.prompt.is_some() {
@@ -1561,6 +1567,8 @@ impl App {
                     Some(recovery_manager::modal_key)
                 } else if self.settings.open {
                     Some(settings_page::modal_key)
+                } else if self.qc_export.is_some() {
+                    Some(qc_export::modal_key)
                 } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {

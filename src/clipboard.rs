@@ -468,7 +468,12 @@ async fn prepare_copy_with_limit(
         }
     };
     // Marked like a saved file, so pasting it never migrates its colors again.
-    let doc = doc.current();
+    // The clipboard carries no calculation data.
+    let doc = Document {
+        science: Default::default(),
+        ..doc
+    }
+    .current();
     let mut representations = Vec::new();
     // The browser keeps ReShiki's drawing in the HTML picture other apps
     // paste, so it leaves it out with the pictures' drawing.
