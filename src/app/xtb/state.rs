@@ -170,7 +170,9 @@ pub(crate) fn scientific(value: f64) -> String {
         .to_string()
         .chars()
         .map(|c| match c {
-            '-' => '⁻',
+            // Superscript minus. The browser build, whose fonts lack it, never
+            // shows the card (see `unavailable`).
+            '-' => '\u{207B}',
             digit => digit
                 .to_digit(10)
                 .and_then(|d| "⁰¹²³⁴⁵⁶⁷⁸⁹".chars().nth(d as usize))

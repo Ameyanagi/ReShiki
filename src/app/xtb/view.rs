@@ -112,7 +112,11 @@ impl App {
                 state::formula(numbers),
                 numbers.len()
             ),
-            (Some(atoms), None) => format!("GFN2-xTB · {} atoms drawn", atoms.len()),
+            (Some(atoms), None) => format!(
+                "GFN2-xTB · {} atom{} drawn",
+                atoms.len(),
+                if atoms.len() == 1 { "" } else { "s" }
+            ),
         };
         let set = |action: Action| idle.then_some(Message::Xtb(action));
 
@@ -326,9 +330,10 @@ impl App {
         body = body.push(self.xtb_advanced(idle));
 
         // Run; while running, the progress row above replaces it.
-        let too_many = numbers
+        let count = numbers
             .as_ref()
-            .is_some_and(|numbers| numbers.len() > state::MAX_ATOMS);
+            .map_or_else(|| target.as_ref().map_or(0, Vec::len), Vec::len);
+        let too_many = count > state::MAX_ATOMS;
         if run.is_none() {
             let ready = target.is_some() && check.is_ok() && !too_many;
             body = body.push(
@@ -353,11 +358,10 @@ impl App {
                 .spacing(10)
                 .align_y(Alignment::Center),
             );
-            if let Some(numbers) = numbers.as_ref().filter(|_| too_many) {
+            if too_many {
                 body = body.push(line(
                     format!(
-                        "Too many atoms: {}. The limit is {} atoms.",
-                        numbers.len(),
+                        "Too many atoms: {count}. The limit is {} atoms.",
                         state::MAX_ATOMS
                     ),
                     Tone::Error,
@@ -620,7 +624,8 @@ impl canvas::Program<Message> for Spark {
                 ..canvas::Stroke::default().with_color(accent).with_width(1.)
             },
         );
-        for (log, label) in [(Self::TOP, "10⁻¹"), (Self::BOTTOM, "10⁻⁸")] {
+        // Superscript minus: desktop only, like the whole card.
+        for (log, label) in [(Self::TOP, "10\u{207B}¹"), (Self::BOTTOM, "10\u{207B}⁸")] {
             frame.fill_text(canvas::Text {
                 content: label.into(),
                 position: Point::new(left - 3., y(log) - 5.),

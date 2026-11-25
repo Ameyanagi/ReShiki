@@ -5,6 +5,8 @@
 //! preview of the model, never the document. At the end the result is
 //! stored with the molecule and an optimized geometry is applied as one
 //! Undo step, unless the stereo check finds a change: then the card asks.
+// The browser editor shows only a note: runs, previews and results are desktop-only.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_variables))]
 use super::{App, Message};
 use iced::Task;
 use reshiki::document::Document;
@@ -76,8 +78,8 @@ pub(crate) struct Run {
     fixed: Vec<u64>,
     /// Absent while the 3D model is made first.
     launch: Option<Launch>,
-    /// Whether this run already asked for a 3D model.
-    modeled: bool,
+    /// The 3D model generation this run asked for, once it asked.
+    model: Option<super::models3d::Key>,
     started: iced::time::Instant,
     progress: Progress,
     /// The document state the run started from; edits stop the preview.
@@ -306,7 +308,7 @@ impl App {
             tight: settings.tight,
             fixed,
             launch: None,
-            modeled: false,
+            model: None,
             started: iced::time::Instant::now(),
             progress: Progress::default(),
             revision: (self.tab.file_epoch, self.tab.revision),
@@ -335,17 +337,16 @@ impl App {
         ) {
             Ok(launch) => self.xtb_start(launch),
             Err(science::ScienceError::NoModel | science::ScienceError::StaleModel)
-                if !run.modeled =>
+                if run.model.is_none() =>
             {
-                let atoms = run.atoms.clone();
-                if let Some(run) = &mut self.tab.xtb.run {
-                    run.modeled = true;
-                    run.started = iced::time::Instant::now();
-                }
-                let task = self.model_for_calculation(atoms);
-                if self.tab.model_job.is_none() {
+                let task = self.model_for_calculation(run.atoms.clone());
+                let Some(key) = self.tab.model_job.as_ref().map(|job| job.key) else {
                     self.xtb_fail(format!("xTB not started · {}", self.status));
                     return Task::none();
+                };
+                if let Some(run) = &mut self.tab.xtb.run {
+                    run.model = Some(key);
+                    run.started = iced::time::Instant::now();
                 }
                 self.status = "xTB · making the 3D model first (MMFF94s)".into();
                 self.error = false;
@@ -362,15 +363,16 @@ impl App {
         }
     }
 
-    /// The model generation this run asked for ended, in any way.
-    pub(super) fn xtb_model_finished(&mut self) -> Task<Message> {
+    /// The model generation `key` ended, in any way (done, failed, dropped,
+    /// cancelled or replaced): a run waiting for it starts or stops.
+    pub(super) fn xtb_model_finished(&mut self, key: super::models3d::Key) -> Task<Message> {
         let waiting = self
             .tab
             .xtb
             .run
             .as_ref()
-            .is_some_and(|run| run.launch.is_none() && run.modeled);
-        if waiting && self.tab.model_job.is_none() {
+            .is_some_and(|run| run.launch.is_none() && run.model == Some(key));
+        if waiting {
             return self.xtb_launch();
         }
         Task::none()
@@ -482,8 +484,8 @@ impl App {
         let Some(run) = self.tab.xtb.run.take() else {
             return;
         };
-        if run.launch.is_none() && run.modeled {
-            self.tab.model_job = None;
+        if run.launch.is_none() {
+            self.tab.model_job.take_if(|job| Some(job.key) == run.model);
         }
         self.status = "Calculation cancelled".into();
         self.error = false;
@@ -519,7 +521,7 @@ impl App {
         };
         let optimized = pending.result.task == qcdata::Task::Optimize;
         let mut notes = pending.notes.clone();
-        let moved = optimized && !shows(&self.tab.doc, &pending.launch);
+        let moved = !shows(&self.tab.doc, &pending.launch);
         if attached.freshness == Freshness::Stale {
             notes.push(
                 "The molecule changed during the calculation: the result is kept, the 3D model is unchanged."
@@ -639,6 +641,9 @@ fn preview(doc: &Document, launch: &Launch, positions: &[[f64; 3]]) -> Option<Do
     let model = doc.models.get_mut(index)?;
     if model.atoms.len() + model.hydrogens.len() != positions.len() {
         return None;
+    }
+    if model.display == reshiki::models3d::Display::TwoD {
+        model.display = reshiki::models3d::Display::Both;
     }
     let mut xyz = positions.iter().map(|p| p.map(|x| x as f32));
     for (atom, p) in model.atoms.iter_mut().zip(xyz.by_ref()) {

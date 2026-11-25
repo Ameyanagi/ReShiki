@@ -142,7 +142,7 @@ impl App {
             Action::Generated(key, result) => {
                 self.model_generated(key, result);
                 // A calculation waiting for this model goes on, or stops.
-                self.xtb_model_finished()
+                self.xtb_model_finished(key)
             }
         }
     }
@@ -226,13 +226,13 @@ impl App {
     }
 
     pub(super) fn cancel_model_generation(&mut self) -> bool {
-        if self.tab.model_job.take().is_none() {
+        let Some(job) = self.tab.model_job.take() else {
             return false;
-        }
+        };
         self.status = "3D model canceled · Drawing unchanged".into();
         self.error = false;
         // A calculation waiting for this model stops too.
-        let _ = self.xtb_model_finished();
+        let _ = self.xtb_model_finished(job.key);
         true
     }
 
@@ -471,6 +471,10 @@ impl App {
             move |result| Message::Models3d(Action::Generated(key, result)),
         )
         .abortable();
+        // A calculation waiting for a replaced generation stops.
+        if let Some(old) = self.tab.model_job.take() {
+            let _ = self.xtb_model_finished(old.key);
+        }
         self.tab.model_job = Some(Job {
             key,
             current: key,

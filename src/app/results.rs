@@ -21,6 +21,10 @@ enum Completion {
     /// Nmr(Finished | Exported).
     Nmr,
     /// Xtb(Event): progress and the finish of a calculation.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser runs no xTB worker")
+    )]
     Xtb,
     /// Exported.
     Export,

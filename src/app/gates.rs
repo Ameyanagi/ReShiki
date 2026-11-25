@@ -17,6 +17,9 @@ impl App {
         #[cfg(any(windows, target_os = "linux"))]
         let message = self.desktop_opening_gate(message)?;
         let message = self.background_results_gate(message)?;
+        if let Message::Xtb(action @ super::xtb::Action::Cancel) = message {
+            return Break(self.xtb_action(action));
+        }
         if let Some(task) = self.optimization_gate(&message) {
             return Break(task);
         }
