@@ -1543,10 +1543,18 @@ fn the_export_tab_offers_cdx_and_follows_the_chemdraw_format_setting() {
     let _ = app.update(Message::InspectorAction(Action::Chemical(
         ChemicalFormat::Cdx,
     )));
-    // Another format's export, such as MOL from the palette, keeps it.
-    let _ = app.update(Message::Export("mol"));
-    assert_eq!(app.tab.inspector_ui.chemical, ChemicalFormat::Cdx);
+    // A canceled export or another format's file, such as MOL from the
+    // palette, keeps it; the written CDX file ends it.
+    let saved = |name: &str| super::super::figure_export::Saved {
+        path: name.into(),
+        details: Vec::new(),
+        recent: None,
+    };
     let _ = app.update(Message::Export("cdx"));
+    app.structure_exported(Ok(None));
+    app.structure_exported(Ok(Some(saved("structure.mol"))));
+    assert_eq!(app.tab.inspector_ui.chemical, ChemicalFormat::Cdx);
+    app.structure_exported(Ok(Some(saved("structure.cdx"))));
     assert_eq!(app.tab.inspector_ui.chemical, ChemicalFormat::Cdxml);
     let _ = app.export_panel();
 }

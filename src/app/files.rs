@@ -1324,11 +1324,6 @@ impl super::App {
         {
             return self.export_figure(format, false, self.appearance.export_editable_drawing);
         }
-        // The other ChemDraw format is for this export only.
-        let chemical = self.tab.inspector_ui.chemical;
-        if chemical.chemdraw() && chemical.code() == format {
-            self.tab.inspector_ui.chemical = self.appearance.chemdraw_format.into();
-        }
         let mut request = Request::molecule("export", self.tab.doc.clone());
         request.format = Some(format.into());
         self.run(request, Job::Export(format))
@@ -1340,6 +1335,16 @@ impl super::App {
     ) {
         match result {
             Ok(Some(saved)) => {
+                // The other ChemDraw format served this one file.
+                let chemical = self.tab.inspector_ui.chemical;
+                if chemical.chemdraw()
+                    && saved
+                        .path
+                        .extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case(chemical.code()))
+                {
+                    self.tab.inspector_ui.chemical = self.appearance.chemdraw_format.into();
+                }
                 self.status =
                     export_status(&saved.path, &saved.details, cfg!(target_arch = "wasm32"));
                 self.error = false;
