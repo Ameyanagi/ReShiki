@@ -94,9 +94,22 @@ pub(crate) fn xyz(result: &CalcResult, title: &str) -> Result<String, String> {
             .enumerate()
             .map(|(index, conformer)| {
                 let rank = index + 1;
-                let RankedConformer { energy, delta_kcal, percent, .. } = conformer;
+                let RankedConformer {
+                    step,
+                    energy,
+                    delta_kcal,
+                    percent,
+                    ..
+                } = conformer;
+                let cluster = path
+                    .cluster_sizes
+                    .get(*step)
+                    .map_or_else(String::new, |size| format!(" · cluster {size}"));
+                // charge= and mult= as extended XYZ reads them back; the
+                // energy last, as ReShiki and xtb tools read it.
                 format!(
-                    "{title} conformer {rank} · ΔE {delta_kcal:.2} kcal/mol · {percent:.1} % · E = {energy:.10} Eh"
+                    "{title} conformer {rank} · ΔE {delta_kcal:.2} kcal/mol · {percent:.1} %{cluster} · charge={} mult={} · E = {energy:.10} Eh",
+                    path.charge, path.multiplicity
                 )
             })
             .collect(),
@@ -315,15 +328,15 @@ mod tests {
         let (frames, _) = lines.as_chunks::<5>();
         for (frame, (comment, oxygen_z)) in frames.iter().zip([
             (
-                "Water conformer 1 · ΔE 0.00 kcal/mol · 68.2 % · E = -5.0700000000 Eh",
+                "Water conformer 1 · ΔE 0.00 kcal/mol · 68.2 % · cluster 6 · charge=1 mult=2 · E = -5.0700000000 Eh",
                 "0.00000000",
             ),
             (
-                "Water conformer 2 · ΔE 0.63 kcal/mol · 23.6 % · E = -5.0690000000 Eh",
+                "Water conformer 2 · ΔE 0.63 kcal/mol · 23.6 % · cluster 4 · charge=1 mult=2 · E = -5.0690000000 Eh",
                 "0.01000000",
             ),
             (
-                "Water conformer 3 · ΔE 1.26 kcal/mol · 8.2 % · E = -5.0680000000 Eh",
+                "Water conformer 3 · ΔE 1.26 kcal/mol · 8.2 % · cluster 2 · charge=1 mult=2 · E = -5.0680000000 Eh",
                 "0.02000000",
             ),
         ]) {
