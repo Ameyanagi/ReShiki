@@ -11,6 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from license_notices import (
+    KDE_PROTOCOL_CRATES,
+    KDE_PROTOCOL_REVIEW,
     PROJECT_FILES,
     THIRD_PARTY_FILE,
     consolidated_notices,
@@ -482,6 +484,115 @@ class LicenseNoticeTests(unittest.TestCase):
             # Output is deterministic regardless of metadata package order.
             write_notices(root, root / "again", {"packages": list(reversed(packages))})
             self.assertEqual((root / "again" / THIRD_PARTY_FILE).read_bytes(), result)
+
+    def test_kde_protocol_lgpl_text_names_the_files_it_covers(self):
+        lgpl = b"<copyright><![CDATA[ 2015 KDE Author\n SPDX: LGPL-2.1-or-later ]]></copyright>"
+        mit = b"<copyright>MIT-CMU</copyright> mentions GPL in a description"
+        terms = b"GNU LESSER GENERAL PUBLIC LICENSE 2.1"
+        source_id = "registry+https://github.com/rust-lang/crates.io-index"
+
+        def digest(content):
+            return hashlib.sha256(content).hexdigest()
+
+        def notices(change=lambda package, source: None):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root / "licenses/rust").mkdir(parents=True)
+                (root / "licenses/rust/manifest.json").write_text("{}")
+                source = root / "plasma"
+                (source / "protocols").mkdir(parents=True)
+                (source / "Cargo.toml").write_text('license = "MIT"\n')
+                (source / "COPYING.LIB").write_bytes(terms)
+                (source / "protocols/blur.xml").write_bytes(lgpl)
+                (source / "protocols/output.xml").write_bytes(mit)
+                inventory = (
+                    f"protocols/blur.xml {digest(lgpl)}\nprotocols/output.xml {digest(mit)}\n"
+                )
+                reviewed = {
+                    "license": "MIT",
+                    "source": source_id,
+                    "license_texts": {"COPYING.LIB": digest(terms)},
+                    "xml_inventory_sha256": digest(inventory.encode()),
+                    "files": {"protocols/blur.xml": digest(lgpl)},
+                }
+                review = {
+                    "license": "LGPL-2.1-or-later",
+                    "packages": {"wayland-protocols-plasma@1": reviewed},
+                }
+                (root / KDE_PROTOCOL_REVIEW).write_text(json.dumps(review))
+                package = {
+                    "name": "wayland-protocols-plasma",
+                    "version": "1",
+                    "license": "MIT",
+                    "source": source_id,
+                    "manifest_path": str(source / "Cargo.toml"),
+                }
+                change(package, source)
+                return consolidated_notices(root, {"packages": [package]}).decode()
+
+        result = notices()
+        entry = result.split("DEPENDENCY: wayland-protocols-plasma@1\n", 1)[1]
+        scope, review_line, _ = entry.partition(f"  Review: {KDE_PROTOCOL_REVIEW}\n")
+        self.assertTrue(review_line)
+        self.assertIn("LGPL-2.1-or-later covers these KDE protocol descriptions", scope)
+        self.assertIn("  wayland-protocols-plasma@1/protocols/blur.xml (copyright block)\n", scope)
+        self.assertIn("2015 KDE Author\n SPDX: LGPL-2.1-or-later\n", result)
+        self.assertIn("    wayland-protocols-plasma@1/COPYING.LIB\n", scope)
+        self.assertNotIn("output.xml", result)
+        self.assertIn(terms.decode(), result)
+        # Any unreviewed version, source, license, XML file or license text
+        # stops packaging until the review is updated.
+        for name, change, message in (
+            ("version", lambda p, s: p.update(version="2"), "licenses changed"),
+            (
+                "source",
+                lambda p, s: p.update(source="git+https://example.test"),
+                "licenses changed",
+            ),
+            ("license", lambda p, s: p.update(license="MIT OR LGPL-2.1"), "licenses changed"),
+            ("lgpl", lambda p, s: (s / "protocols/blur.xml").write_text("x"), "licenses changed"),
+            ("mit", lambda p, s: (s / "protocols/output.xml").write_text("x"), "licenses changed"),
+            ("new", lambda p, s: (s / "protocols/new.xml").write_text("x"), "licenses changed"),
+            ("upper", lambda p, s: (s / "protocols/new.XML").write_text("x"), "licenses changed"),
+            ("text", lambda p, s: (s / "COPYING.LIB").write_text("x"), "license text missing"),
+        ):
+            with self.subTest(change=name), self.assertRaisesRegex(ValueError, message):
+                notices(change)
+
+    def test_committed_kde_protocol_review_matches_the_linux_dependencies(self):
+        repository = Path(__file__).resolve().parents[1]
+        lock = tomllib.loads((repository / "Cargo.lock").read_text(encoding="utf-8"))
+        locked = {
+            f"{p['name']}@{p['version']}": p
+            for p in lock["package"]
+            if p["name"] in KDE_PROTOCOL_CRATES
+        }
+        review = json.loads((repository / KDE_PROTOCOL_REVIEW).read_text(encoding="utf-8"))
+        self.assertEqual(set(review["packages"]), set(locked))
+        for key, reviewed in review["packages"].items():
+            with self.subTest(package=key):
+                self.assertEqual(reviewed["source"], locked[key]["source"])
+                self.assertEqual(reviewed["checksum"], locked[key]["checksum"])
+        metadata = json.loads(
+            subprocess.check_output(
+                [
+                    *("cargo", "metadata", "--locked", "--format-version", "1"),
+                    *("--filter-platform", "x86_64-unknown-linux-gnu"),
+                ],
+                cwd=repository,
+                text=True,
+            )
+        )
+        packages = [p for p in metadata["packages"] if p["name"] in KDE_PROTOCOL_CRATES]
+        result = consolidated_notices(repository, {"packages": packages}).decode()
+        self.assertEqual(result.count("LGPL-2.1-or-later covers these KDE protocol"), 2)
+        self.assertEqual(result.count(" (copyright block)\n"), 18)
+        self.assertIn("SPDX-FileCopyrightText: 2015 Martin Gräßlin", result)
+        self.assertIn(
+            "wayland-protocols-plasma@0.3.12/plasma-wayland-protocols/src/protocols/blur.xml",
+            result,
+        )
+        self.assertIn("wayland-protocols-misc@0.3.12/protocols/server-decoration.xml", result)
 
 
 if __name__ == "__main__":
