@@ -6,7 +6,8 @@ use super::state::{
 };
 use reshiki::qcdata;
 use reshiki::qcdata::{
-    Beta, CalcResult, Frame, OrbitalSet, Orbitals, Settings, Status, Task, XtbConventions,
+    Beta, CalcResult, Convergence, Frame, OrbitalSet, Orbitals, Settings, Status, Task,
+    XtbConventions,
 };
 
 /// Always shown under the method line.
@@ -68,25 +69,17 @@ pub(crate) struct Evaluation {
     pub seconds: f64,
 }
 
-/// What this session knows about a run beyond the stored result. The file
-/// does not keep it, so a reopened result shows less.
+/// What this session knows about a run beyond the stored result.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct RunInfo {
     pub gap_ev: Option<f64>,
     pub near_degenerate: bool,
     pub evaluations: Vec<Evaluation>,
     pub numerics: String,
-    pub tight: bool,
-    pub threads: u32,
-    /// Drawing atoms the optimizer held fixed.
-    pub fixed: Vec<u64>,
-    /// When the run finished, e.g. "25 Nov 2026 14:03".
-    pub finished: String,
-    pub seconds: f64,
 }
 
 /// "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1 · 25 Nov 2026 14:03".
-pub(crate) fn method_line(result: &CalcResult, frame: &Frame, info: Option<&RunInfo>) -> String {
+pub(crate) fn method_line(result: &CalcResult, frame: &Frame) -> String {
     let provenance = &result.provenance;
     // Files from other programs may not name their method.
     let mut parts: Vec<String> = provenance
@@ -110,8 +103,18 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame, info: Option<&RunI
     }
     parts.push(format!("charge {}", signed(f64::from(frame.charge), 0)));
     parts.push(format!("multiplicity {}", frame.multiplicity));
-    if let Some(info) = info.filter(|info| !info.finished.is_empty()) {
-        parts.push(info.finished.clone());
+    if let Some(finished) = result
+        .run
+        .as_ref()
+        .and_then(|run| run.finished.as_deref())
+        .and_then(|finished| chrono::DateTime::parse_from_rfc3339(finished).ok())
+    {
+        parts.push(
+            finished
+                .with_timezone(&chrono::Local)
+                .format("%-d %b %Y %H:%M")
+                .to_string(),
+        );
     }
     parts.join(" · ")
 }
@@ -234,13 +237,13 @@ pub(crate) fn summary_rows(
             output.numbers.len()
         ),
     ));
-    if let Some(info) = info.filter(|info| info.seconds > 0.) {
+    if let Some(run) = result.run.as_ref().filter(|run| run.seconds > 0.) {
         rows.push((
             "Run time",
             format!(
                 "{:.1} s · {} {}",
-                info.seconds,
-                info.evaluations.len(),
+                run.seconds,
+                run.scf_iterations.len(),
                 // GFN-FF has no SCF.
                 if matches!(&result.settings, Settings::Xtb(s) if !super::state::electronic(s.method)) {
                     "calculations"
@@ -370,14 +373,13 @@ fn around(levels: &[f64], n: usize, spin: &str) -> Vec<(String, f64)> {
     rows
 }
 
-/// A stored result's settings, to calculate it again; what the file
-/// does not keep comes from `info` (this session's run), else defaults.
+/// A stored result's settings, to calculate it again.
 /// `None` when the card cannot reproduce it: imported results, other
 /// tasks, GBSA or a solvent the card does not list.
 pub(crate) fn config(
     result: &qcdata::CalcResult,
     frame: &qcdata::Frame,
-    info: Option<&RunInfo>,
+    atoms: &[Option<u64>],
     threads: u32,
 ) -> Option<Config> {
     let qcdata::Settings::Xtb(settings) = &result.settings else {
@@ -417,9 +419,13 @@ pub(crate) fn config(
         accuracy: settings.accuracy,
         temperature_k: settings.electronic_temperature_k,
         max_iterations: settings.max_iterations,
-        threads: info.map_or(threads, |info| info.threads),
-        tight: info.is_some_and(|info| info.tight),
-        fixed: info.map_or_else(Vec::new, |info| info.fixed.clone()),
+        threads: settings.threads.unwrap_or(threads),
+        tight: settings.convergence == Some(Convergence::Tight),
+        fixed: settings
+            .fixed_atoms
+            .iter()
+            .filter_map(|&index| atoms.get(index as usize).copied().flatten())
+            .collect(),
     })
 }
 
@@ -473,6 +479,7 @@ pub(crate) fn log(
         Task::Energy => "energy",
         _ => "other",
     };
+    let mut task_line = format!("task {task}");
     if let Settings::Xtb(settings) = &result.settings {
         let scf: Vec<String> = [
             settings.accuracy.map(|a| format!("SCF accuracy {a}")),
@@ -486,43 +493,48 @@ pub(crate) fn log(
         if !scf.is_empty() {
             lines.push(scf.join(" · "));
         }
-    }
-    match info {
-        Some(info) => {
-            let mut settings = format!("task {task} · {} threads", info.threads);
-            if result.task == Task::Optimize {
-                settings.push_str(if info.tight {
-                    " · tight convergence"
-                } else {
-                    " · normal convergence"
-                });
-                if !info.fixed.is_empty() {
-                    settings.push_str(&format!(" · {} atoms held fixed", info.fixed.len()));
-                }
-            }
-            lines.push(settings);
-            if !info.numerics.is_empty() {
-                lines.push(format!("numerics {}", info.numerics));
-            }
-            lines.push(String::new());
-            lines.push(" calc        energy (Eh)    SCF iterations    time (s)".into());
-            for (index, e) in info.evaluations.iter().enumerate() {
-                lines.push(format!(
-                    "{:>5}  {:>17.8}  {:>16}  {:>10.3}",
-                    index + 1,
-                    e.energy,
-                    e.scf_iterations,
-                    e.seconds
+        if let Some(threads) = settings.threads {
+            task_line.push_str(&format!(" · {threads} threads"));
+        }
+        if result.task == Task::Optimize {
+            // Files from before it was recorded say nothing rather than Normal.
+            task_line.push_str(match settings.convergence {
+                Some(Convergence::Tight) => " · tight convergence",
+                Some(Convergence::Normal) => " · normal convergence",
+                None => "",
+            });
+            if !settings.fixed_atoms.is_empty() {
+                task_line.push_str(&format!(
+                    " · {} atoms held fixed",
+                    settings.fixed_atoms.len()
                 ));
             }
         }
-        None => {
-            lines.push(format!("task {task}"));
-            lines.push(String::new());
-            lines.push(
-                "SCF details are kept only while the app is open; recalculate to see them.".into(),
-            );
+    }
+    lines.push(task_line);
+    if let Some(info) = info.filter(|info| !info.numerics.is_empty()) {
+        lines.push(format!("numerics {}", info.numerics));
+    }
+    lines.push(String::new());
+    if let Some(info) = info {
+        lines.push(" calc        energy (Eh)    SCF iterations    time (s)".into());
+        for (index, e) in info.evaluations.iter().enumerate() {
+            lines.push(format!(
+                "{:>5}  {:>17.8}  {:>16}  {:>10.3}",
+                index + 1,
+                e.energy,
+                e.scf_iterations,
+                e.seconds
+            ));
         }
+    } else if let Some(run) = &result.run {
+        lines.push(" calc    SCF iterations".into());
+        for (index, iterations) in run.scf_iterations.iter().enumerate() {
+            lines.push(format!("{:>5}    {iterations:>14}", index + 1));
+        }
+        lines.push(format!("run time {:.1} s", run.seconds));
+    } else {
+        lines.push("SCF details were not saved with this result; recalculate to see them.".into());
     }
     lines.push(String::new());
     if let Some(energy) = result.energy_hartree {

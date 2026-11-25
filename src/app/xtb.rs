@@ -663,13 +663,7 @@ impl App {
                 correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
             }),
             threads: config.threads,
-            fixed: launch
-                .atoms
-                .iter()
-                .enumerate()
-                .filter(|(_, id)| id.is_some_and(|id| config.fixed.contains(&id)))
-                .map(|(index, _)| index)
-                .collect(),
+            fixed: fixed_indices(&launch.atoms, &config.fixed).collect(),
             tight: config.tight,
         };
         run.label = format!("xTB · {}", state::formula(&launch.frame.numbers));
@@ -955,6 +949,14 @@ fn preview(doc: &Document, atom: u64, positions: &[[f64; 3]]) -> Option<Document
     Some(doc)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn fixed_indices(atoms: &[Option<u64>], fixed: &[u64]) -> impl Iterator<Item = usize> {
+    atoms
+        .iter()
+        .enumerate()
+        .filter_map(move |(index, id)| id.is_some_and(|id| fixed.contains(&id)).then_some(index))
+}
+
 /// The result to store from a finished run.
 #[cfg(not(target_arch = "wasm32"))]
 fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
@@ -983,6 +985,26 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
     let mut result = computed
         .to_calc_result(frame, task, &report.engine, gfnff_reference)
         .map_err(|error| state::Failure::Other(error.to_string()))?;
+    if let qcdata::Settings::Xtb(settings) = &mut result.settings {
+        settings.threads = Some(run.config.threads);
+        settings.convergence = optimized.then_some(if run.config.tight {
+            qcdata::Convergence::Tight
+        } else {
+            qcdata::Convergence::Normal
+        });
+        settings.fixed_atoms = fixed_indices(&launch.atoms, &run.config.fixed)
+            .map(|index| index as u32)
+            .collect();
+    }
+    result.run = Some(qcdata::RunSummary {
+        seconds: run.seconds(),
+        scf_iterations: report
+            .evaluations
+            .iter()
+            .map(|evaluation| evaluation.scf_iterations as u32)
+            .collect(),
+        finished: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+    });
     let status = if report.converged {
         qcdata::Status::Converged
     } else {
@@ -1015,11 +1037,6 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         near_degenerate: computed.near_degenerate,
         evaluations: report.evaluations.clone(),
         numerics: computed.numerics.clone(),
-        tight: run.config.tight,
-        threads: run.config.threads,
-        fixed: run.config.fixed.clone(),
-        finished: chrono::Local::now().format("%-d %b %Y %H:%M").to_string(),
-        seconds: run.seconds(),
     };
     Ok(Pending {
         info,

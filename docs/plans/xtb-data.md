@@ -266,14 +266,19 @@ One calculation or one imported job step, bound to the frame it describes.
 | `trajectory`                       | Optional. Optimization: the path, first step `input_frame`, last step `frame`. Conformers: the kept conformers in rank order, first step `frame` (the best). Transition state: the path images from reactant to product with their energies. |
 | `keep_full`                        | The user's "Keep full results in this file" choice; `false` by default.                                                                                                                                                                      |
 | `omitted_bytes`                    | Set on a saved copy that left out heavy arrays which cannot be recomputed: their encoded size, for the palette.                                                                                                                              |
+| `run`                              | The optional `RunSummary { seconds, scf_iterations, finished }` records wall time, per-evaluation SCF iteration counts, and an RFC 3339 UTC finish time when available.                                                                      |
 
 `CalcResult::validate(&frame)` checks the hash, every array length against the frame and the
 basis, orbital consistency and limits.
 
 ### `XtbSettings` and `Provenance`
 
-`XtbSettings { method, conventions, solvent, electronic_temperature_k, accuracy, max_iterations, scf_retries, gfnff }`.
+`XtbSettings { method, conventions, solvent, electronic_temperature_k, accuracy, max_iterations, scf_retries, gfnff, threads, convergence, fixed_atoms }`.
 Conventions default to `axtb`, omitted overrides use the defaults pinned by the engine revision, and `scf_retries` lists temperature or iteration overrides tried after a failed SCF.
+`threads` records the worker thread count.
+`convergence` is `normal` or `tight` for optimizations, and absent when not recorded.
+`fixed_atoms` lists the zero-based frame atoms held fixed in ascending order.
+Files without these fields load with threads and convergence unknown (Recalculate then uses the card's threads and Normal), nothing held fixed, and no run summary. A run summary lists at most 100,000 evaluations.
 
 - `method`: `XtbMethod::{Gfn2Xtb, GfnFf, GXtb}`. `GXtb` is g-xTB 2.0.1.
 - `solvent`: `Solvent { model, name, state, correction }`, with `model: SolventModel::{Alpb, Gbsa}` and
