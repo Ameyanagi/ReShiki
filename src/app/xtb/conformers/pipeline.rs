@@ -362,6 +362,10 @@ fn sample(
                 "{dropped} starts did not converge with the force field and were left out."
             ));
         }
+    } else if !embedded {
+        notes.push(
+            "No start converged with the force field: clustering used unconverged geometries, and xTB re-optimized the representatives.".into(),
+        );
     }
     conformers
         .into_iter()

@@ -155,10 +155,7 @@ fn progress_reads_as_the_search_goes() {
     assert_eq!(live.line(9.), "Clustered · GFN2-xTB 7/20 · 9.0 s");
     assert_eq!(live.fraction(), Some(0.675));
     live.stopping = true;
-    assert_eq!(
-        live.line(9.),
-        "Stopping · keeping what finished (7 of 20) · 9.0 s"
-    );
+    assert_eq!(live.line(9.), "Stopping · 7 of 20 finished · 9.0 s");
 }
 
 #[test]
@@ -373,8 +370,7 @@ mod app {
             "the finished conformers are still to come"
         );
         assert!(
-            app.status
-                .contains("Stopping · keeping what finished (3 of 20)"),
+            app.status.contains("Stopping · 3 of 20 finished"),
             "{}",
             app.status
         );
@@ -452,4 +448,34 @@ fn an_xtb_minimizer_is_the_method_the_card_checks_and_runs() {
         ignored.config(None).unwrap().representatives,
         MAX_REPRESENTATIVES
     );
+}
+
+#[test]
+fn recalculation_follows_the_card_or_refuses() {
+    use crate::app::xtb::CalcTask;
+    let card = crate::app::xtb::state::Settings {
+        task: CalcTask::Conformers,
+        solvent: Some("water"),
+        ..Default::default()
+    };
+    let saved = card.config((0, 0), true, vec![]).unwrap();
+    let mut config = saved.clone();
+    let gfnff = Settings {
+        minimizer: Minimizer::GfnFf,
+        ..Settings::default()
+    };
+    let search = recalculation(&mut config, &gfnff).unwrap();
+    assert_eq!(search.minimizer, Minimizer::GfnFf);
+    assert_eq!((config.method, config.solvent), (XtbMethod::GfnFf, None));
+    // Wrong fields never fall back to another task.
+    let broken = Settings {
+        starts: "0".into(),
+        ..Settings::default()
+    };
+    assert!(recalculation(&mut saved.clone(), &broken).is_err());
+    let mut open_shell = crate::app::xtb::state::Config {
+        unpaired: 1,
+        ..saved
+    };
+    assert!(recalculation(&mut open_shell, &gfnff).is_err());
 }

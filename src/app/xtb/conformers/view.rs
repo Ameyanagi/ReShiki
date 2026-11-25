@@ -308,7 +308,8 @@ impl App {
         live: bool,
     ) -> Element<'a, Message> {
         let palette_state = &self.tab.xtb.palette;
-        let overlay = palette_state.ensemble.overlay;
+        // The overlay draws only on a live preview.
+        let overlay = palette_state.ensemble.overlay && self.xtb_step_preview().is_some();
         let choice = row(
             [(false, "Off"), (true, "All conformers")].map(|(on, name)| {
                 segment(
@@ -366,6 +367,11 @@ impl App {
                             ": {cluster} start{} in this cluster",
                             if cluster == 1 { "" } else { "s" }
                         ));
+                    }
+                    if let (Some(field), Some(start)) =
+                        (super::start_field(&shown.stored.result), r.start_kcal)
+                    {
+                        text.push_str(&format!(" · ΔE {field} {start:.2} kcal/mol"));
                     }
                     if let Some(rmsd) = r.rmsd.filter(|_| index > 0) {
                         text.push_str(&format!(" · RMSD to #1 {rmsd:.2} Å"));
