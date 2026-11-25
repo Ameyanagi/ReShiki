@@ -206,6 +206,14 @@ explains how the crates and modules fit together.
 - `src/app/workspace/model_controls_qa.rs`: Opt-in real-renderer captures at the issue's 1600 × 1000 logical pixels.
 - `src/app/workspace/model_face_qa.rs`: Matched real-renderer and pointer evidence for model faces, frames and hints.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
+- `src/app/xtb.rs`: Predict → xTB
+- `src/app/xtb/palette.rs`: The xTB results palette
+- `src/app/xtb/palette/view.rs`: The results palette's widgets
+- `src/app/xtb/results.rs`: The results palette's content, kept free of iced
+- `src/app/xtb/run.rs`: One xTB job on its own thread
+- `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
+- `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
+- `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.
 - `src/appearance.rs`: Interface preferences and defaults for new drawings.
 - `src/assistant/codex.rs`: Small JSONL app-server client using the user's existing Codex sign-in.
 - `src/assistant/codex/connection.rs`: Setup failures are classified at their source, never by matching provider text.

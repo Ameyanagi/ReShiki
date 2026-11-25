@@ -154,7 +154,29 @@ impl MoleculeCanvas<'_> {
             frame,
             bounds,
             lo - Vector::new(14., 48.),
-            format!("Generating 3D… {} s · Esc cancels", elapsed.as_secs()),
+            format!(
+                "{}… {} s · Esc cancels",
+                generation.label,
+                elapsed.as_secs()
+            ),
+            true,
+        );
+    }
+
+    pub(super) fn draw_result_label(&self, frame: &mut layered::Frame<'_>, bounds: Rectangle) {
+        let Some(label) = &self.result_label else {
+            return;
+        };
+        let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &label.atoms) else {
+            return;
+        };
+        let lo = self.camera.screen(lo, bounds);
+        let hi = self.camera.screen(hi, bounds);
+        badge(
+            frame,
+            bounds,
+            Point::new(lo.x - 14., hi.y),
+            label.text.clone(),
             true,
         );
     }
