@@ -143,8 +143,8 @@ impl Client {
     }
 
     /// Sample sequential seeded batches up to the caller's deadline. Any error
-    /// after a successful batch returns the conformers already collected with
-    /// [`Starts::complete`] set to false. First-batch errors propagate.
+    /// after a successful batch returns the conformers already collected, with
+    /// the reason in [`Starts::stopped`]. First-batch errors propagate.
     /// In a browser, the deadline is checked between in-process batches.
     pub async fn conformer_starts(
         &self,
@@ -189,7 +189,13 @@ impl Client {
             {
                 Ok(batch) => batch,
                 Err(error) if result.batches > 0 => {
-                    result.stopped = Some(error.to_string());
+                    result.stopped = Some(
+                        if matches!(error, Error::Timeout) && BatchInstant::now() >= deadline {
+                            "Conformer search deadline reached".into()
+                        } else {
+                            error.to_string()
+                        },
+                    );
                     break;
                 }
                 Err(error) => return Err(error),

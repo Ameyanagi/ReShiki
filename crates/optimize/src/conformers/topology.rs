@@ -19,8 +19,11 @@ impl Topology {
     /// Validate atomic numbers and undirected bonds, retaining a heavy-atom graph.
     ///
     /// `numbers` and `bonds` must include every hydrogen (conformer coordinates
-    /// always do). Attached-hydrogen counts then tell apart atoms that differ
-    /// only in bond order, such as CH₂= and CH₃– ends; bond orders are not used.
+    /// always do). Bond orders are not used: attached-hydrogen counts tell apart
+    /// most such sites (CH₂= and CH₃– ends), but a graph that differs only in
+    /// where double bonds sit, such as a substituted cyclooctatetraene, may get
+    /// a mapping that swaps them and so understates RMSD by roughly the
+    /// single/double bond-length difference.
     pub fn new(numbers: Vec<u8>, bonds: Vec<[usize; 2]>) -> Result<Self, Error> {
         if numbers.is_empty() {
             return Err(Error::Invalid(

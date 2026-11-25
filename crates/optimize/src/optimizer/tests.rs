@@ -331,7 +331,7 @@ fn tight_failure_keeps_the_normal_sample() {
 }
 
 #[test]
-fn anc_rejections_retry_from_the_accepted_point_then_switch_methods() {
+fn anc_rejections_retry_from_the_accepted_point_down_to_the_minimum_radius() {
     let mut calls = Vec::new();
     let mut p = surface(|x, g, _| {
         calls.push(x.to_vec());
@@ -365,7 +365,8 @@ fn anc_rejections_retry_from_the_accepted_point_then_switch_methods() {
 
 #[test]
 fn anc_retries_at_the_minimum_radius_before_switching_methods() {
-    // A stiff bond: the first steps overshoot, a 0.001 bohr step is downhill.
+    // A stiff bond: the first steps overshoot; a 0.001 bohr step stays within
+    // the 1e-6 Eh rejection tolerance and is accepted.
     let mut p = surface(|x, g, _| {
         let (dx, y) = (x[3] - 1.4, x[4]);
         g.fill(0.);

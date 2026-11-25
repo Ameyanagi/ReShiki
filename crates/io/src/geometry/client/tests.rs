@@ -343,7 +343,9 @@ fi
             .unwrap();
         assert_eq!(result.batches, 1);
         assert_eq!(result.conformers.len(), 1);
-        assert!(result.stopped.is_some());
+        let reason = result.stopped.unwrap();
+        assert_ne!(reason, "Conformer search deadline reached");
+        assert!(!reason.is_empty());
     }
     std::fs::remove_file(executable.with_extension("first")).unwrap();
     std::fs::write(executable.with_extension("response1"), rejected).unwrap();
