@@ -132,19 +132,38 @@ struct Key {
     revision: (u64, u64),
 }
 
+/// One preview document; each frame swaps in the model (and its arrows), so
+/// a large drawing is copied once, not once per frame.
 struct Animation {
     key: Key,
-    /// The document with the model at each phase of one period.
-    frames: Vec<Document>,
+    doc: Document,
+    /// The animated model in `doc`, and how many graphics `doc` has without arrows.
+    model: usize,
+    graphics: usize,
+    /// The model and arrows at each phase of one period.
+    frames: Vec<(reshiki::models3d::Model3d, Vec<Graphic>)>,
+    shown: usize,
     /// Position in the period, 0 to 1.
     phase: f32,
 }
 
 impl Animation {
-    fn frame(&self) -> Option<&Document> {
-        let index = (self.phase * self.frames.len() as f32) as usize;
-        self.frames
-            .get(index.min(self.frames.len().saturating_sub(1)))
+    /// Put the frame for the current phase into the preview document.
+    fn show(&mut self) {
+        let index = ((self.phase * self.frames.len() as f32) as usize)
+            .min(self.frames.len().saturating_sub(1));
+        if index == self.shown {
+            return;
+        }
+        let (Some((model, arrows)), Some(slot)) =
+            (self.frames.get(index), self.doc.models.get_mut(self.model))
+        else {
+            return;
+        };
+        *slot = model.clone();
+        self.doc.graphics.truncate(self.graphics);
+        self.doc.graphics.extend(arrows.iter().cloned());
+        self.shown = index;
     }
 }
 
@@ -298,8 +317,7 @@ impl App {
         let animation = self.tab.xtb.vibrations.animation.as_ref()?;
         (self.xtb_vibrations_visible()
             && animation.key.revision == (self.tab.file_epoch, self.tab.revision))
-            .then(|| animation.frame())
-            .flatten()
+            .then_some(&animation.doc)
     }
 
     /// Ticks while a mode animates.
@@ -366,41 +384,67 @@ impl App {
         if settings.animation.as_ref().is_some_and(|a| a.key == key) {
             return;
         }
-        let frames = self
+        let phase = settings.animation.as_ref().map_or(0., |a| a.phase);
+        let mut animation = self
             .xtb_modes(result)
             .and_then(|modes| vector(modes, shown.frame, key.mode))
-            .and_then(|mode| self.xtb_mode_frames(&shown, mode, key));
-        let phase = settings.animation.as_ref().map_or(0., |a| a.phase);
-        self.tab.xtb.vibrations.animation = frames.map(|frames| Animation { key, frames, phase });
+            .and_then(|mode| self.xtb_mode_frames(&shown, mode, key, phase));
+        if let Some(animation) = &mut animation {
+            animation.show();
+        }
+        self.tab.xtb.vibrations.animation = animation;
     }
 
     /// One period of `mode` on the model, with arrows if asked. The model
     /// keeps its drawn size as atoms move (its frame follows its reach).
-    fn xtb_mode_frames(&self, shown: &Shown<'_>, mode: &[f64], key: Key) -> Option<Vec<Document>> {
+    fn xtb_mode_frames(
+        &self,
+        shown: &Shown<'_>,
+        mode: &[f64],
+        key: Key,
+        phase: f32,
+    ) -> Option<Animation> {
         let atom = *shown.atoms.iter().flatten().next()?;
         let equilibrium = &shown.frame.positions_angstrom;
         let positions =
             vibrational::mode_frames(equilibrium, mode, f64::from(key.amplitude), FRAMES);
-        let base = super::preview(&self.tab.doc, atom, equilibrium)?;
-        let index = base
+        let mut doc = super::preview(&self.tab.doc, atom, equilibrium)?;
+        let index = doc
             .models
             .iter()
             .position(|m| m.linked_atoms.contains(&atom))?;
-        let model = base.models.get(index)?;
-        let (size, reach) = (model.size, model.reach(&base));
-        positions
-            .iter()
-            .map(|positions| {
-                let mut doc = super::preview(&self.tab.doc, atom, positions)?;
-                let reach_now = doc.models.get(index)?.reach(&doc);
-                doc.models.get_mut(index)?.size = size * reach_now / reach.max(1e-3);
-                if key.arrows {
-                    let arrows = arrows(&doc, index, positions, mode, key.amplitude)?;
-                    doc.graphics.extend(arrows);
-                }
-                Some(doc)
-            })
-            .collect()
+        let rest = doc.models.get(index)?.clone();
+        let (size, reach) = (rest.size, rest.reach(&doc));
+        let mut frames = Vec::with_capacity(positions.len());
+        for positions in &positions {
+            let model = doc.models.get_mut(index)?;
+            let mut xyz = positions.iter().map(|p| p.map(|x| x as f32));
+            for (atom, p) in model.atoms.iter_mut().zip(xyz.by_ref()) {
+                atom.xyz = p;
+            }
+            for (hydrogen, p) in model.hydrogens.iter_mut().zip(xyz) {
+                hydrogen.xyz = p;
+            }
+            let reach_now = doc.models.get(index)?.reach(&doc);
+            doc.models.get_mut(index)?.size = size * reach_now / reach.max(1e-3);
+            let arrows = if key.arrows {
+                arrows(&doc, index, positions, mode, key.amplitude)?
+            } else {
+                vec![]
+            };
+            frames.push((doc.models.get(index)?.clone(), arrows));
+        }
+        *doc.models.get_mut(index)? = rest;
+        Some(Animation {
+            key,
+            graphics: doc.graphics.len(),
+            doc,
+            model: index,
+            frames,
+            // Nothing shown yet: `show` puts in the frame for `phase`.
+            shown: usize::MAX,
+            phase,
+        })
     }
 
     pub(super) fn xtb_vibrations_action(&mut self, action: Action) -> Task<Message> {
@@ -427,6 +471,7 @@ impl App {
                 if let Some(animation) = &mut settings.animation {
                     let step = settings.speed * TICK.as_secs_f32();
                     animation.phase = (animation.phase + step).fract();
+                    animation.show();
                 }
             }
             Action::ExportXyz => return self.xtb_export_movie(),
@@ -690,6 +735,7 @@ impl App {
             settings.playing = false;
             if let Some(animation) = &mut settings.animation {
                 animation.phase = 0.;
+                animation.show();
             }
         }
     }

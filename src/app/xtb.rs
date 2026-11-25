@@ -691,6 +691,17 @@ impl App {
                 ..(*launch.frame).clone()
             });
         }
+        // The vibrational analysis needs the masses of isotope-labelled atoms;
+        // the stored frame keeps them, so a recompute uses the same ones.
+        if config.task.frequencies()
+            && launch.frame.masses_amu.is_empty()
+            && let Some(masses) = isotope_masses(&launch.frame)
+        {
+            launch.frame = Arc::new(Frame {
+                masses_amu: masses,
+                ..(*launch.frame).clone()
+            });
+        }
         let fixed = fixed_indices(&launch.atoms, &config.fixed).collect();
         let job = job(config, &launch.frame, fixed);
         run.label = format!("xTB · {}", state::formula(&launch.frame.numbers));
@@ -951,6 +962,34 @@ impl Run {
     }
 }
 
+/// Masses (u) for a frame with isotope labels: labelled atoms take their
+/// isotope's mass, the others the standard atomic weight; `None` without labels.
+fn isotope_masses(frame: &Frame) -> Option<Vec<f64>> {
+    use reshiki::chemistry::{ELEMENTS, ISOTOPES};
+    if frame.isotopes.iter().all(|&isotope| isotope == 0) {
+        return None;
+    }
+    Some(
+        frame
+            .numbers
+            .iter()
+            .enumerate()
+            .map(
+                |(index, &z)| match frame.isotopes.get(index).copied().unwrap_or(0) {
+                    0 => ELEMENTS
+                        .get(usize::from(z))
+                        .map_or(0., |element| element.average_mass_amu()),
+                    isotope => ISOTOPES
+                        .binary_search_by_key(&(z, isotope), |&(n, i, _)| (n, i))
+                        .ok()
+                        .and_then(|found| ISOTOPES.get(found))
+                        .map_or(f64::from(isotope), |&(_, _, mass)| mass),
+                },
+            )
+            .collect(),
+    )
+}
+
 /// The worker job for `config` on `frame`, holding frame atoms `fixed`.
 #[cfg(not(target_arch = "wasm32"))]
 fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
@@ -965,6 +1004,7 @@ fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
     run::Job {
         optimize: config.task.optimizes(),
         frequencies: config.task.frequencies(),
+        masses: (!frame.masses_amu.is_empty()).then(|| frame.masses_amu.clone()),
         numbers: frame.numbers.clone(),
         positions: frame.positions_angstrom.clone(),
         charge: config.charge,
