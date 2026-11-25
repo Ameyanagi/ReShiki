@@ -323,15 +323,15 @@ fn independent_intersects(points: &[DPoint], cyclic: bool) -> bool {
     false
 }
 
-fn sample_eight_steps(commands: &[PathCommand]) -> Vec<DPoint> {
+fn sample_steps(commands: &[PathCommand], steps: u32) -> Vec<DPoint> {
     let mut points = Vec::new();
     for command in commands {
         match *command {
             PathCommand::Move(p) | PathCommand::Line(p) => points.push(dp(p)),
             PathCommand::Cubic(b, c, d) => {
                 let [a, b, c, d] = [*points.last().unwrap(), dp(b), dp(c), dp(d)];
-                for step in 1..=8 {
-                    let t = f64::from(step) / 8.0;
+                for step in 1..=steps {
+                    let t = f64::from(step) / f64::from(steps);
                     let s = 1.0 - t;
                     points.push([
                         s * s * s * a[0]
@@ -351,8 +351,8 @@ fn sample_eight_steps(commands: &[PathCommand]) -> Vec<DPoint> {
     points
 }
 
-fn even_odd_contains(paths: &[FlatSubpath], point: DPoint) -> bool {
-    let mut inside = false;
+fn nonzero_contains(paths: &[FlatSubpath], point: DPoint) -> bool {
+    let mut winding = 0;
     for path in paths {
         assert!(path.closed, "region output must contain closed contours");
         for edge in path.points.windows(2) {
@@ -360,12 +360,12 @@ fn even_odd_contains(paths: &[FlatSubpath], point: DPoint) -> bool {
             if (a[1] > point[1]) != (b[1] > point[1]) {
                 let crossing = a[0] + (point[1] - a[1]) * (b[0] - a[0]) / (b[1] - a[1]);
                 if point[0] < crossing {
-                    inside = !inside;
+                    winding += if b[1] > a[1] { 1 } else { -1 };
                 }
             }
         }
     }
-    inside
+    winding != 0
 }
 
 #[test]
@@ -520,24 +520,116 @@ fn topology_intersection_sweep_matches_exhaustive_geometry() {
 }
 
 #[test]
-fn topology_guard_retries_at_half_tolerance_before_returning_a_curve() {
+fn short_loop_between_eight_step_samples_is_refined_before_accepting_a_cubic() {
     let points = [
-        [2.815711, 0.0],
-        [7.109807, 3.4239028],
-        [4.978295, 6.242584],
-        [0.5702141, 2.4982712],
-        [-0.37759152, 1.6543366],
-        [-1.1774554, 1.4764824],
-        [-2.350118, 1.1317571],
-        [-0.92079115, 1.1276438e-16],
-        [-7.5271344, -3.624877],
-        [-3.5817494, -4.4913716],
-        [-1.8008132, -7.889878],
-        [0.556881, -2.439855],
-        [0.41891983, -0.52530885],
-        [3.335212, -1.6061534],
+        [0.5, 0.0],
+        [2.0, 3.0],
+        [-2.0, 3.0],
+        [-3.0, 0.0],
+        [-2.0, -3.5],
+        [1.5, -3.0],
     ];
-    let error = 1.7610363_f32;
+    let commands = closed(&points, 1.1);
+    assert!(cubic_count(&commands) > 0, "retain the fitted smooth arc");
+    assert_vertices_within(&points, &commands, 1.1);
+    assert!(
+        !independent_intersects(&sample_steps(&commands, 64), true),
+        "dense sampling must not reveal a loop between the guard's samples: {commands:?}"
+    );
+    assert!(!independent_intersects(&flatten(&commands)[0].points, true));
+}
+
+#[test]
+fn interpolated_short_edges_bound_shared_handles_without_losing_smooth_joins() {
+    let points = [
+        [1.8075448, 0.0],
+        [5.8782153, 5.8782153],
+        [0.0, 2.4336567],
+        [-0.24110684, 0.24110684],
+        [-5.0910563, 0.0],
+        [-5.105465, -5.105465],
+        [0.0, -1.4674914],
+        [6.9647756, -6.9647756],
+    ];
+    let commands = open(&points, 0.8332968);
+    assert_vertices_within(&points, &commands, 0.8332968);
+    let mut cursor = dp(Point::new(points[0][0], points[0][1]));
+    let mut previous: Option<DPoint> = None;
+    let mut checked_joins = 0;
+    for command in commands {
+        let (incoming, outgoing, end) = match command {
+            PathCommand::Move(p) => {
+                cursor = dp(p);
+                continue;
+            }
+            PathCommand::Line(p) => {
+                let d = difference(dp(p), cursor);
+                (d, d, dp(p))
+            }
+            PathCommand::Cubic(b, c, p) => {
+                let chord = distance(cursor, dp(p));
+                assert!(
+                    distance(cursor, dp(b)) <= chord,
+                    "start handle exceeds chord"
+                );
+                assert!(distance(dp(c), dp(p)) <= chord, "end handle exceeds chord");
+                let scale = |v: DPoint| [3.0 * v[0], 3.0 * v[1]];
+                (
+                    scale(difference(dp(b), cursor)),
+                    scale(difference(dp(p), dp(c))),
+                    dp(p),
+                )
+            }
+            PathCommand::Close => panic!("unexpected close"),
+        };
+        if [points[2], points[3]]
+            .iter()
+            .any(|p| cursor == p.map(f64::from))
+        {
+            assert!(
+                distance(
+                    previous.expect("smooth join has an incoming segment"),
+                    incoming
+                ) < 0.000_005
+            );
+            checked_joins += 1;
+        }
+        previous = Some(outgoing);
+        cursor = end;
+    }
+    assert_eq!(checked_joins, 2, "check both ends of the short source edge");
+}
+
+fn topology_retry_points() -> [[f32; 2]; 21] {
+    [
+        [3.1191733, 0.0],
+        [7.6095057, 2.3472216],
+        [3.6243758, 2.4710577],
+        [2.7517486, 3.4505837],
+        [0.9611632, 2.449004],
+        [0.32987934, 4.4019337],
+        [-2.191362, 9.600984],
+        [-0.787649, 1.364248],
+        [-2.3451524, 2.1759834],
+        [-4.931342, 2.3748093],
+        [-3.3837335, 0.5100158],
+        [-4.3017406, -0.6483831],
+        [-4.009836, -1.9310354],
+        [-0.41734597, -0.38724047],
+        [-4.429225, -7.6716423],
+        [-0.26370347, -1.1553603],
+        [0.57963693, -7.7347174],
+        [2.2531633, -5.740967],
+        [1.2817415, -1.607253],
+        [3.2504408, -2.216113],
+        [9.216352, -2.8428683],
+    ]
+}
+
+#[test]
+fn topology_guard_retries_at_half_tolerance_before_returning_a_curve() {
+    let points = topology_retry_points();
+    let error = 3.3029964_f32;
     let clean = super::clean(&points);
     let input: Vec<_> = points
         .iter()
@@ -549,11 +641,11 @@ fn topology_guard_retries_at_half_tolerance_before_returning_a_curve() {
     let first = super::fit_path(&prepared, f64::from(error), true);
     let half = super::fit_path(&prepared, f64::from(error) * 0.5, true);
     assert!(
-        independent_intersects(&sample_eight_steps(&first), true),
+        independent_intersects(&sample_steps(&first, 8), true),
         "fixture must reject the first fit"
     );
     assert!(
-        !independent_intersects(&sample_eight_steps(&half), true),
+        !independent_intersects(&sample_steps(&half, 8), true),
         "fixture must accept the half-error fit"
     );
     let commands = closed(&points, error);
@@ -574,18 +666,20 @@ fn topology_guard_retries_at_half_tolerance_before_returning_a_curve() {
 #[test]
 fn topology_guard_falls_back_to_the_input_polygon_after_two_crossing_fits() {
     let points = [
-        [4.936034, 0.0],
-        [5.36151, 3.895365],
-        [0.83161, 2.5594325],
-        [-3.0426636, 9.364355],
-        [-1.3057957, 0.9487161],
-        [-1.7960285, 2.1995005e-16],
-        [-3.1316297, -2.275262],
-        [-0.8613413, -2.650936],
-        [2.5407157, -7.8195186],
-        [5.6066275, -4.073453],
+        [7.2255573, 0.0],
+        [8.371476, 4.833274],
+        [2.4225998, 4.196066],
+        [6.349441e-17, 1.0369424],
+        [-3.170093, 5.490762],
+        [-2.2222433, 1.2830129],
+        [-7.5454183, 9.240472e-16],
+        [-6.9599996, -4.0183578],
+        [-3.7434454, -6.4838376],
+        [-2.055205e-17, -0.111880146],
+        [4.5579934, -7.894676],
+        [0.24648629, -0.14230894],
     ];
-    let error = 2.1319616_f32;
+    let error = 3.043504_f32;
     let clean = super::clean(&points);
     let input: Vec<_> = points
         .iter()
@@ -599,7 +693,7 @@ fn topology_guard_falls_back_to_the_input_polygon_after_two_crossing_fits() {
             true,
         );
         assert!(
-            independent_intersects(&sample_eight_steps(&candidate), true),
+            independent_intersects(&sample_steps(&candidate, 8), true),
             "fixture must reject tolerance {tolerance}"
         );
     }
@@ -630,8 +724,8 @@ fn region_drops_small_area_and_keeps_its_neighbour() {
         1,
         "only the small-area contour should be dropped"
     );
-    assert!(even_odd_contains(&paths, [5.0, 5.0]));
-    assert!(!even_odd_contains(&paths, [20.03, 0.03]));
+    assert!(nonzero_contains(&paths, [5.0, 5.0]));
+    assert!(!nonzero_contains(&paths, [20.03, 0.03]));
     assert_vertices_within(&neighbour, &commands, 0.1);
 }
 
@@ -642,23 +736,23 @@ fn region_drops_narrow_sliver_and_keeps_its_neighbour() {
     let commands = region(&[narrow, neighbour.clone()], 0.1, 0.0, 0.02);
     let paths = flatten(&commands);
     assert_eq!(paths.len(), 1, "only the narrow contour should be dropped");
-    assert!(even_odd_contains(&paths, [5.0, 5.0]));
-    assert!(!even_odd_contains(&paths, [25.0, 0.005]));
+    assert!(nonzero_contains(&paths, [5.0, 5.0]));
+    assert!(!nonzero_contains(&paths, [25.0, 0.005]));
     assert_vertices_within(&neighbour, &commands, 0.1);
 }
 
 #[test]
-fn region_preserves_holes_with_even_odd_fill() {
-    // The rings intentionally have the same winding: even-odd fill must still
-    // leave the inner ring empty.
+fn region_preserves_oppositely_wound_holes_with_nonzero_fill() {
+    // Visibility emits holes with the opposite winding to their outer contour.
     let outer = rectangle(0.0, 0.0, 10.0, 10.0);
-    let hole = rectangle(3.0, 3.0, 4.0, 4.0);
+    let mut hole = rectangle(3.0, 3.0, 4.0, 4.0);
+    hole.reverse();
     let commands = region(&[outer.clone(), hole.clone()], 0.1, 0.0, 0.0);
     let paths = flatten(&commands);
     assert_eq!(paths.len(), 2);
-    assert!(even_odd_contains(&paths, [1.0, 5.0]));
-    assert!(!even_odd_contains(&paths, [5.0, 5.0]));
-    assert!(!even_odd_contains(&paths, [15.0, 5.0]));
+    assert!(nonzero_contains(&paths, [1.0, 5.0]));
+    assert!(!nonzero_contains(&paths, [5.0, 5.0]));
+    assert!(!nonzero_contains(&paths, [15.0, 5.0]));
     assert_vertices_within(&outer, &commands, 0.1);
     assert_vertices_within(&hole, &commands, 0.1);
 }
@@ -733,16 +827,8 @@ fn empty_and_degenerate_inputs_are_safe_and_finite() {
 
 #[test]
 fn topology_open_guard_retries_after_a_crossing_fit() {
-    let points = [
-        [2.0830626, 0.0],
-        [0.2590102, 0.3247885],
-        [-0.21286455, 0.9326205],
-        [-3.4656014, 1.6689457],
-        [-1.6709186, -0.80467194],
-        [-0.4506157, -1.9742763],
-        [3.917767, -4.9127245],
-    ];
-    let error = 3.3507018_f32;
+    let points = topology_retry_points();
+    let error = 3.3029964_f32;
     let input: Vec<_> = points
         .iter()
         .map(|p| [f64::from(p[0]), f64::from(p[1])])
@@ -750,7 +836,7 @@ fn topology_open_guard_retries_after_a_crossing_fit() {
     assert!(!independent_intersects(&input, false));
     let prepared = super::prepare(&super::clean(&points), f64::from(error), false);
     let first = super::fit_path(&prepared, f64::from(error), false);
-    assert!(independent_intersects(&sample_eight_steps(&first), false));
+    assert!(independent_intersects(&sample_steps(&first, 8), false));
     let half = super::fit_path(&prepared, f64::from(error) * 0.5, false);
     let commands = open(&points, error);
     assert_eq!(

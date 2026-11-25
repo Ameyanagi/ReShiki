@@ -8,24 +8,41 @@ pub(super) struct LineInterval {
     pub interval: (f64, f64),
 }
 
-/// Split a rim by the number of nearer front pieces covering each span.
+/// Split a rim by the number of nearer front triangles covering each span.
 pub(super) fn rim_segments(
     a: [f64; 2],
     b: [f64; 2],
-    covers: impl Iterator<Item = (f64, f64)>,
+    covers: impl Iterator<Item = (usize, (f64, f64))>,
     rims: &mut [Vec<Segment>],
 ) {
     if rims.is_empty() {
         return;
     }
-    let mut events = Vec::new();
-    for (start, end) in covers {
-        let start = start.max(0.);
-        let end = end.min(1.);
-        if start < end {
-            events.push((start, true));
-            events.push((end, false));
+    let mut intervals: Vec<_> = covers
+        .filter_map(|(triangle, (start, end))| {
+            let start = start.max(0.);
+            let end = end.min(1.);
+            (start < end).then_some((triangle, start, end))
+        })
+        .collect();
+    intervals.sort_unstable_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+    // Clipping can split one triangle along a cut that lies on this rim.
+    // Its pieces then cover the same interval, but the triangle counts once.
+    let mut united: Vec<(usize, f64, f64)> = Vec::with_capacity(intervals.len());
+    for (triangle, start, end) in intervals {
+        if let Some(last) = united.last_mut()
+            && last.0 == triangle
+            && start <= last.2
+        {
+            last.2 = last.2.max(end);
+        } else {
+            united.push((triangle, start, end));
         }
+    }
+    let mut events = Vec::with_capacity(2 * united.len());
+    for (_, start, end) in united {
+        events.push((start, true));
+        events.push((end, false));
     }
     events.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
     let mut cursor = 0.;

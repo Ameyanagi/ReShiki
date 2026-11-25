@@ -168,6 +168,35 @@ fn primitives(run: &[Primitive], parts: &[Part]) -> Vec<Primitive> {
         .collect()
 }
 
+/// A fitted path's structure and every coordinate bit, including controls.
+fn path_key(commands: &[reshiki::graphics::PathCommand], hasher: &mut DefaultHasher) {
+    use reshiki::graphics::PathCommand;
+    let point = |p: World, hasher: &mut DefaultHasher| {
+        p.x.to_bits().hash(hasher);
+        p.y.to_bits().hash(hasher);
+    };
+    commands.len().hash(hasher);
+    for command in commands {
+        match command {
+            PathCommand::Move(p) => {
+                0_u8.hash(hasher);
+                point(*p, hasher);
+            }
+            PathCommand::Line(p) => {
+                1_u8.hash(hasher);
+                point(*p, hasher);
+            }
+            PathCommand::Cubic(a, b, c) => {
+                2_u8.hash(hasher);
+                point(*a, hasher);
+                point(*b, hasher);
+                point(*c, hasher);
+            }
+            PathCommand::Close => 3_u8.hash(hasher),
+        }
+    }
+}
+
 /// Hash every coordinate and colour of `primitive` exactly: its `Debug`
 /// output, but a ball's contact and a surface by their bits, as that output
 /// would be long.
@@ -177,20 +206,26 @@ fn key(primitive: &Primitive, hasher: &mut DefaultHasher) {
             alpha.to_bits().hash(hasher);
             key(primitive, hasher);
         }
-        Primitive::Surface {
-            layers,
-            rims,
-            outline,
-        } => {
-            format!("{outline:?}").hash(hasher);
-            for (region, color) in layers {
-                (color, region.len()).hash(hasher);
-            }
-            for run in layers.iter().flat_map(|(region, _)| region).chain(rims) {
-                run.len().hash(hasher);
-                for p in run {
-                    p.x.to_bits().hash(hasher);
-                    p.y.to_bits().hash(hasher);
+        Primitive::Surface { groups } => {
+            groups.len().hash(hasher);
+            for group in groups {
+                group.alpha.to_bits().hash(hasher);
+                group.fills.len().hash(hasher);
+                for fill in &group.fills {
+                    fill.color.hash(hasher);
+                    path_key(&fill.region, hasher);
+                    fill.tones.len().hash(hasher);
+                    for (commands, color) in &fill.tones {
+                        color.hash(hasher);
+                        path_key(commands, hasher);
+                    }
+                }
+                group.strokes.len().hash(hasher);
+                for stroke in &group.strokes {
+                    stroke.outline.color.hash(hasher);
+                    stroke.outline.alpha.to_bits().hash(hasher);
+                    stroke.outline.width.to_bits().hash(hasher);
+                    path_key(&stroke.paths, hasher);
                 }
             }
         }

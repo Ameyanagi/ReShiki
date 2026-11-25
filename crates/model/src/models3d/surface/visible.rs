@@ -71,7 +71,8 @@ pub struct Layer {
     pub depth: usize,
     /// The region includes this tone and all lighter tones of this sign and depth.
     pub tone: usize,
-    /// Implicitly closed contours, including holes; fill with even-odd parity.
+    /// Implicitly closed contours, with holes wound opposite to their outer contour.
+    /// Fill with the nonzero winding rule.
     pub region: Vec<Vec<[f32; 2]>>,
 }
 
@@ -909,6 +910,7 @@ fn shade(contour: Polygon, light: Affine, tones: &mut [Vec<Polygon>]) {
 struct Batch {
     // One entry per (depth, sign), then one list of polygons per tone.
     shades: Vec<Vec<Vec<Polygon>>>,
+    regions: Vec<Vec<Polygon>>,
     rims: Vec<Vec<Segment>>,
     lines: Vec<runs::LineInterval>,
     fragments: usize,
@@ -922,6 +924,7 @@ impl Batch {
                 .iter()
                 .flat_map(|&n| [vec![Vec::new(); n], vec![Vec::new(); n]])
                 .collect(),
+            regions: vec![Vec::new(); 2 * tones.len()],
             rims: vec![Vec::new(); tones.len()],
             lines: Vec::new(),
             fragments: 0,
@@ -935,6 +938,9 @@ impl Batch {
                 target.extend(polygons);
             }
         }
+        for (regions, more) in self.regions.iter_mut().zip(other.regions) {
+            regions.extend(more);
+        }
         for (rims, more) in self.rims.iter_mut().zip(other.rims) {
             rims.extend(more);
         }
@@ -946,6 +952,7 @@ impl Batch {
 
 fn merge_layers(
     shades: &[Vec<Vec<Polygon>>],
+    regions: &[Vec<Polygon>],
     adapter: &FloatPointAdapter<[f64; 2], i64>,
     tolerance: f64,
 ) -> Vec<Layer> {
@@ -953,13 +960,27 @@ fn merge_layers(
         let mut output = Vec::new();
         let mut overlay = FloatOverlay::<[f64; 2], i64>::with_adapter(adapter.clone(), 0);
         for group in range {
+            let Some(first) = shades[group]
+                .iter()
+                .position(|polygons| !polygons.is_empty())
+            else {
+                continue;
+            };
             let mut cumulative = Vec::<Polygon>::new();
             let mut layers = Vec::new();
             for (tone, polygons) in shades[group].iter().enumerate().rev() {
                 if polygons.is_empty() {
                     continue;
                 }
-                cumulative.extend(polygons.iter().cloned());
+                if tone == first {
+                    // Merge the unsliced fragments for the whole region. Shade
+                    // cuts can otherwise leave different contour starts as the
+                    // tone count changes with opacity, changing the fitted rim.
+                    cumulative.clear();
+                    cumulative.extend(regions[group].iter().cloned());
+                } else {
+                    cumulative.extend(polygons.iter().cloned());
+                }
                 overlay.clear();
                 // All cuts stay inside the shared adapter's bounds.
                 overlay = overlay.unsafe_add_source(&cumulative, ShapeType::Subject);
@@ -1046,6 +1067,9 @@ pub fn visible(input: &Input<'_>) -> Visible {
                                 }
                             }
                             if front && depth < groups {
+                                if input.tones[depth] > 0 {
+                                    batch.regions[2 * depth + sign].push(polygon.clone());
+                                }
                                 shade(polygon, piece.light, &mut batch.shades[2 * depth + sign]);
                             }
                         },
@@ -1075,7 +1099,7 @@ pub fn visible(input: &Input<'_>) -> Visible {
                         }
                         let (lo, hi) = segment_interval(a, b, &other.polygon)?;
                         coverage::in_front(&pieces, j, i, along(a, b, (lo + hi) * 0.5))
-                            .then_some((lo, hi))
+                            .then_some((other.triangle, (lo, hi)))
                     });
                     runs::rim_segments(a, b, covers, &mut batch.rims);
                 }
@@ -1090,7 +1114,7 @@ pub fn visible(input: &Input<'_>) -> Visible {
             pieces.iter().flat_map(|p| &p.polygon),
             UNION_BITS,
         );
-        result.layers = merge_layers(&all.shades, &adapter, tolerance);
+        result.layers = merge_layers(&all.shades, &all.regions, &adapter, tolerance);
     }
     result.stats.fragments = all.fragments;
     result.stats.fragment_limit_hits = all.limit_hits;

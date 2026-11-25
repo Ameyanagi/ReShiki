@@ -1,4 +1,6 @@
+use super::super::super::fit;
 use super::*;
+use crate::graphics::PathCommand;
 
 fn planar_squares(squares: &[(f32, f32, bool)]) -> Mesh {
     let mut mesh = Mesh::default();
@@ -71,6 +73,50 @@ fn run_length(runs: &[Vec<[f32; 2]>]) -> f64 {
         .flat_map(|run| run.windows(2))
         .map(|edge| f64::from(edge[1][0] - edge[0][0]).hypot(f64::from(edge[1][1] - edge[0][1])))
         .sum()
+}
+
+fn signed_area(contour: &[[f64; 2]]) -> f64 {
+    contour
+        .iter()
+        .zip(contour.iter().cycle().skip(1))
+        .take(contour.len())
+        .map(|(a, b)| a[0] * b[1] - a[1] * b[0])
+        .sum::<f64>()
+        * 0.5
+}
+
+fn fitted_signed_areas(commands: &[PathCommand]) -> Vec<f64> {
+    let mut areas = Vec::new();
+    let mut contour = Vec::new();
+    for command in commands {
+        match *command {
+            PathCommand::Move(p) => {
+                assert!(contour.is_empty(), "every contour must close");
+                contour.push([f64::from(p.x), f64::from(p.y)]);
+            }
+            PathCommand::Line(p) => contour.push([f64::from(p.x), f64::from(p.y)]),
+            PathCommand::Cubic(b, c, d) => {
+                let a = *contour.last().expect("cubic must follow a move");
+                let [b, c, d] = [b, c, d].map(|p| [f64::from(p.x), f64::from(p.y)]);
+                for step in 1..=64 {
+                    let t = f64::from(step) / 64.;
+                    let s = 1. - t;
+                    contour.push(std::array::from_fn(|axis| {
+                        s * s * s * a[axis]
+                            + 3. * s * s * t * b[axis]
+                            + 3. * s * t * t * c[axis]
+                            + t * t * t * d[axis]
+                    }));
+                }
+            }
+            PathCommand::Close => {
+                areas.push(signed_area(&contour));
+                contour.clear();
+            }
+        }
+    }
+    assert!(contour.is_empty(), "every contour must close");
+    areas
 }
 
 fn check_horizontal_intervals(runs: &[Vec<[f32; 2]>], y: f32, expected: &[(f32, f32)]) {
@@ -425,6 +471,124 @@ fn a_line_on_a_clipping_fragment_boundary_is_emitted_once() {
     );
     assert!(result.lines[0][1].is_empty());
     assert!(result.lines[1].iter().all(Vec::is_empty));
+}
+
+#[test]
+fn a_rim_on_a_nearer_triangles_clipping_cut_is_covered_once() {
+    let result = visible(&Input {
+        positions: &[
+            [0., 0., 1.],
+            [10., 0., 1.],
+            [0., 10., 1.],
+            [3., 0.5, 0.],
+            [3., 1.5, 0.],
+            [2., 0.5, 0.],
+            [4., 0.5, -1.],
+        ],
+        triangles: &[[0, 1, 2], [3, 4, 5], [4, 3, 6]],
+        positive: &[false, true, true],
+        front: &[true, true, false],
+        lightness: &[1.; 7],
+        occluders: &[Occluder::Stick {
+            a: [3., 3., 2.],
+            b: [6., 3., 2.],
+            half: [1.; 2],
+            depth: [0.; 2],
+        }],
+        tones: &[1, 1],
+        lines: &[],
+        tolerance: 0.,
+    });
+    check_depth_output(&result, &[1, 1]);
+    assert!(result.stats.pieces > 2, "the nearer triangle must be split");
+    assert!(result.rims[0].is_empty());
+    assert_eq!(result.rims[1].len(), 1);
+    assert!((run_length(&result.rims[1]) - 1.).abs() < 0.0001);
+    assert!(
+        result.rims[1][0]
+            .iter()
+            .all(|p| (p[0] - 3.).abs() < 0.0001 && (0.5..=1.5).contains(&p[1]))
+    );
+}
+
+#[test]
+fn a_nearer_piece_cuts_an_oppositely_wound_hole_that_fitting_preserves() {
+    let result = visible(&Input {
+        positions: &[
+            [0., 0., 0.],
+            [10., 0., 0.],
+            [0., 10., 0.],
+            [2., 2., 1.],
+            [4., 2., 1.],
+            [2., 4., 1.],
+        ],
+        triangles: &[[0, 1, 2], [3, 4, 5]],
+        positive: &[true, false],
+        front: &[true; 2],
+        lightness: &[1.; 6],
+        occluders: &[],
+        tones: &[1],
+        lines: &[],
+        tolerance: 0.,
+    });
+    check_depth_output(&result, &[1]);
+    let region = &first_layer(&result, true)
+        .expect("rear piece remains")
+        .region;
+    assert_eq!(region.len(), 2, "one outer contour and one hole");
+    assert!(contains(region, [1., 1.]));
+    assert!(!contains(region, [2.5, 2.5]));
+    let original: Vec<_> = region
+        .iter()
+        .map(|contour| signed_area(&contour.iter().map(|p| p.map(f64::from)).collect::<Vec<_>>()))
+        .collect();
+    assert!(
+        original[0] * original[1] < 0.,
+        "hole winding must oppose its outer contour"
+    );
+    let fitted = fitted_signed_areas(&fit::region(region, 0.08, 0., 0.));
+    assert_eq!(fitted.len(), original.len());
+    for (before, after) in original.into_iter().zip(fitted) {
+        assert!(
+            before * after > 0.,
+            "fitting reversed a contour: {before} -> {after}"
+        );
+    }
+}
+
+#[test]
+fn whole_region_geometry_is_independent_of_tone_counts_and_depth_group_count() {
+    let input = Input {
+        positions: &[
+            [0.3153, 0.8301, 0.],
+            [10.7371, 1.3307, 0.],
+            [0.2831, 10.1317, 0.],
+        ],
+        triangles: &[[0, 1, 2]],
+        positive: &[true],
+        front: &[true],
+        lightness: &[0.35, 0.96, 0.52],
+        occluders: &[],
+        tones: &[90],
+        lines: &[],
+        tolerance: 0.025,
+    };
+    let opaque = visible(&input);
+    let translucent = visible(&Input {
+        tones: &[54, 22, 9],
+        ..input
+    });
+    check_depth_output(&opaque, &[90]);
+    check_depth_output(&translucent, &[54, 22, 9]);
+    let opaque = first_layer(&opaque, true).expect("opaque region");
+    let translucent = first_layer(&translucent, true).expect("translucent region");
+    assert_eq!(opaque.tone, 31, "keep the earliest occupied tone");
+    assert_eq!(translucent.tone, 18, "keep the earliest occupied tone");
+    assert_eq!(opaque.region, translucent.region);
+    assert_eq!(
+        fit::region(&opaque.region, 0.08, 0., 0.),
+        fit::region(&translucent.region, 0.08, 0., 0.)
+    );
 }
 
 #[test]

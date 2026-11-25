@@ -86,7 +86,7 @@ struct Frame {
     paper: Option<[u8; 3]>,
     lo: super::Point,
     hi: super::Point,
-    /// Serial for 3D-model gradient IDs.
+    /// Serial for gradient, clip and filter IDs.
     gradients: std::cell::Cell<usize>,
 }
 
@@ -147,6 +147,23 @@ fn push_command(d: &mut String, letter: char, numbers: &[f32]) {
             }
         }
     }
+}
+
+/// Fitted surface paths use the compact 3D-model coordinate format too.
+fn surface_data(commands: &[crate::graphics::PathCommand]) -> String {
+    use crate::graphics::PathCommand;
+    let mut d = String::new();
+    for command in commands {
+        match command {
+            PathCommand::Move(p) => push_command(&mut d, 'M', &[p.x, p.y]),
+            PathCommand::Line(p) => push_command(&mut d, 'L', &[p.x, p.y]),
+            PathCommand::Cubic(a, b, c) => {
+                push_command(&mut d, 'C', &[a.x, a.y, b.x, b.y, c.x, c.y]);
+            }
+            PathCommand::Close => push_command(&mut d, 'Z', &[]),
+        }
+    }
+    d
 }
 
 /// Path data through `points`, each run of steps between points on the
@@ -583,35 +600,42 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     2. * spread
                 ));
             }
-            Primitive::Surface {
-                layers,
-                rims,
-                outline,
-            } => {
-                let data = |runs: &[Vec<super::Point>], closed: bool| {
-                    let mut d = String::new();
-                    for run in runs.iter().filter(|run| !run.is_empty()) {
-                        for (k, p) in run.iter().enumerate() {
-                            push_command(&mut d, if k == 0 { 'M' } else { 'L' }, &[p.x, p.y]);
-                        }
-                        if closed {
-                            d.push('Z');
+            Primitive::Surface { groups } => {
+                for group in groups {
+                    if group.alpha < 1. {
+                        s.push_str(&format!("<g opacity=\"{}\">", group.alpha));
+                    }
+                    for fill in group.fills {
+                        let region = surface_data(&fill.region);
+                        let [r, g, b] = fill.color;
+                        s.push_str(&format!(
+                            "<path d=\"{region}\" fill=\"rgb({r},{g},{b})\" fill-rule=\"nonzero\"/>"
+                        ));
+                        if !fill.tones.is_empty() {
+                            frame.gradients.set(frame.gradients.get() + 1);
+                            let id = format!("reshiki-surface-{}", frame.gradients.get());
+                            s.push_str(&format!(
+                                "<defs><clipPath id=\"{id}\" clipPathUnits=\"userSpaceOnUse\"><path d=\"{region}\" clip-rule=\"nonzero\"/></clipPath></defs><g clip-path=\"url(#{id})\">"
+                            ));
+                            for (commands, [r, g, b]) in fill.tones {
+                                s.push_str(&format!(
+                                    "<path d=\"{}\" fill=\"rgb({r},{g},{b})\" fill-rule=\"nonzero\"/>",
+                                    surface_data(&commands)
+                                ));
+                            }
+                            s.push_str("</g>");
                         }
                     }
-                    d
-                };
-                for (region, [r, g, b]) in &layers {
-                    s.push_str(&format!(
-                        "<path d=\"{}\" fill=\"rgb({r},{g},{b})\" fill-rule=\"evenodd\"/>",
-                        data(region, true)
-                    ));
-                }
-                if outline.is_some() && !rims.is_empty() {
-                    s.push_str(&format!(
-                        "<path d=\"{}\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{}/>",
-                        data(&rims, false),
-                        outline_paint(outline)
-                    ));
+                    for stroke in group.strokes {
+                        s.push_str(&format!(
+                            "<path d=\"{}\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{}/>",
+                            surface_data(&stroke.paths),
+                            outline_paint(Some(stroke.outline))
+                        ));
+                    }
+                    if group.alpha < 1. {
+                        s.push_str("</g>");
+                    }
                 }
             }
             Primitive::Card {

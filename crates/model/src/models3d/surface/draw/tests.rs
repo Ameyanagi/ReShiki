@@ -1,4 +1,6 @@
 use super::*;
+use crate::document::Point;
+use crate::graphics::PathCommand;
 use crate::models3d::{
     Display, ForceField, Hydrogen, Labels, Placed, require_version, set_display,
 };
@@ -79,28 +81,59 @@ fn tilted(mut doc: Document, degrees: f32) -> Document {
     doc
 }
 
-/// Whether `p` lies inside the first (whole) layer of either phase.
+/// Whether `p` lies inside a fitted phase region.
 fn covered(surface: &Primitive, p: Point) -> bool {
-    let Primitive::Surface { layers, .. } = surface else {
+    let Primitive::Surface { groups } = surface else {
         return false;
     };
-    let inside = |contour: &Vec<Point>| {
-        let mut odd = false;
-        for (a, b) in contour.iter().zip(contour.iter().cycle().skip(1)) {
+    groups.iter().flat_map(|g| &g.fills).any(|fill| {
+        let (mut start, mut from) = (Point::default(), Point::default());
+        let mut winding = 0;
+        let mut edge = |a: Point, b: Point| {
             if (a.y > p.y) != (b.y > p.y) && p.x < a.x + (p.y - a.y) / (b.y - a.y) * (b.x - a.x) {
-                odd = !odd;
+                winding += if a.y < b.y { 1 } else { -1 };
+            }
+        };
+        for command in &fill.region {
+            match *command {
+                PathCommand::Move(a) => (start, from) = (a, a),
+                PathCommand::Line(to) => {
+                    edge(from, to);
+                    from = to;
+                }
+                PathCommand::Cubic(b, c, to) => {
+                    let a = from;
+                    for step in 1..=16 {
+                        let t = step as f32 / 16.;
+                        let u = 1. - t;
+                        let coord = |a, b, c, d| {
+                            u * u * u * a + 3. * u * u * t * b + 3. * u * t * t * c + t * t * t * d
+                        };
+                        let next =
+                            Point::new(coord(a.x, b.x, c.x, to.x), coord(a.y, b.y, c.y, to.y));
+                        edge(from, next);
+                        from = next;
+                    }
+                }
+                PathCommand::Close => {
+                    edge(from, start);
+                    from = start;
+                }
             }
         }
-        odd
-    };
-    // The first layer of each phase (blue positive, grey negative) covers its whole region.
-    let blue = |c: &[u8; 3]| i32::from(c[2]) > i32::from(c[0]) + 40;
-    [true, false].iter().any(|&positive| {
-        layers
-            .iter()
-            .find(|(_, c)| blue(c) == positive)
-            .is_some_and(|(region, _)| region.iter().filter(|c| inside(c)).count() % 2 == 1)
+        winding != 0
     })
+}
+
+fn groups(doc: &Document, spec: &str) -> Vec<SurfaceGroup> {
+    demo_on_this_thread(Some(spec)).unwrap();
+    let mut surfaces = surfaces(doc);
+    demo_on_this_thread(None).unwrap();
+    assert_eq!(surfaces.len(), 1, "{spec}");
+    let Primitive::Surface { groups } = surfaces.remove(0) else {
+        unreachable!()
+    };
+    groups
 }
 
 #[test]
@@ -117,11 +150,51 @@ fn without_the_switch_nothing_changes() {
 
 #[test]
 fn the_switch_rejects_bad_specs() {
-    for spec in ["sigma", "pi:0", "pi:-1", "pi:nan", "pistar:x"] {
-        assert!(demo_on_this_thread(Some(spec)).is_err(), "{spec}");
+    for (spec, message) in [
+        ("sigma", "Unknown demo"),
+        ("pi:0", "Isovalue"),
+        ("pi:-1", "Isovalue"),
+        ("pi:nan", "Isovalue"),
+        ("pistar:x", "Isovalue"),
+        ("pi,look=smooth", "Unknown surface look"),
+        ("pi,look=mesh+mesh", "Unknown surface look"),
+        ("pi,opacity=19", "opacity"),
+        ("pi,opacity=101", "opacity"),
+        ("pi,opacity=0.6", "opacity"),
+        ("pi,alpha=50", "Unknown surface option"),
+        ("pi,mesh", "key=value"),
+        ("pi,look=solid,look=mesh", "Duplicate surface option"),
+    ] {
+        let error = demo_on_this_thread(Some(spec)).unwrap_err();
+        assert!(error.contains(message), "{spec}: {error}");
     }
-    demo_on_this_thread(Some("pistar:0.04")).unwrap();
+    for (spec, expected) in [
+        ("pi", (Demo::Pi, 0.06, Look::default())),
+        ("pistar:0.05", (Demo::PiStar, 0.05, Look::default())),
+        (
+            "pistar:0.06,look=shaded+mesh,opacity=60",
+            (
+                Demo::PiStar,
+                0.06,
+                Look::new(Fill::Shaded, true, 60).unwrap(),
+            ),
+        ),
+    ] {
+        demo_on_this_thread(Some(spec)).unwrap();
+        assert_eq!(switch(), Some(expected));
+    }
     demo_on_this_thread(None).unwrap();
+}
+
+#[test]
+fn changing_the_look_reuses_the_mesh() {
+    let doc = ethylene();
+    demo_on_this_thread(Some("pi")).unwrap();
+    let shaded = meshes(&doc, &doc.models[0]).unwrap();
+    demo_on_this_thread(Some("pi,look=mesh,opacity=30")).unwrap();
+    let mesh = meshes(&doc, &doc.models[0]).unwrap();
+    demo_on_this_thread(None).unwrap();
+    assert!(Rc::ptr_eq(&shaded, &mesh));
 }
 
 #[test]
@@ -143,24 +216,15 @@ fn the_surface_is_drawn_after_the_molecule_and_holds_both_phases() {
             .iter()
             .any(|p| matches!(p, Primitive::Sphere { .. } | Primitive::ShadedQuad { .. }))
     );
-    let Primitive::Surface {
-        layers,
-        rims,
-        outline,
-    } = &all[at]
-    else {
+    let Primitive::Surface { groups } = &all[at] else {
         unreachable!()
     };
-    let blue = layers
-        .iter()
-        .filter(|(_, c)| i32::from(c[2]) > i32::from(c[0]) + 40)
-        .count();
-    assert!(
-        blue >= 3 && blue < layers.len(),
-        "{blue} of {}",
-        layers.len()
-    );
-    assert!(!rims.is_empty() && outline.is_some());
+    let [positive, negative] = groups[0].fills.as_slice() else {
+        panic!("Expected two phases");
+    };
+    let blue = |[r, _, b]: [u8; 3]| i32::from(b) > i32::from(r) + 40;
+    assert!(blue(positive.color) && !blue(negative.color));
+    assert!(!groups[0].strokes.is_empty());
     demo_on_this_thread(None).unwrap();
 }
 
@@ -312,10 +376,18 @@ fn the_frame_holds_the_surface() {
     let (lo, hi) = crate::models3d::frame(&doc, &doc.models[0]).unwrap();
     // Same frame; the model draws smaller inside it.
     assert_eq!((lo, hi), plain);
-    let Primitive::Surface { layers, rims, .. } = &surfaces(&doc)[0] else {
+    let Primitive::Surface { groups } = &surfaces(&doc)[0] else {
         unreachable!()
     };
-    for p in layers.iter().flat_map(|(r, _)| r).chain(rims).flatten() {
+    let fills = groups.iter().flat_map(|g| &g.fills).flat_map(|fill| {
+        std::iter::once(&fill.region).chain(fill.tones.iter().map(|(path, _)| path))
+    });
+    let strokes = groups.iter().flat_map(|g| &g.strokes).map(|s| &s.paths);
+    for p in fills
+        .chain(strokes)
+        .flatten()
+        .flat_map(PathCommand::iter_points)
+    {
         assert!(
             p.x >= lo.x && p.y >= lo.y && p.x <= hi.x && p.y <= hi.y,
             "{p:?}"
@@ -325,23 +397,166 @@ fn the_frame_holds_the_surface() {
 }
 
 #[test]
-fn svg_has_only_vector_paths() {
-    demo_on_this_thread(Some("pistar")).unwrap();
-    let svg = scene::svg(&tilted(benzene(), 50.));
-    assert!(svg.contains("fill-rule=\"evenodd\""));
+fn looks_paint_the_requested_fills_and_strokes() {
+    let doc = tilted(ethylene(), 55.);
+    let shaded = groups(&doc, "pi,look=shaded");
+    assert_eq!(shaded.len(), 1);
+    assert_eq!(shaded[0].alpha, 1.);
+    let positive = &shaded[0].fills[0];
+    assert!(positive.tones.len() >= 60, "{}", positive.tones.len());
+    // The endpoint range bounds the average step. The steeper part of the
+    // exact piecewise ramp can round to two levels between uniform midpoints.
+    for (a, b) in std::iter::once(positive.color)
+        .chain(positive.tones.iter().map(|(_, color)| *color))
+        .zip(positive.tones.iter().map(|(_, color)| *color))
+    {
+        assert!(
+            a.into_iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 2),
+            "{a:?} → {b:?}"
+        );
+    }
+
+    let solid = groups(&doc, "pi,look=solid");
+    assert!(!solid[0].fills.is_empty());
+    assert!(solid[0].fills.iter().all(|fill| fill.tones.is_empty()));
+
+    let outline = groups(&doc, "pi,look=outline");
+    let backdrop = match doc.models[0].background {
+        crate::models3d::Background::None => doc.canvas_theme.background(),
+        crate::models3d::Background::Card => crate::models3d::CARD,
+    };
+    assert!(!outline[0].fills.is_empty());
+    assert!(outline[0].fills.iter().all(|fill| fill.color == backdrop));
+
+    let mesh = groups(&doc, "pi,look=mesh");
+    assert!(mesh[0].fills.is_empty());
+    assert!(
+        mesh[0]
+            .strokes
+            .iter()
+            .any(|stroke| stroke.outline.alpha == 0.9)
+    );
+
+    let both = groups(&doc, "pi,look=shaded+mesh");
+    assert_eq!(both[0].fills, shaded[0].fills);
+    let (rim, mesh) = both[0].strokes.split_last().unwrap();
+    assert_eq!(rim, &shaded[0].strokes[0]);
+    assert!(!mesh.is_empty());
+    assert!(mesh.iter().all(|stroke| stroke.outline.alpha == 0.9));
+
+    let mut glossy = doc;
+    glossy.models[0].look = crate::models3d::Look::Glossy;
+    let line_width = (glossy.models[0].size / 400.).clamp(0.6, 1.1);
+    let mesh = groups(&glossy, "pi,look=mesh");
+    assert!(!mesh[0].strokes.is_empty());
+    assert!(mesh[0].strokes.iter().all(|stroke| {
+        stroke.outline.alpha == 0.9 && stroke.outline.width == 0.45 * line_width
+    }));
+}
+
+#[test]
+fn tone_counts_follow_the_faded_endpoint_range_and_group_weights() {
+    let backdrop = [255.; 3];
+    let fade = 0.175;
+    assert_eq!(shaded(POSITIVE, 0.35, backdrop, fade), [86, 119, 188]);
+    assert_eq!(shaded(POSITIVE, 1., backdrop, fade), [175, 196, 238]);
+    assert_eq!(tone_counts(Look::default(), false, backdrop, fade), [89]);
+    let film = Look::new(Fill::Shaded, false, 60).unwrap();
+    assert_eq!(tone_counts(film, false, backdrop, fade), [54, 22, 9, 4]);
+}
+
+#[test]
+fn translucent_groups_put_the_nearest_layer_last() {
+    let doc = tilted(benzene(), 55.);
+    let opaque = groups(&doc, "pistar");
+    let film = groups(&doc, "pistar,opacity=60");
+    assert!(film.len() > 1);
+    assert!(film.iter().all(|group| group.alpha == 0.6));
+    assert_eq!(
+        film.last().unwrap().fills[0].region,
+        opaque[0].fills[0].region
+    );
+
+    let mesh = groups(&doc, "pistar,look=mesh,opacity=30");
+    assert!(mesh.len() >= 3);
+    for (group, alpha) in mesh
+        .iter()
+        .rev()
+        .zip([0.3, 0.21, 0.147, 0.1029, 0.07203, 0.050421])
+    {
+        assert!(group.fills.is_empty());
+        assert!((group.alpha - alpha).abs() < 1e-6, "{}", group.alpha);
+    }
+}
+
+#[test]
+fn svg_composites_groups_with_clipped_vector_tones() {
+    demo_on_this_thread(Some("pistar,opacity=60")).unwrap();
+    let svg = scene::svg(&tilted(benzene(), 55.));
+    demo_on_this_thread(None).unwrap();
+    assert!(svg.contains("<g opacity=\"0.6\">"));
+    assert!(svg.contains("<clipPath id=\"reshiki-surface-"));
+    assert!(svg.contains("fill-rule=\"nonzero\""));
+    assert!(svg.contains("clip-rule=\"nonzero\""));
+    assert!(svg.split("<path d=\"").skip(1).any(|element| {
+        element.split_once('"').is_some_and(|(path, rest)| {
+            path.contains('C')
+                && rest
+                    .split('>')
+                    .next()
+                    .is_some_and(|attributes| attributes.contains("fill-rule=\"nonzero\""))
+        })
+    }));
     assert!(!svg.contains("<image"));
+}
+
+#[test]
+fn opaque_shaded_svg_preserves_fitted_region_commands() {
+    demo_on_this_thread(Some("pi")).unwrap();
+    let doc = ethylene();
+    for degrees in [0., 55.] {
+        let surfaces = surfaces(&tilted(doc.clone(), degrees));
+        let Primitive::Surface { groups } = &surfaces[0] else {
+            unreachable!()
+        };
+        let mut expected = (0, 0);
+        for command in groups[0].fills.iter().flat_map(|fill| &fill.region) {
+            match command {
+                PathCommand::Cubic(..) => expected.0 += 1,
+                PathCommand::Line(..) => expected.1 += 1,
+                PathCommand::Move(..) | PathCommand::Close => {}
+            }
+        }
+        let svg = scene::svg_part(&surfaces, Point::new(-100., -100.), Point::new(100., 100.));
+        let (mut regions, mut cubics, mut lines) = (0, 0, 0);
+        // Each clip repeats its exact phase region path.
+        for clip in svg.split("<clipPath id=\"reshiki-surface-").skip(1) {
+            let (_, path) = clip.split_once("<path d=\"").unwrap();
+            let (data, _) = path.split_once('"').unwrap();
+            regions += 1;
+            cubics += data.matches('C').count();
+            lines += data.matches('L').count();
+        }
+        assert_eq!(regions, groups[0].fills.len());
+        assert_eq!((cubics, lines), expected, "{degrees}°");
+        if degrees == 0. {
+            assert!(
+                cubics > lines,
+                "{cubics} cubic commands, {lines} line commands"
+            );
+        }
+    }
     demo_on_this_thread(None).unwrap();
 }
 
-/// Release-mode numbers for the PR: mesh build, frame, SVG and snapshot
-/// bytes at both details, for each demo molecule. Run with
+/// Release-mode frame and export budgets at drawing detail. Run with
 /// `cargo test --release -p reshiki-model export_budgets -- --ignored --nocapture`.
 #[test]
 #[ignore]
 fn export_budgets() {
     use std::time::Instant;
     println!(
-        "| molecule | demo | detail | triangles | mesh ms | frame ms | layers | points | SVG KB | snapshot KB |"
+        "| molecule | demo | look | triangles | frame ms | groups | group 0 tones | path commands | SVG KB | snapshot KB |"
     );
     println!("|---|---|---|---:|---:|---:|---:|---:|---:|---:|");
     for (name, doc) in [("ethylene", ethylene()), ("benzene", benzene())] {
@@ -349,12 +564,18 @@ fn export_budgets() {
         for demo in ["pi", "pistar"] {
             demo_on_this_thread(Some(demo)).unwrap();
             MESHES.with_borrow_mut(Vec::clear);
-            let started = Instant::now();
             let meshes = meshes(&doc, &doc.models[0]).unwrap();
-            let mesh_ms = started.elapsed().as_secs_f32() * 1000.;
-            for (k, turning) in [false, true].into_iter().enumerate() {
-                let mut doc = doc.clone();
-                doc.models[0].turning = turning;
+            for (look, opacity) in [
+                ("shaded", 100),
+                ("shaded+mesh", 100),
+                ("shaded", 60),
+                ("mesh", 100),
+                ("mesh", 30),
+                ("solid", 100),
+                ("outline", 100),
+            ] {
+                demo_on_this_thread(Some(&format!("{demo},look={look},opacity={opacity}")))
+                    .unwrap();
                 let started = Instant::now();
                 let all = scene::primitives(&doc);
                 let frame_ms = started.elapsed().as_secs_f32() * 1000.;
@@ -363,21 +584,35 @@ fn export_budgets() {
                     .iter()
                     .find(|p| matches!(p, Primitive::Surface { .. }))
                     .unwrap();
-                let Primitive::Surface { layers, rims, .. } = surface else {
+                let Primitive::Surface { groups } = surface else {
                     unreachable!()
                 };
-                let points: usize = layers
+                let tones: usize = groups
+                    .last()
+                    .unwrap()
+                    .fills
                     .iter()
-                    .flat_map(|(r, _)| r)
-                    .chain(rims)
-                    .map(Vec::len)
+                    .map(|fill| fill.tones.len())
+                    .sum();
+                let commands: usize = groups
+                    .iter()
+                    .map(|group| {
+                        group
+                            .fills
+                            .iter()
+                            .map(|f| {
+                                f.region.len()
+                                    + f.tones.iter().map(|(path, _)| path.len()).sum::<usize>()
+                            })
+                            .sum::<usize>()
+                            + group.strokes.iter().map(|s| s.paths.len()).sum::<usize>()
+                    })
                     .sum();
                 let snapshot = super::super::snapshot::encode(surface, Point::default()).unwrap();
                 println!(
-                    "| {name} | {demo} | {} | {} | {mesh_ms:.0} | {frame_ms:.0} | {} | {points} | {:.0} | {:.0} |",
-                    DETAIL[k],
-                    meshes[k].triangles.len(),
-                    layers.len(),
+                    "| {name} | {demo} | {look} {opacity} | {} | {frame_ms:.1} | {} | {tones} | {commands} | {:.1} | {:.1} |",
+                    meshes[0].triangles.len(),
+                    groups.len(),
                     svg.len() as f32 / 1024.,
                     snapshot.len() as f32 / 1024.,
                 );

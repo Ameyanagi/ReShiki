@@ -6,22 +6,27 @@
 // the model's own geometry.
 #![allow(clippy::indexing_slicing)]
 use super::mesh::{self, Grid, Mesh};
-use super::visible::{self, Input, Occluder, Visible};
-use crate::document::{Document, Point};
-use crate::models3d::{Model3d, Style, View, rotate, sub};
-use crate::scene::{Outline, Primitive};
+use super::visible::{self, Input, Line, Occluder, Visible};
+use super::{Fill, Look, fit};
+use crate::document::Document;
+use crate::models3d::{BLACK, Model3d, Style, View, WHITE, dot, mix, rgb, rotate, sub};
+use crate::scene::{Outline, Primitive, SurfaceFill, SurfaceGroup, SurfaceStroke};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::OnceLock;
 
 /// Triangles for the drawing and export, and while the model turns.
 pub const DETAIL: [usize; 2] = [20_000, 4_000];
-/// Shading levels per phase.
-const BANDS: usize = 10;
-/// Outline thinning, in drawing units.
-const TOLERANCE: f32 = 0.05;
-/// The shortest outline run drawn, as a fraction of the model's size.
-const SHORTEST: f32 = 0.02;
+const FIT_ERROR: f32 = 0.08;
+const MIN_AREA: f32 = 0.05;
+const MIN_WIDTH: f32 = 0.12;
+const MIN_RUN: f32 = 1.;
+const TOLERANCE: f32 = 0.03;
+const MAX_TONES: usize = 128;
+const MAX_GROUPS: usize = 6;
+const TONE_STEP: f32 = 1.;
+/// The distance between mesh planes, in ångströms.
+const MESH_SPACING: f64 = 0.3;
 /// The demo's p-function decay, per ångström.
 const DECAY: f32 = 1.6;
 /// Box margin around the atoms before the mesher grows it, in ångström.
@@ -38,13 +43,13 @@ enum Demo {
     PiStar,
 }
 
-static SWITCH: OnceLock<(Demo, f32)> = OnceLock::new();
+static SWITCH: OnceLock<(Demo, f32, Look)> = OnceLock::new();
 thread_local! {
-    static THREAD: std::cell::Cell<Option<(Demo, f32)>> = const { std::cell::Cell::new(None) };
+    static THREAD: std::cell::Cell<Option<(Demo, f32, Look)>> = const { std::cell::Cell::new(None) };
 }
 
 /// Turns the analytic demo surface on for every 3D model it supports, from
-/// `RESHIKI_DEV_ORBITAL_SURFACE`: `pi` or `pistar`, optionally `:isovalue`.
+/// `RESHIKI_DEV_ORBITAL_SURFACE`: `name[:iso][,look=<token>][,opacity=<percent>]`.
 pub fn enable_demo(spec: &str) -> Result<(), String> {
     SWITCH
         .set(parse(spec)?)
@@ -59,12 +64,14 @@ pub fn demo_on_this_thread(spec: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-fn switch() -> Option<(Demo, f32)> {
+fn switch() -> Option<(Demo, f32, Look)> {
     THREAD.get().or_else(|| SWITCH.get().copied())
 }
 
-fn parse(spec: &str) -> Result<(Demo, f32), String> {
-    let (name, iso) = spec.split_once(':').unwrap_or((spec, "0.06"));
+fn parse(spec: &str) -> Result<(Demo, f32, Look), String> {
+    let mut fields = spec.split(',');
+    let field = fields.next().unwrap_or_default();
+    let (name, iso) = field.split_once(':').unwrap_or((field, "0.06"));
     let demo = match name {
         "pi" => Demo::Pi,
         "pistar" => Demo::PiStar,
@@ -75,13 +82,35 @@ fn parse(spec: &str) -> Result<(Demo, f32), String> {
         .ok()
         .filter(|v: &f32| v.is_finite() && *v > 0.)
         .ok_or_else(|| format!("Isovalue {iso:?} is not a positive number"))?;
-    Ok((demo, iso))
+    let mut look = None;
+    let mut opacity = None;
+    for field in fields {
+        let (key, value) = field
+            .split_once('=')
+            .ok_or_else(|| format!("Surface option {field:?} must use key=value"))?;
+        match key {
+            "look" if look.is_none() => look = Some(value.parse::<Look>()?),
+            "opacity" if opacity.is_none() => {
+                opacity = Some(value.parse::<u8>().map_err(|_| {
+                    format!("Surface opacity {value:?} must be an integer between 20 and 100")
+                })?);
+            }
+            "look" | "opacity" => return Err(format!("Duplicate surface option {key:?}")),
+            _ => return Err(format!("Unknown surface option {key:?}")),
+        }
+    }
+    let look = look.unwrap_or_default();
+    Ok((
+        demo,
+        iso,
+        Look::new(look.fill, look.mesh, opacity.unwrap_or(look.opacity))?,
+    ))
 }
 
 /// The model's demo meshes at both details, if the switch is on and the
 /// prototype supports the model (no crystals, no Wireframe or ellipsoids).
 pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Rc<[Mesh; 2]>> {
-    let (demo, iso) = switch()?;
+    let (demo, iso, _) = switch()?;
     if model.cell.is_some() || matches!(model.style, Style::Wireframe | Style::Ellipsoids) {
         return None;
     }
@@ -187,6 +216,15 @@ fn field(
 
 /// The unit normal of the plane that fits `points` best.
 fn plane_normal(points: &[[f32; 3]]) -> [f32; 3] {
+    let (_, values, vectors) = principal_axes(points);
+    // A line or a lone atom gets a normal across it.
+    let least = (0..3)
+        .min_by(|&i, &j| values[i].total_cmp(&values[j]))
+        .unwrap_or(2);
+    vectors[least].map(|x| x as f32)
+}
+
+fn principal_axes(points: &[[f32; 3]]) -> ([f64; 3], [f64; 3], [[f64; 3]; 3]) {
     let n = points.len().max(1) as f64;
     let mean: [f64; 3] =
         std::array::from_fn(|k| points.iter().map(|p| p[k] as f64).sum::<f64>() / n);
@@ -199,12 +237,124 @@ fn plane_normal(points: &[[f32; 3]]) -> [f32; 3] {
             }
         }
     }
-    // The direction of least spread; a line or a lone atom gets one across it.
     let (values, vectors) = crate::models3d::ellipsoids::eigen(c);
-    let least = (0..3)
-        .min_by(|&i, &j| values[i].total_cmp(&values[j]))
-        .unwrap_or(2);
-    vectors[least].map(|x| x as f32)
+    (mean, values, vectors)
+}
+
+/// Intersect each triangle with the three model-space families before projection.
+fn mesh_lines(
+    mesh: &Mesh,
+    front: &[bool],
+    backs: bool,
+    atoms: &[[f32; 3]],
+    project: impl Fn([f32; 3]) -> [f32; 3],
+) -> Vec<Line> {
+    let (mean, _, axes) = principal_axes(atoms);
+    let coordinates: Vec<_> = mesh
+        .positions
+        .iter()
+        .map(|p| {
+            axes.map(|axis| {
+                let distance = (0..3)
+                    .map(|i| (f64::from(p[i]) - mean[i]) * axis[i])
+                    .sum::<f64>();
+                distance / MESH_SPACING - 0.5
+            })
+        })
+        .collect();
+    let mut lines = Vec::new();
+    for (triangle, (&vertices, &is_front)) in mesh.triangles.iter().zip(front).enumerate() {
+        if !is_front && !backs {
+            continue;
+        }
+        let vertices = vertices.map(|i| i as usize);
+        let [a, b, c] = vertices.map(|i| coordinates[i]);
+        for ((a, b), c) in a.into_iter().zip(b).zip(c) {
+            let heights = [a, b, c];
+            let low = heights.into_iter().fold(f64::INFINITY, f64::min);
+            let high = heights.into_iter().fold(f64::NEG_INFINITY, f64::max);
+            // A vertex exactly on the plane counts as above it.
+            for plane in (low.floor() as i64).saturating_add(1)..=high.floor() as i64 {
+                let mut cuts = [None; 3];
+                for (cut, (a, b)) in cuts.iter_mut().zip([(0, 1), (1, 2), (2, 0)]) {
+                    let (a, b) = if vertices[a] < vertices[b] {
+                        (a, b)
+                    } else {
+                        (b, a)
+                    };
+                    let [da, db] = [heights[a], heights[b]].map(|h| h - plane as f64);
+                    if (da < 0.) == (db < 0.) {
+                        continue;
+                    }
+                    // A shared edge must produce the same point in both triangles.
+                    let [p, q] =
+                        [vertices[a], vertices[b]].map(|i| mesh.positions[i].map(f64::from));
+                    let t = da / (da - db);
+                    *cut = Some(std::array::from_fn(|i| (p[i] + t * (q[i] - p[i])) as f32));
+                }
+                let mut cuts = cuts.into_iter().flatten();
+                if let (Some(a), Some(b)) = (cuts.next(), cuts.next())
+                    && a != b
+                {
+                    lines.push(Line {
+                        triangle: triangle as u32,
+                        ends: [a, b].map(&project),
+                    });
+                }
+            }
+        }
+    }
+    lines
+}
+
+fn phase_base(positive: bool, dark: bool) -> [f32; 3] {
+    if positive {
+        POSITIVE
+    } else {
+        NEGATIVE[usize::from(dark)]
+    }
+}
+
+fn shaded(base: [f32; 3], light: f32, backdrop: [f32; 3], fade: f32) -> [u8; 3] {
+    let color = if light < 0.6 {
+        mix(base, BLACK, (0.6 - light) / 0.6 * 0.45)
+    } else {
+        mix(base, WHITE, (light - 0.6) / 0.4 * 0.5)
+    };
+    rgb(mix(color, backdrop, fade))
+}
+
+fn group_weight(alpha: f32, depth: usize) -> f32 {
+    alpha * (1. - alpha).powi(depth as i32)
+}
+
+fn tone_counts(look: Look, dark: bool, backdrop: [f32; 3], fade: f32) -> Vec<usize> {
+    let alpha = look.alpha();
+    let groups = (1..MAX_GROUPS)
+        .find(|&depth| group_weight(alpha, depth) < 1. / 50.)
+        .unwrap_or(MAX_GROUPS);
+    match look.fill {
+        Fill::None => vec![0; groups],
+        Fill::Solid | Fill::Outline => vec![1; groups],
+        Fill::Shaded => {
+            let levels = [true, false]
+                .into_iter()
+                .flat_map(|positive| {
+                    let base = phase_base(positive, dark);
+                    let low = shaded(base, 0.35, backdrop, fade);
+                    let high = shaded(base, 1., backdrop, fade);
+                    low.into_iter().zip(high).map(|(lo, hi)| lo.abs_diff(hi))
+                })
+                .max()
+                .unwrap_or_default();
+            (0..groups)
+                .map(|depth| {
+                    let tones = f32::from(levels) * group_weight(alpha, depth) / TONE_STEP;
+                    (tones.ceil() as usize).clamp(2, MAX_TONES)
+                })
+                .collect()
+        }
+    }
 }
 
 /// The surface cut and merged for `view`, ready to draw after the molecule.
@@ -213,9 +363,8 @@ pub(in crate::models3d) struct Prepared {
     triangles: Vec<[u32; 3]>,
     front: Vec<bool>,
     visible: Visible,
-    /// Outline runs shorter than this are folds of the simplified mesh,
-    /// not the lobe's outline.
-    shortest: f32,
+    look: Look,
+    tones: Vec<usize>,
 }
 
 impl Prepared {
@@ -227,10 +376,14 @@ impl Prepared {
         model: &Model3d,
         view: &View,
         outline: f32,
+        dark: bool,
+        backdrop: [f32; 3],
+        fade: f32,
     ) -> Option<Self> {
         if model.morph.is_some_and(|m| m < 1.) {
             return None;
         }
+        let (_, _, look) = switch()?;
         let meshes = meshes(doc, model)?;
         let mesh = &meshes[usize::from(model.turning)];
         let rotated: Vec<[f32; 3]> = mesh
@@ -246,23 +399,35 @@ impl Prepared {
                 let [a, b, c] = t.map(|i| rotated[i as usize]);
                 let n = cross(sub(b, a), sub(c, a));
                 let eye = view.eye(a);
-                n[0] * eye[0] + n[1] * eye[1] + n[2] * eye[2] > 0.
+                dot(n, eye) > 0.
             })
             .collect::<Vec<_>>();
         // The balls' light, from the upper left in front.
-        let light = {
-            let l = [-0.38f32, 0.42, 0.82];
-            let length = (l[0] * l[0] + l[1] * l[1] + l[2] * l[2]).sqrt();
-            l.map(|v| v / length)
-        };
+        let l = [-0.38f32, 0.42, 0.82];
+        let length = dot(l, l).sqrt();
+        let light = l.map(|v| v / length);
         let lightness: Vec<f32> = mesh
             .normals
             .iter()
             .map(|n| {
-                let n = rotate(model.rotation, *n);
-                0.35 + 0.65 * (n[0] * light[0] + n[1] * light[1] + n[2] * light[2]).max(0.)
+                // Removing the ambient term and scaling maps Lambert lightness to the tone axis.
+                dot(rotate(model.rotation, *n), light).clamp(0., 1.)
             })
             .collect();
+        let tones = tone_counts(look, dark, backdrop, fade);
+        let lines = if look.mesh {
+            let atoms: Vec<_> = model
+                .atoms
+                .iter()
+                .map(|a| a.xyz)
+                .chain(model.hydrogens.iter().map(|h| h.xyz))
+                .collect();
+            mesh_lines(mesh, &front, tones.len() > 1, &atoms, |p| {
+                screen(view, rotate(model.rotation, sub(p, view.center)))
+            })
+        } else {
+            Vec::new()
+        };
         let occluders = occluders(view, model, outline / 2.);
         let visible = visible::visible(&Input {
             positions: &positions,
@@ -271,17 +436,17 @@ impl Prepared {
             front: &front,
             lightness: &lightness,
             occluders: &occluders,
-            tones: &[BANDS],
-            lines: &[],
+            tones: &tones,
+            lines: &lines,
             tolerance: TOLERANCE,
         });
-        // An isovalue above the field's peak leaves nothing to draw.
-        (!visible.layers.is_empty()).then_some(Prepared {
+        Some(Prepared {
             positions,
             triangles: mesh.triangles.clone(),
             front,
             visible,
-            shortest: SHORTEST * model.size,
+            look,
+            tones,
         })
     }
 
@@ -298,64 +463,94 @@ impl Prepared {
             front: &self.front,
             lightness: &[],
             occluders: &[],
-            tones: &[BANDS],
+            tones: &[1],
             lines: &[],
             tolerance: TOLERANCE,
         };
         visible::front_depth(&input, [x, y]).is_none_or(|depth| depth <= z)
     }
 
-    /// The surface primitive: band layers per phase shaded from dark to
-    /// light, faded toward `backdrop` by `fade`, then the outline.
+    /// Fit the visible shapes and paint each depth as a group.
     pub(in crate::models3d) fn primitive(
-        self,
+        &self,
         dark: bool,
         backdrop: [f32; 3],
         fade: f32,
         outline: Option<Outline>,
-    ) -> Primitive {
-        let point = |p: &[f32; 2]| Point::new(p[0], p[1]);
-        let layers = self
-            .visible
-            .layers
-            .into_iter()
-            .filter(|layer| layer.depth == 0)
-            .map(|layer| {
-                let base = if layer.positive {
-                    POSITIVE
-                } else {
-                    NEGATIVE[usize::from(dark)]
+        line_width: f32,
+    ) -> Option<Primitive> {
+        let alpha = self.look.alpha();
+        let mut groups = Vec::new();
+        for (depth, &count) in self.tones.iter().enumerate().rev() {
+            let mut fills = Vec::new();
+            let mut strokes = Vec::new();
+            for (sign, positive) in [true, false].into_iter().enumerate() {
+                let base = phase_base(positive, dark);
+                let color = |tone: usize| match self.look.fill {
+                    Fill::Shaded => {
+                        let light = 0.35 + 0.65 * (tone as f32 + 0.5) / count as f32;
+                        shaded(base, light, backdrop, fade)
+                    }
+                    Fill::Solid => rgb(mix(base, backdrop, fade)),
+                    Fill::Outline | Fill::None => rgb(backdrop),
                 };
-                let t = (layer.tone as f32 + 0.5) / BANDS as f32;
-                let shaded = if t < 0.6 {
-                    super::super::mix(base, super::super::BLACK, (0.6 - t) / 0.6 * 0.45)
-                } else {
-                    super::super::mix(base, super::super::WHITE, (t - 0.6) / 0.4 * 0.5)
-                };
-                let color = super::super::rgb(super::super::mix(shaded, backdrop, fade));
-                let region = layer
-                    .region
+                let mut layers = self
+                    .visible
+                    .layers
                     .iter()
-                    .map(|c| c.iter().map(point).collect())
-                    .collect();
-                (region, color)
-            })
-            .collect();
-        let rims = self.visible.rims[0]
-            .iter()
-            .filter(|r| {
-                r.windows(2)
-                    .map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]))
-                    .sum::<f32>()
-                    >= self.shortest
-            })
-            .map(|r| r.iter().map(point).collect())
-            .collect();
-        Primitive::Surface {
-            layers,
-            rims,
-            outline,
+                    .filter(|layer| layer.depth == depth && layer.positive == positive);
+                if let Some(first) = layers.next() {
+                    let region = fit::region(&first.region, FIT_ERROR, MIN_AREA, MIN_WIDTH);
+                    if !region.is_empty() {
+                        let tones = layers
+                            .filter_map(|layer| {
+                                let path =
+                                    fit::region(&layer.region, FIT_ERROR, MIN_AREA, MIN_WIDTH);
+                                (!path.is_empty()).then(|| (path, color(layer.tone)))
+                            })
+                            .collect();
+                        fills.push(SurfaceFill {
+                            region,
+                            color: color(first.tone),
+                            tones,
+                        });
+                    }
+                }
+                if self.look.mesh {
+                    let paths = fit::runs(&self.visible.lines[depth][sign], FIT_ERROR, MIN_RUN);
+                    if !paths.is_empty() {
+                        strokes.push(SurfaceStroke {
+                            paths,
+                            outline: Outline {
+                                color: rgb(mix(mix(base, BLACK, 0.45), backdrop, fade)),
+                                alpha: 0.9,
+                                width: outline
+                                    .map_or(0.45 * line_width, |o| (0.45 * o.width).max(0.35)),
+                            },
+                        });
+                    }
+                }
+            }
+            if let Some(outline) = outline {
+                let paths = fit::runs(&self.visible.rims[depth], FIT_ERROR, MIN_RUN);
+                if !paths.is_empty() {
+                    strokes.push(SurfaceStroke { paths, outline });
+                }
+            }
+            if !fills.is_empty() || !strokes.is_empty() {
+                let alpha = if self.look.fill == Fill::None {
+                    group_weight(alpha, depth)
+                } else {
+                    alpha
+                };
+                groups.push(SurfaceGroup {
+                    alpha,
+                    fills,
+                    strokes,
+                });
+            }
         }
+        (!groups.is_empty()).then_some(Primitive::Surface { groups })
     }
 }
 

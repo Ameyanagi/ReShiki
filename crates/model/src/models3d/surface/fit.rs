@@ -122,8 +122,9 @@ pub fn open(points: &[[f32; 2]], error: f32) -> Vec<PathCommand> {
     guarded(&clean(points), error, false)
 }
 
-/// Fits each even-odd contour with absolute area ≥ `min_area` and
+/// Fits each nonzero-winding contour with absolute area ≥ `min_area` and
 /// width (twice its absolute area divided by its perimeter) ≥ `min_width`.
+/// Outer and hole contours retain their respective input orientations.
 pub fn region(
     contours: &[Vec<[f32; 2]>],
     error: f32,
@@ -313,6 +314,21 @@ fn fit_path(k: &[Knot], error: f64, cyclic: bool) -> Vec<PathCommand> {
 struct Cubic([V; 4]);
 
 impl Cubic {
+    fn valid_controls(self) -> bool {
+        let [a, b, c, d] = self.0;
+        let chord2 = (d - a).norm2();
+        if (b - a).norm2() > chord2 || (d - c).norm2() > chord2 {
+            return false;
+        }
+        let first = Edge { a, b };
+        let last = Edge { a: c, b: d };
+        !(first.xmin() <= last.xmax()
+            && last.xmin() <= first.xmax()
+            && first.ymin() <= last.ymax()
+            && last.ymin() <= first.ymax()
+            && first.crosses(last))
+    }
+
     fn eval(self, t: f64) -> V {
         let [a, b, c, d] = self.0;
         let s = 1.0 - t;
@@ -485,16 +501,34 @@ fn straight(k: &[Knot], tol2: f64) -> bool {
         })
 }
 
-fn common_handle(prev: &Span, next: &Span, knot: Knot) -> V {
+fn common_handle(prev: &Span, next: &Span, knot: Knot, k: &[Knot]) -> V {
     let incoming = prev.curve.0[3] - prev.curve.0[2];
     let outgoing = next.curve.0[1] - next.curve.0[0];
     let left = (prev.curve.0[3] - prev.curve.0[0]) * (1.0 / 3.0);
     let right = (next.curve.0[3] - next.curve.0[0]) * (1.0 / 3.0);
-    match (prev.line(), next.line()) {
+    let handle = match (prev.line(), next.line()) {
         (true, _) => left,
         (false, true) => right,
         // A long neighbour must not pull a short span past its samples.
         (false, false) => knot.tangent() * incoming.length().min(outgoing.length()),
+    };
+    if !prev.interpolate && !next.interpolate {
+        return handle;
+    }
+    // An interpolated span emits one cubic per source edge. Its shared
+    // endpoint handle must fit that edge, rather than the span's whole chord.
+    let original = handle.length();
+    let mut length = original;
+    if prev.interpolate {
+        length = length.min((k[prev.last].p - k[prev.last - 1].p).length() / 3.0);
+    }
+    if next.interpolate {
+        length = length.min((k[next.first + 1].p - k[next.first].p).length() / 3.0);
+    }
+    if length < original {
+        handle * (length / original)
+    } else {
+        handle
     }
 }
 
@@ -562,11 +596,25 @@ fn fit_chain(k: &[Knot], error: f64, seam: bool, out: &mut Vec<PathCommand>) {
         for (i, span) in spans.iter().enumerate() {
             let [a, b, c, d] = span.curve.0;
             let l = (i > 0 || seam)
-                .then(|| common_handle(&spans[(i + n - 1) % n], span, k[span.first]));
-            let r =
-                (i + 1 < n || seam).then(|| common_handle(span, &spans[(i + 1) % n], k[span.last]));
+                .then(|| common_handle(&spans[(i + n - 1) % n], span, k[span.first], k));
+            let r = (i + 1 < n || seam)
+                .then(|| common_handle(span, &spans[(i + 1) % n], k[span.last], k));
             if span.line() {
-                commands.push(PathCommand::Line(d.point()));
+                let third = (d - a) * (1.0 / 3.0);
+                if l.is_none_or(|h| h == third) && r.is_none_or(|h| h == third) {
+                    commands.push(PathCommand::Line(d.point()));
+                } else {
+                    // A shorter shared derivative still traces this exact line.
+                    commands.push(
+                        Cubic([
+                            a,
+                            (a + l.unwrap_or(third)).rounded(),
+                            (d - r.unwrap_or(third)).rounded(),
+                            d,
+                        ])
+                        .command(),
+                    );
+                }
                 cuts.push(None);
                 continue;
             }
@@ -583,7 +631,9 @@ fn fit_chain(k: &[Knot], error: f64, seam: bool, out: &mut Vec<PathCommand>) {
                 continue;
             }
             let (err, split) = worst(sub, &span.t, curve, tol2);
-            if err <= tol2 {
+            // A small point error can still hide a loop between samples.
+            // Refine suspect control polygons at the same worst-point split.
+            if err <= tol2 && curve.valid_controls() {
                 commands.push(curve.command());
                 cuts.push(None);
             } else if depth == 24 {

@@ -342,15 +342,16 @@ Rejected alternatives:
 ### 6. The primitive
 
     Primitive::Surface {
-        layers: Vec<(Vec<Vec<Point>>, [u8; 3])>,  // regions, even-odd, exact colours,
+        layers: Vec<(Vec<Vec<Point>>, [u8; 3])>,  // regions, nonzero winding, exact colours,
                                                    // drawn in order
         rims: Vec<Vec<Point>>,                     // visible outline runs
         outline: Option<Outline>,
     }
 
-- SVG: one `<path fill-rule="evenodd" fill="rgb(…)" d="M…L…Z …"/>` per layer
+- SVG: one `<path fill-rule="nonzero" fill="rgb(…)" d="M…L…Z …"/>` per layer
   with coordinates to a hundredth of a unit (`push_command`), and one
-  stroked path for the rims.
+  stroked path for the rims. Outer contours and holes have opposite winding,
+  which fitting preserves.
 - PDF: through the existing SVG → usvg → svg2pdf path, as filled paths. No
   rasters.
 - Canvas: model primitives are rasterized into cached tiles by resvg from
@@ -508,6 +509,12 @@ optionally `+mesh`).
   Béziers (Schneider 1990) to an error of 0.08 drawing units at its input
   points, C1 except at real corners (a turn over 40°, such as where a ball
   cuts a lobe). Outlines are round at any zoom and paths get shorter.
+  A fitted span is split again at its worst input point if its end control
+  segments cross or either handle is longer than its endpoint chord. Low
+  error at the sampled points alone cannot rule out a loop between them.
+  Interpolated fallback spans bound their handles by one third of each
+  source edge. A neighbouring straight segment uses a collinear cubic when
+  needed to share that shorter derivative and keep the join C1.
 - Slivers and stray marks: contours under 0.05 square units or thinner than
   0.12 units (2·area / perimeter) and outline runs shorter than 1 unit are
   dropped before fitting. These replace the old rule that dropped outline
@@ -519,18 +526,23 @@ optionally `+mesh`).
 ### Smooth shading
 
 The shading is still nested regions of the interpolated Lambert lightness
-(cuts never change the shading field), but with enough tones that one tone
-step is at most one 8-bit level in every colour channel of the final
-picture, which no 8-bit display or viewer can show as a step:
+(cuts never change the shading field). The endpoint colour range sets the
+tone count to target one 8-bit level per step in the composited picture:
 
     tones = clamp(ceil(channel range in levels × weight), 2, 128)
 
 where the channel range is that of the phase's colour ramp from the darkest
 to the lightest lightness (about 110 levels for the blue phase, 55 for the
-pale one) and `weight` is the group's share of the final colour (1 when
-opaque, α(1 − α)^d for depth group d below). Each tone region is clipped
+pale one before fading) and `weight` is the group's share of the final colour
+(1 when opaque, α(1 − α)^d for depth group d below). Uniform lightness steps
+sample the piecewise colour ramp. The endpoint range measures average
+change, so adjacent samples on a steeper part can differ by two levels
+after rounding at the default fade. Each tone region is clipped
 to its phase's whole region (an SVG `clipPath`), so independently fitted
 tone outlines can never reach past the lobe's edge.
+The whole region is merged directly from the resolved fragments before
+shade cuts, so its contour and fitted commands stay identical when opacity
+changes the tone count.
 
 Considered and not used:
 
@@ -542,9 +554,8 @@ Considered and not used:
   from the usvg tree that the clipboard, page export and Python share;
   usvg has no mesh paint, so this would mean patching the vendored usvg and
   svg2pdf (and resvg, which matches on usvg's paints) or splitting every
-  page into interleaved SVG and shading chunks. At one level per step the
-  bands already look identical to a smooth shading in every 8-bit viewer,
-  so PDF uses the same vector regions as SVG.
+  page into interleaved SVG and shading chunks. PDF uses the same nested
+  vector regions as SVG.
 - A linear gradient per band: a band is curved, so one gradient direction
   is wrong along most of it.
 
@@ -566,6 +577,9 @@ half-plane splits used against occluders, so all of it stays exact:
   bonds stay opaque, so a lobe part behind an atom is still cut away.
 - Each group is one SVG group with `opacity="α"`: its tones are opaque
   inside the group, so there are no seams or doubled alpha between pieces.
+- Rims count covering triangles, with the intervals of a triangle's clipped
+  pieces united first. A shared clipping cut along a farther rim therefore
+  attenuates that rim once.
 - The number of groups is the smallest G with α(1 − α)^G < 1/50, at most 6
   (G = 1 at 100 %, when the output is exactly the opaque one).
 - Cost: fragments grow only where sheets overlap; a piece is split at most
@@ -596,6 +610,9 @@ already exclude what the molecule hides and carry the depth count.
     SurfaceGroup { alpha, fills: Vec<SurfaceFill>, strokes: Vec<SurfaceStroke> }
     SurfaceFill { region: Vec<PathCommand>, color, tones: Vec<(Vec<PathCommand>, color)> }
     SurfaceStroke { paths: Vec<PathCommand>, outline: Outline }
+
+Regions, tones and tone clips use nonzero winding. Holes wind opposite
+their outer contours.
 
 The snapshot format becomes `RSF2` (RSF1 was never released, so it is not
 read):
