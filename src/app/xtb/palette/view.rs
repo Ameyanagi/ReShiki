@@ -134,6 +134,7 @@ impl App {
         let body = match view {
             View::Summary => summary(&shown, inspector),
             View::Steps => self.xtb_steps(&shown, inspector),
+            View::Conformers => self.xtb_conformers_tab(&shown, inspector),
             View::Log => log(&shown, &method),
         };
         let body: Element<'_, Message> = if inspector {
@@ -491,6 +492,9 @@ impl App {
                     "The file keeps the first and last steps; keep full results to save every step.",
                     Tone::Muted,
                 ));
+            }
+            View::Conformers => {
+                footer = footer.push(super::super::conformers::footer());
             }
             View::Log => {
                 footer = footer.push(

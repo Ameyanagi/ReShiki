@@ -617,7 +617,7 @@ pub struct Hello {
     pub max_hessian_atoms: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Engine {
     pub name: String,

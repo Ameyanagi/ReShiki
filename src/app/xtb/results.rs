@@ -28,6 +28,8 @@ pub(crate) enum View {
     #[default]
     Summary,
     Steps,
+    /// A conformer search's ranked conformers.
+    Conformers,
     Log,
 }
 
@@ -35,7 +37,9 @@ impl View {
     /// The tabs `result` has: Steps only for an optimization with steps.
     pub(crate) fn available(result: &CalcResult) -> Vec<Self> {
         let mut views = vec![Self::Summary];
-        if energies(result).len() > 1 {
+        if result.task == Task::Conformers {
+            views.push(Self::Conformers);
+        } else if energies(result).len() > 1 {
             views.push(Self::Steps);
         }
         views.push(Self::Log);
@@ -46,6 +50,7 @@ impl View {
         match self {
             Self::Summary => "Summary",
             Self::Steps => "Steps",
+            Self::Conformers => "Conformers",
             Self::Log => "Log",
         }
     }
@@ -120,12 +125,13 @@ fn solvent(result: &CalcResult) -> String {
     }
 }
 
-/// The energy of each optimization step, the start included.
+/// The energy of each optimization step, the start included, or of each
+/// kept conformer, the lowest first.
 pub(crate) fn energies(result: &CalcResult) -> &[f64] {
     result
         .trajectory
         .as_ref()
-        .filter(|_| result.task == Task::Optimize)
+        .filter(|_| matches!(result.task, Task::Optimize | Task::Conformers))
         .map_or(&[], |path| path.energies_hartree.as_slice())
 }
 
@@ -205,6 +211,20 @@ pub(crate) fn summary_rows(
             outcome.push_str(&format!(" · RMSD from start {rmsd:.2} Å"));
         }
         rows.push(("Optimization", outcome));
+    }
+    if result.task == Task::Conformers {
+        let kept = energies(result).len();
+        let mut text = format!(
+            "{kept} kept · the lowest is shown here{}",
+            match &result.status {
+                Status::NotConverged { reason } => format!(" · {reason}"),
+                _ => String::new(),
+            }
+        );
+        if kept > 1 {
+            text.push_str(" · see the Conformers tab");
+        }
+        rows.push(("Conformers", text));
     }
     let gradient = &result.gradient_hartree_per_bohr;
     if !gradient.is_empty() {
@@ -456,6 +476,7 @@ pub(crate) fn log(
     let task = match result.task {
         Task::Optimize => "optimize",
         Task::Energy => "energy",
+        Task::Conformers => "conformer search",
         _ => "other",
     };
     if let Settings::Xtb(settings) = &result.settings {

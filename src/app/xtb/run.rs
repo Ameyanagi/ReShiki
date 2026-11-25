@@ -117,7 +117,11 @@ pub(crate) fn start(job: Job, cancel: Cancel) -> impl Stream<Item = Event> + Sen
     rx
 }
 
-fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<Report, Failure> {
+pub(super) fn run(
+    job: Job,
+    cancel: &Cancel,
+    tx: &mpsc::UnboundedSender<Event>,
+) -> Result<Report, Failure> {
     let limits = Limits::default();
     let exe = std::env::current_exe().map_err(|error| worker_failure(&Error::Spawn(error)))?;
     let (mut session, hello) =
