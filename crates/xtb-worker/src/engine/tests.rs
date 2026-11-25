@@ -206,17 +206,69 @@ fn water_analytic_hessian_frequencies_match_the_driver() {
 }
 
 #[test]
+fn explicit_isotope_masses_lower_water_frequencies() {
+    let open = water(Method::Gfn2, Conventions::Axtb);
+    let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+    let mut request = Compute {
+        hessian: Some(Default::default()),
+        ..Compute::default()
+    };
+    let light = session
+        .compute(request.clone())
+        .unwrap()
+        .vibrations
+        .unwrap();
+    let masses = vec![16.0, 2.014, 2.014];
+    request.hessian.as_mut().unwrap().masses_amu = Some(masses.clone());
+    let heavy = session.compute(request).unwrap();
+    let vibrations = heavy.vibrations.as_ref().unwrap();
+    assert_eq!(vibrations.masses_amu, masses);
+    assert_eq!(vibrations.frequencies_cm1.len(), 3);
+    for (deuterated, normal) in vibrations.frequencies_cm1.iter().zip(light.frequencies_cm1) {
+        assert!(*deuterated < normal);
+    }
+
+    let mut frame = open.admit(None, None, protocol::MAX_ATOMS).unwrap();
+    let engine = hello().engine.unwrap();
+    frame.isotopes = vec![0, 2, 2];
+    assert!(matches!(
+        heavy.to_calc_result(&frame, reshiki_qcdata::Task::Hessian, &engine, None),
+        Err(reshiki_qcdata::Error::Unsupported(message))
+            if message == "isotopes need explicit masses for the vibrational analysis"
+    ));
+    frame.masses_amu = masses;
+    heavy
+        .to_calc_result(&frame, reshiki_qcdata::Task::Hessian, &engine, None)
+        .unwrap();
+    frame.masses_amu[1] = 2.0;
+    assert!(matches!(
+        heavy.to_calc_result(&frame, reshiki_qcdata::Task::Hessian, &engine, None),
+        Err(reshiki_qcdata::Error::Invalid(message))
+            if message == "frame masses differ from the vibrational analysis masses"
+    ));
+}
+
+#[test]
 fn cef3_resolves_spin_from_valence_electrons() {
     let mut open = Open {
         numbers: vec![58, 9, 9, 9],
         positions: vec![[0.0; 3], [2.0, 0.0, 0.0], [-2.0, 0.0, 0.0], [0.0, 2.0, 0.0]],
         ..water(Method::Gfn2, Conventions::Axtb)
     };
+    let frame = open.admit(None, None, protocol::MAX_ATOMS).unwrap();
+    let engine = hello().engine.unwrap();
     for uhf in [Some(0), None] {
         open.uhf = uhf;
-        let (session, opened) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+        let (mut session, opened) =
+            Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
         assert_eq!(opened.uhf, 0);
         assert_eq!(session.settings.uhf, 0);
+        let computed = session.compute(Compute::default()).unwrap();
+        assert!(matches!(
+            computed.to_calc_result(&frame, reshiki_qcdata::Task::Energy, &engine, None),
+            Err(reshiki_qcdata::Error::Unsupported(message))
+                if message == "the xTB valence spin (uhf 0) differs from the frame multiplicity 2; this cannot be stored yet"
+        ));
     }
 }
 
@@ -232,7 +284,12 @@ fn water_gxtb_alpb_reports_each_composite_part() {
         ..water(Method::Gxtb, Conventions::Axtb)
     };
     let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
-    let computed = session.compute(Compute::default()).unwrap();
+    let computed = session
+        .compute(Compute {
+            hessian: Some(Default::default()),
+            ..Compute::default()
+        })
+        .unwrap();
     let actual = computed.composite.as_ref().unwrap();
     let (numbers, positions) =
         axtb_driver::read_xyz(WATER, axtb_driver::Method::GxtbV2_0_1, Some("axtb")).unwrap();
@@ -244,30 +301,40 @@ fn water_gxtb_alpb_reports_each_composite_part() {
         restart: Some("previous".into()),
         alpb: Some("water".into()),
         solvation_correction: Some("gfn2".into()),
+        hessian: true,
+        hessian_method: Some("analytic".into()),
         ..Request::default()
     })
     .unwrap()
     .composite
     .unwrap();
-    assert_eq!(
-        actual.parts.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["gfn2_gas", "gfn2_solvated", "gxtb"]
-    );
-    for (name, part) in &actual.parts {
-        let expected = expected.parts.get(name).unwrap();
-        assert_eq!(part.method, expected.method);
-        assert_eq!(part.conventions, expected.conventions);
-        assert_eq!(part.electronic_temperature_k, expected.etemp);
-        assert_eq!(part.max_iterations, expected.max_iter);
-        assert_eq!(part.iterations, expected.iterations);
-        assert_eq!(part.retry, expected.retry);
+    for (actual_parts, expected_parts) in [
+        (&actual.parts, &expected.parts),
+        (
+            actual.hessian_parts.as_ref().unwrap(),
+            expected.hessian_parts.as_ref().unwrap(),
+        ),
+    ] {
+        assert_eq!(
+            actual_parts.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["gfn2_gas", "gfn2_solvated", "gxtb"]
+        );
+        for (name, part) in actual_parts {
+            let expected = expected_parts.get(name).unwrap();
+            assert_eq!(part.method, expected.method);
+            assert_eq!(part.conventions, expected.conventions);
+            assert_eq!(part.electronic_temperature_k, expected.etemp);
+            assert_eq!(part.max_iterations, expected.max_iter);
+            assert_eq!(part.iterations, expected.iterations);
+            assert_eq!(part.retry, expected.retry);
+        }
     }
     assert_eq!(actual.components.len(), expected.components.0.len());
     let frame = open.admit(None, None, protocol::MAX_ATOMS).unwrap();
     let result = computed
         .to_calc_result(
             &frame,
-            reshiki_qcdata::Task::Energy,
+            reshiki_qcdata::Task::Hessian,
             &hello().engine.unwrap(),
             None,
         )
@@ -276,6 +343,26 @@ fn water_gxtb_alpb_reports_each_composite_part() {
         assert_eq!(actual.components[name], energy);
         assert_eq!(result.energy_terms[&format!("composite.{name}")], energy);
     }
+}
+
+#[test]
+fn water_scf_retries_with_the_requested_iteration_limit() {
+    let mut open = water(Method::Gfn2, Conventions::Axtb);
+    open.scf.max_iterations = Some(1);
+    let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+    assert_eq!(
+        session.compute(Compute::default()).unwrap_err().kind,
+        ErrorKind::Scf
+    );
+
+    open.scf.retries.push(protocol::ScfRetry {
+        max_iterations: Some(250),
+        electronic_temperature_k: None,
+    });
+    let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+    let result = session.compute(Compute::default()).unwrap();
+    let retry = result.scf.unwrap().retry.unwrap();
+    assert_eq!((retry.rung, retry.of), (1, 1));
 }
 
 #[test]

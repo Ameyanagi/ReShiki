@@ -10,7 +10,7 @@ use crate::protocol::{
 };
 use serde::de::DeserializeOwned;
 use std::{
-    collections::VecDeque,
+    collections::{BTreeMap, VecDeque},
     io,
     marker::PhantomData,
     path::Path,
@@ -901,9 +901,20 @@ fn validate_computed_header(
         return Err("Worker returned inconsistent method-specific outputs".into());
     }
     let composite = open.method == protocol::Method::Gxtb && open.solvent.is_some();
+    let has_parts = |parts: &BTreeMap<String, protocol::CompositePart>| {
+        let names = ["gxtb", "gfn2_solvated", "gfn2_gas"];
+        parts.len() == names.len() && names.iter().all(|name| parts.contains_key(*name))
+    };
     if computed.composite.is_some() != composite
         || computed.composite.as_ref().is_some_and(|composite| {
-            composite.components.is_empty() || composite.components.values().any(|v| !v.is_finite())
+            composite.components.is_empty()
+                || composite.components.values().any(|v| !v.is_finite())
+                || !has_parts(&composite.parts)
+                || composite.hessian_parts.is_some() != request.hessian.is_some()
+                || composite
+                    .hessian_parts
+                    .as_ref()
+                    .is_some_and(|p| !has_parts(p))
         })
     {
         return Err("Worker returned inconsistent solvent composite outputs".into());
@@ -1185,12 +1196,13 @@ fn validate_vibrations(
     } else {
         &opened.engine_conventions
     };
-    let expected_modes = if opened.atoms >= 2 {
-        axes - if v.linear { 5 } else { 6 }
-    } else {
-        0
+    let expected_modes = match opened.atoms {
+        0 | 1 => 0,
+        2 => 1,
+        _ => axes - if v.linear { 5 } else { 6 },
     };
     if v.conventions != expected_conventions
+        || (opened.atoms == 2 && !v.linear)
         || modes != expected_modes
         || v.frequencies_cm1.iter().any(|v| !v.is_finite())
         || v.frequencies_cm1.windows(2).any(|p| p[0] > p[1])

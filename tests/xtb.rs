@@ -520,6 +520,15 @@ fn gfnff_topology_and_fragment_charges_survive_a_restarted_session() {
     };
     let reference = scientific_frame(&open.positions).hash();
     let evaluated = scientific_frame(&positions);
+    assert!(matches!(
+        computed.to_calc_result(
+            &evaluated,
+            reshiki_qcdata::Task::Gradient,
+            hello.engine.as_ref().unwrap(),
+            None,
+        ),
+        Err(reshiki_qcdata::Error::Invalid(_))
+    ));
     let result = computed
         .to_calc_result(
             &evaluated,
@@ -811,6 +820,32 @@ fn failed_engine_compute_keeps_the_last_successful_geometry() {
         "recovered and fresh energies differ by {difference:.16e} Eh"
     );
     fresh.close(&cancel).expect("close fresh worker");
+    session.close(&cancel).expect("close recovered worker");
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn non_finite_thermochemistry_keeps_the_last_successful_geometry() {
+    let water = molecule("water");
+    let cancel = Cancel::default();
+    let (mut session, _) = Session::start(executable(), limits(), &cancel).expect("start worker");
+    session.open(&water, &cancel).expect("open water");
+    let original = session.compute(&Compute::default(), &cancel).unwrap();
+    let mut positions = water.positions;
+    positions[2][0] += 0.1;
+    let mut request = compute(Some(positions), false);
+    let mut hessian = HessianRequest::default();
+    hessian.thermo.pressure_pa = Some(5e-324);
+    request.hessian = Some(hessian);
+    assert!(matches!(
+        session.compute(&request, &cancel),
+        Err(Error::Engine {
+            kind: ErrorKind::Numerical,
+            ..
+        })
+    ));
+    let recovered = session.compute(&Compute::default(), &cancel).unwrap();
+    assert!((recovered.energy - original.energy).abs() <= 1e-10);
     session.close(&cancel).expect("close recovered worker");
 }
 

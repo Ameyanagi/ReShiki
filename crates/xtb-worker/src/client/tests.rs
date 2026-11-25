@@ -297,7 +297,47 @@ fn composite_is_present_exactly_for_solvated_gxtb_with_finite_components() {
         }))
         .unwrap(),
     );
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
+    let part = json!({
+        "method":"gfn2", "conventions":"xtb", "electronic_temperature_k":300,
+        "max_iterations":250, "iterations":3, "retry":null
+    });
+    let parts = json!({"gfn2_gas":part, "gfn2_solvated":part, "gxtb":part});
+    result.composite.as_mut().unwrap().parts = serde_json::from_value(parts.clone()).unwrap();
     assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_ok());
+    result.composite.as_mut().unwrap().hessian_parts = Some(serde_json::from_value(parts).unwrap());
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
+
+    let (hessian_request, mut hessian) = hessian_result();
+    hessian.method = result.method;
+    hessian
+        .engine_conventions
+        .clone_from(&result.engine_conventions);
+    hessian.numerics.clone_from(&result.numerics);
+    hessian
+        .settings
+        .solvent
+        .clone_from(&result.settings.solvent);
+    hessian.vibrations.as_mut().unwrap().conventions = "xtb-6.7.1".into();
+    hessian.composite = result.composite.take();
+    let validate_hessian = |result: &Computed| {
+        validate_computed_header(result, Some(&opened), Some(&input), &hessian_request)
+    };
+    assert!(validate_hessian(&hessian).is_ok());
+    let mut hessian_parts = hessian
+        .composite
+        .as_mut()
+        .unwrap()
+        .hessian_parts
+        .take()
+        .unwrap();
+    assert!(validate_hessian(&hessian).is_err());
+    hessian_parts.remove("gfn2_gas");
+    hessian.composite.as_mut().unwrap().hessian_parts = Some(hessian_parts);
+    assert!(validate_hessian(&hessian).is_err());
+    result.composite = hessian.composite.take();
+    result.composite.as_mut().unwrap().hessian_parts = None;
+
     result
         .composite
         .as_mut()
@@ -598,6 +638,11 @@ fn vibrational_counts_are_exact_for_linear_and_nonlinear_molecules() {
     let mut opened = opened();
     assert!(validate_vibrations(vibrations, &opened).is_ok());
     vibrations.linear = false;
+    assert!(validate_vibrations(vibrations, &opened).is_err());
+    vibrations.frequencies_cm1.clear();
+    vibrations.ir_intensities_km_mol.as_mut().unwrap().clear();
+    vibrations.reduced_masses_amu.clear();
+    vibrations.force_constants_mdyn_per_angstrom.clear();
     assert!(validate_vibrations(vibrations, &opened).is_err());
     opened.atoms = 3;
     vibrations.masses_amu.push(4.0);

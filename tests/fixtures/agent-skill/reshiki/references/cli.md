@@ -270,7 +270,7 @@ Options:
   --etemp K                    Set the electronic temperature in kelvin.
   --accuracy X                 Set a positive SCF accuracy multiplier (default 1).
   --max-iter N                 Set the SCF iteration limit (default 250).
-  --scf-retry K[:N]            Add an SCF retry at K kelvin with an optional N iterations.
+  --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.
   --threads N                  Use 1 to 64 worker threads (default 1).
 
 See docs/xtb-worker.md (Command line)

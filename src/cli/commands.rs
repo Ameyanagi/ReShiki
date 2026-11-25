@@ -442,7 +442,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--scf-retry",
             value: Some("K[:N]"),
-            help: "Add an SCF retry at K kelvin with an optional N iterations.",
+            help: "Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.",
             default: None,
             sets: None,
             equivalent: None,

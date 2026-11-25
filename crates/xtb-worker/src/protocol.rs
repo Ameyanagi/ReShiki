@@ -399,6 +399,14 @@ impl Open {
         check_calculation(task, &settings, &frame, orbital_request).map_err(admission_error)?;
         if let Some(compute) = compute {
             if let Some(hessian) = &compute.hessian {
+                if hessian.masses_amu.as_ref().is_some_and(|masses| {
+                    masses.len() != atoms || masses.iter().any(|&m| !m.is_finite() || m <= 0.0)
+                }) {
+                    return Err(ResponseError::new(
+                        ErrorKind::Input,
+                        "expected one positive finite mass per atom",
+                    ));
+                }
                 let thermo = &hessian.thermo;
                 if [
                     thermo.temperature_k,
@@ -467,6 +475,7 @@ fn validate_positions(positions: &[[f64; 3]], atoms: usize) -> Result<(), Respon
     Ok(())
 }
 
+#[cfg(any(not(target_arch = "wasm32"), feature = "engine", test))]
 fn make_frame(
     numbers: &[u8],
     positions: &[[f64; 3]],
@@ -535,6 +544,8 @@ impl Default for Compute {
 pub struct HessianRequest {
     #[serde(default)]
     pub thermo: ThermoRequest,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub masses_amu: Option<Vec<f64>>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -701,26 +712,41 @@ impl Computed {
         engine: &Engine,
         gfnff_reference: Option<FrameHash>,
     ) -> Result<CalcResult, Error> {
-        if frame.charge != self.settings.charge
-            || frame.multiplicity.checked_sub(1) != Some(self.settings.uhf)
-        {
+        if frame.charge != self.settings.charge {
             return Err(Error::Invalid(
-                "frame charge or multiplicity differs from the xTB session".into(),
+                "frame charge differs from the xTB session".into(),
             ));
         }
-        let gfnff = self.settings.gfnff.as_ref().map(|gfnff| GfnFfTopology {
-            reference: gfnff_reference.unwrap_or_else(|| {
-                make_frame(
-                    &frame.numbers,
-                    &gfnff.reference_positions_bohr,
-                    Units::Bohr,
-                    frame.charge,
-                    frame.multiplicity,
-                )
-                .hash()
-            }),
-            fragment_charges: gfnff.fragment_charges.clone(),
-        });
+        if self.settings.uhf.checked_add(1) != Some(frame.multiplicity) {
+            return Err(Error::Unsupported(format!(
+                "the xTB valence spin (uhf {}) differs from the frame multiplicity {}; this cannot be stored yet",
+                self.settings.uhf, frame.multiplicity
+            )));
+        }
+        if let Some(vibrations) = &self.vibrations {
+            if frame.masses_amu.is_empty() {
+                if frame.isotopes.iter().any(|&isotope| isotope != 0) {
+                    return Err(Error::Unsupported(
+                        "isotopes need explicit masses for the vibrational analysis".into(),
+                    ));
+                }
+            } else if frame.masses_amu != vibrations.masses_amu {
+                return Err(Error::Invalid(
+                    "frame masses differ from the vibrational analysis masses".into(),
+                ));
+            }
+        }
+        let gfnff = if self.method == Method::Gfnff || self.settings.gfnff.is_some() {
+            let reference = gfnff_reference.ok_or_else(|| {
+                Error::Invalid("GFN-FF results require a reference frame hash".into())
+            })?;
+            self.settings.gfnff.as_ref().map(|gfnff| GfnFfTopology {
+                reference,
+                fragment_charges: gfnff.fragment_charges.clone(),
+            })
+        } else {
+            None
+        };
         let settings = self.settings.scf.xtb_settings(
             self.method,
             self.conventions,
@@ -820,6 +846,8 @@ pub struct RetryReport {
 pub struct CompositeReport {
     pub components: BTreeMap<String, f64>,
     pub parts: BTreeMap<String, CompositePart>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hessian_parts: Option<BTreeMap<String, CompositePart>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

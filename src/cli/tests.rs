@@ -703,6 +703,8 @@ fn calc_parses_tasks_solvent_and_a_repeatable_scf_ladder() {
     );
     assert!(command.gradient && command.bond_orders);
     assert_eq!(command.threads, 4);
+    assert!(parsed(&["calc", "--scf-retry", "299", "water.xyz"]).is_ok());
+    assert!(parsed(&["calc", "--etemp", "1000", "--scf-retry", "300", "water.xyz"]).is_ok());
 }
 
 #[test]
@@ -723,8 +725,6 @@ fn calc_rejects_invalid_task_solvent_and_scf_syntax() {
         vec!["--scf-retry", ""],
         vec!["--scf-retry", "300:"],
         vec!["--scf-retry", "300:1:2"],
-        vec!["--scf-retry", "299"],
-        vec!["--etemp", "1000", "--scf-retry", "300"],
         vec!["--threads", "0"],
         vec!["--threads", "65"],
         vec!["--method", "gfn2", "--method", "gfnff"],

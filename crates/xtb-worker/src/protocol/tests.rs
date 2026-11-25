@@ -380,6 +380,26 @@ fn validates_hessian_limits_and_orbital_rows() {
 }
 
 #[test]
+fn validates_hessian_masses_in_admission() {
+    let open = open(Method::Gfn2, 2);
+    let mut compute = Compute {
+        hessian: Some(HessianRequest::default()),
+        ..Compute::default()
+    };
+    for masses in [vec![1.0], vec![1.0, 0.0], vec![1.0, f64::INFINITY]] {
+        compute.hessian.as_mut().unwrap().masses_amu = Some(masses);
+        assert_eq!(
+            open.admit(Some(&compute), None, MAX_ATOMS)
+                .unwrap_err()
+                .kind,
+            ErrorKind::Input
+        );
+    }
+    compute.hessian.as_mut().unwrap().masses_amu = Some(vec![1.0, 2.014]);
+    open.admit(Some(&compute), None, MAX_ATOMS).unwrap();
+}
+
+#[test]
 fn validates_thermochemistry_ranges_in_admission() {
     let open = open(Method::Gfn2, 2);
     let mut compute = Compute {

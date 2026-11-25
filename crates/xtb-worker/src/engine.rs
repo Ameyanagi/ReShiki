@@ -177,11 +177,13 @@ impl Session {
             .clone()
             .map(|positions| to_bohr(positions, compute.units, self.angstrom_to_bohr))
             .transpose()?;
-        let thermo = compute.hessian.as_ref().map(|h| &h.thermo);
+        let hessian_request = compute.hessian.as_ref();
+        let thermo = hessian_request.map(|h| &h.thermo);
         let mut task = Task::from_request(&Request {
             gradient: compute.gradient,
             hessian: compute.hessian.is_some(),
             hessian_method: compute.hessian.as_ref().map(|_| "analytic".into()),
+            masses: hessian_request.and_then(|h| h.masses_amu.clone()),
             bond_orders: compute.bond_orders,
             temperature: thermo
                 .and_then(|t| t.temperature_k)
@@ -327,6 +329,43 @@ impl Session {
                 point_group,
             }
         });
+        if vibrations.as_ref().is_some_and(|v| {
+            v.frequencies_cm1
+                .iter()
+                .chain(v.ir_intensities_km_mol.iter().flatten())
+                .chain(&v.reduced_masses_amu)
+                .chain(&v.force_constants_mdyn_per_angstrom)
+                .chain(&v.masses_amu)
+                .chain(&normal_modes)
+                .chain(&dipole_derivatives)
+                .any(|value| !value.is_finite())
+        }) {
+            return Err(ResponseError::new(
+                ErrorKind::Numerical,
+                "axtb returned non-finite vibrational data",
+            ));
+        }
+        if thermo_result.as_ref().is_some_and(|t| {
+            [
+                t.temperature_k,
+                t.pressure_pa,
+                t.zero_point_energy_hartree,
+                t.enthalpy_correction_hartree,
+                t.entropy_hartree_per_k,
+                t.gibbs_correction_hartree,
+                t.frequency_scale,
+                t.rotor_cutoff_cm1,
+                t.imaginary_cutoff_cm1,
+            ]
+            .into_iter()
+            .chain(t.heat_capacity_hartree_per_k)
+            .any(|value| !value.is_finite())
+        }) {
+            return Err(ResponseError::new(
+                ErrorKind::Numerical,
+                "axtb returned non-finite thermochemistry",
+            ));
+        }
         let mut arrays = Vec::new();
         let axes = (3 * self.atoms()) as u32;
         let mut announce = |name, shape: [u32; 2], count| {
@@ -366,6 +405,25 @@ impl Session {
                 );
             }
         }
+        let composite_parts = |parts: axtb_driver::Parts| {
+            parts
+                .0
+                .into_iter()
+                .map(|(name, part)| {
+                    (
+                        name.into(),
+                        CompositePart {
+                            method: part.method,
+                            conventions: part.conventions.into(),
+                            electronic_temperature_k: part.etemp,
+                            max_iterations: part.max_iter,
+                            iterations: part.iterations,
+                            retry: part.retry,
+                        },
+                    )
+                })
+                .collect()
+        };
         let computed = Computed {
             method: self.open.method,
             conventions: self.open.conventions,
@@ -403,24 +461,8 @@ impl Session {
                     .into_iter()
                     .map(|(k, v)| (k.into(), v))
                     .collect(),
-                parts: c
-                    .parts
-                    .0
-                    .into_iter()
-                    .map(|(name, part)| {
-                        (
-                            name.into(),
-                            CompositePart {
-                                method: part.method,
-                                conventions: part.conventions.into(),
-                                electronic_temperature_k: part.etemp,
-                                max_iterations: part.max_iter,
-                                iterations: part.iterations,
-                                retry: part.retry,
-                            },
-                        )
-                    })
-                    .collect(),
+                parts: composite_parts(c.parts),
+                hessian_parts: c.hessian_parts.map(composite_parts),
             }),
             gfnff,
             hessian_method,

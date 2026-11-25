@@ -364,21 +364,12 @@ fn calc(options: &Options) -> Result<Command, String> {
         .map(|value| iterations("--max-iter", value))
         .transpose()?;
     let mut retries = Vec::with_capacity(options.scf_retry.len());
-    let base_temperature = electronic_temperature_k.unwrap_or(match method {
-        Method::Gxtb => 0.0,
-        _ => 300.0,
-    });
     for retry in &options.scf_retry {
         let text = retry.to_str().ok_or("--scf-retry must be K or K:N")?;
         let (kelvin, count) = text
             .split_once(':')
             .map_or((text, None), |(kelvin, count)| (kelvin, Some(count)));
         let kelvin = temperature("--scf-retry temperature", OsStr::new(kelvin))?;
-        if kelvin < base_temperature {
-            return Err(
-                "--scf-retry temperature cannot be below --etemp (or the method default)".into(),
-            );
-        }
         retries.push(ScfRetry {
             electronic_temperature_k: Some(kelvin),
             max_iterations: count
