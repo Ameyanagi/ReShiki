@@ -3,6 +3,7 @@
 import json
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -16,6 +17,7 @@ from check_agent_dependencies import (
     SERDE_JSON_FORBIDDEN,
     WEBPKI_ROOT_CERTS_CDLA_REVIEW,
     allowlist_problems,
+    kde_protocol_problems,
     layout,
     license_allowed,
     reviewed_certificate_data_license,
@@ -181,6 +183,20 @@ class AgentDependencyTests(unittest.TestCase):
             self.assertEqual(record[field], value)
         self.assertEqual(record["selected_license"], "MIT")
         self.assertEqual(set(record["upstream_texts"]), {"LICENSE-MIT", "UNLICENSE", "COPYING"})
+
+    def test_kde_protocol_crates_stay_on_the_reviewed_archives(self):
+        lock = tomllib.loads((ROOT / "Cargo.lock").read_text(encoding="utf-8"))["package"]
+        self.assertEqual(kde_protocol_problems(lock), [])
+        plasma = next(p for p in lock if p["name"] == "wayland-protocols-plasma")
+        self.audit(cargo(tree(SERVER)), locked_packages=[plasma])
+        for field, changed in (
+            ("version", "0.3.13"),
+            ("checksum", "0" * 64),
+            ("source", "git+https://example.test/wayland-rs"),
+        ):
+            with self.subTest(field=field):
+                with self.assertRaisesRegex(ValueError, "LGPL KDE protocol files; review"):
+                    self.audit(cargo(tree(SERVER)), locked_packages=[{**plasma, field: changed}])
 
     def test_hyper_under_rmcp_fails(self):
         with self.assertRaisesRegex(ValueError, "rmcp depends on hyper for .* network-free"):

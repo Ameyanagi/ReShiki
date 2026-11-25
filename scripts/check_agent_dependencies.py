@@ -8,7 +8,8 @@ ship, so the interop test's rmcp `client` feature is out of scope):
 - rmcp's subtree contains no HTTP, TLS or WebSocket stack.
 Every Cargo package added since the baseline commit must have a license
 expression built only from the permissive licenses below, or match an exact
-reviewed package-specific license decision below. `cargo tree` resolves
+reviewed package-specific license decision below. The MIT crates that generate
+code from LGPL KDE protocol files must match their reviewed version and archive. `cargo tree` resolves
 foreign targets without installing them, so one host covers all release targets.
 """
 
@@ -22,6 +23,7 @@ import tomllib
 from pathlib import Path
 
 from build_inchi_helper import RELEASE_TARGETS
+from license_notices import KDE_PROTOCOL_CRATES, KDE_PROTOCOL_REVIEW
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = Path("scripts/agent_dependency_baseline.json")
@@ -195,6 +197,21 @@ def reviewed_certificate_data_license(package, locked_packages):
     )
 
 
+def kde_protocol_problems(locked_packages):
+    """Flag any locked KDE-protocol crate other than the reviewed versions and archives."""
+    reviewed = json.loads((ROOT / KDE_PROTOCOL_REVIEW).read_text(encoding="utf-8"))["packages"]
+    return sorted(
+        f"{key} generates code from LGPL KDE protocol files; review {KDE_PROTOCOL_REVIEW}"
+        for locked in locked_packages
+        if locked.get("name") in KDE_PROTOCOL_CRATES
+        for key in [f"{locked['name']}@{locked.get('version')}"]
+        if any(
+            reviewed.get(key, {}).get(field) != locked.get(field)
+            for field in ("source", "checksum")
+        )
+    )
+
+
 def license_problems(metadata, known, locked_packages):
     problems = []
     for package in metadata["packages"]:
@@ -227,6 +244,7 @@ def verify(root=ROOT, metadata=None):
         metadata = json.loads(run(root, "cargo", "metadata", "--locked", "--format-version", "1"))
     lock = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
     problems += license_problems(metadata, set(baseline["packages"]), lock.get("package", []))
+    problems += kde_protocol_problems(lock.get("package", []))
     if problems:
         raise ValueError("Agent dependency audit failed:\n" + "\n".join(f"- {p}" for p in problems))
 
