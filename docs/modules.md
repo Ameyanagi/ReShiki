@@ -652,6 +652,14 @@ explains how the crates and modules fit together.
 - `crates/io/src/payload.rs`: Editable drawing snapshots carried by ordinary PNG, SVG, and PDF figures.
 - `crates/io/src/piece_library.rs`: Libraries of equipment pieces
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
+- `crates/io/src/qcread.rs`: Readers for quantum chemistry files, from geometries to calculated results.
+- `crates/io/src/qcread/fchk.rs`: Gaussian formatted checkpoints, read from the documented record layout.
+- `crates/io/src/qcread/gaussian.rs`: Gaussian log jobs, coordinate steps, and results.
+- `crates/io/src/qcread/input.rs`: Geometry sections of Gaussian, ORCA and GAMESS input files.
+- `crates/io/src/qcread/molden.rs`: Molden records, converted at the boundary to the canonical AO convention.
+- `crates/io/src/qcread/orca.rs`: ORCA output read job by job into geometries, energies, orbital levels and vibrations.
+- `crates/io/src/qcread/sdf.rs`: Molecular geometries from native MOL and SD records.
+- `crates/io/src/qcread/xyz.rs`: Molecular geometries from plain and extended XYZ.
 - `crates/io/src/recovery.rs`
 - `crates/io/src/svg_drawing.rs`: Bounded SVG import as ordinary, editable vector graphics.
 - `crates/io/src/svg_drawing/css.rs`: Remove unsupported CSS effects without changing selectors or the cascade.

@@ -1,5 +1,7 @@
-//! Readers for quantum chemistry files: geometries (multi-frame XYZ, SDF, Gaussian, ORCA and
-//! GAMESS inputs) and results (Molden, Gaussian fchk, Gaussian logs, ORCA outputs).
+//! Readers for quantum chemistry files, from geometries to calculated results.
+//!
+//! Geometries come from multi-frame XYZ, SDF and Gaussian, ORCA and GAMESS inputs; results from
+//! Molden, Gaussian fchk, Gaussian logs and ORCA outputs.
 //!
 //! A file becomes jobs, and each job a list of steps (geometries) and at most one result
 //! bound by hash to the step it describes, so a value is never paired with the geometry of
@@ -96,6 +98,9 @@ impl Format {
 /// (`.log`, `.out`, `.inp`) or missing, from its text.
 pub fn detect(file_name: &str, text: &str) -> Option<Format> {
     let lower = file_name.to_ascii_lowercase();
+    if lower.ends_with(".molden.input") {
+        return Some(Format::Molden);
+    }
     let extension = lower.rsplit_once('.').map_or("", |(_, e)| e);
     match extension {
         "xyz" | "extxyz" => Some(Format::Xyz),
@@ -110,7 +115,10 @@ pub fn detect(file_name: &str, text: &str) -> Option<Format> {
 fn sniff(text: &str) -> Option<Format> {
     let head = &text[..text.floor_char_boundary(1024 * 1024)];
     let lines = || head.lines().map(str::trim);
-    if lines().any(|line| line.eq_ignore_ascii_case("[Molden Format]")) {
+    if lines()
+        .find(|line| !line.is_empty())
+        .is_some_and(|line| line.eq_ignore_ascii_case("[Molden Format]"))
+    {
         return Some(Format::Molden);
     }
     if lines().any(|line| {
@@ -133,7 +141,14 @@ fn sniff(text: &str) -> Option<Format> {
         // GAMESS output echoes its input; it is not read yet.
         return None;
     }
-    if head.to_ascii_uppercase().contains("$DATA") {
+    if head.lines().any(|line| {
+        line.strip_prefix(" $")
+            .and_then(|card| {
+                card.split(|c: char| c.is_ascii_whitespace() || c == '!')
+                    .next()
+            })
+            .is_some_and(|name| name.eq_ignore_ascii_case("DATA"))
+    }) {
         return Some(Format::GamessInput);
     }
     if lines().any(|line| {

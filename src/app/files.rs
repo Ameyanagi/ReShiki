@@ -481,7 +481,7 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             Box::new(doc),
             reshiki::document::View::read(&contents),
         ))
-    } else if QC_EXTENSIONS.contains(&extension.as_str()) {
+    } else if is_qc_file(path, &extension) {
         prepare_qc(path, &contents)
     } else {
         // An SD file's records are read next, in `records`. Its extension
@@ -508,10 +508,18 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
     }
 }
 
-/// Quantum chemistry program outputs and inputs that Open reads.
-pub(super) const QC_EXTENSIONS: [&str; 10] = [
+const QC_EXTENSIONS: [&str; 10] = [
     "log", "out", "fchk", "fch", "molden", "mold", "gjf", "com", "gau", "inp",
 ];
+
+/// Whether Open reads this name as a quantum chemistry program output or input.
+pub(super) fn is_qc_file(path: &std::path::Path, extension: &str) -> bool {
+    QC_EXTENSIONS.contains(&extension)
+        || extension == "input"
+            && super::import::name(path)
+                .to_ascii_lowercase()
+                .ends_with(".molden.input")
+}
 
 /// A program output or input opens as the 3D model of its default job's last
 /// geometry, as an unsaved drawing named after the file. Its results are not

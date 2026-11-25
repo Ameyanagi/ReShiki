@@ -735,19 +735,21 @@ fn place(
     Ok(position)
 }
 
-fn gamess_content(text: &str) -> (String, String) {
+fn gamess_content(text: &str) -> (String, String, bool) {
     let mut clean = String::with_capacity(text.len());
     let mut controls = String::new();
     let (mut namelist, mut comment, mut line_comment) = (false, false, false);
     let (mut data, mut control, mut start) = (false, false, 0);
+    let (mut source_start, mut basis) = (0, false);
     for (at, c) in text.char_indices() {
         if c == '\n' {
-            if data && clean[start..].trim().eq_ignore_ascii_case("$END") {
+            if data && clean[start..].trim_end().eq_ignore_ascii_case(" $END") {
                 data = false;
             }
             line_comment = false;
             clean.push(c);
             start = clean.len();
+            source_start = at + 1;
             if control {
                 controls.push(c);
             }
@@ -770,10 +772,19 @@ fn gamess_content(text: &str) -> (String, String) {
                     .split(|c: char| !c.is_ascii_alphanumeric())
                     .next()
                     .unwrap_or_default();
-                if !group.is_empty() {
+                // A new group is active only with its dollar in column two.
+                // END still closes a namelist on the same or a continuation line.
+                if group.eq_ignore_ascii_case("END") && namelist {
+                    namelist = false;
+                    control = false;
+                } else if !group.is_empty()
+                    && at == source_start + 1
+                    && text.as_bytes().get(source_start) == Some(&b' ')
+                {
                     data = group.eq_ignore_ascii_case("DATA");
                     namelist = !group.eq_ignore_ascii_case("END") && !data;
                     control = group.eq_ignore_ascii_case("CONTRL");
+                    basis |= group.eq_ignore_ascii_case("BASIS");
                     if control {
                         controls.push(' ');
                     }
@@ -786,15 +797,20 @@ fn gamess_content(text: &str) -> (String, String) {
             controls.push(c);
         }
     }
-    (clean, controls)
+    (clean, controls, basis)
 }
 
 /// Read a C1 Cartesian or simple Z-matrix geometry in a GAMESS `$DATA` group.
 pub(super) fn gamess(text: &str) -> Result<QcFile, Error> {
     // Namelist comments toggle at each bang, including across physical lines.
     // Preserve newlines so every diagnostic still names the source line.
-    let (clean, control) = gamess_content(text);
-    let all: Vec<_> = lines(&clean).collect();
+    let (clean, control, basis) = gamess_content(text);
+    // Keep card columns until DATA and its terminator have been selected.
+    let all: Vec<_> = clean
+        .lines()
+        .enumerate()
+        .map(|(at, row)| (at + 1, row))
+        .collect();
     // GAMESS permits repeated groups and assignments; the last value wins.
     let control = control.to_ascii_uppercase();
     let coord = assignment(&control, "COORD").unwrap_or("UNIQUE");
@@ -808,14 +824,16 @@ pub(super) fn gamess(text: &str) -> Result<QcFile, Error> {
     }
     let mut rows = all.into_iter();
     rows.by_ref()
-        .find(|(_, row)| row.eq_ignore_ascii_case("$DATA"))
+        .find(|(_, row)| row.trim_end().eq_ignore_ascii_case(" $DATA"))
         .ok_or_else(|| Error::Invalid("The GAMESS input has no $DATA group".into()))?;
     let (_, title) = rows
         .next()
         .ok_or_else(|| Error::Invalid("The GAMESS $DATA group has no title".into()))?;
+    let title = title.trim();
     let (line, group) = rows
         .next()
         .ok_or_else(|| Error::Invalid("The GAMESS $DATA group has no point group".into()))?;
+    let group = group.trim();
     if !group.eq_ignore_ascii_case("C1") {
         let point_group = group.to_ascii_uppercase();
         let mut fields = point_group.split_whitespace();
@@ -851,11 +869,11 @@ pub(super) fn gamess(text: &str) -> Result<QcFile, Error> {
     let mut data = Vec::new();
     let mut ended = false;
     for (line, row) in rows {
-        if row.eq_ignore_ascii_case("$END") {
+        if row.trim_end().eq_ignore_ascii_case(" $END") {
             ended = true;
             break;
         }
-        data.push((line, row));
+        data.push((line, row.trim()));
     }
     if !ended {
         return Err(Error::Invalid(
@@ -871,8 +889,33 @@ pub(super) fn gamess(text: &str) -> Result<QcFile, Error> {
             .unwrap_or(rows.len());
         let (rows, variable_lines) = rows.split_at(end);
         let variables = gaussian_variables(variable_lines.iter().chain(rest));
+        // GAMESS's seventh internal-coordinate field selects a dihedral (0)
+        // or the unsupported second-angle form (+1/-1).
+        let rows = rows
+            .iter()
+            .map(|&(line, row)| {
+                let fields: Vec<_> = words(row).collect();
+                if let [_, _, _, _, _, _, _, flag] = fields.as_slice() {
+                    match *flag {
+                        "0" => {
+                            let end = row
+                                .rfind(|c: char| c.is_ascii_whitespace() || c == ',')
+                                .unwrap_or(row.len());
+                            return Ok((line, row[..end].trim_end()));
+                        }
+                        "1" | "+1" | "-1" => {
+                            return Err(Error::Unsupported(
+                                "GAMESS Z-matrix second-angle coordinates (flag +1 or -1) are not supported; use dihedral coordinates with flag 0".into(),
+                            ));
+                        }
+                        _ => (),
+                    }
+                }
+                Ok((line, row))
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
         let frame = coordinates(
-            rows,
+            &rows,
             CoordinateKind::ZMatrix,
             &variables,
             scale,
@@ -884,69 +927,13 @@ pub(super) fn gamess(text: &str) -> Result<QcFile, Error> {
 
     let mut atoms = Vec::new();
     let mut positions = Vec::new();
-    let mut rows = data.into_iter().peekable();
-    let mut basis = false;
+    let mut rows = data.into_iter();
+    let inline_basis = !basis && matches!(coord, "UNIQUE" | "CART");
     while let Some((line, row)) = rows.next() {
         if row.is_empty() {
-            basis = false;
             continue;
         }
         let fields: Vec<_> = words(row).collect();
-        if coord == "UNIQUE"
-            && !atoms.is_empty()
-            && let [shell, count, scales @ ..] = fields.as_slice()
-            && let Ok(count) = count.parse::<usize>()
-            && count > 0
-            && scales.iter().all(|value| real(value).is_some())
-        {
-            let builtin = matches!(
-                shell.to_ascii_uppercase().as_str(),
-                "STO" | "N21" | "N31" | "N311"
-            );
-            let explicit = matches!(
-                shell.to_ascii_uppercase().as_str(),
-                "S" | "P" | "L" | "SP" | "D" | "F" | "G" | "H" | "I"
-            );
-            // A scaled shell card can have five fields like a sulfur atom.
-            // Numbered primitives distinguish it from another Cartesian row.
-            if builtin
-                || explicit
-                    && (basis
-                        || fields.len() != 5
-                        || element(shell).is_none_or(|(z, _)| usize::from(z) != count)
-                        || rows
-                            .peek()
-                            .is_some_and(|(_, row)| words(row).next() == Some("1")))
-            {
-                basis = true;
-                // Built-in cards select a basis; explicit shells supply NPRIM records.
-                if !builtin {
-                    for index in 1..=count {
-                        let (primitive_line, primitive) = rows.next().ok_or_else(|| {
-                            Error::at(line, format!("GAMESS basis is missing primitive {index}"))
-                        })?;
-                        let primitive: Vec<_> = words(primitive).collect();
-                        if !primitive.split_first().is_some_and(|(number, values)| {
-                            values.len() >= 2
-                                && number.parse::<usize>().ok() == Some(index)
-                                && values.iter().all(|value| real(value).is_some())
-                        }) {
-                            return Err(Error::at(
-                                primitive_line,
-                                format!("Expected GAMESS basis primitive {index}"),
-                            ));
-                        }
-                    }
-                }
-                continue;
-            }
-        }
-        if basis {
-            return Err(Error::at(
-                line,
-                "Expected a GAMESS basis card or a blank line before the next atom",
-            ));
-        }
         let &[name, nuclear, x, y, z] = fields.as_slice() else {
             return Err(Error::at(
                 line,
@@ -959,9 +946,61 @@ pub(super) fn gamess(text: &str) -> Result<QcFile, Error> {
             .ok_or_else(|| Error::at(line, format!("Invalid nuclear charge of {name}")))?;
         atoms.push((atomic_number as u8, 0));
         positions.push(cartesian([x, y, z], line)?.map(|x| x * scale));
+        if inline_basis {
+            gamess_basis(&mut rows, line)?;
+        }
     }
     let frame = frame(&atoms, positions, charge, mult)?;
     Ok(geometry(Format::GamessInput, geometry_job(frame, title)))
+}
+
+/// Consume the basis belonging to the preceding atom, including its blank terminator.
+fn gamess_basis<'a>(
+    rows: &mut impl Iterator<Item = Line<'a>>,
+    atom_line: usize,
+) -> Result<(), Error> {
+    while let Some((line, row)) = rows.next() {
+        if row.is_empty() {
+            return Ok(());
+        }
+        let fields: Vec<_> = words(row).collect();
+        let [shell, count, scales @ ..] = fields.as_slice() else {
+            return Err(Error::at(line, "Expected a GAMESS basis card"));
+        };
+        let count = count
+            .parse::<usize>()
+            .ok()
+            .filter(|&count| count > 0)
+            .filter(|_| scales.iter().all(|value| real(value).is_some()))
+            .ok_or_else(|| Error::at(line, "Expected a GAMESS basis card"))?;
+        // Named basis cards (ACCT, N31, ...) select a basis without primitives.
+        // Explicit angular-momentum shells supply NPRIM numbered records.
+        if matches!(
+            shell.to_ascii_uppercase().as_str(),
+            "S" | "P" | "L" | "SP" | "D" | "F" | "G" | "H" | "I"
+        ) {
+            for index in 1..=count {
+                let (primitive_line, primitive) = rows.next().ok_or_else(|| {
+                    Error::at(line, format!("GAMESS basis is missing primitive {index}"))
+                })?;
+                let primitive: Vec<_> = words(primitive).collect();
+                if !primitive.split_first().is_some_and(|(number, values)| {
+                    values.len() >= 2
+                        && number.parse::<usize>().ok() == Some(index)
+                        && values.iter().all(|value| real(value).is_some())
+                }) {
+                    return Err(Error::at(
+                        primitive_line,
+                        format!("Expected GAMESS basis primitive {index}"),
+                    ));
+                }
+            }
+        }
+    }
+    Err(Error::at(
+        atom_line,
+        "The GAMESS inline basis is missing its terminating blank line",
+    ))
 }
 
 #[cfg(test)]

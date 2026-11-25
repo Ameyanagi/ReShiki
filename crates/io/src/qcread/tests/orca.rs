@@ -1103,3 +1103,275 @@ fn shared_open_shell_levels_split_total_occupations_into_two_spins() {
         assert_eq!(orbitals.beta, Beta::SameOrbitals { occupations: beta });
     }
 }
+
+#[test]
+fn normal_mode_columns_and_rows_keep_allocation_bounded() {
+    const CHILD: &str = "RESHIKI_ORCA_BOUNDED_NORMAL_MODES_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        // The existing allocation counters are process-wide. Run this ordinary test
+        // alone in the same test executable so parallel reader tests cannot affect it.
+        let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+            .args([
+                "--exact",
+                "qcread::orca::tests::normal_mode_columns_and_rows_keep_allocation_bounded",
+                "--test-threads=1",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .expect("isolated allocation test starts");
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("running 1 test"),
+            "the isolated allocation test must execute"
+        );
+        return;
+    }
+
+    let original = text(IR);
+    let (_, normal) = original.split_once("NORMAL MODES\n").expect("normal modes");
+    // Fixture panel: "0 1 2 3 4 5 6 7 8 9" and row
+    // "0 0.000000 0.223607 ... -0.020024", for the 20-atom (60-axis) dvb geometry.
+    let header = normal
+        .lines()
+        .find(|line| line.split_whitespace().take(2).eq(["0", "1"]))
+        .expect("printed mode columns");
+    let row = normal
+        .lines()
+        .find(|line| line.split_whitespace().take(2).eq(["0", "0.000000"]))
+        .expect("printed Cartesian row");
+    // Build adversarial records in memory from the real panel, before measurement.
+    let oversized_header = format!("{header}{}\n", " 0".repeat(250_000));
+    let oversized_row = format!("{header}\n{row}{}\n", " 0.000000".repeat(250_000));
+    let mut measurements = Vec::new();
+    for (name, input) in [("header", oversized_header), ("row", oversized_row)] {
+        let lines: Vec<_> = input.lines().collect();
+        let mut cursor = 0;
+        crate::allocation_metrics::reset();
+        // Fixture: "Number of atoms                             ...     20".
+        let result = normal_modes(&lines, &mut cursor, 0, 20, false);
+        let allocated = crate::allocation_metrics::snapshot().allocated_bytes;
+        measurements.push((name, result.is_err(), allocated));
+    }
+    eprintln!("normal-mode requested Rust allocations: {measurements:?}");
+    for (name, rejected, allocated) in measurements {
+        assert!(rejected, "the oversized {name} must be rejected");
+        assert!(
+            allocated < 256 * 1024,
+            "the {name} allocated {allocated} bytes; a 60-axis panel must stay below 256 KiB"
+        );
+    }
+}
+
+#[test]
+fn echoed_termination_markers_never_finish_or_split_orca_jobs() {
+    let original = text(WATER6);
+    // Build adversarial echo lines in memory from the fixture. Its real completion
+    // line is "****ORCA TERMINATED NORMALLY****"; remove only that genuine record.
+    let incomplete = original.replace("****ORCA TERMINATED NORMALLY****", "");
+    for marker in [
+        "****ORCA TERMINATED NORMALLY****",
+        "ORCA TERMINATED ABNORMALLY",
+        "ORCA finished by error termination in SCF",
+        "ABORTING THE RUN",
+        "error : quoted input comment",
+    ] {
+        let echo = format!("| 99> # {marker}");
+        let file = parsed(&format!("{incomplete}\n{echo}\nstill running\n"));
+        assert_eq!(file.jobs.len(), 1, "{marker}");
+        assert_eq!(
+            file.jobs[0].completion,
+            Some(Completion::Truncated),
+            "{marker}"
+        );
+        let result = file.jobs[0].result.as_ref().expect("last complete energy");
+        // Fixture: "FINAL SINGLE POINT ENERGY -74.999374598107".
+        assert_eq!(result.energy_hartree, Some(-74.999374598107));
+        assert!(matches!(result.status, Status::NotConverged { .. }));
+
+        let file = parsed(&original.replace(
+            "****ORCA TERMINATED NORMALLY****",
+            &format!("{echo}\n****ORCA TERMINATED NORMALLY****"),
+        ));
+        assert_eq!(file.jobs.len(), 1, "{marker}");
+        assert_eq!(
+            file.jobs[0].completion,
+            Some(Completion::Normal),
+            "{marker}"
+        );
+    }
+}
+
+#[test]
+fn repeated_orbital_table_cut_at_eof_keeps_complete_spectrum() {
+    let original = text(WATER6);
+    let incomplete = original.replace("****ORCA TERMINATED NORMALLY****", "");
+    let start = original.find("ORBITAL ENERGIES\n").expect("orbital block");
+    let end = start + original[start..].find("*Only").expect("orbital table end");
+    let table = &original[start..end];
+    // Build adversarial EOF cuts in memory from the fixture's repeated orbital table.
+    // Rows "0 2.0000 -20.242269 -550.8201" through
+    // "6 0.0000 0.736585 20.0435" give seven levels in the complete spectrum.
+    let first = table.find("   0   2.0000").expect("first orbital row");
+    let after_first = first + table[first..].find('\n').expect("first row end");
+    let restricted_cuts = vec![
+        table[..after_first].to_owned(),
+        format!("{}\n\n", &table[..after_first]),
+        table.trim_end().to_owned(),
+        format!("{}\n", table.trim_end()),
+    ];
+    let rows = table[first..].replace("2.0000", "1.0000");
+    let up = format!("ORBITAL ENERGIES\nSPIN UP ORBITALS\nNO OCC E(Eh) E(eV)\n{rows}");
+    let down = "SPIN DOWN ORBITALS\nNO OCC E(Eh) E(eV)\n";
+    let unrestricted_table = format!("{up}\n{down}{rows}");
+    let unrestricted_source = format!(
+        "{}{}{}",
+        &original[..start],
+        unrestricted_table,
+        &original[end..]
+    )
+    .replace("****ORCA TERMINATED NORMALLY****", "");
+    let first_spin_row = rows.lines().next().expect("first spin orbital");
+    let unrestricted_cuts = vec![
+        up.trim_end().to_owned(),
+        format!("{up}\n{down}"),
+        format!("{up}\n{down}{first_spin_row}"),
+        unrestricted_table.trim_end().to_owned(),
+    ];
+    let geometry_start = original.find(COORDINATES).expect("geometry heading");
+    let geometry_end = geometry_start
+        + original[geometry_start..]
+            .find("\n\n")
+            .expect("complete coordinate panel");
+    for (source, cuts, unrestricted) in [
+        (incomplete, restricted_cuts, false),
+        (unrestricted_source, unrestricted_cuts, true),
+    ] {
+        for tail in cuts {
+            let tail = tail.replace("-20.242269", "-20.000000");
+            for folded in [false, true] {
+                // Also repeat the exact fixture geometry behind ORCA's stationary
+                // marker. This folds into the same step and retains its earlier data.
+                let reprint = if folded {
+                    format!(
+                        "\n{STATIONARY}\n{}\n\n",
+                        &original[geometry_start..geometry_end]
+                    )
+                } else {
+                    String::new()
+                };
+                let file = parsed(&format!("{source}{reprint}\n{tail}"));
+                assert_eq!(file.jobs[0].completion, Some(Completion::Truncated));
+                assert_eq!(file.jobs[0].steps.len(), 1);
+                let orbitals = file.jobs[0]
+                    .result
+                    .as_ref()
+                    .expect("earlier result")
+                    .orbitals
+                    .as_ref()
+                    .expect("earlier complete spectrum");
+                assert_eq!(orbitals.alpha.energies_hartree.len(), 7);
+                assert_eq!(orbitals.alpha.energies_hartree[0], -20.242269);
+                assert_eq!(orbitals.alpha.energies_hartree[6], 0.736585);
+                if unrestricted {
+                    let Beta::Unrestricted(beta) = &orbitals.beta else {
+                        panic!("both earlier spin channels remain");
+                    };
+                    assert_eq!(beta.energies_hartree, orbitals.alpha.energies_hartree);
+                } else {
+                    assert_eq!(orbitals.beta, Beta::Restricted);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn unrestricted_orbital_tables_require_both_spin_channels() {
+    let original = text(WATER6);
+    let start = original.find("ORBITAL ENERGIES\n").expect("orbital block");
+    let rows_start = start
+        + original[start..]
+            .find("   0   2.0000")
+            .expect("first orbital");
+    let end = rows_start + original[rows_start..].find("*Only").expect("orbital end");
+    let rows = original[rows_start..end].replace("2.0000", "1.0000");
+    // Build missing-channel tables in memory from the fixture's seven real rows:
+    // "0 2.0000 -20.242269 -550.8201" through "6 0.0000 0.736585 20.0435".
+    for spin in [
+        format!("SPIN UP ORBITALS\nNO OCC E(Eh) E(eV)\n{rows}"),
+        format!(
+            "SPIN UP ORBITALS\nNO OCC E(Eh) E(eV)\n{rows}\nSPIN DOWN ORBITALS\nNO OCC E(Eh) E(eV)\n"
+        ),
+    ] {
+        let output = format!(
+            "{}ORBITAL ENERGIES\n{spin}\n{}",
+            &original[..start],
+            &original[end..]
+        );
+        let file = parsed(&output);
+        assert_eq!(file.jobs[0].completion, Some(Completion::Normal));
+        assert!(
+            file.jobs[0]
+                .result
+                .as_ref()
+                .expect("energy remains")
+                .orbitals
+                .is_none(),
+            "one spin channel is not a complete unrestricted table"
+        );
+    }
+}
+
+#[test]
+fn appended_invocations_keep_each_numbered_jobs_program_version() {
+    let water6 = text(WATER6);
+    let water5 = text(WATER5);
+    // Append real fixture runs in memory. Each first job retains its own prologue and
+    // input echo; each numbered continuation retains the fixture output after the echo.
+    let invocation = |water: &str| {
+        let first = water.replace("****ORCA TERMINATED NORMALLY****", "");
+        let body = &water[water.find(COORDINATES).expect("printed geometry")..];
+        format!("{first}\n$ JOB NUMBER 2 $\n{body}")
+    };
+    let unversioned = water5
+        .lines()
+        .filter(|line| !line.contains("Program Version"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let output = format!(
+        "{}\n{}\n{}",
+        invocation(&water6),
+        invocation(&water5),
+        invocation(&unversioned)
+    );
+    let file = parsed(&output);
+    // Source prologues: "Program Version 6.0.1" and "Program Version 5.0.0".
+    // The final invocation deliberately has no version record to inherit.
+    let versions = [
+        Some("6.0.1"),
+        Some("6.0.1"),
+        Some("5.0.0"),
+        Some("5.0.0"),
+        None,
+        None,
+    ];
+    assert_eq!(file.jobs.len(), versions.len());
+    for (index, version) in versions.into_iter().enumerate() {
+        let job = &file.jobs[index];
+        let result = job.result.as_ref().expect("per-job result");
+        assert_eq!(
+            result.provenance.program_version.as_deref(),
+            version,
+            "job {index}"
+        );
+        assert!(
+            matches!(result.provenance.source, Source::Imported { job, .. } if job as usize == index)
+        );
+    }
+}

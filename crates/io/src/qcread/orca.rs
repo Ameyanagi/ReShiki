@@ -1,4 +1,4 @@
-//! ORCA output: job-local geometries, energies, orbital levels and vibrational analysis.
+//! ORCA output read job by job into geometries, energies, orbital levels and vibrations.
 use super::{
     Completion, Error, Format, Job, JobKind, Origin, QcFile, QcProgram, Step, element, frame,
 };
@@ -59,24 +59,18 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
         }
         seen_banner |= banner.is_some();
         has_geometry |= trimmed == COORDINATES;
-        terminated |= matches!(
-            record,
-            "ORCA TERMINATED NORMALLY" | "ORCA TERMINATED ABNORMALLY"
-        ) || record.starts_with("ORCA finished by error termination");
+        terminated |= termination(line).is_some_and(|(_, ends_job)| ends_job);
         has_output |= prologue || has_geometry || trimmed == "INPUT FILE" || terminated;
     }
     boundaries.push(lines.len());
     let mut jobs = Vec::new();
     let mut inputs = Vec::new();
     let mut next_input = 0;
+    let mut invocation_version = None;
     for (index, &[start, end]) in boundaries.array_windows::<2>().enumerate() {
         let job_lines = lines
             .get(start..end)
             .ok_or_else(|| Error::at(start + 1, "The ORCA job boundary is outside the file"))?;
-        let program = QcProgram {
-            name: "ORCA".into(),
-            version: program_version(job_lines).or_else(|| version.clone()),
-        };
         if start > 0
             && (job_lines
                 .first()
@@ -87,7 +81,15 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
         {
             inputs.clear();
             next_input = 0;
+            invocation_version = None;
         }
+        if let Some(version) = program_version(job_lines) {
+            invocation_version = Some(version);
+        }
+        let program = QcProgram {
+            name: "ORCA".into(),
+            version: invocation_version.clone(),
+        };
         let echo = input_lines(job_lines);
         if !echo.is_empty() {
             inputs = echo
@@ -121,8 +123,8 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
 
 fn program_version(lines: &[&str]) -> Option<String> {
     lines.iter().find_map(|line| {
-        line.split_once("Program Version")?
-            .1
+        line.trim()
+            .strip_prefix("Program Version")?
             .split_whitespace()
             .next()
             .map(str::to_owned)
@@ -436,24 +438,44 @@ fn job_kind(keywords: &[String], input: &[&str], lines: &[&str]) -> JobKind {
     }
 }
 
-fn is_error_termination(line: &str) -> bool {
+/// Recognize termination evidence outside the input echo. The boolean distinguishes
+/// official end records from diagnostics that affect completion but do not split jobs.
+fn termination(line: &str) -> Option<(Completion, bool)> {
+    let line = line.trim();
+    if line.starts_with('|') {
+        return None;
+    }
+    if line.trim_matches('*').trim() == "ORCA TERMINATED NORMALLY" {
+        return Some((Completion::Normal, true));
+    }
     let lower = line.to_ascii_lowercase();
-    lower.contains("orca finished by error termination")
+    let record = line.trim_matches('*').trim();
+    let ends_job = record == "ORCA TERMINATED ABNORMALLY"
+        || record.starts_with("ORCA finished by error termination");
+    (lower.contains("orca finished by error termination")
         || lower.contains("orca terminated abnormally")
         || lower.contains("aborting the run")
-        || lower.contains("error :")
+        || lower.contains("error :"))
+    .then(|| {
+        (
+            Completion::Error {
+                message: line.into(),
+            },
+            ends_job,
+        )
+    })
 }
 
 fn completion(lines: &[&str], followed_by_numbered_job: bool) -> Completion {
-    if let Some(line) = lines.iter().rev().find(|line| is_error_termination(line)) {
-        Completion::Error {
-            message: line.trim().into(),
+    let mut normal = followed_by_numbered_job;
+    for line in lines.iter().rev() {
+        match termination(line) {
+            Some((error @ Completion::Error { .. }, _)) => return error,
+            Some((Completion::Normal, _)) => normal = true,
+            _ => {}
         }
-    } else if followed_by_numbered_job
-        || lines
-            .iter()
-            .any(|line| line.contains("ORCA TERMINATED NORMALLY"))
-    {
+    }
+    if normal {
         Completion::Normal
     } else {
         Completion::Truncated
@@ -700,7 +722,12 @@ fn read_values(
                 truncated,
                 step.frame.multiplicity,
             )? {
-                values.orbitals = Some(orbitals);
+                // A table that runs into interrupted EOF has no closing record. It
+                // may expose an initial partial spectrum, but cannot replace the last
+                // complete table, including one retained by a stationary-point fold.
+                if !truncated || cursor < lines.len() || values.orbitals.is_none() {
+                    values.orbitals = Some(orbitals);
+                }
             }
         } else if trimmed.starts_with("MULLIKEN ATOMIC CHARGES") {
             if let Some(charges) = mulliken(lines, &mut cursor, offset, &step.frame, truncated)? {
@@ -857,7 +884,7 @@ fn orbital_energies(
             .push(number(energy, offset + i + 1, "orbital energy")?);
         *cursor += 1;
     }
-    if alpha.energies_hartree.is_empty() {
+    if alpha.energies_hartree.is_empty() || (unrestricted && beta.energies_hartree.is_empty()) {
         return Ok(None);
     }
     let beta = if unrestricted {
@@ -1047,8 +1074,28 @@ fn normal_modes(
     let mut modes = BTreeMap::new();
     while let Some(line) = lines.get(*cursor) {
         let trimmed = line.trim();
-        let words: Vec<_> = trimmed.split_whitespace().collect();
-        let columns: Option<Vec<usize>> = words.iter().map(|word| word.parse().ok()).collect();
+        let mut words = trimmed.split_whitespace();
+        // Allocate only for a numeric header, with space for this geometry's modes.
+        // Check one excess token without storing it in the bounded column vector.
+        let columns = if words
+            .clone()
+            .next()
+            .is_some_and(|word| word.parse::<usize>().is_ok())
+        {
+            let mut columns = Vec::with_capacity(axes);
+            let valid = words.by_ref().take(axes).all(|word| {
+                if let Ok(mode) = word.parse::<usize>() {
+                    columns.push(mode);
+                    true
+                } else {
+                    false
+                }
+            });
+            valid.then_some(columns)
+        } else {
+            None
+        };
+        let excess_columns = words.next().is_some();
         let Some(columns) = columns.filter(|columns| !columns.is_empty()) else {
             if trimmed.is_empty()
                 || trimmed.bytes().all(|byte| byte == b'-')
@@ -1067,7 +1114,7 @@ fn normal_modes(
             }
             break;
         };
-        if columns.len() > axes
+        if excess_columns
             || columns.iter().any(|&mode| mode >= axes)
             || columns
                 .array_windows::<2>()
@@ -1084,11 +1131,13 @@ fn normal_modes(
         *cursor += 1;
         // ORCA can print one symmetry label per mode between columns and rows.
         if let Some(line) = lines.get(*cursor) {
-            let labels: Vec<_> = line.split_whitespace().collect();
-            if labels.len() == columns.len()
-                && labels
-                    .iter()
-                    .all(|label| label.chars().any(char::is_alphabetic))
+            let mut labels = line.split_whitespace();
+            let mut count = 0;
+            if labels.by_ref().take(columns.len()).all(|label| {
+                count += 1;
+                label.chars().any(char::is_alphabetic)
+            }) && count == columns.len()
+                && labels.next().is_none()
             {
                 *cursor += 1;
             }
@@ -1104,9 +1153,13 @@ fn normal_modes(
                     "The ORCA normal-mode panel ends before all 3N Cartesian rows",
                 ));
             };
-            let words: Vec<_> = line.split_whitespace().collect();
-            if words.len() != columns.len() + 1
-                || words.first().and_then(|word| word.parse::<usize>().ok()) != Some(row)
+            let expected = columns.len() + 1;
+            let mut words = line.split_whitespace();
+            let mut fields = Vec::with_capacity(expected);
+            fields.extend(words.by_ref().take(expected));
+            if fields.len() != expected
+                || words.next().is_some()
+                || fields.first().and_then(|word| word.parse::<usize>().ok()) != Some(row)
             {
                 if truncated {
                     return Ok(None);
@@ -1116,7 +1169,7 @@ fn normal_modes(
                     "The ORCA normal-mode panel needs 3N consecutive Cartesian rows",
                 ));
             }
-            for (word, vector) in words.iter().skip(1).zip(&mut panel) {
+            for (word, vector) in fields.iter().skip(1).zip(&mut panel) {
                 if truncated
                     && *cursor + 1 == lines.len()
                     && word.replace(['D', 'd'], "E").parse::<f64>().is_err()

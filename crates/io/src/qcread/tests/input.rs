@@ -439,27 +439,75 @@ fn gamess_carbon_reads_prinaxis_cartesian_rows_as_given() {
 }
 
 #[test]
+fn gamess_group_cards_are_active_only_with_a_dollar_in_column_two() {
+    let bytes = fixture("cclib/gamess_nh3_ts_ir.inp");
+    let text = std::str::from_utf8(&bytes).expect("GAMESS ammonia fixture is UTF-8");
+    // Synthetic inactive cards precede the fixture's active " $CONTRL ... $END".
+    // Its four C1 atoms include "H 1.0 -0.4882960784 0.8457536168 0.0000000000".
+    for prefix in ["", "--", "  ", "text ", "\t"] {
+        let input = format!("{prefix}$CONTRL COORD=FRAGONLY ICHARG=8 $END\n{text}");
+        let file = read("inactive-control.inp", input.as_bytes())
+            .expect("GAMESS ignores group cards outside column two");
+        let step = &one_job(&file.jobs, 4, 0, 1).steps[0];
+        assert_eq!(step.frame.numbers, [7, 1, 1, 1]);
+        assert_eq!(
+            step.frame.positions_angstrom[1],
+            [-0.4882960784, 0.8457536168, 0.]
+        );
+
+        // A synthetic inactive DATA group must not hide the fixture's C1 geometry.
+        let input = format!("{prefix}$DATA\ninactive geometry\nC2\n $END\n{text}");
+        let file = read("inactive-data.inp", input.as_bytes())
+            .expect("GAMESS ignores inactive DATA cards");
+        one_job(&file.jobs, 4, 0, 1);
+    }
+}
+
+#[test]
+fn gamess_unique_consumes_named_acct_basis_as_part_of_the_carbon_atom() {
+    let bytes = fixture("cclib/gamess_C_bigbasis.inp");
+    let text = std::str::from_utf8(&bytes).expect("GAMESS carbon fixture is UTF-8");
+    // Synthetic: remove " $BASIS GBASIS=ACCQC $END", use COORD=UNIQUE,
+    // and append ACCT to "C 6.0 0.0000000000 0.0000000000 0.0000000000".
+    let (before, after) = text
+        .rsplit_once(" $END")
+        .expect("fixture ends its DATA group");
+    let input = format!("{before}ACCT 6 1.0 1.0 1.0\n\n $END{after}")
+        .replace("COORD=PRINAXIS", "COORD=UNIQUE")
+        .replace(" $BASIS  GBASIS=ACCQC $END\n", "");
+    let file = read("inline-acct.inp", input.as_bytes()).expect("inline ACCT basis");
+    let step = &one_job(&file.jobs, 1, 0, 1).steps[0];
+    assert_eq!(step.frame.numbers, [6]);
+    assert_eq!(step.frame.positions_angstrom, [[0., 0., 0.]]);
+}
+
+#[test]
 fn gamess_unique_skips_builtin_basis_and_numbered_primitive_cards() {
     let bytes = fixture("cclib/gamess_C_bigbasis.inp");
     let text = std::str::from_utf8(&bytes).expect("GAMESS carbon fixture is UTF-8");
     let (control, _) = text.split_once("$DATA").expect("fixture has $DATA");
     // "$CONTRL COORD=PRINAXIS UNITS=ANGS" and
     // "C           6.0  0.0000000000   0.0000000000   0.0000000000".
-    // Adapt the fixture's C1 Cartesian input to H2 with inline basis cards.
-    for builtin in ["STO 3", "N21 3", "N31 6", "N311 6"] {
-        let input = format!(
-            "{}\n$DATA\nH2\nC1\n\
+    // Synthetic: adapt the fixture's C1 Cartesian input to H2 with inline basis
+    // cards and no active BASIS group. The inactive card must not select a basis.
+    for coord in ["UNIQUE", "CART"] {
+        for builtin in ["STO 3", "N21 3", "N31 6", "N311 6", "ACCT 6"] {
+            let input = format!(
+                "{}\n$BASIS GBASIS=N31 NGAUSS=6 $END\n $DATA\nH2\nC1\n\
          H1 1.0 0.0 0.0 0.0\n{builtin} 1.0 1.0 1.0\n\n\
          H2 1.0 0.0 0.0 1.1\nS 3\n\
          1 3.42525091 0.15432897 0.1 0.2\n\
          2 0.62391373 0.53532814 0.2 0.3\n\
-         3 0.16885540 0.44463454 0.3 0.4\n\n$END\n",
-            control.replace("COORD=PRINAXIS", "cOoRd = unique")
-        );
-        let file = read("inline-basis.inp", input.as_bytes()).expect("inline GAMESS basis");
-        let step = &one_job(&file.jobs, 2, 0, 1).steps[0];
-        assert_eq!(step.frame.numbers, [1, 1]);
-        assert_eq!(step.frame.positions_angstrom, [[0., 0., 0.], [0., 0., 1.1]]);
+         3 0.16885540 0.44463454 0.3 0.4\n\n $END\n",
+                control
+                    .replace("COORD=PRINAXIS", &format!("cOoRd = {coord}"))
+                    .replace(" $BASIS  GBASIS=ACCQC $END\n", "")
+            );
+            let file = read("inline-basis.inp", input.as_bytes()).expect("inline GAMESS basis");
+            let step = &one_job(&file.jobs, 2, 0, 1).steps[0];
+            assert_eq!(step.frame.numbers, [1, 1]);
+            assert_eq!(step.frame.positions_angstrom, [[0., 0., 0.], [0., 0., 1.1]]);
+        }
     }
 }
 
@@ -467,13 +515,16 @@ fn gamess_unique_skips_builtin_basis_and_numbered_primitive_cards() {
 fn gamess_unique_rejects_a_shell_missing_its_numbered_primitives() {
     let bytes = fixture("cclib/gamess_C_bigbasis.inp");
     let text = std::str::from_utf8(&bytes).expect("GAMESS carbon fixture is UTF-8");
-    // Append a malformed shell after the fixture's "C           6.0 ..." row.
+    // Synthetic: append a malformed shell after the fixture's "C 6.0 0 0 0" row
+    // and remove its active BASIS group so basis cards belong to the atom.
     let (before, _) = text
         .rsplit_once("$END")
         .expect("fixture ends its DATA group");
     let input = format!(
-        "{}\nS 3 1.0 1.0 1.0\n$END\n",
-        before.replace("COORD=PRINAXIS", "COORD=UNIQUE MULT=2")
+        "{}S 3 1.0 1.0 1.0\n $END\n",
+        before
+            .replace("COORD=PRINAXIS", "COORD=UNIQUE MULT=2")
+            .replace(" $BASIS  GBASIS=ACCQC $END\n", "")
     );
     assert!(matches!(
         read("missing-primitives.inp", input.as_bytes()),
@@ -488,10 +539,10 @@ fn gamess_merges_control_groups_and_ignores_bang_comments() {
     // The fixture's "$CONTRL SCFTYP=RHF RUNTYP=HESSIAN AIMPAC=.t. $END"
     // leaves these geometry options at their defaults; supply repeated assignments.
     let input = format!(
-        "$CONTRL COORD=ZMTMPC UNITS=BOHR ICHARG=8 MULT=1 $END\n\
-         $CONTRL COORD=UNIQUE UNITS=ANGS ICHARG=0 ICHARG=1 MULT=2\n\
+        " $CONTRL COORD=ZMTMPC UNITS=BOHR ICHARG=8 MULT=1 $END\n\
+         \x20$CONTRL COORD=UNIQUE UNITS=ANGS ICHARG=0 ICHARG=1 MULT=2\n\
          ! COORD=FRAGONLY UNITS=BOHR ICHARG=9 $END !\n\
-         $END\n{text}"
+         \x20$END\n{text}"
     );
     let file = read("control.inp", input.as_bytes()).expect("merged GAMESS control");
     let actual = &one_job(&file.jobs, 4, 1, 2).steps[0].frame;
@@ -510,7 +561,7 @@ fn gamess_paired_control_comments_preserve_following_assignments() {
     // Add paired namelist comments to the fixture's "$CONTRL ... $END".
     // Both the inline and multiline comment contain fake group boundaries.
     let input = format!(
-        "$CONTRL ! COORD=FRAGONLY $END ! COORD=UNIQUE ICHARG=0\n\
+        " $CONTRL ! COORD=FRAGONLY $END ! COORD=UNIQUE ICHARG=0\n\
          ! a multiline comment\n$END $CONTRL COORD=ZMTMPC\n\
          ! ICHARG=1 MULT=2 UNITS=ANGS $END\n{text}"
     );
@@ -556,13 +607,68 @@ fn gamess_c1_zmt_uses_the_existing_variable_z_matrix_converter() {
         .split_once("0 1\n")
         .expect("fixture has water geometry");
     let input = format!(
-        "{}\n$DATA\nWater\nC1\n{rows}\n$END\n",
+        "{}\n $DATA\nWater\nC1\n{rows}\n $END\n",
         control.replace("$CONTRL", "$CONTRL COORD=ZMT")
     );
     let file = read("zmt.inp", input.as_bytes()).expect("C1 GAMESS Z-matrix");
     let actual = &one_job(&file.jobs, 3, 0, 1).steps[0].frame;
     let expected = open("cclib/g16_water_mp2.com");
     assert_eq!(*actual, expected.jobs[0].steps[0].frame);
+}
+
+fn gamess_dvb_zmt_with_flag(flag: &str) -> String {
+    let bytes = fixture("cclib/gamess_nh3_ts_ir.inp");
+    let control = std::str::from_utf8(&bytes).expect("GAMESS ammonia fixture is UTF-8");
+    let (control, _) = control.split_once("$DATA").expect("fixture has $DATA");
+    let bytes = fixture("cclib/g16_dvb_gopt.gjf");
+    let text = std::str::from_utf8(&bytes).expect("Gaussian DVB fixture is UTF-8");
+    let (_, geometry) = text.split_once("0 1\n").expect("fixture has DVB geometry");
+    let (rows, variables) = geometry
+        .split_once("\n\n")
+        .expect("fixture separates atoms and variables");
+    // Synthetic GAMESS C1 ZMT input reuses all 20 Gaussian fixture atoms and
+    // variables, adding a flag only to the rows with three reference atoms.
+    let rows = rows
+        .lines()
+        .map(|row| {
+            if row.split_whitespace().count() == 7 {
+                format!("{row} {flag}\n")
+            } else {
+                format!("{row}\n")
+            }
+        })
+        .collect::<String>();
+    format!(
+        "{}\n $DATA\nDVB with a Z-matrix flag\nC1\n{rows}\n{variables}\n $END\n",
+        control.replace("$CONTRL", "$CONTRL COORD=ZMT")
+    )
+}
+
+#[test]
+fn gamess_zmt_accepts_an_optional_zero_dihedral_flag() {
+    let input = gamess_dvb_zmt_with_flag("0");
+    let file = read("zmt-flag-zero.inp", input.as_bytes()).expect("GAMESS ZMT flag 0");
+    let step = &one_job(&file.jobs, 20, 0, 1).steps[0];
+    let expected = open("cclib/g16_dvb_gopt.gjf");
+    assert_eq!(step.frame, expected.jobs[0].steps[0].frame);
+    // Fixture evidence: "B1 1.39155762", "A1 120.26061806", "D1 0.00000000".
+    let xyz = &step.frame.positions_angstrom;
+    close(distance(xyz[0], xyz[1]), 1.39155762);
+    close(angle(xyz[2], xyz[1], xyz[0]), 120.26061806);
+    close(dihedral(xyz[3], xyz[2], xyz[1], xyz[0]), 0.);
+}
+
+#[test]
+fn gamess_zmt_rejects_second_angle_flags_with_a_specific_unsupported_error() {
+    for flag in ["1", "+1", "-1"] {
+        let input = gamess_dvb_zmt_with_flag(flag);
+        assert_eq!(
+            read("zmt-second-angle.inp", input.as_bytes()),
+            Err(Error::Unsupported(
+                "GAMESS Z-matrix second-angle coordinates (flag +1 or -1) are not supported; use dihedral coordinates with flag 0".into()
+            ))
+        );
+    }
 }
 
 #[test]
@@ -604,9 +710,10 @@ fn gamess_cart_reads_bohr_and_explicit_charge_and_spin() {
             format!("atom {nuclear} {x} {y} {z}\n")
         })
         .collect::<String>();
-    let input =
-        format!("$contrl iChArG=1 MuLt = 2 units=bohr coord=cart $end\n$data\nNH3\nc1\n{rows}$end");
-    let actual = read("cart.inp", input.as_bytes()).unwrap();
+    let input = format!(
+        " $contrl iChArG=1 MuLt = 2 units=bohr coord=cart $end\n $basis GBASIS=AM1 $end\n $data\nNH3\nc1\n{rows} $end"
+    );
+    let actual = read("cart.inp", input.as_bytes()).expect("GAMESS Cartesian coordinates in bohr");
     let frame = &one_job(&actual.jobs, 4, 1, 2).steps[0].frame;
     assert_eq!(frame.numbers, [7, 1, 1, 1]);
     for (a, b) in frame

@@ -446,7 +446,7 @@ pub(super) fn limit(path: &Path) -> u64 {
 /// structure files at their [`limit`], as Insert does.
 /// Drawings and pictures are read whole.
 pub(super) fn open_limit(path: &Path) -> u64 {
-    if super::files::QC_EXTENSIONS.contains(&extension(path).as_str()) {
+    if super::files::is_qc_file(path, &extension(path)) {
         reshiki::qcread::MAX_FILE_BYTES as u64
     } else {
         match kind(path) {

@@ -52,7 +52,7 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
         } else if line == "Initial command:" || line.starts_with('#') {
             start.get_or_insert(i);
         }
-        if termination(line)
+        if termination(line).is_some()
             && let Some(job) = start.take().and_then(|from| lines.get(from..=i))
         {
             jobs.push(read_job(job, jobs.len(), origin, &program, &mut warnings)?);
@@ -84,8 +84,18 @@ fn version(line: &str) -> Option<String> {
     Some(format!("{number} Revision {revision}"))
 }
 
-fn termination(line: &str) -> bool {
-    line.starts_with(NORMAL_TERMINATION) || line.starts_with("Error termination via ")
+enum Termination {
+    Normal,
+    Error,
+}
+
+fn termination(line: &str) -> Option<Termination> {
+    if line.starts_with("Error termination via ") {
+        return Some(Termination::Error);
+    }
+    let (version, _) = line.strip_prefix(NORMAL_TERMINATION)?.split_once(" at ")?;
+    (!version.is_empty() && version.bytes().all(|byte| byte.is_ascii_digit()))
+        .then_some(Termination::Normal)
 }
 
 fn completion(lines: &Lines<'_>) -> Completion {
@@ -93,44 +103,43 @@ fn completion(lines: &Lines<'_>) -> Completion {
         return Completion::Truncated;
     };
     let last = last.trim();
-    if last.starts_with(NORMAL_TERMINATION) {
-        return Completion::Normal;
+    match termination(last) {
+        Some(Termination::Normal) => return Completion::Normal,
+        Some(Termination::Error) => {}
+        None => return Completion::Truncated,
     }
-    if termination(last) {
-        let message = before
+    let message = before
+        .iter()
+        .rev()
+        .map(|&(_, line)| line.trim())
+        .take_while(|line| !line.starts_with("(Enter "))
+        .find(|line| {
+            if line.starts_with("Error termination request") || line.starts_with("Leave Link") {
+                return false;
+            }
+            let line = line.to_ascii_lowercase();
+            [
+                "error",
+                "failed",
+                "failure",
+                "exceeded",
+                "cannot",
+                "unable",
+                "not converg",
+                "unrecognized",
+                "impossible",
+                "not implemented",
+                "problem with",
+                "too close",
+                "run terminated",
+                "aborting",
+            ]
             .iter()
-            .rev()
-            .map(|&(_, line)| line.trim())
-            .take_while(|line| !line.starts_with("(Enter "))
-            .find(|line| {
-                if line.starts_with("Error termination request") || line.starts_with("Leave Link") {
-                    return false;
-                }
-                let line = line.to_ascii_lowercase();
-                [
-                    "error",
-                    "failed",
-                    "failure",
-                    "exceeded",
-                    "cannot",
-                    "unable",
-                    "not converg",
-                    "unrecognized",
-                    "impossible",
-                    "not implemented",
-                    "problem with",
-                    "too close",
-                    "run terminated",
-                    "aborting",
-                ]
-                .iter()
-                .any(|word| line.contains(word))
-            })
-            .unwrap_or(last)
-            .into();
-        return Completion::Error { message };
-    }
-    Completion::Truncated
+            .any(|word| line.contains(word))
+        })
+        .unwrap_or(last)
+        .into();
+    Completion::Error { message }
 }
 
 fn read_job(

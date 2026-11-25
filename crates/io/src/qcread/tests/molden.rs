@@ -886,9 +886,9 @@ fn missing_coefficient_rows_keep_levels_without_inventing_zero_mos() {
 
 #[test]
 fn conflicting_representation_flags_are_rejected_even_without_gto() {
-    // Synthetic global declarations on the water fixture; [5D] means pure d/f,
-    // while [7F] explicitly selects only the f representation.
+    // Add synthetic global declarations to the water fixture in memory.
     for flags in [
+        "[5D]\n[7F]",
         "[5D]\n[5D10F]",
         "[5D10F]\n[7F]",
         "[9G]\n[15G]",
@@ -908,10 +908,15 @@ fn conflicting_representation_flags_are_rejected_even_without_gto() {
     assert!(
         read(
             "flags.molden",
-            format!("{}\n[5D]\n[5D7F]\n[7F]\n[9G]\n", text(WATER)).as_bytes()
+            format!("{}\n[5D]\n[5D7F]\n[9G]\n", text(WATER)).as_bytes()
         )
         .is_ok()
     );
+    // [7F] can accompany an explicit declaration of Cartesian d.
+    let input = format!("{}\n[6D]\n[7F]\n", text(WATER));
+    let file = modified(&input);
+    // H      3  1    -0.272880     0.951649     0.000000
+    assert_eq!(file.jobs[0].steps[0].frame.numbers, [8, 1, 1]);
 }
 
 #[test]

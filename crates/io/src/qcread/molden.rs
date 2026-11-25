@@ -659,14 +659,12 @@ fn read_pseudo(section: &Section<'_>, atoms: &mut Atoms) -> Result<(), Error> {
 fn read_representations(sections: &[Section<'_>]) -> Result<BTreeMap<u8, bool>, Error> {
     let mut representations = BTreeMap::new();
     for section in sections {
-        // [5D] also declares pure f; standalone [7F] leaves d at its
-        // default Cartesian representation unless another flag declares d.
+        // The short [5D] and [7F] flags each declare both d and f.
         // See https://www.theochem.ru.nl/molden/molden_format.html.
         let flags: &[(u8, bool)] = match section.name.as_str() {
             "5D" | "5D7F" => &[(2, true), (3, true)],
             "5D10F" => &[(2, true), (3, false)],
-            "7F" => &[(3, true)],
-            "6D7F" => &[(2, false), (3, true)],
+            "7F" | "6D7F" => &[(2, false), (3, true)],
             "6D10F" => &[(2, false), (3, false)],
             "6D" => &[(2, false)],
             "10F" => &[(3, false)],

@@ -795,6 +795,7 @@ fn program_outputs_use_the_qc_reader_byte_limit() {
         "run.fchk",
         "run.fch",
         "run.molden",
+        "run.MOLDEN.INPUT",
         "run.mold",
         "run.gjf",
         "run.com",
@@ -849,4 +850,53 @@ fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
     // A .log that no reader recognizes is refused by name.
     let error = open("notes.log", "README.md").err().unwrap_or_default();
     assert!(error.contains("not a format ReShiki reads"), "{error}");
+
+    // Open the water Molden fixture under ORCA's double suffix in memory.
+    let Ok(Prepared::Records(batch)) =
+        open("water.molden.input", "cclib/molden5.7_water_mp2.molden")
+    else {
+        panic!("a .molden.input file opens as a drawing");
+    };
+    // H      3  1    -0.272880     0.951649     0.000000
+    assert_eq!(batch.drawings[0].atoms.len(), 3);
+    assert_eq!(
+        batch.warnings[0],
+        "Geometry from the Molden file · Results can't be shown yet"
+    );
+}
+
+#[tokio::test]
+async fn program_outputs_open_the_last_optimization_step_in_3d() {
+    let name = "g16_dvb_gopt.out";
+    let bytes = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/qc/cclib/g16_dvb_gopt.out"
+    ))
+    .unwrap();
+    let qc = reshiki::qcread::read(name, &bytes).unwrap();
+    let job = &qc.jobs[qc.default_job().unwrap()];
+    assert_eq!(job.kind, reshiki::qcread::JobKind::Optimization);
+    assert!(job.steps.len() > 1);
+    let first = job.steps.first().unwrap().frame.positions_angstrom[0];
+    let last = job.steps.last().unwrap().frame.positions_angstrom[0];
+    // The first and last Standard orientation tables start with these rows:
+    //      1          6           0        1.205666    0.676891   -0.000000
+    //      1          6           0        0.269445    1.410118    0.000000
+    assert_eq!(first, [1.205666, 0.676891, 0.0]);
+    assert_eq!(last, [0.269445, 1.410118, 0.0]);
+
+    let (_, opened) = prepare_contents(name.into(), Ok(bytes)).await.unwrap();
+    let Prepared::Records(batch) = opened.unwrap() else {
+        panic!("a Gaussian optimization opens as a drawing");
+    };
+    let doc = &batch.drawings[0];
+    // The last Standard orientation ends with atom 20:
+    //     20          1           0        2.364759    0.813041   -0.000000
+    assert_eq!(doc.atoms.len(), 20);
+    let placed = doc.models[0]
+        .atoms
+        .iter()
+        .find(|atom| atom.id == doc.atoms[0].id)
+        .unwrap();
+    assert_eq!(placed.xyz, last.map(|coord| coord as f32));
 }

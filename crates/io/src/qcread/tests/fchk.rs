@@ -363,7 +363,7 @@ fn replace_real_array(source: &str, name: &str, transform: impl FnOnce(&mut Vec<
     lines.join("\n") + "\n"
 }
 
-fn replace_integer(source: &str, name: &str, value: usize) -> String {
+fn replace_integer(source: &str, name: &str, value: impl std::fmt::Display) -> String {
     source
         .lines()
         .map(|line| {
@@ -568,7 +568,8 @@ fn fchk_force_constants_are_only_a_calculated_hessian_for_frequency_jobs() {
 
 #[test]
 fn fchk_job_status_zero_preserves_results_as_not_converged() {
-    // G16 fixture line 445 reports "Job Status ... 1". Alter only that value.
+    // Synthetic status: G16 fixture line 445 reports "Job Status ... 1".
+    // Alter only that value; line 441 still has Total Energy -382.3082666020143.
     let source = replace_integer(&text("cclib/g16_dvb_ir.fchk"), "Job Status", 0);
     let file = read("not-converged.fchk", source.as_bytes()).unwrap();
     let result = file.jobs[0].result.as_ref().unwrap();
@@ -582,19 +583,90 @@ fn fchk_job_status_zero_preserves_results_as_not_converged() {
 }
 
 #[test]
+fn fchk_job_status_error_preserves_results_as_failed() {
+    // Synthetic status: G16 line 445 has "Job Status ... 1"; line 470 declares
+    // 3,600 Alpha MO coefficients. Neither the spectrum nor Hessian is removed.
+    let source = replace_integer(&text("cclib/g16_dvb_ir.fchk"), "Job Status", 3);
+    let file = read("failed.fchk", source.as_bytes()).unwrap();
+    let result = file.jobs[0].result.as_ref().unwrap();
+    assert_eq!(
+        result.status,
+        Status::Failed {
+            reason: "Gaussian job status 3 (error)".into()
+        }
+    );
+    assert!(result.orbitals.is_some());
+    assert!(result.vibrations.is_some());
+    assert_eq!(result.hessian_hartree_per_bohr2.len(), 3600);
+    assert_eq!(result.energy_hartree, Some(-382.3082666020143));
+}
+
+#[test]
+fn fchk_job_status_in_progress_preserves_results_as_not_converged() {
+    // Synthetic status: change only "Job Status ... 1" at G16 line 445 to -1.
+    // Its 60 orbital energies (line 457) remain useful partial results.
+    let source = replace_integer(&text("cclib/g16_dvb_ir.fchk"), "Job Status", -1);
+    let file = read("in-progress.fchk", source.as_bytes()).unwrap();
+    let result = file.jobs[0].result.as_ref().unwrap();
+    assert_eq!(
+        result.status,
+        Status::NotConverged {
+            reason: "job in progress".into()
+        }
+    );
+    assert!(result.orbitals.is_some());
+    assert!(result.vibrations.is_some());
+    assert_eq!(result.hessian_hartree_per_bohr2.len(), 3600);
+    assert_eq!(result.energy_hartree, Some(-382.3082666020143));
+}
+
+#[test]
+fn fchk_job_status_success_and_absence_preserve_converged_results() {
+    // Synthetic statuses: G16 line 445 has "Job Status ... 1". Status 2 and
+    // absence retain the same successful result, including line 441's energy.
+    let original = text("cclib/g16_dvb_ir.fchk");
+    for source in [
+        original.clone(),
+        replace_integer(&original, "Job Status", 2),
+        original
+            .lines()
+            .filter(|line| !line.starts_with("Job Status"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    ] {
+        let file = read("successful.fchk", source.as_bytes()).unwrap();
+        let result = file.jobs[0].result.as_ref().unwrap();
+        assert_eq!(result.status, Status::Converged);
+        assert!(result.orbitals.is_some());
+        assert!(result.vibrations.is_some());
+        assert_eq!(result.energy_hartree, Some(-382.3082666020143));
+    }
+}
+
+#[test]
 fn fchk_natural_orbital_route_does_not_import_occupations_as_energies() {
-    // Water supplies ordinary HF-reference orbital energies beginning -20.2437548.
+    // Water lines 130–132 supply seven ordinary HF-reference orbital energies
+    // beginning "-2.02437548E+01"; line 133 declares 49 Alpha MO coefficients.
     // A synthetic Route character record changes only the interpretation of its
     // orbital records; Total Energy and geometry are still ordinary fchk data.
     let source = text("cclib/g09_water_mp2.fchk");
     for keyword in [
-        "NaturalOrbitals",
-        "NatOrb",
-        "Pop=NO",
+        "Guess=NaturalOrbitals",
+        "Guess=(Only,NaturalOrbitals)",
+        "Guess=(Save,Only,NaturalOrbitals)",
+        "Guess = ( Read , nAtOrB )",
+        "Guess(Save,Only,NaturalOrbitals)",
+        "Guess=Only NaturalOrbitals",
+        "Guess=Only Pop=NaturalOrbitals",
         "SaveNO",
-        "nAtOrB",
-        "pop = ( full , no )",
-        "Pop=(Full,NO)",
+        "SaveNatural",
+        "SaveNaturalOrbitals",
+        "Pop=(Full,SaveNO)",
+        "Pop=SaveNaturalTransitionOrbitals",
+        "Pop=SaveNTO",
+        "Pop=SaveNBOs",
+        "Pop=SaveNLMOs",
+        "Pop=SaveMixed",
     ] {
         let source = source.clone() + &format!("{:<40}   C     #p hf/sto-3g {keyword}\n", "Route");
         let file = read("natural.fchk", source.as_bytes()).unwrap();
@@ -608,20 +680,41 @@ fn fchk_natural_orbital_route_does_not_import_occupations_as_energies() {
             ]
         );
     }
+}
+
+#[test]
+fn fchk_population_natural_orbital_analysis_preserves_canonical_spectrum() {
+    // Synthetic Route records on water's unchanged seven-level spectrum:
+    // lines 130–132 begin -20.2437548 and finish 0.708591547. Pop requests an
+    // analysis; explicit Guess natural options or orbital SAVE options replace MOs.
+    let source = text("cclib/g09_water_mp2.fchk");
+    let original = open("cclib/g09_water_mp2.fchk");
+    let expected = original.jobs[0].result.as_ref().unwrap();
     for keyword in [
+        "Pop=NO",
+        "Pop=NaturalOrbitals",
+        "pop = ( full , no )",
+        "Pop=(Full,NaturalOrbitals)",
+        "Guess=Only",
         "Pop=None",
         "Pop=Normal",
         "Pop=(Full,None)",
+        "NaturalOrbitals",
+        "NatOrb",
         "NoNaturalOrbitals",
         "SaveNormal",
         "OtherPop=NO",
+        "OtherGuess=NaturalOrbitals",
+        "Guess=Read Pop=NaturalOrbitals",
+        "Guess=(Only,Read) Pop=(Full,NO)",
+        "Pop=SaveMulliken",
+        "Pop=SaveNPA",
     ] {
         let source = source.clone() + &format!("{:<40}   C     #p hf/sto-3g {keyword}\n", "Route");
         let file = read("ordinary.fchk", source.as_bytes()).unwrap();
-        assert!(
-            file.jobs[0].result.as_ref().unwrap().orbitals.is_some(),
-            "{keyword}"
-        );
+        let actual = file.jobs[0].result.as_ref().unwrap();
+        assert_eq!(actual.orbitals, expected.orbitals, "{keyword}");
+        assert_eq!(actual.energy_hartree, expected.energy_hartree, "{keyword}");
         assert!(file.warnings.is_empty(), "{keyword}");
     }
 }
@@ -629,7 +722,7 @@ fn fchk_natural_orbital_route_does_not_import_occupations_as_energies() {
 #[test]
 fn fchk_real_atomic_weights_identify_isotopes_in_the_result_frame() {
     // Water line 31 has "1.59949146E+01 1.00782504E+00 1.00782504E+00".
-    // Default O-16/H-1 masses are close to natural averages and keep natural identity.
+    // Default O-16/H-1 masses match the common nuclides and keep natural identity.
     let original = open("cclib/g09_water_mp2.fchk");
     assert!(original.jobs[0].steps[0].frame.isotopes.is_empty());
     // Replace only the masses: oxygen-18, deuterium, and unchanged ordinary H.
@@ -646,13 +739,13 @@ fn fchk_real_atomic_weights_identify_isotopes_in_the_result_frame() {
     assert_eq!(frame.isotopes, [18, 2, 0]);
     assert_ne!(frame.hash(), original.jobs[0].steps[0].frame.hash());
     assert_eq!(file.jobs[0].result.as_ref().unwrap().frame, frame.hash());
-    // A synthetic +0.49 amu perturbation from the natural-average mass is below
+    // A synthetic +0.49 amu perturbation from the common-nuclide mass is below
     // the requested half-amu threshold, even when ordinary rounding changes.
     let source = replace_real_array(&source, "Real atomic weights", |masses| {
         for (mass, number) in masses.iter_mut().zip([8, 1, 1]) {
             *mass = crate::chemistry::properties(&[crate::chemistry::AtomFacts {
                 atomic_number: number,
-                isotope: 0,
+                isotope: crate::chemistry::ELEMENTS[usize::from(number)].common_isotope,
                 charge: 0,
                 hydrogens: 0,
                 radical_electrons: 0,
@@ -664,6 +757,40 @@ fn fchk_real_atomic_weights_identify_isotopes_in_the_result_frame() {
     });
     let file = read("near-natural.fchk", source.as_bytes()).unwrap();
     assert!(file.jobs[0].steps[0].frame.isotopes.is_empty());
+}
+
+#[test]
+fn fchk_common_bromine_mass_and_half_amu_threshold_use_the_common_nuclide() {
+    // Synthetic BrH2+ geometry from water: its Atomic numbers record (lines
+    // 16–17) is "8 1 1" and Real atomic weights (lines 30–31) starts 15.9949146.
+    // Substitute Br for O, keep an even electron count with charge +1, and remove
+    // the seven water orbitals (lines 130–143); no Br calculation is claimed.
+    let source = replace_integer_array(&text("cclib/g09_water_mp2.fchk"), "Atomic numbers", |v| {
+        v[0] = 35;
+    });
+    let source = replace_integer(&source, "Charge", 1);
+    let source = remove_real_array(&source, "Alpha Orbital Energies");
+    let source = remove_real_array(&source, "Alpha MO coefficients");
+    // Br-79's exact mass is 78.9183371 amu. Its natural-average mass (~79.904)
+    // differs enough to make both the ordinary Br case and the +0.51 case wrong.
+    for (mass, expected) in [
+        (78.9183371, Vec::new()),
+        (78.9183371 + 0.49, Vec::new()),
+        (78.9183371 + 0.5, Vec::new()),
+        (78.9183371 + 0.51, vec![79, 0, 0]),
+        (78.9183371 - 0.5, Vec::new()),
+        (78.9183371 - 0.51, vec![78, 0, 0]),
+    ] {
+        let source = replace_real_array(&source, "Real atomic weights", |masses| {
+            masses[0] = mass;
+        });
+        let file = read("common-bromine.fchk", source.as_bytes()).unwrap();
+        let frame = &file.jobs[0].steps[0].frame;
+        assert_eq!(frame.numbers, [35, 1, 1]);
+        assert_eq!(frame.isotopes, expected, "mass {mass}");
+        assert_eq!(file.jobs[0].result.as_ref().unwrap().frame, frame.hash());
+        assert!(file.warnings.is_empty());
+    }
 }
 
 // Expand the actual seven-AO water fixture with one-primitive s functions on O.

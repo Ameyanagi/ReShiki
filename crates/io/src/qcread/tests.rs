@@ -122,6 +122,52 @@ fn banner_mentions_inside_a_line_do_not_identify_the_format() {
 }
 
 #[test]
+fn molden_sniffing_uses_the_first_nonempty_line() {
+    // Replace the Gaussian fixture's "Water" title with a Molden heading in memory.
+    let source = String::from_utf8(fixture("cclib/g16_water_mp2.log")).unwrap();
+    let titled = source.replace("\n Water\n", "\n [Molden Format]\n");
+    // Entering Gaussian System, Link 0=g16_main
+    assert_eq!(detect("water.log", &titled), Some(Format::GaussianLog));
+
+    // The real Molden fixture begins with "[Molden Format]". Change its case
+    // and prepend blank lines in memory.
+    let source = String::from_utf8(fixture("cclib/molden5.7_water_mp2.molden")).unwrap();
+    let first = source.replacen("[Molden Format]", "\n  \n[mOLDEN fORMAT]", 1);
+    assert_eq!(detect("water", &first), Some(Format::Molden));
+    assert_eq!(detect("water", &format!("preamble\n{source}")), None);
+}
+
+#[test]
+fn gamess_sniffing_uses_a_column_two_data_card() {
+    // Add a comment in memory before the ORCA fixture's "!  MP2 sto-3g" route.
+    let source = String::from_utf8(fixture("cclib/orca60_water_mp2.inp")).unwrap();
+    let commented = format!("# A GAMESS input uses $DATA\n{source}");
+    // *xyz 0 1
+    assert_eq!(detect("water.inp", &commented), Some(Format::OrcaInput));
+
+    // Change the fixture's " $DATA" card in memory.
+    let source = String::from_utf8(fixture("cclib/gamess_C_bigbasis.inp")).unwrap();
+    let lowercase = source.replace(" $DATA\n", " $data\n");
+    assert_eq!(detect("carbon.inp", &lowercase), Some(Format::GamessInput));
+    for card in ["$DATA", "  $DATA", "--$DATA", " $DATABASE"] {
+        let modified = source.replace(" $DATA\n", &format!("{card}\n"));
+        assert_eq!(detect("carbon.inp", &modified), None, "{card}");
+    }
+}
+
+#[test]
+fn detects_orca_molden_double_suffix_without_a_content_probe() {
+    // Give the water Molden fixture another filename in memory. Remove its
+    // "[Molden Format]" heading from the probe to isolate filename detection.
+    let source = String::from_utf8(fixture("cclib/molden5.7_water_mp2.molden")).unwrap();
+    let (_, body) = source.split_once('\n').unwrap();
+    assert_eq!(detect("water.MOLDEN.INPUT", body), Some(Format::Molden));
+    let file = read("water.MOLDEN.INPUT", source.as_bytes()).unwrap();
+    // H      3  1    -0.272880     0.951649     0.000000
+    assert_eq!(file.jobs[0].steps[0].frame.numbers, [8, 1, 1]);
+}
+
+#[test]
 fn oversized_hessian_keeps_the_energy_and_geometry() {
     // Build a synthetic frequency result in memory one atom above the Hessian limit.
     let n = MAX_HESSIAN_ATOMS + 1;

@@ -300,32 +300,38 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     if let Some(masses) = fields.real_array("Real atomic weights", n_atoms)? {
-        let mut natural_masses = BTreeMap::new();
+        let mut common_masses = BTreeMap::new();
         for ((z, isotope), &mass) in atoms.iter_mut().zip(masses) {
             if mass <= 0.0 || mass.round() > f64::from(u16::MAX) {
                 return Err(
                     fields.invalid("Real atomic weights", "contains an invalid atomic mass")
                 );
             }
-            // Gaussian supplies isotope masses even for its default nuclides. Keep the
-            // natural-abundance identity unless the recorded mass clearly differs.
-            let natural = match natural_masses.get(z) {
+            // Gaussian supplies the most common isotope's exact mass by default.
+            // Preserve its unlabeled identity unless the explicit mass clearly differs.
+            let common = match common_masses.get(z) {
                 Some(&mass) => mass,
                 None => {
+                    let common_isotope = crate::chemistry::ELEMENTS
+                        .get(usize::from(*z))
+                        .ok_or_else(|| {
+                            fields.invalid("Atomic numbers", "contains an invalid element")
+                        })?
+                        .common_isotope;
                     let mass = crate::chemistry::properties(&[crate::chemistry::AtomFacts {
                         atomic_number: *z,
-                        isotope: 0,
+                        isotope: common_isotope,
                         charge: 0,
                         hydrogens: 0,
                         radical_electrons: 0,
                     }])
                     .map_err(Error::Invalid)?
                     .mass;
-                    natural_masses.insert(*z, mass);
+                    common_masses.insert(*z, mass);
                     mass
                 }
             };
-            if (mass - natural).abs() > 0.5 {
+            if (mass - common).abs() > 0.5 {
                 *isotope = mass.round() as u16;
             }
         }
@@ -395,12 +401,17 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
         steps: Vec::new(),
         result: None,
     };
-    let status = if fields.integer("Job Status")? == Some(0) {
-        Status::NotConverged {
+    let status = match fields.integer("Job Status")? {
+        Some(3) => Status::Failed {
+            reason: "Gaussian job status 3 (error)".into(),
+        },
+        Some(-1) => Status::NotConverged {
+            reason: "job in progress".into(),
+        },
+        Some(0) => Status::NotConverged {
             reason: "Gaussian Job Status is 0".into(),
-        }
-    } else {
-        Status::Converged
+        },
+        _ => Status::Converged,
     };
     let mut result = origin.result(&frame, task, status, &program, &job);
     let mut warnings = Vec::new();
@@ -858,35 +869,59 @@ fn orbitals(
 fn natural_orbital_route(keywords: &[String]) -> bool {
     keywords.iter().any(|route| {
         let lower = route.to_ascii_lowercase();
-        lower
-            .split(|c: char| !c.is_ascii_alphanumeric())
-            .any(|token| matches!(token, "naturalorbitals" | "natorb" | "saveno"))
-            || lower.match_indices("pop").any(|(start, _)| {
+        let separator = |c: char| !c.is_ascii_alphanumeric();
+        let natural = |token| matches!(token, "naturalorbitals" | "natorb");
+        // Population analysis alone leaves the canonical checkpoint orbitals intact.
+        if lower.split(separator).any(|token| {
+            matches!(
+                token,
+                "saveno"
+                    | "savenatural"
+                    | "savenaturalorbitals"
+                    | "savenaturaltransitionorbitals"
+                    | "savento"
+                    | "savenbo"
+                    | "savenbos"
+                    | "savenlmo"
+                    | "savenlmos"
+                    | "savemixed"
+            )
+        }) {
+            return true;
+        }
+        let options = lower
+            .match_indices("guess")
+            .filter_map(|(start, _)| {
                 if lower
                     .get(..start)
                     .and_then(|prefix| prefix.chars().next_back())
                     .is_some_and(|c| c.is_ascii_alphanumeric())
                 {
-                    return false;
+                    return None;
                 }
-                let Some(options) = lower
-                    .get(start + 3..)
-                    .unwrap_or_default()
-                    .trim_start()
-                    .strip_prefix('=')
-                else {
-                    return false;
-                };
-                let options = options.trim_start();
-                if let Some(list) = options.strip_prefix('(') {
-                    list.split_once(')').is_some_and(|(list, _)| {
-                        list.split(|c: char| !c.is_ascii_alphanumeric())
-                            .any(|token| token == "no")
-                    })
+                let rest = lower.get(start + 5..).unwrap_or_default().trim_start();
+                let options = if let Some(options) = rest.strip_prefix('=') {
+                    options.trim_start()
+                } else if rest.starts_with('(') {
+                    rest
                 } else {
-                    options.split(|c: char| !c.is_ascii_alphanumeric()).next() == Some("no")
+                    return None;
+                };
+                if let Some(list) = options.strip_prefix('(') {
+                    list.split_once(')').map(|(list, _)| list)
+                } else {
+                    options.split(separator).next()
                 }
             })
+            .flat_map(|options| options.split(separator));
+        let mut guess_only = false;
+        for option in options {
+            if natural(option) {
+                return true;
+            }
+            guess_only |= option == "only";
+        }
+        guess_only && lower.split(separator).any(natural)
     })
 }
 

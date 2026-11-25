@@ -119,6 +119,33 @@ fn g16_mp2_archive_and_step_energies() {
 }
 
 #[test]
+fn gaussian_normal_termination_title_does_not_split_the_job() {
+    // Replace the fixture's "Water" title in memory. The job still ends at
+    // "Normal termination of Gaussian 16 at Wed Apr  4 10:14:17 2018."
+    let source = String::from_utf8(fixture(MP2)).unwrap();
+    let titled = source.replace(
+        "\n Water\n",
+        "\n Normal termination of Gaussian water benchmark\n",
+    );
+    let file = read(MP2, titled.as_bytes()).unwrap();
+    let [job] = file.jobs.as_slice() else {
+        panic!("the title and termination belong to one Gaussian job");
+    };
+    assert_eq!(job.completion, Some(Completion::Normal));
+    // NAtoms=      3 NQM=        3 NQMF=       0 NMMI=      0 NMMIF=      0
+    assert_eq!(job.steps[0].frame.numbers.len(), 3);
+    // E2 =    -0.3795333610D-01 EUMP2 =    -0.75002282127454D+02
+    assert_eq!(job.steps[0].energy_hartree, Some(-75.002282127454));
+
+    let missing_at = titled.replace(
+        "Normal termination of Gaussian 16 at ",
+        "Normal termination of Gaussian 16 ",
+    );
+    let file = read(MP2, missing_at.as_bytes()).unwrap();
+    assert_eq!(file.jobs[0].completion, Some(Completion::Truncated));
+}
+
+#[test]
 fn g09_link1_and_internal_jobs_stay_separate() {
     let file = open(LINK1);
     // "Gaussian 09, Revision D.01," and three "Normal termination of Gaussian 09" lines.
