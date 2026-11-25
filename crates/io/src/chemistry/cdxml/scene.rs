@@ -380,16 +380,21 @@ impl CdxmlScene {
         let source = presentation::parse(&prepared.expanded_xml)?;
         let nodes: Vec<_> = source.descendants().filter(Node::is_element).collect();
         let mut out: HashMap<u64, Vec<u64>> = HashMap::new();
+        let atoms: HashSet<_> = prepared.molecule.ids.iter().copied().collect();
         for entry in &self.objects {
             let Some(node) = nodes.get(entry.source) else {
                 continue;
             };
-            // A step may name a group of captions or other objects, so each
-            // enclosing group also resolves to what this object became.
-            let groups = node.ancestors().skip(1).filter(|n| n.has_tag_name("group"));
-            for node in std::iter::once(*node).chain(groups) {
-                if let Some(id) = node.attribute("id").and_then(|id| id.parse().ok()) {
-                    out.entry(id).or_default().extend(&entry.atoms);
+            if let Some(id) = node.attribute("id").and_then(|id| id.parse().ok()) {
+                out.entry(id).or_default().extend(&entry.atoms);
+            }
+            // A step may name a group of captions or other objects. Atoms
+            // join a group only through their fragments below, so a charge
+            // mark in the group does not bring in its owner atom.
+            for group in node.ancestors().skip(1).filter(|n| n.has_tag_name("group")) {
+                if let Some(id) = group.attribute("id").and_then(|id| id.parse().ok()) {
+                    let objects = entry.atoms.iter().filter(|id| !atoms.contains(id));
+                    out.entry(id).or_default().extend(objects);
                 }
             }
         }

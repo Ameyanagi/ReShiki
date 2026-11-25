@@ -625,7 +625,19 @@ fn restore_reaction_maps(
         }
         i
     }
+    // Participants are whole molecules; the smallest atom ID names each one.
+    let molecule_of: HashMap<u64, u64> = doc
+        .reactions
+        .iter()
+        .skip(before)
+        .flat_map(|r| r.reactants.iter().chain(&r.products))
+        .flat_map(|part| {
+            let key = part.atoms.iter().min().copied().unwrap_or_default();
+            part.atoms.iter().map(move |&id| (id, key))
+        })
+        .collect();
     let mut parent: Vec<_> = (0..doc.atoms.len()).collect();
+    let mut molecules: HashMap<usize, HashSet<u64>> = HashMap::new();
     let mut order = Vec::new();
     for (reaction, &pairs) in doc.reactions.iter().skip(before).zip(maps) {
         let side = |parts: &[Participant]| {
@@ -646,8 +658,29 @@ fn restore_reaction_maps(
             {
                 paired.extend([a, b]);
                 let (ra, rb) = (root(&parent, a), root(&parent, b));
-                if let Some(slot) = parent.get_mut(ra) {
-                    *slot = rb;
+                if ra != rb {
+                    let molecule = |i| {
+                        id(i)
+                            .and_then(|id| molecule_of.get(&id))
+                            .into_iter()
+                            .copied()
+                            .collect::<HashSet<_>>()
+                    };
+                    let mut joined = molecules.remove(&ra).unwrap_or_else(|| molecule(a));
+                    let other = molecules.remove(&rb).unwrap_or_else(|| molecule(b));
+                    // Steps that map one molecule differently keep the first
+                    // step's pairs, as two atoms of a molecule cannot share a
+                    // number.
+                    if !joined.is_disjoint(&other) {
+                        molecules.insert(ra, joined);
+                        molecules.insert(rb, other);
+                        continue;
+                    }
+                    joined.extend(other);
+                    molecules.insert(rb, joined);
+                    if let Some(slot) = parent.get_mut(ra) {
+                        *slot = rb;
+                    }
                 }
                 order.extend([a, b]);
             }

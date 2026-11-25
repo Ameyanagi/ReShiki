@@ -697,3 +697,102 @@ async fn a_condition_group_keeps_its_captions_linked_to_the_step() {
         }
     }
 }
+
+#[tokio::test]
+async fn a_later_step_with_conflicting_pairs_keeps_the_first_steps_pairs() {
+    // A second step between the same molecules swaps the first two pairs.
+    let source = String::from_utf8(fixture("040-reaction-scheme-4", "cdxml"))
+        .unwrap()
+        .replace(
+            "    </scheme>",
+            "      <step id=\"91\" ReactionStepReactants=\"2\" ReactionStepProducts=\"11\" \
+             ReactionStepArrows=\"90\" ReactionStepAtomMap=\"3 13 4 12 5 14 6 15\" />\n    </scheme>",
+        )
+        .replace(
+            "    <scheme id=\"24\">",
+            "    <arrow id=\"90\" BoundingBox=\"190 167 250 173\" Tail3D=\"190 170 0\" \
+             Head3D=\"250 170 0\" ArrowheadHead=\"Full\" ArrowheadTail=\"None\" \
+             ArrowheadType=\"Solid\" FillType=\"None\" />\n    <scheme id=\"24\">",
+        );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        assert_eq!(document.reactions.len(), 2, "{format}");
+        for reaction in &document.reactions {
+            for side in [&reaction.reactants[0], &reaction.products[0]] {
+                assert_eq!(
+                    map_numbers(&document, &side.atoms),
+                    [1, 2, 3, 4],
+                    "{format}"
+                );
+            }
+        }
+        let saved = String::from_utf8(
+            formats::write_with_engine(document, "cdxml", &engine)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let pairs = saved_step_pairs(&saved);
+        assert_eq!(pairs.len(), 2, "{format}");
+        assert!(
+            pairs.iter().all(|step| step.len() == 4),
+            "{format}: {pairs:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_charge_mark_in_a_condition_group_does_not_bring_in_its_atom() {
+    // The group holds a caption and the reactant oxygen's charge mark.
+    let source = String::from_utf8(fixture("037-reaction-scheme-1", "cdxml"))
+        .unwrap()
+        .replace(
+            "<n id=\"5\" p=\"101.569219 110\" Element=\"8\" NumHydrogens=\"1\">",
+            "<n id=\"5\" p=\"101.569219 110\" Element=\"8\" NumHydrogens=\"0\" Charge=\"-1\">",
+        );
+    let first = source.find("<t id=\"17\"").unwrap();
+    let last = source.find("<t id=\"18\"").unwrap();
+    let caption = source[first..last].trim_end();
+    let mark = "<graphic id=\"51\" GraphicType=\"Symbol\" SymbolType=\"Minus\" \
+                BoundingBox=\"108 100 114 106\"><represent attribute=\"Charge\" object=\"5\"/></graphic>";
+    let source = source
+        .replacen(
+            caption,
+            &format!("<group id=\"50\">{caption}{mark}</group>"),
+            1,
+        )
+        .replace(
+            "ReactionStepObjectsAboveArrow=\"17\"",
+            "ReactionStepObjectsAboveArrow=\"50\"",
+        );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let contents = compatibility::import_text(format, bytes.clone()).unwrap();
+        assert_eq!(
+            formats::chemdraw_loss(format, &contents),
+            formats::ChemdrawLoss::default(),
+            "{format}"
+        );
+        let document = formats::read_with_engine(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert_eq!(document.reactions.len(), 1, "{format}");
+        let reaction = &document.reactions[0];
+        assert!(reaction.agents.is_empty(), "{format}");
+        let texts: Vec<_> = reaction
+            .annotations
+            .iter()
+            .map(|id| {
+                let caption = document.annotations.iter().find(|a| a.id == *id);
+                caption.unwrap().text.as_str()
+            })
+            .collect();
+        assert_eq!(texts, ["catalyst 1", "solvent, 24 h"], "{format}");
+    }
+}
