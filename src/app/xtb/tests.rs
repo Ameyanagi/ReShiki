@@ -236,6 +236,7 @@ fn frequencies_reject_a_target_above_the_hessian_limit() {
         atoms: (1..=201).collect(),
         config: settings.config((0, 0), false, vec![]).unwrap(),
         keep_full: false,
+        start: None,
     });
     assert!(matches!(
         &app.tab.xtb.outcome,

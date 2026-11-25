@@ -541,7 +541,7 @@ impl App {
 
 /// An inline card with a round "!" icon: red for an error, amber for a
 /// warning. The status bar repeats an error's sentence.
-fn alert<'a>(
+pub(in crate::app::xtb) fn alert<'a>(
     warning: bool,
     title: String,
     detail: String,
