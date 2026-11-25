@@ -552,6 +552,7 @@ fn calc_parses_its_default_task_compatibility_flags_and_optional_settings() {
             conventions: Conventions::Axtb,
             solvent: None,
             scf: None,
+            thermo_temperature_k: None,
             threads: 1,
         }))
     );
@@ -579,6 +580,7 @@ fn calc_parses_its_default_task_compatibility_flags_and_optional_settings() {
             conventions: Conventions::Xtb68,
             solvent: None,
             scf: None,
+            thermo_temperature_k: None,
             threads: 1,
         }))
     );
@@ -602,6 +604,7 @@ fn calc_parses_its_default_task_compatibility_flags_and_optional_settings() {
             conventions: Conventions::Axtb,
             solvent: None,
             scf: None,
+            thermo_temperature_k: None,
             threads: 1,
         }))
     );
@@ -705,6 +708,33 @@ fn calc_parses_tasks_solvent_and_a_repeatable_scf_ladder() {
     assert!(command.gradient && command.bond_orders);
     assert_eq!(command.threads, 4);
     assert!(parsed(&["calc", "--etemp", "300", "--scf-retry", "300", "water.xyz"]).is_ok());
+}
+
+#[test]
+fn calc_parses_thermo_temperature_only_for_hessian() {
+    let hessian = |value| {
+        parsed(&[
+            "calc",
+            "--task",
+            "hessian",
+            "--thermo-temperature",
+            value,
+            "water.xyz",
+        ])
+    };
+    for (value, kelvin) in [("350.5", 350.5), ("10000", 10_000.0)] {
+        let Command::Calc(command) = hessian(value).unwrap() else {
+            panic!("calc command");
+        };
+        assert_eq!(command.thermo_temperature_k, Some(kelvin));
+    }
+    assert_eq!(
+        parsed(&["calc", "--thermo-temperature", "350.5", "water.xyz"]),
+        Err("--thermo-temperature needs --task hessian".into())
+    );
+    for value in ["0", "-1", "NaN", "inf", "10001"] {
+        assert!(hessian(value).is_err(), "{value}");
+    }
 }
 
 #[test]
