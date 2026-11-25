@@ -109,6 +109,10 @@ fn arrows_show_on_the_animation_and_add_to_the_drawing_as_one_undo_step() {
     assert!(app.tab.doc.arrows.is_empty(), "no reaction arrows");
     assert_eq!(app.tab.doc.models.first().unwrap().display, Display::Both);
     assert!(app.status.starts_with("Added 1 displacement arrows"));
+    assert!(
+        !app.tab.xtb.vibrations.playing,
+        "the model stays at equilibrium under the placed arrows"
+    );
     let _ = app.update(Message::Undo);
     assert!(app.tab.doc.graphics.is_empty());
     assert_eq!(app.tab.doc.models.first().unwrap().display, Display::TwoD);
@@ -421,4 +425,13 @@ fn undoing_the_result_cancels_recomputation() {
     let _ = app.update(Message::Undo);
     assert!(app.xtb_shown().is_none());
     assert!(!app.tab.xtb.vibrations.recomputing(&light));
+}
+
+#[test]
+fn animation_ticks_leave_the_view_and_style_choosers_open() {
+    let mut app = opened();
+    app.view_open = true;
+    app.status_style_open = true;
+    let _ = app.update(Message::Xtb(XtbAction::Vibrations(Action::Tick)));
+    assert!(app.view_open && app.status_style_open);
 }

@@ -1108,7 +1108,8 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         near_degenerate: computed.near_degenerate,
         evaluations: report.evaluations.clone(),
         numerics: computed.numerics.clone(),
-        tight: run.config.tight,
+        // Frequency jobs always optimize to Tight criteria.
+        tight: run.config.tight || run.config.task.frequencies(),
         threads: run.config.threads,
         fixed: run.config.fixed.clone(),
         finished: chrono::Local::now().format("%-d %b %Y %H:%M").to_string(),
