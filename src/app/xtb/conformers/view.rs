@@ -292,7 +292,21 @@ impl App {
             ),
             Tone::Muted,
         );
-        let table = column![header, list, note].spacing(4);
+        // The same energy diagram as the import sheet: levels with their
+        // Boltzmann shares; a click shows that conformer.
+        let plot = iced::widget::canvas(crate::app::energy_plot::EnergyPlot {
+            delta_kcal: rows.iter().map(|r| r.delta_kcal).collect(),
+            layout: crate::app::energy_plot::Layout::Levels,
+            selected: current,
+            notes: rows.iter().map(|r| format!("{:.0}%", r.percent)).collect(),
+            select: live.then_some(
+                (|i| Message::Xtb(XtbAction::Palette(PaletteAction::Step(i))))
+                    as fn(usize) -> Message,
+            ),
+        })
+        .width(Length::Fill)
+        .height(110);
+        let table = column![plot, header, list, note].spacing(4);
         let side = self.xtb_conformer_side(shown, &rows, current, live);
         if inspector {
             return column![table, side].spacing(10).into();

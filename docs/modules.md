@@ -70,6 +70,7 @@ explains how the crates and modules fit together.
 - `src/app/document_tab.rs`: Per-document state.
 - `src/app/drawing_panel_capture.rs`: Opt-in real-renderer evidence for the drawing-panel state transitions.
 - `src/app/drawing_polish_qa.rs`: Focused native-renderer and interaction evidence for drawing polish.
+- `src/app/energy_plot.rs`: A small energy diagram shared by the import sheet and the Conformers tab
 - `src/app/engine_jobs.rs`: Chemistry engine jobs
 - `src/app/equipment.rs`: The Equipment browser
 - `src/app/equipment/bend.rs`: Direct manipulation for rigid tube bends.

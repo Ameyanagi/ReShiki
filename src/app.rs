@@ -84,6 +84,7 @@ mod tlc;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
 mod add_panel;
+mod energy_plot;
 mod frames_import;
 #[cfg(test)]
 mod hover_qa;

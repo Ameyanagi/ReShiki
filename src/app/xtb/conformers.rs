@@ -564,7 +564,10 @@ pub(crate) fn overlay(
 
 /// `mobile`'s geometry moved onto `reference` by its heavy atoms, in its
 /// own atom order.
-fn superposed(reference: &qcdata::Frame, mobile: &qcdata::Frame) -> Option<Vec<[f64; 3]>> {
+pub(crate) fn superposed(
+    reference: &qcdata::Frame,
+    mobile: &qcdata::Frame,
+) -> Option<Vec<[f64; 3]>> {
     #[cfg(target_arch = "wasm32")]
     return {
         let _ = reference;
