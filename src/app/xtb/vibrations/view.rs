@@ -750,13 +750,19 @@ impl canvas::Program<Message> for Spectrum {
             align_x: align.into(),
             ..Default::default()
         };
+        // A narrow chart labels fewer ticks: each label needs its width
+        // (about 6 px a digit at 10 px) clear of the previous one.
+        let mut last_right = f32::NEG_INFINITY;
         for tick in spectrum_ticks(self.data.high, self.data.low) {
             let x = self.x(tick, bounds);
             frame.stroke(
                 &canvas::Path::line(Point::new(x, base), Point::new(x, base + 4.)),
                 canvas::Stroke::default().with_color(muted).with_width(1.),
             );
-            if (tick / 1000.).fract() == 0. || self.data.high - self.data.low <= 2000. {
+            let half = format!("{tick:.0}").len() as f32 * 3.;
+            let major = (tick / 1000.).fract() == 0. || self.data.high - self.data.low <= 2000.;
+            if major && x - half > last_right + 6. {
+                last_right = x + half;
                 frame.fill_text(small(
                     format!("{tick:.0}"),
                     Point::new(x, base + 6.),
