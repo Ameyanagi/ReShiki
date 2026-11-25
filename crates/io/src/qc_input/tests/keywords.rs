@@ -1,0 +1,273 @@
+use super::*;
+
+#[test]
+fn gaussian_maps_basis_names_and_preserves_existing_spin_prefixes() {
+    let frame = water();
+    for (basis, expected) in [
+        ("def2-SV(P)", "Def2SVPP"),
+        ("def2-TZVPP", "Def2TZVPP"),
+        ("cc-pVDZ", "cc-pVDZ"),
+    ] {
+        let mut settings = settings(Program::Gaussian, Job::SinglePoint);
+        settings.basis = basis.into();
+        let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+        assert!(
+            output
+                .main
+                .text
+                .contains(&format!("B3LYP/{expected} EmpiricalDispersion=GD3BJ SP"))
+        );
+    }
+    for method in ["UB3LYP", "uB3LYP", "ROHF"] {
+        let mut settings = settings(Program::Gaussian, Job::SinglePoint);
+        settings.method = method.into();
+        settings.multiplicity = 2;
+        let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+        assert!(
+            output
+                .main
+                .text
+                .contains(&format!("#p {method}/Def2SVP SP"))
+        );
+    }
+}
+
+#[test]
+fn orca_uses_the_right_open_shell_reference_and_memory_per_core() {
+    let frame = water();
+    for (method, prefix) in [
+        ("HF", "UHF"),
+        ("MP2", "UHF"),
+        ("RI-MP2", "UHF"),
+        ("DLPNO-CCSD(T)", "UHF"),
+        ("CCSD(T)", "UHF"),
+        ("PBE0", "UKS"),
+    ] {
+        let mut settings = settings(Program::Orca, Job::SinglePoint);
+        settings.method = method.into();
+        settings.multiplicity = 2;
+        settings.cores = 7;
+        settings.memory_gb = 2;
+        let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+        let text = &output.main.text;
+        assert!(text.contains(&format!("! {prefix} {method} def2-SVP SP\n")));
+        assert!(text.contains("%pal nprocs 7 end\n%maxcore 219\n"));
+    }
+    let mut settings = settings(Program::Orca, Job::SinglePoint);
+    settings.cores = 1;
+    settings.memory_gb = 1;
+    let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+    assert!(!output.main.text.contains("%pal"));
+    assert!(output.main.text.contains("%maxcore 768\n"));
+}
+
+#[test]
+fn orca_frequency_jobs_use_numerical_frequencies_for_correlated_methods() {
+    let frame = water();
+    let reactant = shifted_water(0.05);
+    let product = shifted_water(-0.05);
+    for (job, keyword) in [
+        (Job::OptFreq, "Opt"),
+        (Job::TransitionState, "OptTS"),
+        (Job::NebTs, "NEB-TS"),
+    ] {
+        for (method, frequency) in [
+            ("MP2", "NumFreq"),
+            ("ri-mp2", "NumFreq"),
+            ("DLPNO-CCSD(T)", "NumFreq"),
+            ("CCSD(T)", "NumFreq"),
+            ("HF", "Freq"),
+            ("B3LYP", "Freq"),
+        ] {
+            let mut settings = settings(Program::Orca, job);
+            settings.method = method.into();
+            let geometry = Geometry {
+                reactant: Some(&reactant),
+                product: Some(&product),
+                ..geometry(&frame)
+            };
+            let output = write(&settings, &geometry, "water", GENERATOR).unwrap();
+            assert!(
+                output
+                    .main
+                    .text
+                    .contains(&format!("! {method} def2-SVP {keyword} {frequency}\n"))
+            );
+        }
+    }
+}
+
+#[test]
+fn orca_warns_when_maxcore_is_below_1000_mb() {
+    let frame = water();
+    let mut settings = settings(Program::Orca, Job::SinglePoint);
+    settings.memory_gb = 121;
+    settings.cores = 93;
+    let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+    assert!(output.main.text.contains("%maxcore 999\n"));
+    assert_eq!(
+        output.warnings,
+        ["ORCA gets only 999 MB per core; raise Memory or lower Cores."]
+    );
+
+    settings.memory_gb = 125;
+    settings.cores = 96;
+    let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+    assert!(output.main.text.contains("%maxcore 1000\n"));
+    assert!(output.warnings.is_empty());
+}
+
+#[test]
+fn gamess_maps_builtin_bases_hf_mp2_and_per_process_memory() {
+    let frame = water();
+    for (basis, group) in [
+        ("6-31g(D)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("6-31G*", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("6-31G", "GBASIS=N31 NGAUSS=6"),
+        ("sto-3g", "GBASIS=STO NGAUSS=3"),
+    ] {
+        let mut settings = settings(Program::Gamess, Job::SinglePoint);
+        settings.basis = basis.into();
+        settings.method = "HF".into();
+        settings.memory_gb = 2;
+        settings.cores = 7;
+        let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+        let text = &output.main.text;
+        assert!(text.contains(&format!(" $BASIS {group} $END\n")));
+        assert!(!text.contains("DFTTYP="));
+        assert!(!text.contains("MPLEVL="));
+        assert!(text.contains(" $SYSTEM MWORDS=35 $END\n"));
+        structure::check(Program::Gamess, text, 3, 1);
+    }
+    let mut settings = settings(Program::Gamess, Job::SinglePoint);
+    settings.method = "mp2".into();
+    settings.memory_gb = 1;
+    settings.cores = 1000;
+    let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+    assert!(output.main.text.contains("MPLEVL=2"));
+    assert!(!output.main.text.contains("DFTTYP="));
+    assert!(output.main.text.contains(" $SYSTEM MWORDS=1 $END\n"));
+}
+
+#[test]
+fn gamess_warns_about_memddi_for_parallel_mp2() {
+    let frame = water();
+    let mut settings = settings(Program::Gamess, Job::SinglePoint);
+    settings.method = "mp2".into();
+    settings.cores = 2;
+    let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+    assert_eq!(
+        output.warnings,
+        [
+            "GAMESS takes the number of cores when you start it (rungms), not from the file.",
+            "Parallel GAMESS MP2 needs MEMDDI: add a line such as  $SYSTEM MEMDDI=100 $END under Extra keywords.",
+        ]
+    );
+    settings.cores = 1;
+    let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+    assert_eq!(output.warnings.len(), 1);
+}
+
+#[test]
+fn gamess_warns_about_written_lines_over_80_columns() {
+    let frame = water();
+    let mut settings = settings(Program::Gamess, Job::SinglePoint);
+    settings.title = "x".repeat(78);
+    settings.extra = "x".repeat(79);
+    let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+    assert_eq!(output.warnings.len(), 1);
+
+    for (title_chars, extra_chars) in [(79, 79), (78, 80)] {
+        settings.title = "x".repeat(title_chars);
+        settings.extra = "x".repeat(extra_chars);
+        let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+        assert_eq!(
+            output.warnings.last().unwrap(),
+            "GAMESS reads 80 columns; shorten the title or Extra keywords."
+        );
+    }
+}
+
+#[test]
+fn gaussian_and_orca_write_method_basis_and_extra_on_one_line() {
+    let frame = water();
+    for (program, route) in [
+        (
+            Program::Gaussian,
+            "#p HF A B C/X Y Z W SP Grid Tight SCF Keep",
+        ),
+        (Program::Orca, "! HF A B C X Y Z W SP Grid Tight SCF Keep"),
+    ] {
+        let mut settings = settings(program, Job::SinglePoint);
+        settings.method = " HF\r\nA\rB\nC ".into();
+        settings.basis = " X\r\nY\rZ\nW ".into();
+        settings.extra = " Grid\r\nTight\rSCF\nKeep ".into();
+        let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+        assert!(output.main.text.lines().any(|line| line == route));
+    }
+}
+
+#[test]
+fn gamess_indents_every_nonempty_extra_line() {
+    let frame = water();
+    let mut settings = settings(Program::Gamess, Job::SinglePoint);
+    settings.extra =
+        "  $SCF DIRSCF=.T. $END  \r\n\t\n $SYSTEM MEMDDI=100 $END\r  $GUESS GUESS=HUCKEL $END "
+            .into();
+    let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+    assert!(output.main.text.contains(
+        "\n $SCF DIRSCF=.T. $END\n $SYSTEM MEMDDI=100 $END\n $GUESS GUESS=HUCKEL $END\n $DATA\n"
+    ));
+}
+
+#[test]
+fn transition_state_headers_use_provenance_and_the_most_negative_frequency() {
+    let frame = water();
+    let mut result = result(&frame);
+    result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-600.7, -412.3, 3700.0];
+    for program in [Program::Gaussian, Program::Orca, Program::Gamess] {
+        let settings = settings(program, Job::TransitionState);
+        let with_result = Geometry {
+            result: Some(&result),
+            ..geometry(&frame)
+        };
+        let output = write(&settings, &with_result, "water", GENERATOR).unwrap();
+        let prefix = if program == Program::Orca { '#' } else { '!' };
+        assert_eq!(
+            output.main.text.lines().next().unwrap(),
+            format!("{prefix} TS guess from GFN2-xTB ({GENERATOR}), imaginary frequency -601 cm-1")
+        );
+        let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+        assert_eq!(
+            output.main.text.lines().next().unwrap(),
+            format!("{prefix} TS guess from the 3D model ({GENERATOR})")
+        );
+    }
+    result.provenance.method = None;
+    result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![100.0, 1600.0, 3700.0];
+    let with_result = Geometry {
+        result: Some(&result),
+        ..geometry(&frame)
+    };
+    let output = write(
+        &settings(Program::Gaussian, Job::TransitionState),
+        &with_result,
+        "water",
+        GENERATOR,
+    )
+    .unwrap();
+    assert_eq!(
+        output.main.text.lines().next().unwrap(),
+        format!("! TS guess from the 3D model ({GENERATOR})")
+    );
+    for program in Program::ALL {
+        let output = write(
+            &settings(program, Job::SinglePoint),
+            &with_result,
+            "water",
+            GENERATOR,
+        )
+        .unwrap();
+        assert!(!output.main.text.contains(GENERATOR));
+    }
+}
