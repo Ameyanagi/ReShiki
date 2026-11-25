@@ -23,9 +23,9 @@ pub use molden::{
     molden_pure_order, shell_from_molden, shell_to_molden,
 };
 pub use result::{
-    AtomicCharges, BondOrder, CalcResult, ChargeScheme, Endpoints, GfnFfTopology, Provenance,
-    ScfRetry, Settings, SolvationState, Solvent, SolventCorrection, SolventModel, Source, Status,
-    Task, Thermo, Vibrations, XtbConventions, XtbSettings,
+    AtomicCharges, BondOrder, CalcResult, ChargeScheme, Convergence, Endpoints, GfnFfTopology,
+    Provenance, RunSummary, ScfRetry, Settings, SolvationState, Solvent, SolventCorrection,
+    SolventModel, Source, Status, Task, Thermo, Vibrations, XtbConventions, XtbSettings,
 };
 
 /// Ångströms per bohr, CODATA 2022.

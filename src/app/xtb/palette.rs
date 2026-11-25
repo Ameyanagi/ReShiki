@@ -116,7 +116,7 @@ pub(super) struct Shown<'a> {
 
 impl Shown<'_> {
     pub(super) fn method(&self) -> String {
-        results::method_line(&self.stored.result, self.frame, self.info)
+        results::method_line(&self.stored.result, self.frame)
     }
 
     pub(super) fn rows(&self) -> Vec<(&'static str, String)> {
@@ -559,9 +559,12 @@ impl App {
             self.error = true;
             return Task::none();
         };
-        let Some(mut config) =
-            results::config(result, shown.frame, shown.info, self.xtb.settings.threads())
-        else {
+        let Some(mut config) = results::config(
+            result,
+            shown.frame,
+            shown.atoms,
+            self.xtb.settings.threads(),
+        ) else {
             self.status = "The Calculate card cannot repeat this calculation".into();
             self.error = true;
             return Task::none();

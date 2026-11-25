@@ -80,6 +80,22 @@ pub struct CalcResult {
     /// Total encoded bytes of heavy imported data omitted from the saved result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub omitted_bytes: Option<usize>,
+    /// Wall time and SCF effort of the run that produced a calculated result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<RunSummary>,
+}
+
+/// Wall time and SCF effort of one calculation run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RunSummary {
+    /// Wall-clock seconds from the start of the run to the result.
+    pub seconds: f64,
+    /// SCF iterations of each energy evaluation, in order; zero for methods without an SCF.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scf_iterations: Vec<u32>,
+    /// When the run finished: RFC 3339, UTC, whole seconds (e.g. "2026-11-26T05:03:00Z").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finished: Option<String>,
 }
 
 /// Calculation task.
@@ -278,6 +294,32 @@ pub struct XtbSettings {
     /// Required topology reference for GFN-FF.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gfnff: Option<GfnFfTopology>,
+    /// Worker threads the calculation used; `None` in results saved before it was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub threads: Option<u32>,
+    /// Optimizer convergence level; Normal unless the run asked for Tight.
+    #[serde(default, skip_serializing_if = "Convergence::is_default")]
+    pub convergence: Convergence,
+    /// Zero-based frame atoms the optimizer held fixed, ascending.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fixed_atoms: Vec<u32>,
+}
+
+/// Optimizer convergence level.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Convergence {
+    /// Normal convergence criteria.
+    #[default]
+    Normal,
+    /// Tight convergence criteria.
+    Tight,
+}
+
+impl Convergence {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 /// Numerical conventions for xTB calculations.
@@ -442,6 +484,20 @@ impl CalcResult {
             return Err(Error::Invalid(
                 "endpoints are required exactly for transition-state results".into(),
             ));
+        }
+        if let Some(run) = &self.run {
+            if !run.seconds.is_finite() || run.seconds < 0.0 {
+                return Err(Error::Invalid(
+                    "run time must be finite and nonnegative".into(),
+                ));
+            }
+            if run.scf_iterations.len() > MAX_COMPACT_VALUES {
+                return Err(Error::TooLarge {
+                    what: "SCF iteration counts",
+                    count: run.scf_iterations.len(),
+                    max: MAX_COMPACT_VALUES,
+                });
+            }
         }
         let n_atoms = frame.numbers.len();
         let axes = n_atoms * 3;
@@ -718,6 +774,7 @@ impl CalcResult {
             }),
             keep_full: self.keep_full,
             omitted_bytes: self.omitted_bytes,
+            run: self.run.clone(),
         }
     }
 
@@ -808,6 +865,7 @@ impl CalcResult {
             Settings::Xtb(settings) => {
                 settings.solvent.as_ref().map_or(0, |s| s.name.len())
                     + size_of_val(settings.scf_retries.as_slice())
+                    + size_of_val(settings.fixed_atoms.as_slice())
                     + settings
                         .gfnff
                         .as_ref()
@@ -843,6 +901,10 @@ impl CalcResult {
                 + size_of_val(v.modes.as_slice())
                 + size_of_val(v.reduced_masses_amu.as_slice())
                 + size_of_val(v.masses_amu.as_slice());
+        }
+        if let Some(run) = &self.run {
+            bytes += size_of_val(run.scf_iterations.as_slice())
+                + run.finished.as_ref().map_or(0, String::len);
         }
         bytes
             + self.orbitals.as_ref().map_or(0, Orbitals::heap_bytes)
@@ -909,6 +971,7 @@ mod tests {
             trajectory: None,
             keep_full: false,
             omitted_bytes: None,
+            run: None,
         };
         (frame, result)
     }
