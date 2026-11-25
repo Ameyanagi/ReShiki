@@ -1,0 +1,690 @@
+//! Predict → xTB: the Calculate card, one running job per document and its finish.
+//!
+//! A run takes the molecule's 3D model (made first with MMFF when missing or
+//! out of date), streams optimizer steps from a worker thread and moves a
+//! preview of the model, never the document. At the end the result is
+//! stored with the molecule and an optimized geometry is applied as one
+//! Undo step, unless the stereo check finds a change: then the card asks.
+use super::{App, Message};
+use iced::Task;
+use reshiki::document::Document;
+use reshiki::qcdata::{self, CalcResult, Frame};
+use reshiki::science::{self, Freshness, Launch};
+use state::{Progress, Settings};
+
+#[cfg(not(target_arch = "wasm32"))]
+mod run;
+mod state;
+mod view;
+
+pub(crate) use state::Task as CalcTask;
+
+/// The Predict tab's two pages.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Page {
+    #[default]
+    Nmr,
+    Xtb,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum Action {
+    Page(Page),
+    Task(CalcTask),
+    Charge(String),
+    Unpaired(String),
+    Solvent(Option<&'static str>),
+    HoldFixed(bool),
+    Tight(bool),
+    Threads(u32),
+    Advanced,
+    Run,
+    Cancel,
+    /// Elapsed time while a run waits on the worker.
+    Tick,
+    ApplyAnyway,
+    Discard,
+    #[cfg(not(target_arch = "wasm32"))]
+    Event(u64, run::Event),
+}
+
+/// The window's card settings and page; the last used task stays chosen.
+#[derive(Default)]
+pub(crate) struct Window {
+    pub(super) page: Page,
+    pub(super) settings: Settings,
+}
+
+/// One document's run and the last outcome the card shows.
+#[derive(Default)]
+pub(crate) struct State {
+    pub(super) run: Option<Run>,
+    pub(super) outcome: Option<Outcome>,
+    serial: u64,
+    /// The attachment of the newest stored result, for the results palette.
+    pub(super) last_attachment: Option<u64>,
+}
+
+pub(crate) struct Run {
+    serial: u64,
+    task: CalcTask,
+    atoms: Vec<u64>,
+    charge: i32,
+    unpaired: u32,
+    solvent: Option<&'static str>,
+    threads: u32,
+    tight: bool,
+    /// Drawing atoms the optimizer holds fixed.
+    fixed: Vec<u64>,
+    /// Absent while the 3D model is made first.
+    launch: Option<Launch>,
+    /// Whether this run already asked for a 3D model.
+    modeled: bool,
+    started: iced::time::Instant,
+    progress: Progress,
+    /// The document state the run started from; edits stop the preview.
+    revision: (u64, u64),
+    preview: Option<Box<Document>>,
+    label: String,
+    #[cfg(not(target_arch = "wasm32"))]
+    cancel: reshiki_xtb_worker::client::Cancel,
+    handle: Option<iced::task::Handle>,
+}
+
+impl Drop for Run {
+    /// Dropping a run (Cancel, a closed tab) stops its worker at once.
+    fn drop(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.cancel.cancel();
+    }
+}
+
+/// What the card shows after a run.
+pub(crate) enum Outcome {
+    Done {
+        line: String,
+        notes: Vec<String>,
+    },
+    Failed(String),
+    /// Nothing applied yet: the stereo check found changes, or an edit was open.
+    Review(Box<Review>),
+}
+
+pub(crate) struct Review {
+    pending: Pending,
+    reasons: Vec<String>,
+}
+
+/// A finished calculation, not yet stored.
+struct Pending {
+    launch: Launch,
+    frames: Vec<Frame>,
+    result: CalcResult,
+    line: String,
+    notes: Vec<String>,
+}
+
+/// Why this build cannot calculate, if it cannot.
+fn unavailable() -> Option<&'static str> {
+    if cfg!(windows) {
+        return Some("xTB calculations are coming to Windows once code signing is in place.");
+    }
+    #[cfg(target_arch = "wasm32")]
+    return Some("xTB calculations run in the desktop app.");
+    #[cfg(not(target_arch = "wasm32"))]
+    (!reshiki_xtb_worker::INCLUDED).then_some("This build does not include the xTB engine.")
+}
+
+impl App {
+    pub(super) fn xtb_action(&mut self, action: Action) -> Task<Message> {
+        match action {
+            Action::Run => return self.xtb_run(),
+            Action::Cancel => self.xtb_cancel(),
+            Action::Tick => {
+                if let Some(run) = &self.tab.xtb.run {
+                    self.status = run.status();
+                    self.error = false;
+                }
+            }
+            Action::ApplyAnyway => self.xtb_apply_anyway(),
+            Action::Discard => {
+                if let Some(Outcome::Review(_)) = self.tab.xtb.outcome.take() {
+                    self.status = "Optimized geometry discarded".into();
+                    self.error = false;
+                }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            Action::Event(serial, event) => self.xtb_event(serial, event),
+            Action::Page(page) => self.xtb.page = page,
+            setting => {
+                let target = self.xtb_target().and_then(|atoms| atoms.first().copied());
+                let settings = &mut self.xtb.settings;
+                match setting {
+                    Action::Task(task) => settings.task = task,
+                    Action::Charge(value) => {
+                        settings.retarget(target);
+                        settings.charge = value;
+                    }
+                    Action::Unpaired(value) => {
+                        settings.retarget(target);
+                        settings.unpaired = value;
+                    }
+                    Action::Solvent(solvent) => settings.solvent = solvent,
+                    Action::HoldFixed(hold) => settings.hold_fixed = hold,
+                    Action::Tight(tight) => settings.tight = tight,
+                    Action::Threads(threads) => settings.threads = threads,
+                    Action::Advanced => settings.advanced = !settings.advanced,
+                    _ => {}
+                }
+            }
+        }
+        Task::none()
+    }
+
+    /// The molecule the card calculates: the selected one, or the only one.
+    pub(super) fn xtb_target(&self) -> Option<Vec<u64>> {
+        let doc = &self.tab.doc;
+        if let Some(atoms) = reshiki::models3d::selected_molecule(doc, &self.tab.selected) {
+            return Some(atoms);
+        }
+        let first = doc.atoms.first()?.id;
+        let atoms = reshiki::molecule_names::component(doc, first);
+        (self.tab.selected.is_empty() && atoms.len() == doc.atoms.len()).then_some(atoms)
+    }
+
+    /// The current 3D model of the molecule of `atom`, by index.
+    fn xtb_model(&self, atom: u64) -> Option<usize> {
+        let index = self
+            .tab
+            .doc
+            .models
+            .iter()
+            .position(|m| m.linked_atoms.contains(&atom))?;
+        (!self.model_stale(index)).then_some(index)
+    }
+
+    /// The model preview while a run is current, for the canvas.
+    pub(super) fn xtb_preview(&self) -> Option<&Document> {
+        let run = self.tab.xtb.run.as_ref()?;
+        (run.revision == (self.tab.file_epoch, self.tab.revision))
+            .then_some(run.preview.as_deref())
+            .flatten()
+    }
+
+    pub(super) fn xtb_running(&self) -> bool {
+        self.tab.xtb.run.is_some()
+    }
+
+    fn xtb_run(&mut self) -> Task<Message> {
+        // A build without the engine shows no Run button; its worker would
+        // answer "not included" anyway.
+        if self.tab.xtb.run.is_some() {
+            return Task::none();
+        }
+        if self.tab.busy
+            || self.tab.optimization.is_some()
+            || self.tab.model_job.is_some()
+            || self.tab.drawing_edit_active()
+        {
+            self.status = "Finish the current operation, then run xTB".into();
+            self.error = false;
+            return Task::none();
+        }
+        let Some((atoms, first)) = self
+            .xtb_target()
+            .and_then(|atoms| Some((atoms.clone(), *atoms.first()?)))
+        else {
+            self.status = "Select a molecule to calculate".into();
+            self.error = true;
+            return Task::none();
+        };
+        let settings = &self.xtb.settings;
+        let (charge, multiplicity) = science::drawn_state(&self.tab.doc, first);
+        let drawn = (charge, multiplicity.saturating_sub(1));
+        let typed = settings.molecule == Some(first);
+        let state = if typed {
+            settings.state(drawn)
+        } else {
+            Ok(drawn)
+        };
+        let (charge, unpaired) = match state {
+            Ok(state) => state,
+            Err(reason) => {
+                self.xtb_fail(reason.into());
+                return Task::none();
+            }
+        };
+        let selected: std::collections::HashSet<u64> = self.tab.selected.iter().copied().collect();
+        let fixed = if settings.hold_fixed && settings.task == CalcTask::Optimize {
+            atoms
+                .iter()
+                .copied()
+                .filter(|id| selected.contains(id))
+                .collect()
+        } else {
+            vec![]
+        };
+        self.tab.xtb.serial = self.tab.xtb.serial.wrapping_add(1);
+        self.tab.xtb.outcome = None;
+        self.tab.xtb.run = Some(Run {
+            serial: self.tab.xtb.serial,
+            task: settings.task,
+            atoms,
+            charge,
+            unpaired,
+            solvent: settings.solvent,
+            threads: settings.threads(),
+            tight: settings.tight,
+            fixed,
+            launch: None,
+            modeled: false,
+            started: iced::time::Instant::now(),
+            progress: Progress::default(),
+            revision: (self.tab.file_epoch, self.tab.revision),
+            preview: None,
+            label: String::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            cancel: Default::default(),
+            handle: None,
+        });
+        self.xtb_launch()
+    }
+
+    /// Start the worker, or make the 3D model first.
+    fn xtb_launch(&mut self) -> Task<Message> {
+        let Some(run) = &self.tab.xtb.run else {
+            return Task::none();
+        };
+        let Some(&atom) = run.atoms.first() else {
+            return Task::none();
+        };
+        match science::launch(&self.tab.doc, atom, run.charge, run.unpaired + 1) {
+            Ok(launch) => self.xtb_start(launch),
+            Err(science::ScienceError::NoModel | science::ScienceError::StaleModel)
+                if !run.modeled =>
+            {
+                let atoms = run.atoms.clone();
+                if let Some(run) = &mut self.tab.xtb.run {
+                    run.modeled = true;
+                    run.started = iced::time::Instant::now();
+                }
+                let task = self.model_for_calculation(atoms);
+                if self.tab.model_job.is_none() {
+                    self.xtb_fail(format!("xTB not started · {}", self.status));
+                    return Task::none();
+                }
+                self.status = "xTB · making the 3D model first (MMFF94s)".into();
+                self.error = false;
+                task
+            }
+            Err(error @ (science::ScienceError::NoModel | science::ScienceError::StaleModel)) => {
+                self.xtb_fail(format!("xTB not started: {error}"));
+                Task::none()
+            }
+            Err(error) => {
+                self.xtb_fail(error.to_string());
+                Task::none()
+            }
+        }
+    }
+
+    /// The model generation this run asked for ended, in any way.
+    pub(super) fn xtb_model_finished(&mut self) -> Task<Message> {
+        let waiting = self
+            .tab
+            .xtb
+            .run
+            .as_ref()
+            .is_some_and(|run| run.launch.is_none() && run.modeled);
+        if waiting && self.tab.model_job.is_none() {
+            return self.xtb_launch();
+        }
+        Task::none()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn xtb_start(&mut self, _: Launch) -> Task<Message> {
+        self.xtb_fail("xTB calculations run in the desktop app.".into());
+        Task::none()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn xtb_start(&mut self, launch: Launch) -> Task<Message> {
+        let atoms = launch.frame.numbers.len();
+        if atoms > state::MAX_ATOMS {
+            self.xtb_fail(format!(
+                "Too many atoms: {atoms}. The limit is {} atoms.",
+                state::MAX_ATOMS
+            ));
+            return Task::none();
+        }
+        let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
+        let Some(run) = &mut self.tab.xtb.run else {
+            return Task::none();
+        };
+        let job = run::Job {
+            optimize: run.task == CalcTask::Optimize,
+            numbers: launch.frame.numbers.clone(),
+            positions: launch.frame.positions_angstrom.clone(),
+            charge: run.charge,
+            uhf: run.unpaired,
+            solvent: run.solvent.map(str::to_lowercase),
+            threads: run.threads,
+            fixed: launch
+                .atoms
+                .iter()
+                .enumerate()
+                .filter(|(_, id)| id.is_some_and(|id| run.fixed.contains(&id)))
+                .map(|(index, _)| index)
+                .collect(),
+            tight: run.tight,
+        };
+        run.label = format!("xTB · {}", state::formula(&launch.frame.numbers));
+        run.launch = Some(launch);
+        run.revision = (epoch, revision);
+        run.started = iced::time::Instant::now();
+        let serial = run.serial;
+        // The thread starts when the task first runs, never in a test that
+        // drops the task.
+        let cancel = run.cancel.clone();
+        let events = iced::futures::StreamExt::flatten(iced::futures::stream::once(async move {
+            run::start(job, cancel)
+        }));
+        let (task, handle) = Task::run(events, move |event| {
+            Message::Xtb(Action::Event(serial, event))
+        })
+        .abortable();
+        run.handle = Some(handle.abort_on_drop());
+        self.status = run.status();
+        self.error = false;
+        task
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn xtb_event(&mut self, serial: u64, event: run::Event) {
+        let current = (self.tab.file_epoch, self.tab.revision);
+        let Some(run) = self.tab.xtb.run.as_mut().filter(|run| run.serial == serial) else {
+            return;
+        };
+        match event {
+            run::Event::Steps {
+                first,
+                energies,
+                positions,
+            } => {
+                run.progress.push(first, &energies);
+                run.preview = (run.revision == current)
+                    .then_some(run.launch.as_ref())
+                    .flatten()
+                    .and_then(|launch| preview(&self.tab.doc, launch, &positions))
+                    .map(Box::new);
+                self.status = run.status();
+                self.error = false;
+            }
+            run::Event::Done(result) => {
+                if let Some(run) = self.tab.xtb.run.take() {
+                    match result.and_then(|report| pending(&run, &report)) {
+                        Ok(pending) => self.xtb_store(pending, false),
+                        Err(reason) => self.xtb_fail(reason),
+                    }
+                }
+            }
+        }
+    }
+
+    fn xtb_fail(&mut self, reason: String) {
+        self.tab.xtb.run = None;
+        self.status = format!("xTB calculation failed: {reason}");
+        self.error = true;
+        self.tab.xtb.outcome = Some(Outcome::Failed(reason));
+    }
+
+    /// Cancel stops the worker (or the model generation) and applies nothing.
+    pub(super) fn xtb_cancel(&mut self) {
+        let Some(run) = self.tab.xtb.run.take() else {
+            return;
+        };
+        if run.launch.is_none() && run.modeled {
+            self.tab.model_job = None;
+        }
+        self.status = "Calculation cancelled".into();
+        self.error = false;
+    }
+
+    fn xtb_apply_anyway(&mut self) {
+        if self.tab.drawing_edit_active() {
+            self.status = "Finish the current edit, then apply".into();
+            self.error = false;
+            return;
+        }
+        if let Some(Outcome::Review(review)) = self.tab.xtb.outcome.take() {
+            self.xtb_store(review.pending, true);
+        }
+    }
+
+    /// Store the result with its molecule and apply an optimized geometry,
+    /// as one Undo step. Unless `forced`, a stereo change or an open edit
+    /// stops at the review card instead.
+    fn xtb_store(&mut self, pending: Pending, forced: bool) {
+        let mut doc = self.tab.doc.clone();
+        let attached = match science::attach(
+            &mut doc,
+            &pending.launch,
+            pending.frames.clone(),
+            pending.result.clone(),
+        ) {
+            Ok(attached) => attached,
+            Err(error) => {
+                self.xtb_fail(error.to_string());
+                return;
+            }
+        };
+        let optimized = pending.result.task == qcdata::Task::Optimize;
+        let mut notes = pending.notes.clone();
+        if attached.freshness == Freshness::Stale {
+            notes.push(
+                "The molecule changed during the calculation: the result is kept, the 3D model is unchanged."
+                    .into(),
+            );
+        } else if !forced {
+            let mut reasons = Vec::new();
+            if optimized && let Some(frame) = pending.frames.first() {
+                reasons = match science::stereo_changes(&self.tab.doc, &pending.launch.atoms, frame)
+                {
+                    Ok(changes) => changes
+                        .iter()
+                        .map(|change| {
+                            state::describe(change, |id| self.xtb_atom_name(&pending.launch, id))
+                        })
+                        .collect(),
+                    Err(error) => vec![format!("The stereo check could not run: {error}.")],
+                };
+            }
+            if self.tab.drawing_edit_active() {
+                reasons.push("An edit was open when the calculation finished.".into());
+            }
+            if let Some(first) = reasons.first() {
+                self.status = format!("{} · nothing applied", first.trim_end_matches('.'));
+                self.error = false;
+                self.tab.xtb.outcome = Some(Outcome::Review(Box::new(Review { pending, reasons })));
+                return;
+            }
+        }
+        let applied = optimized
+            && attached.freshness == Freshness::Current
+            && match science::apply_geometry(&mut doc, attached.attachment, &pending.result.frame) {
+                Ok(()) => true,
+                Err(error) => {
+                    notes.push(format!("The geometry was not applied: {error}."));
+                    false
+                }
+            };
+        let before = std::mem::replace(&mut self.tab.doc, doc);
+        self.changed(before);
+        if self.error {
+            self.tab.xtb.outcome = Some(Outcome::Failed(self.status.clone()));
+            return;
+        }
+        self.tab.xtb.last_attachment = Some(attached.attachment);
+        self.status = if applied {
+            format!("Applied xTB geometry · {} · ⌘Z undoes", pending.line)
+        } else {
+            format!("xTB · {}", pending.line)
+        };
+        self.tab.xtb.outcome = Some(Outcome::Done {
+            line: pending.line,
+            notes,
+        });
+    }
+
+    /// "C3" for the third frame atom, and the drawing's CIP code there.
+    fn xtb_atom_name(&self, launch: &Launch, id: u64) -> (String, Option<String>) {
+        let index = launch.atoms.iter().position(|a| *a == Some(id));
+        let atom = self.tab.doc.atom(id);
+        let element = atom.map_or("?", |a| a.element.as_str());
+        let label = index.map_or_else(|| element.to_owned(), |i| format!("{element}{}", i + 1));
+        (label, atom.and_then(|a| a.cip_label.clone()))
+    }
+}
+
+impl Run {
+    fn seconds(&self) -> f64 {
+        self.started.elapsed().as_secs_f64()
+    }
+
+    fn status(&self) -> String {
+        if self.launch.is_none() {
+            return "xTB · making the 3D model first (MMFF94s)".into();
+        }
+        format!(
+            "{} · {}",
+            self.label,
+            self.progress.line(self.task, self.seconds())
+        )
+    }
+}
+
+/// The document with the molecule's model at `positions` (Å, frame order).
+fn preview(doc: &Document, launch: &Launch, positions: &[[f64; 3]]) -> Option<Document> {
+    let atom = launch.atoms.iter().flatten().next()?;
+    let index = doc
+        .models
+        .iter()
+        .position(|m| m.linked_atoms.contains(atom))?;
+    let mut doc = doc.clone();
+    let model = doc.models.get_mut(index)?;
+    if model.atoms.len() + model.hydrogens.len() != positions.len() {
+        return None;
+    }
+    let mut xyz = positions.iter().map(|p| p.map(|x| x as f32));
+    for (atom, p) in model.atoms.iter_mut().zip(xyz.by_ref()) {
+        atom.xyz = p;
+    }
+    for (hydrogen, p) in model.hydrogens.iter_mut().zip(xyz) {
+        hydrogen.xyz = p;
+    }
+    Some(doc)
+}
+
+/// The result to store from a finished run.
+#[cfg(not(target_arch = "wasm32"))]
+fn pending(run: &Run, report: &run::Report) -> Result<Pending, String> {
+    let launch = run
+        .launch
+        .clone()
+        .ok_or("the run finished before it started")?;
+    let input = launch.frame.hash();
+    let optimized = run.task == CalcTask::Optimize;
+    let frames = if optimized {
+        vec![Frame {
+            positions_angstrom: report.positions.clone(),
+            ..(*launch.frame).clone()
+        }]
+    } else {
+        vec![]
+    };
+    let frame = frames.first().map_or(input, Frame::hash);
+    let status = if report.converged {
+        qcdata::Status::Converged
+    } else {
+        qcdata::Status::NotConverged {
+            reason: format!("Stopped after {} steps", report.steps),
+        }
+    };
+    let trajectory = optimized.then(|| qcdata::Trajectory {
+        numbers: launch.frame.numbers.clone(),
+        isotopes: launch.frame.isotopes.clone(),
+        masses_amu: launch.frame.masses_amu.clone(),
+        charge: launch.frame.charge,
+        multiplicity: launch.frame.multiplicity,
+        positions_angstrom: report.path.clone(),
+        energies_hartree: report.energies.clone(),
+        labels: vec![],
+        minimizer_energies_hartree: vec![],
+        cluster_sizes: vec![],
+    });
+    let result = CalcResult {
+        frame,
+        input_frame: optimized.then_some(input),
+        task: if optimized {
+            qcdata::Task::Optimize
+        } else {
+            qcdata::Task::Energy
+        },
+        endpoints: None,
+        settings: qcdata::Settings::Xtb(qcdata::XtbSettings {
+            method: qcdata::XtbMethod::Gfn2Xtb,
+            solvent: run.solvent.map(|name| qcdata::Solvent {
+                model: qcdata::SolventModel::Alpb,
+                name: name.to_lowercase(),
+                state: Default::default(),
+                correction: None,
+            }),
+            electronic_temperature_k: None,
+            accuracy: None,
+            max_iterations: None,
+            gfnff: None,
+        }),
+        provenance: qcdata::Provenance {
+            program: "axtb".into(),
+            program_version: Some(report.engine_version.clone()),
+            method: Some("GFN2-xTB".into()),
+            basis: None,
+            source: qcdata::Source::Calculated {
+                engine_revision: report.engine_rev.clone(),
+            },
+        },
+        status,
+        energy_hartree: Some(report.energy),
+        energy_terms: Default::default(),
+        gradient_hartree_per_bohr: report.gradient.clone(),
+        hessian_hartree_per_bohr2: vec![],
+        charges: vec![],
+        dipole_e_bohr: None,
+        bond_orders: vec![],
+        orbitals: None,
+        vibrations: None,
+        thermo: None,
+        trajectory,
+        keep_full: false,
+        omitted_bytes: None,
+    };
+    let mut notes = Vec::new();
+    if report.near_degenerate {
+        notes.push(state::NEAR_DEGENERATE.into());
+    }
+    Ok(Pending {
+        launch,
+        frames,
+        result,
+        line: state::summary(
+            report.energy,
+            report.gap_ev,
+            optimized.then_some((report.converged, report.steps)),
+        ),
+        notes,
+    })
+}
+
+#[cfg(test)]
+mod tests;

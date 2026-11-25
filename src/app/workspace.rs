@@ -2092,7 +2092,7 @@ impl App {
             InspectorTab::ThemeGenerator => self.theme_generator_panel(),
             InspectorTab::Properties if self.tab.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
-            InspectorTab::Predict => self.nmr_inspector(),
+            InspectorTab::Predict => self.predict_inspector(),
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
@@ -3120,6 +3120,14 @@ impl App {
                 accessible_command("engine.cancel", "Cancel chemistry operation", "Cancel")
                     .on_press(Message::CancelEngine(key)),
                 "Cancel this operation · Esc",
+                tooltip::Position::Top,
+            ));
+        }
+        if self.xtb_running() {
+            status = status.push(hover_hint(
+                accessible_command("xtb.status.cancel", "Cancel xTB calculation", "Cancel")
+                    .on_press(Message::Xtb(super::xtb::Action::Cancel)),
+                "Cancel the calculation · Esc",
                 tooltip::Position::Top,
             ));
         }

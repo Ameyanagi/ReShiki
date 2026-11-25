@@ -20,6 +20,8 @@ enum Completion {
     Models3d,
     /// Nmr(Finished | Exported).
     Nmr,
+    /// Xtb(Event): progress and the finish of a calculation.
+    Xtb,
     /// Exported.
     Export,
     /// FigureExported.
@@ -94,6 +96,7 @@ impl Completion {
             | Self::Optimization
             | Self::Models3d
             | Self::Nmr
+            | Self::Xtb
             | Self::Export
             | Self::FigureExport
             | Self::Printing
@@ -164,6 +167,7 @@ fn admission(completion: Completion) -> Admission {
         Completion::Engine
         | Completion::Models3d
         | Completion::Nmr
+        | Completion::Xtb
         | Completion::Export
         | Completion::FigureExport
         | Completion::Naming
@@ -728,6 +732,27 @@ fn completion(message: &Message) -> Option<Completion> {
             Some(Completion::Export)
         }
         Message::QcExport(_) => None,
+        Message::Xtb(action) => {
+            use super::xtb::Action;
+            match action {
+                #[cfg(not(target_arch = "wasm32"))]
+                Action::Event(..) => Some(Completion::Xtb),
+                Action::Page(..)
+                | Action::Task(..)
+                | Action::Charge(..)
+                | Action::Unpaired(..)
+                | Action::Solvent(..)
+                | Action::HoldFixed(..)
+                | Action::Tight(..)
+                | Action::Threads(..)
+                | Action::Advanced
+                | Action::Run
+                | Action::Cancel
+                | Action::Tick
+                | Action::ApplyAnyway
+                | Action::Discard => None,
+            }
+        }
         Message::FigureExported(..) => Some(Completion::FigureExport),
         Message::ExportReady(export) | Message::SaveExport(_, export) => Some(match export.kind {
             super::figure_export::Kind::Figure => Completion::FigureExport,

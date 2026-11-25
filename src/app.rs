@@ -136,6 +136,7 @@ mod wayland_qa;
 #[cfg(windows)]
 mod windows_libreoffice_save;
 mod workspace;
+mod xtb;
 #[cfg(target_arch = "wasm32")]
 pub(crate) use files::Picked;
 #[cfg(target_arch = "wasm32")]
@@ -265,6 +266,8 @@ pub enum Message {
     Settings(settings_page::Action),
     /// Export input for Gaussian, ORCA or GAMESS.
     QcExport(qc_export::Action),
+    /// Predict → xTB: the Calculate card and its runs.
+    Xtb(xtb::Action),
     Help(help::Action),
     Commands(command_palette::Action),
     OpenShortcutExamples,
@@ -550,6 +553,7 @@ pub struct App {
     help_open: bool,
     settings: settings_page::State,
     qc_export: Option<qc_export::Dialog>,
+    xtb: xtb::Window,
     help: help::State,
     commands: command_palette::State,
     viewport: iced::Size,
@@ -685,6 +689,7 @@ impl App {
             help_open: false,
             settings: settings_page::State::default(),
             qc_export: None,
+            xtb: xtb::Window::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
             viewport: iced::Size::new(850.0, 600.0),
@@ -781,6 +786,12 @@ impl App {
             self.properties_subscription(),
             self.engine_subscription(),
             self.pulse_subscription(),
+            if self.xtb_running() {
+                iced::time::every(std::time::Duration::from_millis(250))
+                    .map(|_| Message::Xtb(xtb::Action::Tick))
+            } else {
+                Subscription::none()
+            },
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
             if self.assistant.needs_poll() {
@@ -1126,6 +1137,9 @@ impl App {
             })
         {
             return session.preview_document();
+        }
+        if let Some(preview) = self.xtb_preview() {
+            return preview;
         }
         self.cycle_proposal_document().unwrap_or(&self.tab.doc)
     }

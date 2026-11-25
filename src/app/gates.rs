@@ -407,6 +407,9 @@ impl App {
             } else if self.tab.engine_job.is_some() {
                 self.cancel_engine_job();
                 Task::none()
+            } else if self.xtb_running() {
+                self.xtb_cancel();
+                Task::none()
             } else if self.cancel_model_generation() {
                 Task::none()
             } else if self.inspector_open
