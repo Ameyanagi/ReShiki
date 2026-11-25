@@ -4,6 +4,16 @@ import starlightLlmsTxt from "starlight-llms-txt";
 import { readdirSync } from "node:fs";
 import { historicalTopics, movedRecords } from "./scripts/doc-topics.mjs";
 
+const calculationPages = [
+  { label: "Calculate with xTB", slug: "guide/calculations" },
+  { label: "Frequencies", slug: "guide/calculation-frequencies" },
+  { label: "Orbitals", slug: "guide/calculation-orbitals" },
+  { label: "Conformer search", slug: "guide/calculation-conformers" },
+  { label: "Transition states", slug: "guide/calculation-transition-states" },
+  { label: "Gaussian, ORCA and GAMESS files", slug: "guide/calculation-files" },
+  { label: "From scripts", slug: "guide/calculation-scripts" },
+];
+
 const archivedPages = [
   "developer/changes-*",
   ...historicalTopics.map((topic) => `developer/${topic}`),
@@ -254,6 +264,7 @@ export default defineConfig({
             { label: "Crystal structures", slug: "developer/crystal-structures" },
           ],
         },
+        { label: "Calculations (xTB)", items: calculationPages },
         {
           label: "AI",
           items: [
@@ -277,6 +288,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { label: "Python package", slug: "developer/python" },
+            { label: "xTB licensing", slug: "developer/xtb-licensing" },
             { label: "Browser editor (npm)", slug: "developer/npm-package" },
             { label: "Headless library (npm)", slug: "developer/npm-headless" },
             { label: "CAS SciFinder", slug: "developer/scifinder-handoff" },

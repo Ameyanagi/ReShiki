@@ -1,0 +1,23 @@
+---
+title: Frequencies and thermochemistry
+description: Vibrational frequencies, IR spectra and thermochemistry from an xTB Hessian.
+---
+
+:::caution[In progress]
+The Vibrations tab is being built and is not on the `xtb/next` branch yet. Until it lands, the **Opt + freq** task on the Calculate card is off. This page describes the agreed design and will be updated when it lands. From scripts, frequencies already work: see [Python](/guide/calculation-scripts/#python) and `reshiki --cli calc --task hessian`.
+:::
+
+**Opt + freq** optimizes the molecule, then calculates the analytic Hessian with the same method. Up to 200 atoms.
+
+## What you will see
+
+- **Vibrations** tab of the results palette: one row per mode, such as `1590 cm⁻¹ · IR 127.7`, and the IR spectrum beside it (Lorentzian lines, adjustable width and scale factor).
+- Select a mode to animate it on the 3D model. **Show arrows** draws the displacements as vector arrows for figures; a mode can be exported as a multi-frame XYZ movie.
+- Imaginary frequencies are listed in red, negative, with a banner: one imaginary frequency means the structure is not a minimum. **Push along mode and re-optimize** moves the structure along that mode and optimizes again; a cancelled or unconverged rerun never replaces the accepted structure.
+- Thermochemistry at a chosen temperature and pressure (default 298.15 K, 1 atm): zero-point energy, enthalpy, entropy and free energy, with the point group and symmetry number.
+
+## How good the numbers are
+
+xTB frequencies are approximate. They reliably tell a minimum from a saddle point and give the shape of an IR spectrum; individual bands can be off by tens of cm⁻¹. For thermochemistry in a paper, recompute frequencies with DFT; the [input export](/guide/calculation-files/) writes `Opt Freq` inputs from the xTB geometry.
+
+Example, water with GFN2-xTB (axtb 0.2.0): 1590.13 cm⁻¹ (bend, IR 127.68 km/mol), 3468.58 and 3480.11 cm⁻¹ (stretches), zero-point energy 0.019453 Eh, point group C2v.

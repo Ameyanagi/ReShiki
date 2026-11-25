@@ -1,0 +1,23 @@
+---
+title: Conformer search
+description: Find low-energy conformers with ETKDG starts, force-field minimization, clustering and xTB re-ranking.
+---
+
+:::caution[In progress]
+The conformer search is being built and is not on the `xtb/next` branch yet; until it lands, the **Conformers** task on the Calculate card is off. This page describes the agreed design.
+:::
+
+A conformer search looks for the low-energy shapes of a flexible molecule. Force-field energies alone often rank conformers in the wrong order, so ReShiki picks a diverse set with a force field and re-ranks it with xTB.
+
+## How it works
+
+1. **Starts**: 100 random 3D structures (ETKDG; up to 300), with fixed seeds, so the same molecule gives the same result.
+2. **Minimize** each start, with MMFF94s by default. Also offered: MMFF94, UFF, GFN-FF (recommended for metal complexes) and GFN2-xTB (up to 120 atoms, with a time estimate before you run). Molecules MMFF cannot type fall back to UFF, with a note.
+3. **Cluster** the minimized structures by heavy-atom RMSD after alignment, taking molecular symmetry into account. **Diversity**: fine (0.5 Å), normal (0.75 Å, default) or coarse (1.25 Å).
+4. **Re-rank**: optimize the lowest-energy member of each cluster (or the lowest 3, to catch force-field mis-ranking) with xTB, up to 20 structures by default, and sort by xTB energy. Up to 200 atoms.
+
+## What you will see
+
+The **Conformers** tab lists each conformer with its relative energy (kcal/mol) by xTB and by the force field, Boltzmann population at 298 K, RMSD to the best, cluster size and a stereo check. Click a row to show it on the 3D model; **Overlay** draws the conformers aligned. **Use this conformer** applies one (one Undo step); **Export all…** writes SDF with energies or a multi-frame XYZ file.
+
+The file keeps at most 32 conformers, stored compactly: about 10 KB for 30 conformers of a 40-atom molecule.
