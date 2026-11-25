@@ -1385,3 +1385,17 @@ fn uneven_smooth_samples_keep_derivatives_when_an_edge_would_force_a_kink() {
         cursor = end;
     }
 }
+
+#[test]
+fn a_contour_touching_a_sliver_at_one_vertex_is_not_its_child() {
+    // A thin strip ending at the square's first vertex: the strip is a sliver,
+    // the square must survive on its own.
+    let strip = vec![[-20., -0.0625], [0., -0.0625], [0., 0.], [-20., 0.]];
+    let square = vec![[0., 0.], [1., 0.], [1., 1.], [0., 1.]];
+    let path = region(&[strip, square], 0.04, 0.05, 0.12);
+    let moves = path
+        .iter()
+        .filter(|c| matches!(c, PathCommand::Move(..)))
+        .count();
+    assert_eq!(moves, 1, "{path:?}");
+}

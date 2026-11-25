@@ -201,7 +201,7 @@ pub fn region(
         // Search the larger contours from smallest to largest to find the parent.
         let parent = order[..position].iter().rev().copied().find(|&j| {
             input[j].twice_area.abs() > contour.twice_area.abs()
-                && polygon_contains(&input[j].points, contour.points[0])
+                && encloses(&input[j].points, &contour.points)
         });
         // An island inside a hole starts its own shape.
         input[i].hole = parent.is_some_and(|parent| {
@@ -242,6 +242,34 @@ pub fn region(
         }
     }
     out
+}
+
+/// Whether `outer` encloses `inner`: their boxes nest, and more sampled
+/// vertices of `inner` lie inside `outer` than outside. Merged contours may
+/// touch at a vertex, so a single vertex cannot decide.
+fn encloses(outer: &[V], inner: &[V]) -> bool {
+    let bounds = |p: &[V]| {
+        p.iter().fold(
+            [
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            ],
+            |b, v| [b[0].min(v.x), b[1].min(v.y), b[2].max(v.x), b[3].max(v.y)],
+        )
+    };
+    let [o, i] = [bounds(outer), bounds(inner)];
+    if i[0] < o[0] || i[1] < o[1] || i[2] > o[2] || i[3] > o[3] {
+        return false;
+    }
+    let step = inner.len().div_ceil(16).max(1);
+    let inside = inner
+        .iter()
+        .step_by(step)
+        .filter(|&&v| polygon_contains(outer, v))
+        .count();
+    2 * inside > inner.len().div_ceil(step)
 }
 
 fn polygon_contains(p: &[V], point: V) -> bool {

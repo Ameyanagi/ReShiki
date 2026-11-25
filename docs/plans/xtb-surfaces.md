@@ -664,6 +664,15 @@ encoding returns no snapshot.
 ## Known limitations of the prototype
 
 - One surface (one orbital, both signs) per model.
+- An outline run less than half a drawing unit behind a nearer sheet is
+  not hidden by it (the rule that keeps mesh folds from breaking outlines);
+  at a typical scale of 20 units/Å that is a 0.025 Å gap.
+- PDF shading uses the same one-level vector tones as SVG, not PDF
+  Gouraud meshes (see "Smooth shading").
+- Shading tones are mapped per vertex and interpolated per triangle, so a
+  triangle that straddles the ramp's bend (lightness 0.6) differs slightly
+  from the exact ramp inside it; at 20 000 triangles a triangle spans a
+  small part of the ramp, so the error is under a level or two.
 - No surface on crystals, in Wireframe or in thermal ellipsoids, and none
   during the 2D → 3D morph (see section 2).
 - The molecule's own paint order is unchanged, with its existing
