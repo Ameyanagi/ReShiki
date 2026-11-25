@@ -151,7 +151,7 @@ fn placing_the_spectrum_selects_one_group_and_undo_removes_it() {
         .flat_map(|command| command.points())
         .collect();
     let width = points.last().unwrap().x - points[0].x;
-    assert!((width - 9. * bond).abs() < 1e-3);
+    assert!((width - super::figure::PLOT_WIDTH_BONDS * bond).abs() < 1e-3);
     assert!(points.windows(2).all(|pair| pair[0].x <= pair[1].x));
     let tick_labels: Vec<_> = doc
         .annotations
@@ -278,8 +278,8 @@ fn the_editable_figure_keeps_the_palette_peaks_and_is_deterministic() {
     };
     assert!(weaker[1] < stronger[1]);
     for &[wavenumber, intensity] in &data.peaks {
-        let peak_x = points[0].x + data.x(wavenumber) * 9. * bond;
-        let peak_y = base - (intensity / top) as f32 * 3. * bond;
+        let peak_x = points[0].x + data.x(wavenumber) * super::figure::PLOT_WIDTH_BONDS * bond;
+        let peak_y = base - (intensity / top) as f32 * super::figure::PLOT_HEIGHT_BONDS * bond;
         assert!(
             points
                 .iter()
@@ -287,8 +287,8 @@ fn the_editable_figure_keeps_the_palette_peaks_and_is_deterministic() {
         );
     }
     for &[wavenumber, intensity] in [stronger, bend] {
-        let peak_x = points[0].x + data.x(wavenumber) * 9. * bond;
-        let peak_y = base - (intensity / top) as f32 * 3. * bond;
+        let peak_x = points[0].x + data.x(wavenumber) * super::figure::PLOT_WIDTH_BONDS * bond;
+        let peak_y = base - (intensity / top) as f32 * super::figure::PLOT_HEIGHT_BONDS * bond;
         let text = format!("{wavenumber:.0}");
         assert!(figure.annotations.iter().any(|a| {
             a.text == text && (a.centre().x - peak_x).abs() < 1e-3 && a.position.y < peak_y
@@ -325,8 +325,8 @@ fn the_ninth_band_keeps_its_sampled_height_without_a_label() {
     let axis = &figure.graphics[1];
     let bond = doc.drawing_style.bond_length_world;
     let apex = axis.origin.offset(
-        data.x(frequency) * 9. * bond,
-        -(intensity / top) as f32 * 3. * bond,
+        data.x(frequency) * super::figure::PLOT_WIDTH_BONDS * bond,
+        -(intensity / top) as f32 * super::figure::PLOT_HEIGHT_BONDS * bond,
     );
     assert!(figure.graphics[0].commands().iter().any(|command| {
         command
@@ -348,7 +348,7 @@ fn wide_spectrum_tick_labels_have_clearance_and_keep_the_minor_ticks() {
     let axis = &figure.graphics[1];
     let ticks = &figure.graphics[2..];
     assert_eq!(ticks.len(), 20);
-    let step = 9. * doc.drawing_style.bond_length_world * 500. / 9600.;
+    let step = super::figure::PLOT_WIDTH_BONDS * doc.drawing_style.bond_length_world * 500. / 9600.;
     assert!(
         ticks
             .windows(2)

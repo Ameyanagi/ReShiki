@@ -7,6 +7,10 @@ use reshiki::qcdata::vibrational::BandShape;
 use reshiki::typography::{TextFormat, layout};
 
 const LABEL_INTERVAL_CM1: f64 = 1000.;
+/// Plot width in bond lengths: about a column wide at the journal styles' bond length.
+pub(super) const PLOT_WIDTH_BONDS: f32 = 16.;
+/// Plot height in bond lengths.
+pub(super) const PLOT_HEIGHT_BONDS: f32 = 5.;
 
 #[derive(Debug, PartialEq)]
 pub(super) struct Figure {
@@ -27,8 +31,9 @@ impl Figure {
 pub(super) fn spectrum(doc: &Document, spectrum: &SpectrumData, method: &str, at: Point) -> Figure {
     let drawing = &doc.drawing_style;
     let bond = drawing.bond_length_world;
-    let width = 9. * bond;
-    let height = 3. * bond;
+    // Labels a little smaller than captions so the curve dominates.
+    let width = PLOT_WIDTH_BONDS * bond;
+    let height = PLOT_HEIGHT_BONDS * bond;
     let gap = 0.12 * bond;
     let tick_length = 0.16 * bond;
     let first_id = doc.next_id();
@@ -38,12 +43,13 @@ pub(super) fn spectrum(doc: &Document, spectrum: &SpectrumData, method: &str, at
         next_id = next_id.saturating_add(1);
         id
     };
-    let format = TextFormat {
+    let mut format = TextFormat {
         style: drawing.text_style(),
         ..Default::default()
     };
+    format.style.size_pt = (0.8 * format.style.size_pt).max(4.);
     let mut caption_format = format.clone();
-    caption_format.style.size_pt = (0.8 * caption_format.style.size_pt).max(4.);
+    caption_format.style.size_pt = (0.85 * caption_format.style.size_pt).max(4.);
     let shape = match spectrum.shape {
         BandShape::Lorentzian => "Lorentzian",
         BandShape::Gaussian => "Gaussian",
