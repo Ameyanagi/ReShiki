@@ -38,6 +38,7 @@ impl Session {
         let method = match open.method {
             Method::Gfn2 => axtb_driver::Method::Gfn2,
         };
+        validate_electrons(&open, method)?;
         let conventions = match open.conventions {
             Conventions::Axtb => "axtb",
             Conventions::Xtb68 => "xtb",
@@ -129,6 +130,36 @@ impl Session {
             seconds,
         })
     }
+}
+
+fn validate_electrons(open: &Open, method: axtb_driver::Method) -> Result<(), ResponseError> {
+    let neutral_electrons = open
+        .numbers
+        .iter()
+        .map(|&number| axtb_driver::valence_electrons(method, usize::from(number)))
+        .sum::<Option<f64>>();
+    let Some(neutral_electrons) = neutral_electrons else {
+        // Calculator construction reports invalid or unsupported atomic numbers.
+        return Ok(());
+    };
+    let electrons = neutral_electrons - f64::from(open.charge);
+    if electrons < 0.0 {
+        return Err(ResponseError::new(
+            ErrorKind::Input,
+            "charge leaves a negative valence electron count",
+        ));
+    }
+    if open
+        .uhf
+        .map(f64::from)
+        .is_some_and(|uhf| uhf > electrons || uhf % 2.0 != electrons % 2.0)
+    {
+        return Err(ResponseError::new(
+            ErrorKind::Input,
+            "uhf must have the same parity as the valence electron count and cannot exceed it",
+        ));
+    }
+    Ok(())
 }
 
 fn angstrom_to_bohr(method: axtb_driver::Method, conventions: &str) -> Result<f64, ResponseError> {

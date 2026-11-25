@@ -400,9 +400,9 @@ fn invalid_client_input_is_rejected_without_losing_the_session() {
 #[test]
 fn worker_rejects_invalid_electrons_spin_and_unknown_solvent_on_open() {
     for (name, charge, uhf, solvent) in [
-        ("negative electron count", 11, None, None),
+        ("negative valence electron count", 9, None, None),
         ("UHF parity", 0, Some(1), None),
-        ("UHF exceeds electron count", 0, Some(12), None),
+        ("UHF exceeds valence electron count", 0, Some(10), None),
         (
             "unknown solvent",
             0,
@@ -431,6 +431,131 @@ fn worker_rejects_invalid_electrons_spin_and_unknown_solvent_on_open() {
         );
         session.close().expect("close worker after rejected open");
     }
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn worker_checks_cef3_spin_against_gfn2_valence_electrons_on_open() {
+    let mut cef3 = Open {
+        numbers: vec![58, 9, 9, 9],
+        positions: vec![
+            [0.0, 0.0, 0.0],
+            [2.1, 0.0, 0.0],
+            [-1.05, 1.82, 0.0],
+            [-1.05, -1.82, 0.0],
+        ],
+        uhf: Some(0),
+        ..molecule("water")
+    };
+    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    session
+        .open(&cef3, &Cancel::default())
+        .expect("open neutral CeF3 with UHF 0");
+    session.close().expect("close worker");
+
+    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    cef3.uhf = Some(1);
+    let result = session.open(&cef3, &Cancel::default());
+    assert!(
+        matches!(
+            result,
+            Err(Error::Engine {
+                kind: ErrorKind::Input,
+                ..
+            })
+        ),
+        "neutral CeF3 with UHF 1: {result:?}"
+    );
+    session.close().expect("close worker after rejected open");
+}
+
+#[cfg(all(feature = "xtb", unix))]
+#[test]
+fn directly_launched_worker_clears_lapack_override_and_matches_water_energy() {
+    use reshiki_xtb_worker::protocol::{self, Outcome, Request, RequestOp, Response};
+    use std::{
+        io::Write,
+        process::{Command, Stdio},
+    };
+
+    let mut child = Command::new(executable())
+        .arg("--xtb-worker")
+        .env("AXTB_LAPACK", "/no/such/reshiki-test-lapack")
+        .env_remove("AXTB_LAPACK_BLAS")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("launch worker directly");
+    let pid = child.id();
+    let watchdog = PidWatchdog::from_pid(move || Some(pid), Duration::from_secs(30));
+    let mut input = child.stdin.take().expect("worker stdin");
+    let mut output = child.stdout.take().expect("worker stdout");
+    let mut id = 0;
+    let mut request = |op| {
+        id += 1;
+        let frame = protocol::encode_frame(&Request { id, op }).expect("encode request");
+        input.write_all(&frame).expect("write request");
+        let response: Response<serde_json::Value> = protocol::read_frame(&mut output)
+            .expect("read response")
+            .expect("worker response");
+        assert_eq!(response.id, id);
+        match response.result {
+            Outcome::Ok { ok } => ok,
+            Outcome::Error { error } => panic!("request {id}: {error:?}"),
+        }
+    };
+
+    let hello = request(RequestOp::Hello {});
+    assert_eq!(hello["engine"]["name"], "axtb");
+    #[cfg(target_os = "linux")]
+    {
+        // axtb can fall back after a failed LAPACK load, so the energy alone
+        // cannot distinguish the clean environment from that fallback.
+        let environment =
+            std::fs::read(format!("/proc/{pid}/environ")).expect("worker environment");
+        assert!(environment.split(|&byte| byte == 0).all(|entry| {
+            !entry.starts_with(b"AXTB_LAPACK=") && !entry.starts_with(b"AXTB_LAPACK_BLAS=")
+        }));
+    }
+    let opened = request(RequestOp::Open(molecule("water")));
+    assert_eq!(opened["atoms"], 3);
+    let computed = request(RequestOp::Compute(compute(None, false)));
+    let energy = computed["energy"].as_f64().expect("water energy");
+    let reference: Reference = serde_json::from_str(include_str!("fixtures/xtb/reference.json"))
+        .expect("xTB reference JSON");
+    let expected = reference.axtb["water"].energy;
+    assert!((energy - expected).abs() <= 1e-10, "{energy} vs {expected}");
+    request(RequestOp::Close {});
+    assert!(child.wait().expect("reap worker").success());
+    watchdog.finish();
+}
+
+#[cfg(all(feature = "xtb", unix))]
+#[test]
+fn cancellation_precedes_local_validation_and_reaps_the_worker() {
+    let cancel = Cancel::default();
+    cancel.cancel();
+    let water = molecule("water");
+
+    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let pid = session.pid();
+    let invalid_open = Open {
+        threads: 0,
+        ..water.clone()
+    };
+    let result = session.open(&invalid_open, &cancel);
+    assert!(matches!(result, Err(Error::Cancelled)), "{result:?}");
+    assert_pid_gone(pid);
+
+    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    session
+        .open(&water, &Cancel::default())
+        .expect("open water");
+    let pid = session.pid();
+    let invalid_compute = compute(Some(vec![]), false);
+    let result = session.compute(&invalid_compute, &cancel);
+    assert!(matches!(result, Err(Error::Cancelled)), "{result:?}");
+    assert_pid_gone(pid);
 }
 
 // A 288-atom cluster gives SIGKILL a stable window during

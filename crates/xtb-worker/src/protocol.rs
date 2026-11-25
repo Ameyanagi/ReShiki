@@ -194,28 +194,6 @@ impl Open {
     #[cfg(any(feature = "engine", test))]
     pub(crate) fn validate(&self) -> Result<usize, ResponseError> {
         self.validate_geometry_and_threads(MAX_ATOMS)?;
-        let electrons = self
-            .numbers
-            .iter()
-            .map(|&number| i64::from(number))
-            .sum::<i64>()
-            - i64::from(self.charge);
-        if electrons < 0 {
-            return Err(ResponseError::new(
-                ErrorKind::Input,
-                "charge leaves a negative electron count",
-            ));
-        }
-        if self
-            .uhf
-            .map(i64::from)
-            .is_some_and(|uhf| uhf > electrons || uhf % 2 != electrons % 2)
-        {
-            return Err(ResponseError::new(
-                ErrorKind::Input,
-                "uhf must have the same parity as the electron count and cannot exceed it",
-            ));
-        }
         usize::try_from(self.heap_bytes)
             .ok()
             .filter(|&bytes| bytes > 0)

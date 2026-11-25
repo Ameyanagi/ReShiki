@@ -1,5 +1,5 @@
 use super::*;
-use crate::worker::serve_io;
+use crate::worker::Worker;
 
 fn raw_frame(body: &str) -> Vec<u8> {
     let mut frame = Vec::from(*b"RSHXTBWK\x01\x00\x00\x00");
@@ -176,7 +176,10 @@ fn ids_must_be_positive_and_increasing() {
             .flat_map(|id| raw_frame(&format!(r#"{{"id":{id},"op":"hello"}}"#)))
             .collect();
         let mut output = Vec::new();
-        assert_eq!(serve_io(&mut input.as_slice(), &mut output), 2);
+        assert_eq!(
+            Worker::default().serve_io(&mut input.as_slice(), &mut output),
+            2
+        );
         let mut output = output.as_slice();
         for _ in 1..ids.len() {
             let hello: Response<Hello> = read_frame(&mut output).unwrap().unwrap();
@@ -197,7 +200,10 @@ fn malformed_request_exits_with_protocol_error() {
     let mut input = raw_frame(r#"{"id":1,"op":"hello","extra":1}"#);
     input.extend(raw_frame(r#"{"id":2,"op":"hello"}"#));
     let mut output = Vec::new();
-    assert_eq!(serve_io(&mut input.as_slice(), &mut output), 2);
+    assert_eq!(
+        Worker::default().serve_io(&mut input.as_slice(), &mut output),
+        2
+    );
     let mut output = output.as_slice();
     let response: Response<Closed> = read_frame(&mut output).unwrap().unwrap();
     assert_eq!(response.id, 0);
@@ -215,7 +221,10 @@ fn oversized_unknown_operation_still_returns_a_protocol_error_frame() {
     let name = "水".repeat((MAX_JSON_BYTES - prefix.len() - suffix.len()) / "水".len());
     let input = raw_frame(&format!("{prefix}{name}{suffix}"));
     let mut output = Vec::new();
-    assert_eq!(serve_io(&mut input.as_slice(), &mut output), 2);
+    assert_eq!(
+        Worker::default().serve_io(&mut input.as_slice(), &mut output),
+        2
+    );
     let mut output = output.as_slice();
     let response: Response<Closed> = read_frame(&mut output).unwrap().unwrap();
     assert_eq!(response.id, 0);
@@ -236,7 +245,10 @@ fn disabled_worker_answers_hello_and_refuses_open() {
         r#"{"id":2,"op":"open","numbers":[1],"positions":[[0,0,0]],"units":"bohr","method":"gfn2","heap_bytes":1048576}"#,
     ));
     let mut output = Vec::new();
-    assert_eq!(serve_io(&mut input.as_slice(), &mut output), 0);
+    assert_eq!(
+        Worker::default().serve_io(&mut input.as_slice(), &mut output),
+        0
+    );
     let mut output = output.as_slice();
     let hello: Response<Hello> = read_frame(&mut output).unwrap().unwrap();
     assert_eq!(hello.id, 1);

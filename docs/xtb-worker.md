@@ -57,10 +57,11 @@ increases with every request; the response repeats it.
   These protocol names map to the axtb driver's `"axtb"` and `"xtb"`
   conventions, respectively. Both `Opened` and every `Computed` response
   include `method`, `conventions`, and `numerics` using protocol spellings.
-- `charge`: integer, default 0. The total electron count is the sum of the
-  atomic numbers minus the charge. `uhf`: unpaired electrons, default from
-  the electron count. `open` returns `input` if the electron count is negative
-  or if `uhf` exceeds it or differs in parity. Version 1 requires
+- `charge`: integer, default 0. The engine calculates the valence electron
+  count by summing the selected method's valence electrons for each atom and
+  subtracting the charge. `uhf`: unpaired electrons, default from the valence
+  electron count. `open` returns `input` if that count is negative or if `uhf`
+  exceeds it or differs in parity. Version 1 requires
   `"method": "gfn2"`. GFN2-xTB is the default method and the only one
   available in version 1. The planned name `"gfnff"` means GFN-FF, whose
   results will carry a null gap and a false near-degenerate flag. The planned
@@ -88,7 +89,7 @@ Errors replace `ok`:
 
 Kinds: `input` (the request), `unsupported_element`, `topology`, `scf`,
 `numerical` (from axtb's error kinds), `limit` (size or budget), `state` (wrong
-order, such as `compute` before `open`), `unavailable` (this build has no xTB),
+order, such as `compute` before `open`), `unavailable` (xTB cannot be used),
 and `protocol`. After a `protocol` error (bad header, version, kind, length,
 JSON, or a non-positive or non-increasing ID) the worker writes the error
 frame with `id` 0 and exits 2. Error messages are limited to 1 KiB of UTF-8
@@ -102,9 +103,12 @@ fixed message with the same ID and error kind.
   resident-memory, address-space (Linux) and file-size limits. Defaults: 2 GiB
   heap budget, 3 GiB resident memory, one hour of CPU time for the whole
   session, 64 GiB address space on Linux, and 1 MiB file size. The client
-  takes the `open` request's heap budget from its session limits. The worker
-  always uses axtb's built-in eigensolver. The client removes `AXTB_LAPACK`
-  and `AXTB_LAPACK_BLAS` from the worker's environment.
+  takes the `open` request's heap budget from its session limits. The client
+  removes `AXTB_LAPACK` and `AXTB_LAPACK_BLAS` from the worker's environment
+  so it uses axtb's built-in eigensolver. On Unix, an engine-enabled worker
+  started with either variable set re-executes itself with both removed and
+  keeps its arguments and standard streams. If re-execution fails, `open`
+  returns `unavailable` and names both variables in the error message.
 - A client session stays on the thread that started it. On Linux the worker
   receives a parent-death signal if that thread exits. A `Cancel` handle can
   be shared with other threads.
@@ -113,8 +117,10 @@ fixed message with the same ID and error kind.
   The client drains stdout and stderr while it waits, so a blocked pipe
   cannot stall either side.
 - **Cancel** is kill and reap: the client terminates the process group and
-  waits for it before returning. The session is gone; a new one starts with
-  `open`. There is no cancel message, so there are no late replies.
+  waits for it before returning. `open` and `compute` check cancellation
+  before validating input locally, so an already cancelled handle returns
+  `Cancelled` even for invalid input. The session is gone; a new one starts
+  with `open`. There is no cancel message, so there are no late replies.
 - **Crash or EOF**: if the worker exits or closes stdout before a complete
   response, the client reports the exit status and the last 4 KiB of stderr.
   The session is gone. If the worker reads EOF on stdin between requests,

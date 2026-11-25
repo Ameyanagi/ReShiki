@@ -163,6 +163,7 @@ impl Session {
 
     /// The session's heap policy replaces `open.heap_bytes` on the wire.
     pub fn open(&mut self, open: &Open, cancel: &Cancel) -> Result<Opened> {
+        self.check_cancelled(cancel)?;
         open.validate_geometry_and_threads(self.max_atoms)
             .map_err(|error| Error::Input(error.message))?;
         let mut request = open.clone();
@@ -177,6 +178,7 @@ impl Session {
     }
 
     pub fn compute(&mut self, compute: &Compute, cancel: &Cancel) -> Result<Computed> {
+        self.check_cancelled(cancel)?;
         if let Some(positions) = &compute.positions {
             protocol::validate_atom_count(positions.len(), self.max_atoms)
                 .and_then(|()| {
@@ -355,16 +357,18 @@ impl Session {
         deadline: Duration,
         cancel: &Cancel,
     ) -> Result<()> {
-        let error = if cancel.cancelled() {
-            Some(Error::Cancelled)
-        } else if started.elapsed() >= deadline {
-            Some(Error::Timeout)
-        } else {
-            None
-        };
-        if let Some(error) = error {
+        self.check_cancelled(cancel)?;
+        if started.elapsed() >= deadline {
             self.terminate();
-            return Err(error);
+            return Err(Error::Timeout);
+        }
+        Ok(())
+    }
+
+    fn check_cancelled(&mut self, cancel: &Cancel) -> Result<()> {
+        if cancel.cancelled() {
+            self.terminate();
+            return Err(Error::Cancelled);
         }
         Ok(())
     }
