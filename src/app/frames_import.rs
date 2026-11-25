@@ -91,7 +91,7 @@ pub(super) fn detect(path: &std::path::Path, contents: &[u8]) -> Option<File> {
                 || a.multiplicity != b.multiplicity
                 // Records of different molecules can share an atom list;
                 // conformer files repeat the molecule's name.
-                || sdf && step.label != first.label
+                || sdf && molecule_name(&step.label) != molecule_name(&first.label)
         })
     {
         return None;
@@ -241,8 +241,11 @@ impl App {
         if frame.multiplicity != 1 {
             omitted.push(format!("spin multiplicity {}", frame.multiplicity));
         }
-        if !omitted.is_empty() {
-            warnings.insert(0, format!("Not drawn: {}", omitted.join(", ")));
+        let not_drawn = (!omitted.is_empty())
+            .then(|| format!("Not drawn: {}", omitted.join(", ")))
+            .unwrap_or_default();
+        if !not_drawn.is_empty() {
+            warnings.insert(0, not_drawn.clone());
         }
         warnings.insert(
             0,
@@ -261,12 +264,16 @@ impl App {
         if self.error || !dialog.keep {
             return task;
         }
-        match ensemble(&mut self.tab.doc, &dialog.file, index) {
+        let result = ensemble(&mut self.tab.doc, &dialog.file, index);
+        match result {
             Ok(kept) => {
                 self.status = format!(
                     "Frame {} of {count} opened · {kept} kept as an ensemble",
                     index + 1
                 );
+                if !not_drawn.is_empty() {
+                    self.status.push_str(&format!(" · {not_drawn}"));
+                }
                 self.error = false;
                 task.chain(Task::done(Message::Xtb(super::xtb::Action::Palette(
                     super::xtb::palette::Action::Show,
@@ -453,6 +460,24 @@ impl App {
             Placement::Fit,
             send(Action::Close),
         )
+    }
+}
+
+/// A record title without a trailing conformer number, as exports number
+/// them: "water conformer 2" and "water conformer 3" name one molecule.
+fn molecule_name(label: &Option<String>) -> &str {
+    let label = label.as_deref().unwrap_or("").trim();
+    let name = label
+        .trim_end_matches(|c: char| c.is_ascii_digit())
+        .trim_end();
+    if name.len() == label.len() {
+        return label;
+    }
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with("conformer") {
+        name[..name.len() - "conformer".len()].trim_end()
+    } else {
+        name
     }
 }
 

@@ -131,12 +131,21 @@ fn an_sd_file_asks_only_for_3d_records_of_one_molecule() {
             "  ReShiki"
         )
     };
-    let conformers = water("water", 0.1, -5.06) + &water("water", -0.1, -5.07);
+    // Titles as ReShiki's own SDF export numbers them.
+    let conformers =
+        water("water conformer 1", 0.1, -5.06) + &water("water conformer 2", -0.1, -5.07);
     let file = detect(Path::new("w.sdf"), conformers.as_bytes()).expect("conformers ask");
     // ReShiki's own SDF export carries the energies back.
     assert_eq!(file.energies(), Some(vec![-5.06, -5.07]));
     let library = water("water", 0.1, -5.06) + &water("deuterated?", -0.1, -5.07);
     assert!(detect(Path::new("w.sdf"), library.as_bytes()).is_none());
+    // A record of another calculated state is not a conformer of the first.
+    let cation = water("water conformer 2", -0.1, -5.07).replace(
+        "\n\n$$$$",
+        "\n\n> <TOTAL_CHARGE>\n1\n\n> <MULTIPLICITY>\n2\n\n$$$$",
+    );
+    let states = water("water conformer 1", 0.1, -5.06) + &cation;
+    assert!(detect(Path::new("w.sdf"), states.as_bytes()).is_none());
 }
 
 #[test]
@@ -147,6 +156,12 @@ fn files_that_are_not_one_molecules_frames_open_as_before() {
         .replace(" -5.070176", "2")
         .replace(" -5.065176", "3");
     let file = detect(Path::new("md.xyz"), numbered.as_bytes()).unwrap();
+    assert!(file.energies().is_none());
+    let exponents = CREST
+        .replace(" -5.06901", "1.00e0")
+        .replace(" -5.070176", "2.00e0")
+        .replace(" -5.065176", "3.00e0");
+    let file = detect(Path::new("md.xyz"), exponents.as_bytes()).unwrap();
     assert!(file.energies().is_none());
     let periodic = CREST.replace(
         " -5.06901",
