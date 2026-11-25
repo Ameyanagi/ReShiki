@@ -1,272 +1,139 @@
-//! Signed grid checks against axtb's independent, public Molden writer.
-//! This evaluator uses polynomial Gaussian moments, not the engine's AO transforms.
+//! Compare the worker's signed orbitals with axtb's Molden text from the same SCF.
 
-use super::*;
-use reshiki_qcdata::{
-    CartesianNorm, Shell, axial_norm_ratio, contraction_overlap, mo_to_molden,
-    molden_cartesian_order, primitive_norm,
-};
+mod grid;
+mod reference;
 
-type Polynomial = Vec<(f64, [u8; 3])>;
+use super::{Method, canonical_orbitals, driver_method};
+use axtb_driver::{Calculator, MoldenTask, Request, Task};
+use reference::Molden;
+use reshiki_qcdata::{Beta, Orbitals, Shell, contraction_overlap};
+
+const WATER: &str = include_str!("../../../../tests/fixtures/xtb/water.xyz");
+const CAFFEINE: &str = include_str!("../../../../tests/fixtures/xtb/caffeine.xyz");
+const FERROCENE: &str = include_str!("../../../../tests/fixtures/xtb/ferrocene.xyz");
+
+fn request(method: Method, xyz: &str, charge: i32) -> Request {
+    let method = driver_method(method);
+    let (numbers, positions) = axtb_driver::read_xyz(xyz, method, None).unwrap();
+    Request {
+        numbers,
+        positions,
+        method: Some(method.name().into()),
+        charge: f64::from(charge),
+        uhf: Some(0),
+        ..Request::default()
+    }
+}
+
+fn orbitals_with_molden(request: &Request, method: Method, spherical: bool) -> (Orbitals, Molden) {
+    let task = Task {
+        orbitals: true,
+        molden: Some(MoldenTask {
+            // axtb-driver exposes MoldenTask; its functions enum implements FromStr.
+            functions: if spherical { "spherical" } else { "cartesian" }
+                .parse()
+                .unwrap(),
+            text: true,
+            file: None,
+        }),
+        ..Task::default()
+    };
+    let response = Calculator::new(request)
+        .unwrap()
+        .compute(&request.positions, &task)
+        .unwrap();
+    let nao = response.orbitals.as_ref().unwrap().nao() as u32;
+    let rows = (0..nao).collect::<Vec<_>>();
+    let canonical = canonical_orbitals(&response, method, 0, &rows).unwrap();
+    assert!(matches!(canonical.beta, Beta::Restricted));
+    for shell in &canonical.basis.as_ref().unwrap().shells {
+        let overlap = contraction_overlap(shell);
+        assert!(
+            (overlap - 1.).abs() <= 1e-14,
+            "atom {} l={} overlap {overlap}",
+            shell.atom,
+            shell.l
+        );
+    }
+    let molden = reference::parse(response.molden.as_deref().unwrap(), spherical);
+    assert_eq!(molden.mos.len(), nao as usize);
+    (canonical, molden)
+}
 
 #[test]
-fn canonical_orbitals_match_cartesian_and_spherical_molden_references() {
-    for (numbers, positions, charge) in [
-        (
-            vec![8, 1, 1],
-            vec![
-                [0., 0., 0.119262],
-                [0., 0.763239, -0.477047],
-                [0., -0.763239, -0.477047],
-            ],
-            0,
-        ),
-        // Cerium's q-vSZP basis includes f functions, even in this closed-shell ion.
-        (vec![58], vec![[0., 0., 0.]], 4),
+fn ao_cartesian_grid_and_spherical_rebuild() {
+    for (name, xyz, charge, method) in [
+        ("water", WATER, 0, Method::Gfn2),
+        ("caffeine", CAFFEINE, 0, Method::Gfn2),
+        ("ferrocene", FERROCENE, 0, Method::Gfn2),
+        ("water", WATER, 0, Method::Gxtb),
+        ("ferrocene", FERROCENE, 0, Method::Gxtb),
+        // The molecular fixtures go through d. Keep a real f shell in both comparisons.
+        ("Ce(IV)", "1\ncerium ion\nCe 0 0 0\n", 4, Method::Gxtb),
     ] {
-        let open: Open = serde_json::from_value(serde_json::json!({
-            "numbers": numbers, "positions": positions, "charge": charge,
-            "units": "angstrom", "method": "gxtb", "uhf": 0,
-            "scf": {"electronic_temperature_k": 1000.0},
-            "heap_bytes": 2_147_483_648_u64
-        }))
-        .unwrap();
-        let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
-        let actual = session
-            .compute(Compute {
-                orbitals: OrbitalOutput::All,
-                ..Compute::default()
-            })
-            .unwrap()
-            .orbitals
-            .unwrap();
-        let basis = actual.basis.unwrap();
-        let nao = actual.alpha.energies_hartree.len();
-        let source = Request {
-            numbers: numbers.into_iter().map(|z| z as usize).collect(),
-            positions: session.positions.clone(),
-            charge: charge as f64,
-            uhf: Some(0),
-            method: Some("gxtb-v2.0.1".into()),
-            restart: Some("previous".into()),
-            etemp: Some(1000.),
-            molden: true,
-            ..Request::default()
-        };
-        for cartesian in [false, true] {
-            let reference = axtb_driver::run(&Request {
-                molden_cartesian: cartesian,
-                ..source.clone()
-            })
-            .unwrap();
-            let (reference_basis, reference_rows) =
-                parse_molden(reference.molden.as_ref().unwrap(), !cartesian);
-            assert_eq!(reference_rows.len(), nao);
-            assert_eq!(reference_basis.shells.len(), basis.shells.len());
-            for (a, b) in basis.shells.iter().zip(&reference_basis.shells) {
-                assert_eq!((a.atom, a.l), (b.atom, b.l));
-                for (&a, &b) in a
-                    .exponents_per_bohr2
-                    .iter()
-                    .chain(&a.coefficients)
-                    .zip(b.exponents_per_bohr2.iter().chain(&b.coefficients))
-                {
-                    assert!((a - b).abs() < 2e-12 * a.abs().max(1.));
-                }
-            }
-            for (row, reference_row) in actual
-                .alpha
-                .coefficients
-                .chunks_exact(nao)
-                .zip(reference_rows)
-            {
-                if !cartesian {
-                    let molden = mo_to_molden(&basis, row, CartesianNorm::Unit).unwrap();
-                    for (actual, reference) in molden.into_iter().zip(reference_row) {
-                        assert!(
-                            (actual - reference).abs() < 2e-11,
-                            "spherical Molden coefficient {actual} != {reference}"
-                        );
-                    }
-                } else {
-                    for point in [
-                        [0.31, -0.47, 0.59],
-                        [-1.13, 0.23, -0.77],
-                        [0.07, 1.61, -0.38],
-                        [2.2, -1.7, 0.6],
-                    ] {
-                        let expected = evaluate(
-                            &reference_basis,
-                            &reference_row,
-                            &session.positions,
-                            point,
-                            true,
-                        );
-                        let actual = evaluate(&basis, row, &session.positions, point, false);
-                        assert!(
-                            (actual - expected).abs() < 2e-11 * expected.abs().max(1.),
-                            "signed grid value {actual} != {expected}"
-                        );
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn parse_molden(text: &str, spherical: bool) -> (BasisSet, Vec<Vec<f64>>) {
-    let lines = text.lines().collect::<Vec<_>>();
-    let mut index = lines.iter().position(|line| *line == "[GTO]").unwrap() + 1;
-    let mut atom = 0;
-    let mut shells = Vec::new();
-    while !lines[index].starts_with('[') {
-        let fields = lines[index].split_whitespace().collect::<Vec<_>>();
-        index += 1;
-        if fields.is_empty() {
-            continue;
-        }
-        let l = match fields[0] {
-            "s" => 0,
-            "p" => 1,
-            "d" => 2,
-            "f" => 3,
-            _ => {
-                atom = fields[0].parse::<u32>().unwrap() - 1;
-                continue;
-            }
-        };
-        let n = fields[1].parse::<usize>().unwrap();
-        let mut exponents = Vec::new();
-        let mut coefficients = Vec::new();
-        for line in &lines[index..index + n] {
-            let mut fields = line.split_whitespace();
-            exponents.push(fields.next().unwrap().parse().unwrap());
-            coefficients.push(fields.next().unwrap().parse().unwrap());
-        }
-        index += n;
-        shells.push(Shell {
-            atom,
-            l,
-            pure: spherical && l >= 2,
-            exponents_per_bohr2: exponents,
-            coefficients,
-        });
-    }
-    let start = lines.iter().position(|line| *line == "[MO]").unwrap() + 1;
-    let mut rows: Vec<Vec<f64>> = Vec::new();
-    for line in &lines[start..] {
-        if line.starts_with("Sym=") {
-            rows.push(Vec::new());
+        let label = driver_method(method).name();
+        let request = request(method, xyz, charge);
+        let (canonical, cartesian) = orbitals_with_molden(&request, method, false);
+        let basis = canonical.basis.as_ref().unwrap();
+        let occupations = &canonical.alpha.occupations;
+        let nmo = if name == "Ce(IV)" {
+            assert!(basis.shells.iter().any(|s| s.l == 3));
+            occupations.len() // Include every f orbital of the cerium ion.
         } else {
-            let fields = line.split_whitespace().collect::<Vec<_>>();
-            if fields.len() == 2 && fields[0].parse::<usize>().is_ok() {
-                rows.last_mut().unwrap().push(fields[1].parse().unwrap());
-            }
-        }
-    }
-    (BasisSet { shells }, rows)
-}
-
-fn evaluate(
-    basis: &BasisSet,
-    row: &[f64],
-    positions: &[[f64; 3]],
-    point: [f64; 3],
-    molden: bool,
-) -> f64 {
-    let mut offset = 0;
-    let mut value = 0.;
-    for shell in &basis.shells {
-        let displacement = std::array::from_fn::<_, 3, _>(|axis| {
-            point[axis] - positions[shell.atom as usize][axis]
-        });
-        let r2 = displacement.iter().map(|x| x * x).sum::<f64>();
-        let radial = shell
-            .exponents_per_bohr2
-            .iter()
-            .zip(&shell.coefficients)
-            .map(|(&a, &d)| d * primitive_norm(a, shell.l) * (-a * r2).exp())
-            .sum::<f64>()
-            / contraction_overlap(shell).sqrt();
-        let polynomials = if shell.pure {
-            (-(shell.l as i8)..=shell.l as i8)
-                .map(|m| harmonic(shell.l, m))
-                .collect::<Vec<_>>()
-        } else {
-            let order = if molden {
-                molden_cartesian_order(shell.l).unwrap().to_vec()
-            } else {
-                reshiki_qcdata::canonical_cartesian_order(shell.l)
-            };
-            order
-                .into_iter()
-                .map(|powers| {
-                    vec![(
-                        1. / axial_norm_ratio(powers[0], powers[1], powers[2]).sqrt(),
-                        powers,
-                    )]
-                })
-                .collect()
+            let last_occupied = occupations.iter().rposition(|&n| n > 0.).unwrap();
+            (last_occupied + 1 + 5).min(occupations.len())
         };
-        for polynomial in polynomials {
-            let angular = polynomial
-                .iter()
-                .map(|(factor, powers)| {
-                    factor
-                        * displacement
-                            .iter()
-                            .zip(powers)
-                            .map(|(x, &power)| x.powi(i32::from(power)))
-                            .product::<f64>()
-                })
-                .sum::<f64>();
-            value += row[offset] * radial * angular;
-            offset += 1;
+        let (points, errors) = grid::relative_errors(
+            basis,
+            &request.positions,
+            &canonical.alpha.coefficients,
+            &cartesian,
+            nmo,
+        );
+        for (i, &error) in errors.iter().enumerate() {
+            assert!(
+                error <= 1e-10,
+                "{label} {name} MO {i}: relative grid error {error:e}"
+            );
+        }
+        let grid_max = errors.into_iter().fold(0., f64::max);
+
+        let (canonical, spherical) = orbitals_with_molden(&request, method, true);
+        let (compared, identical, rebuild_max) = reference::check_spherical(
+            canonical.basis.as_ref().unwrap(),
+            &canonical.alpha,
+            &spherical,
+        );
+        eprintln!(
+            "{label} {name}: grid MOs={nmo} points={points} max_rel={grid_max:.3e}; spherical compared={compared} bit_identical={identical} max_rel={rebuild_max:.3e}"
+        );
+    }
+}
+
+#[test]
+fn ao_grid_rejects_native_p_order() {
+    let request = request(Method::Gfn2, WATER, 0);
+    let (canonical, cartesian) = orbitals_with_molden(&request, Method::Gfn2, false);
+    let basis = canonical.basis.unwrap();
+    let nao = basis.shells.iter().map(Shell::n_functions).sum();
+    let mut wrong = canonical.alpha.coefficients;
+    for row in wrong.chunks_exact_mut(nao) {
+        let mut offset = 0;
+        for shell in &basis.shells {
+            if shell.l == 1 {
+                row[offset..offset + 3].rotate_left(1); // x,y,z back to axtb's y,z,x
+            }
+            offset += shell.n_functions();
         }
     }
-    assert_eq!(offset, row.len());
-    value
-}
-
-fn harmonic(l: u8, m: i8) -> Polynomial {
-    let terms: &[(f64, [u8; 3])] = match (l, m) {
-        (2, -2) => &[(1., [1, 1, 0])],
-        (2, -1) => &[(1., [0, 1, 1])],
-        (2, 0) => &[(2., [0, 0, 2]), (-1., [2, 0, 0]), (-1., [0, 2, 0])],
-        (2, 1) => &[(1., [1, 0, 1])],
-        (2, 2) => &[(1., [2, 0, 0]), (-1., [0, 2, 0])],
-        (3, -3) => &[(3., [2, 1, 0]), (-1., [0, 3, 0])],
-        (3, -2) => &[(1., [1, 1, 1])],
-        (3, -1) => &[(4., [0, 1, 2]), (-1., [2, 1, 0]), (-1., [0, 3, 0])],
-        (3, 0) => &[(2., [0, 0, 3]), (-3., [2, 0, 1]), (-3., [0, 2, 1])],
-        (3, 1) => &[(4., [1, 0, 2]), (-1., [3, 0, 0]), (-1., [1, 2, 0])],
-        (3, 2) => &[(1., [2, 0, 1]), (-1., [0, 2, 1])],
-        (3, 3) => &[(1., [3, 0, 0]), (-3., [1, 2, 0])],
-        _ => unreachable!(),
-    };
-    let overlap = terms
-        .iter()
-        .flat_map(|(a, p)| {
-            terms.iter().map(move |(b, q)| {
-                a * b
-                    * (0..3)
-                        .map(|axis| moment(p[axis] + q[axis]))
-                        .product::<f64>()
-            })
-        })
-        .sum::<f64>();
-    let axial = moment(2 * l) * moment(0).powi(2);
-    terms
-        .iter()
-        .map(|(coefficient, powers)| (coefficient * (axial / overlap).sqrt(), *powers))
-        .collect()
-}
-
-fn moment(power: u8) -> f64 {
-    if !power.is_multiple_of(2) {
-        return 0.;
-    }
-    (0..power / 2).fold(std::f64::consts::PI.sqrt(), |moment, k| {
-        moment * f64::from(2 * k + 1) / 2.
-    })
+    let (_, errors) = grid::relative_errors(
+        &basis,
+        &request.positions,
+        &wrong,
+        &cartesian,
+        cartesian.mos.len(),
+    );
+    let max = errors.into_iter().fold(0., f64::max);
+    assert!(max > 1e-3, "wrong p order escaped the grid check: {max:e}");
+    eprintln!("gfn2 water with deliberately wrong p order: max_rel={max:.3e}");
 }

@@ -87,6 +87,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn two_normalized_s_primitives_have_the_expected_contraction_norm() {
+        // For exponents 1/2 and 2, the normalized primitive overlap is (4/5)^(3/2).
+        let axial = |a: f64| (2. * a / std::f64::consts::PI).powf(0.75);
+        let (shell, norm) = shell(0, 0, &[0.5, 2.], &[2. * axial(0.5), -axial(2.)]).unwrap();
+        let expected_norm = (5. - 4. * 0.8_f64.powf(1.5)).sqrt();
+        assert!((norm - expected_norm).abs() < 1e-14);
+        assert!((shell.coefficients[0] - 2. / expected_norm).abs() < 1e-14);
+        assert!((shell.coefficients[1] + 1. / expected_norm).abs() < 1e-14);
+        let basis = BasisSet {
+            shells: vec![shell],
+        };
+        let mo = rows(&basis, &[norm], &[-0.7], &[0]).unwrap();
+        assert!((mo[0] + 0.7 * expected_norm).abs() < 1e-14);
+    }
+
+    #[test]
     fn p_reorders_and_d_f_keep_their_m_order_and_phases() {
         let mut shells = Vec::new();
         let mut norms = Vec::new();

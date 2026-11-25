@@ -233,79 +233,9 @@ impl Session {
                 label: r.label.clone(),
             }),
         });
-        let orbitals = if compute.orbitals != OrbitalOutput::None {
-            let scf = response
-                .scf
-                .as_ref()
-                .ok_or_else(|| incomplete("orbital levels"))?;
-            let core_electrons = scf.core_electrons.iter().map(|&n| n as u32).collect();
-            let mut basis = None;
-            let mut alpha_coefficients = Vec::new();
-            let mut beta_coefficients = Vec::new();
-            if !rows.is_empty() {
-                let orbitals = response
-                    .orbitals
-                    .as_ref()
-                    .ok_or_else(|| incomplete("orbitals"))?;
-                let mut canonical = BasisSet { shells: Vec::new() };
-                let mut norms = Vec::new();
-                for (atom, shells) in orbitals.shells.iter().enumerate() {
-                    for shell in shells {
-                        let (shell, norm) = crate::ao::shell(
-                            atom,
-                            shell.l,
-                            &shell.alpha[..shell.nprim],
-                            &shell.coeff[..shell.nprim],
-                        )?;
-                        canonical.shells.push(shell);
-                        norms.push(norm);
-                    }
-                }
-                alpha_coefficients =
-                    crate::ao::rows(&canonical, &norms, &orbitals.sets[0].coefficients, &rows)?;
-                if self.settings.uhf > 0 && self.open.method == Method::Gxtb {
-                    beta_coefficients =
-                        crate::ao::rows(&canonical, &norms, &orbitals.sets[1].coefficients, &rows)?;
-                }
-                basis = Some(canonical);
-            }
-            let mut alpha = OrbitalSet {
-                energies_hartree: scf.orbital_energies_alpha.clone(),
-                occupations: scf.occupations_alpha.clone(),
-                symmetries: Vec::new(),
-                rows: rows.clone(),
-                coefficients: alpha_coefficients,
-            };
-            let beta = if self.settings.uhf == 0 {
-                alpha.occupations = scf
-                    .occupations_alpha
-                    .iter()
-                    .zip(&scf.occupations_beta)
-                    .map(|(a, b)| a + b)
-                    .collect();
-                Beta::Restricted
-            } else if self.open.method == Method::Gfn2 {
-                Beta::SameOrbitals {
-                    occupations: scf.occupations_beta.clone(),
-                }
-            } else {
-                Beta::Unrestricted(OrbitalSet {
-                    energies_hartree: scf.orbital_energies_beta.clone(),
-                    occupations: scf.occupations_beta.clone(),
-                    symmetries: Vec::new(),
-                    rows: rows.clone(),
-                    coefficients: beta_coefficients,
-                })
-            };
-            Some(Orbitals {
-                basis,
-                core_electrons,
-                alpha,
-                beta,
-            })
-        } else {
-            None
-        };
+        let orbitals = (compute.orbitals != OrbitalOutput::None)
+            .then(|| canonical_orbitals(&response, self.open.method, self.settings.uhf, &rows))
+            .transpose()?;
         let bond_orders = if compute.bond_orders {
             let matrix = response
                 .scf
@@ -487,6 +417,83 @@ impl Session {
         }
         Ok(computed)
     }
+}
+
+fn canonical_orbitals(
+    response: &axtb_driver::Response,
+    method: Method,
+    uhf: u32,
+    rows: &[u32],
+) -> Result<Orbitals, ResponseError> {
+    let scf = response
+        .scf
+        .as_ref()
+        .ok_or_else(|| incomplete("orbital levels"))?;
+    let core_electrons = scf.core_electrons.iter().map(|&n| n as u32).collect();
+    let mut basis = None;
+    let mut alpha_coefficients = Vec::new();
+    let mut beta_coefficients = Vec::new();
+    if !rows.is_empty() {
+        let orbitals = response
+            .orbitals
+            .as_ref()
+            .ok_or_else(|| incomplete("orbitals"))?;
+        let mut canonical = BasisSet { shells: Vec::new() };
+        let mut norms = Vec::new();
+        for (atom, shells) in orbitals.shells.iter().enumerate() {
+            for shell in shells {
+                let (shell, norm) = crate::ao::shell(
+                    atom,
+                    shell.l,
+                    &shell.alpha[..shell.nprim],
+                    &shell.coeff[..shell.nprim],
+                )?;
+                canonical.shells.push(shell);
+                norms.push(norm);
+            }
+        }
+        alpha_coefficients =
+            crate::ao::rows(&canonical, &norms, &orbitals.sets[0].coefficients, rows)?;
+        if uhf > 0 && method == Method::Gxtb {
+            beta_coefficients =
+                crate::ao::rows(&canonical, &norms, &orbitals.sets[1].coefficients, rows)?;
+        }
+        basis = Some(canonical);
+    }
+    let mut alpha = OrbitalSet {
+        energies_hartree: scf.orbital_energies_alpha.clone(),
+        occupations: scf.occupations_alpha.clone(),
+        symmetries: Vec::new(),
+        rows: rows.to_vec(),
+        coefficients: alpha_coefficients,
+    };
+    let beta = if uhf == 0 {
+        alpha.occupations = scf
+            .occupations_alpha
+            .iter()
+            .zip(&scf.occupations_beta)
+            .map(|(a, b)| a + b)
+            .collect();
+        Beta::Restricted
+    } else if method == Method::Gfn2 {
+        Beta::SameOrbitals {
+            occupations: scf.occupations_beta.clone(),
+        }
+    } else {
+        Beta::Unrestricted(OrbitalSet {
+            energies_hartree: scf.orbital_energies_beta.clone(),
+            occupations: scf.occupations_beta.clone(),
+            symmetries: Vec::new(),
+            rows: rows.to_vec(),
+            coefficients: beta_coefficients,
+        })
+    };
+    Ok(Orbitals {
+        basis,
+        core_electrons,
+        alpha,
+        beta,
+    })
 }
 
 fn incomplete(part: &str) -> ResponseError {
