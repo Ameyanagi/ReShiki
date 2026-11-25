@@ -77,13 +77,25 @@ From [ClevinLiju/VibeView](https://github.com/ClevinLiju/VibeView) at commit
 `1ff906a7e74e3f83b79370f0f80a07acf7028fc9`, MIT, copyright Clevin Liju and
 VibeView contributors. The licence text is in
 [`licenses/vibeview/LICENSE`](../../../licenses/vibeview/LICENSE).
-These are unmodified ORCA 6.1.1 `orca_2mkl` Molden exports under local filenames.
+These unmodified `orca_2mkl` Molden exports come from VibeView test data from
+the same ORCA 6.1.1 setup. The formaldehyde file's companion output records
+ORCA 6.1.1. The water file records only `orca_2mkl`.
+[Formaldehyde companion output](https://raw.githubusercontent.com/ClevinLiju/VibeView/1ff906a7e74e3f83b79370f0f80a07acf7028fc9/Sources/MolChecks/TestData/io/orca/h2co_tddft.out)
+
 Source paths are relative to the VibeView repository root.
 
 | File                        | Source path                                               | SHA-256 (first 12) |
 | --------------------------- | --------------------------------------------------------- | ----------------- |
 | `orca611_water_tzvp.molden`  | `Sources/MolChecks/TestData/analysis/water_tzvp.molden`     | `9f17122eaf0b`    |
 | `orca611_h2co_tddft.molden`  | `Sources/MolChecks/TestData/io/orca/h2co_tddft.molden.input` | `c71c2fd033e3`    |
+
+`orca_ch3f_pbe0.molden` is an unmodified copy of `tests/eqc_ch3f_pbe0/parent.molden`
+from [AK-Kleemiss/NoSpherA2](https://github.com/AK-Kleemiss/NoSpherA2) at commit
+`48cffe7a0e30e7eded82c289f17407b0ecc2d7d2`, BSD-2-Clause, copyright Florian Kleemiß
+(SHA-256 first 12 `3151ad8e29ad`; licence text
+[`licenses/nosphera2/LICENSE`](../../../licenses/nosphera2/LICENSE)). It is an
+`orca_2mkl` export of PBE0 CH3F whose atoms are not coplanar, so it also
+fixes the p and d phases that the planar water and formaldehyde files cannot.
 
 ## PySCF (`pyscf/`)
 
@@ -110,6 +122,7 @@ under ReShiki's MIT OR Apache-2.0 licence.
 | `g09_Mo4OCl4-sp.txt`       | PySCF pure AO evaluation with Gaussian fchk coefficients mapped by the G09/G16 overlap test. |
 | `orca611_water_tzvp.txt`   | PySCF pure AO evaluation using the ORCA convention established by implied overlap.             |
 | `orca611_h2co_tddft.txt`   | PySCF pure AO evaluation using the ORCA convention established by implied overlap.             |
+| `orca_ch3f_pbe0.txt`       | PySCF pure AO evaluation using the ORCA convention established by implied overlap.             |
 
 ## ReShiki (`reshiki/`)
 

@@ -291,6 +291,7 @@ reference_tests! {
     reference_g09_mo4ocl4_sp => "g09_Mo4OCl4-sp",
     reference_orca611_water_tzvp => "orca611_water_tzvp",
     reference_orca611_h2co_tddft => "orca611_h2co_tddft",
+    reference_orca_ch3f_pbe0 => "orca_ch3f_pbe0",
 }
 
 #[test]
@@ -304,13 +305,14 @@ fn orbital_references_detect_perturbed_components() {
     }
     use Perturbation::{BareRadial, FlipPureD, FlipPureF3, Swap};
 
-    let cases: [(&str, &[Perturbation]); 6] = [
+    let cases: [(&str, &[Perturbation]); 7] = [
         ("h2o_ccpvqz_pure", &[Swap(2), Swap(3), Swap(4), FlipPureD]),
         ("h2o_ccpvqz_cart", &[Swap(2), Swap(3), Swap(4)]),
         ("ch3nh2_631gs_cart", &[Swap(2)]),
         ("g09_Mo4OCl4-sp", &[Swap(2), FlipPureD]),
         ("orca611_water_tzvp", &[FlipPureF3, BareRadial]),
         ("orca611_h2co_tddft", &[Swap(2)]),
+        ("orca_ch3f_pbe0", &[Swap(2), FlipPureD, BareRadial]),
     ];
     for (stem, perturbations) in cases {
         let reference = read_reference(stem);

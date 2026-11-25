@@ -194,15 +194,19 @@ The converters take `CartesianNorm`:
   coefficient by √r and exporting divides by it. A d_xy coefficient of 1 becomes 1/√3.
 
 The cclib Molden 5.7 carbon fixture verifies Cartesian d/f/g `Unit` normalization by MO
-orthonormality. By import policy, unidentified Molden producers use the conventions verified
-on Molden and PySCF exports. Producer-specific sign changes of pure functions belong to the
-reader's adapter. The printed G09 and G16 Mo4OCl4-sp overlaps and the G09 fchk signed grid
-reference verify that the Gaussian pure d order and signs match Molden's.
+orthonormality. By import policy, the Molden writer and unidentified producers use the
+specification's pure d/f/g convention, verified on PySCF 2.15.0 exports. Producer-specific
+sign changes of pure functions belong to the reader's adapter. The printed G09 and G16
+Mo4OCl4-sp overlaps and the G09 fchk signed grid reference verify that the Gaussian pure d
+order and signs match Molden's.
 
 The ORCA adapter divides bare radial coefficients by `primitive_norm(alpha, l)` and flips
-the pure f coefficients at m = ±3, as verified by the implied AO overlap of the complete
-ORCA 6.1.1 water TZVP and formaldehyde TDDFT MO sets and checked against signed grid references.
-Pure g and Cartesian d/f/g remain unverified and cause the reader to keep only the orbital spectrum.
+the pure f coefficients at m = ±3. The implied AO overlap of the complete water TZVP and
+formaldehyde TDDFT MO sets verifies the radial conversion on contracted s/p shells. Every
+d/f shell in these fixtures has one primitive. The overlap phase checks assume ORCA's p
+components are x, y, z and establish the pure d/f phases used for the signed grid references.
+The adapter applies this convention to all `orca_2mkl` files. Pure g and Cartesian d/f/g
+remain unverified and cause the reader to keep only the orbital spectrum.
 
 Functions: `canonical_cartesian_order(l)`, `molden_cartesian_order(l)`, `molden_pure_order(l)`,
 `axial_norm_ratio(a, b, c)`, `primitive_norm(alpha, l)`, `contraction_overlap(shell)`,

@@ -238,6 +238,31 @@ fn fchk_g09_water_mp2_uses_total_energy_and_splits_sp_shell() {
 }
 
 #[test]
+fn fchk_sp_coefficients_copy_complete_rows_in_level_order() {
+    let file = open("cclib/g09_water_mp2.fchk");
+    let basis = file.jobs[0]
+        .result
+        .as_ref()
+        .unwrap()
+        .orbitals
+        .as_ref()
+        .unwrap()
+        .basis
+        .as_ref()
+        .unwrap();
+    assert!(basis.shells.iter().all(|shell| shell.l < 2));
+    // Distinct signed coefficients expose any changes to the s/p component order.
+    // The selected level order must still move each complete seven-AO row together.
+    let values = (0..21).map(|i| f64::from(i - 10)).collect::<Vec<_>>();
+    let levels = [(2, -3.0), (0, -2.0), (1, -1.0)];
+    let actual = super::canonical_coefficients(basis, &values, 7, &levels).unwrap();
+    assert_eq!(
+        actual,
+        [&values[14..21], &values[..7], &values[7..14]].concat()
+    );
+}
+
+#[test]
 fn fchk_g16_dvb_ir_vibration_blocks_match_quoted_gaussian_output() {
     let file = open("cclib/g16_dvb_ir.fchk");
     let job = &file.jobs[0];
@@ -467,11 +492,17 @@ fn fchk_high_shell_shapes_require_gaussian_pure_d() {
                 let no_ilsw = source.replacen("\nILSW ", "\nXLSW ", 1);
                 let no_iopcl = source.replacen("\nIOpCl ", "\nXOpCl ", 1);
                 let neither = no_ilsw.replacen("\nIOpCl ", "\nXOpCl ", 1);
-                let version_only =
-                    format!("{neither}{:<40}   C     G16 A.03\n", "Gaussian Version");
+                let with_version = |source, version| {
+                    format!("{source}{:<40}   C     {version}\n", "Gaussian Version")
+                };
                 vec![
-                    (source, true),
-                    (version_only, true),
+                    (source.clone(), true),
+                    (with_version(&neither, "ES64L-G16RevA.03"), true),
+                    (with_version(&neither, "EM64L-G09RevD.01"), true),
+                    // An explicit version overrides the marker-pair fallback.
+                    (with_version(&source, "G03 C.02"), false),
+                    (with_version(&source, ""), false),
+                    (with_version(&source, "G160 A.03"), false),
                     (no_ilsw, false),
                     (no_iopcl, false),
                     (neither, false),
@@ -504,8 +535,7 @@ fn fchk_high_shell_shapes_require_gaussian_pure_d() {
                         let representation = if pure { "pure" } else { "Cartesian" };
                         format!("Gaussian {representation} {name} functions")
                     } else {
-                        "pure d functions in an fchk file not written by Gaussian 09 or later"
-                            .into()
+                        "pure d functions in an fchk file whose Gaussian 09 or 16 origin could not be verified".into()
                     };
                     assert_eq!(
                         file.warnings,

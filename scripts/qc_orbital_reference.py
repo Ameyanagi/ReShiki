@@ -7,13 +7,17 @@ r"""Generate signed PySCF Molden, Gaussian fchk, and ORCA Molden orbital referen
 
 Run from the repository root with the pinned, development-only dependencies::
 
-    uv run --no-build scripts/qc_orbital_reference.py --cclib <CCLIB> [--orca <VIBEVIEW>]
+    uv run --no-build scripts/qc_orbital_reference.py --cclib <CCLIB> \
+        [--orca <VIBEVIEW>] [--orca-extra <CH3F_MOLDEN>]
 
 CCLIB is an unpacked cclib source tree at commit
 1ed6fb7b7d0b95f2767c12071e22841e18bb845e; only its data files are read.
 VIBEVIEW is an optional VibeView data tree at commit
 1ff906a7e74e3f83b79370f0f80a07acf7028fc9. Part C also accepts its source
-paths flattened with "__" and uses the complete printed MOs to fix the AO convention.
+paths flattened with "__". CH3F_MOLDEN is tests/eqc_ch3f_pbe0/parent.molden
+from NoSpherA2 at commit 48cffe7a0e30e7eded82c289f17407b0ecc2d7d2. Part C
+uses the complete printed MOs to fix the AO convention and tests its x and y
+reflections against the noncoplanar CH3F geometry.
 PySCF (Apache-2.0) is a dev-time generator only, never a runtime dependency.
 References use 32 fixed-seed points in bohr and retain the signs of the in-memory
 MOs. Source energies are parsed back before a stable ascending energy sort.
@@ -690,7 +694,7 @@ def phase_errors(overlap, implied, masks):
     return np.max(np.abs(signed - implied), axis=(1, 2))
 
 
-def prove_orca_convention(atoms, basis, coeff):
+def prove_orca_convention(atoms, basis, coeff, *, require_reflection_gap=False):
     """Rank AO hypotheses against (C C^T)^-1, independent of any AO evaluator."""
     eye = np.eye(len(coeff))
     inv_c = np.linalg.solve(coeff, eye)
@@ -726,7 +730,8 @@ def prove_orca_convention(atoms, basis, coeff):
     assert discarded_bound >= alternative  # Certifies the global runner-up.
     margin = alternative - residual
     overlap = mol.intor_symmetric("int1e_ovlp_sph")[np.ix_(order, order)]
-    orthogonality = np.max(np.abs(coeff.T @ (signs[:, None] * overlap * signs) @ coeff - eye))
+    signed_overlap = signs[:, None] * overlap * signs
+    orthogonality = np.max(np.abs(coeff.T @ signed_overlap @ coeff - eye))
     expected = np.ones(mol.nao)
     expected[slots[3][:, 5:]] = -1  # The last two file slots are f(+3), f(-3).
     assert radial == "bare" and swap == "identity" and np.array_equal(signs, expected)
@@ -735,12 +740,39 @@ def prove_orca_convention(atoms, basis, coeff):
     print(f"  winner: {radial}, {swap} order, {phases}")
     print(f"  max|S_hyp - S_impl|={residual:.9e}  max|C^T S_hyp C - I|={orthogonality:.9e}")
     print(
-        f"  best alternative ({alt_swap}): max|S_hyp - S_impl|={alternative:.9e}  margin={margin:.9e}"
+        f"  best alternative with fixed p phases ({alt_swap}): "
+        f"max|S_hyp - S_impl|={alternative:.9e}  margin={margin:.9e}"
     )
+
+    # In real harmonics +m carries cos(m phi) and -m carries sin(|m| phi).
+    # Reflecting x takes phi to pi-phi; reflecting y takes phi to -phi.
+    # The p slots (x,y,z) have m=(+1,-1,0) in this convention.
+    m = np.concatenate([[1, -1, 0] if n == 1 else gaussian_m(n) for n in shell_l])
+    x_odd = ((m > 0) & (m % 2 == 1)) | ((m < 0) & (m % 2 == 0))
+    for axis, odd in (("x", x_odd), ("y", m < 0)):
+        reflection = np.where(odd, -1, 1)
+        error = np.max(np.abs(reflection[:, None] * signed_overlap * reflection - implied))
+        print(f"  reflected {axis}: max|S_hyp - S_impl|={error:.9e}")
+        if require_reflection_gap:
+            assert error - residual > 1e-2, (axis, error, residual)
     return mol, order, signs
 
 
-def orca_cases(vibeview):
+def orca_sources(vibeview, ch3f):
+    if vibeview is not None:
+        for stem, upstream in (
+            ("water_tzvp", "Sources/MolChecks/TestData/analysis/water_tzvp.molden"),
+            ("h2co_tddft", "Sources/MolChecks/TestData/io/orca/h2co_tddft.molden.input"),
+        ):
+            source = vibeview / upstream
+            if not source.is_file():
+                source = vibeview / upstream.replace("/", "__")
+            yield f"orca611_{stem}.molden", source, False
+    if ch3f is not None:
+        yield "orca_ch3f_pbe0.molden", ch3f, True
+
+
+def orca_cases(vibeview, ch3f=None):
     print("Part C: ORCA orca_2mkl Molden, S_impl = (C C^T)^-1")
     print("  p=x,y,z; pure d/f order m=0,+1,-1,+2,-2[, +3,-3]; signs relative to PySCF")
     print(
@@ -748,14 +780,8 @@ def orca_cases(vibeview):
     )
     directory = QC / "orca"
     directory.mkdir(parents=True, exist_ok=True)
-    for stem, upstream in (
-        ("water_tzvp", "Sources/MolChecks/TestData/analysis/water_tzvp.molden"),
-        ("h2co_tddft", "Sources/MolChecks/TestData/io/orca/h2co_tddft.molden.input"),
-    ):
-        source = vibeview / upstream
-        if not source.is_file():
-            source = vibeview / upstream.replace("/", "__")
-        path = directory / f"orca611_{stem}.molden"
+    for name, source, require_reflection_gap in orca_sources(vibeview, ch3f):
+        path = directory / name
         shutil.copyfile(source, path)
         digest = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
         source_name = path.relative_to(QC).as_posix()
@@ -763,7 +789,9 @@ def orca_cases(vibeview):
         print(
             f"C {source_name}: {path.stat().st_size} bytes, sha256[:12]={digest}, {len(energies)} alpha MOs"
         )
-        mol, order, signs = prove_orca_convention(atoms, basis, coeff)
+        mol, order, signs = prove_orca_convention(
+            atoms, basis, coeff, require_reflection_gap=require_reflection_gap
+        )
         points = grid_points(mol)
         values = (mol.eval_gto("GTOval_sph", points)[:, order] * signs) @ coeff
         write_reference(
@@ -779,12 +807,13 @@ def main():
     parser = argparse.ArgumentParser(description="Generate and verify signed orbital references.")
     parser.add_argument("--cclib", required=True, type=Path, help="root of the cclib data checkout")
     parser.add_argument("--orca", type=Path, help="VibeView data directory for the ORCA proof")
+    parser.add_argument("--orca-extra", type=Path, help="NoSpherA2 CH3F parent.molden file")
     args = parser.parse_args()
     print(f"PySCF {pyscf.__version__}, NumPy {np.__version__}, grid seed 20261125")
     run_molden()
     gaussian_cases(args.cclib)
-    if args.orca is not None:
-        orca_cases(args.orca)
+    if args.orca is not None or args.orca_extra is not None:
+        orca_cases(args.orca, args.orca_extra)
 
 
 if __name__ == "__main__":

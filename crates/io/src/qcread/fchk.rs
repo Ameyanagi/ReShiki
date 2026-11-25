@@ -4,7 +4,7 @@
 //! specifies the field widths, atomic units, normalized primitive contractions, and
 //! Gaussian component order. Printed G09 and G16 Mo4OCl4-sp overlaps verify the
 //! pure d order and signs, and the cclib G09 fchk fixture verifies signed grid
-//! values. The reader retains s/p/SP and enables pure d for Gaussian 09 or later.
+//! values. The reader retains s/p/SP and enables pure d for Gaussian 09 or 16.
 //! Higher pure shells and Cartesian d and above have unverified conventions.
 //! This adapter is original code under MIT OR Apache-2.0.
 use std::collections::{BTreeMap, BTreeSet};
@@ -498,7 +498,7 @@ fn nonempty(text: &str) -> Option<String> {
     (!text.is_empty()).then(|| text.to_string())
 }
 
-/// Retain s, p, SP and Gaussian 09 or later pure d shells. An unverified shell
+/// Retain s, p, SP and Gaussian 09 or 16 pure d shells. An unverified shell
 /// convention leaves the spectrum intact while omitting all orbital shapes.
 fn basis(
     fields: &Fields,
@@ -508,8 +508,17 @@ fn basis(
     warnings: &mut Vec<String>,
 ) -> Result<Option<BasisSet>, Error> {
     let types = fields.integers("Shell types")?;
-    let gaussian = fields.get("Gaussian Version").is_some()
-        || (fields.get("ILSW").is_some() && fields.get("IOpCl").is_some());
+    let gaussian = match fields.characters("Gaussian Version")? {
+        Some(version) => version
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|token| {
+                token
+                    .strip_prefix("G09")
+                    .or_else(|| token.strip_prefix("G16"))
+                    .is_some_and(|suffix| suffix.is_empty() || suffix.starts_with("Rev"))
+            }),
+        None => fields.get("ILSW").is_some() && fields.get("IOpCl").is_some(),
+    };
     let unverified: BTreeSet<_> = types
         .unwrap_or_default()
         .iter()
@@ -529,7 +538,7 @@ fn basis(
     if let Some(last) = names.pop() {
         let qualifier = if gaussian { "Gaussian " } else { "" };
         let location = if non_gaussian_d {
-            " in an fchk file not written by Gaussian 09 or later"
+            " in an fchk file whose Gaussian 09 or 16 origin could not be verified"
         } else {
             ""
         };
@@ -955,10 +964,15 @@ fn canonical_coefficients(
     levels: &[(usize, f64)],
 ) -> Result<Vec<f64>, Error> {
     let mut converted = Vec::with_capacity(values.len());
+    let reorder_ao = basis.shells.iter().any(|shell| shell.l >= 2);
     for &(mo, _) in levels {
         let row = &values[mo * n_ao..(mo + 1) * n_ao];
-        // Gaussian pure d uses Molden's order and signs. The conversion leaves s/p/SP as is.
-        converted.extend(mo_from_molden(basis, row, CartesianNorm::Unit)?);
+        if reorder_ao {
+            // Gaussian pure d uses Molden's order and signs.
+            converted.extend(mo_from_molden(basis, row, CartesianNorm::Unit)?);
+        } else {
+            converted.extend_from_slice(row);
+        }
     }
     Ok(converted)
 }
