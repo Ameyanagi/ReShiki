@@ -8,6 +8,7 @@ use crate::{Error, Frame, MAX_BASIS_FUNCTIONS, MAX_COEFFICIENTS, MAX_L, MAX_PRIM
 
 /// An atomic-orbital basis in canonical shell order.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BasisSet {
     /// Shells in atomic-orbital order.
     pub shells: Vec<Shell>,
@@ -15,6 +16,7 @@ pub struct BasisSet {
 
 /// A contracted Gaussian shell on one atom.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Shell {
     /// Zero-based index of the atom in the frame.
     pub atom: u32,

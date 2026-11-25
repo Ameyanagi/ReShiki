@@ -94,6 +94,8 @@ pub enum Error {
     Limit(String),
     #[error("xTB input: {0}")]
     Input(String),
+    #[error("xTB unsupported: {0}")]
+    Unsupported(String),
     #[error("xTB worker protocol error: {0}")]
     Protocol(String),
     #[error("xTB {kind}: {message}")]
@@ -119,7 +121,10 @@ pub struct Session {
     limits: Limits,
     next_id: u64,
     max_atoms: usize,
+    max_hessian_atoms: usize,
     opened: Option<Opened>,
+    open: Option<Open>,
+    geometry: Option<(Vec<[f64; 3]>, protocol::Units)>,
     stderr: VecDeque<u8>,
     _thread: PhantomData<*const ()>,
 }
@@ -144,7 +149,10 @@ impl Session {
             limits,
             next_id: 1,
             max_atoms: 0,
+            max_hessian_atoms: 0,
             opened: None,
+            open: None,
+            geometry: None,
             stderr: VecDeque::with_capacity(STDERR_BYTES),
             _thread: PhantomData,
         };
@@ -154,6 +162,7 @@ impl Session {
             return Err(session.protocol_error(message));
         }
         session.max_atoms = hello.max_atoms;
+        session.max_hessian_atoms = hello.max_hessian_atoms;
         Ok((session, hello))
     }
 
@@ -164,8 +173,8 @@ impl Session {
     /// The session's heap policy replaces `open.heap_bytes` on the wire.
     pub fn open(&mut self, open: &Open, cancel: &Cancel) -> Result<Opened> {
         self.check_cancelled(cancel)?;
-        open.validate_geometry_and_threads(self.max_atoms)
-            .map_err(|error| Error::Input(error.message))?;
+        open.admit(None, None, self.max_atoms)
+            .map_err(admission_error)?;
         let mut request = open.clone();
         request.heap_bytes = self.limits.heap_bytes;
         let opened: Opened =
@@ -174,30 +183,84 @@ impl Session {
             return Err(self.protocol_error(message));
         }
         self.opened = Some(opened.clone());
+        self.open = Some(open.clone());
+        self.geometry = Some((open.positions.clone(), open.units));
         Ok(opened)
     }
 
     pub fn compute(&mut self, compute: &Compute, cancel: &Cancel) -> Result<Computed> {
         self.check_cancelled(cancel)?;
-        if let Some(positions) = &compute.positions {
-            protocol::validate_atom_count(positions.len(), self.max_atoms)
-                .and_then(|()| {
-                    let atoms = self
-                        .opened
-                        .as_ref()
-                        .map_or(positions.len(), |open| open.atoms);
-                    protocol::validate_positions(positions, atoms)
-                })
-                .map_err(|error| Error::Input(error.message))?;
-        }
-        let computed: Computed = self.request(
+        let open = self.open.clone();
+        let opened = self.opened.clone();
+        let frame = if let Some(open) = &open {
+            if compute.hessian.is_some() && open.numbers.len() > self.max_hessian_atoms {
+                return Err(Error::Limit(format!(
+                    "expected at most {} Hessian atoms",
+                    self.max_hessian_atoms
+                )));
+            }
+            let mut current = compute.clone();
+            if current.positions.is_none()
+                && let Some((positions, units)) = &self.geometry
+            {
+                current.positions = Some(positions.clone());
+                current.units = *units;
+            }
+            Some(
+                open.admit(
+                    Some(&current),
+                    opened.as_ref().and_then(|o| o.basis_functions),
+                    self.max_atoms,
+                )
+                .map_err(admission_error)?,
+            )
+        } else {
+            // Preserve the worker's state error for compute-before-open.
+            if let Some(positions) = &compute.positions {
+                if positions.is_empty() || positions.iter().flatten().any(|v| !v.is_finite()) {
+                    return Err(Error::Input("expected one finite position per atom".into()));
+                }
+                if positions.len() > self.max_atoms {
+                    return Err(Error::Limit(format!(
+                        "expected at most {} atoms",
+                        self.max_atoms
+                    )));
+                }
+            }
+            None
+        };
+        let computed: Computed = self.request_with(
             RequestOp::Compute(compute.clone()),
             self.limits.compute,
             cancel,
             false,
+            |session, computed, stream, started, deadline, cancel| {
+                let plans =
+                    validate_computed_header(computed, opened.as_ref(), open.as_ref(), compute)
+                        .map_err(|message| session.protocol_error(message))?;
+                for plan in plans {
+                    let mut values = Vec::with_capacity(plan.values);
+                    for index in 0..plan.chunks {
+                        let body = session.receive_frame(
+                            &[],
+                            protocol::FrameKind::Chunk,
+                            stream,
+                            deadline,
+                            started,
+                            cancel,
+                        )?;
+                        append_chunk(&mut values, &body, index, plan.values)
+                            .map_err(|message| session.protocol_error(message))?;
+                    }
+                    install_array(computed, plan.name, values);
+                }
+                validate_computed_payload(computed, frame.as_ref())
+                    .map_err(|message| session.protocol_error(message))
+            },
         )?;
-        if let Err(message) = validate_computed(&computed, self.opened.as_ref(), compute.gradient) {
-            return Err(self.protocol_error(message));
+        // Only successful calculations advance the geometry used for admission.
+        if let Some(positions) = &compute.positions {
+            self.geometry = Some((positions.clone(), compute.units));
         }
         Ok(computed)
     }
@@ -220,6 +283,24 @@ impl Session {
         cancel: &Cancel,
         closing: bool,
     ) -> Result<T> {
+        self.request_with(op, deadline, cancel, closing, |_, _, _, _, _, _| Ok(()))
+    }
+
+    fn request_with<T: DeserializeOwned>(
+        &mut self,
+        op: RequestOp,
+        deadline: Duration,
+        cancel: &Cancel,
+        closing: bool,
+        load: impl FnOnce(
+            &mut Self,
+            &mut T,
+            &mut ResponseInput,
+            Instant,
+            Duration,
+            &Cancel,
+        ) -> Result<()>,
+    ) -> Result<T> {
         let started = Instant::now();
         self.check_request(started, deadline, cancel)?;
         self.preflight()?;
@@ -230,7 +311,15 @@ impl Session {
         };
         let frame = protocol::encode_frame(&Request { id, op })
             .map_err(|error| self.protocol_error(error.to_string()))?;
-        let (body, ended) = self.exchange(&frame, deadline, started, cancel)?;
+        let mut stream = ResponseInput::default();
+        let body = self.receive_frame(
+            &frame,
+            protocol::FrameKind::Json,
+            &mut stream,
+            deadline,
+            started,
+            cancel,
+        )?;
         let response: Response<T> = serde_json::from_slice(&body)
             .map_err(|error| self.protocol_error(format!("Invalid response JSON: {error}")))?;
         self.check_request(started, deadline, cancel)?;
@@ -241,7 +330,10 @@ impl Session {
             )));
         }
         match response.result {
-            Outcome::Ok { ok } => {
+            Outcome::Ok { mut ok } => {
+                load(self, &mut ok, &mut stream, started, deadline, cancel)?;
+                let ended = self.finish_response(&stream)?;
+                self.check_request(started, deadline, cancel)?;
                 if closing {
                     self.finish_close(started, deadline, cancel)?;
                 } else if ended {
@@ -250,12 +342,17 @@ impl Session {
                 Ok(ok)
             }
             Outcome::Error { error } => {
+                let ended = self.finish_response(&stream)?;
+                if error.message.len() > 1024 {
+                    return Err(self.protocol_error("Worker error message exceeds 1 KiB".into()));
+                }
                 if ended || error.kind == ErrorKind::Protocol {
                     self.terminate();
                 }
                 Err(match error.kind {
                     ErrorKind::Protocol => Error::Protocol(error.message),
                     ErrorKind::Limit => Error::Limit(error.message),
+                    ErrorKind::Unsupported => Error::Unsupported(error.message),
                     ErrorKind::Unavailable => Error::Unavailable,
                     kind => Error::Engine {
                         kind,
@@ -278,20 +375,18 @@ impl Session {
         self.check_resources()
     }
 
-    fn exchange(
+    fn receive_frame(
         &mut self,
         request: &[u8],
+        kind: protocol::FrameKind,
+        output: &mut ResponseInput,
         deadline: Duration,
         started: Instant,
         cancel: &Cancel,
-    ) -> Result<(Vec<u8>, bool)> {
+    ) -> Result<Vec<u8>> {
         let mut written = 0;
-        let mut output = Vec::new();
-        let mut expected = None;
-        let mut output_closed = false;
         loop {
             self.check_request(started, deadline, cancel)?;
-
             let mut progress = false;
             if written < request.len() {
                 match self.child_mut()?.write_input(&request[written..]) {
@@ -305,17 +400,22 @@ impl Session {
                 }
             }
 
-            let mut buffer = [0_u8; 8192];
-            if !output_closed {
+            let mut frame = output
+                .take_frame(kind)
+                .map_err(|message| self.protocol_error(message))?;
+            if frame.is_none() && !output.closed {
+                let mut buffer = [0_u8; 8192];
                 match self.read_stdout(&mut buffer)? {
-                    Some(0) => output_closed = true,
+                    Some(0) => output.closed = true,
                     Some(count) => {
-                        append_output(&mut output, &mut expected, &buffer[..count])
-                            .map_err(|message| self.protocol_error(message))?;
+                        output.bytes.extend_from_slice(&buffer[..count]);
                         progress = true;
                     }
                     None => (),
                 }
+                frame = output
+                    .take_frame(kind)
+                    .map_err(|message| self.protocol_error(message))?;
             }
             progress |= self.read_stderr()?;
             let status = self.status()?;
@@ -325,30 +425,30 @@ impl Session {
             if status.is_none() {
                 self.check_resources()?;
             }
-
-            let complete = expected.is_some_and(|length| output.len() == length);
-            if complete && written != request.len() {
-                return Err(
-                    self.protocol_error("Response arrived before the complete request".into())
-                );
-            }
-            if complete {
-                // Check once more even when the first read ended exactly at a
-                // frame boundary. A second response is never a future reply.
-                if !output_closed {
-                    output_closed = self.no_more_output()?;
+            if let Some(frame) = frame {
+                if written != request.len() {
+                    return Err(
+                        self.protocol_error("Response arrived before the complete request".into())
+                    );
                 }
-                return Ok((
-                    output.split_off(protocol::HEADER_LEN),
-                    output_closed || status.is_some(),
-                ));
-            } else if output_closed || (status.is_some() && !progress) {
+                return Ok(frame);
+            }
+            if output.closed || (status.is_some() && !progress) {
                 return Err(self.exited());
             }
             if !progress {
                 std::thread::sleep(POLL.min(deadline.saturating_sub(started.elapsed())));
             }
         }
+    }
+
+    fn finish_response(&mut self, output: &ResponseInput) -> Result<bool> {
+        if !output.bytes.is_empty() {
+            return Err(self.protocol_error("Unsolicited or extra worker output".into()));
+        }
+        let closed = output.closed || self.no_more_output()?;
+        self.read_stderr()?;
+        Ok(closed || self.status()?.is_some())
     }
 
     fn check_request(
@@ -552,33 +652,59 @@ fn remember_stderr(tail: &mut VecDeque<u8>, bytes: &[u8]) {
     }
 }
 
-fn append_output(
-    output: &mut Vec<u8>,
-    expected: &mut Option<usize>,
-    bytes: &[u8],
-) -> std::result::Result<(), String> {
-    output.extend_from_slice(bytes);
-    if expected.is_none() && output.len() >= protocol::HEADER_LEN {
-        let mut header = [0; protocol::HEADER_LEN];
-        header.copy_from_slice(&output[..protocol::HEADER_LEN]);
-        let length = protocol::decode_header(&header).map_err(|error| error.to_string())?;
-        *expected = Some(protocol::HEADER_LEN + length);
+#[derive(Default)]
+struct ResponseInput {
+    bytes: Vec<u8>,
+    closed: bool,
+}
+
+impl ResponseInput {
+    /// Consume one frame, preserving bytes already read from the next frame.
+    fn take_frame(
+        &mut self,
+        expected: protocol::FrameKind,
+    ) -> std::result::Result<Option<Vec<u8>>, String> {
+        if self.bytes.len() < protocol::HEADER_LEN {
+            return Ok(None);
+        }
+        let header: &[u8; protocol::HEADER_LEN] =
+            self.bytes[..protocol::HEADER_LEN].try_into().unwrap();
+        let (kind, length) = protocol::decode_header(header).map_err(|error| error.to_string())?;
+        if kind != expected {
+            return Err(format!("Expected {expected:?} frame, received {kind:?}"));
+        }
+        let total = protocol::HEADER_LEN + length;
+        if self.bytes.len() < total {
+            return Ok(None);
+        }
+        let trailing = self.bytes.split_off(total);
+        let mut frame = std::mem::replace(&mut self.bytes, trailing);
+        frame.drain(..protocol::HEADER_LEN);
+        Ok(Some(frame))
     }
-    if expected.is_some_and(|length| output.len() > length) {
-        return Err("More than one response frame or trailing output".into());
+}
+
+fn admission_error(error: protocol::ResponseError) -> Error {
+    match error.kind {
+        ErrorKind::Unsupported => Error::Unsupported(error.message),
+        ErrorKind::Limit => Error::Limit(error.message),
+        _ => Error::Input(error.message),
     }
-    Ok(())
 }
 
 fn validate_hello(hello: &Hello) -> std::result::Result<(), String> {
     if hello.protocol != protocol::VERSION {
         return Err("Worker advertised an incompatible protocol".into());
     }
-    if hello.max_atoms == 0 || hello.max_atoms > protocol::MAX_ATOMS {
+    if hello.max_atoms == 0
+        || hello.max_atoms > protocol::MAX_ATOMS
+        || hello.max_hessian_atoms != protocol::MAX_HESSIAN_ATOMS
+        || hello.max_hessian_atoms > hello.max_atoms
+    {
         return Err("Worker advertised an invalid atom limit".into());
     }
     let Some(engine) = &hello.engine else {
-        return if hello.methods.is_empty() && hello.operations.is_empty() {
+        return if hello.methods.is_empty() {
             Ok(())
         } else {
             Err("Unavailable worker advertised engine capabilities".into())
@@ -596,14 +722,28 @@ fn validate_hello(hello: &Hello) -> std::result::Result<(), String> {
     {
         return Err("Worker advertised incomplete engine metadata".into());
     }
-    if hello.methods != [protocol::Method::Gfn2]
-        || hello.operations.len() != 2
-        || !hello.operations.contains(&protocol::Operation::Energy)
-        || !hello.operations.contains(&protocol::Operation::Gradient)
+    if engine.name != "axtb"
+        || hello.methods
+            != [
+                protocol::Method::Gfn2,
+                protocol::Method::Gfnff,
+                protocol::Method::Gxtb,
+            ]
     {
         return Err("Worker advertised inconsistent capabilities".into());
     }
     Ok(())
+}
+
+fn engine_conventions(
+    method: protocol::Method,
+    conventions: protocol::Conventions,
+) -> &'static str {
+    match (method, conventions) {
+        (_, protocol::Conventions::Axtb) => "axtb",
+        (protocol::Method::Gxtb, protocol::Conventions::Xtb68) => "gxtb",
+        (_, protocol::Conventions::Xtb68) => "xtb",
+    }
 }
 
 fn validate_opened(
@@ -616,52 +756,555 @@ fn validate_opened(
     }
     if opened.method != open.method
         || opened.conventions != open.conventions
+        || opened.engine_conventions != engine_conventions(open.method, open.conventions)
         || opened.numerics.trim().is_empty()
+        || (open.method == protocol::Method::Gxtb && !opened.numerics.starts_with("gxtb-v2.0.1:"))
     {
         return Err("Worker returned inconsistent method metadata".into());
+    }
+    let scf = open.method != protocol::Method::Gfnff;
+    if opened.basis_functions.is_some() != scf || opened.basis_functions == Some(0) {
+        return Err("Worker returned an inconsistent basis function count".into());
     }
     Ok(())
 }
 
-fn validate_computed(
+#[derive(Debug)]
+struct ArrayPlan {
+    name: protocol::ArrayName,
+    values: usize,
+    chunks: u32,
+}
+
+/// Validate every descriptor before allocating any binary array.
+fn validate_array_headers(
+    headers: &[protocol::ArrayHeader],
+    expected: &[(protocol::ArrayName, [u32; 2])],
+) -> std::result::Result<Vec<ArrayPlan>, String> {
+    if headers.len() != expected.len() {
+        return Err("Worker returned missing or unrequested binary arrays".into());
+    }
+    headers
+        .iter()
+        .zip(expected)
+        .map(|(header, (name, shape))| {
+            if header.name != *name || header.shape != *shape || header.shape.contains(&0) {
+                return Err(
+                    "Worker returned an unexpected binary array name, order or shape".into(),
+                );
+            }
+            let values = (header.shape[0] as usize)
+                .checked_mul(header.shape[1] as usize)
+                .ok_or_else(|| "Binary array shape overflows".to_owned())?;
+            let max = match header.name {
+                protocol::ArrayName::CoefficientsAlpha | protocol::ArrayName::CoefficientsBeta => {
+                    reshiki_qcdata::MAX_COEFFICIENTS
+                }
+                _ => (3 * reshiki_qcdata::MAX_HESSIAN_ATOMS).pow(2),
+            };
+            if values > max || header.chunks != protocol::chunk_count(values) {
+                return Err(
+                    "Worker returned an oversized binary array or invalid chunk count".into(),
+                );
+            }
+            Ok(ArrayPlan {
+                name: header.name,
+                values,
+                chunks: header.chunks,
+            })
+        })
+        .collect()
+}
+
+fn validate_computed_header(
     computed: &Computed,
     opened: Option<&Opened>,
-    gradient: bool,
-) -> std::result::Result<(), String> {
+    open: Option<&Open>,
+    request: &Compute,
+) -> std::result::Result<Vec<ArrayPlan>, String> {
     let opened = opened.ok_or_else(|| "Worker computed before opening a molecule".to_owned())?;
+    let open = open.ok_or_else(|| "Worker computed before opening a molecule".to_owned())?;
     if computed.method != opened.method
         || computed.conventions != opened.conventions
+        || computed.engine_conventions != opened.engine_conventions
         || computed.numerics != opened.numerics
     {
         return Err("Worker returned inconsistent method metadata".into());
     }
-    if !computed.energy.is_finite() {
+    if !computed.energy.is_finite() || computed.energy_terms.values().any(|v| !v.is_finite()) {
         return Err("Worker returned a non-finite energy".into());
     }
     if computed
         .homo_lumo_gap_ev
         .is_some_and(|gap| !gap.is_finite() || gap < 0.0)
+        || computed.near_degenerate != protocol::is_near_degenerate(computed.homo_lumo_gap_ev)
     {
-        return Err("Worker returned an invalid HOMO-LUMO gap".into());
-    }
-    if computed.near_degenerate != protocol::is_near_degenerate(computed.homo_lumo_gap_ev) {
-        return Err("Worker returned an inconsistent near-degenerate flag".into());
+        return Err("Worker returned an invalid HOMO-LUMO gap or near-degenerate flag".into());
     }
     if !computed.seconds.is_finite() || computed.seconds < 0.0 {
         return Err("Worker returned an invalid elapsed time".into());
     }
-    match (gradient, &computed.gradient) {
+    match (
+        request.gradient || request.hessian.is_some(),
+        &computed.gradient,
+    ) {
         (true, Some(rows))
-            if rows.len() == opened.atoms && rows.iter().flatten().all(|x| x.is_finite()) =>
-        {
-            Ok(())
-        }
+            if rows.len() == opened.atoms && rows.iter().flatten().all(|x| x.is_finite()) => {}
         (true, _) => {
-            Err("Worker returned a missing, non-finite or incorrectly sized gradient".into())
+            return Err(
+                "Worker returned a missing, non-finite or incorrectly sized gradient".into(),
+            );
         }
-        (false, None) => Ok(()),
-        (false, Some(_)) => Err("Worker returned an unrequested gradient".into()),
+        (false, None) => (),
+        (false, Some(_)) => return Err("Worker returned an unrequested gradient".into()),
     }
+    validate_settings(computed, open)?;
+    let scf = open.method != protocol::Method::Gfnff;
+    let charges = computed
+        .charges
+        .as_ref()
+        .ok_or_else(|| "Worker omitted atomic charges".to_owned())?;
+    let scheme = if scf {
+        reshiki_qcdata::ChargeScheme::Mulliken
+    } else {
+        reshiki_qcdata::ChargeScheme::Eeq
+    };
+    if charges.scheme != scheme
+        || charges.values.len() != opened.atoms
+        || charges.values.iter().any(|v| !v.is_finite())
+    {
+        return Err("Worker returned invalid atomic charges".into());
+    }
+    if computed.dipole_e_bohr.is_none()
+        || computed.quadrupole_e_bohr2.is_some() != scf
+        || computed
+            .dipole_e_bohr
+            .iter()
+            .flatten()
+            .chain(computed.quadrupole_e_bohr2.iter().flatten())
+            .any(|v| !v.is_finite())
+        || computed.scf.is_some() != scf
+        || computed.gfnff.is_some() == scf
+        || (!scf && computed.homo_lumo_gap_ev.is_some())
+    {
+        return Err("Worker returned inconsistent method-specific outputs".into());
+    }
+    let composite = open.method == protocol::Method::Gxtb && open.solvent.is_some();
+    if computed.composite.is_some() != composite
+        || computed
+            .composite
+            .as_ref()
+            .is_some_and(|parts| parts.is_empty() || parts.values().any(|v| !v.is_finite()))
+    {
+        return Err("Worker returned inconsistent solvent composite outputs".into());
+    }
+    if let Some(report) = &computed.scf {
+        if report.iterations == 0
+            || !["previous", "eeq", "sad", "eeq-bc"].contains(&report.start.as_str())
+            || !report.electronic_temperature_k.is_finite()
+            || report.electronic_temperature_k < 0.0
+        {
+            return Err("Worker returned an invalid SCF report".into());
+        }
+        let settings = open.scf.clone();
+        match (&report.retry, settings.retries.len()) {
+            (None, 0) => (),
+            (Some(retry), count) if count > 0 && retry.of == count && retry.rung <= count => (),
+            _ => return Err("Worker returned an inconsistent SCF retry report".into()),
+        }
+    }
+    match (request.bond_orders, &computed.bond_orders) {
+        (false, None) => (),
+        (true, Some(bonds)) if scf => {
+            let mut previous = None;
+            for bond in bonds {
+                let pair = (bond.a, bond.b);
+                if bond.a >= bond.b
+                    || bond.b as usize >= opened.atoms
+                    || !bond.order.is_finite()
+                    || bond.order < protocol::BOND_ORDER_MIN
+                    || previous.is_some_and(|p| p >= pair)
+                {
+                    return Err("Worker returned invalid bond order pairs".into());
+                }
+                previous = Some(pair);
+            }
+        }
+        _ => return Err("Worker returned missing or unrequested bond orders".into()),
+    }
+    let axes = (opened.atoms * 3) as u32;
+    let mut expected = Vec::new();
+    if let Some(hessian) = &request.hessian {
+        if opened.atoms > reshiki_qcdata::MAX_HESSIAN_ATOMS
+            || computed.hessian_method.as_deref() != Some("analytic")
+        {
+            return Err("Worker returned an invalid Hessian method or atom count".into());
+        }
+        let vibrations = computed
+            .vibrations
+            .as_ref()
+            .ok_or_else(|| "Worker omitted vibrational analysis".to_owned())?;
+        validate_vibrations(vibrations, opened)?;
+        validate_thermo(
+            computed
+                .thermo
+                .as_ref()
+                .ok_or_else(|| "Worker omitted thermochemistry".to_owned())?,
+            hessian,
+        )?;
+        expected.push((protocol::ArrayName::Hessian, [axes, axes]));
+        let dipole_derivatives = computed
+            .arrays
+            .iter()
+            .any(|a| a.name == protocol::ArrayName::DipoleDerivatives);
+        if !vibrations.frequencies_cm1.is_empty()
+            && dipole_derivatives != !vibrations.ir_intensities_km_mol.is_empty()
+        {
+            return Err(
+                "Worker returned inconsistent dipole derivatives and IR intensities".into(),
+            );
+        }
+        if dipole_derivatives {
+            expected.push((protocol::ArrayName::DipoleDerivatives, [axes, 3]));
+        }
+        let modes = vibrations.frequencies_cm1.len() as u32;
+        if modes > 0 {
+            expected.push((protocol::ArrayName::NormalModes, [modes, axes]));
+        }
+    } else if computed.hessian_method.is_some()
+        || computed.vibrations.is_some()
+        || computed.thermo.is_some()
+    {
+        return Err("Worker returned unrequested Hessian outputs".into());
+    }
+    match (&request.orbitals, &computed.orbitals) {
+        (protocol::OrbitalOutput::None, None) => (),
+        (protocol::OrbitalOutput::None, Some(_)) | (_, None) => {
+            return Err("Worker returned missing or unrequested orbitals".into());
+        }
+        (output, Some(orbitals)) => {
+            let width = opened
+                .basis_functions
+                .ok_or_else(|| "Orbitals returned without an SCF basis".to_owned())?;
+            let rows = output.coefficient_rows(width);
+            if orbitals.alpha.rows != rows
+                || orbitals.alpha.energies_hartree.len() != width as usize
+                || orbitals.alpha.occupations.len() != width as usize
+                || !orbitals.alpha.coefficients.is_empty()
+                || orbitals.basis.is_some() != !rows.is_empty()
+            {
+                return Err("Worker returned inconsistent orbital levels, rows or basis".into());
+            }
+            if let Some(basis) = &orbitals.basis
+                && basis.shells.iter().map(|s| s.n_functions()).sum::<usize>() != width as usize
+            {
+                return Err("Worker returned an inconsistent orbital basis width".into());
+            }
+            if !rows.is_empty() {
+                expected.push((
+                    protocol::ArrayName::CoefficientsAlpha,
+                    [rows.len() as u32, width],
+                ));
+            }
+            let spin_matches = match (open.method, computed.settings.uhf, &orbitals.beta) {
+                (_, 0, reshiki_qcdata::Beta::Restricted) => true,
+                (
+                    protocol::Method::Gfn2,
+                    1..,
+                    reshiki_qcdata::Beta::SameOrbitals { occupations },
+                ) => occupations.len() == width as usize,
+                (protocol::Method::Gxtb, 1.., reshiki_qcdata::Beta::Unrestricted(_)) => true,
+                _ => false,
+            };
+            if !spin_matches {
+                return Err("Worker returned an inconsistent orbital spin representation".into());
+            }
+            if let reshiki_qcdata::Beta::Unrestricted(beta) = &orbitals.beta {
+                if beta.rows != rows
+                    || beta.energies_hartree.len() != width as usize
+                    || beta.occupations.len() != width as usize
+                    || !beta.coefficients.is_empty()
+                {
+                    return Err("Worker returned inconsistent beta orbital levels or rows".into());
+                }
+                if !rows.is_empty() {
+                    expected.push((
+                        protocol::ArrayName::CoefficientsBeta,
+                        [rows.len() as u32, width],
+                    ));
+                }
+            }
+        }
+    }
+    if !computed.hessian.is_empty()
+        || !computed.dipole_derivatives.is_empty()
+        || !computed.normal_modes.is_empty()
+    {
+        return Err("Worker embedded binary arrays in its JSON result".into());
+    }
+    validate_array_headers(&computed.arrays, &expected)
+}
+
+fn validate_settings(computed: &Computed, open: &Open) -> std::result::Result<(), String> {
+    let settings = &computed.settings;
+    let electrons =
+        open.numbers.iter().map(|&z| i64::from(z)).sum::<i64>() - i64::from(open.charge);
+    let valid_uhf = if open.method == protocol::Method::Gfnff {
+        settings.uhf == 0
+    } else {
+        open.uhf.map_or(
+            settings.uhf <= 1 && i64::from(settings.uhf) <= electrons,
+            |uhf| uhf == settings.uhf,
+        )
+    };
+    if settings.charge != open.charge
+        || !valid_uhf
+        || settings.solvent != open.solvent
+        || settings.scf != open.scf.clone()
+        || settings.threads != open.threads
+    {
+        return Err("Worker returned settings that differ from the opened session".into());
+    }
+    if open.method != protocol::Method::Gfnff {
+        return if settings.gfnff.is_none() {
+            Ok(())
+        } else {
+            Err("Worker returned unrequested GFN-FF settings".into())
+        };
+    }
+    let topology = settings
+        .gfnff
+        .as_ref()
+        .ok_or_else(|| "Worker omitted GFN-FF topology settings".to_owned())?;
+    let report = computed
+        .gfnff
+        .as_ref()
+        .ok_or_else(|| "Worker omitted GFN-FF fragments".to_owned())?;
+    let reference = open
+        .gfnff
+        .as_ref()
+        .and_then(|g| g.reference_positions.as_ref())
+        .unwrap_or(&open.positions);
+    if topology.reference_positions_bohr.len() != open.numbers.len()
+        || report.fragments.len() != open.numbers.len()
+        || topology
+            .reference_positions_bohr
+            .iter()
+            .flatten()
+            .any(|v| !v.is_finite())
+    {
+        return Err("Worker returned an invalid GFN-FF reference geometry".into());
+    }
+    let scale = match open.units {
+        protocol::Units::Bohr => 1.0,
+        protocol::Units::Angstrom => 1.0 / reshiki_qcdata::ANGSTROM_PER_BOHR,
+    };
+    if reference
+        .iter()
+        .flatten()
+        .zip(topology.reference_positions_bohr.iter().flatten())
+        .any(|(&input, &actual)| {
+            let expected = input * scale;
+            match open.units {
+                protocol::Units::Bohr => actual != expected,
+                protocol::Units::Angstrom => {
+                    (actual - expected).abs() > 1e-7 * expected.abs().max(1.0)
+                }
+            }
+        })
+    {
+        return Err("Worker returned a different GFN-FF reference geometry".into());
+    }
+    let mut fragments = 0_u32;
+    for &fragment in &report.fragments {
+        if fragment > fragments {
+            return Err("Worker returned unordered GFN-FF fragments".into());
+        }
+        if fragment == fragments {
+            fragments += 1;
+        }
+    }
+    if topology.fragment_charges.len() != fragments as usize
+        || topology
+            .fragment_charges
+            .iter()
+            .map(|&q| i64::from(q))
+            .sum::<i64>()
+            != i64::from(open.charge)
+    {
+        return Err("Worker returned invalid GFN-FF fragment charges".into());
+    }
+    if let Some(charges) = open
+        .gfnff
+        .as_ref()
+        .and_then(|g| g.fragment_charges.as_ref())
+        .filter(|charges| !charges.is_empty())
+    {
+        if topology.fragment_charges != *charges {
+            return Err("Worker changed explicit GFN-FF fragment charges".into());
+        }
+    } else if topology.fragment_charges.first() != Some(&open.charge)
+        || topology
+            .fragment_charges
+            .iter()
+            .skip(1)
+            .any(|&charge| charge != 0)
+    {
+        return Err("Worker returned inconsistent default GFN-FF fragment charges".into());
+    }
+    Ok(())
+}
+
+fn validate_vibrations(
+    v: &protocol::VibrationsReport,
+    opened: &Opened,
+) -> std::result::Result<(), String> {
+    let axes = opened.atoms * 3;
+    let modes = v.frequencies_cm1.len();
+    let expected_conventions = if opened.engine_conventions == "gxtb" {
+        "xtb-6.7.1"
+    } else {
+        &opened.engine_conventions
+    };
+    if v.conventions != expected_conventions
+        || modes > axes.saturating_sub(5)
+        || v.frequencies_cm1.iter().any(|v| !v.is_finite())
+        || v.frequencies_cm1.windows(2).any(|p| p[0] > p[1])
+        || (!v.ir_intensities_km_mol.is_empty() && v.ir_intensities_km_mol.len() != modes)
+        || v.reduced_masses_amu.len() != modes
+        || v.force_constants_mdyn_per_angstrom.len() != modes
+        || v.masses_amu.len() != opened.atoms
+        || v.ir_intensities_km_mol
+            .iter()
+            .any(|v| !v.is_finite() || *v < 0.0)
+        || v.force_constants_mdyn_per_angstrom
+            .iter()
+            .any(|v| !v.is_finite())
+        || v.reduced_masses_amu
+            .iter()
+            .chain(&v.masses_amu)
+            .any(|v| !v.is_finite() || *v <= 0.0)
+        || v.point_group.as_ref().is_some_and(|p| p.trim().is_empty())
+    {
+        return Err("Worker returned invalid vibrational analysis".into());
+    }
+    Ok(())
+}
+
+fn validate_thermo(
+    t: &reshiki_qcdata::Thermo,
+    hessian: &protocol::HessianRequest,
+) -> std::result::Result<(), String> {
+    if [
+        t.temperature_k,
+        t.pressure_pa,
+        t.zero_point_energy_hartree,
+        t.enthalpy_correction_hartree,
+        t.entropy_hartree_per_k,
+        t.gibbs_correction_hartree,
+        t.frequency_scale,
+        t.rotor_cutoff_cm1,
+        t.imaginary_cutoff_cm1,
+    ]
+    .iter()
+    .any(|v| !v.is_finite())
+        || t.heat_capacity_hartree_per_k
+            .is_some_and(|v| !v.is_finite())
+        || t.temperature_k <= 0.0
+        || t.pressure_pa <= 0.0
+        || t.frequency_scale <= 0.0
+        || t.rotor_cutoff_cm1 < 0.0
+        || t.imaginary_cutoff_cm1 < 0.0
+        || t.symmetry_number == 0
+        || (t.gibbs_correction_hartree
+            - (t.enthalpy_correction_hartree - t.temperature_k * t.entropy_hartree_per_k))
+            .abs()
+            > 1e-5
+    {
+        return Err("Worker returned invalid thermochemistry".into());
+    }
+    let requested = &hessian.thermo;
+    if [
+        (requested.temperature_k, t.temperature_k),
+        (requested.pressure_pa, t.pressure_pa),
+        (requested.frequency_scale, t.frequency_scale),
+        (requested.rotor_cutoff_cm1, t.rotor_cutoff_cm1),
+        (requested.imaginary_cutoff_cm1, t.imaginary_cutoff_cm1),
+    ]
+    .iter()
+    .any(|(expected, actual)| expected.is_some_and(|v| v != *actual))
+        || requested
+            .symmetry_number
+            .is_some_and(|v| v != t.symmetry_number)
+    {
+        return Err("Worker returned thermochemistry settings that differ from the request".into());
+    }
+    Ok(())
+}
+
+fn install_array(computed: &mut Computed, name: protocol::ArrayName, values: Vec<f64>) {
+    match name {
+        protocol::ArrayName::Hessian => computed.hessian = values,
+        protocol::ArrayName::DipoleDerivatives => computed.dipole_derivatives = values,
+        protocol::ArrayName::NormalModes => computed.normal_modes = values,
+        protocol::ArrayName::CoefficientsAlpha => {
+            computed.orbitals.as_mut().unwrap().alpha.coefficients = values
+        }
+        protocol::ArrayName::CoefficientsBeta => {
+            if let reshiki_qcdata::Beta::Unrestricted(set) =
+                &mut computed.orbitals.as_mut().unwrap().beta
+            {
+                set.coefficients = values;
+            }
+        }
+    }
+}
+
+fn append_chunk(
+    out: &mut Vec<f64>,
+    body: &[u8],
+    index: u32,
+    values: usize,
+) -> std::result::Result<(), String> {
+    if (index as usize).checked_mul(protocol::CHUNK_VALUES) != Some(out.len())
+        || out.len() >= values
+    {
+        return Err("Worker returned a chunk beyond the announced array".into());
+    }
+    let remaining = (values - out.len()).min(protocol::CHUNK_VALUES);
+    protocol::decode_chunk(body, index, remaining, out).map_err(|error| error.to_string())
+}
+
+fn validate_computed_payload(
+    computed: &Computed,
+    frame: Option<&reshiki_qcdata::Frame>,
+) -> std::result::Result<(), String> {
+    let mut frame = frame
+        .ok_or_else(|| "Worker computed before opening a molecule".to_owned())?
+        .clone();
+    frame.multiplicity = computed
+        .settings
+        .uhf
+        .checked_add(1)
+        .ok_or_else(|| "Worker returned an invalid resolved spin".to_owned())?;
+    if let Some(orbitals) = &computed.orbitals {
+        orbitals
+            .validate(&frame)
+            .map_err(|error| format!("Worker returned invalid orbitals: {error}"))?;
+    }
+    if computed
+        .normal_modes
+        .chunks_exact(frame.numbers.len() * 3)
+        .any(|row| {
+            let norm = row.iter().map(|v| v * v).sum::<f64>();
+            !norm.is_finite() || (norm - 1.0).abs() > 1e-6
+        })
+    {
+        return Err(
+            "Worker returned a normal mode that is not a unit Cartesian displacement".into(),
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]

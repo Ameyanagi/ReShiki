@@ -75,7 +75,7 @@ pub(super) fn run(
     use super::host::CliError;
     use reshiki_xtb_worker::{
         client::{Cancel, Limits, Session},
-        protocol::{Compute, Method, Open, Units},
+        protocol::{Compute, HessianRequest, Open, OrbitalOutput, Units},
     };
     use serde_json::json;
     use std::{
@@ -113,43 +113,64 @@ pub(super) fn run(
         units: Units::Angstrom,
         charge: command.charge,
         uhf: command.uhf,
-        method: Method::Gfn2,
+        method: command.method,
         conventions: command.conventions,
-        solvent: None,
-        threads: 1,
+        solvent: command.solvent,
+        scf: command.scf.unwrap_or_default(),
+        gfnff: None,
+        threads: command.threads,
         heap_bytes: limits.heap_bytes,
     };
     fn failed(error: impl std::fmt::Display) -> CliError {
         CliError::Failed(error.to_string())
     }
-    let (mut session, hello) = Session::start(&executable, limits).map_err(failed)?;
+    fn calculation_error(error: reshiki_xtb_worker::client::Error) -> CliError {
+        match error {
+            reshiki_xtb_worker::client::Error::Unsupported(message) => CliError::Failed(message),
+            error => failed(error),
+        }
+    }
+    let (mut session, hello) = Session::start(&executable, limits).map_err(calculation_error)?;
     let cancel = Cancel::default();
-    session.open(&open, &cancel).map_err(failed)?;
+    session.open(&open, &cancel).map_err(calculation_error)?;
     let computed = session
         .compute(
             &Compute {
                 positions: None,
                 units: Units::Angstrom,
-                gradient: command.gradient,
+                gradient: command.gradient || command.task == super::args::CalcTask::Gradient,
+                hessian: (command.task == super::args::CalcTask::Hessian)
+                    .then(HessianRequest::default),
+                bond_orders: command.bond_orders,
+                orbitals: if command.task == super::args::CalcTask::Orbitals {
+                    OrbitalOutput::All
+                } else {
+                    OrbitalOutput::None
+                },
             },
             &cancel,
         )
-        .map_err(failed)?;
-    session.close().map_err(failed)?;
-    let mut result = serde_json::Map::from_iter([
-        ("energy".into(), json!(computed.energy)),
-        ("homo_lumo_gap_ev".into(), json!(computed.homo_lumo_gap_ev)),
-        ("near_degenerate".into(), json!(computed.near_degenerate)),
-        ("method".into(), json!(computed.method)),
-        ("conventions".into(), json!(computed.conventions)),
-        ("numerics".into(), json!(computed.numerics)),
-        ("engine".into(), json!(hello.engine)),
-    ]);
-    if command.gradient {
-        let gradient = computed
-            .gradient
-            .ok_or_else(|| CliError::Failed("the xTB worker returned no gradient".into()))?;
-        result.insert("gradient".into(), json!(gradient));
+        .map_err(calculation_error)?;
+    session.close().map_err(calculation_error)?;
+    let serde_json::Value::Object(mut result) = serde_json::to_value(&computed).map_err(failed)?
+    else {
+        return Err(CliError::Failed(
+            "the xTB worker returned no result object".into(),
+        ));
+    };
+    result.insert("engine".into(), json!(hello.engine));
+    for array in &computed.arrays {
+        let name = serde_json::to_value(array.name).map_err(failed)?;
+        let name = name
+            .as_str()
+            .ok_or_else(|| CliError::Failed("invalid xTB array name".into()))?;
+        result.insert(
+            name.into(),
+            json!({
+                "shape": array.shape,
+                "values": computed.array_values(array.name),
+            }),
+        );
     }
     writeln!(out, "{}", serde_json::Value::Object(result)).map_err(CliError::Stdout)?;
     if computed.near_degenerate {

@@ -1,18 +1,33 @@
 use super::*;
-use crate::protocol::{Conventions, Method};
+use crate::protocol::{ArrayHeader, ArrayName, Conventions, FrameKind, Method, OrbitalOutput};
+use serde_json::json;
+
+fn open() -> Open {
+    serde_json::from_value(json!({
+        "numbers": [2,2], "positions": [[0,0,0],[0,0,2]], "units": "bohr",
+        "charge": 0, "uhf": 0, "method": "gfn2", "conventions": "xtb-6.8",
+        "threads": 1, "heap_bytes": 1024
+    }))
+    .unwrap()
+}
+
+fn request() -> Compute {
+    serde_json::from_value(json!({"units":"bohr", "gradient": false})).unwrap()
+}
 
 fn computed(gradient: Option<Vec<[f64; 3]>>) -> Computed {
-    Computed {
-        method: Method::Gfn2,
-        conventions: Conventions::Xtb68,
-        numerics: "gfn2:1".into(),
-        energy: -1.0,
-        gradient,
-        homo_lumo_gap_ev: None,
-        near_degenerate: false,
-        scf_iterations: 3,
-        seconds: 0.1,
-    }
+    let mut computed: Computed = serde_json::from_value(json!({
+        "method": "gfn2", "conventions": "xtb-6.8", "engine_conventions": "xtb", "numerics": "gfn2:1",
+        "settings": {"charge": 0, "uhf": 0, "scf": {}, "threads": 1},
+        "energy": -1, "energy_terms": {"electronic": -1},
+        "charges": {"scheme": "mulliken", "values": [0,0]},
+        "dipole_e_bohr": [0,0,0], "quadrupole_e_bohr2": [0,0,0,0,0,0],
+        "homo_lumo_gap_ev": null, "near_degenerate": false,
+        "scf": {"iterations": 3, "start": "previous", "electronic_temperature_k": 300},
+        "arrays": [], "seconds": 0.1
+    })).unwrap();
+    computed.gradient = gradient;
+    computed
 }
 
 fn opened() -> Opened {
@@ -20,8 +35,52 @@ fn opened() -> Opened {
         atoms: 2,
         method: Method::Gfn2,
         conventions: Conventions::Xtb68,
+        engine_conventions: "xtb".into(),
         numerics: "gfn2:1".into(),
+        basis_functions: Some(2),
     }
+}
+
+fn validate(computed: &Computed, request: &Compute) -> std::result::Result<Vec<ArrayPlan>, String> {
+    validate_computed_header(computed, Some(&opened()), Some(&open()), request)
+}
+
+fn header(name: ArrayName, shape: [u32; 2]) -> ArrayHeader {
+    ArrayHeader {
+        name,
+        shape,
+        chunks: protocol::chunk_count(shape[0] as usize * shape[1] as usize),
+    }
+}
+
+fn orbital_rows(rows: &[u32]) -> reshiki_qcdata::Orbitals {
+    serde_json::from_value(json!({
+        "basis": {"shells": [
+            {"atom":0,"l":0,"pure":false,"exponents_per_bohr2":[1],"coefficients":[1]},
+            {"atom":1,"l":0,"pure":false,"exponents_per_bohr2":[1],"coefficients":[1]}
+        ]},
+        "core_electrons": [0,0], "alpha": {
+            "energies_hartree": [-1,-0.5], "occupations": [2,2], "rows": rows
+        }, "beta": "restricted"
+    }))
+    .unwrap()
+}
+
+fn chunk_body(index: u32, values: &[f64]) -> Vec<u8> {
+    let mut body = index.to_le_bytes().to_vec();
+    for value in values {
+        body.extend_from_slice(&value.to_le_bytes());
+    }
+    body
+}
+
+fn raw_frame(kind: FrameKind, body: &[u8]) -> Vec<u8> {
+    let mut bytes = b"RSHXTBWK".to_vec();
+    bytes.extend_from_slice(&protocol::VERSION.to_le_bytes());
+    bytes.extend_from_slice(&(kind as u16).to_le_bytes());
+    bytes.extend_from_slice(&(body.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(body);
+    bytes
 }
 
 #[test]
@@ -70,85 +129,6 @@ fn heap_exit_classification_accounts_for_supervisor_cleanup() {
 }
 
 #[test]
-fn hello_metadata_distinguishes_unavailable_and_inconsistent_workers() {
-    let mut hello = Hello {
-        protocol: protocol::VERSION,
-        engine: None,
-        methods: vec![],
-        operations: vec![],
-        max_atoms: protocol::MAX_ATOMS,
-    };
-    assert!(validate_hello(&hello).is_ok());
-    hello.methods.push(protocol::Method::Gfn2);
-    assert!(validate_hello(&hello).is_err());
-    hello.engine = Some(protocol::Engine {
-        name: "axtb".into(),
-        version: "0.2.0".into(),
-        license: "LGPL-3.0-or-later".into(),
-        source: "https://github.com/Ameyanagi/axtb".into(),
-        rev: "revision".into(),
-    });
-    hello.operations = vec![protocol::Operation::Energy, protocol::Operation::Gradient];
-    assert!(validate_hello(&hello).is_ok());
-    hello.operations = vec![protocol::Operation::Energy; 2];
-    assert!(validate_hello(&hello).is_err());
-    hello.max_atoms = 0;
-    assert!(validate_hello(&hello).is_err());
-}
-
-#[test]
-fn computed_validation_requires_exact_requested_finite_gradient() {
-    let opened = Some(&opened());
-    assert!(validate_computed(&computed(None), opened, false).is_ok());
-    assert!(validate_computed(&computed(None), opened, true).is_err());
-    assert!(validate_computed(&computed(Some(vec![[0.0; 3]; 2])), opened, true).is_ok());
-    assert!(validate_computed(&computed(Some(vec![[0.0; 3]; 1])), opened, true).is_err());
-    assert!(validate_computed(&computed(Some(vec![[0.0; 3]; 2])), opened, false).is_err());
-    assert!(validate_computed(&computed(Some(vec![[f64::NAN; 3]; 2])), opened, true).is_err());
-    assert!(validate_computed(&computed(None), None, false).is_err());
-    let mut invalid = computed(None);
-    invalid.energy = f64::INFINITY;
-    assert!(validate_computed(&invalid, opened, false).is_err());
-    invalid.energy = -1.0;
-    invalid.seconds = f64::NAN;
-    assert!(validate_computed(&invalid, opened, false).is_err());
-    invalid.seconds = -0.1;
-    assert!(validate_computed(&invalid, opened, false).is_err());
-}
-
-#[test]
-fn computed_validation_checks_the_gap_and_its_flag() {
-    let opened = Some(&opened());
-    let mut result = computed(None);
-    result.near_degenerate = true;
-    assert!(validate_computed(&result, opened, false).is_err());
-    for gap in [-0.1, f64::INFINITY, f64::NAN] {
-        result.homo_lumo_gap_ev = Some(gap);
-        result.near_degenerate = protocol::is_near_degenerate(Some(gap));
-        assert!(validate_computed(&result, opened, false).is_err());
-    }
-    result.homo_lumo_gap_ev = Some(0.05);
-    assert!(validate_computed(&result, opened, false).is_err());
-    result.near_degenerate = true;
-    assert!(validate_computed(&result, opened, false).is_ok());
-    result.homo_lumo_gap_ev = Some(protocol::NEAR_DEGENERATE_GAP_EV);
-    assert!(validate_computed(&result, opened, false).is_err());
-    result.near_degenerate = false;
-    assert!(validate_computed(&result, opened, false).is_ok());
-}
-
-#[test]
-fn computed_validation_checks_open_session_metadata() {
-    let opened = Some(&opened());
-    let mut result = computed(None);
-    result.conventions = Conventions::Axtb;
-    assert!(validate_computed(&result, opened, false).is_err());
-    result.conventions = Conventions::Xtb68;
-    result.numerics = "gfn2:2".into();
-    assert!(validate_computed(&result, opened, false).is_err());
-}
-
-#[test]
 fn diagnostics_keep_the_last_four_kibibytes() {
     let mut tail = VecDeque::new();
     remember_stderr(&mut tail, &vec![b'a'; STDERR_BYTES + 10]);
@@ -166,14 +146,376 @@ fn diagnostics_keep_the_last_four_kibibytes() {
 }
 
 #[test]
-fn one_frame_is_parsed_across_short_reads_and_trailing_data_is_rejected() {
-    let frame = protocol::encode_frame(&serde_json::json!({"id": 1, "ok": {}})).unwrap();
-    let mut bytes = Vec::new();
-    let mut expected = None;
-    for byte in &frame {
-        append_output(&mut bytes, &mut expected, &[*byte]).unwrap();
+fn hello_metadata_requires_exact_v2_capabilities_and_limits() {
+    let mut hello: Hello = serde_json::from_value(json!({
+        "protocol": 2, "engine": null, "methods": [], "max_atoms": 500, "max_hessian_atoms": 200
+    }))
+    .unwrap();
+    assert!(validate_hello(&hello).is_ok());
+    hello.methods.push(Method::Gfn2);
+    assert!(validate_hello(&hello).is_err());
+    hello.engine = Some(protocol::Engine {
+        name: "axtb".into(),
+        version: "0.2.0".into(),
+        license: "LGPL-3.0-or-later".into(),
+        source: "https://github.com/Ameyanagi/axtb".into(),
+        rev: "revision".into(),
+    });
+    hello.methods = Method::ALL.to_vec();
+    assert!(validate_hello(&hello).is_ok());
+    hello.methods.swap(0, 1);
+    assert!(validate_hello(&hello).is_err());
+    hello.methods = Method::ALL.to_vec();
+    hello.max_hessian_atoms = 201;
+    assert!(validate_hello(&hello).is_err());
+    hello.max_hessian_atoms = 199;
+    assert!(validate_hello(&hello).is_err());
+    hello.max_hessian_atoms = 0;
+    assert!(validate_hello(&hello).is_err());
+    hello.max_hessian_atoms = 200;
+    hello.max_atoms = 0;
+    assert!(validate_hello(&hello).is_err());
+}
+
+#[test]
+fn opened_requires_exact_identity_and_basis_only_for_scf() {
+    let mut result = opened();
+    assert!(validate_opened(&result, &open(), 500).is_ok());
+    result.basis_functions = None;
+    assert!(validate_opened(&result, &open(), 500).is_err());
+    result.basis_functions = Some(0);
+    assert!(validate_opened(&result, &open(), 500).is_err());
+    result.basis_functions = Some(reshiki_qcdata::MAX_BASIS_FUNCTIONS as u32 + 1);
+    assert!(validate_opened(&result, &open(), 500).is_ok());
+    result.basis_functions = Some(2);
+    result.engine_conventions = "axtb".into();
+    assert!(validate_opened(&result, &open(), 500).is_err());
+    let mut input = open();
+    input.method = Method::Gfnff;
+    result.method = Method::Gfnff;
+    result.engine_conventions = "xtb".into();
+    assert!(validate_opened(&result, &input, 500).is_err());
+    result.basis_functions = None;
+    assert!(validate_opened(&result, &input, 500).is_ok());
+    input.method = Method::Gxtb;
+    result.method = Method::Gxtb;
+    result.engine_conventions = "gxtb".into();
+    result.basis_functions = Some(2);
+    result.numerics = "gxtb-v1.1:1".into();
+    assert!(validate_opened(&result, &input, 500).is_err());
+    result.numerics = "gxtb-v2.0.1:1".into();
+    assert!(validate_opened(&result, &input, 500).is_ok());
+}
+
+#[test]
+fn computed_requires_exact_requested_finite_gradient() {
+    let mut request = request();
+    assert!(validate(&computed(None), &request).is_ok());
+    request.gradient = true;
+    assert!(validate(&computed(None), &request).is_err());
+    assert!(validate(&computed(Some(vec![[0.0; 3]; 2])), &request).is_ok());
+    assert!(validate(&computed(Some(vec![[0.0; 3]; 1])), &request).is_err());
+    assert!(validate(&computed(Some(vec![[f64::NAN; 3]; 2])), &request).is_err());
+    request.gradient = false;
+    assert!(validate(&computed(Some(vec![[0.0; 3]; 2])), &request).is_err());
+    assert!(validate_computed_header(&computed(None), None, None, &request).is_err());
+}
+
+#[test]
+fn computed_checks_gap_flag_energy_and_time() {
+    let request = request();
+    let mut result = computed(None);
+    for gap in [-0.1, f64::INFINITY, f64::NAN] {
+        result.homo_lumo_gap_ev = Some(gap);
+        result.near_degenerate = protocol::is_near_degenerate(Some(gap));
+        assert!(validate(&result, &request).is_err());
     }
-    assert_eq!(expected, Some(frame.len()));
-    assert!(append_output(&mut bytes, &mut expected, b"x").is_err());
-    assert!(append_output(&mut Vec::new(), &mut None, &[0; protocol::HEADER_LEN]).is_err());
+    result.homo_lumo_gap_ev = Some(0.05);
+    result.near_degenerate = false;
+    assert!(validate(&result, &request).is_err());
+    result.near_degenerate = true;
+    assert!(validate(&result, &request).is_ok());
+    result.homo_lumo_gap_ev = Some(0.1);
+    assert!(validate(&result, &request).is_err());
+    result.near_degenerate = false;
+    assert!(validate(&result, &request).is_ok());
+    result.energy = f64::INFINITY;
+    assert!(validate(&result, &request).is_err());
+    result.energy = -1.0;
+    for seconds in [f64::NAN, -0.1] {
+        result.seconds = seconds;
+        assert!(validate(&result, &request).is_err());
+    }
+}
+
+#[test]
+fn computed_requires_method_settings_and_requested_parts() {
+    let request = request();
+    let mut result = computed(None);
+    result.settings.threads = 2;
+    assert!(validate(&result, &request).is_err());
+    result.settings.threads = 1;
+    result.settings.charge = 1;
+    assert!(validate(&result, &request).is_err());
+    result.settings.charge = 0;
+    result.settings.uhf = 2;
+    assert!(validate(&result, &request).is_err());
+    result.settings.uhf = 0;
+    result.charges = None;
+    assert!(validate(&result, &request).is_err());
+    result = computed(None);
+    result.bond_orders = Some(vec![]);
+    assert!(validate(&result, &request).is_err());
+    result.bond_orders = None;
+    result.hessian_method = Some("analytic".into());
+    assert!(validate(&result, &request).is_err());
+    result.hessian_method = None;
+    result.numerics = "gfn2:2".into();
+    assert!(validate(&result, &request).is_err());
+}
+
+#[test]
+fn array_headers_reject_missing_extra_order_shape_oversize_and_wrong_chunks() {
+    let expected = [
+        (ArrayName::Hessian, [6, 6]),
+        (ArrayName::DipoleDerivatives, [6, 3]),
+    ];
+    let correct = vec![
+        header(ArrayName::Hessian, [6, 6]),
+        header(ArrayName::DipoleDerivatives, [6, 3]),
+    ];
+    assert!(validate_array_headers(&correct, &expected).is_ok());
+    assert!(validate_array_headers(&correct[..1], &expected).is_err());
+    let mut invalid = correct.clone();
+    invalid.push(header(ArrayName::NormalModes, [1, 6]));
+    assert!(validate_array_headers(&invalid, &expected).is_err());
+    invalid = correct.clone();
+    invalid.swap(0, 1);
+    assert!(validate_array_headers(&invalid, &expected).is_err());
+    invalid = correct.clone();
+    invalid[0].shape = [6, 5];
+    assert!(validate_array_headers(&invalid, &expected).is_err());
+    invalid = correct;
+    invalid[0].chunks = 2;
+    assert!(validate_array_headers(&invalid, &expected).is_err());
+    let huge = header(ArrayName::CoefficientsAlpha, [2049, 2048]);
+    assert!(validate_array_headers(&[huge], &[(huge.name, huge.shape)]).is_err());
+    let empty = header(ArrayName::NormalModes, [0, 6]);
+    assert!(validate_array_headers(&[empty], &[(empty.name, empty.shape)]).is_err());
+}
+
+#[test]
+fn orbital_headers_require_exact_rows_and_payload_validates_current_frame() {
+    let mut request = request();
+    request.orbitals = OrbitalOutput::Rows(vec![0]);
+    let mut result = computed(None);
+    result.orbitals = Some(orbital_rows(&[0]));
+    result.arrays = vec![header(ArrayName::CoefficientsAlpha, [1, 2])];
+    assert!(validate(&result, &request).is_ok());
+    result.orbitals.as_mut().unwrap().alpha.rows = vec![1];
+    assert!(validate(&result, &request).is_err());
+    result.orbitals.as_mut().unwrap().alpha.rows = vec![0];
+    let frame = open().admit(Some(&request), Some(2), 500).unwrap();
+    assert!(validate_computed_payload(&result, Some(&frame)).is_err());
+    install_array(
+        &mut result,
+        ArrayName::CoefficientsAlpha,
+        vec![1, 0].into_iter().map(f64::from).collect(),
+    );
+    assert!(validate_computed_payload(&result, Some(&frame)).is_ok());
+    result.settings.uhf = 2;
+    assert!(validate_computed_payload(&result, Some(&frame)).is_err());
+}
+
+#[test]
+fn chunk_validation_requires_exact_index_size_finite_values_and_last_remainder() {
+    let mut out = vec![];
+    append_chunk(&mut out, &chunk_body(0, &[1, 2].map(f64::from)), 0, 2).unwrap();
+    assert_eq!(out, vec![1.0, 2.0]);
+    for body in [
+        chunk_body(1, &[1.0, 2.0]),
+        chunk_body(0, &[1.0]),
+        chunk_body(0, &[1.0, 2.0, 3.0]),
+        chunk_body(0, &[1.0, f64::INFINITY]),
+        vec![0; 5],
+    ] {
+        assert!(append_chunk(&mut vec![], &body, 0, 2).is_err());
+    }
+    assert!(
+        append_chunk(
+            &mut vec![],
+            &chunk_body(0, &[1.0]),
+            0,
+            protocol::CHUNK_VALUES + 1
+        )
+        .is_err()
+    );
+    let mut partial = vec![0.0; protocol::CHUNK_VALUES];
+    append_chunk(
+        &mut partial,
+        &chunk_body(1, &[3.0]),
+        1,
+        protocol::CHUNK_VALUES + 1,
+    )
+    .unwrap();
+    assert_eq!(partial.last(), Some(&3.0));
+}
+
+#[test]
+fn framed_input_preserves_next_frame_and_rejects_bad_kind_version_length_and_magic() {
+    let json = raw_frame(FrameKind::Json, b"{}");
+    let chunk = raw_frame(FrameKind::Chunk, &chunk_body(0, &[1.0]));
+    let mut input = ResponseInput::default();
+    for byte in &json[..json.len() - 1] {
+        input.bytes.push(*byte);
+        assert!(input.take_frame(FrameKind::Json).unwrap().is_none());
+    }
+    input.bytes.extend_from_slice(&json[json.len() - 1..]);
+    input.bytes.extend_from_slice(&chunk);
+    assert_eq!(
+        input.take_frame(FrameKind::Json).unwrap(),
+        Some(b"{}".to_vec())
+    );
+    assert_eq!(input.bytes, chunk);
+    assert!(input.take_frame(FrameKind::Json).is_err());
+    assert_eq!(
+        input.take_frame(FrameKind::Chunk).unwrap(),
+        Some(chunk_body(0, &[1.0]))
+    );
+    assert!(input.bytes.is_empty());
+    for offset in [0, 8, 10, 15] {
+        let mut invalid = json.clone();
+        invalid[offset] = 255;
+        input.bytes = invalid;
+        assert!(input.take_frame(FrameKind::Json).is_err());
+    }
+    input.bytes = json;
+    input.bytes[8..10].copy_from_slice(&1_u16.to_le_bytes());
+    assert!(input.take_frame(FrameKind::Json).is_err());
+}
+
+#[test]
+fn local_admission_keeps_error_categories() {
+    assert!(matches!(
+        admission_error(protocol::ResponseError::new(
+            ErrorKind::Unsupported,
+            "no orbitals"
+        )),
+        Error::Unsupported(_)
+    ));
+    assert!(matches!(
+        admission_error(protocol::ResponseError::new(
+            ErrorKind::Limit,
+            "too many atoms"
+        )),
+        Error::Limit(_)
+    ));
+    assert!(matches!(
+        admission_error(protocol::ResponseError::new(ErrorKind::Input, "positions")),
+        Error::Input(_)
+    ));
+}
+
+#[test]
+fn absent_input_spin_accepts_resolved_driver_spin_and_explicit_spin_is_exact() {
+    let mut input = open();
+    input.uhf = None;
+    let mut result = computed(None);
+    result.settings.uhf = 1;
+    assert!(validate_settings(&result, &input).is_ok());
+    result.settings.uhf = 2;
+    assert!(validate_settings(&result, &input).is_err());
+    result.settings.uhf = 1;
+    input.uhf = Some(0);
+    assert!(validate_settings(&result, &input).is_err());
+}
+
+#[test]
+fn hessian_header_requires_all_requested_arrays_and_thermo_settings() {
+    let mut request = request();
+    request.hessian =
+        Some(serde_json::from_value(json!({"thermo":{"temperature_k":300}})).unwrap());
+    let mut result = computed(Some(vec![[0.0; 3]; 2]));
+    result.hessian_method = Some("analytic".into());
+    result.vibrations = Some(
+        serde_json::from_value(json!({
+            "conventions":"xtb","frequencies_cm1":[100],"ir_intensities_km_mol":[1],
+            "reduced_masses_amu":[1],"force_constants_mdyn_per_angstrom":[1],"masses_amu":[4,4],
+            "linear":true,"point_group":"dinfh"
+        }))
+        .unwrap(),
+    );
+    result.thermo = Some(
+        serde_json::from_value(json!({
+            "temperature_k":300,"pressure_pa":101325,"zero_point_energy_hartree":0.01,
+            "enthalpy_correction_hartree":0.02,"entropy_hartree_per_k":0.00001,
+            "gibbs_correction_hartree":0.017,"frequency_scale":1,"rotor_cutoff_cm1":50,
+            "imaginary_cutoff_cm1":20,"symmetry_number":1
+        }))
+        .unwrap(),
+    );
+    result.arrays = vec![
+        header(ArrayName::Hessian, [6, 6]),
+        header(ArrayName::DipoleDerivatives, [6, 3]),
+        header(ArrayName::NormalModes, [1, 6]),
+    ];
+    assert!(validate(&result, &request).is_ok());
+    result.arrays.remove(1);
+    assert!(validate(&result, &request).is_err());
+    result
+        .vibrations
+        .as_mut()
+        .unwrap()
+        .ir_intensities_km_mol
+        .clear();
+    assert!(validate(&result, &request).is_ok());
+    result.vibrations.as_mut().unwrap().ir_intensities_km_mol = vec![1.0];
+    result
+        .arrays
+        .insert(1, header(ArrayName::DipoleDerivatives, [6, 3]));
+    result.arrays.pop();
+    assert!(validate(&result, &request).is_err());
+    result.arrays.push(header(ArrayName::NormalModes, [1, 6]));
+    result.thermo.as_mut().unwrap().temperature_k = 298.15;
+    assert!(validate(&result, &request).is_err());
+    result.thermo.as_mut().unwrap().temperature_k = 300.0;
+    result.vibrations.as_mut().unwrap().reduced_masses_amu[0] = f64::NAN;
+    assert!(validate(&result, &request).is_err());
+}
+
+#[test]
+fn gfnff_settings_verify_reference_fragments_and_explicit_charges() {
+    let mut input = open();
+    input.method = Method::Gfnff;
+    input.gfnff = Some(protocol::GfnFfOpen {
+        reference_positions: None,
+        fragment_charges: Some(vec![0, 0]),
+    });
+    let mut result = computed(None);
+    result.settings.gfnff = Some(protocol::GfnFfSettings {
+        reference_positions_bohr: input.positions.clone(),
+        fragment_charges: vec![0, 0],
+    });
+    result.gfnff = Some(protocol::GfnFfReport {
+        fragments: vec![0, 1],
+    });
+    assert!(validate_settings(&result, &input).is_ok());
+    result
+        .settings
+        .gfnff
+        .as_mut()
+        .unwrap()
+        .reference_positions_bohr[1][2] = 3.0;
+    assert!(validate_settings(&result, &input).is_err());
+    result
+        .settings
+        .gfnff
+        .as_mut()
+        .unwrap()
+        .reference_positions_bohr = input.positions.clone();
+    result.gfnff.as_mut().unwrap().fragments = vec![1, 0];
+    assert!(validate_settings(&result, &input).is_err());
+    result.gfnff.as_mut().unwrap().fragments = vec![0, 1];
+    result.settings.gfnff.as_mut().unwrap().fragment_charges = vec![1, -1];
+    assert!(validate_settings(&result, &input).is_err());
 }

@@ -320,13 +320,33 @@ const NAME: CommandSpec = CommandSpec {
 // Calculation sessions are deliberately outside the agent operation/MCP catalog.
 const CALC: CommandSpec = CommandSpec {
     name: "calc",
-    summary: "Print a GFN2-xTB energy and optional gradient as one JSON line",
-    usage: "reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz",
+    summary: "Print an xTB calculation as one JSON line",
+    usage: "reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--gradient] [--wbo] FILE.xyz",
     options: &[
+        OptionSpec {
+            flag: "--task",
+            value: Some("TASK"),
+            help: "Calculate energy (default), gradient, hessian or orbitals.",
+            default: Some(|| json!("energy")),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--method",
+            value: Some("METHOD"),
+            help: "Use gfn2 (default), gfnff or gxtb.",
+            default: Some(|| json!("gfn2")),
+            sets: None,
+            equivalent: None,
+        },
         OptionSpec {
             flag: "--energy",
             value: None,
-            help: "Calculate the GFN2-xTB energy. Required.",
+            help: "Calculate energy; accepted for compatibility.",
             default: None,
             sets: None,
             equivalent: None,
@@ -335,6 +355,14 @@ const CALC: CommandSpec = CommandSpec {
             flag: "--gradient",
             value: None,
             help: "Include the Cartesian energy gradient in Eh/bohr.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--wbo",
+            value: None,
+            help: "Include Mayer–Wiberg bond orders.",
             default: None,
             sets: None,
             equivalent: None,
@@ -360,6 +388,70 @@ const CALC: CommandSpec = CommandSpec {
             value: Some("MODE"),
             help: "Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.",
             default: Some(|| json!("axtb")),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--alpb",
+            value: Some("NAME"),
+            help: "Use the ALPB solvent model; cannot be combined with --gbsa.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--gbsa",
+            value: Some("NAME"),
+            help: "Use the GBSA solvent model; cannot be combined with --alpb.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--solvent-correction",
+            value: Some("METHOD"),
+            help: "Use gfn2 for g-xTB solvent calculations.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--etemp",
+            value: Some("K"),
+            help: "Set the electronic temperature in kelvin (GFN2-xTB 300, g-xTB 0 by default).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--accuracy",
+            value: Some("X"),
+            help: "Set a positive SCF accuracy multiplier (default 1).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--max-iter",
+            value: Some("N"),
+            help: "Set the SCF iteration limit (default 250).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--scf-retry",
+            value: Some("K[:N]"),
+            help: "Retry an unconverged SCF at K kelvin and optionally N iterations; repeat for a ladder.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--threads",
+            value: Some("N"),
+            help: "Use 1 to 64 worker threads.",
+            default: Some(|| json!(1)),
             sets: None,
             equivalent: None,
         },
@@ -526,7 +618,8 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
 ];
 
 const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
-const OPTIONS_RULE: &str = "Options are allowed once each; -- ends the options.";
+const OPTIONS_RULE: &str =
+    "Options are allowed once each except calc's --scf-retry; -- ends the options.";
 const STDOUT_CONTRACT: &str = "\
 stdout carries only the result: the file, one JSON line, or one receipt
   line with --receipt. With -o FILE and no --receipt it stays empty.";
@@ -820,29 +913,55 @@ fn calc_help() -> String {
 Usage: {}
 
 Reads the first structure of an XYZ file, with coordinates in angstroms,
-and runs GFN2-xTB in an isolated worker process. The first line is an atom
-count (1 to 500), followed by a comment line and exactly that many atom
-rows, each with an element symbol and three finite coordinates.
+and runs GFN2-xTB (default), GFN-FF or g-xTB 2.0.1 in an isolated worker.
+The first line is an atom count (1 to 500), followed by a comment line and
+exactly that many atom rows, each with an element symbol and three finite
+coordinates. Element symbols are case-insensitive.
 
 Options:
-  --energy    Calculate the energy. Required.
-  --gradient  Include the Cartesian energy gradient.
+  --task energy|gradient|hessian|orbitals
+              Calculate energy (default), gradient, analytic Hessian with
+              vibrations and thermochemistry, or every orbital row and basis.
+  --method gfn2|gfnff|gxtb
+              Choose the calculation method (default gfn2).
+  --energy    Accepted for compatibility; energy is always included.
+  --gradient  Include the Cartesian energy gradient in any task.
+  --wbo       Include Mayer–Wiberg bond orders.
   --charge N  Set the molecular charge (default 0).
   --uhf N     Set a nonnegative number of unpaired electrons. The default
               comes from the electron count.
   --conventions axtb|xtb-6.8
-              Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.
+              Use axtb (default) or xtb 6.8 compatible conventions.
+  --alpb NAME | --gbsa NAME
+              Use an implicit solvent. GFN-FF does not support solvents.
+  --solvent-correction gfn2
+              Required for g-xTB in solvent; refused for GFN2-xTB.
+  --etemp K   Set the electronic temperature (GFN2-xTB 300 K, g-xTB 0 K).
+  --accuracy X
+              Set a positive SCF accuracy multiplier (default 1).
+  --max-iter N
+              Set the SCF iteration limit (default 250).
+  --scf-retry K[:N]
+              Retry an unconverged SCF at K kelvin, optionally with a new
+              iteration limit. Repeat for a ladder; K cannot be below the
+              initial electronic temperature.
+  --threads N Use 1 to 64 worker threads (default 1).
 
-Prints one JSON line with energy (Eh), gradient (Eh/bohr) when requested,
-homo_lumo_gap_ev (null without a LUMO), near_degenerate, method, conventions,
-numerics and engine. A gap below 0.1 eV also prints a warning on stderr.
-This CLI-only command has no MCP tool and uses the worker result format
-without an experimental envelope.
+GFN-FF supports energy, gradients and Hessians for singlets. It takes no
+SCF settings, orbitals or bond orders. A Hessian is limited to 200 atoms.
+Unsupported method and task combinations exit 1 with the capability message.
+
+Prints one JSON line containing the worker's Computed result plus engine.
+Energy is in Eh, gradient in Eh/bohr and the HOMO-LUMO gap in eV (null when
+no LUMO exists). Each binary array is included under its name as
+{{\"shape\":[rows,columns],\"values\":[...]}}. The worker's array descriptors
+and empty compact orbital coefficient fields are preserved.
+A gap below 0.1 eV also prints a warning on stderr and leaves the exit
+status unchanged. This CLI-only command has no MCP tool.
 
 Requires a build with xTB. Otherwise it reports that xTB is not included
-and exits 1. See docs/xtb-worker.md and docs/xtb-licensing.md.
-",
-        CALC.usage,
+and exits 1.\n",
+        CALC.usage
     )
 }
 

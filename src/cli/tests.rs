@@ -1,7 +1,7 @@
 use super::{
     args::{
-        Calc, Compose, Convert, Export, Input, Labels, Name, Output, PredictNmr, Preview, Render,
-        Schema, Skill, Source, SvgText, parse,
+        Calc, CalcTask, Compose, Convert, Export, Input, Labels, Name, Output, PredictNmr, Preview,
+        Render, Schema, Skill, Source, SvgText, parse,
     },
     *,
 };
@@ -9,7 +9,10 @@ use reshiki_agent::ops::{
     budget::Budgets,
     documents::{EXPORT_FORMATS, IMPORT_FORMATS},
 };
-use reshiki_xtb_worker::protocol::Conventions;
+use reshiki_xtb_worker::protocol::{
+    Conventions, Method, ScfRetry, ScfSettings, SolvationState, Solvent, SolventCorrection,
+    SolventModel,
+};
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -534,15 +537,21 @@ async fn version_prints_the_app_version_and_exits() {
 }
 
 #[test]
-fn calc_parses_its_required_operation_and_optional_settings() {
+fn calc_parses_its_default_task_compatibility_flags_and_optional_settings() {
     assert_eq!(
         parsed(&["calc", "--energy", "water.xyz"]),
         Ok(Command::Calc(Calc {
             file: "water.xyz".into(),
+            task: CalcTask::Energy,
+            method: Method::Gfn2,
             gradient: false,
+            bond_orders: false,
             charge: 0,
             uhf: None,
             conventions: Conventions::Axtb,
+            solvent: None,
+            scf: None,
+            threads: 1,
         }))
     );
     assert_eq!(
@@ -560,10 +569,16 @@ fn calc_parses_its_required_operation_and_optional_settings() {
         ]),
         Ok(Command::Calc(Calc {
             file: "water.XYZ".into(),
+            task: CalcTask::Energy,
+            method: Method::Gfn2,
             gradient: true,
+            bond_orders: false,
             charge: -1,
             uhf: Some(1),
             conventions: Conventions::Xtb68,
+            solvent: None,
+            scf: None,
+            threads: 1,
         }))
     );
     assert_eq!(
@@ -577,15 +592,20 @@ fn calc_parses_its_required_operation_and_optional_settings() {
         ]),
         Ok(Command::Calc(Calc {
             file: "-water.xyz".into(),
+            task: CalcTask::Energy,
+            method: Method::Gfn2,
             gradient: false,
+            bond_orders: false,
             charge: 0,
             uhf: None,
             conventions: Conventions::Axtb,
+            solvent: None,
+            scf: None,
+            threads: 1,
         }))
     );
     for tokens in [
         vec!["calc"],
-        vec!["calc", "--gradient", "water.xyz"],
         vec!["calc", "--energy"],
         vec!["calc", "--energy", "-"],
         vec!["calc", "--energy", "water.mol"],
@@ -600,6 +620,118 @@ fn calc_parses_its_required_operation_and_optional_settings() {
         vec!["calc", "--energy", "--uhf"],
         vec!["calc", "--energy", "--from", "xyz", "water.xyz"],
     ] {
+        assert!(parsed(&tokens).is_err(), "{tokens:?}");
+    }
+}
+
+#[test]
+fn calc_parses_tasks_solvent_and_a_repeatable_scf_ladder() {
+    let Command::Calc(default) = parsed(&["calc", "water.xyz"]).unwrap() else {
+        panic!("calc command");
+    };
+    assert_eq!(default.task, CalcTask::Energy);
+    assert_eq!(default.method, Method::Gfn2);
+    assert!(!default.gradient);
+    for (name, task) in [
+        ("energy", CalcTask::Energy),
+        ("gradient", CalcTask::Gradient),
+        ("hessian", CalcTask::Hessian),
+        ("orbitals", CalcTask::Orbitals),
+    ] {
+        let Command::Calc(command) = parsed(&["calc", "--task", name, "water.xyz"]).unwrap() else {
+            panic!("calc command");
+        };
+        assert_eq!(command.task, task);
+    }
+    let Command::Calc(command) = parsed(&[
+        "calc",
+        "--task",
+        "orbitals",
+        "--method",
+        "gxtb",
+        "--gbsa",
+        "water",
+        "--solvent-correction",
+        "gfn2",
+        "--etemp",
+        "0",
+        "--accuracy",
+        "0.5",
+        "--max-iter",
+        "50",
+        "--scf-retry",
+        "300:100",
+        "--scf-retry",
+        "1000",
+        "--threads",
+        "4",
+        "--gradient",
+        "--wbo",
+        "water.xyz",
+    ])
+    .unwrap() else {
+        panic!("calc command");
+    };
+    assert_eq!(command.task, CalcTask::Orbitals);
+    assert_eq!(command.method, Method::Gxtb);
+    assert_eq!(
+        command.solvent,
+        Some(Solvent {
+            model: SolventModel::Gbsa,
+            name: "water".into(),
+            state: SolvationState::Gsolv,
+            correction: Some(SolventCorrection::Gfn2),
+        })
+    );
+    assert_eq!(
+        command.scf,
+        Some(ScfSettings {
+            accuracy: Some(0.5),
+            electronic_temperature_k: Some(0.0),
+            max_iterations: Some(50),
+            retries: vec![
+                ScfRetry {
+                    electronic_temperature_k: Some(300.0),
+                    max_iterations: Some(100)
+                },
+                ScfRetry {
+                    electronic_temperature_k: Some(1000.0),
+                    max_iterations: None
+                },
+            ],
+        })
+    );
+    assert!(command.gradient && command.bond_orders);
+    assert_eq!(command.threads, 4);
+}
+
+#[test]
+fn calc_rejects_invalid_task_solvent_and_scf_syntax() {
+    for options in [
+        vec!["--task", "optimize"],
+        vec!["--method", "gxtb-v1.1"],
+        vec!["--alpb", "water", "--gbsa", "water"],
+        vec!["--alpb", ""],
+        vec!["--solvent-correction", "gfn2"],
+        vec!["--alpb", "water", "--solvent-correction", "gxtb"],
+        vec!["--etemp", "-1"],
+        vec!["--etemp", "NaN"],
+        vec!["--accuracy", "0"],
+        vec!["--accuracy", "inf"],
+        vec!["--max-iter", "0"],
+        vec!["--max-iter", "1.5"],
+        vec!["--scf-retry", ""],
+        vec!["--scf-retry", "300:"],
+        vec!["--scf-retry", "300:1:2"],
+        vec!["--scf-retry", "299"],
+        vec!["--etemp", "1000", "--scf-retry", "300"],
+        vec!["--threads", "0"],
+        vec!["--threads", "65"],
+        vec!["--method", "gfn2", "--method", "gfnff"],
+        vec!["--wbo", "--wbo"],
+    ] {
+        let mut tokens = vec!["calc", "water.xyz"];
+        tokens.extend(options);
         assert!(parsed(&tokens).is_err(), "{tokens:?}");
     }
 }

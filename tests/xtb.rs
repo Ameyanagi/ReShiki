@@ -7,7 +7,8 @@ use std::{path::Path, time::Duration};
 
 #[cfg(feature = "xtb")]
 use reshiki_xtb_worker::protocol::{
-    ErrorKind, HARTREE_TO_EV, NEAR_DEGENERATE_GAP_EV, Solvent, SolventModel,
+    ArrayName, ErrorKind, GfnFfOpen, HARTREE_TO_EV, HessianRequest, NEAR_DEGENERATE_GAP_EV,
+    OrbitalOutput, SolvationState, Solvent, SolventModel,
 };
 #[cfg(any(feature = "xtb", unix))]
 use reshiki_xtb_worker::{
@@ -76,6 +77,8 @@ fn molecule(name: &str) -> Open {
         method: Method::Gfn2,
         conventions: Conventions::Axtb,
         solvent: None,
+        scf: Default::default(),
+        gfnff: None,
         threads: 1,
         heap_bytes: limits().heap_bytes,
     }
@@ -87,6 +90,7 @@ fn compute(positions: Option<Vec<[f64; 3]>>, gradient: bool) -> Compute {
         positions,
         units: Units::Angstrom,
         gradient,
+        ..Compute::default()
     }
 }
 
@@ -275,6 +279,344 @@ fn calc_reports_a_null_gap_without_a_lumo() {
 }
 
 #[cfg(feature = "xtb")]
+fn frame(open: &Open) -> reshiki_qcdata::Frame {
+    assert_eq!(open.units, Units::Angstrom);
+    reshiki_qcdata::Frame {
+        numbers: open.numbers.clone(),
+        positions_angstrom: open.positions.clone(),
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: open.charge,
+        multiplicity: open.uhf.unwrap_or(0) + 1,
+        drawing_atoms: vec![],
+    }
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn water_hessian_crosses_binary_chunks_and_converts_to_a_valid_calc_result() {
+    let open = molecule("water");
+    let frame = frame(&open);
+    let (mut session, hello) = Session::start(executable(), limits()).expect("start worker");
+    session.open(&open, &Cancel::default()).expect("open water");
+    let computed = session
+        .compute(
+            &Compute {
+                hessian: Some(HessianRequest::default()),
+                ..Compute::default()
+            },
+            &Cancel::default(),
+        )
+        .expect("water Hessian");
+    assert_eq!(computed.hessian.len(), 9 * 9);
+    assert_eq!(computed.dipole_derivatives.len(), 9 * 3);
+    assert!(
+        computed
+            .hessian
+            .iter()
+            .chain(&computed.dipole_derivatives)
+            .all(|value| value.is_finite())
+    );
+    let vibrations = computed.vibrations.as_ref().expect("vibrational analysis");
+    assert_eq!(vibrations.frequencies_cm1.len(), 3);
+    assert_eq!(computed.normal_modes.len(), 3 * 9);
+    assert!(
+        vibrations
+            .frequencies_cm1
+            .windows(2)
+            .all(|pair| pair[0] <= pair[1])
+    );
+    assert!(computed.thermo.is_some());
+    for row in 0..9 {
+        for column in 0..9 {
+            assert!(
+                (computed.hessian[row * 9 + column] - computed.hessian[column * 9 + row]).abs()
+                    < 1e-12
+            );
+        }
+    }
+    let result = computed
+        .to_calc_result(
+            &frame,
+            reshiki_qcdata::Task::Hessian,
+            hello.engine.as_ref().expect("engine"),
+            None,
+        )
+        .expect("convert Hessian");
+    result
+        .validate(&frame)
+        .expect("valid scientific Hessian result");
+    assert_eq!(result.frame, frame.hash());
+    assert_eq!(result.hessian_hartree_per_bohr2, computed.hessian);
+    assert_eq!(
+        result.vibrations.as_ref().expect("stored vibrations").modes,
+        computed.normal_modes
+    );
+    assert_eq!(result.energy_hartree, Some(computed.energy));
+    session.close().expect("close worker");
+
+    let dir = tempfile::tempdir().expect("CLI folder");
+    let xyz = fixtures().join("water.xyz");
+    let output = headless::run_cli(
+        dir.path(),
+        &["calc", "--task", "hessian", xyz.to_str().unwrap()],
+        b"",
+        Duration::from_secs(120),
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("Hessian CLI JSON");
+    assert_eq!(json["hessian"]["shape"], serde_json::json!([9, 9]));
+    assert_eq!(json["hessian"]["values"].as_array().unwrap().len(), 81);
+    assert_eq!(
+        json["dipole_derivatives"]["shape"],
+        serde_json::json!([9, 3])
+    );
+    assert_eq!(json["normal_modes"]["shape"], serde_json::json!([3, 9]));
+    assert_eq!(json["arrays"].as_array().unwrap().len(), 3);
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn ferrocene_all_orbitals_have_canonical_basis_rows_and_cli_arrays() {
+    let open = molecule("ferrocene");
+    let frame = frame(&open);
+    let (mut session, hello) = Session::start(executable(), limits()).expect("start worker");
+    let opened = session
+        .open(&open, &Cancel::default())
+        .expect("open ferrocene");
+    let width = opened.basis_functions.expect("basis size") as usize;
+    let computed = session
+        .compute(
+            &Compute {
+                orbitals: OrbitalOutput::All,
+                bond_orders: true,
+                ..Compute::default()
+            },
+            &Cancel::default(),
+        )
+        .expect("ferrocene orbitals");
+    let orbitals = computed.orbitals.as_ref().expect("orbitals");
+    orbitals
+        .validate(&frame)
+        .expect("valid canonical ferrocene orbitals");
+    assert_eq!(orbitals.alpha.rows.len(), width);
+    assert_eq!(orbitals.alpha.rows, (0..width as u32).collect::<Vec<_>>());
+    assert_eq!(
+        computed.array_values(ArrayName::CoefficientsAlpha).len(),
+        width * width
+    );
+    let basis = orbitals.basis.as_ref().expect("canonical basis");
+    assert!(
+        basis.shells.iter().any(|shell| shell.l == 2 && shell.pure),
+        "Fe d shell"
+    );
+    let result = computed
+        .to_calc_result(
+            &frame,
+            reshiki_qcdata::Task::Energy,
+            hello.engine.as_ref().unwrap(),
+            None,
+        )
+        .expect("convert orbitals");
+    result
+        .validate(&frame)
+        .expect("valid result with all orbital rows");
+    session.close().expect("close worker");
+
+    let dir = tempfile::tempdir().expect("CLI folder");
+    let xyz = fixtures().join("ferrocene.xyz");
+    let output = headless::run_cli(
+        dir.path(),
+        &["calc", "--task", "orbitals", "--wbo", xyz.to_str().unwrap()],
+        b"",
+        Duration::from_secs(120),
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("orbital CLI JSON");
+    assert_eq!(
+        json["coefficients_alpha"]["shape"],
+        serde_json::json!([width, width])
+    );
+    assert_eq!(
+        json["coefficients_alpha"]["values"]
+            .as_array()
+            .unwrap()
+            .len(),
+        width * width
+    );
+    assert_eq!(json["orbitals"]["alpha"]["coefficients"], "");
+    assert!(!json["bond_orders"].as_array().unwrap().is_empty());
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn gfnff_topology_and_fragment_charges_survive_a_restarted_session() {
+    let mut open = molecule("water");
+    open.method = Method::Gfnff;
+    open.units = Units::Bohr;
+    open.numbers = vec![8, 1, 1, 8, 1, 1];
+    open.positions = vec![
+        [0., 0., 0.],
+        [1.81, 0., 0.],
+        [-0.45, 1.75, 0.],
+        [10., 0., 0.],
+        [11.81, 0., 0.],
+        [9.55, 1.75, 0.],
+    ];
+    open.gfnff = Some(GfnFfOpen {
+        reference_positions: Some(open.positions.clone()),
+        fragment_charges: Some(vec![1, -1]),
+    });
+    let (mut original, hello) = Session::start(executable(), limits()).expect("start GFN-FF");
+    original
+        .open(&open, &Cancel::default())
+        .expect("open reference topology");
+    let mut positions = open.positions.clone();
+    positions[1][0] += 0.2;
+    positions[4][1] += 0.1;
+    let request = Compute {
+        positions: Some(positions.clone()),
+        units: Units::Bohr,
+        gradient: true,
+        ..Compute::default()
+    };
+    let computed = original
+        .compute(&request, &Cancel::default())
+        .expect("displaced GFN-FF");
+    let topology = computed
+        .settings
+        .gfnff
+        .as_ref()
+        .expect("persistent topology");
+    assert_eq!(topology.reference_positions_bohr, open.positions);
+    assert_eq!(topology.fragment_charges, [1, -1]);
+    assert_eq!(
+        computed.gfnff.as_ref().expect("fragments").fragments,
+        [0, 0, 0, 1, 1, 1]
+    );
+    assert!(computed.scf.is_none());
+    assert!(computed.homo_lumo_gap_ev.is_none());
+    let scientific_frame = |positions: &[[f64; 3]]| reshiki_qcdata::Frame {
+        numbers: open.numbers.clone(),
+        positions_angstrom: positions
+            .iter()
+            .map(|row| row.map(|coordinate| coordinate * reshiki_qcdata::ANGSTROM_PER_BOHR))
+            .collect(),
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let reference = scientific_frame(&open.positions).hash();
+    let evaluated = scientific_frame(&positions);
+    let result = computed
+        .to_calc_result(
+            &evaluated,
+            reshiki_qcdata::Task::Gradient,
+            hello.engine.as_ref().unwrap(),
+            Some(reference),
+        )
+        .expect("convert persistent GFN-FF topology");
+    let reshiki_qcdata::Settings::Xtb(settings) = result.settings else {
+        panic!("xTB settings");
+    };
+    let saved_topology = settings.gfnff.expect("saved topology");
+    assert_eq!(saved_topology.reference, reference);
+    assert_eq!(saved_topology.fragment_charges, [1, -1]);
+    original.close().expect("close original GFN-FF");
+    open.positions = positions;
+    open.gfnff = Some(GfnFfOpen {
+        reference_positions: Some(topology.reference_positions_bohr.clone()),
+        fragment_charges: Some(topology.fragment_charges.clone()),
+    });
+    let (mut restarted, _) = Session::start(executable(), limits()).expect("restart GFN-FF");
+    restarted
+        .open(&open, &Cancel::default())
+        .expect("restore topology");
+    let repeated = restarted
+        .compute(
+            &Compute {
+                units: Units::Bohr,
+                gradient: true,
+                ..Compute::default()
+            },
+            &Cancel::default(),
+        )
+        .expect("restarted GFN-FF energy");
+    assert!((computed.energy - repeated.energy).abs() < 1e-12);
+    assert_eq!(computed.gradient, repeated.gradient);
+    restarted.close().expect("close restarted GFN-FF");
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn unsupported_gfnff_outputs_are_refused_by_client_and_cli() {
+    let mut open = molecule("water");
+    open.method = Method::Gfnff;
+    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    session
+        .open(&open, &Cancel::default())
+        .expect("open GFN-FF");
+    for (request, expected) in [
+        (
+            Compute {
+                orbitals: OrbitalOutput::All,
+                ..Compute::default()
+            },
+            "GFN-FF does not provide orbitals",
+        ),
+        (
+            Compute {
+                bond_orders: true,
+                ..Compute::default()
+            },
+            "GFN-FF does not provide bond orders",
+        ),
+    ] {
+        let error = session
+            .compute(&request, &Cancel::default())
+            .expect_err("unsupported output");
+        assert!(
+            matches!(error, Error::Unsupported(ref message) if message == expected),
+            "{error:?}"
+        );
+        session
+            .compute(&Compute::default(), &Cancel::default())
+            .expect("session survives refusal");
+    }
+    session.close().expect("close worker");
+    let dir = tempfile::tempdir().expect("CLI folder");
+    let xyz = fixtures().join("water.xyz");
+    for (args, expected) in [
+        (
+            vec!["--task", "orbitals"],
+            "GFN-FF does not provide orbitals",
+        ),
+        (vec!["--wbo"], "GFN-FF does not provide bond orders"),
+    ] {
+        let mut tokens = vec!["calc", "--method", "gfnff"];
+        tokens.extend(args);
+        tokens.push(xyz.to_str().unwrap());
+        let output = headless::run_cli(dir.path(), &tokens, b"", Duration::from_secs(120));
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stdout.is_empty());
+        assert_eq!(
+            String::from_utf8(output.stderr).unwrap(),
+            format!("reshiki: error: {expected}\n")
+        );
+    }
+}
+
+#[cfg(feature = "xtb")]
 #[test]
 fn reused_session_matches_fresh_sessions_for_three_displaced_geometries() {
     let (mut reused, _) = Session::start(executable(), limits()).expect("start reusable worker");
@@ -304,7 +646,8 @@ fn reused_session_matches_fresh_sessions_for_three_displaced_geometries() {
         maximum_difference = maximum_difference.max(difference);
         eprintln!(
             "xTB reused/fresh geometry {step}: |ΔE|={difference:.16e} Eh, SCF iterations {}/{}",
-            cached.scf_iterations, independent.scf_iterations
+            cached.scf.as_ref().expect("SCF metadata").iterations,
+            independent.scf.as_ref().expect("SCF metadata").iterations
         );
     }
     reused.close().expect("close reused worker");
@@ -343,7 +686,11 @@ fn invalid_client_input_is_rejected_without_losing_the_session() {
     }
     for (name, open) in invalid {
         let result = session.open(&open, &Cancel::default());
-        assert!(matches!(result, Err(Error::Input(_))), "{name}: {result:?}");
+        if name == "too many atoms" {
+            assert!(matches!(result, Err(Error::Limit(_))), "{name}: {result:?}");
+        } else {
+            assert!(matches!(result, Err(Error::Input(_))), "{name}: {result:?}");
+        }
     }
 
     // A finite replacement cannot be compared to an atom count before open.
@@ -368,8 +715,13 @@ fn invalid_client_input_is_rejected_without_losing_the_session() {
         vec![[f64::INFINITY; 3]],
         vec![[f64::NEG_INFINITY; 3]],
     ] {
+        let too_many = positions.len() > reshiki_xtb_worker::protocol::MAX_ATOMS;
         let result = session.compute(&compute(Some(positions), false), &Cancel::default());
-        assert!(matches!(result, Err(Error::Input(_))), "{result:?}");
+        if too_many {
+            assert!(matches!(result, Err(Error::Limit(_))), "{result:?}");
+        } else {
+            assert!(matches!(result, Err(Error::Input(_))), "{result:?}");
+        }
     }
 
     session
@@ -460,6 +812,8 @@ fn worker_rejects_invalid_electrons_spin_and_unknown_solvent_on_open() {
             Some(Solvent {
                 model: SolventModel::Alpb,
                 name: "reshiki-no-such-solvent".into(),
+                state: SolvationState::Gsolv,
+                correction: None,
             }),
         ),
     ] {
@@ -469,23 +823,27 @@ fn worker_rejects_invalid_electrons_spin_and_unknown_solvent_on_open() {
         open.uhf = uhf;
         open.solvent = solvent;
         let result = session.open(&open, &Cancel::default());
-        assert!(
-            matches!(
-                result,
-                Err(Error::Engine {
-                    kind: ErrorKind::Input,
-                    ..
-                })
-            ),
-            "{name}: {result:?}"
-        );
+        if name == "UHF parity" {
+            assert!(matches!(result, Err(Error::Input(_))), "{name}: {result:?}");
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(Error::Engine {
+                        kind: ErrorKind::Input,
+                        ..
+                    })
+                ),
+                "{name}: {result:?}"
+            );
+        }
         session.close().expect("close worker after rejected open");
     }
 }
 
 #[cfg(feature = "xtb")]
 #[test]
-fn worker_checks_cef3_spin_against_gfn2_valence_electrons_on_open() {
+fn cef3_checks_explicit_spin_against_frame_and_valence_electrons_and_keeps_driver_default() {
     let mut cef3 = Open {
         numbers: vec![58, 9, 9, 9],
         positions: vec![
@@ -498,10 +856,12 @@ fn worker_checks_cef3_spin_against_gfn2_valence_electrons_on_open() {
         ..molecule("water")
     };
     let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
-    session
-        .open(&cef3, &Cancel::default())
-        .expect("open neutral CeF3 with UHF 0");
-    session.close().expect("close worker");
+    let result = session.open(&cef3, &Cancel::default());
+    assert!(
+        matches!(result, Err(Error::Input(_))),
+        "neutral CeF3 with explicit UHF 0: {result:?}"
+    );
+    session.close().expect("close worker after local refusal");
 
     let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
     cef3.uhf = Some(1);
@@ -517,6 +877,13 @@ fn worker_checks_cef3_spin_against_gfn2_valence_electrons_on_open() {
         "neutral CeF3 with UHF 1: {result:?}"
     );
     session.close().expect("close worker after rejected open");
+
+    cef3.uhf = None;
+    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    session
+        .open(&cef3, &Cancel::default())
+        .expect("open neutral CeF3 with the driver's default spin");
+    session.close().expect("close worker after omitted UHF");
 }
 
 #[cfg(all(feature = "xtb", unix))]
@@ -658,14 +1025,14 @@ fn cancellation_after_the_compute_frame_kills_and_reaps_the_worker() {
         response(serde_json::json!({
             "id": 1,
             "ok": {
-                "protocol": 1,
+                "protocol": 2,
                 "engine": {
-                    "name": "fake", "version": "1", "license": "MIT",
+                    "name": "axtb", "version": "1", "license": "MIT",
                     "source": "test", "rev": "test"
                 },
-                "methods": ["gfn2"],
-                "operations": ["energy", "gradient"],
+                "methods": ["gfn2", "gfnff", "gxtb"],
                 "max_atoms": reshiki_xtb_worker::protocol::MAX_ATOMS,
+                "max_hessian_atoms": reshiki_xtb_worker::protocol::MAX_HESSIAN_ATOMS,
             }
         })),
         receive(2, RequestOp::Open(open.clone())),
@@ -675,7 +1042,9 @@ fn cancellation_after_the_compute_frame_kills_and_reaps_the_worker() {
                 "atoms": open.numbers.len(),
                 "method": "gfn2",
                 "conventions": "axtb",
-                "numerics": "gfn2:1"
+                "numerics": "gfn2:1",
+                "engine_conventions": "axtb",
+                "basis_functions": 6
             }
         })),
         receive(3, RequestOp::Compute(request.clone())),
@@ -859,17 +1228,17 @@ fn fake_workers_exit_garbage_and_partial_response_never_hang() {
         ),
         (
             "truncated_eof",
-            "printf 'RSHXTBWK\\001\\000\\000\\000\\020\\000\\000\\000{\"id\":1'\n",
+            "printf 'RSHXTBWK\\002\\000\\000\\000\\020\\000\\000\\000{\"id\":1'\n",
         ),
         (
             "truncated_closed_stdout",
-            "printf 'RSHXTBWK\\001\\000\\000\\000\\020\\000\\000\\000{\"id\":1'\nexec 1>&-\nexec sleep 30\n",
+            "printf 'RSHXTBWK\\002\\000\\000\\000\\020\\000\\000\\000{\"id\":1'\nexec 1>&-\nexec sleep 30\n",
         ),
         // A complete valid header announcing 16 body bytes, followed by only
         // seven bytes and a live process: this must reach the hello deadline.
         (
             "partial",
-            "printf 'RSHXTBWK\\001\\000\\000\\000\\020\\000\\000\\000{\"id\":1'\nexec sleep 30\n",
+            "printf 'RSHXTBWK\\002\\000\\000\\000\\020\\000\\000\\000{\"id\":1'\nexec sleep 30\n",
         ),
     ] {
         let dir = tempfile::tempdir().expect("fake worker folder");
@@ -945,7 +1314,6 @@ fn build_without_xtb_has_null_engine_and_a_clear_calc_error() {
         "build without xTB advertises no engine"
     );
     assert!(hello.methods.is_empty());
-    assert!(hello.operations.is_empty());
     assert!(matches!(session.close(), Err(Error::Unavailable)));
     let dir = tempfile::tempdir().expect("CLI working folder");
     let water = fixtures().join("water.xyz");

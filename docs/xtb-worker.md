@@ -62,10 +62,10 @@ increases with every request; the response repeats it.
 The table is `reshiki_qcdata::XtbMethod::capabilities()`. Both sides enforce
 it with `reshiki_qcdata::check_calculation`: the client before it sends a
 request, the worker again on `open` (as an energy) and on every `compute` (as
-an energy, gradient or Hessian, with the requested orbital rows). A refused
-combination is the error kind `unsupported` with qcdata's message, for example
-`GFN-FF does not provide orbitals`; nothing is computed and the session stays
-open. Bond orders for GFN-FF are refused the same way.
+an energy, gradient or Hessian, with the requested orbital rows). An output
+the method cannot provide returns `unsupported` with qcdata's message, such as
+`GFN-FF does not provide orbitals`. Invalid settings return `input`. Refused
+computes leave the session open at its last successful geometry.
 
 ### `open`
 
@@ -79,10 +79,13 @@ open. Bond orders for GFN-FF are refused the same way.
   worker passes the axtb driver these conventions: GFN2-xTB `axtb` / `xtb`,
   GFN-FF `axtb` / `xtb`, g-xTB `axtb` / `gxtb` (the g-xTB 2.0.1 program's).
   `engine_conventions` in every response is the driver's canonical name.
-- `charge`: integer, default 0. `uhf`: unpaired electrons, default from the
-  valence electron count. For SCF methods `open` returns `input` if the
-  valence electron count (the method's valence electrons per atom minus the
-  charge) is negative, or if `uhf` exceeds it or differs in parity.
+- `charge`: integer, default 0. `uhf`: unpaired electrons. Admission checks
+  the total electron count with qcdata and uses its parity when `uhf` is
+  absent. SCF methods resolve an absent `uhf` from the method's valence
+  electron count. They return `input` if that count is negative or if an
+  explicit `uhf` exceeds it or differs in parity. If the two default parities
+  differ, the worker can compute, but its resolved spin cannot be represented
+  by a validated qcdata frame at that charge.
 - `solvent`: `null` or `{ "model": "alpb" | "gbsa", "name": "<solvent>",
 "state": "gsolv" | "bar1mol" | "reference", "correction": null | "gfn2" }`.
   `state` defaults to `gsolv`. The name is any solvent axtb accepts for the
@@ -94,7 +97,7 @@ open. Bond orders for GFN-FF are refused the same way.
   300 K, g-xTB 0 K; 250 iterations; accuracy 1). `retries` is an SCF retry
   ladder: after an SCF that does not converge, a fresh SCF at each rung in
   order until one converges, for example `[{ "electronic_temperature_k": 1000 }]`
-  ("retry at 1000 K"). No rung may go below `electronic_temperature_k`. For the
+  ("retry at 1000 K"). No rung may go below an explicit `electronic_temperature_k`. For the
   g-xTB solvent composite the ladder applies to each part.
 - `gfnff` (optional; GFN-FF only): `{ "reference_positions": [[x, y, z], …],
 "fragment_charges": [q, …] }`, both optional. The topology is set up from
@@ -114,13 +117,13 @@ open. Bond orders for GFN-FF are refused the same way.
 
 ### `compute`
 
-| Field         | Values                                                                                                                                                                                                                                                                                                        |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `positions`   | Optional replacement geometry, one finite row per atom, in `units`.                                                                                                                                                                                                                                           |
-| `gradient`    | `true` adds the gradient (Eh/bohr).                                                                                                                                                                                                                                                                           |
-| `hessian`     | `null` (default) or `{ "thermo": { "temperature_k", "pressure_pa", "rotor_cutoff_cm1", "imaginary_cutoff_cm1", "frequency_scale", "symmetry_number" } }`, each optional. At most 200 atoms. Adds the gradient, the analytic Hessian, the dipole derivatives, axtb's vibrational analysis and thermochemistry. |
-| `bond_orders` | `true` adds Mayer–Wiberg bond orders (SCF methods).                                                                                                                                                                                                                                                           |
-| `orbitals`    | `"none"` (default), `"levels"` (energies and occupations), `"all"` (also every coefficient row and the basis) or `{ "rows": [i, …] }` (strictly increasing zero-based MO indices). SCF methods.                                                                                                               |
+| Field         | Values                                                                                                                                                                                                                                                                                                            |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `positions`   | Optional replacement geometry, one finite row per atom, in `units`.                                                                                                                                                                                                                                               |
+| `gradient`    | `true` adds the gradient (Eh/bohr).                                                                                                                                                                                                                                                                               |
+| `hessian`     | `null` (default) or `{ "thermo": { "temperature_k", "pressure_pa", "rotor_cutoff_cm1", "imaginary_cutoff_cm1", "frequency_scale", "symmetry_number" } }`, each optional. At most 200 atoms. Adds the gradient, the analytic Hessian, dipole derivatives when available, vibrational analysis and thermochemistry. |
+| `bond_orders` | `true` adds Mayer–Wiberg bond orders (SCF methods).                                                                                                                                                                                                                                                               |
+| `orbitals`    | `"none"` (default), `"levels"` (energies and occupations), `"all"` (also every coefficient row and the basis) or `{ "rows": [i, …] }` (strictly increasing zero-based MO indices). SCF methods.                                                                                                                   |
 
 Each SCF starts from the previous geometry's converged wavefunction in the
 same session (axtb's `restart: previous`), whatever geometries the optimizer
@@ -140,10 +143,9 @@ method's own start `eeq`, `sad`, `eeq-bc`).
   "dipole_e_bohr": [0.0, 0.0, 0.85], "quadrupole_e_bohr2": [ … six values … ],
   "bond_orders": [{ "a": 0, "b": 1, "order": 0.92 }, { "a": 0, "b": 2, "order": 0.92 }],
   "orbitals": { "basis": { "shells": [ … ] }, "alpha": { "energies_hartree": [ … ],
-    "occupations": [ … ], "rows": [0, 1, 2, 3, 4, 5] }, "beta": "restricted" },
+    "occupations": [ … ], "rows": [0, 1, 2, 3, 4, 5], "coefficients": "" }, "beta": "restricted" },
   "homo_lumo_gap_ev": 14.18, "near_degenerate": false,
-  "scf": { "iterations": 9, "start": "previous", "electronic_temperature_k": 300.0, "retry": null },
-  "composite": null, "gfnff": null,
+  "scf": { "iterations": 9, "start": "previous", "electronic_temperature_k": 300.0 },
   "hessian_method": "analytic",
   "vibrations": { "conventions": "axtb", "frequencies_cm1": [ … ], "ir_intensities_km_mol": [ … ],
     "reduced_masses_amu": [ … ], "force_constants_mdyn_per_angstrom": [ … ], "masses_amu": [ … ],
@@ -161,9 +163,9 @@ method's own start `eeq`, `sad`, `eeq-bc`).
   conventions and the thermochemistry settings, a result records every setting
   that produced it.
 - `energy` (Eh) and `energy_terms` (Eh, as axtb names them). `charges`:
-  Mulliken (SCF methods) or EEQ (GFN-FF). `dipole_e_bohr` and
-  `quadrupole_e_bohr2` (xx, xy, yy, xz, yz, zz, traceless; SCF methods) about
-  the coordinate origin.
+  Mulliken (SCF methods) or EEQ (GFN-FF). `dipole_e_bohr` is about the
+  coordinate origin. SCF methods also report `quadrupole_e_bohr2` about that
+  origin, as the components of a traceless tensor ordered xx, xy, yy, xz, yz, zz.
 - `bond_orders` (when asked): the pairs `a < b` whose Mayer–Wiberg order is at
   least `0.1` ("bonded pairs"), in row-major order of the N × N matrix.
 - `orbitals` (when asked): a `reshiki_qcdata::Orbitals` in the canonical AO
@@ -183,7 +185,7 @@ method's own start `eeq`, `sad`, `eeq-bc`).
 - `scf` (`null` for GFN-FF): iterations of the converged attempt, its start,
   the electronic temperature of the occupations, and with `retries` the rung
   that converged: `{ "rung": i, "of": n, "label": "…" }` (0 is the session's
-  own settings).
+  own settings). A solvent composite reports the highest rung used by its parts.
 - `composite` (g-xTB in solvent): the energies of its parts and the correction
   (Eh), named as axtb names them.
 - `gfnff` (GFN-FF): `{ "fragments": [...] }`, the zero-based fragment of each
