@@ -40,8 +40,6 @@ pub(crate) enum Action {
     Advanced,
     Run,
     Cancel,
-    /// Elapsed time while a run waits on the worker.
-    Tick,
     ApplyAnyway,
     Discard,
     #[cfg(not(target_arch = "wasm32"))]
@@ -124,6 +122,14 @@ struct Pending {
     notes: Vec<String>,
 }
 
+/// A run's progress, which never closes menus or moves focus.
+pub(super) fn is_progress(message: &Message) -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    return matches!(message, Message::Xtb(Action::Event(..)));
+    #[cfg(target_arch = "wasm32")]
+    false
+}
+
 /// Why this build cannot calculate, if it cannot.
 fn unavailable() -> Option<&'static str> {
     if cfg!(windows) {
@@ -140,12 +146,6 @@ impl App {
         match action {
             Action::Run => return self.xtb_run(),
             Action::Cancel => self.xtb_cancel(),
-            Action::Tick => {
-                if let Some(run) = &self.tab.xtb.run {
-                    self.status = run.status();
-                    self.error = false;
-                }
-            }
             Action::ApplyAnyway => self.xtb_apply_anyway(),
             Action::Discard => {
                 if let Some(Outcome::Review(_)) = self.tab.xtb.outcome.take() {
@@ -157,7 +157,7 @@ impl App {
             Action::Event(serial, event) => self.xtb_event(serial, event),
             Action::Page(page) => self.xtb.page = page,
             setting => {
-                let target = self.xtb_target().and_then(|atoms| atoms.first().copied());
+                let target = self.xtb_key();
                 let settings = &mut self.xtb.settings;
                 match setting {
                     Action::Task(task) => settings.task = task,
@@ -179,6 +179,12 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// Who typed charge and unpaired electrons belong to: this document's target.
+    pub(super) fn xtb_key(&self) -> Option<[u64; 3]> {
+        let atom = *self.xtb_target()?.first()?;
+        Some([self.tab.id.0, self.tab.file_epoch, atom])
     }
 
     /// The molecule the card calculates: the selected one, or the only one.
@@ -253,10 +259,18 @@ impl App {
             self.error = true;
             return Task::none();
         };
+        if atoms.len() > state::MAX_ATOMS {
+            self.xtb_fail(format!(
+                "Too many atoms: {}. The limit is {} atoms.",
+                atoms.len(),
+                state::MAX_ATOMS
+            ));
+            return Task::none();
+        }
         let settings = &self.xtb.settings;
         let (charge, multiplicity) = science::drawn_state(&self.tab.doc, first);
         let drawn = (charge, multiplicity.saturating_sub(1));
-        let typed = settings.molecule == Some(first);
+        let typed = settings.molecule.is_some() && settings.molecule == self.xtb_key();
         let state = if typed {
             settings.state(drawn)
         } else {
@@ -313,7 +327,12 @@ impl App {
         let Some(&atom) = run.atoms.first() else {
             return Task::none();
         };
-        match science::launch(&self.tab.doc, atom, run.charge, run.unpaired + 1) {
+        match science::launch(
+            &self.tab.doc,
+            atom,
+            run.charge,
+            run.unpaired.saturating_add(1),
+        ) {
             Ok(launch) => self.xtb_start(launch),
             Err(science::ScienceError::NoModel | science::ScienceError::StaleModel)
                 if !run.modeled =>
@@ -422,6 +441,10 @@ impl App {
             return;
         };
         match event {
+            run::Event::Tick => {
+                self.status = run.status();
+                self.error = false;
+            }
             run::Event::Steps {
                 first,
                 energies,
@@ -496,9 +519,15 @@ impl App {
         };
         let optimized = pending.result.task == qcdata::Task::Optimize;
         let mut notes = pending.notes.clone();
+        let moved = optimized && !shows(&self.tab.doc, &pending.launch);
         if attached.freshness == Freshness::Stale {
             notes.push(
                 "The molecule changed during the calculation: the result is kept, the 3D model is unchanged."
+                    .into(),
+            );
+        } else if moved {
+            notes.push(
+                "The 3D model changed during the calculation: the result is kept, the model is not moved."
                     .into(),
             );
         } else if !forced {
@@ -526,6 +555,7 @@ impl App {
             }
         }
         let applied = optimized
+            && !moved
             && attached.freshness == Freshness::Current
             && match science::apply_geometry(&mut doc, attached.attachment, &pending.result.frame) {
                 Ok(()) => true,
@@ -577,6 +607,25 @@ impl Run {
             self.progress.line(self.task, self.seconds())
         )
     }
+}
+
+/// Whether the molecule's model still has the geometry `launch` started from.
+fn shows(doc: &Document, launch: &Launch) -> bool {
+    let Some(atom) = launch.atoms.iter().flatten().next() else {
+        return false;
+    };
+    doc.models
+        .iter()
+        .find(|m| m.linked_atoms.contains(atom))
+        .is_some_and(|model| {
+            let now = model.atoms.iter().map(|a| a.xyz);
+            let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
+            now.eq(launch
+                .frame
+                .positions_angstrom
+                .iter()
+                .map(|p| p.map(|x| x as f32)))
+        })
 }
 
 /// The document with the molecule's model at `positions` (Å, frame order).

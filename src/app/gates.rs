@@ -329,7 +329,8 @@ impl App {
                 | Message::Updates(_)
                 | Message::Imports(import::Action::Loaded(..))
                 | Message::Naming(super::naming::Action::CaptionNamed(..))
-        ) {
+        ) && !super::xtb::is_progress(message)
+        {
             self.context_menu = None;
             self.tab.inspector_ui.close_menu();
             if !matches!(

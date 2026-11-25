@@ -231,6 +231,8 @@ impl App {
         }
         self.status = "3D model canceled · Drawing unchanged".into();
         self.error = false;
+        // A calculation waiting for this model stops too.
+        let _ = self.xtb_model_finished();
         true
     }
 

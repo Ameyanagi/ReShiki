@@ -748,7 +748,6 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Advanced
                 | Action::Run
                 | Action::Cancel
-                | Action::Tick
                 | Action::ApplyAnyway
                 | Action::Discard => None,
             }

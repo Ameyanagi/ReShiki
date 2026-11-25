@@ -58,14 +58,14 @@ pub(crate) struct Settings {
     /// Zero is Auto.
     pub threads: u32,
     pub advanced: bool,
-    /// The molecule (its first atom) the typed values belong to.
-    pub molecule: Option<u64>,
+    /// The molecule the typed values belong to: tab, file epoch, first atom.
+    pub molecule: Option<[u64; 3]>,
 }
 
 impl Settings {
     /// Typed charge and unpaired electrons belong to one molecule; another
     /// target starts again from its drawing.
-    pub(crate) fn retarget(&mut self, molecule: Option<u64>) {
+    pub(crate) fn retarget(&mut self, molecule: Option<[u64; 3]>) {
         if self.molecule != molecule {
             self.molecule = molecule;
             self.charge.clear();
@@ -119,7 +119,7 @@ pub(crate) fn electrons(protons: u32, charge: i32, unpaired: u32) -> Result<Stri
     Ok(format!(
         "{count} electron{} · multiplicity {}",
         if count == 1 { "" } else { "s" },
-        unpaired + 1
+        u64::from(unpaired) + 1
     ))
 }
 

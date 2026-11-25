@@ -41,6 +41,8 @@ pub(crate) enum Event {
         energies: Vec<f64>,
         positions: Vec<[f64; 3]>,
     },
+    /// Elapsed time goes on while the worker computes: every 250 ms.
+    Tick,
     /// The last event of a job.
     Done(Result<Arc<Report>, String>),
 }
@@ -71,6 +73,18 @@ pub(crate) struct Report {
 /// Start `job` on a new thread. The stream ends after `Event::Done`.
 pub(crate) fn start(job: Job, cancel: Cancel) -> impl Stream<Item = Event> + Send + 'static {
     let (tx, rx) = mpsc::unbounded();
+    let ticks = tx.clone();
+    // Ends when the receiver is dropped or the channel is closed after Done.
+    let _ = std::thread::Builder::new()
+        .name("xtb-tick".into())
+        .spawn(move || {
+            while !ticks.is_closed() {
+                std::thread::sleep(Duration::from_millis(250));
+                if ticks.unbounded_send(Event::Tick).is_err() {
+                    break;
+                }
+            }
+        });
     let worker_tx = tx.clone();
     let thread = std::thread::Builder::new()
         .name("xtb-run".into())
@@ -78,9 +92,11 @@ pub(crate) fn start(job: Job, cancel: Cancel) -> impl Stream<Item = Event> + Sen
             let result = run(job, &cancel, &worker_tx);
             let done = Event::Done(result.map(Arc::new).map_err(|error| error.to_string()));
             let _ = worker_tx.unbounded_send(done);
+            worker_tx.close_channel();
         });
     if let Err(error) = thread {
         let _ = tx.unbounded_send(Event::Done(Err(error.to_string())));
+        tx.close_channel();
     }
     rx
 }

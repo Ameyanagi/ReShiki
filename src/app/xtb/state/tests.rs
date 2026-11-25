@@ -34,7 +34,7 @@ fn electron_check_names_the_count_or_the_parity_problem() {
 fn typed_values_win_over_the_drawing_until_the_target_changes() {
     let mut settings = Settings::default();
     assert_eq!(settings.state((-1, 0)), Ok((-1, 0)));
-    settings.retarget(Some(7));
+    settings.retarget(Some([1, 0, 7]));
     settings.charge = "−2".into();
     settings.unpaired = " 1 ".into();
     assert_eq!(settings.state((0, 0)), Ok((-2, 1)));
@@ -43,9 +43,10 @@ fn typed_values_win_over_the_drawing_until_the_target_changes() {
     settings.charge = "1.5".into();
     assert_eq!(settings.state((0, 0)), Err("Charge must be a whole number"));
     // The same molecule keeps them; another starts from its drawing.
-    settings.retarget(Some(7));
+    settings.retarget(Some([1, 0, 7]));
     assert_eq!(settings.charge, "1.5");
-    settings.retarget(Some(8));
+    // The same atom ID in another tab is another molecule.
+    settings.retarget(Some([2, 0, 7]));
     assert_eq!(settings.state((3, 2)), Ok((3, 2)));
 }
 

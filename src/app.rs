@@ -786,12 +786,6 @@ impl App {
             self.properties_subscription(),
             self.engine_subscription(),
             self.pulse_subscription(),
-            if self.xtb_running() {
-                iced::time::every(std::time::Duration::from_millis(250))
-                    .map(|_| Message::Xtb(xtb::Action::Tick))
-            } else {
-                Subscription::none()
-            },
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
             if self.assistant.needs_poll() {

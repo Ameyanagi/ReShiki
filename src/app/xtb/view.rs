@@ -53,7 +53,9 @@ fn segment<'a>(
     message: Option<Message>,
     hint: Option<&'a str>,
 ) -> Element<'a, Message> {
-    let button = accessible_command(id, name, name)
+    let label = text(name).size(12).center().width(WIDE);
+    let button = reshiki::accessibility::button(id, name, label)
+        .padding([7, 6])
         .checked(active)
         .style(control(active))
         .width(WIDE)
@@ -152,7 +154,7 @@ impl App {
             let (charge, multiplicity) = reshiki::science::drawn_state(&self.tab.doc, atom);
             (charge, multiplicity.saturating_sub(1))
         });
-        let typed = settings.molecule.is_some() && settings.molecule == first;
+        let typed = settings.molecule.is_some() && settings.molecule == self.xtb_key();
         let (charge_text, unpaired_text) = if typed {
             (settings.charge.clone(), settings.unpaired.clone())
         } else {
@@ -287,40 +289,47 @@ impl App {
         ]
         .spacing(3);
 
-        let mut body = column![
-            label("Task"),
-            tasks,
-            later,
-            line(
-                "Opt + freq, orbitals and conformers need support in the xTB worker.",
-                Tone::Muted
-            ),
-            label("Method"),
-            methods,
-            line(
-                "g-xTB and GFN-FF need support in the xTB worker.",
-                Tone::Muted
-            ),
-            fields,
-            check_line,
-            label("Solvent (ALPB)"),
-            solvent,
-            label("Starting geometry"),
-            geometry,
-        ]
-        .spacing(6);
+        // Progress and outcomes come first, where they are seen without scrolling.
+        let mut body = column![].spacing(6);
+        if let Some(run) = run {
+            body = body.push(progress(run));
+        } else if let Some(outcome) = &self.tab.xtb.outcome {
+            body = body.push(outcome_view(outcome));
+        }
+        body = body.push(
+            column![
+                label("Task"),
+                tasks,
+                later,
+                line(
+                    "Opt + freq, orbitals and conformers need support in the xTB worker.",
+                    Tone::Muted
+                ),
+                label("Method"),
+                methods,
+                line(
+                    "g-xTB and GFN-FF need support in the xTB worker.",
+                    Tone::Muted
+                ),
+                fields,
+                check_line,
+                label("Solvent (ALPB)"),
+                solvent,
+                label("Starting geometry"),
+                geometry,
+            ]
+            .spacing(6),
+        );
         if optimize {
             body = body.push(hold);
         }
         body = body.push(self.xtb_advanced(idle));
 
-        // Run, its progress, or the outcome.
+        // Run; while running, the progress row above replaces it.
         let too_many = numbers
             .as_ref()
             .is_some_and(|numbers| numbers.len() > state::MAX_ATOMS);
-        if let Some(run) = run {
-            body = body.push(progress(run));
-        } else {
+        if run.is_none() {
             let ready = target.is_some() && check.is_ok() && !too_many;
             body = body.push(
                 row![
@@ -354,9 +363,6 @@ impl App {
                     Tone::Error,
                 ));
             }
-        }
-        if let Some(outcome) = &self.tab.xtb.outcome {
-            body = body.push(outcome_view(outcome));
         }
         self.inspector_section(Section::Xtb, "xTB calculation", subtitle, true, body)
     }

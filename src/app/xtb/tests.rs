@@ -268,3 +268,49 @@ fn a_stereo_change_waits_for_apply_anyway_or_discard() {
     assert_eq!(model(&app.tab.doc), f32s(&start));
     assert!(app.tab.doc.science.results.is_empty());
 }
+
+#[test]
+fn a_model_moved_during_the_run_is_not_overwritten() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    // Another conformer (no chemical change), as Undo of a regeneration would bring.
+    let before = app.tab.doc.clone();
+    app.tab.doc.models[0].hydrogens[0].xyz = [0.5, 0.5, 0.5];
+    app.changed(before);
+    let moved = model(&app.tab.doc);
+    event(&mut app, optimized(&START, &MOVED));
+    assert_eq!(model(&app.tab.doc), moved);
+    assert_eq!(app.tab.doc.science.results.len(), 1);
+    assert!(matches!(
+        &app.tab.xtb.outcome,
+        Some(Outcome::Done { notes, .. }) if notes[0].starts_with("The 3D model changed during the calculation")
+    ));
+}
+
+#[test]
+fn choosing_2d_while_the_model_is_made_stops_the_run() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let o = app.tab.doc.add_atom("O", Point::default());
+    app.tab.selected = vec![o];
+    send(&mut app, Action::Run);
+    assert!(app.tab.model_job.is_some());
+    let _ = app.update(Message::Models3d(crate::app::models3d::Action::Show(
+        Display::TwoD,
+    )));
+    assert!(app.tab.model_job.is_none());
+    assert!(!app.xtb_running());
+    assert!(matches!(app.tab.xtb.outcome, Some(Outcome::Failed(_))));
+}
+
+#[test]
+fn progress_keeps_menus_open() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    app.tabs.menu = true;
+    event(&mut app, Event::Tick);
+    assert!(app.tabs.menu);
+    assert!(
+        app.status.starts_with("xTB · H2O · Starting xTB"),
+        "{}",
+        app.status
+    );
+}
