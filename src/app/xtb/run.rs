@@ -26,6 +26,8 @@ pub(crate) struct Job {
     pub frequencies: bool,
     /// Analysis masses (u) for isotope-labelled molecules; standard masses otherwise.
     pub masses: Option<Vec<f64>>,
+    /// Proper rotational symmetry with isotope labels, when masses are explicit.
+    pub symmetry_number: Option<u32>,
     pub numbers: Vec<u8>,
     pub positions: Vec<[f64; 3]>,
     pub charge: i32,
@@ -273,10 +275,8 @@ fn final_request(job: &Job, positions: Option<&[f64]>) -> Compute {
         gradient: positions.is_some(),
         hessian: job.frequencies.then(|| HessianRequest {
             masses_amu: job.masses.clone(),
-            // The worker's point-group symmetry ignores isotopes, so explicit
-            // masses need a symmetry number: 1, as substitution usually lowers it.
             thermo: protocol::ThermoRequest {
-                symmetry_number: job.masses.is_some().then_some(1),
+                symmetry_number: job.symmetry_number,
                 ..Default::default()
             },
         }),
@@ -485,6 +485,7 @@ mod tests {
             optimize: true,
             frequencies: false,
             masses: None,
+            symmetry_number: None,
             numbers: vec![8, 1, 1],
             positions: vec![[0.; 3]; 3],
             charge: 0,
@@ -498,6 +499,33 @@ mod tests {
             tight: false,
             topology: None,
         }
+    }
+
+    #[test]
+    fn d2o_frequency_job_forwards_its_isotope_symmetry() {
+        use super::super::{Frame, Settings, state};
+
+        let mut frame = Frame {
+            numbers: vec![8, 1, 1],
+            positions_angstrom: vec![[0., 0., 0.], [0.7586, 0., 0.5043], [-0.7586, 0., 0.5043]],
+            isotopes: vec![0, 2, 2],
+            masses_amu: vec![],
+            charge: 0,
+            multiplicity: 1,
+            drawing_atoms: vec![],
+        };
+        frame.masses_amu = super::super::isotope_masses(&frame).expect("deuterium masses");
+        let settings = Settings {
+            task: state::Task::Frequencies,
+            ..Settings::default()
+        };
+        let config = settings.config((0, 0), false, vec![]).unwrap();
+        let job = super::super::job(&config, &frame, vec![]);
+        assert_eq!(job.symmetry_number, Some(2));
+        let request = final_request(&job, None);
+        let hessian = request.hessian.expect("frequency request");
+        assert_eq!(hessian.masses_amu, Some(frame.masses_amu));
+        assert_eq!(hessian.thermo.symmetry_number, Some(2));
     }
 
     #[test]

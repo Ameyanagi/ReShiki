@@ -1048,10 +1048,27 @@ fn job(config: &state::Config, frame: &Frame, fixed: Vec<usize>) -> run::Job {
         qcdata::XtbMethod::GXtb => Method::Gxtb,
         qcdata::XtbMethod::GfnFf => Method::Gfnff,
     };
+    let symmetry_number = (config.task.frequencies() && !frame.masses_amu.is_empty()).then(|| {
+        let labels: Vec<_> = frame
+            .numbers
+            .iter()
+            .enumerate()
+            .map(|(index, &number)| {
+                u32::from(number) * 1000
+                    + u32::from(frame.isotopes.get(index).copied().unwrap_or(0))
+            })
+            .collect();
+        qcdata::vibrational::rotational_symmetry_number(
+            &labels,
+            &frame.positions_angstrom,
+            &frame.masses_amu,
+        )
+    });
     run::Job {
         optimize: config.task.optimizes(),
         frequencies: config.task.frequencies(),
         masses: (!frame.masses_amu.is_empty()).then(|| frame.masses_amu.clone()),
+        symmetry_number,
         numbers: frame.numbers.clone(),
         positions: frame.positions_angstrom.clone(),
         charge: config.charge,

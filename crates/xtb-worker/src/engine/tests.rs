@@ -36,6 +36,45 @@ O -1.16 0 0
 C 0 0 0
 O 1.16 0 0
 ";
+const THERMO_AMMONIA: &str = "4
+pyramidal ammonia
+N 0 0 0.2
+H 0.94 0 -0.2
+H -0.47 0.8140638795573723 -0.2
+H -0.47 -0.8140638795573723 -0.2
+";
+const THERMO_METHANE: &str = "5
+tetrahedral methane
+C 0 0 0
+H 0.63 0.63 0.63
+H 0.63 -0.63 -0.63
+H -0.63 0.63 -0.63
+H -0.63 -0.63 0.63
+";
+const THERMO_BENZENE: &str = "12
+planar benzene
+C 1.4 0 0
+C 0.7 1.212435565298214 0
+C -0.7 1.212435565298214 0
+C -1.4 0 0
+C -0.7 -1.212435565298214 0
+C 0.7 -1.212435565298214 0
+H 2.48 0 0
+H 1.24 2.147743001385408 0
+H -1.24 2.147743001385408 0
+H -2.48 0 0
+H -1.24 -2.147743001385408 0
+H 1.24 -2.147743001385408 0
+";
+const THERMO_ETHYLENE: &str = "6
+planar ethylene
+C -0.67 0 0
+C 0.67 0 0
+H -1.235 0.932 0
+H -1.235 -0.932 0
+H 1.235 0.932 0
+H 1.235 -0.932 0
+";
 const THERMO_WATER_DIMER: &str = "6
 unoptimized water dimer
 O 0 0 0.119262
@@ -152,6 +191,41 @@ fn assert_thermo_maximum_errors(errors: &[(String, [f64; 5])]) {
             maximum,
             tolerance,
             case
+        );
+    }
+}
+
+#[test]
+fn public_rotational_symmetry_matches_the_unlabelled_worker() {
+    use reshiki_qcdata::vibrational::rotational_symmetry_number;
+
+    for (name, xyz, expected) in [
+        ("water", THERMO_WATER, 2),
+        ("ammonia", THERMO_AMMONIA, 3),
+        ("methane", THERMO_METHANE, 12),
+        ("benzene", THERMO_BENZENE, 12),
+        ("ethylene", THERMO_ETHYLENE, 4),
+        ("CO2", THERMO_CO2, 2),
+    ] {
+        let open = thermo_xyz(xyz);
+        let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+        // Leave masses and the symmetry override unset so the worker supplies
+        // its ordinary, unlabelled thermochemistry symmetry number.
+        let computed = session
+            .compute(Compute {
+                hessian: Some(Default::default()),
+                ..Compute::default()
+            })
+            .unwrap();
+        let engine_symmetry = computed.thermo.as_ref().unwrap().symmetry_number;
+        let masses = &computed.vibrations.as_ref().unwrap().masses_amu;
+        let labels: Vec<_> = open.numbers.iter().map(|&z| u32::from(z) * 1000).collect();
+        let public_symmetry = rotational_symmetry_number(&labels, &open.positions, masses);
+
+        assert_eq!(engine_symmetry, expected, "{name}: worker symmetry");
+        assert_eq!(
+            public_symmetry, engine_symmetry,
+            "{name}: public symmetry versus worker"
         );
     }
 }
