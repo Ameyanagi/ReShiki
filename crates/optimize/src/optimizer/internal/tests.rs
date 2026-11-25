@@ -784,7 +784,7 @@ fn compact_clusters_stop_during_primitive_enumeration() {
     // or allocating either case's dense Wilson matrix and DLC basis.
     for count in [12, 64] {
         let (numbers, x) = compact_carbons(count);
-        let expected = "internal topology exceeds 64 local primitives per atom";
+        let expected = "internal topology exceeds 128 local primitives per atom";
         match super::topology::Topology::generate(&numbers, &x, false) {
             Ok(topology) => panic!(
                 "compact {count}-atom topology generated {} local primitives",

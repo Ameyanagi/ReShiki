@@ -39,7 +39,8 @@ const MIN_DISTANCE: f64 = 1e-8;
 // A compact covalent graph can produce O(n⁴) torsions. Limit local primitives
 // during enumeration so ANC takes over before allocating dense Wilson rows
 // and DLC weights. The chart adds at most six rigid coordinates per fragment.
-const MAX_LOCAL_PRIMITIVES_PER_ATOM: usize = 64;
+// Dense inorganic clusters such as [Mo6Cl14]2- need about 84 per atom.
+const MAX_LOCAL_PRIMITIVES_PER_ATOM: usize = 128;
 // Weak initial curvature for an auxiliary H···acceptor distance (Eh/bohr²).
 const HBOND_STIFFNESS: f64 = 1e-3;
 
