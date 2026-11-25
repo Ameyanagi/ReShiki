@@ -626,3 +626,135 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
     );
     assert_eq!(run.atoms, [o]);
 }
+
+/// A drawing whose 3D model has `positions` (heavy atoms in drawing order,
+/// then hydrogens bound to `parents`), with `element` written over the
+/// drawn atom `swap` afterwards: the geometry worker types only organic
+/// elements, so uranium and cerium models are made this way.
+fn evidence_file(
+    heavy: &[(&str, i32)],
+    bonds: &[(usize, usize, u8)],
+    positions: &[[f64; 3]],
+    hydrogens: &[(usize, [f64; 3])],
+    swap: Option<(usize, &str)>,
+) -> Vec<u8> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let ids: Vec<u64> = heavy
+        .iter()
+        .enumerate()
+        .map(|(i, (element, charge))| {
+            let id = app
+                .tab
+                .doc
+                .add_atom(element, Point::new(i as f32 * 25., (i % 2) as f32 * 14.));
+            if let Some(atom) = app.tab.doc.atoms.iter_mut().find(|a| a.id == id) {
+                atom.charge = *charge;
+            }
+            id
+        })
+        .collect();
+    for &(a, b, order) in bonds {
+        app.tab.doc.add_bond(ids[a], ids[b], order, "plain");
+    }
+    app.tab.selected = vec![ids[0]];
+    send(&mut app, Action::Run);
+    let order = app.model_atoms();
+    let mut points: Vec<[f64; 3]> = order
+        .iter()
+        .map(|id| positions[ids.iter().position(|i| i == id).expect("heavy atom")])
+        .collect();
+    let parents = hydrogens
+        .iter()
+        .map(|&(parent, xyz)| {
+            points.push(xyz);
+            order
+                .iter()
+                .position(|id| *id == ids[parent])
+                .expect("parent")
+        })
+        .collect();
+    let points = points.iter().map(|&[x, y, z]| Point3 { x, y, z }).collect();
+    let _ = app.finish_model(points, parents);
+    send(&mut app, Action::Cancel);
+    assert_eq!(app.tab.doc.models.len(), 1, "{}", app.status);
+    if let Some((index, element)) = swap {
+        let id = ids[index];
+        if let Some(atom) = app.tab.doc.atoms.iter_mut().find(|a| a.id == id) {
+            atom.element = element.into();
+        }
+        let model = &mut app.tab.doc.models[0];
+        if let Some(generated) = &mut model.generated {
+            let slot = generated.sources.iter().position(|s| *s == Some(id));
+            generated.elements[slot.expect("swapped atom")] = element.into();
+        }
+        // Without a fingerprint the model is not stale after the swap.
+        model.fingerprint = None;
+    }
+    app.tab.doc.file_json().expect("file")
+}
+
+/// A zigzag alkane with `carbons` carbons and its hydrogens.
+fn alkane_file(carbons: usize) -> Vec<u8> {
+    let heavy = vec![("C", 0); carbons];
+    let bonds: Vec<_> = (1..carbons).map(|i| (i - 1, i, 1)).collect();
+    let positions: Vec<[f64; 3]> = (0..carbons)
+        .map(|i| [i as f64 * 1.27, (i % 2) as f64 * 0.87, 0.])
+        .collect();
+    let mut hydrogens = vec![];
+    for (i, c) in positions.iter().enumerate() {
+        let ends = i == 0 || i + 1 == carbons;
+        let up = if i % 2 == 0 { -1. } else { 1. };
+        hydrogens.push((i, [c[0], c[1] + up * 0.5, 0.9]));
+        hydrogens.push((i, [c[0], c[1] + up * 0.5, -0.9]));
+        if ends {
+            let out = if i == 0 { -1. } else { 1. };
+            hydrogens.push((i, [c[0] + out * 1.0, c[1] - up * 0.3, 0.]));
+        }
+    }
+    evidence_file(&heavy, &bonds, &positions, &hydrogens, None)
+}
+
+#[test]
+#[ignore = "writes the U1c real-app evidence files; set RESHIKI_XTB_EVIDENCE_DIR"]
+fn manual_write_evidence_files() {
+    let dir = std::path::PathBuf::from(std::env::var("RESHIKI_XTB_EVIDENCE_DIR").expect("dir"));
+    let linear = [[-1.78, 0., 0.], [0., 0., 0.], [1.78, 0., 0.]];
+    let files = [
+        (
+            "uranyl.rsk",
+            evidence_file(
+                &[("O", 0), ("S", 2), ("O", 0)],
+                &[(0, 1, 2), (1, 2, 2)],
+                &linear,
+                &[],
+                Some((1, "U")),
+            ),
+        ),
+        (
+            "ceria.rsk",
+            evidence_file(
+                &[("O", 0), ("S", 0), ("O", 0)],
+                &[(0, 1, 2), (1, 2, 2)],
+                &[[-1.85, 0., 0.], [0., 0., 0.], [1.2, 1.4, 0.]],
+                &[],
+                Some((1, "Ce")),
+            ),
+        ),
+        (
+            "dioxygen.rsk",
+            evidence_file(
+                &[("O", 0), ("O", 0)],
+                &[(0, 1, 2)],
+                &[[0., 0., 0.], [1.21, 0., 0.]],
+                &[],
+                None,
+            ),
+        ),
+        ("c170.rsk", alkane_file(170)),
+        ("c100.rsk", alkane_file(100)),
+    ];
+    for (name, bytes) in files {
+        std::fs::write(dir.join(name), bytes).expect("written");
+    }
+}
