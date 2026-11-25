@@ -4593,6 +4593,7 @@ dependencies = [
  "reshiki-macos",
  "reshiki-mcp",
  "reshiki-model",
+ "reshiki-optimize",
  "reshiki-process",
  "reshiki-process-heap",
  "reshiki-qcdata",

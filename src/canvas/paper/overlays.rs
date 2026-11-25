@@ -154,9 +154,55 @@ impl MoleculeCanvas<'_> {
             frame,
             bounds,
             lo - Vector::new(14., 48.),
-            format!("Generating 3D… {} s · Esc cancels", elapsed.as_secs()),
+            format!(
+                "{}… {} s · Esc cancels",
+                generation.label,
+                elapsed.as_secs()
+            ),
             true,
         );
+    }
+
+    pub(super) fn draw_result_label(&self, frame: &mut layered::Frame<'_>, bounds: Rectangle) {
+        let Some(label) = &self.result_label else {
+            return;
+        };
+        let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &label.atoms) else {
+            return;
+        };
+        let lo = self.camera.screen(lo, bounds);
+        let hi = self.camera.screen(hi, bounds);
+        badge(
+            frame,
+            bounds,
+            Point::new(lo.x - 14., hi.y),
+            label.text.clone(),
+            true,
+        );
+        for (id, text) in &label.atom_labels {
+            let Some(atom) = self.doc.atom(*id) else {
+                continue;
+            };
+            // Above and right of the atom, clear of a label glyph about
+            // 10 pt tall at any zoom.
+            let half = 5. * self.camera.zoom;
+            let at =
+                self.camera.screen(atom.position, bounds) + Vector::new(half + 2., -half - 15.);
+            let width = crate::app::text_width(text, 11.) + 6.;
+            frame.fill_rectangle(
+                at - Vector::new(3., 1.),
+                iced::Size::new(width, 15.),
+                ACCENT_TINT,
+            );
+            frame.fill_text(canvas::Text {
+                content: text.clone(),
+                position: at,
+                color: rgb([30, 100, 85]),
+                size: 11.into(),
+                font: iced::Font::with_name(reshiki::style::ui_font_family()),
+                ..Default::default()
+            });
+        }
     }
 
     pub(super) fn scientific_drawing(

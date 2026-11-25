@@ -185,34 +185,36 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
     assert_eq!(labels, ["Keyboard drawing", "3D optimize…"]);
     // Selection commands first, global ones last, so these fold first.
     app.tab.selected = app.tab.doc.all_ids();
+    // A selected molecule offers xTB in builds that can calculate.
+    let xtb = super::super::xtb::available().then_some("Optimize with GFN2-xTB");
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(
-        labels,
-        [
-            "Join",
-            "Merge atoms",
-            "Move & attach…",
-            "Coordinate in place…",
-            "Group",
-            "Keyboard drawing",
-            "3D optimize…"
-        ]
-    );
+    let expected: Vec<_> = [
+        "Join",
+        "Merge atoms",
+        "Move & attach…",
+        "Coordinate in place…",
+        "Group",
+    ]
+    .into_iter()
+    .chain(xtb)
+    .chain(["Keyboard drawing", "3D optimize…"])
+    .collect();
+    assert_eq!(labels, expected);
     let _ = app.update(Message::Group);
     let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-    assert_eq!(
-        labels,
-        [
-            "Join",
-            "Merge atoms",
-            "Move & attach…",
-            "Coordinate in place…",
-            "Group",
-            "Ungroup",
-            "Keyboard drawing",
-            "3D optimize…"
-        ]
-    );
+    let expected: Vec<_> = [
+        "Join",
+        "Merge atoms",
+        "Move & attach…",
+        "Coordinate in place…",
+        "Group",
+        "Ungroup",
+    ]
+    .into_iter()
+    .chain(xtb)
+    .chain(["Keyboard drawing", "3D optimize…"])
+    .collect();
+    assert_eq!(labels, expected);
     assert!(
         !app.context_commands()
             .iter()

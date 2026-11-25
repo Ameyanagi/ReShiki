@@ -136,6 +136,7 @@ mod wayland_qa;
 #[cfg(windows)]
 mod windows_libreoffice_save;
 mod workspace;
+mod xtb;
 #[cfg(target_arch = "wasm32")]
 pub(crate) use files::Picked;
 #[cfg(target_arch = "wasm32")]
@@ -265,6 +266,8 @@ pub enum Message {
     Settings(settings_page::Action),
     /// Export input for Gaussian, ORCA or GAMESS.
     QcExport(qc_export::Action),
+    /// Predict → xTB: the Calculate card and its runs.
+    Xtb(xtb::Action),
     Help(help::Action),
     Commands(command_palette::Action),
     OpenShortcutExamples,
@@ -550,6 +553,7 @@ pub struct App {
     help_open: bool,
     settings: settings_page::State,
     qc_export: Option<qc_export::Dialog>,
+    xtb: xtb::Window,
     help: help::State,
     commands: command_palette::State,
     viewport: iced::Size,
@@ -685,6 +689,7 @@ impl App {
             help_open: false,
             settings: settings_page::State::default(),
             qc_export: None,
+            xtb: xtb::Window::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
             viewport: iced::Size::new(850.0, 600.0),
@@ -1127,7 +1132,9 @@ impl App {
         {
             return session.preview_document();
         }
-        self.cycle_proposal_document().unwrap_or(&self.tab.doc)
+        self.cycle_proposal_document()
+            .or_else(|| self.xtb_preview())
+            .unwrap_or(&self.tab.doc)
     }
     /// The runtime's entry point. A finished export or copy counts
     /// toward the GitHub star prompt here, once, even when its drawing has
@@ -1322,7 +1329,10 @@ impl App {
         // The answer goes on as the system dialog's would have.
         if let Message::Prompt(answer) = message {
             return ControlFlow::Break(match self.prompt.take() {
-                Some(prompt) => self.update(prompt.answer(answer)),
+                Some(prompt) => match self.xtb_size_answer(prompt, answer) {
+                    Some(message) => self.update(message),
+                    None => Task::none(),
+                },
                 None => Task::none(),
             });
         }

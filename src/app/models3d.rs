@@ -140,41 +140,46 @@ impl App {
                 Task::none()
             }
             Action::Generated(key, result) => {
-                let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
-                    return Task::none();
-                };
-                if job.current != self.model_key() {
-                    self.status = "Drawing changed · 3D model not applied".into();
-                    self.error = false;
-                    return Task::none();
+                self.model_generated(key, result);
+                // A calculation waiting for this model goes on, or stops.
+                self.xtb_model_finished(key)
+            }
+        }
+    }
+
+    fn model_generated(&mut self, key: Key, result: Result<Arc<Optimized>, String>) {
+        let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
+            return;
+        };
+        if job.current != self.model_key() {
+            self.status = "Drawing changed · 3D model not applied".into();
+            self.error = false;
+            return;
+        }
+        // A preview or label editor owns the drawing; adding a model
+        // under it would cancel or outdate it.
+        if self.tab.drawing_edit_active() {
+            self.status = "3D model not applied · Choose 3D again after this edit".into();
+            self.error = false;
+            return;
+        }
+        let model = result.and_then(|optimized| {
+            job.prepared
+                .model(&optimized)
+                .map_err(|error| error.to_string())
+        });
+        match model {
+            Ok(mut model) => {
+                model.seed = job.seed;
+                if let Some(index) = job.target {
+                    self.replace_model(index, model);
+                } else {
+                    self.add_model(model, job.display);
                 }
-                // A preview or label editor owns the drawing; adding a model
-                // under it would cancel or outdate it.
-                if self.tab.drawing_edit_active() {
-                    self.status = "3D model not applied · Choose 3D again after this edit".into();
-                    self.error = false;
-                    return Task::none();
-                }
-                let model = result.and_then(|optimized| {
-                    job.prepared
-                        .model(&optimized)
-                        .map_err(|error| error.to_string())
-                });
-                match model {
-                    Ok(mut model) => {
-                        model.seed = job.seed;
-                        if let Some(index) = job.target {
-                            self.replace_model(index, model);
-                        } else {
-                            self.add_model(model, job.display);
-                        }
-                    }
-                    Err(error) => {
-                        self.status = format!("3D model not generated: {error}");
-                        self.error = true;
-                    }
-                }
-                Task::none()
+            }
+            Err(error) => {
+                self.status = format!("3D model not generated: {error}");
+                self.error = true;
             }
         }
     }
@@ -207,21 +212,27 @@ impl App {
             })
     }
 
-    /// The current generation's own target, independent of later selection.
+    /// The current generation's own target, independent of later selection,
+    /// or the molecule an xTB calculation runs on.
     pub(super) fn model_generation(&self) -> Option<crate::canvas::ModelGeneration<'_>> {
-        let job = self.tab.model_job.as_ref()?;
+        let Some(job) = self.tab.model_job.as_ref() else {
+            return self.xtb_outline();
+        };
         (job.current == self.model_key()).then_some(crate::canvas::ModelGeneration {
             atoms: job.prepared.ids(),
             started: job.started,
+            label: "Generating 3D",
         })
     }
 
     pub(super) fn cancel_model_generation(&mut self) -> bool {
-        if self.tab.model_job.take().is_none() {
+        let Some(job) = self.tab.model_job.take() else {
             return false;
-        }
+        };
         self.status = "3D model canceled · Drawing unchanged".into();
         self.error = false;
+        // A calculation waiting for this model stops too.
+        let _ = self.xtb_model_finished(job.key);
         true
     }
 
@@ -355,6 +366,33 @@ impl App {
         let Some((_, Some(index))) = self.selected_model() else {
             return Task::none();
         };
+        self.regenerate_model_at(index, fresh)
+    }
+
+    /// A model for a calculation on `atoms`: a new one shown beside the
+    /// drawing, or an Update of an out-of-date one. Starts nothing on error;
+    /// the status says why.
+    pub(super) fn model_for_calculation(&mut self, atoms: Vec<u64>) -> Task<Message> {
+        let first = atoms.first().copied();
+        let index = self
+            .tab
+            .doc
+            .models
+            .iter()
+            .position(|model| first.is_some_and(|id| model.linked_atoms.contains(&id)));
+        match index {
+            Some(index) => self.regenerate_model_at(index, false),
+            None => self.generate_model(
+                atoms,
+                Display::Both,
+                None,
+                ForceField::Mmff94s,
+                DEFAULT_SEED,
+            ),
+        }
+    }
+
+    fn regenerate_model_at(&mut self, index: usize, fresh: bool) -> Task<Message> {
         let Some(model) = self.tab.doc.models.get(index) else {
             return Task::none();
         };
@@ -433,6 +471,10 @@ impl App {
             move |result| Message::Models3d(Action::Generated(key, result)),
         )
         .abortable();
+        // A calculation waiting for a replaced generation stops.
+        if let Some(old) = self.tab.model_job.take() {
+            let _ = self.xtb_model_finished(old.key);
+        }
         self.tab.model_job = Some(Job {
             key,
             current: key,

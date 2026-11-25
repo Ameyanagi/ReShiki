@@ -357,6 +357,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "Join selected atoms or bonds",
             "Merge selected atoms",
             "Show as",
+            "Calculate (xTB)",
             "Arrange & transform",
             "Add callout",
             "—",
@@ -374,6 +375,8 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
         .into_iter()
         // Copy image on needs a native clipboard, as Copy image does.
         .filter(|label| *label != "Copy image on" || reshiki::clipboard::available())
+        // Calculate needs a build with xTB, as Run does.
+        .filter(|label| *label != "Calculate (xTB)" || super::super::xtb::available())
         .collect::<Vec<_>>()
     );
     // Join and Merge both stay, unavailable below their minimum selection.
@@ -1191,19 +1194,28 @@ fn row_menus_toggle_and_explain_unavailable_arrange_commands() -> Result<(), Str
         ]
     );
     assert!(run_item(&mut app, Page::Arrange, "Align needs 2 objects").is_err());
+    // A selected molecule also offers xTB in builds that can calculate.
+    let xtb: Vec<_> = super::super::xtb::available()
+        .then_some("Optimize with GFN2-xTB")
+        .into_iter()
+        .collect();
+    let folded = |labels: &[&'static str]| -> Vec<&'static str> {
+        let (rest, last) = labels.split_at(labels.len() - 1);
+        [rest, &xtb, last].concat()
+    };
     assert_eq!(
-        labels(&app, Page::More(2)),
-        ["Group", "3D optimize…"],
+        labels(&app, Page::More(2 + xtb.len())),
+        folded(&["Group", "3D optimize…"]),
         "Default keyboard drawing folds the global commands first"
     );
     assert_eq!(
-        labels(&app, Page::More(4)),
-        [
+        labels(&app, Page::More(4 + xtb.len())),
+        folded(&[
             "Move & attach…",
             "Coordinate in place…",
             "Group",
             "3D optimize…"
-        ],
+        ]),
         "⋯ keeps the folded commands in row order"
     );
     let _ = app.update(Message::KeyboardDrawing(

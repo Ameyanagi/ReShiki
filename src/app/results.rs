@@ -20,6 +20,9 @@ enum Completion {
     Models3d,
     /// Nmr(Finished | Exported).
     Nmr,
+    /// Xtb(Event | Palette(Exported)): a calculation's progress and finish,
+    /// and the results table's export.
+    Xtb,
     /// Exported.
     Export,
     /// FigureExported.
@@ -94,6 +97,7 @@ impl Completion {
             | Self::Optimization
             | Self::Models3d
             | Self::Nmr
+            | Self::Xtb
             | Self::Export
             | Self::FigureExport
             | Self::Printing
@@ -164,6 +168,7 @@ fn admission(completion: Completion) -> Admission {
         Completion::Engine
         | Completion::Models3d
         | Completion::Nmr
+        | Completion::Xtb
         | Completion::Export
         | Completion::FigureExport
         | Completion::Naming
@@ -728,11 +733,43 @@ fn completion(message: &Message) -> Option<Completion> {
             Some(Completion::Export)
         }
         Message::QcExport(_) => None,
+        Message::Xtb(action) => {
+            use super::xtb::Action;
+            match action {
+                #[cfg(not(target_arch = "wasm32"))]
+                Action::Event(..) => Some(Completion::Xtb),
+                Action::Page(..)
+                | Action::Task(..)
+                | Action::Charge(..)
+                | Action::Unpaired(..)
+                | Action::Solvent(..)
+                | Action::HoldFixed(..)
+                | Action::Tight(..)
+                | Action::Threads(..)
+                | Action::Advanced
+                | Action::Method(..)
+                | Action::Accuracy(..)
+                | Action::Temperature(..)
+                | Action::Iterations(..)
+                | Action::Xtb68(..)
+                | Action::Run
+                | Action::Entry(..)
+                | Action::Retry
+                | Action::RunAgain
+                | Action::CopyDetails
+                | Action::Cancel
+                | Action::ApplyAnyway
+                | Action::Discard => None,
+                Action::Palette(super::xtb::palette::Action::Exported(..)) => Some(Completion::Xtb),
+                Action::Palette(..) => None,
+            }
+        }
         Message::FigureExported(..) => Some(Completion::FigureExport),
         Message::ExportReady(export) | Message::SaveExport(_, export) => Some(match export.kind {
             super::figure_export::Kind::Figure => Completion::FigureExport,
             super::figure_export::Kind::Structure => Completion::Export,
             super::figure_export::Kind::Nmr => Completion::Nmr,
+            super::figure_export::Kind::Xtb => Completion::Xtb,
         }),
         // Tab wraps a routed message; its inner message is classified where it is delivered.
         Message::Tab(..) => None,
