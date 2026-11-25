@@ -21,7 +21,7 @@ Options:
   --memory-gb G       Total memory in GB (16).
   --title T           Title (the input file name).
   --extra TEXT        More keywords, or GAMESS groups.
-  --out PATH          Main file; companions go beside it.
+  --out PATH          Main file, replaced if it exists; companions go beside it.
 
 Templates:
   1  B3LYP-D3BJ/def2-SVP opt+freq

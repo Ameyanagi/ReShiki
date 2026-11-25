@@ -396,7 +396,7 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--out",
             value: Some("PATH"),
-            help: "Main file; companions go beside it.",
+            help: "Main file, replaced if it exists; companions go beside it.",
             ..QC_OPTION
         },
     ],

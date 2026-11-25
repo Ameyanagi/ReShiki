@@ -516,7 +516,7 @@ reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz [--job J
 | `--memory-gb G`     | export-input | Memory in GB (16)                                       |
 | `--title T`         | export-input | Title                                                   |
 | `--extra TEXT`      | export-input | More keywords                                           |
-| `--out PATH`        | export-input | Main file; companions beside it                         |
+| `--out PATH`        | export-input | Replaces PATH; companions go beside it                  |
 
 ## name
 
