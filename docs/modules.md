@@ -563,7 +563,7 @@ explains how the crates and modules fit together.
 - `crates/io/src/chemistry/cdxml/scene/finish.rs`
 - `crates/io/src/chemistry/cdxml/scene/properties.rs`: ChemDraw linked property text (`chemicalproperty`) read as property links.
 - `crates/io/src/chemistry/cdxml/scene/ring_fills.rs`: Native ChemDraw bond-owned areas and legacy ReShiki-owned polygons.
-- `crates/io/src/chemistry/cdxml/schemes.rs`: Validate external reaction references without inventing native reaction roles.
+- `crates/io/src/chemistry/cdxml/schemes.rs`: Validate ChemDraw schemes and read reaction step references.
 - `crates/io/src/chemistry/cdxml/stereo.rs`
 - `crates/io/src/chemistry/cdxml/symbol.rs`
 - `crates/io/src/chemistry/cdxml/tables.rs`: Native table pages own ordinary editable objects.
@@ -629,6 +629,8 @@ explains how the crates and modules fit together.
 - `crates/io/src/exchange/drawing/ligands.rs`: Hidden-charge and aromatic-ligand presentation using native CDX symbols.
 - `crates/io/src/exchange/drawing/objects.rs`
 - `crates/io/src/exchange/drawing/partial_charges.rs`
+- `crates/io/src/exchange/drawing/reaction_goldens.rs`: Reproducible editable reaction drawings for before/after reader checks.
+- `crates/io/src/exchange/drawing/steps.rs`: ChemDraw reaction steps for ordinary arrows and catalytic cycles.
 - `crates/io/src/exchange/drawing/tables.rs`: Native cell pages keep chemistry editable and let ChemDraw clip/reflow it.
 - `crates/io/src/exchange/drawing/tlc.rs`: Native ChemDraw TLC objects, never a flattened collection of ellipses.
 - `crates/io/src/exchange/drawing/tree.rs`

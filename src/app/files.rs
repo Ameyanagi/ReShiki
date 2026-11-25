@@ -64,7 +64,7 @@ pub(super) fn keep_format_text(
                 _ => lost.push(format!("{count} {many}")),
             }
         }
-        if !doc.reactions.is_empty() {
+        if reshiki::exchange::drawing::has_unwritten_reactions(doc) {
             lost.push("reaction roles".into());
         }
         if reshiki::arrow_anchors::export_notice(doc).is_some()
