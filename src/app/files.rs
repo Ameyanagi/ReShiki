@@ -967,8 +967,8 @@ impl super::App {
             Ok(Prepared::Frames(file)) => {
                 // One sheet at a time: files opened together wait their turn.
                 let name = super::import::name(&path);
-                if let Some(open) = self.frames_import.as_mut() {
-                    open.queue(path, *file);
+                if self.frames_import.is_some() || !self.frames_queue.is_empty() {
+                    self.frames_queue.push_back((path, *file));
                 } else {
                     self.frames_import = Some(super::frames_import::Dialog::new(path, *file));
                     self.status = format!("{name} has several frames: choose which to open");

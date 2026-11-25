@@ -558,6 +558,8 @@ pub struct App {
     settings: settings_page::State,
     qc_export: Option<qc_export::Dialog>,
     frames_import: Option<frames_import::Dialog>,
+    /// Files of several frames opened together, asked about in turn.
+    frames_queue: std::collections::VecDeque<(std::path::PathBuf, frames_import::File)>,
     xtb: xtb::Window,
     help: help::State,
     commands: command_palette::State,
@@ -695,6 +697,7 @@ impl App {
             settings: settings_page::State::default(),
             qc_export: None,
             frames_import: None,
+            frames_queue: Default::default(),
             xtb: xtb::Window::default(),
             help: help::State::default(),
             commands: command_palette::State::default(),
