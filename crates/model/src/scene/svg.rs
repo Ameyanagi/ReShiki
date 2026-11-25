@@ -650,9 +650,11 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                             s.push_str("</g>");
                         }
                     }
+                    // Butt ends: a run ends exactly where a nearer lobe or a
+                    // ball hides it, and a round cap would poke past that.
                     for stroke in group.strokes {
                         s.push_str(&format!(
-                            "<path d=\"{}\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{}/>",
+                            "<path d=\"{}\" fill=\"none\" stroke-linejoin=\"round\"{}/>",
                             surface_data(&stroke.paths),
                             outline_paint(Some(stroke.outline))
                         ));

@@ -17,6 +17,7 @@ use crate::scene::{Outline, Primitive, SurfaceFill, SurfaceGroup, SurfaceStroke}
 
 const MAGIC: &[u8; 4] = b"RSF2";
 const MAX_INFLATED_BYTES: usize = 16 * 1024 * 1024;
+const MAX_PATH_COMMANDS: usize = 1_000_000;
 const MIN_PATH_BYTES: usize = 4 + 1 + 8;
 
 /// Largest encoded snapshot, in bytes.
@@ -180,6 +181,7 @@ pub fn decode(text: &str, origin: Point) -> Result<Primitive, String> {
     // A group always contains its alpha and both collection counts.
     let group_count = read_count(&mut bytes, 4 + 4 + 4)?;
     let mut groups = Vec::with_capacity(group_count);
+    let mut total_path_commands = 0;
     for _ in 0..group_count {
         let alpha = f32::from_le_bytes(take(&mut bytes)?);
         if !valid_alpha(alpha) {
@@ -189,12 +191,12 @@ pub fn decode(text: &str, origin: Point) -> Result<Primitive, String> {
         let mut fills = Vec::with_capacity(fill_count);
         for _ in 0..fill_count {
             let color = take(&mut bytes)?;
-            let region = read_path(&mut bytes, origin)?;
+            let region = read_path(&mut bytes, origin, &mut total_path_commands)?;
             let tone_count = read_count(&mut bytes, 3 + MIN_PATH_BYTES)?;
             let mut tones = Vec::with_capacity(tone_count);
             for _ in 0..tone_count {
                 let color = take(&mut bytes)?;
-                let path = read_path(&mut bytes, origin)?;
+                let path = read_path(&mut bytes, origin, &mut total_path_commands)?;
                 tones.push((path, color));
             }
             fills.push(SurfaceFill {
@@ -214,7 +216,7 @@ pub fn decode(text: &str, origin: Point) -> Result<Primitive, String> {
             if !valid_outline(&outline) {
                 return Err("Invalid snapshot outline".into());
             }
-            let paths = read_path(&mut bytes, origin)?;
+            let paths = read_path(&mut bytes, origin, &mut total_path_commands)?;
             strokes.push(SurfaceStroke { paths, outline });
         }
         groups.push(SurfaceGroup {
@@ -243,31 +245,54 @@ fn read_count(bytes: &mut &[u8], item_bytes: usize) -> Result<usize, String> {
     Ok(count)
 }
 
-fn read_path(bytes: &mut &[u8], origin: Point) -> Result<Vec<PathCommand>, String> {
+fn read_path(
+    bytes: &mut &[u8],
+    origin: Point,
+    total_path_commands: &mut usize,
+) -> Result<Vec<PathCommand>, String> {
     // Close is the smallest command, occupying just its tag byte.
     let command_count = read_count(bytes, 1)?;
     if command_count == 0 {
         return Err("Snapshot path is empty".into());
     }
-    // Grow only after commands validate: a run of Close tags can legitimately
-    // have many commands, but malformed tags should not reserve that memory.
+    // Validate each command before growing the decoded path.
     let mut path = Vec::new();
+    let mut subpath_open = false;
     for index in 0..command_count {
+        if *total_path_commands == MAX_PATH_COMMANDS {
+            return Err("Snapshot has too many path commands".into());
+        }
         let [tag] = take(bytes)?;
         if index == 0 && tag != 0 {
             return Err("Snapshot path does not start with Move".into());
         }
-        path.push(match tag {
-            0 => PathCommand::Move(read_point(bytes, origin)?),
+        let command = match tag {
+            0 => {
+                subpath_open = true;
+                PathCommand::Move(read_point(bytes, origin)?)
+            }
             1 => PathCommand::Line(read_point(bytes, origin)?),
             2 => PathCommand::Cubic(
                 read_point(bytes, origin)?,
                 read_point(bytes, origin)?,
                 read_point(bytes, origin)?,
             ),
-            3 => PathCommand::Close,
+            3 => {
+                if !subpath_open
+                    || !matches!(
+                        path.last(),
+                        Some(PathCommand::Line(_) | PathCommand::Cubic(..))
+                    )
+                {
+                    return Err("Snapshot Close does not follow a segment in its subpath".into());
+                }
+                subpath_open = false;
+                PathCommand::Close
+            }
             _ => return Err("Invalid snapshot path command".into()),
-        });
+        };
+        *total_path_commands += 1;
+        path.push(command);
     }
     Ok(path)
 }
@@ -601,6 +626,83 @@ mod tests {
             decode_bytes(&bytes).unwrap_err(),
             "Invalid snapshot path command"
         );
+    }
+
+    #[test]
+    fn rejects_more_than_one_million_total_path_commands() {
+        fn path(bytes: &mut Vec<u8>, commands: usize) {
+            write_count(bytes, commands).unwrap();
+            for index in 0..commands {
+                bytes.push(u8::from(index != 0));
+                bytes.extend_from_slice(&[0; 8]);
+            }
+        }
+
+        fn fixture(last_path_commands: usize) -> Vec<u8> {
+            let mut bytes = MAGIC.to_vec();
+            write_count(&mut bytes, 2).unwrap();
+            bytes.extend_from_slice(&1f32.to_le_bytes());
+            write_count(&mut bytes, 1).unwrap();
+            bytes.extend_from_slice(&[1, 2, 3]);
+            path(&mut bytes, 250_000);
+            write_count(&mut bytes, 1).unwrap();
+            bytes.extend_from_slice(&[4, 5, 6]);
+            path(&mut bytes, 250_000);
+            write_count(&mut bytes, 1).unwrap();
+            bytes.extend_from_slice(&[7, 8, 9]);
+            bytes.extend_from_slice(&1f32.to_le_bytes());
+            bytes.extend_from_slice(&1f32.to_le_bytes());
+            path(&mut bytes, 250_000);
+            bytes.extend_from_slice(&1f32.to_le_bytes());
+            write_count(&mut bytes, 1).unwrap();
+            bytes.extend_from_slice(&[10, 11, 12]);
+            path(&mut bytes, last_path_commands);
+            write_count(&mut bytes, 0).unwrap();
+            write_count(&mut bytes, 0).unwrap();
+            bytes
+        }
+
+        // The budget spans regions, tones, strokes, and groups.
+        assert!(decode_bytes(&fixture(250_000)).is_ok());
+        assert_eq!(
+            decode_bytes(&fixture(250_001)).err().as_deref(),
+            Some("Snapshot has too many path commands")
+        );
+    }
+
+    #[test]
+    fn rejects_close_without_preceding_segment_in_subpath() {
+        let point = Point::default();
+        for path in [
+            vec![PathCommand::Move(point), PathCommand::Close],
+            vec![
+                PathCommand::Move(point),
+                PathCommand::Line(point),
+                PathCommand::Close,
+                PathCommand::Close,
+            ],
+            vec![
+                PathCommand::Move(point),
+                PathCommand::Line(point),
+                PathCommand::Move(point),
+                PathCommand::Close,
+            ],
+            vec![
+                PathCommand::Move(point),
+                PathCommand::Line(point),
+                PathCommand::Close,
+                PathCommand::Line(point),
+                PathCommand::Close,
+            ],
+        ] {
+            let mut surface = small_surface();
+            groups_mut(&mut surface)[0].fills[0].region = path;
+            let bytes = write_snapshot(groups(&surface), point, 1).unwrap();
+            assert_eq!(
+                decode_bytes(&bytes).unwrap_err(),
+                "Snapshot Close does not follow a segment in its subpath"
+            );
+        }
     }
 
     #[test]

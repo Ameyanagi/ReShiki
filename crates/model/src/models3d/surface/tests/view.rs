@@ -475,8 +475,9 @@ impl Oracle<'_> {
     }
 }
 
+/// Nonzero winding, as the SVG fills use.
 fn contains(region: &[Vec<[f32; 2]>], point: [f64; 2]) -> bool {
-    let mut inside = false;
+    let mut winding = 0;
     for contour in region {
         for (a, b) in contour
             .iter()
@@ -488,11 +489,11 @@ fn contains(region: &[Vec<[f32; 2]>], point: [f64; 2]) -> bool {
             if (a[1] > point[1]) != (b[1] > point[1])
                 && point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0]
             {
-                inside = !inside;
+                winding += if b[1] > a[1] { 1 } else { -1 };
             }
         }
     }
-    inside
+    winding != 0
 }
 
 fn distance_to_segment(point: [f64; 2], a: [f32; 2], b: [f32; 2]) -> f64 {
@@ -739,7 +740,8 @@ fn ray_oracle_rejects_a_false_hole_inside_a_uniformly_visible_square() {
     // exemption near returned contours would conceal every missing point.
     result.layers[0]
         .region
-        .push(vec![[49.5, 20.], [50.5, 20.], [50.5, 80.], [49.5, 80.]]);
+        // Wound against the square, as holes are under the nonzero rule.
+        .push(vec![[49.5, 20.], [49.5, 80.], [50.5, 80.], [50.5, 20.]]);
     let (counts, disagreements) = classify_samples(&result, &oracle, seed);
     eprintln!(
         "surface oracle false-hole self-test: {counts:?}, {} disagreements",
@@ -835,7 +837,8 @@ fn depth_ray_oracle_rejects_a_false_hole_in_a_rear_layer() {
     assert!(counts.populated.into_iter().all(|count| count > 1_500));
     result.layers[1]
         .region
-        .push(vec![[49.5, 20.], [50.5, 20.], [50.5, 80.], [49.5, 80.]]);
+        // Wound against the square, as holes are under the nonzero rule.
+        .push(vec![[49.5, 20.], [49.5, 80.], [50.5, 80.], [50.5, 20.]]);
     let (_, disagreements) = classify_depth_samples(&result, &oracle, seed);
     assert!(
         !disagreements.is_empty(),

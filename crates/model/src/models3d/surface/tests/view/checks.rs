@@ -839,6 +839,8 @@ fn front_depth_matches_two_sided_ray_intersections_at_random_screen_points() {
 
 #[test]
 fn nested_shading_layers_follow_the_continuous_vertex_lightness_field() {
+    // Exercise nesting across multiple tone blocks.
+    const TONES: usize = 38;
     let mesh = Mesh {
         positions: vec![[0., 0., 0.], [10., 0., 0.], [0., 10., 0.]],
         normals: vec![[0., 0., 1.]; 3],
@@ -853,21 +855,23 @@ fn nested_shading_layers_follow_the_continuous_vertex_lightness_field() {
         front: &[true],
         lightness: &[0., 1., 0.],
         occluders: &[],
-        tones: &[5],
+        tones: &[TONES],
         lines: &[],
         tolerance: 0.0001,
     };
     let result = visible(&input);
-    check_depth_output(&result, &[5]);
-    for x in [0.35, 1.35, 2.35, 3.35, 4.35, 5.35, 6.35, 7.35, 8.35] {
-        let point = [x, 0.25];
-        for band in 0..5 {
+    check_depth_output(&result, &[TONES]);
+    assert_eq!(result.layers.len(), TONES);
+    for band in 0..TONES {
+        let x = 10. * (band as f64 + 0.5) / TONES as f64;
+        let point = [x, 0.05];
+        for tone in 0..TONES {
             let drawn = result
                 .layers
                 .iter()
-                .filter(|layer| layer.tone == band && layer.positive)
+                .filter(|layer| layer.tone == tone && layer.positive)
                 .any(|layer| contains(&layer.region, point));
-            assert_eq!(drawn, x / 10. >= band as f64 / 5., "x={x}, band={band}");
+            assert_eq!(drawn, tone <= band, "x={x}, tone={tone}");
         }
     }
 }

@@ -20,17 +20,18 @@ pub const DETAIL: [usize; 2] = [20_000, 4_000];
 /// Fit error of outlines, outline runs and mesh lines, and of shading-tone
 /// contours (clipped to their region, so they may stray further), in
 /// drawing units.
-pub(super) const FIT_ERROR: f32 = 0.12;
-const TONE_FIT_ERROR: f32 = 0.5;
+pub(super) const FIT_ERROR: f32 = 0.04;
+const TONE_FIT_ERROR: f32 = 0.75;
 pub(super) const MIN_AREA: f32 = 0.05;
 pub(super) const MIN_WIDTH: f32 = 0.12;
 const MIN_RUN: f32 = 1.;
+const MIN_MESH_RUN: f32 = 0.25;
 const TOLERANCE: f32 = 0.03;
 const MAX_TONES: usize = 128;
 const MAX_GROUPS: usize = 6;
-/// Tones while the model turns: frames stay fast, and the full shading
-/// returns when it stops.
-const TURNING_TONES: usize = 24;
+// Full shading returns when the model stops turning.
+const TURNING_GROUPS: usize = 2;
+const TURNING_TONES: usize = 16;
 const TONE_STEP: f32 = 1.;
 /// The distance between mesh planes, in ångströms.
 const MESH_SPACING: f64 = 0.3;
@@ -484,6 +485,7 @@ impl Prepared {
             .collect();
         let mut tones = tone_counts(look, dark, backdrop, fade);
         if model.turning {
+            tones.truncate(TURNING_GROUPS);
             for count in &mut tones {
                 *count = (*count).min(TURNING_TONES);
             }
@@ -556,21 +558,19 @@ impl Prepared {
         // Layers fit independently: in parallel. A sign and depth's first
         // layer is its outline; later ones are tone contours under a clip.
         let layers = &self.visible.layers;
-        let fitted: Vec<_> = visible::batches(layers.len(), 4, |range| {
-            range
-                .map(|i| {
-                    let first = i == 0 || {
-                        let (a, b) = (&layers[i - 1], &layers[i]);
-                        (a.depth, a.positive) != (b.depth, b.positive)
-                    };
-                    let error = if first { FIT_ERROR } else { TONE_FIT_ERROR };
-                    fit::region(&layers[i].region, error, MIN_AREA, MIN_WIDTH)
-                })
-                .collect::<Vec<_>>()
-        })
-        .into_iter()
-        .flatten()
-        .collect();
+        let fitted = visible::ordered_jobs(
+            layers.len(),
+            4,
+            || (),
+            |_, i| {
+                let first = i == 0 || {
+                    let (a, b) = (&layers[i - 1], &layers[i]);
+                    (a.depth, a.positive) != (b.depth, b.positive)
+                };
+                let error = if first { FIT_ERROR } else { TONE_FIT_ERROR };
+                fit::region(&layers[i].region, error, MIN_AREA, MIN_WIDTH)
+            },
+        );
         let mut groups = Vec::new();
         for (depth, &count) in self.tones.iter().enumerate().rev() {
             let mut fills = Vec::new();
@@ -604,7 +604,8 @@ impl Prepared {
                     });
                 }
                 if self.look.mesh {
-                    let paths = fit::runs(&self.visible.lines[depth][sign], FIT_ERROR, MIN_RUN);
+                    let paths =
+                        fit::runs(&self.visible.lines[depth][sign], FIT_ERROR, MIN_MESH_RUN);
                     if !paths.is_empty() {
                         strokes.push(SurfaceStroke {
                             paths,

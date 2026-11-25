@@ -1,7 +1,7 @@
 //! Smooth cubic outlines for merged surface regions and runs, after Schneider's
 //! digitized-curve fitting (Graphics Gems, 1990).
 //! Fits use drawing units. Smooth joins share a derivative on the cubic unit interval.
-//! The topology guard samples each cubic in eight steps and may return the source polygon.
+//! The topology guard samples each cubic in 32 steps and may return the source polygon.
 
 // Knot, span and edge indices stay within the cleaned polyline they were built from.
 #![allow(clippy::indexing_slicing)]
@@ -146,6 +146,8 @@ pub fn open(points: &[[f32; 2]], error: f32) -> Vec<PathCommand> {
 /// Fits each nonzero-winding contour with absolute area ≥ `min_area` and
 /// width (twice its absolute area divided by its perimeter) ≥ `min_width`.
 /// Outer and hole contours retain their respective input orientations.
+/// The largest input contour determines outer winding. Holes outside all
+/// surviving outer input polygons are discarded.
 pub fn region(
     contours: &[Vec<[f32; 2]>],
     error: f32,
@@ -154,7 +156,8 @@ pub fn region(
 ) -> Vec<PathCommand> {
     #[cfg(test)]
     STROKE.set(false);
-    let mut out = Vec::new();
+    let mut surviving = Vec::new();
+    let mut largest_area = 0.0_f64;
     for contour in contours {
         let mut p = clean(contour);
         strip_seam(&mut p);
@@ -171,11 +174,49 @@ pub fn region(
             prev = v;
         }
         let magnitude = twice_area.abs();
+        if magnitude > largest_area.abs() {
+            largest_area = twice_area;
+        }
         if magnitude >= 2.0 * f64::from(min_area) && magnitude >= f64::from(min_width) * perimeter {
-            out.extend(guarded(&p, error, true));
+            surviving.push((p, twice_area));
         }
     }
+    let mut out = Vec::new();
+    for (p, area) in &surviving {
+        // An orphaned hole paints an island under the nonzero fill rule.
+        if area * largest_area < 0.0
+            && !surviving.iter().any(|(outer, outer_area)| {
+                outer_area * largest_area > 0.0 && polygon_contains(outer, p[0])
+            })
+        {
+            continue;
+        }
+        out.extend(guarded(p, error, true));
+    }
     out
+}
+
+fn polygon_contains(p: &[V], point: V) -> bool {
+    let mut winding = 0;
+    let mut a = p[p.len() - 1];
+    for &b in p {
+        let side = (b - a).cross(point - a);
+        if side == 0.0
+            && point.x >= a.x.min(b.x)
+            && point.x <= a.x.max(b.x)
+            && point.y >= a.y.min(b.y)
+            && point.y <= a.y.max(b.y)
+        {
+            return true;
+        }
+        if a.y <= point.y && b.y > point.y && side > 0.0 {
+            winding += 1;
+        } else if a.y > point.y && b.y <= point.y && side < 0.0 {
+            winding -= 1;
+        }
+        a = b;
+    }
+    winding != 0
 }
 
 /// Fits runs meeting the length threshold, closing those with coincident endpoints.
@@ -678,7 +719,8 @@ fn flatten(path: &[PathCommand], cyclic: bool) -> Vec<V> {
             PathCommand::Cubic(b, c, d) => {
                 let start = points.last().copied().unwrap_or_default();
                 let curve = Cubic([start, b.into(), c.into(), d.into()]);
-                points.extend((1..=8).map(|i| curve.eval(f64::from(i) / 8.0)));
+                // Short loops can hide between a cubic's coarser samples.
+                points.extend((1..=32).map(|i| curve.eval(f64::from(i) / 32.0)));
             }
             PathCommand::Close => {}
         }
@@ -814,6 +856,14 @@ impl ActiveEdges {
         }
     }
 
+    /// Whether `test` holds for an active edge whose y range meets `edge`'s.
+    fn any(&self, edges: &[Edge], edge: Edge, test: &impl Fn(usize) -> bool) -> bool {
+        let end = self
+            .order
+            .partition_point(|&j| edges[j].ymin() <= edge.ymax());
+        self.hits(1, 0, self.base, end, edge.ymin(), test)
+    }
+
     fn hits(
         &self,
         node: usize,
@@ -855,21 +905,44 @@ fn intersects(p: &[V], cyclic: bool) -> bool {
         }
     }
     let mut entering: Vec<_> = (0..n).collect();
-    let mut leaving = entering.clone();
     entering.sort_unstable_by(|&i, &j| edges[i].xmin().total_cmp(&edges[j].xmin()).then(i.cmp(&j)));
+    // Most contours have only a few edges at each x. Avoid two more sorts
+    // and an interval tree until a dense sweep actually needs them.
+    let mut active: Vec<usize> = Vec::new();
+    for &i in &entering {
+        let edge = edges[i];
+        active.retain(|&j| edges[j].xmax() >= edge.xmin());
+        if active.iter().any(|&j| {
+            let gap = i.abs_diff(j);
+            gap != 1
+                && !(cyclic && gap == n - 1)
+                && edge.ymin() <= edges[j].ymax()
+                && edges[j].ymin() <= edge.ymax()
+                && edge.crosses(edges[j])
+        }) {
+            return true;
+        }
+        active.push(i);
+        if active.len() > 32 {
+            return indexed_intersects(&edges, &entering, cyclic);
+        }
+    }
+    false
+}
+
+fn indexed_intersects(edges: &[Edge], entering: &[usize], cyclic: bool) -> bool {
+    let n = edges.len();
+    let mut leaving = entering.to_vec();
     leaving.sort_unstable_by(|&i, &j| edges[i].xmax().total_cmp(&edges[j].xmax()).then(i.cmp(&j)));
-    let mut active = ActiveEdges::new(&edges);
+    let mut active = ActiveEdges::new(edges);
     let mut expired = 0;
-    for i in entering {
+    for &i in entering {
         let edge = edges[i];
         while expired < n && edges[leaving[expired]].xmax() < edge.xmin() {
             active.set(leaving[expired], f64::NEG_INFINITY);
             expired += 1;
         }
-        let end = active
-            .order
-            .partition_point(|&j| edges[j].ymin() <= edge.ymax());
-        if active.hits(1, 0, active.base, end, edge.ymin(), &|j| {
+        if active.any(edges, edge, &|j| {
             let gap = i.abs_diff(j);
             gap != 1 && !(cyclic && gap == n - 1) && edge.crosses(edges[j])
         }) {

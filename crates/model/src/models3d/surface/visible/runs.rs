@@ -118,9 +118,10 @@ pub(super) fn chain_lines(
                 && let Some((&depth, _)) = active.last_key_value()
                 && depth < depths
             {
+                // Independent clips of a shared cut can leave a roundoff gap.
                 if let Some((previous, _, end)) = intervals.last_mut()
                     && *previous == depth
-                    && *end == cursor
+                    && cursor - *end < 1e-6
                 {
                     *end = t;
                 } else {
@@ -141,8 +142,18 @@ pub(super) fn chain_lines(
             }
             cursor = t;
         }
+        let at = |t| {
+            let point = along(a, b, t);
+            let rounded = point.map(|v| f64::from(v as f32));
+            // Neighbouring triangles share the projected f32 endpoint.
+            if rounded == a || rounded == b {
+                rounded
+            } else {
+                point
+            }
+        };
         for (depth, start, end) in intervals {
-            resolved[depth][sign].push((along(a, b, start), along(a, b, end)));
+            resolved[depth][sign].push((at(start), at(end)));
         }
     }
     resolved
@@ -169,4 +180,36 @@ pub(super) fn endpoint_key(point: [f64; 2]) -> (i64, i64) {
         (point[0] * 1e4).round() as i64,
         (point[1] * 1e4).round() as i64,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mesh_line_bridges_roundoff_between_same_depth_fragments() {
+        let input = Input {
+            positions: &[],
+            triangles: &[],
+            positive: &[true],
+            front: &[],
+            lightness: &[],
+            occluders: &[],
+            tones: &[0],
+            lines: &[Line {
+                triangle: 0,
+                ends: [[0., 0., 0.], [1., 0., 0.]],
+            }],
+            tolerance: 0.,
+        };
+        let spans =
+            Vec::from(
+                [(0., 0.500_049_8), (0.500_050_2, 1.)].map(|interval| LineInterval {
+                    source: 0,
+                    depth: 0,
+                    interval,
+                }),
+            );
+        assert_eq!(chain_lines(spans, &input)[0][0], [vec![[0., 0.], [1., 0.]]]);
+    }
 }

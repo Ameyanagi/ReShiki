@@ -447,34 +447,37 @@ fn project_vertex(
     level: f32,
     step: f32,
 ) -> ([f32; 3], [f32; 3]) {
-    let initial = field(smooth);
-    let fallback = if initial.is_finite() && initial * level.signum() >= level.abs() {
-        smooth
-    } else {
-        original
-    };
     let mut p = smooth;
-    let mut value = initial;
+    let mut value = field(p);
     let mut remaining = 3;
-    while value.is_finite() {
+    let gradient = loop {
+        if !value.is_finite() {
+            return (original, [0.; 3]);
+        }
         let Some(g) = field_gradient(field, p, 0.01 * step) else {
-            break;
+            return (original, [0.; 3]);
         };
         if remaining == 0 || value == level {
-            return (p, outward_normal(g, level > 0.));
+            break g;
         }
         let length2 = dot(g, g);
         let limit = 0.5 * f64::from(step) / length2.sqrt();
         let scale = ((f64::from(value) - f64::from(level)) / length2).clamp(-limit, limit);
         let next = std::array::from_fn(|i| (f64::from(p[i]) - scale * g[i]) as f32);
         if next == p {
-            return (p, outward_normal(g, level > 0.));
+            break g;
         }
         p = next;
         value = field(p);
         remaining -= 1;
+    };
+    // Capped Newton steps can stop far from the level on a coarse mesh.
+    let distance = (f64::from(value) - f64::from(level)).abs() / dot(gradient, gradient).sqrt();
+    if distance.is_finite() && distance <= 0.05 * f64::from(step) {
+        (p, outward_normal(gradient, level > 0.))
+    } else {
+        (original, [0.; 3])
     }
-    (fallback, [0.; 3])
 }
 
 pub(super) fn guard_refinement(mesh: &Mesh, positions: &mut [[f32; 3]]) -> bool {

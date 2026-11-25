@@ -598,6 +598,61 @@ fn collapses_preserve_embedding_against_spatial_neighbours() {
 }
 
 #[test]
+fn refinement_restores_vertices_when_capped_projection_misses_the_level() {
+    let step = 0.1;
+    let positions = vec![
+        [1., 0., 0.],
+        [0., 1., 0.],
+        [-1., 0., 0.],
+        [0., -1., 0.],
+        [0., 0., 1.],
+        [0., 0., -1.],
+    ];
+    let mut mesh = Mesh {
+        normals: positions.clone(),
+        positions,
+        triangles: vec![
+            [0, 1, 4],
+            [1, 0, 5],
+            [1, 2, 4],
+            [2, 1, 5],
+            [2, 3, 4],
+            [3, 2, 5],
+            [3, 0, 4],
+            [0, 3, 5],
+        ],
+        positive: vec![true; 8],
+        truncated: false,
+    };
+    for sign in [1., -1.] {
+        mesh.positive.fill(sign > 0.);
+        let field = |p: [f32; 3]| sign * (2. - p.iter().map(|x| x * x).sum::<f32>());
+        let refined = refine(&mesh, field, 1., step);
+        let volume_ratio = volume(&refined) / volume(&mesh);
+        let distances: Vec<_> = refined
+            .positions
+            .iter()
+            .map(|p| {
+                // The analytic gradient makes this independent of refinement's stencil.
+                let radius2 = p.iter().map(|&x| f64::from(x).powi(2)).sum::<f64>();
+                (1. - radius2).abs() / (2. * radius2.sqrt())
+            })
+            .collect();
+        eprintln!(
+            "capped projection sign={sign} distances={distances:?} volume_ratio={volume_ratio:.9}"
+        );
+        for (i, (&p, &distance)) in refined.positions.iter().zip(&distances).enumerate() {
+            assert!(
+                p == mesh.positions[i]
+                    || (distance.is_finite() && distance <= 0.05 * f64::from(step)),
+                "vertex {i} moved off its level by {distance}"
+            );
+        }
+        assert!(volume_ratio >= 0.99, "volume ratio {volume_ratio:.9}");
+    }
+}
+
+#[test]
 fn refinement_rollback_rechecks_collisions_and_keeps_unrelated_moves() {
     use super::mesh::guard_refinement;
 

@@ -507,8 +507,8 @@ optionally `+mesh`).
   removes the lumps that the quadric simplifier leaves at lobe tips
   (25 ms for 20 000 triangles).
 - Every merged contour, outline run and mesh line is fitted with cubic
-  Béziers (Schneider 1990): outlines, outline runs and mesh lines to 0.12
-  drawing units at their input points, shading-tone contours to 0.5 units
+  Béziers (Schneider 1990): outlines, outline runs and mesh lines to 0.04
+  drawing units at their input points (tight, so an outline cut by a ball follows the painted rim), shading-tone contours to 0.75 units
   (they are one-level edges under a clip, see below). The result is C1
   except at real corners: a turn over 40° measured over chords at least
   max(3 × error, 1 unit) long, such as where a ball cuts a lobe, so the
@@ -529,6 +529,10 @@ optionally `+mesh`).
   dropped before fitting. These replace the old rule that dropped outline
   runs shorter than 2 % of the model, which cut legitimate short outline
   runs between two crossing lobes and left the gaps seen in the review.
+  Mesh-line runs keep pieces down to 0.25 units. Strokes have butt ends: a
+  run ends exactly where something nearer hides it, and a round cap would
+  poke past that point. A sliver-filtered outer contour takes its holes
+  with it (a lone hole would paint under the nonzero rule).
 - Fitting moves a boundary by at most the fit error; the ray oracle checks
   the fitted outlines too, with the same approximation band as before.
 - Paths are written in relative SVG commands to a hundredth of a unit, the
@@ -550,7 +554,7 @@ equal colour steps:
 where `levels` is that measure for the steeper phase (114 for the blue
 phase at the default depth fade, about 45 for the pale one) and `weight` is
 the group's share of the final colour (1 when opaque, α(1 − α)^d for depth
-group d below). While the model turns, tones are capped at 24; the full
+group d below). While the model turns, tones are capped at 16 and depth groups at 2; the full
 shading returns when it stops.
 
 Each tone region is clipped to its phase's whole region (an SVG

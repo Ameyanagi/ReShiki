@@ -3,6 +3,7 @@
 #![allow(clippy::indexing_slicing)]
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use i_overlay::core::{fill_rule::FillRule, overlay::ShapeType, overlay_rule::OverlayRule};
 use i_overlay::float::overlay::FloatOverlay;
@@ -785,6 +786,33 @@ pub(super) fn batches<T: Send>(
     output.into_iter().flatten().collect()
 }
 
+/// Keep workers busy when independent contours vary widely in size.
+pub(super) fn ordered_jobs<T: Send, Scratch>(
+    len: usize,
+    minimum: usize,
+    scratch: impl Fn() -> Scratch + Sync,
+    run: impl Fn(&mut Scratch, usize) -> T + Sync,
+) -> Vec<T> {
+    let next = AtomicUsize::new(0);
+    let mut output: Vec<_> = batches(len, minimum, |range| {
+        let mut scratch = scratch();
+        let mut completed = Vec::with_capacity(range.len());
+        loop {
+            let i = next.fetch_add(1, Ordering::Relaxed);
+            if i >= len {
+                break;
+            }
+            completed.push((i, run(&mut scratch, i)));
+        }
+        completed
+    })
+    .into_iter()
+    .flatten()
+    .collect();
+    output.sort_unstable_by_key(|&(i, _)| i);
+    output.into_iter().map(|(_, value)| value).collect()
+}
+
 fn mesh_pieces(input: &Input<'_>, lines_by_triangle: &HashMap<usize, Vec<usize>>) -> Vec<Piece> {
     let mut back_edges = HashSet::new();
     for (i, triangle) in input.triangles.iter().enumerate() {
@@ -958,79 +986,118 @@ fn merge_layers(
     adapter: &FloatPointAdapter<[f64; 2], i64>,
     tolerance: f64,
 ) -> Vec<Layer> {
-    let union = |sources: &[Polygon]| {
-        // All cuts stay inside the shared adapter's bounds.
-        FloatOverlay::<[f64; 2], i64>::with_adapter(adapter.clone(), 0)
-            .unsafe_add_source(sources, ShapeType::Subject)
-            .overlay(OverlayRule::Subject, FillRule::NonZero)
-            .into_iter()
-            .flatten()
-            .filter(|c| area(c).abs() > AREA)
-            .collect::<Vec<Polygon>>()
+    const TONE_BLOCK_SIZE: usize = 12;
+
+    let union_worker = || {
+        // Keep each worker's overlay scratch on the same grid across unions.
+        let mut scratch = None;
+        move |lighter: &[Polygon], sources: &[Polygon]| {
+            let mut overlay = scratch
+                .take()
+                .unwrap_or_else(|| FloatOverlay::<[f64; 2], i64>::with_adapter(adapter.clone(), 0))
+                .unsafe_add_source(lighter, ShapeType::Subject)
+                .unsafe_add_source(sources, ShapeType::Subject);
+            let shapes = overlay.overlay(OverlayRule::Subject, FillRule::NonZero);
+            overlay.clear();
+            scratch = Some(overlay);
+            shapes
+                .into_iter()
+                .flatten()
+                .filter(|c| area(c).abs() > AREA)
+                .collect::<Vec<Polygon>>()
+        }
     };
-    // Each tone's fragments merge on their own first, all in parallel, so
-    // the sequential nesting below unions a few contours per tone rather
-    // than thousands of fragments.
-    let jobs: Vec<(usize, usize)> = shades
-        .iter()
-        .enumerate()
-        .flat_map(|(group, tones)| (0..tones.len()).map(move |tone| (group, tone)))
-        .filter(|&(group, tone)| !shades[group][tone].is_empty())
-        .collect();
-    let mut merged = vec![Vec::new(); shades.len()];
-    for (group, tones) in merged.iter_mut().zip(shades) {
-        *group = vec![Vec::new(); tones.len()];
-    }
-    for done in batches(jobs.len(), 4, |range| {
-        jobs[range]
-            .iter()
-            .map(|&(group, tone)| (group, tone, union(&shades[group][tone])))
-            .collect::<Vec<_>>()
-    }) {
-        for (group, tone, polygons) in done {
-            merged[group][tone] = polygons;
+    let mut jobs = Vec::new();
+    let mut blocks = Vec::new();
+    let mut block_groups = Vec::new();
+    let mut block_for_tone = Vec::new();
+    for (group, tones) in shades.iter().enumerate() {
+        let mut occupied = tones.iter().enumerate().filter(|(_, p)| !p.is_empty());
+        let Some((first, _)) = occupied.next() else {
+            continue;
+        };
+        // Shade cuts change contour starts. Merge the whole region directly
+        // so an opacity change cannot affect its fitted outline.
+        jobs.push((group, first, regions[group].as_slice()));
+        block_for_tone.push(None);
+        let start = jobs.len();
+        jobs.extend(occupied.map(|(tone, polygons)| (group, tone, polygons.as_slice())));
+        let first_block = blocks.len();
+        for start in (start..jobs.len()).step_by(TONE_BLOCK_SIZE) {
+            let end = (start + TONE_BLOCK_SIZE).min(jobs.len());
+            block_for_tone.resize(end, Some(blocks.len()));
+            blocks.push(start..end);
+        }
+        if first_block < blocks.len() {
+            block_groups.push(first_block..blocks.len());
         }
     }
-    batches(shades.len(), 1, |range| {
-        let mut output = Vec::new();
-        for group in range {
-            let Some(first) = shades[group]
-                .iter()
-                .position(|polygons| !polygons.is_empty())
-            else {
-                continue;
-            };
-            let mut cumulative = Vec::<Polygon>::new();
-            let mut layers = Vec::new();
-            for (tone, polygons) in merged[group].iter().enumerate().rev() {
-                if shades[group][tone].is_empty() {
-                    continue;
-                }
-                if tone == first {
-                    // Merge the unsliced fragments for the whole region. Shade
-                    // cuts can otherwise leave different contour starts as the
-                    // tone count changes with opacity, changing the fitted rim.
-                    cumulative.clear();
-                    cumulative.extend(regions[group].iter().cloned());
-                } else {
-                    cumulative.extend(polygons.iter().cloned());
-                }
-                cumulative = union(&cumulative);
-                if !cumulative.is_empty() {
-                    layers.push(Layer {
-                        positive: group % 2 == 0,
-                        depth: group / 2,
-                        tone,
-                        region: cumulative
-                            .iter()
-                            .map(|c| simplify_closed(c, tolerance))
-                            .collect(),
-                    });
-                }
-            }
-            output.extend(layers.into_iter().rev());
+
+    // Merge the fragments before nesting, so later unions work on contours.
+    let mut nested = ordered_jobs(jobs.len(), 4, union_worker, |union, i| {
+        union(&[], jobs[i].2)
+    });
+
+    for (i, contours) in ordered_jobs(blocks.len(), 1, union_worker, |union, block| {
+        let block = &blocks[block];
+        let last = block.end - 1;
+        let mut lighter = &nested[last];
+        let mut output = Vec::with_capacity(block.len() - 1);
+        for i in (block.start..last).rev() {
+            let index = output.len();
+            output.push((i, union(lighter, &nested[i])));
+            lighter = &output[index].1;
         }
         output
+    })
+    .into_iter()
+    .flatten()
+    {
+        nested[i] = contours;
+    }
+
+    // Each suffix includes only the lighter blocks of the same depth and sign.
+    let suffixes: Vec<_> = ordered_jobs(block_groups.len(), 1, union_worker, |union, group| {
+        let group = &block_groups[group];
+        let mut output = Vec::with_capacity(group.len());
+        let mut lighter = Vec::new();
+        for block in blocks[group.start + 1..group.end].iter().rev() {
+            let contours = &nested[block.start];
+            let next = if lighter.is_empty() {
+                contours.clone()
+            } else {
+                union(&lighter, contours)
+            };
+            output.push(lighter);
+            lighter = next;
+        }
+        output.push(lighter);
+        output.reverse();
+        output
+    })
+    .into_iter()
+    .flatten()
+    .collect();
+
+    ordered_jobs(jobs.len(), 4, union_worker, |union, i| {
+        let (group, tone, _) = jobs[i];
+        let suffix = block_for_tone[i].map_or(&[][..], |block| suffixes[block].as_slice());
+        let joined;
+        let contours = if suffix.is_empty() {
+            &nested[i]
+        } else {
+            joined = union(suffix, &nested[i]);
+            &joined
+        };
+        (!contours.is_empty()).then(|| Layer {
+            positive: group % 2 == 0,
+            depth: group / 2,
+            tone,
+            region: contours
+                .iter()
+                .map(|c| simplify_closed(c, tolerance))
+                .collect(),
+        })
     })
     .into_iter()
     .flatten()

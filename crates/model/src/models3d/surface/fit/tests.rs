@@ -589,6 +589,12 @@ fn topology_intersection_sweep_matches_exhaustive_geometry() {
             false,
         ),
         (
+            "dense vertical sweep",
+            (0..70).map(|y| [0.0, y as f32]).collect(),
+            false,
+            false,
+        ),
+        (
             "adjacent reversal",
             vec![[0.0, 0.0], [2.0, 0.0], [1.0, 0.0]],
             false,
@@ -650,6 +656,23 @@ fn short_loop_between_eight_step_samples_is_refined_before_accepting_a_cubic() {
         "dense sampling must not reveal a loop between the guard's samples: {commands:?}"
     );
     assert!(!independent_intersects(&flatten(&commands)[0].points, true));
+}
+
+#[test]
+fn topology_guard_detects_short_loop_between_coarse_samples() {
+    let points = [
+        [-0.025, -0.022],
+        [-0.356, -0.753],
+        [-0.004, -0.191],
+        [1.078, -2.574],
+        [0.860, -0.301],
+    ];
+    let commands = closed(&points, 0.12);
+    assert!(
+        !independent_intersects(&sample_steps(&commands, 64), true),
+        "dense sampling must not reveal a short loop between the topology guard's samples"
+    );
+    assert_vertices_within(&points, &commands, 0.12);
 }
 
 #[test]
@@ -918,6 +941,29 @@ fn region_drops_narrow_sliver_and_keeps_its_neighbour() {
     assert!(nonzero_contains(&paths, [5.0, 5.0]));
     assert!(!nonzero_contains(&paths, [25.0, 0.005]));
     assert_vertices_within(&neighbour, &commands, 0.1);
+}
+
+#[test]
+fn region_drops_holes_when_sliver_filter_removes_their_outer_contour() {
+    // The long thin arm makes 2 * area / perimeter less than 0.12, even
+    // though the square contains a hole that passes both sliver thresholds.
+    let outer = vec![
+        [0.0, 0.0],
+        [2.0, 0.0],
+        [2.0, 0.99],
+        [102.0, 0.99],
+        [102.0, 1.01],
+        [2.0, 1.01],
+        [2.0, 2.0],
+        [0.0, 2.0],
+    ];
+    let mut hole = rectangle(0.5, 0.5, 1.0, 1.0);
+    hole.reverse();
+    let commands = region(&[outer, hole], 0.12, 0.05, 0.12);
+    assert!(
+        commands.is_empty(),
+        "an orphaned hole would paint a filled island under the nonzero rule"
+    );
 }
 
 #[test]

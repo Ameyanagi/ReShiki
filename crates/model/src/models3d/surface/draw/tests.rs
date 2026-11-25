@@ -379,9 +379,11 @@ fn the_frame_holds_the_surface() {
     let Primitive::Surface { groups } = &surfaces(&doc)[0] else {
         unreachable!()
     };
-    let fills = groups.iter().flat_map(|g| &g.fills).flat_map(|fill| {
-        std::iter::once(&fill.region).chain(fill.tones.iter().map(|(path, _)| path))
-    });
+    // The base regions also clip the fitted tone paths to the frame.
+    let fills = groups
+        .iter()
+        .flat_map(|g| &g.fills)
+        .map(|fill| &fill.region);
     let strokes = groups.iter().flat_map(|g| &g.strokes).map(|s| &s.paths);
     for p in fills
         .chain(strokes)
@@ -452,6 +454,97 @@ fn looks_paint_the_requested_fills_and_strokes() {
     assert!(mesh[0].strokes.iter().all(|stroke| {
         stroke.outline.alpha == 0.9 && stroke.outline.width == 0.45 * line_width
     }));
+}
+
+#[test]
+fn translated_mesh_line_crosses_the_diagonal_in_one_run() {
+    let mesh = Mesh {
+        positions: vec![[0., 0., 0.], [0.26, 0., 0.], [0.26, 0.1, 0.], [0., 0.1, 0.]],
+        triangles: vec![[0, 1, 2], [0, 2, 3]],
+        positive: vec![true; 2],
+        ..Mesh::default()
+    };
+    let project = |[x, y, z]: [f32; 3]| [1000. + 17.3 * x, 1000. + 17.3 * y, 17.3 * z];
+    let positions: Vec<_> = mesh.positions.iter().copied().map(project).collect();
+    let front = vec![true; 2];
+    let lines = mesh_lines(&mesh, &front, false, &[[0.; 3]], project);
+    assert_eq!(lines.len(), 2, "one segment per triangle at x = 0.15");
+    let visible = visible::visible(&Input {
+        positions: &positions,
+        triangles: &mesh.triangles,
+        positive: &mesh.positive,
+        front: &front,
+        lightness: &[0.; 4],
+        occluders: &[],
+        tones: &[0],
+        lines: &lines,
+        tolerance: TOLERANCE,
+    });
+    let runs = &visible.lines[0][0];
+    assert_eq!(runs.len(), 1, "{runs:?}");
+    let length: f32 = runs[0]
+        .windows(2)
+        .map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]))
+        .sum();
+    assert!((length - 1.73).abs() < 0.001, "{length}");
+}
+
+#[test]
+fn mesh_strokes_keep_subunit_runs() {
+    let short = vec![vec![[0., 0.], [0.3, 0.]], vec![[0., 1.], [0.2, 1.]]];
+    let prepared = Prepared {
+        positions: Vec::new(),
+        triangles: Vec::new(),
+        front: Vec::new(),
+        visible: Visible {
+            lines: vec![[short.clone(), Vec::new()]],
+            rims: vec![short],
+            ..Visible::default()
+        },
+        look: Look::new(Fill::None, true, 100).unwrap(),
+        tones: vec![0],
+    };
+    let outline = Outline {
+        color: [0; 3],
+        alpha: 1.,
+        width: 1.,
+    };
+    let Some(Primitive::Surface { groups }) =
+        prepared.primitive(false, [255.; 3], 0., Some(outline), 1.)
+    else {
+        panic!("the 0.3-unit mesh line should be painted");
+    };
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].strokes.len(), 1);
+    assert_eq!(
+        groups[0].strokes[0].paths,
+        [
+            PathCommand::Move(Point::new(0., 0.)),
+            PathCommand::Line(Point::new(0.3, 0.))
+        ]
+    );
+}
+
+#[test]
+fn turning_caps_depth_groups_and_tones() {
+    let mut doc = tilted(benzene(), 55.);
+    let stopped = groups(&doc, "pistar,opacity=60");
+    assert!(stopped.len() > 2);
+    assert!(
+        stopped
+            .last()
+            .unwrap()
+            .fills
+            .iter()
+            .any(|f| f.tones.len() >= 16)
+    );
+
+    doc.models[0].turning = true;
+    let turning = groups(&doc, "pistar,opacity=60");
+    assert_eq!(turning.len(), 2);
+    for fill in turning.iter().flat_map(|g| &g.fills) {
+        assert!(fill.tones.len() < 16, "the base fill also counts as a tone");
+    }
 }
 
 #[test]
@@ -618,9 +711,9 @@ fn benzene_fit_diagnostic() {
 fn export_budgets() {
     use std::time::Instant;
     println!(
-        "| molecule | demo | look | triangles | frame ms | groups | group 0 tones | path commands | SVG KB | snapshot KB |"
+        "| molecule | demo | look | triangles | frame ms | groups | group 0 tones | path commands | SVG KB | exported SVG KB | snapshot KB |"
     );
-    println!("|---|---|---|---:|---:|---:|---:|---:|---:|---:|");
+    println!("|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|");
     for (name, doc) in [("ethylene", ethylene()), ("benzene", benzene())] {
         let doc = tilted(doc, 55.);
         for demo in ["pi", "pistar"] {
@@ -676,12 +769,18 @@ fn export_budgets() {
                     })
                     .sum();
                 let snapshot = super::super::snapshot::encode(surface, Point::default()).unwrap();
+                // File export writes the parsed tree back out (absolute commands).
+                let exported = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default())
+                    .unwrap()
+                    .to_string(&resvg::usvg::WriteOptions::default())
+                    .len();
                 println!(
-                    "| {name} | {demo} | {look} {opacity}{} | {} | {frame_ms:.1} | {} | {tones} | {commands} | {:.1} | {:.1} |",
+                    "| {name} | {demo} | {look} {opacity}{} | {} | {frame_ms:.1} | {} | {tones} | {commands} | {:.1} | {:.1} | {:.1} |",
                     if turning { " (turning)" } else { "" },
                     meshes[usize::from(turning)].triangles.len(),
                     groups.len(),
                     svg.len() as f32 / 1024.,
+                    exported as f32 / 1024.,
                     snapshot.len() as f32 / 1024.,
                 );
             }
