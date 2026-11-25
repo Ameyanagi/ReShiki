@@ -248,7 +248,9 @@ impl Dialog {
 impl App {
     pub(super) fn frames_import_action(&mut self, action: Action) -> Task<Message> {
         let Some(dialog) = self.frames_import.as_mut() else {
-            if let (Action::Next, Some((path, file))) = (action, self.frames_queue.pop_front()) {
+            if matches!(action, Action::Next)
+                && let Some((path, file)) = self.frames_queue.pop_front()
+            {
                 self.status = format!(
                     "{} has several frames: choose which to open",
                     super::import::name(&path)
