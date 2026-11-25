@@ -660,6 +660,8 @@ impl App {
         self.changed(before);
         if !self.error {
             self.status = format!("Added {count} displacement arrows · ⌘Z undoes");
+            // The drawing has them now; the preview would draw them twice.
+            self.tab.xtb.vibrations.arrows = false;
         }
     }
 
