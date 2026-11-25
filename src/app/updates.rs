@@ -3,6 +3,51 @@ use iced::widget::{Space, button, column, container, mouse_area, opaque, row, st
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task};
 use reshiki::updates::{self, Channel, Preferences, Release};
 
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+static AXTB_SOURCE_URL: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    format!(
+        "{}/tree/{}",
+        reshiki_xtb_worker::AXTB_SOURCE,
+        reshiki_xtb_worker::AXTB_REV
+    )
+});
+
+#[cfg(not(target_arch = "wasm32"))]
+fn xtb_credit() -> Element<'static, Message> {
+    #[cfg(feature = "xtb")]
+    {
+        row![
+            text(format!(
+                "xTB: axtb {}, {}",
+                reshiki_xtb_worker::AXTB_VERSION,
+                reshiki_xtb_worker::AXTB_LICENSE
+            ))
+            .size(11)
+            .style(super::workspace::muted_text),
+            reshiki::accessibility::button(
+                "updates-xtb-source",
+                "Source ↗",
+                text("Source ↗")
+                    .size(11)
+                    .style(super::workspace::muted_text)
+            )
+            .on_press(Message::Updates(Action::OpenAboutLink(
+                AXTB_SOURCE_URL.as_str()
+            )))
+            .padding(0)
+            .style(button::text),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center)
+        .into()
+    }
+    #[cfg(not(feature = "xtb"))]
+    text("xTB calculations are not included in this build.")
+        .size(11)
+        .style(super::workspace::muted_text)
+        .into()
+}
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Show(bool),
@@ -664,6 +709,8 @@ impl App {
             .style(super::workspace::muted_text),
         )
         .spacing(10);
+        #[cfg(not(target_arch = "wasm32"))]
+        let panel = panel.push(xtb_credit());
         let backdrop = mouse_area(
             container(Space::new())
                 .width(Length::Fill)
