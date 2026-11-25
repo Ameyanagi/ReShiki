@@ -62,7 +62,9 @@ pub(super) fn write(
     let upper = base.to_ascii_uppercase();
     let mp2 = upper.contains("MP2");
     let coupled_cluster = is_coupled_cluster(&upper);
-    let numerical_frequencies = mp2 || upper.contains("PLYP") || coupled_cluster;
+    // ORCA 6 has no analytic Hessians for MP2, double hybrids or DLPNO methods.
+    let numerical_frequencies =
+        mp2 || upper.contains("PLYP") || upper.starts_with("DLPNO") || coupled_cluster;
     if settings.multiplicity > 1 {
         let wave_function = upper == "HF" || mp2 || coupled_cluster || upper.starts_with("DLPNO");
         text.push_str(if wave_function { "UHF " } else { "UKS " });

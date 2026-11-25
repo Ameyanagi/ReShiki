@@ -254,7 +254,17 @@ impl App {
                 .first()
                 .copied()
         }?;
-        Some(reshiki::molecule_names::component(doc, seed))
+        // A model can join several drawn molecules (ions read from a file):
+        // its atoms all go into the file, so they all count for the charge.
+        let mut atoms = reshiki::molecule_names::component(doc, seed);
+        if let Some(model) = doc.models.iter().find(|model| model.contains(seed)) {
+            for id in model.linked_ids(doc) {
+                if !atoms.contains(&id) {
+                    atoms.push(id);
+                }
+            }
+        }
+        Some(atoms)
     }
 
     fn open_qc_export(&mut self) -> Task<Message> {

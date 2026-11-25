@@ -336,6 +336,12 @@ fn an_earlier_dialogs_save_receipt_leaves_the_open_dialog_alone() {
     send(&mut app, Action::Saved(first, Err("disk full".into())));
     assert_eq!(app.qc_export.as_ref().unwrap().title, "typed");
     assert_eq!((app.status.as_str(), app.error), ("disk full", true));
+    send(
+        &mut app,
+        Action::Saved(first, Ok(Some("/tmp/old.gjf".into()))),
+    );
+    assert_eq!(app.qc_export.as_ref().unwrap().title, "typed");
+    assert_eq!(app.status, "Saved /tmp/old.gjf");
     let current = app.qc_export.as_ref().unwrap().id;
     send(
         &mut app,

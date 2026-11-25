@@ -67,7 +67,7 @@ fn trajectory_writes_all_steps_and_the_reader_recovers_the_first() {
         cluster_sizes: vec![],
     };
     path.validate().unwrap();
-    let text = write_xyz_trajectory(&path, "water");
+    let text = write_xyz_trajectory(&path, "water").unwrap();
     assert_eq!(text.lines().count(), 10);
     assert_eq!(
         text.lines().nth(1).unwrap(),
@@ -84,12 +84,15 @@ fn trajectory_writes_all_steps_and_the_reader_recovers_the_first() {
     );
     path.labels.clear();
     path.energies_hartree.clear();
-    let text = write_xyz_trajectory(&path, "water");
+    let text = write_xyz_trajectory(&path, "water").unwrap();
     assert_eq!(text.lines().nth(1).unwrap(), "water step 1");
     assert_eq!(text.lines().nth(6).unwrap(), "water step 2");
     path.positions_angstrom.clear();
     path.labels = vec!["unsaved".into()];
-    assert_eq!(write_xyz_trajectory(&path, "water"), "");
+    assert_eq!(write_xyz_trajectory(&path, "water").unwrap(), "");
+    path.positions_angstrom = vec![0.0; 9];
+    path.numbers[0] = 119;
+    assert!(write_xyz_trajectory(&path, "water").is_err());
 }
 
 #[test]
