@@ -527,3 +527,401 @@ async fn an_edited_cycle_keeps_unrelated_explicit_steps_and_their_save_loss_cred
         reactions::validate(&restored).unwrap();
     }
 }
+
+/// Atom map pairs of every saved step, as (reactant, product) element pairs.
+fn saved_step_pairs(xml: &str) -> Vec<Vec<(String, String)>> {
+    let tree = roxmltree::Document::parse(xml).unwrap();
+    let element = |id: &str| {
+        tree.descendants()
+            .find(|n| n.has_tag_name("n") && n.attribute("id") == Some(id))
+            .unwrap()
+            .attribute("Element")
+            .unwrap_or("6")
+            .to_owned()
+    };
+    tree.descendants()
+        .filter(|n| n.has_tag_name("step"))
+        .map(|step| {
+            let ids: Vec<_> = step
+                .attribute("ReactionStepAtomMap")
+                .unwrap_or_default()
+                .split_whitespace()
+                .collect();
+            ids.chunks(2)
+                .map(|pair| (element(pair[0]), element(pair[1])))
+                .collect()
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn a_chain_listed_out_of_order_keeps_every_atom_pair() {
+    use crate::{
+        arrows::{ArrowStyle, Preset},
+        document::Arrow,
+        reactions::{Participant, Reaction},
+    };
+    // A -> B -> C -> D, two mapped atoms (C and O) in each molecule.
+    let mut document = Document::default();
+    let molecules: Vec<[u64; 2]> = (0..4)
+        .map(|i| {
+            let x = i as f32 * 200.;
+            let carbon = document.add_atom("C", Point::new(x, 0.));
+            let oxygen = document.add_atom("O", Point::new(x + 30., 0.));
+            document.add_bond(carbon, oxygen, 1, "plain");
+            for (id, map) in [(carbon, 1), (oxygen, 2)] {
+                document.atom_mut(id).unwrap().map_num = map;
+            }
+            [carbon, oxygen]
+        })
+        .collect();
+    for (i, pair) in molecules.windows(2).enumerate() {
+        let x = i as f32 * 200. + 70.;
+        let id = document.next_id();
+        document.arrows.push(Arrow::new(
+            id,
+            Point::new(x, 0.),
+            Point::new(x + 90., 0.),
+            Preset::Forward,
+            ArrowStyle::preset(Preset::Forward),
+        ));
+        let mut reaction = Reaction::new(id);
+        reaction.reactants = vec![Participant {
+            atoms: pair[0].to_vec(),
+            coefficient: 1,
+        }];
+        reaction.products = vec![Participant {
+            atoms: pair[1].to_vec(),
+            coefficient: 1,
+        }];
+        document.reactions.push(reaction);
+    }
+    reactions::validate(&document).unwrap();
+    let engine = LocalEngine::in_process();
+    let xml = String::from_utf8(
+        formats::write_with_engine(document, "cdxml", &engine)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let every_pair = vec![vec![("6".into(), "6".into()), ("8".into(), "8".into())]; 3];
+    assert_eq!(saved_step_pairs(&xml), every_pair);
+    // List the steps A -> B, C -> D, B -> C.
+    let step = |n: usize| {
+        let start = xml.match_indices("<step ").nth(n).unwrap().0;
+        &xml[start..start + xml[start..].find("/>").unwrap() + 2]
+    };
+    let (second, third) = (step(1), step(2));
+    let source = xml.replacen(&format!("{second}{third}"), &format!("{third}{second}"), 1);
+    assert_ne!(source, xml);
+    let binary = binary(&source);
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        assert_eq!(document.reactions.len(), 3, "{format}");
+        let saved = String::from_utf8(
+            formats::write_with_engine(document, "cdxml", &engine)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(saved_step_pairs(&saved), every_pair, "{format}");
+        let (again, _) = formats::read_with_warnings(saved.into_bytes(), "cdxml", &engine)
+            .await
+            .unwrap();
+        for reaction in &again.reactions {
+            for side in [&reaction.reactants, &reaction.products] {
+                let mut maps = map_numbers(&again, &side[0].atoms);
+                maps.sort_unstable();
+                assert_eq!(maps, [1, 2], "{format}");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_condition_group_keeps_its_captions_linked_to_the_step() {
+    // Group both condition captions and name the group above the arrow.
+    let source = String::from_utf8(fixture("037-reaction-scheme-1", "cdxml")).unwrap();
+    let first = source.find("<t id=\"17\"").unwrap();
+    let last = source.find("<graphic id=\"19\"").unwrap();
+    let captions = source[first..last].trim_end();
+    let source = source
+        .replacen(captions, &format!("<group id=\"50\">{captions}</group>"), 1)
+        .replace(
+            "ReactionStepObjectsAboveArrow=\"17\" ReactionStepObjectsBelowArrow=\"18\"",
+            "ReactionStepObjectsAboveArrow=\"50\"",
+        );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    let texts = |document: &Document| {
+        let reaction = &document.reactions[0];
+        let mut texts: Vec<_> = reaction
+            .annotations
+            .iter()
+            .map(|id| {
+                document
+                    .annotations
+                    .iter()
+                    .find(|a| a.id == *id)
+                    .unwrap()
+                    .text
+                    .clone()
+            })
+            .collect();
+        texts.sort_unstable();
+        texts
+    };
+    let expected = ["catalyst 1", "solvent, 24 h"];
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        assert_eq!(document.reactions.len(), 1, "{format}");
+        assert_eq!(texts(&document), expected, "{format}");
+        for saved_format in ["cdxml", "cdx"] {
+            let saved = formats::write_with_engine(document.clone(), saved_format, &engine)
+                .await
+                .unwrap();
+            let (again, warnings) = formats::read_with_warnings(saved, saved_format, &engine)
+                .await
+                .unwrap();
+            assert!(
+                warnings.is_empty(),
+                "{format} -> {saved_format}: {warnings:?}"
+            );
+            assert_eq!(texts(&again), expected, "{format} -> {saved_format}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_later_step_with_conflicting_pairs_keeps_the_first_steps_pairs() {
+    // A second step between the same molecules swaps the first two pairs.
+    let source = String::from_utf8(fixture("040-reaction-scheme-4", "cdxml"))
+        .unwrap()
+        .replace(
+            "    </scheme>",
+            "      <step id=\"91\" ReactionStepReactants=\"2\" ReactionStepProducts=\"11\" \
+             ReactionStepArrows=\"90\" ReactionStepAtomMap=\"3 13 4 12 5 14 6 15\" />\n    </scheme>",
+        )
+        .replace(
+            "    <scheme id=\"24\">",
+            "    <arrow id=\"90\" BoundingBox=\"190 167 250 173\" Tail3D=\"190 170 0\" \
+             Head3D=\"250 170 0\" ArrowheadHead=\"Full\" ArrowheadTail=\"None\" \
+             ArrowheadType=\"Solid\" FillType=\"None\" />\n    <scheme id=\"24\">",
+        );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        assert_eq!(document.reactions.len(), 2, "{format}");
+        for reaction in &document.reactions {
+            for side in [&reaction.reactants[0], &reaction.products[0]] {
+                assert_eq!(
+                    map_numbers(&document, &side.atoms),
+                    [1, 2, 3, 4],
+                    "{format}"
+                );
+            }
+        }
+        let saved = String::from_utf8(
+            formats::write_with_engine(document, "cdxml", &engine)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let pairs = saved_step_pairs(&saved);
+        assert_eq!(pairs.len(), 2, "{format}");
+        assert!(
+            pairs.iter().all(|step| step.len() == 4),
+            "{format}: {pairs:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_charge_mark_in_a_condition_group_does_not_bring_in_its_atom() {
+    // The group holds a caption and the reactant oxygen's charge mark.
+    let source = String::from_utf8(fixture("037-reaction-scheme-1", "cdxml"))
+        .unwrap()
+        .replace(
+            "<n id=\"5\" p=\"101.569219 110\" Element=\"8\" NumHydrogens=\"1\">",
+            "<n id=\"5\" p=\"101.569219 110\" Element=\"8\" NumHydrogens=\"0\" Charge=\"-1\">",
+        );
+    let first = source.find("<t id=\"17\"").unwrap();
+    let last = source.find("<t id=\"18\"").unwrap();
+    let caption = source[first..last].trim_end();
+    let mark = "<graphic id=\"51\" GraphicType=\"Symbol\" SymbolType=\"Minus\" \
+                BoundingBox=\"108 100 114 106\"><represent attribute=\"Charge\" object=\"5\"/></graphic>";
+    let source = source
+        .replacen(
+            caption,
+            &format!("<group id=\"50\">{caption}{mark}</group>"),
+            1,
+        )
+        .replace(
+            "ReactionStepObjectsAboveArrow=\"17\"",
+            "ReactionStepObjectsAboveArrow=\"50\"",
+        );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let contents = compatibility::import_text(format, bytes.clone()).unwrap();
+        assert_eq!(
+            formats::chemdraw_loss(format, &contents),
+            formats::ChemdrawLoss::default(),
+            "{format}"
+        );
+        let document = formats::read_with_engine(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert_eq!(document.reactions.len(), 1, "{format}");
+        let reaction = &document.reactions[0];
+        assert!(reaction.agents.is_empty(), "{format}");
+        let texts: Vec<_> = reaction
+            .annotations
+            .iter()
+            .map(|id| {
+                let caption = document.annotations.iter().find(|a| a.id == *id);
+                caption.unwrap().text.as_str()
+            })
+            .collect();
+        assert_eq!(texts, ["catalyst 1", "solvent, 24 h"], "{format}");
+    }
+}
+
+#[tokio::test]
+async fn a_later_pair_never_gives_one_number_twice_to_a_step_side() {
+    // A + B -> C + D maps A to C and B to D; the later step C -> B would
+    // join both chains, putting one number twice on each side of step one.
+    let source = r#"<?xml version="1.0" encoding="UTF-8"?>
+<CDXML><page id="1">
+<fragment id="2"><n id="3" p="0 0" Element="6"/></fragment>
+<fragment id="4"><n id="5" p="0 40" Element="8"/></fragment>
+<arrow id="6" Tail3D="30 20 0" Head3D="90 20 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None"/>
+<fragment id="7"><n id="8" p="120 0" Element="6"/></fragment>
+<fragment id="9"><n id="10" p="120 40" Element="8"/></fragment>
+<arrow id="11" Tail3D="150 0 0" Head3D="210 0 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None"/>
+<scheme id="12">
+<step id="13" ReactionStepReactants="2 4" ReactionStepProducts="7 9" ReactionStepArrows="6" ReactionStepAtomMap="3 8 5 10"/>
+<step id="14" ReactionStepReactants="7" ReactionStepProducts="4" ReactionStepArrows="11" ReactionStepAtomMap="8 5"/>
+</scheme></page></CDXML>"#;
+    let binary = binary(source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.as_bytes().to_vec()), ("cdx", binary)] {
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        assert_eq!(document.reactions.len(), 2, "{format}");
+        let saved = String::from_utf8(
+            formats::write_with_engine(document, "cdxml", &engine)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let first_step = vec![("6".into(), "6".into()), ("8".into(), "8".into())];
+        assert_eq!(saved_step_pairs(&saved), [first_step, vec![]], "{format}");
+    }
+}
+
+#[tokio::test]
+async fn an_unmapped_step_holding_both_ends_keeps_the_earlier_pair() {
+    // A -> B is mapped; the later A + B -> C lists no atom pairs.
+    let source = r#"<?xml version="1.0" encoding="UTF-8"?>
+<CDXML><page id="1">
+<fragment id="2"><n id="3" p="0 0" Element="6"/></fragment>
+<arrow id="4" Tail3D="20 0 0" Head3D="80 0 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None"/>
+<fragment id="5"><n id="6" p="100 0" Element="8"/></fragment>
+<arrow id="7" Tail3D="20 60 0" Head3D="80 60 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None"/>
+<fragment id="8"><n id="9" p="100 60" Element="7"/></fragment>
+<scheme id="10">
+<step id="11" ReactionStepReactants="2" ReactionStepProducts="5" ReactionStepArrows="4" ReactionStepAtomMap="3 6"/>
+<step id="12" ReactionStepReactants="2 5" ReactionStepProducts="8" ReactionStepArrows="7"/>
+</scheme></page></CDXML>"#;
+    let binary = binary(source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.as_bytes().to_vec()), ("cdx", binary)] {
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        assert_eq!(document.reactions.len(), 2, "{format}");
+        let saved = String::from_utf8(
+            formats::write_with_engine(document, "cdxml", &engine)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let first_step = vec![("6".into(), "8".into())];
+        assert_eq!(saved_step_pairs(&saved), [first_step, vec![]], "{format}");
+    }
+}
+
+#[tokio::test]
+async fn a_resonance_step_does_not_join_the_pairs_of_saved_steps() {
+    // A -> B and C -> D, then B <-> C on a resonance arrow, which is not
+    // saved as a step, then A + C -> E + F. All four saved pairs fit.
+    let arrow = |id: u32, y: u32, tail: &str| {
+        format!(
+            "<arrow id=\"{id}\" Tail3D=\"20 {y} 0\" Head3D=\"80 {y} 0\" ArrowheadHead=\"Full\" \
+             ArrowheadTail=\"{tail}\" ArrowheadType=\"Solid\" FillType=\"None\"/>"
+        )
+    };
+    let atom = |fragment: u32, x: u32, y: u32, element: u32| {
+        format!(
+            "<fragment id=\"{fragment}\"><n id=\"{}\" p=\"{x} {y}\" Element=\"{element}\"/></fragment>",
+            fragment + 1
+        )
+    };
+    let source = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CDXML><page id=\"1\">{}{}{}{}{}{}{}{}{}{}\
+         <scheme id=\"40\">\
+         <step id=\"41\" ReactionStepReactants=\"2\" ReactionStepProducts=\"4\" ReactionStepArrows=\"30\" ReactionStepAtomMap=\"3 5\"/>\
+         <step id=\"42\" ReactionStepReactants=\"6\" ReactionStepProducts=\"8\" ReactionStepArrows=\"31\" ReactionStepAtomMap=\"7 9\"/>\
+         <step id=\"43\" ReactionStepReactants=\"4\" ReactionStepProducts=\"6\" ReactionStepArrows=\"32\" ReactionStepAtomMap=\"5 7\"/>\
+         <step id=\"44\" ReactionStepReactants=\"2 6\" ReactionStepProducts=\"10 12\" ReactionStepArrows=\"33\" ReactionStepAtomMap=\"3 11 7 13\"/>\
+         </scheme></page></CDXML>",
+        atom(2, 0, 0, 6),
+        atom(4, 100, 0, 7),
+        atom(6, 0, 100, 8),
+        atom(8, 100, 100, 9),
+        atom(10, 100, 300, 16),
+        atom(12, 100, 340, 17),
+        arrow(30, 0, "None"),
+        arrow(31, 100, "None"),
+        arrow(32, 200, "Full"),
+        arrow(33, 320, "None"),
+    );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let document = formats::read_with_engine(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert_eq!(document.reactions.len(), 4, "{format}");
+        let saved = String::from_utf8(
+            formats::write_with_engine(document, "cdxml", &engine)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let pair = |a: &str, b: &str| (a.to_owned(), b.to_owned());
+        assert_eq!(
+            saved_step_pairs(&saved),
+            [
+                vec![pair("6", "7")],
+                vec![pair("8", "9")],
+                vec![pair("6", "16"), pair("8", "17")],
+            ],
+            "{format}"
+        );
+    }
+}
