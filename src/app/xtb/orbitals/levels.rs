@@ -1,5 +1,7 @@
 //! The orbital levels of a result: one column per spin, names around the
 //! gap, degenerate groups, and the level diagram drawn from them.
+// Level indices come from windows and groups bounded by the spectrum.
+#![allow(clippy::indexing_slicing)]
 use super::{Action, send};
 use crate::app::Message;
 use iced::widget::canvas;

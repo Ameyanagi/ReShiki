@@ -6,6 +6,9 @@
 //! Meshes are built off the UI thread and registered with the renderer
 //! (`surface::draw::register`); xTB results keep no coefficients, so the
 //! worker recomputes them first. Nothing here is saved but a placed figure.
+// Model indices come from `xtb_model` on the same document, and column and
+// level indices from a choice made for the same result's columns.
+#![allow(clippy::indexing_slicing)]
 use super::results::View;
 use crate::app::{App, Message};
 use iced::Task;
