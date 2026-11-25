@@ -49,6 +49,7 @@ fn finish_model(app: &mut App) {
         force_field: job.force_field,
         diagnostics: vec![],
         approximations: vec![],
+        ensemble: vec![],
     };
     let key = job.key;
     let _ = app.update(Message::Models3d(ModelAction::Generated(
