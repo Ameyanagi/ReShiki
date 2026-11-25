@@ -58,11 +58,15 @@ pub(crate) struct Dialog {
     keep: bool,
 }
 
-/// A multi-frame XYZ or a conformer SD file (every record the same atoms);
-/// `None` for anything else, which opens as before.
+/// A multi-frame XYZ, or an SD file of 3D conformers (every record the
+/// same atoms, charge, spin and title); `None` for anything else, which
+/// opens as before: a single frame, a library of molecules, 2D records, a
+/// periodic structure, or a file read only in part.
 pub(super) fn detect(path: &std::path::Path, contents: &[u8]) -> Option<File> {
     let extension = path.extension()?.to_str()?.to_ascii_lowercase();
-    if !matches!(extension.as_str(), "xyz" | "extxyz" | "sdf" | "sd") {
+    if !matches!(extension.as_str(), "xyz" | "extxyz" | "sdf")
+        || contents.len() as u64 > super::import::limit(path)
+    {
         return None;
     }
     let name = super::import::name(path);
@@ -71,13 +75,23 @@ pub(super) fn detect(path: &std::path::Path, contents: &[u8]) -> Option<File> {
         return None;
     };
     let first = job.steps.first()?;
-    // An SD file of 2D records is a list of drawings, which opens side by
-    // side as before.
-    let flat = |frame: &Frame| frame.positions_angstrom.iter().all(|p| p[2].abs() < 1e-6);
-    if job.steps.len() < 2
+    let partial = file.warnings.iter().any(|warning| {
+        warning.starts_with("Read the first")
+            || warning.starts_with("The cell is ignored")
+            || warning.ends_with("is 2D (all z = 0)")
+    });
+    let sdf = file.format == Format::Sdf;
+    if partial
+        || job.steps.len() < 2
         || job.steps.iter().any(|step| {
-            step.frame.numbers != first.frame.numbers
-                || file.format == Format::Sdf && flat(&step.frame)
+            let (a, b) = (&step.frame, &first.frame);
+            a.numbers != b.numbers
+                || a.isotopes != b.isotopes
+                || a.charge != b.charge
+                || a.multiplicity != b.multiplicity
+                // Records of different molecules can share an atom list;
+                // conformer files repeat the molecule's name.
+                || sdf && step.label != first.label
         })
     {
         return None;
@@ -87,7 +101,7 @@ pub(super) fn detect(path: &std::path::Path, contents: &[u8]) -> Option<File> {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    let sdf = (file.format == Format::Sdf).then(|| String::from_utf8_lossy(contents).into_owned());
+    let sdf = sdf.then(|| String::from_utf8_lossy(contents).into_owned());
     Some(File {
         name,
         file,
@@ -96,13 +110,13 @@ pub(super) fn detect(path: &std::path::Path, contents: &[u8]) -> Option<File> {
     })
 }
 
+/// Esc cancels, ⌘Return imports (Return stays with the focused control),
+/// ↑/↓ pick the frame above or below.
 pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
-    if !modifiers.is_empty() {
-        return None;
-    }
     let action = match key {
+        Key::Named(Named::Enter) if modifiers.command() => Action::Import,
+        _ if !modifiers.is_empty() => return None,
         Key::Named(Named::Escape) => Action::Close,
-        Key::Named(Named::Enter) => Action::Import,
         Key::Named(Named::ArrowUp) => Action::Move(-1),
         Key::Named(Named::ArrowDown) => Action::Move(1),
         _ => return None,
@@ -219,6 +233,17 @@ impl App {
                 return Task::none();
             }
         };
+        let frame = &step.frame;
+        let mut omitted = Vec::new();
+        if frame.charge != 0 {
+            omitted.push(format!("total charge {:+}", frame.charge));
+        }
+        if frame.multiplicity != 1 {
+            omitted.push(format!("spin multiplicity {}", frame.multiplicity));
+        }
+        if !omitted.is_empty() {
+            warnings.insert(0, format!("Not drawn: {}", omitted.join(", ")));
+        }
         warnings.insert(
             0,
             format!(
@@ -383,7 +408,7 @@ impl App {
             "Up to 32 frames, the lowest in energy, are kept with the molecule and saved in the file."
         };
         let message = format!(
-            "Frame {} of {} opens{}.",
+            "Frame {} of {} opens{}. ⌘Return imports.",
             index + 1,
             steps.len(),
             match (dialog.choice, energies.as_ref()) {
@@ -479,6 +504,7 @@ fn ensemble(
     let launch = reshiki::science::launch(doc, first, chosen.charge, chosen.multiplicity)
         .map_err(|e| e.to_string().to_lowercase())?;
     let same = launch.frame.numbers == chosen.numbers
+        && launch.frame.isotopes == chosen.isotopes
         && launch
             .frame
             .positions_angstrom
