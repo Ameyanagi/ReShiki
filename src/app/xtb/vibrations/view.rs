@@ -125,7 +125,8 @@ impl App {
             && self.tab.xtb.run.is_none()
             && super::super::results::config(&shown.stored.result, shown.frame, shown.info, 1)
                 .is_some();
-        let detail = if can_push {
+        // The dock's body is short: the explanation goes in the inspector only.
+        let detail = if can_push && self.xtb.dock.inspector {
             "Push moves the structure 0.3 Å along the mode, optimizes and recomputes frequencies; \
              the structure changes only if the optimization converges."
         } else {
@@ -133,7 +134,7 @@ impl App {
         };
         let push = reshiki::accessibility::button(
             "xtb-push-mode",
-            "Push along mode and re-optimize",
+            "Push 0.3 Å along the imaginary mode and re-optimize; the structure changes only if the optimization converges",
             text("Push along mode and re-optimize").size(12),
         )
         .padding([6, 12])
@@ -854,9 +855,10 @@ impl canvas::Program<Message> for Spectrum {
         if self.imaginary_selected {
             frame.fill_text(small(
                 "imaginary mode: not plotted".into(),
-                Point::new(bounds.width - Self::RIGHT - 4., Self::TOP + 2.),
+                // Top left: high wavenumbers rarely carry peak labels.
+                Point::new(Self::LEFT + 4., Self::TOP + 2.),
                 theme.palette().danger,
-                iced::alignment::Horizontal::Right,
+                iced::alignment::Horizontal::Left,
             ));
         }
         vec![frame.into_geometry()]
