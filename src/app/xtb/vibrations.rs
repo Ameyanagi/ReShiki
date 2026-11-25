@@ -10,6 +10,7 @@ use super::{Page, Request, Start, is, state};
 use crate::app::{App, InspectorTab, Message};
 use iced::Task;
 use reshiki::document::Document;
+use reshiki::graphics::Graphic;
 use reshiki::qcdata::vibrational::{self, BandShape};
 use reshiki::qcdata::{CalcResult, Frame, Settings, Thermo};
 use std::cell::RefCell;
@@ -370,7 +371,7 @@ impl App {
                 doc.models.get_mut(index)?.size = size * reach_now / reach.max(1e-3);
                 if key.arrows {
                     let arrows = arrows(&doc, index, positions, mode, key.amplitude)?;
-                    doc.arrows.extend(arrows);
+                    doc.graphics.extend(arrows);
                 }
                 Some(doc)
             })
@@ -378,6 +379,7 @@ impl App {
     }
 
     pub(super) fn xtb_vibrations_action(&mut self, action: Action) -> Task<Message> {
+        let tick = matches!(action, Action::Tick);
         let settings = &mut self.tab.xtb.vibrations;
         match action {
             Action::Mode(mode) => settings.mode = mode,
@@ -413,7 +415,10 @@ impl App {
             }
         }
         self.xtb_vibrations_sync();
-        self.xtb_vibrations_status();
+        // Ticks leave the status bar to whatever else it says.
+        if !tick {
+            self.xtb_vibrations_status();
+        }
         Task::none()
     }
 
@@ -454,7 +459,9 @@ impl App {
                 .problem
                 .take_if(|(weak, _)| is(weak, &result));
         }
-        self.xtb_vibrations_resume()
+        let task = self.xtb_vibrations_resume();
+        self.xtb_vibrations_status();
+        task
     }
 
     pub(in crate::app) fn xtb_vibrations_resume(&mut self) -> Task<Message> {
@@ -648,7 +655,7 @@ impl App {
             return;
         };
         let count = arrows.len();
-        doc.arrows.extend(arrows);
+        doc.graphics.extend(arrows);
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed(before);
         if !self.error {
@@ -787,7 +794,8 @@ fn arrows(
     positions: &[[f64; 3]],
     mode: &[f64],
     amplitude: f32,
-) -> Option<Vec<reshiki::document::Arrow>> {
+) -> Option<Vec<Graphic>> {
+    use reshiki::graphics::{PathCommand, PathHeads};
     let model = doc.models.get(index)?;
     let (directions, _) = mode.as_chunks::<3>();
     let largest = directions
@@ -812,14 +820,20 @@ fn arrows(
     let points = reshiki::models3d::project(doc, model, &tips)?;
     // Arrows shorter than a fifth of a bond would be all head.
     let shortest = doc.drawing_style.bond_length_world * 0.2;
-    let mut style = reshiki::arrows::ArrowStyle::DEFAULT;
-    style.color = reshiki::palette::Color::Palette(
-        reshiki::palette::Hue::Teal,
-        reshiki::palette::Row::Strong,
-    );
-    style.width_pt = 1.2;
-    style.head_length_pt = 5.;
-    style.head_width_pt = 2.;
+    let style = reshiki::graphics::GraphicStyle {
+        stroke: reshiki::palette::Color::Palette(
+            reshiki::palette::Hue::Teal,
+            reshiki::palette::Row::Strong,
+        ),
+        width_pt: 1.2,
+        ..Default::default()
+    };
+    let heads = PathHeads {
+        head: reshiki::arrows::Head::Full,
+        head_length_pt: 5.,
+        head_width_pt: 2.,
+        ..Default::default()
+    };
     let mut id = doc.next_id();
     Some(
         points
@@ -828,14 +842,13 @@ fn arrows(
             .iter()
             .filter(|[start, end]| start.distance(*end) >= shortest)
             .map(|&[start, end]| {
-                let mut arrow = reshiki::document::Arrow::new(
-                    id,
-                    start,
-                    end,
-                    reshiki::arrows::Preset::Forward,
-                    style.clone(),
-                );
-                arrow.purpose = reshiki::purpose::Purpose::Illustration;
+                // A plain pen path: no reaction-arrow meaning, drawn in front
+                // of the model it annotates.
+                let mut arrow = Graphic::pen_curve(id, start, end, style.clone());
+                arrow.path = vec![PathCommand::Move(start), PathCommand::Line(end)];
+                arrow.node_types.clear();
+                arrow.heads = Some(heads);
+                arrow.layer = 1;
                 id += 1;
                 arrow
             })

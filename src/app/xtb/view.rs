@@ -109,19 +109,29 @@ impl App {
         let set = |action: Action| idle.then_some(Message::Xtb(action));
 
         // Task and method: what the worker runs now, then what comes later.
-        let tasks = row(CalcTask::ALL.map(|(task, name)| {
-            segment(
-                format!("xtb-task-{}", name.to_lowercase()),
-                name,
-                settings.task == task,
-                set(Action::Task(task)),
-                None,
-            )
-        }))
-        .spacing(4);
-        let later = row(LATER_TASKS.map(|(name, reason)| {
+        // Three per row: the four tasks, then those still to come.
+        let mut segments: Vec<Element<'_, Message>> = CalcTask::ALL
+            .map(|(task, name)| {
+                segment(
+                    format!("xtb-task-{}", name.to_lowercase()),
+                    name,
+                    settings.task == task,
+                    set(Action::Task(task)),
+                    None,
+                )
+            })
+            .into();
+        segments.extend(LATER_TASKS.map(|(name, reason)| {
             segment(format!("xtb-task-{name}"), name, false, None, Some(reason))
-        }))
+        }));
+        let mut segments = segments.into_iter();
+        let tasks = column(
+            std::iter::from_fn(|| {
+                let three: Vec<_> = segments.by_ref().take(3).collect();
+                (!three.is_empty()).then(|| row(three).spacing(4).into())
+            })
+            .collect::<Vec<Element<'_, Message>>>(),
+        )
         .spacing(4);
         let methods = row(METHODS.map(|method| {
             segment(
@@ -292,11 +302,7 @@ impl App {
             column![
                 label("Task"),
                 tasks,
-                later,
-                line(
-                    "Opt + freq and Orbitals are coming in the Vibrations and Orbitals tabs.",
-                    Tone::Muted
-                ),
+                line("Orbitals are coming in the Orbitals tab.", Tone::Muted),
                 label("Method"),
                 methods,
             ]

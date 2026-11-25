@@ -849,7 +849,7 @@ reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnf
     [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
     [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
     [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
-    [--gradient] [--wbo] FILE.xyz
+    [--thermo-temperature K] [--gradient] [--wbo] FILE.xyz
 ```
 
 Runs one GFN2-xTB (default), GFN-FF or g-xTB 2.0.1 calculation through the
