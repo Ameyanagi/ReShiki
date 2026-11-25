@@ -6,9 +6,9 @@
 //! The BFGS secant condition follows Nocedal & Wright, *Numerical
 //! Optimization*, 2nd ed., Chapter 6.
 
-use super::{InternalModel, fragment::Fragment, primitive::Local};
+use super::{Curvature, InternalModel, fragment::Fragment, primitive::Local};
 use crate::linalg::{dot, norm, symmetric_eigen};
-use crate::optimizer::Update;
+use crate::optimizer::{Options, Update};
 use std::f64::consts::{PI, TAU};
 
 type Molecule = (Vec<u8>, Vec<f64>);
@@ -32,6 +32,21 @@ fn maximum_error(actual: &[f64], expected: &[f64]) -> f64 {
 
 fn free_components(x: &[f64], fixed: &[usize]) -> Vec<usize> {
     (0..x.len()).filter(|i| !fixed.contains(&(i / 3))).collect()
+}
+
+fn lindh_model(
+    numbers: &[u8],
+    free: &[usize],
+    positions: &[f64],
+    hbonds: bool,
+) -> Result<InternalModel, String> {
+    InternalModel::build(
+        numbers,
+        free,
+        positions,
+        hbonds,
+        Curvature::Initial(None, &Options::default()),
+    )
 }
 
 fn water() -> Molecule {
@@ -327,7 +342,7 @@ fn every_chart_row_matches_central_differences_at_reference_and_rotated_geometri
     ] {
         for fixed in [&[][..], &[0][..]] {
             let free = free_components(&x, fixed);
-            let model = InternalModel::build(&numbers, &free, &x, true, None).unwrap();
+            let model = lindh_model(&numbers, &free, &x, true).unwrap();
             for (local, _) in &model.chart.topology.locals {
                 let kind = match local {
                     Local::Stretch(..) => 0,
@@ -362,8 +377,8 @@ fn every_chart_row_matches_central_differences_at_reference_and_rotated_geometri
 fn optional_hydrogen_bond_is_local_and_preserves_two_rigid_fragments() {
     let (numbers, x) = water_dimer();
     let free = free_components(&x, &[]);
-    let without = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
-    let with = InternalModel::build(&numbers, &free, &x, true, None).unwrap();
+    let without = lindh_model(&numbers, &free, &x, false).unwrap();
+    let with = lindh_model(&numbers, &free, &x, true).unwrap();
     let hydrogen_bond =
         |local: &Local| matches!(local, Local::Stretch(1, 3) | Local::Stretch(3, 1));
     assert!(
@@ -390,7 +405,7 @@ fn optional_hydrogen_bond_is_local_and_preserves_two_rigid_fragments() {
 fn torsions_span_a_collinear_run_between_two_methyl_groups() {
     let (numbers, x) = butyne();
     let free = free_components(&x, &[]);
-    let model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let model = lindh_model(&numbers, &free, &x, false).unwrap();
     assert!(
         model
             .chart
@@ -415,7 +430,7 @@ fn torsions_span_a_collinear_run_between_two_methyl_groups() {
 fn rigid_rotation_has_known_sign_angle_and_gyration_scale() {
     let (numbers, x) = ammonia();
     let free = free_components(&x, &[]);
-    let model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let model = lindh_model(&numbers, &free, &x, false).unwrap();
     let center: Vector = std::array::from_fn(|k| {
         x.as_chunks::<3>().0.iter().map(|p| p[k]).sum::<f64>() / numbers.len() as f64
     });
@@ -466,7 +481,7 @@ fn rotation_branch_cut_rejects_stale_chart_and_rebuilds_short_secant() {
     let numbers = [1, 1];
     let x = [-0.7, 0.0, 0.0, 0.7, 0.0, 0.0];
     let free = free_components(&x, &[]);
-    let mut model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let mut model = lindh_model(&numbers, &free, &x, false).unwrap();
     let rotate = |degrees: f64| -> Vec<f64> {
         let (sine, cosine) = degrees.to_radians().sin_cos();
         x.as_chunks::<3>()
@@ -519,7 +534,7 @@ fn rotation_branch_cut_rejects_stale_chart_and_rebuilds_short_secant() {
 fn nonparallel_rotation_endpoints_require_a_common_chart_for_rows_and_secants() {
     let (numbers, x) = ammonia();
     let free = free_components(&x, &[]);
-    let mut model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let mut model = lindh_model(&numbers, &free, &x, false).unwrap();
     let rotate = |degrees: f64, axis: Vector| -> Vec<f64> {
         let axis = unit(axis);
         let (sine, cosine) = degrees.to_radians().sin_cos();
@@ -582,7 +597,7 @@ fn torsion_rows_remain_continuous_across_both_sides_of_pi() {
             -1.40, 2.45, 0.0, 0.0, 0.0, 0.0, 2.86, 0.0, 0.0, 4.26, -2.45, height,
         ];
         let free = free_components(&x, &[]);
-        let model = InternalModel::build(&[6; 4], &free, &x, false, None).unwrap();
+        let model = lindh_model(&[6; 4], &free, &x, false).unwrap();
         let values = model.chart.values(&x).unwrap();
         assert!(
             values[..model.chart.topology.locals.len()]
@@ -602,7 +617,7 @@ fn torsion_rows_remain_continuous_across_both_sides_of_pi() {
 fn distorted_horn_and_nearly_linear_rotation_rows_match_central_differences() {
     let (numbers, x) = ammonia();
     let free = free_components(&x, &[]);
-    let model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let model = lindh_model(&numbers, &free, &x, false).unwrap();
     let mut distorted: Vec<f64> = x
         .as_chunks::<3>()
         .0
@@ -617,7 +632,7 @@ fn distorted_horn_and_nearly_linear_rotation_rows_match_central_differences() {
         let (numbers, mut x) = carbon_dioxide();
         x[4] = bending;
         let free = free_components(&x, &[]);
-        let model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+        let model = lindh_model(&numbers, &free, &x, false).unwrap();
         check_rows(&model, &x, &free);
         let tilted: Vec<f64> = x
             .as_chunks::<3>()
@@ -638,7 +653,7 @@ fn singleton_fragments_are_exact_cartesian_translations() {
     let x = [0.0, 0.0, 0.0, 15.0, 2.0, 3.0, -12.0, 6.0, 8.0];
     for fixed in [&[][..], &[1][..]] {
         let free = free_components(&x, fixed);
-        let model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+        let model = lindh_model(&numbers, &free, &x, false).unwrap();
         assert!(model.chart.topology.locals.is_empty());
         assert_eq!(model.chart.fragments.len(), 3);
         assert_eq!(model.chart.values(&x).unwrap(), x);
@@ -669,7 +684,7 @@ fn singleton_fragments_are_exact_cartesian_translations() {
 fn rebuild_detection_tracks_linearity_and_is_invariant_to_translation() {
     let (numbers, x) = carbon_dioxide();
     let free = free_components(&x, &[]);
-    let mut model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let mut model = lindh_model(&numbers, &free, &x, false).unwrap();
     let translated: Vec<_> = x
         .iter()
         .enumerate()
@@ -725,18 +740,18 @@ fn bond_cutoffs_and_lindh_stiffness_have_atomic_units() {
 fn invalid_and_degenerate_geometries_are_rejected_without_nonfinite_outputs() {
     let x = [0.0, 0.0, 0.0, 1.4, 0.0, 0.0];
     for numbers in [[0, 1], [1, 119]] {
-        assert!(InternalModel::build(&numbers, &[0, 1, 2, 3, 4, 5], &x, false, None).is_err());
+        assert!(lindh_model(&numbers, &[0, 1, 2, 3, 4, 5], &x, false).is_err());
     }
-    assert!(InternalModel::build(&[1, 1], &[0, 1, 2], &x[..3], false, None).is_err());
-    assert!(InternalModel::build(&[1, 1], &[0, 1, 2, 3, 4, 5], &[0.0; 6], false, None).is_err());
+    assert!(lindh_model(&[1, 1], &[0, 1, 2], &x[..3], false).is_err());
+    assert!(lindh_model(&[1, 1], &[0, 1, 2, 3, 4, 5], &[0.0; 6], false).is_err());
     let mut nonfinite = x;
     nonfinite[4] = f64::NAN;
-    assert!(InternalModel::build(&[1, 1], &[0, 1, 2, 3, 4, 5], &nonfinite, false, None).is_err());
+    assert!(lindh_model(&[1, 1], &[0, 1, 2, 3, 4, 5], &nonfinite, false).is_err());
     assert!(Fragment::new(&[], &x).is_none());
     assert!(Fragment::new(&[0, 0], &x).is_none());
     assert!(Fragment::new(&[usize::MAX], &x).is_none());
     assert!(Fragment::new(&[0, 1], &[0.0; 6]).is_none());
-    let model = InternalModel::build(&[1, 1], &[0, 1, 2, 3, 4, 5], &x, false, None).unwrap();
+    let model = lindh_model(&[1, 1], &[0, 1, 2, 3, 4, 5], &x, false).unwrap();
     assert!(model.chart.values(&x[..3]).is_none());
     assert!(model.chart.rows(&nonfinite, &[0, 1, 2, 3, 4, 5]).is_none());
     assert!(model.back_transform(&x, &[0.0]).is_none());
@@ -754,7 +769,7 @@ fn invalid_and_degenerate_geometries_are_rejected_without_nonfinite_outputs() {
 fn organic_local_metric_has_expected_dlc_dimensions() {
     for ((numbers, x), expected) in [(water(), 3), (ammonia(), 6)] {
         let free = free_components(&x, &[]);
-        let model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+        let model = lindh_model(&numbers, &free, &x, false).unwrap();
         let rows = model.chart.rows(&x, &free).unwrap();
         let organic = &rows[..model.chart.topology.locals.len() * free.len()];
         assert_eq!(rank(organic, free.len()), expected);
@@ -775,7 +790,7 @@ fn tric_spans_all_free_components_for_nonlinear_linear_and_fragmented_molecules(
         for fixed in [&[][..], &[0][..], &[0, 1][..]] {
             let free = free_components(&x, fixed);
             for hbonds in [false, true] {
-                let model = InternalModel::build(&numbers, &free, &x, hbonds, None).unwrap();
+                let model = lindh_model(&numbers, &free, &x, hbonds).unwrap();
                 assert_eq!(
                     rank(&model.chart.rows(&x, &free).unwrap(), free.len()),
                     free.len()
@@ -801,7 +816,7 @@ fn tric_spans_distorted_planar_four_coordinate_center() {
             rank(&chart.rows(&x, &free).unwrap(), free.len()),
             free.len()
         );
-        let model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+        let model = lindh_model(&numbers, &free, &x, false).unwrap();
         assert_eq!(model.dimension(), free.len());
         let mut target = x;
         target[14] += 1e-4;
@@ -823,7 +838,7 @@ fn tric_spans_planar_centers_above_coordination_four() {
         x.extend([3.04 * angle.cos(), 3.8 * angle.sin(), 2.28 * angle.cos()]);
     }
     let free = free_components(&x, &[]);
-    let model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let model = lindh_model(&numbers, &free, &x, false).unwrap();
     assert_eq!(
         rank(&model.chart.rows(&x, &free).unwrap(), free.len()),
         free.len()
@@ -837,7 +852,7 @@ fn small_random_back_transforms_round_trip_and_preserve_fixed_atoms_exactly() {
     for (numbers, x) in [butane(), water_dimer()] {
         for fixed in [&[][..], &[0][..], &[0, 2][..]] {
             let free = free_components(&x, fixed);
-            let model = InternalModel::build(&numbers, &free, &x, true, None).unwrap();
+            let model = lindh_model(&numbers, &free, &x, true).unwrap();
             for length in [1e-5, 1e-4, 1e-3] {
                 for _ in 0..4 {
                     let requested = random_vector(model.dimension(), length, &mut state);
@@ -870,7 +885,7 @@ fn initial_models_are_symmetric_positive_definite() {
     for (numbers, x) in [ethanol(), benzene(), water_dimer()] {
         for fixed in [&[][..], &[0][..]] {
             let free = free_components(&x, fixed);
-            let model = InternalModel::build(&numbers, &free, &x, true, None).unwrap();
+            let model = lindh_model(&numbers, &free, &x, true).unwrap();
             let dim = model.dimension();
             for i in 0..dim {
                 for j in 0..dim {
@@ -896,7 +911,7 @@ fn gradient_transformation_obeys_cartesian_chain_rule_including_fixed_components
     for (numbers, x) in [ammonia(), acetylene(), water_dimer()] {
         for fixed in [&[][..], &[0][..]] {
             let free = free_components(&x, fixed);
-            let model = InternalModel::build(&numbers, &free, &x, true, None).unwrap();
+            let model = lindh_model(&numbers, &free, &x, true).unwrap();
             let expected = random_vector(model.dimension(), 0.03, &mut state);
             let mut gradient = cartesian_gradient(&model, &x, &free, &expected);
             for &atom in fixed {
@@ -940,7 +955,7 @@ fn gradient_transformation_obeys_cartesian_chain_rule_including_fixed_components
 fn accepted_bfgs_update_satisfies_the_secant_equation_and_keeps_positive_curvature() {
     let (numbers, x) = water_dimer();
     let free = free_components(&x, &[]);
-    let mut model = InternalModel::build(&numbers, &free, &x, true, None).unwrap();
+    let mut model = lindh_model(&numbers, &free, &x, true).unwrap();
     let mut state = 0x9135_bcc0_6a78_d124;
     let requested = random_vector(model.dimension(), 1e-3, &mut state);
     let next = model.back_transform(&x, &requested).unwrap();
@@ -980,7 +995,7 @@ fn accepted_bfgs_update_satisfies_the_secant_equation_and_keeps_positive_curvatu
 fn rebuild_preserves_learned_cartesian_curvature_through_chart_and_metric_changes() {
     let (numbers, x) = water_dimer();
     let free = free_components(&x, &[0]);
-    let mut model = InternalModel::build(&numbers, &free, &x, true, None).unwrap();
+    let mut model = lindh_model(&numbers, &free, &x, true).unwrap();
     let mut state = 0xc3ed_1084_5640_b29a;
     let requested = random_vector(model.dimension(), 0.01, &mut state);
     let next = model.back_transform(&x, &requested).unwrap();
@@ -1015,7 +1030,7 @@ fn rebuild_carries_curvature_when_a_bond_breaks_into_two_fragments() {
     let x = [0.0, 0.0, 0.0, 1.40, 0.0, 0.0];
     let stretched = [0.0, 0.0, 0.0, 5.0, 0.0, 0.0];
     let free = free_components(&x, &[]);
-    let mut model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let mut model = lindh_model(&numbers, &free, &x, false).unwrap();
     assert_eq!(model.chart.fragments.len(), 1);
     let dim = model.dimension();
     // An anisotropic learned quadratic form makes a model reset detectable.
@@ -1059,9 +1074,22 @@ fn supplied_full_and_restricted_cartesian_hessians_transform_with_fixed_componen
         .flat_map(|&i| free.iter().map(move |&j| (i, j)))
         .map(|(i, j)| full[i * ncart + j])
         .collect();
-    let from_full = InternalModel::build(&numbers, &free, &x, true, Some(&full)).unwrap();
-    let from_restricted =
-        InternalModel::build(&numbers, &free, &x, true, Some(&restricted)).unwrap();
+    let from_full = InternalModel::build(
+        &numbers,
+        &free,
+        &x,
+        true,
+        Curvature::Initial(Some(&full), &Options::default()),
+    )
+    .unwrap();
+    let from_restricted = InternalModel::build(
+        &numbers,
+        &free,
+        &x,
+        true,
+        Curvature::Initial(Some(&restricted), &Options::default()),
+    )
+    .unwrap();
     assert_eq!(from_full.dimension(), free.len());
     for model in [&from_full, &from_restricted] {
         let transformed = physical_hessian(model, &x, &free);
@@ -1110,7 +1138,14 @@ fn supplied_saddle_seed_decouples_fragment_stretch_from_global_rotation() {
     let free = [3, 4, 2, 1, 0, 5]; // Exercise a nontrivial free-column ordering.
     let mut seed = [0.; 36];
     Pair.hessian(&x, &mut seed).unwrap().unwrap();
-    let model = InternalModel::build(&atoms, &free, &x, false, Some(&seed)).unwrap();
+    let model = InternalModel::build(
+        &atoms,
+        &free,
+        &x,
+        false,
+        Curvature::Initial(Some(&seed), &Options::default()),
+    )
+    .unwrap();
     let mut g = [0.; 6];
     Pair.evaluate(&x, &mut g, Accuracy::Normal).unwrap();
     let force = norm(&g);
@@ -1160,7 +1195,7 @@ fn supplied_saddle_seed_decouples_fragment_stretch_from_global_rotation() {
 fn an_impossible_negative_bond_length_rejects_an_out_of_chart_fallback() {
     let x = [0.0, 0.0, 0.0, 1.40, 0.0, 0.0];
     let free = free_components(&x, &[]);
-    let model = InternalModel::build(&[1, 1], &free, &x, false, None).unwrap();
+    let model = lindh_model(&[1, 1], &free, &x, false).unwrap();
     let nprimitive = model.chart.values(&x).unwrap().len();
     let mut primitive_step = vec![0.0; nprimitive];
     let stretch = model
@@ -1190,7 +1225,7 @@ fn rfo_restriction_returns_descent_with_negative_prediction_and_internal_radius(
     for (numbers, x) in [water(), water_dimer()] {
         for fixed in [&[][..], &[0][..]] {
             let free = free_components(&x, fixed);
-            let model = InternalModel::build(&numbers, &free, &x, true, None).unwrap();
+            let model = lindh_model(&numbers, &free, &x, true).unwrap();
             let gradient = cartesian_gradient(
                 &model,
                 &x,
@@ -1244,7 +1279,7 @@ fn selected_updates_apply_endpoint_secants_in_the_nonlinear_internal_chart() {
     let mut state = 0xb121_658c_78f4_e902;
     let requested = random_vector(free.len(), 1e-3, &mut state);
     for update in [Update::Bfgs, Update::DampedBfgs, Update::Bofill] {
-        let mut model = InternalModel::build(&numbers, &free, &x, true, None).unwrap();
+        let mut model = lindh_model(&numbers, &free, &x, true).unwrap();
         let next = model.back_transform(&x, &requested).unwrap();
         assert!(next.converged);
         let s = model.displacement(&x, &next.positions).unwrap();
@@ -1288,20 +1323,21 @@ fn selected_updates_apply_endpoint_secants_in_the_nonlinear_internal_chart() {
 #[test]
 fn contact_curvature_preserves_the_dlc_metric_and_matches_the_free_cartesian_form() {
     use crate::model_hessian::contact_stretches;
-    use crate::optimizer::Options;
     let (numbers, x) = water_dimer();
     let free = free_components(&x, &[0]);
-    let base = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
-    let augmented = InternalModel::build_with_options(
+    let base = lindh_model(&numbers, &free, &x, false).unwrap();
+    let augmented = InternalModel::build(
         &numbers,
         &free,
         &x,
         false,
-        None,
-        &Options {
-            contacts: true,
-            ..Options::default()
-        },
+        Curvature::Initial(
+            None,
+            &Options {
+                contacts: true,
+                ..Options::default()
+            },
+        ),
     )
     .unwrap();
     assert_eq!(base.basis, augmented.basis);
@@ -1342,7 +1378,6 @@ fn contact_curvature_preserves_the_dlc_metric_and_matches_the_free_cartesian_for
 
 #[test]
 fn fragment_prior_and_supplied_seed_use_the_requested_curvature_floor() {
-    use crate::optimizer::Options;
     let numbers = [18, 18];
     let x = [0., 0., 0., 15., 0., 0.];
     let free = [3, 4, 5];
@@ -1351,8 +1386,14 @@ fn fragment_prior_and_supplied_seed_use_the_requested_curvature_floor() {
         contacts: true,
         ..Options::default()
     };
-    let mut model =
-        InternalModel::build_with_options(&numbers, &free, &x, false, None, &options).unwrap();
+    let mut model = InternalModel::build(
+        &numbers,
+        &free,
+        &x,
+        false,
+        Curvature::Initial(None, &options),
+    )
+    .unwrap();
     assert_eq!(model.hessian, [0.007, 0., 0., 0., 0.007, 0., 0., 0., 0.007]);
     model.rebuild(&[0., 0., 0., 16., 1., 0.]).unwrap();
     assert_eq!(model.parameters.curvature_floor, options.curvature_floor);
@@ -1363,19 +1404,26 @@ fn fragment_prior_and_supplied_seed_use_the_requested_curvature_floor() {
     // potential Hessian, which already describes that interaction.
     let x = [0., 0., 0., 2. * 1.88 / crate::ANGSTROM_PER_BOHR, 0., 0.];
     let exact = [-2., 0., 0., 0., 0.0002, 0., 0., 0., 4.];
-    let with =
-        InternalModel::build_with_options(&numbers, &free, &x, false, Some(&exact), &options)
-            .unwrap();
-    let without = InternalModel::build_with_options(
+    let with = InternalModel::build(
         &numbers,
         &free,
         &x,
         false,
-        Some(&exact),
-        &Options {
-            contacts: false,
-            ..options
-        },
+        Curvature::Initial(Some(&exact), &options),
+    )
+    .unwrap();
+    let without = InternalModel::build(
+        &numbers,
+        &free,
+        &x,
+        false,
+        Curvature::Initial(
+            Some(&exact),
+            &Options {
+                contacts: false,
+                ..options
+            },
+        ),
     )
     .unwrap();
     assert_eq!(with.hessian, without.hessian);

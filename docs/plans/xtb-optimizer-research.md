@@ -165,9 +165,125 @@ Recorded after each round: its predictions, proposals, and which won or lost.
   Cartesians per Bakken & Helgaker Tables V–VI); GDIIS/GEDIIS: 0 to a few calls.
 - Overhead: loosen the Davidson residual (1e-12 |g| today), time rebuilds and back-transforms.
 
+### After round 1 (its analysis of the raw traces)
+
+- The main loss of #1415's ANC against `xtb --opt` is the stopping rule, not the search:
+  ANC first meets xtb's own criterion (|ΔE| < 5e-6 Eh, |g| < 1e-3 Eh/bohr) after 1.05× xtb's
+  gradient count, then finishes at 1.57×. Displacement thresholds alone blocked convergence
+  on 1,970 accepted steps across 122 starts. But some of those late steps matter: PEG5 from
+  ETKDG first qualified at evaluation 69 and gained another 6 mEh by evaluation 268. Any
+  earlier stop needs a geometry-quality check against a tight reference.
+- xtb's cycle count excludes its initial and final single points; with them xtb makes
+  3,982 calls on the 154 starts and ANC's ratio is 1.34× instead of 1.57×.
+- Rejected trials are only 2.5 % of ANC evaluations; SCF restart halves the SCF iterations
+  (34k vs 70k); `tight_final` costs exactly one call per start; adaptive accuracy saves 3 %
+  of SCF iterations but adds 316 evaluations (loses); GDIIS/GEDIIS/Bofill/damped BFGS: no
+  general win (GDIIS's floppy "gain" was PEG5 stopping 6 mEh higher); the GFN2 Hessian start
+  saves 390 evaluations at a cost of 1,523 gradient equivalents (loses); the GFN-FF Hessian
+  start helps ions/radicals and hurts metals (net neutral).
+- GFN-FF pre-optimization cut GFN2 calls outside the metal set from 5,747 to 3,783
+  (≈ 4,106 GFN2-gradient equivalents with the GFN-FF time), but rough Fe/Zn aqua complexes
+  failed in both stages.
+- TRIC overhead: each back-transformation iteration re-diagonalizes the metric (up to 25 per
+  trial); proposal: sparse Wilson rows, one factorization per trial, Davidson for RFO.
+
+### After round 2 (TRIC internal coordinates)
+
+- Internal needs 2,824 calls on the 154 GFN2 starts: 2,490 accepted steps, 154 initial
+  evaluations, 154 Tight rechecks and only 26 rejected trials. Per set vs xtb cycles: drugs
+  0.71×, floppy 0.80×, rings 0.81×, charged/open 0.99×, Baker 1.10×, metals 1.06×. Short
+  runs (xtb ≤ 10 cycles) average 1.25×: one or two extra calls weigh heavily there.
+- The internal + GFN-FF-Hessian failure is an indefinite seed: the transformed Hessian went
+  to RFO unrepaired (ANC floors |λ|); the first RFO step on ethanol was 28.6 long, 97 % of it
+  rigid motion. Fix: project rigid motion, floor |λ|, then transform (task H).
+- Wall time with Internal: 25.0 s optimizer overhead vs 16.1 s potential time (ANC: 3.2 s vs
+  41.0 s). Halving the overhead saves 30 % of total time.
+- Replaying the traces with an energy-and-gradient stop (two consecutive passes, Tight
+  recheck kept) gives 0.78× xtb; Bofill gives a small extra gain (0.927 → 0.912); GEDIIS,
+  contacts, H-bond primitives: no measurable gain. The predicted SCF benefit of
+  extrapolating the wavefunction guess is ≤ 7 % of wall time; deferred.
+
+### After round 3 (TRIC overhead cut 15×, stopping-rule option)
+
+- Recommends shipping Internal + Lindh seed + BFGS + Standard convergence + Tight recheck:
+  143/154 endpoints within 1 µEh of the tight reference, against 113/154 with the
+  energy-and-gradient stop (which saves 560 evaluations and 4.8 s of 17.4 s). Bofill saves
+  33 evaluations but costs more optimizer time than it saves.
+- A middle-ground stop (Standard OR two passes with |g| < 3e-4 and |ΔE| ≤ 5e-7) keeps all 143
+  energy passes in a replay but retains only 39 % of the saving; not pursued further.
+- On short runs the remaining gap to xtb is the convergence tail and the Tight recheck
+  (14 starts with ≤ 4 atoms: 93 calls vs xtb's 79, all of the difference from the recheck).
+- At 40–70 atoms the optimizer is 1.1 of 10.9 s; halving all optimizer time would save 5 %.
+
 ## Results
 
-(Filled in by the benchmark rounds.)
+Test set: 77 molecules, 154 starts (Baker-set molecules rebuilt from SMILES, 20 drugs, 4
+floppy chains, 5 rings/macrocycles, 11 ions and radicals, 8 metal complexes; ETKDG and
+ETKDG+MMFF94 starts for SMILES cases, given and noised (σ = 0.1 Å) starts for XYZ cases).
+GFN2-xTB from axtb, one thread per optimization. "Evaluations" are energy+gradient calls,
+including rejected trials and the Tight recheck. xtb counts are its `CYCLE` blocks (each one
+SCC + gradient), not counting its separate initial and final single points (308 more calls).
+Ratio = geometric mean over starts of our evaluations / xtb's. Quality: final energy within
+1 µEh of a tight reference (lowest minimum found from that start by any method, re-optimized
+at Tight), or heavy-atom RMSD < 0.1 Å to it.
+
+### Winner and the two baselines
+
+| Optimizer                            | Evaluations (sum / median) | Ratio vs xtb | Within 1 µEh | Same minimum | Wall, serial, Arch Linux x64 |
+| ------------------------------------ | -------------------------: | -----------: | -----------: | -----------: | ---------------------------: |
+| `xtb --opt normal` (6.8.0)           |                 3,674 / 16 |         1.00 |           58 |          126 |             34.5 s (process) |
+| #1415 ANC-RFO                        |                 6,689 / 23 |         1.57 |          128 |          141 |                       43.6 s |
+| **TRIC internal (new default)**      |           **2,818 / 15.5** |     **0.93** |      **143** |      **144** |                   **17.2 s** |
+| TRIC + energy-gradient stop (option) |                 2,258 / 12 |         0.80 |          113 |          142 |                       13.3 s |
+
+Per set (ratio vs xtb, new default): drugs 0.71, floppy 0.80, rings 0.81, charged/open 0.99,
+metals 1.04, Baker 1.10. Wall time includes the engine: axtb's GFN2 gradient here is about
+5 ms per call against xtb's about 7 ms (both including SCF), so the evaluation ratio is the
+fair optimizer comparison and the wall ratio is what a user sees.
+
+### One change at a time
+
+Against the method it modifies (sum of evaluations over the 154 starts; Hessian cost in
+gradient equivalents measured by time):
+
+| Change                                                            | Base → with change                      | Verdict                                         |
+| ----------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------- |
+| TRIC delocalized internals instead of ANC                         | 6,689 → 2,818                           | **won** (all sets)                              |
+| TRIC overhead work (sparse B, factor reuse, cheap chart checks)   | optimizer 25.0 s → 1.9 s                | **won**                                         |
+| SCF restart from the previous wavefunction (axtb default) vs cold | 70k → 34k SCF iterations                | **won** (kept, potential side)                  |
+| Tight final recheck off                                           | 2,818 → 2,663                           | same quality; kept on (#1415 design)            |
+| Energy+gradient stop instead of displacement test                 | 2,818 → 2,258                           | faster, 30 fewer endpoints within 1 µEh; option |
+| GFN2 analytic Hessian start                                       | 2,818 → 3,291 + 1,442 Hessian           | lost                                            |
+| GFN-FF analytic Hessian start (after the seed repair)             | 2,818 → 3,452 + 120                     | lost                                            |
+| GFN2 Hessian below 20 atoms                                       | 2,818 → 2,919 + 467                     | lost                                            |
+| GFN-FF pre-optimization                                           | 17.4 s → 23.2 s                         | lost                                            |
+| Adaptive SCF accuracy (Coarse early)                              | ANC 6,689 → 7,005                       | lost                                            |
+| Bofill SR1/BFGS update                                            | 2,818 → 2,785                           | tie (more optimizer time)                       |
+| Damped BFGS                                                       | ANC 6,689 → 6,676                       | tie                                             |
+| GDIIS / GEDIIS                                                    | ANC 6,689 → 6,789 / 6,609; TRIC → 2,835 | tie or lost                                     |
+| Per-atom trust radius                                             | TRIC 2,818 → 3,576; ANC 6,689 → 6,677   | lost                                            |
+| Global trust 0.5 start / 1.0 max                                  | 2,818 → 2,770                           | small win, not adopted (ANC fallback untested)  |
+| Nonbonded contact curvature                                       | 2,818 → 2,850                           | tie                                             |
+| Rebuild on poor prediction instead of every 30 steps              | 2,818 → 2,822                           | tie                                             |
+| Curvature floor 1e-4 / 1e-2 (ANC)                                 | 6,689 → 6,466 / 7,193                   | small / lost                                    |
+| Reject ratio 0.05 (ANC)                                           | 6,689 → 6,680                           | tie                                             |
+| Cartesian L-BFGS                                                  | 10,281                                  | lost                                            |
+
+MMFF94 (20 drugs, `examples/mmff_benchmark.rs`): TRIC 571 evaluations vs ANC 1,797, but on a
+0.1 ms force field ANC is still faster in wall time; GFN-FF: TRIC 3,736 vs ANC 7,709
+evaluations (0.89× xtb `--gfnff --opt`).
+
+### What the design partner predicted vs what happened
+
+- Predicted ~20 % from internals; measured 58 % fewer evaluations than ANC (2.4×), because
+  ANC's global trust radius and its displacement-limited tail were worse than expected.
+- Predicted that trust-radius control (per-atom) would matter as much as coordinates; per-atom
+  trust lost for both methods.
+- Predicted GFN-FF Hessian seeding would save 15–35 % on drugs; it lost (+28 % on drugs),
+  also after repairing the indefinite seed.
+- Predicted GDIIS/GEDIIS and update changes would give at most a few calls: confirmed.
+- Its overhead diagnosis (re-diagonalization in every back-transformation iteration) was
+  right: the fix cut TRIC overhead 15×.
 
 ## References
 

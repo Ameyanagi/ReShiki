@@ -162,7 +162,9 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::internal::Curvature;
     use crate::linalg::dot;
+    use crate::optimizer::Options;
 
     fn held_water() -> (InternalModel, Vec<f64>, Vec<usize>) {
         let angle = 104.5_f64.to_radians();
@@ -178,7 +180,14 @@ mod tests {
             0.,
         ];
         let free: Vec<_> = (3..9).collect();
-        let model = InternalModel::build(&[8, 1, 1], &free, &positions, false, None).unwrap();
+        let model = InternalModel::build(
+            &[8, 1, 1],
+            &free,
+            &positions,
+            false,
+            Curvature::Initial(None, &Options::default()),
+        )
+        .unwrap();
         (model, positions, free)
     }
 

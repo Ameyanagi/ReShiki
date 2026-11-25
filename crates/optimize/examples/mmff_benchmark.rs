@@ -18,12 +18,12 @@ use reshiki_optimize::{
 mod fixture;
 use fixture::{MOLECULES, MmffPotential};
 
-const RUNS: [(&str, Method, Level); 5] = [
-    ("ANC-RFO", Method::AncRfo, Level::Normal),
-    ("L-BFGS", Method::Lbfgs, Level::Normal),
-    ("ANC-RFO Tight", Method::AncRfo, Level::Tight),
-    ("L-BFGS Tight", Method::Lbfgs, Level::Tight),
-    ("Internal Normal", Method::Internal, Level::Normal),
+const RUNS: [(&str, Option<(Method, Level)>); 5] = [
+    ("Internal (default)", None),
+    ("ANC-RFO", Some((Method::AncRfo, Level::Normal))),
+    ("L-BFGS", Some((Method::Lbfgs, Level::Normal))),
+    ("ANC-RFO Tight", Some((Method::AncRfo, Level::Tight))),
+    ("L-BFGS Tight", Some((Method::Lbfgs, Level::Tight))),
 ];
 
 struct SweepConfig {
@@ -149,12 +149,12 @@ fn benchmark(
     let new_field = || fixture.new_field();
 
     let mut runs = Vec::with_capacity(RUNS.len());
-    for (label, method, level) in RUNS {
-        let options = Options {
+    for (label, settings) in RUNS {
+        let options = settings.map_or_else(Options::default, |(method, level)| Options {
             method,
             level,
             ..Options::default()
-        };
+        });
         let run = run_mmff(new_field()?, numbers, positions, label, &options);
         if run.status != Status::Converged {
             eprintln!("{name} {label}: {:?}", run.status);
@@ -164,13 +164,12 @@ fn benchmark(
     let mut sweep_runs = Vec::new();
     if trust_sweep {
         for config in sweep_configs() {
-            // Global is the original Normal run, reused so its baseline values
-            // and timing are identical in the default and sweep reports.
+            // Reuse the Normal runs so their values and timing match in both reports.
             let run = if config.trust == Trust::default() {
                 let baseline = if config.method == Method::AncRfo {
-                    0
+                    1
                 } else {
-                    4
+                    0
                 };
                 Run {
                     label: config.label,
@@ -364,7 +363,7 @@ fn median(values: impl Iterator<Item = f64>) -> f64 {
 
 fn markdown(benchmarks: &[Benchmark]) -> String {
     let mut table = String::from(concat!(
-        "| Molecule | Atoms | ANC steps/evals | L-BFGS steps/evals | ANC Tight evals | L-BFGS Tight evals | Internal Normal steps/evals | COSMolKit iterations | ΔE ANC−LBFGS (kcal/mol) | ΔE ANC−COSMolKit (kcal/mol) | L-BFGS evals / ANC evals |\n",
+        "| Molecule | Atoms | Internal (default) steps/evals | ANC steps/evals | L-BFGS steps/evals | ANC Tight evals | L-BFGS Tight evals | COSMolKit iterations | ΔE ANC−LBFGS (kcal/mol) | ΔE ANC−COSMolKit (kcal/mol) | L-BFGS evals / ANC evals |\n",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
     ));
     let mut total_steps = [0; RUNS.len()];
@@ -375,25 +374,26 @@ fn markdown(benchmarks: &[Benchmark]) -> String {
     let mut deltas_lbfgs = Vec::with_capacity(benchmarks.len());
     let mut deltas_reference = Vec::with_capacity(benchmarks.len());
     for bench in benchmarks {
-        let anc = &bench.runs[0];
-        let lbfgs = &bench.runs[1];
+        let internal = &bench.runs[0];
+        let anc = &bench.runs[1];
+        let lbfgs = &bench.runs[2];
         let delta_lbfgs = anc.energy - lbfgs.energy;
         let delta_reference = anc.energy - bench.reference_energy;
         deltas_lbfgs.push(delta_lbfgs);
         deltas_reference.push(delta_reference);
         writeln!(
             table,
-            "| {} | {} | {}/{} | {}/{} | {} | {} | {}/{} | {} | {:+.6} | {:+.6} | {:.3} |",
+            "| {} | {} | {}/{} | {}/{} | {}/{} | {} | {} | {} | {:+.6} | {:+.6} | {:.3} |",
             bench.name,
             bench.atoms,
+            internal.steps,
+            internal.marked_evaluations(Method::default()),
             anc.steps,
             anc.marked_evaluations(Method::AncRfo),
             lbfgs.steps,
             lbfgs.marked_evaluations(Method::Lbfgs),
-            bench.runs[2].marked_evaluations(Method::AncRfo),
-            bench.runs[3].marked_evaluations(Method::Lbfgs),
-            bench.runs[4].steps,
-            bench.runs[4].marked_evaluations(Method::Internal),
+            bench.runs[3].marked_evaluations(Method::AncRfo),
+            bench.runs[4].marked_evaluations(Method::Lbfgs),
             bench.reference_iterations,
             delta_lbfgs,
             delta_reference,
@@ -410,25 +410,25 @@ fn markdown(benchmarks: &[Benchmark]) -> String {
     }
     writeln!(
         table,
-        "| **Totals / median ΔE** | {} | {}/{} | {}/{} | {} | {} | {}/{} | {} | {:+.6} | {:+.6} | {:.3} |",
+        "| **Totals / median ΔE** | {} | {}/{} | {}/{} | {}/{} | {} | {} | {} | {:+.6} | {:+.6} | {:.3} |",
         total_atoms,
         total_steps[0],
         total_evals[0],
         total_steps[1],
         total_evals[1],
+        total_steps[2],
         total_evals[2],
         total_evals[3],
-        total_steps[4],
         total_evals[4],
         total_iterations,
         median(deltas_lbfgs.into_iter()),
         median(deltas_reference.into_iter()),
-        total_evals[1] as f64 / total_evals[0] as f64,
+        total_evals[2] as f64 / total_evals[1] as f64,
     )
     .unwrap();
     writeln!(
         table,
-        "\n\\* stopped at MaxSteps.\n\n† finished with a different method after fallback (Internal → ANC-RFO → L-BFGS).\n\n‡ stopped with an error or was cancelled.\n\nNon-converged runs by method — ANC-RFO {}, L-BFGS {}, ANC-RFO Tight {}, L-BFGS Tight {}, Internal Normal {}.",
+        "\n\\* stopped at MaxSteps.\n\n† finished with a fallback method.\n\n‡ stopped with an error or was cancelled.\n\nNon-converged runs by method — Internal (default) {}, ANC-RFO {}, L-BFGS {}, ANC-RFO Tight {}, L-BFGS Tight {}.",
         non_converged[0], non_converged[1], non_converged[2], non_converged[3], non_converged[4],
     )
     .unwrap();
@@ -494,18 +494,17 @@ mod tests {
         let runs = RUNS
             .into_iter()
             .enumerate()
-            .map(|(i, (label, method, _))| Run {
+            .map(|(i, (label, settings))| Run {
                 label,
                 status: match i {
-                    0 => Status::MaxSteps,
-                    3 => Status::Cancelled,
-                    4 => Status::MaxSteps,
+                    0 | 1 => Status::MaxSteps,
+                    4 => Status::Cancelled,
                     _ => Status::Converged,
                 },
                 method: match i {
-                    0 => Method::Lbfgs,
-                    4 => Method::AncRfo,
-                    _ => method,
+                    0 => Method::AncRfo,
+                    1 => Method::Lbfgs,
+                    _ => settings.unwrap().0,
                 },
                 steps: 500 + i,
                 evaluations: 507 + i,
@@ -525,23 +524,19 @@ mod tests {
             reference_energy: 0.,
         }]);
         assert!(
-            report.contains("| 500/507*† | 501/508 | 509 | 510‡ | 504/511*† |"),
+            report.contains("| 500/507*† | 501/508*† | 502/509 | 510 | 511‡ |"),
             "{report}"
         );
         assert!(
             report.contains(
-                "| **Totals / median ΔE** | 10 | 500/507 | 501/508 | 509 | 510 | 504/511 | 500 | -1.000000 | +0.000000 | 1.002 |"
+                "| **Totals / median ΔE** | 10 | 500/507 | 501/508 | 502/509 | 510 | 511 | 500 | -1.000000 | +1.000000 | 1.002 |"
             )
         );
         assert!(report.contains("\\* stopped at MaxSteps."));
+        assert!(report.contains("† finished with a fallback method."));
         assert!(report.contains(
-            "† finished with a different method after fallback (Internal → ANC-RFO → L-BFGS)."
+            "Internal (default) 1, ANC-RFO 1, L-BFGS 0, ANC-RFO Tight 0, L-BFGS Tight 1"
         ));
-        assert!(
-            report.contains(
-                "ANC-RFO 1, L-BFGS 0, ANC-RFO Tight 0, L-BFGS Tight 1, Internal Normal 1"
-            )
-        );
     }
 
     #[test]

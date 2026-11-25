@@ -297,6 +297,7 @@ fn energy_gradient_stops_on_a_soft_mode_after_two_qualifying_displacements() {
 
     let initial = [0., 0., 0., 10., 0., 0.];
     let options = Options {
+        method: Method::AncRfo,
         initial_hessian: InitialHessian::Potential,
         curvature_floor: 1e-6,
         fixed_atoms: vec![0],

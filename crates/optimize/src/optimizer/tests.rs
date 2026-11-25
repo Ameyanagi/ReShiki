@@ -36,6 +36,45 @@ fn proceed(_: &Step) -> ControlFlow<()> {
 }
 
 #[test]
+fn default_internal_step_preserves_fixed_atoms_and_can_be_cancelled() {
+    assert_eq!(Method::default(), Method::Internal);
+    let options = Options {
+        fixed_atoms: vec![0],
+        ..Options::default()
+    };
+    assert_eq!(options.method, Method::Internal);
+
+    let initial: [f64; 6] = [-0., 0., -0., 1.8, 0.1, 0.];
+    let check_fixed = |x: &[f64]| {
+        for (actual, expected) in x[..3].iter().zip(&initial[..3]) {
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    };
+    let mut p = surface(|x, g, _| {
+        check_fixed(x);
+        g.fill(0.);
+        g[3] = x[3] - 1.4;
+        Ok(0.5 * g[3].powi(2))
+    });
+    let mut accepted = Vec::new();
+    let result = optimize(&mut p, &[1, 1], &initial, &options, |step| {
+        check_fixed(step.positions);
+        if step.index == 1 {
+            accepted.extend_from_slice(step.positions);
+            ControlFlow::Break(())
+        } else {
+            proceed(step)
+        }
+    });
+    assert_eq!(result.status, Status::Cancelled);
+    assert_eq!(result.method, Method::Internal);
+    assert_eq!(result.steps, 1);
+    assert_eq!(result.positions, accepted);
+    assert!(result.positions[3] < initial[3]);
+    check_fixed(&result.positions);
+}
+
+#[test]
 fn invalid_input_never_reaches_the_potential_or_callback() {
     for (z, x, fixed) in [
         (vec![], vec![], vec![]),
@@ -950,12 +989,12 @@ fn internal_build_failure_preserves_the_potential_hessian_for_anc() {
     // A coincident pair has no defined internal bond or fragment frame. The
     // exact Cartesian Hessian still gives ANC a usable positive model.
     assert!(
-        crate::internal::InternalModel::build(
+        InternalModel::build(
             &[1, 1],
             &[3, 4, 5],
             &COINCIDENT,
             true,
-            Some(&hessian),
+            InternalCurvature::Initial(Some(&hessian), &Options::default()),
         )
         .is_err()
     );

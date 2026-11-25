@@ -1,4 +1,4 @@
-//! Molecular geometry minimization with ANC or TRIC RFO and Cartesian L-BFGS.
+//! Molecular geometry minimization with TRIC or ANC RFO and Cartesian L-BFGS.
 
 mod anc;
 mod coordinates;
@@ -10,7 +10,7 @@ use std::{cell::LazyCell, ops::ControlFlow};
 
 use crate::{
     Accuracy, EvalError, Potential,
-    internal::InternalModel,
+    internal::{Curvature as InternalCurvature, InternalModel},
     linalg::{dot, norm},
 };
 use anc::{Anc, History};
@@ -23,13 +23,15 @@ pub use trust::{Rebuild, Trust};
 /// Coordinate model and search direction for minimization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Method {
-    /// Approximate normal coordinates with RFO. Falls back to Cartesian L-BFGS.
+    /// Translation–rotation–internal coordinates (TRIC), delocalized for RFO
+    /// (Wang & Song 2016, Baker et al. 1996, Banerjee et al. 1985).
     #[default]
-    AncRfo,
-    /// TRIC delocalized internals with RFO, a trust radius and the selected Hessian
-    /// update (Wang & Song 2016, Baker et al. 1996, Peng et al. 1996).
-    /// An unusable internal model falls back to ANC-RFO.
     Internal,
+    /// RFO in approximate normal coordinates from a Cartesian Hessian
+    /// (Grimme et al. 2017, Banerjee et al. 1985).
+    AncRfo,
+    /// Limited-memory BFGS in free Cartesian coordinates with Armijo
+    /// backtracking (Liu & Nocedal 1989, Armijo 1966).
     Lbfgs,
 }
 
@@ -145,50 +147,59 @@ impl Level {
     }
 }
 
+/// The defaults used 2,818 evaluations on 154 GFN2-xTB starts, versus 6,689
+/// for ANC-RFO. Alternative methods and policies remain selectable for benchmarking.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Options {
+    /// Search method. Defaults to [`Method::Internal`].
     pub method: Method,
-    /// Trust radius and single-atom displacement limit for RFO.
+    /// RFO trust policy. The default global model-space radius starts at 0.3
+    /// and ranges from 0.001 to 0.5. [`Trust::PerAtom`] also caps atom motion.
     pub trust: Trust,
-    /// Reject trials with actual/predicted reduction below this value. Zero
-    /// selects the original energy-rise-only rejection rule (1e-6 Eh).
+    /// Minimum actual/predicted reduction ratio for an RFO trial. The default
+    /// of zero disables this test and retains the 1e-6 Eh energy-rise limit.
     pub reject_ratio: f64,
-    /// Curvature floor in hartree/bohr² (default 1e-3). ANC uses it for its
-    /// eigenvalues and curvature transport. Internal uses it for the model
-    /// fragment-motion prior and the physical eigenvalues of a supplied Hessian.
-    /// Global rigid modes in a supplied Internal seed receive this curvature.
+    /// Curvature floor in hartree/bohr² (default 1e-3). Sets TRIC fragment
+    /// motion priors and regularizes supplied Hessians and ANC curvature.
     pub curvature_floor: f64,
-    /// When to rebuild the RFO basis and transport its learned curvature.
+    /// Scheduled RFO basis rebuild and curvature transport. Defaults to every
+    /// 30 accepted displacements.
     pub rebuild: Rebuild,
-    /// Add weak nonbonded stretch curvature to the Lindh model for elements
-    /// with tabulated van der Waals radii. Covalent and 1–3 pairs are excluded.
+    /// Add weak nonbonded stretch curvature to Lindh, excluding covalent and
+    /// 1–3 pairs. Off by default, with no measurable GFN2 benchmark gain.
     pub contacts: bool,
-    /// Source of the first RFO Hessian.
+    /// Starting RFO Hessian. Defaults to the Lindh model. A GFN2 Hessian seed
+    /// cost more to compute than it saved in gradient evaluations.
     pub initial_hessian: InitialHessian,
-    /// RFO Hessian update applied after each accepted step.
+    /// RFO Hessian update. Defaults to BFGS. Bofill saved a few calls on the
+    /// GFN2 benchmark but took longer overall.
     pub update: Update,
-    /// DIIS-family trial steps in the active RFO coordinates.
+    /// DIIS-family trial steps in the active RFO coordinates. Off by default,
+    /// with no consistent gain on the GFN2 benchmark.
     pub acceleration: Acceleration,
     /// Start at Coarse and promote once to Normal when the maximum free gradient
-    /// is within 20× its convergence threshold. This cutoff is a benchmark heuristic for
-    /// inexact evaluations (cf. Carter, SIAM J. Sci. Comput. 14, 368, 1993).
+    /// is at most 20× its convergence threshold. Off by default because it
+    /// increased evaluations on the GFN2 benchmark.
     pub adaptive_accuracy: bool,
+    /// Convergence thresholds. Defaults to [`Level::Normal`].
     pub level: Level,
-    /// Which convergence tests to apply. The energy-gradient norm bound must
-    /// be finite and positive.
+    /// Defaults to [`Convergence::Standard`]. The energy-gradient alternative
+    /// reached the reference minimum less often on the GFN2 benchmark.
     pub convergence: Convergence,
+    /// Limit on accepted displacements. Defaults to 500.
     pub max_steps: usize,
-    /// Zero-based atom indices whose input coordinates are held exactly fixed.
+    /// Zero-based atom indices whose input coordinates are held bit-identical.
+    /// Empty by default.
     pub fixed_atoms: Vec<usize>,
-    /// Recheck convergence with [`Accuracy::Tight`]. With `false`,
-    /// [`Status::Converged`] reflects only Normal-accuracy evaluations.
+    /// Recheck convergence with [`Accuracy::Tight`]. Enabled by default and
+    /// independent of the convergence [`Level`].
     pub tight_final: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
-            method: Method::AncRfo,
+            method: Method::default(),
             trust: Trust::default(),
             reject_ratio: 0.,
             curvature_floor: 1e-3,
@@ -533,13 +544,12 @@ impl<'a> Engine<'a> {
                 .as_ref()
                 .is_some_and(|model| model.needs_rebuild(x));
         if self.internal.is_none() {
-            self.internal = InternalModel::build_with_options(
+            self.internal = InternalModel::build(
                 numbers,
                 &eval.coords.indices,
                 x,
                 false,
-                self.initial_hessian.as_deref(),
-                self.options,
+                InternalCurvature::Initial(self.initial_hessian.as_deref(), self.options),
             )
             .ok();
         }
@@ -712,73 +722,42 @@ impl<'a> Engine<'a> {
     }
 }
 
-/// Minimize an energy in atomic units, reporting the input, every accepted step,
-/// and each successful accuracy change at the same accepted-step index.
+/// Minimize an energy in atomic units. By default, TRIC RFO starts with the
+/// Lindh model Hessian and updates it with BFGS after accepted displacements.
 ///
-/// Atomic numbers must be in 1..=118. Positions must be finite, with three
-/// components per atom. Fixed indices must be unique and in range, leaving at
-/// least one free atom. Invalid inputs return `Failed` before any evaluation.
+/// The default global trust radius bounds the Euclidean step in model space.
+/// It starts at 0.3, shrinks by a factor of four for an accepted reduction
+/// ratio below 0.25, and doubles for a boundary step above 0.75, within
+/// [0.001, 0.5]. By default, a trial energy rise above 1e-6 Eh causes
+/// rejection. TRIC transports curvature through free Cartesians when
+/// rebuilding after 30 accepted steps by default, when its chart becomes
+/// invalid, or after two consecutive incomplete or failed back-transforms.
 ///
-/// Maximum absolute component and RMS use only free Cartesian components.
-/// RMS is their Euclidean norm divided by the square root of their count.
-/// With no anchors, the gradient is projected perpendicular to the
-/// instantaneous translations and rotations.
-/// With [`Convergence::Standard`], both gradient thresholds must pass (≤).
-/// In addition, the last accepted
-/// |energy change|, maximum step and RMS step must all pass (≤), or the maximum
-/// gradient must be strictly below 1/100 of its threshold. Only this last rule
-/// can converge at the initial point or immediately after Coarse → Normal.
-/// [`Convergence::EnergyGradient`] requires two consecutive accepted steps at
-/// the same accuracy to pass the energy and both gradient thresholds (≤), with
-/// the Euclidean gradient norm strictly below its configured bound. It waives
-/// the displacement limits and the initial small-gradient exception.
+/// An unusable model or exhausted search switches methods at the last accepted
+/// geometry in the order Internal → ANC-RFO → L-BFGS. An energy or gradient
+/// evaluation error stops the run.
 ///
-/// With `tight_final`, first convergence triggers a Tight evaluation at the same
-/// geometry. The callback receives the Tight sample before convergence is
-/// tested and may cancel. If minimization continues, all trials use Tight.
-/// With `adaptive_accuracy`, trials start at Coarse and switch once to Normal
-/// when the accepted gradient reaches the cutoff. Each accuracy change refreshes
-/// the energy and gradient. Coarse → Normal clears the last displacement;
-/// Normal → Tight checks the fresh Tight gradient with the preceding Normal
-/// displacement and energy change. Only Normal or Tight can converge.
-/// For energy-gradient convergence, the qualifying Normal pair remains valid
-/// for this recheck; a failed Tight gradient check resets that pair.
-/// Both RFO methods keep their curvature and radius across accuracy changes.
-/// DIIS and L-BFGS discard their histories.
+/// The default [`Convergence::Standard`] uses [`Level`] thresholds on absolute
+/// energy change and maximum/RMS free Cartesian gradient and step components.
+/// A maximum gradient below 1/100 of its threshold waives the energy and step tests.
+/// Without held atoms, the gradient is projected off global rigid motion.
+/// [`Convergence::EnergyGradient`] instead requires two qualifying accepted
+/// displacements and a gradient norm bound. Only Normal or Tight can converge.
 ///
-/// By default ANC starts from the projected Lindh curvature, flooring internal
-/// eigenvalues at 0.001 Eh/bohr². Davidson iteration finds the lowest augmented-Hessian
-/// eigenvector, with a dense solve on nonconvergence. The default trust policy
-/// scales the step to a Euclidean radius, initially 0.3 bohr. The rational prediction is
-/// (g·s + s·Hs/2)/(1 + s·s). Actual/predicted below 0.25 quarters the radius
-/// (minimum 0.001 bohr); above 0.75 on the boundary doubles it (maximum 0.5).
-/// An energy rise above 1e-6 Eh rejects the trial and sets the radius to one
-/// quarter of the attempted step length, but not below the minimum.
-/// After an accuracy change, a rejected RFO step at the minimum radius may
-/// backtrack inside that radius. These retries must lower or match the new
-/// energy and satisfy the configured reduction ratio. Otherwise a rejection
-/// at the minimum radius exhausts the search. Ten rejections or an unusable
-/// ANC model also trigger fallback to L-BFGS. Accepted BFGS updates require
-/// y·s > 1e-12 |y||s| and positive model curvature. Every 30 accepted steps
-/// the Lindh basis is rebuilt. Learned curvature is transformed into the new
-/// basis, using the configured curvature floor for components outside the old internal space.
-/// A change of internal dimension starts from the fresh Lindh curvature.
+/// By default, evaluations start at [`Accuracy::Normal`]. The Tight recheck
+/// evaluates the same geometry with a fresh gradient and uses the preceding
+/// Normal displacement and energy change if available. Further steps stay at
+/// Tight. With adaptive accuracy enabled, a Coarse start switches to Normal
+/// at the gradient cutoff and resets the convergence displacement.
 ///
-/// TRIC measures steps in its delocalized coordinates and uses the same trust
-/// policy as ANC. It carries learned curvature through free Cartesian space when
-/// the chart changes, its rebuild is due, or two consecutive back-transforms are
-/// incomplete. A failed build or exhausted search retries the accepted geometry with ANC.
+/// Atomic numbers must be in 1..=118, with three finite Cartesian components
+/// per atom. Held indices must be unique and in range, with at least one free
+/// atom. Held coordinates stay bit-identical to the input.
 ///
-/// L-BFGS retains 20 pairs, uses initial inverse curvature 2 bohr²/Eh and then
-/// (s·y)/(y·y), and limits the largest atom displacement to 0.3 bohr. Armijo
-/// backtracking (c1 = 1e-4) allows ten halvings, or 20 when an accuracy change
-/// discards the previous steps' curvature.
-/// An exhausted search with history retries once with the initial scaling.
-/// Nonpositive curvature or a non-descent direction clears the history.
-///
-/// A callback break, failed trial, or failed accuracy change returns the last
-/// accepted point. Energy/gradient and Hessian calls have separate counts.
-/// Only accepted displacements count toward `max_steps`.
+/// The callback sees the input, accepted steps, and successful accuracy
+/// re-evaluations. A callback break or [`EvalError::Cancelled`] returns
+/// [`Status::Cancelled`] with the last accepted sample, if available.
+/// Only accepted displacements count toward [`Options::max_steps`].
 pub fn optimize<P: Potential + ?Sized>(
     potential: &mut P,
     numbers: &[u8],

@@ -52,8 +52,8 @@ pub(crate) struct InternalModel {
     tangent: Tangent,
 }
 
-enum Curvature<'a> {
-    Initial(Option<&'a [f64]>),
+pub(crate) enum Curvature<'a> {
+    Initial(Option<&'a [f64]>, &'a Options),
     Transport(&'a InternalModel),
 }
 
@@ -72,54 +72,21 @@ impl InternalModel {
     /// The transformation (B_u⁺)ᵀ H_x B_u⁺ omits the gradient-weighted coordinate
     /// second derivatives (the K term), and is exact at a stationary point
     /// [Peng, Ayala, Schlegel & Frisch, J. Comput. Chem. **17**, 49 (1996)].
-    #[cfg(test)]
     pub(crate) fn build(
         numbers: &[u8],
         free: &[usize],
         positions: &[f64],
         hbonds: bool,
-        cartesian_hessian: Option<&[f64]>,
+        curvature: Curvature<'_>,
     ) -> Result<Self, String> {
-        Self::build_with_options(
-            numbers,
-            free,
-            positions,
-            hbonds,
-            cartesian_hessian,
-            &Options::default(),
-        )
-    }
-
-    pub(crate) fn build_with_options(
-        numbers: &[u8],
-        free: &[usize],
-        positions: &[f64],
-        hbonds: bool,
-        cartesian_hessian: Option<&[f64]>,
-        options: &Options,
-    ) -> Result<Self, String> {
-        Self::build_model(
-            numbers,
-            free,
-            positions,
-            hbonds,
-            Curvature::Initial(cartesian_hessian),
-            ModelParameters {
+        profile_phase!("model build");
+        let parameters = match curvature {
+            Curvature::Initial(_, options) => ModelParameters {
                 contacts: options.contacts,
                 curvature_floor: options.curvature_floor,
             },
-        )
-    }
-
-    fn build_model(
-        numbers: &[u8],
-        free: &[usize],
-        positions: &[f64],
-        hbonds: bool,
-        curvature: Curvature<'_>,
-        parameters: ModelParameters,
-    ) -> Result<Self, String> {
-        profile_phase!("model build");
+            Curvature::Transport(old) => old.parameters,
+        };
         if free.is_empty() {
             return Err("TRIC requires free Cartesian components".into());
         }
@@ -142,7 +109,7 @@ impl InternalModel {
         let dual = tangent.dense_dual().expect("new DLC basis");
         let (hessian, positive_definite) = match curvature {
             Curvature::Transport(old) => (old.transport(positions, dual)?, old.positive_definite),
-            Curvature::Initial(seed) => {
+            Curvature::Initial(seed, _) => {
                 let h = if let Some(h) = seed {
                     let restricted = restrict_hessian(h, positions.len(), free)?;
                     let seeded =
@@ -354,13 +321,12 @@ impl InternalModel {
     /// the Cartesian curvature. A failed rebuild leaves the model usable.
     pub(crate) fn rebuild(&mut self, x: &[f64]) -> Result<(), String> {
         profile_phase!("rebuild");
-        *self = Self::build_model(
+        *self = Self::build(
             &self.numbers,
             &self.free,
             x,
             self.hbonds,
             Curvature::Transport(self),
-            self.parameters,
         )?;
         Ok(())
     }

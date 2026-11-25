@@ -1,8 +1,9 @@
 //! Geometry optimization and conformer ranking for any energy-and-gradient potential.
 //!
-//! Written from the published methods (Lindh et al. 1995 model Hessian, rational
-//! function optimization, BFGS, L-BFGS, Horn quaternion superposition, Butina clustering);
-//! no code from xtb, tblite or axtb.
+//! Written from the published methods (TRIC, Wang & Song 2016, Lindh et al. 1995
+//! model Hessian, rational function optimization, BFGS, L-BFGS, Horn quaternion
+//! superposition, and Butina clustering). The implementation is independent of
+//! xtb, tblite, and axtb.
 
 #![forbid(unsafe_code)]
 
