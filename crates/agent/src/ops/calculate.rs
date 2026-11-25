@@ -3,7 +3,7 @@ use super::{
     budget::Budgets,
     catalog::arguments,
     error::{ErrorKind, OpError},
-    exec::Context,
+    exec::{Context, Hold},
     export_input::xyz_frame,
     progress::Monotonic,
     result::ToolResult,
@@ -53,6 +53,9 @@ pub struct CalcRequest {
     pub settings: XtbSettings,
     /// The cooperative deadline set by the executor before calling the host.
     pub deadline: Option<Instant>,
+    /// Keeps the call's executor slot until the host drops it: a host that
+    /// finishes work after a cancellation drops it only when the work ends.
+    pub hold: Hold,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -283,6 +286,7 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<CalcRequest, OpEr
         frame,
         settings,
         deadline: None,
+        hold: Hold::default(),
     })
 }
 
@@ -294,6 +298,7 @@ pub(crate) async fn calculate(
 ) -> Result<ToolResult, OpError> {
     ctx.checkpoint()?;
     request.deadline = ctx.deadline();
+    request.hold = ctx.hold();
     let calculated = ctx
         .cancellable(hook.calculate(request, ctx.progress()))
         .await

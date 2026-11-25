@@ -146,6 +146,16 @@ struct Lease {
     _admission: Admission,
 }
 
+/// Keeps a call's permit and admission while it lives; see [`Context::hold`].
+#[derive(Default)]
+pub struct Hold(#[allow(dead_code)] Option<Arc<Lease>>);
+
+impl std::fmt::Debug for Hold {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Hold")
+    }
+}
+
 /// Finishes the call's progress when the operation ends.
 struct FinishGuard(Option<Arc<Monotonic>>);
 
@@ -409,6 +419,13 @@ pub struct Context {
 }
 
 impl Context {
+    /// A share of this call's permit and admission for work that outlives
+    /// the call's future, such as a worker thread that finishes after a
+    /// cancellation: the call's slot stays taken until it is dropped.
+    pub fn hold(&self) -> Hold {
+        Hold(Some(Arc::clone(&self.lease)))
+    }
+
     /// When this operation's cooperative deadline expires, if representable.
     pub fn deadline(&self) -> Option<Instant> {
         self.deadline

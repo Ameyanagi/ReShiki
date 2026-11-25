@@ -612,6 +612,8 @@ struct FakeCalculations {
 struct Stall {
     started: tokio::sync::Notify,
     dropped: AtomicBool,
+    /// Lets the stalled host's work thread end, dropping the call's hold.
+    released: AtomicBool,
 }
 
 struct DropFlag(Arc<Stall>);
@@ -644,6 +646,15 @@ impl Calculations for FakeCalculations {
             reshiki_io::qcdata::XtbMethod::Gfn2Xtb
         );
         if let Some(stall) = &self.stall {
+            // Like a worker thread: it keeps the call's slot until it ends.
+            let hold = request.hold;
+            let work = Arc::clone(stall);
+            std::thread::spawn(move || {
+                let _hold = hold;
+                while !work.released.load(Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+            });
             let flag = DropFlag(Arc::clone(stall));
             return Box::pin(async move {
                 flag.0.started.notify_one();
@@ -764,6 +775,14 @@ async fn calculate_cancellation_drops_the_hook_future() {
         .unwrap_err();
     assert_eq!(error.kind, ErrorKind::Cancelled);
     assert!(stall.dropped.load(Ordering::SeqCst));
+    // The cancelled call's slot stays taken until the host's work ends.
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), host.drained())
+            .await
+            .is_err()
+    );
+    stall.released.store(true, Ordering::SeqCst);
+    tokio::time::timeout(bound, host.drained()).await.unwrap();
 }
 
 #[tokio::test]
@@ -1260,4 +1279,29 @@ fn hints_follow_effects() {
             tool["name"]
         );
     }
+}
+
+#[tokio::test]
+async fn read_output_results_respect_the_output_budget() {
+    let host = HeadlessHost::new(
+        "contract-test",
+        Budgets {
+            max_output_bytes: 64,
+            ..Budgets::default()
+        },
+    );
+    let result = host
+        .call(Call {
+            principal: Principal::local(),
+            request: RequestId::Int(1),
+            tool: "read_output".into(),
+            arguments: json!({
+                "text": WATER_XYZ, "file_name": "water.xyz", "path": null, "job": null,
+            }),
+            progress: None,
+        })
+        .await
+        .unwrap();
+    assert!(result.is_error);
+    assert_eq!(result.value["error"]["code"], "budget");
 }
