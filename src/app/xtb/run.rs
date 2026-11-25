@@ -37,6 +37,9 @@ pub(crate) struct Job {
     pub fixed: Vec<usize>,
     /// Use Tight convergence instead of Normal.
     pub tight: bool,
+    /// GFN-FF only: the geometry (Å) its topology comes from, when it is not
+    /// `positions` (a conformer search keeps one topology for every start).
+    pub topology: Option<Vec<[f64; 3]>>,
 }
 
 #[derive(Debug, Clone)]
@@ -117,7 +120,11 @@ pub(crate) fn start(job: Job, cancel: Cancel) -> impl Stream<Item = Event> + Sen
     rx
 }
 
-fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<Report, Failure> {
+pub(super) fn run(
+    job: Job,
+    cancel: &Cancel,
+    tx: &mpsc::UnboundedSender<Event>,
+) -> Result<Report, Failure> {
     let limits = Limits::default();
     let exe = std::env::current_exe().map_err(|error| worker_failure(&Error::Spawn(error)))?;
     let (mut session, hello) =
@@ -135,7 +142,10 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
         conventions: job.conventions,
         solvent: job.solvent,
         scf: job.scf.clone(),
-        gfnff: None,
+        gfnff: job.topology.clone().map(|positions| protocol::GfnFfOpen {
+            reference_positions: Some(positions),
+            fragment_charges: None,
+        }),
         threads: job.threads,
         heap_bytes: limits.heap_bytes,
     };

@@ -9,18 +9,22 @@ pub(crate) enum Task {
     Energy,
     #[default]
     Optimize,
+    /// A conformer search, set up in the card's Conformers fields.
+    Conformers,
 }
 
 impl Task {
-    pub(crate) const ALL: [(Self, &'static str); 2] =
-        [(Self::Energy, "Energy"), (Self::Optimize, "Optimize")];
+    pub(crate) const ALL: [(Self, &'static str); 3] = [
+        (Self::Energy, "Energy"),
+        (Self::Optimize, "Optimize"),
+        (Self::Conformers, "Conformers"),
+    ];
 }
 
 /// Shown disabled, each with the reason, until their tabs arrive.
-pub(crate) const LATER_TASKS: [(&str, &str); 3] = [
+pub(crate) const LATER_TASKS: [(&str, &str); 2] = [
     ("Opt + freq", "Coming in the Vibrations tab"),
     ("Orbitals", "Coming in the Orbitals tab"),
-    ("Conformers", "Coming with the conformer search"),
 ];
 /// The methods in the card's order; GFN2-xTB is the default.
 pub(crate) const METHODS: [XtbMethod; 3] = [XtbMethod::Gfn2Xtb, XtbMethod::GXtb, XtbMethod::GfnFf];
@@ -467,6 +471,7 @@ impl Progress {
         let time = format!("{seconds:.1} s");
         match task {
             Task::Energy => format!("Computing energy · {time}"),
+            Task::Conformers => format!("Searching conformers · {time}"),
             Task::Optimize => match self.deltas().last() {
                 Some(delta) => format!(
                     "Optimizing · step {} · ΔE {} Eh · {time}",
