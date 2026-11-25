@@ -6,7 +6,8 @@ use super::super::{
     equipment_authoring, figure_panels, generic, graphics, import, inspector, keyboard_drawing,
     models3d, naming, nmr, numeric_transforms,
     numeric_transforms::Field,
-    object_toolbar, optimization, pages, palettes, printing, reaction_mapping, reactions,
+    object_toolbar, optimization, pages, palettes, printing, qc_export, reaction_mapping,
+    reactions,
     shortcuts::{self, TabKey, keys, tab_keys},
     tabs, template_library, view_settings,
 };
@@ -1874,6 +1875,13 @@ fn files() -> Vec<Command> {
             Message::Inspector(InspectorTab::Export),
         )
         .keys(keys(command | shift, "E")),
+        send(
+            "Export input for Gaussian / ORCA / GAMESS…",
+            File,
+            "Write a calculation input from the 3D model",
+            "quantum chemistry gjf com inp xyz dft orca gamess gaussian",
+            Message::QcExport(qc_export::Action::Open),
+        ),
         send(
             "Print…",
             File,

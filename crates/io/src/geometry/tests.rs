@@ -180,6 +180,101 @@ fn explicit_generation_seeds_preserve_field_and_reject_values_outside_sampling_r
     }
 }
 
+#[test]
+fn ensemble_request_encodes_fresh_generation_and_validates_limits() {
+    let mut source = carbon_chain(4);
+    source.atoms[0].depth = 17.;
+    let prepared = Prepared::new(&source, &[]).unwrap();
+    let field = ForceField::Mmff94s;
+    assert!(
+        !prepared
+            .generation_request(field, 42)
+            .unwrap()
+            .coordinates
+            .is_empty()
+    );
+    for (mode, name) in [
+        (Ensemble::Minimized, "Minimized"),
+        (Ensemble::Embedded, "Embedded"),
+    ] {
+        let request = prepared.ensemble_request(field, 42, 16, mode).unwrap();
+        let value = serde_json::to_value(&request).unwrap();
+        assert_eq!(value["ensemble"], name);
+        assert_eq!(request.operation, reshiki_geometry::Operation::Generate);
+        assert_eq!(request.field, field.native());
+        assert_eq!(request.seed, 42);
+        assert_eq!(request.conformers, 16);
+        assert!(request.coordinates.is_empty());
+    }
+    for count in [0, reshiki_geometry::MAX_CONFORMERS + 1] {
+        assert!(matches!(
+            prepared.ensemble_request(field, 42, count, Ensemble::Minimized),
+            Err(Error::Invalid(_))
+        ));
+    }
+    let relaxed = Prepared::relaxed(&source, &[]).unwrap();
+    assert!(matches!(
+        relaxed.ensemble_request(field, 42, 16, Ensemble::Minimized),
+        Err(Error::Invalid(_))
+    ));
+    let large = Prepared::with_limits(
+        &carbon_chain(201),
+        &[],
+        Limits {
+            heap_bytes: 256 * 1024 * 1024,
+            timeout: std::time::Duration::from_secs(60),
+        },
+    )
+    .unwrap();
+    assert!(
+        large
+            .ensemble_request(field, 42, 31, Ensemble::Embedded)
+            .is_ok()
+    );
+    assert!(matches!(
+        large.ensemble_request(field, 42, 32, Ensemble::Embedded),
+        Err(Error::Invalid(_))
+    ));
+}
+
+#[test]
+fn butane_ensemble_round_trips_through_the_worker_frame() {
+    let prepared = Prepared::new(&carbon_chain(4), &[]).unwrap();
+    let operation = prepared
+        .ensemble_request(ForceField::Mmff94s, DEFAULT_SEED, 16, Ensemble::Minimized)
+        .unwrap();
+    let request = wire::encode(
+        &wire::Request {
+            heap_bytes: 64 * 1024 * 1024,
+            capacity: None,
+            operation,
+        },
+        wire::MAX_REQUEST_BYTES,
+    )
+    .unwrap();
+    let bytes = worker::respond(&request).unwrap();
+    let response: wire::Response = wire::decode(&bytes, wire::MAX_RESPONSE_BYTES).unwrap();
+    assert_eq!(response.version, reshiki_geometry::RDKIT_VERSION);
+    let response = response.result.unwrap();
+    assert!(response.ensemble.len() > 1);
+    assert_eq!(response.original_count, 4);
+    assert_eq!(response.hydrogen_parents.len(), 10);
+    assert!(response.hydrogen_parents.iter().all(|&parent| parent < 4));
+    assert_eq!(response.coordinates.len(), 14);
+    for member in &response.ensemble {
+        assert_eq!(member.coordinates.len(), response.coordinates.len());
+        assert!(member.energy.is_finite());
+    }
+    assert_eq!(
+        response.energy,
+        response
+            .ensemble
+            .iter()
+            .map(|member| member.energy)
+            .fold(f64::INFINITY, f64::min)
+    );
+}
+
 fn identity(doc: &Document) -> String {
     let molecule = molecular::prepare(doc).unwrap();
     crate::chemistry::smiles::write::write(&molecule.state, Default::default())
@@ -609,6 +704,7 @@ fn optimized(prepared: &Prepared, parents: Vec<usize>) -> Optimized {
             original_atom_count: n,
             hydrogen_parents: parents,
         },
+        ensemble: Vec::new(),
         initial_energy: 1.,
         energy: 1.,
         gradient: None,

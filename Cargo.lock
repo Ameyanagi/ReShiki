@@ -4694,6 +4694,7 @@ dependencies = [
  "reshiki-geometry",
  "reshiki-model",
  "reshiki-process-heap",
+ "reshiki-qcdata",
  "reshiki-windows",
  "resvg",
  "roxmltree",
@@ -4779,6 +4780,7 @@ dependencies = [
  "reshiki-chemistry",
  "reshiki-metafile",
  "reshiki-process-heap",
+ "reshiki-qcdata",
  "resvg",
  "roxmltree",
  "rustybuzz",
@@ -4792,6 +4794,15 @@ dependencies = [
  "tokio",
  "ttf-parser",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "reshiki-optimize"
+version = "0.1.0"
+dependencies = [
+ "cosmolkit",
+ "reshiki-qcdata",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

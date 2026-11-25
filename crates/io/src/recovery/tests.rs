@@ -532,3 +532,23 @@ fn replacement_rejects_a_symlink_alias_before_overwriting_the_original() {
     assert_eq!(std::fs::read(&source.path).unwrap(), changed);
     assert!(recovery.session.is_symlink());
 }
+
+#[test]
+fn drafts_save_calculation_results_in_their_saved_form() {
+    let directory = tempfile::Builder::new()
+        .prefix("reshiki-recovery-science-test-")
+        .tempdir()
+        .unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    // Already at the calculations version, so the draft needs no version change.
+    let (mut doc, _) = crate::payload::calculated_water();
+    let stored = &mut doc.science.results[0];
+    let mut heavy = (*stored.result).clone();
+    heavy.gradient_hartree_per_bohr = vec![0.01; 9];
+    stored.result = std::sync::Arc::new(heavy);
+    assert_eq!(doc.version, doc.file_version());
+    store.save(&doc, None).unwrap();
+    let draft = std::fs::read_to_string(&store.session).unwrap();
+    assert!(draft.contains("\"energy_hartree\""));
+    assert!(!draft.contains("gradient_hartree_per_bohr"));
+}

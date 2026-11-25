@@ -1,0 +1,15 @@
+[package]
+name = "reshiki-optimize"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Geometry optimization and conformer ranking for ReShiki"
+
+[dependencies]
+reshiki-qcdata = { path = "../qcdata" }
+thiserror = "2"
+
+[dev-dependencies]
+# MMFF94 benchmark potential only; release code reaches MMFF through the geometry worker.
+cosmolkit = { version = "=0.5.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "501f7b234031ba4d87461e14d0947c77a7d1a631", default-features = false, features = ["cap-conformer", "cap-forcefields", "cap-hydrogens", "cap-sanitize", "cap-smiles"] }

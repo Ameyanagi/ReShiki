@@ -15,6 +15,7 @@ rdkit-reference = ["reshiki-model/rdkit-reference"]
 
 [dependencies]
 reshiki-model = { path = "../model" }
+reshiki-qcdata = { path = "../qcdata" }
 reshiki-geometry = { path = "../../native/geometry" }
 reshiki-process-heap = { path = "../process-heap" }
 base64 = "0.22"
