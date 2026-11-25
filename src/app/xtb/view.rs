@@ -64,16 +64,9 @@ impl App {
         content.into()
     }
 
-    /// "Show results" while the palette is closed and results exist: for
-    /// the card's molecule, or the palette's last result.
+    /// "Show results" when the palette could show something it does not.
     fn xtb_show_results(&self) -> Option<Element<'_, Message>> {
-        let first = self.xtb_target().and_then(|atoms| atoms.first().copied());
-        let has_results = !self.xtb_palette_visible()
-            && (self.xtb_shown().is_some()
-                || first.is_some_and(|atom| {
-                    !reshiki::science::results_for(&self.tab.doc, atom).is_empty()
-                }));
-        has_results.then(|| {
+        self.xtb_can_show().then(|| {
             accessible_command("xtb-show-results", "Show the xTB results", "Show results")
                 .on_press(Message::Xtb(Action::Palette(super::palette::Action::Show)))
                 .into()

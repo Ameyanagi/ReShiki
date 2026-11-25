@@ -148,6 +148,39 @@ impl App {
         })
     }
 
+    /// Whether Show results would show something new: the card's molecule
+    /// has a newer result than the one on display, or the palette is closed
+    /// on results.
+    pub(super) fn xtb_can_show(&self) -> bool {
+        let visible = self.xtb_palette_visible();
+        match self.xtb_newest() {
+            Some(newest) => {
+                !visible
+                    || !self
+                        .xtb_shown()
+                        .is_some_and(|s| Arc::ptr_eq(&s.stored.result, &newest))
+            }
+            None => !visible && self.xtb_shown().is_some(),
+        }
+    }
+
+    /// The newest result stored for the card's molecule; cheap enough for
+    /// every frame (no freshness or frame hashing).
+    fn xtb_newest(&self) -> Option<Arc<CalcResult>> {
+        let target: std::collections::HashSet<u64> = self.xtb_target()?.into_iter().collect();
+        let science = &self.tab.doc.science;
+        science
+            .results
+            .iter()
+            .rev()
+            .find(|s| {
+                science
+                    .attachment(s.attachment)
+                    .is_some_and(|a| a.atoms.iter().flatten().any(|id| target.contains(id)))
+            })
+            .map(|s| s.result.clone())
+    }
+
     /// The palette is showing a result.
     pub(super) fn xtb_palette_visible(&self) -> bool {
         self.tab.xtb.palette.open && self.xtb_shown().is_some()
@@ -270,11 +303,7 @@ impl App {
     pub(super) fn xtb_palette(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show => {
-                let newest = self.xtb_target().and_then(|atoms| {
-                    let atom = *atoms.first()?;
-                    let views = science::results_for(&self.tab.doc, atom);
-                    views.last().map(|view| view.stored.result.clone())
-                });
+                let newest = self.xtb_newest();
                 let shown = self.xtb_shown().map(|shown| shown.stored.result.clone());
                 if let Some(result) = newest.or(shown) {
                     self.tab.xtb.palette.show(&result);

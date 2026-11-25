@@ -95,6 +95,36 @@ fn a_finished_run_opens_the_palette_and_the_card_defers_to_it() {
 }
 
 #[test]
+fn show_results_switches_to_the_selected_molecule() {
+    let (mut app, water) = water(CalcTask::Energy);
+    event(&mut app, path(&[&START]));
+    let first = app.xtb_shown().expect("water").stored.result.clone();
+    // A second water, calculated: the palette follows it.
+    let before = app.tab.doc.clone();
+    let other = app.tab.doc.add_atom("O", Point::new(200., 0.));
+    app.changed(before);
+    app.tab.selected = vec![other];
+    send(&mut app, XtbAction::Run);
+    let positions = START.map(|[x, y, z]| Point3 { x, y, z }).to_vec();
+    let _ = app.finish_model(positions, vec![0, 0]);
+    assert!(app.xtb_running(), "{}", app.status);
+    event(&mut app, path(&[&START]));
+    assert!(
+        !app.xtb_can_show(),
+        "the selected molecule's result is shown"
+    );
+    app.tab.selected = vec![water];
+    assert!(
+        app.xtb_can_show(),
+        "water has a result the palette does not show"
+    );
+    palette(&mut app, Action::Show);
+    let shown = app.xtb_shown().expect("water again");
+    assert!(std::sync::Arc::ptr_eq(&shown.stored.result, &first));
+    assert!(!app.xtb_can_show());
+}
+
+#[test]
 fn an_edit_greys_the_results_undo_restores_them_and_recalculate_reruns() {
     let (mut app, o) = water(CalcTask::Optimize);
     event(&mut app, optimized(&START, &MOVED));
