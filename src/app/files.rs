@@ -1174,6 +1174,12 @@ impl super::App {
     }
 
     pub(super) fn save_drawing_named(&mut self, name: String) -> Task<Message> {
+        let then = Message::Xtb(super::xtb::Action::Palette(
+            super::xtb::palette::Action::SaveNamed(name.clone()),
+        ));
+        if self.xtb_size_question(then) {
+            return Task::none();
+        }
         self.save_drawing_to(
             true,
             Some(name),

@@ -36,6 +36,9 @@ pub(super) enum Prompt {
     /// (when it would drop anything: how many results, and the size after),
     /// or save as is. Either goes on with `then`.
     LargeResults {
+        /// The document asked about; another in front cancels.
+        tab: super::document_tab::TabId,
+        epoch: u64,
         bytes: usize,
         lighter: Option<(usize, usize)>,
         then: Box<Message>,
@@ -89,10 +92,8 @@ impl Prompt {
                 _ => Message::Cancel,
             },
             Self::Notice { then, .. } => *then,
-            Self::LargeResults { lighter, then, .. } => match answer {
-                Answer::Save if lighter.is_some() => Message::Xtb(super::xtb::Action::Palette(
-                    super::xtb::palette::Action::Lighter(then),
-                )),
+            // Make lighter itself runs in App::xtb_size_answer.
+            Self::LargeResults { then, .. } => match answer {
                 Answer::Save | Answer::DontSave => *then,
                 Answer::Cancel | Answer::Format(_) => Message::Cancel,
             },

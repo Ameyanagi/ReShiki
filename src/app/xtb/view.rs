@@ -95,12 +95,30 @@ impl App {
         content.into()
     }
 
+    /// "Show results" while the palette is closed and results exist: for
+    /// the card's molecule, or the palette's last result.
+    fn xtb_show_results(&self) -> Option<Element<'_, Message>> {
+        let first = self.xtb_target().and_then(|atoms| atoms.first().copied());
+        let has_results = !self.xtb_palette_visible()
+            && (self.xtb_shown().is_some()
+                || first.is_some_and(|atom| {
+                    !reshiki::science::results_for(&self.tab.doc, atom).is_empty()
+                }));
+        has_results.then(|| {
+            accessible_command("xtb-show-results", "Show the xTB results", "Show results")
+                .on_press(Message::Xtb(Action::Palette(super::palette::Action::Show)))
+                .into()
+        })
+    }
+
     fn xtb_card(&self) -> Element<'_, Message> {
         if let Some(reason) = super::unavailable() {
-            return container(text(reason).size(12))
-                .padding(10)
-                .width(WIDE)
-                .into();
+            // Stored results stay readable in builds that cannot calculate.
+            let mut body = column![text(reason).size(12)].spacing(8);
+            if let Some(show) = self.xtb_show_results() {
+                body = body.push(show);
+            }
+            return container(body).padding(10).width(WIDE).into();
         }
         let settings = &self.xtb.settings;
         let run = self.tab.xtb.run.as_ref();
@@ -306,16 +324,8 @@ impl App {
         } else if let Some(outcome) = &self.tab.xtb.outcome {
             body = body.push(outcome_view(outcome, self.xtb_palette_visible()));
         }
-        let has_results = !self.xtb_palette_visible()
-            && (self.xtb_shown().is_some()
-                || first.is_some_and(|atom| {
-                    !reshiki::science::results_for(&self.tab.doc, atom).is_empty()
-                }));
-        if has_results {
-            body = body.push(
-                accessible_command("xtb-show-results", "Show the xTB results", "Show results")
-                    .on_press(Message::Xtb(Action::Palette(super::palette::Action::Show))),
-            );
+        if let Some(show) = self.xtb_show_results() {
+            body = body.push(show);
         }
         body = body.push(
             column![

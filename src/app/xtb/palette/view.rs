@@ -176,7 +176,7 @@ impl App {
         }
         let body = match view {
             View::Summary => summary(&shown, inspector),
-            View::Steps => self.xtb_steps(&shown),
+            View::Steps => self.xtb_steps(&shown, inspector),
             View::Log => log(&shown, &method),
         };
         let body: Element<'_, Message> = if inspector {
@@ -241,17 +241,29 @@ impl App {
         .into()
     }
 
-    fn xtb_steps<'a>(&'a self, shown: &Shown<'a>) -> Element<'a, Message> {
+    fn xtb_steps<'a>(&'a self, shown: &Shown<'a>, inspector: bool) -> Element<'a, Message> {
         let energies = results::energies(&shown.stored.result).to_vec();
         let last = energies.len().saturating_sub(1);
         let selected = self.xtb_step();
-        let live = !shown.stale;
+        // Steps preview only between runs: a run owns the model preview.
+        let live = !shown.stale && self.tab.xtb.run.is_none();
+        // Without a preview, the list marks the step the model shows (the
+        // last one unless another step was used).
+        let shows = (0..energies.len()).rev().filter(|_| live).find(|&step| {
+            shown.step_positions(step).is_some_and(|positions| {
+                super::super::model_shows(&self.tab.doc, shown.atoms, &positions)
+            })
+        });
         let chart = canvas(StepChart {
             energies: energies.clone(),
-            selected: selected.unwrap_or(last),
+            selected: selected.or(shows).unwrap_or(last),
             live,
         })
-        .width(420)
+        .width(if inspector {
+            Length::Fill
+        } else {
+            Length::Fixed(420.)
+        })
         .height(140);
         let list = Column::with_children(energies.iter().enumerate().map(|(index, energy)| {
             let delta = index
@@ -261,7 +273,7 @@ impl App {
                     || "start".into(),
                     |before| state::scientific(energy - before),
                 );
-            let active = selected.unwrap_or(last) == index;
+            let active = selected.or(shows).unwrap_or(last) == index;
             reshiki::accessibility::button(
                 format!("xtb-step-{index}"),
                 format!("Step {index}"),
@@ -283,12 +295,16 @@ impl App {
         }))
         .spacing(1);
         let palette = &self.tab.xtb.palette;
-        let index = selected.unwrap_or(last);
+        let index = selected.or(shows).unwrap_or(last);
         let mut side = column![text(format!("Step {index} of {last}")).size(12)].spacing(6);
         if palette.confirm.is_empty() {
+            // Any step the model does not show already, the last one too
+            // after another step was used.
             let usable = live
-                && selected.is_some_and(|step| step != last)
-                && shown.step_positions(index).is_some();
+                && selected.is_some()
+                && shown.step_positions(index).is_some_and(|positions| {
+                    !super::super::model_shows(&self.tab.doc, shown.atoms, &positions)
+                });
             side = side.push(
                 reshiki::accessibility::button(
                     "xtb-use-step",
@@ -336,6 +352,9 @@ impl App {
                 ]
                 .spacing(8),
             );
+        }
+        if inspector {
+            return column![chart, list, side].spacing(10).into();
         }
         row![
             chart,

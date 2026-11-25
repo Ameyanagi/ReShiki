@@ -174,6 +174,67 @@ fn a_step_previews_on_the_model_and_use_this_geometry_is_one_undo_step() {
     );
     let _ = app.update(Message::Undo);
     assert_eq!(model(&app.tab.doc), f32s(&MOVED));
+
+    // After another step, the last one can be used again.
+    palette(&mut app, Action::Step(1));
+    palette(&mut app, Action::UseStep);
+    palette(&mut app, Action::Step(2));
+    palette(&mut app, Action::UseStep);
+    assert_eq!(model(&app.tab.doc), f32s(&MOVED));
+
+    // A run owns the model preview: no step previews meanwhile.
+    send(&mut app, XtbAction::Run);
+    palette(&mut app, Action::Step(1));
+    assert_eq!(app.xtb_step(), None);
+}
+
+#[test]
+fn each_result_keeps_its_own_run_details_through_undo() {
+    let (mut app, _) = water(CalcTask::Energy);
+    let energy = || {
+        let mut done = path(&[&START]);
+        if let Event::Done(Ok(report)) = &mut done {
+            let report = std::sync::Arc::get_mut(report).expect("unshared");
+            report.positions = START.to_vec();
+            report.path.clear();
+            report.steps = 0;
+        }
+        done
+    };
+    event(&mut app, energy());
+    let first = app.xtb_shown().expect("first").stored.result.clone();
+    app.xtb.settings.threads = 2;
+    send(&mut app, XtbAction::Run);
+    event(&mut app, energy());
+    let threads = |app: &App| {
+        app.xtb_shown()
+            .and_then(|shown| shown.info.map(|info| info.threads))
+    };
+    assert_eq!(threads(&app), Some(2));
+    assert_eq!(
+        app.tab.doc.science.results.len(),
+        2,
+        "same geometry and energy, two results"
+    );
+    let _ = app.update(Message::Undo);
+    assert!(app.xtb_shown().is_none(), "the undone result is not shown");
+    palette(&mut app, Action::Show);
+    let shown = app.xtb_shown().expect("the first result again");
+    assert!(std::sync::Arc::ptr_eq(&shown.stored.result, &first));
+    assert_ne!(shown.info.map(|info| info.threads), Some(2));
+}
+
+#[test]
+fn keep_model_ends_the_preview() {
+    let (mut app, _, start) = halocarbon();
+    let mirrored: Vec<[f64; 3]> = start.iter().map(|&[x, y, z]| [-x, y, z]).collect();
+    event(&mut app, path(&[&start, &mirrored, &start]));
+    palette(&mut app, Action::Step(1));
+    palette(&mut app, Action::UseStep);
+    assert!(!app.tab.xtb.palette.confirm.is_empty());
+    palette(&mut app, Action::KeepModel);
+    assert_eq!(app.xtb_step(), None);
+    assert_eq!(model(app.display_document()), f32s(&start));
 }
 
 #[test]
@@ -298,8 +359,17 @@ fn save_asks_once_about_large_results_and_make_lighter_drops_the_steps() {
     assert!(after * 20 < bytes, "{after} of {bytes}");
     assert!(!app.file_io.saving, "nothing is written before the answer");
 
-    let then = app.prompt.take().expect("prompt").answer(Answer::Save);
-    let _ = app.update(then);
+    // Another document in front (a new file epoch here) cancels instead.
+    let prompt = app.prompt.clone().expect("prompt");
+    app.tab.file_epoch += 1;
+    assert!(matches!(
+        app.xtb_size_answer(prompt, Answer::Save),
+        Message::Cancel
+    ));
+    assert!(app.xtb_shown().is_some_and(|shown| shown.stored.keep_full));
+    app.tab.file_epoch -= 1;
+
+    let _ = app.update(Message::Prompt(Answer::Save));
     assert!(app.xtb_shown().is_some_and(|shown| !shown.stored.keep_full));
     assert!(app.tab.doc.science.file_bytes() < reshiki::science::LIGHTER_BYTES);
 

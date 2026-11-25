@@ -14,7 +14,7 @@ use reshiki::qcdata::{self, CalcResult, Frame};
 use reshiki::science::{self, Freshness, Launch};
 use results::RunInfo;
 use state::{Progress, Settings};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::{Arc, Weak};
 
 pub(super) mod palette;
 mod results;
@@ -70,19 +70,25 @@ pub(crate) struct State {
     pub(super) run: Option<Run>,
     pub(super) outcome: Option<Outcome>,
     serial: u64,
-    /// The attachment whose newest result the results palette shows.
-    pub(super) last_attachment: Option<u64>,
     pub(super) palette: palette::Palette,
-    /// What this session knows about stored results' runs, by [`info_key`].
-    infos: HashMap<(qcdata::FrameHash, u64), Arc<RunInfo>>,
+    /// What this session knows about stored results' runs, by result.
+    infos: Vec<(Weak<CalcResult>, Arc<RunInfo>)>,
 }
 
-/// Which run a stored result came from: its geometry and its energy.
-fn info_key(result: &CalcResult) -> (qcdata::FrameHash, u64) {
-    (
-        result.frame,
-        result.energy_hartree.unwrap_or_default().to_bits(),
-    )
+impl State {
+    /// The run information of a result the document holds.
+    fn info(&self, result: &Arc<CalcResult>) -> Option<&RunInfo> {
+        // A live weak at the same address is the same allocation.
+        self.infos
+            .iter()
+            .find(|(weak, _)| weak.strong_count() > 0 && weak.as_ptr() == Arc::as_ptr(result))
+            .map(|(_, info)| info.as_ref())
+    }
+
+    fn remember(&mut self, result: &Arc<CalcResult>, info: Arc<RunInfo>) {
+        self.infos.retain(|(weak, _)| weak.strong_count() > 0);
+        self.infos.push((Arc::downgrade(result), info));
+    }
 }
 
 /// What a run calculates and how: from the card, or a result's Recalculate.
@@ -95,6 +101,8 @@ struct Request {
     threads: u32,
     tight: bool,
     fixed: Vec<u64>,
+    /// "Keep full results in this file" for the new result.
+    keep_full: bool,
 }
 
 pub(crate) struct Run {
@@ -108,6 +116,7 @@ pub(crate) struct Run {
     tight: bool,
     /// Drawing atoms the optimizer holds fixed.
     fixed: Vec<u64>,
+    keep_full: bool,
     /// Absent while the 3D model is made first.
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
@@ -340,6 +349,7 @@ impl App {
             threads: settings.threads(),
             tight: settings.tight,
             fixed,
+            keep_full: false,
         };
         self.xtb_begin(request)
     }
@@ -354,6 +364,7 @@ impl App {
             ));
             return Task::none();
         }
+        self.xtb_end_preview();
         self.tab.xtb.serial = self.tab.xtb.serial.wrapping_add(1);
         self.tab.xtb.outcome = None;
         self.tab.xtb.run = Some(Run {
@@ -366,6 +377,7 @@ impl App {
             threads: request.threads,
             tight: request.tight,
             fixed: request.fixed,
+            keep_full: request.keep_full,
             launch: None,
             model: None,
             started: iced::time::Instant::now(),
@@ -634,12 +646,17 @@ impl App {
             self.tab.xtb.outcome = Some(Outcome::Failed(self.status.clone()));
             return;
         }
-        self.tab.xtb.last_attachment = Some(attached.attachment);
-        if let Some(stored) = self.tab.doc.science.results.last() {
-            let key = info_key(&stored.result);
-            self.tab.xtb.infos.insert(key, Arc::new(pending.info));
+        if let Some(result) = self
+            .tab
+            .doc
+            .science
+            .results
+            .last()
+            .map(|s| s.result.clone())
+        {
+            self.tab.xtb.remember(&result, Arc::new(pending.info));
+            self.tab.xtb.palette.show(&result);
         }
-        self.tab.xtb.palette.show();
         self.status = if applied {
             format!("Applied xTB geometry · {} · ⌘Z undoes", pending.line)
         } else {
@@ -680,7 +697,12 @@ impl Run {
 
 /// Whether the molecule's model still has the geometry `launch` started from.
 fn shows(doc: &Document, launch: &Launch) -> bool {
-    let Some(atom) = launch.atoms.iter().flatten().next() else {
+    model_shows(doc, &launch.atoms, &launch.frame.positions_angstrom)
+}
+
+/// Whether the 3D model of the frame atoms `atoms` is at `positions` (Å).
+fn model_shows(doc: &Document, atoms: &[Option<u64>], positions: &[[f64; 3]]) -> bool {
+    let Some(atom) = atoms.iter().flatten().next() else {
         return false;
     };
     doc.models
@@ -689,11 +711,7 @@ fn shows(doc: &Document, launch: &Launch) -> bool {
         .is_some_and(|model| {
             let now = model.atoms.iter().map(|a| a.xyz);
             let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
-            now.eq(launch
-                .frame
-                .positions_angstrom
-                .iter()
-                .map(|p| p.map(|x| x as f32)))
+            now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
         })
 }
 
@@ -706,42 +724,8 @@ fn preview(doc: &Document, atom: u64, positions: &[[f64; 3]]) -> Option<Document
         .position(|m| m.linked_atoms.contains(&atom))?;
     let mut doc = doc.clone();
     let model = doc.models.get_mut(index)?;
-    if !set_positions(model, positions) {
-        return None;
-    }
-    // A model shown as 2D only appears beside the drawing while it moves.
-    if model.display == reshiki::models3d::Display::TwoD {
-        reshiki::models3d::set_display(&mut doc, index, reshiki::models3d::Display::Both);
-    }
-    Some(doc)
-}
-
-/// Move the model linked to the frame atoms `atoms` to `positions`, when it
-/// still has those atoms in that order.
-fn place(doc: &mut Document, atoms: &[Option<u64>], positions: &[[f64; 3]]) -> bool {
-    let Some(atom) = atoms.iter().flatten().next() else {
-        return false;
-    };
-    let Some(model) = doc
-        .models
-        .iter_mut()
-        .find(|m| m.linked_atoms.contains(atom))
-    else {
-        return false;
-    };
-    let sources = model.geometry_sources();
-    atoms.len() == positions.len()
-        && sources
-            .iter()
-            .chain(std::iter::repeat(&None))
-            .zip(atoms)
-            .all(|(model, frame)| model == frame)
-        && set_positions(model, positions)
-}
-
-fn set_positions(model: &mut reshiki::models3d::Model3d, positions: &[[f64; 3]]) -> bool {
     if model.atoms.len() + model.hydrogens.len() != positions.len() {
-        return false;
+        return None;
     }
     let mut xyz = positions.iter().map(|p| p.map(|x| x as f32));
     for (atom, p) in model.atoms.iter_mut().zip(xyz.by_ref()) {
@@ -750,7 +734,11 @@ fn set_positions(model: &mut reshiki::models3d::Model3d, positions: &[[f64; 3]])
     for (hydrogen, p) in model.hydrogens.iter_mut().zip(xyz) {
         hydrogen.xyz = p;
     }
-    true
+    // A model shown as 2D only appears beside the drawing while it moves.
+    if model.display == reshiki::models3d::Display::TwoD {
+        reshiki::models3d::set_display(&mut doc, index, reshiki::models3d::Display::Both);
+    }
+    Some(doc)
 }
 
 /// The result to store from a finished run.
@@ -833,7 +821,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, String> {
         vibrations: None,
         thermo: None,
         trajectory,
-        keep_full: false,
+        keep_full: run.keep_full,
         omitted_bytes: None,
     };
     let mut notes = Vec::new();
