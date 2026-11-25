@@ -1,0 +1,73 @@
+{
+  "rules": [
+    {"id": "arguments.object", "cite": "crates/agent/src/ops/read_output.rs:39-41,81-87"},
+    {"id": "read_output.text_nullable_required", "cite": "crates/agent/src/ops/read_output.rs:43,48,56-57"},
+    {"id": "read_output.file_name_nullable_required", "cite": "crates/agent/src/ops/read_output.rs:44,48,58-59"},
+    {"id": "read_output.path_nullable_required", "cite": "crates/agent/src/ops/read_output.rs:45,48,60-61"},
+    {"id": "read_output.job_nullable_required", "cite": "crates/agent/src/ops/read_output.rs:46,48,62-63"},
+    {"id": "read_output.sources_exclusive", "cite": "crates/agent/src/ops/read_output.rs:88-89,106,117"},
+    {"id": "read_output.text_needs_file_name", "cite": "crates/agent/src/ops/read_output.rs:89-92"},
+    {"id": "read_output.text_bytes", "cite": "crates/agent/src/ops/read_output.rs:93-102; crates/agent/src/ops/budget.rs:93-97"},
+    {"id": "read_output.path_length", "cite": "crates/agent/src/ops/read_output.rs:45,107; crates/agent/src/ops/files.rs:40,216-227"},
+    {"id": "read_output.job_nonnegative_integer", "cite": "crates/agent/src/ops/read_output.rs:46,63"},
+    {"id": "read_output.no_unknown_fields", "cite": "crates/agent/src/ops/read_output.rs:49,53-64"}
+  ],
+  "bases": {
+    "inline": {"tool": "read_output", "arguments": {"text": "1\nH\nH 0 0 0\n", "file_name": "hydrogen.xyz", "path": null, "job": null}},
+    "file": {"tool": "read_output", "arguments": {"text": null, "file_name": null, "path": "/read/run.log", "job": null}}
+  },
+  "cases": [
+    {"name": "arguments_object", "rule": "arguments.object", "base": "inline", "expect": "both_accept"},
+    {"name": "arguments_array", "rule": "arguments.object", "base": "inline", "patch": [{"op": "replace", "path": "/arguments", "value": [null, "run.log", "/read/run.log", null]}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+    {"name": "arguments_null", "rule": "arguments.object", "base": "file", "patch": [{"op": "replace", "path": "/arguments", "value": null}], "expect": "both_reject", "message": "Tool arguments must be a JSON object"},
+
+    {"name": "text_string", "rule": "read_output.text_nullable_required", "base": "inline", "expect": "both_accept"},
+    {"name": "text_null", "rule": "read_output.text_nullable_required", "base": "file", "expect": "both_accept"},
+    {"name": "text_omitted_for_path", "rule": "read_output.text_nullable_required", "base": "file", "patch": [{"op": "remove", "path": "/arguments/text"}], "expect": "schema_rejects_only"},
+    {"name": "text_number", "rule": "read_output.text_nullable_required", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/text", "value": 1}], "expect": "both_reject"},
+
+    {"name": "file_name_string", "rule": "read_output.file_name_nullable_required", "base": "inline", "expect": "both_accept"},
+    {"name": "file_name_null_for_path", "rule": "read_output.file_name_nullable_required", "base": "file", "expect": "both_accept"},
+    {"name": "file_name_omitted_for_path", "rule": "read_output.file_name_nullable_required", "base": "file", "patch": [{"op": "remove", "path": "/arguments/file_name"}], "expect": "schema_rejects_only"},
+    {"name": "file_name_number", "rule": "read_output.file_name_nullable_required", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/file_name", "value": 12}], "expect": "both_reject"},
+
+    {"name": "path_string", "rule": "read_output.path_nullable_required", "base": "file", "expect": "both_accept"},
+    {"name": "path_null_for_text", "rule": "read_output.path_nullable_required", "base": "inline", "expect": "both_accept"},
+    {"name": "path_omitted_for_text", "rule": "read_output.path_nullable_required", "base": "inline", "patch": [{"op": "remove", "path": "/arguments/path"}], "expect": "schema_rejects_only"},
+    {"name": "path_boolean", "rule": "read_output.path_nullable_required", "base": "file", "patch": [{"op": "replace", "path": "/arguments/path", "value": true}], "expect": "both_reject"},
+
+    {"name": "job_null", "rule": "read_output.job_nullable_required", "base": "inline", "expect": "both_accept"},
+    {"name": "job_omitted", "rule": "read_output.job_nullable_required", "base": "inline", "patch": [{"op": "remove", "path": "/arguments/job"}], "expect": "schema_rejects_only"},
+    {"name": "job_string", "rule": "read_output.job_nullable_required", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/job", "value": "0"}], "expect": "both_reject"},
+    {"name": "job_boolean", "rule": "read_output.job_nullable_required", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/job", "value": false}], "expect": "both_reject"},
+
+    {"name": "text_only", "rule": "read_output.sources_exclusive", "base": "inline", "expect": "both_accept"},
+    {"name": "path_only", "rule": "read_output.sources_exclusive", "base": "file", "expect": "both_accept"},
+    {"name": "text_and_path", "rule": "read_output.sources_exclusive", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/path", "value": "/read/hydrogen.xyz"}], "expect": "decoder_rejects_only", "message": "Give exactly one of text or path"},
+    {"name": "neither_text_nor_path", "rule": "read_output.sources_exclusive", "base": "file", "patch": [{"op": "replace", "path": "/arguments/path", "value": null}], "expect": "decoder_rejects_only", "message": "Give exactly one of text or path"},
+    {"name": "both_sources_omitted", "rule": "read_output.sources_exclusive", "base": "file", "patch": [{"op": "remove", "path": "/arguments/text"}, {"op": "remove", "path": "/arguments/path"}], "expect": "both_reject", "message": "Give exactly one of text or path"},
+
+    {"name": "text_with_file_name", "rule": "read_output.text_needs_file_name", "base": "inline", "expect": "both_accept"},
+    {"name": "text_with_empty_file_name_for_sniffing", "rule": "read_output.text_needs_file_name", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/file_name", "value": ""}], "expect": "both_accept"},
+    {"name": "text_with_null_file_name", "rule": "read_output.text_needs_file_name", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/file_name", "value": null}], "expect": "decoder_rejects_only", "message": "file_name is required with text"},
+    {"name": "text_with_omitted_file_name", "rule": "read_output.text_needs_file_name", "base": "inline", "patch": [{"op": "remove", "path": "/arguments/file_name"}], "expect": "both_reject", "message": "file_name is required with text"},
+
+    {"name": "text_at_max_bytes", "rule": "read_output.text_bytes", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/text", "value": {"$text": "a", "count": 16777216}}], "expect": "both_accept"},
+    {"name": "text_over_max_bytes", "rule": "read_output.text_bytes", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/text", "value": {"$text": "a", "count": 16777217}}], "expect": "decoder_rejects_only", "message": "The text is 16777217 bytes; max_text_bytes allows at most 16777216"},
+
+    {"name": "path_at_4096_bytes", "rule": "read_output.path_length", "base": "file", "patch": [{"op": "replace", "path": "/arguments/path", "value": {"$text": "/aaa.log", "count": 512}}], "expect": "both_accept"},
+    {"name": "path_over_4096_bytes", "rule": "read_output.path_length", "base": "file", "patch": [{"op": "replace", "path": "/arguments/path", "value": {"$text": "/aaaaaaaaaaaa.log", "count": 241}}], "expect": "both_reject", "message": "path_invalid: the path is 4097 bytes; at most 4096 are allowed"},
+    {"name": "path_unicode_bytes", "rule": "read_output.path_length", "base": "file", "patch": [{"op": "replace", "path": "/arguments/path", "value": {"$text": "/é.log", "count": 600}}], "expect": "decoder_rejects_only", "message": "path_invalid: the path is 4200 bytes; at most 4096 are allowed"},
+
+    {"name": "job_zero", "rule": "read_output.job_nonnegative_integer", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/job", "value": 0}], "expect": "both_accept"},
+    {"name": "job_index_checked_after_parsing", "rule": "read_output.job_nonnegative_integer", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/job", "value": 1000000}], "expect": "both_accept"},
+    {"name": "job_negative", "rule": "read_output.job_nonnegative_integer", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/job", "value": -1}], "expect": "both_reject"},
+    {"name": "job_fraction", "rule": "read_output.job_nonnegative_integer", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/job", "value": 0.5}], "expect": "both_reject"},
+    {"name": "job_whole_float", "rule": "read_output.job_nonnegative_integer", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/job", "value": 0.0}], "expect": "decoder_rejects_only"},
+    {"name": "job_over_u64", "rule": "read_output.job_nonnegative_integer", "base": "inline", "patch": [{"op": "replace", "path": "/arguments/job", "value": 18446744073709551616}], "expect": "decoder_rejects_only"},
+
+    {"name": "known_fields_only", "rule": "read_output.no_unknown_fields", "base": "inline", "expect": "both_accept"},
+    {"name": "unknown_field", "rule": "read_output.no_unknown_fields", "base": "inline", "patch": [{"op": "add", "path": "/arguments/format", "value": "gaussian"}], "expect": "both_reject"},
+    {"name": "unknown_null_field", "rule": "read_output.no_unknown_fields", "base": "file", "patch": [{"op": "add", "path": "/arguments/extra", "value": null}], "expect": "both_reject"}
+  ]
+}

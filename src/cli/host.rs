@@ -48,10 +48,16 @@ pub(crate) struct Session {
 
 impl Session {
     pub(crate) fn new() -> Self {
-        let budgets = Budgets::default();
+        Self::with_budgets(Budgets::default())
+    }
+
+    pub(crate) fn with_budgets(budgets: Budgets) -> Self {
+        let host = HeadlessHost::new(crate::updates::CURRENT_VERSION, budgets.clone())
+            .with_naming(Arc::new(crate::naming::AgentNaming));
+        #[cfg(feature = "xtb")]
+        let host = host.with_calculations(Arc::new(crate::xtb_agent::AgentCalculations));
         Self {
-            host: HeadlessHost::new(crate::updates::CURRENT_VERSION, budgets.clone())
-                .with_naming(Arc::new(crate::naming::AgentNaming)),
+            host,
             budgets,
             principal: Principal::local(),
             next: 0,

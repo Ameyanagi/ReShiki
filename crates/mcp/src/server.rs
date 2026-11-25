@@ -21,6 +21,10 @@
 //! permits belong to the host's executor; the transport adds no limit of its
 //! own beyond the framing's.
 //!
+//! With `_meta.progressToken`, reports reach `notifications/progress` in
+//! order before the call's response. Without a token the host receives no
+//! progress sink. Reports after the response are ignored.
+//!
 //! # Cancellation
 //!
 //! `notifications/cancelled` for an outstanding request reaches
@@ -43,6 +47,7 @@ use reshiki_agent::{
     ops::{
         error::{ErrorKind, OpError},
         host::{Call, ToolHost},
+        progress::{Progress, Sink},
         result::ToolResult,
         wire::{Principal, RequestId},
     },
@@ -56,7 +61,8 @@ use rmcp::{
         Implementation, ListPromptsRequestMethod, ListPromptsResult,
         ListResourceTemplatesRequestMethod, ListResourceTemplatesResult,
         ListResourcesRequestMethod, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
-        ProtocolVersion, ServerCapabilities, ServerConfig, ToolsCapability,
+        ProgressNotificationParam, ProtocolVersion, ServerCapabilities, ServerConfig,
+        ToolsCapability,
     },
     service::{RequestContext, ServerInitializeError},
 };
@@ -423,14 +429,43 @@ impl<H: ToolHost> ServerHandler for Server<H> {
         if self.tracker.is_cancelled(&key) {
             return Err(cancelled());
         }
+        let (progress, forwarding) = if let Some(token) = context.meta.get_progress_token() {
+            let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<Option<Progress>>();
+            let reports = sender.clone();
+            let sink: Sink = Arc::new(move |progress| {
+                let _ = reports.send(Some(progress));
+            });
+            let task = tokio::spawn(async move {
+                while let Some(Some(progress)) = receiver.recv().await {
+                    let mut params =
+                        ProgressNotificationParam::new(token.clone(), progress.completed);
+                    params.total = progress.total;
+                    params.message = progress.message;
+                    if context.peer.notify_progress(params).await.is_err() {
+                        break;
+                    }
+                }
+            });
+            (Some(sink), Some((sender, task)))
+        } else {
+            (None, None)
+        };
         let call = Call {
             principal: self.principal.clone(),
             request: request_id(&key),
             tool: request.name.into_owned(),
             arguments: Value::Object(request.arguments.unwrap_or_default()),
-            progress: None,
+            progress,
         };
-        self.call(call).await.map(CallToolResponse::Complete)
+        let result = self.call(call).await;
+        if let Some((sender, task)) = forwarding {
+            // The marker follows every queued report. Awaiting the one sender
+            // keeps them ordered before the response, even if the host retains
+            // a sink and tries to report after its call returned.
+            let _ = sender.send(None);
+            let _ = task.await;
+        }
+        result.map(CallToolResponse::Complete)
     }
 
     async fn on_custom_request(

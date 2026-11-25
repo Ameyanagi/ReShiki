@@ -16,9 +16,9 @@ import time
 
 MODERN = "2026-07-28"
 LEGACY_REVISIONS = ("2025-11-25", "2025-06-18")
-# The final operation catalog, in tools/list order
+# The base operation catalog, in tools/list order
 # (tests/fixtures/agent-contract/ops-catalog.json).
-TOOLS = (
+BASE_TOOLS = (
     "info",
     "document_new",
     "document_list",
@@ -37,7 +37,11 @@ TOOLS = (
     "convert",
     "name",
     "schema",
+    "export_input",
+    "read_output",
 )
+# Builds with xTB append calculate after the base catalog.
+TOOLS = (*BASE_TOOLS, "calculate")
 CLIENT_INFO = {"name": "reshiki-package-check", "version": "1.0.0"}
 
 
