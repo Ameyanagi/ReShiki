@@ -688,7 +688,13 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.ring_fills.extend(part.ring_fills);
     doc.depth_appearance.extend(part.depth_appearance);
     doc.generic.extend(part.generic);
-    doc.science.extend(part.science);
+    // An insertion that would pass the calculation budget comes without
+    // its calculation data.
+    let mut science = doc.science.clone();
+    science.extend(part.science);
+    if science.check_budget().is_ok() {
+        doc.science = science;
+    }
     if !part.models.is_empty() {
         doc.models.extend(part.models);
         crate::models3d::require_version(doc);

@@ -784,7 +784,7 @@ fn deleting_atoms_unlinks_and_reused_id_never_relinks() {
     let link = doc.science.attachment(attached.attachment).unwrap();
     assert_eq!(link.atoms[2], None);
     assert_eq!(link.freshness(&doc), Freshness::Stale);
-    assert!(results_for(&doc, ids[2]).is_empty());
+    assert_eq!(results_for(&doc, ids[2])[0].freshness, Freshness::Stale);
     reconciled_edit(&mut doc, &mut history, |doc| doc.delete(&ids));
     assert!(doc.science.is_empty());
     assert_eq!(doc.file_version(), Document::default().file_version());
@@ -1423,4 +1423,89 @@ fn stereo_check_reports_inverted_centre_and_flipped_double_bond() {
             }],
         );
     }
+}
+
+#[test]
+fn launch_refuses_a_model_of_several_molecules() {
+    let mut doc = Document::default();
+    let first = doc.add_atom("O", Point::new(0., 0.));
+    let second = doc.add_atom("O", Point::new(80., 0.));
+    let atoms = vec![
+        Placed {
+            id: first,
+            xyz: [0., 0., 0.],
+        },
+        Placed {
+            id: second,
+            xyz: [3., 0., 0.],
+        },
+    ];
+    let model =
+        Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s).with_cell(&doc, None, vec![]);
+    doc.models.push(model);
+    crate::models3d::require_version(&mut doc);
+    assert!(matches!(
+        launch(&doc, first, 0, 1),
+        Err(ScienceError::Fragments)
+    ));
+}
+
+#[test]
+fn stereo_group_change_makes_results_stale() {
+    use crate::stereo_groups::{Kind, StereoGroup};
+    let (mut doc, carbon, _) = wedged_halocarbon();
+    doc.atom_mut(carbon).unwrap().stereo_group = Some(StereoGroup {
+        kind: Kind::And,
+        number: 1,
+    });
+    let start = launch(&doc, carbon, 0, 1).unwrap();
+    add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
+    assert_eq!(results_for(&doc, carbon)[0].freshness, Freshness::Current);
+    let mut history = History::default();
+    reconciled_edit(&mut doc, &mut history, |doc| {
+        doc.atom_mut(carbon).unwrap().stereo_group = Some(StereoGroup {
+            kind: Kind::Or,
+            number: 1,
+        });
+    });
+    assert_eq!(results_for(&doc, carbon)[0].freshness, Freshness::Stale);
+    assert!(history.undo(&mut doc));
+    assert_eq!(results_for(&doc, carbon)[0].freshness, Freshness::Current);
+}
+
+#[test]
+fn a_result_for_other_atoms_is_refused() {
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    let mut methane = (*start.frame).clone();
+    methane.numbers[0] = 6;
+    let mut optimized = result(&methane, Task::Optimize, false);
+    optimized.input_frame = Some(start.frame.hash());
+    let before = doc.clone();
+    assert!(matches!(
+        attach(&mut doc, &start, vec![methane], optimized),
+        Err(ScienceError::Unknown)
+    ));
+    assert_eq!(doc, before);
+    let mut short = start.clone();
+    short.atoms.pop();
+    assert!(matches!(
+        attach(
+            &mut doc,
+            &short,
+            vec![],
+            result(&start.frame, Task::Energy, false)
+        ),
+        Err(ScienceError::Unknown)
+    ));
+}
+
+#[test]
+fn oversized_baselines_are_refused_on_read() {
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
+    let mut json: Value = serde_json::from_slice(&doc.file_json().unwrap()).unwrap();
+    json["science"]["attachments"][0]["baseline"] = json!("0".repeat(10_000));
+    assert!(Document::from_json(&serde_json::to_vec(&json).unwrap()).is_err());
 }

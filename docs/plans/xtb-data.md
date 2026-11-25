@@ -396,7 +396,7 @@ and the agent API call the functions named here.
   chemistry fingerprint of the mapped atoms when the frame was made: the same digest that marks
   3D models out of date (element, charge, isotope, radicals, hydrogens, bonds and perceived
   stereo, in frame order, so the atom count counts too), plus each atom's singlet choice, which
-  sets the spin. Attachment IDs are unique among the
+  sets the spin, and its enhanced-stereo group, which the digest leaves out. Attachment IDs are unique among the
   document's attachments; they are not drawing object IDs, so selection, hit testing and ID
   remapping of drawing objects never meet them; a new one takes the smallest free ID. Two
   molecules with identical geometries keep their own results. `Model3d` is unchanged: applying a geometry writes the model's
@@ -406,8 +406,8 @@ and the agent API call the functions named here.
   hydrogens) and returns a `Launch { frame, atoms, baseline }` without changing the document.
   `drawn_state(doc, atom)` gives the charge and multiplicity the drawing implies. When the model
   still shows an attached frame exactly (an applied optimization), the launch reuses that `f64`
-  frame, so chained calculations keep full precision. A missing, out-of-date or periodic model is
-  an error.
+  frame, so chained calculations keep full precision. A missing, out-of-date or periodic model, or one that also
+  holds other molecules, is an error.
 - **Staleness.** `Attachment::freshness(doc)` is `Current` when the mapped atoms still exist, form
   one whole molecule with no other atoms, and match the baseline; otherwise `Stale`. Every
   transaction runs `science::prune`: deleted atoms leave their map entries in the same edit, so a
@@ -415,7 +415,9 @@ and the agent API call the functions named here.
   frames nothing else needs. Undo restores the snapshot, and with it the fresh state.
 - **Storing a result.** `science::attach(doc, &launch, new_frames, result)` stores the launch
   frame, the result's new frames, the result and the launch frame's attachment as one edit, after
-  validating everything; the result must start from the launch frame. It returns
+  validating everything; the result must start from the launch frame and describe the same
+  atoms in the same order (a transition state excepted). `results_for(doc, atom)` lists the
+  results of every attachment still linked to the atom's current molecule. It returns
   `Attached { freshness, attachment }`: the launch's baseline is the revision the reply is checked
   against, so a reply for a molecule edited since launch is stored `Stale` (greyed, with
   Recalculate) and becomes current if Undo returns to the launch state; a reply for a deleted

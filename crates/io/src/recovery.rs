@@ -453,7 +453,8 @@ impl Recovery {
         }
         // Drafts use the required file version and current presentation, so
         // restoring never repeats a migration or requires an unused feature.
-        let document = if document.version == document.file_version() {
+        let document = if document.version == document.file_version() && document.science.is_empty()
+        {
             Cow::Borrowed(document)
         } else {
             Cow::Owned(document.current())

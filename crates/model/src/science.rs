@@ -106,6 +106,8 @@ pub enum ScienceError {
     StaleModel,
     #[error("Calculations on crystal structures are not supported")]
     Periodic,
+    #[error("The 3D model holds more than this molecule")]
+    Fragments,
     #[error("The molecule was deleted")]
     Gone,
     #[error("The molecule changed after this calculation")]
@@ -309,12 +311,15 @@ impl Science {
             .results
             .iter()
             .map(|stored| {
-                if stored.keep_full {
-                    return stored.clone();
-                }
                 let budget = budgets
                     .entry(self.molecule_key(stored.attachment))
                     .or_insert(MAX_IMPORTED_HEAVY_BYTES);
+                if stored.keep_full {
+                    if matches!(stored.result.settings, Settings::Imported { .. }) {
+                        *budget = budget.saturating_sub(stored.result.heavy_bytes());
+                    }
+                    return stored.clone();
+                }
                 let result = match stored.result.for_file(*budget, &[]) {
                     Cow::Borrowed(_) => {
                         if matches!(stored.result.settings, Settings::Imported { .. }) {
@@ -366,6 +371,9 @@ impl Science {
     /// Pretty-printed JSON bytes the file spends on calculation data; Save
     /// offers [`make_lighter`] above [`LIGHTER_BYTES`].
     pub fn file_bytes(&self) -> usize {
+        if self.is_empty() {
+            return 0;
+        }
         serde_json::to_vec_pretty(&self.saved())
             .map(|json| json.len())
             .unwrap_or(0)
@@ -394,21 +402,25 @@ impl Science {
                     .flatten()
                     .all(|id| atoms.insert(*id))
                 || attachment.baseline.is_empty()
+                || attachment.baseline.len() > MAX_BASELINE_PER_ATOM * (attachment.atoms.len() + 1)
             {
                 return Err("Invalid calculation attachment".into());
             }
         }
         for stored in &self.results {
             let result = &stored.result;
-            attachments
+            let attachment = attachments
                 .get(&stored.attachment)
-                .filter(|a| belongs(result, a))
                 .ok_or("A calculation result has no matching attachment")?;
-            let frame = frames.get(&result.frame).ok_or_else(missing)?;
-            result.validate(frame).map_err(|e| e.to_string())?;
             if referenced(result).any(|hash| !frames.contains_key(&hash)) {
                 return Err(missing());
             }
+            let (Some(input), Some(frame)) =
+                (frames.get(&attachment.frame), frames.get(&result.frame))
+            else {
+                return Err(missing());
+            };
+            check_result(attachment, input, result, frame).map_err(|e| e.to_string())?;
         }
         self.check_budget()
     }
@@ -461,8 +473,11 @@ impl Science {
     /// Take in an inserted drawing's data, its atom IDs already remapped;
     /// its attachments get new IDs.
     pub(crate) fn extend(&mut self, other: Self) {
+        let mut hashes: HashSet<FrameHash> = self.frames.iter().map(|f| f.hash()).collect();
         for frame in other.frames {
-            self.insert_frame(frame);
+            if hashes.insert(frame.hash()) {
+                self.frames.push(frame);
+            }
         }
         let mut ids = HashMap::new();
         for attachment in &other.attachments {
@@ -480,10 +495,31 @@ impl Science {
     }
 }
 
+/// Longest baseline per linked atom: the digest, a singlet flag and an
+/// enhanced-stereo group for each atom.
+const MAX_BASELINE_PER_ATOM: usize = 64;
+
 /// A result belongs to the attachment of its input frame, or of its own
-/// frame when it has none.
-fn belongs(result: &CalcResult, attachment: &Attachment) -> bool {
-    result.input_frame.unwrap_or(result.frame) == attachment.frame
+/// frame when it has none, and describes the same atoms in the same order
+/// (a transition state's frame is its own reaction's).
+fn check_result(
+    attachment: &Attachment,
+    input: &Frame,
+    result: &CalcResult,
+    frame: &Frame,
+) -> Result<(), ScienceError> {
+    let same_atoms = result.task == reshiki_qcdata::Task::TransitionState
+        || input.numbers == frame.numbers
+            && input.charge == frame.charge
+            && input.multiplicity == frame.multiplicity;
+    if result.input_frame.unwrap_or(result.frame) != attachment.frame
+        || attachment.atoms.len() != input.numbers.len()
+        || !same_atoms
+    {
+        return Err(ScienceError::Unknown);
+    }
+    result.validate(frame)?;
+    Ok(())
 }
 
 /// Every frame a result refers to, which must stay stored while it exists.
@@ -551,32 +587,37 @@ pub fn prune(doc: &mut Document) {
 }
 
 /// The chemistry digest 3D models use, plus each linked atom's singlet
-/// choice, which sets the spin a calculation describes.
+/// choice, which sets the spin a calculation describes, and its enhanced
+/// stereo group, which the digest leaves out.
 fn baseline(doc: &Document, ids: &[u64]) -> String {
-    let singlets: String = ids
-        .iter()
-        .map(|id| match doc.atom(*id) {
-            Some(atom) if atom.singlet => '1',
-            _ => '0',
-        })
-        .collect();
-    format!("{}/{singlets}", crate::models3d::fingerprint(doc, ids))
+    let mut text = crate::models3d::fingerprint(doc, ids);
+    text.push('/');
+    let mut groups = String::new();
+    for atom in ids.iter().filter_map(|id| doc.atom(*id)) {
+        text.push(if atom.singlet { '1' } else { '0' });
+        if let Some(group) = &atom.stereo_group {
+            groups.push_str(&serde_json::to_string(group).unwrap_or_default());
+        }
+        groups.push(',');
+    }
+    if groups.chars().any(|c| c != ',') {
+        text.push('/');
+        text.push_str(&groups);
+    }
+    text
 }
 
 /// Whether the drawing atoms of `atoms` are still exactly one whole molecule
 /// with the chemistry of `expected`.
 fn freshness(doc: &Document, atoms: &[Option<u64>], expected: &str) -> Freshness {
     let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
-    let whole = !ids.is_empty() && ids.iter().all(|id| doc.atom(*id).is_some()) && {
+    let whole = ids.first().is_some_and(|first| {
         let set: HashSet<u64> = ids.iter().copied().collect();
-        let mut component = HashSet::new();
-        for id in &ids {
-            if !component.contains(id) {
-                component.extend(crate::molecule_names::component(doc, *id));
-            }
-        }
+        let component: HashSet<u64> = crate::molecule_names::component(doc, *first)
+            .into_iter()
+            .collect();
         component == set
-    };
+    });
     if whole && baseline(doc, &ids) == expected {
         Freshness::Current
     } else {
@@ -698,10 +739,17 @@ pub fn launch(
     };
     frame.validate()?;
     let ids: Vec<u64> = atoms.iter().flatten().copied().collect();
-    let baseline = baseline(doc, &ids);
-    if freshness(doc, &atoms, &baseline) == Freshness::Stale {
-        return Err(ScienceError::StaleModel);
+    let molecule: HashSet<u64> = crate::molecule_names::component(doc, atom)
+        .into_iter()
+        .collect();
+    if ids.iter().copied().collect::<HashSet<_>>() != molecule {
+        return Err(if ids.iter().all(|id| doc.atom(*id).is_some()) {
+            ScienceError::Fragments
+        } else {
+            ScienceError::StaleModel
+        });
     }
+    let baseline = baseline(doc, &ids);
     let shown = |stored: &Frame| {
         stored.numbers == frame.numbers
             && stored.isotopes == frame.isotopes
@@ -721,24 +769,25 @@ pub fn launch(
         .filter(|a| a.atoms == atoms && a.baseline == baseline)
         .map(|a| a.id)
         .collect();
-    let candidates: HashSet<FrameHash> = science
-        .attachments
+    // The newest result's geometry first: an applied optimization.
+    let frames: HashMap<FrameHash, &Arc<Frame>> =
+        science.frames.iter().map(|f| (f.hash(), f)).collect();
+    let frame = science
+        .results
         .iter()
-        .filter(|a| mine.contains(&a.id))
-        .map(|a| a.frame)
+        .rev()
+        .filter(|s| mine.contains(&s.attachment))
+        .map(|s| s.result.frame)
         .chain(
             science
-                .results
+                .attachments
                 .iter()
-                .filter(|s| mine.contains(&s.attachment))
-                .map(|s| s.result.frame),
+                .filter(|a| mine.contains(&a.id))
+                .map(|a| a.frame),
         )
-        .collect();
-    let frame = science
-        .frames
-        .iter()
-        .find(|stored| candidates.contains(&stored.hash()) && shown(stored))
-        .cloned()
+        .filter_map(|hash| frames.get(&hash))
+        .find(|stored| shown(stored))
+        .map(|stored| Arc::clone(stored))
         .unwrap_or_else(|| Arc::new(frame));
     Ok(Launch {
         frame,
@@ -769,22 +818,22 @@ pub fn attach(
     }
     let mut science = doc.science.clone();
     let input = science.insert_frame(launch.frame.clone());
-    if result.input_frame.unwrap_or(result.frame) != input {
-        return Err(ScienceError::Unknown);
-    }
     for frame in frames {
         frame.validate()?;
         science.insert_frame(Arc::new(frame));
+    }
+    if referenced(&result).any(|hash| science.frame(&hash).is_none()) {
+        return Err(ScienceError::Unknown);
     }
     let frame = science
         .frame(&result.frame)
         .ok_or(ScienceError::Unknown)?
         .clone();
-    result.validate(&frame)?;
-    if referenced(&result).any(|hash| science.frame(&hash).is_none()) {
-        return Err(ScienceError::Unknown);
-    }
     let attachment = science.link(input, &launch.atoms, &launch.baseline);
+    let link = science
+        .attachment(attachment)
+        .ok_or(ScienceError::Unknown)?;
+    check_result(link, &launch.frame, &result, &frame)?;
     let keep_full = std::mem::take(&mut result.keep_full);
     science.results.push(Stored {
         attachment,
@@ -808,13 +857,17 @@ pub fn attach(
     })
 }
 
-/// Every result shown for the molecule of `atom`, oldest first.
+/// Every result stored for the molecule of `atom` (any of its current atoms
+/// still linked), oldest first.
 pub fn results_for(doc: &Document, atom: u64) -> Vec<ResultView<'_>> {
     let science = &doc.science;
+    let molecule: HashSet<u64> = crate::molecule_names::component(doc, atom)
+        .into_iter()
+        .collect();
     let attachments: HashMap<u64, (&Attachment, Freshness)> = science
         .attachments
         .iter()
-        .filter(|a| a.atoms.contains(&Some(atom)))
+        .filter(|a| a.atoms.iter().flatten().any(|id| molecule.contains(id)))
         .map(|a| (a.id, (a, a.freshness(doc))))
         .collect();
     if attachments.is_empty() {

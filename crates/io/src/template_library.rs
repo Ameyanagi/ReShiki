@@ -127,6 +127,8 @@ impl Library {
         let mut next = self.clone();
         let mut added = 0;
         for mut t in incoming.templates {
+            // Templates hold structures, not calculation data.
+            t.document.science = Default::default();
             let favorite = incoming.favorites.contains(&t.id);
             let original_id = std::mem::take(&mut t.id);
             let equal = next.templates.iter().find(|existing| {

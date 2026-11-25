@@ -112,8 +112,10 @@ fn envelope_round_trip_has_compact_json_length_and_hash() {
 #[test]
 fn figure_payload_carries_no_science() {
     let (doc, _) = calculated_water();
-    let decoded = decode(&encode(&doc).unwrap()).unwrap();
+    let decoded = decode(&encode(&doc.current()).unwrap()).unwrap();
     assert!(decoded.science.is_empty());
+    // Without the calculation data the embedded drawing needs no newer reader.
+    assert!(decoded.version < CALCULATIONS);
     assert_eq!(decoded.atoms, doc.atoms);
     assert_eq!(decoded.models, doc.models);
 }
