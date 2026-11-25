@@ -625,19 +625,18 @@ fn restore_reaction_maps(
         }
         i
     }
-    // Participants are whole molecules; the smallest atom ID names each one.
-    let molecule_of: HashMap<u64, u64> = doc
-        .reactions
-        .iter()
-        .skip(before)
-        .flat_map(|r| r.reactants.iter().chain(&r.products))
-        .flat_map(|part| {
-            let key = part.atoms.iter().min().copied().unwrap_or_default();
-            part.atoms.iter().map(move |&id| (id, key))
-        })
-        .collect();
+    // The step sides each atom is on. Saving pairs atoms by number, so a
+    // number may appear only once on each side of each step.
+    let mut sides_of = HashMap::<u64, Vec<(usize, bool)>>::new();
+    for (step, reaction) in doc.reactions.iter().skip(before).enumerate() {
+        for (side, parts) in [(false, &reaction.reactants), (true, &reaction.products)] {
+            for &id in parts.iter().flat_map(|part| &part.atoms) {
+                sides_of.entry(id).or_default().push((step, side));
+            }
+        }
+    }
     let mut parent: Vec<_> = (0..doc.atoms.len()).collect();
-    let mut molecules: HashMap<usize, HashSet<u64>> = HashMap::new();
+    let mut sides: HashMap<usize, HashSet<(usize, bool)>> = HashMap::new();
     let mut order = Vec::new();
     for (reaction, &pairs) in doc.reactions.iter().skip(before).zip(maps) {
         let side = |parts: &[Participant]| {
@@ -659,25 +658,25 @@ fn restore_reaction_maps(
                 paired.extend([a, b]);
                 let (ra, rb) = (root(&parent, a), root(&parent, b));
                 if ra != rb {
-                    let molecule = |i| {
+                    let on = |i| {
                         id(i)
-                            .and_then(|id| molecule_of.get(&id))
+                            .and_then(|id| sides_of.get(&id))
                             .into_iter()
+                            .flatten()
                             .copied()
                             .collect::<HashSet<_>>()
                     };
-                    let mut joined = molecules.remove(&ra).unwrap_or_else(|| molecule(a));
-                    let other = molecules.remove(&rb).unwrap_or_else(|| molecule(b));
-                    // Steps that map one molecule differently keep the first
-                    // step's pairs, as two atoms of a molecule cannot share a
-                    // number.
+                    let mut joined = sides.remove(&ra).unwrap_or_else(|| on(a));
+                    let other = sides.remove(&rb).unwrap_or_else(|| on(b));
+                    // A pair that would put one number twice on a step side
+                    // conflicts with earlier pairs, which keep their numbers.
                     if !joined.is_disjoint(&other) {
-                        molecules.insert(ra, joined);
-                        molecules.insert(rb, other);
+                        sides.insert(ra, joined);
+                        sides.insert(rb, other);
                         continue;
                     }
                     joined.extend(other);
-                    molecules.insert(rb, joined);
+                    sides.insert(rb, joined);
                     if let Some(slot) = parent.get_mut(ra) {
                         *slot = rb;
                     }

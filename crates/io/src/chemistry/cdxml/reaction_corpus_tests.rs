@@ -796,3 +796,38 @@ async fn a_charge_mark_in_a_condition_group_does_not_bring_in_its_atom() {
         assert_eq!(texts, ["catalyst 1", "solvent, 24 h"], "{format}");
     }
 }
+
+#[tokio::test]
+async fn a_later_pair_never_gives_one_number_twice_to_a_step_side() {
+    // A + B -> C + D maps A to C and B to D; the later step C -> B would
+    // join both chains, putting one number twice on each side of step one.
+    let source = r#"<?xml version="1.0" encoding="UTF-8"?>
+<CDXML><page id="1">
+<fragment id="2"><n id="3" p="0 0" Element="6"/></fragment>
+<fragment id="4"><n id="5" p="0 40" Element="8"/></fragment>
+<arrow id="6" Tail3D="30 20 0" Head3D="90 20 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None"/>
+<fragment id="7"><n id="8" p="120 0" Element="6"/></fragment>
+<fragment id="9"><n id="10" p="120 40" Element="8"/></fragment>
+<arrow id="11" Tail3D="150 0 0" Head3D="210 0 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None"/>
+<scheme id="12">
+<step id="13" ReactionStepReactants="2 4" ReactionStepProducts="7 9" ReactionStepArrows="6" ReactionStepAtomMap="3 8 5 10"/>
+<step id="14" ReactionStepReactants="7" ReactionStepProducts="4" ReactionStepArrows="11" ReactionStepAtomMap="8 5"/>
+</scheme></page></CDXML>"#;
+    let binary = binary(source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.as_bytes().to_vec()), ("cdx", binary)] {
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        assert_eq!(document.reactions.len(), 2, "{format}");
+        let saved = String::from_utf8(
+            formats::write_with_engine(document, "cdxml", &engine)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let first_step = vec![("6".into(), "6".into()), ("8".into(), "8".into())];
+        assert_eq!(saved_step_pairs(&saved), [first_step, vec![]], "{format}");
+    }
+}
