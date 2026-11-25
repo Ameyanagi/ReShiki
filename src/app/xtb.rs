@@ -12,13 +12,20 @@ use iced::Task;
 use reshiki::document::Document;
 use reshiki::qcdata::{self, CalcResult, Frame};
 use reshiki::science::{self, Freshness, Launch};
+use results::RunInfo;
 use state::{Progress, Settings};
+use std::sync::{Arc, Weak};
 
+pub(super) mod palette;
+mod results;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
 mod state;
+mod tone;
 mod view;
 
+#[cfg(test)]
+pub(super) use results::{Evaluation, View};
 pub(crate) use state::Task as CalcTask;
 
 /// The Predict tab's two pages.
@@ -44,6 +51,7 @@ pub(crate) enum Action {
     Cancel,
     ApplyAnyway,
     Discard,
+    Palette(palette::Action),
     #[cfg(not(target_arch = "wasm32"))]
     Event(u64, run::Event),
 }
@@ -53,6 +61,8 @@ pub(crate) enum Action {
 pub(crate) struct Window {
     pub(super) page: Page,
     pub(super) settings: Settings,
+    /// Where the results palette sits, for every document of the window.
+    pub(super) dock: palette::Dock,
 }
 
 /// One document's run and the last outcome the card shows.
@@ -61,8 +71,44 @@ pub(crate) struct State {
     pub(super) run: Option<Run>,
     pub(super) outcome: Option<Outcome>,
     serial: u64,
-    /// The attachment of the newest stored result, for the results palette.
-    pub(super) last_attachment: Option<u64>,
+    pub(super) palette: palette::Palette,
+    /// What this session knows about stored results' runs, by result.
+    infos: Vec<(Weak<CalcResult>, Arc<RunInfo>)>,
+}
+
+impl State {
+    /// The run information of a result the document holds.
+    fn info(&self, result: &Arc<CalcResult>) -> Option<&RunInfo> {
+        self.infos
+            .iter()
+            .find(|(weak, _)| is(weak, result))
+            .map(|(_, info)| info.as_ref())
+    }
+
+    fn remember(&mut self, result: &Arc<CalcResult>, info: Arc<RunInfo>) {
+        self.infos.retain(|(weak, _)| weak.strong_count() > 0);
+        self.infos.push((Arc::downgrade(result), info));
+    }
+}
+
+/// Whether `weak` is the live allocation `result`: a live weak at the same
+/// address is the same allocation.
+fn is(weak: &Weak<CalcResult>, result: &Arc<CalcResult>) -> bool {
+    weak.strong_count() > 0 && weak.as_ptr() == Arc::as_ptr(result)
+}
+
+/// What a run calculates and how: from the card, or a result's Recalculate.
+struct Request {
+    atoms: Vec<u64>,
+    task: CalcTask,
+    charge: i32,
+    unpaired: u32,
+    solvent: Option<&'static str>,
+    threads: u32,
+    tight: bool,
+    fixed: Vec<u64>,
+    /// "Keep full results in this file" for the new result.
+    keep_full: bool,
 }
 
 pub(crate) struct Run {
@@ -76,6 +122,7 @@ pub(crate) struct Run {
     tight: bool,
     /// Drawing atoms the optimizer holds fixed.
     fixed: Vec<u64>,
+    keep_full: bool,
     /// Absent while the 3D model is made first.
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
@@ -122,6 +169,7 @@ struct Pending {
     result: CalcResult,
     line: String,
     notes: Vec<String>,
+    info: RunInfo,
 }
 
 /// A run's progress, which never closes menus or moves focus.
@@ -158,6 +206,7 @@ impl App {
             #[cfg(not(target_arch = "wasm32"))]
             Action::Event(serial, event) => self.xtb_event(serial, event),
             Action::Page(page) => self.xtb.page = page,
+            Action::Palette(action) => return self.xtb_palette(action),
             setting => {
                 let target = self.xtb_key();
                 let settings = &mut self.xtb.settings;
@@ -211,9 +260,11 @@ impl App {
         (!self.model_stale(index)).then_some(index)
     }
 
-    /// The model preview while a run is current, for the canvas.
+    /// The model preview while a run is current, else a previewed step.
     pub(super) fn xtb_preview(&self) -> Option<&Document> {
-        let run = self.tab.xtb.run.as_ref()?;
+        let Some(run) = self.tab.xtb.run.as_ref() else {
+            return self.xtb_step_preview();
+        };
         (run.revision == (self.tab.file_epoch, self.tab.revision))
             .then_some(run.preview.as_deref())
             .flatten()
@@ -238,11 +289,12 @@ impl App {
         self.tab.xtb.run.is_some()
     }
 
-    fn xtb_run(&mut self) -> Task<Message> {
+    /// Whether a run can start now; if not, the status says why.
+    fn xtb_can_start(&mut self) -> bool {
         // A build without the engine shows no Run button; its worker would
         // answer "not included" anyway.
         if self.tab.xtb.run.is_some() {
-            return Task::none();
+            return false;
         }
         if self.tab.busy
             || self.tab.optimization.is_some()
@@ -251,6 +303,13 @@ impl App {
         {
             self.status = "Finish the current operation, then run xTB".into();
             self.error = false;
+            return false;
+        }
+        true
+    }
+
+    fn xtb_run(&mut self) -> Task<Message> {
+        if !self.xtb_can_start() {
             return Task::none();
         }
         let Some((atoms, first)) = self
@@ -261,14 +320,6 @@ impl App {
             self.error = true;
             return Task::none();
         };
-        if atoms.len() > state::MAX_ATOMS {
-            self.xtb_fail(format!(
-                "Too many atoms: {}. The limit is {} atoms.",
-                atoms.len(),
-                state::MAX_ATOMS
-            ));
-            return Task::none();
-        }
         let settings = &self.xtb.settings;
         let (charge, multiplicity) = science::drawn_state(&self.tab.doc, first);
         let drawn = (charge, multiplicity.saturating_sub(1));
@@ -295,18 +346,44 @@ impl App {
         } else {
             vec![]
         };
-        self.tab.xtb.serial = self.tab.xtb.serial.wrapping_add(1);
-        self.tab.xtb.outcome = None;
-        self.tab.xtb.run = Some(Run {
-            serial: self.tab.xtb.serial,
-            task: settings.task,
+        let request = Request {
             atoms,
+            task: settings.task,
             charge,
             unpaired,
             solvent: settings.solvent,
             threads: settings.threads(),
             tight: settings.tight,
             fixed,
+            keep_full: false,
+        };
+        self.xtb_begin(request)
+    }
+
+    /// Start `request`; its run replaces the card's last outcome.
+    fn xtb_begin(&mut self, request: Request) -> Task<Message> {
+        if request.atoms.len() > state::MAX_ATOMS {
+            self.xtb_fail(format!(
+                "Too many atoms: {}. The limit is {} atoms.",
+                request.atoms.len(),
+                state::MAX_ATOMS
+            ));
+            return Task::none();
+        }
+        self.xtb_end_preview();
+        self.tab.xtb.serial = self.tab.xtb.serial.wrapping_add(1);
+        self.tab.xtb.outcome = None;
+        self.tab.xtb.run = Some(Run {
+            serial: self.tab.xtb.serial,
+            task: request.task,
+            atoms: request.atoms,
+            charge: request.charge,
+            unpaired: request.unpaired,
+            solvent: request.solvent,
+            threads: request.threads,
+            tight: request.tight,
+            fixed: request.fixed,
+            keep_full: request.keep_full,
             launch: None,
             model: None,
             started: iced::time::Instant::now(),
@@ -456,7 +533,8 @@ impl App {
                 run.preview = (run.revision == current)
                     .then_some(run.launch.as_ref())
                     .flatten()
-                    .and_then(|launch| preview(&self.tab.doc, launch, &positions))
+                    .and_then(|launch| launch.atoms.iter().flatten().next().copied())
+                    .and_then(|atom| preview(&self.tab.doc, atom, &positions))
                     .map(Box::new);
                 self.status = run.status();
                 self.error = false;
@@ -540,7 +618,9 @@ impl App {
                     Ok(changes) => changes
                         .iter()
                         .map(|change| {
-                            state::describe(change, |id| self.xtb_atom_name(&pending.launch, id))
+                            state::describe(change, |id| {
+                                self.xtb_atom_name(&pending.launch.atoms, id)
+                            })
                         })
                         .collect(),
                     Err(error) => vec![format!("The stereo check could not run: {error}.")],
@@ -572,7 +652,17 @@ impl App {
             self.tab.xtb.outcome = Some(Outcome::Failed(self.status.clone()));
             return;
         }
-        self.tab.xtb.last_attachment = Some(attached.attachment);
+        if let Some(result) = self
+            .tab
+            .doc
+            .science
+            .results
+            .last()
+            .map(|s| s.result.clone())
+        {
+            self.tab.xtb.remember(&result, Arc::new(pending.info));
+            self.tab.xtb.palette.show(&result);
+        }
         self.status = if applied {
             format!("Applied xTB geometry · {} · ⌘Z undoes", pending.line)
         } else {
@@ -585,8 +675,8 @@ impl App {
     }
 
     /// "C3" for the third frame atom, and the drawing's CIP code there.
-    fn xtb_atom_name(&self, launch: &Launch, id: u64) -> (String, Option<String>) {
-        let index = launch.atoms.iter().position(|a| *a == Some(id));
+    fn xtb_atom_name(&self, atoms: &[Option<u64>], id: u64) -> (String, Option<String>) {
+        let index = atoms.iter().position(|a| *a == Some(id));
         let atom = self.tab.doc.atom(id);
         let element = atom.map_or("?", |a| a.element.as_str());
         let label = index.map_or_else(|| element.to_owned(), |i| format!("{element}{}", i + 1));
@@ -613,7 +703,12 @@ impl Run {
 
 /// Whether the molecule's model still has the geometry `launch` started from.
 fn shows(doc: &Document, launch: &Launch) -> bool {
-    let Some(atom) = launch.atoms.iter().flatten().next() else {
+    model_shows(doc, &launch.atoms, &launch.frame.positions_angstrom)
+}
+
+/// Whether the 3D model of the frame atoms `atoms` is at `positions` (Å).
+fn model_shows(doc: &Document, atoms: &[Option<u64>], positions: &[[f64; 3]]) -> bool {
+    let Some(atom) = atoms.iter().flatten().next() else {
         return false;
     };
     doc.models
@@ -622,21 +717,17 @@ fn shows(doc: &Document, launch: &Launch) -> bool {
         .is_some_and(|model| {
             let now = model.atoms.iter().map(|a| a.xyz);
             let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
-            now.eq(launch
-                .frame
-                .positions_angstrom
-                .iter()
-                .map(|p| p.map(|x| x as f32)))
+            now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
         })
 }
 
-/// The document with the molecule's model at `positions` (Å, frame order).
-fn preview(doc: &Document, launch: &Launch, positions: &[[f64; 3]]) -> Option<Document> {
-    let atom = launch.atoms.iter().flatten().next()?;
+/// The document with the model of `atom`'s molecule at `positions` (Å,
+/// frame order), shown beside the drawing if it was 2D only.
+fn preview(doc: &Document, atom: u64, positions: &[[f64; 3]]) -> Option<Document> {
     let index = doc
         .models
         .iter()
-        .position(|m| m.linked_atoms.contains(atom))?;
+        .position(|m| m.linked_atoms.contains(&atom))?;
     let mut doc = doc.clone();
     let model = doc.models.get_mut(index)?;
     if model.atoms.len() + model.hydrogens.len() != positions.len() {
@@ -736,14 +827,26 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, String> {
         vibrations: None,
         thermo: None,
         trajectory,
-        keep_full: false,
+        keep_full: run.keep_full,
         omitted_bytes: None,
     };
     let mut notes = Vec::new();
     if report.near_degenerate {
         notes.push(state::NEAR_DEGENERATE.into());
     }
+    let info = RunInfo {
+        gap_ev: report.gap_ev,
+        near_degenerate: report.near_degenerate,
+        evaluations: report.evaluations.clone(),
+        numerics: report.numerics.clone(),
+        tight: run.tight,
+        threads: run.threads,
+        fixed: run.fixed.clone(),
+        finished: chrono::Local::now().format("%-d %b %Y %H:%M").to_string(),
+        seconds: run.seconds(),
+    };
     Ok(Pending {
+        info,
         launch,
         frames,
         result,

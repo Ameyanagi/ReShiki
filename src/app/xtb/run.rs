@@ -1,12 +1,15 @@
 //! One xTB job on its own thread: the worker client driven by the optimizer.
 
+use super::results::Evaluation;
 use iced::futures::{Stream, channel::mpsc};
 use reshiki_optimize::{
     ANGSTROM_PER_BOHR, Accuracy, EvalError, Level, Options, Potential, Status, optimize,
 };
 use reshiki_xtb_worker::{
     client::{Cancel, Error, Limits, Session},
-    protocol::{Compute, Conventions, ErrorKind, Method, Open, Solvent, SolventModel, Units},
+    protocol::{
+        Compute, Computed, Conventions, ErrorKind, Method, Open, Solvent, SolventModel, Units,
+    },
 };
 use std::{
     ops::ControlFlow,
@@ -68,6 +71,20 @@ pub(crate) struct Report {
     pub energies: Vec<f64>,
     /// Step-major Å coordinates, one block per energy. Empty for an energy job.
     pub path: Vec<f64>,
+    /// Every energy the worker computed, in order, for the Log tab.
+    pub evaluations: Vec<Evaluation>,
+    /// How the engine computed (its numerics line).
+    pub numerics: String,
+}
+
+impl From<&Computed> for Evaluation {
+    fn from(computed: &Computed) -> Self {
+        Self {
+            energy: computed.energy,
+            scf_iterations: computed.scf_iterations,
+            seconds: computed.seconds,
+        }
+    }
 }
 
 /// Start `job` on a new thread. The stream ends after `Event::Done`.
@@ -127,6 +144,7 @@ fn run(
     session.open(&open, cancel)?;
 
     let mut path = Vec::new();
+    let mut evaluations = Vec::new();
     let outcome = if job.optimize {
         let xyz = open.positions.as_flattened();
         let positions: Vec<_> = xyz.iter().map(|x| x / ANGSTROM_PER_BOHR).collect();
@@ -144,6 +162,7 @@ fn run(
         let mut xtb = Xtb {
             session: &mut session,
             cancel,
+            evaluations: &mut evaluations,
         };
         let mut batch = Batch::default();
         let outcome = optimize(&mut xtb, &open.numbers, &positions, &options, |step| {
@@ -177,6 +196,7 @@ fn run(
     let final_xyz = outcome.as_ref().map(|outcome| outcome.positions.as_slice());
     let computed = session.compute(&request(final_xyz, false), cancel)?;
     let _ = session.close();
+    evaluations.push(Evaluation::from(&computed));
     let energy = outcome
         .as_ref()
         .map_or(computed.energy, |outcome| outcome.energy);
@@ -201,6 +221,8 @@ fn run(
         steps,
         energies,
         path,
+        evaluations,
+        numerics: computed.numerics,
     })
 }
 
@@ -227,6 +249,7 @@ fn angstroms(positions: &[f64]) -> Vec<[f64; 3]> {
 struct Xtb<'a> {
     session: &'a mut Session,
     cancel: &'a Cancel,
+    evaluations: &'a mut Vec<Evaluation>,
 }
 
 impl Potential for Xtb<'_> {
@@ -246,6 +269,7 @@ impl Potential for Xtb<'_> {
             } => EvalError::Scf(message),
             error => EvalError::Failed(error.to_string()),
         })?;
+        self.evaluations.push(Evaluation::from(&computed));
         let rows = computed
             .gradient
             .ok_or_else(|| EvalError::Failed("the xTB worker returned no gradient".into()))?;

@@ -1,45 +1,14 @@
 //! The Predict tab's NMR · xTB switch and the Calculate card.
 use super::state::{self, LATER_METHODS, LATER_SETTINGS, LATER_TASKS, SOLVENTS};
+use super::tone::{Tone, line};
 use super::{Action, CalcTask, Outcome, Page};
 use crate::app::inspector::Section;
-use crate::app::workspace::{
-    accessible_checkbox, accessible_command, control, hover_hint, muted_text,
-};
+use crate::app::workspace::{accessible_checkbox, accessible_command, control, hover_hint};
 use crate::app::{App, Message};
 use iced::widget::{Space, canvas, column, container, progress_bar, row, text, tooltip};
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 
 const WIDE: Length = Length::Fill;
-
-/// A line in the card's tone: muted, good, warning or error.
-#[derive(Clone, Copy)]
-enum Tone {
-    Muted,
-    Good,
-    Warning,
-    Error,
-}
-
-fn line<'a>(content: impl Into<String>, tone: Tone) -> Element<'a, Message> {
-    text(content.into())
-        .size(11)
-        .style(move |theme: &Theme| {
-            let seed = match tone {
-                Tone::Muted => return muted_text(theme),
-                Tone::Good => theme.palette().success,
-                Tone::Warning => theme.palette().warning,
-                Tone::Error => crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47)),
-            };
-            text::Style {
-                color: Some(crate::appearance::readable(
-                    seed,
-                    &[theme.palette().background],
-                    reshiki::color_contrast::TEXT_TARGET,
-                )),
-            }
-        })
-        .into()
-}
 
 fn label<'a>(content: &'a str) -> Element<'a, Message> {
     text(content).size(12).into()
@@ -82,19 +51,36 @@ impl App {
             },
         ))
         .spacing(4);
-        let body = match page {
-            Page::Nmr => self.nmr_inspector(),
-            Page::Xtb => self.xtb_card(),
-        };
-        column![switch, body].spacing(12).into()
+        let mut content = column![switch].spacing(12);
+        match page {
+            Page::Nmr => content = content.push(self.nmr_inspector()),
+            Page::Xtb => {
+                content = content.push(self.xtb_card());
+                if let Some(palette) = self.xtb_inspector_palette() {
+                    content = content.push(palette);
+                }
+            }
+        }
+        content.into()
+    }
+
+    /// "Show results" when the palette could show something it does not.
+    fn xtb_show_results(&self) -> Option<Element<'_, Message>> {
+        self.xtb_can_show().then(|| {
+            accessible_command("xtb-show-results", "Show the xTB results", "Show results")
+                .on_press(Message::Xtb(Action::Palette(super::palette::Action::Show)))
+                .into()
+        })
     }
 
     fn xtb_card(&self) -> Element<'_, Message> {
         if let Some(reason) = super::unavailable() {
-            return container(text(reason).size(12))
-                .padding(10)
-                .width(WIDE)
-                .into();
+            // Stored results stay readable in builds that cannot calculate.
+            let mut body = column![text(reason).size(12)].spacing(8);
+            if let Some(show) = self.xtb_show_results() {
+                body = body.push(show);
+            }
+            return container(body).padding(10).width(WIDE).into();
         }
         let settings = &self.xtb.settings;
         let run = self.tab.xtb.run.as_ref();
@@ -298,7 +284,10 @@ impl App {
         if let Some(run) = run {
             body = body.push(progress(run));
         } else if let Some(outcome) = &self.tab.xtb.outcome {
-            body = body.push(outcome_view(outcome));
+            body = body.push(outcome_view(outcome, self.xtb_palette_visible()));
+        }
+        if let Some(show) = self.xtb_show_results() {
+            body = body.push(show);
         }
         body = body.push(
             column![
@@ -515,13 +504,18 @@ fn reshiki_optimize_steps() -> usize {
     500
 }
 
-fn outcome_view(outcome: &Outcome) -> Element<'_, Message> {
+/// The card's last outcome. A finished result defers to the results
+/// palette while it shows; its notes stay here.
+fn outcome_view(outcome: &Outcome, in_palette: bool) -> Element<'_, Message> {
     match outcome {
         Outcome::Done {
             line: summary,
             notes,
         } => {
-            let mut lines = column![line(summary.clone(), Tone::Good)].spacing(4);
+            let mut lines = column![].spacing(4);
+            if !in_palette {
+                lines = lines.push(line(summary.clone(), Tone::Good));
+            }
             for note in notes {
                 lines = lines.push(line(note.clone(), Tone::Warning));
             }

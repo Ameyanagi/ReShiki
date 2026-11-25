@@ -6,19 +6,19 @@ use reshiki::geometry::Point3;
 use reshiki::models3d::Display;
 use std::sync::Arc;
 
-const START: [[f64; 3]; 3] = [[0., 0., 0.], [0.96, 0., 0.], [-0.24, 0.93, 0.]];
-const MOVED: [[f64; 3]; 3] = [[0., 0., 0.01], [0.9572, 0., 0.], [-0.2400, 0.9266, 0.]];
+pub(super) const START: [[f64; 3]; 3] = [[0., 0., 0.], [0.96, 0., 0.], [-0.24, 0.93, 0.]];
+pub(super) const MOVED: [[f64; 3]; 3] = [[0., 0., 0.01], [0.9572, 0., 0.], [-0.2400, 0.9266, 0.]];
 
-fn send(app: &mut App, action: Action) {
+pub(super) fn send(app: &mut App, action: Action) {
     let _ = app.update(Message::Xtb(action));
 }
 
-fn event(app: &mut App, event: Event) {
+pub(super) fn event(app: &mut App, event: Event) {
     app.xtb_answer(event);
 }
 
 /// A selected oxygen; Run asks for its 3D model, answered here as water.
-fn water(task: CalcTask) -> (App, u64) {
+pub(super) fn water(task: CalcTask) -> (App, u64) {
     let (mut app, _) = App::new();
     app.tab.busy = false;
     let o = app.tab.doc.add_atom("O", Point::default());
@@ -42,7 +42,7 @@ fn water(task: CalcTask) -> (App, u64) {
     (app, o)
 }
 
-fn model(doc: &Document) -> Vec<[f32; 3]> {
+pub(super) fn model(doc: &Document) -> Vec<[f32; 3]> {
     let model = &doc.models[0];
     model
         .atoms
@@ -52,11 +52,11 @@ fn model(doc: &Document) -> Vec<[f32; 3]> {
         .collect()
 }
 
-fn f32s(positions: &[[f64; 3]]) -> Vec<[f32; 3]> {
+pub(super) fn f32s(positions: &[[f64; 3]]) -> Vec<[f32; 3]> {
     positions.iter().map(|p| p.map(|x| x as f32)).collect()
 }
 
-fn optimized(start: &[[f64; 3]], end: &[[f64; 3]]) -> Event {
+pub(super) fn optimized(start: &[[f64; 3]], end: &[[f64; 3]]) -> Event {
     Event::Done(Ok(Arc::new(Report {
         engine_version: "0.2.0".into(),
         engine_rev: "9d0388c".into(),
@@ -69,6 +69,8 @@ fn optimized(start: &[[f64; 3]], end: &[[f64; 3]]) -> Event {
         steps: 1,
         energies: vec![-5.06, -5.070176],
         path: [start.as_flattened(), end.as_flattened()].concat(),
+        evaluations: vec![],
+        numerics: String::new(),
     })))
 }
 
@@ -132,6 +134,8 @@ fn an_energy_keeps_the_result_and_the_model() {
             steps: 0,
             energies: vec![-5.070176],
             path: vec![],
+            evaluations: vec![],
+            numerics: String::new(),
         }))),
     );
     assert_eq!(model(&app.tab.doc), f32s(&START));
@@ -209,7 +213,7 @@ fn a_worker_failure_applies_nothing() {
 }
 
 /// CHFClBr with F wedged, its model matching the wedge (as in the science tests).
-fn halocarbon() -> (App, u64, Vec<[f64; 3]>) {
+pub(super) fn halocarbon() -> (App, u64, Vec<[f64; 3]>) {
     let (mut app, _) = App::new();
     app.tab.busy = false;
     let doc = &mut app.tab.doc;

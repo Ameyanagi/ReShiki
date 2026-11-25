@@ -285,10 +285,11 @@ impl App {
             body = body.push(background(self.inspector()));
         }
         content = content.push(body);
-        content
-            .push(background(self.status_bar()))
-            .height(Length::Fill)
-            .into()
+        content = content.push(background(self.status_bar()));
+        if let Some(results) = self.xtb_bottom_palette() {
+            content = content.push(background(results));
+        }
+        content.height(Length::Fill).into()
     }
 
     fn drawing_canvas(&self) -> Element<'_, Edit> {
@@ -315,6 +316,7 @@ impl App {
             keyboard_marker: show_keyboard_target && self.tab.keyboard_drawing.shown(),
             morph: self.model_morph(),
             model_generation: self.model_generation(),
+            result_label: self.xtb_label(),
             element: self.atom_tool_element(),
             atom_label: (self.element == super::palettes::R_GROUP)
                 .then_some(super::palettes::R_GROUP),
