@@ -904,6 +904,23 @@ explains how the crates and modules fit together.
 - `crates/model/src/typography.rs`: Editable rich text, independent of the UI and chemistry engine.
 - `crates/model/src/typography/name_markup.rs`: Presentation-only typography for chemical names.
 
+## reshiki-optimize
+
+- `crates/optimize/src/conformers.rs`: Cluster minimized starts by molecular symmetry and rank the reoptimized representatives.
+- `crates/optimize/src/conformers/alignment.rs`: Heavy-atom RMSD under a proper rotation using Horn's quaternion matrix.
+- `crates/optimize/src/conformers/clustering.rs`: Select diverse low-energy representatives from minimized starts with Butina clustering.
+- `crates/optimize/src/conformers/ranking.rs`: Deduplicate optimized candidates, compute thermal populations, and save aligned geometries.
+- `crates/optimize/src/conformers/topology.rs`: Validate molecular connectivity and enumerate heavy-atom graph automorphisms.
+- `crates/optimize/src/lib.rs`: Geometry optimization and conformer ranking for any energy-and-gradient potential.
+- `crates/optimize/src/linalg.rs`: Dense symmetric eigendecomposition and vector operations for geometry optimization.
+- `crates/optimize/src/model_hessian.rs`: Lindh's positive semidefinite model Hessian in Cartesian atomic units.
+- `crates/optimize/src/optimizer.rs`: Molecular geometry minimization with ANC-RFO and Cartesian L-BFGS.
+- `crates/optimize/src/optimizer/anc.rs`: Approximate normal coordinates, rational-function steps and direct BFGS updates.
+- `crates/optimize/src/optimizer/anc/davidson.rs`: Lowest eigenvector of the symmetric RFO matrix [H g; gᵀ 0].
+- `crates/optimize/src/optimizer/anc/davidson/regression.rs`: Davidson regression on a realistic Lindh model Hessian after BFGS updates.
+- `crates/optimize/src/optimizer/coordinates.rs`: Free Cartesian coordinates and the instantaneous translation and rotation subspace.
+- `crates/optimize/src/optimizer/lbfgs.rs`: Limited-memory inverse BFGS in free Cartesian coordinates.
+
 ## reshiki-process-heap
 
 - `crates/process-heap/src/allocation_metrics.rs`: Optional development measurements of requested Rust allocation sizes.
