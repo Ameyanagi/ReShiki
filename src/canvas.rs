@@ -753,6 +753,8 @@ pub struct MoleculeCanvas<'a> {
     /// The model (by an atom) that started its 2D → 3D morph, and when.
     pub(crate) morph: Option<(u64, iced::time::Instant)>,
     pub(crate) model_generation: Option<ModelGeneration<'a>>,
+    /// xTB "Show as labels": a result's value under its molecule.
+    pub(crate) result_label: Option<ResultLabel>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
@@ -816,6 +818,7 @@ impl<'a> MoleculeCanvas<'a> {
             keyboard_marker: false,
             morph: None,
             model_generation: None,
+            result_label: None,
             joining: None,
             hidden_annotation: None,
             bond_drawing: styles.bond_drawing,
@@ -852,12 +855,21 @@ impl<'a> MoleculeCanvas<'a> {
     }
 }
 
+/// A calculation's value drawn under its molecule; session-only, like NMR
+/// labels, and absent from exported scenes.
+pub(crate) struct ResultLabel {
+    pub atoms: Vec<u64>,
+    pub text: String,
+}
+
 /// An editing aid for a current, abortable 3D-generation job. It never changes
 /// the drawing and is absent from previews and exported scenes.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ModelGeneration<'a> {
     pub atoms: &'a [u64],
     pub started: iced::time::Instant,
+    /// What the badge says is running: "Generating 3D" or "Calculating xTB".
+    pub label: &'static str,
 }
 
 impl ModelGeneration<'_> {
