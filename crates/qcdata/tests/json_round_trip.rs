@@ -1,6 +1,6 @@
 use reshiki_qcdata::{
     AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Convergence, Endpoints,
-    Error, Frame, MAX_COMPACT_VALUES, MAX_SAVED_CONFORMERS, OrbitalSet, Orbitals, Provenance,
+    Error, Frame, MAX_RUN_EVALUATIONS, MAX_SAVED_CONFORMERS, OrbitalSet, Orbitals, Provenance,
     RunSummary, ScfRetry, Settings, Shell, SolvationState, Solvent, SolventCorrection,
     SolventModel, Source, Spin, Status, Task, Thermo, Trajectory, Vibrations, XtbConventions,
     XtbMethod, XtbSettings,
@@ -277,7 +277,7 @@ fn calculated_result_round_trips_with_solvent_settings() {
         }],
         gfnff: None,
         threads: Some(4),
-        convergence: Convergence::Tight,
+        convergence: Some(Convergence::Tight),
         fixed_atoms: vec![0, 2],
     });
     calculated.provenance.program = "ReShiki".into();
@@ -358,7 +358,7 @@ fn minimal_result_deserializes_from_only_required_fields() {
         panic!("expected xTB settings");
     };
     assert_eq!(settings.threads, None);
-    assert_eq!(settings.convergence, Convergence::Normal);
+    assert_eq!(settings.convergence, None);
     assert!(settings.fixed_atoms.is_empty());
     assert_eq!(result.run, None);
     assert_eq!(
@@ -380,7 +380,7 @@ fn calculated_result_rejects_invalid_run_settings_and_summary() {
         scf_retries: vec![],
         gfnff: None,
         threads: Some(4),
-        convergence: Convergence::Tight,
+        convergence: Some(Convergence::Tight),
         fixed_atoms: vec![0, 2],
     });
     result.provenance.source = Source::Calculated {
@@ -414,7 +414,7 @@ fn calculated_result_rejects_invalid_run_settings_and_summary() {
     }
     result.run = Some(RunSummary {
         seconds: 0.0,
-        scf_iterations: vec![0; MAX_COMPACT_VALUES + 1],
+        scf_iterations: vec![0; MAX_RUN_EVALUATIONS + 1],
         finished: None,
     });
     assert!(matches!(

@@ -788,10 +788,7 @@ fn a_reopened_legacy_optimization_recalculates_with_defaults() {
         shown.info,
         &shown.method(),
     );
-    assert!(
-        log.lines()
-            .any(|line| line == "task optimize · normal convergence")
-    );
+    assert!(log.lines().any(|line| line == "task optimize"));
     assert!(log.contains("SCF details were not saved with this result; recalculate to see them."));
 
     reopened.xtb.settings.threads = 7;

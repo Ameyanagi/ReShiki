@@ -196,7 +196,7 @@ fn light_optimization_run_metadata_costs_at_most_two_kilobytes() {
         unreachable!();
     };
     settings.threads = Some(4);
-    settings.convergence = Convergence::Tight;
+    settings.convergence = Some(Convergence::Tight);
     settings.fixed_atoms = vec![0, 11, 23];
     result.run = Some(RunSummary {
         seconds: 42.5,
@@ -205,6 +205,8 @@ fn light_optimization_run_metadata_costs_at_most_two_kilobytes() {
     });
     let saved = result.for_file(0, &[]);
     saved.validate(&frame).unwrap();
+    assert_eq!(saved.run, result.run);
+    assert_eq!(saved.settings, result.settings);
     let bytes = result.saved_bytes(0, &[]);
     let added = bytes - baseline;
     eprintln!(
