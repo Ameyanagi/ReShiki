@@ -46,6 +46,9 @@ label_atoms     Label atoms
 convert         Convert structure
 name            Name structure
 schema          Input schema
+export_input    Export calculation input
+read_output     Read calculation output
+calculate       Run xTB calculation
 ```
 
 Commands after `--cli`:

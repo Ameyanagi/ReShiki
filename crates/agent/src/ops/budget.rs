@@ -18,7 +18,7 @@ const MIB: usize = 1024 * 1024;
 pub struct Budgets {
     /// 24 MiB. Published for the transport's request line cap.
     pub max_request_bytes: usize,
-    /// `exchange::LIMIT` (16 MiB), for textual import formats only.
+    /// `exchange::LIMIT` (16 MiB), for text inputs other than base64 CDX.
     pub max_text_bytes: usize,
     /// `exchange::LIMIT.div_ceil(3) * 4`, the base64 length of the largest
     /// CDX, and the only limit for cdx imports (as in native import).
@@ -51,8 +51,10 @@ pub struct Budgets {
     pub concurrency: usize,
     /// 8 calls may wait for a permit; more are refused as busy.
     pub queue: usize,
-    /// 120 s cooperative deadline per operation.
+    /// 120 s cooperative deadline for ordinary operations.
     pub op_deadline: Duration,
+    /// 30 min cooperative deadline for a calculation.
+    pub calc_deadline: Duration,
     /// 60 min: an idle session document expires.
     pub idle_ttl: Duration,
     /// 32 idempotency receipts kept per document.
@@ -106,6 +108,7 @@ impl Default for Budgets {
             concurrency: 2,
             queue: 8,
             op_deadline: Duration::from_secs(120),
+            calc_deadline: Duration::from_secs(30 * 60),
             idle_ttl: Duration::from_secs(60 * 60),
             idempotency_receipts: 32,
             max_idempotency_key_bytes: 128,
@@ -143,6 +146,9 @@ impl Budgets {
         }
         if self.op_deadline.is_zero() || self.idle_ttl.is_zero() {
             return Err("op_deadline and idle_ttl must be positive".into());
+        }
+        if self.calc_deadline.is_zero() {
+            return Err("calc_deadline must be positive".into());
         }
         if self.max_text_bytes > self.max_request_bytes
             || self.max_cdx_base64 > self.max_request_bytes

@@ -2,15 +2,16 @@
 use super::{
     analyze, apply,
     budget::Budgets,
+    calculate::{self, Calculations},
     catalog::{self, Op},
     compose, convert, documents,
     error::{ErrorKind, OpError},
     exec::{Context, Executor},
-    export, files,
+    export, export_input, files,
     host::{Call, ToolHost},
     import, inspect, label_atoms,
     naming::{self, Hook, Naming},
-    predict_nmr, render,
+    predict_nmr, read_output, render,
     result::ToolResult,
     schema,
     session::SessionStore,
@@ -30,6 +31,7 @@ pub struct HeadlessHost {
     versions: Versions,
     grants: Arc<Grants>,
     naming: Hook,
+    calculations: Option<Arc<dyn Calculations>>,
 }
 
 impl HeadlessHost {
@@ -45,6 +47,7 @@ impl HeadlessHost {
             versions: Versions::current(app_version),
             grants: Arc::new(Grants::none()),
             naming: None,
+            calculations: None,
         }
     }
 
@@ -53,6 +56,14 @@ impl HeadlessHost {
     pub fn with_naming(self, naming: Arc<dyn Naming>) -> Self {
         Self {
             naming: Some(naming),
+            ..self
+        }
+    }
+
+    /// Installs the worker hook and makes `calculate` available.
+    pub fn with_calculations(self, calculations: Arc<dyn Calculations>) -> Self {
+        Self {
+            calculations: Some(calculations),
             ..self
         }
     }
@@ -87,12 +98,17 @@ async fn run(
     budgets: Budgets,
     grants: Arc<Grants>,
     naming: Hook,
+    calculations: Option<Arc<dyn Calculations>>,
 ) -> Result<ToolResult, OpError> {
     match op {
         // The other tools check through `blocking` or `effect`.
-        Op::Info => ctx
-            .checkpoint()
-            .map(|()| documents::info(&versions, &budgets, &grants)),
+        Op::Info => ctx.checkpoint().map(|()| {
+            let calculations = calculations
+                .as_deref()
+                .map(calculate::info)
+                .unwrap_or_default();
+            documents::info(&versions, &budgets, &grants, calculations)
+        }),
         Op::DocumentNew => documents::document_new(ctx, store, who, versions).await,
         Op::DocumentList => documents::document_list(ctx, store, who, versions).await,
         Op::DocumentClose(args) => documents::document_close(ctx, store, who, versions, args).await,
@@ -116,12 +132,26 @@ async fn run(
         Op::Convert(args) => convert::convert(ctx, engine, naming, versions, budgets, args).await,
         Op::Name(args) => naming::name(ctx, store, naming, who, versions, args).await,
         Op::Schema(args) => ctx.checkpoint().map(|()| schema::run(&args, &versions)),
+        Op::ExportInput(args) => export_input::export_input(ctx, versions, budgets, args).await,
+        Op::ReadOutput(args) => read_output::read_output(ctx, grants, versions, args).await,
+        Op::Calculate(args) => {
+            let hook = calculations.ok_or_else(|| unknown_tool("calculate"))?;
+            calculate::calculate(ctx, hook, versions, args).await
+        }
     }
+}
+
+fn unknown_tool(tool: &str) -> OpError {
+    OpError::new(ErrorKind::UnknownTool, format!("Unknown tool {tool}"))
 }
 
 impl ToolHost for HeadlessHost {
     fn catalog(&self) -> &'static [ToolSpec] {
-        catalog::SPECS
+        if self.calculations.is_some() {
+            catalog::SPECS
+        } else {
+            catalog::BASE_SPECS
+        }
     }
 
     /// Decodes the arguments first, so invalid arguments and input budgets
@@ -135,13 +165,9 @@ impl ToolHost for HeadlessHost {
             arguments,
             progress,
         } = call;
-        let op = match catalog::decode(&tool, arguments, &self.budgets) {
-            None => {
-                return Err(OpError::new(
-                    ErrorKind::UnknownTool,
-                    format!("Unknown tool {tool}"),
-                ));
-            }
+        let op = match catalog::decode(&tool, arguments, &self.budgets, self.calculations.is_some())
+        {
+            None => return Err(unknown_tool(&tool)),
             Some(Err(error)) => return Ok(ToolResult::error(&error, &self.versions)),
             Some(Ok(op)) => op,
         };
@@ -152,11 +178,26 @@ impl ToolHost for HeadlessHost {
         let budgets = self.budgets.clone();
         let grants = Arc::clone(&self.grants);
         let naming = self.naming.clone();
+        let calculations = self.calculations.clone();
+        let deadline = if matches!(op, Op::Calculate(_)) {
+            budgets.calc_deadline
+        } else {
+            budgets.op_deadline
+        };
         let outcome = self
             .exec
-            .run(principal, request, progress, move |ctx| {
+            .run(principal, request, progress, deadline, move |ctx| {
                 run(
-                    op, ctx, who, store, engine, versions, budgets, grants, naming,
+                    op,
+                    ctx,
+                    who,
+                    store,
+                    engine,
+                    versions,
+                    budgets,
+                    grants,
+                    naming,
+                    calculations,
                 )
             })
             .await;

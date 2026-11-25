@@ -3,17 +3,20 @@ use super::{
     analyze::{self, Analyze},
     apply::{self, Apply},
     budget::Budgets,
+    calculate::{self, CalcRequest},
     compose::{self, Compose},
     convert::{self, Convert},
     documents::{self, Close},
     error::{ErrorKind, OpError},
     export::{self, Export},
+    export_input::{self, ExportInput},
     files::{self, Open, Save},
     import::{self, Import},
     inspect::{self, Inspect},
     label_atoms::{self, LabelAtoms},
     naming::{self, Name},
     predict_nmr::{self, PredictNmr},
+    read_output::{self, ReadOutput},
     render::{self, Render},
     schema::{self, Schema},
 };
@@ -41,7 +44,13 @@ pub const SPECS: &[ToolSpec] = &[
     convert::CONVERT,
     naming::NAME,
     schema::SCHEMA,
+    export_input::EXPORT_INPUT,
+    read_output::READ_OUTPUT,
+    calculate::CALCULATE,
 ];
+
+/// The operation tools a host serves without a calculation hook.
+pub const BASE_SPECS: &[ToolSpec] = SPECS.split_at(SPECS.len() - 1).0;
 
 /// What every entry of [`RESULTS`] shares, stated once.
 pub const RESULT_CONVENTIONS: &str = concat!(
@@ -63,12 +72,16 @@ pub const RESULTS: &[(&str, &str)] = &[
     (
         "info",
         concat!(
-            "{operation_api, stability, budgets, formats, grants, files} ",
+            "{operation_api, stability, budgets, formats, grants, files, calculations} ",
             "operation_api is the operation API version; stability is \"experimental\". ",
             "budgets lists the enforced limits, with the render limits nested under render. ",
             "formats is {import, export}. grants is {read, write}, the granted folders as the ",
             "user spelled them; files is {read, write}, the extensions file_open and file_save ",
-            "accept.",
+            "accept. calculations is null without an xTB hook. With one, it is ",
+            "{engine, methods, max_atoms, max_frequency_atoms}. engine is ",
+            "{name, version, license, source, rev}; methods is ",
+            "[{method, label, energy, optimize, frequencies, open_shell, solvent}]. ",
+            "solvent is native, gfn2_correction or null.",
         ),
     ),
     (
@@ -245,6 +258,38 @@ pub const RESULTS: &[(&str, &str)] = &[
             "that input, with its rules in the description.",
         ),
     ),
+    (
+        "export_input",
+        concat!(
+            "{file_name, text, companions} The main input file name and text. companions is ",
+            "[{file_name, text}] for files the input references. The writer's messages become ",
+            "warnings. Total file text is at most max_output_bytes.",
+        ),
+    ),
+    (
+        "read_output",
+        concat!(
+            "{format, program, program_version, jobs, job} jobs is ",
+            "[{index, kind, title, completion, steps, atoms, energy_hartree, frequencies, orbitals}]. ",
+            "job is the selected job or null. It has {index, kind, method, basis, keywords, ",
+            "completion, energy_hartree, homo_lumo_gap_ev, dipole_debye, frequencies_cm1, ",
+            "ir_intensities_km_mol, imaginary, thermo, xyz}. thermo gives temperature and ",
+            "absolute energies. xyz is the last geometry. File messages become warnings.",
+        ),
+    ),
+    (
+        "calculate",
+        concat!(
+            "{task, method, engine, atoms, charge, multiplicity, energy_hartree, ",
+            "homo_lumo_gap_ev, dipole_debye, charges, optimization, frequencies, seconds} ",
+            "engine is {name, version, rev}. Gap, dipole and charges are null when absent. ",
+            "optimization is {converged, steps, rmsd_angstrom, xyz} or null. frequencies is ",
+            "{frequencies_cm1, ir_intensities_km_mol, imaginary, temperature_k, ",
+            "zero_point_energy_hartree, enthalpy_hartree, gibbs_hartree} or null. ",
+            "Charges are rounded to four decimal places and frequencies to two. ",
+            "The hook's messages become warnings.",
+        ),
+    ),
 ];
 
 /// The catalog as protocol-neutral JSON, in [`SPECS`] order:
@@ -292,11 +337,19 @@ pub(crate) enum Op {
     Convert(Convert),
     Name(Name),
     Schema(Schema),
+    ExportInput(ExportInput),
+    ReadOutput(ReadOutput),
+    Calculate(CalcRequest),
 }
 
 /// Decodes `args` for `tool`, with every input budget check, before any work
-/// runs. `None` when no tool has that name.
-pub(crate) fn decode(tool: &str, args: Value, budgets: &Budgets) -> Option<Result<Op, OpError>> {
+/// runs. `None` when the host has no tool with that name.
+pub(crate) fn decode(
+    tool: &str,
+    args: Value,
+    budgets: &Budgets,
+    has_calculations: bool,
+) -> Option<Result<Op, OpError>> {
     Some(match tool {
         "info" => documents::decode_none(args).map(|()| Op::Info),
         "document_new" => documents::decode_none(args).map(|()| Op::DocumentNew),
@@ -316,6 +369,9 @@ pub(crate) fn decode(tool: &str, args: Value, budgets: &Budgets) -> Option<Resul
         "convert" => convert::decode(args, budgets).map(Op::Convert),
         "name" => naming::decode(args).map(Op::Name),
         "schema" => schema::decode(args).map(Op::Schema),
+        "export_input" => export_input::decode(args, budgets).map(Op::ExportInput),
+        "read_output" => read_output::decode(args, budgets).map(Op::ReadOutput),
+        "calculate" if has_calculations => calculate::decode(args, budgets).map(Op::Calculate),
         _ => return None,
     })
 }
@@ -324,7 +380,7 @@ pub(crate) fn decode(tool: &str, args: Value, budgets: &Budgets) -> Option<Resul
 /// schema and decoder contract tests. `Err` carries the decoder's message.
 #[doc(hidden)]
 pub fn decode_check(tool: &str, args: Value) -> Result<(), String> {
-    match decode(tool, args, &Budgets::default()) {
+    match decode(tool, args, &Budgets::default(), true) {
         None => Err(format!("Unknown tool {tool}")),
         Some(decoded) => decoded.map(drop).map_err(|error| error.message),
     }
