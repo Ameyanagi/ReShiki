@@ -878,6 +878,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/scene/projected_bonds.rs`: Secondary rails in a retained ring face, projected without rescaling XY.
 - `crates/model/src/scene/svg.rs`: SVG serialization of the scene primitives.
 - `crates/model/src/scene/table.rs`: Table cells are independently painted native drawing scopes.
+- `crates/model/src/science.rs`: Scientific frames and calculation results kept with molecules.
 - `crates/model/src/scientific.rs`: Chemical marks and orbital diagrams.
 - `crates/model/src/scientific/label_halo.rs`: Find the atom labels an orbital's complete lobes run into.
 - `crates/model/src/scientific/mark_placement.rs`: Click placement and the orbit of a dragged mark.

@@ -165,7 +165,13 @@ pub(super) fn certify_translation(
         piece_definitions: _,
         on_other_canvas: _,
         seats: _,
+        science,
     } = &mut restored;
+    for attachment in &mut science.attachments {
+        for id in attachment.atoms.iter_mut().flatten() {
+            undo(id)?;
+        }
+    }
     for (actual, old) in atoms.iter_mut().zip(&source.atoms) {
         check_shift(old.position, actual.position)?;
         if actual.position != old.position.offset(shift.x, shift.y) {

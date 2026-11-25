@@ -99,6 +99,11 @@ impl Library {
     ) -> Result<usize, String> {
         let mut next = self.clone();
         let id = new_id();
+        // Templates hold structures, not calculation data.
+        let document = Document {
+            science: Default::default(),
+            ..document
+        };
         next.templates.push(Template {
             id,
             name: name.trim().into(),
@@ -122,6 +127,8 @@ impl Library {
         let mut next = self.clone();
         let mut added = 0;
         for mut t in incoming.templates {
+            // Templates hold structures, not calculation data.
+            t.document.science = Default::default();
             let favorite = incoming.favorites.contains(&t.id);
             let original_id = std::mem::take(&mut t.id);
             let equal = next.templates.iter().find(|existing| {
