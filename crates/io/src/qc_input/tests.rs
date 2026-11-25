@@ -99,6 +99,7 @@ fn result(frame: &Frame) -> CalcResult {
         trajectory: None,
         keep_full: false,
         omitted_bytes: None,
+        run: None,
     }
 }
 
