@@ -207,6 +207,9 @@ explains how the crates and modules fit together.
 - `src/app/workspace/model_face_qa.rs`: Matched real-renderer and pointer evidence for model faces, frames and hints.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
 - `src/app/xtb.rs`: Predict → xTB
+- `src/app/xtb/palette.rs`: The xTB results palette
+- `src/app/xtb/palette/view.rs`: The results palette's widgets
+- `src/app/xtb/results.rs`: The results palette's content, kept free of iced
 - `src/app/xtb/run.rs`: One xTB job on its own thread
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.

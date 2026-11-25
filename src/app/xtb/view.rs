@@ -13,14 +13,14 @@ const WIDE: Length = Length::Fill;
 
 /// A line in the card's tone: muted, good, warning or error.
 #[derive(Clone, Copy)]
-enum Tone {
+pub(super) enum Tone {
     Muted,
     Good,
     Warning,
     Error,
 }
 
-fn line<'a>(content: impl Into<String>, tone: Tone) -> Element<'a, Message> {
+pub(super) fn line<'a>(content: impl Into<String>, tone: Tone) -> Element<'a, Message> {
     text(content.into())
         .size(11)
         .style(move |theme: &Theme| {
@@ -82,11 +82,17 @@ impl App {
             },
         ))
         .spacing(4);
-        let body = match page {
-            Page::Nmr => self.nmr_inspector(),
-            Page::Xtb => self.xtb_card(),
-        };
-        column![switch, body].spacing(12).into()
+        let mut content = column![switch].spacing(12);
+        match page {
+            Page::Nmr => content = content.push(self.nmr_inspector()),
+            Page::Xtb => {
+                content = content.push(self.xtb_card());
+                if let Some(palette) = self.xtb_inspector_palette() {
+                    content = content.push(palette);
+                }
+            }
+        }
+        content.into()
     }
 
     fn xtb_card(&self) -> Element<'_, Message> {
@@ -298,7 +304,18 @@ impl App {
         if let Some(run) = run {
             body = body.push(progress(run));
         } else if let Some(outcome) = &self.tab.xtb.outcome {
-            body = body.push(outcome_view(outcome));
+            body = body.push(outcome_view(outcome, self.xtb_palette_visible()));
+        }
+        let has_results = !self.xtb_palette_visible()
+            && (self.xtb_shown().is_some()
+                || first.is_some_and(|atom| {
+                    !reshiki::science::results_for(&self.tab.doc, atom).is_empty()
+                }));
+        if has_results {
+            body = body.push(
+                accessible_command("xtb-show-results", "Show the xTB results", "Show results")
+                    .on_press(Message::Xtb(Action::Palette(super::palette::Action::Show))),
+            );
         }
         body = body.push(
             column![
@@ -515,13 +532,18 @@ fn reshiki_optimize_steps() -> usize {
     500
 }
 
-fn outcome_view(outcome: &Outcome) -> Element<'_, Message> {
+/// The card's last outcome. A finished result defers to the results
+/// palette while it shows; its notes stay here.
+fn outcome_view(outcome: &Outcome, in_palette: bool) -> Element<'_, Message> {
     match outcome {
         Outcome::Done {
             line: summary,
             notes,
         } => {
-            let mut lines = column![line(summary.clone(), Tone::Good)].spacing(4);
+            let mut lines = column![].spacing(4);
+            if !in_palette {
+                lines = lines.push(line(summary.clone(), Tone::Good));
+            }
             for note in notes {
                 lines = lines.push(line(note.clone(), Tone::Warning));
             }

@@ -1140,6 +1140,14 @@ impl super::App {
             self.prompt = Some(super::prompt::Prompt::KeepFormat(format));
             return Task::none();
         }
+        // Results above 5 MB: asked once per document, before an .rsk save.
+        let native = save_as.map_or_else(
+            || self.tab.path.as_deref().and_then(kept_format).is_none(),
+            |format| format == reshiki::compatibility::NATIVE_EXTENSION,
+        );
+        if native && self.xtb_size_question(save_as.map_or(Message::Save, Message::SaveFormat)) {
+            return Task::none();
+        }
         self.save_drawing_to(
             save_as.is_some(),
             None,

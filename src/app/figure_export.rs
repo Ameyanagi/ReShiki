@@ -132,6 +132,7 @@ pub enum Kind {
     Figure,
     Structure,
     Nmr,
+    Xtb,
 }
 
 #[derive(Debug, Clone)]
@@ -203,6 +204,11 @@ impl Prepared {
             Kind::Nmr => Message::Nmr(super::nmr::Action::Exported(
                 result.map(|saved| saved.map(|saved| saved.path)),
             )),
+            Kind::Xtb => Message::Xtb(super::xtb::Action::Palette(
+                super::xtb::palette::Action::Exported(
+                    result.map(|saved| saved.map(|saved| saved.path)),
+                ),
+            )),
         }
     }
 
@@ -223,6 +229,7 @@ impl Prepared {
             async move {
                 let title = match self.kind {
                     Kind::Nmr => "Export predicted NMR shifts".into(),
+                    Kind::Xtb => "Export xTB results".into(),
                     _ => format!("Export {}", super::export_format_label(self.format)),
                 };
                 let result = super::files::save_bytes(

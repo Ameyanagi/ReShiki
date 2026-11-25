@@ -32,6 +32,14 @@ pub(super) enum Prompt {
     KeepFormat(&'static str),
     /// The formats Save as offers.
     SaveAs,
+    /// Save found more than 5 MB of calculation results: Make lighter
+    /// (when it would drop anything: how many results, and the size after),
+    /// or save as is. Either goes on with `then`.
+    LargeResults {
+        bytes: usize,
+        lighter: Option<(usize, usize)>,
+        then: Box<Message>,
+    },
     /// A notice with one OK button, which sends `then`.
     Notice {
         title: String,
@@ -81,6 +89,13 @@ impl Prompt {
                 _ => Message::Cancel,
             },
             Self::Notice { then, .. } => *then,
+            Self::LargeResults { lighter, then, .. } => match answer {
+                Answer::Save if lighter.is_some() => Message::Xtb(super::xtb::Action::Palette(
+                    super::xtb::palette::Action::Lighter(then),
+                )),
+                Answer::Save | Answer::DontSave => *then,
+                Answer::Cancel | Answer::Format(_) => Message::Cancel,
+            },
             Self::Download { name, action } => {
                 let save = answer == Answer::Save && !name.trim().is_empty();
                 match action {
@@ -178,6 +193,18 @@ impl App {
                 "ChemDraw keeps most of the drawing. MOL keeps the structure only.".to_owned(),
                 row![button("prompt-cancel", "Cancel", Answer::Cancel, false),],
             ),
+            Prompt::LargeResults { bytes, lighter, .. } => {
+                let (title, text) = super::xtb::palette::size_question(*bytes, *lighter);
+                let buttons = if lighter.is_some() {
+                    row![
+                        button("prompt-save-as-is", "Save as is", Answer::DontSave, false),
+                        button("prompt-make-lighter", "Make lighter", Answer::Save, true),
+                    ]
+                } else {
+                    row![button("prompt-save", "Save", Answer::Save, true)]
+                };
+                (title, text, buttons)
+            }
             Prompt::Notice { title, text, .. } => (
                 title.clone(),
                 text.clone(),
