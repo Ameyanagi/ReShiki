@@ -59,6 +59,8 @@ render        Render a preview image of a structure or drawing
 compose       Lay out an assistant Proposal (JSON) and write it as a file
 analyze       Print molecular properties as one JSON line
 predict-nmr   Print predicted NMR shifts as one JSON line
+calculate     Print a compact xTB calculation summary as one JSON line
+read-output   Print quantum chemistry job summaries and calculated values as one JSON line
 export-input  Write a quantum-chemistry input from an XYZ structure
 name          Print the systematic name of a structure
 calc          Print an xTB calculation as one JSON line

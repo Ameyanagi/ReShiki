@@ -28,6 +28,8 @@ pub(crate) enum Command {
     Info,
     Version,
     Calc(Calc),
+    Calculate(Calculate),
+    ReadOutput(ReadOutput),
     Tools,
     Schema(Schema),
     Skill(Skill),
@@ -64,6 +66,31 @@ pub(crate) enum CalcTask {
     Gradient,
     Hessian,
     Orbitals,
+}
+
+/// `calculate`: one XYZ file and the compact calculation tool's settings.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Calculate {
+    pub(crate) file: PathBuf,
+    pub(crate) task: &'static str,
+    pub(crate) method: &'static str,
+    pub(crate) charge: i32,
+    pub(crate) uhf: u32,
+    pub(crate) solvent: Option<String>,
+    pub(crate) conventions: &'static str,
+    pub(crate) electronic_temperature_k: Option<f64>,
+    pub(crate) accuracy: Option<f64>,
+    pub(crate) max_iterations: Option<u32>,
+    pub(crate) threads: Option<u32>,
+    pub(crate) convergence: Option<&'static str>,
+    pub(crate) fixed_atoms: Option<Vec<u32>>,
+}
+
+/// `read-output`: a quantum chemistry file and an optional zero-based job.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ReadOutput {
+    pub(crate) file: PathBuf,
+    pub(crate) job: Option<usize>,
 }
 
 /// A schema the CLI can print without a tool host.
@@ -230,6 +257,8 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "skill" => skill(&options(spec, rest)?),
         "pieces" => pieces(spec, rest),
         "calc" => calc(&options(spec, rest)?),
+        "calculate" => calculate(&options(spec, rest)?),
+        "read-output" => read_output(&options(spec, rest)?),
         "convert" => convert(&options(spec, rest)?),
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
@@ -441,6 +470,146 @@ fn calc(options: &Options) -> Result<Command, String> {
     }))
 }
 
+fn calculate(options: &Options) -> Result<Command, String> {
+    let file = options
+        .input
+        .as_ref()
+        .filter(|file| !file.is_empty() && *file != "-")
+        .map(PathBuf::from)
+        .filter(|file| {
+            file.extension()
+                .and_then(OsStr::to_str)
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("xyz"))
+        })
+        .ok_or("calculate needs an XYZ file: FILE.xyz")?;
+    let task = match option_text("--task", options.task.as_deref())? {
+        None | Some("energy") => "energy",
+        Some("optimize") => "optimize",
+        Some("frequencies") => "frequencies",
+        Some("opt+freq") => "opt+freq",
+        _ => return Err("--task must be energy, optimize, frequencies or opt+freq".into()),
+    };
+    let method = match option_text("--method", options.method.as_deref())? {
+        None | Some("gfn2") => "gfn2",
+        Some("gxtb") => "gxtb",
+        Some("gfnff") => "gfnff",
+        _ => return Err("--method must be gfn2, gxtb or gfnff".into()),
+    };
+    let conventions = match option_text("--conventions", options.conventions.as_deref())? {
+        None | Some("axtb") => "axtb",
+        Some("xtb-6.8") => "xtb-6.8",
+        _ => return Err("--conventions must be axtb or xtb-6.8".into()),
+    };
+    let uhf = integer("--uhf", options.uhf.as_deref(), 0_u32)?;
+    if uhf == u32::MAX {
+        return Err("--uhf is too large for a spin multiplicity".into());
+    }
+    let solvent = option_text("--solvent", options.solvent.as_deref())?
+        .map(|text| {
+            if text.trim().is_empty() {
+                Err("--solvent needs a nonempty name")
+            } else {
+                Ok(text.to_owned())
+            }
+        })
+        .transpose()?;
+    let electronic_temperature_k = option_text("--etemp", options.etemp.as_deref())?
+        .map(|text| {
+            text.parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value >= 0.0)
+                .ok_or("--etemp must be finite and at least 0 K")
+        })
+        .transpose()?;
+    let accuracy = option_text("--accuracy", options.accuracy.as_deref())?
+        .map(|text| {
+            text.parse::<f64>()
+                .ok()
+                .filter(|value| value.is_finite() && *value > 0.0)
+                .ok_or("--accuracy must be finite and positive")
+        })
+        .transpose()?;
+    let max_iterations = option_text("--max-iter", options.max_iter.as_deref())?
+        .map(|text| {
+            text.parse::<u32>()
+                .ok()
+                .filter(|value| *value > 0)
+                .ok_or("--max-iter must be a whole number from 1 to 4294967295")
+        })
+        .transpose()?;
+    let threads = option_text("--threads", options.threads.as_deref())?
+        .map(|text| {
+            text.parse::<u32>()
+                .ok()
+                .filter(|value| (1..=64).contains(value))
+                .ok_or("--threads must be a whole number from 1 to 64")
+        })
+        .transpose()?;
+    let convergence = match option_text("--convergence", options.convergence.as_deref())? {
+        None => None,
+        Some("normal") => Some("normal"),
+        Some("tight") => Some("tight"),
+        _ => return Err("--convergence must be normal or tight".into()),
+    };
+    let fixed_atoms = option_text("--fix", options.fix.as_deref())?
+        .map(|text| {
+            let mut atoms = Vec::new();
+            for atom in text.split(',') {
+                let atom = atom
+                    .trim()
+                    .parse::<u32>()
+                    .ok()
+                    .filter(|atom| *atom > 0)
+                    .ok_or("--fix must list atom numbers starting at 1, separated by commas")?;
+                if atoms.contains(&atom) {
+                    return Err("--fix atom numbers must be unique");
+                }
+                atoms.push(atom);
+            }
+            Ok(atoms)
+        })
+        .transpose()?;
+    if !matches!(task, "optimize" | "opt+freq") {
+        if convergence.is_some() {
+            return Err("--convergence requires --task optimize or opt+freq".into());
+        }
+        if fixed_atoms.is_some() {
+            return Err("--fix requires --task optimize or opt+freq".into());
+        }
+    }
+    Ok(Command::Calculate(Calculate {
+        file,
+        task,
+        method,
+        charge: integer("--charge", options.charge.as_deref(), 0)?,
+        uhf,
+        solvent,
+        conventions,
+        electronic_temperature_k,
+        accuracy,
+        max_iterations,
+        threads,
+        convergence,
+        fixed_atoms,
+    }))
+}
+
+fn read_output(options: &Options) -> Result<Command, String> {
+    let file = options
+        .input
+        .as_ref()
+        .filter(|file| !file.is_empty() && *file != "-")
+        .map(PathBuf::from)
+        .ok_or("read-output needs a file: FILE")?;
+    let job = option_text("--job", options.job.as_deref())?
+        .map(|text| {
+            text.parse::<usize>()
+                .map_err(|_| "--job must be a nonnegative whole number")
+        })
+        .transpose()?;
+    Ok(Command::ReadOutput(ReadOutput { file, job }))
+}
+
 fn pieces(spec: &CommandSpec, rest: &[OsString]) -> Result<Command, String> {
     let Some((sub, tokens)) = rest.split_first() else {
         return Err("pieces needs a subcommand: check or render".into());
@@ -584,6 +753,9 @@ struct Options {
     max_iter: Option<OsString>,
     scf_retry: Vec<OsString>,
     threads: Option<OsString>,
+    solvent: Option<OsString>,
+    convergence: Option<OsString>,
+    fix: Option<OsString>,
     svg_text: SvgText,
     pages: bool,
     dark: bool,
@@ -672,6 +844,9 @@ fn parse_options(
                 "--max-iter" => options.max_iter = Some(value),
                 "--scf-retry" => options.scf_retry.push(value),
                 "--threads" => options.threads = Some(value),
+                "--solvent" => options.solvent = Some(value),
+                "--convergence" => options.convergence = Some(value),
+                "--fix" => options.fix = Some(value),
                 "--svg-text" => {
                     options.svg_text = match value.to_str() {
                         Some("live") => SvgText::Live,
