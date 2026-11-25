@@ -120,9 +120,16 @@ pub(super) fn read(text: &str) -> Result<QcFile, Error> {
                 program_version.get_or_insert_with(|| version.trim().into());
             }
         }
+        // ReShiki's conformer export writes each record's energy as data.
+        let mut data = record.split_at(molfile_end).1.lines();
+        let energy_hartree = data
+            .find(|line| line.starts_with('>') && line.contains("<ENERGY_HARTREE>"))
+            .and_then(|_| data.next())
+            .and_then(|value| value.trim().parse::<f64>().ok())
+            .filter(|e| e.is_finite());
         steps.push(Step {
             frame: frame(&atoms, positions, charge, multiplicity)?,
-            energy_hartree: None,
+            energy_hartree,
             label: (!label.is_empty()).then(|| label.into()),
         });
     }

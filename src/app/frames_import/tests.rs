@@ -120,4 +120,57 @@ fn an_sd_file_asks_only_for_3d_records_of_one_molecule() {
     let ethanol = include_str!("../../../tests/fixtures/ethanol.mol");
     let flat = format!("{ethanol}$$$$\n{ethanol}$$$$\n");
     assert!(detect(Path::new("two.sdf"), flat.as_bytes()).is_none());
+
+    let water = |title: &str, z: f64, energy: f64| {
+        format!(
+            "{title}\n{:<20}3D\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\n\
+             \x20   0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n\
+             \x20   0.9600    0.0000 {z:>9.4} H   0  0  0  0  0  0  0  0  0  0  0  0\n\
+             \x20  -0.2400    0.9300    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n\
+             \x20 1  2  1  0\n  1  3  1  0\nM  END\n> <ENERGY_HARTREE>\n{energy}\n\n$$$$\n",
+            "  ReShiki"
+        )
+    };
+    let conformers = water("water", 0.1, -5.06) + &water("water", -0.1, -5.07);
+    let file = detect(Path::new("w.sdf"), conformers.as_bytes()).expect("conformers ask");
+    // ReShiki's own SDF export carries the energies back.
+    assert_eq!(file.energies(), Some(vec![-5.06, -5.07]));
+    let library = water("water", 0.1, -5.06) + &water("deuterated?", -0.1, -5.07);
+    assert!(detect(Path::new("w.sdf"), library.as_bytes()).is_none());
+}
+
+#[test]
+fn files_that_are_not_one_molecules_frames_open_as_before() {
+    // A frame number is not an energy, and a cell keeps the crystal path.
+    let numbered = CREST
+        .replace(" -5.06901", "1")
+        .replace(" -5.070176", "2")
+        .replace(" -5.065176", "3");
+    let file = detect(Path::new("md.xyz"), numbered.as_bytes()).unwrap();
+    assert!(file.energies().is_none());
+    let periodic = CREST.replace(
+        " -5.06901",
+        "Lattice=\"10 0 0 0 10 0 0 0 10\" pbc=\"T T T\"",
+    );
+    assert!(detect(Path::new("cell.extxyz"), periodic.as_bytes()).is_none());
+    // Different charges are different species, not frames of one.
+    let ions = CREST.replace(" -5.06901", "charge=1 multiplicity=2");
+    assert!(detect(Path::new("ions.extxyz"), ions.as_bytes()).is_none());
+    // `.sd` keeps its own route.
+    assert!(detect(Path::new("w.sd"), CREST.as_bytes()).is_none());
+}
+
+#[test]
+fn the_sheets_keys_leave_return_to_the_focused_control() {
+    use iced::keyboard::{Key, Modifiers, key::Named};
+    let enter = Key::Named(Named::Enter);
+    assert!(modal_key(&enter, Modifiers::empty()).is_none());
+    assert!(matches!(
+        modal_key(&enter, Modifiers::COMMAND),
+        Some(Message::FramesImport(Action::Import))
+    ));
+    assert!(matches!(
+        modal_key(&Key::Named(Named::Escape), Modifiers::empty()),
+        Some(Message::FramesImport(Action::Close))
+    ));
 }

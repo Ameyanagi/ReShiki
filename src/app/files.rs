@@ -965,9 +965,17 @@ impl super::App {
                 }
             }
             Ok(Prepared::Frames(file)) => {
-                self.frames_import = Some(super::frames_import::Dialog::new(path, *file));
-                self.status = "Choose which frame to open".into();
-                self.error = false;
+                // One sheet at a time, and never over a 3D optimization
+                // preview, whose gate would hold the sheet's buttons.
+                let name = super::import::name(&path);
+                if self.frames_import.is_some() || self.tab.optimization.is_some() {
+                    self.status = format!("Could not open {name}: finish what is open first");
+                    self.error = true;
+                } else {
+                    self.frames_import = Some(super::frames_import::Dialog::new(path, *file));
+                    self.status = format!("{name} has several frames: choose which to open");
+                    self.error = false;
+                }
             }
             Ok(Prepared::Import {
                 format,
