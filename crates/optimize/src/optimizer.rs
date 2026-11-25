@@ -25,7 +25,7 @@ pub use trust::{Rebuild, Trust};
 pub enum Method {
     /// Translation–rotation–internal coordinates (TRIC), delocalized for RFO
     /// (Wang & Song 2016, Baker et al. 1996, Banerjee et al. 1985).
-    /// Falls back to ANC if the local primitive count exceeds 64 times the
+    /// Falls back to ANC if the local primitive count exceeds 128 times the
     /// atom count, before allocating dense Wilson rows.
     #[default]
     Internal,
