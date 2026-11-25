@@ -67,6 +67,8 @@ pub(crate) struct Dialog {
     overlay: bool,
     /// The chosen frame as a 3D model, turned as the user turned it.
     preview: Option<reshiki::document::Document>,
+    /// Files with frames opened together with this one, asked about next.
+    queued: Vec<(PathBuf, File)>,
 }
 
 /// A multi-frame XYZ, or an SD file of 3D conformers (every record the
@@ -186,9 +188,26 @@ impl Dialog {
             keep: false,
             overlay: false,
             preview: None,
+            queued: vec![],
         };
         dialog.refresh();
         dialog
+    }
+
+    /// Ask about `file` once this sheet is answered.
+    pub(super) fn queue(&mut self, path: PathBuf, file: File) {
+        self.queued.push((path, file));
+    }
+
+    /// The sheet for the next queued file, which carries the rest.
+    fn next(&mut self) -> Option<Self> {
+        if self.queued.is_empty() {
+            return None;
+        }
+        let (path, file) = self.queued.remove(0);
+        let mut next = Self::new(path, file);
+        next.queued = std::mem::take(&mut self.queued);
+        Some(next)
     }
 
     /// Build the preview of the chosen frame, keeping the view's turn, with
@@ -281,16 +300,24 @@ impl App {
                 }
             }
             Action::Close => {
-                self.frames_import = None;
-                self.status = "Nothing opened".into();
+                self.frames_import = dialog.next();
+                self.status = match &self.frames_import {
+                    Some(next) => format!(
+                        "{} has several frames: choose which to open",
+                        super::import::name(&next.path)
+                    ),
+                    None => "Nothing opened".into(),
+                };
                 self.error = false;
                 // Keyboard focus goes back to the drawing.
                 return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus);
             }
             Action::Import => {
-                let Some(dialog) = self.frames_import.take() else {
+                let Some(mut dialog) = self.frames_import.take() else {
                     return Task::none();
                 };
+                // The next queued file asks once this one is open.
+                self.frames_import = dialog.next();
                 return self
                     .frames_import_open(dialog)
                     .chain(iced::advanced::widget::operate(
