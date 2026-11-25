@@ -40,7 +40,7 @@ pub(crate) const SOLVENTS: [&str; 9] = [
 ];
 /// Energy and optimization limit of the worker.
 pub(crate) const MAX_ATOMS: usize = 500;
-pub(crate) const NEAR_DEGENERATE: &str = "Near-degenerate electronic structure: results can differ between computers. Try a higher electronic temperature or more unpaired electrons.";
+pub(crate) use reshiki::XTB_NEAR_DEGENERATE as NEAR_DEGENERATE;
 
 /// Whether `method` runs an SCF, and so has orbitals and SCF settings.
 pub(crate) fn electronic(method: XtbMethod) -> bool {
