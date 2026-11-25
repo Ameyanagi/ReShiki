@@ -136,6 +136,11 @@ the magnitude of the imaginary cutoff.
 
 A caller that saves a Hessian result computed with explicit masses must store
 those masses on the frame it passes to `to_calc_result`.
+When a retry rung converged, `to_calc_result` saves that rung's electronic
+temperature and iteration limit instead of the ladder, so recomputing gives the
+same numbers. For the g-xTB solvent composite it keeps the requested settings
+and the component energies; the per-part settings stay in `Computed` (qcdata
+has no field for them yet).
 
 Each SCF starts from the previous geometry's converged wavefunction in the
 same session (axtb's `restart: previous`), whatever geometries the optimizer

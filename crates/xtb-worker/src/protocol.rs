@@ -753,12 +753,24 @@ impl Computed {
         } else {
             None
         };
-        let settings = self.settings.scf.xtb_settings(
+        let mut settings = self.settings.scf.xtb_settings(
             self.method,
             self.conventions,
             self.settings.solvent.clone(),
             gfnff,
         );
+        // A converged retry rung (outside the solvent composite, whose parts
+        // climb their own ladders) is what produced the result: save it, not
+        // the ladder, so recomputing reproduces these numbers.
+        if let Some((scf, rung)) = self.scf.as_ref().and_then(|scf| {
+            let rung = scf.retry.as_ref()?.rung.checked_sub(1)?;
+            Some((scf, self.settings.scf.retries.get(rung)?))
+        }) && self.composite.is_none()
+        {
+            settings.electronic_temperature_k = Some(scf.electronic_temperature_k);
+            settings.max_iterations = rung.max_iterations.or(settings.max_iterations);
+            settings.scf_retries.clear();
+        }
         let mut energy_terms = self.energy_terms.clone();
         if let Some(composite) = &self.composite {
             energy_terms.extend(

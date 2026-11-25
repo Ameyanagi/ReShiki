@@ -237,12 +237,15 @@ fn scientific_result_has_session_settings_and_provenance() {
     assert_eq!(result.frame, frame.hash());
     assert_eq!(result.gradient_hartree_per_bohr, vec![0.25; 6]);
     assert_eq!(result.provenance.program, "axtb");
-    assert_eq!(result.provenance.program_version, Some(engine.version));
+    assert_eq!(
+        result.provenance.program_version,
+        Some(engine.version.clone())
+    );
     assert_eq!(result.provenance.method.as_deref(), Some("GFN2-xTB"));
     assert_eq!(
         result.provenance.source,
         Source::Calculated {
-            engine_revision: engine.rev
+            engine_revision: engine.rev.clone()
         }
     );
     let Settings::Xtb(settings) = result.settings else {
@@ -252,6 +255,30 @@ fn scientific_result_has_session_settings_and_provenance() {
     assert_eq!(settings.accuracy, Some(0.5));
     assert_eq!(settings.max_iterations, Some(500));
     assert_eq!(settings.scf_retries, computed.settings.scf.retries);
+
+    // The rung that converged replaces the ladder in the saved settings.
+    // An iteration-only rung keeps the reported temperature and the accuracy.
+    let mut retried = computed;
+    retried.settings.scf.retries = vec![ScfRetry {
+        electronic_temperature_k: None,
+        max_iterations: Some(900),
+    }];
+    retried.scf.as_mut().unwrap().electronic_temperature_k = 300.0;
+    retried.scf.as_mut().unwrap().retry = Some(RetryReport {
+        rung: 1,
+        of: 1,
+        label: None,
+    });
+    let result = retried
+        .to_calc_result(&frame, Task::Gradient, &engine, None)
+        .unwrap();
+    let Settings::Xtb(settings) = result.settings else {
+        panic!("expected xTB settings");
+    };
+    assert_eq!(settings.electronic_temperature_k, Some(300.0));
+    assert_eq!(settings.max_iterations, Some(900));
+    assert_eq!(settings.accuracy, Some(0.5));
+    assert!(settings.scf_retries.is_empty());
 }
 
 #[test]
