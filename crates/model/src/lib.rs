@@ -72,6 +72,7 @@ pub mod ring_arcs;
 pub mod ring_fills;
 pub mod rings;
 pub mod scene;
+pub mod science;
 pub mod scientific;
 pub mod selection_region;
 pub mod shape_text;

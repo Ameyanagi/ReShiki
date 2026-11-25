@@ -1,0 +1,10 @@
+NoSpherA2 test data
+===================
+
+tests/fixtures/qc/orca/orca_ch3f_pbe0.molden is an unmodified copy of
+tests/eqc_ch3f_pbe0/parent.molden from NoSpherA2
+(https://github.com/AK-Kleemiss/NoSpherA2), commit
+48cffe7a0e30e7eded82c289f17407b0ecc2d7d2.
+
+This fixture is test data only. It retains NoSpherA2's BSD-2-Clause license
+and copyright notice, reproduced in LICENSE in this directory.

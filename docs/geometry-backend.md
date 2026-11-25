@@ -122,6 +122,13 @@ detached calculation. Admission does not guarantee convergence. Live relaxation 
 pauses after 50 batches for unchanged physical constraints or eight batches
 without meaningful energy improvement; the preview remains editable.
 
+An optional `ensemble` on a strict `Generate` request returns every valid
+conformer from a fresh seeded batch. Use `Minimized` for force-field-minimized
+coordinates or `Embedded` for raw embedding coordinates scored by the selected
+force field. Each batch can request up to 32 conformers, and the product of
+requested conformers and original atoms must be at most 6,400. The client
+schedules up to 300 starts across sequential batches within a caller deadline.
+
 `Generate` accepts either no coordinates or one XYZ coordinate per original
 atom as a candidate starting geometry. The worker checks physical geometry and
 intrinsic three-dimensionality, adds temporary hydrogen coordinates, then

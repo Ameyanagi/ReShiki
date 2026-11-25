@@ -13,20 +13,22 @@ Experimental: ReShiki's agent tools, schemas and results may change between rele
 Usage: reshiki --cli <command> [options]
 
 Commands:
-  convert      Convert a structure or drawing to another file format
-  render       Render a preview image of a structure or drawing
-  compose      Lay out an assistant Proposal (JSON) and write it as a file
-  analyze      Print molecular properties as one JSON line
-  predict-nmr  Print predicted NMR shifts as one JSON line
-  name         Print the systematic name of a structure
-  pieces       Check or render equipment piece files
-  info         Print versions, limits and formats as one JSON line
-  tools        Print the agent tool catalog as one JSON line
-  schema       Print a JSON Schema: reshiki --cli schema proposal
-  skill        Write an Agent Skill folder that teaches AI agents to use ReShiki
-  help         Show this help, or a command's help: reshiki --cli help <command>
+  convert       Convert a structure or drawing to another file format
+  render        Render a preview image of a structure or drawing
+  compose       Lay out an assistant Proposal (JSON) and write it as a file
+  analyze       Print molecular properties as one JSON line
+  predict-nmr   Print predicted NMR shifts as one JSON line
+  export-input  Write a quantum-chemistry input from an XYZ structure
+  name          Print the systematic name of a structure
+  calc          Print an xTB calculation as one JSON line
+  pieces        Check or render equipment piece files
+  info          Print versions, limits and formats as one JSON line
+  tools         Print the agent tool catalog as one JSON line
+  schema        Print a JSON Schema: reshiki --cli schema proposal
+  skill         Write an Agent Skill folder that teaches AI agents to use ReShiki
+  help          Show this help, or a command's help: reshiki --cli help <command>
 
-Options are allowed once each; -- ends the options.
+Options are allowed once each except calc's --scf-retry; -- ends the options.
 
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
@@ -216,6 +218,40 @@ A molecule with no sites for the nucleus, or with metals, charges,
 radicals or isotope labels, is an error.
 ```
 
+### reshiki --cli export-input
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+                                  [--job JOB] [--template N|--method M --basis B]
+                                  [--charge C] [--multiplicity M] [--cores N]
+                                  [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--out PATH]
+
+Writes input for another program from the first frame of INPUT.xyz (Å);
+stdout without --out. An existing companion file stops the export.
+Warnings go to stderr.
+
+Options:
+  --program PROGRAM   gaussian, orca, gamess or xyz. Required.
+  --job JOB           single-point, optimize, opt-freq, transition-state or irc.
+  --template N        Built-in template, 1 to 3.
+  --method M          Method, given with --basis.
+  --basis B           Basis; empty for an ORCA composite method.
+  --charge C          Total charge.
+  --multiplicity M    2S + 1.
+  --cores N           Cores (8).
+  --memory-gb G       Total memory in GB (16).
+  --title T           Title (the input file name).
+  --extra TEXT        More keywords, or GAMESS groups.
+  --out PATH          Main file, replaced if it exists; companions go beside it.
+
+Templates:
+  1  B3LYP-D3BJ/def2-SVP opt+freq
+  2  r2SCAN-3c opt+freq (ORCA only)
+  3  HF/6-31G(d) single point
+```
+
 ### reshiki --cli name
 
 ```text
@@ -248,6 +284,37 @@ value contains name, preferred, status, reason, detail, alternatives and aliases
   alternatives   Other verified names, each with name, status and reason.
 With --locants, value also contains locants: one string or null per imported
 atom, in input atom order. Atoms outside the principal parent have null.
+```
+
+### reshiki --cli calc
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--gradient] [--wbo] FILE.xyz
+
+Options:
+  --task TASK                  Calculate energy (default), gradient, hessian or orbitals.
+  --method METHOD              Use gfn2 (default), gfnff or gxtb.
+  --energy                     Accepted for compatibility. Energy is always included.
+  --gradient                   Include the Cartesian energy gradient.
+  --wbo                        Include Mayer–Wiberg bond orders.
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --conventions MODE           Use axtb (default) or xtb-6.8 conventions.
+  --alpb NAME                  Use the ALPB solvent model.
+  --gbsa NAME                  Use the GBSA solvent model.
+  --solvent-correction METHOD  Use gfn2 for g-xTB solvent calculations.
+  --etemp K                    Set the electronic temperature in kelvin.
+  --accuracy X                 Set a positive SCF accuracy multiplier (default 1).
+  --max-iter N                 Set the SCF iteration limit (default 250).
+  --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.
+  --threads N                  Use 1 to 64 worker threads (default 1).
+
+See docs/xtb-worker.md (Command line)
 ```
 
 ### reshiki --cli pieces
@@ -849,7 +916,7 @@ Extensions accepted by `file_open` and `file_save`; a dash means unsupported.
 | --- | --- |
 | `operation_api` | 2 |
 | `engine_protocol` | 1 |
-| `document` | 41 |
+| `document` | 42 |
 
 ## Proposal
 

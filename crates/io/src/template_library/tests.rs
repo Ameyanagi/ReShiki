@@ -227,6 +227,19 @@ fn templates_keep_3d_models() {
 }
 
 #[test]
+fn templates_store_no_science() {
+    let (doc, oxygen) = crate::payload::calculated_water();
+    let anchor = crate::templates::Anchor::Atom(oxygen);
+    let mut library = super::Library::default();
+    let index = library.add("Water", "Mine", doc.clone(), anchor).unwrap();
+    let template = library.get(index).unwrap();
+    assert!(template.document.science.is_empty());
+    assert_eq!(template.document.atoms, doc.atoms);
+    assert_eq!(template.document.models, doc.models);
+    assert_eq!(template.anchor, anchor);
+}
+
+#[test]
 fn exported_library_bytes_are_the_saved_file() {
     use crate::{document::Document, templates::Anchor};
     let mut doc = Document::default();

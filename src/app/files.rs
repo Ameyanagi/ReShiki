@@ -481,6 +481,8 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             Box::new(doc),
             reshiki::document::View::read(&contents),
         ))
+    } else if is_qc_file(path, &extension) {
+        prepare_qc(path, &contents)
     } else {
         // An SD file's records are read next, in `records`. Its extension
         // comes first, as for Insert: POSCAR is told by its name.
@@ -504,6 +506,73 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
             contents,
         })
     }
+}
+
+const QC_EXTENSIONS: [&str; 10] = [
+    "log", "out", "fchk", "fch", "molden", "mold", "gjf", "com", "gau", "inp",
+];
+
+/// Whether Open reads this name as a quantum chemistry program output or input.
+pub(super) fn is_qc_file(path: &std::path::Path, extension: &str) -> bool {
+    QC_EXTENSIONS.contains(&extension)
+        || extension == "input"
+            && super::import::name(path)
+                .to_ascii_lowercase()
+                .ends_with(".molden.input")
+}
+
+/// A program output or input opens as the 3D model of its default job's last
+/// geometry, as an unsaved drawing named after the file. Its results are not
+/// shown yet, and the status says so.
+fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, String> {
+    use reshiki::qcread::read;
+    let name = super::import::name(path);
+    let file = read(&name, contents).map_err(|e| e.to_string())?;
+    let (index, job, step) = file
+        .default_job()
+        .and_then(|i| file.jobs.get(i).map(|job| (i, job)))
+        .and_then(|(i, job)| Some((i, job, job.steps.last()?)))
+        .ok_or("The file has no geometry")?;
+    let frame = &step.frame;
+    let mut xyz = format!("{}\n\n", frame.numbers.len());
+    for (number, [x, y, z]) in frame.numbers.iter().zip(&frame.positions_angstrom) {
+        xyz.push_str(&format!("{number} {x} {y} {z}\n"));
+    }
+    let (mut drawing, mut warnings) =
+        reshiki::crystal::read("xyz", &xyz).map_err(|e| e.to_string())?;
+    let what = if file.jobs.len() > 1 {
+        format!("Final geometry of job {} of {}", index + 1, file.jobs.len())
+    } else if job.steps.len() > 1 {
+        "Final geometry".into()
+    } else {
+        "Geometry".into()
+    };
+    let mut notice = match &job.completion {
+        Some(completion) => format!("{what}: {}, {}", job.title(), completion.name()),
+        None => format!("{what} from the {} file", file.format.name()),
+    };
+    if file.format.has_results() {
+        notice.push_str(" · Results can't be shown yet");
+    }
+    // Files give the total charge and spin, not which atoms carry them, unless there is one
+    // atom. Where a file records neither, the reader's warning says what it assumed.
+    let mut omitted = Vec::new();
+    match drawing.atoms.as_mut_slice() {
+        [atom] if frame.numbers.len() == 1 => atom.charge = frame.charge,
+        _ if frame.charge != 0 => omitted.push(format!("total charge {:+}", frame.charge)),
+        _ => {}
+    }
+    if frame.multiplicity != 1 {
+        omitted.push(format!("spin multiplicity {}", frame.multiplicity));
+    }
+    if !omitted.is_empty() {
+        notice.push_str(&format!(" · Not drawn: {}", omitted.join(", ")));
+    }
+    warnings.insert(0, notice);
+    warnings.extend(file.warnings);
+    Ok(Prepared::Records(Box::new(super::import::Batch::one(
+        drawing, warnings,
+    ))))
 }
 
 /// Every record of an SD file, read as Insert reads them, before the file
@@ -559,7 +628,7 @@ pub(super) async fn read(path: PathBuf) -> Opened {
 }
 
 /// The Open dialog's title, which names what it opens: it has no filter.
-const OPEN_TITLE: &str = "Open a ReShiki, editable PNG/SVG/PDF, MOL, SDF, RXN, CDXML, CDX, CDS, SMILES, CIF, PDB, POSCAR or XYZ file";
+const OPEN_TITLE: &str = "Open a ReShiki, editable PNG/SVG/PDF, MOL, SDF, RXN, CDXML, CDX, CDS, SMILES, CIF, PDB, POSCAR, XYZ, Molden, fchk, or Gaussian/ORCA/GAMESS file";
 
 /// Opens the files the user chooses, each in a tab.
 pub(super) fn open_dialog(
@@ -924,6 +993,13 @@ impl super::App {
                     self.show_opened(*doc, Some(path));
                     if let Some(view) = view {
                         self.restore_view(view);
+                    }
+                    let results = self.tab.doc.science.results.len();
+                    if results > 0 {
+                        self.status = format!(
+                            "{results} calculation result{} in this file",
+                            if results == 1 { "" } else { "s" }
+                        );
                     }
                 }
                 return kept;

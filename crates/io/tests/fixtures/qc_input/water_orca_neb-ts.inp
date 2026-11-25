@@ -1,0 +1,16 @@
+# TS guess from GFN2-xTB (ReShiki 0.17.1), imaginary frequency -412 cm-1
+# water
+! B3LYP D3BJ def2-SVP NEB-TS Freq
+%pal nprocs 8 end
+%maxcore 1536
+%neb
+  NEB_End_XYZFile "water_product.xyz"
+  NEB_TS_XYZFile "water_ts.xyz"
+  NImages 12
+end
+
+* xyz 0 1
+  O      0.00000000     0.00000000     0.00000000
+  H      1.00720000     0.00000000     0.00000000
+  H     -0.18998720     0.92662720     0.00000000
+*

@@ -155,6 +155,7 @@ impl App {
                 || self.tab.atom_text.is_some()
                 || self.help_open
                 || self.settings.open
+                || self.qc_export.is_some()
                 || self.commands.open
                 || self.updates.open
                 || self.github_dialog()
