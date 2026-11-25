@@ -484,6 +484,14 @@ fn embedding_parameters(request: &Request) -> EmbedParams {
     } else {
         0.1
     };
+    // Symmetry-aware pruning first enumerates the molecule's automorphisms,
+    // with no deadline; for a symmetric C96H24 flake that search alone
+    // outlasts the worker. Compare heavy atoms in atom order instead. Most
+    // molecules prune as before. A symmetric one, or one whose nitro or
+    // carboxylate oxygens could swap, may keep a symmetry copy of a seed,
+    // which costs one more minimization; isotopic hydrogens (D, T) no longer
+    // count toward the RMS.
+    parameters.use_symmetry_for_pruning = false;
     parameters.clear_conformers = true;
     // Validation leaves room for each one-based conformer index in signed i32.
     parameters.enable_sequential_random_seeds = true;
@@ -511,6 +519,7 @@ fn valid_conformer_ids(ids: &[i32]) -> impl Iterator<Item = i32> + '_ {
 #[derive(Debug, PartialEq, Eq)]
 enum EmbeddingRetry {
     WithoutBasicKnowledge,
+    RandomCoordinates,
     SingleConformer,
 }
 
@@ -522,26 +531,30 @@ fn embedding_retry(
     if valid_conformer_ids(ids).next().is_some() {
         return None;
     }
-    let planarity = u64::from(
-        parameters
-            .failures
-            .get(EmbedFailureCause::EtkMinimization as usize)
-            .copied()
-            .unwrap_or(0),
-    );
+    let count = |cause: EmbedFailureCause| {
+        u64::from(
+            parameters
+                .failures
+                .get(cause as usize)
+                .copied()
+                .unwrap_or(0),
+        )
+    };
     let failures: u64 = parameters
         .failures
         .iter()
         .map(|&count| u64::from(count))
         .sum();
-    if parameters.use_basic_knowledge && planarity * 2 > failures {
+    if parameters.use_basic_knowledge && count(EmbedFailureCause::EtkMinimization) * 2 > failures {
         Some(EmbeddingRetry::WithoutBasicKnowledge)
-    } else if conformers > 1
-        && parameters
-            .failures
-            .get(EmbedFailureCause::ExceededTimeout as usize)
-            .is_some_and(|&count| count > 0)
+    } else if !parameters.use_random_coords
+        && count(EmbedFailureCause::InitialCoords) * 2 > failures
     {
+        // Large flexible molecules (dendrimers, long chains) rarely give a
+        // Euclidean random distance matrix, so the eigenvector start fails at
+        // once. RDKit recommends random starting coordinates for them.
+        Some(EmbeddingRetry::RandomCoordinates)
+    } else if conformers > 1 && count(EmbedFailureCause::ExceededTimeout) > 0 {
         Some(EmbeddingRetry::SingleConformer)
     } else {
         None
@@ -560,8 +573,7 @@ fn embed(
     let mut conformers = request.conformers;
     if cage.is_some() {
         // One seeded attempt diagnoses the known planarity incompatibility.
-        // With clear_confs and one candidate, RMS pruning cannot reject it;
-        // disabling pruning avoids needless unbounded symmetry matching.
+        // With clear_confs and one candidate, RMS pruning cannot reject it.
         let mut trial = parameters.clone();
         trial.max_iterations = 1;
         trial.prune_rms_thresh = -1.;
@@ -598,7 +610,23 @@ fn embed(
                     request.conformers, request.seed, embedding_failures(&embedded.params)
                 ));
                 parameters.use_basic_knowledge = false;
-                method = "Rust ETDG fallback";
+                method = if parameters.use_random_coords {
+                    "Rust random-start ETDG"
+                } else {
+                    "Rust ETDG fallback"
+                };
+            }
+            Some(EmbeddingRetry::RandomCoordinates) => {
+                diagnostics.push(format!(
+                    "initialization=random-coordinates; requested={}; actual_count={conformers}; seed={}; prior_embedding_failure_counters={}; random_coordinates=true; embedding_call_limit=3",
+                    request.conformers, request.seed, embedding_failures(&embedded.params)
+                ));
+                parameters.use_random_coords = true;
+                method = if parameters.use_basic_knowledge {
+                    "Rust random-start ETKDGv3"
+                } else {
+                    "Rust random-start ETDG"
+                };
             }
             Some(EmbeddingRetry::SingleConformer) => {
                 diagnostics.push(format!(
@@ -606,8 +634,7 @@ fn embed(
                     request.conformers, request.seed, embedding_failures(&embedded.params)
                 ));
                 conformers = 1;
-                // With no existing conformers, this has no pruning effect and
-                // avoids needless symmetry matching for a sole retry candidate.
+                // With no existing conformers, this has no pruning effect.
                 parameters.prune_rms_thresh = -1.;
             }
             None => return Ok((embedded, method)),

@@ -813,6 +813,8 @@ impl App {
                         Some("Cage starting geometry")
                     } else if diagnostic.starts_with("initialization=ETDG-fallback") {
                         Some("Alternative starting geometry")
+                    } else if diagnostic.starts_with("initialization=random-coordinates") {
+                        Some("Random starting geometry")
                     } else if diagnostic.starts_with("initialization=single-conformer") {
                         Some("Single conformer")
                     } else {
