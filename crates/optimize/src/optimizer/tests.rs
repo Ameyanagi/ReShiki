@@ -645,18 +645,31 @@ fn singular_model_falls_back_without_evaluating_the_input_twice() {
         g[3] = x[3] - 1.;
         Ok(0.5 * g[3].powi(2))
     });
-    let result = optimize(
-        &mut p,
-        &[1, 1],
-        &[0.; 6],
-        &anchored(Method::AncRfo),
-        proceed,
-    );
-    assert_eq!(result.status, Status::Converged);
-    assert_eq!(result.method, Method::Lbfgs);
-    assert!((result.positions[3] - 1.).abs() < 1e-10);
-    // Each capped descent step is accepted, plus one evaluation at the input.
-    assert_eq!(result.evaluations, result.steps + 1);
+    for tight_final in [false, true] {
+        let options = Options {
+            tight_final,
+            ..anchored(Method::AncRfo)
+        };
+        let mut last = Accuracy::Normal;
+        let result = optimize(&mut p, &[1, 1], &[0.; 6], &options, |s| {
+            last = s.accuracy;
+            proceed(s)
+        });
+        assert_eq!(result.status, Status::Converged);
+        assert_eq!(result.method, Method::Lbfgs);
+        assert!((result.positions[3] - 1.).abs() < 1e-10);
+        // Each capped descent step is accepted, plus the input and the opt-in recheck.
+        assert_eq!(
+            result.evaluations,
+            result.steps + 1 + usize::from(tight_final)
+        );
+        let expected = if tight_final {
+            Accuracy::Tight
+        } else {
+            Accuracy::Normal
+        };
+        assert_eq!(last, expected);
+    }
 }
 
 #[test]
@@ -1195,13 +1208,14 @@ fn internal_build_failure_preserves_the_potential_hessian_for_anc() {
             Some(Ok(()))
         }
     }
-    let run = |method| {
+    let run = |method, tight_final| {
         let mut p = SeparatedWell {
             calls: Vec::new(),
             hessian: hessian.clone(),
         };
         let options = Options {
             initial_hessian: InitialHessian::Potential,
+            tight_final,
             ..anchored(method)
         };
         let mut callbacks = Vec::new();
@@ -1211,8 +1225,14 @@ fn internal_build_failure_preserves_the_potential_hessian_for_anc() {
         });
         (out, p.calls, callbacks)
     };
-    let (direct, direct_calls, direct_callbacks) = run(Method::AncRfo);
-    let (fallback, fallback_calls, fallback_callbacks) = run(Method::Internal);
+    // With the opt-in recheck, the fallback must still end with one Tight call.
+    let (tight, tight_calls, _) = run(Method::Internal, true);
+    assert_eq!(tight.status, Status::Converged);
+    assert_eq!(tight.method, Method::AncRfo);
+    assert_eq!(tight.evaluations, tight.steps + 2);
+    assert_eq!(tight_calls.last().unwrap().1, Accuracy::Tight);
+    let (direct, direct_calls, direct_callbacks) = run(Method::AncRfo, false);
+    let (fallback, fallback_calls, fallback_callbacks) = run(Method::Internal, false);
     assert_eq!(fallback.status, Status::Converged);
     assert_eq!(fallback.method, Method::AncRfo);
     assert!(fallback.steps > 0);

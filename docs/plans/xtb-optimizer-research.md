@@ -270,7 +270,7 @@ gradient equivalents measured by time):
 | Reject ratio 0.05 (ANC)                                           | 6,689 → 6,680                           | tie                                                                                           |
 | Cartesian L-BFGS                                                  | 10,281                                  | lost                                                                                          |
 
-MMFF94 (20 drugs, `examples/mmff_benchmark.rs`): TRIC 571 evaluations vs ANC 1,797, but on a
+MMFF94 (20 drugs, `examples/mmff_benchmark.rs`): TRIC 551 evaluations vs ANC 1,777 with the default (571 vs 1,797 with the Tight recheck), but on a
 0.1 ms force field ANC is still faster in wall time; GFN-FF: TRIC 3,736 vs ANC 7,709
 evaluations (0.89× xtb `--gfnff --opt`).
 
