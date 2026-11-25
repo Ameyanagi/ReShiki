@@ -8,7 +8,8 @@ ship, so the interop test's rmcp `client` feature is out of scope):
 - rmcp's subtree contains no HTTP, TLS or WebSocket stack.
 Every Cargo package added since the baseline commit must have a license
 expression built only from the permissive licenses below, or match an exact
-reviewed package-specific license decision below. `cargo tree` resolves
+reviewed package-specific license decision below. The MIT crates that generate
+code from LGPL KDE protocol files must match their reviewed version and archive. `cargo tree` resolves
 foreign targets without installing them, so one host covers all release targets.
 
 The xTB audit rejects copyleft licenses and the axtb fork in default production
@@ -28,6 +29,7 @@ import tomllib
 from pathlib import Path
 
 from build_inchi_helper import RELEASE_TARGETS
+from license_notices import KDE_PROTOCOL_CRATES, KDE_PROTOCOL_REVIEW
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = Path("scripts/agent_dependency_baseline.json")
@@ -388,6 +390,19 @@ def reviewed_certificate_data_license(package, locked_packages):
     )
 
 
+def kde_protocol_problems(root, locked_packages):
+    """Flag any locked KDE-protocol crate other than the reviewed versions and archives."""
+    reviewed = json.loads((root / KDE_PROTOCOL_REVIEW).read_text(encoding="utf-8"))["packages"]
+    return sorted(
+        f"{key} generates code from LGPL KDE protocol files; review {KDE_PROTOCOL_REVIEW}"
+        for locked in locked_packages
+        if locked.get("name") in KDE_PROTOCOL_CRATES
+        for key in [f"{locked['name']}@{locked.get('version')}"]
+        if key not in reviewed
+        or any(reviewed[key][field] != locked.get(field) for field in ("source", "checksum"))
+    )
+
+
 def license_problems(metadata, known, locked_packages):
     problems = []
     for package in metadata["packages"]:
@@ -428,6 +443,7 @@ def verify(root=ROOT, metadata=None):
     known = set(baseline["packages"])
     locked_packages = lock.get("package", [])
     problems += license_problems(metadata, known, locked_packages)
+    problems += kde_protocol_problems(root, locked_packages)
 
     revision = axtb_revision(root)
     for target in (*RELEASE_TARGETS, "wasm32-unknown-unknown"):

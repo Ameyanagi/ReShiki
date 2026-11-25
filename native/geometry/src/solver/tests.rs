@@ -11,6 +11,20 @@ fn failed_embedding_ids_are_skipped_without_losing_valid_conformers() {
 }
 
 #[test]
+fn pruning_never_searches_molecule_symmetry() {
+    // The automorphism search has no deadline (C96H24 outlasted the worker).
+    let request: Request = serde_json::from_value(serde_json::json!({
+        "atoms": [], "bonds": [], "field": "MMFF94s", "operation": "Generate",
+        "coordinates": [], "fixed_atoms": [], "conformers": 8, "seed": 7,
+        "max_iterations": 500
+    }))
+    .unwrap();
+    let parameters = embedding_parameters(&request);
+    assert!(parameters.prune_rms_thresh > 0.);
+    assert!(!parameters.use_symmetry_for_pruning);
+}
+
+#[test]
 fn retries_require_failure_evidence_and_preserve_successful_ensembles() {
     let mut parameters = EmbedParams::etkdg_v3();
     parameters.failures = vec![0; EmbedFailureCause::EndOfEnum as usize];
@@ -48,6 +62,21 @@ fn retries_require_failure_evidence_and_preserve_successful_ensembles() {
         embedding_retry(&parameters, &[], 8),
         Some(EmbeddingRetry::WithoutBasicKnowledge)
     );
+    // Eigenvector starts that fail outright switch to random coordinates once.
+    parameters.failures.fill(0);
+    parameters.failures[EmbedFailureCause::InitialCoords as usize] = 800;
+    assert_eq!(
+        embedding_retry(&parameters, &[], 8),
+        Some(EmbeddingRetry::RandomCoordinates)
+    );
+    parameters.use_random_coords = true;
+    assert_eq!(embedding_retry(&parameters, &[], 8), None);
+    parameters.failures[EmbedFailureCause::ExceededTimeout as usize] = 1;
+    assert_eq!(
+        embedding_retry(&parameters, &[-1], 8),
+        Some(EmbeddingRetry::SingleConformer)
+    );
+    parameters.use_random_coords = false;
     parameters.failures.clear();
     assert_eq!(embedding_retry(&parameters, &[], 8), None);
 }
