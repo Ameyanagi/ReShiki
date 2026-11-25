@@ -254,8 +254,7 @@ impl App {
         let live = !shown.stale && self.tab.xtb.run.is_none();
         // Without a preview, the list marks the step the model shows (the
         // last one unless another step was used).
-        let shows = selected
-            .is_none()
+        let shows = (live && selected.is_none())
             .then(|| self.xtb_model_step(shown))
             .flatten();
         let chart = canvas(StepChart {
@@ -301,7 +300,8 @@ impl App {
         let palette = &self.tab.xtb.palette;
         let index = selected.or(shows).unwrap_or(last);
         let mut side = column![text(format!("Step {index} of {last}")).size(12)].spacing(6);
-        if palette.confirm.is_empty() {
+        // The stereo question belongs to the current preview.
+        if palette.confirm.is_empty() || selected.is_none() {
             // Any step the model does not show already, the last one too
             // after another step was used.
             let usable = live

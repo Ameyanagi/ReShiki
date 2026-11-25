@@ -78,8 +78,10 @@ struct Step {
 
 struct Sizes {
     /// The results measured, by identity and "keep full" choice, without
-    /// holding them; drawing edits keep the sizes.
+    /// holding them, and the attachments (imported results share a size
+    /// budget per molecule); drawing edits keep the sizes.
     results: Vec<(Weak<CalcResult>, bool)>,
+    attachments: Vec<science::Attachment>,
     index: usize,
     /// Saved bytes per result, in `Science::results` order.
     saved: Vec<usize>,
@@ -90,7 +92,10 @@ struct Sizes {
 impl Palette {
     /// Open on `result`'s Summary.
     pub(super) fn show(&mut self, result: &Arc<CalcResult>) {
-        self.result = vec![Arc::downgrade(result)];
+        // The same result again keeps its lighter copies' identities.
+        if !self.result.iter().any(|weak| is(weak, result)) {
+            self.result = vec![Arc::downgrade(result)];
+        }
         self.open = true;
         self.view = View::Summary;
         self.step = None;
@@ -220,6 +225,7 @@ impl App {
         let science = &self.tab.doc.science;
         let same = |sizes: &Sizes| {
             sizes.index == shown.index
+                && sizes.attachments == science.attachments
                 && sizes.results.len() == science.results.len()
                 && sizes
                     .results
@@ -236,6 +242,7 @@ impl App {
                     .iter()
                     .map(|s| (Arc::downgrade(&s.result), s.keep_full))
                     .collect(),
+                attachments: science.attachments.clone(),
                 index: shown.index,
                 saved: science.saved_sizes(),
                 full: shown.stored.result.heavy_bytes(),
@@ -578,10 +585,15 @@ impl App {
         else {
             return Some(prompt.answer(answer));
         };
-        // Asked about another document: drop the question, and leave any
-        // close in progress alone.
+        // Asked about another document: drop the question, and end only a
+        // close that was waiting for that document's save.
         if (*tab, *epoch) != (self.tab.id, self.tab.file_epoch) {
-            return None;
+            let ours = matches!(
+                self.pending,
+                Some(crate::app::Pending::CloseTab(id) | crate::app::Pending::CloseWindow(_, id, _))
+                    if id == *tab
+            );
+            return ours.then_some(Message::Cancel);
         }
         if answer == Answer::Save && lighter.is_some() {
             self.xtb_make_lighter();
