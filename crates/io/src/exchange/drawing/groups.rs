@@ -209,10 +209,10 @@ impl Writer<'_> {
         }
         Ok(())
     }
-    pub(super) fn groups(&mut self, reactions: &[steps::Preview]) -> Result<Fragments> {
+    pub(super) fn groups(&mut self) -> Result<()> {
         let doc = self.doc;
-        if doc.groups.is_empty() && !self.split_fragments && reactions.is_empty() {
-            return Ok(Fragments::default());
+        if doc.groups.is_empty() && !self.split_fragments {
+            return Ok(());
         }
         let sets: Vec<HashSet<_>> = doc
             .groups
@@ -242,12 +242,6 @@ impl Writer<'_> {
             ));
         }
         let fragments = Fragments::new(doc, stereo_edges);
-        if doc.groups.is_empty() && !self.split_fragments {
-            self.split_fragments = steps::needs_fragments(reactions, &fragments);
-            if !self.split_fragments {
-                return Ok(Fragments::default());
-            }
-        }
         let indices = &fragments.indices;
         let xml_indices = indices
             .iter()
@@ -386,7 +380,7 @@ impl Writer<'_> {
                 .unwrap_or(0);
             self.tree.set(n, "Z", z.to_string())?;
         }
-        Ok(fragments)
+        Ok(())
     }
     pub(super) fn abbreviations(&mut self) -> Result<()> {
         let doc = self.doc;

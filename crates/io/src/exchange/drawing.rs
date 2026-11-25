@@ -421,6 +421,13 @@ fn write_impl(
     w.hidden_charges()?;
     w.arrows()?;
     let reactions = w.preview_steps();
+    // Each participant needs a fragment of its own for a step to name it.
+    let fragments = if reactions.is_empty() {
+        groups::Fragments::default()
+    } else {
+        groups::Fragments::of(document)
+    };
+    w.split_fragments |= steps::needs_fragments(&reactions, &fragments);
     let plusses = reactions
         .iter()
         .flat_map(|r| r.plusses.iter().copied())
@@ -447,7 +454,7 @@ fn write_impl(
         }
     }
     w.crossings(middle)?;
-    let fragments = w.groups(&reactions)?;
+    w.groups()?;
     w.abbreviations()?;
     w.orbitals_behind_labels()?;
     // Abbreviations move bonds into nested fragments. Native areas must be

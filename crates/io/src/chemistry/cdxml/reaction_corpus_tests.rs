@@ -1,10 +1,10 @@
 //! Reaction roles in the independent SDK corpus, including explicit roles
 //! that the drawing's geometry would not infer.
-use reshiki_io::{compatibility, engine::LocalEngine, exchange, formats};
-use reshiki_model::{
-    cycles,
+use crate::{
+    compatibility, cycles,
     document::{Annotation, Document, Point},
-    reactions,
+    engine::LocalEngine,
+    exchange, formats, reactions,
 };
 use std::path::Path;
 
@@ -156,10 +156,10 @@ async fn a_complete_step_resolves_the_captured_group_and_deduplicates_superseded
         )
     };
     let source = complete(include_str!(
-        "../../../tests/fixtures/chemdraw-arrows/numeric.cdxml"
+        "../../../../../tests/fixtures/chemdraw-arrows/numeric.cdxml"
     ));
     let captured = exchange::from_cdx_tolerant(include_bytes!(
-        "../../../tests/fixtures/chemdraw-arrows/numeric.cdx"
+        "../../../../../tests/fixtures/chemdraw-arrows/numeric.cdx"
     ))
     .unwrap();
     let binary = binary(&complete(&captured));
