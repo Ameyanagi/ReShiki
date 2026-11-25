@@ -134,6 +134,8 @@ pub struct Settings {
     pub export_dpi: Dpi,
     /// Symbols inserted from the picker, newest first.
     pub recent_symbols: Vec<String>,
+    /// The user's templates for Export input for Gaussian, ORCA and GAMESS.
+    pub input_templates: Vec<reshiki::qc_input::Template>,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -158,6 +160,7 @@ impl Default for Settings {
             copy_dpi: Dpi(300),
             export_dpi: Dpi(1200),
             recent_symbols: Vec::new(),
+            input_templates: Vec::new(),
         }
     }
 }
