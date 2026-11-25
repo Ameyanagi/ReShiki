@@ -135,6 +135,7 @@ pub enum Section {
     GenericStructure,
     AtomMaps,
     StereoGroups,
+    Xtb,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

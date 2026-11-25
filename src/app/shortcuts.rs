@@ -149,6 +149,7 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
         Message::Settings(super::settings_page::Action::Open(None)) => (command, ","),
         Message::Commands(super::command_palette::Action::Open) => (command, "K"),
         Message::Optimization(super::optimization::Action::Begin) => (shift, "D"),
+        Message::Xtb(super::xtb::Action::Entry(super::xtb::Entry::Rerun)) => (command, "R"),
         Message::Cleanup(super::cleanup::Action::Scheme) => (shift, "X"),
         Message::SelectAll => (command, "A"),
         Message::InvertSelection => (shift, "A"),
@@ -288,6 +289,9 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
             "x" => Message::Copy(true),
             "v" => Message::Paste,
             "d" => Message::Shortcut(Action::CopyText("cdxml")),
+            "r" if super::xtb::available() => {
+                Message::Xtb(super::xtb::Action::Entry(super::xtb::Entry::Rerun))
+            }
             "j" => Message::Shortcut(Action::Join),
             "i" => Message::Inspector(InspectorTab::Import),
             "l" => Message::Shortcut(Action::FixedLength),

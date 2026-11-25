@@ -285,10 +285,11 @@ impl App {
             body = body.push(background(self.inspector()));
         }
         content = content.push(body);
-        content
-            .push(background(self.status_bar()))
-            .height(Length::Fill)
-            .into()
+        content = content.push(background(self.status_bar()));
+        if let Some(results) = self.xtb_bottom_palette() {
+            content = content.push(background(results));
+        }
+        content.height(Length::Fill).into()
     }
 
     fn drawing_canvas(&self) -> Element<'_, Edit> {
@@ -315,6 +316,7 @@ impl App {
             keyboard_marker: show_keyboard_target && self.tab.keyboard_drawing.shown(),
             morph: self.model_morph(),
             model_generation: self.model_generation(),
+            result_label: self.xtb_label(),
             element: self.atom_tool_element(),
             atom_label: (self.element == super::palettes::R_GROUP)
                 .then_some(super::palettes::R_GROUP),
@@ -1185,6 +1187,17 @@ impl App {
             });
         }
         commands.extend(self.depth_commands());
+        // With a molecule selected; builds that cannot calculate hide it.
+        if super::xtb::available()
+            && reshiki::models3d::selected_molecule(&self.tab.doc, &self.tab.selected).is_some()
+        {
+            commands.push(RowCommand {
+                label: "Optimize with GFN2-xTB",
+                menu: "Optimize with GFN2-xTB",
+                message: Message::Xtb(super::xtb::Action::Entry(super::xtb::Entry::OptimizeGfn2)),
+                enabled: !self.tab.busy && !self.xtb_running(),
+            });
+        }
         if !keyboard {
             commands.push(RowCommand {
                 label: "Keyboard drawing",
@@ -2092,7 +2105,7 @@ impl App {
             InspectorTab::ThemeGenerator => self.theme_generator_panel(),
             InspectorTab::Properties if self.tab.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
-            InspectorTab::Predict => self.nmr_inspector(),
+            InspectorTab::Predict => self.predict_inspector(),
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
@@ -3120,6 +3133,14 @@ impl App {
                 accessible_command("engine.cancel", "Cancel chemistry operation", "Cancel")
                     .on_press(Message::CancelEngine(key)),
                 "Cancel this operation · Esc",
+                tooltip::Position::Top,
+            ));
+        }
+        if self.xtb_running() {
+            status = status.push(hover_hint(
+                accessible_command("xtb.status.cancel", "Cancel xTB calculation", "Cancel")
+                    .on_press(Message::Xtb(super::xtb::Action::Cancel)),
+                "Cancel the calculation · Esc",
                 tooltip::Position::Top,
             ));
         }

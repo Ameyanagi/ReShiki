@@ -61,7 +61,7 @@ pub const MAX_COMPACT_EXPANSION: usize = 32;
 /// Encoded heavy bytes allowed per molecule by default for imported results.
 pub const MAX_IMPORTED_HEAVY_BYTES: usize = 2_000_000;
 /// Minimum dimensionless bond order retained in a light result.
-pub const LIGHT_BOND_ORDER_MIN: f64 = 0.3;
+pub const LIGHT_BOND_ORDER_MIN: f64 = 0.1;
 
 /// Validation or conversion failure.
 #[derive(Debug, thiserror::Error)]

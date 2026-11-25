@@ -381,6 +381,7 @@ impl App {
     fn place_nmr_inspector(&mut self, dock: bool) {
         let old_width = self.inspector_width();
         if dock {
+            self.xtb.page = super::xtb::Page::Nmr;
             if self.inspector_tab != InspectorTab::Predict {
                 self.tab.nmr.dock.dock_return = Some((self.inspector_open, self.inspector_tab));
             }
