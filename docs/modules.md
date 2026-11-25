@@ -860,10 +860,14 @@ explains how the crates and modules fit together.
 - `crates/model/src/models3d/ellipsoids.rs`: ORTEP displacement ellipsoids in Cartesian ångström and their exact silhouettes.
 - `crates/model/src/models3d/polish.rs`: Persistent generated chemistry, separate from the live source drawing.
 - `crates/model/src/models3d/surface.rs`: Orbital isosurfaces drawn as vector shapes in a 3D model (see docs/plans/xtb-surfaces.md).
-- `crates/model/src/models3d/surface/draw.rs`: The developer demo surface and its place in a model's picture
+- `crates/model/src/models3d/surface/draw.rs`: Orbital meshes and their projection into a model's picture.
+- `crates/model/src/models3d/surface/draw/figures.rs`
+- `crates/model/src/models3d/surface/figure.rs`: An orbital placed on a 3D model
 - `crates/model/src/models3d/surface/fit.rs`: Smooth cubic outlines for merged surface regions and runs, after Schneider's digitized-curve fitting (Graphics Gems, 1990).
 - `crates/model/src/models3d/surface/look.rs`: How an orbital surface is drawn
 - `crates/model/src/models3d/surface/mesh.rs`: Closed surfaces of a signed scalar field, in model coordinates (Å).
+- `crates/model/src/models3d/surface/orbital.rs`: A molecular orbital in the model frame (Å), evaluated from normalized Gaussian AOs.
+- `crates/model/src/models3d/surface/orbital/timing.rs`: Manual timings
 - `crates/model/src/models3d/surface/snapshot.rs`: Compact snapshots of the merged 2D shapes of an orbital surface.
 - `crates/model/src/models3d/surface/visible.rs`: Screen-affine hidden-surface clipping and merged, nested shading regions.
 - `crates/model/src/models3d/surface/visible/coverage.rs`
