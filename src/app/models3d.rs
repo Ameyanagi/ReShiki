@@ -212,12 +212,16 @@ impl App {
             })
     }
 
-    /// The current generation's own target, independent of later selection.
+    /// The current generation's own target, independent of later selection,
+    /// or the molecule an xTB calculation runs on.
     pub(super) fn model_generation(&self) -> Option<crate::canvas::ModelGeneration<'_>> {
-        let job = self.tab.model_job.as_ref()?;
+        let Some(job) = self.tab.model_job.as_ref() else {
+            return self.xtb_outline();
+        };
         (job.current == self.model_key()).then_some(crate::canvas::ModelGeneration {
             atoms: job.prepared.ids(),
             started: job.started,
+            label: "Generating 3D",
         })
     }
 

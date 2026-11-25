@@ -154,7 +154,11 @@ impl MoleculeCanvas<'_> {
             frame,
             bounds,
             lo - Vector::new(14., 48.),
-            format!("Generating 3D… {} s · Esc cancels", elapsed.as_secs()),
+            format!(
+                "{}… {} s · Esc cancels",
+                generation.label,
+                elapsed.as_secs()
+            ),
             true,
         );
     }

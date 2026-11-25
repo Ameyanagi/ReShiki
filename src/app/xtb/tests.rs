@@ -13,10 +13,8 @@ fn send(app: &mut App, action: Action) {
     let _ = app.update(Message::Xtb(action));
 }
 
-/// The worker's events for the run in flight.
 fn event(app: &mut App, event: Event) {
-    let serial = app.tab.xtb.run.as_ref().expect("a run in flight").serial;
-    send(app, Action::Event(serial, event));
+    app.xtb_answer(event);
 }
 
 /// A selected oxygen; Run asks for its 3D model, answered here as water.

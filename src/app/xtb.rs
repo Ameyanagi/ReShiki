@@ -211,6 +211,21 @@ impl App {
             .flatten()
     }
 
+    /// The canvas outline and badge around the molecule being calculated.
+    pub(super) fn xtb_outline(&self) -> Option<crate::canvas::ModelGeneration<'_>> {
+        let run = self
+            .tab
+            .xtb
+            .run
+            .as_ref()
+            .filter(|run| run.launch.is_some())?;
+        Some(crate::canvas::ModelGeneration {
+            atoms: &run.atoms,
+            started: run.started,
+            label: "Calculating xTB",
+        })
+    }
+
     pub(super) fn xtb_running(&self) -> bool {
         self.tab.xtb.run.is_some()
     }
@@ -684,6 +699,18 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, String> {
         ),
         notes,
     })
+}
+
+#[cfg(test)]
+pub(super) use run::{Event as RunEvent, Report as RunReport};
+
+#[cfg(test)]
+impl App {
+    /// Answer the run in flight as its worker would.
+    pub(super) fn xtb_answer(&mut self, event: run::Event) {
+        let serial = self.tab.xtb.run.as_ref().expect("a run in flight").serial;
+        let _ = self.update(Message::Xtb(Action::Event(serial, event)));
+    }
 }
 
 #[cfg(test)]

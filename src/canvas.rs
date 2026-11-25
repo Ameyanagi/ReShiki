@@ -858,6 +858,8 @@ impl<'a> MoleculeCanvas<'a> {
 pub(crate) struct ModelGeneration<'a> {
     pub atoms: &'a [u64],
     pub started: iced::time::Instant,
+    /// What the badge says is running: "Generating 3D" or "Calculating xTB".
+    pub label: &'static str,
 }
 
 impl ModelGeneration<'_> {
