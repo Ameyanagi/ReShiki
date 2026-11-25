@@ -3,7 +3,7 @@
 //! Adapted from D. Butina, J. Chem. Inf. Comput. Sci. 39, 747–750 (1999),
 //! using a heavy-atom RMSD cutoff and updating neighbor counts after each assignment.
 
-use std::{cmp::Reverse, thread};
+use std::{cmp::Reverse, sync::Mutex, thread};
 
 use super::{
     Automorphisms, Error, MAX_STARTS, PerCluster, Settings, Topology, alignment::Centered,
@@ -136,11 +136,24 @@ fn complete_distances(
         fill(0, rows);
         return;
     }
+    // Blocks go through a queue that the calling thread also drains, so a
+    // thread that cannot start only means less parallelism, never a panic.
     let block_size = rows.len().div_ceil(workers);
-    thread::scope(|scope| {
-        for (block, chunk) in rows.chunks_mut(block_size).enumerate() {
-            scope.spawn(move || fill(block * block_size, chunk));
+    let queue = Mutex::new(rows.chunks_mut(block_size).enumerate().collect::<Vec<_>>());
+    let work = || {
+        loop {
+            let next = queue.lock().expect("no worker panics").pop();
+            let Some((block, chunk)) = next else { break };
+            fill(block * block_size, chunk);
         }
+    };
+    thread::scope(|scope| {
+        for _ in 1..workers {
+            if thread::Builder::new().spawn_scoped(scope, work).is_err() {
+                break;
+            }
+        }
+        work();
     });
 }
 
