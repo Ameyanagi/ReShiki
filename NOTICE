@@ -33,8 +33,10 @@ of adaptations, copyright notices, and license texts are recorded in:
 
   tests/fixtures/crystal/  COD ferrocene data (CC0; source notice retained)
   tests/fixtures/qc/       Quantum chemistry test files, not distributed:
-                          licenses/cclib/ (BSD-3-Clause) and
-                          licenses/pymatgen-test-files/ (MIT)
+                          licenses/cclib/ (BSD-3-Clause),
+                          licenses/pymatgen-test-files/ (MIT),
+                          licenses/vibeview/ (ORCA Molden exports, MIT), and
+                          licenses/nosphera2/ (ORCA Molden export, BSD-2-Clause)
 
 Individual files and fixture directories may contain additional notices.
 Dependencies retain the licenses declared by their respective projects;
