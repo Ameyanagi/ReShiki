@@ -214,6 +214,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
 - `src/app/xtb/vibrations.rs`: The Vibrations tab
+- `src/app/xtb/vibrations/figure.rs`: An infrared spectrum built from editable drawing objects.
 - `src/app/xtb/vibrations/view.rs`: The Vibrations tab's widgets
 - `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.
 - `src/appearance.rs`: Interface preferences and defaults for new drawings.
