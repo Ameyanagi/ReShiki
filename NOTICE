@@ -23,6 +23,7 @@ of adaptations, copyright notices, and license texts are recorded in:
   licenses/tabler-icons/   Tabler Icons outline library (MIT)
   licenses/liberation-fonts/ Liberation Sans, the bundled Arial fallback (OFL-1.1)
   licenses/dejavu-fonts/   Interface symbols from DejaVu Sans in the browser build (Bitstream Vera)
+  licenses/axtb/           xTB engine in builds with the `xtb` feature (LGPL-3.0-or-later)
   licenses/nmrshiftdb2/    Observed-shift derivative database (separate data license)
   data/nmr/               Offline index, provenance and held-out validation
   licenses/name-aliases/   Offline retained-name catalog (OPSIN MIT; ChEBI CC BY 4.0)
@@ -53,6 +54,14 @@ fixtures. Historical crates/opsin/ and crates/nazuchem* paths in retained
 attribution records identify source locations before the split; current
 naming sources and provenance live in the external nazuchem repository at the
 pin above.
+
+Builds with the Cargo feature `xtb` (the macOS and Linux desktop releases)
+link axtb, an LGPL-3.0-or-later implementation of the xTB methods, from the
+fork https://github.com/Ameyanagi/axtb at the revision in licenses/axtb/SOURCE.
+axtb's NOTICE there records the upstream projects it reproduces, including
+the g-xTB authors' permission for its g-xTB parts. Each such release also
+publishes reshiki-<version>-source.tar.gz with the complete corresponding
+source and rebuild steps. Other builds and packages do not contain axtb.
 
 Binary distributions include a Licenses directory. It contains this notice,
 the project license texts, and THIRD-PARTY-NOTICES.txt with the source

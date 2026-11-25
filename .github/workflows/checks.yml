@@ -459,9 +459,10 @@ jobs:
         run: cargo build --locked --no-default-features --bin reshiki
       - name: Check Rust heap and byte protocol boundaries
         run: uv run --no-project --with certifi==2026.10.23 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
-      - name: Audit agent API dependencies for every release target
-        # cargo tree resolves all six release triples from one host.
-        if: runner.os == 'macOS'
+      - name: Audit dependencies and licences for every release target
+        # cargo tree resolves all six release triples from one host. Linux runs
+        # on every native PR; macOS only on stacked and main runs.
+        if: runner.os == 'Linux'
         run: uv run --no-project python scripts/check_agent_dependencies.py
       - name: Test with the real renderer on Windows
         if: runner.os == 'Windows'
@@ -653,9 +654,37 @@ jobs:
           cargo test --locked -p reshiki-model --lib --target ${{ matrix.target }} chemistry::abbreviations::
           cargo check --locked -p reshiki-process --all-targets --target ${{ matrix.target }}
           cargo test --locked -p reshiki-process --target ${{ matrix.target }}
+  xtb:
+    name: xtb (linux x64)
+    needs: [scope, images]
+    if: needs.scope.outputs.native == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    container: ${{ needs.images.outputs.noble }}
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: *native_checkout
+      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy
+      - run: rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: xtb
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Check the application with xTB enabled
+        run: cargo clippy --locked --features xtb --bin reshiki --all-targets -- -D warnings
+      - name: Test the xTB worker engine
+        run: cargo test --locked -p reshiki-xtb-worker --features engine
+      - name: Test xTB application integration
+        run: cargo test --locked --test it xtb --features xtb
   rust-result:
     name: Rust checks
-    needs: [scope, rust-build, rust, rust-extra, rust-lint-goldens]
+    needs: [scope, rust-build, rust, rust-extra, rust-lint-goldens, xtb]
     if: always()
     runs-on: ubuntu-22.04
     steps:
@@ -669,9 +698,10 @@ jobs:
           RUST_RESULT: ${{ needs.rust.result }}
           RUST_EXTRA_RESULT: ${{ needs.rust-extra.result }}
           LINT_GOLDENS_RESULT: ${{ needs.rust-lint-goldens.result }}
+          XTB_RESULT: ${{ needs.xtb.result }}
         run: |
           [[ "$SCOPE_RESULT" == success ]] || exit 1
-          for result in "$RUST_BUILD_RESULT" "$RUST_RESULT" "$RUST_EXTRA_RESULT" "$LINT_GOLDENS_RESULT"; do
+          for result in "$RUST_BUILD_RESULT" "$RUST_RESULT" "$RUST_EXTRA_RESULT" "$LINT_GOLDENS_RESULT" "$XTB_RESULT"; do
             case "$result" in
               success) ;;
               skipped) [[ "$NATIVE" != true ]] || exit 1 ;;

@@ -19,6 +19,7 @@ Commands:
   analyze      Print molecular properties as one JSON line
   predict-nmr  Print predicted NMR shifts as one JSON line
   name         Print the systematic name of a structure
+  calc         Print an xTB calculation as one JSON line
   pieces       Check or render equipment piece files
   info         Print versions, limits and formats as one JSON line
   tools        Print the agent tool catalog as one JSON line
@@ -26,7 +27,7 @@ Commands:
   skill        Write an Agent Skill folder that teaches AI agents to use ReShiki
   help         Show this help, or a command's help: reshiki --cli help <command>
 
-Options are allowed once each; -- ends the options.
+Options are allowed once each except calc's --scf-retry; -- ends the options.
 
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
@@ -248,6 +249,37 @@ value contains name, preferred, status, reason, detail, alternatives and aliases
   alternatives   Other verified names, each with name, status and reason.
 With --locants, value also contains locants: one string or null per imported
 atom, in input atom order. Atoms outside the principal parent have null.
+```
+
+### reshiki --cli calc
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--gradient] [--wbo] FILE.xyz
+
+Options:
+  --task TASK                  Calculate energy (default), gradient, hessian or orbitals.
+  --method METHOD              Use gfn2 (default), gfnff or gxtb.
+  --energy                     Accepted for compatibility. Energy is always included.
+  --gradient                   Include the Cartesian energy gradient.
+  --wbo                        Include Mayer–Wiberg bond orders.
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --conventions MODE           Use axtb (default) or xtb-6.8 conventions.
+  --alpb NAME                  Use the ALPB solvent model.
+  --gbsa NAME                  Use the GBSA solvent model.
+  --solvent-correction METHOD  Use gfn2 for g-xTB solvent calculations.
+  --etemp K                    Set the electronic temperature in kelvin.
+  --accuracy X                 Set a positive SCF accuracy multiplier (default 1).
+  --max-iter N                 Set the SCF iteration limit (default 250).
+  --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.
+  --threads N                  Use 1 to 64 worker threads (default 1).
+
+See docs/xtb-worker.md (Command line)
 ```
 
 ### reshiki --cli pieces

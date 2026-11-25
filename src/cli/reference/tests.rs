@@ -131,18 +131,30 @@ fn budget_units_cover_the_serialized_limits() {
     assert!(!agent_reference().contains("| `app` |"));
 }
 
-/// docs/agent-cli.md is hand-written: each command's usage must appear in it
-/// (line wraps aside), and its options table must list every option with
-/// the commands that take it.
+/// The CLI guide keeps every usage and points to the worker guide for calc options.
 #[test]
 fn the_cli_guide_states_every_usage_and_option() {
     let guide = include_str!("../../../docs/agent-cli.md");
+    let (_, worker_cli) = include_str!("../../../docs/xtb-worker.md")
+        .split_once("## Command line\n")
+        .unwrap();
     let folded = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
     let guide_folded = folded(guide);
     let mut missing = Vec::new();
     for spec in COMMANDS {
         if !guide_folded.contains(&folded(spec.usage)) {
             missing.push(format!("usage: {}", folded(spec.usage)));
+        }
+        if spec.name == "calc" {
+            assert!(guide.contains("(xtb-worker.md#command-line)"));
+            for option in spec.options {
+                assert!(
+                    worker_cli.contains(option.flag),
+                    "missing calc option {}",
+                    option.flag
+                );
+            }
+            continue;
         }
         for option in spec.options {
             let cell = match option.value {

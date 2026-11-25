@@ -191,6 +191,50 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: uv run --no-project --python 3.12.15 python scripts/build_release.py --tag "$RELEASE_TAG" --check-tag-only
+  source:
+    needs: [validate, images]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    container: ${{ needs.images.outputs.jammy }}
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.5"
+          python-version: "3.12.15"
+          enable-cache: false
+      - run: rustup toolchain install 1.99.1 --profile minimal
+      - run: rustup default 1.99.1
+      - &stamp_nightly_version
+        name: Stamp nightly package version
+        if: inputs.nightly
+        shell: bash
+        env:
+          NIGHTLY_VERSION: ${{ needs.validate.outputs.nightly_version }}
+        run: uv run --no-project --python 3.12.15 python scripts/prepare_nightly.py --version "$NIGHTLY_VERSION"
+      - name: Test source packaging and release rebuild settings
+        run: uv run --no-project --python 3.12.15 python -m unittest tests.test_xtb_source_archive
+      - name: Build the complete source archive with xTB
+        run: uv run --no-project --python 3.12.15 python scripts/xtb_source_archive.py build --output dist/releases
+      - name: Check shipped sources and rebuild offline against a modified axtb
+        run: uv run --no-project --python 3.12.15 python scripts/xtb_source_archive.py check dist/releases/reshiki-*-source.tar.gz
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: source-archive
+          path: |
+            dist/releases/*-source.tar.gz
+            dist/releases/*-source.tar.gz.sha256
+          if-no-files-found: error
+          compression-level: 0
   build:
     needs: [validate, images]
     # Intel macOS builds and Windows x64 package checks can exceed 100 minutes.
@@ -278,12 +322,7 @@ jobs:
         with:
           version: "0.13.5"
           python-version: ${{ matrix.python }}
-      - name: Stamp nightly package version
-        if: inputs.nightly
-        shell: bash
-        env:
-          NIGHTLY_VERSION: ${{ needs.validate.outputs.nightly_version }}
-        run: uv run --no-project --python 3.12.15 python scripts/prepare_nightly.py --version "$NIGHTLY_VERSION"
+      - *stamp_nightly_version
       - name: Install Linux libraries
         if: matrix.artifact == 'linux-arm64'
         run: sudo apt-get update && sudo apt-get install -y binutils libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
@@ -324,6 +363,7 @@ jobs:
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
+          RELEASE_TAG: ${{ needs.validate.outputs.nightly_version != '' && format('nightly-{0}', needs.validate.outputs.nightly_version) || github.event_name == 'push' && github.ref_name || '' }}
         run: uv run --no-project --isolated --python 3.12.15 python scripts/build_release.py --target ${{ matrix.target }} --installer
       # Symbols for crash reports; a workflow artifact, never a release download.
       # The published build has its own profile folder, so the cargo test steps
@@ -568,11 +608,12 @@ jobs:
           path: dist/releases/*
           if-no-files-found: error
   publish:
-    needs: [validate, build, sign, sign_windows, reference]
+    needs: [validate, build, source, sign, sign_windows, reference]
     if: >-
       ${{ always() && github.event_name == 'push'
           && needs.validate.result == 'success'
           && needs.build.result == 'success'
+          && needs.source.result == 'success'
           && needs.sign.result == 'success'
           && needs.reference.result == 'success'
           && ((needs.validate.outputs.windows_signing_enabled == 'true' && needs.sign_windows.result == 'success')
@@ -617,6 +658,10 @@ jobs:
         with:
           name: unsigned-linux-arm64
           path: release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: source-archive
+          path: release
       - name: Check every archive and publish
         working-directory: release
         env:
@@ -634,7 +679,7 @@ jobs:
           fi
           args=(--latest)
           if [[ "$RELEASE_TAG" == *-* ]]; then args=(--prerelease --latest=false); fi
-          gh release create "$RELEASE_TAG" --verify-tag --generate-notes --notes-file notes.md "${args[@]}" *.zip *.tar.gz *.dmg *-setup.exe SHA256SUMS
+          gh release create "$RELEASE_TAG" --verify-tag --generate-notes --notes-file notes.md "${args[@]}" *.zip *.tar.gz *.dmg *-setup.exe *-source.tar.gz.sha256 SHA256SUMS
   # The browser editor demo on reshiki.com/demo/ follows the latest release.
   # docs.yml copies the web-demo asset into the site on every deploy.
   web_demo:
