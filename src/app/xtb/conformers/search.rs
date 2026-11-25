@@ -6,6 +6,7 @@ use super::{Action, Format, Row, Table};
 use crate::app::xtb::{Action as XtbAction, Pending, results::RunInfo, state};
 use crate::app::{App, Message};
 use iced::Task;
+#[cfg(not(target_arch = "wasm32"))]
 use reshiki::qcdata;
 use std::sync::Arc;
 
