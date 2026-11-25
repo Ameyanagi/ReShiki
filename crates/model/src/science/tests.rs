@@ -173,10 +173,12 @@ fn result(frame: &Frame, task: Task, full: bool) -> CalcResult {
         endpoints: None,
         settings: Settings::Xtb(XtbSettings {
             method: XtbMethod::Gfn2Xtb,
+            conventions: Default::default(),
             solvent: None,
             electronic_temperature_k: None,
             accuracy: None,
             max_iterations: None,
+            scf_retries: vec![],
             gfnff: None,
         }),
         provenance: Provenance {
