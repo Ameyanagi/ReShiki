@@ -48,6 +48,21 @@ fn retries_require_failure_evidence_and_preserve_successful_ensembles() {
         embedding_retry(&parameters, &[], 8),
         Some(EmbeddingRetry::WithoutBasicKnowledge)
     );
+    // Eigenvector starts that fail outright switch to random coordinates once.
+    parameters.failures.fill(0);
+    parameters.failures[EmbedFailureCause::InitialCoords as usize] = 800;
+    assert_eq!(
+        embedding_retry(&parameters, &[], 8),
+        Some(EmbeddingRetry::RandomCoordinates)
+    );
+    parameters.use_random_coords = true;
+    assert_eq!(embedding_retry(&parameters, &[], 8), None);
+    parameters.failures[EmbedFailureCause::ExceededTimeout as usize] = 1;
+    assert_eq!(
+        embedding_retry(&parameters, &[-1], 8),
+        Some(EmbeddingRetry::SingleConformer)
+    );
+    parameters.use_random_coords = false;
     parameters.failures.clear();
     assert_eq!(embedding_retry(&parameters, &[], 8), None);
 }
