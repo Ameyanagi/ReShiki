@@ -15,9 +15,10 @@
 //! Bakken–Helgaker Table I and Eqs. (40)–(41). Periods beyond three use the
 //! existing model Hessian's explicit period-three extrapolation.
 //!
-//! Torsions can span a run of linear degree-two atoms. Planar three-coordinate
-//! centers receive symmetric out-of-plane coordinates, and optional hydrogen
-//! bonds add weak distances. Each extension's stiffness is documented below.
+//! Torsions can span a run of linear degree-two atoms. Planar neighbor triples
+//! at centers of any coordination receive symmetric out-of-plane coordinates,
+//! and optional hydrogen bonds add weak distances. Each extension's stiffness
+//! is documented below.
 
 use std::collections::BTreeMap;
 
@@ -276,33 +277,50 @@ fn add_torsions(locals: &mut Vec<(Local, f64)>, graph: &[Vec<Neighbor>], x: &[f6
 
 fn add_impropers(locals: &mut Vec<(Local, f64)>, graph: &[Vec<Neighbor>], x: &[f64]) {
     for (b, adjacent) in graph.iter().enumerate() {
-        let [a, c, d] = adjacent.as_slice() else {
-            continue;
-        };
-        let atoms = [a.atom, c.atom, d.atom];
-        let vectors = atoms.map(|atom| direction(x, b, atom));
-        let normals = [
-            cross(vectors[1], vectors[2]),
-            cross(vectors[2], vectors[0]),
-            cross(vectors[0], vectors[1]),
-        ];
-        let lengths = normals.map(length);
-        let maximum = lengths.iter().copied().fold(0.0, f64::max);
-        if maximum < 1e-10 || dot(vectors[0], normals[0]).abs() > SIN_FIVE_DEGREES * maximum {
-            continue;
-        }
-        // Lindh has no separate improper parameter. Use its small torsion
-        // coefficient with the three bonds to the center, and include each
-        // peripheral atom to preserve symmetry in the redundant coordinates.
-        let force = TORSION * a.rho * c.rho * d.rho;
-        for index in 0..3 {
-            if lengths[index] > SIN_FIVE_DEGREES {
-                let a = atoms[index];
-                let c = atoms[(index + 1) % 3];
-                let d = atoms[(index + 2) % 3];
-                // A lies out of the B–C–D plane, with B always second.
-                locals.push((Local::OutOfPlane(a, b, c.min(d), c.max(d)), force));
+        // At a planar center, stretches and ordinary bends have no first-order
+        // response normal to the plane. Using every neighbor triple spans the
+        // missing modes and treats equivalent ligands symmetrically.
+        for (i, a) in adjacent.iter().enumerate() {
+            for (j, c) in adjacent.iter().enumerate().skip(i + 1) {
+                for d in &adjacent[j + 1..] {
+                    add_improper_triple(locals, b, [*a, *c, *d], x);
+                }
             }
+        }
+    }
+}
+
+fn add_improper_triple(
+    locals: &mut Vec<(Local, f64)>,
+    b: usize,
+    [a, c, d]: [Neighbor; 3],
+    x: &[f64],
+) {
+    let atoms = [a.atom, c.atom, d.atom];
+    let vectors = atoms.map(|atom| direction(x, b, atom));
+    let normals = [
+        cross(vectors[1], vectors[2]),
+        cross(vectors[2], vectors[0]),
+        cross(vectors[0], vectors[1]),
+    ];
+    let lengths = normals.map(length);
+    let maximum = lengths.iter().copied().fold(0.0, f64::max);
+    // The normalized scalar triple product measures departure from planarity
+    // using the best-conditioned bond pair.
+    if maximum < 1e-10 || dot(vectors[0], normals[0]).abs() > SIN_FIVE_DEGREES * maximum {
+        return;
+    }
+    // Lindh has no separate improper parameter. Use its small torsion
+    // coefficient with this triple's three bonds to the center, and include
+    // each peripheral atom to preserve symmetry in the redundant coordinates.
+    let force = TORSION * a.rho * c.rho * d.rho;
+    for index in 0..3 {
+        if lengths[index] > SIN_FIVE_DEGREES {
+            let a = atoms[index];
+            let c = atoms[(index + 1) % 3];
+            let d = atoms[(index + 2) % 3];
+            // A lies out of the B–C–D plane, with B always second.
+            locals.push((Local::OutOfPlane(a, b, c.min(d), c.max(d)), force));
         }
     }
 }

@@ -289,7 +289,7 @@ fn physical_hessian(model: &InternalModel, x: &[f64], free: &[usize]) -> Vec<f64
 
 fn check_rows(model: &InternalModel, x: &[f64], free: &[usize]) {
     let analytic = model.chart.rows(x, free).unwrap();
-    let count = model.chart.values(x).unwrap().len();
+    let count = model.chart.raw_values(x).unwrap().len();
     assert_eq!(analytic.len(), count * free.len());
     let epsilon = 1e-5;
     for (column, &index) in free.iter().enumerate() {
@@ -297,8 +297,8 @@ fn check_rows(model: &InternalModel, x: &[f64], free: &[usize]) {
         let mut minus = x.to_vec();
         plus[index] += epsilon;
         minus[index] -= epsilon;
-        let plus_values = model.chart.values(&plus).unwrap();
-        let minus_values = model.chart.values(&minus).unwrap();
+        let plus_values = model.chart.raw_values(&plus).unwrap();
+        let minus_values = model.chart.raw_values(&minus).unwrap();
         let difference = model.chart.differences(&plus_values, &minus_values);
         assert_eq!(difference.len(), count);
         for row in 0..count {
@@ -459,6 +459,117 @@ fn rigid_rotation_has_known_sign_angle_and_gyration_scale() {
         check_rows(&model, &rotated, &free);
     }
     assert!(model.needs_rebuild(&rotate(0.95 * PI)));
+}
+
+#[test]
+fn rotation_branch_cut_rejects_stale_chart_and_rebuilds_short_secant() {
+    let numbers = [1, 1];
+    let x = [-0.7, 0.0, 0.0, 0.7, 0.0, 0.0];
+    let free = free_components(&x, &[]);
+    let mut model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let rotate = |degrees: f64| -> Vec<f64> {
+        let (sine, cosine) = degrees.to_radians().sin_cos();
+        x.as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|p| [cosine * p[0], sine * p[0], p[2]])
+            .collect()
+    };
+    let old = rotate(160.0);
+    let new = rotate(200.0);
+    // Recenter before the hard validity boundary so ordinary accepted motion
+    // cannot creep against it. Values remain valid at this earlier trigger.
+    assert!(model.needs_rebuild(&rotate(82.0)));
+    assert!(model.chart.values(&rotate(82.0)).is_some());
+    let stale = model.displacement(&old, &new);
+    assert!(
+        stale.is_none(),
+        "stale rotation chart produced a {:.12}-bohr displacement for a {:.12}-bohr rotation",
+        norm(&stale.unwrap()),
+        0.7 * 40.0_f64.to_radians()
+    );
+    assert!(model.needs_rebuild(&old));
+    assert!(
+        model
+            .model_direction(
+                &old,
+                vec![1.0; model.dimension()],
+                vec![-1.0; model.dimension()]
+            )
+            .is_none()
+    );
+    assert!(
+        model
+            .back_transform(&old, &vec![0.0; model.dimension()])
+            .is_none()
+    );
+    let before = model.hessian.clone();
+    model.update(&old, &new, &[0.0; 6], &new, Update::Bfgs);
+    assert_eq!(model.hessian, before);
+    assert_eq!(model.linearized_at, x);
+    model.rebuild(&old).unwrap();
+    let short = model.displacement(&old, &new).unwrap();
+    close(norm(&short), 0.7 * 40.0_f64.to_radians(), 1e-12);
+    let transformed = model.back_transform(&old, &short).unwrap();
+    assert!(transformed.converged);
+    assert!(maximum_error(&transformed.positions, &new) < 1e-9);
+}
+
+#[test]
+fn nonparallel_rotation_endpoints_require_a_common_chart_for_rows_and_secants() {
+    let (numbers, x) = ammonia();
+    let free = free_components(&x, &[]);
+    let mut model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let rotate = |degrees: f64, axis: Vector| -> Vec<f64> {
+        let axis = unit(axis);
+        let (sine, cosine) = degrees.to_radians().sin_cos();
+        x.as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|&p| {
+                let product = cross(axis, p);
+                std::array::from_fn::<_, 3, _>(|k| {
+                    cosine * p[k] + sine * product[k] + (1.0 - cosine) * dot(&axis, &p) * axis[k]
+                })
+            })
+            .collect()
+    };
+    let old = rotate(80.0, [0.0, 0.0, 1.0]);
+    let new = rotate(100.0, [0.2, 0.1, 1.0]);
+    assert!(!model.needs_rebuild(&old));
+    assert!(model.needs_rebuild(&new));
+    assert!(model.displacement(&old, &new).is_none());
+    assert!(model.chart.values(&new).is_none());
+    let before = model.hessian.clone();
+    model.update(&old, &new, &old, &new, Update::Bfgs);
+    assert_eq!(model.hessian, before);
+    assert_eq!(model.linearized_at, x);
+
+    // Even a Newton solve starting inside the chart cannot return an iterate
+    // whose residual uses a different branch than its endpoint Wilson rows.
+    let target = super::metric::apply(
+        &model.basis,
+        &model.chart.differences(
+            &model.chart.raw_values(&new).unwrap(),
+            &model.chart.values(&old).unwrap(),
+        ),
+    );
+    if let Some(fallback) = model.back_transform(&old, &target) {
+        assert!(!fallback.converged);
+        assert!(model.displacement(&old, &fallback.positions).is_some());
+    }
+
+    model.rebuild(&old).unwrap();
+    check_rows(&model, &new, &free);
+    let displacement = model.displacement(&old, &new).unwrap();
+    let y: Vec<_> = displacement.iter().map(|s| 3.0 * s).collect();
+    let new_gradient = cartesian_gradient(&model, &new, &free, &y);
+    model.update(&old, &new, &vec![0.0; x.len()], &new_gradient, Update::Bfgs);
+    let hs = super::metric::apply(&model.hessian, &displacement);
+    assert!(maximum_error(&hs, &y) < 1e-9);
+    let transformed = model.back_transform(&old, &displacement).unwrap();
+    assert!(transformed.converged);
+    assert!(maximum_error(&transformed.positions, &new) < 1e-9);
 }
 
 #[test]
@@ -673,6 +784,51 @@ fn tric_spans_all_free_components_for_nonlinear_linear_and_fragmented_molecules(
             }
         }
     }
+}
+
+#[test]
+fn tric_spans_distorted_planar_four_coordinate_center() {
+    // XeF4 has no exactly opposite ligand pair here: ordinary angle rows have
+    // no first-order out-of-plane response and cannot supply these modes.
+    let numbers = [54, 9, 9, 9, 9];
+    let x = [
+        0.0, 0.0, 0.0, 3.8, 0.0, 0.0, 0.7, 3.8, 0.0, -3.8, -0.7, 0.0, 0.0, -3.8, 0.0,
+    ];
+    for fixed in [&[][..], &[0][..], &[0, 1][..]] {
+        let free = free_components(&x, fixed);
+        let chart = super::chart::Chart::new(&numbers, &x, false).unwrap();
+        assert_eq!(
+            rank(&chart.rows(&x, &free).unwrap(), free.len()),
+            free.len()
+        );
+        let model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+        assert_eq!(model.dimension(), free.len());
+        let mut target = x;
+        target[14] += 1e-4;
+        let displacement = model.displacement(&x, &target).unwrap();
+        let realized = model.back_transform(&x, &displacement).unwrap();
+        assert!(realized.converged);
+        assert!(maximum_error(&realized.positions, &target) < 1e-7);
+    }
+}
+
+#[test]
+fn tric_spans_planar_centers_above_coordination_four() {
+    // A fifth ligand ensures the extension is not specific to square-planar
+    // coordination; the plane is tilted to exercise all Cartesian components.
+    let numbers = [54, 9, 9, 9, 9, 9];
+    let mut x = vec![0.0; 3];
+    for ligand in 0..5 {
+        let angle = TAU * ligand as f64 / 5.0;
+        x.extend([3.04 * angle.cos(), 3.8 * angle.sin(), 2.28 * angle.cos()]);
+    }
+    let free = free_components(&x, &[]);
+    let model = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    assert_eq!(
+        rank(&model.chart.rows(&x, &free).unwrap(), free.len()),
+        free.len()
+    );
+    assert_eq!(model.dimension(), free.len());
 }
 
 #[test]
@@ -909,7 +1065,7 @@ fn supplied_full_and_restricted_cartesian_hessians_transform_with_fixed_componen
 }
 
 #[test]
-fn an_impossible_negative_bond_length_returns_a_finite_unconverged_fallback() {
+fn an_impossible_negative_bond_length_rejects_an_out_of_chart_fallback() {
     let x = [0.0, 0.0, 0.0, 1.40, 0.0, 0.0];
     let free = free_components(&x, &[]);
     let model = InternalModel::build(&[1, 1], &free, &x, false, None).unwrap();
@@ -929,17 +1085,11 @@ fn an_impossible_negative_bond_length_returns_a_finite_unconverged_fallback() {
         .chunks_exact(nprimitive)
         .map(|u| dot(u, &primitive_step))
         .collect();
-    let fallback = model.back_transform(&x, &step).unwrap();
-    assert!(!fallback.converged);
-    assert!(fallback.positions.iter().all(|value| value.is_finite()));
     // The stretch is orthogonal to all centroid and rotational coordinates.
     // Its first linear image moves the endpoints inward by 0.80 bohr each.
     // They pass through one another. The resulting reversed line is outside
-    // the rotational chart, so no later evaluated iterate improves on it.
-    assert!(maximum_error(&fallback.positions, &[0.80, 0.0, 0.0, 0.60, 0.0, 0.0]) < 1e-12);
-    if let Some(realized) = model.displacement(&x, &fallback.positions) {
-        assert!(maximum_error(&realized, &step) > 1e-8);
-    }
+    // the rotational chart and must not be returned to a direct caller.
+    assert!(model.back_transform(&x, &step).is_none());
 }
 
 #[test]

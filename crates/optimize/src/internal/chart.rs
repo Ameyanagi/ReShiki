@@ -31,6 +31,19 @@ impl Chart {
     }
 
     pub(super) fn values(&self, x: &[f64]) -> Option<Vec<f64>> {
+        self.collect_values(x, Fragment::values)
+    }
+
+    #[cfg(test)]
+    pub(super) fn raw_values(&self, x: &[f64]) -> Option<Vec<f64>> {
+        self.collect_values(x, Fragment::raw_values)
+    }
+
+    fn collect_values(
+        &self,
+        x: &[f64],
+        fragment_values: impl Fn(&Fragment, &[f64]) -> Option<Vec<f64>>,
+    ) -> Option<Vec<f64>> {
         if !self.valid_positions(x) {
             return None;
         }
@@ -39,7 +52,7 @@ impl Chart {
             values.push(coordinate.value(x)?);
         }
         for fragment in &self.fragments {
-            values.extend(fragment.values(x)?);
+            values.extend(fragment_values(fragment, x)?);
         }
         values.iter().all(|v| v.is_finite()).then_some(values)
     }

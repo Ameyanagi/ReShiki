@@ -7,7 +7,8 @@
 //! The quaternion fits the reference **to the current geometry**. Its principal
 //! logarithm is multiplied by the reference radius of gyration, so all six
 //! coordinates have units of length. The logarithm is smooth at the origin.
-//! Recenter at 0.9π, before the principal rotation vector changes branch.
+//! Recenter before π/2 and reject values beyond that hard chart boundary,
+//! keeping local differences away from the principal logarithm's branch cut.
 //! All analytic rotation derivatives share one eigensystem per fragment.
 
 use std::array::from_fn;
@@ -22,7 +23,8 @@ type Quaternion = [f64; 4];
 // axial twist. Keep a linear chart until the size doubles to avoid oscillating
 // between charts at this numerical threshold.
 const LINEAR_FRACTION: f64 = 1e-8;
-const REBUILD_ANGLE: f64 = 0.9 * PI;
+const MAX_CHART_ANGLE: f64 = 0.5 * PI;
+const REBUILD_ANGLE: f64 = 0.45 * PI;
 
 /// One fragment, with a fixed reference geometry and rotation scale.
 pub(super) struct Fragment {
@@ -123,10 +125,25 @@ impl Fragment {
 
     /// Centroid xyz, followed by the scaled principal rotation vector xyz.
     pub(super) fn values(&self, x: &[f64]) -> Option<Vec<f64>> {
+        self.values_in_chart(x, true)
+    }
+
+    /// Unrestricted principal values for independent Wilson-row checks.
+    #[cfg(test)]
+    pub(super) fn raw_values(&self, x: &[f64]) -> Option<Vec<f64>> {
+        self.values_in_chart(x, false)
+    }
+
+    fn values_in_chart(&self, x: &[f64], local: bool) -> Option<Vec<f64>> {
         let (centroid, current) = self.current(x)?;
         let mut result = centroid.to_vec();
         if self.len() == 6 {
             let q = self.rotation(&current)?.quaternion();
+            // A displacement and its endpoint Wilson rows must use the same
+            // logarithm chart. Component-wise wrapping cannot ensure this.
+            if local && rotation_angle(q) >= MAX_CHART_ANGLE {
+                return None;
+            }
             result.extend(rotation_vector(q).map(|value| self.radius * value));
         }
         result
@@ -201,9 +218,7 @@ impl Fragment {
         let Some(fit) = self.rotation(&current) else {
             return true;
         };
-        let q = fit.quaternion();
-        let angle = 2.0 * length([q[1], q[2], q[3]]).atan2(q[0]);
-        angle >= REBUILD_ANGLE
+        rotation_angle(fit.quaternion()) >= REBUILD_ANGLE
     }
 
     fn current(&self, x: &[f64]) -> Option<(Vector, Vec<Vector>)> {
@@ -375,6 +390,10 @@ fn horn([[a, b, c], [d, e, f], [g, h, i]]: [Vector; 3]) -> [Quaternion; 4] {
         [g - c, b + d, e - a - i, f + h],
         [b - d, c + g, f + h, i - a - e],
     ]
+}
+
+fn rotation_angle(q: Quaternion) -> f64 {
+    2.0 * length([q[1], q[2], q[3]]).atan2(q[0])
 }
 
 fn rotation_vector(q: Quaternion) -> Vector {

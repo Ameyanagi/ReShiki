@@ -232,6 +232,7 @@ impl InternalModel {
         gradient: Vec<f64>,
         step: Vec<f64>,
     ) -> Option<InternalDirection<'a>> {
+        self.chart.values(positions)?;
         let length = norm(&step);
         let slope = dot(&gradient, &step);
         if !length.is_finite() || !slope.is_finite() || slope >= 0. {
@@ -256,13 +257,17 @@ impl InternalModel {
         new_gradient: &[f64],
         update: Update,
     ) {
+        // The next search rebuilds at the accepted point. Do not form a
+        // secant across an expired principal-log chart in the meantime.
+        let Some(s) = self.displacement(old_positions, new_positions) else {
+            return;
+        };
         let Some(next) = self.tangent_at(new_positions).map(Cow::into_owned) else {
             return;
         };
-        if let (Some(old), Some(new), Some(s)) = (
+        if let (Some(old), Some(new)) = (
             self.gradient(old_positions, old_gradient),
             self.free_gradient(new_gradient),
-            self.displacement(old_positions, new_positions),
         ) {
             let mut y = apply(&next.dual, &new);
             for (v, previous) in y.iter_mut().zip(old) {

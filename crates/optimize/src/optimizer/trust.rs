@@ -210,17 +210,19 @@ impl TrustRegion {
         &mut self,
         eval: &mut Evaluator<P>,
         point: &Point,
+        accuracy_changed: bool,
         accelerated: impl FnOnce(Bound) -> Option<Result<TrialStep, DirectionError>>,
         ordinary: impl Fn(Bound) -> Result<TrialStep, DirectionError>,
     ) -> Result<Search, Status> {
         let mut accelerated = Some(accelerated);
+        let mut backtrack_radius = None;
         for _ in 0..10 {
             if self.failed_transforms >= 2 {
                 return Ok(Search::Rebuild);
             }
             let radius = self.radius;
             let bound = Bound {
-                model_radius: self.model_radius(),
+                model_radius: backtrack_radius.unwrap_or_else(|| self.model_radius()),
                 atom_cap: self.atom_cap,
             };
             let diis = accelerated.take().and_then(|d| d(bound));
@@ -247,19 +249,28 @@ impl TrustRegion {
             let trial = eval.trial(point, &step.cartesian)?;
             let actual = trial.energy - point.energy;
             let ratio = actual / step.predicted;
-            if actual > 1e-6 || (self.reject_ratio > 0. && ratio < self.reject_ratio) {
+            let allowed_rise = if backtrack_radius.is_some() { 0. } else { 1e-6 };
+            if actual > allowed_rise || (self.reject_ratio > 0. && ratio < self.reject_ratio) {
                 // Ordinary RFO gets a try even when DIIS reached the floor.
                 if length <= self.min * self.scale && !used_diis {
                     self.radius = self.min;
+                    // The model was learned on the previous surface. Try a
+                    // shorter downhill displacement inside the minimum trust
+                    // radius before switching methods on the refreshed point.
+                    if accuracy_changed {
+                        backtrack_radius = Some(0.25 * length.min(bound.model_radius));
+                        continue;
+                    }
                     break;
                 }
                 self.radius = (0.25 * (length / self.scale)).max(self.min);
                 continue;
             }
+            let model_radius = self.model_radius();
             let on_boundary = if self.atom_cap.is_some() {
-                length >= bound.model_radius * (1. - 32. * f64::EPSILON)
+                length >= model_radius * (1. - 32. * f64::EPSILON)
             } else {
-                length == bound.model_radius
+                length == model_radius
             };
             self.accept(ratio, on_boundary);
             return Ok(Search::Accepted(trial, radius));

@@ -44,15 +44,14 @@ impl InternalModel {
             for (&i, d) in self.free.iter().zip(dx) {
                 x[i] += d;
             }
-            if !x.iter().all(|p| p.is_finite()) {
-                break;
-            }
-            if first.is_none() {
-                first = Some(x.clone());
-            }
+            // Guarded values keep residuals and Newton rows in this same
+            // chart. Reject an invalid iterate before recording a fallback.
             let Some(q) = self.chart.values(&x) else {
                 break;
             };
+            if first.is_none() {
+                first = Some(x.clone());
+            }
             let achieved = apply(&self.basis, &self.chart.differences(&q, &q0));
             for ((r, &t), a) in residual.iter_mut().zip(target).zip(achieved) {
                 *r = t - a;

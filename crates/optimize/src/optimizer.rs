@@ -35,7 +35,8 @@ pub enum InitialHessian {
     /// Construct the Lindh model at the input geometry.
     #[default]
     Model,
-    /// Request the potential's Hessian once, falling back to Lindh when unavailable.
+    /// Request the potential's Hessian when the first step is needed. An unavailable,
+    /// failed or non-finite Hessian falls back to Lindh. Cancellation stops the run.
     /// ANC uses max(|λ|, curvature_floor) on projected modes to preserve stiffness and start BFGS
     /// with positive curvature (Nocedal & Wright, Numerical Optimization, §3.4).
     Potential,
@@ -138,8 +139,8 @@ pub struct Options {
     pub update: Update,
     /// DIIS-family trial steps in the active RFO coordinates.
     pub acceleration: Acceleration,
-    /// Start at Coarse and request Normal when the maximum free gradient is within
-    /// 20× its convergence threshold. This cutoff is a benchmark heuristic for
+    /// Start at Coarse and promote once to Normal when the maximum free gradient
+    /// is within 20× its convergence threshold. This cutoff is a benchmark heuristic for
     /// inexact evaluations (cf. Carter, SIAM J. Sci. Comput. 14, 368, 1993).
     pub adaptive_accuracy: bool,
     pub level: Level,
@@ -173,7 +174,7 @@ impl Default for Options {
 }
 
 /// An accepted geometry, including re-evaluations at a new accuracy at the same index.
-/// Index zero has zero energy change and step lengths.
+/// The input and same-geometry accuracy changes report zero energy change and step lengths.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Step<'a> {
     pub index: usize,
@@ -260,12 +261,12 @@ impl Point {
 }
 
 impl Step<'_> {
-    fn converged(&self, c: Criteria) -> bool {
+    fn converged(&self, c: Criteria, has_displacement: bool) -> bool {
         self.accuracy != Accuracy::Coarse
             && self.max_gradient <= c.max_gradient
             && self.rms_gradient <= c.rms_gradient
             && (self.max_gradient < c.max_gradient / 100.
-                || (self.index > 0
+                || (has_displacement
                     && self.delta_energy.abs() <= c.energy
                     && self.max_step <= c.max_step
                     && self.rms_step <= c.rms_step))
@@ -327,20 +328,19 @@ impl<P: Potential + ?Sized> Evaluator<'_, P> {
 
     fn hessian(&mut self, positions: &[f64]) -> Result<Option<Vec<f64>>, Status> {
         let n = positions.len();
-        let size = n
-            .checked_mul(n)
-            .ok_or_else(|| Status::Failed("Hessian dimension overflow".into()))?;
-        let mut h = Vec::new();
-        h.try_reserve_exact(size)
-            .map_err(|e| Status::Failed(e.to_string()))?;
-        h.resize(size, f64::NAN);
-        self.hessian_count += 1;
-        let Some(result) = self.potential.hessian(positions, &mut h) else {
+        let Some(size) = n.checked_mul(n) else {
             return Ok(None);
         };
-        result?;
-        if !h.iter().all(|x| x.is_finite()) {
-            return Err(Status::Failed("non-finite potential Hessian".into()));
+        let mut h = Vec::new();
+        if h.try_reserve_exact(size).is_err() {
+            return Ok(None);
+        }
+        h.resize(size, f64::NAN);
+        self.hessian_count += 1;
+        match self.potential.hessian(positions, &mut h) {
+            Some(Err(EvalError::Cancelled)) => return Err(Status::Cancelled),
+            Some(Ok(())) if h.iter().all(|x| x.is_finite()) => {}
+            _ => return Ok(None),
         }
         // Finite differences of analytic gradients can have small antisymmetric errors.
         for i in 0..n {
@@ -395,6 +395,7 @@ impl<'a> Engine<'a> {
         numbers: &[u8],
         point: &Point,
         steps: usize,
+        accuracy_changed: bool,
     ) -> Result<Option<(Point, f64)>, Status> {
         if self.anc.as_ref().is_none_or(|a| {
             self.trust
@@ -427,6 +428,7 @@ impl<'a> Engine<'a> {
         let search = self.trust.search(
             eval,
             point,
+            accuracy_changed,
             |bound| bound.restrict(|r| diis.as_ref()?.restricted(r)).map(Ok),
             |bound| {
                 bound
@@ -443,6 +445,7 @@ impl<'a> Engine<'a> {
         numbers: &[u8],
         point: &Point,
         steps: usize,
+        accuracy_changed: bool,
     ) -> Result<Option<(Point, f64)>, Status> {
         let x = &point.positions;
         let mut rebuild = self
@@ -492,6 +495,7 @@ impl<'a> Engine<'a> {
             let search = self.trust.search(
                 eval,
                 point,
+                accuracy_changed,
                 |bound| {
                     diis.map(|d| {
                         bound
@@ -520,6 +524,7 @@ impl<'a> Engine<'a> {
         &mut self,
         eval: &mut Evaluator<P>,
         point: &Point,
+        accuracy_changed: bool,
     ) -> Result<(Point, f64), Status> {
         loop {
             let Some(mut d) = self.lbfgs.direction(&point.active_gradient, &point.rigid) else {
@@ -527,7 +532,10 @@ impl<'a> Engine<'a> {
             };
             let slope = dot(&point.active_gradient, &d);
             let mut scale = 1.;
-            for _ in 0..=10 {
+            // The accuracy switch discarded the learned inverse curvature.
+            // A stiff mode can need a much shorter first step on this surface.
+            let halvings = if accuracy_changed { 20 } else { 10 };
+            for _ in 0..=halvings {
                 let trial = eval.trial(point, &d)?;
                 if trial.energy <= point.energy + 1e-4 * scale * slope {
                     return Ok((trial, 0.3 * scale));
@@ -548,11 +556,14 @@ impl<'a> Engine<'a> {
         numbers: &[u8],
         point: &Point,
         steps: usize,
+        accuracy_changed: bool,
     ) -> Result<(Point, Motion, f64), Status> {
         let (next, radius) = loop {
             match self.method {
                 Method::Internal => {
-                    if let Some(trial) = self.search_internal(eval, numbers, point, steps)? {
+                    if let Some(trial) =
+                        self.search_internal(eval, numbers, point, steps, accuracy_changed)?
+                    {
                         // The seed remains available to ANC until the input point moves.
                         self.initial_hessian = None;
                         break trial;
@@ -563,13 +574,15 @@ impl<'a> Engine<'a> {
                     self.trust = TrustRegion::new(self.options, eval.coords.indices.len() / 3);
                 }
                 Method::AncRfo => {
-                    if let Some(trial) = self.search_anc(eval, numbers, point, steps)? {
+                    if let Some(trial) =
+                        self.search_anc(eval, numbers, point, steps, accuracy_changed)?
+                    {
                         break trial;
                     }
                     self.method = Method::Lbfgs;
                     self.anc = None;
                 }
-                Method::Lbfgs => break self.search_lbfgs(eval, point)?,
+                Method::Lbfgs => break self.search_lbfgs(eval, point, accuracy_changed)?,
             }
         };
         // Use the displacement that survived floating-point addition at the trial.
@@ -624,16 +637,15 @@ impl<'a> Engine<'a> {
 /// Both gradient thresholds must pass (≤). In addition, the last accepted
 /// |energy change|, maximum step and RMS step must all pass (≤), or the maximum
 /// gradient must be strictly below 1/100 of its threshold. Only this last rule
-/// can converge at the initial point.
+/// can converge at the initial point or immediately after an accuracy change.
 ///
 /// With `tight_final`, first convergence triggers a Tight evaluation at the same
-/// geometry. Its gradient is tested with the preceding accepted displacement and
-/// energy change. The callback receives the Tight sample before convergence is
+/// geometry. The callback receives the Tight sample before convergence is
 /// tested and may cancel. If minimization continues, all trials use Tight.
-/// With `adaptive_accuracy`, Coarse and Normal trials are selected from the most
-/// recent accepted gradient. A switch refreshes the energy and gradient at that
-/// geometry before taking another step. Each reported ΔE belongs to the last
-/// displacement, evaluated at one accuracy. Convergence requires Normal or Tight.
+/// With `adaptive_accuracy`, trials start at Coarse and switch once to Normal
+/// when the accepted gradient reaches the cutoff. Each accuracy change refreshes
+/// the energy and gradient and clears the last displacement. Only Normal or
+/// Tight can converge. The displacement test uses two endpoints at that accuracy.
 /// Both RFO methods keep their curvature and radius across accuracy changes.
 /// DIIS and L-BFGS discard their histories.
 ///
@@ -645,8 +657,11 @@ impl<'a> Engine<'a> {
 /// (minimum 0.001 bohr); above 0.75 on the boundary doubles it (maximum 0.5).
 /// An energy rise above 1e-6 Eh rejects the trial and sets the radius to one
 /// quarter of the attempted step length, but not below the minimum.
-/// Ten successive rejections, a rejected trial at the minimum radius, or
-/// an unusable ANC model switches to L-BFGS. Accepted BFGS updates require
+/// After an accuracy change, a rejected RFO step at the minimum radius may
+/// backtrack inside that radius. These retries must lower or match the new
+/// energy and satisfy the configured reduction ratio. Otherwise a rejection
+/// at the minimum radius exhausts the search. Ten rejections or an unusable
+/// ANC model also trigger fallback to L-BFGS. Accepted BFGS updates require
 /// y·s > 1e-12 |y||s| and positive model curvature. Every 30 accepted steps
 /// the Lindh basis is rebuilt. Learned curvature is transformed into the new
 /// basis, using the configured curvature floor for components outside the old internal space.
@@ -659,7 +674,8 @@ impl<'a> Engine<'a> {
 ///
 /// L-BFGS retains 20 pairs, uses initial inverse curvature 2 bohr²/Eh and then
 /// (s·y)/(y·y), and limits the largest atom displacement to 0.3 bohr. Armijo
-/// backtracking (c1 = 1e-4) tries the capped step and at most ten halvings.
+/// backtracking (c1 = 1e-4) allows ten halvings, or 20 when an accuracy change
+/// discards the previous steps' curvature.
 /// An exhausted search with history retries once with the initial scaling.
 /// Nonpositive curvature or a non-descent direction clears the history.
 ///
@@ -724,38 +740,27 @@ pub fn optimize<P: Potential + ?Sized>(
             InitialHessian::Auto { max_atoms } => numbers.len() <= max_atoms,
         };
     let criteria = options.level.criteria();
-    let mut motion = Motion::default();
+    let mut motion = None;
     let mut radius = if options.method == Method::Lbfgs {
         0.3
     } else {
         engine.trust.radius
     };
-    let mut new_geometry = true;
     out.energies.push(point.energy);
     out.status = loop {
-        let info = point.step(out.steps, motion, radius, eval.accuracy);
+        let info = point.step(out.steps, motion.unwrap_or_default(), radius, eval.accuracy);
         if on_step(&info).is_break() {
             break Status::Cancelled;
         }
-        if request_hessian && out.steps == 0 && new_geometry {
-            engine.initial_hessian = match eval.hessian(&point.positions) {
-                Ok(h) => h,
-                Err(status) => break status,
-            };
-        }
-        // Choose once per accepted geometry. A noisy replacement gradient can lie
-        // across the cutoff; use its accuracy for the next trial before reconsidering.
-        let next_accuracy = if info.converged(criteria) {
+        let next_accuracy = if info.converged(criteria, motion.is_some()) {
             if !options.tight_final || eval.accuracy == Accuracy::Tight {
                 break Status::Converged;
             }
             Accuracy::Tight
-        } else if new_geometry && options.adaptive_accuracy && eval.accuracy != Accuracy::Tight {
-            if info.max_gradient > 20. * criteria.max_gradient {
-                Accuracy::Coarse
-            } else {
-                Accuracy::Normal
-            }
+        } else if eval.accuracy == Accuracy::Coarse
+            && info.max_gradient <= 20. * criteria.max_gradient
+        {
+            Accuracy::Normal
         } else {
             eval.accuracy
         };
@@ -768,18 +773,28 @@ pub fn optimize<P: Potential + ?Sized>(
             out.energies[out.steps] = point.energy;
             engine.lbfgs.clear();
             engine.history.clear();
-            new_geometry = false;
+            motion = None;
             continue;
         }
         if out.steps == options.max_steps {
             break Status::MaxSteps;
         }
-        match engine.advance(&mut eval, numbers, &point, out.steps) {
-            Ok(accepted) => (point, motion, radius) = accepted,
+        if request_hessian && out.steps == 0 {
+            engine.initial_hessian = match eval.hessian(&point.positions) {
+                Ok(h) => h,
+                Err(status) => break status,
+            };
+        }
+        let accuracy_changed = out.steps > 0 && motion.is_none();
+        match engine.advance(&mut eval, numbers, &point, out.steps, accuracy_changed) {
+            Ok((next, displacement, next_radius)) => {
+                point = next;
+                motion = Some(displacement);
+                radius = next_radius;
+            }
             Err(status) => break status,
         }
         out.steps += 1;
-        new_geometry = true;
         out.energies.push(point.energy);
     };
     out.positions = point.positions;
