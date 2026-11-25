@@ -343,3 +343,59 @@ fn sizes_read_like_a_file_browser() {
     assert_eq!(size(18_200), "19 KB");
     assert_eq!(size(1_400_000), "1.4 MB");
 }
+
+#[test]
+fn unrestricted_gaps_follow_the_conventions_and_list_both_spins() {
+    let set = |energies: Vec<f64>, occupations: Vec<f64>| qcdata::OrbitalSet {
+        energies_hartree: energies,
+        occupations,
+        symmetries: vec![],
+        rows: vec![],
+        coefficients: vec![],
+    };
+    let mut result = with_properties(optimized(false));
+    // Alpha gap 0.50 Eh, beta gap 0.60 Eh, across spins 0.40 Eh.
+    result.orbitals = Some(qcdata::Orbitals {
+        basis: None,
+        core_electrons: vec![],
+        alpha: set(vec![-0.6, -0.5, 0.0, 0.3], vec![1., 1., 0., 0.]),
+        beta: qcdata::Beta::Unrestricted(set(vec![-0.7, -0.1, 0.2, 0.4], vec![1., 0., 0., 0.])),
+    });
+    let ev = |hartree: f64| hartree * 27.211386245981;
+    let gap = gap_ev(&result, None).unwrap();
+    // Native conventions: lowest empty (beta −0.1) above highest filled (alpha −0.5).
+    assert!((gap - ev(0.4)).abs() < 1e-9, "{gap}");
+    if let Settings::Xtb(settings) = &mut result.settings {
+        settings.conventions = qcdata::XtbConventions::Xtb68;
+    }
+    let gap = gap_ev(&result, None).unwrap();
+    assert!(
+        (gap - ev(0.5)).abs() < 1e-9,
+        "xtb 6.8: the alpha frontier, {gap}"
+    );
+    let names: Vec<_> = levels(&result).into_iter().map(|(name, _)| name).collect();
+    assert_eq!(
+        names,
+        [
+            "α LUMO+1",
+            "α LUMO",
+            "α HOMO",
+            "α HOMO−1",
+            "β LUMO+2",
+            "β LUMO+1",
+            "β LUMO",
+            "β HOMO"
+        ]
+    );
+
+    // An H atom: alpha full, beta empty, so no spin has both a HOMO and a
+    // LUMO and the engine reports no gap.
+    result.settings = optimized(false).settings;
+    result.orbitals = Some(qcdata::Orbitals {
+        basis: None,
+        core_electrons: vec![],
+        alpha: set(vec![-0.5], vec![1.]),
+        beta: qcdata::Beta::Unrestricted(set(vec![-0.4], vec![0.])),
+    });
+    assert_eq!(gap_ev(&result, None), None);
+}

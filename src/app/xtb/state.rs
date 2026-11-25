@@ -101,13 +101,24 @@ impl Config {
             qcdata::Task::Energy => Task::Energy,
             _ => return None,
         };
+        // Settings the card cannot send: a retry ladder, a GFN-FF
+        // topology with fragment charges, another solvation state.
+        let topology = settings
+            .gfnff
+            .as_ref()
+            .is_some_and(|gfnff| !gfnff.fragment_charges.is_empty());
+        if !settings.scf_retries.is_empty() || topology {
+            return None;
+        }
         let solvent = match &settings.solvent {
             None => None,
-            Some(s) if s.model == qcdata::SolventModel::Alpb => Some(
-                SOLVENTS
-                    .into_iter()
-                    .find(|name| name.eq_ignore_ascii_case(&s.name))?,
-            ),
+            Some(s) if s.model == qcdata::SolventModel::Alpb && s.state == Default::default() => {
+                Some(
+                    SOLVENTS
+                        .into_iter()
+                        .find(|name| name.eq_ignore_ascii_case(&s.name))?,
+                )
+            }
             Some(_) => return None,
         };
         Some(Self {

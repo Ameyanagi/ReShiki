@@ -326,6 +326,7 @@ impl App {
             Action::Show => {
                 if matches!(self.tab.xtb.outcome, Some(super::Outcome::Failed(_))) {
                     self.tab.xtb.palette.open = true;
+                    self.xtb.dock.collapsed = false;
                 }
                 let newest = self.xtb_newest();
                 let shown = self.xtb_shown().map(|shown| shown.stored.result.clone());

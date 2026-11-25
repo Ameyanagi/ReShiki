@@ -188,8 +188,9 @@ pub(crate) struct Failed {
     /// The frame's atomic numbers, once the 3D model existed.
     pub numbers: Vec<u8>,
     pub seconds: f64,
-    /// The file the run belonged to; Retry needs the same one.
-    pub epoch: u64,
+    /// The document state when the run failed; Retry and Run again need
+    /// it unchanged, so they calculate what failed.
+    pub revision: (u64, u64),
 }
 
 impl Failed {
@@ -283,12 +284,8 @@ impl App {
                 let Some(request) = failed.request.as_deref() else {
                     return Task::none();
                 };
-                let first = request.atoms.first().copied().unwrap_or_default();
-                let same = failed.epoch == self.tab.file_epoch
-                    && self.tab.doc.atom(first).is_some()
-                    && reshiki::molecule_names::component(&self.tab.doc, first) == request.atoms;
-                if !same {
-                    self.status = "The molecule changed: run it from the Calculate card".into();
+                if !self.xtb_can_retry(failed) {
+                    self.status = "The drawing changed: run it from the Calculate card".into();
                     self.error = false;
                     return Task::none();
                 }
@@ -428,6 +425,13 @@ impl App {
             return false;
         }
         true
+    }
+
+    /// Whether Retry and Run again can repeat `failed` as it ran.
+    pub(super) fn xtb_can_retry(&self, failed: &Failed) -> bool {
+        failed.request.is_some()
+            && self.tab.xtb.run.is_none()
+            && failed.revision == (self.tab.file_epoch, self.tab.revision)
     }
 
     fn xtb_entry(&mut self, entry: Entry) -> Task<Message> {
@@ -729,7 +733,7 @@ impl App {
             request,
             numbers,
             seconds,
-            epoch: self.tab.file_epoch,
+            revision: (self.tab.file_epoch, self.tab.revision),
         };
         self.status = format!("xTB calculation failed: {}", failed.explain().0);
         self.error = true;

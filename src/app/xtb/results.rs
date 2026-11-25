@@ -275,6 +275,10 @@ fn gap_hartree(result: &CalcResult) -> Option<f64> {
     match &orbitals.beta {
         Beta::Unrestricted(beta) if !xtb68 => {
             let m = filled(beta, &beta.occupations)?;
+            let both = |levels: &[f64], k: usize| k > 0 && k < levels.len();
+            if !both(alpha, n) && !both(&beta.energies_hartree, m) {
+                return None;
+            }
             let levels = &beta.energies_hartree;
             let homo = [
                 n.checked_sub(1).and_then(|i| alpha.get(i)),
@@ -303,6 +307,17 @@ pub(crate) fn levels(result: &CalcResult) -> Vec<(String, f64)> {
     } else {
         "α "
     };
+    let mut rows = around(&orbitals.alpha.energies_hartree, homo, spin);
+    if let Beta::Unrestricted(beta) = &orbitals.beta
+        && let Some(homo) = filled(beta, &beta.occupations).and_then(|n| n.checked_sub(1))
+    {
+        rows.extend(around(&beta.energies_hartree, homo, "β "));
+    }
+    rows
+}
+
+/// HOMO−2 … LUMO+2 of one spectrum, highest first, names prefixed by `spin`.
+fn around(levels: &[f64], homo: usize, spin: &str) -> Vec<(String, f64)> {
     let name = |index: usize| match index.cmp(&homo) {
         std::cmp::Ordering::Equal => format!("{spin}HOMO"),
         std::cmp::Ordering::Less => format!("{spin}HOMO−{}", homo - index),
@@ -310,7 +325,7 @@ pub(crate) fn levels(result: &CalcResult) -> Vec<(String, f64)> {
         std::cmp::Ordering::Greater => format!("{spin}LUMO+{}", index - homo - 1),
     };
     let shown = homo.saturating_sub(2)..=homo + 3;
-    let mut rows: Vec<_> = (orbitals.alpha.energies_hartree.iter().enumerate())
+    let mut rows: Vec<_> = (levels.iter().enumerate())
         .filter(|(index, _)| shown.contains(index))
         .map(|(index, energy)| (name(index), energy * EV_PER_HARTREE))
         .collect();
@@ -409,7 +424,7 @@ pub(crate) fn log(
     if let Some(energy) = result.energy_hartree {
         lines.push(format!("total energy    {energy:.8} Eh"));
     }
-    if let Some(gap) = info.and_then(|info| info.gap_ev) {
+    if let Some(gap) = gap_ev(result, info) {
         lines.push(format!("HOMO-LUMO gap   {gap:.4} eV"));
     }
     if result.task == Task::Optimize {

@@ -479,6 +479,26 @@ fn retry_runs_the_failed_request_at_1000_k() {
 }
 
 #[test]
+fn an_edit_after_a_failure_retires_retry() {
+    let (mut app, _) = water(CalcTask::Energy);
+    event(
+        &mut app,
+        Event::Done(Err(state::Failure::Scf("not converged".into()))),
+    );
+    let failed = |app: &App| match &app.tab.xtb.outcome {
+        Some(Outcome::Failed(failed)) => app.xtb_can_retry(failed),
+        _ => false,
+    };
+    assert!(failed(&app));
+    let c = app.tab.doc.add_atom("C", Point::new(40., 0.));
+    app.tab.revision += 1;
+    assert!(!failed(&app), "Retry would calculate another drawing");
+    send(&mut app, Action::Retry);
+    assert!(!app.xtb_running());
+    assert!(app.tab.doc.atom(c).is_some());
+}
+
+#[test]
 fn a_crash_offers_run_again_and_details_without_the_structure() {
     let (mut app, _) = water(CalcTask::Energy);
     event(
@@ -524,7 +544,7 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
             "energy_terms": {},
             "charges": { "scheme": "mulliken", "values": [-0.56, 0.28, 0.28] },
             "dipole_e_bohr": [0.0, 0.0, 0.85],
-            "bond_orders": [{ "a": 0, "b": 1, "order": 0.92 }, { "a": 0, "b": 2, "order": 0.92 }],
+            "bond_orders": [{ "a": 0, "b": 1, "order": 0.92 }, { "a": 1, "b": 2, "order": 0.2104 }],
             "homo_lumo_gap_ev": 13.6,
             "near_degenerate": false,
             "arrays": [],
@@ -576,7 +596,11 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
     assert_eq!(row("HOMO–LUMO gap").as_deref(), Some("13.61 eV"));
     assert_eq!(row("Dipole").as_deref(), Some("2.16 D"));
     assert!(row("Charges").is_some_and(|c| c.starts_with("O −0.560")));
-    assert_eq!(results::bond_orders(&result, shown.frame).len(), 2);
+    // A weak 0.21 order survives saving, as the Summary showed it.
+    assert_eq!(
+        results::bond_orders(&result, shown.frame)[1],
+        ("H2–H3".to_owned(), "0.21".to_owned())
+    );
     assert_eq!(results::levels(&result).len(), 5);
     assert_eq!(
         shown.method(),

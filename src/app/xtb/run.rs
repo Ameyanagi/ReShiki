@@ -358,9 +358,10 @@ fn worker_failure(error: &Error) -> Failure {
         Error::Exited { status, .. } => {
             Failure::Crashed(format!("xTB worker exited with {status}"))
         }
-        Error::Protocol(_) | Error::Timeout | Error::Spawn(_) => {
-            Failure::Crashed(error.to_string())
-        }
+        // Fixed texts: Copy details never carries the worker's own words.
+        Error::Protocol(_) => Failure::Crashed("xTB worker protocol error".into()),
+        Error::Timeout => Failure::Crashed("xTB worker reached its request deadline".into()),
+        Error::Spawn(_) => Failure::Crashed("could not start the xTB worker".into()),
         Error::Cancelled => canceled(),
         error => Failure::Other(error.to_string()),
     }

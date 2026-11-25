@@ -229,7 +229,7 @@ impl App {
                 .on_press(Message::Xtb(action))
                 .into()
         };
-        let retry = failed.request.is_some() && self.tab.xtb.run.is_none();
+        let retry = self.xtb_can_retry(failed);
         let actions = match &failed.failure {
             state::Failure::Scf(_)
                 if retry
@@ -268,6 +268,13 @@ impl App {
         Some(alert(false, title, detail, actions))
     }
 
+    /// Whether Recalculate can repeat the shown result with the card.
+    fn xtb_repeatable(&self) -> bool {
+        self.xtb_shown().is_some_and(|shown| {
+            state::Config::from_result(&shown.stored.result, shown.frame, shown.info, 1).is_some()
+        })
+    }
+
     fn xtb_stale_banner(&self) -> Element<'_, Message> {
         let (message, action): (String, Element<'_, Message>) = match &self.tab.xtb.run {
             Some(run) => (
@@ -282,8 +289,9 @@ impl App {
                     .on_press(Message::Xtb(XtbAction::Cancel))
                     .into(),
             ),
-            // Builds without the engine show stored results only.
-            None if super::super::unavailable().is_some() => (
+            // Builds without the engine show stored results only, and the
+            // card cannot repeat every stored calculation.
+            None if super::super::unavailable().is_some() || !self.xtb_repeatable() => (
                 "The molecule changed after this calculation. Results are kept, greyed.".into(),
                 Space::new().into(),
             ),
