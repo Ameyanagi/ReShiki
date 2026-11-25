@@ -108,7 +108,8 @@ pub(super) fn read(text: &str) -> Result<QcFile, Error> {
                 .map(|(_, s)| energy(s.trim()))
                 .transpose()?
         } else {
-            None
+            // CREST writes each conformer's energy (Eh) as the whole comment.
+            label.parse::<f64>().ok().filter(|e| e.is_finite())
         };
         steps.push(Step {
             frame: frame(&atoms, positions, charge, multiplicity)?,

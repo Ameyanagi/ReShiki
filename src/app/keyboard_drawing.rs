@@ -145,6 +145,7 @@ impl App {
         self.help_open
             || self.settings.open
             || self.qc_export.is_some()
+            || self.frames_import.is_some()
             || self.commands.open
             || self.updates.open
             || self.github_dialog()
