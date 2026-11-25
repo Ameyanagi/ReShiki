@@ -356,6 +356,82 @@ fn plain_xyz_is_a_molecule_without_a_cell() {
 }
 
 #[test]
+fn xyz_shows_first_frame_and_warns_about_the_frame_count() {
+    // Append an altered copy of the existing water fixture.
+    let text = format!("{WATER}{}", WATER.replace("0.1173", "0.2000"));
+    let (doc, warnings) = open("xyz", &text);
+    let (first, _) = open("xyz", WATER);
+    assert_eq!(model(&doc).atoms, model(&first).atoms);
+    assert_eq!(warnings, ["This XYZ file has 2 frames; the first is shown"]);
+}
+
+#[test]
+fn xyz_warns_with_a_lower_bound_when_frame_counting_stops() -> anyhow::Result<()> {
+    // Repeat the water fixture in memory beyond the counting limit; its first
+    // line is "3", so every complete five-line XYZ block is one frame.
+    let text = WATER.repeat(reshiki_qcdata::MAX_FRAMES + 7);
+    let structure = super::xyz::read(&text)?;
+    assert_eq!(structure.atoms.len(), 3);
+    assert_eq!(
+        structure.warnings,
+        ["This XYZ file has at least 1001 frames; the first is shown"]
+    );
+    Ok(())
+}
+
+#[test]
+fn extended_xyz_reads_atomic_number_property_columns() -> anyhow::Result<()> {
+    // Synthetic extxyz derived in memory from silicon.extxyz:
+    // "Properties=species:S:1:pos:R:3:forces:R:3" and
+    // "Si 1.35775 1.35775 1.35775 0.0 0.0 0.0" become Z:I:1 and 14.
+    let text = SILICON
+        .replace("species:S:1", "Z:I:1")
+        .replace("Si ", "14 ");
+    let structure = super::xyz::read(&text)?;
+    assert_eq!(structure.atoms.len(), 2);
+    assert!(structure.atoms.iter().all(|a| a.element == "Si"));
+    assert_eq!(structure.atoms[1].xyz, [1.35775; 3]);
+    assert!(structure.lattice.is_some());
+    Ok(())
+}
+
+#[test]
+fn crystal_extended_xyz_prefers_species_over_atomic_numbers() -> anyhow::Result<()> {
+    // Synthetic conflicting columns from "Si 0.0 0.0 0.0 0.0 0.0 0.0".
+    // Preserve the original species even though a new trailing Z column says 8.
+    let text = SILICON.replace("forces:R:3", "forces:R:3:Z:I:1");
+    let text = text
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            if i >= 2 {
+                format!("{line} 8\n")
+            } else {
+                format!("{line}\n")
+            }
+        })
+        .collect::<String>();
+    let structure = super::xyz::read(&text)?;
+    assert!(structure.atoms.iter().all(|a| a.element == "Si"));
+    Ok(())
+}
+
+#[test]
+fn crystal_extended_xyz_atomic_number_columns_require_integers() -> anyhow::Result<()> {
+    // Synthetic malformed declaration from the fixture's
+    // "Properties=species:S:1:pos:R:3:forces:R:3", leaving "Si" in each row.
+    let text = SILICON.replace("species:S:1", "Z:I:1");
+    let error = super::xyz::read(&text)
+        .err()
+        .ok_or_else(|| anyhow::anyhow!("expected invalid atomic number"))?;
+    assert_eq!(
+        error.to_string(),
+        "Line 3: Expected an atomic number in the Z column"
+    );
+    Ok(())
+}
+
+#[test]
 fn extended_xyz_reads_the_lattice_and_properties() {
     let (doc, _) = open("xyz", SILICON);
     let m = model(&doc);
@@ -365,6 +441,20 @@ fn extended_xyz_reads_the_lattice_and_properties() {
     assert_eq!(doc.bonds.len() + cell.crossing.len(), 4);
     for atom in &doc.atoms {
         assert_eq!(bonds_of(&doc, atom.id), 4);
+    }
+}
+
+#[test]
+fn extended_xyz_reads_quoted_keys_and_reordered_properties() {
+    for (flags, periodic) in [("F F F", false), ("T T T", true)] {
+        let text = format!(
+            "1\n\"Properties\"=\"charge:R:1:pos:R:3:species:S:1\" \"Lattice\"=\"10 0 0 0 10 0 0 0 10\" \"pbc\"=\"{flags}\"\n0.2 1 2 3 Ar\n"
+        );
+        let structure = super::xyz::read(&text).unwrap();
+        assert_eq!(structure.lattice.is_some(), periodic);
+        assert_eq!(structure.atoms.len(), 1);
+        assert_eq!(structure.atoms[0].element, "Ar");
+        assert_eq!(structure.atoms[0].xyz, [1., 2., 3.]);
     }
 }
 

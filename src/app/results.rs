@@ -724,7 +724,10 @@ fn completion(message: &Message) -> Option<Completion> {
             }
         }
         Message::Saved(..) => Some(Completion::Save),
-        Message::Exported(..) => Some(Completion::Export),
+        Message::Exported(..) | Message::QcExport(super::qc_export::Action::Saved(..)) => {
+            Some(Completion::Export)
+        }
+        Message::QcExport(_) => None,
         Message::FigureExported(..) => Some(Completion::FigureExport),
         Message::ExportReady(export) | Message::SaveExport(_, export) => Some(match export.kind {
             super::figure_export::Kind::Figure => Completion::FigureExport,

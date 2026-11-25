@@ -1,6 +1,7 @@
 //! Bounded adapter to the Rust COSMolKit molecular mechanics implementation.
 use super::{
-    ForceField, MAX_COORDINATES, Operation, Request, Response, cage::Cage, valid_coordinate,
+    Ensemble, EnsembleMember, ForceField, MAX_COORDINATES, Operation, Request, Response,
+    cage::Cage, valid_coordinate,
 };
 use cosmolkit::{
     AddHsParams, AtomId, AtomSpec, BondOrder, BondSpec, BondStereo, ChiralTag, Element,
@@ -478,8 +479,13 @@ fn embedding_parameters(request: &Request) -> EmbedParams {
     parameters.max_iterations = 100;
     parameters.timeout = 10;
     parameters.enforce_chirality = true;
-    parameters.prune_rms_thresh = 0.1;
+    parameters.prune_rms_thresh = if request.ensemble.is_some() {
+        -1.0
+    } else {
+        0.1
+    };
     parameters.clear_conformers = true;
+    // Validation leaves room for each one-based conformer index in signed i32.
     parameters.enable_sequential_random_seeds = true;
     parameters.track_failures = true;
     parameters
@@ -616,6 +622,31 @@ struct Candidate {
     converged: bool,
 }
 
+fn embedded_candidate(
+    mol: &Molecule,
+    coordinates: &[[f64; 3]],
+    expected: &StereoExpectation,
+    cage: Option<&Cage>,
+    request: &Request,
+) -> Result<Candidate> {
+    validate_geometry(mol, coordinates)?;
+    expected.validate(mol, coordinates)?;
+    if let Some(cage) = cage {
+        cage.validate(mol, coordinates)?;
+    }
+    let positioned = mol
+        .with_only_3d_conformer(rows(coordinates))
+        .map_err(|error| error.to_string())?;
+    let field = request_force_field(&positioned, request)?;
+    let energy = energy(&field)?;
+    Ok(Candidate {
+        coordinates: coordinates.to_vec(),
+        initial_energy: energy,
+        energy,
+        converged: false,
+    })
+}
+
 fn minimized(
     mol: &Molecule,
     coordinates: &[[f64; 3]],
@@ -720,6 +751,7 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         converged: false,
         field: request.field,
         diagnostics: Vec::new(),
+        ensemble: Vec::new(),
         approximations: if request.relaxed {
             relaxed::approximations(&mol)?
         } else {
@@ -846,23 +878,45 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
         let mut valid = 0;
         let mut rejected = 0;
         let mut last_failure = String::new();
-        for id in valid_conformer_ids(&embedded.conf_ids) {
+        let mut ids: Vec<_> = valid_conformer_ids(&embedded.conf_ids).collect();
+        if request.ensemble.is_some() {
+            ids.sort_unstable();
+        }
+        for id in ids {
             let conformer = embedded
                 .molecule
                 .conformers_3d()
                 .iter()
                 .find(|conformer| conformer.id() == id as usize)
                 .ok_or("embedding lost a conformer")?;
-            match minimized(
-                &embedded.molecule,
-                conformer.coordinates(),
-                &expected,
-                cage.as_ref(),
-                request,
-                None,
-            ) {
+            let candidate = if request.ensemble == Some(Ensemble::Embedded) {
+                embedded_candidate(
+                    &embedded.molecule,
+                    conformer.coordinates(),
+                    &expected,
+                    cage.as_ref(),
+                    request,
+                )
+            } else {
+                minimized(
+                    &embedded.molecule,
+                    conformer.coordinates(),
+                    &expected,
+                    cage.as_ref(),
+                    request,
+                    None,
+                )
+            };
+            match candidate {
                 Ok(candidate) => {
                     valid += 1;
+                    if request.ensemble.is_some() {
+                        response.ensemble.push(EnsembleMember {
+                            coordinates: candidate.coordinates.clone(),
+                            energy: candidate.energy,
+                            converged: candidate.converged,
+                        });
+                    }
                     if candidate.energy < best {
                         best = candidate.energy;
                         response.coordinates = candidate.coordinates;
@@ -882,7 +936,21 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
             format!("all generated conformers failed validation: {last_failure}"),
         )
         .map_err(generation_error)?;
-        response.diagnostics.push(format!("{method}; requested={}; actual_count={}; embedded={embedded_count}; failed_embedding_ids={failed_embedding_ids}; valid={valid}; rejected={rejected}; seed={}; selection=lowest energy among valid generated conformers; iteration_limit={}; converged={}; embedding_failure_counters={failures}", request.conformers, embedded.requested_num_confs, request.seed, request.max_iterations, response.converged));
+        let mut sampling = format!(
+            "{method}; requested={}; actual_count={}; embedded={embedded_count}; failed_embedding_ids={failed_embedding_ids}; valid={valid}; rejected={rejected}; seed={}; selection=lowest energy among valid generated conformers; iteration_limit={}; converged={}; embedding_failure_counters={failures}",
+            request.conformers,
+            embedded.requested_num_confs,
+            request.seed,
+            request.max_iterations,
+            response.converged
+        );
+        if let Some(mode) = request.ensemble {
+            sampling.push_str(&format!(
+                "; ensemble={mode:?}; ensemble_count={}",
+                response.ensemble.len()
+            ));
+        }
+        response.diagnostics.push(sampling);
         if !last_failure.is_empty() {
             response
                 .diagnostics

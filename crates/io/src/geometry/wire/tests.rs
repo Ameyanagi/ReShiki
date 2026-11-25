@@ -22,7 +22,7 @@ fn frames_reject_truncation_trailing_bytes_unknown_fields_and_oversize() {
 }
 
 #[test]
-fn legacy_protocol_defaults_to_strict_and_empty_approximations() {
+fn legacy_protocol_defaults_to_strict_with_no_approximations_or_ensemble() {
     let mut document = crate::document::Document::default();
     document.add_atom("C", crate::document::Point::new(0., 0.));
     let prepared = super::super::Prepared::new(&document, &[]).unwrap();
@@ -39,9 +39,11 @@ fn legacy_protocol_defaults_to_strict_and_empty_approximations() {
         .as_object_mut()
         .unwrap()
         .remove("relaxed");
+    assert!(value["operation"].get("ensemble").is_none());
     let frame = encode(&value, MAX_REQUEST_BYTES).unwrap();
     let legacy: Request = decode(&frame, MAX_REQUEST_BYTES).unwrap();
     assert!(!legacy.operation.relaxed);
+    assert!(legacy.operation.ensemble.is_none());
     legacy.operation.validate().unwrap();
 
     let response = serde_json::json!({
@@ -54,5 +56,13 @@ fn legacy_protocol_defaults_to_strict_and_empty_approximations() {
     });
     let frame = encode(&response, MAX_RESPONSE_BYTES).unwrap();
     let legacy: Response = decode(&frame, MAX_RESPONSE_BYTES).unwrap();
-    assert!(legacy.result.unwrap().approximations.is_empty());
+    let legacy = legacy.result.unwrap();
+    assert!(legacy.approximations.is_empty());
+    assert!(legacy.ensemble.is_empty());
+    assert!(
+        serde_json::to_value(legacy)
+            .unwrap()
+            .get("ensemble")
+            .is_none()
+    );
 }

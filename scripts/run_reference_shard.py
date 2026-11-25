@@ -93,6 +93,8 @@ WORKSPACE_TARGET_SHARDS = {
     ("reshiki-mcp", "transcripts"): 0,
     ("reshiki-process-heap", "global_allocator_unwind"): 0,
     ("reshiki-python", "bitmap_budget"): 0,
+    ("reshiki-qcdata", "file_size"): 0,
+    ("reshiki-qcdata", "json_round_trip"): 0,
 }
 
 

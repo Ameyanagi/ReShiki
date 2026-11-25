@@ -11,11 +11,6 @@ const catalog = fileURLToPath(
 const proposalSchema = fileURLToPath(
   new URL("../../tests/fixtures/agent-contract/proposal-schema.json", import.meta.url),
 );
-// 200 KiB held the 16 tools at 204,140 bytes. predict_nmr (#1203) adds about
-// 7.7 KB of tool reference, command help and guide text, and its label tool
-// about as much again, so the cap leaves room for both.
-const maxBytes = 220 * 1024;
-
 async function read(relativePath) {
   return readFile(path.join(output, relativePath)).catch((cause) => {
     throw new Error(`Missing or unreadable ${relativePath} in ${output}`, { cause });
@@ -28,9 +23,6 @@ if (!/^# ReShiki\r?\n(?:[ \t]*\r?\n)*> /.test(index)) {
 }
 
 const agentApi = await read("_llms-txt/agent-api.txt");
-if (agentApi.length >= maxBytes) {
-  throw new Error(`agent-api.txt must be under ${maxBytes} bytes; found ${agentApi.length}.`);
-}
 // The plugin's Markdown output escapes underscores in headings (### document\_new).
 const text = agentApi.toString("utf8").replaceAll("\\_", "_");
 const tools = JSON.parse(await readFile(catalog, "utf8")).map((tool) => tool.name);

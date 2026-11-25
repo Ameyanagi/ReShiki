@@ -307,6 +307,108 @@ const PREDICT_NMR: CommandSpec = CommandSpec {
     body: predict_nmr_help,
 };
 
+const QC_OPTION: OptionSpec = OptionSpec {
+    flag: "",
+    value: Some("TEXT"),
+    help: "",
+    default: None,
+    sets: None,
+    equivalent: None,
+};
+
+const EXPORT_INPUT: CommandSpec = CommandSpec {
+    name: "export-input",
+    summary: "Write a quantum-chemistry input from an XYZ structure",
+    usage: "reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+                                  [--job JOB] [--template N|--method M --basis B]
+                                  [--charge C] [--multiplicity M] [--cores N]
+                                  [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--out PATH]",
+    options: &[
+        OptionSpec {
+            flag: "--program",
+            value: Some("PROGRAM"),
+            help: "gaussian, orca, gamess or xyz. Required.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--job",
+            value: Some("JOB"),
+            help: "single-point, optimize, opt-freq, transition-state or irc.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--template",
+            value: Some("N"),
+            help: "Built-in template, 1 to 3.",
+            default: Some(|| json!(1)),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--method",
+            value: Some("M"),
+            help: "Method, given with --basis.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--basis",
+            value: Some("B"),
+            help: "Basis; empty for an ORCA composite method.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--charge",
+            value: Some("C"),
+            help: "Total charge.",
+            default: Some(|| json!(0)),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--multiplicity",
+            value: Some("M"),
+            help: "2S + 1.",
+            default: Some(|| json!(1)),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--cores",
+            value: Some("N"),
+            help: "Cores (8).",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--memory-gb",
+            value: Some("G"),
+            help: "Total memory in GB (16).",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--title",
+            value: Some("T"),
+            help: "Title (the input file name).",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--extra",
+            help: "More keywords, or GAMESS groups.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--out",
+            value: Some("PATH"),
+            help: "Main file, replaced if it exists; companions go beside it.",
+            ..QC_OPTION
+        },
+    ],
+    tools: &[],
+    operand: Some(Operand {
+        name: "INPUT.xyz",
+        help: "Read the first frame of a Cartesian XYZ file, in angstroms.",
+        sets: None,
+    }),
+    body: export_input_help,
+};
+
 const NAME: CommandSpec = CommandSpec {
     name: "name",
     summary: "Print the systematic name of a structure",
@@ -315,6 +417,154 @@ const NAME: CommandSpec = CommandSpec {
     tools: &["import"],
     operand: Some(INPUT),
     body: name_help,
+};
+
+// Calculation sessions are deliberately outside the agent operation/MCP catalog.
+const CALC: CommandSpec = CommandSpec {
+    name: "calc",
+    summary: "Print an xTB calculation as one JSON line",
+    usage: "reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--gradient] [--wbo] FILE.xyz",
+    options: &[
+        OptionSpec {
+            flag: "--task",
+            value: Some("TASK"),
+            help: "Calculate energy (default), gradient, hessian or orbitals.",
+            default: Some(|| json!("energy")),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--method",
+            value: Some("METHOD"),
+            help: "Use gfn2 (default), gfnff or gxtb.",
+            default: Some(|| json!("gfn2")),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--energy",
+            value: None,
+            help: "Accepted for compatibility. Energy is always included.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--gradient",
+            value: None,
+            help: "Include the Cartesian energy gradient.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--wbo",
+            value: None,
+            help: "Include Mayer–Wiberg bond orders.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--charge",
+            value: Some("N"),
+            help: "Set the molecular charge (default 0).",
+            default: Some(|| json!(0)),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--uhf",
+            value: Some("N"),
+            help: "Set unpaired electrons (default from valence count).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--conventions",
+            value: Some("MODE"),
+            help: "Use axtb (default) or xtb-6.8 conventions.",
+            default: Some(|| json!("axtb")),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--alpb",
+            value: Some("NAME"),
+            help: "Use the ALPB solvent model.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--gbsa",
+            value: Some("NAME"),
+            help: "Use the GBSA solvent model.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--solvent-correction",
+            value: Some("METHOD"),
+            help: "Use gfn2 for g-xTB solvent calculations.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--etemp",
+            value: Some("K"),
+            help: "Set the electronic temperature in kelvin.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--accuracy",
+            value: Some("X"),
+            help: "Set a positive SCF accuracy multiplier (default 1).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--max-iter",
+            value: Some("N"),
+            help: "Set the SCF iteration limit (default 250).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--scf-retry",
+            value: Some("K[:N]"),
+            help: "Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--threads",
+            value: Some("N"),
+            help: "Use 1 to 64 worker threads (default 1).",
+            default: Some(|| json!(1)),
+            sets: None,
+            equivalent: None,
+        },
+    ],
+    tools: &[],
+    operand: Some(Operand {
+        name: "FILE.xyz",
+        help: "Read the first structure of an XYZ file in angstroms.",
+        sets: None,
+    }),
+    body: calc_help,
 };
 
 const PIECES: CommandSpec = CommandSpec {
@@ -459,7 +709,9 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     COMPOSE,
     ANALYZE,
     PREDICT_NMR,
+    EXPORT_INPUT,
     NAME,
+    CALC,
     PIECES,
     INFO,
     TOOLS,
@@ -469,7 +721,8 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
 ];
 
 const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
-const OPTIONS_RULE: &str = "Options are allowed once each; -- ends the options.";
+const OPTIONS_RULE: &str =
+    "Options are allowed once each except calc's --scf-retry; -- ends the options.";
 const STDOUT_CONTRACT: &str = "\
 stdout carries only the result: the file, one JSON line, or one receipt
   line with --receipt. With -o FILE and no --receipt it stays empty.";
@@ -757,6 +1010,19 @@ fn analyze_help() -> String {
     format!("Usage: {}\n\n{ANALYZE_HELP}", ANALYZE.usage)
 }
 
+fn calc_help() -> String {
+    let mut text = format!("Usage: {}\n\nOptions:\n", CALC.usage);
+    for option in CALC.options {
+        let label = match option.value {
+            Some(value) => format!("{} {value}", option.flag),
+            None => option.flag.to_string(),
+        };
+        text.push_str(&format!("  {label:<28} {}\n", option.help));
+    }
+    text.push_str("\nSee docs/xtb-worker.md (Command line)\n");
+    text
+}
+
 fn predict_nmr_help() -> String {
     let body = "\
 Predicts 1H or 13C NMR chemical shifts offline, as the app's Predict NMR
@@ -779,6 +1045,29 @@ A molecule with no sites for the nucleus, or with metals, charges,
 radicals or isotope labels, is an error.
 ";
     format!("Usage: {}\n\n{body}", PREDICT_NMR.usage)
+}
+
+fn export_input_help() -> String {
+    let mut text = format!(
+        "Usage: {}\n\nWrites input for another program from the first frame of INPUT.xyz (Å);\nstdout without --out. An existing companion file stops the export.\nWarnings go to stderr.\n\nOptions:\n",
+        EXPORT_INPUT.usage,
+    );
+    for option in EXPORT_INPUT.options {
+        let flag = match option.value {
+            Some(value) => format!("{} {value}", option.flag),
+            None => option.flag.into(),
+        };
+        text.push_str(&format!("  {flag:<19} {}\n", option.help));
+    }
+    text.push_str("\nTemplates:\n");
+    for (index, template) in reshiki_io::qc_input::builtin_templates().iter().enumerate() {
+        let only = template
+            .only
+            .map(|program| format!(" ({} only)", program.label()))
+            .unwrap_or_default();
+        text.push_str(&format!("  {}  {}{only}\n", index + 1, template.name));
+    }
+    text
 }
 
 fn name_help() -> String {

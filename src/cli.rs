@@ -1,9 +1,11 @@
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 //! `reshiki --cli`: experimental command-line access to the agent tools.
 //!
-//! Each command runs on an in-process `HeadlessHost` through
+//! Drawing commands run on an in-process `HeadlessHost` through
 //! `ToolHost::call`, the operation layer `reshiki --mcp` serves, so both
 //! share the same import, analyze, render, compose and export semantics.
+//! `calc` is a CLI-only exception: it calls the isolated xTB worker directly
+//! and has no MCP tool.
 //!
 //! # Output contract
 //!
@@ -12,24 +14,28 @@
 //!   JSON line when `--receipt` is given with `-o FILE`. With `-o FILE` and
 //!   no `--receipt`, stdout stays empty. Every JSON line carries
 //!   `"experimental": true` except `schema proposal`, which prints the raw
-//!   JSON Schema; plain-text output carries no banner.
+//!   JSON Schema, and `calc`, which prints the worker calculation result.
+//!   Plain-text output carries no banner.
 //! - Warnings go to stderr as `reshiki: warning: {message}`, an operation
 //!   error as `reshiki: error[{code}]: {message}` with the operation error
 //!   code, any other error as `reshiki: error: {message}` and usage errors
-//!   as `reshiki: {message}`.
+//!   as `reshiki: {message}`. `export-input` warnings use `warning: {message}`.
 //! - An operation, input or file error exits [`FAILURE`] (1), a usage error
 //!   [`USAGE`] (2), and a failed write to stdout [`FAILURE`].
 //!
 //! Paths on the command line are read and written with the user's own
-//! authority (no folder grants, no extension allowlist). An existing output
-//! file is replaced only with `--force`. Release builds on Windows are GUI
+//! authority (no folder grants, no extension allowlist). Commands that offer
+//! `--force` require it to replace existing files. `export-input --out` replaces
+//! its output. Release builds on Windows are GUI
 //! programs without a console, so their output must be redirected.
 
 mod analyze;
 mod args;
+mod calc;
 mod commands;
 mod compose;
 mod convert;
+mod export_input;
 mod host;
 mod io;
 mod mcp_usage;
@@ -155,14 +161,25 @@ async fn run_command(
         }
         Command::Skill(skill) => skill::run(skill, out),
         Command::Info => info(out, err).await,
-        Command::Version => {
-            writeln!(out, "reshiki {}", crate::updates::CURRENT_VERSION).map_err(CliError::Stdout)
+        Command::Version => version(out).map_err(CliError::Stdout),
+        Command::Calc(command) => {
+            #[cfg(feature = "xtb")]
+            {
+                calc::run(command, out, err)
+            }
+            #[cfg(not(feature = "xtb"))]
+            {
+                let _ = command;
+                let _ = writeln!(err, "reshiki: xTB is not included in this build");
+                return Ok(FAILURE);
+            }
         }
         Command::Convert(convert) => convert::run(convert, out, err, terminal).await,
         Command::Render(render) => render::run(render, out, err, terminal).await,
         Command::Compose(compose) => compose::run(compose, out, err, terminal).await,
         Command::Analyze(input) => analyze::run(input, out, err).await,
         Command::PredictNmr(command) => predict_nmr::run(command, out, err).await,
+        Command::ExportInput(command) => export_input::run(command, out, err),
         Command::Name(name) => name::run(name, out, err).await,
         Command::PiecesCheck(files) => pieces::check(&files, out),
         Command::PiecesRender(render) => pieces::render(render, out, err, terminal).await,
@@ -183,6 +200,20 @@ async fn run_command(
             Ok(FAILURE)
         }
     }
+}
+
+fn version(out: &mut dyn Write) -> std::io::Result<()> {
+    writeln!(out, "reshiki {}", crate::updates::CURRENT_VERSION)?;
+    #[cfg(feature = "xtb")]
+    {
+        use reshiki_xtb_worker::{AXTB_LICENSE, AXTB_REV, AXTB_SOURCE, AXTB_VERSION};
+        writeln!(
+            out,
+            "xTB: included (axtb {AXTB_VERSION}, {AXTB_LICENSE}, source {AXTB_SOURCE}/tree/{AXTB_REV})"
+        )
+    }
+    #[cfg(not(feature = "xtb"))]
+    writeln!(out, "xTB: not included in this build")
 }
 
 /// The help text for `topic`, or the overview, after the [`NOTICE`] line.

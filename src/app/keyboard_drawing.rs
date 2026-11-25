@@ -144,6 +144,7 @@ impl App {
     fn keyboard_drawing_blocked(&self) -> bool {
         self.help_open
             || self.settings.open
+            || self.qc_export.is_some()
             || self.commands.open
             || self.updates.open
             || self.github_dialog()

@@ -56,6 +56,7 @@ fn previewing(mut app: App) -> (App, optimization::Key) {
         force_field: ForceField::Mmff94s,
         diagnostics: vec![],
         approximations: vec![],
+        ensemble: vec![],
     };
     let _ = app.optimization_action(optimization::Action::WorkerDone(
         key,
