@@ -7,7 +7,7 @@ use super::super::{Action as XtbAction, unavailable};
 use super::{Action, State, thermo_at};
 use crate::app::workspace::{accessible_checkbox, accessible_command, control, muted_text};
 use crate::app::{App, Message};
-use iced::widget::{Column, Space, canvas, column, container, row, scrollable, slider, text};
+use iced::widget::{Column, canvas, column, container, row, scrollable, slider, text};
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 use reshiki::qcdata::vibrational::{self, BandShape};
 use reshiki::qcdata::{CalcResult, Thermo};
@@ -17,7 +17,11 @@ use std::sync::{Arc, Weak};
 const CAL_PER_MOL_PER_HARTREE: f64 = 627_509.474;
 const LIST_WIDTH: f32 = 250.;
 const CHART_WIDTH: f32 = 480.;
+/// Chart height in the inspector; the bottom dock's body is shorter.
 const CHART_HEIGHT: f32 = 156.;
+const DOCK_CHART_HEIGHT: f32 = 128.;
+/// Peak labels closer than this (px) to a taller one are left out.
+const LABEL_GAP: f32 = 30.;
 /// Peaks labelled on the spectrum: at most this many, at least this fraction of the tallest.
 const LABELS: usize = 8;
 const LABEL_FRACTION: f64 = 0.05;
@@ -71,25 +75,28 @@ impl App {
         } else {
             Length::Fixed(LIST_WIDTH)
         });
-        let chart = column![
-            canvas(Spectrum::new(result, settings, selected))
-                .width(if inspector {
-                    Length::Fill
-                } else {
-                    Length::Fixed(CHART_WIDTH)
-                })
-                .height(CHART_HEIGHT),
-            spectrum_controls(settings),
-        ]
-        .spacing(6);
+        let chart = canvas(Spectrum::new(result, settings, selected));
         let controls = self.xtb_animation_controls(shown);
         if inspector {
-            body = body.push(left).push(chart).push(controls);
+            body = body
+                .push(left)
+                .push(chart.width(Length::Fill).height(CHART_HEIGHT))
+                .push(spectrum_controls(settings))
+                .push(controls);
         } else {
+            // Everything fits the dock's short body: list, chart, then the
+            // animation and spectrum controls side by side.
             body = body.push(
-                row![left, chart, controls.width(Length::Fill)]
-                    .spacing(18)
-                    .align_y(Alignment::Start),
+                row![
+                    left,
+                    chart
+                        .width(Length::Fixed(CHART_WIDTH))
+                        .height(DOCK_CHART_HEIGHT),
+                    controls.width(Length::FillPortion(3)),
+                    container(spectrum_controls(settings)).width(Length::FillPortion(2)),
+                ]
+                .spacing(18)
+                .align_y(Alignment::Start),
             );
         }
         body.into()
@@ -180,22 +187,9 @@ impl App {
         .padding([6, 12])
         .style(crate::appearance::secondary)
         .on_press_maybe(live.then(|| send(Action::Play(!settings.playing))));
-        controls = controls.push(play);
-        controls = controls.push(labelled_slider(
-            "Amplitude",
-            format!("{:.2} Å", settings.amplitude),
-            slider(0.1..=0.6, settings.amplitude, |v| {
-                send(Action::Amplitude(v))
-            })
-            .step(0.05_f32),
-        ));
-        controls = controls.push(labelled_slider(
-            "Speed",
-            format!("{:.2}×", settings.speed),
-            slider(0.25..=2., settings.speed, |v| send(Action::Speed(v))).step(0.25_f32),
-        ));
         controls = controls.push(
             row![
+                play,
                 accessible_checkbox(
                     "xtb-vibration-arrows",
                     "Show arrows",
@@ -212,6 +206,19 @@ impl App {
             .spacing(10)
             .align_y(Alignment::Center),
         );
+        controls = controls.push(labelled_slider(
+            "Amplitude",
+            format!("{:.2} Å", settings.amplitude),
+            slider(0.1..=0.6, settings.amplitude, |v| {
+                send(Action::Amplitude(v))
+            })
+            .step(0.05_f32),
+        ));
+        controls = controls.push(labelled_slider(
+            "Speed",
+            format!("{:.2}×", settings.speed),
+            slider(0.25..=2., settings.speed, |v| send(Action::Speed(v))).step(0.25_f32),
+        ));
         controls.push(
             accessible_command(
                 "xtb-vibration-export-xyz",
@@ -471,15 +478,15 @@ fn spectrum_controls(settings: &State) -> Element<'_, Message> {
     .spacing(6)
     .align_y(Alignment::Center);
     column![
-        row![shapes, Space::new().width(12), scale].align_y(Alignment::Center),
+        shapes,
         labelled_slider(
             "FWHM",
             format!("{:.0} cm⁻¹", settings.fwhm),
             slider(5.0..=60., settings.fwhm, |v| send(Action::Fwhm(v))).step(1_f32),
         ),
+        scale,
     ]
-    .spacing(6)
-    .width(CHART_WIDTH)
+    .spacing(7)
     .into()
 }
 
@@ -811,20 +818,37 @@ impl canvas::Program<Message> for Spectrum {
             }),
             canvas::Stroke::default().with_color(ink).with_width(1.4),
         );
-        for [wavenumber, value] in &self.data.peaks {
-            frame.fill_text(small(
-                format!("{wavenumber:.0}"),
-                Point::new(self.x(*wavenumber, bounds), y(*value) - 12.),
-                ink,
-                iced::alignment::Horizontal::Center,
-            ));
-        }
+        // The selected mode's label wins; then the tallest peaks, each
+        // clear of the labels already placed.
+        let mut placed: Vec<f32> = Vec::new();
         if let Some(frequency) = self.selected {
+            let x = self.x(frequency, bounds);
+            let left = x + 64. < bounds.width - Self::RIGHT;
             frame.fill_text(small(
                 format!("{frequency:.0} cm⁻¹"),
-                Point::new(self.x(frequency, bounds) + 4., Self::TOP + 2.),
+                Point::new(if left { x + 4. } else { x - 4. }, Self::TOP + 2.),
                 accent,
-                iced::alignment::Horizontal::Left,
+                if left {
+                    iced::alignment::Horizontal::Left
+                } else {
+                    iced::alignment::Horizontal::Right
+                },
+            ));
+            placed.push(x);
+        }
+        let mut peaks: Vec<&[f64; 2]> = self.data.peaks.iter().collect();
+        peaks.sort_by(|a, b| b[1].total_cmp(&a[1]));
+        for [wavenumber, value] in peaks {
+            let x = self.x(*wavenumber, bounds);
+            if placed.iter().any(|other| (other - x).abs() < LABEL_GAP) {
+                continue;
+            }
+            placed.push(x);
+            frame.fill_text(small(
+                format!("{wavenumber:.0}"),
+                Point::new(x, (y(*value) - 12.).max(Self::TOP + 2.)),
+                ink,
+                iced::alignment::Horizontal::Center,
             ));
         }
         if self.imaginary_selected {

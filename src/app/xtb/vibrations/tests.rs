@@ -95,22 +95,22 @@ fn arrows_show_on_the_animation_and_add_to_the_drawing_as_one_undo_step() {
     models3d::set_display(&mut app.tab.doc, 0, Display::TwoD);
     vibrations(&mut app, Action::Arrows(true));
     assert_eq!(
-        app.display_document().arrows.len(),
+        app.display_document().graphics.len(),
         1,
         "one atom moves in mode 1"
     );
-    assert!(app.tab.doc.arrows.is_empty());
+    assert!(app.tab.doc.graphics.is_empty());
     vibrations(&mut app, Action::PlaceArrows);
-    let arrows = &app.tab.doc.arrows;
+    let arrows = &app.tab.doc.graphics;
     assert_eq!(arrows.len(), 1);
-    assert_eq!(
-        arrows.first().unwrap().purpose,
-        reshiki::purpose::Purpose::Illustration
-    );
+    let arrow = arrows.first().unwrap();
+    assert!(arrow.heads.is_some(), "a pen path with an arrowhead");
+    assert!(arrow.layer > 0, "in front of the model");
+    assert!(app.tab.doc.arrows.is_empty(), "no reaction arrows");
     assert_eq!(app.tab.doc.models.first().unwrap().display, Display::Both);
     assert!(app.status.starts_with("Added 1 displacement arrows"));
     let _ = app.update(Message::Undo);
-    assert!(app.tab.doc.arrows.is_empty());
+    assert!(app.tab.doc.graphics.is_empty());
     assert_eq!(app.tab.doc.models.first().unwrap().display, Display::TwoD);
 }
 
