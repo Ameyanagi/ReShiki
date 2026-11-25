@@ -86,7 +86,7 @@ struct Frame {
     paper: Option<[u8; 3]>,
     lo: super::Point,
     hi: super::Point,
-    /// Serial for 3D-model gradient IDs.
+    /// Serial for gradient, clip and filter IDs.
     gradients: std::cell::Cell<usize>,
 }
 
@@ -147,6 +147,47 @@ fn push_command(d: &mut String, letter: char, numbers: &[f32]) {
             }
         }
     }
+}
+
+/// Fitted surface paths in relative commands, to a hundredth of a unit:
+/// they are long, and small offsets print shorter. Offsets are taken between
+/// rounded points, so rounding never accumulates along a path.
+fn surface_data(commands: &[crate::graphics::PathCommand]) -> String {
+    use crate::graphics::PathCommand;
+    let hundredths = |p: super::Point| [p.x, p.y].map(|v| (v * 100.).round());
+    let mut d = String::new();
+    let (mut at, mut start) = ([0.; 2], [0.; 2]);
+    let push = |d: &mut String, letter, points: &[super::Point], at: &mut [f32; 2]| {
+        let from = *at;
+        let numbers: Vec<f32> = points
+            .iter()
+            .flat_map(|&p| {
+                let [x, y] = hundredths(p);
+                [(x - from[0]) / 100., (y - from[1]) / 100.]
+            })
+            .collect();
+        if let Some(&last) = points.last() {
+            *at = hundredths(last);
+        }
+        push_command(d, letter, &numbers);
+    };
+    for command in commands {
+        match command {
+            PathCommand::Move(p) => {
+                // An absolute move keeps each subpath independent of the last.
+                push_command(&mut d, 'M', &[p.x, p.y]);
+                at = hundredths(*p);
+                start = at;
+            }
+            PathCommand::Line(p) => push(&mut d, 'l', &[*p], &mut at),
+            PathCommand::Cubic(a, b, c) => push(&mut d, 'c', &[*a, *b, *c], &mut at),
+            PathCommand::Close => {
+                d.push('z');
+                at = start;
+            }
+        }
+    }
+    d
 }
 
 /// Path data through `points`, each run of steps between points on the
@@ -583,6 +624,46 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     2. * spread
                 ));
             }
+            Primitive::Surface { groups } => {
+                for group in groups {
+                    if group.alpha < 1. {
+                        s.push_str(&format!("<g opacity=\"{}\">", group.alpha));
+                    }
+                    for fill in group.fills {
+                        let region = surface_data(&fill.region);
+                        let [r, g, b] = fill.color;
+                        s.push_str(&format!(
+                            "<path d=\"{region}\" fill=\"rgb({r},{g},{b})\" fill-rule=\"nonzero\"/>"
+                        ));
+                        if !fill.tones.is_empty() {
+                            frame.gradients.set(frame.gradients.get() + 1);
+                            let id = format!("reshiki-surface-{}", frame.gradients.get());
+                            s.push_str(&format!(
+                                "<defs><clipPath id=\"{id}\" clipPathUnits=\"userSpaceOnUse\"><path d=\"{region}\" clip-rule=\"nonzero\"/></clipPath></defs><g clip-path=\"url(#{id})\">"
+                            ));
+                            for (commands, [r, g, b]) in fill.tones {
+                                s.push_str(&format!(
+                                    "<path d=\"{}\" fill=\"rgb({r},{g},{b})\" fill-rule=\"nonzero\"/>",
+                                    surface_data(&commands)
+                                ));
+                            }
+                            s.push_str("</g>");
+                        }
+                    }
+                    // Butt ends: a run ends exactly where a nearer lobe or a
+                    // ball hides it, and a round cap would poke past that.
+                    for stroke in group.strokes {
+                        s.push_str(&format!(
+                            "<path d=\"{}\" fill=\"none\" stroke-linejoin=\"round\"{}/>",
+                            surface_data(&stroke.paths),
+                            outline_paint(Some(stroke.outline))
+                        ));
+                    }
+                    if group.alpha < 1. {
+                        s.push_str("</g>");
+                    }
+                }
+            }
             Primitive::Card {
                 lo,
                 hi,
@@ -759,6 +840,7 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. }
+            | Primitive::Surface { .. }
             | Primitive::Gradient { .. }
             | Primitive::Glow { .. } => {}
         }

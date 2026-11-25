@@ -250,6 +250,7 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
         | Primitive::Contour { .. }
         | Primitive::Wire { .. }
         | Primitive::Card { .. }
+        | Primitive::Surface { .. }
         | Primitive::Glow { .. } => false,
     }
 }

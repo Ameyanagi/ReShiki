@@ -47,6 +47,14 @@ static ALLOCATOR: allocation_metrics::MeasuredAllocator<reshiki_process_heap::Bo
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> iced::Result {
+    // Developer-only analytic orbital surface (docs/plans/xtb-surfaces.md),
+    // before any mode, render workers included; drawn on every supported 3D
+    // model, never saved.
+    if let Some(spec) = std::env::var_os("RESHIKI_DEV_ORBITAL_SURFACE")
+        && let Err(error) = reshiki::models3d::surface::enable_demo(&spec.to_string_lossy())
+    {
+        eprintln!("{error}");
+    }
     // Worker modes enter before graphics, AppKit/Office registration or Tokio.
     // Relaunching this executable keeps deadlines and memory failures isolated.
     match std::env::args_os()
