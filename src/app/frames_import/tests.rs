@@ -46,7 +46,11 @@ fn the_lowest_frame_opens_with_the_ensemble_kept() {
     app.tab.busy = false;
     open(&mut app, "crest_conformers.xyz", CREST);
     let dialog = app.frames_import.as_ref().expect("the sheet asks");
-    assert_eq!(dialog.choice, Choice::Lowest);
+    // Not sorted by energy: an ordered trajectory, which opens its last frame.
+    assert_eq!(dialog.file.layout(), Some(Layout::Line));
+    assert_eq!(dialog.choice, Choice::Last);
+    send(&mut app, Action::Choose(Choice::Lowest));
+    let dialog = app.frames_import.as_ref().unwrap();
     assert_eq!(dialog.index(), 1);
 
     send(&mut app, Action::Keep(true));
@@ -206,4 +210,33 @@ fn reshikis_own_xyz_export_reopens_with_energies_charge_and_spin() {
     assert_eq!(file.energies(), Some(vec![-5.0, -4.99]));
     let first = &file.steps()[0].frame;
     assert_eq!((first.charge, first.multiplicity), (1, 2));
+}
+
+#[test]
+fn a_sorted_file_is_an_ensemble_with_a_turnable_preview_and_the_lowest_overlaid() {
+    // CREST writes conformers lowest first.
+    let sorted = "3\n -5.070176\nO 0 0 0\nH 0.96 0 0\nH -0.24 0.93 0\n\
+                  3\n -5.06901\nO 0 0 0\nH 0.97 0 0\nH -0.30 0.90 0\n\
+                  3\n -5.065176\nO 0 0 0\nH 0.95 0.1 0\nH -0.20 0.95 0.1\n";
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    open(&mut app, "crest_conformers.xyz", sorted);
+    let dialog = app.frames_import.as_ref().unwrap();
+    assert_eq!(dialog.file.layout(), Some(Layout::Levels));
+    assert_eq!((dialog.choice, dialog.index()), (Choice::Lowest, 0));
+    let preview = |app: &App| app.frames_import.as_ref().unwrap().preview.clone().unwrap();
+    assert!(preview(&app).models[0].overlay.is_empty());
+
+    // Picking frame 3 with the overlay shows the lowest behind it.
+    send(&mut app, Action::Overlay(true));
+    send(&mut app, Action::Choose(Choice::Frame(2)));
+    let shown = preview(&app);
+    assert_eq!(shown.models[0].overlay.len(), 1);
+    let turned = shown.models[0].rotation;
+    send(&mut app, Action::Turn(30., 0.));
+    assert_ne!(preview(&app).models[0].rotation, turned);
+    // The turn stays when another frame is picked.
+    let after = preview(&app).models[0].rotation;
+    send(&mut app, Action::Move(-1));
+    assert_eq!(preview(&app).models[0].rotation, after);
 }

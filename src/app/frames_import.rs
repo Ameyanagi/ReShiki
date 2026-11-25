@@ -3,6 +3,7 @@
 //! of conformers): choose the first, the last, the lowest-energy or any
 //! frame, and optionally keep every frame as an ensemble in the results
 //! palette's Conformers tab.
+use super::energy_plot::{EnergyPlot, Layout};
 use super::{
     App, Message,
     files::Prepared,
@@ -10,8 +11,9 @@ use super::{
     workspace::{accessible_checkbox, accessible_command, control, muted_text},
 };
 use iced::keyboard::{Key, Modifiers, key::Named};
+use iced::widget::canvas;
 use iced::widget::{Column, column, container, row, scrollable, text};
-use iced::{Alignment, Element, Length, Task};
+use iced::{Alignment, Element, Length, Task, mouse};
 use reshiki::qcdata::{
     self, CalcResult, Frame, MAX_SAVED_CONFORMERS, Provenance, Source, Status, Trajectory,
 };
@@ -36,6 +38,10 @@ pub(crate) enum Action {
     /// Move the picked frame by this many rows.
     Move(isize),
     Keep(bool),
+    /// Draw the lowest-energy frame faint behind the previewed one.
+    Overlay(bool),
+    /// Turn the preview by a drag of this many pixels.
+    Turn(f32, f32),
     Import,
     Close,
 }
@@ -56,6 +62,9 @@ pub(crate) struct Dialog {
     file: File,
     choice: Choice,
     keep: bool,
+    overlay: bool,
+    /// The chosen frame as a 3D model, turned as the user turned it.
+    preview: Option<reshiki::document::Document>,
 }
 
 /// A multi-frame XYZ, or an SD file of 3D conformers (every record the
@@ -136,21 +145,83 @@ impl File {
     fn energies(&self) -> Option<Vec<f64>> {
         self.steps().iter().map(|s| s.energy_hartree).collect()
     }
+
+    /// The lowest-energy frame.
+    fn lowest(&self) -> Option<usize> {
+        self.energies()?
+            .iter()
+            .enumerate()
+            .min_by(|a, b| a.1.total_cmp(b.1))
+            .map(|(i, _)| i)
+    }
+
+    /// How the energy diagram draws this file, `None` without energies: an
+    /// SD file or frames already sorted by energy (CREST, ReShiki's export)
+    /// are an ensemble of levels; frames in any other order are an ordered
+    /// trajectory (an optimization, a scan, MD), drawn against frame.
+    fn layout(&self) -> Option<Layout> {
+        let energies = self.energies()?;
+        let sorted = energies.windows(2).all(|pair| pair.first() <= pair.get(1));
+        Some(if self.sdf.is_some() || sorted {
+            Layout::Levels
+        } else {
+            Layout::Line
+        })
+    }
 }
 
 impl Dialog {
     pub(super) fn new(path: PathBuf, file: File) -> Self {
-        let choice = if file.energies().is_some() {
-            Choice::Lowest
-        } else {
-            Choice::Last
+        // An ensemble opens its lowest member; a trajectory its last frame.
+        let choice = match file.layout() {
+            Some(Layout::Levels) => Choice::Lowest,
+            _ => Choice::Last,
         };
-        Self {
+        let mut dialog = Self {
             path,
             file,
             choice,
             keep: false,
+            overlay: false,
+            preview: None,
+        };
+        dialog.refresh();
+        dialog
+    }
+
+    /// Build the preview of the chosen frame, keeping the view's turn, with
+    /// the lowest-energy frame superposed behind it when asked.
+    fn refresh(&mut self) {
+        let index = self.index();
+        let steps = self.file.steps();
+        let Some(step) = steps.get(index) else {
+            return;
+        };
+        let rotation = self
+            .preview
+            .as_ref()
+            .and_then(|doc| doc.models.first())
+            .map(|model| model.rotation);
+        let Ok((mut doc, _)) = drawing(&step.frame) else {
+            self.preview = None;
+            return;
+        };
+        let lowest = self
+            .file
+            .lowest()
+            .and_then(|i| steps.get(i))
+            .filter(|_| self.overlay);
+        if let Some(model) = doc.models.first_mut() {
+            if let Some(rotation) = rotation {
+                model.rotation = rotation;
+            }
+            if let Some(lowest) = lowest.filter(|lowest| !std::ptr::eq(*lowest, step))
+                && let Some(ghost) = super::xtb::superposed(&step.frame, &lowest.frame)
+            {
+                model.overlay = vec![ghost.iter().map(|p| p.map(|x| x as f32)).collect()];
+            }
         }
+        self.preview = Some(doc);
     }
 
     /// The frame `choice` names.
@@ -159,17 +230,7 @@ impl Dialog {
         match self.choice {
             Choice::First => 0,
             Choice::Last => last,
-            Choice::Lowest => self
-                .file
-                .energies()
-                .and_then(|energies| {
-                    energies
-                        .iter()
-                        .enumerate()
-                        .min_by(|a, b| a.1.total_cmp(b.1))
-                        .map(|(i, _)| i)
-                })
-                .unwrap_or(0),
+            Choice::Lowest => self.file.lowest().unwrap_or(0),
             Choice::Frame(index) => index.min(last),
         }
     }
@@ -182,23 +243,46 @@ impl App {
         };
         match action {
             Action::Choose(Choice::Lowest) if dialog.file.energies().is_none() => {}
-            Action::Choose(choice) => dialog.choice = choice,
+            Action::Choose(choice) => {
+                dialog.choice = choice;
+                dialog.refresh();
+            }
             Action::Move(step) => {
                 let count = dialog.file.steps().len() as isize;
                 let index = (dialog.index() as isize + step).clamp(0, count - 1);
                 dialog.choice = Choice::Frame(index as usize);
+                dialog.refresh();
             }
             Action::Keep(keep) => dialog.keep = keep && dialog.file.energies().is_some(),
+            Action::Overlay(on) => {
+                dialog.overlay = on;
+                dialog.refresh();
+            }
+            Action::Turn(dx, dy) => {
+                if let Some(model) = dialog
+                    .preview
+                    .as_mut()
+                    .and_then(|doc| doc.models.first_mut())
+                {
+                    model.rotation = reshiki::models3d::turn(model.rotation, dx, dy, false);
+                }
+            }
             Action::Close => {
                 self.frames_import = None;
                 self.status = "Nothing opened".into();
                 self.error = false;
+                // Keyboard focus goes back to the drawing.
+                return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus);
             }
             Action::Import => {
                 let Some(dialog) = self.frames_import.take() else {
                     return Task::none();
                 };
-                return self.frames_import_open(dialog);
+                return self
+                    .frames_import_open(dialog)
+                    .chain(iced::advanced::widget::operate(
+                        super::keyboard_drawing::ReleaseFocus,
+                    ));
             }
         }
         Task::none()
@@ -449,15 +533,74 @@ impl App {
         ]
         .spacing(10)
         .align_y(Alignment::Center);
+        // Right: the chosen frame in 3D, then the energy diagram.
+        let preview: Element<'_, Message> = match &dialog.preview {
+            Some(doc) => iced::widget::canvas(FramePreview(doc))
+                .width(Length::Fill)
+                .height(250)
+                .into(),
+            None => text("This frame cannot be shown")
+                .size(12)
+                .style(muted_text)
+                .into(),
+        };
+        let lowest_frame = file.lowest();
+        let overlay = accessible_checkbox(
+            "frames-overlay-lowest",
+            "Overlay lowest energy",
+            dialog.overlay,
+            lowest_frame.map(|_| send(Action::Overlay(!dialog.overlay))),
+        );
+        let diagram: Element<'_, Message> = match (file.layout(), &energies, lowest) {
+            (Some(layout), Some(energies), Some(low)) => column![
+                text(match layout {
+                    Layout::Levels => "Ensemble: levels sorted by energy",
+                    Layout::Line => "Trajectory: energy against frame",
+                })
+                .size(11)
+                .style(muted_text),
+                iced::widget::canvas(EnergyPlot {
+                    delta_kcal: energies
+                        .iter()
+                        .map(|e| (e - low) * KCAL_PER_HARTREE)
+                        .collect(),
+                    layout,
+                    selected: Some(index),
+                    notes: vec![],
+                    select: Some(|i| Message::FramesImport(Action::Choose(Choice::Frame(i)))),
+                })
+                .width(Length::Fill)
+                .height(130),
+            ]
+            .spacing(4)
+            .into(),
+            _ => text("No energies in this file, so no energy diagram.")
+                .size(11)
+                .style(muted_text)
+                .into(),
+        };
+        let side = column![
+            preview,
+            overlay,
+            text("Drag to turn the model.").size(11).style(muted_text),
+            diagram,
+        ]
+        .spacing(8)
+        .width(330);
+        let main = column![
+            quick,
+            column![header, list].spacing(2),
+            column![keep, text(keep_note).size(11).style(muted_text)].spacing(4),
+        ]
+        .spacing(12)
+        .width(Length::Fill);
         let mut content = column![
             column![
                 text("Choose what to import").size(15),
                 text(subtitle).size(12).style(muted_text),
             ]
             .spacing(2),
-            quick,
-            column![header, list].spacing(2),
-            column![keep, text(keep_note).size(11).style(muted_text)].spacing(4),
+            row![main, side].spacing(18),
         ]
         .spacing(12);
         for warning in &file.file.warnings {
@@ -467,10 +610,86 @@ impl App {
         modal(
             base,
             container(content).padding(16).into(),
-            780.,
-            620.,
+            1100.,
+            640.,
             Placement::Fit,
             send(Action::Close),
+        )
+    }
+}
+
+/// The chosen frame's 3D model; a drag turns it.
+struct FramePreview<'a>(&'a reshiki::document::Document);
+
+impl canvas::Program<Message> for FramePreview<'_> {
+    type State = (
+        <crate::canvas::TemplateThumbnail<'static> as canvas::Program<Message>>::State,
+        Option<iced::Point>,
+    );
+
+    fn update(
+        &self,
+        state: &mut Self::State,
+        event: &iced::Event,
+        bounds: iced::Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<canvas::Action<Message>> {
+        let iced::Event::Mouse(event) = event else {
+            return None;
+        };
+        match event {
+            mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                state.1 = Some(cursor.position_in(bounds)?);
+                Some(canvas::Action::capture())
+            }
+            mouse::Event::CursorMoved { .. } => {
+                let last = state.1?;
+                let now = cursor.position_in(bounds)?;
+                state.1 = Some(now);
+                Some(
+                    canvas::Action::publish(Message::FramesImport(Action::Turn(
+                        now.x - last.x,
+                        now.y - last.y,
+                    )))
+                    .and_capture(),
+                )
+            }
+            mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                state.1 = None;
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn mouse_interaction(
+        &self,
+        state: &Self::State,
+        bounds: iced::Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        match (state.1, cursor.is_over(bounds)) {
+            (Some(_), _) => mouse::Interaction::Grabbing,
+            (None, true) => mouse::Interaction::Grab,
+            _ => mouse::Interaction::default(),
+        }
+    }
+
+    fn draw(
+        &self,
+        state: &Self::State,
+        renderer: &iced::Renderer,
+        theme: &iced::Theme,
+        bounds: iced::Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Vec<canvas::Geometry> {
+        <crate::canvas::TemplateThumbnail<'_> as canvas::Program<Message>>::draw(
+            &crate::canvas::TemplateThumbnail(self.0, None),
+            &state.0,
+            renderer,
+            theme,
+            bounds,
+            cursor,
         )
     }
 }
