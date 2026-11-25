@@ -20,7 +20,7 @@ Commands:
   predict-nmr   Print predicted NMR shifts as one JSON line
   export-input  Write a quantum-chemistry input from an XYZ structure
   name          Print the systematic name of a structure
-  calc          Print a GFN2-xTB energy and optional gradient as one JSON line
+  calc          Print an xTB calculation as one JSON line
   pieces        Check or render equipment piece files
   info          Print versions, limits and formats as one JSON line
   tools         Print the agent tool catalog as one JSON line
@@ -28,7 +28,7 @@ Commands:
   skill         Write an Agent Skill folder that teaches AI agents to use ReShiki
   help          Show this help, or a command's help: reshiki --cli help <command>
 
-Options are allowed once each; -- ends the options.
+Options are allowed once each except calc's --scf-retry; -- ends the options.
 
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
@@ -290,30 +290,31 @@ atom, in input atom order. Atoms outside the principal parent have null.
 
 ```text
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
-Usage: reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz
-
-Reads the first structure of an XYZ file, with coordinates in angstroms,
-and runs GFN2-xTB in an isolated worker process. The first line is an atom
-count (1 to 500), followed by a comment line and exactly that many atom
-rows, each with an element symbol and three finite coordinates.
+Usage: reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--gradient] [--wbo] FILE.xyz
 
 Options:
-  --energy    Calculate the energy. Required.
-  --gradient  Include the Cartesian energy gradient.
-  --charge N  Set the molecular charge (default 0).
-  --uhf N     Set a nonnegative number of unpaired electrons. The default
-              comes from the electron count.
-  --conventions axtb|xtb-6.8
-              Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.
+  --task TASK                  Calculate energy (default), gradient, hessian or orbitals.
+  --method METHOD              Use gfn2 (default), gfnff or gxtb.
+  --energy                     Accepted for compatibility. Energy is always included.
+  --gradient                   Include the Cartesian energy gradient.
+  --wbo                        Include Mayer–Wiberg bond orders.
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --conventions MODE           Use axtb (default) or xtb-6.8 conventions.
+  --alpb NAME                  Use the ALPB solvent model.
+  --gbsa NAME                  Use the GBSA solvent model.
+  --solvent-correction METHOD  Use gfn2 for g-xTB solvent calculations.
+  --etemp K                    Set the electronic temperature in kelvin.
+  --accuracy X                 Set a positive SCF accuracy multiplier (default 1).
+  --max-iter N                 Set the SCF iteration limit (default 250).
+  --scf-retry K[:N]            Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.
+  --threads N                  Use 1 to 64 worker threads (default 1).
 
-Prints one JSON line with energy (Eh), gradient (Eh/bohr) when requested,
-homo_lumo_gap_ev (null without a LUMO), near_degenerate, method, conventions,
-numerics and engine. A gap below 0.1 eV also prints a warning on stderr.
-This CLI-only command has no MCP tool and uses the worker result format
-without an experimental envelope.
-
-Requires a build with xTB. Otherwise it reports that xTB is not included
-and exits 1. See docs/xtb-worker.md and docs/xtb-licensing.md.
+See docs/xtb-worker.md (Command line)
 ```
 
 ### reshiki --cli pieces

@@ -256,19 +256,18 @@ basis, orbital consistency and limits.
 
 ### `XtbSettings` and `Provenance`
 
-`XtbSettings { method, solvent, electronic_temperature_k, accuracy, max_iterations, gfnff }`;
-`None` means the engine's default for the method, and the engine revision in the provenance
-pins what that default is.
+`XtbSettings { method, conventions, solvent, electronic_temperature_k, accuracy, max_iterations, scf_retries, gfnff }`.
+Conventions default to `axtb`, omitted overrides use the defaults pinned by the engine revision, and `scf_retries` lists temperature or iteration overrides tried after a failed SCF.
 
 - `method`: `XtbMethod::{Gfn2Xtb, GfnFf, GXtb}`. `GXtb` is g-xTB 2.0.1.
-- `solvent`: `Solvent { model: SolventModel::Alpb, name, state, correction }`, with
+- `solvent`: `Solvent { model, name, state, correction }`, with `model: SolventModel::{Alpb, Gbsa}` and
   `state: SolvationState::{Gsolv, Bar1mol, Reference}` (default `Gsolv`). For g-xTB the
   correction must be `Some(SolventCorrection::Gfn2)`: the composite
-  E = E(g-xTB) + [E(GFN2-xTB + ALPB) − E(GFN2-xTB)], named explicitly so a solvent never
+  E = E(g-xTB) + [E(GFN2-xTB + solvent) − E(GFN2-xTB)], named explicitly so a solvent never
   silently means it; a given `electronic_temperature_k` applies to all three parts. GFN2-xTB
   takes no correction.
-- GFN-FF takes no solvent, no electronic temperature, accuracy or iteration count (it has no
-  SCF), and only singlets. `gfnff` is required for GFN-FF and absent otherwise:
+- GFN-FF takes no solvent or SCF settings and accepts only singlets.
+  `gfnff` is required for GFN-FF and absent otherwise:
   `GfnFfTopology { reference: FrameHash, fragment_charges: Vec<i32> }`, the frame the topology
   was set up from and one charge per molecular fragment in the order of the fragments' first
   atoms (empty: the whole charge on the first fragment). The fragments follow from the

@@ -2,6 +2,8 @@
 //!
 //! Only the `engine` feature links the LGPL axtb fork. See `docs/xtb-licensing.md`.
 
+#[cfg(any(feature = "engine", test))]
+mod ao;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod client;
 #[cfg(feature = "engine")]
