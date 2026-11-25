@@ -1,15 +1,13 @@
-//! Validate external reaction references without inventing native reaction roles.
+//! Validate ChemDraw schemes and read reaction step references.
 use super::{
     Error, Result,
     tree::{Element, Tree},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub(crate) const NOTICE: &str = "Drawing imported; external reaction roles and condition references are not retained. The molecules, captions, and arrows remain editable. Keep the original CDX/CDXML or native ReShiki document for reaction metadata.";
 
-/// What a ChemDraw file holds that its drawing does not: reaction schemes,
-/// their steps and the pages after the first. A save in ChemDraw format
-/// cannot write them back.
+/// What a save in ChemDraw format loses from the original file.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Loss {
     pub schemes: usize,
@@ -19,16 +17,30 @@ pub struct Loss {
     pub unsupported: usize,
 }
 
-pub(crate) fn loss(text: &str) -> Result<Loss> {
+pub(crate) fn loss(text: &str, restored: &HashSet<u64>) -> Result<Loss> {
     let tree = Tree::parse_import(text)?;
     let mut loss = Loss {
         pages: tree.children(0, "page")?.len().saturating_sub(1),
         ..Loss::default()
     };
+    let kept = |index| -> Result<bool> {
+        Ok(tree
+            .node(index)?
+            .attr("id")
+            .and_then(|id| id.parse().ok())
+            .is_some_and(|id| restored.contains(&id)))
+    };
     for index in tree.descendants(0)? {
         match tree.node(index)?.tag.as_str() {
-            "scheme" => loss.schemes += 1,
-            "step" => loss.steps += 1,
+            "scheme" => {
+                let steps = tree.children(index, "step")?;
+                let mut complete = !steps.is_empty();
+                for index in steps {
+                    complete &= kept(index)?;
+                }
+                loss.schemes += usize::from(!complete);
+            }
+            "step" => loss.steps += usize::from(!kept(index)?),
             _ => {}
         }
     }
@@ -36,18 +48,42 @@ pub(crate) fn loss(text: &str) -> Result<Loss> {
     Ok(loss)
 }
 
-pub(crate) fn validate(text: &str) -> Result<bool> {
+fn has_schemes(text: &str) -> bool {
     // Serialized CDXML escapes literal '<' inside text and attribute values.
-    // Avoid another tree allocation for the usual drawing without schemes.
-    if !text.contains("<scheme") && !text.contains("<step") {
-        return Ok(false);
+    text.contains("<scheme") || text.contains("<step")
+}
+
+#[derive(Default)]
+pub(crate) struct Step {
+    pub id: u64,
+    pub representable: bool,
+    pub reactants: Vec<u64>,
+    pub products: Vec<u64>,
+    pub plusses: Vec<u64>,
+    pub arrows: Vec<u64>,
+    pub above: Vec<u64>,
+    pub below: Vec<u64>,
+    pub atom_map: Vec<[u64; 2]>,
+}
+
+pub(crate) fn validate(text: &str) -> Result<bool> {
+    Ok(!read(text)?.is_empty())
+}
+
+/// Read each scheme's steps, including references for unrepresentable steps.
+pub(crate) fn read(text: &str) -> Result<Vec<Vec<Step>>> {
+    if !has_schemes(text) {
+        return Ok(Vec::new());
     }
-    let tree = Tree::parse_import(text)?;
+    read_tree(&Tree::parse_import(text)?)
+}
+
+fn read_tree(tree: &Tree) -> Result<Vec<Vec<Step>>> {
     let nodes = tree.descendants(0)?;
     let mut ids = HashMap::new();
     // ChemDraw itself repeats an identifier, for example on linked property
     // captions. Only a reference to a repeated one is ambiguous.
-    let mut repeated = std::collections::HashSet::new();
+    let mut repeated = HashSet::new();
     let mut metadata = Vec::new();
     for &index in &nodes {
         let node = tree.node(index)?;
@@ -65,6 +101,7 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
         }
     }
     let mut references = 0usize;
+    let mut schemes: Vec<Vec<Step>> = Vec::new();
     for &index in &metadata {
         let node = tree.node(index)?;
         // A scheme or step shares its identifier with nothing.
@@ -85,9 +122,23 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
             {
                 return Err(invalid());
             }
+            schemes.push(Vec::new());
+            continue;
         } else if parent.is_none_or(|p| p.tag != "scheme") || !node.children.is_empty() {
             return Err(invalid());
         }
+        let mut step = Step {
+            id: node
+                .attr("id")
+                .ok_or_else(invalid)?
+                .parse()
+                .map_err(|_| invalid())?,
+            ..Default::default()
+        };
+        let mut representable = true;
+        let mut aggregate_map = None;
+        let mut manual_map = None;
+        let mut auto_map = None;
         for (name, value) in &node.attributes {
             if name == "id" {
                 continue;
@@ -106,7 +157,7 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
             ) {
                 return Err(invalid());
             }
-            let mut count = 0;
+            let mut list = Vec::new();
             for reference in value.split_whitespace() {
                 references += 1;
                 if references > 100_000 {
@@ -117,23 +168,68 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
                     return Err(invalid());
                 }
                 let &target = ids.get(&id).ok_or_else(invalid)?;
-                if !valid_target(&tree, &ids, &repeated, name, target)? {
+                if !valid_target(tree, &ids, &repeated, name, target)? {
                     return Err(invalid());
                 }
-                count += 1;
+                let node = tree.node(target)?;
+                let structure = matches!(node.tag.as_str(), "fragment" | "group");
+                representable &= match name.as_str() {
+                    "ReactionStepReactants" | "ReactionStepProducts" => structure,
+                    "ReactionStepObjectsAboveArrow" | "ReactionStepObjectsBelowArrow" => {
+                        structure || node.tag == "t"
+                    }
+                    _ => true,
+                };
+                let id = if name == "ReactionStepArrows"
+                    && let Some(replacement) = node.attr("SupersededBy")
+                {
+                    replacement.parse().map_err(|_| invalid())?
+                } else {
+                    u64::from(id)
+                };
+                list.push(id);
             }
-            if name.starts_with("ReactionStepAtomMap") && count % 2 != 0 {
+            if name.starts_with("ReactionStepAtomMap") && list.len() % 2 != 0 {
                 return Err(invalid());
             }
+            match name.as_str() {
+                "ReactionStepReactants" => step.reactants = list,
+                "ReactionStepProducts" => step.products = list,
+                "ReactionStepPlusses" => step.plusses = list,
+                "ReactionStepArrows" => {
+                    list.sort_unstable();
+                    list.dedup();
+                    step.arrows = list;
+                }
+                "ReactionStepObjectsAboveArrow" => step.above = list,
+                "ReactionStepObjectsBelowArrow" => step.below = list,
+                "ReactionStepAtomMap" => aggregate_map = Some(list),
+                "ReactionStepAtomMapManual" => manual_map = Some(list),
+                "ReactionStepAtomMapAuto" => auto_map = Some(list),
+                _ => {}
+            }
         }
+        let atom_map = aggregate_map.unwrap_or_else(|| {
+            manual_map
+                .into_iter()
+                .flatten()
+                .chain(auto_map.into_iter().flatten())
+                .collect()
+        });
+        step.atom_map = atom_map.as_chunks().0.to_vec();
+        step.representable = representable
+            && step.arrows.len() == 1
+            && !step.reactants.is_empty()
+            && !step.products.is_empty();
+        schemes.last_mut().ok_or_else(invalid)?.push(step);
     }
-    Ok(!metadata.is_empty())
+    Ok(schemes)
 }
 
 fn valid_target(
     tree: &Tree,
     ids: &HashMap<u32, usize>,
-    repeated: &std::collections::HashSet<u32>,
+    repeated: &HashSet<u32>,
     field: &str,
     index: usize,
 ) -> Result<bool> {
