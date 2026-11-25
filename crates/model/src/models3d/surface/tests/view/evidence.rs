@@ -10,7 +10,7 @@ fn write_points<T: Display>(svg: &mut String, points: &[[T; 2]]) {
 pub(super) fn svg(
     oracle: &Oracle<'_>,
     result: &Visible,
-    bands: usize,
+    tones: &[usize],
     counts: &Counts,
     disagreements: &[[f64; 2]],
 ) -> String {
@@ -71,7 +71,7 @@ pub(super) fn svg(
         } else {
             ([138., 143., 150.], [244., 245., 247.])
         };
-        let t = layer.band as f64 / (bands - 1) as f64;
+        let t = layer.tone as f64 / tones[layer.depth].saturating_sub(1).max(1) as f64;
         let [r, g, b] = std::array::from_fn(|i| (dark[i] + t * (light[i] - dark[i])).round() as u8);
         write!(
             scene,
@@ -85,7 +85,7 @@ pub(super) fn svg(
         }
         scene.push_str("\"/>\n");
     }
-    for rim in &result.rims {
+    for rim in result.rims.iter().rev().flatten() {
         scene.push_str(r##"<polyline fill="none" stroke="#1e2226" points=""##);
         write_points(&mut scene, rim);
         scene.push_str("\"/>\n");

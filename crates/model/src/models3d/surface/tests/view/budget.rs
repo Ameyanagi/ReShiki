@@ -120,41 +120,47 @@ fn surface_budgets() {
                     (0.35 + 0.65 * dot(normal, [-0.4, 0.5, 0.768_114_6]).max(0.)) as f32
                 })
                 .collect();
-            let start = Instant::now();
-            let output = visible(&frame.input(&mesh, 10));
-            let visible_ms = start.elapsed().as_secs_f64() * 1_000.;
-            let contours: usize = output.layers.iter().map(|layer| layer.region.len()).sum();
-            let layer_points: usize = output
-                .layers
-                .iter()
-                .flat_map(|layer| &layer.region)
-                .map(Vec::len)
-                .sum();
-            let rim_points: usize = output.rims.iter().map(Vec::len).sum();
-            let points = layer_points + rim_points;
-            eprintln!(
-                "surface budget scene={} samples={} raw={} build_ms={build_ms:.2} simplify_ms={simplify_ms:.2} triangles={} front={} pieces={} overlaps={} visible_ms={visible_ms:.2} reported_ms={:.2} layers={} contours={contours} rims={} layer_points={layer_points} rim_points={rim_points} points={points}",
-                if benzene { "12-lobe" } else { "two-lobe" },
-                97_usize.pow(3),
-                raw.triangles.len(),
-                mesh.triangles.len(),
-                output.stats.front,
-                output.stats.pieces,
-                output.stats.overlaps,
-                output.stats.millis,
-                output.layers.len(),
-                output.rims.len()
-            );
-            assert!(output.stats.front > target / 4);
-            assert!(output.stats.pieces > 100 && contours > 0 && points > 100);
             if build_ms + simplify_ms > 1_500. {
                 timing_failures.push(format!(
                     "benzene={benzene}, target={target}: mesh build took {:.2}ms, budget 1500ms",
                     build_ms + simplify_ms
                 ));
             }
-            if visible_ms > limit_ms {
-                timing_failures.push(format!("benzene={benzene}, target={target}: visibility took {visible_ms:.2}ms, budget {limit_ms}ms"));
+            for tones in [&[10][..], &[10; 4][..]] {
+                let start = Instant::now();
+                let output = visible(&frame.input(&mesh, tones));
+                let visible_ms = start.elapsed().as_secs_f64() * 1_000.;
+                let contours: usize = output.layers.iter().map(|layer| layer.region.len()).sum();
+                let layer_points: usize = output
+                    .layers
+                    .iter()
+                    .flat_map(|layer| &layer.region)
+                    .map(Vec::len)
+                    .sum();
+                let rim_points: usize = output.rims.iter().flatten().map(Vec::len).sum();
+                let points = layer_points + rim_points;
+                eprintln!(
+                    "surface budget scene={} samples={} raw={} build_ms={build_ms:.2} simplify_ms={simplify_ms:.2} triangles={} front={} pieces={} overlaps={} groups={} fragments={} limit_hits={} visible_ms={visible_ms:.2} reported_ms={:.2} layers={} contours={contours} rims={} layer_points={layer_points} rim_points={rim_points} points={points}",
+                    if benzene { "12-lobe" } else { "two-lobe" },
+                    97_usize.pow(3),
+                    raw.triangles.len(),
+                    mesh.triangles.len(),
+                    output.stats.front,
+                    output.stats.pieces,
+                    output.stats.overlaps,
+                    tones.len(),
+                    output.stats.fragments,
+                    output.stats.fragment_limit_hits,
+                    output.stats.millis,
+                    output.layers.len(),
+                    output.rims.iter().map(Vec::len).sum::<usize>()
+                );
+                assert!(output.stats.front > target / 4);
+                assert!(output.stats.pieces > 100 && contours > 0 && points > 100);
+                assert_eq!(output.stats.fragment_limit_hits, 0);
+                if tones.len() == 1 && visible_ms > limit_ms {
+                    timing_failures.push(format!("benzene={benzene}, target={target}: visibility took {visible_ms:.2}ms, budget {limit_ms}ms"));
+                }
             }
         }
     }

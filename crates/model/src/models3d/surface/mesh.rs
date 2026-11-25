@@ -110,13 +110,22 @@ static CUBE_CASES: std::sync::LazyLock<[Crossings; 256]> = std::sync::LazyLock::
 });
 
 /// Extract both levels, growing the box to contain the field when possible.
-pub fn isosurface(field: impl Fn([f32; 3]) -> f32, mut grid: Grid, iso: f32) -> Mesh {
+pub fn isosurface(field: impl Fn([f32; 3]) -> f32, grid: Grid, iso: f32) -> Mesh {
+    isosurface_with_step(field, grid, iso).0
+}
+
+/// Also return the spacing used after box growth or a coarser retry.
+pub(super) fn isosurface_with_step(
+    field: impl Fn([f32; 3]) -> f32,
+    mut grid: Grid,
+    iso: f32,
+) -> (Mesh, f32) {
     assert!(
         iso.is_finite() && iso > 0.,
         "isovalue must be finite and positive"
     );
     if grid.size.contains(&0) {
-        return Mesh::default();
+        return (Mesh::default(), grid.step);
     }
     if grid.size.iter().any(|&n| n > MAX_SIDE) {
         grid = Grid::around(
@@ -305,22 +314,9 @@ pub fn isosurface(field: impl Fn([f32; 3]) -> f32, mut grid: Grid, iso: f32) -> 
                         });
                         let id = mesh.positions.len() as u32;
                         mesh.positions.push(p);
-                        let n = std::array::from_fn(|i| {
-                            let (mut lo, mut hi) = (p, p);
-                            hi[i] += h;
-                            lo[i] -= h;
-                            let diff = (f64::from(field(hi)) - f64::from(field(lo)))
-                                / f64::from(grid.step);
-                            if positive { -diff } else { diff }
-                        });
-                        let length2 = dot(n, n);
-                        mesh.normals
-                            .push(if !length2.is_finite() || length2 < 1e-18 {
-                                needs_face_normals = true;
-                                [0.; 3]
-                            } else {
-                                unit_normal(n).map(|v| v as f32)
-                            });
+                        let n = field_normal(&field, p, h, positive);
+                        needs_face_normals |= n == [0.; 3];
+                        mesh.normals.push(n);
                         id
                     })
                 });
@@ -329,25 +325,310 @@ pub fn isosurface(field: impl Fn([f32; 3]) -> f32, mut grid: Grid, iso: f32) -> 
             }
         }
         if needs_face_normals {
-            let mut summed = vec![[0.; 3]; mesh.positions.len()];
-            for &tri in &mesh.triangles {
-                let [a, b, c] = tri.map(|v| mesh.positions[v as usize].map(f64::from));
-                let n = cross(sub(b, a), sub(c, a));
-                for v in tri {
-                    let sum = &mut summed[v as usize];
-                    for i in 0..3 {
-                        sum[i] += n[i];
-                    }
-                }
+            fill_face_normals(&mut mesh);
+        }
+        return (mesh, grid.step);
+    }
+}
+
+fn field_gradient(field: &impl Fn([f32; 3]) -> f32, p: [f32; 3], h: f32) -> Option<[f64; 3]> {
+    let gradient = std::array::from_fn(|i| {
+        let (mut lo, mut hi) = (p, p);
+        hi[i] += h;
+        lo[i] -= h;
+        (f64::from(field(hi)) - f64::from(field(lo))) / (2. * f64::from(h))
+    });
+    let length2 = dot(gradient, gradient);
+    (length2.is_finite() && length2 >= 1e-18).then_some(gradient)
+}
+
+fn field_normal(field: &impl Fn([f32; 3]) -> f32, p: [f32; 3], h: f32, positive: bool) -> [f32; 3] {
+    field_gradient(field, p, h).map_or([0.; 3], |g| outward_normal(g, positive))
+}
+
+fn outward_normal(gradient: [f64; 3], positive: bool) -> [f32; 3] {
+    let sign = if positive { -1. } else { 1. };
+    unit_normal(gradient).map(|x| (sign * x) as f32)
+}
+
+fn face_normal([a, b, c]: [[f64; 3]; 3]) -> [f64; 3] {
+    cross(sub(b, a), sub(c, a))
+}
+
+fn fill_face_normals(mesh: &mut Mesh) {
+    let mut summed = vec![[0.; 3]; mesh.positions.len()];
+    for &tri in &mesh.triangles {
+        let n = face_normal(tri.map(|v| mesh.positions[v as usize].map(f64::from)));
+        for v in tri {
+            let sum = &mut summed[v as usize];
+            for i in 0..3 {
+                sum[i] += n[i];
             }
-            for (normal, sum) in mesh.normals.iter_mut().zip(summed) {
-                if *normal == [0.; 3] {
-                    *normal = unit_normal(sum).map(|v| v as f32);
+        }
+    }
+    for (normal, sum) in mesh.normals.iter_mut().zip(summed) {
+        if *normal == [0.; 3] {
+            *normal = unit_normal(sum).map(|v| v as f32);
+        }
+    }
+}
+
+pub(super) static REFINE_FALLBACKS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// Relaxes a simplified mesh and puts its vertices back on the level set,
+/// with normals from the field gradient. Topology and orientation are kept.
+pub fn refine(mesh: &Mesh, field: impl Fn([f32; 3]) -> f32, iso: f32, step: f32) -> Mesh {
+    assert!(iso.is_finite() && iso > 0. && step.is_finite() && step > 0.);
+    let mut result = mesh.clone();
+    if mesh.triangles.is_empty() {
+        return result;
+    }
+
+    let mut degree = vec![0usize; mesh.positions.len()];
+    let mut levels = vec![iso; mesh.positions.len()];
+    for (&tri, &positive) in mesh.triangles.iter().zip(&mesh.positive) {
+        for v in tri {
+            degree[v as usize] += 1;
+            levels[v as usize] = if positive { iso } else { -iso };
+        }
+    }
+
+    // Taubin (1995), eqs. 6–8. Each directed edge occurs once on a closed,
+    // oriented mesh, so this sums the one-ring without storing it separately.
+    let mut sums = vec![[0.; 3]; mesh.positions.len()];
+    for weight in [0.5, -0.53].into_iter().cycle().take(8) {
+        sums.fill([0.; 3]);
+        for &[a, b, c] in &mesh.triangles {
+            for (v, neighbour) in [(a, b), (b, c), (c, a)] {
+                let sum = &mut sums[v as usize];
+                let p = result.positions[neighbour as usize];
+                for i in 0..3 {
+                    sum[i] += f64::from(p[i]);
                 }
             }
         }
-        return mesh;
+        for ((p, sum), &count) in result.positions.iter_mut().zip(&sums).zip(&degree) {
+            if count != 0 {
+                *p = std::array::from_fn(|i| {
+                    let x = f64::from(p[i]);
+                    (x + weight * (sum[i] / count as f64 - x)) as f32
+                });
+            }
+        }
     }
+
+    for (i, &level) in levels.iter().enumerate() {
+        (result.positions[i], result.normals[i]) =
+            project_vertex(&field, result.positions[i], mesh.positions[i], level, step);
+    }
+    if !guard_refinement(mesh, &mut result.positions) {
+        REFINE_FALLBACKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        return mesh.clone();
+    }
+    let mut needs_face_normals = false;
+    for (i, normal) in result.normals.iter_mut().enumerate() {
+        let p = result.positions[i];
+        if p == mesh.positions[i] || *normal == [0.; 3] {
+            *normal = field_normal(&field, p, 0.01 * step, levels[i] > 0.);
+        }
+        needs_face_normals |= *normal == [0.; 3];
+    }
+    if needs_face_normals {
+        fill_face_normals(&mut result);
+    }
+    result
+}
+
+fn project_vertex(
+    field: &impl Fn([f32; 3]) -> f32,
+    smooth: [f32; 3],
+    original: [f32; 3],
+    level: f32,
+    step: f32,
+) -> ([f32; 3], [f32; 3]) {
+    let mut p = smooth;
+    let mut value = field(p);
+    let mut remaining = 3;
+    let gradient = loop {
+        if !value.is_finite() {
+            return (original, [0.; 3]);
+        }
+        let Some(g) = field_gradient(field, p, 0.01 * step) else {
+            return (original, [0.; 3]);
+        };
+        if remaining == 0 || value == level {
+            break g;
+        }
+        let length2 = dot(g, g);
+        let limit = 0.5 * f64::from(step) / length2.sqrt();
+        let scale = ((f64::from(value) - f64::from(level)) / length2).clamp(-limit, limit);
+        let next = std::array::from_fn(|i| (f64::from(p[i]) - scale * g[i]) as f32);
+        if next == p {
+            break g;
+        }
+        p = next;
+        value = field(p);
+        remaining -= 1;
+    };
+    // Capped Newton steps can stop far from the level on a coarse mesh.
+    let distance = (f64::from(value) - f64::from(level)).abs() / dot(gradient, gradient).sqrt();
+    // A nearly flat field can hide a large move in that local distance estimate.
+    let displacement = sub(p.map(f64::from), original.map(f64::from));
+    if distance.is_finite()
+        && distance <= 0.05 * f64::from(step)
+        && dot(displacement, displacement) <= (0.5 * f64::from(step)).powi(2)
+    {
+        (p, outward_normal(gradient, level > 0.))
+    } else {
+        (original, [0.; 3])
+    }
+}
+
+pub(super) fn guard_refinement(mesh: &Mesh, positions: &mut [[f32; 3]]) -> bool {
+    if positions == mesh.positions {
+        return true;
+    }
+    let mut shapes = Vec::with_capacity(mesh.triangles.len());
+    let mut normals = Vec::with_capacity(mesh.triangles.len());
+    let mut bounds = Vec::with_capacity(mesh.triangles.len());
+    let mut area = 0.;
+    for t in &mesh.triangles {
+        let original = t.map(|v| mesh.positions[v as usize].map(f64::from));
+        let n = face_normal(original);
+        // An existing needle may improve while still having an angle under 3°.
+        let limit = SIN_3_DEGREES_SQUARED.min(dot(n, n) / largest_edge_product(original));
+        shapes.push((n, limit));
+        area += 0.5 * dot(n, n).sqrt();
+        let p = t.map(|v| positions[v as usize].map(f64::from));
+        normals.push(face_normal(p));
+        bounds.push(qem_bounds(p));
+    }
+    let mut grid = QemGrid::new(&bounds, &vec![true; bounds.len()], area);
+    let mut seen = vec![0; mesh.triangles.len()];
+    let mut stamp = 0;
+    let mut candidates = Vec::new();
+    let mut groups = None;
+    let mut changed: Vec<_> = positions
+        .iter()
+        .zip(&mesh.positions)
+        .map(|(a, b)| a != b)
+        .collect();
+
+    // A restored corner also changes its incident faces. Recheck them against
+    // both phases, including faces sharing just a vertex or edge.
+    for round in 0..=4 {
+        let mut restore = vec![false; positions.len()];
+        let mut checked = vec![false; mesh.triangles.len()];
+        for (id, &tri) in mesh.triangles.iter().enumerate() {
+            if !tri.iter().any(|&v| changed[v as usize]) {
+                continue;
+            }
+            let p = tri.map(|v| positions[v as usize].map(f64::from));
+            if tri
+                .iter()
+                .any(|&v| positions[v as usize] != mesh.positions[v as usize])
+                && !refine_shape_ok(shapes[id], normals[id], p)
+            {
+                for v in tri {
+                    restore[v as usize] = true;
+                }
+            }
+            checked[id] = true;
+            let bound = bounds[id];
+            grid.query(bound, &checked, &mut seen, &mut stamp, &mut candidates);
+            for &other in &candidates {
+                if (0..3)
+                    .any(|k| bound.1[k] < bounds[other].0[k] || bounds[other].1[k] < bound.0[k])
+                {
+                    continue;
+                }
+                let t = mesh.triangles[other];
+                if qem_triangles_intersect(
+                    p,
+                    normals[id],
+                    t.map(|v| positions[v as usize].map(f64::from)),
+                    normals[other],
+                    (tri, t),
+                ) {
+                    for v in tri.into_iter().chain(t) {
+                        restore[v as usize] = true;
+                    }
+                }
+            }
+        }
+        if !restore.contains(&true) {
+            return true;
+        }
+        if round == 4 {
+            break;
+        }
+        if round > 0 {
+            let groups = groups.get_or_insert_with(|| rollback_groups(mesh, positions, &shapes));
+            for (v, &group) in groups.iter().enumerate() {
+                if restore[v] {
+                    restore[group] = true;
+                }
+            }
+            for (v, &group) in groups.iter().enumerate() {
+                restore[v] = restore[group];
+            }
+        }
+        for (v, p) in positions.iter_mut().enumerate() {
+            changed[v] = restore[v] && *p != mesh.positions[v];
+            if changed[v] {
+                *p = mesh.positions[v];
+            }
+        }
+        for (id, tri) in mesh.triangles.iter().enumerate() {
+            if tri.iter().any(|&v| changed[v as usize]) {
+                let p = tri.map(|v| positions[v as usize].map(f64::from));
+                normals[id] = face_normal(p);
+                bounds[id] = qem_bounds(p);
+                grid.update(id, bounds[id]);
+            }
+        }
+    }
+    false
+}
+
+fn refine_shape_ok(shape: ([f64; 3], f64), normal: [f64; 3], p: [[f64; 3]; 3]) -> bool {
+    dot(shape.0, normal) > 0. && dot(normal, normal) >= shape.1 * largest_edge_product(p)
+}
+
+// If restoring part of a face could fold it, restore its corners together.
+// These fixed groups stop a local repair from advancing one face per round.
+fn rollback_groups(mesh: &Mesh, positions: &[[f32; 3]], shapes: &[([f64; 3], f64)]) -> Vec<usize> {
+    fn root(parent: &mut [usize], mut v: usize) -> usize {
+        while v != parent[v] {
+            parent[v] = parent[parent[v]];
+            v = parent[v];
+        }
+        v
+    }
+    let mut parent: Vec<_> = (0..positions.len()).collect();
+    for (tri, &shape) in mesh.triangles.iter().zip(shapes) {
+        let old = tri.map(|v| mesh.positions[v as usize].map(f64::from));
+        let new = tri.map(|v| positions[v as usize].map(f64::from));
+        let unsafe_mix = (1..7).any(|mask| {
+            let p = std::array::from_fn(|i| if mask & (1 << i) == 0 { old[i] } else { new[i] });
+            p != old && !refine_shape_ok(shape, face_normal(p), p)
+        });
+        if unsafe_mix {
+            let mut moved = (0..3).filter(|&i| old[i] != new[i]);
+            if let Some(first) = moved.next() {
+                let group = root(&mut parent, tri[first] as usize);
+                for i in moved {
+                    let other = root(&mut parent, tri[i] as usize);
+                    parent[other] = group;
+                }
+            }
+        }
+    }
+    for v in 0..parent.len() {
+        parent[v] = root(&mut parent, v);
+    }
+    parent
 }
 
 /// Reduce a closed surface with area-weighted Garland–Heckbert quadrics.
@@ -869,6 +1150,15 @@ fn qem_heap(
     std::collections::BinaryHeap::from(edges)
 }
 
+const SIN_3_DEGREES_SQUARED: f64 = 0.0027390523158633317;
+
+// |normal|² divided by this product gives sin² of the smallest angle.
+// The area stays measurable even when a needle's cosine rounds to one.
+fn largest_edge_product([a, b, c]: [[f64; 3]; 3]) -> f64 {
+    let [ab, bc, ca] = [sub(a, b), sub(b, c), sub(c, a)].map(|e| dot(e, e));
+    (ab * bc).max(bc * ca).max(ca * ab)
+}
+
 pub(super) fn qem_shape_ok(old_normal: [f64; 3], new_normal: [f64; 3], new: [[f64; 3]; 3]) -> bool {
     let old_length2 = dot(old_normal, old_normal);
     let new_length2 = dot(new_normal, new_normal);
@@ -879,16 +1169,7 @@ pub(super) fn qem_shape_ok(old_normal: [f64; 3], new_normal: [f64; 3], new: [[f6
     {
         return false;
     }
-    const COS_3_DEGREES_SQUARED: f64 = 0.9972609476841366;
-    for corner in 0..3 {
-        let a = sub(new[(corner + 1) % 3], new[corner]);
-        let b = sub(new[(corner + 2) % 3], new[corner]);
-        let product = dot(a, b);
-        if product > 0.0 && product * product > COS_3_DEGREES_SQUARED * dot(a, a) * dot(b, b) {
-            return false;
-        }
-    }
-    true
+    new_length2 >= SIN_3_DEGREES_SQUARED * largest_edge_product(new)
 }
 
 fn qem_bounds(points: [[f64; 3]; 3]) -> QemBounds {
