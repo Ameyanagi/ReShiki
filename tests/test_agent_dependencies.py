@@ -1,8 +1,10 @@
 """The agent dependency audit's parsers and decisions, on fixture cargo output."""
 
 import json
+import shutil
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -12,10 +14,12 @@ from build_inchi_helper import RELEASE_TARGETS
 from check_agent_dependencies import (
     AHO_CORASICK_MIT_CHOICE,
     BASELINE,
+    KDE_PROTOCOL_REVIEW,
     ROOT,
     SERDE_JSON_FORBIDDEN,
     WEBPKI_ROOT_CERTS_CDLA_REVIEW,
     allowlist_problems,
+    kde_protocol_problems,
     layout,
     license_allowed,
     reviewed_certificate_data_license,
@@ -70,6 +74,8 @@ class AgentDependencyTests(unittest.TestCase):
             root = Path(temporary)
             (root / BASELINE).parent.mkdir(parents=True)
             (root / BASELINE).write_text(json.dumps(FIXTURE_BASELINE), encoding="utf-8")
+            (root / KDE_PROTOCOL_REVIEW).parent.mkdir(parents=True)
+            shutil.copy(ROOT / KDE_PROTOCOL_REVIEW, root / KDE_PROTOCOL_REVIEW)
             lock = "version = 4\n" + "".join(
                 "\n[[package]]\n"
                 + "".join(f"{key} = {json.dumps(value)}\n" for key, value in package.items())
@@ -181,6 +187,29 @@ class AgentDependencyTests(unittest.TestCase):
             self.assertEqual(record[field], value)
         self.assertEqual(record["selected_license"], "MIT")
         self.assertEqual(set(record["upstream_texts"]), {"LICENSE-MIT", "UNLICENSE", "COPYING"})
+
+    def test_kde_protocol_crates_stay_on_the_reviewed_archives(self):
+        lock = tomllib.loads((ROOT / "Cargo.lock").read_text(encoding="utf-8"))["package"]
+        self.assertEqual(kde_protocol_problems(ROOT, lock), [])
+        plasma = next(p for p in lock if p["name"] == "wayland-protocols-plasma")
+        self.audit(cargo(tree(SERVER)), locked_packages=[plasma])
+        for field, changed in (
+            ("version", "0.3.13"),
+            ("checksum", "0" * 64),
+            ("source", "git+https://example.test/wayland-rs"),
+        ):
+            with self.subTest(field=field):
+                with self.assertRaisesRegex(ValueError, "LGPL KDE protocol files; review"):
+                    self.audit(cargo(tree(SERVER)), locked_packages=[{**plasma, field: changed}])
+        # The review comes from the audited checkout, not from this script's.
+        with tempfile.TemporaryDirectory() as temporary:
+            (Path(temporary) / KDE_PROTOCOL_REVIEW).parent.mkdir(parents=True)
+            (Path(temporary) / KDE_PROTOCOL_REVIEW).write_text('{"packages": {}}')
+            self.assertEqual(len(kde_protocol_problems(Path(temporary), [plasma])), 1)
+        # A path dependency has neither source nor checksum in Cargo.lock.
+        path = {"name": plasma["name"], "version": "0.3.13"}
+        with self.assertRaisesRegex(ValueError, r"plasma@0\.3\.13 generates code from LGPL"):
+            self.audit(cargo(tree(SERVER)), locked_packages=[path])
 
     def test_hyper_under_rmcp_fails(self):
         with self.assertRaisesRegex(ValueError, "rmcp depends on hyper for .* network-free"):

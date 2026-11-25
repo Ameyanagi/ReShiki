@@ -27,6 +27,7 @@ of adaptations, copyright notices, and license texts are recorded in:
   data/nmr/               Offline index, provenance and held-out validation
   licenses/name-aliases/   Offline retained-name catalog (OPSIN MIT; ChEBI CC BY 4.0)
   licenses/rust/           Notices omitted from published dependency archives
+                          and the KDE Wayland protocol review (LGPL-2.1-or-later)
   vendor/zune-jpeg/        Modified JPEG dependency and its upstream notices
   vendor/usvg/            Variable-font weight support in the SVG dependency
   vendor/svg2pdf/         Variable-font PDF instances and upstream notices
@@ -53,6 +54,12 @@ fixtures. Historical crates/opsin/ and crates/nazuchem* paths in retained
 attribution records identify source locations before the split; current
 naming sources and provenance live in the external nazuchem repository at the
 pin above.
+
+On Linux, the MIT crates wayland-protocols-plasma and wayland-protocols-misc
+generate Wayland bindings from KDE protocol descriptions licensed
+LGPL-2.1-or-later. THIRD-PARTY-NOTICES.txt names those files next to the
+complete LGPL text. licenses/rust/kde-wayland-protocols-lgpl-review.json
+records their sources and what the generated bindings contain.
 
 Binary distributions include a Licenses directory. It contains this notice,
 the project license texts, and THIRD-PARTY-NOTICES.txt with the source
