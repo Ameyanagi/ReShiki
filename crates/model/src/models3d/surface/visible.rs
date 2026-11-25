@@ -8,7 +8,16 @@ use i_overlay::core::{fill_rule::FillRule, overlay::ShapeType, overlay_rule::Ove
 use i_overlay::float::overlay::FloatOverlay;
 use i_overlay::i_float::adapter::FloatPointAdapter;
 
+mod coverage;
+mod runs;
+
+type Polygon = Vec<[f64; 2]>;
+type Segment = ([f64; 2], [f64; 2]);
+
 const AREA: f64 = 1e-9;
+// A fine common grid avoids slivers at T-junctions. Leave five f64 mantissa
+// bits for roundoff when the same intersection is reached by different cuts.
+const UNION_BITS: u32 = f64::MANTISSA_DIGITS - 5;
 const SEGMENTS: usize = 64;
 const RINGS: usize = 12;
 
@@ -39,17 +48,29 @@ pub struct Input<'a> {
     pub triangles: &'a [[u32; 3]],
     pub positive: &'a [bool],
     pub front: &'a [bool],
+    /// Per-vertex shading coordinate, from darkest (0) to lightest (1).
     pub lightness: &'a [f32],
     pub occluders: &'a [Occluder],
-    pub bands: usize,
+    /// Tone counts, nearest group first. At least one group is required.
+    /// A zero-tone group still has rims and mesh lines.
+    pub tones: &'a [usize],
+    pub lines: &'a [Line],
     pub tolerance: f32,
 }
 
-/// The visible region of one sign in this band and all lighter bands.
+/// A straight segment on a mesh triangle, with endpoints in screen-depth space.
+#[derive(Clone, Copy, Debug)]
+pub struct Line {
+    pub triangle: u32,
+    pub ends: [[f32; 3]; 2],
+}
+
 #[derive(Clone, Debug)]
 pub struct Layer {
     pub positive: bool,
-    pub band: usize,
+    pub depth: usize,
+    /// The region includes this tone and all lighter tones of this sign and depth.
+    pub tone: usize,
     /// Implicitly closed contours, including holes; fill with even-odd parity.
     pub region: Vec<Vec<[f32; 2]>>,
 }
@@ -59,15 +80,21 @@ pub struct Stats {
     pub front: usize,
     pub pieces: usize,
     pub overlaps: usize,
+    /// Convex fragments retained after counting coverage, before shading.
+    pub fragments: usize,
+    /// Pieces whose unresolved fragments were dropped at the work limit.
+    pub fragment_limit_hits: usize,
     pub millis: f32,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Visible {
-    /// Layers for each sign are in ascending band order, starting with its
-    /// whole visible region. Empty bands are omitted.
+    /// Nearest depth first, then positive sign first and ascending occupied tone.
     pub layers: Vec<Layer>,
-    pub rims: Vec<Vec<[f32; 2]>>,
+    /// Silhouette runs at each resolved depth.
+    pub rims: Vec<Vec<Vec<[f32; 2]>>>,
+    /// Mesh lines at each resolved depth, positive then negative.
+    pub lines: Vec<[Vec<Vec<[f32; 2]>>; 2]>,
     pub stats: Stats,
 }
 
@@ -80,11 +107,12 @@ pub(super) struct Vertex {
 }
 
 struct Piece {
-    vertices: Vec<Vertex>,
+    triangle: usize,
+    rims: Vec<usize>,
+    polygon: Polygon,
     bounds: [f32; 4],
     z: Affine,
     light: Affine,
-    positive: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -539,26 +567,39 @@ fn cross(a: [f64; 2], b: [f64; 2]) -> f64 {
     a[0] * b[1] - a[1] * b[0]
 }
 
-fn half_plane(contour: &[[f64; 2]], distance: impl Fn([f64; 2]) -> f64) -> Vec<[f64; 2]> {
-    let Some(&last) = contour.last() else {
-        return Vec::new();
-    };
-    let mut result = Vec::with_capacity(contour.len() + 1);
-    let mut a = last;
+fn edge_distance(p: [f64; 2], q: [f64; 2], v: [f64; 2]) -> f64 {
+    (q[1] - p[1]) * (v[0] - p[0]) - (q[0] - p[0]) * (v[1] - p[1])
+}
+
+// Both halves use the very same intersection vertex.
+fn split_polygon(polygon: Polygon, distance: impl Fn([f64; 2]) -> f64) -> (Polygon, Polygon) {
+    if polygon.iter().all(|&v| distance(v) <= 0.) {
+        return (polygon, Vec::new());
+    }
+    if polygon.iter().all(|&v| distance(v) >= 0.) {
+        return (Vec::new(), polygon);
+    }
+    let mut inside = Vec::with_capacity(polygon.len() + 1);
+    let mut outside = Vec::with_capacity(polygon.len() + 1);
+    let mut a = polygon[polygon.len() - 1];
     let mut da = distance(a);
-    for &b in contour {
+    for b in polygon {
         let db = distance(b);
         if (da < 0. && db > 0.) || (da > 0. && db < 0.) {
-            let t = da / (da - db);
-            result.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
+            let v = along(a, b, da / (da - db));
+            inside.push(v);
+            outside.push(v);
         }
         if db <= 0. {
-            result.push(b);
+            inside.push(b);
+        }
+        if db >= 0. {
+            outside.push(b);
         }
         a = b;
         da = db;
     }
-    result
+    (inside, outside)
 }
 
 pub(super) fn intersection_centroid(
@@ -573,10 +614,7 @@ pub(super) fn intersection_centroid(
             if p == q {
                 continue;
             }
-            if other
-                .iter()
-                .all(|v| (q[0] - p[0]) * (v[1] - p[1]) - (q[1] - p[1]) * (v[0] - p[0]) <= 0.)
-            {
+            if other.iter().all(|&v| edge_distance(p, q, v) >= 0.) {
                 return None;
             }
         }
@@ -587,7 +625,7 @@ pub(super) fn intersection_centroid(
     for i in 0..b.len() {
         let p = b[i];
         let q = b[(i + 1) % b.len()];
-        let distance = |v: [f64; 2]| (q[1] - p[1]) * (v[0] - p[0]) - (q[0] - p[0]) * (v[1] - p[1]);
+        let distance = |v| edge_distance(p, q, v);
         buffer.clear();
         let mut previous = overlap[overlap.len() - 1];
         let mut previous_distance = distance(previous);
@@ -744,11 +782,7 @@ fn batches<T: Send>(
     output.into_iter().flatten().collect()
 }
 
-/// Resolve front pieces independently, then merge their visible isobands.
-pub fn visible(input: &Input<'_>) -> Visible {
-    #[cfg(not(target_arch = "wasm32"))]
-    let started = std::time::Instant::now();
-    let mut result = Visible::default();
+fn mesh_pieces(input: &Input<'_>, lines_by_triangle: &HashMap<usize, Vec<usize>>) -> Vec<Piece> {
     let mut back_edges = HashSet::new();
     for (i, triangle) in input.triangles.iter().enumerate() {
         if input.front[i] {
@@ -770,10 +804,9 @@ pub fn visible(input: &Input<'_>) -> Visible {
     let mut work = Vec::new();
     let mut next = Vec::new();
     for (i, triangle) in input.triangles.iter().enumerate() {
-        if !input.front[i] {
+        if !input.front[i] && !lines_by_triangle.contains_key(&i) {
             continue;
         }
-        result.stats.front += 1;
         let mut indices = *triangle;
         let p = triangle.map(|j| input.positions[j as usize]);
         let Some(z) = affine(p, p.map(|p| p[2])) else {
@@ -802,7 +835,7 @@ pub fn visible(input: &Input<'_>) -> Visible {
                 let b = indices[j];
                 Vertex {
                     p: input.positions[b as usize],
-                    rim: back_edges.contains(&(a.min(b), a.max(b))),
+                    rim: input.front[i] && back_edges.contains(&(a.min(b), a.max(b))),
                     cut: usize::MAX,
                 }
             })
@@ -822,166 +855,208 @@ pub fn visible(input: &Input<'_>) -> Visible {
         for vertices in work.drain(..) {
             if valid_vertices(&vertices) {
                 pieces.push(Piece {
+                    triangle: i,
+                    polygon: vertices
+                        .iter()
+                        .map(|v| [v.p[0] as f64, v.p[1] as f64])
+                        .collect(),
                     bounds: vertex_bounds(&vertices),
-                    vertices,
+                    rims: vertices
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(e, v)| v.rim.then_some(e))
+                        .collect(),
                     z,
                     light,
-                    positive: input.positive[i],
                 });
             }
         }
     }
+    pieces
+}
+
+fn shade(contour: Polygon, light: Affine, tones: &mut [Vec<Polygon>]) {
+    if tones.is_empty() {
+        return;
+    }
+    let (min, max) = contour
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), &p| {
+            let value = light.at(p);
+            (min.min(value), max.max(value))
+        });
+    let count = tones.len();
+    let tone_at = |v: f64| ((v * count as f64).floor() as usize).min(count - 1);
+    let (first, last) = (tone_at(min), tone_at(max));
+    if first == last {
+        tones[first].push(contour);
+        return;
+    }
+    let mut remaining = contour;
+    for (tone, polygons) in tones.iter_mut().enumerate().take(last).skip(first) {
+        let threshold = (tone + 1) as f64 / count as f64;
+        let (cut, lighter) = split_polygon(remaining, |p| light.at(p) - threshold);
+        if area(&cut) > AREA {
+            polygons.push(cut);
+        }
+        remaining = lighter;
+    }
+    if area(&remaining) > AREA {
+        tones[last].push(remaining);
+    }
+}
+
+struct Batch {
+    // One entry per (depth, sign), then one list of polygons per tone.
+    shades: Vec<Vec<Vec<Polygon>>>,
+    rims: Vec<Vec<Segment>>,
+    lines: Vec<runs::LineInterval>,
+    fragments: usize,
+    limit_hits: usize,
+}
+
+impl Batch {
+    fn new(tones: &[usize]) -> Self {
+        Self {
+            shades: tones
+                .iter()
+                .flat_map(|&n| [vec![Vec::new(); n], vec![Vec::new(); n]])
+                .collect(),
+            rims: vec![Vec::new(); tones.len()],
+            lines: Vec::new(),
+            fragments: 0,
+            limit_hits: 0,
+        }
+    }
+
+    fn append(&mut self, other: Self) {
+        for (tones, more) in self.shades.iter_mut().zip(other.shades) {
+            for (target, polygons) in tones.iter_mut().zip(more) {
+                target.extend(polygons);
+            }
+        }
+        for (rims, more) in self.rims.iter_mut().zip(other.rims) {
+            rims.extend(more);
+        }
+        self.lines.extend(other.lines);
+        self.fragments += other.fragments;
+        self.limit_hits += other.limit_hits;
+    }
+}
+
+fn merge_layers(
+    shades: &[Vec<Vec<Polygon>>],
+    adapter: &FloatPointAdapter<[f64; 2], i64>,
+    tolerance: f64,
+) -> Vec<Layer> {
+    batches(shades.len(), 1, |range| {
+        let mut output = Vec::new();
+        let mut overlay = FloatOverlay::<[f64; 2], i64>::with_adapter(adapter.clone(), 0);
+        for group in range {
+            let mut cumulative = Vec::<Polygon>::new();
+            let mut layers = Vec::new();
+            for (tone, polygons) in shades[group].iter().enumerate().rev() {
+                if polygons.is_empty() {
+                    continue;
+                }
+                cumulative.extend(polygons.iter().cloned());
+                overlay.clear();
+                // All cuts stay inside the shared adapter's bounds.
+                overlay = overlay.unsafe_add_source(&cumulative, ShapeType::Subject);
+                cumulative = overlay
+                    .overlay(OverlayRule::Subject, FillRule::NonZero)
+                    .into_iter()
+                    .flatten()
+                    .filter(|c| area(c).abs() > AREA)
+                    .collect();
+                if !cumulative.is_empty() {
+                    layers.push(Layer {
+                        positive: group % 2 == 0,
+                        depth: group / 2,
+                        tone,
+                        region: cumulative
+                            .iter()
+                            .map(|c| simplify_closed(c, tolerance))
+                            .collect(),
+                    });
+                }
+            }
+            output.extend(layers.into_iter().rev());
+        }
+        output
+    })
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
+/// Resolve coverage counts on the molecule-clipped pieces and their mesh lines.
+pub fn visible(input: &Input<'_>) -> Visible {
+    #[cfg(not(target_arch = "wasm32"))]
+    let started = std::time::Instant::now();
+    let groups = input.tones.len();
+    assert!(groups > 0, "at least one depth group is required");
+    let mut lines_by_triangle = HashMap::<usize, Vec<usize>>::new();
+    for (id, line) in input.lines.iter().enumerate() {
+        let triangle = line.triangle as usize;
+        if groups > 1 || input.front[triangle] {
+            lines_by_triangle.entry(triangle).or_default().push(id);
+        }
+    }
+    let pieces = mesh_pieces(input, &lines_by_triangle);
+    let mut result = Visible::default();
+    result.stats.front = input.front.iter().filter(|&&front| front).count();
     result.stats.pieces = pieces.len();
+    let mut all = Batch::new(input.tones);
+    let tolerance = f64::from(input.tolerance);
     if !pieces.is_empty() {
         let grid = Buckets::new(&pieces);
-        let polygons: Vec<Vec<_>> = pieces
-            .iter()
-            .map(|p| {
-                p.vertices
-                    .iter()
-                    .map(|v| [f64::from(v.p[0]), f64::from(v.p[1])])
-                    .collect()
-            })
-            .collect();
-        let areas: Vec<_> = polygons.iter().map(|p| area(p)).collect();
-        let in_front = |i: usize, j: usize, point| {
-            let dz = pieces[i].z.at(point) - pieces[j].z.at(point);
-            dz > 0. || (dz == 0. && i < j)
-        };
-        let mut nearer = vec![Vec::new(); pieces.len()];
-        let mut covered = vec![false; pieces.len()];
-        let comparisons = batches(pieces.len(), 512, |range| {
-            let mut seen = vec![usize::MAX; pieces.len()];
-            let mut candidates = Vec::new();
-            let mut scratch = [Vec::with_capacity(16), Vec::with_capacity(16)];
-            let mut comparisons = Vec::new();
-            for i in range {
-                let piece = &pieces[i];
-                grid.candidates(piece.bounds, &mut seen, i, &mut candidates);
-                for &j in &candidates {
-                    if j <= i || !boxes_overlap(piece.bounds, pieces[j].bounds) {
-                        continue;
-                    }
-                    let Some((center, overlap_area)) =
-                        intersection_centroid(&polygons[i], &polygons[j], &mut scratch)
-                    else {
-                        continue;
-                    };
-                    let (back, front) = if in_front(j, i, center) {
-                        (i, j)
-                    } else {
-                        (j, i)
-                    };
-                    comparisons.push((back, front, overlap_area));
-                }
-            }
-            comparisons
-        });
-        for comparisons in comparisons {
-            result.stats.overlaps += comparisons.len();
-            for (back, front, overlap_area) in comparisons {
-                nearer[back].push((front, overlap_area));
-                covered[back] |= overlap_area >= areas[back] - AREA;
-            }
-        }
-        // A front sheet usually covers a rear face with several adjacent,
-        // disjoint triangles. Their intersection areas add without a Boolean
-        // operation; overlapping candidates are conservatively left out.
-        for i in 0..pieces.len() {
-            if covered[i] {
-                continue;
-            }
-            let mut disjoint: Vec<usize> = Vec::new();
-            let mut total = 0.;
-            for &(j, overlap_area) in &nearer[i] {
-                if disjoint.iter().all(|&k| {
-                    !nearer[j].iter().any(|&(n, _)| n == k)
-                        && !nearer[k].iter().any(|&(n, _)| n == j)
-                }) {
-                    total += overlap_area;
-                    if total >= areas[i] - AREA {
-                        covered[i] = true;
-                        break;
-                    }
-                    disjoint.push(j);
-                }
-            }
-        }
-        let bands = input.bands.max(1);
-        // All differences and unions share the same integer grid. Recentring
-        // and rescaling each small piece would introduce cracks at shared cuts.
-        let adapter = FloatPointAdapter::with_iter_conservative(polygons.iter().flatten());
-        let partial = batches(pieces.len(), 512, |range| {
-            let mut raw = vec![vec![Vec::<Vec<[f64; 2]>>::new(); bands]; 2];
-            let mut overlay = FloatOverlay::<[f64; 2]>::with_adapter(adapter.clone(), 0);
-            let mut segments = Vec::new();
+        let nearer = coverage::nearer_pieces(&pieces, &grid, input.front);
+        result.stats.overlaps = nearer.iter().map(Vec::len).sum();
+
+        for batch in batches(pieces.len(), 512, |range| {
+            let mut batch = Batch::new(input.tones);
             let mut seen = vec![usize::MAX; pieces.len()];
             let mut candidates = Vec::new();
             let mut stamp = 0;
             for i in range {
                 let piece = &pieces[i];
-                let regions = if covered[i] {
-                    Vec::new()
-                } else if nearer[i].is_empty() {
-                    vec![polygons[i].clone()]
-                } else {
-                    let clips: Vec<_> = nearer[i]
-                        .iter()
-                        .map(|&(j, _)| polygons[j].clone())
-                        .collect();
-                    overlay.clear();
-                    // These safe builder methods require contours inside the
-                    // adapter bounds, which contain every piece and every cut.
-                    overlay = overlay
-                        .unsafe_add_source(&polygons[i], ShapeType::Subject)
-                        .unsafe_add_source(&clips, ShapeType::Clip);
-                    overlay
-                        .overlay(OverlayRule::Difference, FillRule::NonZero)
-                        .into_iter()
-                        .flatten()
-                        .collect()
-                };
-                for contour in regions {
-                    if contour.len() < 3 || area(&contour).abs() <= AREA {
-                        continue;
-                    }
-                    let (min, max) = contour.iter().fold(
-                        (f64::INFINITY, f64::NEG_INFINITY),
-                        |(min, max), &p| {
-                            let l = piece.light.at(p);
-                            (min.min(l), max.max(l))
+                let front = input.front[piece.triangle];
+                let sign = usize::from(!input.positive[piece.triangle]);
+                let lines = lines_by_triangle.get(&piece.triangle);
+                if groups > 1 || lines.is_some() || !coverage::fully_covered(i, &pieces, &nearer) {
+                    let (kept, limited) = coverage::resolve(
+                        piece,
+                        &nearer[i],
+                        &pieces,
+                        groups,
+                        lines.is_some(),
+                        |polygon, depth| {
+                            if let Some(lines) = lines {
+                                for &id in lines {
+                                    if let Some(interval) =
+                                        runs::clip_line(&input.lines[id], &polygon)
+                                    {
+                                        batch.lines.push(runs::LineInterval {
+                                            source: id,
+                                            depth,
+                                            interval,
+                                        });
+                                    }
+                                }
+                            }
+                            if front && depth < groups {
+                                shade(polygon, piece.light, &mut batch.shades[2 * depth + sign]);
+                            }
                         },
                     );
-                    let first = ((min.max(0.) * bands as f64).floor() as usize).min(bands - 1);
-                    let last = ((max.max(0.) * bands as f64).floor() as usize).min(bands - 1);
-                    for (band, target) in raw[usize::from(!piece.positive)]
-                        .iter_mut()
-                        .enumerate()
-                        .take(last + 1)
-                        .skip(first)
-                    {
-                        let mut cut = contour.clone();
-                        if band > 0 {
-                            let lower = band as f64 / bands as f64;
-                            cut = half_plane(&cut, |p| lower - piece.light.at(p));
-                        }
-                        if band + 1 < bands {
-                            let upper = (band + 1) as f64 / bands as f64;
-                            cut = half_plane(&cut, |p| piece.light.at(p) - upper);
-                        }
-                        if cut.len() >= 3 && area(&cut).abs() > AREA {
-                            target.push(cut);
-                        }
-                    }
+                    batch.fragments += kept;
+                    batch.limit_hits += usize::from(limited);
                 }
-                for e in 0..piece.vertices.len() {
-                    let b = piece.vertices[e];
-                    if !b.rim {
-                        continue;
-                    }
-                    let a = piece.vertices[(e + piece.vertices.len() - 1) % piece.vertices.len()];
-                    let a = [a.p[0] as f64, a.p[1] as f64];
-                    let b = [b.p[0] as f64, b.p[1] as f64];
+                // Area coverage cannot establish visibility on a silhouette edge.
+                for &e in &piece.rims {
+                    let a = piece.polygon[(e + piece.polygon.len() - 1) % piece.polygon.len()];
+                    let b = piece.polygon[e];
                     let bounds = [
                         a[0].min(b[0]) as f32,
                         a[1].min(b[1]) as f32,
@@ -990,87 +1065,41 @@ pub fn visible(input: &Input<'_>) -> Visible {
                     ];
                     grid.candidates(bounds, &mut seen, stamp, &mut candidates);
                     stamp += 1;
-                    let mut hidden = Vec::new();
-                    for &j in &candidates {
-                        if j == i || !boxes_overlap(bounds, pieces[j].bounds) {
-                            continue;
+                    let covers = candidates.iter().filter_map(|&j| {
+                        let other = &pieces[j];
+                        if other.triangle == piece.triangle
+                            || !input.front[other.triangle]
+                            || !boxes_overlap(bounds, other.bounds)
+                        {
+                            return None;
                         }
-                        if let Some((start, end)) = segment_interval(a, b, &polygons[j]) {
-                            let t = (start + end) * 0.5;
-                            let midpoint = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
-                            if in_front(j, i, midpoint) {
-                                hidden.push((start, end));
-                            }
-                        }
-                    }
-                    hidden.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
-                    let mut cursor: f64 = 0.;
-                    for (start, end) in hidden {
-                        if start > cursor {
-                            segments.push((along(a, b, cursor), along(a, b, start)));
-                        }
-                        cursor = cursor.max(end);
-                    }
-                    if cursor < 1. {
-                        segments.push((along(a, b, cursor), b));
-                    }
-                }
-            }
-            (raw, segments)
-        });
-        let mut raw = vec![vec![Vec::<Vec<[f64; 2]>>::new(); bands]; 2];
-        let mut segments = Vec::new();
-        for (mut regions, mut edges) in partial {
-            for sign in 0..2 {
-                for band in 0..bands {
-                    raw[sign][band].append(&mut regions[sign][band]);
-                }
-            }
-            segments.append(&mut edges);
-        }
-        let merged = batches(2, 1, |range| {
-            let mut output = Vec::new();
-            let mut overlay = FloatOverlay::<[f64; 2]>::with_adapter(adapter.clone(), 0);
-            for sign in range {
-                let raw = &raw[sign];
-                let mut cumulative = Vec::<Vec<[f64; 2]>>::new();
-                let mut layers = Vec::new();
-                for band in (0..bands).rev() {
-                    if raw[band].is_empty() {
-                        continue;
-                    }
-                    cumulative.extend(raw[band].iter().cloned());
-                    if cumulative.is_empty() {
-                        continue;
-                    }
-                    overlay.clear();
-                    overlay = overlay.unsafe_add_source(&cumulative, ShapeType::Subject);
-                    cumulative = overlay
-                        .overlay(OverlayRule::Subject, FillRule::NonZero)
-                        .into_iter()
-                        .flatten()
-                        .filter(|c| area(c).abs() > AREA)
-                        .collect();
-                    let region: Vec<_> = cumulative
-                        .iter()
-                        .map(|c| simplify_closed(c, input.tolerance as f64))
-                        .collect();
-                    if region.is_empty() {
-                        continue;
-                    }
-                    layers.push(Layer {
-                        positive: sign == 0,
-                        band,
-                        region,
+                        let (lo, hi) = segment_interval(a, b, &other.polygon)?;
+                        coverage::in_front(&pieces, j, i, along(a, b, (lo + hi) * 0.5))
+                            .then_some((lo, hi))
                     });
+                    runs::rim_segments(a, b, covers, &mut batch.rims);
                 }
-                output.extend(layers.into_iter().rev());
             }
-            output
-        });
-        result.layers = merged.into_iter().flatten().collect();
-        result.rims = chain(segments, input.tolerance as f64);
+            batch
+        }) {
+            all.append(batch);
+        }
+
+        // A common integer grid keeps cuts on adjacent pieces together.
+        let adapter = FloatPointAdapter::with_iter_and_coordinate_bits(
+            pieces.iter().flat_map(|p| &p.polygon),
+            UNION_BITS,
+        );
+        result.layers = merge_layers(&all.shades, &adapter, tolerance);
     }
+    result.stats.fragments = all.fragments;
+    result.stats.fragment_limit_hits = all.limit_hits;
+    result.rims = all
+        .rims
+        .into_iter()
+        .map(|rims| chain(rims, tolerance))
+        .collect();
+    result.lines = runs::chain_lines(all.lines, input);
     #[cfg(not(target_arch = "wasm32"))]
     {
         result.stats.millis = started.elapsed().as_secs_f32() * 1000.;
@@ -1093,7 +1122,7 @@ pub(super) fn segment_interval(
     for i in 0..contour.len() {
         let p = contour[i];
         let q = contour[(i + 1) % contour.len()];
-        let distance = |v: [f64; 2]| (q[1] - p[1]) * (v[0] - p[0]) - (q[0] - p[0]) * (v[1] - p[1]);
+        let distance = |v| edge_distance(p, q, v);
         let da = distance(a);
         let db = distance(b);
         let delta = db - da;
@@ -1215,7 +1244,7 @@ fn chain(segments: Vec<([f64; 2], [f64; 2])>, tolerance: f64) -> Vec<Vec<[f32; 2
     for (a, b) in segments {
         let mut endpoints = [0; 2];
         for (i, p) in [a, b].into_iter().enumerate() {
-            let key = ((p[0] * 1e4).round() as i64, (p[1] * 1e4).round() as i64);
+            let key = runs::endpoint_key(p);
             endpoints[i] = *lookup.entry(key).or_insert_with(|| {
                 points.push([key.0 as f64 * 1e-4, key.1 as f64 * 1e-4]);
                 adjacency.push(Vec::new());

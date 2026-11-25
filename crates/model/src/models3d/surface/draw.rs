@@ -271,7 +271,8 @@ impl Prepared {
             front: &front,
             lightness: &lightness,
             occluders: &occluders,
-            bands: BANDS,
+            tones: &[BANDS],
+            lines: &[],
             tolerance: TOLERANCE,
         });
         // An isovalue above the field's peak leaves nothing to draw.
@@ -297,7 +298,8 @@ impl Prepared {
             front: &self.front,
             lightness: &[],
             occluders: &[],
-            bands: BANDS,
+            tones: &[BANDS],
+            lines: &[],
             tolerance: TOLERANCE,
         };
         visible::front_depth(&input, [x, y]).is_none_or(|depth| depth <= z)
@@ -317,13 +319,14 @@ impl Prepared {
             .visible
             .layers
             .into_iter()
+            .filter(|layer| layer.depth == 0)
             .map(|layer| {
                 let base = if layer.positive {
                     POSITIVE
                 } else {
                     NEGATIVE[usize::from(dark)]
                 };
-                let t = (layer.band as f32 + 0.5) / BANDS as f32;
+                let t = (layer.tone as f32 + 0.5) / BANDS as f32;
                 let shaded = if t < 0.6 {
                     super::super::mix(base, super::super::BLACK, (0.6 - t) / 0.6 * 0.45)
                 } else {
@@ -338,9 +341,7 @@ impl Prepared {
                 (region, color)
             })
             .collect();
-        let rims = self
-            .visible
-            .rims
+        let rims = self.visible.rims[0]
             .iter()
             .filter(|r| {
                 r.windows(2)
