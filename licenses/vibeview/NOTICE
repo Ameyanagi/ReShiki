@@ -1,0 +1,14 @@
+VibeView test data
+==================
+
+tests/fixtures/qc/orca/ contains two unmodified orca_2mkl Molden files from
+VibeView (https://github.com/ClevinLiju/VibeView), commit
+1ff906a7e74e3f83b79370f0f80a07acf7028fc9.
+
+  orca611_water_tzvp.molden
+    Sources/MolChecks/TestData/analysis/water_tzvp.molden
+  orca611_h2co_tddft.molden
+    Sources/MolChecks/TestData/io/orca/h2co_tddft.molden.input
+
+These fixtures are test data only. They retain VibeView's MIT license and
+copyright notice, reproduced in LICENSE in this directory.
