@@ -48,7 +48,7 @@ Shortcuts that start at once: right-click the molecule and choose **Calculate (x
   alt="The xTB calculation card for acetic acid under Predict: Task Optimize, Method GFN2-xTB, Charge 0 and Unpaired electrons 0 from the drawing, Solvent None (gas phase), the note that no 3D model exists yet, Hold selected atoms fixed, and the open Advanced settings: Accuracy 1.0, Electronic temp. 300 K, Max SCF iterations 250, xtb 6.8 compatible, Threads Auto (8), Optimizer convergence Normal, and the Run (⌘R) button."
 />
 
-If the molecule has no 3D model yet, **Run** first makes one with MMFF94s; if the drawing changed since the model was made, it updates the model first. Either is its own Undo step. The 2D drawing never moves.
+If the molecule has no 3D model yet, **Run** first makes one with MMFF94s (for structures MMFF94s cannot handle, such as many metal complexes, make or open a 3D model first); if the drawing changed since the model was made, it updates the model first. Either is its own Undo step. The 2D drawing never moves.
 
 While it runs, the card shows the step, the energy change and the time, for example `Optimizing · step 12 · ΔE −2.1 × 10⁻⁵ Eh · 3.2 s`, and the 3D model follows the optimization. **Cancel** stops at once and applies no xTB result. A 3D model made or updated for this run stays; Undo reverses it.
 
@@ -88,10 +88,10 @@ When the HOMO–LUMO gap is below 0.1 eV, a warning appears under the header: _N
 
 ## Optimized geometries
 
-When an optimization finishes, ReShiki first compares stereocentres and double-bond geometry with the drawing. If none changed, the optimized geometry replaces the molecule's 3D model as one Undo step (`Applied xTB geometry · ⌘Z undoes`). If one changed, or the check could not run, nothing is applied until you choose **Apply anyway** or **Discard**. The 2D drawing does not move.
+When an optimization finishes, ReShiki first compares stereocentres and double-bond geometry with the drawing. If none changed, the optimized geometry replaces the molecule's 3D model as one Undo step (`Applied xTB geometry · ⌘Z undoes`). If one changed, the check could not run, or an edit is still open, nothing is applied until you choose **Apply anyway** or **Discard**. The 2D drawing does not move.
 
 - An optimization that reaches the step limit before converging can still apply its last geometry, and says `Stopped after N steps`.
-- If you edited the molecule or its 3D model while it ran, the result is kept but the model is not moved.
+- If you changed the molecule's atoms or bonds, or its 3D coordinates, while it ran, the result is kept but the model is not moved.
 
 If you later change the molecule's atoms or bonds, its results stay readable but greyed. **Recalculate** appears when the card can repeat that calculation.
 
@@ -112,10 +112,10 @@ Errors appear in the palette, with an action where one helps:
 
 ## File size
 
-Results are saved in the `.rsk` file with the molecule and kept small on purpose: the settings, the starting and final geometries, the energy of every step, charges, dipole, bond orders and orbital energies. The geometries of intermediate steps and the gradients are left out; after reopening, clicking such a step says it is not saved in the file. To keep them, turn on **Keep full results in this file** before you save. The palette footer shows **Saved in file** for each result.
+Results are saved in the `.rsk` file with the molecule and kept small on purpose: the method and SCF settings, the starting and final geometries, the energy of every step, charges, dipole, bond orders and orbital energies. The geometries of intermediate steps and the gradients are left out; after reopening, clicking such a step says it is not saved in the file. To keep them, turn on **Keep full results in this file** before you save. The palette footer shows **Saved in file** for each result.
 
 - **Keep full results in this file** also saves the step geometries and gradients of that result, at the size it shows.
-- The **Log** tab's SCF details are kept only while the app is open. Copy them first if you need them.
+- The **Log** tab's SCF details, and the threads, optimizer convergence and held atoms of a run, are kept only while the app is open. Copy the log first if you need it.
 - When the results in a document exceed 5 MB, Save asks once. If some xTB results keep full data, it offers **Make lighter**, which drops that data; otherwise it offers **Save**. Data imported from other programs cannot be recomputed, so it stays.
 
 <Screenshot

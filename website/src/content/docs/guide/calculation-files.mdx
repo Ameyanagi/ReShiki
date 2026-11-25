@@ -16,7 +16,7 @@ Writing inputs and reading outputs works in every ReShiki build, Windows include
 ReShiki writes a text input for another program from the molecule's 3D model. Nothing runs in ReShiki.
 
 1. Select one molecule.
-2. Open **Export → Input for Gaussian / ORCA / GAMESS…**, or search the command palette for **Export input for Gaussian / ORCA / GAMESS…**. If the molecule has no 3D model, **Generate 3D model** makes one with MMFF94s first.
+2. Open **Export → Input for Gaussian / ORCA / GAMESS…**, or search the command palette for **Export input for Gaussian / ORCA / GAMESS…**. If the molecule has no 3D model, **Generate 3D model** makes one with MMFF94s first; for structures MMFF94s cannot handle, such as many metal complexes, make or open a 3D model another way.
 3. Choose the **Program**: **Gaussian**, **ORCA**, **GAMESS** or **XYZ** (coordinates only).
 4. Pick a **Template**, or set **Method**, **Basis** and **Task** yourself. The built-in templates are `B3LYP-D3BJ/def2-SVP opt+freq`, `r2SCAN-3c opt+freq` (ORCA only) and `HF/6-31G(d) single point`. **Save as template…** keeps your own.
 5. Check **Charge** and **Multiplicity**. They come from the charges and radicals drawn on the molecule, not from an xTB calculation: if you set another charge or spin there, or opened a file whose ion or spin state the drawing could not show, enter it here. Then set **Cores**, **Memory (GB)**, **Title** and **Extra keywords**.
