@@ -4595,6 +4595,7 @@ dependencies = [
  "reshiki-model",
  "reshiki-process",
  "reshiki-process-heap",
+ "reshiki-qcdata",
  "reshiki-windows",
  "reshiki-xtb-worker",
  "resvg",
@@ -4826,6 +4827,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "reshiki-qcdata"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "miniz_oxide 0.8.9",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "reshiki-web"
 version = "0.1.0"
 dependencies = [
@@ -4873,6 +4886,7 @@ dependencies = [
  "axtb-driver",
  "reshiki-process",
  "reshiki-process-heap",
+ "reshiki-qcdata",
  "serde",
  "serde_json",
  "thiserror 2.0.20",

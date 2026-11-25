@@ -919,6 +919,16 @@ explains how the crates and modules fit together.
 - `crates/python/src/render.rs`
 - `crates/python/src/styles.rs`
 
+## reshiki-qcdata
+
+- `crates/qcdata/src/basis.rs`: Basis sets, molecular orbitals and the canonical atomic-orbital contract.
+- `crates/qcdata/src/capabilities.rs`: Method × task capabilities and calculation admission checks.
+- `crates/qcdata/src/compact.rs`: Compact encodings for floating-point arrays in their field's declared units.
+- `crates/qcdata/src/frame.rs`: Exact molecular frames, their SHA-256 identity, and trajectories.
+- `crates/qcdata/src/lib.rs`: Quantum chemistry data, canonical orbital conventions, and storage formats.
+- `crates/qcdata/src/molden.rs`: Conversion between Molden and canonical atomic-orbital order and normalization.
+- `crates/qcdata/src/result.rs`: Calculation results, settings, provenance, and the saved (light) form.
+
 ## reshiki-web
 
 - `crates/web/src/lib.rs`: Headless ReShiki for the browser
@@ -929,10 +939,12 @@ explains how the crates and modules fit together.
 
 ## reshiki-xtb-worker
 
+- `crates/xtb-worker/src/ao.rs`: Conversion from axtb's spherical AOs to qcdata's unit-norm canonical AOs.
 - `crates/xtb-worker/src/client.rs`: Persistent, synchronous supervision of one bounded xTB worker.
-- `crates/xtb-worker/src/engine.rs`: Warm-started GFN2-xTB calculations through the axtb driver.
+- `crates/xtb-worker/src/engine.rs`: Warm-started calculations through the pinned axtb driver.
 - `crates/xtb-worker/src/lib.rs`: The xTB protocol, client and engine-backed worker.
-- `crates/xtb-worker/src/protocol.rs`: Version 1 of the ReShiki xTB worker wire format.
+- `crates/xtb-worker/src/protocol.rs`: Version 2 of the ReShiki xTB worker wire format.
+- `crates/xtb-worker/src/protocol/wire_orbitals.rs`: Orbital metadata on the wire.
 - `crates/xtb-worker/src/worker.rs`: Request dispatch and error responses for the xTB worker.
 
 ## reshiki-geometry
