@@ -1,6 +1,8 @@
 //! Shared test helpers; each reader's tests live in their own module below.
 use super::*;
 
+mod orbital;
+
 /// The bytes of `tests/fixtures/qc/<name>`.
 pub(super) fn fixture(name: &str) -> Vec<u8> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

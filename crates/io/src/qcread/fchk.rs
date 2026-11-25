@@ -1041,7 +1041,3 @@ fn vibrations(fields: &Fields, axes: usize, n_atoms: usize) -> Result<Option<Vib
 #[cfg(test)]
 #[path = "tests/fchk.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "tests/orbital.rs"]
-mod orbital_tests;

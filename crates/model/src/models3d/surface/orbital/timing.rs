@@ -70,7 +70,7 @@ fn measure(name: &str, carbons: usize) {
     let points: Vec<_> = centres.iter().map(|p| p.map(|x| x as f32)).collect();
     let field = OrbitalField::new(&basis, &row, &centres).unwrap();
     let start = Instant::now();
-    let grid = orbital_grid(&points).unwrap();
+    let grid = orbital_grid(&field, &points, ISO).unwrap();
     let value = |p| field.value(p);
     let sample_time = Cell::new(Duration::ZERO);
     let samples = Cell::new(0usize);

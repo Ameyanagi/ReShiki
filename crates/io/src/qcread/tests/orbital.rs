@@ -5,7 +5,7 @@
 //! expands a finite Legendre polynomial, independently of the evaluator's recurrence.
 //! The fixture tests compare this evaluator with signed grid values from PySCF,
 //! including ORCA references whose convention is fixed by implied AO overlap.
-use crate::qcread::tests::{fixture, open};
+use super::{fixture, open};
 use reshiki_model::models3d::surface::orbital::{OrbitalField, orbital_meshes};
 use reshiki_qcdata::{
     ANGSTROM_PER_BOHR, BasisSet, CartesianNorm, Frame, Orbitals, Shell, mo_from_molden,
@@ -275,27 +275,24 @@ fn compare(stem: &str) {
     let n_ao: usize = basis.shells.iter().map(Shell::n_functions).sum();
     let alpha = &orbitals.alpha;
     let mut worst = 0.0_f64;
-    let mut scale = 0.0_f64;
     for orbital in &reference.orbitals {
         let index = alpha.rows.binary_search(&orbital.index).unwrap();
         let row = &alpha.coefficients[index * n_ao..(index + 1) * n_ao];
         let field = OrbitalField::new(basis, row, &frame.positions_angstrom).unwrap();
         for (point, expected) in reference.points.iter().zip(&orbital.values) {
-            let point = point.map(|x| (x * ANGSTROM_PER_BOHR) as f32);
+            let point = point.map(|x| x * ANGSTROM_PER_BOHR);
             let error = (f64::from(field.value(point)) - expected).abs();
-            assert!(error.is_finite());
-            worst = worst.max(error);
-            scale = scale.max(expected.abs());
+            let scale = expected.abs().max(1e-3);
+            let tolerance = 1e-6 * scale;
+            assert!(
+                error <= tolerance,
+                "{stem} production orbital {} at {point:?}: |error| = {error:e}, reference = {expected:e}, tolerance = {tolerance:e}",
+                orbital.index
+            );
+            worst = worst.max(error / scale);
         }
     }
-    eprintln!(
-        "production {stem}: max |error| = {worst:.3e}, max |reference| = {scale:.3e}, relative error = {:.3e}",
-        worst / scale
-    );
-    assert!(
-        worst <= 1e-6 * scale,
-        "{stem} production: max |error| = {worst:e}, max |reference| = {scale:e}"
-    );
+    eprintln!("production {stem}: max scaled point error = {worst:.3e}");
 }
 
 macro_rules! reference_tests {
