@@ -1,0 +1,15 @@
+[package]
+name = "reshiki-qcdata"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Quantum chemistry data types and validation for ReShiki"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"] }
+thiserror = "2"
+base64 = "0.22"
+miniz_oxide = "0.8"

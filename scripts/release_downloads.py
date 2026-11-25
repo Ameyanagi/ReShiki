@@ -24,11 +24,6 @@ VERSION = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-
 def release_version(tag: str) -> str:
     if tag.startswith("nightly-"):
         version = tag.removeprefix("nightly-")
-        if not re.fullmatch(
-            r"[0-9]+\.[0-9]+\.[0-9]+-nightly\.[1-9][0-9]{7}\.[1-9][0-9]*\.[1-9][0-9]*",
-            version,
-        ):
-            raise ValueError("Invalid nightly release tag")
     elif tag.startswith("v"):
         version = tag.removeprefix("v")
     else:
@@ -38,24 +33,25 @@ def release_version(tag: str) -> str:
     return version
 
 
-def platforms(version: str) -> list[tuple]:
-    nightly = "-nightly." in version
+def platforms(*, nightly: bool = False) -> list[tuple]:
     return [row for row in PLATFORMS if not (nightly and row[2] == "macos-x64")]
 
 
-def filenames(version: str) -> list[str]:
+def filenames(version: str, *, nightly: bool = False) -> list[str]:
     return [
         f"reshiki-{version}-{platform}{suffix}"
-        for _, _, platform, installer, portable in platforms(version)
+        for _, _, platform, installer, portable in platforms(nightly=nightly)
         for suffix in (installer, portable)
         if suffix
-    ]
+    ] + [f"reshiki-{version}-source.tar.gz"]
 
 
-def verify_assets(directory: Path, version: str, windows_signing: str = "unsigned") -> list[str]:
+def verify_assets(
+    directory: Path, version: str, windows_signing: str = "unsigned", *, nightly: bool = False
+) -> list[str]:
     if windows_signing not in {"required", "unsigned"}:
         raise ValueError("Expected required or unsigned Windows signing mode")
-    expected = filenames(version)
+    expected = filenames(version, nightly=nightly)
     found = {path.name for path in directory.glob("reshiki-*")}
     required = set(expected) | {name + ".sha256" for name in expected}
     if found != required:
@@ -132,7 +128,10 @@ def prepare(directory: Path, repository: str, tag: str, windows_signing: str = "
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("Expected an owner/repository name")
     version = release_version(tag)
-    checksums = verify_assets(directory, version, windows_signing)
+    # Publishing workflows select their platform matrix from the tag prefix;
+    # prerelease identifiers remain part of every package filename.
+    nightly = tag.startswith("nightly-")
+    checksums = verify_assets(directory, version, windows_signing, nightly=nightly)
     base = f"https://github.com/{repository}/releases/download/{quote(tag, safe='')}"
 
     def link(name: str, label: str) -> str:
@@ -144,7 +143,7 @@ def prepare(directory: Path, repository: str, tag: str, windows_signing: str = "
         "| Operating system | Architecture | Installer | Portable archive |",
         "| --- | --- | --- | --- |",
     ]
-    for system, architecture, platform, installer, portable in platforms(version):
+    for system, architecture, platform, installer, portable in platforms(nightly=nightly):
         stem = f"reshiki-{version}-{platform}"
         installation = (
             link(stem + installer, "DMG" if installer == ".dmg" else "Setup EXE")
@@ -153,7 +152,13 @@ def prepare(directory: Path, repository: str, tag: str, windows_signing: str = "
         )
         archive = link(stem + portable, "ZIP" if portable == ".zip" else "tar.gz")
         lines.append(f"| {system} | {architecture} | {installation} | {archive} |")
-    if len(platforms(version)) < len(PLATFORMS):
+    lines.extend(
+        [
+            "",
+            link(f"reshiki-{version}-source.tar.gz", "Source code with xTB (tar.gz)"),
+        ]
+    )
+    if nightly:
         lines.extend(
             [
                 "",
