@@ -166,6 +166,7 @@ explains how the crates and modules fit together.
 - `src/app/popover.rs`: A menu or panel anchored to a toolbar button, drawn over the surrounding rows so that nothing moves.
 - `src/app/printing.rs`
 - `src/app/prompt.rs`: Questions the app asks in its own dialog
+- `src/app/qc_export.rs`: Export input for Gaussian, ORCA and GAMESS
 - `src/app/reaction_mapping.rs`: The reaction inspector edits chemical map numbers and reviews detached fits.
 - `src/app/reactions.rs`
 - `src/app/recovery_capture.rs`: Opt-in real-renderer recovery fixtures, also runnable on the unmodified base.
@@ -270,6 +271,7 @@ explains how the crates and modules fit together.
 - `src/cli/commands.rs`: The command grammar and help text for `reshiki --cli`.
 - `src/cli/compose.rs`: `reshiki --cli compose`
 - `src/cli/convert.rs`: `reshiki --cli convert`
+- `src/cli/export_input.rs`: Cartesian XYZ to quantum-chemistry input, without a drawing import.
 - `src/cli/host.rs`: The in-process `HeadlessHost` a CLI command runs on, called through `ToolHost::call` like `reshiki --mcp` calls it.
 - `src/cli/io.rs`: The CLI's file and standard-input access
 - `src/cli/mcp_usage.rs`: Shared MCP help and heap limits for headless entry points.
@@ -653,6 +655,21 @@ explains how the crates and modules fit together.
 - `crates/io/src/payload.rs`: Editable drawing snapshots carried by ordinary PNG, SVG, and PDF figures.
 - `crates/io/src/piece_library.rs`: Libraries of equipment pieces
 - `crates/io/src/preview.rs`: The editor's PNG preview of a drawing, shared by the assistant's canvas tools, the MCP `render` and `convert` tools, the CLI and the browser library, so every surface draws the same pixels.
+- `crates/io/src/qc_input.rs`: Quantum chemistry input files and Cartesian geometry exports.
+- `crates/io/src/qc_input/gamess.rs`: GAMESS-US input
+- `crates/io/src/qc_input/gaussian.rs`: Gaussian 16 input
+- `crates/io/src/qc_input/hess.rs`: ORCA `.hess` files from a Cartesian Hessian, for `InHess Read`.
+- `crates/io/src/qc_input/orca.rs`: ORCA 6 input
+- `crates/io/src/qc_input/sdf.rs`: SDF records with V3000 3D connection tables.
+- `crates/io/src/qc_input/xyz.rs`: XYZ files, one frame or a trajectory.
+- `crates/io/src/qcread.rs`: Readers for quantum chemistry files, from geometries to calculated results.
+- `crates/io/src/qcread/fchk.rs`: Gaussian formatted checkpoints, read from the documented record layout.
+- `crates/io/src/qcread/gaussian.rs`: Gaussian log jobs, coordinate steps, and results.
+- `crates/io/src/qcread/input.rs`: Geometry sections of Gaussian, ORCA and GAMESS input files.
+- `crates/io/src/qcread/molden.rs`: Molden records, converted at the boundary to the canonical AO convention.
+- `crates/io/src/qcread/orca.rs`: ORCA output read job by job into geometries, energies, orbital levels and vibrations.
+- `crates/io/src/qcread/sdf.rs`: Molecular geometries from native MOL and SD records.
+- `crates/io/src/qcread/xyz.rs`: Molecular geometries from plain and extended XYZ.
 - `crates/io/src/recovery.rs`
 - `crates/io/src/svg_drawing.rs`: Bounded SVG import as ordinary, editable vector graphics.
 - `crates/io/src/svg_drawing/css.rs`: Remove unsupported CSS effects without changing selectors or the cascade.
@@ -879,6 +896,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/scene/projected_bonds.rs`: Secondary rails in a retained ring face, projected without rescaling XY.
 - `crates/model/src/scene/svg.rs`: SVG serialization of the scene primitives.
 - `crates/model/src/scene/table.rs`: Table cells are independently painted native drawing scopes.
+- `crates/model/src/science.rs`: Scientific frames and calculation results kept with molecules.
 - `crates/model/src/scientific.rs`: Chemical marks and orbital diagrams.
 - `crates/model/src/scientific/label_halo.rs`: Find the atom labels an orbital's complete lobes run into.
 - `crates/model/src/scientific/mark_placement.rs`: Click placement and the orbit of a dragged mark.
@@ -903,6 +921,43 @@ explains how the crates and modules fit together.
 - `crates/model/src/transaction.rs`: GUI-free edit finalization shared by the app and future API hosts.
 - `crates/model/src/typography.rs`: Editable rich text, independent of the UI and chemistry engine.
 - `crates/model/src/typography/name_markup.rs`: Presentation-only typography for chemical names.
+
+## reshiki-optimize
+
+- `crates/optimize/src/conformers.rs`: Cluster minimized starts by molecular symmetry and rank the reoptimized representatives.
+- `crates/optimize/src/conformers/alignment.rs`: Heavy-atom RMSD under a proper rotation using Horn's quaternion matrix.
+- `crates/optimize/src/conformers/clustering.rs`: Select diverse low-energy representatives from minimized starts with Butina clustering.
+- `crates/optimize/src/conformers/ranking.rs`: Deduplicate optimized candidates, compute thermal populations, and save aligned geometries.
+- `crates/optimize/src/conformers/topology.rs`: Validate molecular connectivity and enumerate heavy-atom graph automorphisms.
+- `crates/optimize/src/lib.rs`: Geometry optimization and conformer ranking for any energy-and-gradient potential.
+- `crates/optimize/src/linalg.rs`: Dense symmetric eigendecomposition and vector operations for geometry optimization.
+- `crates/optimize/src/linalg/cholesky.rs`: Scaled Cholesky factorization and triangular solves.
+- `crates/optimize/src/linalg/projected.rs`: Symmetric eigendecomposition on the complement of known orthonormal axes.
+- `crates/optimize/src/model_hessian.rs`: Lindh's positive semidefinite model Hessian in Cartesian atomic units.
+- `crates/optimize/src/model_hessian/contacts.rs`: Weak nonbonded stretch curvature for the Lindh Hessian.
+- `crates/optimize/src/optimizer.rs`: Molecular geometry minimization with TRIC or ANC RFO and Cartesian L-BFGS.
+- `crates/optimize/src/optimizer/anc.rs`: Approximate normal coordinates, rational-function steps and Hessian updates.
+- `crates/optimize/src/optimizer/anc/davidson.rs`: Lowest eigenvector of the symmetric RFO matrix [H g; gᵀ 0].
+- `crates/optimize/src/optimizer/anc/davidson/regression.rs`: Davidson regression on a realistic Lindh model Hessian after BFGS updates.
+- `crates/optimize/src/optimizer/anc/diis.rs`: Accepted-point histories and coordinate transforms for shared DIIS proposals.
+- `crates/optimize/src/optimizer/coordinates.rs`: Free Cartesian coordinates and the instantaneous translation and rotation subspace.
+- `crates/optimize/src/optimizer/internal.rs`: Translation-rotation-internal coordinates for molecular RFO.
+- `crates/optimize/src/optimizer/internal/back_transform.rs`: Iterative back-transformation after Pulay & Fogarasi, J.
+- `crates/optimize/src/optimizer/internal/chart.rs`: Primitive values, their local differences and free-column Wilson rows.
+- `crates/optimize/src/optimizer/internal/delocalize.rs`: Products of the sparse primitive Wilson rows at a DLC build.
+- `crates/optimize/src/optimizer/internal/fragment.rs`: Fragment translations and exponential-map rotations for TRIC.
+- `crates/optimize/src/optimizer/internal/geometry.rs`: Three-dimensional Cartesian geometry used by the internal coordinate charts.
+- `crates/optimize/src/optimizer/internal/metric.rs`: Dense Wilson matrices.
+- `crates/optimize/src/optimizer/internal/primitive.rs`: Local internal-coordinate values and analytic Wilson B rows.
+- `crates/optimize/src/optimizer/internal/product.rs`: Row-major A Bᵀ, optionally computing a symmetric result from its lower triangle.
+- `crates/optimize/src/optimizer/internal/profile.rs`: Test-only, nested wall timers.
+- `crates/optimize/src/optimizer/internal/topology.rs`: Covalent topology and the primitive part of a molecular coordinate chart.
+- `crates/optimize/src/optimizer/internal/topology/chart_check.rs`: Exact chart checks for bounded, ordinary organic coordination.
+- `crates/optimize/src/optimizer/lbfgs.rs`: Limited-memory inverse BFGS in free Cartesian coordinates.
+- `crates/optimize/src/optimizer/rfo.rs`: Shared rational-function, secant-update and DIIS calculations.
+- `crates/optimize/src/optimizer/rfo/diis.rs`: DIIS interpolation in the current RFO coordinate frame.
+- `crates/optimize/src/optimizer/rfo/positive.rs`: The unique negative RFO root for a positive-definite physical Hessian.
+- `crates/optimize/src/optimizer/trust.rs`: Trust-region acceptance and radius adjustment shared by both RFO coordinate models.
 
 ## reshiki-process-heap
 

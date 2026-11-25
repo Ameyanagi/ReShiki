@@ -40,6 +40,7 @@ members = [
   "crates/web-worker",
   "crates/process-heap",
   "crates/qcdata",
+  "crates/optimize",
   "crates/web",
   "crates/python",
   "crates/xtb-worker",

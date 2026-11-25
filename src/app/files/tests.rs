@@ -785,3 +785,172 @@ async fn a_drawing_reopens_at_the_view_it_was_saved_in() {
         assert_eq!(app.tab.pages.fit.is_none(), saved);
     }
 }
+
+#[test]
+fn program_outputs_use_the_qc_reader_byte_limit() {
+    let limit = reshiki::qcread::MAX_FILE_BYTES as u64;
+    for path in [
+        "run.log",
+        "run.OUT",
+        "run.fchk",
+        "run.fch",
+        "run.molden",
+        "run.MOLDEN.INPUT",
+        "run.mold",
+        "run.gjf",
+        "run.com",
+        "run.gau",
+        "run.inp",
+    ] {
+        let open_limit = super::super::import::open_limit(std::path::Path::new(path));
+        assert_eq!(read_length(u64::MAX, open_limit), limit + 1, "{path}");
+    }
+}
+
+#[test]
+fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let open = |name: &str, path: &str| {
+        let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/qc/");
+        let bytes = std::fs::read(format!("{fixtures}{path}")).unwrap();
+        let (_, opened) = runtime
+            .block_on(prepare_contents(name.into(), Ok(bytes)))
+            .unwrap();
+        opened
+    };
+    // Three Gaussian jobs (Link1 and an internal step): the last one that ended normally opens.
+    let Ok(Prepared::Records(batch)) = open("CH2O_CO2.log", "pymatgen/CH2O_CO2.log") else {
+        panic!("a Gaussian log opens as a drawing");
+    };
+    assert_eq!(batch.drawings.len(), 1);
+    // The last Standard orientation lists atomic numbers 6, 8, 8:
+    //      1          6           0        0.000000    0.000000    0.000000
+    //      2          8           0        0.000000    0.000000    1.187890
+    //      3          8           0        0.000000    0.000000   -1.187890
+    let doc = &batch.drawings[0];
+    let elements: Vec<_> = doc.atoms.iter().map(|atom| atom.element.as_str()).collect();
+    assert_eq!(elements, ["C", "O", "O"]);
+    let notice = &batch.warnings[0];
+    assert!(
+        notice.starts_with("Final geometry of job 3 of 3: "),
+        "{notice}"
+    );
+    assert!(
+        notice.ends_with("Normal termination · Results can't be shown yet"),
+        "{notice}"
+    );
+    // An input has no results to mention.
+    let Ok(Prepared::Records(batch)) = open("water.com", "cclib/g16_water_mp2.com") else {
+        panic!("a Gaussian input opens as a drawing");
+    };
+    assert_eq!(batch.warnings[0], "Geometry from the Gaussian input file");
+    // A .log that no reader recognizes is refused by name.
+    let error = open("notes.log", "README.md").err().unwrap_or_default();
+    assert!(error.contains("not a format ReShiki reads"), "{error}");
+
+    // Open the water Molden fixture under ORCA's double suffix in memory.
+    let Ok(Prepared::Records(batch)) =
+        open("water.molden.input", "cclib/molden5.7_water_mp2.molden")
+    else {
+        panic!("a .molden.input file opens as a drawing");
+    };
+    // H      3  1    -0.272880     0.951649     0.000000
+    assert_eq!(batch.drawings[0].atoms.len(), 3);
+    assert_eq!(
+        batch.warnings[0],
+        "Geometry from the Molden file · Results can't be shown yet"
+    );
+
+    // The anion radical's "-1 2" line: the drawing cannot say which atom carries them.
+    let Ok(Prepared::Records(batch)) = open(
+        "MethylPyrrolidine_drawn.gjf",
+        "pymatgen/MethylPyrrolidine_drawn.gjf",
+    ) else {
+        panic!("a Gaussian Z-matrix input opens as a drawing");
+    };
+    assert_eq!(
+        batch.warnings[0],
+        "Geometry from the Gaussian input file · Not drawn: total charge -1, spin multiplicity 2"
+    );
+    // Charge only, spin only, and a single ion whose charge is drawn on its atom (in memory).
+    let input = |charge_spin: &str, atoms: &str| {
+        let text = format!("#p hf/sto-3g\n\nion\n\n{charge_spin}\n{atoms}\n\n");
+        let (_, opened) = runtime
+            .block_on(prepare_contents("ion.gjf".into(), Ok(text.into_bytes())))
+            .unwrap();
+        let Ok(Prepared::Records(batch)) = opened else {
+            panic!("{charge_spin}");
+        };
+        batch
+    };
+    let hydroxide = input("-1 1", "O 0 0 0\nH 0 0 0.96");
+    assert!(hydroxide.warnings[0].ends_with(" · Not drawn: total charge -1"));
+    let oxygen = input("0 3", "O 0 0 0\nO 0 0 1.21");
+    assert!(oxygen.warnings[0].ends_with(" · Not drawn: spin multiplicity 3"));
+    let chloride = input("-1 1", "Cl 0 0 0");
+    assert_eq!(chloride.drawings[0].atoms[0].charge, -1);
+    assert_eq!(
+        chloride.warnings[0],
+        "Geometry from the Gaussian input file"
+    );
+    // A Molden file that records its charge says so too (water as H3O+ in memory).
+    let water = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/qc/cclib/molden5.7_water_mp2.molden"
+    ))
+    .unwrap()
+    .replacen("[Atoms]", "[Charge]\n1\n[Atoms]", 1);
+    let (_, opened) = runtime
+        .block_on(prepare_contents(
+            "ion.molden".into(),
+            Ok(water.into_bytes()),
+        ))
+        .unwrap();
+    let Ok(Prepared::Records(batch)) = opened else {
+        panic!("a Molden file opens as a drawing");
+    };
+    assert!(
+        batch.warnings[0].contains(" · Not drawn: total charge +1"),
+        "{:?}",
+        batch.warnings
+    );
+}
+
+#[tokio::test]
+async fn program_outputs_open_the_last_optimization_step_in_3d() {
+    let name = "g16_dvb_gopt.out";
+    let bytes = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/qc/cclib/g16_dvb_gopt.out"
+    ))
+    .unwrap();
+    let qc = reshiki::qcread::read(name, &bytes).unwrap();
+    let job = &qc.jobs[qc.default_job().unwrap()];
+    assert_eq!(job.kind, reshiki::qcread::JobKind::Optimization);
+    assert!(job.steps.len() > 1);
+    let first = job.steps.first().unwrap().frame.positions_angstrom[0];
+    let last = job.steps.last().unwrap().frame.positions_angstrom[0];
+    // The first and last Standard orientation tables start with these rows:
+    //      1          6           0        1.205666    0.676891   -0.000000
+    //      1          6           0        0.269445    1.410118    0.000000
+    assert_eq!(first, [1.205666, 0.676891, 0.0]);
+    assert_eq!(last, [0.269445, 1.410118, 0.0]);
+
+    let (_, opened) = prepare_contents(name.into(), Ok(bytes)).await.unwrap();
+    let Prepared::Records(batch) = opened.unwrap() else {
+        panic!("a Gaussian optimization opens as a drawing");
+    };
+    let doc = &batch.drawings[0];
+    // The last Standard orientation ends with atom 20:
+    //     20          1           0        2.364759    0.813041   -0.000000
+    assert_eq!(doc.atoms.len(), 20);
+    let placed = doc.models[0]
+        .atoms
+        .iter()
+        .find(|atom| atom.id == doc.atoms[0].id)
+        .unwrap();
+    assert_eq!(placed.xyz, last.map(|coord| coord as f32));
+}

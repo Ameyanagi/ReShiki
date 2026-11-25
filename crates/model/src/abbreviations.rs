@@ -549,6 +549,7 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         seats,
         property_captions,
         compound_numbers,
+        science,
     } = a;
     *atoms == b.atoms
         && *abbreviations == b.abbreviations
@@ -576,6 +577,7 @@ fn same_except_bonds(a: &Document, b: &Document) -> bool {
         && *seats == b.seats
         && *property_captions == b.property_captions
         && *compound_numbers == b.compound_numbers
+        && *science == b.science
 }
 
 /// The abbreviations holding each atom, built once for a pass over the whole

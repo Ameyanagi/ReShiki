@@ -1,0 +1,16 @@
+# TS guess from GFN2-xTB (ReShiki 0.17.1), imaginary frequency -412 cm-1
+# water
+! B3LYP D3BJ def2-SVP IRC
+%pal nprocs 8 end
+%maxcore 1536
+%irc
+  MaxIter 30
+  InitHess read
+  Hess_Filename "water_xtb.hess"
+end
+
+* xyz 0 1
+  O      0.00000000     0.00000000     0.00000000
+  H      0.95720000     0.00000000     0.00000000
+  H     -0.23998720     0.92662720     0.00000000
+*

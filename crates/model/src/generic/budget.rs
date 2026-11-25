@@ -252,6 +252,7 @@ impl Presentation {
             piece_definitions,
             on_other_canvas: _,
             seats,
+            science,
         } = doc;
         fn records<T>(n: usize) -> usize {
             n.saturating_mul(std::mem::size_of::<T>())
@@ -278,7 +279,9 @@ impl Presentation {
             }
             Ok(size)
         }
+        // Calculation payloads are shared by `Arc`; a copy owns only the lists.
         let mut copy = std::mem::size_of::<Document>()
+            .saturating_add(science.container_bytes())
             .saturating_add(drawing_style.name.len())
             .saturating_add(drawing_style.font_family.len());
         let mut atom = std::mem::size_of::<crate::document::Atom>() + 128;

@@ -104,6 +104,8 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     crate::arrow_labels::include_labels(doc, &mut ids);
     crate::shape_text::include_texts(doc, &mut ids);
     let mut part = doc.clone();
+    // The clipboard carries no calculation data.
+    part.science = Default::default();
     part.molecule_names.retain(|name| {
         ids.contains(&name.annotation) && name.atoms.iter().all(|id| ids.contains(id))
     });
@@ -257,6 +259,7 @@ pub fn preserved_expansion_selection(doc: &Document, selected: &[u64]) -> Result
         .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
     part.models
         .retain(|m| m.linked_ids(doc).iter().all(|id| ids.contains(id)));
+    crate::science::prune(&mut part);
     part.generic.alternatives.retain(|a| ids.contains(&a.atom));
     part.generic.links.retain(|a| ids.contains(&a.atom));
     part.generic.repeats.retain(|r| {
@@ -572,6 +575,7 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
         piece_definitions: _,
         on_other_canvas: _,
         seats,
+        science,
     } = doc;
     let map = |id: &mut u64| {
         *id = *mapping.get(id)?;
@@ -655,6 +659,12 @@ pub(crate) fn remap_ids(doc: &mut Document, mapping: &HashMap<u64, u64>) -> Opti
     for model in models {
         model.remap(mapping)?;
     }
+    // An atom outside the mapping is gone, as after a delete.
+    for attachment in &mut science.attachments {
+        for atom in &mut attachment.atoms {
+            *atom = atom.and_then(|id| mapping.get(&id).copied());
+        }
+    }
     *depth_appearance = crate::depth_appearance::remap(depth_appearance, mapping);
     Some(())
 }
@@ -678,6 +688,13 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.ring_fills.extend(part.ring_fills);
     doc.depth_appearance.extend(part.depth_appearance);
     doc.generic.extend(part.generic);
+    // An insertion that would pass the calculation budget comes without
+    // its calculation data.
+    let mut science = doc.science.clone();
+    science.extend(part.science);
+    if science.check_budget().is_ok() {
+        doc.science = science;
+    }
     if !part.models.is_empty() {
         doc.models.extend(part.models);
         crate::models3d::require_version(doc);

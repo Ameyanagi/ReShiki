@@ -45,6 +45,7 @@ fn generated(app: &App) -> (Key, Arc<Optimized>) {
         force_field: job.force_field,
         diagnostics: vec![],
         approximations: vec![],
+        ensemble: vec![],
     };
     (job.key, Arc::new(optimized))
 }

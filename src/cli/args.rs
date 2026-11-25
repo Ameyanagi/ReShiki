@@ -8,6 +8,7 @@ use super::{
     commands::{self, CommandSpec},
     input_format, input_formats, output_formats, render_formats,
 };
+use reshiki_io::qc_input::{Job, Program, builtin_templates};
 use reshiki_xtb_worker::protocol::{
     Conventions, Method, ScfRetry, ScfSettings, SolvationState, Solvent, SolventCorrection,
     SolventModel,
@@ -35,6 +36,7 @@ pub(crate) enum Command {
     Compose(Compose),
     Analyze(Input),
     PredictNmr(PredictNmr),
+    ExportInput(ExportInput),
     Name(Name),
     PiecesCheck(Vec<PathBuf>),
     PiecesRender(PieceRender),
@@ -90,6 +92,23 @@ pub(crate) struct Input {
 pub(crate) struct PredictNmr {
     pub(crate) input: Input,
     pub(crate) nucleus: &'static str,
+}
+
+/// `export-input`: the first Cartesian XYZ frame and calculation settings.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ExportInput {
+    pub(crate) input: PathBuf,
+    pub(crate) program: Program,
+    pub(crate) job: Job,
+    pub(crate) method: String,
+    pub(crate) basis: String,
+    pub(crate) charge: i32,
+    pub(crate) multiplicity: u32,
+    pub(crate) cores: u32,
+    pub(crate) memory_gb: u32,
+    pub(crate) title: Option<String>,
+    pub(crate) extra: String,
+    pub(crate) output: Output,
 }
 
 /// `name`: one structure, with optional preference status in JSON.
@@ -227,6 +246,7 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
                 nucleus: nucleus_code(nucleus)?,
             }))
         }
+        "export-input" => export_input(&options(spec, rest)?),
         "name" => {
             let options = options(spec, rest)?;
             Ok(Command::Name(Name {
@@ -542,11 +562,20 @@ struct Options {
     nucleus: Option<OsString>,
     labels: Option<OsString>,
     decimals: Option<OsString>,
+    program: Option<OsString>,
+    job: Option<OsString>,
+    template: Option<OsString>,
+    method: Option<OsString>,
+    basis: Option<OsString>,
     charge: Option<OsString>,
+    multiplicity: Option<OsString>,
+    cores: Option<OsString>,
+    memory_gb: Option<OsString>,
+    title: Option<OsString>,
+    extra: Option<OsString>,
     uhf: Option<OsString>,
     conventions: Option<OsString>,
     task: Option<OsString>,
-    method: Option<OsString>,
     alpb: Option<OsString>,
     gbsa: Option<OsString>,
     solvent_correction: Option<OsString>,
@@ -621,11 +650,20 @@ fn parse_options(
                 "--nucleus" => options.nucleus = Some(value),
                 "--labels" => options.labels = Some(value),
                 "--decimals" => options.decimals = Some(value),
+                "--program" => options.program = Some(value),
+                "--job" => options.job = Some(value),
+                "--template" => options.template = Some(value),
+                "--method" => options.method = Some(value),
+                "--basis" => options.basis = Some(value),
                 "--charge" => options.charge = Some(value),
+                "--multiplicity" => options.multiplicity = Some(value),
+                "--cores" => options.cores = Some(value),
+                "--memory-gb" => options.memory_gb = Some(value),
+                "--title" => options.title = Some(value),
+                "--extra" => options.extra = Some(value),
                 "--uhf" => options.uhf = Some(value),
                 "--conventions" => options.conventions = Some(value),
                 "--task" => options.task = Some(value),
-                "--method" => options.method = Some(value),
                 "--alpb" => options.alpb = Some(value),
                 "--gbsa" => options.gbsa = Some(value),
                 "--solvent-correction" => options.solvent_correction = Some(value),
@@ -846,6 +884,102 @@ fn nucleus_code(nucleus: &OsStr) -> Result<&'static str, String> {
         .and_then(crate::nmr::Nucleus::from_code)
         .map(crate::nmr::Nucleus::code)
         .ok_or_else(|| "--nucleus must be 1H or 13C".into())
+}
+
+fn export_input(options: &Options) -> Result<Command, String> {
+    let input = options
+        .input
+        .as_ref()
+        .ok_or("export-input needs INPUT.xyz")?;
+    if input == "-" {
+        return Err("export-input needs an XYZ file path".into());
+    }
+    let program = match options.program.as_deref().and_then(OsStr::to_str) {
+        Some("gaussian") => Program::Gaussian,
+        Some("orca") => Program::Orca,
+        Some("gamess") => Program::Gamess,
+        Some("xyz") => Program::Xyz,
+        _ => return Err("--program must be gaussian, orca, gamess or xyz".into()),
+    };
+    if options.template.is_some() && (options.method.is_some() || options.basis.is_some()) {
+        return Err("--template cannot be combined with --method or --basis".into());
+    }
+    if options.method.is_some() != options.basis.is_some() {
+        return Err("--method and --basis must be given together".into());
+    }
+    let templates = builtin_templates();
+    let template = integer("--template", options.template.as_deref(), 1_usize)?;
+    let template = template
+        .checked_sub(1)
+        .and_then(|index| templates.get(index))
+        .ok_or_else(|| format!("--template must be from 1 to {}", templates.len()))?;
+    if template.only.is_some_and(|only| only != program) {
+        return Err(format!("{} is available only for ORCA", template.name));
+    }
+    let job = match option_text("--job", options.job.as_deref())? {
+        Some(text) => Job::parse(text)
+            .ok_or("--job must be single-point, optimize, opt-freq, transition-state or irc")?,
+        None => template.job,
+    };
+    if matches!(job, Job::Qst2 | Job::Qst3 | Job::NebTs) {
+        return Err(
+            "QST2, QST3 and NEB-TS need a transition-state result; export them from the app."
+                .into(),
+        );
+    }
+    let output = match &options.output {
+        None => Output::Stdout,
+        Some(path) if path == "-" => Output::Stdout,
+        Some(path) if path.is_empty() => return Err("--out needs a file path".into()),
+        Some(path) => Output::File(path.into()),
+    };
+    Ok(Command::ExportInput(ExportInput {
+        input: input.into(),
+        program,
+        job,
+        method: option_text("--method", options.method.as_deref())?
+            .unwrap_or(&template.method)
+            .into(),
+        basis: option_text("--basis", options.basis.as_deref())?
+            .unwrap_or(&template.basis)
+            .into(),
+        charge: integer("--charge", options.charge.as_deref(), 0)?,
+        multiplicity: integer("--multiplicity", options.multiplicity.as_deref(), 1)?,
+        cores: integer("--cores", options.cores.as_deref(), template.cores)?,
+        memory_gb: integer(
+            "--memory-gb",
+            options.memory_gb.as_deref(),
+            template.memory_gb,
+        )?,
+        title: option_text("--title", options.title.as_deref())?.map(str::to_owned),
+        extra: option_text("--extra", options.extra.as_deref())?
+            .unwrap_or(&template.extra)
+            .into(),
+        output,
+    }))
+}
+
+fn option_text<'a>(flag: &str, value: Option<&'a OsStr>) -> Result<Option<&'a str>, String> {
+    value
+        .map(|value| {
+            value
+                .to_str()
+                .ok_or_else(|| format!("{flag} must be UTF-8"))
+        })
+        .transpose()
+}
+
+fn integer<T: std::str::FromStr>(
+    flag: &str,
+    value: Option<&OsStr>,
+    default: T,
+) -> Result<T, String> {
+    match option_text(flag, value)? {
+        None => Ok(default),
+        Some(text) => text
+            .parse()
+            .map_err(|_| format!("{flag} must be a whole number")),
+    }
 }
 
 /// `render`: the input, the image format and destination, then the size.

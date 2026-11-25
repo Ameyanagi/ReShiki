@@ -1,0 +1,11 @@
+%nprocshared=8
+%mem=16GB
+%chk=oh.chk
+#p UB3LYP/Def2SVP EmpiricalDispersion=GD3BJ SP
+
+OH radical
+
+0 2
+ O      0.00000000     0.00000000     0.00000000
+ H      0.95720000     0.00000000     0.00000000
+
