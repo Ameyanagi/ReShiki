@@ -1,0 +1,34 @@
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+                                  [--job JOB] [--template N|--method M --basis B]
+                                  [--charge C] [--multiplicity M] [--cores N]
+                                  [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--out PATH]
+
+Reads the first Cartesian frame from INPUT.xyz (angstroms) and writes a
+quantum-chemistry input. Without --out, the main file goes to stdout.
+With --out, companion files go beside the main file and existing output
+files are replaced. Warnings go to stderr as `warning: MESSAGE`.
+
+Options:
+  --program PROGRAM   Required program. Choose gaussian, orca, gamess or xyz.
+  --job JOB           Choose single-point, optimize, opt-freq, transition-state or irc. Defaults to the template's job.
+  --template N        Built-in template number, from 1 to 3.
+  --method M          Specify a method and --basis together.
+  --basis B           Basis set. Use an empty string for an ORCA composite method.
+  --charge C          Total charge in elementary charge units.
+  --multiplicity M    Spin multiplicity, 2S + 1.
+  --cores N           Number of cores. Defaults to 8 from the template.
+  --memory-gb G       Total memory in GB. Defaults to 16 from the template.
+  --title T           Calculation title. Defaults to the input file stem.
+  --extra TEXT        Additional program keywords or GAMESS groups.
+  --out PATH          Write the main file to PATH and companions beside it. Omit for stdout.
+
+Templates:
+  1  B3LYP-D3BJ/def2-SVP opt+freq
+  2  r2SCAN-3c opt+freq (ORCA only)
+  3  HF/6-31G(d) single point
+
+For GAMESS, choose template 3 or supply a method and built-in basis.
+
+QST2, QST3 and NEB-TS need a transition-state result; export them from the app.

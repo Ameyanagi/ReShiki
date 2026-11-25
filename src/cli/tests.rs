@@ -77,6 +77,7 @@ async fn help_describes_one_command() {
         ("compose", "Usage: reshiki --cli compose "),
         ("analyze", "Usage: reshiki --cli analyze "),
         ("predict-nmr", "Usage: reshiki --cli predict-nmr "),
+        ("export-input", "Usage: reshiki --cli export-input "),
         ("name", "Usage: reshiki --cli name "),
         ("info", "Usage: reshiki --cli info"),
         ("tools", "Usage: reshiki --cli tools"),
@@ -2202,6 +2203,10 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
         include_str!("../../tests/fixtures/cli-help/predict-nmr.txt"),
     ),
     (
+        "export-input",
+        include_str!("../../tests/fixtures/cli-help/export-input.txt"),
+    ),
+    (
         "name",
         include_str!("../../tests/fixtures/cli-help/name.txt"),
     ),
@@ -2543,4 +2548,396 @@ async fn pieces_render_reports_the_piece_check_error() {
     let (code, out, err) = call(&["pieces", "render", path.to_str().unwrap()]).await;
     assert_eq!((code, out.as_str()), (FAILURE, ""));
     assert_eq!(err, "reshiki: error: This is not a ReShiki piece file.\n");
+}
+
+const WATER_XYZ: &str = "3\nwater\nO 0 0 0\nH 0.9572 0 0\nH -0.2399872 0.9266272 0\n";
+
+#[test]
+fn export_input_parses_defaults_and_orca_composite_template() {
+    use reshiki_io::qc_input::{Job, Program};
+    let Command::ExportInput(command) =
+        parsed(&["export-input", "water.xyz", "--program", "gaussian"]).unwrap()
+    else {
+        panic!("expected export-input");
+    };
+    assert_eq!(command.input, PathBuf::from("water.xyz"));
+    assert_eq!(
+        (command.program, command.job),
+        (Program::Gaussian, Job::OptFreq)
+    );
+    assert_eq!(command.method, "B3LYP-D3BJ");
+    assert_eq!(command.basis, "def2-SVP");
+    assert_eq!((command.charge, command.multiplicity), (0, 1));
+    assert_eq!((command.cores, command.memory_gb), (8, 16));
+    assert_eq!(command.title, None);
+    assert_eq!(command.output, Output::Stdout);
+    let Command::ExportInput(command) = parsed(&[
+        "export-input",
+        "water.xyz",
+        "--program",
+        "orca",
+        "--template",
+        "2",
+    ])
+    .unwrap() else {
+        panic!("expected export-input");
+    };
+    assert_eq!(command.method, "r2SCAN-3c");
+    assert!(command.basis.is_empty());
+    assert_eq!(command.program, Program::Orca);
+}
+
+#[test]
+fn export_input_rejects_invalid_options_before_reading() {
+    for (options, message) in [
+        (
+            &["--job", "qst2"][..],
+            "QST2, QST3 and NEB-TS need a transition-state result; export them from the app.",
+        ),
+        (
+            &["--job", "qst3"],
+            "QST2, QST3 and NEB-TS need a transition-state result; export them from the app.",
+        ),
+        (
+            &["--job", "neb-ts"],
+            "QST2, QST3 and NEB-TS need a transition-state result; export them from the app.",
+        ),
+        (
+            &["--job", "invalid"],
+            "--job must be single-point, optimize, opt-freq, transition-state or irc",
+        ),
+        (&["--template", "0"], "--template must be from 1 to 3"),
+        (&["--template", "4"], "--template must be from 1 to 3"),
+        (
+            &["--template", "2"],
+            "r2SCAN-3c opt+freq is available only for ORCA",
+        ),
+        (
+            &["--template", "1", "--method", "HF", "--basis", "STO-3G"],
+            "--template cannot be combined with --method or --basis",
+        ),
+        (
+            &["--method", "HF"],
+            "--method and --basis must be given together",
+        ),
+        (
+            &["--basis", "STO-3G"],
+            "--method and --basis must be given together",
+        ),
+        (&["--cores", "-1"], "--cores must be a whole number"),
+        (&["--charge", "0.5"], "--charge must be a whole number"),
+        (
+            &["--cores", "2", "--cores", "3"],
+            "--cores given more than once",
+        ),
+        (&["--out", ""], "--out needs a file path"),
+    ] {
+        let tokens = [
+            &["export-input", "missing.xyz", "--program", "gaussian"][..],
+            options,
+        ]
+        .concat();
+        assert_eq!(parsed(&tokens), Err(message.into()), "{tokens:?}");
+    }
+    assert_eq!(
+        parsed(&["export-input"]),
+        Err("export-input needs INPUT.xyz".into())
+    );
+    assert_eq!(
+        parsed(&["export-input", "water.xyz"]),
+        Err("--program must be gaussian, orca, gamess or xyz".into())
+    );
+}
+
+#[tokio::test]
+async fn export_input_writes_only_the_first_xyz_frame_to_stdout() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("water.xyz");
+    std::fs::write(&input, format!("{WATER_XYZ}not a valid second frame\n")).unwrap();
+    let (code, out, err) = call(&[
+        "export-input",
+        input.to_str().unwrap(),
+        "--program",
+        "gaussian",
+    ])
+    .await;
+    assert_eq!((code, err.as_str()), (SUCCESS, ""));
+    assert!(out.contains("%chk=water.chk\n"), "{out}");
+    assert!(
+        out.contains("#p B3LYP/Def2SVP EmpiricalDispersion=GD3BJ Opt Freq\n\nwater\n\n0 1\n"),
+        "{out}"
+    );
+    assert_eq!(
+        out.lines().filter(|line| line.starts_with(" H ")).count(),
+        2
+    );
+    assert!(!out.contains("second frame"));
+}
+
+#[tokio::test]
+async fn export_input_honours_extended_xyz_columns_and_plain_xyz_defaults() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("hydrogen.xyz");
+    for text in [
+        "1\nProperties=species:S:1:charge:R:1:pos:R:3\nH 0.2 0 0 0.74\n",
+        "1\nProperties=charge:R:1:pos:R:3:species:S:1\n0.2 0 0 0.74 H\n",
+        "1\nplain XYZ\nH 0 0 0.74\n",
+    ] {
+        std::fs::write(&input, text).unwrap();
+        let (code, out, err) =
+            call(&["export-input", input.to_str().unwrap(), "--program", "xyz"]).await;
+        assert_eq!((code, err.as_str()), (SUCCESS, ""), "{text}");
+        let fields: Vec<_> = out.lines().nth(2).unwrap().split_whitespace().collect();
+        assert_eq!(fields[0], "H", "{out}");
+        let position: Vec<f64> = fields[1..]
+            .iter()
+            .map(|value| value.parse().unwrap())
+            .collect();
+        assert_eq!(position, [0.0, 0.0, 0.74], "{text}");
+    }
+}
+
+#[tokio::test]
+async fn export_input_writes_a_file_and_uses_its_stem_for_checkpoint() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("water.xyz");
+    let output = directory.path().join("calculation.gjf");
+    std::fs::write(&input, WATER_XYZ).unwrap();
+    let args = [
+        "export-input",
+        input.to_str().unwrap(),
+        "--program",
+        "gaussian",
+        "--out",
+        output.to_str().unwrap(),
+    ];
+    let (code, out, err) = call(&args).await;
+    assert_eq!((code, out.as_str(), err.as_str()), (SUCCESS, "", ""));
+    let written = std::fs::read_to_string(&output).unwrap();
+    assert!(written.contains("%chk=calculation.chk\n"));
+    assert!(written.contains("\nwater\n"));
+    std::fs::write(&output, "existing output").unwrap();
+    let (code, out, err) = call(&args).await;
+    assert_eq!((code, out.as_str(), err.as_str()), (SUCCESS, "", ""));
+    assert_eq!(std::fs::read_to_string(&output).unwrap(), written);
+}
+
+#[tokio::test]
+async fn export_input_applies_custom_settings() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("water.xyz");
+    std::fs::write(&input, WATER_XYZ).unwrap();
+    let (code, out, err) = call(&[
+        "export-input",
+        input.to_str().unwrap(),
+        "--program",
+        "orca",
+        "--job",
+        "single-point",
+        "--method",
+        "HF",
+        "--basis",
+        "6-31G(d)",
+        "--charge",
+        "1",
+        "--multiplicity",
+        "2",
+        "--cores",
+        "4",
+        "--memory-gb",
+        "4",
+        "--title",
+        "ion",
+        "--extra",
+        "TightSCF",
+    ])
+    .await;
+    assert_eq!(code, SUCCESS);
+    assert_eq!(
+        err,
+        "warning: ORCA gets only 768 MB per core; raise Memory or lower Cores.\n"
+    );
+    for expected in [
+        "# ion\n",
+        "! UHF HF 6-31G(d) SP TightSCF\n",
+        "%pal nprocs 4 end\n",
+        "%maxcore 768\n",
+        "* xyz 1 2\n",
+    ] {
+        assert!(out.contains(expected), "missing {expected:?}: {out}");
+    }
+}
+
+#[tokio::test]
+async fn export_input_supports_all_programs_and_warns_on_stderr() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("water.xyz");
+    std::fs::write(&input, WATER_XYZ).unwrap();
+    for (program, template, expected, warning) in [
+        ("orca", "2", "! r2SCAN-3c Opt Freq\n", ""),
+        (
+            "gamess",
+            "3",
+            " $BASIS GBASIS=N31 NGAUSS=6 NDFUNC=1 $END\n",
+            "warning: GAMESS takes the number of cores when you start it (rungms), not from the file.\n",
+        ),
+        ("xyz", "1", "3\nwater\n", ""),
+    ] {
+        let (code, out, err) = call(&[
+            "export-input",
+            input.to_str().unwrap(),
+            "--program",
+            program,
+            "--template",
+            template,
+        ])
+        .await;
+        assert_eq!(code, SUCCESS, "{program}: {err}");
+        assert_eq!(err, warning, "{program}");
+        assert!(out.contains(expected), "{program}: {out}");
+    }
+    let (code, _, err) = call(&[
+        "export-input",
+        input.to_str().unwrap(),
+        "--program",
+        "gamess",
+        "--method",
+        "MP2",
+        "--basis",
+        "6-31G(d)",
+    ])
+    .await;
+    assert_eq!(code, SUCCESS);
+    assert_eq!(
+        err,
+        concat!(
+            "warning: GAMESS takes the number of cores when you start it (rungms), not from the file.\n",
+            "warning: Parallel GAMESS MP2 needs MEMDDI: add a line such as  $SYSTEM MEMDDI=100 $END under Extra keywords.\n",
+        )
+    );
+    let (code, out, err) = call(&[
+        "export-input",
+        input.to_str().unwrap(),
+        "--program",
+        "orca",
+        "--job",
+        "transition-state",
+    ])
+    .await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert!(out.contains("%geom\n  Calc_Hess true\nend\n"), "{out}");
+    assert_eq!(
+        err,
+        "warning: No xTB Hessian: ORCA computes the first Hessian itself.\n"
+    );
+    let (code, _, err) = call(&[
+        "export-input",
+        input.to_str().unwrap(),
+        "--program",
+        "gaussian",
+        "--charge",
+        "1",
+    ])
+    .await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert_eq!(
+        err,
+        "warning: Charge 1 and multiplicity 1 do not fit 9 electrons.\n"
+    );
+}
+
+#[tokio::test]
+async fn export_input_reports_writer_errors_and_ignores_xyz_settings() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("water.xyz");
+    std::fs::write(&input, WATER_XYZ).unwrap();
+    for (options, message) in [
+        (
+            &["--multiplicity", "0"][..],
+            "Multiplicity must be at least 1.",
+        ),
+        (&["--cores", "0"], "Cores and memory must be at least 1."),
+        (&["--method", "", "--basis", ""], "Enter a method."),
+    ] {
+        let tokens = [
+            &[
+                "export-input",
+                input.to_str().unwrap(),
+                "--program",
+                "gaussian",
+            ][..],
+            options,
+        ]
+        .concat();
+        let (code, out, err) = call(&tokens).await;
+        assert_eq!(code, FAILURE, "{tokens:?}: {err}");
+        assert!(out.is_empty());
+        assert_eq!(err, format!("reshiki: error: {message}\n"));
+    }
+    let (code, out, err) = call(&[
+        "export-input",
+        input.to_str().unwrap(),
+        "--program",
+        "xyz",
+        "--cores",
+        "0",
+        "--memory-gb",
+        "0",
+        "--multiplicity",
+        "0",
+        "--method",
+        "",
+        "--basis",
+        "",
+    ])
+    .await;
+    assert_eq!((code, err.as_str()), (SUCCESS, ""));
+    assert!(out.starts_with("3\nwater\n"));
+}
+
+#[tokio::test]
+async fn export_input_reports_invalid_xyz_and_missing_files() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("invalid.xyz");
+    for (text, message) in [
+        (
+            "invalid\n",
+            "The XYZ input needs an atom count on the first line.",
+        ),
+        ("1\n", "The XYZ input needs a comment line."),
+        (
+            "1\nProperties=species:S:1:charge:R:1\nH 0.2 0 0 0.74\n",
+            "XYZ Properties needs species:S:1 and pos:R:3 columns.",
+        ),
+        (
+            "1\ncomment\n",
+            "Invalid XYZ atom 1: expected an element and finite x y z coordinates.",
+        ),
+        (
+            "1\ncomment\nUnknown 0 0 0\n",
+            "Invalid XYZ atom 1: expected an element and finite x y z coordinates.",
+        ),
+        (
+            "1\ncomment\nH NaN 0 0\n",
+            "Invalid XYZ atom 1: expected an element and finite x y z coordinates.",
+        ),
+        ("0\ncomment\n", "The structure has no atoms."),
+    ] {
+        std::fs::write(&input, text).unwrap();
+        let (code, out, err) =
+            call(&["export-input", input.to_str().unwrap(), "--program", "xyz"]).await;
+        assert_eq!(code, FAILURE, "{text:?}: {err}");
+        assert!(out.is_empty());
+        assert_eq!(err, format!("reshiki: error: {message}\n"));
+    }
+    let (code, out, err) = call(&[
+        "export-input",
+        directory.path().join("missing.xyz").to_str().unwrap(),
+        "--program",
+        "gaussian",
+    ])
+    .await;
+    assert_eq!(code, FAILURE);
+    assert!(out.is_empty());
+    assert!(err.starts_with("reshiki: error: cannot read "), "{err}");
 }

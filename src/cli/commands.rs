@@ -307,6 +307,108 @@ const PREDICT_NMR: CommandSpec = CommandSpec {
     body: predict_nmr_help,
 };
 
+const QC_OPTION: OptionSpec = OptionSpec {
+    flag: "",
+    value: Some("TEXT"),
+    help: "",
+    default: None,
+    sets: None,
+    equivalent: None,
+};
+
+const EXPORT_INPUT: CommandSpec = CommandSpec {
+    name: "export-input",
+    summary: "Write a quantum-chemistry input from an XYZ structure",
+    usage: "reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+                                  [--job JOB] [--template N|--method M --basis B]
+                                  [--charge C] [--multiplicity M] [--cores N]
+                                  [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--out PATH]",
+    options: &[
+        OptionSpec {
+            flag: "--program",
+            value: Some("PROGRAM"),
+            help: "Required program. Choose gaussian, orca, gamess or xyz.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--job",
+            value: Some("JOB"),
+            help: "Choose single-point, optimize, opt-freq, transition-state or irc. Defaults to the template's job.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--template",
+            value: Some("N"),
+            help: "Built-in template number, from 1 to 3.",
+            default: Some(|| json!(1)),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--method",
+            value: Some("M"),
+            help: "Specify a method and --basis together.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--basis",
+            value: Some("B"),
+            help: "Basis set. Use an empty string for an ORCA composite method.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--charge",
+            value: Some("C"),
+            help: "Total charge in elementary charge units.",
+            default: Some(|| json!(0)),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--multiplicity",
+            value: Some("M"),
+            help: "Spin multiplicity, 2S + 1.",
+            default: Some(|| json!(1)),
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--cores",
+            value: Some("N"),
+            help: "Number of cores. Defaults to 8 from the template.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--memory-gb",
+            value: Some("G"),
+            help: "Total memory in GB. Defaults to 16 from the template.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--title",
+            value: Some("T"),
+            help: "Calculation title. Defaults to the input file stem.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--extra",
+            help: "Additional program keywords or GAMESS groups.",
+            ..QC_OPTION
+        },
+        OptionSpec {
+            flag: "--out",
+            value: Some("PATH"),
+            help: "Write the main file to PATH and companions beside it. Omit for stdout.",
+            ..QC_OPTION
+        },
+    ],
+    tools: &[],
+    operand: Some(Operand {
+        name: "INPUT.xyz",
+        help: "Read the first frame of a Cartesian XYZ file, in angstroms.",
+        sets: None,
+    }),
+    body: export_input_help,
+};
+
 const NAME: CommandSpec = CommandSpec {
     name: "name",
     summary: "Print the systematic name of a structure",
@@ -459,6 +561,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     COMPOSE,
     ANALYZE,
     PREDICT_NMR,
+    EXPORT_INPUT,
     NAME,
     PIECES,
     INFO,
@@ -779,6 +882,32 @@ A molecule with no sites for the nucleus, or with metals, charges,
 radicals or isotope labels, is an error.
 ";
     format!("Usage: {}\n\n{body}", PREDICT_NMR.usage)
+}
+
+fn export_input_help() -> String {
+    let mut text = format!(
+        "Usage: {}\n\nReads the first Cartesian frame from INPUT.xyz (angstroms) and writes a\nquantum-chemistry input. Without --out, the main file goes to stdout.\nWith --out, companion files go beside the main file and existing output\nfiles are replaced. Warnings go to stderr as `warning: MESSAGE`.\n\nOptions:\n",
+        EXPORT_INPUT.usage,
+    );
+    for option in EXPORT_INPUT.options {
+        let flag = match option.value {
+            Some(value) => format!("{} {value}", option.flag),
+            None => option.flag.into(),
+        };
+        text.push_str(&format!("  {flag:<19} {}\n", option.help));
+    }
+    text.push_str("\nTemplates:\n");
+    for (index, template) in reshiki_io::qc_input::builtin_templates().iter().enumerate() {
+        let only = template
+            .only
+            .map(|program| format!(" ({} only)", program.label()))
+            .unwrap_or_default();
+        text.push_str(&format!("  {}  {}{only}\n", index + 1, template.name));
+    }
+    text.push_str(
+        "\nFor GAMESS, choose template 3 or supply a method and built-in basis.\n\nQST2, QST3 and NEB-TS need a transition-state result; export them from the app.\n",
+    );
+    text
 }
 
 fn name_help() -> String {
