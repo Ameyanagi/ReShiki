@@ -59,7 +59,7 @@ On Linux, the MIT crates wayland-protocols-plasma and wayland-protocols-misc
 generate Wayland bindings from KDE protocol descriptions licensed
 LGPL-2.1-or-later. THIRD-PARTY-NOTICES.txt names those files next to the
 complete LGPL text. licenses/rust/kde-wayland-protocols-lgpl-review.json
-records their sources and why only protocol metadata reaches the binary.
+records their sources and what the generated bindings contain.
 
 Binary distributions include a Licenses directory. It contains this notice,
 the project license texts, and THIRD-PARTY-NOTICES.txt with the source

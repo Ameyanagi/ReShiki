@@ -477,6 +477,7 @@ class LicenseNoticeTests(unittest.TestCase):
             ("lgpl", lambda p, s: (s / "protocols/blur.xml").write_text("x"), "licenses changed"),
             ("mit", lambda p, s: (s / "protocols/output.xml").write_text("x"), "licenses changed"),
             ("new", lambda p, s: (s / "protocols/new.xml").write_text("x"), "licenses changed"),
+            ("upper", lambda p, s: (s / "protocols/new.XML").write_text("x"), "licenses changed"),
             ("text", lambda p, s: (s / "COPYING.LIB").write_text("x"), "license text missing"),
         ):
             with self.subTest(change=name), self.assertRaisesRegex(ValueError, message):

@@ -201,6 +201,11 @@ class AgentDependencyTests(unittest.TestCase):
             with self.subTest(field=field):
                 with self.assertRaisesRegex(ValueError, "LGPL KDE protocol files; review"):
                     self.audit(cargo(tree(SERVER)), locked_packages=[{**plasma, field: changed}])
+        # The review comes from the audited checkout, not from this script's.
+        with tempfile.TemporaryDirectory() as temporary:
+            (Path(temporary) / KDE_PROTOCOL_REVIEW).parent.mkdir(parents=True)
+            (Path(temporary) / KDE_PROTOCOL_REVIEW).write_text('{"packages": {}}')
+            self.assertEqual(len(kde_protocol_problems(Path(temporary), [plasma])), 1)
         # A path dependency has neither source nor checksum in Cargo.lock.
         path = {"name": plasma["name"], "version": "0.3.13"}
         with self.assertRaisesRegex(ValueError, r"plasma@0\.3\.13 generates code from LGPL"):

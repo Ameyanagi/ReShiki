@@ -62,11 +62,13 @@ def kde_protocol_scope(root, package, key, source):
     reviewed = review["packages"].get(key)
     digests = {
         path.relative_to(source).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in sorted(source.rglob("*.xml"))
+        for path in sorted(source.rglob("*"))
+        if path.is_file() and path.suffix.lower() == ".xml"
     }
     inventory = "".join(f"{name} {digest}\n" for name, digest in digests.items())
     if (
         not reviewed
+        or not reviewed["license_texts"]
         or any(reviewed[field] != package.get(field) for field in ("license", "source"))
         or reviewed["xml_inventory_sha256"] != hashlib.sha256(inventory.encode()).hexdigest()
         or any(digests.get(name) != digest for name, digest in reviewed["files"].items())
