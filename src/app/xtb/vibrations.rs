@@ -7,16 +7,19 @@
 use super::palette::Shown;
 use super::results::View;
 use super::{Page, Request, Start, is, state};
+use crate::app::figure_export::{Kind, Prepared};
 use crate::app::{App, InspectorTab, Message};
 use iced::Task;
-use reshiki::document::Document;
+use reshiki::document::{Document, Point};
 use reshiki::graphics::Graphic;
 use reshiki::qcdata::vibrational::{self, BandShape};
-use reshiki::qcdata::{CalcResult, Frame, Thermo};
+use reshiki::qcdata::{CalcResult, Frame, Settings, Thermo};
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
+mod figure;
 mod view;
 
 /// Frames in one period; a period lasts one second at speed 1×.
@@ -47,6 +50,8 @@ pub(crate) enum Action {
     Shape(BandShape),
     Fwhm(f32),
     Scale(String),
+    PlaceSpectrum,
+    ExportSpectrum(&'static str),
     Thermo,
     Temperature(String),
     Pressure(String),
@@ -195,6 +200,17 @@ fn typed(text: &str) -> Option<f64> {
         .filter(|v| v.is_finite())
 }
 
+fn spectrum_method(result: &CalcResult) -> &str {
+    result
+        .provenance
+        .method
+        .as_deref()
+        .unwrap_or(match &result.settings {
+            Settings::Xtb(settings) => settings.method.label(),
+            Settings::Imported { .. } => "xTB",
+        })
+}
+
 /// The selected mode's vector, if the modes are known.
 fn vector<'a>(modes: &'a [f64], frame: &Frame, mode: usize) -> Option<&'a [f64]> {
     let width = frame.numbers.len() * 3;
@@ -314,10 +330,19 @@ impl App {
     /// The document showing the current animation frame, while it belongs
     /// to this document state.
     pub(super) fn xtb_vibration_preview(&self) -> Option<&Document> {
-        let animation = self.tab.xtb.vibrations.animation.as_ref()?;
-        (self.xtb_vibrations_visible()
-            && animation.key.revision == (self.tab.file_epoch, self.tab.revision))
-            .then_some(&animation.doc)
+        Some(&self.xtb_current_animation()?.doc)
+    }
+
+    fn xtb_current_animation(&self) -> Option<&Animation> {
+        self.tab
+            .xtb
+            .vibrations
+            .animation
+            .as_ref()
+            .filter(|animation| {
+                self.xtb_vibrations_visible()
+                    && animation.key.revision == (self.tab.file_epoch, self.tab.revision)
+            })
     }
 
     /// Ticks while a mode animates.
@@ -464,6 +489,21 @@ impl App {
             Action::Shape(shape) => settings.shape = shape,
             Action::Fwhm(value) => settings.fwhm = value,
             Action::Scale(value) => settings.scale = value,
+            Action::PlaceSpectrum => {
+                self.xtb_place_spectrum();
+                self.xtb_vibrations_sync();
+                return Task::none();
+            }
+            Action::ExportSpectrum(format) => {
+                return self
+                    .xtb_prepare_spectrum(format)
+                    .map(|result| match result {
+                        Ok(export) => Message::ExportReady(export),
+                        Err(error) => Message::Xtb(super::Action::Palette(
+                            super::palette::Action::Exported(Err(error)),
+                        )),
+                    });
+            }
             Action::Thermo => settings.thermo = !settings.thermo,
             Action::Temperature(value) => settings.temperature = value,
             Action::Pressure(value) => settings.pressure = value,
@@ -558,7 +598,7 @@ impl App {
                     .as_ref()
                     .is_some_and(|(w, _)| is(w, &result))
                 || super::unavailable().is_some()
-                || !matches!(result.settings, reshiki::qcdata::Settings::Xtb(_))
+                || !matches!(result.settings, Settings::Xtb(_))
             {
                 return Task::none();
             }
@@ -738,6 +778,127 @@ impl App {
                 animation.show();
             }
         }
+    }
+
+    fn xtb_place_spectrum(&mut self) {
+        let Some(shown) = self.xtb_shown() else {
+            return;
+        };
+        let result = &shown.stored.result;
+        let spectrum = view::SpectrumData::cached(result, &self.tab.xtb.vibrations);
+        if !spectrum.can_plot() {
+            return;
+        }
+        let doc = &self.tab.doc;
+        let mut component_atoms = HashSet::new();
+        for &atom in shown.atoms.iter().flatten() {
+            if !component_atoms.contains(&atom) {
+                component_atoms.extend(reshiki::molecule_names::component(doc, atom));
+            }
+        }
+        let atoms: Vec<_> = component_atoms.iter().copied().collect();
+        // Selection bounds include the committed model frame when it is shown.
+        let bounds = reshiki::scene::selection_bounds(doc, &atoms);
+        // Each model frame covers every rotation at that phase. Reserve all
+        // phases since the frame itself can grow as the mode displaces atoms.
+        let animation_bounds = self
+            .xtb_current_animation()
+            .into_iter()
+            .flat_map(|animation| {
+                animation.frames.iter().filter_map(move |(model, _)| {
+                    (model.display != reshiki::models3d::Display::TwoD)
+                        .then(|| reshiki::models3d::frame(&animation.doc, model))
+                        .flatten()
+                })
+            });
+        let Some((lo, hi)) =
+            bounds
+                .into_iter()
+                .chain(animation_bounds)
+                .reduce(|(lo, hi), (frame_lo, frame_hi)| {
+                    (
+                        Point::new(lo.x.min(frame_lo.x), lo.y.min(frame_lo.y)),
+                        Point::new(hi.x.max(frame_hi.x), hi.y.max(frame_hi.y)),
+                    )
+                })
+        else {
+            return;
+        };
+        let at = Point::new(hi.x + doc.drawing_style.bond_length_world, lo.y);
+        let figure = figure::spectrum(doc, &spectrum, spectrum_method(result), at);
+        let before = doc.clone();
+        let members = figure.group.members.clone();
+        figure.add_to(&mut self.tab.doc);
+        self.changed(before);
+        if !self.error {
+            self.set_selection(members);
+            self.tool = crate::canvas::Tool::Select;
+            self.status = "Placed the IR spectrum · ⌘Z undoes".into();
+        }
+    }
+
+    fn xtb_prepare_spectrum(&self, format: &'static str) -> Task<Result<Prepared, String>> {
+        let Some(shown) = self.xtb_shown() else {
+            return Task::none();
+        };
+        let result = &shown.stored.result;
+        let spectrum = view::SpectrumData::cached(result, &self.tab.xtb.vibrations);
+        if !spectrum.can_plot() {
+            return Task::none();
+        }
+        let source = &self.tab.doc;
+        let mut doc = Document {
+            drawing_style: source.drawing_style.clone(),
+            canvas_theme: source.canvas_theme,
+            color_theme: source.color_theme,
+            custom_theme: source.custom_theme.clone(),
+            ..Document::default()
+        };
+        figure::spectrum(&doc, &spectrum, spectrum_method(result), Point::default())
+            .add_to(&mut doc);
+        let engine = self.engine.clone();
+        let name = self.export_stem().unwrap_or_else(|| self.document_name());
+        let stem = Some(format!("{name} IR spectrum"));
+        let appearance = &self.appearance;
+        let render_format = if format == "svg" && !appearance.export_svg_live_text {
+            "svg-office"
+        } else {
+            format
+        };
+        let editable = appearance.export_editable_drawing;
+        let background = appearance
+            .export_background
+            .paper(appearance.custom_background);
+        let dpi = appearance.export_dpi.get();
+        Task::perform(
+            async move {
+                #[cfg(target_arch = "wasm32")]
+                crate::web::after_paint().await;
+                #[cfg(target_arch = "wasm32")]
+                use reshiki::browser_render::publication;
+                #[cfg(not(target_arch = "wasm32"))]
+                use reshiki::export::publication;
+                let exported = publication(
+                    &engine,
+                    doc,
+                    render_format,
+                    false,
+                    editable,
+                    background,
+                    dpi,
+                    reshiki::export::FILE_PIXELS,
+                )
+                .await?;
+                Ok(Prepared::new(
+                    exported.bytes,
+                    format,
+                    stem,
+                    vec![],
+                    Kind::Xtb,
+                ))
+            },
+            std::convert::identity,
+        )
     }
 
     /// Export mode as XYZ movie: one period, [`MOVIE_FRAMES`] frames.
