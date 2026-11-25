@@ -328,75 +328,75 @@ const EXPORT_INPUT: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--program",
             value: Some("PROGRAM"),
-            help: "Required program. Choose gaussian, orca, gamess or xyz.",
+            help: "gaussian, orca, gamess or xyz. Required.",
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--job",
             value: Some("JOB"),
-            help: "Choose single-point, optimize, opt-freq, transition-state or irc. Defaults to the template's job.",
+            help: "single-point, optimize, opt-freq, transition-state or irc.",
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--template",
             value: Some("N"),
-            help: "Built-in template number, from 1 to 3.",
+            help: "Built-in template, 1 to 3.",
             default: Some(|| json!(1)),
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--method",
             value: Some("M"),
-            help: "Specify a method and --basis together.",
+            help: "Method, given with --basis.",
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--basis",
             value: Some("B"),
-            help: "Basis set. Use an empty string for an ORCA composite method.",
+            help: "Basis; empty for an ORCA composite method.",
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--charge",
             value: Some("C"),
-            help: "Total charge in elementary charge units.",
+            help: "Total charge.",
             default: Some(|| json!(0)),
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--multiplicity",
             value: Some("M"),
-            help: "Spin multiplicity, 2S + 1.",
+            help: "2S + 1.",
             default: Some(|| json!(1)),
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--cores",
             value: Some("N"),
-            help: "Number of cores. Defaults to 8 from the template.",
+            help: "Cores (8).",
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--memory-gb",
             value: Some("G"),
-            help: "Total memory in GB. Defaults to 16 from the template.",
+            help: "Total memory in GB (16).",
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--title",
             value: Some("T"),
-            help: "Calculation title. Defaults to the input file stem.",
+            help: "Title (the input file name).",
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--extra",
-            help: "Additional program keywords or GAMESS groups.",
+            help: "More keywords, or GAMESS groups.",
             ..QC_OPTION
         },
         OptionSpec {
             flag: "--out",
             value: Some("PATH"),
-            help: "Write the main file to PATH and companions beside it. Omit for stdout.",
+            help: "Main file; companions go beside it.",
             ..QC_OPTION
         },
     ],
@@ -886,7 +886,7 @@ radicals or isotope labels, is an error.
 
 fn export_input_help() -> String {
     let mut text = format!(
-        "Usage: {}\n\nReads the first Cartesian frame from INPUT.xyz (angstroms) and writes a\nquantum-chemistry input. Without --out, the main file goes to stdout.\nWith --out, the main file replaces PATH and companion files go beside it;\nan existing companion file stops the export before anything is written.\nWarnings go to stderr as `warning: MESSAGE`.\n\nOptions:\n",
+        "Usage: {}\n\nWrites input for another program from the first frame of INPUT.xyz (Å);\nstdout without --out. An existing companion file stops the export.\nWarnings go to stderr.\n\nOptions:\n",
         EXPORT_INPUT.usage,
     );
     for option in EXPORT_INPUT.options {
@@ -904,9 +904,6 @@ fn export_input_help() -> String {
             .unwrap_or_default();
         text.push_str(&format!("  {}  {}{only}\n", index + 1, template.name));
     }
-    text.push_str(
-        "\nFor GAMESS, choose template 3 or supply a method and built-in basis.\n\nQST2, QST3 and NEB-TS need a transition-state result; export them from the app.\n",
-    );
     text
 }
 

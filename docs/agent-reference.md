@@ -227,34 +227,28 @@ Usage: reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
                                   [--memory-gb G] [--title T] [--extra TEXT]
                                   [--out PATH]
 
-Reads the first Cartesian frame from INPUT.xyz (angstroms) and writes a
-quantum-chemistry input. Without --out, the main file goes to stdout.
-With --out, the main file replaces PATH and companion files go beside it;
-an existing companion file stops the export before anything is written.
-Warnings go to stderr as `warning: MESSAGE`.
+Writes input for another program from the first frame of INPUT.xyz (Å);
+stdout without --out. An existing companion file stops the export.
+Warnings go to stderr.
 
 Options:
-  --program PROGRAM   Required program. Choose gaussian, orca, gamess or xyz.
-  --job JOB           Choose single-point, optimize, opt-freq, transition-state or irc. Defaults to the template's job.
-  --template N        Built-in template number, from 1 to 3.
-  --method M          Specify a method and --basis together.
-  --basis B           Basis set. Use an empty string for an ORCA composite method.
-  --charge C          Total charge in elementary charge units.
-  --multiplicity M    Spin multiplicity, 2S + 1.
-  --cores N           Number of cores. Defaults to 8 from the template.
-  --memory-gb G       Total memory in GB. Defaults to 16 from the template.
-  --title T           Calculation title. Defaults to the input file stem.
-  --extra TEXT        Additional program keywords or GAMESS groups.
-  --out PATH          Write the main file to PATH and companions beside it. Omit for stdout.
+  --program PROGRAM   gaussian, orca, gamess or xyz. Required.
+  --job JOB           single-point, optimize, opt-freq, transition-state or irc.
+  --template N        Built-in template, 1 to 3.
+  --method M          Method, given with --basis.
+  --basis B           Basis; empty for an ORCA composite method.
+  --charge C          Total charge.
+  --multiplicity M    2S + 1.
+  --cores N           Cores (8).
+  --memory-gb G       Total memory in GB (16).
+  --title T           Title (the input file name).
+  --extra TEXT        More keywords, or GAMESS groups.
+  --out PATH          Main file; companions go beside it.
 
 Templates:
   1  B3LYP-D3BJ/def2-SVP opt+freq
   2  r2SCAN-3c opt+freq (ORCA only)
   3  HF/6-31G(d) single point
-
-For GAMESS, choose template 3 or supply a method and built-in basis.
-
-QST2, QST3 and NEB-TS need a transition-state result; export them from the app.
 ```
 
 ### reshiki --cli name

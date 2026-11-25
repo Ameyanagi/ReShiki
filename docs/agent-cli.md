@@ -150,43 +150,31 @@ and `pieces render` write only `png` or `svg`. The command line cannot write
 
 ## Options
 
-| Option                  | Commands                                    | Meaning                                                                                                                     |
-| ----------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `--smiles TEXT`         | convert, render, analyze, predict-nmr, name | Read SMILES text instead of a file or standard input                                                                        |
-| `--from FORMAT`         | convert, render, analyze, predict-nmr, name | Set the input format                                                                                                        |
-| `--nucleus NUCLEUS`     | predict-nmr, convert                        | The nucleus to predict: `1H` or `13C`; required by predict-nmr, and by convert `--labels`                                   |
-| `--labels FORMAT`       | convert                                     | Write predicted shifts as `value`, `numbers`, `ppm` or `both`; needs `--nucleus`                                            |
-| `--decimals N`          | convert                                     | The ppm decimal places of `--labels`, 0 to 4: 2 for `1H` and 1 for `13C` by default                                         |
-| `--to FORMAT`           | convert, render, compose, pieces            | Set the output format. Use `png` or `svg` for `render` and `pieces render`                                                  |
-| `-o OUTPUT`             | convert, render, compose, pieces            | Write to OUTPUT, or to standard output with `-`                                                                             |
-| `--dark`                | pieces                                      | Use dark canvas colors with `pieces render`                                                                                 |
-| `--pages`               | convert, compose                            | Export every publication page as one PDF; PDF output only                                                                   |
-| `--svg-text MODE`       | convert, render, compose                    | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it                                        |
-| `--width N`             | render                                      | The widest the PNG may be, in pixels: 1 to 8192, default 1600                                                               |
-| `--height N`            | render                                      | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                                                              |
-| `--force`               | convert, render, compose, pieces            | Replace OUTPUT if it exists                                                                                                 |
-| `--receipt`             | convert, compose                            | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                                                         |
-| `-o FOLDER`             | skill                                       | The existing folder that receives the skill folder                                                                          |
-| `--name NAME`           | skill                                       | The skill's name and folder name; default `reshiki`                                                                         |
-| `--executable PATH`     | skill                                       | The absolute path of the executable the skill runs; default this executable                                                 |
-| `--force`               | skill                                       | Replace the generated files of an existing skill folder                                                                     |
-| `--receipt`             | skill                                       | Print one receipt JSON line after writing the skill                                                                         |
-| `--isotope-style STYLE` | name                                        | Isotope notation: `iupac` (default), as in (2H3)methanol, or `boughton`, as in methanol-d3                                  |
-| `--json`                | name                                        | Print the name and its status as one JSON line                                                                              |
-| `--locants`             | name                                        | Print JSON with parent locants in input atom order                                                                          |
-| `--json`                | help                                        | Print the command catalog as one JSON line                                                                                  |
-| `--program PROGRAM`     | export-input                                | `gaussian`, `orca`, `gamess` or `xyz`; required                                                                             |
-| `--job JOB`             | export-input                                | `single-point`, `optimize`, `opt-freq`, `transition-state` or `irc`; default the template's job                             |
-| `--template N`          | export-input                                | Built-in template 1 to 3 (B3LYP-D3BJ/def2-SVP opt+freq; r2SCAN-3c opt+freq, ORCA only; HF/6-31G(d) single point); default 1 |
-| `--method M`            | export-input                                | The method, given with `--basis` instead of a template                                                                      |
-| `--basis B`             | export-input                                | The basis set; an empty string for an ORCA composite method such as r2SCAN-3c                                               |
-| `--charge C`            | export-input                                | Total charge; default 0                                                                                                     |
-| `--multiplicity M`      | export-input                                | Spin multiplicity 2S + 1; default 1                                                                                         |
-| `--cores N`             | export-input                                | Cores the input asks for; default 8                                                                                         |
-| `--memory-gb G`         | export-input                                | Total memory in GB; default 16 (ORCA gets 75 % of it per core as `%maxcore`)                                                |
-| `--title T`             | export-input                                | The title; default the input file's name                                                                                    |
-| `--extra TEXT`          | export-input                                | Keywords added to the route or keyword line, or extra GAMESS groups                                                         |
-| `--out PATH`            | export-input                                | Write the main file to PATH and companion files beside it; standard output without it                                       |
+| Option                  | Commands                                    | Meaning                                                                                    |
+| ----------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `--smiles TEXT`         | convert, render, analyze, predict-nmr, name | Read SMILES text instead of a file or standard input                                       |
+| `--from FORMAT`         | convert, render, analyze, predict-nmr, name | Set the input format                                                                       |
+| `--nucleus NUCLEUS`     | predict-nmr, convert                        | The nucleus to predict: `1H` or `13C`; required by predict-nmr, and by convert `--labels`  |
+| `--labels FORMAT`       | convert                                     | Write predicted shifts as `value`, `numbers`, `ppm` or `both`; needs `--nucleus`           |
+| `--decimals N`          | convert                                     | The ppm decimal places of `--labels`, 0 to 4: 2 for `1H` and 1 for `13C` by default        |
+| `--to FORMAT`           | convert, render, compose, pieces            | Set the output format. Use `png` or `svg` for `render` and `pieces render`                 |
+| `-o OUTPUT`             | convert, render, compose, pieces            | Write to OUTPUT, or to standard output with `-`                                            |
+| `--dark`                | pieces                                      | Use dark canvas colors with `pieces render`                                                |
+| `--pages`               | convert, compose                            | Export every publication page as one PDF; PDF output only                                  |
+| `--svg-text MODE`       | convert, render, compose                    | SVG text as `outline` (default) or `live` `<text>` elements; other formats ignore it       |
+| `--width N`             | render                                      | The widest the PNG may be, in pixels: 1 to 8192, default 1600                              |
+| `--height N`            | render                                      | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                             |
+| `--force`               | convert, render, compose, pieces            | Replace OUTPUT if it exists                                                                |
+| `--receipt`             | convert, compose                            | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                        |
+| `-o FOLDER`             | skill                                       | The existing folder that receives the skill folder                                         |
+| `--name NAME`           | skill                                       | The skill's name and folder name; default `reshiki`                                        |
+| `--executable PATH`     | skill                                       | The absolute path of the executable the skill runs; default this executable                |
+| `--force`               | skill                                       | Replace the generated files of an existing skill folder                                    |
+| `--receipt`             | skill                                       | Print one receipt JSON line after writing the skill                                        |
+| `--isotope-style STYLE` | name                                        | Isotope notation: `iupac` (default), as in (2H3)methanol, or `boughton`, as in methanol-d3 |
+| `--json`                | name                                        | Print the name and its status as one JSON line                                             |
+| `--locants`             | name                                        | Print JSON with parent locants in input atom order                                         |
+| `--json`                | help                                        | Print the command catalog as one JSON line                                                 |
 
 A rendered PNG has at most 16,000,000 pixels. A `--width` or `--height` that
 is not a whole number is a usage error. A number outside 1 to 8192 fails, as
@@ -515,32 +503,20 @@ reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz [--job J
 
 `reshiki --cli help export-input` prints the [full help](agent-reference.md#reshiki---cli-export-input).
 
-Reads the first frame of a plain or extended XYZ file (Å) and writes the
-input for Gaussian 16 (`.gjf`), ORCA 6 or GAMESS-US (`.inp`), or a plain XYZ
-file. Nothing runs. GAMESS takes only its built-in bases 6-31G(d), 6-31G and
-STO-3G. Warnings, such as a charge and multiplicity that do not fit the
-electron count, go to standard error as `warning: MESSAGE`; an input the
-program cannot accept is an error. With `--out`, the main file replaces PATH
-and companion files go beside it; an existing companion file stops the export
-before anything is written. QST2, QST3 and NEB-TS need the reactant and
-product of a transition-state search and are exported from the app.
-
-```text
-$ reshiki --cli export-input water.xyz --program orca --job opt-freq
-# water
-! B3LYP D3BJ def2-SVP Opt Freq
-%pal nprocs 8 end
-%maxcore 1536
-
-* xyz 0 1
-  O      0.00000000     0.00000000     0.00000000
-  H      0.95720000     0.00000000     0.00000000
-  H     -0.23998720     0.92662720     0.00000000
-*
-```
-
-The keyword sources are listed in
-[crates/io/tests/fixtures/qc_input/README.md](../crates/io/tests/fixtures/qc_input/README.md).
+| Option              | Commands     | Meaning                                                 |
+| ------------------- | ------------ | ------------------------------------------------------- |
+| `--program PROGRAM` | export-input | gaussian, orca, gamess or xyz                           |
+| `--job JOB`         | export-input | single-point, optimize, opt-freq, transition-state, irc |
+| `--template N`      | export-input | Built-in template 1 to 3                                |
+| `--method M`        | export-input | Method, with `--basis`                                  |
+| `--basis B`         | export-input | Basis; empty for ORCA composites                        |
+| `--charge C`        | export-input | Total charge (0)                                        |
+| `--multiplicity M`  | export-input | 2S + 1 (1)                                              |
+| `--cores N`         | export-input | Cores (8)                                               |
+| `--memory-gb G`     | export-input | Memory in GB (16)                                       |
+| `--title T`         | export-input | Title                                                   |
+| `--extra TEXT`      | export-input | More keywords                                           |
+| `--out PATH`        | export-input | Main file; companions beside it                         |
 
 ## name
 
