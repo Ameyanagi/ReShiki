@@ -2,6 +2,8 @@
 
 mod geometry;
 mod output;
+#[cfg(all(test, feature = "xtb"))]
+pub(super) mod tests;
 #[cfg(feature = "xtb")]
 mod worker;
 
@@ -24,8 +26,8 @@ use worker::Worker;
 
 #[cfg(feature = "xtb")]
 pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Result<bool, CliError> {
-    let (reactant, product) = geometry::load(&command).map_err(CliError::Failed)?;
     output::check_destinations(&command).map_err(CliError::Failed)?;
+    let (reactant, product) = geometry::load(&command).map_err(CliError::Failed)?;
     let start = reactant
         .as_ref()
         .or(product.as_ref())
@@ -101,14 +103,11 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
         let report =
             ts::search(&mut workers, &search, |event| progress.show(event, err)).map_err(failed)?;
         let _ = writeln!(err, "Checking TS frequencies with the xTB worker");
-        let computed = workers
+        let worker_check = workers
             .first_mut()
             .ok_or_else(|| CliError::Failed("no xTB worker".into()))?
-            .analyze_hessian(&report.ts.positions)
-            .map_err(failed)?;
-        let vibrations = computed.vibrations.ok_or_else(|| {
-            CliError::Failed("the xTB worker returned no vibrational analysis".into())
-        })?;
+            .check_hessian(&report.ts.positions, &masses)
+            .map_err(|error| ts::TsError::from(error).to_string());
         Ok::<_, CliError>(output::Summary {
             command: &command,
             numbers: &open.numbers,
@@ -116,8 +115,7 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
             report,
             engine,
             uhf,
-            worker_frequencies: vibrations.frequencies_cm1,
-            worker_hessian: computed.hessian,
+            worker_check,
             iterations: progress.iterations,
             steps: progress.steps,
             evaluations: workers.iter().map(|worker| worker.gradients).sum(),
@@ -126,6 +124,15 @@ pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Resu
         })
     })?;
     summary.seconds = started.elapsed().as_secs_f64();
+    finish(&summary, out, err)
+}
+
+#[cfg(feature = "xtb")]
+fn finish(
+    summary: &output::Summary<'_>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<bool, CliError> {
     summary.write_table(out)?;
     summary.write_files().map_err(CliError::Failed)?;
     if let Some(reason) = summary.failure_reason() {

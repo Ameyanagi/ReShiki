@@ -360,6 +360,133 @@ fn callbacks_cancel_every_stage() {
     }
 }
 
+#[derive(Clone, Copy)]
+enum SecondBranchFault {
+    Scf,
+    StepLimit,
+    Cancelled,
+}
+
+fn second_branch_failure(fault: SecondBranchFault) -> Result<TsReport, TsError> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    struct FailingIrc {
+        triangle: Triangle,
+        second_branch: Arc<AtomicBool>,
+        fault: SecondBranchFault,
+    }
+
+    impl Potential for FailingIrc {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], a: Accuracy) -> Result<f64, EvalError> {
+            if !self.second_branch.load(Ordering::Relaxed) {
+                return self.triangle.evaluate(x, g, a);
+            }
+            match self.fault {
+                SecondBranchFault::Scf => {
+                    Err(EvalError::Scf("injected second-branch SCF failure".into()))
+                }
+                SecondBranchFault::Cancelled => Err(EvalError::Cancelled),
+                SecondBranchFault::StepLimit => {
+                    // An unbounded internal stretch cannot meet the minimizer's
+                    // gradient criterion and exhausts its accepted-step budget.
+                    let axis: [f64; 3] = std::array::from_fn(|k| x[3 + k] - x[k]);
+                    let r = norm(&axis);
+                    g.fill(0.);
+                    for k in 0..3 {
+                        g[k] = axis[k] / r;
+                        g[3 + k] = -g[k];
+                    }
+                    Ok(-r)
+                }
+            }
+        }
+
+        fn hessian(&mut self, x: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+            self.triangle.hessian(x, h)
+        }
+    }
+
+    let second_branch = Arc::new(AtomicBool::new(false));
+    let mut pool = [FailingIrc {
+        triangle: Triangle {
+            analytic: true,
+            ..Default::default()
+        },
+        second_branch: Arc::clone(&second_branch),
+        fault,
+    }];
+    let options = TsOptions {
+        irc_max_steps: if matches!(fault, SecondBranchFault::StepLimit) {
+            0
+        } else {
+            TsOptions::default().irc_max_steps
+        },
+        ..TsOptions::default()
+    };
+    search(
+        &mut pool,
+        &Search {
+            numbers: &[1; 3],
+            masses_amu: &[1., 2., 4.],
+            reactant: &triangle(1.08),
+            product: &triangle(2.32),
+            options: &options,
+        },
+        |event| {
+            if matches!(
+                event,
+                Event::Irc {
+                    forward: false,
+                    step: 0,
+                    ..
+                }
+            ) {
+                second_branch.store(true, Ordering::Relaxed);
+            }
+            ControlFlow::Continue(())
+        },
+    )
+}
+
+#[test]
+fn second_irc_branch_scf_failure_keeps_characterized_report() {
+    let report = second_branch_failure(SecondBranchFault::Scf)
+        .expect("an IRC SCF failure discarded the characterized candidate");
+    assert!(report.saddle_converged);
+    assert_eq!(report.imaginary, 1);
+    assert_eq!(report.frequencies_cm1.len(), 3);
+    assert!((norm(&report.transition_mode) - 1.).abs() < 1e-12);
+    assert!((report.ts.energy - 0.0324).abs() < 1e-4);
+    assert!(report.irc.is_none() && !report.connects);
+    assert_eq!(report.hessian.len(), report.ts.positions.len().pow(2));
+    assert!(report.hessian.iter().all(|v| v.is_finite()));
+    assert_eq!(
+        report.irc_error.as_deref(),
+        Some("SCF failure: injected second-branch SCF failure")
+    );
+    assert_eq!(
+        second_branch_failure(SecondBranchFault::Cancelled).unwrap_err(),
+        TsError::Cancelled
+    );
+}
+
+#[test]
+fn irc_final_minimizer_step_limit_keeps_characterized_report() {
+    let report = second_branch_failure(SecondBranchFault::StepLimit)
+        .expect("an IRC minimizer step limit discarded the characterized candidate");
+    assert!(report.saddle_converged);
+    assert_eq!(report.imaginary, 1);
+    assert!((report.ts.energy - 0.0324).abs() < 1e-4);
+    assert!(report.irc.is_none() && !report.connects);
+    assert_eq!(
+        report.irc_error.as_deref(),
+        Some("endpoint minimization reached its step limit")
+    );
+}
+
 #[test]
 fn invalid_inputs_skip_evaluations_and_events() {
     let x = [0., 0., 0., 1., 0., 0.];

@@ -323,7 +323,8 @@ Usage: reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--
 Search using gas-phase GFN2-xTB with axtb conventions. Requires the xtb feature.
 Supply two atom-mapped XYZ files or one XYZ file with the bond changes.
 Each structure must have 2 to 120 atoms. With two files, atom order
-defines the map. --remap-hydrogens keeps heavy atoms mapped by order.
+defines the map. --remap-hydrogens requires two files and keeps heavy atoms
+mapped by order.
 
 Options:
   --reactant R.xyz             Read the reactant from the first XYZ frame in angstroms.
@@ -339,8 +340,9 @@ Options:
   --out-dir DIR                Write endpoint, TS, NEB and IRC XYZ files and an ORCA Hessian.
   --json FILE                  Write a JSON report.
 
-Exit 0 requires one engine frequency below -50 cm-1 and IRC branches that
-reach both endpoints. Progress and the hydrogen mapping review go to stderr.
+Exit 0 requires a converged saddle, one frequency below -50 cm-1 in both
+checks, and IRC branches whose relaxed ends match both endpoints. Progress
+and the hydrogen mapping review go to stderr.
 
 Examples:
   reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results

@@ -193,10 +193,10 @@ pub(super) struct Refinement {
     pub(super) hessian: Option<Vec<f64>>,
 }
 
-/// Refine until both the projected gradient and the followed-mode Newton
-/// displacement pass. For a Cartesian unit mode v the displacement in the IRC
-/// metric is |g·v| / |λ| times ‖√M v‖. It must lie below 10% of the launch
-/// length. Empty masses select the Euclidean metric for generic potentials.
+/// Refine until both the projected gradient and the IRC launch-mode Newton
+/// displacement pass. For the lowest projected mass-weighted unit mode u it is
+/// |(M⁻¹/²g)·u| / |λᵤ| and must lie below 10% of the launch length. Empty masses
+/// retain the followed Cartesian mode for generic potentials.
 pub(super) fn refine(
     p: &mut impl Potential,
     start: &Minimum,
@@ -210,10 +210,10 @@ pub(super) fn refine(
     let mut h = hessian(p, &x)?;
     let mut h_is_exact = true;
     let mut reference = tangent.to_vec();
-    let scale: Vec<_> = if masses.is_empty() {
+    let inverse_sqrt: Vec<_> = if masses.is_empty() {
         vec![1.0; x.len()]
     } else {
-        masses.iter().flat_map(|m| [m.sqrt(); 3]).collect()
+        masses.iter().flat_map(|m| [m.sqrt().recip(); 3]).collect()
     };
     let mut radius = 0.1;
     let criteria = Level::Normal.criteria();
@@ -273,16 +273,34 @@ pub(super) fn refine(
                 eigenvalue: values[followed],
             },
         )?;
-        let slope = dot(&g, &reference).abs();
-        let amplitude = if values[followed] != 0.0 {
-            slope / values[followed].abs()
-        } else if slope == 0.0 {
-            0.0
+        let mode_displacement = if gradient_passes {
+            // Certify the same mode used by frequency analysis and IRC, rather
+            // than the Cartesian mode followed by the optimization steps.
+            let (curvature, slope) = if masses.is_empty() {
+                (values[followed], dot(&g, &reference).abs())
+            } else {
+                let weighted = modes::mass_weight(&h, &inverse_sqrt);
+                let (launch_values, launch_vectors) = modes::spectrum(&x, &weighted, masses)?;
+                let weighted_gradient: Vec<_> = gradient
+                    .iter()
+                    .zip(&inverse_sqrt)
+                    .map(|(g, inverse)| g * inverse)
+                    .collect();
+                (
+                    launch_values[0],
+                    dot(&weighted_gradient, &launch_vectors[..x.len()]).abs(),
+                )
+            };
+            if curvature != 0.0 {
+                slope / curvature.abs()
+            } else if slope == 0.0 {
+                0.0
+            } else {
+                f64::INFINITY
+            }
         } else {
             f64::INFINITY
         };
-        let weighted_mode: Vec<_> = reference.iter().zip(&scale).map(|(v, m)| v * m).collect();
-        let mode_displacement = amplitude * norm(&weighted_mode);
         if gradient_passes && mode_displacement < 0.1 * options.irc_step {
             return Ok(Refinement {
                 point: Minimum {
@@ -835,5 +853,80 @@ mod tests {
             .unwrap();
             assert_eq!(converged, expected, "atomic mass {mass}");
         }
+    }
+
+    struct MixedMassStretches;
+
+    impl Potential for MixedMassStretches {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            let axes: [[f64; 3]; 2] = std::array::from_fn(|bond| {
+                std::array::from_fn(|k| x[3 * (bond + 1) + k] - x[3 * bond + k])
+            });
+            let lengths = axes.map(|axis| norm(&axis));
+            let s = (lengths[0] + lengths[1] - 4.) / 2_f64.sqrt();
+            let a = (lengths[0] - lengths[1]) / 6_f64.sqrt();
+            let ds = 0.0004 + 0.002 * s;
+            let da = -0.002 * a;
+            g.fill(0.);
+            for (bond, ((axis, length), sign)) in
+                axes.into_iter().zip(lengths).zip([1., -1.]).enumerate()
+            {
+                let slope = ds / 2_f64.sqrt() + sign * da / 6_f64.sqrt();
+                for (k, axis_component) in axis.into_iter().enumerate() {
+                    let component = slope * axis_component / length;
+                    g[3 * bond + k] -= component;
+                    g[3 * (bond + 1) + k] += component;
+                }
+            }
+            Ok(0.0004 * s + 0.001 * (s * s - a * a))
+        }
+    }
+
+    #[test]
+    fn unequal_mass_stationarity_uses_the_actual_irc_launch_mode() {
+        let masses = [1., 12., 35.45];
+        let x = vec![0., 0., 0., 2., 0., 0., 4., 0., 0.];
+        // The negative Cartesian stretch is orthogonal to the gradient, but
+        // mass weighting mixes both stretches into the lowest physical mode.
+        let tangent = [1., 0., 0., -2., 0., 0., 1., 0., 0.];
+        let (energy, g) = evaluate(&mut MixedMassStretches, &x).unwrap();
+        assert!(dot(&g, &tangent).abs() < 1e-15);
+        let h = hessian(&mut MixedMassStretches, &x).unwrap();
+        let inverse_sqrt: Vec<_> = masses
+            .iter()
+            .flat_map(|m: &f64| [m.sqrt().recip(); 3])
+            .collect();
+        let weighted = modes::mass_weight(&h, &inverse_sqrt);
+        let (values, vectors) = modes::spectrum(&x, &weighted, &masses).unwrap();
+        let weighted_gradient: Vec<_> = g
+            .iter()
+            .zip(&inverse_sqrt)
+            .map(|(g, inverse)| g * inverse)
+            .collect();
+        let displacement = dot(&weighted_gradient, &vectors[..x.len()]).abs() / values[0].abs();
+        assert!((displacement - 0.3284).abs() < 0.0001, "{displacement}");
+        let (frequencies, _) = modes::frequencies(&x, &h, &masses).unwrap();
+        assert!((frequencies[0] + 72.13).abs() < 0.01, "{frequencies:?}");
+
+        let options = TsOptions {
+            saddle_max_steps: 0,
+            ..TsOptions::default()
+        };
+        let result = refine(
+            &mut MixedMassStretches,
+            &Minimum {
+                positions: x,
+                energy,
+            },
+            &tangent,
+            &masses,
+            &options,
+            &mut |_| ControlFlow::Continue(()),
+        )
+        .unwrap();
+        assert!(
+            !result.converged,
+            "the IRC mode remains {displacement} sqrt(amu) bohr from stationarity"
+        );
     }
 }

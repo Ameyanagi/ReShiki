@@ -210,7 +210,9 @@ impl Descent<'_> {
         }
         let weight_gradient =
             |g: Vec<f64>| -> Vec<f64> { g.iter().zip(&scale).map(|(v, w)| v / w).collect() };
-        let mut gradient = weight_gradient(evaluate(p, &point.positions)?.1);
+        let (energy, gradient) = evaluate(p, &point.positions)?;
+        point.energy = energy;
+        let mut gradient = weight_gradient(gradient);
         let inverse_sqrt: Vec<_> = scale.iter().map(|w| w.recip()).collect();
         let mut h = modes::mass_weight(self.hessian, &inverse_sqrt);
         let mut completed = false;
@@ -338,7 +340,9 @@ fn classify(
                     / numbers.len() as f64
             });
             let closest = loss[0].min(loss[1]);
-            if closest.sqrt() * crate::ANGSTROM_PER_BOHR < ENDPOINT_RMSD_ANGSTROM {
+            if loss[0] != loss[1]
+                && closest.sqrt() * crate::ANGSTROM_PER_BOHR < ENDPOINT_RMSD_ANGSTROM
+            {
                 if closest == loss[0] {
                     Reached::Reactant
                 } else {
@@ -442,6 +446,13 @@ mod tests {
         // All are unbonded pairs. The closest mapped endpoint still differs
         // by 2 bohr per atom (1.058 A), so relative closeness is insufficient.
         assert_eq!(classify_pair(10., [5., 6.]), Reached::Other);
+    }
+
+    #[test]
+    fn same_graph_exact_rmsd_tie_is_other() {
+        // Both endpoints share the C-C graph and lie 0.25 bohr per atom
+        // from this fitted geometry, well inside the 0.5 A cutoff.
+        assert_eq!(classify_pair(2., [1.5, 2.5]), Reached::Other);
     }
 
     #[test]
@@ -652,6 +663,47 @@ mod tests {
             let q = x[0] * x[0] - 1.;
             g[0] = 0.0008 * x[0] * q;
             Ok(0.0008 * q * q / 4.)
+        }
+    }
+
+    struct ShiftedSoftSaddle;
+
+    impl Potential for ShiftedSoftSaddle {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            let curvature = (51. / 5_140.487_14_f64).powi(2);
+            g[0] = -curvature * x[0];
+            Ok(1e-7 - 0.5 * curvature * x[0] * x[0])
+        }
+    }
+
+    #[test]
+    fn irc_launch_uses_fresh_ts_energy_with_its_gradient() {
+        let ts = Minimum {
+            positions: vec![0.],
+            energy: 0.,
+        };
+        let options = TsOptions {
+            irc_max_steps: 1,
+            ..TsOptions::default()
+        };
+        let curvature = (51. / 5_140.487_14_f64).powi(2);
+        for forward in [true, false] {
+            let (end, path, _) = Descent {
+                ts: &ts,
+                mode: &[1.],
+                hessian: &[-curvature],
+                masses: &[],
+                options: &options,
+            }
+            .trace(&mut ShiftedSoftSaddle, forward, &mut proceed)
+            .unwrap();
+            assert_eq!(
+                path.len(),
+                1,
+                "fresh SCF baseline rejected a downhill launch"
+            );
+            assert!((end.positions[0].abs() - options.irc_step).abs() < 1e-14);
+            assert!(end.energy < 1e-7);
         }
     }
 

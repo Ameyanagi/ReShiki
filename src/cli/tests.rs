@@ -901,7 +901,6 @@ fn ts_parses_repeatable_bond_edits_and_output_paths() {
             "24",
             "--workers",
             "8",
-            "--remap-hydrogens",
             "--keep-endpoints",
             "--out-dir",
             "results",
@@ -917,7 +916,7 @@ fn ts_parses_repeatable_bond_edits_and_output_paths() {
             uhf: Some(2),
             images: 24,
             workers: 8,
-            remap_hydrogens: true,
+            remap_hydrogens: false,
             keep_endpoints: true,
             out_dir: Some("results".into()),
             json: Some("report.json".into()),
@@ -937,6 +936,29 @@ fn ts_parses_repeatable_bond_edits_and_output_paths() {
         ])
         .is_ok()
     );
+}
+
+#[test]
+fn ts_rejects_hydrogen_remapping_with_explicit_bond_edits() {
+    let message = "--remap-hydrogens requires two XYZ endpoints without --form or --break";
+    for (endpoint, edit) in [("--reactant", "--form"), ("--product", "--break")] {
+        assert_eq!(
+            parsed(&["ts", endpoint, "end.xyz", edit, "1-2", "--remap-hydrogens"]),
+            Err(message.into()),
+        );
+    }
+    let Command::Ts(command) = parsed(&[
+        "ts",
+        "--reactant",
+        "r.xyz",
+        "--product",
+        "p.xyz",
+        "--remap-hydrogens",
+    ])
+    .unwrap() else {
+        panic!("ts command");
+    };
+    assert!(command.remap_hydrogens);
 }
 
 #[test]
@@ -1004,6 +1026,47 @@ fn ts_rejects_invalid_options_and_endpoint_combinations() {
     }
 }
 
+#[cfg(feature = "xtb")]
+#[tokio::test]
+async fn ts_preflight_rejects_json_collisions_with_the_output_directory_and_its_files() {
+    let temp = tempfile::tempdir().unwrap();
+    let missing_xyz = temp.path().join("missing.xyz");
+    let out_dir = temp.path().join("out");
+    let structure = out_dir.join("ts.xyz");
+    let cases = [
+        (out_dir.clone(), &out_dir),
+        (temp.path().join("absent/../out"), &out_dir),
+        (temp.path().join("absent/../out/ts.xyz"), &structure),
+    ];
+    let mut results = Vec::new();
+    for (json, target) in cases {
+        let (code, out, err) = call_os(vec![
+            "ts".into(),
+            "--reactant".into(),
+            missing_xyz.clone().into_os_string(),
+            "--product".into(),
+            missing_xyz.clone().into_os_string(),
+            "--out-dir".into(),
+            out_dir.clone().into_os_string(),
+            "--json".into(),
+            json.into_os_string(),
+        ])
+        .await;
+        results.push((
+            code,
+            out,
+            err,
+            format!("--json and --out-dir both target {}", target.display()),
+        ));
+    }
+    for (code, out, err, expected) in results {
+        assert_eq!(code, FAILURE);
+        assert!(out.is_empty());
+        assert!(err.contains(&expected), "expected {expected}, got {err}");
+    }
+    assert!(!out_dir.exists());
+}
+
 #[test]
 fn ts_is_cli_only() {
     let spec = commands::find("ts").unwrap();
@@ -1025,6 +1088,30 @@ async fn ts_without_xtb_reports_unavailability() {
     assert_eq!(code, FAILURE);
     assert!(out.is_empty());
     assert_eq!(err, "reshiki: xTB is not included in this build\n");
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn ts_worker_failure_keeps_characterized_candidate_and_files() {
+    ts::tests::worker_failure_keeps_characterized_candidate_and_files();
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn ts_worker_count_disagreement_fails_with_diagnostics() {
+    ts::tests::worker_count_disagreement_fails_with_diagnostics();
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn ts_irc_failure_preserves_candidate_and_explains_missing_branches() {
+    ts::tests::irc_failure_preserves_candidate_and_explains_missing_branches();
+}
+
+#[cfg(feature = "xtb")]
+#[test]
+fn ts_worker_hessian_uses_engine_masses_and_explicit_symmetry() {
+    ts::tests::worker_hessian_uses_engine_masses_and_explicit_symmetry();
 }
 
 #[test]
