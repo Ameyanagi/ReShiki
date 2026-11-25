@@ -531,7 +531,15 @@ fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, Strin
         .default_job()
         .and_then(|i| file.jobs.get_mut(i).map(|job| (i, job)))
         .ok_or("The file has no geometry")?;
-    let frame = &job.steps.last().ok_or("The file has no geometry")?.frame;
+    // A job cut off after its last result opens at that result's geometry,
+    // so the result stays with it.
+    let frame = &job
+        .result
+        .as_ref()
+        .and(job.result_step())
+        .or(job.steps.last())
+        .ok_or("The file has no geometry")?
+        .frame;
     let mut xyz = format!("{}\n\n", frame.numbers.len());
     for (number, [x, y, z]) in frame.numbers.iter().zip(&frame.positions_angstrom) {
         xyz.push_str(&format!("{number} {x} {y} {z}\n"));

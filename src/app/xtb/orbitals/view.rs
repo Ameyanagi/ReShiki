@@ -6,7 +6,6 @@ use super::levels::Diagram;
 use super::{Action, ISO_RANGE, LookChoice, PRESETS, send};
 use crate::app::workspace::{accessible_checkbox, accessible_command, control, muted_text};
 use crate::app::xtb::palette::Shown;
-use crate::app::xtb::results;
 use crate::app::xtb::tone::{Tone, line};
 use crate::app::{App, Message};
 use iced::widget::{Column, Space, canvas, column, container, row, slider, text};
@@ -17,21 +16,15 @@ use reshiki::qcdata::Settings;
 pub(crate) const HEIGHT: f32 = 236.;
 
 impl App {
-    pub(in crate::app::xtb) fn xtb_orbitals_tab<'a>(
-        &'a self,
-        shown: &Shown<'a>,
-        inspector: bool,
-    ) -> Element<'a, Message> {
+    pub(in crate::app::xtb) fn xtb_orbitals_tab(&self, inspector: bool) -> Element<'_, Message> {
         let Some(target) = self.xtb_orbital_target() else {
             return line("This result has no orbital levels.", Tone::Muted);
         };
         let choice = self.xtb_orbital_choice(&target);
         let live = target.problem.is_none();
-        let gap = results::gap_ev(&shown.stored.result, shown.info);
         let diagram = canvas(Diagram {
             columns: target.columns.clone(),
             selected: Some((choice.column, choice.index)),
-            gap_ev: gap,
             live,
         })
         .width(Diagram::width(target.columns.len()))
@@ -111,7 +104,7 @@ impl App {
             );
         }
         list = list.push(line(
-            "↑/↓ choose while nothing is selected on the canvas.",
+            "Click a level, then ↑/↓ move through the levels.",
             Tone::Muted,
         ));
         let list: Element<'_, Message> = if inspector {

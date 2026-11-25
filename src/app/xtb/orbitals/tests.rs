@@ -152,20 +152,39 @@ fn the_tab_previews_the_homo_without_changing_the_drawing() {
         app.tab.doc.models[0].surface.is_none(),
         "a preview is no edit"
     );
-    assert!(!app.tab.history.can_undo() || app.tab.doc.science.results.len() == 1);
+    let frames = app.tab.history.frames();
 
     answer(&mut app);
     assert!(has_surface(app.display_document()), "the mesh is drawn");
     assert!(!has_surface(&app.tab.doc));
 
-    // ↑ goes up the diagram, to the LUMO; HOMO comes back.
-    act(&mut app, Action::Step(1));
+    // ↑ (with nothing selected) goes up the diagram, to the LUMO; HOMO
+    // comes back.
+    app.tab.selected.clear();
+    assert!(app.xtb_orbitals_visible(), "visible");
+    assert!(
+        !app.xtb_orbital_keys(),
+        "arrows belong to the drawing first"
+    );
+    act(&mut app, Action::Homo);
+    assert!(
+        app.xtb_orbital_keys(),
+        "after a choice in the tab they choose orbitals"
+    );
+    let _ = app.update(Message::Shortcut(crate::app::shortcuts::Action::Nudge(
+        0., -1.,
+    )));
     let target = app.xtb_orbital_target().unwrap();
     assert_eq!(app.xtb_orbital_choice(&target).index, 4);
     assert_eq!(app.status, "LUMO · 5.44 eV");
     act(&mut app, Action::Homo);
     let target = app.xtb_orbital_target().unwrap();
     assert_eq!(app.xtb_orbital_choice(&target).index, 3);
+    assert_eq!(
+        app.tab.history.frames(),
+        frames,
+        "browsing adds no Undo step"
+    );
 
     // Leaving the tab ends the preview.
     let _ = app.update(Message::Xtb(XtbAction::Palette(
@@ -184,7 +203,14 @@ fn place_keeps_the_orbital_in_the_drawing_as_one_undo_step() {
         "Place waits for the coefficients"
     );
     answer(&mut app);
+    let before = key(&app);
+    let frames = app.tab.history.frames();
     act(&mut app, Action::Place);
+    assert_eq!(
+        app.tab.history.frames(),
+        frames + 1,
+        "Place is one Undo step"
+    );
     let figure = app.tab.doc.models[0].surface.clone().expect("placed");
     assert_eq!(figure.orbital.index, 3);
     assert_eq!(figure.iso, ISO);
@@ -196,25 +222,18 @@ fn place_keeps_the_orbital_in_the_drawing_as_one_undo_step() {
         .unwrap();
     assert_eq!(stored.alpha.rows, vec![3]);
     assert!(stored.basis.is_some());
-    assert_eq!(
-        science::result_key(&app.tab.doc.science.results[0].result),
-        key(&app)
-    );
+    assert_eq!(key(&app), before, "pinning keeps the figure's result key");
     assert!(has_surface(&app.tab.doc));
 
-    // The isovalue slider shows its value while held, then commits once.
+    // A slider drag changes the figure at once and is one Undo step; a
+    // preset is another.
     act(&mut app, Action::Iso(0.08));
     act(&mut app, Action::Iso(0.09));
-    assert_eq!(app.tab.doc.models[0].surface.as_ref().unwrap().iso, ISO);
-    assert_eq!(
-        app.display_document().models[0]
-            .surface
-            .as_ref()
-            .unwrap()
-            .iso,
-        0.09
-    );
+    assert_eq!(app.tab.doc.models[0].surface.as_ref().unwrap().iso, 0.09);
     act(&mut app, Action::Settle);
+    act(&mut app, Action::Iso(0.02));
+    assert_eq!(app.tab.doc.models[0].surface.as_ref().unwrap().iso, 0.02);
+    let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc.models[0].surface.as_ref().unwrap().iso, 0.09);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc.models[0].surface.as_ref().unwrap().iso, ISO);
@@ -272,4 +291,35 @@ fn levels_follow_the_spin_columns_of_an_open_shell() {
     let columns = levels::columns(&open);
     assert_eq!(columns[0].homo(), Some(3));
     assert_eq!(columns[1].homo(), Some(2));
+}
+
+#[test]
+fn a_reopened_placed_orbital_waits_for_its_new_level() {
+    let mut app = tab();
+    answer(&mut app);
+    act(&mut app, Action::Place);
+    // As after reopening: only the placed row is at hand.
+    app.tab.xtb.orbitals.computed.clear();
+    act(&mut app, Action::Lumo);
+    assert_eq!(
+        app.tab.doc.models[0]
+            .surface
+            .as_ref()
+            .unwrap()
+            .orbital
+            .index,
+        3
+    );
+    assert!(app.tab.xtb.orbitals.pending.is_some());
+    let frames = app.tab.history.frames();
+    answer(&mut app);
+    let figure = app.tab.doc.models[0].surface.clone().unwrap();
+    assert_eq!(figure.orbital.index, 4, "the waiting level is placed");
+    assert_eq!(app.tab.history.frames(), frames + 1);
+    let stored = app.tab.doc.science.results[0]
+        .result
+        .orbitals
+        .clone()
+        .unwrap();
+    assert_eq!(stored.alpha.rows, vec![3, 4]);
 }

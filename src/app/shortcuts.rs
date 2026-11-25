@@ -385,7 +385,8 @@ impl App {
                     !self.guides.crosshair,
                 )));
             }
-            // ↑ and ↓ choose orbitals in the xTB results' Orbitals tab.
+            // ↑ and ↓ choose orbitals right after one was chosen in the xTB
+            // Orbitals tab, until the drawing changes or something is selected.
             Action::Nudge(x, y) if x == 0. && self.xtb_orbital_keys() => {
                 return self.xtb_action(super::xtb::Action::Orbitals(
                     super::xtb::orbitals::Action::Step(if y < 0. { 1 } else { -1 }),
