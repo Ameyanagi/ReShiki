@@ -40,20 +40,24 @@ helper executable on the desktop.
 
 ## The pinned revision
 
-The fork revision is written once, in the root `Cargo.toml`
-(`[workspace.dependencies] axtb-driver`). `Cargo.lock` records the same
-revision. The dependency audit checks the other copies against `Cargo.lock`:
-`reshiki_xtb_worker::AXTB_REV` (shown by `--version`, About and the worker's
-`hello`), and `licenses/axtb/SOURCE`. To move the pin, change `Cargo.toml`
-(both the dependency and the two `gemm` patches below), run
-`cargo update -p axtb-driver`, and update the two copies the audit checks.
+The fork revision is written in the root `Cargo.toml`: the
+`[workspace.dependencies] axtb-driver` entry and the two `gemm` patches below.
+`Cargo.lock` records it. The dependency audit checks every other copy against
+`Cargo.lock`: the two patches, `reshiki_xtb_worker::AXTB_REV` (shown by
+`--version`, About and the worker's `hello`), and `licenses/axtb/SOURCE`. To
+move the pin: change the three entries in `Cargo.toml`, run
+`cargo update -p axtb-driver`, update `AXTB_REV` and `licenses/axtb/SOURCE`,
+and copy the fork's `COPYING`, `COPYING.LESSER`, `NOTICE` and
+`CHANGES-reshiki.md` into `licenses/axtb/` (the audit compares them byte for
+byte).
 
 The fork's workspace patches two `gemm` crates, `gemm-common` and
 `private-gemm-x86` (`third_party/README.md` in the fork), so they read one CPU's
 cache description instead of every CPU's. Cargo ignores a dependency's `[patch]`
 sections, so ReShiki's root `Cargo.toml` repeats them, taking the patched copies
-from the fork at the same revision. ReShiki then builds exactly what the fork
-validated. Only the xtb graph uses `gemm`. The copies are MIT and keep their own
+from the fork at the same revision, so ReShiki builds the engine and `gemm`
+sources the fork validated (other dependency versions follow ReShiki's own
+lockfile). Only the xtb graph uses `gemm`. The copies are MIT and keep their own
 `LICENSE` files, which the notices include with the fork as their source.
 
 ## License texts and notices
@@ -81,8 +85,9 @@ validated. Only the xtb graph uses `gemm`. The copies are MIT and keep their own
    contains a package bound by a GPL-family license (GPL, LGPL, AGPL, in any
    form), or any package from the axtb fork. An `OR` expression with a
    non-GPL alternative, such as `self_cell`'s `Apache-2.0 OR GPL-2.0-only`, is
-   used under that alternative and passes; a parenthesized expression with any
-   GPL-family term fails;
+   used under that alternative and passes. Expressions are read with SPDX
+   precedence (`WITH`, then `AND`, then `OR`, parentheses respected): an `AND`
+   with a GPL-family part fails;
 2. the set of GPL-family packages in the application's `--features xtb` graph
    for the macOS and Linux release targets differs from the seven fork crates
    at the pinned revision (`axtb`, `axtb-base`, `axtb-d4`, `axtb-driver`,
@@ -188,7 +193,8 @@ distribution adds calculations for those who opt in:
 
 - Outside review of the wording on this page, then remove the status note.
 - The dependency audit confirms that `licenses/axtb/SOURCE`, `AXTB_REV` and
-  `Cargo.lock` agree and the three copied license and notice files match axtb.
+  `Cargo.lock` agree and the four copied license and notice files match the
+  fork.
 - The source archive is built, checked (`xtb_source_archive.py check`) and
   uploaded before any binary.
 - The packaged macOS and Linux executables answer a water energy through

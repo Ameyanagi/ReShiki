@@ -113,16 +113,26 @@ def package(name, version, license):
 
 
 class AgentDependencyTests(unittest.TestCase):
-    def audit(self, run, packages=(), locked_packages=(), *, source_revision=REVISION):
+    def audit(
+        self, run, packages=(), locked_packages=(), *, source_revision=REVISION, stale_patches=()
+    ):
         with tempfile.TemporaryDirectory() as temporary, patch("check_agent_dependencies.run", run):
             root = Path(temporary)
             (root / BASELINE).parent.mkdir(parents=True)
             (root / BASELINE).write_text(json.dumps(FIXTURE_BASELINE), encoding="utf-8")
-            driver = {"name": "axtb-driver", "version": "0.2.0", "source": FORK_LOCK_SOURCE}
+            fork_packages = [
+                {"name": name, "version": version, "source": FORK_LOCK_SOURCE}
+                for name, version in (
+                    ("axtb-driver", "0.2.0"),
+                    ("gemm-common", "0.18.2"),
+                    ("private-gemm-x86", "0.1.22"),
+                )
+                if name not in stale_patches
+            ]
             lock = "version = 4\n" + "".join(
                 "\n[[package]]\n"
                 + "".join(f"{key} = {json.dumps(value)}\n" for key, value in package.items())
-                for package in (driver, *locked_packages)
+                for package in (*fork_packages, *locked_packages)
             )
             (root / "Cargo.lock").write_text(lock, encoding="utf-8")
             worker = root / "crates/xtb-worker/src/lib.rs"
@@ -228,6 +238,11 @@ class AgentDependencyTests(unittest.TestCase):
         self.assertIn("axtb@1.0.0 has a license", str(raised.exception))
         self.assertIn("axtb-extra@0.2.0 has a license", str(raised.exception))
         self.assertNotIn("axtb-driver@0.2.0 has a license", str(raised.exception))
+
+    def test_pin_consistency_requires_the_gemm_patches_at_the_pin(self):
+        stale = {"name": "gemm-common", "version": "0.18.2", "source": "registry+x"}
+        with self.assertRaisesRegex(ValueError, "Cargo.lock gemm-common source must be the fork"):
+            self.audit(cargo(tree(SERVER)), locked_packages=[stale], stale_patches={"gemm-common"})
 
     def test_pin_consistency_rejects_a_different_source_revision(self):
         with self.assertRaisesRegex(

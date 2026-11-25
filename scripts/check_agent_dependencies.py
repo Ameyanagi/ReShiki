@@ -279,14 +279,16 @@ def axtb_locked_source(revision):
 
 def pin_problems(root, locked_packages, xtb_metadata, revision):
     expected_source = axtb_locked_source(revision)
-    driver_sources = [
-        package["source"]
-        for package in locked_packages
-        if package["name"] == "axtb-driver" and axtb_fork(package.get("source", ""))
-    ]
     problems = []
-    if driver_sources != [expected_source]:
-        problems.append(f"Cargo.lock axtb-driver source must match AXTB_REV ({revision})")
+    # The two gemm patches come from the fork too and must move with the pin.
+    for name in ("axtb-driver", "gemm-common", "private-gemm-x86"):
+        sources = [
+            package.get("source")
+            for package in locked_packages
+            if package["name"] == name and axtb_fork(package.get("source") or "")
+        ]
+        if sources != [expected_source]:
+            problems.append(f"Cargo.lock {name} source must be the fork at AXTB_REV ({revision})")
     notices = root / "licenses/axtb"
     source = (notices / "SOURCE").read_text(encoding="utf-8")
     for field, value in (("Revision", revision), ("Fork", f"{AXTB_SOURCE}, branch reshiki")):
@@ -305,15 +307,17 @@ def pin_problems(root, locked_packages, xtb_metadata, revision):
         problems.append("xtb metadata is missing axtb-driver at the pinned revision")
     else:
         upstream = Path(driver["manifest_path"]).parent
-        # The fork's notice of modification lives at its repository root.
-        for name, source in (
-            ("COPYING", upstream),
-            ("COPYING.LESSER", upstream),
-            ("NOTICE", upstream),
-            ("CHANGES-reshiki.md", upstream.parents[1]),
-        ):
-            if (notices / name).read_bytes() != (source / name).read_bytes():
+        for name in ("COPYING", "COPYING.LESSER", "NOTICE"):
+            if (notices / name).read_bytes() != (upstream / name).read_bytes():
                 problems.append(f"licenses/axtb/{name} must match the pinned fork byte for byte")
+        # The fork's notice of modification lives at its repository root, which
+        # only a git checkout has; vendored layouts (Nix, the source archive)
+        # carry the crate directories alone.
+        changes = upstream.parents[1] / "CHANGES-reshiki.md"
+        if changes.is_file() and (notices / changes.name).read_bytes() != changes.read_bytes():
+            problems.append(
+                "licenses/axtb/CHANGES-reshiki.md must match the pinned fork byte for byte"
+            )
     return problems
 
 
