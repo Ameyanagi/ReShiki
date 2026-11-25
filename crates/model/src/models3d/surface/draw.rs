@@ -813,29 +813,6 @@ mod figures;
 #[cfg(test)]
 mod tests;
 
-// Keep the analytic-demo tests on their original interfaces.
-#[cfg(test)]
-use std::sync::Arc as Rc;
-
-#[cfg(test)]
-fn tone_counts(look: Look, dark: bool, backdrop: [f32; 3], fade: f32) -> Vec<usize> {
-    phase_tone_counts(look, demo_colors(dark), backdrop, fade)
-}
-
-#[cfg(test)]
-impl Prepared {
-    fn primitive(
-        &self,
-        dark: bool,
-        backdrop: [f32; 3],
-        fade: f32,
-        outline: Option<Outline>,
-        line_width: f32,
-    ) -> Option<Primitive> {
-        self.paint(demo_colors(dark), backdrop, fade, outline, line_width)
-    }
-}
-
 fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [
         a[1] * b[2] - a[2] * b[1],
