@@ -1501,6 +1501,21 @@ fn a_result_for_other_atoms_is_refused() {
         attach(&mut doc, &start, vec![heavy_water], deuterated),
         Err(ScienceError::Unknown)
     ));
+    let mut weighed = (*start.frame).clone();
+    weighed.masses_amu = vec![16.0, 2.0, 1.0];
+    let mut reweighed = result(&weighed, Task::Optimize, false);
+    reweighed.input_frame = Some(start.frame.hash());
+    assert!(matches!(
+        attach(&mut doc, &start, vec![weighed], reweighed),
+        Err(ScienceError::Unknown)
+    ));
+    // An empty isotope list and all zeros both mean natural abundance.
+    let mut moved = (*start.frame).clone();
+    moved.isotopes = vec![0, 0, 0];
+    moved.positions_angstrom[0][0] += 0.01;
+    let mut optimized = result(&moved, Task::Optimize, false);
+    optimized.input_frame = Some(start.frame.hash());
+    assert!(attach(&mut doc, &start, vec![moved], optimized).is_ok());
     let mut short = start.clone();
     short.atoms.pop();
     assert!(matches!(
@@ -1520,7 +1535,7 @@ fn history_science_bytes_count_snapshot_attachments() {
     let start = launch(&doc, oxygen, 0, 1).unwrap();
     add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
     let mut history = History::default();
-    let payloads = doc.science.heap_bytes();
+    let payloads: usize = doc.science.payloads().map(|(_, bytes)| bytes).sum();
     for step in 0..5 {
         reconciled_edit(&mut doc, &mut history, |doc| {
             doc.atom_mut(oxygen).unwrap().position = Point::new(step as f32, 0.);
@@ -1528,8 +1543,7 @@ fn history_science_bytes_count_snapshot_attachments() {
     }
     let containers = doc.science.container_bytes();
     // Five snapshots and the live document each own their lists and attachments.
-    assert!(history.science_bytes(&doc) >= 6 * containers);
-    assert!(history.science_bytes(&doc) < payloads + 6 * containers + 1024);
+    assert_eq!(history.science_bytes(&doc), payloads + 6 * containers);
 }
 
 #[test]
