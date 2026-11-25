@@ -199,8 +199,9 @@ async fn foreign_drawings_keep_one_common_geometry_frame_through_editable_roundt
                 )
                 .await
                 .unwrap();
+                // The writer detects a reaction here. Reimport still reports the scheme metadata loss.
                 assert!(
-                    warnings.is_empty(),
+                    matches!(warnings.as_slice(), [warning] if warning.contains("external reaction roles and condition references are not retained")),
                     "{name}.{format} → {target}: {warnings:?}"
                 );
                 check_geometry(&restored, false);

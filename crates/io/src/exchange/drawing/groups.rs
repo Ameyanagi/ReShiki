@@ -139,9 +139,9 @@ impl Writer<'_> {
         }
         Ok(())
     }
-    pub(super) fn groups(&mut self) -> Result<()> {
+    pub(super) fn groups(&mut self, reactions: &[steps::Preview]) -> Result<()> {
         let doc = self.doc;
-        if doc.groups.is_empty() && !self.split_fragments {
+        if doc.groups.is_empty() && !self.split_fragments && reactions.is_empty() {
             return Ok(());
         }
         let sets: Vec<HashSet<_>> = doc
@@ -202,6 +202,12 @@ impl Writer<'_> {
                 }
             }
             components.push(component);
+        }
+        if doc.groups.is_empty() && !self.split_fragments {
+            self.split_fragments = steps::needs_fragments(reactions, &components);
+            if !self.split_fragments {
+                return Ok(());
+            }
         }
         let children = self.tree.node(self.fragment)?.children.clone();
         for (index, component) in components.into_iter().enumerate() {

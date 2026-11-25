@@ -72,7 +72,12 @@ fn drawing_losses(
             .into(),
         );
     }
-    if roles && !document.reactions.is_empty() {
+    // CDXML/CDX keeps roles unless lowering an arrow to shapes removes its reaction.
+    if roles
+        && !document.reactions.is_empty()
+        && (!matches!(format, "cdxml" | "cdx")
+            || crate::arrows::lowered(document).reactions.len() < document.reactions.len())
+    {
         notices.push(REACTION_ROLES_NOTICE.into());
     }
     // MOL and identifiers omit arrows, so the link-loss notice applies only to CDXML/CDX.
@@ -171,9 +176,92 @@ mod tests {
     use super::*;
     use crate::{
         arrow_labels::{ArrowLabel, EXPORT_NOTICE, Side},
-        arrows::{ArrowStyle, Preset},
+        arrows::{ArrowStyle, Body, Preset},
         document::{Annotation, Arrow, Point},
+        reactions::{Participant, Reaction},
     };
+
+    fn add_reaction(document: &mut Document, body: Body, curved: bool) {
+        let y = document.arrows.len() as f32 * 100.;
+        let reactant = document.add_atom("C", Point::new(-40., y));
+        let product = document.add_atom("O", Point::new(160., y));
+        let mut style = ArrowStyle::preset(Preset::Forward);
+        style.set_body(body);
+        let arrow = document.next_id();
+        let mut drawing = Arrow::new(
+            arrow,
+            Point::new(0., y),
+            Point::new(120., y),
+            Preset::Forward,
+            style,
+        );
+        if curved {
+            drawing.control = Some(Point::new(60., y + 40.));
+        }
+        document.arrows.push(drawing);
+        let mut reaction = Reaction::new(arrow);
+        reaction.reactants.push(Participant {
+            atoms: vec![reactant],
+            coefficient: 1,
+        });
+        reaction.products.push(Participant {
+            atoms: vec![product],
+            coefficient: 1,
+        });
+        document.reactions.push(reaction);
+    }
+
+    #[test]
+    fn editable_exchange_reports_only_roles_lost_with_lowered_reaction_arrows() {
+        for (body, curved, lost) in [
+            (Body::Line, false, false),
+            (Body::Block, false, false),
+            (Body::Block, true, true),
+            (Body::Chevron, false, true),
+        ] {
+            let mut doc = Document::default();
+            add_reaction(&mut doc, body, curved);
+            doc.validate().unwrap();
+            for format in ["cdxml", "cdx"] {
+                assert_eq!(
+                    notices(&doc, format, Route::UnpreparedFallback)
+                        .iter()
+                        .any(|notice| notice == REACTION_ROLES_NOTICE),
+                    lost,
+                    "{format}: {body:?}, curved={curved}"
+                );
+            }
+            assert!(
+                notices(
+                    &doc,
+                    "mol",
+                    Route::Prepared {
+                        source: &doc,
+                        figure_only: false,
+                    }
+                )
+                .iter()
+                .any(|notice| notice == REACTION_ROLES_NOTICE)
+            );
+        }
+    }
+
+    #[test]
+    fn only_lowered_arrows_with_explicit_roles_add_the_notice() {
+        let mut doc = Document::default();
+        add_reaction(&mut doc, Body::Line, false);
+        add_reaction(&mut doc, Body::Chevron, false);
+        doc.validate().unwrap();
+        let count = |doc: &Document| {
+            notices(doc, "cdxml", Route::AttachmentEarlyExport)
+                .iter()
+                .filter(|notice| notice.as_str() == REACTION_ROLES_NOTICE)
+                .count()
+        };
+        assert_eq!(count(&doc), 1);
+        doc.reactions.pop();
+        assert_eq!(count(&doc), 0);
+    }
 
     #[test]
     fn editable_exchange_reports_omitted_arrow_condition_links() {

@@ -33,6 +33,11 @@ mod partial_charges;
 mod piece_tests;
 #[cfg(test)]
 mod purpose_tests;
+#[cfg(test)]
+mod reaction_goldens;
+#[cfg(test)]
+mod reaction_tests;
+mod steps;
 mod tables;
 mod tlc;
 mod tree;
@@ -188,7 +193,7 @@ struct Writer<'a> {
     work: usize,
     variable_labels: bool,
     /// Each molecule in a fragment of its own even without groups, so a
-    /// catalytic cycle's parts can be named apart.
+    /// reaction's participants or catalytic cycle's parts can be named apart.
     split_fragments: bool,
 }
 
@@ -398,7 +403,12 @@ fn write_impl(
     w.marks()?;
     w.hidden_charges()?;
     w.arrows()?;
-    let middle = w.graphics()?;
+    let reactions = w.preview_steps();
+    let plusses = reactions
+        .iter()
+        .flat_map(|r| r.plusses.iter().copied())
+        .collect();
+    let middle = w.graphics(&plusses)?;
     w.generic_units()?;
     let arrow_nodes: std::collections::HashSet<_> = document
         .arrows
@@ -420,7 +430,7 @@ fn write_impl(
         }
     }
     w.crossings(middle)?;
-    w.groups()?;
+    w.groups(&reactions)?;
     w.abbreviations()?;
     w.orbitals_behind_labels()?;
     // Abbreviations move bonds into nested fragments. Native areas must be
@@ -448,6 +458,7 @@ fn write_impl(
     }
     let payload = w.cycles(&written_cycles)?;
     w.tables()?;
+    w.reaction_schemes(reactions)?;
     let (_, hi) = w.painted_bounds;
     let right = (hi.x * w.scale + w.shift.x + 30.).ceil().max(612.);
     let bottom = (hi.y * w.scale + w.shift.y + 30.).ceil().max(792.);
