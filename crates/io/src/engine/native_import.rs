@@ -645,7 +645,17 @@ fn restore_reaction_maps(
     let mut parent: Vec<_> = (0..doc.atoms.len()).collect();
     let mut chains = HashMap::<usize, Chain>::new();
     let mut order = Vec::new();
-    for (step, (reaction, &pairs)) in doc.reactions.iter().skip(before).zip(maps).enumerate() {
+    // Steps on arrows that take no reaction roles, such as resonance, are not
+    // saved as steps, so the saved steps' pairs go first.
+    let mut steps: Vec<_> = doc
+        .reactions
+        .iter()
+        .skip(before)
+        .zip(maps)
+        .enumerate()
+        .collect();
+    steps.sort_by_key(|(_, (r, _))| reactions::preview(doc, r.arrow).is_err());
+    for (step, (reaction, &pairs)) in steps {
         let side = |parts: &[Participant]| {
             parts
                 .iter()

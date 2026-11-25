@@ -864,3 +864,64 @@ async fn an_unmapped_step_holding_both_ends_keeps_the_earlier_pair() {
         assert_eq!(saved_step_pairs(&saved), [first_step, vec![]], "{format}");
     }
 }
+
+#[tokio::test]
+async fn a_resonance_step_does_not_join_the_pairs_of_saved_steps() {
+    // A -> B and C -> D, then B <-> C on a resonance arrow, which is not
+    // saved as a step, then A + C -> E + F. All four saved pairs fit.
+    let arrow = |id: u32, y: u32, tail: &str| {
+        format!(
+            "<arrow id=\"{id}\" Tail3D=\"20 {y} 0\" Head3D=\"80 {y} 0\" ArrowheadHead=\"Full\" \
+             ArrowheadTail=\"{tail}\" ArrowheadType=\"Solid\" FillType=\"None\"/>"
+        )
+    };
+    let atom = |fragment: u32, x: u32, y: u32, element: u32| {
+        format!(
+            "<fragment id=\"{fragment}\"><n id=\"{}\" p=\"{x} {y}\" Element=\"{element}\"/></fragment>",
+            fragment + 1
+        )
+    };
+    let source = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CDXML><page id=\"1\">{}{}{}{}{}{}{}{}{}{}\
+         <scheme id=\"40\">\
+         <step id=\"41\" ReactionStepReactants=\"2\" ReactionStepProducts=\"4\" ReactionStepArrows=\"30\" ReactionStepAtomMap=\"3 5\"/>\
+         <step id=\"42\" ReactionStepReactants=\"6\" ReactionStepProducts=\"8\" ReactionStepArrows=\"31\" ReactionStepAtomMap=\"7 9\"/>\
+         <step id=\"43\" ReactionStepReactants=\"4\" ReactionStepProducts=\"6\" ReactionStepArrows=\"32\" ReactionStepAtomMap=\"5 7\"/>\
+         <step id=\"44\" ReactionStepReactants=\"2 6\" ReactionStepProducts=\"10 12\" ReactionStepArrows=\"33\" ReactionStepAtomMap=\"3 11 7 13\"/>\
+         </scheme></page></CDXML>",
+        atom(2, 0, 0, 6),
+        atom(4, 100, 0, 7),
+        atom(6, 0, 100, 8),
+        atom(8, 100, 100, 9),
+        atom(10, 100, 300, 16),
+        atom(12, 100, 340, 17),
+        arrow(30, 0, "None"),
+        arrow(31, 100, "None"),
+        arrow(32, 200, "Full"),
+        arrow(33, 320, "None"),
+    );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let document = formats::read_with_engine(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert_eq!(document.reactions.len(), 4, "{format}");
+        let saved = String::from_utf8(
+            formats::write_with_engine(document, "cdxml", &engine)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let pair = |a: &str, b: &str| (a.to_owned(), b.to_owned());
+        assert_eq!(
+            saved_step_pairs(&saved),
+            [
+                vec![pair("6", "7")],
+                vec![pair("8", "9")],
+                vec![pair("6", "16"), pair("8", "17")],
+            ],
+            "{format}"
+        );
+    }
+}
