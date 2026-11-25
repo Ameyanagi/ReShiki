@@ -939,10 +939,12 @@ explains how the crates and modules fit together.
 
 ## reshiki-xtb-worker
 
+- `crates/xtb-worker/src/ao.rs`: Conversion from axtb's spherical AOs to qcdata's unit-norm canonical AOs.
 - `crates/xtb-worker/src/client.rs`: Persistent, synchronous supervision of one bounded xTB worker.
-- `crates/xtb-worker/src/engine.rs`: Warm-started GFN2-xTB calculations through the axtb driver.
+- `crates/xtb-worker/src/engine.rs`: Warm-started calculations through the pinned axtb driver.
 - `crates/xtb-worker/src/lib.rs`: The xTB protocol, client and engine-backed worker.
-- `crates/xtb-worker/src/protocol.rs`: Version 1 of the ReShiki xTB worker wire format.
+- `crates/xtb-worker/src/protocol.rs`: Version 2 of the ReShiki xTB worker wire format.
+- `crates/xtb-worker/src/protocol/wire_orbitals.rs`: Orbital metadata on the wire.
 - `crates/xtb-worker/src/worker.rs`: Request dispatch and error responses for the xTB worker.
 
 ## reshiki-geometry

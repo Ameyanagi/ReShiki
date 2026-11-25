@@ -255,55 +255,25 @@ Usage: reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gf
     [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
     [--gradient] [--wbo] FILE.xyz
 
-Reads the first structure of an XYZ file, with coordinates in angstroms,
-and runs GFN2-xTB (default), GFN-FF or g-xTB 2.0.1 in an isolated worker.
-The first line is an atom count (1 to 500), followed by a comment line and
-exactly that many atom rows, each with an element symbol and three finite
-coordinates. Element symbols are case-insensitive.
-
 Options:
-  --task energy|gradient|hessian|orbitals
-              Calculate energy (default), gradient, analytic Hessian with
-              vibrations and thermochemistry, or every orbital row and basis.
-  --method gfn2|gfnff|gxtb
-              Choose the calculation method (default gfn2).
-  --energy    Accepted for compatibility; energy is always included.
-  --gradient  Include the Cartesian energy gradient in any task.
-  --wbo       Include Mayer–Wiberg bond orders.
-  --charge N  Set the molecular charge (default 0).
-  --uhf N     Set a nonnegative number of unpaired electrons. The default
-              comes from the electron count.
-  --conventions axtb|xtb-6.8
-              Use axtb (default) or xtb 6.8 compatible conventions.
-  --alpb NAME | --gbsa NAME
-              Use an implicit solvent. GFN-FF does not support solvents.
-  --solvent-correction gfn2
-              Required for g-xTB in solvent; refused for GFN2-xTB.
-  --etemp K   Set the electronic temperature (GFN2-xTB 300 K, g-xTB 0 K).
-  --accuracy X
-              Set a positive SCF accuracy multiplier (default 1).
-  --max-iter N
-              Set the SCF iteration limit (default 250).
-  --scf-retry K[:N]
-              Retry an unconverged SCF at K kelvin, optionally with a new
-              iteration limit. Repeat for a ladder; K cannot be below the
-              initial electronic temperature.
-  --threads N Use 1 to 64 worker threads (default 1).
+  --task TASK                  Calculate energy (default), gradient, hessian or orbitals.
+  --method METHOD              Use gfn2 (default), gfnff or gxtb.
+  --energy                     Accepted for compatibility. Energy is always included.
+  --gradient                   Include the Cartesian energy gradient.
+  --wbo                        Include Mayer–Wiberg bond orders.
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --conventions MODE           Use axtb (default) or xtb-6.8 conventions.
+  --alpb NAME                  Use the ALPB solvent model.
+  --gbsa NAME                  Use the GBSA solvent model.
+  --solvent-correction METHOD  Use gfn2 for g-xTB solvent calculations.
+  --etemp K                    Set the electronic temperature in kelvin.
+  --accuracy X                 Set a positive SCF accuracy multiplier (default 1).
+  --max-iter N                 Set the SCF iteration limit (default 250).
+  --scf-retry K[:N]            Add an SCF retry at K kelvin with an optional N iterations.
+  --threads N                  Use 1 to 64 worker threads (default 1).
 
-GFN-FF supports energy, gradients and Hessians for singlets. It takes no
-SCF settings, orbitals or bond orders. A Hessian is limited to 200 atoms.
-Unsupported method and task combinations exit 1 with the capability message.
-
-Prints one JSON line containing the worker's Computed result plus engine.
-Energy is in Eh, gradient in Eh/bohr and the HOMO-LUMO gap in eV (null when
-no LUMO exists). Each binary array is included under its name as
-{"shape":[rows,columns],"values":[...]}. The worker's array descriptors
-and empty compact orbital coefficient fields are preserved.
-A gap below 0.1 eV also prints a warning on stderr and leaves the exit
-status unchanged. This CLI-only command has no MCP tool.
-
-Requires a build with xTB. Otherwise it reports that xTB is not included
-and exits 1.
+See docs/xtb-worker.md (Command line)
 ```
 
 ## reshiki --cli pieces

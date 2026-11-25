@@ -52,6 +52,7 @@ pub(super) fn relative_errors(
 fn canonical_aos(basis: &BasisSet) -> Vec<Ao> {
     let mut aos = Vec::new();
     for shell in &basis.shells {
+        assert_eq!(shell.exponents_per_bohr2.len(), shell.coefficients.len());
         // Rule 7: contraction coefficients multiply normalized axial primitives.
         let primitives = shell
             .exponents_per_bohr2
@@ -101,6 +102,7 @@ fn canonical_aos(basis: &BasisSet) -> Vec<Ao> {
 fn molden_cartesian_values(molden: &super::Molden, point: [f64; 3]) -> Vec<f64> {
     let mut values = Vec::new();
     for shell in &molden.basis.shells {
+        assert_eq!(shell.exponents_per_bohr2.len(), shell.coefficients.len());
         assert!(
             !shell.pure,
             "the independent reference must be Cartesian Molden"

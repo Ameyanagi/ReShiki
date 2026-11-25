@@ -46,6 +46,8 @@ fn orbitals_with_molden(request: &Request, method: Method, spherical: bool) -> (
     let rows = (0..nao).collect::<Vec<_>>();
     let canonical = canonical_orbitals(&response, method, 0, &rows).unwrap();
     assert!(matches!(canonical.beta, Beta::Restricted));
+    assert_eq!(canonical.alpha.rows, rows);
+    assert_eq!(canonical.alpha.coefficients.len(), rows.len() * rows.len());
     for shell in &canonical.basis.as_ref().unwrap().shells {
         let overlap = contraction_overlap(shell);
         assert!(

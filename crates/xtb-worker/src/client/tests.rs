@@ -38,6 +38,7 @@ fn opened() -> Opened {
         engine_conventions: "xtb".into(),
         numerics: "gfn2:1".into(),
         basis_functions: Some(2),
+        uhf: 0,
     }
 }
 
@@ -275,6 +276,68 @@ fn computed_requires_method_settings_and_requested_parts() {
 }
 
 #[test]
+fn composite_is_present_exactly_for_solvated_gxtb_with_finite_components() {
+    let request = request();
+    let mut input = open();
+    input.method = Method::Gxtb;
+    input.solvent = Some(serde_json::from_value(json!({"model":"alpb", "name":"water"})).unwrap());
+    let mut opened = opened();
+    opened.method = Method::Gxtb;
+    opened.engine_conventions = "gxtb".into();
+    opened.numerics = "gxtb-v2.0.1:1".into();
+    let mut result = computed(None);
+    result.method = opened.method;
+    result.engine_conventions = opened.engine_conventions.clone();
+    result.numerics = opened.numerics.clone();
+    result.settings.solvent = input.solvent.clone();
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
+    result.composite = Some(
+        serde_json::from_value(json!({
+            "components":{"total":-1}, "parts":{}
+        }))
+        .unwrap(),
+    );
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_ok());
+    result
+        .composite
+        .as_mut()
+        .unwrap()
+        .components
+        .insert("total".into(), f64::NAN);
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
+    result.composite.as_mut().unwrap().components.clear();
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
+    result
+        .composite
+        .as_mut()
+        .unwrap()
+        .components
+        .insert("total".into(), -1.0);
+    input.solvent = None;
+    result.settings.solvent = None;
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
+    result.composite = None;
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_ok());
+    input.method = Method::Gfn2;
+    input.solvent = Some(serde_json::from_value(json!({"model":"alpb", "name":"water"})).unwrap());
+    opened.method = input.method;
+    opened.engine_conventions = "xtb".into();
+    opened.numerics = "gfn2:1".into();
+    result.method = opened.method;
+    result.engine_conventions = opened.engine_conventions.clone();
+    result.numerics = opened.numerics.clone();
+    result.settings.solvent = input.solvent.clone();
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_ok());
+    result.composite = Some(
+        serde_json::from_value(json!({
+            "components":{"total":-1}, "parts":{}
+        }))
+        .unwrap(),
+    );
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
+}
+
+#[test]
 fn array_headers_reject_missing_extra_order_shape_oversize_and_wrong_chunks() {
     let expected = [
         (ArrayName::Hessian, [6, 6]),
@@ -362,6 +425,49 @@ fn chunk_validation_requires_exact_index_size_finite_values_and_last_remainder()
 }
 
 #[test]
+fn coefficient_reader_requires_a_full_first_chunk_and_ordered_short_final_chunk() {
+    let width = 2048;
+    let rows = protocol::CHUNK_VALUES / width + 1;
+    let shape = [rows as u32, width as u32];
+    let plans = validate_array_headers(
+        &[header(ArrayName::CoefficientsAlpha, shape)],
+        &[(ArrayName::CoefficientsAlpha, shape)],
+    )
+    .unwrap();
+    let plan = &plans[0];
+    assert_eq!(plan.chunks, 2);
+    assert!(plan.values > protocol::CHUNK_VALUES);
+    let full = vec![1.0; protocol::CHUNK_VALUES];
+    let tail = vec![3.0; plan.values - protocol::CHUNK_VALUES];
+    assert!(tail.len() < protocol::CHUNK_VALUES);
+    let read = |first: &[f64], second_index| {
+        let mut input = ResponseInput {
+            bytes: [
+                raw_frame(FrameKind::Chunk, &chunk_body(0, first)),
+                raw_frame(FrameKind::Chunk, &chunk_body(second_index, &tail)),
+            ]
+            .concat(),
+            closed: false,
+        };
+        read_array(plan, || {
+            input
+                .take_frame(FrameKind::Chunk)
+                .map_err(Error::Protocol)
+                .map(Option::unwrap)
+        })
+    };
+    let values = read(&full, 1).unwrap();
+    assert_eq!(values.len(), plan.values);
+    assert_eq!(&values[..protocol::CHUNK_VALUES], full);
+    assert_eq!(&values[protocol::CHUNK_VALUES..], tail);
+    assert!(matches!(read(&full, 0), Err(Error::Protocol(_))));
+    assert!(matches!(
+        read(&full[..full.len() - 1], 1),
+        Err(Error::Protocol(_))
+    ));
+}
+
+#[test]
 fn framed_input_preserves_next_frame_and_rejects_bad_kind_version_length_and_magic() {
     let json = raw_frame(FrameKind::Json, b"{}");
     let chunk = raw_frame(FrameKind::Chunk, &chunk_body(0, &[1.0]));
@@ -417,21 +523,22 @@ fn local_admission_keeps_error_categories() {
 }
 
 #[test]
-fn absent_input_spin_accepts_resolved_driver_spin_and_explicit_spin_is_exact() {
+fn absent_input_spin_is_anchored_to_the_opened_driver_spin() {
     let mut input = open();
     input.uhf = None;
+    let mut opened = opened();
+    opened.uhf = 3;
+    assert!(validate_opened(&opened, &input, 500).is_ok());
     let mut result = computed(None);
+    result.settings.uhf = 3;
+    assert!(validate_settings(&result, &opened, &input).is_ok());
     result.settings.uhf = 1;
-    assert!(validate_settings(&result, &input).is_ok());
-    result.settings.uhf = 2;
-    assert!(validate_settings(&result, &input).is_err());
-    result.settings.uhf = 1;
+    assert!(validate_settings(&result, &opened, &input).is_err());
     input.uhf = Some(0);
-    assert!(validate_settings(&result, &input).is_err());
+    assert!(validate_opened(&opened, &input, 500).is_err());
 }
 
-#[test]
-fn hessian_header_requires_all_requested_arrays_and_thermo_settings() {
+fn hessian_result() -> (Compute, Computed) {
     let mut request = request();
     request.hessian =
         Some(serde_json::from_value(json!({"thermo":{"temperature_k":300}})).unwrap());
@@ -459,17 +566,18 @@ fn hessian_header_requires_all_requested_arrays_and_thermo_settings() {
         header(ArrayName::DipoleDerivatives, [6, 3]),
         header(ArrayName::NormalModes, [1, 6]),
     ];
+    (request, result)
+}
+
+#[test]
+fn hessian_header_requires_all_requested_arrays_and_thermo_settings() {
+    let (request, mut result) = hessian_result();
     assert!(validate(&result, &request).is_ok());
     result.arrays.remove(1);
     assert!(validate(&result, &request).is_err());
-    result
-        .vibrations
-        .as_mut()
-        .unwrap()
-        .ir_intensities_km_mol
-        .clear();
+    result.vibrations.as_mut().unwrap().ir_intensities_km_mol = None;
     assert!(validate(&result, &request).is_ok());
-    result.vibrations.as_mut().unwrap().ir_intensities_km_mol = vec![1.0];
+    result.vibrations.as_mut().unwrap().ir_intensities_km_mol = Some(vec![1.0]);
     result
         .arrays
         .insert(1, header(ArrayName::DipoleDerivatives, [6, 3]));
@@ -481,6 +589,108 @@ fn hessian_header_requires_all_requested_arrays_and_thermo_settings() {
     result.thermo.as_mut().unwrap().temperature_k = 300.0;
     result.vibrations.as_mut().unwrap().reduced_masses_amu[0] = f64::NAN;
     assert!(validate(&result, &request).is_err());
+}
+
+#[test]
+fn vibrational_counts_are_exact_for_linear_and_nonlinear_molecules() {
+    let (_, mut result) = hessian_result();
+    let vibrations = result.vibrations.as_mut().unwrap();
+    let mut opened = opened();
+    assert!(validate_vibrations(vibrations, &opened).is_ok());
+    vibrations.linear = false;
+    assert!(validate_vibrations(vibrations, &opened).is_err());
+    opened.atoms = 3;
+    vibrations.masses_amu.push(4.0);
+    for (linear, modes) in [(false, 3), (true, 4)] {
+        vibrations.linear = linear;
+        vibrations.frequencies_cm1.resize(modes, 100.0);
+        vibrations.ir_intensities_km_mol = Some(vec![1.0; modes]);
+        vibrations.reduced_masses_amu.resize(modes, 1.0);
+        vibrations
+            .force_constants_mdyn_per_angstrom
+            .resize(modes, 1.0);
+        assert!(validate_vibrations(vibrations, &opened).is_ok());
+        vibrations.frequencies_cm1.pop();
+        vibrations.ir_intensities_km_mol.as_mut().unwrap().pop();
+        vibrations.reduced_masses_amu.pop();
+        vibrations.force_constants_mdyn_per_angstrom.pop();
+        assert!(validate_vibrations(vibrations, &opened).is_err());
+    }
+}
+
+#[test]
+fn zero_mode_ir_presence_matches_dipole_derivatives() {
+    let (request, mut result) = hessian_result();
+    let mut input = open();
+    input.numbers.pop();
+    input.positions.pop();
+    let mut opened = opened();
+    opened.atoms = 1;
+    result.gradient.as_mut().unwrap().pop();
+    result.charges.as_mut().unwrap().values.pop();
+    let vibrations = result.vibrations.as_mut().unwrap();
+    vibrations.frequencies_cm1.clear();
+    vibrations.ir_intensities_km_mol = Some(vec![]);
+    vibrations.reduced_masses_amu.clear();
+    vibrations.force_constants_mdyn_per_angstrom.clear();
+    vibrations.masses_amu.pop();
+    result.arrays = vec![
+        header(ArrayName::Hessian, [3, 3]),
+        header(ArrayName::DipoleDerivatives, [3, 3]),
+    ];
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_ok());
+    result.vibrations.as_mut().unwrap().ir_intensities_km_mol = None;
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
+    result.arrays.pop();
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_ok());
+    result.vibrations.as_mut().unwrap().ir_intensities_km_mol = Some(vec![]);
+    assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
+}
+
+#[test]
+fn hessian_payload_requires_exact_symmetry_and_one_row_per_frequency() {
+    let (request, mut result) = hessian_result();
+    let frame = open().admit(Some(&request), Some(2), 500).unwrap();
+    result.hessian = vec![0.0; 36];
+    result.normal_modes = vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    assert!(validate_computed_payload(&result, Some(&frame)).is_ok());
+    result.hessian[1] = f64::EPSILON;
+    assert!(validate_computed_payload(&result, Some(&frame)).is_err());
+    result.hessian[6] = f64::EPSILON;
+    assert!(validate_computed_payload(&result, Some(&frame)).is_ok());
+    result.hessian.pop();
+    assert!(validate_computed_payload(&result, Some(&frame)).is_err());
+    result.hessian.push(0.0);
+    result.normal_modes.push(0.0);
+    assert!(validate_computed_payload(&result, Some(&frame)).is_err());
+    result.normal_modes = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0].repeat(2);
+    assert!(validate_computed_payload(&result, Some(&frame)).is_err());
+    result.normal_modes.clear();
+    assert!(validate_computed_payload(&result, Some(&frame)).is_err());
+}
+
+#[test]
+fn thermochemistry_echo_accepts_finite_rotor_cutoffs_and_imaginary_magnitudes() {
+    let (mut request, mut result) = hessian_result();
+    let hessian = request.hessian.as_mut().unwrap();
+    let thermo = result.thermo.as_mut().unwrap();
+    for cutoff in [-50.0, 0.0, 50.0] {
+        hessian.thermo.rotor_cutoff_cm1 = Some(cutoff);
+        thermo.rotor_cutoff_cm1 = cutoff;
+        assert!(validate_thermo(thermo, hessian).is_ok());
+    }
+    hessian.thermo.imaginary_cutoff_cm1 = Some(-20.0);
+    thermo.imaginary_cutoff_cm1 = 20.0;
+    assert!(validate_thermo(thermo, hessian).is_ok());
+    thermo.imaginary_cutoff_cm1 = -20.0;
+    assert!(validate_thermo(thermo, hessian).is_ok());
+    thermo.imaginary_cutoff_cm1 = 21.0;
+    assert!(validate_thermo(thermo, hessian).is_err());
+    thermo.imaginary_cutoff_cm1 = 20.0;
+    for cutoff in [f64::INFINITY, f64::NAN] {
+        thermo.rotor_cutoff_cm1 = cutoff;
+        assert!(validate_thermo(thermo, hessian).is_err());
+    }
 }
 
 #[test]
@@ -499,14 +709,14 @@ fn gfnff_settings_verify_reference_fragments_and_explicit_charges() {
     result.gfnff = Some(protocol::GfnFfReport {
         fragments: vec![0, 1],
     });
-    assert!(validate_settings(&result, &input).is_ok());
+    assert!(validate_settings(&result, &opened(), &input).is_ok());
     result
         .settings
         .gfnff
         .as_mut()
         .unwrap()
         .reference_positions_bohr[1][2] = 3.0;
-    assert!(validate_settings(&result, &input).is_err());
+    assert!(validate_settings(&result, &opened(), &input).is_err());
     result
         .settings
         .gfnff
@@ -514,8 +724,40 @@ fn gfnff_settings_verify_reference_fragments_and_explicit_charges() {
         .unwrap()
         .reference_positions_bohr = input.positions.clone();
     result.gfnff.as_mut().unwrap().fragments = vec![1, 0];
-    assert!(validate_settings(&result, &input).is_err());
+    assert!(validate_settings(&result, &opened(), &input).is_err());
     result.gfnff.as_mut().unwrap().fragments = vec![0, 1];
     result.settings.gfnff.as_mut().unwrap().fragment_charges = vec![1, -1];
-    assert!(validate_settings(&result, &input).is_err());
+    assert!(validate_settings(&result, &opened(), &input).is_err());
+}
+
+#[test]
+fn gfnff_topology_is_fixed_after_the_first_validated_result() {
+    let mut input = open();
+    input.method = Method::Gfnff;
+    let mut result = computed(None);
+    result.settings.gfnff = Some(protocol::GfnFfSettings {
+        reference_positions_bohr: input.positions.clone(),
+        fragment_charges: vec![0, 0],
+    });
+    result.gfnff = Some(protocol::GfnFfReport {
+        fragments: vec![0, 1],
+    });
+    let mut previous = None;
+    validate_settings(&result, &opened(), &input).unwrap();
+    remember_gfnff_topology(&mut previous, &result).unwrap();
+    remember_gfnff_topology(&mut previous, &result).unwrap();
+    result.gfnff.as_mut().unwrap().fragments = vec![0, 0];
+    result.settings.gfnff.as_mut().unwrap().fragment_charges = vec![0];
+    validate_settings(&result, &opened(), &input).unwrap();
+    assert!(remember_gfnff_topology(&mut previous, &result).is_err());
+    result.gfnff.as_mut().unwrap().fragments = vec![0, 1];
+    result.settings.gfnff.as_mut().unwrap().fragment_charges = vec![0, 0];
+    remember_gfnff_topology(&mut previous, &result).unwrap();
+    result
+        .settings
+        .gfnff
+        .as_mut()
+        .unwrap()
+        .reference_positions_bohr[1][2] = 3.0;
+    assert!(remember_gfnff_topology(&mut previous, &result).is_err());
 }

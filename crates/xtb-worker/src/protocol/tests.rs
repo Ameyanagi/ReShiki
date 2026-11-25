@@ -380,6 +380,55 @@ fn validates_hessian_limits_and_orbital_rows() {
 }
 
 #[test]
+fn validates_thermochemistry_ranges_in_admission() {
+    let open = open(Method::Gfn2, 2);
+    let mut compute = Compute {
+        hessian: Some(HessianRequest::default()),
+        ..Compute::default()
+    };
+    for thermo in [
+        ThermoRequest {
+            temperature_k: Some(0.0),
+            ..ThermoRequest::default()
+        },
+        ThermoRequest {
+            pressure_pa: Some(-1.0),
+            ..ThermoRequest::default()
+        },
+        ThermoRequest {
+            frequency_scale: Some(0.0),
+            ..ThermoRequest::default()
+        },
+        ThermoRequest {
+            symmetry_number: Some(0),
+            ..ThermoRequest::default()
+        },
+        ThermoRequest {
+            rotor_cutoff_cm1: Some(f64::INFINITY),
+            ..ThermoRequest::default()
+        },
+        ThermoRequest {
+            imaginary_cutoff_cm1: Some(f64::NAN),
+            ..ThermoRequest::default()
+        },
+    ] {
+        compute.hessian.as_mut().unwrap().thermo = thermo;
+        assert_eq!(
+            open.admit(Some(&compute), None, MAX_ATOMS)
+                .unwrap_err()
+                .kind,
+            ErrorKind::Input
+        );
+    }
+    compute.hessian.as_mut().unwrap().thermo = ThermoRequest {
+        rotor_cutoff_cm1: Some(-50.0),
+        imaginary_cutoff_cm1: Some(-20.0),
+        ..ThermoRequest::default()
+    };
+    open.admit(Some(&compute), None, MAX_ATOMS).unwrap();
+}
+
+#[test]
 fn ids_must_be_positive_and_increasing() {
     for ids in [vec![0], vec![1, 1], vec![2, 1]] {
         let input: Vec<u8> = ids

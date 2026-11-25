@@ -44,12 +44,12 @@ increases with every request; the response repeats it.
   "max_atoms": 500, "max_hessian_atoms": 200 } }
 ```
 
-| `op`      | Fields                                                                                                                        | `ok` result                                                                           |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `hello`   | none                                                                                                                          | `protocol`, `engine`, `methods`, `max_atoms`, `max_hessian_atoms`                     |
-| `open`    | `numbers`, `positions`, `units`, `charge`, `uhf`, `method`, `conventions`, `solvent`, `scf`, `gfnff`, `threads`, `heap_bytes` | `atoms`, `method`, `conventions`, `numerics`, `engine_conventions`, `basis_functions` |
-| `compute` | `positions` (optional: the last geometry), `units`, `gradient`, `hessian`, `bond_orders`, `orbitals`                          | [`Computed`](#computed), then the announced binary chunks                             |
-| `close`   | none                                                                                                                          | `{}`; the worker then exits 0                                                         |
+| `op`      | Fields                                                                                                                        | `ok` result                                                                                  |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `hello`   | none                                                                                                                          | `protocol`, `engine`, `methods`, `max_atoms`, `max_hessian_atoms`                            |
+| `open`    | `numbers`, `positions`, `units`, `charge`, `uhf`, `method`, `conventions`, `solvent`, `scf`, `gfnff`, `threads`, `heap_bytes` | `atoms`, `method`, `uhf`, `conventions`, `numerics`, `engine_conventions`, `basis_functions` |
+| `compute` | `positions` (optional: the last geometry), `units`, `gradient`, `hessian`, `bond_orders`, `orbitals`                          | [`Computed`](#computed), then the announced binary chunks                                    |
+| `close`   | none                                                                                                                          | `{}`; the worker then exits 0                                                                |
 
 ### Methods and what they can do
 
@@ -79,13 +79,12 @@ computes leave the session open at its last successful geometry.
   worker passes the axtb driver these conventions: GFN2-xTB `axtb` / `xtb`,
   GFN-FF `axtb` / `xtb`, g-xTB `axtb` / `gxtb` (the g-xTB 2.0.1 program's).
   `engine_conventions` in every response is the driver's canonical name.
-- `charge`: integer, default 0. `uhf`: unpaired electrons. Admission checks
-  the total electron count with qcdata and uses its parity when `uhf` is
-  absent. SCF methods resolve an absent `uhf` from the method's valence
-  electron count. They return `input` if that count is negative or if an
-  explicit `uhf` exceeds it or differs in parity. If the two default parities
-  differ, the worker can compute, but its resolved spin cannot be represented
-  by a validated qcdata frame at that charge.
+- `charge` is an integer and defaults to 0. For SCF methods, the worker
+  resolves an omitted `uhf` (unpaired electrons) from the method's valence
+  electron count. It returns `input` if that count is negative or if an explicit
+  `uhf` exceeds it or differs in parity. Admission uses the all-electron parity
+  to validate the qcdata geometry. The `open` response reports the resolved
+  `uhf`, and every `Computed` echoes it in `settings.uhf`.
 - `solvent`: `null` or `{ "model": "alpb" | "gbsa", "name": "<solvent>",
 "state": "gsolv" | "bar1mol" | "reference", "correction": null | "gfn2" }`.
   `state` defaults to `gsolv`. The name is any solvent axtb accepts for the
@@ -124,6 +123,10 @@ computes leave the session open at its last successful geometry.
 | `hessian`     | `null` (default) or `{ "thermo": { "temperature_k", "pressure_pa", "rotor_cutoff_cm1", "imaginary_cutoff_cm1", "frequency_scale", "symmetry_number" } }`, each optional. At most 200 atoms. Adds the gradient, the analytic Hessian, dipole derivatives when available, vibrational analysis and thermochemistry. |
 | `bond_orders` | `true` adds Mayer–Wiberg bond orders (SCF methods).                                                                                                                                                                                                                                                               |
 | `orbitals`    | `"none"` (default), `"levels"` (energies and occupations), `"all"` (also every coefficient row and the basis) or `{ "rows": [i, …] }` (strictly increasing zero-based MO indices). SCF methods.                                                                                                                   |
+
+Thermochemistry requires positive finite temperature, pressure and frequency
+scale, a symmetry number of at least 1, and finite cutoffs. The engine uses
+the magnitude of the imaginary cutoff.
 
 Each SCF starts from the previous geometry's converged wavefunction in the
 same session (axtb's `restart: previous`), whatever geometries the optimizer
@@ -186,15 +189,20 @@ method's own start `eeq`, `sad`, `eeq-bc`).
   the electronic temperature of the occupations, and with `retries` the rung
   that converged: `{ "rung": i, "of": n, "label": "…" }` (0 is the session's
   own settings). A solvent composite reports the highest rung used by its parts.
-- `composite` (g-xTB in solvent): the energies of its parts and the correction
-  (Eh), named as axtb names them.
+- `composite` is present for g-xTB in solvent. `components` maps axtb names
+  to energies in Eh, including the solvent correction. `parts` maps
+  `gxtb`, `gfn2_solvated` and `gfn2_gas` to their actual `method`,
+  `conventions`, `electronic_temperature_k`, `max_iterations`, `iterations`
+  and `retry` (`null` or a retry label). This includes settings selected by
+  the driver's built-in ladders when `scf.retries` is omitted. Conversion to
+  qcdata adds the component energies to `energy_terms` with a `composite.` prefix.
 - `gfnff` (GFN-FF): `{ "fragments": [...] }`, the zero-based fragment of each
   atom; the reference geometry and fragment charges are in `settings.gfnff`.
 - `hessian_method`, `vibrations`, `thermo` (with `hessian`): frequencies in
   cm⁻¹ ascending with imaginary ones negative and rigid-body modes removed, IR
-  intensities in km/mol, reduced masses and analysis masses in u, force
-  constants in mdyn/Å. `thermo` is a `reshiki_qcdata::Thermo` (corrections
-  relative to `energy`, in Eh and Eh/K).
+  intensities in km/mol when dipole derivatives are present, reduced masses
+  and analysis masses in u, and force constants in mdyn/Å. `thermo` is a
+  `reshiki_qcdata::Thermo` (corrections relative to `energy`, in Eh and Eh/K).
 - `arrays`: the binary arrays that follow, in this order when present:
   `hessian` [3N, 3N] (Eh/bohr², row-major, atom-major axes, symmetrized),
   `dipole_derivatives` [3N, 3] (e, ∂μ/∂R), `normal_modes` [M, 3N] (one unit
@@ -356,6 +364,8 @@ fn hessian(&mut self, positions: &[f64], out: &mut [f64]) -> Option<Result<(), E
 
 ## Command line
 
+`calc` is a CLI-only command.
+
 ```text
 reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
     [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
@@ -364,14 +374,24 @@ reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnf
     [--gradient] [--wbo] FILE.xyz
 ```
 
-reads the first structure of an XYZ file (Ångström, case-insensitive element
-symbols) and runs one calculation through the worker. `--task` defaults to
-`energy`; `--energy` is accepted for compatibility. `--task hessian` adds the
-vibrational analysis and thermochemistry; `--task orbitals` asks for every
-orbital row. `--gradient` adds the gradient to any task and `--wbo` the bond
-orders. The JSON result is the worker's `Computed` plus `engine`, with each
-binary array written as `{ "shape": [rows, columns], "values": [...] }` under
-its name.
+reads the first structure of an XYZ file (1 to 500 atoms, finite Ångström
+coordinates, case-insensitive element symbols) and runs one calculation
+through the worker. `--task` defaults to `energy`. The CLI accepts
+`--energy` for compatibility and always includes the energy. `--task hessian`
+adds the analytic Hessian, vibrational analysis and thermochemistry (up to
+200 atoms). `--task orbitals` asks for every orbital row and the basis.
+`--gradient` adds the gradient to any task and `--wbo` adds the bond orders.
+The CLI prints one JSON line with the worker's `Computed` plus `engine`.
+It writes each binary array as `{ "shape": [rows, columns], "values": [...] }`
+under its name and preserves the array descriptors and empty compact orbital
+coefficient fields.
+
+The [method](#methods-and-what-they-can-do) and [session settings](#open)
+above also apply to the CLI. Use `--alpb` or `--gbsa` to select the solvent
+model and `--solvent-correction gfn2` with a solvated g-xTB calculation.
+Each `--scf-retry K[:N]` adds a rung with electronic temperature `K` in kelvin
+and an optional iteration limit `N`. Retry temperatures must be at least the
+initial temperature. Set it with `--etemp` or use the method's default.
 
 When `near_degenerate` is `true`, stderr carries the warning below.
 

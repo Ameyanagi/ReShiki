@@ -125,6 +125,7 @@ pub struct Session {
     opened: Option<Opened>,
     open: Option<Open>,
     geometry: Option<(Vec<[f64; 3]>, protocol::Units)>,
+    gfnff: Option<(protocol::GfnFfSettings, Vec<u32>)>,
     stderr: VecDeque<u8>,
     _thread: PhantomData<*const ()>,
 }
@@ -158,6 +159,7 @@ impl Session {
             opened: None,
             open: None,
             geometry: None,
+            gfnff: None,
             stderr: VecDeque::with_capacity(STDERR_BYTES),
             _thread: PhantomData,
         };
@@ -189,6 +191,7 @@ impl Session {
         self.opened = Some(opened.clone());
         self.open = Some(open.clone());
         self.geometry = Some((open.positions.clone(), open.units));
+        self.gfnff = None;
         Ok(opened)
     }
 
@@ -243,25 +246,28 @@ impl Session {
                     validate_computed_header(computed, opened.as_ref(), open.as_ref(), compute)
                         .map_err(|message| session.protocol_error(message))?;
                 for plan in plans {
-                    let mut values = Vec::with_capacity(plan.values);
-                    for index in 0..plan.chunks {
-                        let body = session.receive_frame(
+                    let values = read_array(&plan, || {
+                        session.receive_frame(
                             &[],
                             protocol::FrameKind::Chunk,
                             stream,
                             deadline,
                             started,
                             cancel,
-                        )?;
-                        append_chunk(&mut values, &body, index, plan.values)
-                            .map_err(|message| session.protocol_error(message))?;
-                    }
+                        )
+                    })
+                    .inspect_err(|_| {
+                        session.terminate();
+                    })?;
                     install_array(computed, plan.name, values);
                 }
                 validate_computed_payload(computed, frame.as_ref())
                     .map_err(|message| session.protocol_error(message))
             },
         )?;
+        if let Err(message) = remember_gfnff_topology(&mut self.gfnff, &computed) {
+            return Err(self.protocol_error(message));
+        }
         // Only successful calculations advance the geometry used for admission.
         if let Some(positions) = &compute.positions {
             self.geometry = Some((positions.clone(), compute.units));
@@ -762,6 +768,11 @@ fn validate_opened(
     {
         return Err("Worker returned inconsistent method metadata".into());
     }
+    if open.uhf.is_some_and(|uhf| uhf != opened.uhf)
+        || (open.method == protocol::Method::Gfnff && opened.uhf != 0)
+    {
+        return Err("Worker returned an inconsistent resolved spin".into());
+    }
     let scf = open.method != protocol::Method::Gfnff;
     if opened.basis_functions.is_some() != scf || opened.basis_functions == Some(0) {
         return Err("Worker returned an inconsistent basis function count".into());
@@ -858,7 +869,7 @@ fn validate_computed_header(
         (false, None) => (),
         (false, Some(_)) => return Err("Worker returned an unrequested gradient".into()),
     }
-    validate_settings(computed, open)?;
+    validate_settings(computed, opened, open)?;
     let scf = open.method != protocol::Method::Gfnff;
     let charges = computed
         .charges
@@ -891,10 +902,9 @@ fn validate_computed_header(
     }
     let composite = open.method == protocol::Method::Gxtb && open.solvent.is_some();
     if computed.composite.is_some() != composite
-        || computed
-            .composite
-            .as_ref()
-            .is_some_and(|parts| parts.is_empty() || parts.values().any(|v| !v.is_finite()))
+        || computed.composite.as_ref().is_some_and(|composite| {
+            composite.components.is_empty() || composite.components.values().any(|v| !v.is_finite())
+        })
     {
         return Err("Worker returned inconsistent solvent composite outputs".into());
     }
@@ -957,9 +967,7 @@ fn validate_computed_header(
             .arrays
             .iter()
             .any(|a| a.name == protocol::ArrayName::DipoleDerivatives);
-        if !vibrations.frequencies_cm1.is_empty()
-            && dipole_derivatives != !vibrations.ir_intensities_km_mol.is_empty()
-        {
+        if dipole_derivatives != vibrations.ir_intensities_km_mol.is_some() {
             return Err(
                 "Worker returned inconsistent dipole derivatives and IR intensities".into(),
             );
@@ -1045,20 +1053,14 @@ fn validate_computed_header(
     validate_array_headers(&computed.arrays, &expected)
 }
 
-fn validate_settings(computed: &Computed, open: &Open) -> std::result::Result<(), String> {
+fn validate_settings(
+    computed: &Computed,
+    opened: &Opened,
+    open: &Open,
+) -> std::result::Result<(), String> {
     let settings = &computed.settings;
-    let electrons =
-        open.numbers.iter().map(|&z| i64::from(z)).sum::<i64>() - i64::from(open.charge);
-    let valid_uhf = if open.method == protocol::Method::Gfnff {
-        settings.uhf == 0
-    } else {
-        open.uhf.map_or(
-            settings.uhf <= 1 && i64::from(settings.uhf) <= electrons,
-            |uhf| uhf == settings.uhf,
-        )
-    };
     if settings.charge != open.charge
-        || !valid_uhf
+        || settings.uhf != opened.uhf
         || settings.solvent != open.solvent
         || settings.scf != open.scf.clone()
         || settings.threads != open.threads
@@ -1155,6 +1157,23 @@ fn validate_settings(computed: &Computed, open: &Open) -> std::result::Result<()
     Ok(())
 }
 
+fn remember_gfnff_topology(
+    previous: &mut Option<(protocol::GfnFfSettings, Vec<u32>)>,
+    computed: &Computed,
+) -> std::result::Result<(), String> {
+    let (Some(settings), Some(report)) = (&computed.settings.gfnff, &computed.gfnff) else {
+        return Ok(());
+    };
+    if let Some((previous_settings, fragments)) = previous {
+        if settings != &*previous_settings || report.fragments != *fragments {
+            return Err("Worker changed the opened GFN-FF topology".into());
+        }
+    } else {
+        *previous = Some((settings.clone(), report.fragments.clone()));
+    }
+    Ok(())
+}
+
 fn validate_vibrations(
     v: &protocol::VibrationsReport,
     opened: &Opened,
@@ -1166,16 +1185,24 @@ fn validate_vibrations(
     } else {
         &opened.engine_conventions
     };
+    let expected_modes = if opened.atoms >= 2 {
+        axes - if v.linear { 5 } else { 6 }
+    } else {
+        0
+    };
     if v.conventions != expected_conventions
-        || modes > axes.saturating_sub(5)
+        || modes != expected_modes
         || v.frequencies_cm1.iter().any(|v| !v.is_finite())
         || v.frequencies_cm1.windows(2).any(|p| p[0] > p[1])
-        || (!v.ir_intensities_km_mol.is_empty() && v.ir_intensities_km_mol.len() != modes)
+        || v.ir_intensities_km_mol
+            .as_ref()
+            .is_some_and(|v| v.len() != modes)
         || v.reduced_masses_amu.len() != modes
         || v.force_constants_mdyn_per_angstrom.len() != modes
         || v.masses_amu.len() != opened.atoms
         || v.ir_intensities_km_mol
             .iter()
+            .flatten()
             .any(|v| !v.is_finite() || *v < 0.0)
         || v.force_constants_mdyn_per_angstrom
             .iter()
@@ -1213,8 +1240,6 @@ fn validate_thermo(
         || t.temperature_k <= 0.0
         || t.pressure_pa <= 0.0
         || t.frequency_scale <= 0.0
-        || t.rotor_cutoff_cm1 < 0.0
-        || t.imaginary_cutoff_cm1 < 0.0
         || t.symmetry_number == 0
         || (t.gibbs_correction_hartree
             - (t.enthalpy_correction_hartree - t.temperature_k * t.entropy_hartree_per_k))
@@ -1229,10 +1254,12 @@ fn validate_thermo(
         (requested.pressure_pa, t.pressure_pa),
         (requested.frequency_scale, t.frequency_scale),
         (requested.rotor_cutoff_cm1, t.rotor_cutoff_cm1),
-        (requested.imaginary_cutoff_cm1, t.imaginary_cutoff_cm1),
     ]
     .iter()
     .any(|(expected, actual)| expected.is_some_and(|v| v != *actual))
+        || requested
+            .imaginary_cutoff_cm1
+            .is_some_and(|v| v.abs() != t.imaginary_cutoff_cm1.abs())
         || requested
             .symmetry_number
             .is_some_and(|v| v != t.symmetry_number)
@@ -1275,6 +1302,14 @@ fn append_chunk(
     protocol::decode_chunk(body, index, remaining, out).map_err(|error| error.to_string())
 }
 
+fn read_array(plan: &ArrayPlan, mut receive: impl FnMut() -> Result<Vec<u8>>) -> Result<Vec<f64>> {
+    let mut values = Vec::with_capacity(plan.values);
+    for index in 0..plan.chunks {
+        append_chunk(&mut values, &receive()?, index, plan.values).map_err(Error::Protocol)?;
+    }
+    Ok(values)
+}
+
 fn validate_computed_payload(
     computed: &Computed,
     frame: Option<&reshiki_qcdata::Frame>,
@@ -1292,14 +1327,24 @@ fn validate_computed_payload(
             .validate(&frame)
             .map_err(|error| format!("Worker returned invalid orbitals: {error}"))?;
     }
-    if computed
-        .normal_modes
-        .chunks_exact(frame.numbers.len() * 3)
-        .any(|row| {
-            let norm = row.iter().map(|v| v * v).sum::<f64>();
-            !norm.is_finite() || (norm - 1.0).abs() > 1e-6
-        })
-    {
+    let axes = frame.numbers.len() * 3;
+    if let Some(vibrations) = &computed.vibrations {
+        if computed.hessian.len() != axes * axes
+            || (0..axes).any(|a| {
+                (a + 1..axes)
+                    .any(|b| computed.hessian[a * axes + b] != computed.hessian[b * axes + a])
+            })
+        {
+            return Err("Worker returned an asymmetric or incorrectly sized Hessian".into());
+        }
+        if computed.normal_modes.len() != vibrations.frequencies_cm1.len() * axes {
+            return Err("Worker returned an incorrect number of normal modes".into());
+        }
+    }
+    if computed.normal_modes.chunks_exact(axes).any(|row| {
+        let norm = row.iter().map(|v| v * v).sum::<f64>();
+        !norm.is_finite() || (norm - 1.0).abs() > 1e-6
+    }) {
         return Err(
             "Worker returned a normal mode that is not a unit Cartesian displacement".into(),
         );

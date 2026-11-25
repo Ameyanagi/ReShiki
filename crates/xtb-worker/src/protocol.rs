@@ -292,14 +292,6 @@ fn one_thread() -> u32 {
 
 #[cfg(any(not(target_arch = "wasm32"), feature = "engine", test))]
 impl Open {
-    fn resolved_uhf(&self) -> u32 {
-        self.uhf.unwrap_or_else(|| {
-            let electrons =
-                self.numbers.iter().copied().map(i64::from).sum::<i64>() - i64::from(self.charge);
-            electrons.rem_euclid(2) as u32
-        })
-    }
-
     pub(crate) fn admit(
         &self,
         compute: Option<&Compute>,
@@ -320,12 +312,18 @@ impl Open {
         let replacement = compute.and_then(|c| c.positions.as_deref().map(|p| (p, c.units)));
         let (positions, units) = replacement.unwrap_or((&self.positions, self.units));
         validate_positions(positions, atoms)?;
-        let multiplicity = self
-            .resolved_uhf()
-            .checked_add(1)
-            .ok_or_else(|| ResponseError::new(ErrorKind::Input, "uhf is out of range"))?;
+        // The qcdata frame describes all electrons; the engine resolves spin in its valence space.
+        let electrons =
+            self.numbers.iter().copied().map(i64::from).sum::<i64>() - i64::from(self.charge);
+        let multiplicity = 1 + electrons.rem_euclid(2) as u32;
         let frame = make_frame(&self.numbers, positions, units, self.charge, multiplicity);
         let gfnff = if self.method == Method::Gfnff {
+            if self.uhf.unwrap_or(0) > 0 {
+                return Err(ResponseError::new(
+                    ErrorKind::Unsupported,
+                    "GFN-FF requires a singlet",
+                ));
+            }
             let reference = self
                 .gfnff
                 .as_ref()
@@ -405,17 +403,20 @@ impl Open {
                 if [
                     thermo.temperature_k,
                     thermo.pressure_pa,
-                    thermo.rotor_cutoff_cm1,
-                    thermo.imaginary_cutoff_cm1,
                     thermo.frequency_scale,
                 ]
                 .into_iter()
                 .flatten()
-                .any(|value| !value.is_finite())
+                .any(|value| !value.is_finite() || value <= 0.0)
+                    || thermo.symmetry_number == Some(0)
+                    || [thermo.rotor_cutoff_cm1, thermo.imaginary_cutoff_cm1]
+                        .into_iter()
+                        .flatten()
+                        .any(|value| !value.is_finite())
                 {
                     return Err(ResponseError::new(
                         ErrorKind::Input,
-                        "thermochemistry settings must be finite",
+                        "thermochemistry temperature, pressure, and frequency scale must be positive and finite, symmetry number at least 1, and cutoffs finite",
                     ));
                 }
             }
@@ -614,6 +615,7 @@ pub struct Engine {
 pub struct Opened {
     pub atoms: usize,
     pub method: Method,
+    pub uhf: u32,
     pub conventions: Conventions,
     pub numerics: String,
     pub engine_conventions: String,
@@ -652,7 +654,7 @@ pub struct Computed {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scf: Option<ScfReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub composite: Option<BTreeMap<String, f64>>,
+    pub composite: Option<CompositeReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gfnff: Option<GfnFfReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -725,6 +727,15 @@ impl Computed {
             self.settings.solvent.clone(),
             gfnff,
         );
+        let mut energy_terms = self.energy_terms.clone();
+        if let Some(composite) = &self.composite {
+            energy_terms.extend(
+                composite
+                    .components
+                    .iter()
+                    .map(|(name, &energy)| (format!("composite.{name}"), energy)),
+            );
+        }
         let result = CalcResult {
             frame: frame.hash(),
             input_frame: None,
@@ -742,7 +753,7 @@ impl Computed {
             },
             status: Status::Converged,
             energy_hartree: Some(self.energy),
-            energy_terms: self.energy_terms.clone(),
+            energy_terms,
             gradient_hartree_per_bohr: self.gradient.iter().flatten().flatten().copied().collect(),
             hessian_hartree_per_bohr2: self.hessian.clone(),
             charges: self.charges.iter().cloned().collect(),
@@ -751,7 +762,7 @@ impl Computed {
             orbitals: self.orbitals.clone(),
             vibrations: self.vibrations.as_ref().map(|v| Vibrations {
                 frequencies_cm1: v.frequencies_cm1.clone(),
-                ir_intensities_km_mol: v.ir_intensities_km_mol.clone(),
+                ir_intensities_km_mol: v.ir_intensities_km_mol.clone().unwrap_or_default(),
                 modes: self.normal_modes.clone(),
                 reduced_masses_amu: v.reduced_masses_amu.clone(),
                 masses_amu: v.masses_amu.clone(),
@@ -806,6 +817,25 @@ pub struct RetryReport {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct CompositeReport {
+    pub components: BTreeMap<String, f64>,
+    pub parts: BTreeMap<String, CompositePart>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompositePart {
+    pub method: String,
+    pub conventions: String,
+    pub electronic_temperature_k: f64,
+    pub max_iterations: usize,
+    pub iterations: usize,
+    #[serde(deserialize_with = "Deserialize::deserialize")]
+    pub retry: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GfnFfReport {
     pub fragments: Vec<u32>,
 }
@@ -815,7 +845,8 @@ pub struct GfnFfReport {
 pub struct VibrationsReport {
     pub conventions: String,
     pub frequencies_cm1: Vec<f64>,
-    pub ir_intensities_km_mol: Vec<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ir_intensities_km_mol: Option<Vec<f64>>,
     pub reduced_masses_amu: Vec<f64>,
     pub force_constants_mdyn_per_angstrom: Vec<f64>,
     pub masses_amu: Vec<f64>,

@@ -2,6 +2,11 @@ use super::*;
 use std::fmt::Write;
 
 const WATER: &str = include_str!("../../../../tests/fixtures/xtb/water.xyz");
+const DRIVER_METHODS: [(Method, &str, &str); 3] = [
+    (Method::Gfn2, "gfn2", "xtb"),
+    (Method::Gxtb, "gxtb-v2.0.1", "gxtb"),
+    (Method::Gfnff, "gfnff", "xtb"),
+];
 
 fn water(method: Method, conventions: Conventions) -> Open {
     let positions: Vec<[f64; 3]> = WATER
@@ -35,18 +40,29 @@ fn angstrom_conversion_matches_the_driver_bit_for_bit() {
                 std::array::from_fn(|_| coordinates.next().unwrap().parse().unwrap())
             })
             .collect();
-        for method in Method::ALL {
-            for conventions in [Conventions::Axtb, Conventions::Xtb68] {
-                let conventions = driver_conventions(method, conventions);
-                let method = driver_method(method);
-                let (_, expected) = axtb_driver::read_xyz(xyz, method, Some(conventions)).unwrap();
-                let scale = angstrom_to_bohr(method, conventions).unwrap();
+        for (method, name, compatible) in DRIVER_METHODS {
+            for (conventions, expected_conventions) in [
+                (Conventions::Axtb, "axtb"),
+                (Conventions::Xtb68, compatible),
+            ] {
+                let (_, expected) = axtb_driver::read_xyz(
+                    xyz,
+                    axtb_driver::Method::parse(name).unwrap(),
+                    Some(expected_conventions),
+                )
+                .unwrap();
+                let scale = angstrom_to_bohr(
+                    driver_method(method),
+                    driver_conventions(method, conventions),
+                )
+                .unwrap();
                 let actual = to_bohr(angstrom.clone(), Units::Angstrom, scale).unwrap();
+                assert_eq!(actual.len(), expected.len());
                 for (actual, expected) in actual.into_iter().zip(expected) {
                     assert_eq!(
                         actual.map(f64::to_bits),
                         expected.map(f64::to_bits),
-                        "{method:?}/{conventions}"
+                        "{method:?}/{conventions:?}"
                     );
                 }
             }
@@ -56,8 +72,11 @@ fn angstrom_conversion_matches_the_driver_bit_for_bit() {
 
 #[test]
 fn water_matches_the_pinned_driver_for_every_method_and_conventions() {
-    for method in Method::ALL {
-        for conventions in [Conventions::Axtb, Conventions::Xtb68] {
+    for (method, name, compatible) in DRIVER_METHODS {
+        for (conventions, expected_conventions) in [
+            (Conventions::Axtb, "axtb"),
+            (Conventions::Xtb68, compatible),
+        ] {
             let open = water(method, conventions);
             let (mut session, opened) =
                 Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
@@ -74,15 +93,15 @@ fn water_matches_the_pinned_driver_for_every_method_and_conventions() {
             let actual = session.compute(compute).unwrap();
             let (numbers, positions) = axtb_driver::read_xyz(
                 WATER,
-                driver_method(method),
-                Some(driver_conventions(method, conventions)),
+                axtb_driver::Method::parse(name).unwrap(),
+                Some(expected_conventions),
             )
             .unwrap();
             let expected = axtb_driver::run(&Request {
                 numbers,
                 positions,
-                method: Some(driver_method(method).name().into()),
-                conventions: Some(driver_conventions(method, conventions).into()),
+                method: Some(name.into()),
+                conventions: Some(expected_conventions.into()),
                 restart: (method != Method::Gfnff).then(|| "previous".into()),
                 gradient: true,
                 bond_orders: method != Method::Gfnff,
@@ -169,10 +188,7 @@ fn water_analytic_hessian_frequencies_match_the_driver() {
     let vibration = actual.vibrations.unwrap();
     let reference = expected.vibrations.unwrap();
     assert_eq!(vibration.frequencies_cm1, reference.frequencies);
-    assert_eq!(
-        vibration.ir_intensities_km_mol,
-        reference.ir_intensities.unwrap()
-    );
+    assert_eq!(vibration.ir_intensities_km_mol, reference.ir_intensities);
     assert_eq!(vibration.reduced_masses_amu, reference.reduced_masses);
     assert_eq!(
         actual.normal_modes,
@@ -187,6 +203,79 @@ fn water_analytic_hessian_frequencies_match_the_driver() {
         actual.thermo.unwrap().gibbs_correction_hartree.to_bits(),
         reference.thermo.unwrap().last.g_rrho.to_bits()
     );
+}
+
+#[test]
+fn cef3_resolves_spin_from_valence_electrons() {
+    let mut open = Open {
+        numbers: vec![58, 9, 9, 9],
+        positions: vec![[0.0; 3], [2.0, 0.0, 0.0], [-2.0, 0.0, 0.0], [0.0, 2.0, 0.0]],
+        ..water(Method::Gfn2, Conventions::Axtb)
+    };
+    for uhf in [Some(0), None] {
+        open.uhf = uhf;
+        let (session, opened) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+        assert_eq!(opened.uhf, 0);
+        assert_eq!(session.settings.uhf, 0);
+    }
+}
+
+#[test]
+fn water_gxtb_alpb_reports_each_composite_part() {
+    let open = Open {
+        solvent: Some(protocol::Solvent {
+            model: SolventModel::Alpb,
+            name: "water".into(),
+            state: protocol::SolvationState::Gsolv,
+            correction: Some(protocol::SolventCorrection::Gfn2),
+        }),
+        ..water(Method::Gxtb, Conventions::Axtb)
+    };
+    let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
+    let computed = session.compute(Compute::default()).unwrap();
+    let actual = computed.composite.as_ref().unwrap();
+    let (numbers, positions) =
+        axtb_driver::read_xyz(WATER, axtb_driver::Method::GxtbV2_0_1, Some("axtb")).unwrap();
+    let expected = axtb_driver::run(&Request {
+        numbers,
+        positions,
+        method: Some("gxtb-v2.0.1".into()),
+        conventions: Some("axtb".into()),
+        restart: Some("previous".into()),
+        alpb: Some("water".into()),
+        solvation_correction: Some("gfn2".into()),
+        ..Request::default()
+    })
+    .unwrap()
+    .composite
+    .unwrap();
+    assert_eq!(
+        actual.parts.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["gfn2_gas", "gfn2_solvated", "gxtb"]
+    );
+    for (name, part) in &actual.parts {
+        let expected = expected.parts.get(name).unwrap();
+        assert_eq!(part.method, expected.method);
+        assert_eq!(part.conventions, expected.conventions);
+        assert_eq!(part.electronic_temperature_k, expected.etemp);
+        assert_eq!(part.max_iterations, expected.max_iter);
+        assert_eq!(part.iterations, expected.iterations);
+        assert_eq!(part.retry, expected.retry);
+    }
+    assert_eq!(actual.components.len(), expected.components.0.len());
+    let frame = open.admit(None, None, protocol::MAX_ATOMS).unwrap();
+    let result = computed
+        .to_calc_result(
+            &frame,
+            reshiki_qcdata::Task::Energy,
+            &hello().engine.unwrap(),
+            None,
+        )
+        .unwrap();
+    for (name, energy) in expected.components.0 {
+        assert_eq!(actual.components[name], energy);
+        assert_eq!(result.energy_terms[&format!("composite.{name}")], energy);
+    }
 }
 
 #[test]

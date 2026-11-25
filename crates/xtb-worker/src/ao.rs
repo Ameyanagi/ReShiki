@@ -99,6 +99,7 @@ mod tests {
             shells: vec![shell],
         };
         let mo = rows(&basis, &[norm], &[-0.7], &[0]).unwrap();
+        assert_eq!(mo.len(), 1);
         assert!((mo[0] + 0.7 * expected_norm).abs() < 1e-14);
     }
 
@@ -118,6 +119,7 @@ mod tests {
         let expected = [
             1., 4., 2., 3., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16.,
         ];
+        assert_eq!(actual.len(), expected.len());
         for (actual, expected) in actual.into_iter().zip(expected) {
             assert!((actual - expected).abs() < 1e-13);
         }
@@ -136,6 +138,8 @@ mod tests {
             let nao = shell.n_functions();
             let original = vec![-0.7; 2 * nao];
             let converted = rows(&basis, &[norm], &original, &[1]).unwrap();
+            assert_eq!(converted.len(), nao);
+            assert_eq!(shell.coefficients.len(), input.len());
             for r2 in [0., 0.1, 0.75, 3.2] {
                 let old_radial = exponents
                     .iter()

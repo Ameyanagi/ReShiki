@@ -346,7 +346,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--energy",
             value: None,
-            help: "Calculate energy; accepted for compatibility.",
+            help: "Accepted for compatibility. Energy is always included.",
             default: None,
             sets: None,
             equivalent: None,
@@ -354,7 +354,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--gradient",
             value: None,
-            help: "Include the Cartesian energy gradient in Eh/bohr.",
+            help: "Include the Cartesian energy gradient.",
             default: None,
             sets: None,
             equivalent: None,
@@ -370,7 +370,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--charge",
             value: Some("N"),
-            help: "Set the molecular charge.",
+            help: "Set the molecular charge (default 0).",
             default: Some(|| json!(0)),
             sets: None,
             equivalent: None,
@@ -378,7 +378,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--uhf",
             value: Some("N"),
-            help: "Set the number of unpaired electrons. The default comes from the electron count.",
+            help: "Set unpaired electrons (default from valence count).",
             default: None,
             sets: None,
             equivalent: None,
@@ -386,7 +386,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--conventions",
             value: Some("MODE"),
-            help: "Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.",
+            help: "Use axtb (default) or xtb-6.8 conventions.",
             default: Some(|| json!("axtb")),
             sets: None,
             equivalent: None,
@@ -394,7 +394,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--alpb",
             value: Some("NAME"),
-            help: "Use the ALPB solvent model; cannot be combined with --gbsa.",
+            help: "Use the ALPB solvent model.",
             default: None,
             sets: None,
             equivalent: None,
@@ -402,7 +402,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--gbsa",
             value: Some("NAME"),
-            help: "Use the GBSA solvent model; cannot be combined with --alpb.",
+            help: "Use the GBSA solvent model.",
             default: None,
             sets: None,
             equivalent: None,
@@ -418,7 +418,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--etemp",
             value: Some("K"),
-            help: "Set the electronic temperature in kelvin (GFN2-xTB 300, g-xTB 0 by default).",
+            help: "Set the electronic temperature in kelvin.",
             default: None,
             sets: None,
             equivalent: None,
@@ -442,7 +442,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--scf-retry",
             value: Some("K[:N]"),
-            help: "Retry an unconverged SCF at K kelvin and optionally N iterations; repeat for a ladder.",
+            help: "Add an SCF retry at K kelvin with an optional N iterations.",
             default: None,
             sets: None,
             equivalent: None,
@@ -450,7 +450,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--threads",
             value: Some("N"),
-            help: "Use 1 to 64 worker threads.",
+            help: "Use 1 to 64 worker threads (default 1).",
             default: Some(|| json!(1)),
             sets: None,
             equivalent: None,
@@ -908,61 +908,16 @@ fn analyze_help() -> String {
 }
 
 fn calc_help() -> String {
-    format!(
-        "\
-Usage: {}
-
-Reads the first structure of an XYZ file, with coordinates in angstroms,
-and runs GFN2-xTB (default), GFN-FF or g-xTB 2.0.1 in an isolated worker.
-The first line is an atom count (1 to 500), followed by a comment line and
-exactly that many atom rows, each with an element symbol and three finite
-coordinates. Element symbols are case-insensitive.
-
-Options:
-  --task energy|gradient|hessian|orbitals
-              Calculate energy (default), gradient, analytic Hessian with
-              vibrations and thermochemistry, or every orbital row and basis.
-  --method gfn2|gfnff|gxtb
-              Choose the calculation method (default gfn2).
-  --energy    Accepted for compatibility; energy is always included.
-  --gradient  Include the Cartesian energy gradient in any task.
-  --wbo       Include Mayer–Wiberg bond orders.
-  --charge N  Set the molecular charge (default 0).
-  --uhf N     Set a nonnegative number of unpaired electrons. The default
-              comes from the electron count.
-  --conventions axtb|xtb-6.8
-              Use axtb (default) or xtb 6.8 compatible conventions.
-  --alpb NAME | --gbsa NAME
-              Use an implicit solvent. GFN-FF does not support solvents.
-  --solvent-correction gfn2
-              Required for g-xTB in solvent; refused for GFN2-xTB.
-  --etemp K   Set the electronic temperature (GFN2-xTB 300 K, g-xTB 0 K).
-  --accuracy X
-              Set a positive SCF accuracy multiplier (default 1).
-  --max-iter N
-              Set the SCF iteration limit (default 250).
-  --scf-retry K[:N]
-              Retry an unconverged SCF at K kelvin, optionally with a new
-              iteration limit. Repeat for a ladder; K cannot be below the
-              initial electronic temperature.
-  --threads N Use 1 to 64 worker threads (default 1).
-
-GFN-FF supports energy, gradients and Hessians for singlets. It takes no
-SCF settings, orbitals or bond orders. A Hessian is limited to 200 atoms.
-Unsupported method and task combinations exit 1 with the capability message.
-
-Prints one JSON line containing the worker's Computed result plus engine.
-Energy is in Eh, gradient in Eh/bohr and the HOMO-LUMO gap in eV (null when
-no LUMO exists). Each binary array is included under its name as
-{{\"shape\":[rows,columns],\"values\":[...]}}. The worker's array descriptors
-and empty compact orbital coefficient fields are preserved.
-A gap below 0.1 eV also prints a warning on stderr and leaves the exit
-status unchanged. This CLI-only command has no MCP tool.
-
-Requires a build with xTB. Otherwise it reports that xTB is not included
-and exits 1.\n",
-        CALC.usage
-    )
+    let mut text = format!("Usage: {}\n\nOptions:\n", CALC.usage);
+    for option in CALC.options {
+        let label = match option.value {
+            Some(value) => format!("{} {value}", option.flag),
+            None => option.flag.to_string(),
+        };
+        text.push_str(&format!("  {label:<28} {}\n", option.help));
+    }
+    text.push_str("\nSee docs/xtb-worker.md (Command line)\n");
+    text
 }
 
 fn predict_nmr_help() -> String {

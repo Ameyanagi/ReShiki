@@ -131,7 +131,10 @@ pub(super) fn check_spherical(
     let n_ao = basis.shells.iter().map(Shell::n_functions).sum::<usize>();
     assert!(n_ao > 0);
     assert_eq!(orbitals.energies_hartree.len(), molden.mos.len());
-    assert_eq!(orbitals.rows.len(), molden.mos.len());
+    assert_eq!(
+        orbitals.rows,
+        (0..molden.mos.len() as u32).collect::<Vec<_>>()
+    );
     assert_eq!(orbitals.coefficients.len(), molden.mos.len() * n_ao);
     for (index, (row, reference)) in orbitals
         .coefficients
@@ -139,7 +142,6 @@ pub(super) fn check_spherical(
         .zip(&molden.mos)
         .enumerate()
     {
-        assert_eq!(orbitals.rows[index] as usize, index, "all MO rows required");
         assert_eq!(
             energy_line(orbitals.energies_hartree[index]),
             reference.energy_line,

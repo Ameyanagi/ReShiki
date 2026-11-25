@@ -770,7 +770,8 @@ fn calc_is_an_explicit_cli_only_exception_to_mcp_parity() {
             .iter()
             .any(|tool| tool["name"] == "calc")
     );
-    assert!(help(Some(spec)).contains("CLI-only command has no MCP tool"));
+    assert!(help(Some(spec)).contains("See docs/xtb-worker.md (Command line)"));
+    assert!(include_str!("../../docs/xtb-worker.md").contains("`calc` is a CLI-only command."));
 }
 
 #[cfg(not(feature = "xtb"))]

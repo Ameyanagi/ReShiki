@@ -1,9 +1,9 @@
 //! Warm-started calculations through the pinned axtb driver.
 
 use crate::protocol::{
-    self, ArrayHeader, ArrayName, Compute, Computed, Conventions, Engine, ErrorKind, GfnFfReport,
-    GfnFfSettings, Hello, Method, Open, Opened, OrbitalOutput, ResponseError, RetryReport,
-    ScfReport, SessionSettings, SolventModel, Units, VibrationsReport,
+    self, ArrayHeader, ArrayName, CompositePart, CompositeReport, Compute, Computed, Conventions,
+    Engine, ErrorKind, GfnFfReport, GfnFfSettings, Hello, Method, Open, Opened, OrbitalOutput,
+    ResponseError, RetryReport, ScfReport, SessionSettings, SolventModel, Units, VibrationsReport,
 };
 use axtb_driver::{Calculator, Request, Task};
 use reshiki_qcdata::{
@@ -127,6 +127,7 @@ impl Session {
         let opened = Opened {
             atoms: request.numbers.len(),
             method: open.method,
+            uhf,
             conventions: open.conventions,
             numerics: calculator.numerics().to_owned(),
             engine_conventions: calculator.conventions().into(),
@@ -318,7 +319,7 @@ impl Session {
             VibrationsReport {
                 conventions: v.vibrational_conventions.into(),
                 frequencies_cm1: v.frequencies,
-                ir_intensities_km_mol: v.ir_intensities.unwrap_or_default(),
+                ir_intensities_km_mol: v.ir_intensities,
                 reduced_masses_amu: v.reduced_masses,
                 force_constants_mdyn_per_angstrom: v.force_constants,
                 masses_amu: v.masses,
@@ -395,12 +396,31 @@ impl Session {
             homo_lumo_gap_ev,
             near_degenerate: protocol::is_near_degenerate(homo_lumo_gap_ev),
             scf,
-            composite: response.composite.map(|c| {
-                c.components
+            composite: response.composite.map(|c| CompositeReport {
+                components: c
+                    .components
                     .0
                     .into_iter()
                     .map(|(k, v)| (k.into(), v))
-                    .collect()
+                    .collect(),
+                parts: c
+                    .parts
+                    .0
+                    .into_iter()
+                    .map(|(name, part)| {
+                        (
+                            name.into(),
+                            CompositePart {
+                                method: part.method,
+                                conventions: part.conventions.into(),
+                                electronic_temperature_k: part.etemp,
+                                max_iterations: part.max_iter,
+                                iterations: part.iterations,
+                                retry: part.retry,
+                            },
+                        )
+                    })
+                    .collect(),
             }),
             gfnff,
             hessian_method,

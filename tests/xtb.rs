@@ -840,20 +840,16 @@ fn worker_rejects_invalid_electrons_spin_and_unknown_solvent_on_open() {
         open.uhf = uhf;
         open.solvent = solvent;
         let result = session.open(&open, &Cancel::default());
-        if name == "UHF parity" {
-            assert!(matches!(result, Err(Error::Input(_))), "{name}: {result:?}");
-        } else {
-            assert!(
-                matches!(
-                    result,
-                    Err(Error::Engine {
-                        kind: ErrorKind::Input,
-                        ..
-                    })
-                ),
-                "{name}: {result:?}"
-            );
-        }
+        assert!(
+            matches!(
+                result,
+                Err(Error::Engine {
+                    kind: ErrorKind::Input,
+                    ..
+                })
+            ),
+            "{name}: {result:?}"
+        );
         session
             .close(&Cancel::default())
             .expect("close worker after rejected open");
@@ -862,7 +858,7 @@ fn worker_rejects_invalid_electrons_spin_and_unknown_solvent_on_open() {
 
 #[cfg(feature = "xtb")]
 #[test]
-fn cef3_checks_explicit_spin_against_frame_and_valence_electrons_and_keeps_driver_default() {
+fn cef3_accepts_explicit_and_default_valence_spin() {
     let mut cef3 = Open {
         numbers: vec![58, 9, 9, 9],
         positions: vec![
@@ -874,44 +870,15 @@ fn cef3_checks_explicit_spin_against_frame_and_valence_electrons_and_keeps_drive
         uhf: Some(0),
         ..molecule("water")
     };
-    let (mut session, _) =
-        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
-    let result = session.open(&cef3, &Cancel::default());
-    assert!(
-        matches!(result, Err(Error::Input(_))),
-        "neutral CeF3 with explicit UHF 0: {result:?}"
-    );
-    session
-        .close(&Cancel::default())
-        .expect("close worker after local refusal");
-
-    let (mut session, _) =
-        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
-    cef3.uhf = Some(1);
-    let result = session.open(&cef3, &Cancel::default());
-    assert!(
-        matches!(
-            result,
-            Err(Error::Engine {
-                kind: ErrorKind::Input,
-                ..
-            })
-        ),
-        "neutral CeF3 with UHF 1: {result:?}"
-    );
-    session
-        .close(&Cancel::default())
-        .expect("close worker after rejected open");
-
-    cef3.uhf = None;
-    let (mut session, _) =
-        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
-    session
-        .open(&cef3, &Cancel::default())
-        .expect("open neutral CeF3 with the driver's default spin");
-    session
-        .close(&Cancel::default())
-        .expect("close worker after omitted UHF");
+    let cancel = Cancel::default();
+    for uhf in [Some(0), None] {
+        cef3.uhf = uhf;
+        let (mut session, _) =
+            Session::start(executable(), limits(), &cancel).expect("start worker");
+        let opened = session.open(&cef3, &cancel).expect("open neutral CeF3");
+        assert_eq!(opened.uhf, 0);
+        session.close(&cancel).expect("close worker");
+    }
 }
 
 #[cfg(all(feature = "xtb", unix))]
@@ -1248,6 +1215,7 @@ fn fake_opened(open: &Open, basis_functions: Option<u32>) -> Opened {
     Opened {
         atoms: open.numbers.len(),
         method: open.method,
+        uhf: open.uhf.unwrap_or(0),
         conventions: open.conventions,
         numerics: match open.method {
             Method::Gfn2 => "gfn2:1",
@@ -1470,7 +1438,7 @@ mod protocol_v2 {
             numerics: opened.numerics.clone(),
             settings: SessionSettings {
                 charge: open.charge,
-                uhf: 0,
+                uhf: opened.uhf,
                 solvent: open.solvent.clone(),
                 scf: open.scf.clone(),
                 gfnff: gfnff.then(|| GfnFfSettings {
@@ -1547,7 +1515,7 @@ mod protocol_v2 {
             result.vibrations = Some(VibrationsReport {
                 conventions: "axtb".into(),
                 frequencies_cm1: vec![1600.0, 3600.0, 3700.0],
-                ir_intensities_km_mol: vec![1.25, 3.5, 4.75],
+                ir_intensities_km_mol: Some(vec![1.25, 3.5, 4.75]),
                 reduced_masses_amu: vec![1.0; 3],
                 force_constants_mdyn_per_angstrom: vec![1.0, 3.0, 4.0],
                 masses_amu: vec![16.0, 1.0, 1.0],
@@ -1695,6 +1663,17 @@ mod protocol_v2 {
                 .exchange("valid Hessian", &response, PROMPT)
                 .expect("accept valid response and chunks");
             assert_eq!(result.arrays, fixture.result.arrays);
+            assert_eq!(
+                result
+                    .orbitals
+                    .as_ref()
+                    .map(|orbitals| &orbitals.alpha.rows),
+                fixture
+                    .result
+                    .orbitals
+                    .as_ref()
+                    .map(|orbitals| &orbitals.alpha.rows)
+            );
             for array in &result.arrays {
                 let actual = result.array_values(array.name);
                 let expected = fixture.result.array_values(array.name);
