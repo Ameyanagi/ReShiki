@@ -5,7 +5,7 @@ use std::{
     process::{Command, ExitStatus, Stdio},
 };
 
-pub(super) fn spawn(command: &mut Command, limits: Limits) -> io::Result<Child> {
+pub(super) fn spawn(command: &mut Command, limits: Limits, _persistent: bool) -> io::Result<Child> {
     command.process_group(0);
     command
         .stdin(Stdio::piped())
@@ -58,7 +58,7 @@ pub(super) fn spawn(command: &mut Command, limits: Limits) -> io::Result<Child> 
                 }
             }
             #[cfg(target_os = "macos")]
-            install_lifetime_observer(parent, max_fd as i32)?;
+            install_lifetime_observer(parent, max_fd as i32, _persistent)?;
             Ok(())
         });
     }
@@ -88,10 +88,14 @@ pub(super) fn spawn(command: &mut Command, limits: Limits) -> io::Result<Child> 
 /// A macOS observer exists before the trusted worker execs. The worker waits
 /// for registration of BOTH editor-exit and worker-exit notifications, then
 /// checks its expected parent again. This closes the startup/dead-parent race.
-/// The observer holds no response pipe or Rust spawn-error pipe. It also has an
-/// independent 20-second lifetime bound if the editor is stopped or abandoned.
+/// The observer holds no response pipe or Rust spawn-error pipe. For one-shot
+/// workers it also has an independent 20-second lifetime bound.
 #[cfg(target_os = "macos")]
-unsafe fn install_lifetime_observer(parent: libc::pid_t, max_fd: i32) -> io::Result<()> {
+unsafe fn install_lifetime_observer(
+    parent: libc::pid_t,
+    max_fd: i32,
+    persistent: bool,
+) -> io::Result<()> {
     // SAFETY: called only in the controlled post-fork pre-exec closure; all
     // monitor operations use stack storage and direct libc calls.
     unsafe {
@@ -152,9 +156,14 @@ unsafe fn install_lifetime_observer(parent: libc::pid_t, max_fd: i32) -> io::Res
                         tv_sec: 20,
                         tv_nsec: 0,
                     };
+                    let timeout = if persistent {
+                        std::ptr::null()
+                    } else {
+                        &timeout
+                    };
                     let mut event = std::mem::MaybeUninit::<libc::kevent>::uninit();
                     // Any event, timeout or observation failure fails closed.
-                    libc::kevent(queue, std::ptr::null(), 0, event.as_mut_ptr(), 1, &timeout);
+                    libc::kevent(queue, std::ptr::null(), 0, event.as_mut_ptr(), 1, timeout);
                 }
             }
             libc::kill(-worker, libc::SIGKILL);

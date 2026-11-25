@@ -1439,6 +1439,14 @@ async fn about_keyboard_traversal_copies_version_and_opens_update_settings() {
     let draft = app.assistant.input_text();
     app.updates.open = true;
     app.updates.data_folder = Some(std::path::PathBuf::from("/home/me/.reshiki"));
+    let enter = || {
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        )
+    };
     for (named, code) in [(Named::Enter, Code::Enter), (Named::Space, Code::Space)] {
         let (status, messages) = ui.event(
             &app,
@@ -1458,6 +1466,8 @@ async fn about_keyboard_traversal_copies_version_and_opens_update_settings() {
         "updates-license",
         "updates-settings",
         "updates-data-folder",
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        "updates-xtb-source",
         "updates-copy-version",
     ] {
         let (status, messages) = ui.event(
@@ -1484,16 +1494,28 @@ async fn about_keyboard_traversal_copies_version_and_opens_update_settings() {
                 .collect::<Vec<_>>(),
             [expected]
         );
+        #[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+        if expected == "updates-xtb-source" {
+            assert!(
+                snapshot
+                    .nodes
+                    .iter()
+                    .any(|node| { node.id == "updates-xtb-source" && node.name == "Source ↗" })
+            );
+            let (status, messages) = ui.event(&app, enter(), mouse::Cursor::Unavailable);
+            assert_eq!(status, iced::event::Status::Captured);
+            let source = format!(
+                "{}/tree/{}",
+                reshiki_xtb_worker::AXTB_SOURCE,
+                reshiki_xtb_worker::AXTB_REV
+            );
+            assert!(matches!(
+                messages.as_slice(),
+                [Message::Updates(updates::Action::OpenAboutLink(url))] if *url == source
+            ));
+        }
     }
 
-    let enter = || {
-        press(
-            Key::Named(Named::Enter),
-            Code::Enter,
-            Modifiers::empty(),
-            None,
-        )
-    };
     let (status, messages) = ui.event(&app, enter(), mouse::Cursor::Unavailable);
     assert_eq!(status, iced::event::Status::Captured);
     assert!(matches!(

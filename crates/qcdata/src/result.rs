@@ -129,6 +129,7 @@ pub enum Status {
 
 /// Charges assigned by one population analysis.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AtomicCharges {
     /// Charge assignment scheme.
     pub scheme: ChargeScheme,
@@ -156,6 +157,7 @@ pub enum ChargeScheme {
 
 /// Wiberg–Mayer bond order for one unordered atom pair.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BondOrder {
     /// Lower zero-based atom index.
     pub a: u32,
@@ -209,6 +211,7 @@ impl Vibrations {
 
 /// Thermochemical corrections relative to the reported electronic energy.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Thermo {
     /// Analysis temperature in kelvin.
     pub temperature_k: f64,
@@ -254,6 +257,9 @@ pub enum Settings {
 pub struct XtbSettings {
     /// Engine method.
     pub method: XtbMethod,
+    /// Numerical conventions selected in the engine.
+    #[serde(default, skip_serializing_if = "XtbConventions::is_default")]
+    pub conventions: XtbConventions,
     /// Optional implicit solvent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub solvent: Option<Solvent>,
@@ -266,13 +272,47 @@ pub struct XtbSettings {
     /// SCF iteration count override.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_iterations: Option<u32>,
+    /// SCF settings to try in order after a failed attempt.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scf_retries: Vec<ScfRetry>,
     /// Required topology reference for GFN-FF.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gfnff: Option<GfnFfTopology>,
 }
 
+/// Numerical conventions for xTB calculations.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum XtbConventions {
+    /// Axtb's native conventions.
+    #[default]
+    Axtb,
+    /// Reference xTB conventions.
+    #[serde(rename = "xtb-6.8")]
+    Xtb68,
+}
+
+impl XtbConventions {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+/// Overrides for one SCF retry.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScfRetry {
+    /// Electronic temperature in kelvin.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub electronic_temperature_k: Option<f64>,
+    /// SCF iteration limit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_iterations: Option<u32>,
+}
+
 /// Implicit solvent settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Solvent {
     /// Implicit solvent model.
     pub model: SolventModel,
@@ -292,6 +332,8 @@ pub struct Solvent {
 pub enum SolventModel {
     /// Analytical linearized Poisson–Boltzmann model.
     Alpb,
+    /// Generalized Born surface area model.
+    Gbsa,
 }
 
 /// Solvation reference state.
@@ -765,6 +807,7 @@ impl CalcResult {
             }
             Settings::Xtb(settings) => {
                 settings.solvent.as_ref().map_or(0, |s| s.name.len())
+                    + size_of_val(settings.scf_retries.as_slice())
                     + settings
                         .gfnff
                         .as_ref()
