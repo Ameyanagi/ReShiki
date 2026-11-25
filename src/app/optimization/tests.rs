@@ -63,6 +63,10 @@ fn initialization_context_survives_relaxation_without_an_error_or_source_edit() 
             "initialization=ETDG-fallback",
             "Alternative starting geometry",
         ),
+        (
+            "initialization=random-coordinates",
+            "Random starting geometry",
+        ),
         ("initialization=single-conformer", "Single conformer"),
     ] {
         let (mut app, _, _, original) = drawing();

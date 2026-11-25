@@ -478,11 +478,13 @@ fn embedding_parameters(request: &Request) -> EmbedParams {
     parameters.max_iterations = 100;
     parameters.timeout = 10;
     parameters.enforce_chirality = true;
-    // RMS pruning first enumerates the molecule's symmetry matches, with no
-    // deadline. For large symmetric sp2 networks (a C96H24 flake) that search
-    // alone outlasts the worker. Near-duplicate seeds only cost an extra
-    // minimization, and the lowest-energy selection is unchanged by them.
-    parameters.prune_rms_thresh = -1.;
+    parameters.prune_rms_thresh = 0.1;
+    // Symmetry-aware pruning first enumerates the molecule's automorphisms,
+    // with no deadline; for a symmetric C96H24 flake that search alone
+    // outlasts the worker. Compare in atom order instead. A molecule without
+    // symmetry prunes exactly as before; a symmetric one may keep a symmetry
+    // copy of a seed, which only costs another minimization.
+    parameters.use_symmetry_for_pruning = false;
     parameters.clear_conformers = true;
     parameters.enable_sequential_random_seeds = true;
     parameters.track_failures = true;
@@ -563,8 +565,10 @@ fn embed(
     let mut conformers = request.conformers;
     if cage.is_some() {
         // One seeded attempt diagnoses the known planarity incompatibility.
+        // With clear_confs and one candidate, RMS pruning cannot reject it.
         let mut trial = parameters.clone();
         trial.max_iterations = 1;
+        trial.prune_rms_thresh = -1.;
         // The embedder returns its failure counters in the run parameters.
         let trial = mol
             .with_3d_conformers_result_with_params(1, &trial)
@@ -606,7 +610,11 @@ fn embed(
                     request.conformers, request.seed, embedding_failures(&embedded.params)
                 ));
                 parameters.use_random_coords = true;
-                method = "Rust random-start ETKDGv3";
+                method = if parameters.use_basic_knowledge {
+                    "Rust random-start ETKDGv3"
+                } else {
+                    "Rust random-start ETDG"
+                };
             }
             Some(EmbeddingRetry::SingleConformer) => {
                 diagnostics.push(format!(
@@ -614,6 +622,8 @@ fn embed(
                     request.conformers, request.seed, embedding_failures(&embedded.params)
                 ));
                 conformers = 1;
+                // With no existing conformers, this has no pruning effect.
+                parameters.prune_rms_thresh = -1.;
             }
             None => return Ok((embedded, method)),
         }

@@ -34,8 +34,17 @@ fn assert_geometry(request: &Request, response: &Response, lengths: std::ops::Ra
 fn symmetric_c96h24_graphene_flake_generates() {
     // ETKDGv3 embeds this flake in about a second, but RMS pruning's symmetry
     // search over its 120 atoms did not finish within the worker deadline.
+    // Fail at the longest worker deadline instead of hanging the test run.
     let request = request(include_str!("fixtures/graphene-c96h24-request.json"));
-    let response = solve(&request).unwrap();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let solving = request.clone();
+    std::thread::spawn(move || {
+        let _ = sender.send(solve(&solving));
+    });
+    let response = receiver
+        .recv_timeout(std::time::Duration::from_secs(120))
+        .expect("generation outlasted the 120-second worker deadline")
+        .unwrap();
     assert_eq!(response.hydrogen_parents.len(), 24);
     assert_geometry(&request, &response, 1.36..1.46);
     assert!(response.converged, "{:?}", response.diagnostics);

@@ -40,17 +40,22 @@ fn qa(args: &[String]) -> anyhow::Result<()> {
             limits.timeout.as_secs(),
             limits.heap_bytes >> 20
         );
+        let mut failed = 0;
+        let mut ran = 0;
         for line in cases.lines().filter(|line| !line.trim().is_empty()) {
             let (name, smiles) = line.split_once('\t').unwrap_or((line, ""));
             if rest.first().is_some_and(|only| only != name) {
                 continue;
             }
-            let row = run(&client, &output, name, smiles).await;
-            println!(
-                "{name}\t{}",
-                row.unwrap_or_else(|error| format!("error\t{error}"))
-            );
+            ran += 1;
+            let _ = std::fs::remove_file(output.join(format!("{name}.rsk")));
+            let row = run(&client, &output, name, smiles)
+                .await
+                .unwrap_or_else(|error| format!("error\t{error}"));
+            failed += usize::from(!row.contains("\tok\t"));
+            println!("{name}\t{row}");
         }
+        anyhow::ensure!(ran > 0 && failed == 0, "{failed} of {ran} cases failed");
         Ok(())
     })
 }
@@ -111,10 +116,17 @@ async fn run(
             }
         }
     }
+    // The method line of a generated ensemble, else how the start was made.
     let method = optimized
         .diagnostics
         .iter()
         .find(|line| line.contains("selection="))
+        .or_else(|| {
+            optimized
+                .diagnostics
+                .iter()
+                .find(|line| line.starts_with("initialization="))
+        })
         .and_then(|line| line.split(';').next())
         .unwrap_or("");
     doc.models.push(prepared.model(&optimized)?);
