@@ -12,7 +12,8 @@ Open **Settings → Copy & export** and set **ChemDraw files → Format** to
 **CDX**. From then on ReShiki writes CDX wherever it writes a ChemDraw file
 without asking:
 
-- the ChemDraw choice in **Export → Structure** and its **Copy** button;
+- the ChemDraw choice in **Export → Structure** and its **Copy** button
+  (browsers cannot copy CDX, so use **Export…** there);
 - the first ChemDraw entry in **Save as…**.
 
 CDXML stays the default. To write the other format for one file, pick it in the
