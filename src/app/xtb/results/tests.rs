@@ -124,17 +124,25 @@ fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
             "Run time"
         ]
     );
-    assert_eq!(rows[0].1, "−5.070176 Eh");
-    assert_eq!(rows[1].1, "14.01 eV");
+    let [
+        (_, energy),
+        (_, gap),
+        (_, convergence),
+        _,
+        (_, molecule),
+        (_, run_time),
+    ] = rows.as_slice()
+    else {
+        panic!("unexpected summary rows: {rows:?}");
+    };
+    assert_eq!(energy, "−5.070176 Eh");
+    assert_eq!(gap, "14.01 eV");
     assert!(
-        rows[2]
-            .1
-            .starts_with("converged in 2 steps · RMSD from start 0.0"),
-        "{}",
-        rows[2].1
+        convergence.starts_with("converged in 2 steps · RMSD from start 0.0"),
+        "{convergence}"
     );
-    assert_eq!(rows[4].1, "H2O · 3 atoms");
-    assert_eq!(rows[5].1, "1.2 s · 2 SCF calculations");
+    assert_eq!(molecule, "H2O · 3 atoms");
+    assert_eq!(run_time, "1.2 s · 2 SCF calculations");
 
     // A reopened file has no run information: no gap or time rows, no empty ones.
     let rows = summary_rows(&result, &frame(&START), &frame(&END), None);
@@ -168,7 +176,14 @@ fn near_degenerate_gaps_warn() {
     assert_eq!(warning(&result, None), None);
     // Stored levels decide after reopening, without run information.
     let mut close = with_properties(optimized(false));
-    close.orbitals.as_mut().unwrap().alpha.energies_hartree[4] = -0.406;
+    *close
+        .orbitals
+        .as_mut()
+        .unwrap()
+        .alpha
+        .energies_hartree
+        .get_mut(4)
+        .unwrap() = -0.406;
     assert_eq!(warning(&close, None), Some(NEAR_DEGENERATE));
 }
 
@@ -235,7 +250,8 @@ fn stored_properties_show_without_run_information() {
     );
     let names: Vec<_> = levels(&result).into_iter().map(|(name, _)| name).collect();
     assert_eq!(names, ["LUMO+1", "LUMO", "HOMO", "HOMO−1", "HOMO−2"]);
-    assert!((levels(&result)[2].1 - -0.4091 * 27.211386245981).abs() < 1e-9);
+    let homo = levels(&result).get(2).unwrap().1;
+    assert!((homo - -0.4091 * 27.211386245981).abs() < 1e-9);
 
     // An open shell sharing orbitals: alpha fills one more level.
     let mut radical = result.clone();
@@ -389,7 +405,7 @@ fn the_summary_and_log_show_imaginary_modes_and_stored_thermochemistry() {
         "frequencies (cm⁻¹)\n -212.00    23.00  1590.13\nimaginary modes 1",
         "ZPVE  0.019453 Eh\nH(T)  -5.046946 Eh\nS  0.00007198 Eh/K\nG(T)  -5.072139 Eh",
         "point group D∞h",
-        "thermochemistry: quasi-RRHO (Grimme 2012), free-rotor interpolation below 75 cm⁻¹, imaginary modes above −10 cm⁻¹ inverted (xtb defaults), T 350.00 K, p 100000 Pa",
+        "thermochemistry: quasi-RRHO (Grimme 2012), free-rotor interpolation below 75 cm⁻¹, imaginary modes above −10 cm⁻¹ inverted, T 350.00 K, p 100000 Pa",
     ] {
         assert!(text.contains(expected), "Expected {expected:?} in {text}");
     }
@@ -408,7 +424,7 @@ fn rmsd_ignores_rotation_and_translation() {
         .collect();
     assert!(rmsd(&START, &moved).is_some_and(|r| r < 1e-9));
     assert!(rmsd(&START, &END).is_some_and(|r| r > 0. && r < 0.01));
-    assert_eq!(rmsd(&START, &END[..2]), None);
+    assert_eq!(rmsd(&START, END.get(..2).unwrap()), None);
 }
 
 #[test]

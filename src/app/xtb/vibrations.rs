@@ -6,12 +6,13 @@
 //! recomputes them with the stored settings when the tab opens.
 use super::palette::Shown;
 use super::results::View;
-use super::{Request, is, state};
-use crate::app::{App, Message};
+use super::{Page, Request, Start, is, state};
+use crate::app::{App, InspectorTab, Message};
 use iced::Task;
 use reshiki::document::Document;
 use reshiki::qcdata::vibrational::{self, BandShape};
-use reshiki::qcdata::{CalcResult, Frame, Settings};
+use reshiki::qcdata::{CalcResult, Frame, Settings, Thermo};
+use std::cell::RefCell;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -28,6 +29,8 @@ const MOVIE_FRAMES: usize = 20;
 const ARROW_SCALE: f32 = 2.5;
 /// Recomputed frequencies further than this from the saved ones (cm⁻¹) are reported.
 const DRIFT_CM1: f64 = 0.5;
+const MAX_DRIFT_CM1: f64 = 2.;
+const GIBBS_TOLERANCE_HARTREE: f64 = 1e-6;
 /// Pascal per standard atmosphere.
 const PA_PER_ATM: f64 = 101_325.;
 
@@ -50,7 +53,7 @@ pub(crate) enum Action {
     ExportXyz,
     Push,
     #[cfg(not(target_arch = "wasm32"))]
-    Recomputed(u64, Result<Arc<super::run::Report>, state::Failure>),
+    Recomputed(u64, u64, Result<Arc<super::run::Report>, state::Failure>),
 }
 
 /// One document's tab settings and animation.
@@ -68,10 +71,12 @@ pub(crate) struct State {
     pub temperature: String,
     /// Atmospheres, as typed.
     pub pressure: String,
+    spectrum: RefCell<Option<(view::SpectrumKey, Arc<view::SpectrumData>)>>,
     animation: Option<Animation>,
     /// Normal modes recomputed for results the file kept light.
     modes: Vec<(Weak<CalcResult>, Arc<Vec<f64>>)>,
     recompute: Option<Recompute>,
+    recompute_serial: u64,
     /// Why modes could not be recomputed, for the result it was tried on.
     pub(super) problem: Option<(Weak<CalcResult>, String)>,
 }
@@ -90,9 +95,11 @@ impl Default for State {
             thermo: false,
             temperature: "298.15".into(),
             pressure: "1".into(),
+            spectrum: RefCell::new(None),
             animation: None,
             modes: Vec::new(),
             recompute: None,
+            recompute_serial: 0,
             problem: None,
         }
     }
@@ -100,6 +107,7 @@ impl Default for State {
 
 struct Recompute {
     serial: u64,
+    epoch: u64,
     result: Weak<CalcResult>,
     #[cfg(not(target_arch = "wasm32"))]
     cancel: reshiki_xtb_worker::client::Cancel,
@@ -147,8 +155,8 @@ impl State {
 
     /// Temperature (K) and pressure (Pa) as typed, if valid.
     pub(super) fn conditions(&self) -> Option<(f64, f64)> {
-        let kelvin = typed(&self.temperature).filter(|t| *t > 0. && *t <= 10_000.)?;
-        let atm = typed(&self.pressure).filter(|p| *p > 0. && *p <= 10_000.)?;
+        let kelvin = typed(&self.temperature).filter(|t| (1.0..=10_000.).contains(t))?;
+        let atm = typed(&self.pressure).filter(|p| (1e-6..=10_000.).contains(p))?;
         Some((kelvin, atm * PA_PER_ATM))
     }
 
@@ -173,35 +181,76 @@ fn vector<'a>(modes: &'a [f64], frame: &Frame, mode: usize) -> Option<&'a [f64]>
     modes.get(mode * width..(mode + 1) * width)
 }
 
-/// Thermochemistry at the typed conditions, from the saved frequencies and
-/// masses; `None` when the result lacks them or the fields are invalid.
+/// Use the rotor type that reproduces the saved Gibbs correction before
+/// changing temperature or pressure.
 pub(super) fn thermo_at(
     result: &CalcResult,
     frame: &Frame,
     temperature_k: f64,
     pressure_pa: f64,
-) -> Option<reshiki::qcdata::Thermo> {
+) -> Option<Thermo> {
     let vibrations = result.vibrations.as_ref()?;
     let saved = result.thermo.as_ref()?;
-    if vibrations.masses_amu.len() != frame.numbers.len() {
+    if saved.symmetry_number == 0 || vibrations.masses_amu.len() != frame.numbers.len() {
         return None;
     }
-    let mut thermo = vibrational::thermochemistry(&vibrational::ThermoInput {
+    let mut input = vibrational::ThermoInput {
         frequencies_cm1: &vibrations.frequencies_cm1,
         masses_amu: &vibrations.masses_amu,
         positions_angstrom: &frame.positions_angstrom,
+        linear: None,
         symmetry_number: saved.symmetry_number,
-        temperature_k,
-        pressure_pa,
+        temperature_k: saved.temperature_k,
+        pressure_pa: saved.pressure_pa,
         frequency_scale: saved.frequency_scale,
         rotor_cutoff_cm1: saved.rotor_cutoff_cm1,
         imaginary_cutoff_cm1: saved.imaginary_cutoff_cm1,
-    });
+    };
+    let reproduces = |input: &vibrational::ThermoInput<'_>| {
+        let thermo = vibrational::thermochemistry(input);
+        thermo_is_finite(&thermo)
+            && (thermo.gibbs_correction_hartree - saved.gibbs_correction_hartree).abs()
+                <= GIBBS_TOLERANCE_HARTREE
+    };
+    if !reproduces(&input) {
+        input.linear = Some(!input.is_linear());
+        if !reproduces(&input) {
+            return None;
+        }
+    }
+    input.temperature_k = temperature_k;
+    input.pressure_pa = pressure_pa;
+    let mut thermo = vibrational::thermochemistry(&input);
     thermo.point_group = saved.point_group.clone();
-    Some(thermo)
+    thermo_is_finite(&thermo).then_some(thermo)
+}
+
+fn thermo_is_finite(thermo: &Thermo) -> bool {
+    [
+        thermo.temperature_k,
+        thermo.pressure_pa,
+        thermo.zero_point_energy_hartree,
+        thermo.enthalpy_correction_hartree,
+        thermo.entropy_hartree_per_k,
+        thermo.gibbs_correction_hartree,
+        thermo.frequency_scale,
+        thermo.rotor_cutoff_cm1,
+        thermo.imaginary_cutoff_cm1,
+    ]
+    .into_iter()
+    .chain(thermo.heat_capacity_hartree_per_k)
+    .all(f64::is_finite)
 }
 
 impl App {
+    fn xtb_mode(&self, count: usize) -> usize {
+        self.tab.xtb.vibrations.mode.min(count.saturating_sub(1))
+    }
+
+    fn xtb_model_at_result(&self, shown: &Shown<'_>) -> bool {
+        super::model_shows(&self.tab.doc, shown.atoms, &shown.frame.positions_angstrom)
+    }
+
     /// The normal modes of `result`: stored, or recomputed this session.
     pub(super) fn xtb_modes<'a>(&'a self, result: &'a Arc<CalcResult>) -> Option<&'a [f64]> {
         let vibrations = result.vibrations.as_ref()?;
@@ -221,7 +270,8 @@ impl App {
     /// to this document state.
     pub(super) fn xtb_vibration_preview(&self) -> Option<&Document> {
         let animation = self.tab.xtb.vibrations.animation.as_ref()?;
-        (animation.key.revision == (self.tab.file_epoch, self.tab.revision))
+        (self.xtb_vibrations_visible()
+            && animation.key.revision == (self.tab.file_epoch, self.tab.revision))
             .then(|| animation.frame())
             .flatten()
     }
@@ -236,18 +286,35 @@ impl App {
         }
     }
 
-    /// The result whose modes the tab animates: shown, current, not stale,
-    /// with no run or step preview owning the model.
-    fn xtb_vibrations_live(&self) -> Option<Shown<'_>> {
+    pub(in crate::app) fn xtb_vibrations_visible(&self) -> bool {
         let palette = &self.tab.xtb.palette;
-        let collapsed = self.xtb.dock.collapsed && !self.xtb.dock.inspector;
-        if !palette.open || palette.view != View::Vibrations || collapsed {
+        self.tabs.temporary_depth == 0
+            && palette.open
+            && palette.view == View::Vibrations
+            && if self.xtb.dock.inspector {
+                self.inspector_open
+                    && self.inspector_tab == InspectorTab::Predict
+                    && self.xtb.page == Page::Xtb
+            } else {
+                !self.xtb.dock.collapsed
+            }
+    }
+
+    fn xtb_vibrations_live(&self) -> Option<Shown<'_>> {
+        if !self.xtb_vibrations_visible()
+            || self.tab.xtb.run.is_some()
+            || self.xtb_step_preview().is_some()
+        {
             return None;
         }
-        if self.tab.xtb.run.is_some() || self.xtb_step_preview().is_some() {
-            return None;
-        }
-        self.xtb_shown().filter(|shown| !shown.stale)
+        self.xtb_shown()
+            .filter(|shown| !shown.stale && self.xtb_model_at_result(shown))
+    }
+
+    pub(in crate::app) fn xtb_vibrations_leave(&mut self) {
+        let settings = &mut self.tab.xtb.vibrations;
+        settings.animation = None;
+        settings.recompute = None;
     }
 
     /// Build the animation frames for what the tab now shows, or drop them.
@@ -255,13 +322,17 @@ impl App {
         let revision = (self.tab.file_epoch, self.tab.revision);
         let settings = &self.tab.xtb.vibrations;
         let Some(shown) = self.xtb_vibrations_live() else {
-            self.tab.xtb.vibrations.animation = None;
+            self.xtb_vibrations_leave();
             return;
         };
         let result = &shown.stored.result;
+        let count = result
+            .vibrations
+            .as_ref()
+            .map_or(0, |v| v.frequencies_cm1.len());
         let key = Key {
             result: Arc::as_ptr(result),
-            mode: settings.mode,
+            mode: self.xtb_mode(count),
             amplitude: settings.amplitude,
             arrows: settings.arrows,
             revision,
@@ -289,13 +360,14 @@ impl App {
             .models
             .iter()
             .position(|m| m.linked_atoms.contains(&atom))?;
-        let (size, reach) = (base.models[index].size, base.models[index].reach(&base));
+        let model = base.models.get(index)?;
+        let (size, reach) = (model.size, model.reach(&base));
         positions
             .iter()
             .map(|positions| {
                 let mut doc = super::preview(&self.tab.doc, atom, positions)?;
-                let reach_now = doc.models[index].reach(&doc);
-                doc.models[index].size = size * reach_now / reach.max(1e-3);
+                let reach_now = doc.models.get(index)?.reach(&doc);
+                doc.models.get_mut(index)?.size = size * reach_now / reach.max(1e-3);
                 if key.arrows {
                     let arrows = arrows(&doc, index, positions, mode, key.amplitude)?;
                     doc.arrows.extend(arrows);
@@ -333,9 +405,9 @@ impl App {
             Action::ExportXyz => return self.xtb_export_movie(),
             Action::Push => return self.xtb_push(),
             #[cfg(not(target_arch = "wasm32"))]
-            Action::Recomputed(serial, outcome) => {
+            Action::Recomputed(epoch, serial, outcome) => {
                 // Its status (a frequency drift) stays in front of the mode line.
-                self.xtb_recomputed(serial, outcome);
+                self.xtb_recomputed(epoch, serial, outcome);
                 self.xtb_vibrations_sync();
                 return Task::none();
             }
@@ -347,19 +419,17 @@ impl App {
 
     /// "Bend · 1590 cm⁻¹ · animating" for the selected mode.
     fn xtb_vibrations_status(&mut self) {
-        let Some(animation) = &self.tab.xtb.vibrations.animation else {
+        if self.tab.xtb.vibrations.animation.is_none() {
             return;
-        };
+        }
         let Some(shown) = self.xtb_shown() else {
             return;
         };
-        let Some(frequency) = shown
-            .stored
-            .result
-            .vibrations
-            .as_ref()
-            .and_then(|v| v.frequencies_cm1.get(animation.key.mode))
-        else {
+        let Some(vibrations) = &shown.stored.result.vibrations else {
+            return;
+        };
+        let mode = self.xtb_mode(vibrations.frequencies_cm1.len());
+        let Some(frequency) = vibrations.frequencies_cm1.get(mode) else {
             return;
         };
         let state = if self.tab.xtb.vibrations.playing {
@@ -369,7 +439,7 @@ impl App {
         };
         self.status = format!(
             "Mode {} · {} · {state}",
-            animation.key.mode + 1,
+            mode + 1,
             view::wavenumber(*frequency)
         );
         self.error = false;
@@ -377,9 +447,19 @@ impl App {
 
     /// The tab opened: recompute missing modes, then animate.
     pub(super) fn xtb_vibrations_opened(&mut self) -> Task<Message> {
-        let task = self.xtb_recompute_modes();
+        if let Some(result) = self.xtb_shown().map(|shown| shown.stored.result.clone()) {
+            self.tab
+                .xtb
+                .vibrations
+                .problem
+                .take_if(|(weak, _)| is(weak, &result));
+        }
+        self.xtb_vibrations_resume()
+    }
+
+    pub(in crate::app) fn xtb_vibrations_resume(&mut self) -> Task<Message> {
         self.xtb_vibrations_sync();
-        task
+        self.xtb_recompute_modes()
     }
 
     /// Recompute the shown result's normal modes with its stored settings,
@@ -389,7 +469,7 @@ impl App {
         return Task::none();
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let Some(shown) = self.xtb_shown() else {
+            let Some(shown) = self.xtb_vibrations_live() else {
                 return Task::none();
             };
             let result = shown.stored.result.clone();
@@ -400,7 +480,6 @@ impl App {
                     .problem
                     .as_ref()
                     .is_some_and(|(w, _)| is(w, &result))
-                || shown.stale
                 || super::unavailable().is_some()
                 || !matches!(result.settings, Settings::Xtb(_))
             {
@@ -417,14 +496,10 @@ impl App {
             config.task = state::Task::Frequencies;
             config.fixed.clear();
             let job = super::job(&config, shown.frame, vec![]);
-            let serial = self
-                .tab
-                .xtb
-                .vibrations
-                .recompute
-                .as_ref()
-                .map_or(0, |r| r.serial)
-                + 1;
+            let epoch = self.tab.file_epoch;
+            let settings = &mut self.tab.xtb.vibrations;
+            settings.recompute_serial = settings.recompute_serial.wrapping_add(1);
+            let serial = settings.recompute_serial;
             let cancel = reshiki_xtb_worker::client::Cancel::default();
             // The worker starts when the task first runs, never in a test that drops it.
             let worker = cancel.clone();
@@ -434,13 +509,14 @@ impl App {
                 }));
             let (task, handle) = Task::run(events, move |event| match event {
                 super::run::Event::Done(outcome) => Some(Message::Xtb(super::Action::Vibrations(
-                    Action::Recomputed(serial, outcome),
+                    Action::Recomputed(epoch, serial, outcome),
                 ))),
                 _ => None,
             })
             .abortable();
-            self.tab.xtb.vibrations.recompute = Some(Recompute {
+            settings.recompute = Some(Recompute {
                 serial,
+                epoch,
                 result: Arc::downgrade(&result),
                 cancel,
                 _handle: Some(handle.abort_on_drop()),
@@ -452,16 +528,31 @@ impl App {
     #[cfg(not(target_arch = "wasm32"))]
     fn xtb_recomputed(
         &mut self,
+        epoch: u64,
         serial: u64,
         outcome: Result<Arc<super::run::Report>, state::Failure>,
     ) {
+        let Some(recompute) = self
+            .tab
+            .xtb
+            .vibrations
+            .recompute
+            .take_if(|r| r.epoch == epoch && r.serial == serial)
+        else {
+            return;
+        };
+        if recompute.epoch != self.tab.file_epoch {
+            return;
+        }
+        let Some(shown) = self
+            .xtb_vibrations_live()
+            .filter(|shown| is(&recompute.result, &shown.stored.result))
+        else {
+            return;
+        };
+        let atoms = shown.frame.numbers.len();
+        let result = shown.stored.result.clone();
         let vibrations = &mut self.tab.xtb.vibrations;
-        let Some(recompute) = vibrations.recompute.take_if(|r| r.serial == serial) else {
-            return;
-        };
-        let Some(result) = recompute.result.upgrade() else {
-            return;
-        };
         let saved = result
             .vibrations
             .as_ref()
@@ -483,18 +574,33 @@ impl App {
             .as_ref()
             .map_or(&[][..], |v| &v.frequencies_cm1);
         let modes = &report.computed.normal_modes;
-        if fresh.len() != saved.len() || modes.len() != saved.len() * report.positions.len() * 3 {
+        let drift = fresh
+            .iter()
+            .zip(saved)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0., f64::max);
+        if fresh.len() != saved.len()
+            || drift > MAX_DRIFT_CM1
+            || fresh
+                .iter()
+                .zip(saved)
+                .any(|(a, b)| a.partial_cmp(&0.) != b.partial_cmp(&0.))
+        {
+            vibrations.problem = Some((
+                Arc::downgrade(&result),
+                format!(
+                    "The recomputed frequencies differ from the saved ones (up to {drift:.1} cm⁻¹); the modes are not shown."
+                ),
+            ));
+            return;
+        }
+        if modes.len() != saved.len() * atoms * 3 {
             vibrations.problem = Some((
                 Arc::downgrade(&result),
                 "The recomputed modes do not match the saved frequencies.".into(),
             ));
             return;
         }
-        let drift = fresh
-            .iter()
-            .zip(saved)
-            .map(|(a, b)| (a - b).abs())
-            .fold(0., f64::max);
         if drift > DRIFT_CM1 {
             self.status = format!(
                 "Recomputed frequencies differ from the saved ones by up to {drift:.1} cm⁻¹"
@@ -513,38 +619,36 @@ impl App {
         let Some(shown) = self.xtb_vibrations_live() else {
             return;
         };
+        let Some(vibrations) = &shown.stored.result.vibrations else {
+            return;
+        };
+        let mode = self.xtb_mode(vibrations.frequencies_cm1.len());
         let amplitude = self.tab.xtb.vibrations.amplitude;
         let Some(mode) = self
             .xtb_modes(&shown.stored.result)
-            .and_then(|modes| vector(modes, shown.frame, self.tab.xtb.vibrations.mode))
+            .and_then(|modes| vector(modes, shown.frame, mode))
         else {
             return;
         };
         let Some(atom) = shown.atoms.iter().flatten().next().copied() else {
             return;
         };
-        let positions = shown.frame.positions_angstrom.clone();
-        let Some(preview) = super::preview(&self.tab.doc, atom, &positions) else {
+        let positions = &shown.frame.positions_angstrom;
+        let Some(mut doc) = super::preview(&self.tab.doc, atom, positions) else {
             return;
         };
-        let Some(index) = preview
+        let Some(index) = doc
             .models
             .iter()
             .position(|m| m.linked_atoms.contains(&atom))
         else {
             return;
         };
-        let Some(arrows) = arrows(&preview, index, &positions, mode, amplitude) else {
+        let Some(arrows) = arrows(&doc, index, positions, mode, amplitude) else {
             return;
         };
-        let mut doc = self.tab.doc.clone();
-        let first = doc.next_id();
         let count = arrows.len();
-        doc.arrows
-            .extend(arrows.into_iter().enumerate().map(|(k, mut arrow)| {
-                arrow.id = first + k as u64;
-                arrow
-            }));
+        doc.arrows.extend(arrows);
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed(before);
         if !self.error {
@@ -557,7 +661,10 @@ impl App {
         let Some(shown) = self.xtb_shown() else {
             return Task::none();
         };
-        let mode = self.tab.xtb.vibrations.mode;
+        let Some(vibrations) = &shown.stored.result.vibrations else {
+            return Task::none();
+        };
+        let mode = self.xtb_mode(vibrations.frequencies_cm1.len());
         let amplitude = f64::from(self.tab.xtb.vibrations.amplitude);
         let Some(vector) = self
             .xtb_modes(&shown.stored.result)
@@ -567,12 +674,9 @@ impl App {
             self.error = true;
             return Task::none();
         };
-        let frequency = shown
-            .stored
-            .result
-            .vibrations
-            .as_ref()
-            .and_then(|v| v.frequencies_cm1.get(mode))
+        let frequency = vibrations
+            .frequencies_cm1
+            .get(mode)
             .copied()
             .unwrap_or_default();
         let frames = vibrational::mode_frames(
@@ -612,11 +716,16 @@ impl App {
         let Some(shown) = self.xtb_shown().filter(|s| !s.stale) else {
             return Task::none();
         };
+        if !self.xtb_model_at_result(&shown) {
+            self.status = "The 3D model moved after this calculation".into();
+            self.error = true;
+            return Task::none();
+        }
         let result = shown.stored.result.clone();
         let Some(vibrations) = result.vibrations.as_ref() else {
             return Task::none();
         };
-        let selected = self.tab.xtb.vibrations.mode;
+        let selected = self.xtb_mode(vibrations.frequencies_cm1.len());
         let mode = if vibrations
             .frequencies_cm1
             .get(selected)
@@ -649,7 +758,8 @@ impl App {
         };
         config.task = state::Task::OptFreq;
         config.fixed.clear();
-        let start = vibrational::displaced(&shown.frame.positions_angstrom, vector, PUSH_ANGSTROM);
+        let from = shown.frame.positions_angstrom.clone();
+        let positions = vibrational::displaced(&from, vector, PUSH_ANGSTROM);
         let Some(first) = shown
             .atoms
             .iter()
@@ -663,10 +773,8 @@ impl App {
             atoms: reshiki::molecule_names::component(&self.tab.doc, first),
             config,
             keep_full: shown.stored.keep_full,
-            start: Some(start),
+            start: Some(Start { positions, from }),
         };
-        self.xtb_end_preview();
-        self.tab.xtb.vibrations.animation = None;
         self.xtb_begin(request)
     }
 }
@@ -681,8 +789,9 @@ fn arrows(
     amplitude: f32,
 ) -> Option<Vec<reshiki::document::Arrow>> {
     let model = doc.models.get(index)?;
-    let largest = mode
-        .chunks_exact(3)
+    let (directions, _) = mode.as_chunks::<3>();
+    let largest = directions
+        .iter()
         .map(|d| d.iter().map(|x| x * x).sum::<f64>().sqrt())
         .fold(0., f64::max);
     if largest <= 0. {
@@ -691,11 +800,12 @@ fn arrows(
     let length = f64::from(amplitude * ARROW_SCALE) / largest;
     let tips: Vec<[f32; 3]> = positions
         .iter()
-        .zip(mode.chunks_exact(3))
-        .flat_map(|(p, d)| {
+        .zip(directions)
+        .flat_map(|(p, &[dx, dy, dz])| {
+            let [x, y, z] = *p;
             [
                 p.map(|x| x as f32),
-                std::array::from_fn(|k| (p[k] + d[k] * length) as f32),
+                [x + dx * length, y + dy * length, z + dz * length].map(|x| x as f32),
             ]
         })
         .collect();
@@ -713,13 +823,15 @@ fn arrows(
     let mut id = doc.next_id();
     Some(
         points
-            .chunks_exact(2)
-            .filter(|pair| pair[0].distance(pair[1]) >= shortest)
-            .map(|pair| {
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .filter(|[start, end]| start.distance(*end) >= shortest)
+            .map(|&[start, end]| {
                 let mut arrow = reshiki::document::Arrow::new(
                     id,
-                    pair[0],
-                    pair[1],
+                    start,
+                    end,
                     reshiki::arrows::Preset::Forward,
                     style.clone(),
                 );

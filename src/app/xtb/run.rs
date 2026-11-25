@@ -129,14 +129,14 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
         .engine
         .ok_or_else(|| worker_failure(&Error::Unavailable))?;
     let open = Open {
-        numbers: job.numbers,
-        positions: job.positions,
+        numbers: job.numbers.clone(),
+        positions: job.positions.clone(),
         units: Units::Angstrom,
         charge: job.charge,
         uhf: Some(job.uhf),
         method: job.method,
         conventions: job.conventions,
-        solvent: job.solvent,
+        solvent: job.solvent.clone(),
         scf: job.scf.clone(),
         gfnff: None,
         threads: job.threads,
@@ -168,17 +168,7 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
     let outcome = if job.optimize {
         let xyz = open.positions.as_flattened();
         let positions: Vec<_> = xyz.iter().map(|x| x / ANGSTROM_PER_BOHR).collect();
-        let level = if job.tight {
-            Level::Tight
-        } else {
-            Level::Normal
-        };
-        let options = Options {
-            level,
-            fixed_atoms: job.fixed,
-            tight_final: job.frequencies,
-            ..Options::default()
-        };
+        let options = options(&job);
         let mut xtb = Xtb {
             session: &mut session,
             cancel,
@@ -215,20 +205,8 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
         None
     };
     let final_xyz = outcome.as_ref().map(|outcome| outcome.positions.as_slice());
-    let electronic = job.method.xtb_method().capabilities().orbitals;
     // One evaluation gives the stored energy, gradient and properties.
-    let final_request = Compute {
-        positions: final_xyz.map(|xyz| xyz.as_chunks::<3>().0.to_vec()),
-        units: Units::Bohr,
-        gradient: outcome.is_some(),
-        hessian: job.frequencies.then(HessianRequest::default),
-        bond_orders: electronic,
-        orbitals: if electronic {
-            OrbitalOutput::Levels
-        } else {
-            OrbitalOutput::None
-        },
-    };
+    let final_request = final_request(&job, final_xyz);
     if job.frequencies && tx.unbounded_send(Event::Hessian).is_err() {
         return Err(canceled());
     }
@@ -260,6 +238,35 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
         path,
         evaluations,
     })
+}
+
+fn options(job: &Job) -> Options {
+    Options {
+        level: if job.tight || job.frequencies {
+            Level::Tight
+        } else {
+            Level::Normal
+        },
+        fixed_atoms: job.fixed.clone(),
+        tight_final: job.frequencies,
+        ..Options::default()
+    }
+}
+
+fn final_request(job: &Job, positions: Option<&[f64]>) -> Compute {
+    let electronic = job.method.xtb_method().capabilities().orbitals;
+    Compute {
+        positions: positions.map(|xyz| xyz.as_chunks::<3>().0.to_vec()),
+        units: Units::Bohr,
+        gradient: positions.is_some(),
+        hessian: job.frequencies.then(HessianRequest::default),
+        bond_orders: electronic,
+        orbitals: if electronic {
+            OrbitalOutput::Levels
+        } else {
+            OrbitalOutput::None
+        },
+    }
 }
 
 fn angstroms(positions: &[f64]) -> Vec<[f64; 3]> {
@@ -452,6 +459,81 @@ pub(crate) fn example_computed(energy: f64, gap_ev: f64) -> Computed {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn job() -> Job {
+        Job {
+            optimize: true,
+            frequencies: false,
+            numbers: vec![8, 1, 1],
+            positions: vec![[0.; 3]; 3],
+            charge: 0,
+            uhf: 0,
+            method: Method::Gfn2,
+            conventions: Conventions::Axtb,
+            scf: ScfSettings::default(),
+            solvent: None,
+            threads: 1,
+            fixed: vec![0],
+            tight: false,
+        }
+    }
+
+    #[test]
+    fn final_frequency_request_keeps_electronic_properties() {
+        let positions = [0., 1., 2., 3., 4., 5.];
+        let mut job = job();
+        job.frequencies = true;
+        for method in [Method::Gfn2, Method::Gxtb, Method::Gfnff] {
+            job.method = method;
+            let request = final_request(&job, Some(&positions));
+            assert_eq!(request.positions, Some(vec![[0., 1., 2.], [3., 4., 5.]]));
+            assert_eq!(request.units, Units::Bohr);
+            assert!(request.gradient);
+            assert!(request.hessian.is_some());
+            let electronic = method != Method::Gfnff;
+            assert_eq!(request.bond_orders, electronic);
+            assert_eq!(
+                request.orbitals,
+                if electronic {
+                    OrbitalOutput::Levels
+                } else {
+                    OrbitalOutput::None
+                }
+            );
+        }
+        job.optimize = false;
+        let request = final_request(&job, None);
+        assert!(request.positions.is_none());
+        assert!(!request.gradient);
+        assert!(request.hessian.is_some());
+
+        job.frequencies = false;
+        let request = final_request(&job, None);
+        assert!(request.positions.is_none());
+        assert!(!request.gradient);
+        assert!(request.hessian.is_none());
+    }
+
+    #[test]
+    fn frequencies_require_tight_optimization_and_final_recheck() {
+        let mut job = job();
+        let normal = options(&job);
+        assert_eq!(normal.level, Level::Normal);
+        assert!(!normal.tight_final);
+        assert_eq!(normal.fixed_atoms, job.fixed);
+
+        job.frequencies = true;
+        let frequencies = options(&job);
+        assert_eq!(frequencies.level, Level::Tight);
+        assert!(frequencies.tight_final);
+        assert_eq!(frequencies.fixed_atoms, job.fixed);
+
+        job.frequencies = false;
+        job.tight = true;
+        let tight = options(&job);
+        assert_eq!(tight.level, Level::Tight);
+        assert!(!tight.tight_final);
+    }
 
     #[test]
     fn batches_accepted_steps_and_flushes_the_remainder() {

@@ -501,6 +501,11 @@ pub(crate) fn tsv(method: &str, rows: &[(String, String)]) -> String {
     text
 }
 
+/// Whether the stored quasi-RRHO cutoffs are xtb's defaults.
+pub(super) fn thermo_defaults(thermo: &qcdata::Thermo) -> bool {
+    thermo.rotor_cutoff_cm1 == 50. && thermo.imaginary_cutoff_cm1 == 20.
+}
+
 /// The Log tab: settings, then each SCF the worker ran, then the result.
 pub(crate) fn log(
     result: &CalcResult,
@@ -625,8 +630,12 @@ pub(crate) fn log(
             lines.push(format!("point group {}", point_group(group)));
         }
         lines.push(format!(
-            "thermochemistry: quasi-RRHO (Grimme 2012), free-rotor interpolation below {} cm⁻¹, imaginary modes above −{} cm⁻¹ inverted (xtb defaults), T {:.2} K, p {} Pa",
-            thermo.rotor_cutoff_cm1, thermo.imaginary_cutoff_cm1.abs(), thermo.temperature_k, thermo.pressure_pa,
+            "thermochemistry: quasi-RRHO (Grimme 2012), free-rotor interpolation below {} cm⁻¹, imaginary modes above −{} cm⁻¹ inverted{}, T {:.2} K, p {} Pa",
+            thermo.rotor_cutoff_cm1,
+            thermo.imaginary_cutoff_cm1.abs(),
+            if thermo_defaults(thermo) { " (xtb's defaults)" } else { "" },
+            thermo.temperature_k,
+            thermo.pressure_pa,
         ));
     }
     lines.join("\n")
