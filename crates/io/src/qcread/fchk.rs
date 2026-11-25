@@ -513,7 +513,16 @@ fn basis(
             .split_whitespace()
             .next()
             .and_then(|word| word.rsplit('-').next())
-            .is_some_and(|id| id.starts_with("G09Rev") || id.starts_with("G16Rev")),
+            .and_then(|id| {
+                id.strip_prefix("G09Rev")
+                    .or_else(|| id.strip_prefix("G16Rev"))
+            })
+            .is_some_and(|revision| {
+                matches!(
+                    revision.as_bytes(),
+                    [b'A'..=b'Z', b'.', b'0'..=b'9', b'0'..=b'9']
+                )
+            }),
         None => fields.get("ILSW").is_some() && fields.get("IOpCl").is_some(),
     };
     let unverified: BTreeSet<_> = types
@@ -966,10 +975,15 @@ fn natural_orbital_route(keywords: &[String]) -> bool {
 )]
 fn canonical_coefficients(ao_order: &[usize], values: &[f64], levels: &[(usize, f64)]) -> Vec<f64> {
     let n_ao = ao_order.len();
+    let identity = ao_order.iter().copied().eq(0..n_ao);
     let mut converted = Vec::with_capacity(values.len());
     for &(mo, _) in levels {
         let row = &values[mo * n_ao..(mo + 1) * n_ao];
-        converted.extend(ao_order.iter().map(|&ao| row[ao]));
+        if identity {
+            converted.extend_from_slice(row);
+        } else {
+            converted.extend(ao_order.iter().map(|&ao| row[ao]));
+        }
     }
     converted
 }

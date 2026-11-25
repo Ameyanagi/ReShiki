@@ -16,9 +16,10 @@
 //! shell in these fixtures has one primitive. The phase comparison assumes
 //! ORCA's p order and signs are x, y, z. It confirms the Molden pure d order
 //! and signs and the pure f order with inverted m = ±3 signs. The adapter
-//! requires the `orca_2mkl` title header, which uses the bare program name.
-//! Pure g and Cartesian d/f/g from `orca_2mkl` and d/f/g from other named
-//! producers remain unverified.
+//! requires the exact title prefix `Molden file created by orca_2mkl for BaseName=`,
+//! with the bare program name. ORCA files without this header keep only orbital
+//! energies. Pure g and Cartesian d/f/g from `orca_2mkl` and d/f/g from other
+//! named producers remain unverified.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1438,33 +1439,33 @@ fn read_geometry_energies(section: &Section<'_>) -> Result<Vec<f64>, Error> {
 }
 
 fn writer(sections: &[Section<'_>]) -> Writer {
-    let first_line = |name| {
-        sections
-            .iter()
-            .find(|s| s.name == name)?
-            .body
-            .lines()
-            .map(str::trim)
-            .find(|line| !line.is_empty())
+    let header = |name, prefix: &str| {
+        let line = sections.iter().find(|s| s.name == name)?.data().next()?;
+        let (actual, rest) = line.text.trim().split_at_checked(prefix.len())?;
+        actual.eq_ignore_ascii_case(prefix).then_some(rest)
     };
-    const ORCA_HEADER: &str = "Molden file created by orca_2mkl";
-    if first_line("TITLE")
-        .and_then(|line| line.get(..ORCA_HEADER.len()))
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(ORCA_HEADER))
-    {
-        return Writer::Orca;
+    match (
+        header("TITLE", "Molden file created by orca_2mkl for BaseName="),
+        header("MOLDEN FORMAT", "made by pyscf v["),
+    ) {
+        (Some(_), None) => Writer::Orca,
+        (None, None) => Writer::Other,
+        // An unreadable version counts as an unsupported PySCF writer.
+        (None, Some(version)) => Writer::Pyscf(
+            (|| {
+                let version = version.strip_suffix(']')?;
+                let (major, rest) = version.split_once('.')?;
+                let (minor, patch) = rest.split_once('.')?;
+                [major, minor, patch]
+                    .iter()
+                    .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+                    .then_some(())?;
+                major.parse().ok()
+            })()
+            .unwrap_or(0),
+        ),
+        (Some(_), Some(_)) => Writer::Other,
     }
-    let major = first_line("MOLDEN FORMAT").and_then(|line| {
-        let version = line.strip_prefix("made by pyscf v[")?.strip_suffix(']')?;
-        let (major, rest) = version.split_once('.')?;
-        let (minor, patch) = rest.split_once('.')?;
-        [major, minor, patch]
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
-            .then_some(())?;
-        major.parse().ok()
-    });
-    major.map_or(Writer::Other, Writer::Pyscf)
 }
 
 fn producer(text: &str, sections: &[Section<'_>]) -> Option<String> {
@@ -1547,11 +1548,12 @@ fn unsupported_shapes(basis: &BasisSet, writer: Writer, producer: Option<&str>) 
     let orca = matches!(writer, Writer::Orca);
     let name = match (writer, producer) {
         (Writer::Orca, _) => "ORCA",
-        (Writer::Pyscf(2..), _) | (_, None | Some("Molden")) => return None,
-        (_, Some("ORCA")) => {
+        (Writer::Pyscf(2..), _) | (Writer::Other, None | Some("Molden")) => return None,
+        (Writer::Pyscf(_), _) => "PySCF",
+        (Writer::Other, Some("ORCA")) => {
             return Some("Orbital shapes left out: ORCA radial primitive normalization is unverified without the orca_2mkl writer signature; orbital energies are kept".into());
         }
-        (_, Some(name)) => name,
+        (Writer::Other, Some(name)) => name,
     };
     let mut functions = BTreeSet::new();
     for shell in &basis.shells {

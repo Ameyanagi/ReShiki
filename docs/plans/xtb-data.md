@@ -205,8 +205,10 @@ the pure f coefficients at m = ±3. The implied AO overlap of the complete water
 formaldehyde TDDFT MO sets verifies the radial conversion on contracted s/p shells. Every
 d/f shell in these fixtures has one primitive. The overlap phase checks assume ORCA's p
 components are x, y, z and establish the pure d/f phases used for the signed grid references.
-The adapter applies this convention to all `orca_2mkl` files. Pure g and Cartesian d/f/g
-remain unverified and cause the reader to keep only the orbital spectrum.
+The adapter requires the exact `[Title]` prefix `Molden file created by orca_2mkl for BaseName=`,
+with the bare program name. ORCA files without this header keep only orbital energies.
+Pure g and Cartesian d/f/g remain unverified and cause the reader to keep only the orbital
+spectrum.
 
 Functions: `canonical_cartesian_order(l)`, `molden_cartesian_order(l)`, `molden_pure_order(l)`,
 `axial_norm_ratio(a, b, c)`, `primitive_norm(alpha, l)`, `contraction_overlap(shell)`,

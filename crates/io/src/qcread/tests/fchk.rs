@@ -265,6 +265,21 @@ fn fchk_sp_coefficients_keep_ao_order_when_levels_are_sorted() {
 }
 
 #[test]
+fn fchk_coefficient_rows_follow_mo_and_ao_permutations() {
+    let values = [1.0, -2.0, 3.0, -4.0, 5.0, 6.0];
+    let levels = [(1, -1.0), (0, 1.0)];
+    for (order, expected) in [
+        ([0, 1, 2], [-4.0, 5.0, 6.0, 1.0, -2.0, 3.0]),
+        ([2, 0, 1], [6.0, -4.0, 5.0, 3.0, 1.0, -2.0]),
+    ] {
+        assert_eq!(
+            super::canonical_coefficients(&order, &values, &levels),
+            expected
+        );
+    }
+}
+
+#[test]
 fn fchk_g16_dvb_ir_vibration_blocks_match_quoted_gaussian_output() {
     let file = open("cclib/g16_dvb_ir.fchk");
     let job = &file.jobs[0];
@@ -499,9 +514,16 @@ fn fchk_high_shell_shapes_require_gaussian_pure_d() {
                 };
                 vec![
                     (source.clone(), true),
+                    (with_version(&neither, "ES64L-G16RevA.03"), true),
                     (with_version(&neither, "ES64L-G16RevC.01"), true),
                     (with_version(&neither, "EM64L-G09RevD.01"), true),
                     // An explicit version overrides the marker-pair fallback.
+                    (with_version(&source, "QChem-G16RevFake"), false),
+                    (with_version(&source, "G16Reva.03"), false),
+                    (with_version(&source, "G16RevA_03"), false),
+                    (with_version(&source, "G16RevA.3"), false),
+                    (with_version(&source, "G16RevA.0x"), false),
+                    (with_version(&source, "G16RevA.031"), false),
                     (with_version(&source, "G03 C.02 (G16-compatible)"), false),
                     (with_version(&source, ""), false),
                     (with_version(&source, "G160 A.03"), false),
