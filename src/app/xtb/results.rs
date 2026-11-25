@@ -241,6 +241,10 @@ pub(crate) fn warning(result: &CalcResult, info: Option<&RunInfo>) -> Option<&'s
 
 /// "+0.280" or "−0.561".
 pub(crate) fn signed_charge(value: f64) -> String {
+    // −0.0004 rounds to zero and shows unsigned.
+    if value.abs() < 5e-4 {
+        return "0.000".into();
+    }
     if value >= 0. {
         format!("+{value:.3}")
     } else {
