@@ -88,6 +88,17 @@ pub struct Batch {
     pub(super) warnings: Vec<String>,
 }
 
+impl Batch {
+    /// One drawing and its import warnings.
+    pub(super) fn one(drawing: Document, warnings: Vec<String>) -> Self {
+        Self {
+            drawings: vec![drawing],
+            warnings,
+            ..Self::default()
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct State {
     pub kind: InputKind,
@@ -431,12 +442,17 @@ pub(super) fn limit(path: &Path) -> u64 {
         _ => u64::MAX,
     }
 }
-/// Open reads a structure file only to its [`limit`], as Insert does.
+/// Open bounds program inputs and outputs at the QC reader's limit and other
+/// structure files at their [`limit`], as Insert does.
 /// Drawings and pictures are read whole.
 pub(super) fn open_limit(path: &Path) -> u64 {
-    match kind(path) {
-        Kind::Structure(_) => limit(path),
-        _ => u64::MAX,
+    if super::files::is_qc_file(path, &extension(path)) {
+        reshiki::qcread::MAX_FILE_BYTES as u64
+    } else {
+        match kind(path) {
+            Kind::Structure(_) => limit(path),
+            _ => u64::MAX,
+        }
     }
 }
 /// No extension filter: VASP files are often named POSCAR or CONTCAR without

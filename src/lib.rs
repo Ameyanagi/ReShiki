@@ -37,7 +37,7 @@ pub use reshiki_agent::envelope;
 use reshiki_io::native_windows;
 pub use reshiki_io::{
     chemistry, cleanup, compatibility, crystal, document_styles, engine, exchange, export, formats,
-    geometry, nmr, payload, piece_library, qc_input, qcdata, recovery, svg_drawing, task,
+    geometry, nmr, payload, piece_library, qc_input, qcdata, qcread, recovery, svg_drawing, task,
     template_library,
 };
 

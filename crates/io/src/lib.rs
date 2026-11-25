@@ -43,6 +43,7 @@ pub mod payload;
 pub mod piece_library;
 pub mod preview;
 pub mod qc_input;
+pub mod qcread;
 pub mod recovery;
 pub mod svg_drawing;
 pub mod task;

@@ -41,6 +41,7 @@ fn finish_model(app: &mut App) {
             original_atom_count: n,
             hydrogen_parents: vec![0],
         },
+        ensemble: vec![],
         initial_energy: 1.,
         energy: 1.,
         gradient: None,
