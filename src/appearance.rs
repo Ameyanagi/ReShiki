@@ -65,6 +65,25 @@ impl Background {
     }
 }
 
+/// The ChemDraw file ReShiki writes without asking: Export's ChemDraw
+/// choice, the first ChemDraw entry in Save as, and their Copy.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ChemDrawFormat {
+    #[default]
+    Cdxml,
+    Cdx,
+}
+impl ChemDrawFormat {
+    /// The other ChemDraw format.
+    pub fn other(self) -> Self {
+        match self {
+            Self::Cdxml => Self::Cdx,
+            Self::Cdx => Self::Cdxml,
+        }
+    }
+}
+
 /// A PNG resolution: one of the presets. A file from a newer build with
 /// another value does not load, like an unknown background.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,6 +151,8 @@ pub struct Settings {
     pub copy_dpi: Dpi,
     /// PNG resolution of exported files (1200 dpi by default).
     pub export_dpi: Dpi,
+    /// The ChemDraw format written without asking (CDXML by default).
+    pub chemdraw_format: ChemDrawFormat,
     /// Symbols inserted from the picker, newest first.
     pub recent_symbols: Vec<String>,
     /// The user's templates for Export input for Gaussian, ORCA and GAMESS.
@@ -159,6 +180,7 @@ impl Default for Settings {
             background_colors: Vec::new(),
             copy_dpi: Dpi(300),
             export_dpi: Dpi(1200),
+            chemdraw_format: ChemDrawFormat::Cdxml,
             recent_symbols: Vec::new(),
             input_templates: Vec::new(),
         }

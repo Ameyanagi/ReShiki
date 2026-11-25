@@ -1,10 +1,21 @@
 use super::*;
 use crate::{
     arrows::{Body, Head, HeadShape, NoGo},
-    graphics::{GraphicKind, GraphicStyle, LinePattern, PathHeads},
+    graphics::{Graphic, GraphicKind, GraphicStyle, LinePattern, PathHeads},
     ring_fills::RingEffect,
-    scientific::MarkKind,
+    scientific::{MarkKind, SymbolKind},
 };
+use std::collections::HashSet;
+
+pub(super) fn native_plus(graphic: &Graphic) -> bool {
+    let (x, y) = (graphic.axis_x, graphic.axis_y);
+    graphic.kind == GraphicKind::Symbol(SymbolKind::Plus)
+        && graphic.style.pattern == LinePattern::Solid
+        && x.x > 1e-3
+        && x.y == 0.
+        && y.x == 0.
+        && y.y.abs() == x.x
+}
 
 fn head_attributes(heads: &PathHeads, scalar: fn(f32) -> f64) -> [(&'static str, String); 6] {
     let head = |h| match h {
@@ -553,7 +564,7 @@ impl Writer<'_> {
         }
         Ok(())
     }
-    pub(super) fn graphics(&mut self) -> Result<usize> {
+    pub(super) fn graphics(&mut self, plusses: &HashSet<u64>) -> Result<usize> {
         let doc = self.doc;
         let mut ordered: Vec<_> = doc.graphics.iter().collect();
         ordered.sort_by_key(|g| g.layer);
@@ -584,6 +595,36 @@ impl Writer<'_> {
                 continue;
             }
             if let Some(n) = self.native_shape(g, z)? {
+                self.objects.push((g.id, n));
+                continue;
+            }
+            if native_plus(g) && plusses.contains(&g.id) {
+                let center = P::from(g.origin);
+                let axis = P::from(g.axis_x);
+                let style = self.chemdraw_style(&g.style, false);
+                let id = self.id()?;
+                let color = self.color(style.stroke)?;
+                let n = self.tree.add(
+                    Some(self.page),
+                    "graphic",
+                    [
+                        ("id", id),
+                        ("Z", z.to_string()),
+                        ("GraphicType", "Symbol".into()),
+                        ("SymbolType", "Plus".into()),
+                        ("color", color),
+                        ("LineType", "Solid".into()),
+                        ("LineWidth", number(real(style.width_pt))),
+                        (
+                            "BoundingBox",
+                            format!(
+                                "{} {}",
+                                self.position(center),
+                                self.position(center.add(-axis.x, -axis.y))
+                            ),
+                        ),
+                    ],
+                )?;
                 self.objects.push((g.id, n));
                 continue;
             }

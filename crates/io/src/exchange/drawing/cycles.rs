@@ -1,5 +1,5 @@
 //! A catalytic cycle's ChemDraw steps and the data ReShiki reopens it from.
-use super::{P, Result, Writer, invalid};
+use super::{P, Result, Writer, steps::Step};
 use crate::{
     cycles::{Materialized, Role},
     document::Point,
@@ -7,54 +7,6 @@ use crate::{
 };
 
 impl Writer<'_> {
-    /// The file object ID of a cycle part: the outermost fragment holding a
-    /// structure's first atom, or a text's own text object. Also whether
-    /// that object is the part exactly: a fragment can hold more, as when a
-    /// bond deleted in a part left two pieces in two fragments.
-    fn part_id(&self, part: &[u64]) -> Result<(u64, bool)> {
-        let first = *part.first().ok_or_else(|| invalid("Empty cycle part"))?;
-        let mut exact = true;
-        let key = if self.atom_indices.contains_key(&first) {
-            let mut key = self.atom_node(first)?;
-            let mut fragment = None;
-            while let Some(parent) = self.tree.node(key)?.parent {
-                if self.tree.node(parent)?.tag == "fragment" {
-                    fragment = Some(parent);
-                }
-                key = parent;
-            }
-            let fragment = fragment.ok_or_else(|| invalid("Cycle structure outside a fragment"))?;
-            let mut held = std::collections::HashSet::new();
-            for key in self.tree.descendants(fragment)? {
-                if self.tree.node(key)?.tag == "n"
-                    && let Some(atom) = self
-                        .tree
-                        .get(key, "id")?
-                        .and_then(|id| id.parse::<usize>().ok())
-                        .and_then(|id| self.doc.atoms.get(id.checked_sub(3)?))
-                {
-                    held.insert(atom.id);
-                }
-            }
-            exact = held.len() == part.len() && part.iter().all(|id| held.contains(id));
-            fragment
-        } else {
-            self.objects
-                .iter()
-                .find(|(id, _)| *id == first)
-                .map(|(_, key)| *key)
-                .ok_or_else(|| invalid("Missing cycle part"))?
-        };
-        Ok((self.xml_id(key)?, exact))
-    }
-
-    fn xml_id(&self, key: usize) -> Result<u64> {
-        self.tree
-            .value(key, "id")?
-            .parse()
-            .map_err(|_| invalid("Invalid object ID"))
-    }
-
     /// Each step of each cycle as a ChemDraw reaction step, and the cycles
     /// themselves as file data.
     pub(super) fn cycles(&mut self, cycles: &[Materialized]) -> Result<Option<Payload>> {
@@ -93,52 +45,34 @@ impl Writer<'_> {
             }
             // The steps ChemDraw's reaction tools read.
             let n = cycle.intermediates.len();
-            if n > 0 {
-                let scheme_id = self.id()?;
-                let scheme = self
-                    .tree
-                    .add(Some(self.page), "scheme", [("id", scheme_id)])?;
-                for s in 0..n {
-                    let mut reactants = vec![];
-                    let mut products = vec![];
-                    let mut above = vec![];
-                    for ((role, _), (id, text)) in roles.iter().zip(ids.iter().zip(&texts)) {
-                        // A lone intermediate starts and ends its step.
-                        if *role == Role::Intermediate(s) {
-                            reactants.push(*id);
-                        }
-                        let side = match *role {
-                            Role::Intermediate(i) if i == (s + 1) % n => &mut products,
-                            Role::Reagent(k) | Role::Product(k) if k == s && *text => &mut above,
-                            Role::Reagent(k) if k == s => &mut reactants,
-                            Role::Product(k) if k == s => &mut products,
-                            _ => continue,
-                        };
-                        side.push(*id);
+            let mut steps = Vec::new();
+            for s in 0..n {
+                let mut step = Step::default();
+                for ((role, _), (id, text)) in roles.iter().zip(ids.iter().zip(&texts)) {
+                    // A lone intermediate starts and ends its step.
+                    if *role == Role::Intermediate(s) {
+                        step.reactants.push(*id);
                     }
-                    let mut arrows = vec![];
-                    for (step, arrow) in &m.arcs {
-                        if *step == s
-                            && let Some((_, key)) = self.objects.iter().find(|(id, _)| id == arrow)
-                        {
-                            arrows.push(self.xml_id(*key)?);
-                        }
-                    }
-                    let list =
-                        |ids: &[u64]| ids.iter().map(u64::to_string).collect::<Vec<_>>().join(" ");
-                    let mut attrs = vec![("id", self.id()?)];
-                    for (name, ids) in [
-                        ("ReactionStepReactants", &reactants),
-                        ("ReactionStepProducts", &products),
-                        ("ReactionStepArrows", &arrows),
-                        ("ReactionStepObjectsAboveArrow", &above),
-                    ] {
-                        if !ids.is_empty() {
-                            attrs.push((name, list(ids)));
-                        }
-                    }
-                    self.tree.add(Some(scheme), "step", attrs)?;
+                    let side = match *role {
+                        Role::Intermediate(i) if i == (s + 1) % n => &mut step.products,
+                        Role::Reagent(k) | Role::Product(k) if k == s && *text => &mut step.above,
+                        Role::Reagent(k) if k == s => &mut step.reactants,
+                        Role::Product(k) if k == s => &mut step.products,
+                        _ => continue,
+                    };
+                    side.push(*id);
                 }
+                for (i, arrow) in &m.arcs {
+                    if *i == s
+                        && let Some((_, key)) = self.objects.iter().find(|(id, _)| id == arrow)
+                    {
+                        step.arrows.push(self.xml_id(*key)?);
+                    }
+                }
+                steps.push(step);
+            }
+            if !steps.is_empty() {
+                self.scheme(&steps)?;
             }
             // File coordinates, as the parts' own.
             let at = |p: Point| {
