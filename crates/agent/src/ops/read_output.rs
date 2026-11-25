@@ -15,7 +15,7 @@ use crate::{
 };
 use reshiki_io::{
     qcdata::{Beta, DEBYE_PER_E_BOHR, Orbitals},
-    qcread::{self, Completion, Job, JobKind, JobSummary, QcFile},
+    qcread::{self, Completion, Job, JobKind, JobSummary, QcFile, Step},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -26,7 +26,7 @@ const EV_PER_HARTREE: f64 = 27.211_386_245_988;
 pub const READ_OUTPUT: ToolSpec = ToolSpec {
     name: "read_output",
     title: Some("Read calculation output"),
-    description: "Read a quantum chemistry file: job summaries, calculated values and final XYZ geometry.",
+    description: "Summarize quantum chemistry jobs with calculated values and XYZ geometry.",
     input_schema: schema,
     hints: Some(Hints {
         read_only: true,
@@ -42,7 +42,7 @@ fn schema() -> Value {
         "properties": {
             "text": {"type": ["string", "null"], "description": "Inline file, at most max_text_bytes; needs file_name. Give text or path, never both."},
             "file_name": {"type": ["string", "null"], "description": "Format detection name; null uses path's file name."},
-            "path": {"type": ["string", "null"], "maxLength": MAX_PATH_BYTES, "description": "File inside a granted READ folder, at most 128 MiB."},
+            "path": {"type": ["string", "null"], "maxLength": MAX_PATH_BYTES, "description": "File in a granted READ folder, at most max_text_bytes."},
             "job": {"type": ["integer", "null"], "minimum": 0, "description": "Zero-based job index; null selects the default job."},
         },
         "required": ["text", "file_name", "path", "job"],
@@ -201,17 +201,17 @@ struct Selected {
     xyz: Option<String>,
 }
 
-/// The alpha frontier of restricted and unrestricted spectra with occupations.
+/// The frontier across the available spin spectra with occupations.
 fn gap(orbitals: &Orbitals) -> Option<f64> {
-    if matches!(orbitals.beta, Beta::SameOrbitals { .. }) {
-        return None;
-    }
+    let beta = match &orbitals.beta {
+        Beta::Unrestricted(beta) => Some(beta),
+        Beta::Restricted => None,
+        Beta::SameOrbitals { .. } => return None,
+    };
     let levels = || {
-        orbitals
-            .alpha
-            .energies_hartree
-            .iter()
-            .zip(&orbitals.alpha.occupations)
+        std::iter::once(&orbitals.alpha)
+            .chain(beta)
+            .flat_map(|set| set.energies_hartree.iter().zip(&set.occupations))
     };
     let homo = levels()
         .filter(|(_, occupation)| **occupation > 0.0)
@@ -224,9 +224,9 @@ fn gap(orbitals: &Orbitals) -> Option<f64> {
     Some(round((lumo - homo) * EV_PER_HARTREE))
 }
 
-fn xyz(job: &Job) -> Option<String> {
-    let frame = &job.steps.last()?.frame;
-    let mut text = format!("{}\n{}\n", frame.numbers.len(), job.title());
+fn xyz(step: &Step, title: &str) -> Option<String> {
+    let frame = &step.frame;
+    let mut text = format!("{}\n{title}\n", frame.numbers.len());
     for (&number, [x, y, z]) in frame.numbers.iter().zip(&frame.positions_angstrom) {
         let symbol = crate::chemistry::ELEMENTS.get(usize::from(number))?.symbol;
         writeln!(&mut text, "{symbol} {x:.8} {y:.8} {z:.8}").ok()?;
@@ -237,16 +237,21 @@ fn xyz(job: &Job) -> Option<String> {
 impl From<&Job> for Selected {
     fn from(job: &Job) -> Self {
         let result = job.result.as_ref();
+        let step = if result.is_some() {
+            job.result_step()
+        } else {
+            job.steps.last()
+        };
         let energy = result
             .and_then(|result| result.energy_hartree)
-            .or_else(|| job.steps.last().and_then(|step| step.energy_hartree));
+            .or_else(|| step.and_then(|step| step.energy_hartree));
         let vibrations = result.and_then(|result| result.vibrations.as_ref());
         let thermo = result
             .and_then(|result| result.thermo.as_ref())
             .zip(energy)
             .map(|(thermo, energy)| Thermo {
                 temperature_k: round(thermo.temperature_k),
-                zero_point_energy_hartree: round(energy + thermo.zero_point_energy_hartree),
+                zero_point_energy_hartree: round(thermo.zero_point_energy_hartree),
                 enthalpy_hartree: round(energy + thermo.enthalpy_correction_hartree),
                 gibbs_hartree: round(energy + thermo.gibbs_correction_hartree),
             });
@@ -282,7 +287,7 @@ impl From<&Job> for Selected {
             }),
             imaginary: vibrations.map_or(0, |vibrations| vibrations.imaginary_count()),
             thermo,
-            xyz: xyz(job),
+            xyz: step.and_then(|step| xyz(step, &job.title())),
         }
     }
 }
@@ -323,13 +328,22 @@ pub(crate) async fn read_output(
     ctx: Context,
     grants: Arc<Grants>,
     versions: Versions,
+    max_text_bytes: usize,
     args: ReadOutput,
 ) -> Result<ToolResult, OpError> {
     let (value, messages) = ctx
         .blocking(move || {
             let bytes = match args.source {
                 Source::Text(text) => text.into_bytes(),
-                Source::Path(path) => grants.read_qc(&path, qcread::MAX_FILE_BYTES)?,
+                Source::Path(path) => grants.read_qc(&path, max_text_bytes).map_err(|error| {
+                    let mut error = OpError::from(error);
+                    if error.reason == Some("file_too_large") {
+                        error.message = format!(
+                            "file_too_large: the file exceeds max_text_bytes ({max_text_bytes} bytes)"
+                        );
+                    }
+                    error
+                })?,
             };
             let file = qcread::read(&args.file_name, &bytes).map_err(|error| match error {
                 qcread::Error::Invalid(message) => OpError::invalid(message),
@@ -377,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    fn real_gaussian_values_and_absolute_thermochemistry() {
+    fn real_gaussian_values_and_thermochemical_corrections() {
         let mut file = qcread::read(
             "H2O_gau_vib.out",
             include_bytes!("../../../../tests/fixtures/qc/pymatgen/H2O_gau_vib.out"),
@@ -388,7 +402,7 @@ mod tests {
         assert!(Selected::from(&*job).thermo.is_none());
         let result = job.result.as_mut().unwrap();
         // Readers currently leave thermochemistry absent. Supply the corrections
-        // printed by this fixture to exercise their absolute-energy conversion.
+        // printed by this fixture to exercise the result conversion.
         let original = reshiki_io::qcdata::Thermo {
             temperature_k: 298.15,
             pressure_pa: 101_325.0,
@@ -413,7 +427,7 @@ mod tests {
         assert_eq!(thermo.temperature_k, round(original.temperature_k));
         assert_eq!(
             thermo.zero_point_energy_hartree,
-            round(energy + original.zero_point_energy_hartree)
+            round(original.zero_point_energy_hartree)
         );
         assert_eq!(
             thermo.enthalpy_hartree,
@@ -425,6 +439,38 @@ mod tests {
         );
         assert!(selected.homo_lumo_gap_ev.is_some_and(|gap| gap > 0.0));
         assert_eq!(selected.dipole_debye, Some(2.2494));
+    }
+
+    #[test]
+    fn truncated_gaussian_pairs_xyz_with_the_last_evaluated_step() {
+        let text = include_str!("../../../../tests/fixtures/qc/cclib/g16_dvb_gopt.out");
+        let cut = text
+            .find(" SCF Done:  E(RB3LYP) =  -382.308265702")
+            .unwrap();
+        let mut file = qcread::read("interrupted.log", &text.as_bytes()[..cut]).unwrap();
+        let job = &mut file.jobs[0];
+        assert_eq!(job.steps.len(), 4);
+        let expected_xyz = xyz(&job.steps[2], &job.title()).unwrap();
+        assert_ne!(expected_xyz, xyz(&job.steps[3], &job.title()).unwrap());
+        let selected = Selected::from(&*job);
+        assert_eq!(selected.completion, Some("truncated"));
+        assert_eq!(selected.xyz.as_deref(), Some(expected_xyz.as_str()));
+        assert_eq!(selected.energy_hartree, Some(-382.308239279));
+
+        job.result.as_mut().unwrap().energy_hartree = None;
+        assert_eq!(Selected::from(&*job).energy_hartree, Some(-382.308239279));
+    }
+
+    #[test]
+    fn unrestricted_fchk_gap_uses_both_spins() {
+        let file = qcread::read(
+            "g09_dvb_un_sp.fchk",
+            include_bytes!("../../../../tests/fixtures/qc/cclib/g09_dvb_un_sp.fchk"),
+        )
+        .unwrap();
+        let selected = Read::from_file(&file, None).unwrap().job.unwrap();
+        let gap = selected.homo_lumo_gap_ev.unwrap();
+        assert!((gap - 1.88).abs() < 0.01, "gap was {gap} eV");
     }
 
     #[test]
@@ -456,7 +502,7 @@ mod tests {
     }
 
     #[test]
-    fn gap_uses_the_alpha_occupation_frontier_and_needs_both_levels() {
+    fn restricted_gap_uses_the_alpha_occupation_frontier_and_needs_both_levels() {
         let set = OrbitalSet {
             energies_hartree: vec![-1.0, -0.25, 0.1],
             occupations: vec![2.0, 2.0, 0.0],
@@ -467,21 +513,16 @@ mod tests {
         let mut orbitals = Orbitals {
             basis: None,
             core_electrons: Vec::new(),
-            alpha: set.clone(),
+            alpha: set,
             beta: Beta::Restricted,
         };
         let expected = Some(round(0.35 * EV_PER_HARTREE));
         assert_eq!(gap(&orbitals), expected);
-        orbitals.beta = Beta::Unrestricted(OrbitalSet {
-            energies_hartree: vec![-100.0, -50.0, 200.0],
-            ..set
-        });
-        orbitals.alpha.occupations = vec![1.0, 1.0, 0.0];
-        assert_eq!(gap(&orbitals), expected);
-        orbitals.alpha.occupations.fill(1.0);
+        orbitals.alpha.occupations.fill(2.0);
         assert_eq!(gap(&orbitals), None);
         orbitals.alpha.occupations.clear();
         assert_eq!(gap(&orbitals), None);
+        orbitals.alpha.occupations = vec![1.0, 1.0, 0.0];
         orbitals.beta = Beta::SameOrbitals {
             occupations: vec![1.0, 0.0, 0.0],
         };

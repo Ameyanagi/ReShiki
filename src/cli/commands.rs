@@ -1179,7 +1179,7 @@ fn calculate_help() -> String {
 
 fn read_output_help() -> String {
     format!(
-        "Usage: {}\n\nRuns the read_output tool and prints its labelled result as one JSON line,\nincluding job summaries, calculated values and the final XYZ geometry.\n\nOptions:\n  --job N  Select a zero-based job index; omit for the default job.\n\nReads at most max_text_bytes ({} bytes). For larger files, use the MCP\nread_output tool's path form inside a granted read folder.\n",
+        "Usage: {}\n\nRuns the read_output tool and prints its labelled result as one JSON line,\nincluding job summaries, calculated values and the selected XYZ geometry.\n\nOptions:\n  --job N  Select a zero-based job index; omit for the default job.\n\nReads at most max_text_bytes ({} bytes).\n",
         READ_OUTPUT.usage,
         Budgets::default().max_text_bytes,
     )

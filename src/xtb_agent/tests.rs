@@ -3,6 +3,43 @@ use serde_json::json;
 use std::path::Path;
 
 #[test]
+fn optimization_stops_at_the_first_step_when_the_deadline_has_passed() {
+    struct Quadratic;
+
+    impl Potential for Quadratic {
+        fn evaluate(
+            &mut self,
+            positions: &[f64],
+            gradient: &mut [f64],
+            _accuracy: Accuracy,
+        ) -> Result<f64, EvalError> {
+            gradient.copy_from_slice(positions);
+            Ok(positions.iter().map(|x| x * x).sum::<f64>() / 2.0)
+        }
+    }
+
+    let deadline = Instant::now() - std::time::Duration::from_secs(1);
+    let mut steps = Vec::new();
+    let outcome = optimize(
+        &mut Quadratic,
+        &[1, 1],
+        &[0.0, 0.0, 0.0, 1.4, 0.0, 0.0],
+        &Options::default(),
+        |step| {
+            steps.push(step.index);
+            assert_eq!(
+                optimization_step(step, None, None),
+                ControlFlow::Continue(())
+            );
+            optimization_step(step, Some(deadline), None)
+        },
+    );
+    assert_eq!(steps, [0]);
+    assert_eq!(outcome.status, Status::Cancelled);
+    assert_eq!(outcome.evaluations, 1);
+}
+
+#[test]
 fn optimized_xyz_has_the_method_comment_and_eight_decimals() {
     let text = xyz(
         &[8, 1],

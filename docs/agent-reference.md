@@ -255,13 +255,12 @@ Experimental: ReShiki's agent tools, schemas and results may change between rele
 Usage: reshiki --cli read-output [--job N] FILE
 
 Runs the read_output tool and prints its labelled result as one JSON line,
-including job summaries, calculated values and the final XYZ geometry.
+including job summaries, calculated values and the selected XYZ geometry.
 
 Options:
   --job N  Select a zero-based job index; omit for the default job.
 
-Reads at most max_text_bytes (16777216 bytes). For larger files, use the MCP
-read_output tool's path form inside a granted read folder.
+Reads at most max_text_bytes (16777216 bytes).
 ```
 
 ### reshiki --cli export-input
@@ -902,7 +901,7 @@ Result `value`: `{file_name, text, companions}`. The main input file name and te
 
 **Read calculation output**
 
-Read a quantum chemistry file: job summaries, calculated values and final XYZ geometry.
+Summarize quantum chemistry jobs with calculated values and XYZ geometry.
 
 | Hint | Value |
 | --- | --- |
@@ -915,10 +914,10 @@ Read a quantum chemistry file: job summaries, calculated values and final XYZ ge
 | --- | --- | --- | --- | --- | --- |
 | `file_name` | `string or null` | true | true |  | Format detection name; null uses path's file name. |
 | `job` | `integer or null` | true | true | minimum: `0` | Zero-based job index; null selects the default job. |
-| `path` | `string or null` | true | true | maxLength: `4096` | File inside a granted READ folder, at most 128 MiB. |
+| `path` | `string or null` | true | true | maxLength: `4096` | File in a granted READ folder, at most max_text_bytes. |
 | `text` | `string or null` | true | true |  | Inline file, at most max_text_bytes; needs file_name. Give text or path, never both. |
 
-Result `value`: `{format, program, program_version, jobs, job}`. jobs is [{index, kind, title, completion, steps, atoms, energy_hartree, frequencies, orbitals}]. job is the selected job or null. It has {index, kind, method, basis, keywords, completion, energy_hartree, homo_lumo_gap_ev, dipole_debye, frequencies_cm1, ir_intensities_km_mol, imaginary, thermo, xyz}. thermo gives temperature and absolute energies. xyz is the last geometry. File messages become warnings.
+Result `value`: `{format, program, program_version, jobs, job}`. jobs is [{index, kind, title, completion, steps, atoms, energy_hartree, frequencies, orbitals}]. job is the selected job or null. It has {index, kind, method, basis, keywords, completion, energy_hartree, homo_lumo_gap_ev, dipole_debye, frequencies_cm1, ir_intensities_km_mol, imaginary, thermo, xyz}. For unrestricted spectra, the gap uses the highest occupied and lowest empty levels across both spins. In thermo, zero_point_energy_hartree is the zero-point correction. enthalpy_hartree and gibbs_hartree are absolute energies (electronic energy plus correction). xyz is the geometry described by the result, or the last retained geometry if there is no result. File messages become warnings.
 
 ### calculate
 
@@ -949,7 +948,7 @@ Calculate energy, optimize or compute frequencies from the first XYZ frame (Å).
 | `uhf` | `integer` | true | false | minimum: `0` | Unpaired electrons. |
 | `xyz` | `string` | true | false |  |  |
 
-Result `value`: `{task, method, engine, atoms, charge, multiplicity, energy_hartree, homo_lumo_gap_ev, dipole_debye, charges, optimization, frequencies, seconds}`. engine is {name, version, rev}. Gap, dipole and charges are null when absent. optimization is {converged, steps, rmsd_angstrom, xyz} or null. frequencies is {frequencies_cm1, ir_intensities_km_mol, imaginary, temperature_k, zero_point_energy_hartree, enthalpy_hartree, gibbs_hartree} or null. Charges are rounded to four decimal places and frequencies to two. The hook's messages become warnings.
+Result `value`: `{task, method, engine, atoms, charge, multiplicity, energy_hartree, homo_lumo_gap_ev, dipole_debye, charges, optimization, frequencies, seconds}`. engine is {name, version, rev}. Gap, dipole and charges are null when absent. optimization is {converged, steps, rmsd_angstrom, xyz} or null. frequencies is {frequencies_cm1, ir_intensities_km_mol, imaginary, temperature_k, zero_point_energy_hartree, enthalpy_hartree, gibbs_hartree} or null. zero_point_energy_hartree is the zero-point correction. enthalpy_hartree and gibbs_hartree are absolute energies (electronic energy plus correction). Charges are rounded to four decimal places and frequencies to two. The hook's messages become warnings.
 
 ## Budgets
 

@@ -13,18 +13,18 @@ pub(crate) async fn run(
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<(), CliError> {
-    let limit = Budgets::default().max_text_bytes;
+    let mut budgets = Budgets::default();
+    let limit = budgets.max_text_bytes;
     let bytes = io::read_input(Some(&command.file), limit).map_err(|message| {
         CliError::Failed(if message == format!("input exceeds {limit} bytes") {
-            format!(
-                "input exceeds max_text_bytes ({limit} bytes); use the MCP read_output tool's path form for larger files"
-            )
+            format!("input exceeds max_text_bytes ({limit} bytes)")
         } else {
             message
         })
     })?;
-    let text = String::from_utf8(bytes)
-        .map_err(|_| CliError::Failed("The calculation output must be UTF-8.".into()))?;
+    let text = String::from_utf8_lossy(&bytes);
+    // The file is already bounded. Replacement characters can expand its UTF-8 text.
+    budgets.max_text_bytes = limit.max(text.len());
     let file_name = command
         .file
         .file_name()
@@ -36,6 +36,8 @@ pub(crate) async fn run(
         "path": null,
         "job": command.job,
     });
-    let result = Session::new().call("read_output", arguments, err).await?;
+    let result = Session::with_budgets(budgets)
+        .call("read_output", arguments, err)
+        .await?;
     writeln!(out, "{}", labelled(result.value)).map_err(CliError::Stdout)
 }
