@@ -5,8 +5,8 @@
 use super::build::Lattice;
 use super::{Atom, Error, Structure, V3, elements, number};
 
-/// The `key=value` pairs of an extended XYZ comment line; values may be
-/// quoted with double quotes.
+/// The `key=value` pairs of an extended XYZ comment line; keys and values
+/// may be quoted with double quotes.
 pub(crate) fn pairs(comment: &str) -> Vec<(String, String)> {
     let mut out = vec![];
     let mut rest = comment.trim();
@@ -14,7 +14,11 @@ pub(crate) fn pairs(comment: &str) -> Vec<(String, String)> {
         let Some((key, after)) = rest.split_once('=') else {
             break;
         };
-        let key = key.split_whitespace().last().unwrap_or_default();
+        let key = key
+            .split_whitespace()
+            .last()
+            .unwrap_or_default()
+            .trim_matches('"');
         let after = after.trim_start();
         let (value, tail) = if let Some(quoted) = after.strip_prefix('"') {
             quoted.split_once('"').unwrap_or((quoted, ""))

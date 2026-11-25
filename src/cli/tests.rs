@@ -2681,6 +2681,8 @@ async fn export_input_honours_extended_xyz_columns_and_plain_xyz_defaults() {
     for text in [
         "1\nProperties=species:S:1:charge:R:1:pos:R:3\nH 0.2 0 0 0.74\n",
         "1\nProperties=charge:R:1:pos:R:3:species:S:1\n0.2 0 0 0.74 H\n",
+        "1\n\"Properties\"=species:S:1:charge:R:1:pos:R:3\nH 0.2 0 0 0.74\n",
+        "1\n\"Properties\"=\"charge:R:1:pos:R:3:species:S:1\"\n0.2 0 0 0.74 H\n",
         "1\nplain XYZ\nH 0 0 0.74\n",
     ] {
         std::fs::write(&input, text).unwrap();
@@ -2720,6 +2722,139 @@ async fn export_input_writes_a_file_and_uses_its_stem_for_checkpoint() {
     let (code, out, err) = call(&args).await;
     assert_eq!((code, out.as_str(), err.as_str()), (SUCCESS, "", ""));
     assert_eq!(std::fs::read_to_string(&output).unwrap(), written);
+}
+
+#[tokio::test]
+async fn export_input_sanitizes_generated_file_stems_and_keeps_the_chosen_output_path() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("water sample.xyz");
+    std::fs::write(&input, WATER_XYZ).unwrap();
+    let args = [
+        "export-input",
+        input.to_str().unwrap(),
+        "--program",
+        "gaussian",
+    ];
+    let (code, out, err) = call(&args).await;
+    assert_eq!((code, err.as_str()), (SUCCESS, ""));
+    assert!(out.contains("%chk=water_sample.chk\n"), "{out}");
+    assert!(out.contains("\nwater sample\n"), "{out}");
+
+    for (name, sanitized) in [
+        ("calculation sample.gjf", "calculation_sample"),
+        #[cfg(unix)]
+        (
+            "calculation \t\n\u{2003}\u{7}name.gjf",
+            "calculation_____name",
+        ),
+    ] {
+        let output = directory.path().join(name);
+        let (code, out, err) =
+            call(&[&args[..], &["--out", output.to_str().unwrap()][..]].concat()).await;
+        assert_eq!((code, out.as_str(), err.as_str()), (SUCCESS, "", ""));
+        let written = std::fs::read_to_string(&output).unwrap();
+        assert!(
+            written.contains(&format!("%chk={sanitized}.chk\n")),
+            "{written}"
+        );
+        assert!(written.contains("\nwater sample\n"), "{written}");
+        assert!(!directory.path().join(format!("{sanitized}.gjf")).exists());
+    }
+}
+
+#[test]
+fn export_input_preflights_every_companion_before_writing_any_file() {
+    use reshiki_io::qc_input::File;
+    let companions = [
+        File {
+            name: "calculation_product.xyz".into(),
+            text: "new product".into(),
+        },
+        File {
+            name: "calculation_ts.xyz".into(),
+            text: "new TS guess".into(),
+        },
+    ];
+    for (existing, companion) in companions.iter().enumerate() {
+        for main_exists in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let output = directory.path().join("calculation.inp");
+            if main_exists {
+                std::fs::write(&output, "existing input").unwrap();
+            }
+            let existing_path = directory.path().join(&companion.name);
+            std::fs::write(&existing_path, "existing companion").unwrap();
+            let error = export_input::write_files(&output, "new input", &companions).unwrap_err();
+            assert_eq!(
+                error,
+                format!(
+                    "{} already exists; remove it or choose another --out name.",
+                    companion.name
+                )
+            );
+            assert_eq!(
+                std::fs::read_to_string(&output).ok(),
+                main_exists.then(|| "existing input".into())
+            );
+            assert_eq!(
+                std::fs::read_to_string(existing_path).unwrap(),
+                "existing companion"
+            );
+            assert!(
+                !directory
+                    .path()
+                    .join(&companions[1 - existing].name)
+                    .exists()
+            );
+        }
+    }
+}
+
+#[test]
+fn export_input_writes_new_companions_beside_the_chosen_main_path() {
+    use reshiki_io::qc_input::File;
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("chosen.inp");
+    let companions = [
+        File {
+            name: "generated_product.xyz".into(),
+            text: "new product".into(),
+        },
+        File {
+            name: "generated_ts.xyz".into(),
+            text: "new TS guess".into(),
+        },
+    ];
+    std::fs::write(&output, "existing input").unwrap();
+    export_input::write_files(&output, "new input", &companions).unwrap();
+    assert_eq!(std::fs::read_to_string(&output).unwrap(), "new input");
+    for file in &companions {
+        assert_eq!(
+            std::fs::read_to_string(directory.path().join(&file.name)).unwrap(),
+            file.text
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn export_input_preflights_dangling_companion_symlinks() {
+    use reshiki_io::qc_input::File;
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("calculation.inp");
+    let companion = File {
+        name: "calculation_xtb.hess".into(),
+        text: "new Hessian".into(),
+    };
+    let link = directory.path().join(&companion.name);
+    std::os::unix::fs::symlink(directory.path().join("missing.hess"), &link).unwrap();
+    let error = export_input::write_files(&output, "new input", &[companion]).unwrap_err();
+    assert_eq!(
+        error,
+        "calculation_xtb.hess already exists; remove it or choose another --out name."
+    );
+    assert!(!output.exists());
+    assert!(std::fs::symlink_metadata(link).unwrap().is_symlink());
 }
 
 #[tokio::test]

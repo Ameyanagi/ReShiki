@@ -82,7 +82,6 @@ pub(super) struct Dialog {
     title: String,
     extra: String,
     irc_points: String,
-    neb_images: String,
     /// The new template's name while it is being typed.
     template_name: Option<String>,
     message: String,
@@ -201,8 +200,13 @@ impl Dialog {
             memory_gb: number(&self.memory, "Memory")?,
             title: self.title.clone(),
             extra: self.extra.clone(),
-            irc_points: number(&self.irc_points, "IRC points")?,
-            neb_images: number(&self.neb_images, "NEB images")?,
+            // A hidden field never blocks the file.
+            irc_points: if self.job == Job::Irc {
+                number(&self.irc_points, "IRC points")?
+            } else {
+                30
+            },
+            neb_images: 12,
         })
     }
 
@@ -231,20 +235,27 @@ impl App {
             .collect()
     }
 
-    /// The selected molecule, or the drawing's only 3D model.
+    /// The drawn molecule of the selection, or of the drawing's only 3D model
+    /// when nothing is selected. Its charge and spin come from the drawing as
+    /// it is now, even when the model is older.
     fn export_molecule(&self) -> Option<Vec<u64>> {
-        if let Some((atoms, _)) = self.selected_model() {
-            return Some(atoms);
-        }
-        match self.tab.doc.models.as_slice() {
-            [model] => Some(model.linked_ids(&self.tab.doc)).filter(|ids| !ids.is_empty()),
-            _ => None,
-        }
+        let doc = &self.tab.doc;
+        let seed = if self.tab.selected.is_empty() {
+            match doc.models.as_slice() {
+                [model] => model.linked_ids(doc).first().copied(),
+                _ => None,
+            }
+        } else {
+            reshiki::models3d::selected_molecule(doc, &self.tab.selected)?
+                .first()
+                .copied()
+        }?;
+        Some(reshiki::molecule_names::component(doc, seed))
     }
 
     fn open_qc_export(&mut self) -> Task<Message> {
         let Some(atoms) = self.export_molecule() else {
-            self.status = "Select one molecule to export it as input for another program.".into();
+            self.status = "Select one molecule to export as calculation input.".into();
             self.error = true;
             return Task::none();
         };
@@ -281,7 +292,6 @@ impl App {
             memory: String::new(),
             extra: String::new(),
             irc_points: "30".into(),
-            neb_images: "12".into(),
             template_name: None,
             message: String::new(),
         };
@@ -305,11 +315,13 @@ impl App {
                     return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus);
                 }
                 Ok(None) => {}
-                Err(error) => {
-                    if let Some(dialog) = &mut self.qc_export {
-                        dialog.message = error;
+                Err(error) => match &mut self.qc_export {
+                    Some(dialog) => dialog.message = error,
+                    None => {
+                        self.status = error;
+                        self.error = true;
                     }
-                }
+                },
             }
             return Task::none();
         }
@@ -430,7 +442,7 @@ impl App {
             .models
             .iter()
             .enumerate()
-            .find(|(_, model)| dialog.atoms.first().is_some_and(|id| model.contains(*id)))
+            .find(|(_, model)| dialog.atoms.iter().any(|id| model.contains(*id)))
         else {
             return if self.pending(&dialog.atoms).is_some() {
                 Model::Generating
@@ -655,8 +667,13 @@ impl App {
             format!("{} offers no QST2, QST3 or NEB-TS.", dialog.program.label())
         } else {
             format!(
-                "{} need the reactant and product of a transition-state search.",
-                path_jobs.join(" and ")
+                "{} {} the reactant and product of a transition-state search.",
+                path_jobs.join(" and "),
+                if path_jobs.len() == 1 {
+                    "needs"
+                } else {
+                    "need"
+                }
             )
         };
         let irc = dialog.job == Job::Irc && !xyz;

@@ -359,6 +359,7 @@ impl App {
             } => return self.engine_done(revision, kind, *result),
             Message::EngineFinished { key, result } => return self.engine_finished(key, *result),
             Message::Exported(result) => self.structure_exported(result),
+            Message::QcExport(action) => return self.qc_export_action(action),
             _ => {}
         }
         Task::none()

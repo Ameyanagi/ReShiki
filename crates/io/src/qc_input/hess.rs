@@ -1,3 +1,4 @@
+//! ORCA `.hess` files from a Cartesian Hessian, for `InHess Read`.
 use std::fmt::Write;
 
 use crate::qcdata::ANGSTROM_PER_BOHR;

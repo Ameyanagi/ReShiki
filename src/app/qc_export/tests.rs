@@ -119,7 +119,10 @@ fn nothing_to_export_reports_instead_of_opening() {
     send(&mut app, Action::Open);
     assert!(app.qc_export.is_none());
     assert!(app.error);
-    assert!(app.status.starts_with("Select one molecule"));
+    assert_eq!(
+        app.status,
+        "Select one molecule to export as calculation input."
+    );
 }
 
 #[test]
@@ -263,4 +266,53 @@ fn switching_tabs_closes_the_dialog() {
     send(&mut app, Action::Open);
     let _ = app.update(Message::New);
     assert!(app.qc_export.is_none());
+}
+
+#[test]
+fn a_selection_across_molecules_opens_nothing_even_with_one_model() {
+    let (mut app, atoms) = ethanol();
+    send(&mut app, Action::Open);
+    send(&mut app, Action::Generate);
+    finish_model(&mut app);
+    send(&mut app, Action::Close);
+    let water = app.tab.doc.atoms.last().unwrap().id;
+    app.tab.selected = vec![atoms[0], water];
+    send(&mut app, Action::Open);
+    assert!(app.qc_export.is_none());
+}
+
+#[test]
+fn charge_follows_the_drawing_after_the_model_was_made() {
+    let (mut app, atoms) = ethanol();
+    send(&mut app, Action::Open);
+    send(&mut app, Action::Generate);
+    finish_model(&mut app);
+    send(&mut app, Action::Close);
+    let oxygen = app
+        .tab
+        .doc
+        .atoms
+        .iter_mut()
+        .find(|a| a.id == atoms[2])
+        .unwrap();
+    oxygen.charge = -1;
+    app.tab.selected = vec![atoms[0]];
+    send(&mut app, Action::Open);
+    assert_eq!(app.qc_export.as_ref().unwrap().charge, "-1");
+    assert!(preview(&app).unwrap().contains("\n-1 1\n"));
+}
+
+#[test]
+fn a_hidden_irc_field_does_not_block_other_tasks() {
+    let (mut app, _) = ethanol();
+    send(&mut app, Action::Open);
+    send(&mut app, Action::Generate);
+    finish_model(&mut app);
+    send(&mut app, Action::Field(Field::IrcPoints, String::new()));
+    assert!(preview(&app).is_ok());
+    send(&mut app, Action::Job(Job::Irc));
+    assert_eq!(
+        preview(&app),
+        Err("IRC points must be a whole number.".into())
+    );
 }

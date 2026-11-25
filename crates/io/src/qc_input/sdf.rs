@@ -1,4 +1,5 @@
-use std::fmt::Write;
+//! SDF records with V3000 3D connection tables.
+use std::{collections::HashSet, fmt::Write};
 
 use super::{Error, Frame, atoms, clean_title, single_line};
 
@@ -23,18 +24,24 @@ pub fn write_sdf(entries: &[SdfEntry]) -> Result<String, Error> {
         if entry
             .formal_charges
             .iter()
-            .any(|&charge| i8::try_from(charge).is_err())
+            .any(|charge| !(-15..=15).contains(charge))
         {
             return Err(Error::Invalid(
-                "A formal charge is outside the supported range.".into(),
+                "Formal charges must be from -15 to 15.".into(),
             ));
         }
         let bond_count = i32::try_from(entry.bonds.len())
             .map_err(|_| Error::Invalid("There are too many bonds to write to SDF.".into()))?;
+        let mut bond_pairs = HashSet::new();
         for &(a, b, order) in entry.bonds {
             if a >= atom_count || b >= atom_count {
                 return Err(Error::Invalid(
                     "A bond refers to an atom outside the structure.".into(),
+                ));
+            }
+            if a == b || !bond_pairs.insert((a.min(b), a.max(b))) {
+                return Err(Error::Invalid(
+                    "Bonds must join two different atoms, once.".into(),
                 ));
             }
             if !(1..=4).contains(&order) {
@@ -73,7 +80,8 @@ pub fn write_sdf(entries: &[SdfEntry]) -> Result<String, Error> {
         for (name, value) in entry.properties {
             let name = single_line(name);
             let value = single_line(value);
-            let _ = writeln!(text, "> <{name}>\n{value}\n");
+            let prefix = if value.starts_with("$$$$") { " " } else { "" };
+            let _ = writeln!(text, "> <{name}>\n{prefix}{value}\n");
         }
         text.push_str("$$$$\n");
     }

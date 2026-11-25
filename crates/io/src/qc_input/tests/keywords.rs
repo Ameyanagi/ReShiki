@@ -35,13 +35,14 @@ fn gaussian_maps_basis_names_and_preserves_existing_spin_prefixes() {
 #[test]
 fn orca_uses_the_right_open_shell_reference_and_memory_per_core() {
     let frame = water();
-    for (method, prefix) in [
-        ("HF", "UHF"),
-        ("MP2", "UHF"),
-        ("RI-MP2", "UHF"),
-        ("DLPNO-CCSD(T)", "UHF"),
-        ("CCSD(T)", "UHF"),
-        ("PBE0", "UKS"),
+    for (method, prefix, needs_auxiliary_basis) in [
+        ("HF", "UHF", false),
+        ("MP2", "UHF", false),
+        ("RI-MP2", "UHF", true),
+        ("DLPNO-CCSD(T)", "UHF", true),
+        ("CCSD(T)", "UHF", false),
+        ("B2PLYP", "UKS", false),
+        ("PBE0", "UKS", false),
     ] {
         let mut settings = settings(Program::Orca, Job::SinglePoint);
         settings.method = method.into();
@@ -52,6 +53,16 @@ fn orca_uses_the_right_open_shell_reference_and_memory_per_core() {
         let text = &output.main.text;
         assert!(text.contains(&format!("! {prefix} {method} def2-SVP SP\n")));
         assert!(text.contains("%pal nprocs 7 end\n%maxcore 219\n"));
+        let warning = format!(
+            "{method} needs an auxiliary basis: add e.g. def2-SVP/C or AutoAux under Extra keywords."
+        );
+        assert_eq!(output.warnings.contains(&warning), needs_auxiliary_basis);
+        assert!(
+            output
+                .warnings
+                .iter()
+                .all(|warning| !warning.contains("no analytic gradients"))
+        );
     }
     let mut settings = settings(Program::Orca, Job::SinglePoint);
     settings.cores = 1;
@@ -62,22 +73,30 @@ fn orca_uses_the_right_open_shell_reference_and_memory_per_core() {
 }
 
 #[test]
-fn orca_frequency_jobs_use_numerical_frequencies_for_correlated_methods() {
+fn orca_gradient_and_frequency_jobs_use_method_specific_keywords_and_warnings() {
     let frame = water();
     let reactant = shifted_water(0.05);
     let product = shifted_water(-0.05);
-    for (job, keyword) in [
-        (Job::OptFreq, "Opt"),
-        (Job::TransitionState, "OptTS"),
-        (Job::NebTs, "NEB-TS"),
+    for (job, keyword, frequencies) in [
+        (Job::Optimize, "Opt", false),
+        (Job::OptFreq, "Opt", true),
+        (Job::TransitionState, "OptTS", true),
+        (Job::Irc, "IRC", false),
+        (Job::NebTs, "NEB-TS", true),
     ] {
-        for (method, frequency) in [
-            ("MP2", "NumFreq"),
-            ("ri-mp2", "NumFreq"),
-            ("DLPNO-CCSD(T)", "NumFreq"),
-            ("CCSD(T)", "NumFreq"),
-            ("HF", "Freq"),
-            ("B3LYP", "Freq"),
+        for (method, frequency, needs_numgrad, needs_auxiliary_basis) in [
+            ("MP2", "NumFreq", false, false),
+            ("ri-mp2", "NumFreq", false, true),
+            ("rimp2", "NumFreq", false, true),
+            ("SCS-MP2", "NumFreq", false, false),
+            ("DLPNO-MP2", "NumFreq", false, true),
+            ("B2PLYP", "NumFreq", false, false),
+            ("DLPNO-CCSD(T)", "NumFreq", true, true),
+            ("CCSD(T)", "NumFreq", true, false),
+            ("QCISD(T)", "NumFreq", true, false),
+            ("RI-B3LYP", "Freq", false, true),
+            ("HF", "Freq", false, false),
+            ("B3LYP", "Freq", false, false),
         ] {
             let mut settings = settings(Program::Orca, job);
             settings.method = method.into();
@@ -87,13 +106,40 @@ fn orca_frequency_jobs_use_numerical_frequencies_for_correlated_methods() {
                 ..geometry(&frame)
             };
             let output = write(&settings, &geometry, "water", GENERATOR).unwrap();
-            assert!(
-                output
-                    .main
-                    .text
-                    .contains(&format!("! {method} def2-SVP {keyword} {frequency}\n"))
+            let route = if frequencies {
+                format!("! {method} def2-SVP {keyword} {frequency}\n")
+            } else {
+                format!("! {method} def2-SVP {keyword}\n")
+            };
+            assert!(output.main.text.contains(&route), "{route}");
+            assert_eq!(
+                output.warnings.contains(&format!(
+                    "ORCA has no analytic gradients for {method}; add NumGrad under Extra keywords."
+                )),
+                needs_numgrad,
+                "{job:?}, {method}"
+            );
+            assert_eq!(
+                output.warnings.contains(&format!(
+                    "{method} needs an auxiliary basis: add e.g. def2-SVP/C or AutoAux under Extra keywords."
+                )),
+                needs_auxiliary_basis,
+                "{job:?}, {method}"
             );
         }
+    }
+}
+
+#[test]
+fn orca_accepts_an_auxiliary_basis_or_autoaux_in_extra_keywords() {
+    let frame = water();
+    let mut settings = settings(Program::Orca, Job::SinglePoint);
+    settings.method = "SCS-RI-MP2".into();
+    for basis in ["def2-svp/c", "aUtOaUx"] {
+        settings.extra = format!("TightSCF\r\n{basis}");
+        let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+        assert!(output.main.text.contains(&format!("SP TightSCF {basis}\n")));
+        assert!(output.warnings.is_empty(), "{:?}", output.warnings);
     }
 }
 
@@ -163,7 +209,13 @@ fn gamess_warns_about_memddi_for_parallel_mp2() {
             "Parallel GAMESS MP2 needs MEMDDI: add a line such as  $SYSTEM MEMDDI=100 $END under Extra keywords.",
         ]
     );
+    settings.extra = "$SYSTEM memddi=100 $END".into();
+    let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+    assert_eq!(output.warnings.len(), 1);
+    assert!(output.main.text.contains(" $SYSTEM memddi=100 $END\n"));
+
     settings.cores = 1;
+    settings.extra.clear();
     let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
     assert_eq!(output.warnings.len(), 1);
 }
@@ -208,6 +260,21 @@ fn gaussian_and_orca_write_method_basis_and_extra_on_one_line() {
 }
 
 #[test]
+fn gamess_writes_dft_method_on_one_line() {
+    let frame = water();
+    let mut settings = settings(Program::Gamess, Job::SinglePoint);
+    settings.method = " b3lyp\r\nA\rB\nC ".into();
+    let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+    assert!(
+        output
+            .main
+            .text
+            .lines()
+            .any(|line| line == " $CONTRL SCFTYP=RHF RUNTYP=ENERGY DFTTYP=B3LYP A B C")
+    );
+}
+
+#[test]
 fn gamess_indents_every_nonempty_extra_line() {
     let frame = water();
     let mut settings = settings(Program::Gamess, Job::SinglePoint);
@@ -224,6 +291,7 @@ fn gamess_indents_every_nonempty_extra_line() {
 fn transition_state_headers_use_provenance_and_the_most_negative_frequency() {
     let frame = water();
     let mut result = result(&frame);
+    result.provenance.method = Some("GFN2-xTB\r\nA\rB\nC".into());
     result.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-600.7, -412.3, 3700.0];
     for program in [Program::Gaussian, Program::Orca, Program::Gamess] {
         let settings = settings(program, Job::TransitionState);
@@ -235,7 +303,9 @@ fn transition_state_headers_use_provenance_and_the_most_negative_frequency() {
         let prefix = if program == Program::Orca { '#' } else { '!' };
         assert_eq!(
             output.main.text.lines().next().unwrap(),
-            format!("{prefix} TS guess from GFN2-xTB ({GENERATOR}), imaginary frequency -601 cm-1")
+            format!(
+                "{prefix} TS guess from GFN2-xTB A B C ({GENERATOR}), imaginary frequency -601 cm-1"
+            )
         );
         let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
         assert_eq!(

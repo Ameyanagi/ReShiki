@@ -1,3 +1,4 @@
+//! GAMESS-US input: $CONTRL, $SYSTEM, $BASIS, $DFT, $STATPT and $DATA groups.
 use std::fmt::Write;
 
 use super::{Dispersion, Frame, Job, Method, Settings, atoms, coordinates_8};

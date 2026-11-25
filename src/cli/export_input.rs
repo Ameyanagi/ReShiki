@@ -10,7 +10,7 @@ use reshiki_io::{
     qcdata::{Frame, MAX_FRAME_ATOMS},
 };
 use reshiki_model::chemistry::ELEMENTS;
-use std::{io::Write, path::Path};
+use std::{fs, io::Write, path::Path};
 
 pub(crate) fn run(
     command: ExportInput,
@@ -38,8 +38,8 @@ pub(crate) fn run(
         neb_images: 12,
     };
     let file_stem = match &command.output {
-        Output::File(path) => stem(path),
-        Output::Stdout => stem(&command.input),
+        Output::File(path) => file_stem(path),
+        Output::Stdout => file_stem(&command.input),
     };
     let geometry = Geometry {
         frame: &frame,
@@ -58,15 +58,37 @@ pub(crate) fn run(
         Output::Stdout => out
             .write_all(main.text.as_bytes())
             .map_err(CliError::Stdout),
-        Output::File(path) => {
-            io::write_output(&path, main.text.as_bytes(), true).map_err(CliError::Failed)?;
-            for file in companions {
-                io::write_output(&path.with_file_name(&file.name), file.text.as_bytes(), true)
-                    .map_err(CliError::Failed)?;
+        Output::File(path) => write_files(&path, &main.text, &companions).map_err(CliError::Failed),
+    }
+}
+
+pub(super) fn write_files(
+    path: &Path,
+    main: &str,
+    companions: &[qc_input::File],
+) -> Result<(), String> {
+    for file in companions {
+        let companion = path.with_file_name(&file.name);
+        match fs::symlink_metadata(&companion) {
+            Ok(_) => {
+                return Err(format!(
+                    "{} already exists; remove it or choose another --out name.",
+                    file.name
+                ));
             }
-            Ok(())
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("cannot open {}: {error}", companion.display())),
         }
     }
+    io::write_output(path, main.as_bytes(), true)?;
+    for file in companions {
+        io::write_output(
+            &path.with_file_name(&file.name),
+            file.text.as_bytes(),
+            false,
+        )?;
+    }
+    Ok(())
 }
 
 fn stem(path: &Path) -> String {
@@ -74,6 +96,19 @@ fn stem(path: &Path) -> String {
         .filter(|stem| !stem.is_empty())
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_else(|| "molecule".into())
+}
+
+fn file_stem(path: &Path) -> String {
+    stem(path)
+        .chars()
+        .map(|c| {
+            if c.is_whitespace() || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect()
 }
 
 /// Read only the first frame; later frames may contain a different structure.

@@ -1,6 +1,6 @@
 //! Quantum chemistry input files and Cartesian geometry exports.
 
-use std::{borrow::Cow, fmt::Write};
+use std::fmt::Write;
 
 use reshiki_model::chemistry::{ELEMENTS, Element};
 use serde::{Deserialize, Serialize};
@@ -268,33 +268,60 @@ pub fn write(
     stem: &str,
     generator: &str,
 ) -> Result<Output, Error> {
-    if let Some(result) = geometry.result
-        && result.frame != geometry.frame.hash()
-    {
-        return Err(Error::Invalid(
-            "The calculation result belongs to another geometry.".into(),
-        ));
+    let frame = geometry.frame;
+    if let Some(result) = geometry.result {
+        if result.frame != frame.hash() {
+            return Err(Error::Invalid(
+                "The calculation result belongs to another geometry.".into(),
+            ));
+        }
+        if settings.charge != frame.charge || settings.multiplicity != frame.multiplicity {
+            return Err(Error::Invalid(format!(
+                "The calculation result is for charge {} and multiplicity {}.",
+                frame.charge, frame.multiplicity
+            )));
+        }
     }
     let program = settings.program;
     let name = format!("{stem}.{}", program.extension());
     let title = clean_title(&settings.title);
+    let mut frames = [Some(frame), geometry.reactant, geometry.product]
+        .into_iter()
+        .flatten();
+    let mut drawing_atoms = frames
+        .clone()
+        .map(|frame| &frame.drawing_atoms)
+        .filter(|ids| !ids.is_empty());
+    let drawing_atoms_match = drawing_atoms
+        .next()
+        .is_none_or(|first| drawing_atoms.all(|ids| ids == first));
+    let atom_order_error = || {
+        Error::Invalid(
+            "The reactant, product and TS guess must list the same atoms in the same order.".into(),
+        )
+    };
+    let has_isotopes = frame.isotopes.iter().any(|&isotope| isotope != 0);
+    let mut warnings = Vec::new();
     if program == Program::Xyz {
-        check_atoms(geometry.frame)?;
+        check_atoms(frame)?;
+        if !drawing_atoms_match {
+            return Err(atom_order_error());
+        }
+        if has_isotopes {
+            warnings.push("XYZ files carry no isotopes; they are not written.".into());
+        }
         return Ok(Output {
             main: File {
                 name,
-                text: xyz::frame(geometry.frame, &title),
+                text: xyz::frame(frame, &title),
             },
             companions: Vec::new(),
-            warnings: Vec::new(),
+            warnings,
         });
     }
 
     let job = settings.job;
-    let method_name = match program {
-        Program::Gaussian | Program::Orca => Cow::Owned(single_line(settings.method.trim())),
-        _ => Cow::Borrowed(settings.method.trim()),
-    };
+    let method_name = single_line(settings.method.trim());
     if !program.jobs().contains(&job) {
         let jobs = program
             .jobs()
@@ -318,7 +345,7 @@ pub fn write(
             "Cores and memory must be at least 1.".into(),
         ));
     }
-    check_atoms(geometry.frame)?;
+    check_atoms(frame)?;
     let endpoints = if matches!(job, Job::Qst2 | Job::Qst3 | Job::NebTs) {
         Some(geometry.reactant.zip(geometry.product).ok_or_else(|| {
             Error::Invalid(format!(
@@ -329,19 +356,8 @@ pub fn write(
     } else {
         None
     };
-    if [geometry.reactant, geometry.product]
-        .into_iter()
-        .flatten()
-        .any(|endpoint| {
-            endpoint.numbers != geometry.frame.numbers
-                || (!geometry.frame.drawing_atoms.is_empty()
-                    && !endpoint.drawing_atoms.is_empty()
-                    && endpoint.drawing_atoms != geometry.frame.drawing_atoms)
-        })
-    {
-        return Err(Error::Invalid(
-            "The reactant, product and TS guess must list the same atoms in the same order.".into(),
-        ));
+    if !drawing_atoms_match || frames.any(|endpoint| endpoint.numbers != frame.numbers) {
+        return Err(atom_order_error());
     }
     let method = Method::parse(&method_name);
     if method.composite && program != Program::Orca {
@@ -361,23 +377,16 @@ pub fn write(
         ""
     };
 
-    let mut warnings = Vec::new();
     let charge = settings.charge;
     let multiplicity = settings.multiplicity;
-    let electrons = geometry
-        .frame
-        .numbers
-        .iter()
-        .map(|&z| i64::from(z))
-        .sum::<i64>()
-        - i64::from(charge);
+    let electrons = frame.numbers.iter().map(|&z| i64::from(z)).sum::<i64>() - i64::from(charge);
     let unpaired = i64::from(multiplicity - 1);
     if unpaired > electrons || (electrons - unpaired) % 2 != 0 {
         warnings.push(format!(
             "Charge {charge} and multiplicity {multiplicity} do not fit {electrons} electrons."
         ));
     }
-    if geometry.frame.isotopes.iter().any(|&isotope| isotope != 0) {
+    if has_isotopes {
         warnings.push(format!(
             "Isotopes are not written; set them in {} if you need them.",
             program.label()
@@ -394,7 +403,7 @@ pub fn write(
             }
             gaussian::write(
                 settings,
-                geometry.frame,
+                frame,
                 endpoints,
                 &method,
                 &title,
@@ -417,6 +426,7 @@ pub fn write(
                     "ORCA gets only {maxcore} MB per core; raise Memory or lower Cores."
                 ));
             }
+            orca::warn_about_method(settings, &method, &method_name, &mut warnings);
             let (text, files) = orca::write(
                 settings,
                 geometry,
@@ -434,12 +444,15 @@ pub fn write(
                 "GAMESS takes the number of cores when you start it (rungms), not from the file."
                     .into(),
             );
-            if settings.cores > 1 && method.base.eq_ignore_ascii_case("MP2") {
+            if settings.cores > 1
+                && method.base.eq_ignore_ascii_case("MP2")
+                && !settings.extra.to_ascii_uppercase().contains("MEMDDI")
+            {
                 warnings.push("Parallel GAMESS MP2 needs MEMDDI: add a line such as  $SYSTEM MEMDDI=100 $END under Extra keywords.".into());
             }
             let text = gamess::write(
                 settings,
-                geometry.frame,
+                frame,
                 &method,
                 gamess_basis,
                 &title,
@@ -451,7 +464,7 @@ pub fn write(
             }
             text
         }
-        Program::Xyz => xyz::frame(geometry.frame, &title),
+        Program::Xyz => xyz::frame(frame, &title),
     };
     Ok(Output {
         main: File { name, text },
@@ -514,7 +527,7 @@ fn ts_header(result: Option<&CalcResult>, generator: &str) -> String {
     let source = result
         .and_then(|r| r.provenance.method.as_deref())
         .unwrap_or("the 3D model");
-    let mut header = format!("TS guess from {source} ({generator})");
+    let mut header = format!("TS guess from {} ({generator})", single_line(source));
     if let Some(frequency) = result
         .and_then(|r| r.vibrations.as_ref())
         .into_iter()

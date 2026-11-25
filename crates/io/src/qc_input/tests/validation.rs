@@ -130,23 +130,57 @@ fn calculation_result_must_match_the_geometry() {
 }
 
 #[test]
-fn endpoint_drawing_ids_must_match_when_both_are_present() {
+fn calculation_result_must_match_the_requested_charge_and_multiplicity() {
+    let mut frame = water();
+    frame.charge = 1;
+    frame.multiplicity = 2;
+    let result = result(&frame);
+    let with_result = Geometry {
+        result: Some(&result),
+        ..geometry(&frame)
+    };
+    for program in Program::ALL {
+        let mut settings = settings(program, Job::TransitionState);
+        for (charge, multiplicity) in [(0, 2), (1, 1)] {
+            settings.charge = charge;
+            settings.multiplicity = multiplicity;
+            invalid(
+                &settings,
+                &with_result,
+                "The calculation result is for charge 1 and multiplicity 2.",
+            );
+        }
+        settings.charge = frame.charge;
+        settings.multiplicity = frame.multiplicity;
+        write(&settings, &with_result, "water", GENERATOR).unwrap();
+    }
+}
+
+#[test]
+fn endpoint_drawing_ids_must_match_when_present() {
     let mut frame = water();
     frame.drawing_atoms = vec![Some(1), Some(2), Some(3)];
     let mut wrong = frame.clone();
     wrong.drawing_atoms.swap(1, 2);
     let without_ids = water();
     let settings = settings(Program::Gaussian, Job::Qst3);
-    for (reactant, product) in [(&wrong, &frame), (&frame, &wrong)] {
-        invalid(
-            &settings,
-            &Geometry {
-                reactant: Some(reactant),
-                product: Some(product),
-                ..geometry(&frame)
-            },
-            "The reactant, product and TS guess must list the same atoms in the same order.",
-        );
+    for (guess, reactant, product) in [
+        (&frame, &wrong, &frame),
+        (&frame, &frame, &wrong),
+        (&without_ids, &frame, &wrong),
+    ] {
+        let geometry = Geometry {
+            reactant: Some(reactant),
+            product: Some(product),
+            ..geometry(guess)
+        };
+        for settings in [&settings, &super::settings(Program::Xyz, Job::SinglePoint)] {
+            invalid(
+                settings,
+                &geometry,
+                "The reactant, product and TS guess must list the same atoms in the same order.",
+            );
+        }
     }
     for (frame, endpoint) in [
         (&frame, &frame),
@@ -242,7 +276,7 @@ fn warnings_have_exact_text_and_order() {
 }
 
 #[test]
-fn xyz_ignores_settings_and_never_warns() {
+fn xyz_ignores_settings_and_warns_about_isotopes() {
     let mut frame = water();
     frame.isotopes = vec![18, 0, 0];
     let mut settings = settings(Program::Xyz, Job::Qst3);
@@ -253,7 +287,10 @@ fn xyz_ignores_settings_and_never_warns() {
     settings.memory_gb = 0;
     settings.charge = i32::MAX;
     let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
-    assert!(output.warnings.is_empty());
+    assert_eq!(
+        output.warnings,
+        ["XYZ files carry no isotopes; they are not written."]
+    );
     assert!(output.companions.is_empty());
     assert_eq!(output.main.name, "water.xyz");
     frame.numbers.clear();

@@ -1,3 +1,4 @@
+//! Gaussian 16 input: Link 0 lines, the route, and one molecule section per structure.
 use std::{borrow::Cow, fmt::Write};
 
 use super::{Dispersion, Frame, Job, Method, Settings, single_line, write_atoms};

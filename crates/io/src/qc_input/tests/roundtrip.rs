@@ -236,6 +236,16 @@ fn sdf_rejects_invalid_bonds_and_formal_charges() {
             &[][..],
             "A bond refers to an atom outside the structure.",
         ),
+        (
+            &[(1, 1, 1)][..],
+            &[][..],
+            "Bonds must join two different atoms, once.",
+        ),
+        (
+            &[(0, 1, 1), (1, 0, 2)][..],
+            &[][..],
+            "Bonds must join two different atoms, once.",
+        ),
         (&[(0, 1, 0)][..], &[][..], "Bond orders must be 1 to 4."),
         (&[(0, 1, 5)][..], &[][..], "Bond orders must be 1 to 4."),
         (
@@ -243,15 +253,11 @@ fn sdf_rejects_invalid_bonds_and_formal_charges() {
             &[0, 0, 0, 0][..],
             "There are more formal charges than atoms.",
         ),
+        (&[][..], &[16][..], "Formal charges must be from -15 to 15."),
         (
             &[][..],
-            &[128][..],
-            "A formal charge is outside the supported range.",
-        ),
-        (
-            &[][..],
-            &[-129][..],
-            "A formal charge is outside the supported range.",
+            &[-16][..],
+            "Formal charges must be from -15 to 15.",
         ),
     ] {
         let error = write_sdf(&[SdfEntry {
@@ -264,6 +270,42 @@ fn sdf_rejects_invalid_bonds_and_formal_charges() {
         .unwrap_err();
         assert!(matches!(error, Error::Invalid(message) if message == expected));
     }
+}
+
+#[test]
+fn sdf_writes_formal_charges_at_the_limits() {
+    let text = write_sdf(&[SdfEntry {
+        frame: &water(),
+        title: "water",
+        bonds: &[],
+        formal_charges: &[-15, 15],
+        properties: &[],
+    }])
+    .unwrap();
+    assert!(text.contains(" CHG=-15\n"));
+    assert!(text.contains(" CHG=15\n"));
+}
+
+#[test]
+fn sdf_indents_property_values_that_begin_with_the_record_separator() {
+    let text = write_sdf(&[SdfEntry {
+        frame: &water(),
+        title: "water",
+        bonds: &[],
+        formal_charges: &[],
+        properties: &[
+            ("exact".into(), "$$$$".into()),
+            ("prefix".into(), "$$$$rest".into()),
+            ("multiline".into(), "$$$$\r\nrest".into()),
+            ("middle".into(), "amount $$$$".into()),
+        ],
+    }])
+    .unwrap();
+    assert!(text.contains("> <exact>\n $$$$\n\n"));
+    assert!(text.contains("> <prefix>\n $$$$rest\n\n"));
+    assert!(text.contains("> <multiline>\n $$$$ rest\n\n"));
+    assert!(text.contains("> <middle>\namount $$$$\n\n"));
+    assert_eq!(text.lines().filter(|line| *line == "$$$$").count(), 1);
 }
 
 #[test]

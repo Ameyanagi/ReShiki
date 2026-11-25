@@ -1,3 +1,4 @@
+//! XYZ files, one frame or a trajectory.
 use std::fmt::Write;
 
 use crate::qcdata::Trajectory;

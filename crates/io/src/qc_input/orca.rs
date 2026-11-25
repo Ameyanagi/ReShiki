@@ -1,3 +1,4 @@
+//! ORCA 6 input: the keyword line, %pal, %maxcore, job blocks and the xyz block.
 use std::fmt::Write;
 
 use super::{
@@ -7,6 +8,39 @@ use super::{
 
 pub(super) fn maxcore(settings: &Settings) -> u64 {
     u64::from(settings.memory_gb) * 768 / u64::from(settings.cores)
+}
+
+fn is_coupled_cluster(base: &str) -> bool {
+    ["CCSD", "QCISD", "DLPNO-CCSD"]
+        .iter()
+        .any(|prefix| base.starts_with(prefix))
+}
+
+pub(super) fn warn_about_method(
+    settings: &Settings,
+    method: &Method,
+    method_name: &str,
+    warnings: &mut Vec<String>,
+) {
+    let base = method.base.to_ascii_uppercase();
+    if is_coupled_cluster(&base)
+        && matches!(
+            settings.job,
+            Job::Optimize | Job::OptFreq | Job::TransitionState | Job::Irc | Job::NebTs
+        )
+    {
+        warnings.push(format!(
+            "ORCA has no analytic gradients for {method_name}; add NumGrad under Extra keywords."
+        ));
+    }
+    if base.contains("RI-") || base.contains("RIMP2") || base.starts_with("DLPNO") {
+        let extra = settings.extra.to_ascii_uppercase();
+        if !extra.contains("/C") && !extra.contains("AUTOAUX") {
+            warnings.push(format!(
+                "{method_name} needs an auxiliary basis: add e.g. def2-SVP/C or AutoAux under Extra keywords."
+            ));
+        }
+    }
 }
 
 pub(super) fn write(
@@ -26,11 +60,11 @@ pub(super) fn write(
     text.push_str("! ");
     let base = method.base;
     let upper = base.to_ascii_uppercase();
-    let numerical_frequencies = ["MP2", "RI-MP2", "DLPNO", "CCSD"]
-        .iter()
-        .any(|prefix| upper.starts_with(prefix));
+    let mp2 = upper.contains("MP2");
+    let coupled_cluster = is_coupled_cluster(&upper);
+    let numerical_frequencies = mp2 || upper.contains("PLYP") || coupled_cluster;
     if settings.multiplicity > 1 {
-        let wave_function = upper == "HF" || numerical_frequencies;
+        let wave_function = upper == "HF" || mp2 || coupled_cluster || upper.starts_with("DLPNO");
         text.push_str(if wave_function { "UHF " } else { "UKS " });
     }
     text.push_str(base);
