@@ -163,6 +163,24 @@ impl MoleculeCanvas<'_> {
         );
     }
 
+    pub(super) fn draw_result_label(&self, frame: &mut layered::Frame<'_>, bounds: Rectangle) {
+        let Some(label) = &self.result_label else {
+            return;
+        };
+        let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, &label.atoms) else {
+            return;
+        };
+        let lo = self.camera.screen(lo, bounds);
+        let hi = self.camera.screen(hi, bounds);
+        badge(
+            frame,
+            bounds,
+            Point::new(lo.x - 14., hi.y),
+            label.text.clone(),
+            true,
+        );
+    }
+
     pub(super) fn scientific_drawing(
         &self,
         kind: GraphicKind,

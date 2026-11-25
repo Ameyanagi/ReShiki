@@ -20,11 +20,8 @@ enum Completion {
     Models3d,
     /// Nmr(Finished | Exported).
     Nmr,
-    /// Xtb(Event): progress and the finish of a calculation.
-    #[cfg_attr(
-        target_arch = "wasm32",
-        expect(dead_code, reason = "The browser runs no xTB worker")
-    )]
+    /// Xtb(Event | Palette(Exported)): a calculation's progress and finish,
+    /// and the results table's export.
     Xtb,
     /// Exported.
     Export,
@@ -754,6 +751,8 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Cancel
                 | Action::ApplyAnyway
                 | Action::Discard => None,
+                Action::Palette(super::xtb::palette::Action::Exported(..)) => Some(Completion::Xtb),
+                Action::Palette(..) => None,
             }
         }
         Message::FigureExported(..) => Some(Completion::FigureExport),
@@ -761,6 +760,7 @@ fn completion(message: &Message) -> Option<Completion> {
             super::figure_export::Kind::Figure => Completion::FigureExport,
             super::figure_export::Kind::Structure => Completion::Export,
             super::figure_export::Kind::Nmr => Completion::Nmr,
+            super::figure_export::Kind::Xtb => Completion::Xtb,
         }),
         // Tab wraps a routed message; its inner message is classified where it is delivered.
         Message::Tab(..) => None,

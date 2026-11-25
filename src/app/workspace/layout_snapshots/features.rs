@@ -1054,8 +1054,99 @@ fn xtb_stereo(app: &mut App, _: &Driver<'_>) {
             steps: 1,
             energies: vec![-20.0, -20.012345],
             path: [start.as_flattened(), mirrored.as_flattened()].concat(),
+            evaluations: vec![],
+            numerics: String::new(),
         },
     ))));
+}
+
+/// A finished three-step optimization (example energies): the results palette.
+fn xtb_results(app: &mut App, _: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    let start = xtb_halocarbon(app);
+    let middle: Vec<[f64; 3]> = start.iter().map(|&[x, y, z]| [x * 1.02, y, z]).collect();
+    let end: Vec<[f64; 3]> = start
+        .iter()
+        .map(|&[x, y, z]| [x * 1.03, y * 1.01, z])
+        .collect();
+    let energies = vec![-20.0, -20.011, -20.012345];
+    app.xtb_answer(crate::app::xtb::RunEvent::Done(Ok(std::sync::Arc::new(
+        crate::app::xtb::RunReport {
+            engine_version: "0.2.0".into(),
+            engine_rev: reshiki_xtb_worker::AXTB_REV.into(),
+            energy: -20.012345,
+            gap_ev: Some(6.2),
+            near_degenerate: false,
+            converged: true,
+            positions: end.clone(),
+            gradient: vec![1e-4; end.len() * 3],
+            steps: 2,
+            evaluations: energies
+                .iter()
+                .map(|&energy| crate::app::xtb::Evaluation {
+                    energy,
+                    scf_iterations: 7,
+                    seconds: 0.004,
+                })
+                .collect(),
+            numerics: "f64".into(),
+            energies,
+            path: [
+                start.as_flattened(),
+                middle.as_flattened(),
+                end.as_flattened(),
+            ]
+            .concat(),
+        },
+    ))));
+    let _ = app.update(Message::Xtb(Action::Palette(palette::Action::Labels(true))));
+}
+
+fn xtb_results_steps(app: &mut App, driver: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    xtb_results(app, driver);
+    let send = |app: &mut App, action| {
+        let _ = app.update(Message::Xtb(Action::Palette(action)));
+    };
+    send(app, palette::Action::View(crate::app::xtb::View::Steps));
+    send(app, palette::Action::Step(1));
+}
+
+fn xtb_results_log(app: &mut App, driver: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    xtb_results(app, driver);
+    let _ = app.update(Message::Xtb(Action::Palette(palette::Action::View(
+        crate::app::xtb::View::Log,
+    ))));
+}
+
+/// An atom added after the run: the stale banner.
+fn xtb_results_stale(app: &mut App, driver: &Driver<'_>) {
+    xtb_results(app, driver);
+    let before = app.tab.doc.clone();
+    let c = app.tab.doc.atoms[0].id;
+    let added = app.tab.doc.add_atom("C", World::new(0., 40.));
+    app.tab.doc.add_bond(c, added, 1, "plain");
+    app.changed(before);
+}
+
+fn xtb_results_inspector(app: &mut App, driver: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    xtb_results(app, driver);
+    let _ = app.update(Message::Xtb(Action::Palette(palette::Action::Dock)));
+}
+
+fn xtb_results_inspector_steps(app: &mut App, driver: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    xtb_results_steps(app, driver);
+    let _ = app.update(Message::Xtb(Action::Palette(palette::Action::Dock)));
+}
+
+/// Save with more than 5 MB of kept results.
+fn xtb_size_prompt(app: &mut App, _: &Driver<'_>) {
+    *app = crate::app::xtb::palette::tests::large_results();
+    app.appearance.mode = crate::appearance::Mode::Light;
+    let _ = app.update(Message::Save);
 }
 
 #[tokio::test]
@@ -1073,6 +1164,16 @@ async fn manual_xtb_layout_snapshots() {
     for (name, scene) in [
         ("xtb-running", xtb_running as Scene),
         ("xtb-stereo", xtb_stereo as Scene),
+        ("xtb-results", xtb_results as Scene),
+        ("xtb-results-steps", xtb_results_steps as Scene),
+        ("xtb-results-log", xtb_results_log as Scene),
+        ("xtb-results-stale", xtb_results_stale as Scene),
+        ("xtb-results-inspector", xtb_results_inspector as Scene),
+        (
+            "xtb-results-inspector-steps",
+            xtb_results_inspector_steps as Scene,
+        ),
+        ("xtb-size-prompt", xtb_size_prompt as Scene),
     ] {
         let (mut app, _) = App::new();
         app.tab.busy = false;

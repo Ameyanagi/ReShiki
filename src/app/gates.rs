@@ -414,6 +414,9 @@ impl App {
             } else if self.xtb_running() {
                 self.xtb_cancel();
                 Task::none()
+            } else if self.xtb_end_preview() {
+                self.status = "Showing the xTB result geometry".into();
+                Task::none()
             } else if self.cancel_model_generation() {
                 Task::none()
             } else if self.inspector_open
