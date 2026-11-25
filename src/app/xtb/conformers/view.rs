@@ -228,7 +228,12 @@ impl App {
         // the stereo check; the selected row's details follow below it.
         let field = super::start_field(&shown.stored.result).filter(|_| !inspector);
         let cell = |content: String, width: f32| text(content).size(12).width(width);
-        let mut header = row![cell("#".into(), 24.), cell("ΔE xTB".into(), 64.)].spacing(8);
+        // Ensembles read from files carry their program's energies.
+        let delta = match &shown.stored.result.settings {
+            reshiki::qcdata::Settings::Xtb(_) => "ΔE xTB",
+            reshiki::qcdata::Settings::Imported { .. } => "ΔE",
+        };
+        let mut header = row![cell("#".into(), 24.), cell(delta.into(), 64.)].spacing(8);
         if let Some(field) = field {
             header = header.push(cell(format!("ΔE {field}"), 84.));
         }
