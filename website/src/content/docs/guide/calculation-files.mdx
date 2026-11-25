@@ -55,7 +55,7 @@ GAMESS runs one task per job and uses its built-in basis sets: `6-31G(d)` (or `6
 | SDF                                            | Every record, laid out side by side as space allows                          |
 | Gaussian `.gjf`/`.com`, ORCA and GAMESS `.inp` | The geometry in the input                                                    |
 
-For a Gaussian or ORCA output, ReShiki opens the final geometry of the last job that ended normally, as a 3D model in a new, unsaved drawing named after the file. If no job ended normally, it opens the last job that has a geometry, even a failed or cut-off one. The status bar names the job, its method and how it ended, for example `Final geometry of job 3 of 3: Frequencies · RB3LYP/6-31G, Normal termination`, so you can tell which one you got.
+For a Gaussian or ORCA output, ReShiki opens the final geometry of the last job that has a geometry and ended normally, as a 3D model in a new, unsaved drawing named after the file. If there is none, it opens the last job that has a geometry, even a failed or cut-off one. The status bar names the job, its method and how it ended, for example `Final geometry of job 3 of 3: Frequencies · RB3LYP/6-31G, Normal termination`, so you can tell which one you got.
 
 <Screenshot
   src="/manual/qc-open-log.webp"
