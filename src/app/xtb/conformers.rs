@@ -200,7 +200,8 @@ impl Settings {
             diversity: self.diversity,
             window_kcal,
             representatives,
-            three: self.three,
+            // Without re-ranking every cluster keeps its lowest member.
+            three: self.three && self.minimizer.xtb().is_none(),
         })
     }
 }
@@ -263,7 +264,7 @@ impl Live {
         let field = self.config.minimizer.label();
         let text = match self.phase {
             Phase::Reranking { done, total } if self.stopping => {
-                format!("Stopping · keeping what finished ({done} of {total})")
+                format!("Stopping · {done} of {total} finished")
             }
             _ if self.stopping => "Stopping".into(),
             Phase::Starts => format!("Embedding {starts} starts · {field}"),
@@ -318,6 +319,32 @@ pub(crate) fn effective(
         },
         _ => settings.clone(),
     }
+}
+
+/// A stored search's settings to run again with the card's Conformers
+/// fields; an xTB minimizer there sets the method, as on Run.
+pub(crate) fn recalculation(
+    config: &mut super::state::Config,
+    search: &Settings,
+) -> Result<Config, String> {
+    let search = search.config(None)?;
+    if let Some(method) = search.minimizer.xtb() {
+        if !super::state::electronic(method) {
+            if config.unpaired > 0 {
+                return Err(
+                    "GFN-FF calculates closed shells only: set Unpaired electrons to 0".into(),
+                );
+            }
+            (
+                config.solvent,
+                config.accuracy,
+                config.temperature_k,
+                config.max_iterations,
+            ) = (None, None, None, None);
+        }
+        config.method = method;
+    }
+    Ok(search)
 }
 
 /// Whether `result` is a conformer search.

@@ -82,7 +82,12 @@ impl App {
             }
             return container(body).padding(10).width(WIDE).into();
         }
-        let settings = &self.xtb.settings;
+        // A search whose minimizer is an xTB method runs with it: the card
+        // shows and checks that method.
+        let settings = &super::conformers::effective(&self.xtb.settings, &self.xtb.conformers);
+        let fixed_method = settings.method != self.xtb.settings.method
+            || (settings.task == CalcTask::Conformers
+                && self.xtb.conformers.minimizer.xtb().is_some());
         let run = self.tab.xtb.run.as_ref();
         let idle = run.is_none();
         let target = self.xtb_target().filter(|atoms| !atoms.is_empty());
@@ -128,8 +133,8 @@ impl App {
                 format!("xtb-method-{}", method.label().to_lowercase()),
                 method.label(),
                 settings.method == method,
-                set(Action::Method(method)),
-                None,
+                set(Action::Method(method)).filter(|_| !fixed_method),
+                fixed_method.then_some("The search's minimizer sets the method"),
             )
         }))
         .spacing(4);

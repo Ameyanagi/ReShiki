@@ -564,6 +564,7 @@ impl App {
         }
         self.tab.xtb.palette.step = None;
         self.tab.xtb.palette.confirm.clear();
+        self.tab.xtb.palette.ensemble.overlay = false;
     }
 
     /// Run the shown result's calculation again on the molecule as it is now.
@@ -595,12 +596,23 @@ impl App {
             return Task::none();
         };
         config.fixed.retain(|id| self.tab.doc.atom(*id).is_some());
+        // A search runs again with the card's Conformers fields.
+        let search = match config.task {
+            super::CalcTask::Conformers => {
+                match super::conformers::recalculation(&mut config, &self.xtb.conformers) {
+                    Ok(search) => Some(search),
+                    Err(reason) => {
+                        self.status = reason;
+                        self.error = true;
+                        return Task::none();
+                    }
+                }
+            }
+            _ => None,
+        };
         let request = Request {
             atoms: reshiki::molecule_names::component(&self.tab.doc, first),
-            // A search runs again with the card's Conformers fields.
-            search: (config.task == super::CalcTask::Conformers)
-                .then(|| self.xtb.conformers.config(None).ok())
-                .flatten(),
+            search,
             config,
             keep_full: shown.stored.keep_full,
         };
