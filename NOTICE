@@ -10,6 +10,8 @@ of adaptations, copyright notices, and license texts are recorded in:
   nazuchem dependency     Naming engines and their molecular perception kernel
                           https://github.com/Ameyanagi/nazuchem
   licenses/rdkit/          Molecular algorithms, data, and reference fixtures
+  licenses/cclib/          Quantum chemistry input fixtures (BSD-3-Clause)
+  licenses/pymatgen-test-files/  Gaussian input fixture (MIT)
   licenses/centres/        Extended-tetrahedral CIP configuration (BSD-2-Clause)
   licenses/openclatura/    Structure-to-name port, rule tables, and fixtures (MIT)
   licenses/cdxml-native/   Molecular interchange parser adaptations

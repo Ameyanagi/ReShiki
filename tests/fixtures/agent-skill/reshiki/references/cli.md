@@ -7,18 +7,19 @@ Experimental: ReShiki's agent tools, schemas and results may change between rele
 Usage: reshiki --cli <command> [options]
 
 Commands:
-  convert      Convert a structure or drawing to another file format
-  render       Render a preview image of a structure or drawing
-  compose      Lay out an assistant Proposal (JSON) and write it as a file
-  analyze      Print molecular properties as one JSON line
-  predict-nmr  Print predicted NMR shifts as one JSON line
-  name         Print the systematic name of a structure
-  pieces       Check or render equipment piece files
-  info         Print versions, limits and formats as one JSON line
-  tools        Print the agent tool catalog as one JSON line
-  schema       Print a JSON Schema: reshiki --cli schema proposal
-  skill        Write an Agent Skill folder that teaches AI agents to use ReShiki
-  help         Show this help, or a command's help: reshiki --cli help <command>
+  convert       Convert a structure or drawing to another file format
+  render        Render a preview image of a structure or drawing
+  compose       Lay out an assistant Proposal (JSON) and write it as a file
+  analyze       Print molecular properties as one JSON line
+  predict-nmr   Print predicted NMR shifts as one JSON line
+  export-input  Write a quantum-chemistry input from an XYZ structure
+  name          Print the systematic name of a structure
+  pieces        Check or render equipment piece files
+  info          Print versions, limits and formats as one JSON line
+  tools         Print the agent tool catalog as one JSON line
+  schema        Print a JSON Schema: reshiki --cli schema proposal
+  skill         Write an Agent Skill folder that teaches AI agents to use ReShiki
+  help          Show this help, or a command's help: reshiki --cli help <command>
 
 Options are allowed once each; -- ends the options.
 
@@ -208,6 +209,40 @@ credit; cite credit with published values.
 
 A molecule with no sites for the nucleus, or with metals, charges,
 radicals or isotope labels, is an error.
+```
+
+## reshiki --cli export-input
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
+                                  [--job JOB] [--template N|--method M --basis B]
+                                  [--charge C] [--multiplicity M] [--cores N]
+                                  [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--out PATH]
+
+Writes input for another program from the first frame of INPUT.xyz (Å);
+stdout without --out. An existing companion file stops the export.
+Warnings go to stderr.
+
+Options:
+  --program PROGRAM   gaussian, orca, gamess or xyz. Required.
+  --job JOB           single-point, optimize, opt-freq, transition-state or irc.
+  --template N        Built-in template, 1 to 3.
+  --method M          Method, given with --basis.
+  --basis B           Basis; empty for an ORCA composite method.
+  --charge C          Total charge.
+  --multiplicity M    2S + 1.
+  --cores N           Cores (8).
+  --memory-gb G       Total memory in GB (16).
+  --title T           Title (the input file name).
+  --extra TEXT        More keywords, or GAMESS groups.
+  --out PATH          Main file, replaced if it exists; companions go beside it.
+
+Templates:
+  1  B3LYP-D3BJ/def2-SVP opt+freq
+  2  r2SCAN-3c opt+freq (ORCA only)
+  3  HF/6-31G(d) single point
 ```
 
 ## reshiki --cli name

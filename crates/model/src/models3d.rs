@@ -26,8 +26,8 @@ use crate::{
 pub use crystal::{Adp, Cell, Crossing, Site};
 use ellipsoids::Ellipsoid;
 pub use ellipsoids::Probability;
-pub(crate) use polish::deserialize_models;
 pub use polish::{Generated, Labels};
+pub(crate) use polish::{deserialize_models, fingerprint};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -504,7 +504,7 @@ const MAX_ATOMS: usize = 100_000;
 const LABEL_AHEAD: f32 = 0.1;
 /// Room for the labels' text around the cell's bounding sphere.
 const LABEL_ROOM: f32 = 0.2;
-const MAX_COORDINATE: f32 = 10_000.;
+pub(crate) const MAX_COORDINATE: f32 = 10_000.;
 const GREY: [u8; 3] = [0x99; 3];
 const BOND_RADIUS: f32 = 0.085;
 const STICK_RADIUS: f32 = 0.16;
@@ -854,8 +854,8 @@ impl Model3d {
         self.source_ids().into_iter().collect()
     }
 
-    /// Element and position of each atom, then each force-field hydrogen.
-    fn points<'a>(&'a self, doc: &'a Document) -> Option<Vec<(&'a str, [f32; 3])>> {
+    /// Element and position (Å) of each atom, then each force-field hydrogen.
+    pub fn points<'a>(&'a self, doc: &'a Document) -> Option<Vec<(&'a str, [f32; 3])>> {
         let mut points = self
             .atoms
             .iter()

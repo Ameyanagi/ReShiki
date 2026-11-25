@@ -10,6 +10,7 @@ use crate::{
     document::{AtomStereo, Document},
 };
 pub use client::{Client, Limits};
+pub use reshiki_geometry::Ensemble;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 pub use view::{Rotation, ViewFrame};
@@ -17,9 +18,11 @@ pub use view::{Rotation, ViewFrame};
 /// Reproducible conformer sampling for ordinary generation. Regeneration may
 /// supply a different nonnegative seed through [`Client::generate_seeded`].
 pub const DEFAULT_SEED: i32 = 0x52534b;
-/// ETKDG adds 1–8 to the base seed while sampling. Reserve that headroom so
-/// every per-conformer seed remains a nonnegative signed integer.
+/// Ordinary generation needs room for ETKDG to add eight per-conformer
+/// offsets to the base seed.
 pub const GENERATION_SEED_MAX: i32 = i32::MAX - 8;
+/// Maximum number of embeddings requested across one conformer search.
+pub const MAX_CONFORMER_STARTS: u32 = 300;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -143,8 +146,16 @@ pub struct Pin {
 }
 
 #[derive(Clone, Debug)]
+pub struct EnsembleConformer {
+    pub conformer: Conformer,
+    pub energy: f64,
+    pub converged: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct Optimized {
     pub conformer: Conformer,
+    pub ensemble: Vec<EnsembleConformer>,
     pub initial_energy: f64,
     pub energy: f64,
     pub gradient: Option<Vec<Point3>>,
@@ -154,6 +165,17 @@ pub struct Optimized {
     pub diagnostics: Vec<String>,
     /// Approximations actually used by the native force-field calculation.
     pub approximations: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Starts {
+    pub conformers: Vec<EnsembleConformer>,
+    /// Completed worker batches.
+    pub batches: u32,
+    /// Why sampling stopped before every requested batch ran: the deadline or a
+    /// later batch's error, with earlier batches kept. `None` when all ran;
+    /// completed sampling can still yield fewer valid conformers than requested.
+    pub stopped: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -630,6 +652,7 @@ impl Prepared {
             bonds,
             field: field.native(),
             operation,
+            ensemble: None,
             coordinates,
             fixed_atoms,
             conformers: 8,
@@ -653,6 +676,33 @@ impl Prepared {
         let mut request =
             self.native_request(field, reshiki_geometry::Operation::Generate, None, &[], 500)?;
         request.seed = seed;
+        request.validate().map_err(Error::Invalid)?;
+        Ok(request)
+    }
+
+    /// Prepare a fresh embedding batch from the drawing's molecular graph.
+    pub fn ensemble_request(
+        &self,
+        field: ForceField,
+        seed: i32,
+        count: u32,
+        mode: Ensemble,
+    ) -> Result<reshiki_geometry::Request, Error> {
+        if self.mode == Mode::Relaxed {
+            return Err(Error::Invalid(
+                "Conformer search needs an ordinary organic structure".into(),
+            ));
+        }
+        if !(1..=reshiki_geometry::MAX_CONFORMERS).contains(&count) {
+            return Err(Error::Invalid(format!(
+                "An ensemble batch needs 1–{} conformers",
+                reshiki_geometry::MAX_CONFORMERS
+            )));
+        }
+        let mut request = self.generation_request(field, seed)?;
+        request.coordinates.clear();
+        request.conformers = count;
+        request.ensemble = Some(mode);
         request.validate().map_err(Error::Invalid)?;
         Ok(request)
     }

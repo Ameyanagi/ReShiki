@@ -47,8 +47,8 @@ fn resolved_capacity(
     Ok(capacity)
 }
 
-/// Answer one framed request in-process, where no worker can run (the browser).
-#[cfg(target_arch = "wasm32")]
+/// Answer one framed request in-process for browsers and framing tests.
+#[cfg(any(target_arch = "wasm32", test))]
 pub(super) fn respond(bytes: &[u8]) -> Result<Vec<u8>, String> {
     let response = wire::Response {
         version: reshiki_geometry::RDKIT_VERSION.into(),

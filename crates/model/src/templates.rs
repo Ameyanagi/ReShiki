@@ -986,6 +986,8 @@ impl Attachment<'_> {
             piece_definitions: _,
             on_other_canvas: _,
             seats: _,
+            // A removed atom leaves its attachments when the edit is reconciled.
+            science: _,
         } = &mut result;
         atoms.retain(|a| !mapping.contains_key(&a.id));
         // A multi-edge fusion may map both endpoints of a genuinely new

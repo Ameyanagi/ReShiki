@@ -994,6 +994,13 @@ impl super::App {
                     if let Some(view) = view {
                         self.restore_view(view);
                     }
+                    let results = self.tab.doc.science.results.len();
+                    if results > 0 {
+                        self.status = format!(
+                            "{results} calculation result{} in this file",
+                            if results == 1 { "" } else { "s" }
+                        );
+                    }
                 }
                 return kept;
             }
