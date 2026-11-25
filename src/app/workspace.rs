@@ -1187,6 +1187,17 @@ impl App {
             });
         }
         commands.extend(self.depth_commands());
+        // With a molecule selected; builds that cannot calculate hide it.
+        if super::xtb::available()
+            && reshiki::models3d::selected_molecule(&self.tab.doc, &self.tab.selected).is_some()
+        {
+            commands.push(RowCommand {
+                label: "Optimize with GFN2-xTB",
+                menu: "Optimize with GFN2-xTB",
+                message: Message::Xtb(super::xtb::Action::Entry(super::xtb::Entry::OptimizeGfn2)),
+                enabled: !self.tab.busy && !self.xtb_running(),
+            });
+        }
         if !keyboard {
             commands.push(RowCommand {
                 label: "Keyboard drawing",

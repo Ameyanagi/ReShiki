@@ -96,7 +96,7 @@ impl Worker {
                             "open is allowed once per worker",
                         ));
                     }
-                    let heap_bytes = open.validate()?;
+                    let heap_bytes = open.heap_budget()?;
                     let (session, opened) = crate::engine::Session::open(open, heap_bytes)?;
                     self.session = Some(session);
                     Ok(opened)
@@ -108,12 +108,18 @@ impl Worker {
                     let session = self.session.as_mut().ok_or_else(|| {
                         ResponseError::new(ErrorKind::State, "compute requires an open session")
                     })?;
-                    if let Some(positions) = &compute.positions {
-                        protocol::validate_positions(positions, session.atoms())?;
-                    }
                     session.compute(compute)
                 })();
-                respond(writer, id, result)?;
+                match result {
+                    Ok(computed) => {
+                        respond(writer, id, Ok(&computed))?;
+                        for array in &computed.arrays {
+                            protocol::write_array(writer, computed.array_values(array.name))?;
+                        }
+                        writer.flush()?;
+                    }
+                    Err(error) => respond::<Closed>(writer, id, Err(error))?,
+                }
             }
             RequestOp::Close {} => {
                 respond(writer, id, Ok(Closed {}))?;
@@ -137,8 +143,8 @@ impl Worker {
                     protocol: protocol::VERSION,
                     engine: None,
                     methods: vec![],
-                    operations: vec![],
                     max_atoms: protocol::MAX_ATOMS,
+                    max_hessian_atoms: protocol::MAX_HESSIAN_ATOMS,
                 }),
             )?;
         } else {

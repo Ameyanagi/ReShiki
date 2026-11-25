@@ -860,6 +860,8 @@ impl<'a> MoleculeCanvas<'a> {
 pub(crate) struct ResultLabel {
     pub atoms: Vec<u64>,
     pub text: String,
+    /// Per-atom values, such as partial charges, beside their atoms.
+    pub atom_labels: Vec<(u64, String)>,
 }
 
 /// An editing aid for a current, abortable 3D-generation job. It never changes

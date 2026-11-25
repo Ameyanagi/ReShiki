@@ -26,6 +26,8 @@ pub enum Page {
     Tilt,
     /// Show the selected molecule as 2D, 3D or both.
     Model,
+    /// xTB on the selected molecule: Energy or Optimize.
+    Calculate,
     /// Property lines under the clicked molecule, ticked when shown.
     Properties,
     /// Chemistry, Reference or Illustration, ticked for the current one.
@@ -237,6 +239,18 @@ impl App {
                 Hint("Labels stay upright"),
             ],
             Page::Model => self.model_entries(),
+            Page::Calculate => {
+                use super::xtb::{Action, CalcTask, Entry};
+                let idle = !self.tab.busy && !self.xtb_running();
+                [
+                    (CalcTask::Energy, "Energy"),
+                    (CalcTask::Optimize, "Optimize"),
+                ]
+                .map(|(task, label)| {
+                    command(label, Message::Xtb(Action::Entry(Entry::Task(task))), idle)
+                })
+                .into()
+            }
             Page::Properties => self.property_entries(),
             Page::Purpose => reshiki::purpose::Purpose::ALL
                 .into_iter()
@@ -734,6 +748,12 @@ impl App {
         }
         if self.selected_model().is_some() {
             entries.push(submenu("Show as", Page::Model));
+        }
+        // Builds that cannot calculate hide it, as they hide Run.
+        if super::xtb::available()
+            && reshiki::models3d::selected_molecule(&self.tab.doc, &self.tab.selected).is_some()
+        {
+            entries.push(submenu("Calculate (xTB)", Page::Calculate));
         }
         if self
             .tab

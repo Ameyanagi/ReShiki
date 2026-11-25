@@ -179,6 +179,30 @@ impl MoleculeCanvas<'_> {
             label.text.clone(),
             true,
         );
+        for (id, text) in &label.atom_labels {
+            let Some(atom) = self.doc.atom(*id) else {
+                continue;
+            };
+            // Above and right of the atom, clear of a label glyph about
+            // 10 pt tall at any zoom.
+            let half = 5. * self.camera.zoom;
+            let at =
+                self.camera.screen(atom.position, bounds) + Vector::new(half + 2., -half - 15.);
+            let width = crate::app::text_width(text, 11.) + 6.;
+            frame.fill_rectangle(
+                at - Vector::new(3., 1.),
+                iced::Size::new(width, 15.),
+                ACCENT_TINT,
+            );
+            frame.fill_text(canvas::Text {
+                content: text.clone(),
+                position: at,
+                color: rgb([30, 100, 85]),
+                size: 11.into(),
+                font: iced::Font::with_name(reshiki::style::ui_font_family()),
+                ..Default::default()
+            });
+        }
     }
 
     pub(super) fn scientific_drawing(

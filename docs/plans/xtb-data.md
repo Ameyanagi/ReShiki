@@ -256,19 +256,18 @@ basis, orbital consistency and limits.
 
 ### `XtbSettings` and `Provenance`
 
-`XtbSettings { method, solvent, electronic_temperature_k, accuracy, max_iterations, gfnff }`;
-`None` means the engine's default for the method, and the engine revision in the provenance
-pins what that default is.
+`XtbSettings { method, conventions, solvent, electronic_temperature_k, accuracy, max_iterations, scf_retries, gfnff }`.
+Conventions default to `axtb`, omitted overrides use the defaults pinned by the engine revision, and `scf_retries` lists temperature or iteration overrides tried after a failed SCF.
 
 - `method`: `XtbMethod::{Gfn2Xtb, GfnFf, GXtb}`. `GXtb` is g-xTB 2.0.1.
-- `solvent`: `Solvent { model: SolventModel::Alpb, name, state, correction }`, with
+- `solvent`: `Solvent { model, name, state, correction }`, with `model: SolventModel::{Alpb, Gbsa}` and
   `state: SolvationState::{Gsolv, Bar1mol, Reference}` (default `Gsolv`). For g-xTB the
   correction must be `Some(SolventCorrection::Gfn2)`: the composite
-  E = E(g-xTB) + [E(GFN2-xTB + ALPB) − E(GFN2-xTB)], named explicitly so a solvent never
+  E = E(g-xTB) + [E(GFN2-xTB + solvent) − E(GFN2-xTB)], named explicitly so a solvent never
   silently means it; a given `electronic_temperature_k` applies to all three parts. GFN2-xTB
   takes no correction.
-- GFN-FF takes no solvent, no electronic temperature, accuracy or iteration count (it has no
-  SCF), and only singlets. `gfnff` is required for GFN-FF and absent otherwise:
+- GFN-FF takes no solvent or SCF settings and accepts only singlets.
+  `gfnff` is required for GFN-FF and absent otherwise:
   `GfnFfTopology { reference: FrameHash, fragment_charges: Vec<i32> }`, the frame the topology
   was set up from and one charge per molecular fragment in the order of the fragments' first
   atoms (empty: the whole charge on the first fragment). The fragments follow from the
@@ -322,7 +321,7 @@ of a 200-atom molecule would take 8.2 MB that way. The owner's policy is binding
   `(Spin, row)` orbitals that placed surfaces use: the light result keeps their rows and the
   basis. The document passes `MAX_IMPORTED_HEAVY_BYTES` (2 MB) minus what the molecule's
   other imported results already keep. The light result keeps bond orders of at least
-  `LIGHT_BOND_ORDER_MIN` (0.3); the document may filter by drawn bonds instead.
+  `LIGHT_BOND_ORDER_MIN` (0.1, the worker's own cut); the document may filter by drawn bonds instead.
 - **Size estimates.** `heavy_bytes()` is what keeping the heavy data adds to the file: the
   pretty JSON length of the full result minus that of its light form ("Keep full results in
   this file (+1.4 MB)"); `saved_bytes(heavy_budget, pinned)` is the length of the pretty JSON
@@ -374,7 +373,7 @@ it again on its side.
 | `MAX_COMPACT_VALUES`       | 4,194,304 | Values in one compact array.                                                                                       |
 | `MAX_COMPACT_EXPANSION`    | 32        | Decoded bytes per encoded byte of a compact array.                                                                 |
 | `MAX_IMPORTED_HEAVY_BYTES` | 2,000,000 | Encoded heavy arrays saved per molecule for imported results.                                                      |
-| `LIGHT_BOND_ORDER_MIN`     | 0.3       | Smallest bond order a light result keeps.                                                                          |
+| `LIGHT_BOND_ORDER_MIN`     | 0.1       | Smallest bond order a light result keeps.                                                                          |
 
 `validate` enforces them after parsing; compact arrays enforce theirs while decoding.
 

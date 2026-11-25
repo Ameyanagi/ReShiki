@@ -33,6 +33,8 @@ fn optimized(full: bool) -> CalcResult {
         endpoints: None,
         settings: Settings::Xtb(XtbSettings {
             method: qcdata::XtbMethod::Gfn2Xtb,
+            conventions: Default::default(),
+            scf_retries: vec![],
             solvent: Some(qcdata::Solvent {
                 model: qcdata::SolventModel::Alpb,
                 name: "water".into(),
@@ -155,14 +157,101 @@ fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
 
 #[test]
 fn near_degenerate_gaps_warn() {
-    assert_eq!(warning(Some(&info(0.05))), Some(NEAR_DEGENERATE));
-    assert_eq!(warning(Some(&info(3.4))), None);
+    let result = optimized(false);
+    assert_eq!(warning(&result, Some(&info(0.05))), Some(NEAR_DEGENERATE));
+    assert_eq!(warning(&result, Some(&info(3.4))), None);
     let flagged = RunInfo {
         near_degenerate: true,
         ..info(3.4)
     };
-    assert_eq!(warning(Some(&flagged)), Some(NEAR_DEGENERATE));
-    assert_eq!(warning(None), None);
+    assert_eq!(warning(&result, Some(&flagged)), Some(NEAR_DEGENERATE));
+    assert_eq!(warning(&result, None), None);
+    // Stored levels decide after reopening, without run information.
+    let mut close = with_properties(optimized(false));
+    close.orbitals.as_mut().unwrap().alpha.energies_hartree[4] = -0.406;
+    assert_eq!(warning(&close, None), Some(NEAR_DEGENERATE));
+}
+
+/// Water's GFN2-xTB properties (axtb test geometry: charges and gap; the
+/// lower levels and bond orders are example values).
+fn with_properties(mut result: CalcResult) -> CalcResult {
+    result.charges = vec![qcdata::AtomicCharges {
+        scheme: qcdata::ChargeScheme::Mulliken,
+        values: vec![-0.561, 0.2805, 0.2805],
+    }];
+    result.dipole_e_bohr = Some([0., 0., 0.85]);
+    result.bond_orders = vec![
+        qcdata::BondOrder {
+            a: 0,
+            b: 1,
+            order: 0.92,
+        },
+        qcdata::BondOrder {
+            a: 0,
+            b: 2,
+            order: 0.92,
+        },
+    ];
+    // 8 valence electrons: four doubly occupied levels, then the LUMO.
+    let energies = vec![-0.95, -0.62, -0.53, -0.4091, 0.1058, 0.2];
+    result.orbitals = Some(qcdata::Orbitals {
+        basis: None,
+        core_electrons: vec![],
+        alpha: qcdata::OrbitalSet {
+            occupations: vec![2., 2., 2., 2., 0., 0.],
+            energies_hartree: energies,
+            symmetries: vec![],
+            rows: vec![],
+            coefficients: vec![],
+        },
+        beta: qcdata::Beta::Restricted,
+    });
+    result
+}
+
+#[test]
+fn stored_properties_show_without_run_information() {
+    let result = with_properties(optimized(false));
+    let (input, output) = (frame(&START), frame(&END));
+    let rows = summary_rows(&result, &input, &output, None);
+    let row = |name: &str| {
+        rows.iter()
+            .find(|(label, _)| *label == name)
+            .map(|(_, value)| value.as_str())
+    };
+    // (0.1058 + 0.4091) Eh in eV.
+    assert_eq!(row("HOMO–LUMO gap"), Some("14.01 eV"));
+    assert_eq!(row("Dipole"), Some("2.16 D"));
+    assert_eq!(
+        row("Charges"),
+        Some("O −0.561 · H +0.281 · H +0.281 (mulliken)")
+    );
+    assert_eq!(
+        bond_orders(&result, &output),
+        [
+            ("O1–H2".to_owned(), "0.92".to_owned()),
+            ("O1–H3".to_owned(), "0.92".to_owned())
+        ]
+    );
+    let names: Vec<_> = levels(&result).into_iter().map(|(name, _)| name).collect();
+    assert_eq!(names, ["LUMO+1", "LUMO", "HOMO", "HOMO−1", "HOMO−2"]);
+    assert!((levels(&result)[2].1 - -0.4091 * 27.211386245981).abs() < 1e-9);
+
+    // An open shell sharing orbitals: alpha fills one more level.
+    let mut radical = result.clone();
+    let orbitals = radical.orbitals.as_mut().unwrap();
+    orbitals.alpha.occupations = vec![1., 1., 1., 1., 1., 0.];
+    orbitals.beta = qcdata::Beta::SameOrbitals {
+        occupations: vec![1., 1., 1., 1., 0., 0.],
+    };
+    let gap = gap_ev(&radical, None).unwrap();
+    assert!(
+        (gap - (0.2 - 0.1058) * 27.211386245981).abs() < 1e-9,
+        "{gap}"
+    );
+    // Open shells list the alpha levels, from the alpha electron count.
+    let names: Vec<_> = levels(&radical).into_iter().map(|(name, _)| name).collect();
+    assert_eq!(names, ["α LUMO", "α HOMO", "α HOMO−1", "α HOMO−2"]);
 }
 
 #[test]
@@ -198,6 +287,19 @@ fn the_method_line_names_engine_solvent_state_and_time() {
     assert_eq!(
         method_line(&result, &frame(&END), None),
         "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1"
+    );
+    // g-xTB in water at 1000 K with xtb 6.8 conventions.
+    let mut result = result;
+    if let Settings::Xtb(settings) = &mut result.settings {
+        settings.method = qcdata::XtbMethod::GXtb;
+        settings.conventions = qcdata::XtbConventions::Xtb68;
+        settings.electronic_temperature_k = Some(1000.);
+        settings.solvent.as_mut().unwrap().correction = Some(qcdata::SolventCorrection::Gfn2);
+    }
+    result.provenance.method = Some("g-xTB".into());
+    assert_eq!(
+        method_line(&result, &frame(&END), None),
+        "g-xTB · axtb 0.2.0 · water (ALPB, GFN2-xTB correction) · xtb 6.8 compatible · 1000 K · charge 0 · multiplicity 1"
     );
 }
 
@@ -240,4 +342,134 @@ fn sizes_read_like_a_file_browser() {
     assert_eq!(size(0), "1 KB");
     assert_eq!(size(18_200), "19 KB");
     assert_eq!(size(1_400_000), "1.4 MB");
+}
+
+#[test]
+fn unrestricted_gaps_follow_the_conventions_and_list_both_spins() {
+    let set = |energies: Vec<f64>, occupations: Vec<f64>| qcdata::OrbitalSet {
+        energies_hartree: energies,
+        occupations,
+        symmetries: vec![],
+        rows: vec![],
+        coefficients: vec![],
+    };
+    let mut result = with_properties(optimized(false));
+    // Alpha gap 0.50 Eh, beta gap 0.60 Eh, across spins 0.40 Eh.
+    result.orbitals = Some(qcdata::Orbitals {
+        basis: None,
+        core_electrons: vec![],
+        alpha: set(vec![-0.6, -0.5, 0.0, 0.3], vec![1., 1., 0., 0.]),
+        beta: qcdata::Beta::Unrestricted(set(vec![-0.7, -0.1, 0.2, 0.4], vec![1., 0., 0., 0.])),
+    });
+    let ev = |hartree: f64| hartree * 27.211386245981;
+    let gap = gap_ev(&result, None).unwrap();
+    // Native conventions: lowest empty (beta −0.1) above highest filled (alpha −0.5).
+    assert!((gap - ev(0.4)).abs() < 1e-9, "{gap}");
+    if let Settings::Xtb(settings) = &mut result.settings {
+        settings.conventions = qcdata::XtbConventions::Xtb68;
+    }
+    let gap = gap_ev(&result, None).unwrap();
+    assert!(
+        (gap - ev(0.5)).abs() < 1e-9,
+        "xtb 6.8: the alpha frontier, {gap}"
+    );
+    let names: Vec<_> = levels(&result).into_iter().map(|(name, _)| name).collect();
+    assert_eq!(
+        names,
+        [
+            "α LUMO+1",
+            "α LUMO",
+            "α HOMO",
+            "α HOMO−1",
+            "β LUMO+2",
+            "β LUMO+1",
+            "β LUMO",
+            "β HOMO"
+        ]
+    );
+
+    // An H atom: alpha full, beta empty, so no spin has both a HOMO and a
+    // LUMO and the engine reports no gap.
+    result.settings = optimized(false).settings;
+    result.orbitals = Some(qcdata::Orbitals {
+        basis: None,
+        core_electrons: vec![],
+        alpha: set(vec![-0.5], vec![1.]),
+        beta: qcdata::Beta::Unrestricted(set(vec![-0.4], vec![0.])),
+    });
+    assert_eq!(gap_ev(&result, None), None);
+}
+
+#[test]
+fn recalculate_reads_the_settings_the_result_stored() {
+    let frame = qcdata::Frame {
+        numbers: vec![8, 1, 1],
+        positions_angstrom: vec![[0.; 3], [0.96, 0., 0.], [-0.24, 0.93, 0.]],
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let result: qcdata::CalcResult = serde_json::from_value(serde_json::json!({
+        "frame": frame.hash(),
+        "task": "energy",
+        "settings": { "xtb": {
+            "method": "g_xtb",
+            "conventions": "xtb-6.8",
+            "solvent": { "model": "alpb", "name": "water", "correction": "gfn2" },
+            "electronic_temperature_k": 1000.0,
+            "accuracy": 0.5,
+            "max_iterations": 400
+        } },
+        "provenance": { "program": "axtb", "source": { "calculated": { "engine_revision": "9d0388c" } } },
+        "status": "converged"
+    }))
+    .expect("a stored result");
+    assert_eq!(
+        config(&result, &frame, None, 3),
+        Some(Config {
+            task: CardTask::Energy,
+            method: qcdata::XtbMethod::GXtb,
+            charge: 0,
+            unpaired: 0,
+            solvent: Some("water"),
+            xtb68: true,
+            accuracy: Some(0.5),
+            temperature_k: Some(1000.),
+            max_iterations: Some(400),
+            threads: 3,
+            tight: false,
+            fixed: vec![],
+        })
+    );
+    // GBSA, a solvent the card does not list, or an imported job: no rerun.
+    let mut gbsa = result.clone();
+    if let qcdata::Settings::Xtb(settings) = &mut gbsa.settings {
+        settings.solvent.as_mut().unwrap().model = qcdata::SolventModel::Gbsa;
+    }
+    assert_eq!(config(&gbsa, &frame, None, 3), None);
+    let mut benzene = result.clone();
+    if let qcdata::Settings::Xtb(settings) = &mut benzene.settings {
+        settings.solvent.as_mut().unwrap().name = "benzene".into();
+    }
+    assert_eq!(config(&benzene, &frame, None, 3), None);
+    // GFN-FF saves its resolved default fragment charges: still repeatable.
+    let mut force_field = result.clone();
+    if let qcdata::Settings::Xtb(settings) = &mut force_field.settings {
+        settings.method = qcdata::XtbMethod::GfnFf;
+        settings.solvent = None;
+        settings.gfnff = Some(qcdata::GfnFfTopology {
+            reference: frame.hash(),
+            fragment_charges: vec![0],
+        });
+    }
+    assert!(config(&force_field, &frame, None, 3).is_some());
+    if let qcdata::Settings::Xtb(settings) = &mut force_field.settings {
+        settings.gfnff.as_mut().unwrap().fragment_charges = vec![1, -1];
+    }
+    assert_eq!(config(&force_field, &frame, None, 3), None);
+    let mut hessian = result;
+    hessian.task = Task::Hessian;
+    assert_eq!(config(&hessian, &frame, None, 3), None);
 }

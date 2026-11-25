@@ -11,6 +11,7 @@ engine = ["dep:axtb-driver"]
 [dependencies]
 axtb-driver = { workspace = true, optional = true }
 reshiki-process-heap = { path = "../process-heap" }
+reshiki-qcdata = { path = "../qcdata" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 thiserror = "2"

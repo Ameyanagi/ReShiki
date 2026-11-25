@@ -58,7 +58,7 @@ analyze       Print molecular properties as one JSON line
 predict-nmr   Print predicted NMR shifts as one JSON line
 export-input  Write a quantum-chemistry input from an XYZ structure
 name          Print the systematic name of a structure
-calc          Print a GFN2-xTB energy and optional gradient as one JSON line
+calc          Print an xTB calculation as one JSON line
 pieces        Check or render equipment piece files
 info          Print versions, limits and formats as one JSON line
 tools         Print the agent tool catalog as one JSON line

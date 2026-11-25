@@ -22,14 +22,17 @@ fn path(frames: &[&[[f64; 3]]]) -> Event {
         .collect();
     let last = frames.last().expect("frames");
     Event::Done(Ok(std::sync::Arc::new(Report {
-        engine_version: "0.2.0".into(),
-        engine_rev: "9d0388c".into(),
+        engine: super::super::example_engine(),
+        computed: {
+            // An optimization's last compute carries the gradient.
+            let mut computed =
+                super::super::example_computed(*energies.last().expect("energies"), 0.05);
+            computed.gradient = Some(vec![[0.; 3]; last.len()]);
+            computed
+        },
         energy: *energies.last().expect("energies"),
-        gap_ev: Some(0.05),
-        near_degenerate: true,
         converged: true,
         positions: last.to_vec(),
-        gradient: vec![0.; last.len() * 3],
         steps: frames.len() - 1,
         evaluations: energies
             .iter()
@@ -39,7 +42,6 @@ fn path(frames: &[&[[f64; 3]]]) -> Event {
                 seconds: 0.003,
             })
             .collect(),
-        numerics: "f64".into(),
         energies,
         path: frames
             .iter()
@@ -149,11 +151,14 @@ fn an_edit_greys_the_results_undo_restores_them_and_recalculate_reruns() {
     palette(&mut app, Action::Recalculate);
     let run = app.tab.xtb.run.as_ref().expect("Recalculate starts a run");
     assert_eq!(
-        run.task,
+        run.config.task,
         CalcTask::Optimize,
         "the result's task, not the card's"
     );
-    assert_eq!((run.charge, run.unpaired, run.solvent), (0, 0, None));
+    assert_eq!(
+        (run.config.charge, run.config.unpaired, run.config.solvent),
+        (0, 0, None)
+    );
     assert_eq!(run.atoms.len(), 2, "the molecule as it is now");
     assert!(run.keep_full, "the new result keeps \"Keep full\" too");
     assert!(
@@ -178,7 +183,10 @@ fn a_step_previews_on_the_model_and_use_this_geometry_is_one_undo_step() {
     event(&mut app, path(&[&START, &MIDDLE, &MOVED]));
     assert_eq!(model(&app.tab.doc), f32s(&MOVED));
     let shown = app.xtb_shown().expect("result");
-    assert_eq!(results::warning(shown.info), Some(state::NEAR_DEGENERATE));
+    assert_eq!(
+        results::warning(&shown.stored.result, shown.info),
+        Some(state::NEAR_DEGENERATE)
+    );
 
     palette(&mut app, Action::View(View::Steps));
     palette(&mut app, Action::Step(1));

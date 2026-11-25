@@ -40,11 +40,11 @@ pub struct Capabilities {
     pub bond_orders: bool,
     /// Open-shell spin states.
     pub open_shell: bool,
-    /// ALPB solvent treatment.
+    /// Implicit solvent treatment.
     pub solvent: SolventSupport,
 }
 
-/// Available ALPB solvent treatment.
+/// Available implicit solvent treatment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SolventSupport {
@@ -158,6 +158,14 @@ pub fn check_calculation(
             }
         }
     }
+    if settings.method == XtbMethod::GfnFf
+        && (settings.electronic_temperature_k.is_some()
+            || settings.accuracy.is_some()
+            || settings.max_iterations.is_some()
+            || !settings.scf_retries.is_empty())
+    {
+        return Err(Error::Unsupported("GFN-FF takes no SCF settings".into()));
+    }
     // 0 K is valid (g-xTB's default); an accuracy is a positive multiplier.
     if settings
         .electronic_temperature_k
@@ -172,13 +180,29 @@ pub fn check_calculation(
                 .into(),
         ));
     }
+    if settings.scf_retries.iter().any(|retry| {
+        (retry.electronic_temperature_k.is_none() && retry.max_iterations.is_none())
+            || retry
+                .electronic_temperature_k
+                .is_some_and(|t| !(t.is_finite() && t >= 0.0))
+            || retry.max_iterations == Some(0)
+    }) {
+        return Err(Error::Invalid(
+            "each SCF retry needs a finite temperature of at least 0 K or an iteration limit of at least 1".into(),
+        ));
+    }
+    if let Some(base) = settings.electronic_temperature_k
+        && settings.scf_retries.iter().any(|retry| {
+            retry
+                .electronic_temperature_k
+                .is_some_and(|temperature| temperature < base)
+        })
+    {
+        return Err(Error::Invalid(
+            "SCF retry temperature must be at least the session temperature".into(),
+        ));
+    }
     if settings.method == XtbMethod::GfnFf {
-        if settings.electronic_temperature_k.is_some()
-            || settings.accuracy.is_some()
-            || settings.max_iterations.is_some()
-        {
-            return Err(Error::Unsupported("GFN-FF takes no SCF settings".into()));
-        }
         let topology = settings
             .gfnff
             .as_ref()
@@ -239,7 +263,7 @@ pub fn check_calculation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GfnFfTopology, SolvationState, Solvent, SolventModel};
+    use crate::{GfnFfTopology, ScfRetry, SolvationState, Solvent, SolventModel};
 
     fn frame(n_atoms: usize) -> Frame {
         Frame {
@@ -256,12 +280,55 @@ mod tests {
     fn settings(method: XtbMethod) -> XtbSettings {
         XtbSettings {
             method,
+            conventions: Default::default(),
             solvent: None,
             electronic_temperature_k: None,
             accuracy: None,
             max_iterations: None,
+            scf_retries: vec![],
             gfnff: None,
         }
+    }
+
+    #[test]
+    fn scf_retry_settings_are_checked() {
+        let frame = frame(1);
+        let mut settings = settings(XtbMethod::Gfn2Xtb);
+        let check = |settings: &XtbSettings| {
+            check_calculation(Task::Energy, settings, &frame, OrbitalRequest::None)
+        };
+        for (electronic_temperature_k, max_iterations) in [
+            (None, None),
+            (Some(-1.0), Some(1)),
+            (Some(f64::NAN), None),
+            (Some(f64::INFINITY), None),
+            (Some(1000.0), Some(0)),
+        ] {
+            settings.scf_retries = vec![ScfRetry {
+                electronic_temperature_k,
+                max_iterations,
+            }];
+            assert!(matches!(check(&settings), Err(Error::Invalid(_))));
+        }
+        settings.scf_retries = vec![
+            ScfRetry {
+                electronic_temperature_k: Some(0.0),
+                max_iterations: None,
+            },
+            ScfRetry {
+                electronic_temperature_k: None,
+                max_iterations: Some(1),
+            },
+        ];
+        check(&settings).unwrap();
+        settings.electronic_temperature_k = Some(300.0);
+        assert!(matches!(check(&settings), Err(Error::Invalid(_))));
+        settings.electronic_temperature_k = None;
+        settings.method = XtbMethod::GfnFf;
+        assert!(matches!(
+            check(&settings),
+            Err(Error::Unsupported(message)) if message == "GFN-FF takes no SCF settings"
+        ));
     }
 
     fn solvent(correction: Option<SolventCorrection>) -> Solvent {

@@ -1,13 +1,25 @@
 //! The results palette's content, kept free of iced: the method line, the
 //! Summary rows, the optimization steps, the log and file sizes, built from
 //! a stored result and what this session still knows about its run.
-use super::state::{NEAR_DEGENERATE, formula, scientific, signed};
-use reshiki::qcdata::{CalcResult, Frame, Settings, Status, Task};
+use super::state::{
+    Config, NEAR_DEGENERATE, SOLVENTS, Task as CardTask, formula, scientific, signed, symbol,
+};
+use reshiki::qcdata;
+use reshiki::qcdata::{
+    Beta, CalcResult, Frame, OrbitalSet, Orbitals, Settings, Status, Task, XtbConventions,
+};
 
 /// Always shown under the method line.
 pub(crate) const LIMITATIONS: &str = "Semi-empirical: geometries good, frequencies approximate, orbitals qualitative (minimal basis).";
 /// The gap under which the electronic structure counts as near-degenerate.
 const NEAR_DEGENERATE_EV: f64 = 0.1;
+/// CODATA 2022, as the worker converts its gap.
+const EV_PER_HARTREE: f64 = 27.211386245981;
+/// Debye per e·bohr.
+const DEBYE_PER_E_BOHR: f64 = 2.541746473;
+/// Bond orders listed from this order up: what the worker reports and a
+/// saved file keeps.
+pub(crate) const BOND_ORDER_MIN: f64 = reshiki::qcdata::LIGHT_BOND_ORDER_MIN;
 
 /// The palette's tabs. Orbitals and Vibrations join them once the worker
 /// returns orbitals and frequencies.
@@ -73,6 +85,14 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame, info: Option<&RunI
         None => provenance.program.clone(),
     });
     parts.push(solvent(result));
+    if let Settings::Xtb(settings) = &result.settings {
+        if settings.conventions == XtbConventions::Xtb68 {
+            parts.push("xtb 6.8 compatible".into());
+        }
+        if let Some(kelvin) = settings.electronic_temperature_k {
+            parts.push(format!("{kelvin} K"));
+        }
+    }
     parts.push(format!("charge {}", signed(f64::from(frame.charge), 0)));
     parts.push(format!("multiplicity {}", frame.multiplicity));
     if let Some(info) = info.filter(|info| !info.finished.is_empty()) {
@@ -83,10 +103,13 @@ pub(crate) fn method_line(result: &CalcResult, frame: &Frame, info: Option<&RunI
 
 fn solvent(result: &CalcResult) -> String {
     match &result.settings {
-        Settings::Xtb(settings) => settings
-            .solvent
-            .as_ref()
-            .map_or_else(|| "gas phase".into(), |s| format!("{} (ALPB)", s.name)),
+        Settings::Xtb(settings) => settings.solvent.as_ref().map_or_else(
+            || "gas phase".into(),
+            |s| match s.correction {
+                Some(_) => format!("{} (ALPB, GFN2-xTB correction)", s.name),
+                None => format!("{} (ALPB)", s.name),
+            },
+        ),
         Settings::Imported { .. } => "imported".into(),
     }
 }
@@ -138,8 +161,32 @@ pub(crate) fn summary_rows(
     if let Some(energy) = result.energy_hartree {
         rows.push(("Total energy", format!("{} Eh", signed(energy, 6))));
     }
-    if let Some(gap) = info.and_then(|info| info.gap_ev) {
+    if let Some(gap) = gap_ev(result, info) {
         rows.push(("HOMO–LUMO gap", format!("{gap:.2} eV")));
+    }
+    if let Some(dipole) = result.dipole_e_bohr {
+        let debye = dipole.iter().map(|x| x * x).sum::<f64>().sqrt() * DEBYE_PER_E_BOHR;
+        rows.push(("Dipole", format!("{debye:.2} D")));
+    }
+    if let Some(charges) = result.charges.first() {
+        let scheme = format!("{:?}", charges.scheme);
+        let values = &charges.values;
+        let text = if values.len() <= 4 {
+            values
+                .iter()
+                .zip(&output.numbers)
+                .map(|(q, &z)| format!("{} {}", symbol(z), signed_charge(*q)))
+                .collect::<Vec<_>>()
+                .join(" · ")
+        } else {
+            let (low, high) = values
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), &q| {
+                    (lo.min(q), hi.max(q))
+                });
+            format!("{} to {}", signed_charge(low), signed_charge(high))
+        };
+        rows.push(("Charges", format!("{text} ({})", scheme.to_lowercase())));
     }
     if result.task == Task::Optimize {
         let steps = energies(result).len().saturating_sub(1);
@@ -170,9 +217,15 @@ pub(crate) fn summary_rows(
         rows.push((
             "Run time",
             format!(
-                "{:.1} s · {} SCF calculations",
+                "{:.1} s · {} {}",
                 info.seconds,
-                info.evaluations.len()
+                info.evaluations.len(),
+                // GFN-FF has no SCF.
+                if matches!(&result.settings, Settings::Xtb(s) if !super::state::electronic(s.method)) {
+                    "calculations"
+                } else {
+                    "SCF calculations"
+                }
             ),
         ));
     }
@@ -180,11 +233,192 @@ pub(crate) fn summary_rows(
 }
 
 /// The near-degenerate warning, when the gap calls for it.
-pub(crate) fn warning(info: Option<&RunInfo>) -> Option<&'static str> {
-    info.filter(|info| {
-        info.near_degenerate || info.gap_ev.is_some_and(|gap| gap < NEAR_DEGENERATE_EV)
+pub(crate) fn warning(result: &CalcResult, info: Option<&RunInfo>) -> Option<&'static str> {
+    (info.is_some_and(|info| info.near_degenerate)
+        || gap_ev(result, info).is_some_and(|gap| gap < NEAR_DEGENERATE_EV))
+    .then_some(NEAR_DEGENERATE)
+}
+
+/// "+0.280" or "−0.561".
+pub(crate) fn signed_charge(value: f64) -> String {
+    // −0.0004 rounds to zero and shows unsigned.
+    if value.abs() < 5e-4 {
+        return "0.000".into();
+    }
+    if value >= 0. {
+        format!("+{value:.3}")
+    } else {
+        signed(value, 3)
+    }
+}
+
+/// The HOMO–LUMO gap in eV from the stored orbital levels, else from this
+/// session's run.
+pub(crate) fn gap_ev(result: &CalcResult, info: Option<&RunInfo>) -> Option<f64> {
+    // The worker's own value while this session knows it, absence included.
+    match info {
+        Some(info) => info.gap_ev,
+        None => gap_hartree(result).map(|gap| gap * EV_PER_HARTREE),
+    }
+}
+
+/// The occupied count of the alpha spectrum (half the electrons, rounded
+/// up, for restricted levels); thermal smearing does not move it.
+fn alpha_electrons(orbitals: &Orbitals) -> Option<usize> {
+    let set = &orbitals.alpha;
+    let total = filled(set, &set.occupations)?;
+    Some(match orbitals.beta {
+        Beta::Restricted => total.div_ceil(2),
+        _ => total,
     })
-    .map(|_| NEAR_DEGENERATE)
+}
+
+fn filled(set: &OrbitalSet, occupations: &[f64]) -> Option<usize> {
+    (occupations.len() == set.energies_hartree.len())
+        .then(|| occupations.iter().sum::<f64>().round() as usize)
+}
+
+/// LUMO − HOMO (Eh) as the engine reports it: the alpha frontier, except
+/// that unrestricted g-xTB in its own conventions takes the highest
+/// occupied and lowest empty level of either spin.
+fn gap_hartree(result: &CalcResult) -> Option<f64> {
+    let orbitals = result.orbitals.as_ref()?;
+    let alpha = &orbitals.alpha.energies_hartree;
+    let n = alpha_electrons(orbitals)?;
+    let xtb68 =
+        matches!(&result.settings, Settings::Xtb(s) if s.conventions == XtbConventions::Xtb68);
+    match &orbitals.beta {
+        Beta::Unrestricted(beta) if !xtb68 => {
+            let m = filled(beta, &beta.occupations)?;
+            let both = |levels: &[f64], k: usize| k > 0 && k < levels.len();
+            if !both(alpha, n) && !both(&beta.energies_hartree, m) {
+                return None;
+            }
+            let levels = &beta.energies_hartree;
+            let homo = [
+                n.checked_sub(1).and_then(|i| alpha.get(i)),
+                m.checked_sub(1).and_then(|i| levels.get(i)),
+            ];
+            let lumo = [alpha.get(n), levels.get(m)];
+            let homo = homo.into_iter().flatten().copied().reduce(f64::max)?;
+            let lumo = lumo.into_iter().flatten().copied().reduce(f64::min)?;
+            Some(lumo - homo)
+        }
+        _ => Some(alpha.get(n)? - alpha.get(n.checked_sub(1)?)?),
+    }
+}
+
+/// Orbital levels around the gap, "HOMO−2" … "LUMO+2", in eV, highest
+/// first. Open shells list the alpha spin, marked "α".
+pub(crate) fn levels(result: &CalcResult) -> Vec<(String, f64)> {
+    let Some(orbitals) = result.orbitals.as_ref() else {
+        return vec![];
+    };
+    let Some(n) = alpha_electrons(orbitals) else {
+        return vec![];
+    };
+    let spin = if matches!(orbitals.beta, Beta::Restricted) {
+        ""
+    } else {
+        "α "
+    };
+    let mut rows = around(&orbitals.alpha.energies_hartree, n, spin);
+    if let Beta::Unrestricted(beta) = &orbitals.beta
+        && let Some(n) = filled(beta, &beta.occupations)
+    {
+        rows.extend(around(&beta.energies_hartree, n, "β "));
+    }
+    rows
+}
+
+/// HOMO−2 … LUMO+2 of one spectrum with `n` occupied levels, highest
+/// first, names prefixed by `spin`. An empty spin starts at its LUMO.
+fn around(levels: &[f64], n: usize, spin: &str) -> Vec<(String, f64)> {
+    let name = |index: usize| match index.checked_sub(n) {
+        None if index + 1 == n => format!("{spin}HOMO"),
+        None => format!("{spin}HOMO−{}", n - 1 - index),
+        Some(0) => format!("{spin}LUMO"),
+        Some(above) => format!("{spin}LUMO+{above}"),
+    };
+    let shown = n.saturating_sub(3)..=n + 2;
+    let mut rows: Vec<_> = (levels.iter().enumerate())
+        .filter(|(index, _)| shown.contains(index))
+        .map(|(index, energy)| (name(index), energy * EV_PER_HARTREE))
+        .collect();
+    rows.reverse();
+    rows
+}
+
+/// A stored result's settings, to calculate it again; what the file
+/// does not keep comes from `info` (this session's run), else defaults.
+/// `None` when the card cannot reproduce it: imported results, other
+/// tasks, GBSA or a solvent the card does not list.
+pub(crate) fn config(
+    result: &qcdata::CalcResult,
+    frame: &qcdata::Frame,
+    info: Option<&RunInfo>,
+    threads: u32,
+) -> Option<Config> {
+    let qcdata::Settings::Xtb(settings) = &result.settings else {
+        return None;
+    };
+    let task = match result.task {
+        qcdata::Task::Optimize => CardTask::Optimize,
+        qcdata::Task::Energy => CardTask::Energy,
+        _ => return None,
+    };
+    // Settings the card cannot send: a retry ladder, GFN-FF fragment
+    // charges other than the default (the whole charge on the first
+    // fragment, which the worker saves resolved), another solvation state.
+    let topology = settings
+        .gfnff
+        .as_ref()
+        .is_some_and(|gfnff| gfnff.fragment_charges.iter().skip(1).any(|&q| q != 0));
+    if !settings.scf_retries.is_empty() || topology {
+        return None;
+    }
+    let solvent = match &settings.solvent {
+        None => None,
+        Some(s) if s.model == qcdata::SolventModel::Alpb && s.state == Default::default() => Some(
+            SOLVENTS
+                .into_iter()
+                .find(|name| name.eq_ignore_ascii_case(&s.name))?,
+        ),
+        Some(_) => return None,
+    };
+    Some(Config {
+        task,
+        method: settings.method,
+        charge: frame.charge,
+        unpaired: frame.multiplicity.saturating_sub(1),
+        solvent,
+        xtb68: settings.conventions == qcdata::XtbConventions::Xtb68,
+        accuracy: settings.accuracy,
+        temperature_k: settings.electronic_temperature_k,
+        max_iterations: settings.max_iterations,
+        threads: info.map_or(threads, |info| info.threads),
+        tight: info.is_some_and(|info| info.tight),
+        fixed: info.map_or_else(Vec::new, |info| info.fixed.clone()),
+    })
+}
+
+/// "C1–O2" with "1.92": each stored bond order, in the frame's atom order.
+pub(crate) fn bond_orders(result: &CalcResult, frame: &Frame) -> Vec<(String, String)> {
+    let atom = |index: u32| {
+        let z = frame.numbers.get(index as usize).copied().unwrap_or(0);
+        format!("{}{}", symbol(z), index + 1)
+    };
+    result
+        .bond_orders
+        .iter()
+        .filter(|bond| bond.order >= BOND_ORDER_MIN)
+        .map(|bond| {
+            (
+                format!("{}–{}", atom(bond.a), atom(bond.b)),
+                format!("{:.2}", bond.order),
+            )
+        })
+        .collect()
 }
 
 /// Copy table and Export…: tab-separated, with a header row.
@@ -259,7 +493,7 @@ pub(crate) fn log(
     if let Some(energy) = result.energy_hartree {
         lines.push(format!("total energy    {energy:.8} Eh"));
     }
-    if let Some(gap) = info.and_then(|info| info.gap_ev) {
+    if let Some(gap) = gap_ev(result, info) {
         lines.push(format!("HOMO-LUMO gap   {gap:.4} eV"));
     }
     if result.task == Task::Optimize {
