@@ -276,16 +276,21 @@ pub(crate) fn log(
 }
 
 /// RMSD in Å over every atom of two geometries in the same atom order,
-/// after the best superposition.
+/// after the best superposition. The browser build, which has no optimizer
+/// crate, leaves it out.
 pub(crate) fn rmsd(a: &[[f64; 3]], b: &[[f64; 3]]) -> Option<f64> {
     if a.len() != b.len() || a.is_empty() {
         return None;
     }
-    // Every atom counts as heavy, and the one mapping kept is the identity.
-    let numbers = vec![6; a.len()];
-    let topology = reshiki_optimize::conformers::Topology::new(numbers, vec![]).ok()?;
-    let autos = topology.automorphisms(1);
-    reshiki_optimize::conformers::rmsd(&topology, &autos, a, b).ok()
+    #[cfg(target_arch = "wasm32")]
+    return None;
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use reshiki_optimize::conformers::{Topology, rmsd};
+        // Every atom counts as heavy, and the one mapping kept is the identity.
+        let topology = Topology::new(vec![6; a.len()], vec![]).ok()?;
+        rmsd(&topology, &topology.automorphisms(1), a, b).ok()
+    }
 }
 
 /// "84 KB", "1.4 MB": decimal units, as file browsers show them.
