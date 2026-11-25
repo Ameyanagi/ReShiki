@@ -213,6 +213,8 @@ explains how the crates and modules fit together.
 - `src/app/xtb/run.rs`: One xTB job on its own thread
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
 - `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
+- `src/app/xtb/vibrations.rs`: The Vibrations tab
+- `src/app/xtb/vibrations/view.rs`: The Vibrations tab's widgets
 - `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.
 - `src/appearance.rs`: Interface preferences and defaults for new drawings.
 - `src/assistant/codex.rs`: Small JSONL app-server client using the user's existing Codex sign-in.
@@ -1002,6 +1004,7 @@ explains how the crates and modules fit together.
 - `crates/qcdata/src/lib.rs`: Quantum chemistry data, canonical orbital conventions, and storage formats.
 - `crates/qcdata/src/molden.rs`: Conversion between Molden and canonical atomic-orbital order and normalization.
 - `crates/qcdata/src/result.rs`: Calculation results, settings, provenance, and the saved (light) form.
+- `crates/qcdata/src/vibrational.rs`
 
 ## reshiki-web
 

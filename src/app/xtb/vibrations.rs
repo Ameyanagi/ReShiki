@@ -12,7 +12,7 @@ use iced::Task;
 use reshiki::document::Document;
 use reshiki::graphics::Graphic;
 use reshiki::qcdata::vibrational::{self, BandShape};
-use reshiki::qcdata::{CalcResult, Frame, Settings, Thermo};
+use reshiki::qcdata::{CalcResult, Frame, Thermo};
 use std::cell::RefCell;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -513,7 +513,7 @@ impl App {
                     .as_ref()
                     .is_some_and(|(w, _)| is(w, &result))
                 || super::unavailable().is_some()
-                || !matches!(result.settings, Settings::Xtb(_))
+                || !matches!(result.settings, reshiki::qcdata::Settings::Xtb(_))
             {
                 return Task::none();
             }
@@ -634,9 +634,7 @@ impl App {
             return;
         }
         if drift > DRIFT_CM1 {
-            self.status = format!(
-                "Recomputed frequencies differ from the saved ones by up to {drift:.1} cm⁻¹"
-            );
+            self.status = format!("Recomputed modes differ by up to {drift:.1} cm⁻¹");
             self.error = false;
         }
         vibrations.modes.retain(|(weak, _)| weak.strong_count() > 0);
@@ -781,8 +779,7 @@ impl App {
             .xtb_modes(&result)
             .and_then(|modes| vector(modes, shown.frame, mode))
         else {
-            self.status =
-                "Recomputing the normal modes first; push again when they are shown".into();
+            self.status = "Computing normal modes first; push again after".into();
             self.error = false;
             return self.xtb_recompute_modes();
         };
