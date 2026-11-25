@@ -124,8 +124,22 @@ reshiki-<version>-source/
 ```
 
 The release workflow publishes binaries only after this archive is built,
-checked and uploaded. The archive is kept as long as the release it belongs
-to; nightly releases that ship axtb carry their own archive.
+checked and uploaded.
+
+**Each published binary has its source available for as long as the binary
+is.** The archive is an asset of the same GitHub release as the binaries it
+corresponds to, uploaded by the same `gh release create` call (stable releases
+in `release.yml`, nightlies in `nightly.yml`). Deleting a release deletes all
+of its assets, so the archive and its binaries disappear together:
+
+- Tagged releases keep their archive permanently.
+- Nightlies are pruned with their binaries. Nothing deletes nightly releases
+  automatically today (every nightly since the first, 2026-09-28, is still
+  published), so a nightly's archive stays as long as its nightly does. When a
+  nightly is removed, by hand or by a future pruning step, it must be removed
+  as a whole release (`gh release delete`), which takes its archive with it.
+- Workflows and scripts never delete individual release assets; a test fails
+  if one does.
 
 `BUILD-WITH-XTB.md` lists the release profile settings for macOS, Linux arm64,
 and Linux x64, and gives two offline procedures:

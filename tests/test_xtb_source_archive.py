@@ -112,6 +112,32 @@ def workflow_environment(block, indentation, artifact):
 
 
 class XtbSourceArchiveTests(unittest.TestCase):
+    def test_source_archive_shares_its_release_and_is_never_deleted_alone(self):
+        """Prune with the binaries: one release holds both, and no asset is deleted alone."""
+        for workflow in ("release.yml", "nightly.yml"):
+            # Join shell continuation lines, then find the release of the app downloads.
+            text = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
+            commands = [
+                line.split()
+                for line in text.replace("\\\n", " ").splitlines()
+                if "gh release create" in line and "*.zip" in line
+            ]
+            self.assertEqual(len(commands), 1, workflow)
+            for asset in ("*.tar.gz", "*-source.tar.gz.sha256", "SHA256SUMS"):
+                self.assertIn(asset, commands[0], f"{workflow}: {asset}")
+        forbidden = re.compile(
+            r"delete-asset|releases/assets/[^ ]*.*-X *DELETE|-X *DELETE[^\n]*releases/assets"
+        )
+        offenders = [
+            path.relative_to(ROOT).as_posix()
+            for folder in (".github", "scripts")
+            for path in sorted((ROOT / folder).rglob("*"))
+            if path.is_file()
+            and path.suffix in {".yml", ".yaml", ".py", ".sh", ".ps1"}
+            and forbidden.search(path.read_text(encoding="utf-8", errors="replace"))
+        ]
+        self.assertEqual(offenders, [], "release assets must only be deleted with their release")
+
     def test_patch_arguments_cover_exactly_seven_real_crate_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary) / "axtb-source"

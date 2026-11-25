@@ -37,8 +37,11 @@ vendored Cargo dependencies, file hashes and `BUILD-WITH-XTB.md` with offline
 rebuild instructions, including how to use a modified axtb. With an empty
 `CARGO_HOME`, the source job checks the shipped sources and tests a rebuild with
 a modified axtb offline before publication. Nightly archives use the same unique
-version as their applications. Keep each source archive and checksum available
-for as long as its release's application downloads remain available.
+version as their applications. Each archive is published in the same release as
+its applications, so it stays exactly as long as they do: permanently for tagged
+releases, and until the nightly release itself is deleted for nightlies. Prune
+nightlies only by deleting whole releases (`gh release delete`), never single
+assets; see [xTB licensing](xtb-licensing.md#corresponding-source).
 
 The source archive supports building and testing the application. Building the
 website requires the full repository because the archive excludes `docs/images/`
