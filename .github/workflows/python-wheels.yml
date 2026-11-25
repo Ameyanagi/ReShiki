@@ -1,10 +1,14 @@
 name: Python wheels
-# Builds and tests the abi3 wheels that release.yml publishes to PyPI. Pull
-# requests that touch the package run it as a dry run without publishing.
+# Builds and tests the base abi3 wheels and the separate xTB engine wheels.
+# Pull requests that touch either package run without publishing.
 on:
   pull_request:
     paths:
       - "crates/python/**"
+      - "crates/python-xtb/**"
+      - "crates/xtb-worker/**"
+      - "crates/optimize/**"
+      - "crates/qcdata/**"
       - "LICENSE*"
       - "NOTICE"
       - "licenses/**"
@@ -156,9 +160,14 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.msvc_arch }}
+      - name: Build the macOS wheel
+        if: runner.os == 'macOS'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
+        run: uvx maturin@1.15.0 build --release --locked --manifest-path crates/python/Cargo.toml --target ${{ matrix.target }} --interpreter python --out dist
       # The default shell on Windows: under bash, Git's link shadows the MSVC linker.
-      - name: Build the wheel
-        if: runner.os != 'Linux'
+      - name: Build the Windows wheel
+        if: runner.os == 'Windows'
         run: uvx maturin@1.15.0 build --release --locked --manifest-path crates/python/Cargo.toml --target ${{ matrix.target }} --interpreter python --out dist
       - name: Check wheel license notices
         run: uv run --no-project --python 3.12.15 python scripts/check_python_wheel_notices.py "dist/*.whl"
@@ -166,10 +175,99 @@ jobs:
         if: matrix.test
         shell: bash
         run: |
-          uv sync --project crates/python --all-extras --no-install-project
+          uv sync --project crates/python --extra excel --extra pandas --no-install-project
           uv run --project crates/python --no-sync --with ./dist/*.whl --with rdkit pytest crates/python/tests
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: python-wheel-${{ matrix.artifact }}
           path: dist/*.whl
+          if-no-files-found: error
+  xtb_wheel:
+    needs: [scope, wheel]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.scope.outputs.matrix).xtb_wheel }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      UV_PYTHON: "3.12.15"
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/*/
+            /.cargo/
+            /assets/
+            /crates/
+            /data/
+            /licenses/
+            /native/
+            /presets/
+            /resources/
+            /scripts/
+            /src/
+            /tests/fixtures/
+            /vendor/
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.5"
+          python-version: "3.12.15"
+          enable-cache: false
+      - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }} && rustup default 1.99.1
+      - name: Generate xTB wheel license notices
+        run: uv run --no-project --python 3.12.15 python scripts/license_notices.py --manifest-path crates/xtb-worker/Cargo.toml --features engine --destination crates/python-xtb/wheel-licenses --target ${{ matrix.target }}
+      - name: Build the manylinux xTB wheel
+        if: runner.os == 'Linux'
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.15.0
+          rust-toolchain: 1.99.1
+          manylinux: auto
+          target: ${{ matrix.target }}
+          working-directory: crates/python-xtb
+          args: --release --locked --out ../../dist
+      - name: Build the xTB wheel
+        if: runner.os == 'macOS'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
+        working-directory: crates/python-xtb
+        run: uvx maturin@1.15.0 build --release --locked --target ${{ matrix.target }} --out ../../dist
+      - name: Check xTB wheel license notices
+        run: uv run --no-project --python 3.12.15 python scripts/check_python_wheel_notices.py --xtb "dist/*.whl"
+      - name: Download the matching base wheel
+        if: matrix.test
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-wheel-${{ matrix.artifact }}
+          path: dist
+      - name: Test the candidate wheel pair
+        if: matrix.test
+        shell: bash
+        run: |
+          uv sync --project crates/python --no-install-project
+          uv pip install --python crates/python/.venv/bin/python --no-index --find-links dist reshiki reshiki-xtb
+          uv run --project crates/python --no-sync python - <<'PY'
+          import os
+          import subprocess
+
+          import reshiki
+          import reshiki_xtb
+          from reshiki import xtb
+
+          assert reshiki.__version__ == reshiki_xtb.__version__
+          worker = reshiki_xtb.worker_path()
+          assert worker.is_file() and os.access(worker, os.X_OK), worker
+          subprocess.run([str(worker), "--version"], check=True)
+          print(xtb.engine())
+          PY
+          uv run --project crates/python --no-sync pytest crates/python/tests/test_xtb.py crates/python/tests/test_qc.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-xtb-wheel-${{ matrix.artifact }}
+          path: dist/reshiki_xtb-*.whl
           if-no-files-found: error

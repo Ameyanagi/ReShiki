@@ -330,6 +330,23 @@ directory = "vendored-crates"
             self.assertEqual(
                 arguments[arguments.index("--config") :], patch_arguments(root / "axtb-source")
             )
+            wheel_command = next(
+                line
+                for line in instructions.replace("\\\n", "").splitlines()
+                if line.startswith("maturin build --release")
+            )
+            wheel_arguments = shlex.split(wheel_command)
+            self.assertEqual(wheel_arguments[:4], ["maturin", "build", "--release", "--offline"])
+            self.assertEqual(
+                wheel_arguments[4:],
+                [
+                    argument.replace('="axtb-source/', '="../../axtb-source/')
+                    for argument in patch_arguments(root / "axtb-source")
+                ],
+            )
+            self.assertIn("cd crates/python-xtb", instructions)
+            self.assertIn("--destination crates/python-xtb/wheel-licenses", instructions)
+            self.assertIn("target/wheels/reshiki_xtb-*.whl", instructions)
             self.assertIn("codesign --force --sign - target/dist/reshiki", instructions)
             self.assertIn("bundle_metadata", instructions)
             self.assertIn("licenses/axtb/", instructions)

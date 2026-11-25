@@ -106,6 +106,27 @@ class CheckScopeTests(unittest.TestCase):
         self.assertIn("x86_64-apple-darwin", [row["target"] for row in full["geometry"]])
         self.assertEqual(len(full["geometry"]), 5)
 
+    def test_xtb_wheels_pair_with_the_four_supported_base_targets(self):
+        full = matrices(True)
+        base = {row["target"]: row for row in full["wheel"]}
+        xtb = {row["target"]: row for row in full["xtb_wheel"]}
+        self.assertEqual(
+            set(xtb),
+            {
+                "aarch64-apple-darwin",
+                "x86_64-apple-darwin",
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+            },
+        )
+        for target, row in xtb.items():
+            with self.subTest(target=target):
+                self.assertEqual(row, base[target])
+        self.assertEqual(
+            {row["target"] for row in matrices(False)["xtb_wheel"]},
+            {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

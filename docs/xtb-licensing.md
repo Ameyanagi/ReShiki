@@ -25,11 +25,12 @@ g-xTB is on: the fork's `gxtb` feature is on by default and ReShiki keeps it.
 | Python wheel `reshiki`                           | no          | `crates/python` never enables it                |
 | npm packages and the web editor (WebAssembly)    | no          | the web crates never enable it                  |
 | Nix flake                                        | no          | builds default features                         |
-| Planned Python package `reshiki-xtb`             | yes         | separate LGPL distribution, see below           |
+| Python package `reshiki-xtb`                     | yes         | separate LGPL distribution, see below           |
 
 Only the root application crate has the Cargo feature `xtb`. It turns on the
 `engine` feature of `crates/xtb-worker`, the only crate that calls axtb. Library
-crates never enable either feature. Without the feature `crates/xtb-worker`
+crates never enable either feature. The separate Python wheel builds the
+worker executable with `engine`. Without the feature `crates/xtb-worker`
 still builds its protocol types and client (MIT OR Apache-2.0, no axtb code),
 and `reshiki --xtb-worker` answers that xTB is not included.
 
@@ -73,7 +74,7 @@ lockfile). Only the xtb graph uses `gemm`. The copies are MIT and keep their own
 - `scripts/license_notices.py` writes `THIRD-PARTY-NOTICES.txt` from the
   dependency graph of the build being packaged. It includes `licenses/axtb/`
   only when that graph contains the fork's crates, so default builds and the
-  Python wheel carry no LGPL text they do not need. In an xtb build each axtb
+  base Python wheel carry no LGPL text they do not need. In an xtb build each axtb
   crate also contributes its own `COPYING`, `COPYING.LESSER` and `NOTICE`.
 
 ## Licence audit
@@ -109,7 +110,8 @@ release page. `scripts/xtb_source_archive.py` packages the tracked working-tree
 files from the release checkout. For nightlies, the source and desktop build
 jobs stamp the same version into `Cargo.toml` and `Cargo.lock` first.
 
-The archive is for building and testing the ReShiki application. It excludes
+The archive is for building and testing the ReShiki application and the
+`reshiki-xtb` Python wheel. It excludes
 `docs/images/` assets used by the website, so building the website requires
 the full repository.
 
@@ -183,37 +185,35 @@ sense, so no installation keys are involved.
 - `build.json` records `xtb: {included, engine, version, license, source, rev,
 source_archive}`.
 
-## Python: the planned `reshiki-xtb` distribution (design only)
+## Python wheels for xTB
 
-The `reshiki` wheel stays MIT OR Apache-2.0 and never contains axtb. A separate
-distribution adds calculations for those who opt in:
+The `reshiki` wheel stays MIT OR Apache-2.0 and excludes axtb. Install the
+matching `reshiki-xtb` wheel to run calculations.
 
-- **`reshiki-xtb`** (LGPL-3.0-or-later as a whole): import package
-  `reshiki_xtb`, containing one executable, `reshiki-xtb-worker`, built from
-  `crates/xtb-worker` with its `engine` feature (a `[[bin]]` with
-  `required-features = ["engine"]`). It speaks the same worker protocol. The
-  wheel carries the axtb texts and a source notice like the desktop archive.
-- The `reshiki` wheel keeps the MIT client from `crates/xtb-worker` (no axtb
-  code). It finds the worker by importing `reshiki_xtb` and asking for
-  `reshiki_xtb.worker_path()`; it never searches `PATH`. A missing or
-  incompatible worker is reported as "xTB not installed" or "xTB version
-  mismatch", never as a crash. It checks the worker's `hello` (protocol and
-  version) before exposing calculation functions.
-- `pip install "reshiki[xtb]"` installs both: the extra pins
+- **`reshiki-xtb`** (LGPL-3.0-or-later as a whole) provides import package
+  `reshiki_xtb` and the executable `reshiki-xtb-worker`, built from
+  `crates/xtb-worker` with `engine`. The wheel carries `COPYING`,
+  `COPYING.LESSER`, axtb's `NOTICE`, `CHANGES-reshiki.md` and `SOURCE` in its
+  consolidated notices. Its matching complete source is
+  `reshiki-<version>-source.tar.gz` on
+  `https://github.com/Ameyanagi/ReShiki/releases/tag/v<version>`.
+- The client finds the installed executable through `reshiki_xtb.worker_path()`.
+  It checks the package version and verifies the worker's protocol handshake
+  before starting a calculation.
+- `pip install "reshiki[xtb]"` installs both packages. The extra pins
   `reshiki-xtb==<same version>`.
-- Wheels: platform-tagged (`macosx_14_0_arm64`, `macosx_14_0_x86_64`,
-  `manylinux_2_28_x86_64`, `manylinux_2_28_aarch64`, the same floors as the
-  `reshiki` wheel); no Windows wheel until Windows signing works. The
-  executable bit is checked after install.
-- Publication order: `reshiki-xtb` to TestPyPI first; install the candidate
-  pair from a local wheelhouse (`--no-index --find-links`) and run a water
-  energy; then publish `reshiki-xtb` to PyPI and verify it installs; only then
-  publish the `reshiki` wheel that declares the extra. The base wheel's tests
-  never run `uv sync --all-extras` against the index, so they cannot pick up an
-  already published `reshiki-xtb` and hide a broken candidate.
-- Tests: base-only install (no calculation functions, clear message), each
-  supported platform, an unsupported platform (extra resolves to nothing,
-  message), version skew (refused), and removal of `reshiki-xtb` after use.
+- Wheels support macOS 14 or later on Apple Silicon and Intel, and manylinux
+  x86_64 and aarch64. CI checks that the installed worker is executable.
+- Publish the matching source archive on the tagged GitHub release before
+  publishing the worker candidate to TestPyPI. Configure the TestPyPI trusted
+  publisher before the first upload. CI tests the candidate pair from a local wheelhouse
+  (`--no-index --find-links`). The owner publishes `reshiki-xtb` to PyPI
+  manually and verifies installation before telling users to install
+  `reshiki[xtb]`. See the publisher setup and release steps in
+  `docs/releasing.md`.
+- To use a modified axtb, edit `axtb-source/` in that archive and follow the
+  Python wheel section of `BUILD-WITH-XTB.md`. Maturin forwards the same
+  Cargo patch overrides used by the desktop rebuild.
 
 ## Release gates for the first release with xTB
 

@@ -988,8 +988,10 @@ explains how the crates and modules fit together.
 - `crates/python/src/bitmap_budget.rs`: Process-wide admission for batch PNGs' raw RGBA storage, not total RSS.
 - `crates/python/src/drawing.rs`
 - `crates/python/src/lib.rs`: Thin Python bindings over the same headless import, export and analysis API used by the browser.
+- `crates/python/src/qc.rs`: Quantum chemistry files and the shared, full-precision Python result shape.
 - `crates/python/src/render.rs`
 - `crates/python/src/styles.rs`
+- `crates/python/src/xtb.rs`: Run the optional external worker without holding the Python GIL.
 
 ## reshiki-qcdata
 
@@ -1012,6 +1014,7 @@ explains how the crates and modules fit together.
 ## reshiki-xtb-worker
 
 - `crates/xtb-worker/src/ao.rs`: Conversion from axtb's spherical AOs to qcdata's unit-norm canonical AOs.
+- `crates/xtb-worker/src/bin/reshiki-xtb-worker.rs`
 - `crates/xtb-worker/src/client.rs`: Persistent, synchronous supervision of one bounded xTB worker.
 - `crates/xtb-worker/src/engine.rs`: Warm-started calculations through the pinned axtb driver.
 - `crates/xtb-worker/src/lib.rs`: The xTB protocol, client and engine-backed worker.
