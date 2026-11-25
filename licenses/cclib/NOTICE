@@ -1,0 +1,12 @@
+cclib test data
+===============
+
+tests/fixtures/qc/cclib/ holds unmodified copies of quantum chemistry output,
+input, XYZ and Molden files from cclib (https://github.com/cclib/cclib), commit
+1ed6fb7b7d0b95f2767c12071e22841e18bb845e, directories data/ and test/io/data/.
+Some files are renamed; tests/fixtures/qc/README.md maps each copy to its
+source path and records its SHA-256.
+
+The files are test data only. They are not part of any ReShiki binary or
+package, keep their BSD-3-Clause terms (see LICENSE in this directory) and are
+not represented as original dual-licensed ReShiki material.
