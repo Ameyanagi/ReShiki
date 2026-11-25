@@ -180,6 +180,9 @@ fn result(frame: &Frame, task: Task, full: bool) -> CalcResult {
             max_iterations: None,
             scf_retries: vec![],
             gfnff: None,
+            threads: None,
+            convergence: Default::default(),
+            fixed_atoms: vec![],
         }),
         provenance: Provenance {
             program: "axtb".into(),
@@ -267,6 +270,7 @@ fn result(frame: &Frame, task: Task, full: bool) -> CalcResult {
         trajectory: None,
         keep_full: false,
         omitted_bytes: None,
+        run: None,
     };
     result.validate(frame).unwrap();
     result
