@@ -89,7 +89,7 @@ mod tests {
             perspective: if perspective { 1. } else { 0. },
             wire: 1.,
             orbital_meshes: None,
-            orbital_snapshot: None,
+            orbital_snapshot_reach: None,
         }
     }
 

@@ -942,14 +942,31 @@ pub fn result_key(result: &CalcResult) -> String {
     )
 }
 
-/// The newest result with this stable figure reference, and its storage index.
-pub fn find_result<'a>(doc: &'a Document, key: &str) -> Option<(usize, &'a Stored)> {
+/// The newest result matching the figure on this molecule, and its storage index.
+pub fn figure_result<'a>(
+    doc: &'a Document,
+    model: &crate::models3d::Model3d,
+) -> Option<(usize, &'a Stored)> {
+    let figure = model.surface.as_ref()?;
+    let atom = model.linked_atoms.first()?;
     doc.science
         .results
         .iter()
         .enumerate()
         .rev()
-        .find(|(_, stored)| result_key(&stored.result) == key)
+        .find(|(_, stored)| {
+            doc.science
+                .attachment(stored.attachment)
+                .is_some_and(|attachment| {
+                    attachment.atoms.contains(&Some(*atom))
+                        && attachment
+                            .atoms
+                            .iter()
+                            .flatten()
+                            .all(|id| model.contains(*id))
+                        && result_key(&stored.result) == figure.orbital.result
+                })
+        })
 }
 
 /// Clipboard calculation data needed by the document's placed orbital figures.
@@ -1017,13 +1034,17 @@ pub fn for_figures(doc: &Document) -> Science {
 /// shared payload. Nothing changes on error.
 pub fn pin_orbital(
     doc: &mut Document,
-    key: &str,
+    stored_index: usize,
     spin: Spin,
-    index: u32,
+    orbital_index: u32,
     basis: &BasisSet,
     row: &[f64],
 ) -> Result<(), ScienceError> {
-    let (stored_index, stored) = find_result(doc, key).ok_or(ScienceError::Unknown)?;
+    let stored = doc
+        .science
+        .results
+        .get(stored_index)
+        .ok_or(ScienceError::Unknown)?;
     let invalid =
         |message: &str| ScienceError::Invalid(reshiki_qcdata::Error::Invalid(message.into()));
     let orbitals = stored
@@ -1044,7 +1065,7 @@ pub fn pin_orbital(
         (Spin::Beta, Beta::Unrestricted(set)) => set,
         _ => &orbitals.alpha,
     };
-    let position = match set.rows.binary_search(&index) {
+    let position = match set.rows.binary_search(&orbital_index) {
         Ok(_) => return Ok(()),
         Err(position) => position,
     };
@@ -1066,7 +1087,7 @@ pub fn pin_orbital(
         (Spin::Beta, Beta::Unrestricted(set)) => set,
         _ => &mut orbitals.alpha,
     };
-    set.rows.insert(position, index);
+    set.rows.insert(position, orbital_index);
     set.coefficients
         .splice(position * n_ao..position * n_ao, row.iter().copied());
     result.validate(frame)?;

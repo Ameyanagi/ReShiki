@@ -17,6 +17,8 @@ pub struct OrbitalField {
 struct FieldShell {
     centre: [f64; 3],
     radius2: f64,
+    l: u8,
+    angular_bound: f64,
     primitives: Vec<(f64, f64)>,
     angular: Angular,
 }
@@ -57,13 +59,23 @@ impl OrbitalField {
             }
 
             let norm = contraction_overlap(shell).sqrt();
-            let primitives: Vec<_> = shell
+            if !norm.is_finite() || norm <= 0. {
+                return Err("orbital contraction normalization must be positive and finite".into());
+            }
+            let mut primitives = Vec::new();
+            for (&a, &d) in shell
                 .exponents_per_bohr2
                 .iter()
                 .zip(&shell.coefficients)
                 .filter(|(_, d)| **d != 0.)
-                .map(|(&a, &d)| (a, (d / norm) * primitive_norm(a, shell.l)))
-                .collect();
+            {
+                let normalization = primitive_norm(a, shell.l);
+                let weight = (d / norm) * normalization;
+                if !normalization.is_finite() || !weight.is_finite() {
+                    return Err("orbital primitive normalization and weight must be finite".into());
+                }
+                primitives.push((a, weight));
+            }
             let angular = Angular::new(shell, coefficients);
             // Each normalized real harmonic on the unit sphere has magnitude ≤ 1
             // by the addition theorem. Cartesian monomials also have magnitude ≤ 1.
@@ -71,6 +83,9 @@ impl OrbitalField {
                 Angular::Cartesian(terms) => terms.iter().map(|(_, c)| c.abs()).sum(),
                 _ => coefficients.iter().map(|c| c.abs()).sum(),
             };
+            if !angular_bound.is_finite() {
+                return Err("orbital angular coefficient bound must be finite".into());
+            }
             let diffuse = primitives
                 .iter()
                 .map(|&(a, _)| a)
@@ -78,30 +93,25 @@ impl OrbitalField {
             // Start where even the most diffuse Gaussian has decayed by 1e-10.
             // Beyond this radius every r^l exp(-αr²) is decreasing. Include its
             // polynomial and MO weight so a high-l tail cannot be cut prematurely.
-            let mut radius2 = 10. * std::f64::consts::LN_10 / diffuse;
-            let tail = |r2: f64| {
-                let radial: f64 = primitives
-                    .iter()
-                    .map(|&(a, w)| w.abs() * (-a * r2).exp())
-                    .sum();
-                angular_bound * r2.powf(f64::from(shell.l) * 0.5) * radial
-            };
-            while tail(radius2) > 1e-10 {
-                radius2 *= 1.25;
-            }
-            shells.push(FieldShell {
+            let mut prepared = FieldShell {
                 centre,
-                radius2,
+                radius2: 10. * std::f64::consts::LN_10 / diffuse,
+                l: shell.l,
+                angular_bound,
                 primitives,
                 angular,
-            });
+            };
+            while prepared.tail_bound(prepared.radius2) > 1e-10 {
+                prepared.radius2 *= 1.25;
+            }
+            shells.push(prepared);
         }
         Ok(Self { shells })
     }
 
     /// Signed ψ in atomic units (bohr^(-3/2)) at a model-space point in Å.
-    pub fn value(&self, p: [f32; 3]) -> f32 {
-        let [x, y, z] = p.map(|x| f64::from(x) / ANGSTROM_PER_BOHR);
+    pub fn value(&self, p: [impl Into<f64>; 3]) -> f32 {
+        let [x, y, z] = p.map(|x| x.into() / ANGSTROM_PER_BOHR);
         let mut value = 0.;
         for shell in &self.shells {
             let [cx, cy, cz] = shell.centre;
@@ -163,6 +173,20 @@ impl OrbitalField {
 }
 
 impl FieldShell {
+    fn tail_bound(&self, radius2: f64) -> f64 {
+        let power = f64::from(self.l) * 0.5;
+        // A diffuse primitive can peak outside the box even if it is small at its edge.
+        let radial: f64 = self
+            .primitives
+            .iter()
+            .map(|&(a, w)| {
+                let r2 = radius2.max(power / a);
+                w.abs() * (-a * r2).exp() * r2.powf(power)
+            })
+            .sum();
+        self.angular_bound * radial
+    }
+
     // Multiplying the x and yz factors of exp(-αr²) avoids an exponential per voxel.
     // Accumulate shells in canonical order and round only the complete MO to f32.
     #[allow(clippy::indexing_slicing)]
@@ -304,7 +328,7 @@ impl Angular {
     }
 }
 
-fn orbital_grid(points: &[[f32; 3]]) -> Option<Grid> {
+fn orbital_grid(field: &OrbitalField, points: &[[f32; 3]], iso: f32) -> Option<Grid> {
     let mut lo = *points.first()?;
     let mut hi = lo;
     for p in points {
@@ -316,7 +340,15 @@ fn orbital_grid(points: &[[f32; 3]]) -> Option<Grid> {
             *high = high.max(x);
         }
     }
-    Some(Grid::around(lo.map(|x| x - 3.), hi.map(|x| x + 3.)))
+    let max_radius2 = (15. / ANGSTROM_PER_BOHR).powi(2);
+    let mut margin2 = (3. / ANGSTROM_PER_BOHR).powi(2);
+    for shell in &field.shells {
+        while margin2 < max_radius2 && shell.tail_bound(margin2) >= f64::from(iso) {
+            margin2 = (margin2 * 1.25).min(max_radius2);
+        }
+    }
+    let margin = (margin2.sqrt() * ANGSTROM_PER_BOHR) as f32;
+    Some(Grid::around(lo.map(|x| x - margin), hi.map(|x| x + margin)))
 }
 
 /// Drawing and turning meshes at ±iso around the supplied points in Å.
@@ -330,9 +362,10 @@ pub fn orbital_meshes(
         return None;
     }
     let value = |p| field.value(p);
-    let (raw, step) = mesh::isosurface_sampled(&value, orbital_grid(points)?, iso, |grid| {
-        field.sample(grid)
-    });
+    let (raw, step) =
+        mesh::isosurface_sampled(&value, orbital_grid(field, points, iso)?, iso, |grid| {
+            field.sample(grid)
+        });
     if raw.truncated {
         return None;
     }
