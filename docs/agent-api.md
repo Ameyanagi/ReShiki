@@ -170,11 +170,11 @@ with the XYZ geometry those values describe. A job without calculated results
 uses its last retained geometry. Send inline `text` with a `file_name`, or give
 the `path` of a file in a granted read folder. Both forms are capped at
 `max_text_bytes`. Set `job` to a zero-based index or pass null to use the reader's
-default. Files with more than 1,000 frames retain the first 1,000.
+default. Readers keep at most 1,000 geometries per file (for long optimizations, each job's first, last and result geometries) and at most 1,000 jobs.
 
 `calculate` runs xTB energy, optimization, frequencies or optimization
 followed by frequencies on the first XYZ frame. The limits are 500 atoms
-and 200 for frequencies, with a 30-minute cooperative deadline. Include an
+and 200 for frequencies, with a 30-minute cooperative deadline, checked at each accepted optimizer step (a run can end up to one worker request, at most 10 minutes, after it). Include an
 MCP progress token to receive progress notifications. A host lists
 `calculate` only when it has the calculation hook on a build with xTB
 (macOS and Linux desktop). `info` reports the engine and method
