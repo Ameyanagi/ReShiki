@@ -398,6 +398,56 @@ fn invalid_client_input_is_rejected_without_losing_the_session() {
 
 #[cfg(feature = "xtb")]
 #[test]
+fn failed_engine_compute_keeps_the_last_successful_geometry() {
+    let water = molecule("water");
+    let cancel = Cancel::default();
+    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let pid = session.pid();
+    session.open(&water, &cancel).expect("open water");
+    session
+        .compute(&compute(None, false), &cancel)
+        .expect("compute water before the failed replacement");
+
+    // The shifted hydrogen has finite coordinates even in bohr, but its
+    // squared distance overflows in axtb and causes an SCF numerical error.
+    let mut positions = water.positions.clone();
+    positions[2] = [1e200, 0.0, 0.0];
+    let error = session
+        .compute(&compute(Some(positions), false), &cancel)
+        .expect_err("axtb should fail to compute the replacement geometry");
+    assert!(
+        matches!(
+            error,
+            Error::Engine {
+                kind: ErrorKind::Numerical,
+                ..
+            }
+        ),
+        "unexpected replacement error: {error:?}"
+    );
+
+    let recovered = session
+        .compute(&compute(None, false), &cancel)
+        .expect("compute after the engine error");
+    assert_eq!(session.pid(), pid, "engine error changed the worker PID");
+
+    let (mut fresh, _) = Session::start(executable(), limits()).expect("start fresh worker");
+    fresh.open(&water, &cancel).expect("open original water");
+    let original = fresh
+        .compute(&compute(None, false), &cancel)
+        .expect("compute original water in the fresh worker");
+    let difference = (recovered.energy - original.energy).abs();
+    eprintln!("xTB recovery after {error}: |ΔE|={difference:.16e} Eh");
+    assert!(
+        difference <= 1e-10,
+        "recovered and fresh energies differ by {difference:.16e} Eh"
+    );
+    fresh.close().expect("close fresh worker");
+    session.close().expect("close recovered worker");
+}
+
+#[cfg(feature = "xtb")]
+#[test]
 fn worker_rejects_invalid_electrons_spin_and_unknown_solvent_on_open() {
     for (name, charge, uhf, solvent) in [
         ("negative valence electron count", 9, None, None),
