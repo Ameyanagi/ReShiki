@@ -103,8 +103,9 @@ roots, sampling or input. A call with a
 
 ## Tools
 
-The [generated tool reference](agent-reference.md#tools) lists the 21 tools in
-catalog order, with their annotation hints, parameters and result shapes.
+The [generated tool reference](agent-reference.md#tools) lists the 20 base tools
+and the optional `calculate` tool in catalog order, with their annotation hints,
+parameters and result shapes.
 `reshiki --cli tools` prints the full catalog as JSON. Every tool sets all
 four annotation hints explicitly, with `openWorldHint: false`. `file_save`,
 `apply`, `label_atoms` and `document_close` are marked destructive, so a client
@@ -164,11 +165,12 @@ optimization with frequencies. Null settings use the CLI defaults, with
 `molecule` as the title. The main input and any companion files come back
 inline within `max_output_bytes`.
 
-`read_output` returns job summaries and the selected job's calculated
-values and final geometry. Send inline `text` with a `file_name`, or give
-the `path` of a file in a granted read folder. Inline text is capped by
-`max_text_bytes` and a granted file by 128 MiB. Set `job` to a zero-based
-index or pass null to use the reader's default.
+`read_output` returns job summaries and the selected job's calculated values
+with the XYZ geometry those values describe. A job without calculated results
+uses its last retained geometry. Send inline `text` with a `file_name`, or give
+the `path` of a file in a granted read folder. Both forms are capped at
+`max_text_bytes`. Set `job` to a zero-based index or pass null to use the reader's
+default. Files with more than 1,000 frames retain the first 1,000.
 
 `calculate` runs xTB energy, optimization, frequencies or optimization
 followed by frequencies on the first XYZ frame. The limits are 500 atoms
@@ -177,6 +179,10 @@ MCP progress token to receive progress notifications. A host lists
 `calculate` only when it has the calculation hook on a build with xTB
 (macOS and Linux desktop). `info` reports the engine and method
 capabilities when the hook is available.
+For GFN-FF, the whole molecular charge goes to the first fragment, and the tool
+offers no fragment charge input. As in the app, `uhf + 1` must match the
+total-electron multiplicity, which rules out GFN2-xTB lanthanides whose valence
+model requires a different parity.
 
 ## Sessions and documents
 

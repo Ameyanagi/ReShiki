@@ -409,6 +409,11 @@ pub struct Context {
 }
 
 impl Context {
+    /// When this operation's cooperative deadline expires, if representable.
+    pub fn deadline(&self) -> Option<Instant> {
+        self.deadline
+    }
+
     /// Ok once committed; otherwise [`ErrorKind::Cancelled`] when the call
     /// was cancelled and [`ErrorKind::Timeout`] when its deadline has passed.
     pub fn checkpoint(&self) -> Result<(), OpError> {

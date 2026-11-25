@@ -17,7 +17,6 @@ use reshiki_agent::{
     Proposal,
     ops::{
         budget::Budgets,
-        catalog::BASE_SPECS,
         headless::HeadlessHost,
         host::{Call, ToolHost},
         result::ToolResult,
@@ -256,9 +255,10 @@ fn the_tools_work_end_to_end(era: Era) {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect();
-    let catalog: Vec<&str> = BASE_SPECS.iter().map(|spec| spec.name).collect();
+    let specs = headless::operation_specs();
+    let catalog: Vec<&str> = specs.iter().map(|spec| spec.name).collect();
     assert_eq!(names, catalog);
-    for (tool, spec) in tools.iter().zip(BASE_SPECS) {
+    for (tool, spec) in tools.iter().zip(specs) {
         assert_eq!(tool["inputSchema"], (spec.input_schema)(), "{}", spec.name);
         let hints = spec.hints.map(|hints| {
             json!({
@@ -610,6 +610,7 @@ fn run_golden(name: &str, transcript: &str) {
         } else if let Some(expected) = line.strip_prefix("< ") {
             let expected: Value = serde_json::from_str(expected)
                 .unwrap_or_else(|error| panic!("{context}: bad golden: {error}"));
+            let expected = headless::fixture_for_build(expected);
             let actual = session.recv_for(expected.get("id"), LINE_TIMEOUT);
             assert_eq!(structure(actual, &mut handles), expected, "{context}");
         } else {

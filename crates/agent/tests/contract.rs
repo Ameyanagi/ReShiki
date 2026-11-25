@@ -34,7 +34,7 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use support::{
     corpus::{self, Contract},
@@ -636,6 +636,9 @@ impl Calculations for FakeCalculations {
     fn calculate(&self, request: CalcRequest, progress: Option<Arc<Monotonic>>) -> CalcFuture {
         assert_eq!(request.task, CalcTask::Energy);
         assert_eq!(request.frame.numbers, [8, 1, 1]);
+        let now = Instant::now();
+        let deadline = request.deadline.expect("the host passes its deadline");
+        assert!(deadline > now && deadline <= now + Budgets::default().calc_deadline);
         assert_eq!(
             request.settings.method,
             reshiki_io::qcdata::XtbMethod::Gfn2Xtb
@@ -827,29 +830,47 @@ async fn export_input_checks_xyz_and_output_byte_limits() {
 
 #[tokio::test]
 #[allow(clippy::disallowed_methods, clippy::disallowed_types)]
-async fn read_output_accepts_a_granted_file_and_uses_its_detection_name() {
+async fn read_output_accepts_a_granted_file_at_the_text_limit_and_uses_its_detection_name() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("result");
     std::fs::write(&path, WATER_XYZ).unwrap();
     let args = json!({"text": null, "file_name": "result.xyz", "path": path, "job": 0});
-    let host = HeadlessHost::new("contract-test", Budgets::default());
-    let denied = host
-        .call(Call {
-            principal: Principal::local(),
-            request: RequestId::Int(1),
-            tool: "read_output".into(),
-            arguments: args.clone(),
-            progress: None,
-        })
-        .await
-        .unwrap();
+    let host = HeadlessHost::new(
+        "contract-test",
+        Budgets {
+            max_text_bytes: WATER_XYZ.len(),
+            ..Budgets::default()
+        },
+    );
+    let request = || Call {
+        principal: Principal::local(),
+        request: RequestId::Int(1),
+        tool: "read_output".into(),
+        arguments: args.clone(),
+        progress: None,
+    };
+    let denied = host.call(request()).await.unwrap();
     assert_eq!(denied.value["error"]["code"], "access_denied");
 
     let grants = Grants::open(&[dir.path().to_path_buf()], &[]).unwrap();
     let host = host.with_grants(Arc::new(grants));
-    let result = successful_result(&host, "read_output", args).await;
+    let result = successful_result(&host, "read_output", args.clone()).await;
     assert_eq!(result["value"]["format"], "XYZ");
     assert_eq!(result["value"]["job"]["index"], 0);
+
+    std::fs::write(&path, format!("{WATER_XYZ}\n")).unwrap();
+    let result = host.call(request()).await.unwrap();
+    assert!(result.is_error);
+    assert_eq!(result.value["error"]["code"], "budget");
+    assert_eq!(result.value["error"]["reason"], "file_too_large");
+    assert_eq!(result.value["error"]["param"], "path");
+    assert_eq!(
+        result.value["error"]["message"],
+        format!(
+            "file_too_large: the file exceeds max_text_bytes ({} bytes)",
+            WATER_XYZ.len()
+        )
+    );
 }
 
 /// Prefer successful real-binary goldens. Tools without one run against the

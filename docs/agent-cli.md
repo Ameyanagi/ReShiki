@@ -542,16 +542,15 @@ reshiki --cli read-output [--job N] FILE
 
 Reads a quantum-chemistry output or geometry file and prints the MCP
 `read_output` result as one labelled JSON line. `value.jobs` summarizes the
-jobs in the file, and `value.job` contains available calculated values and the
-final geometry as XYZ.
+jobs in the file, and `value.job` contains available calculated values and their
+XYZ geometry. A job without calculated results uses its last retained geometry.
 
 | Option    | Commands    | Meaning                                       |
 | --------- | ----------- | --------------------------------------------- |
 | `--job N` | read-output | Zero-based job index (default chosen by file) |
 
-The input limit is `max_text_bytes` (16 MiB by default). For larger files,
-use the MCP tool's `path` argument with a granted read folder. It accepts
-files up to 128 MiB.
+The input limit is `max_text_bytes` (16 MiB by default), the same limit as the
+MCP tool's `path` argument.
 
 ## export-input
 

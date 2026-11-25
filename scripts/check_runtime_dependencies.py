@@ -12,6 +12,7 @@ from collections import Counter
 from pathlib import Path
 
 from agent_api_client import (
+    BASE_TOOLS,
     LEGACY_REVISIONS,
     MODERN,
     TOOLS,
@@ -212,8 +213,9 @@ def _tool_error(response, tool):
 def _check_tools(client):
     listed = result(client.call("tools/list", {}, AGENT_CALL)).get("tools", [])
     names = tuple(tool.get("name") for tool in listed)
-    if names != TOOLS:
-        raise ValueError(f"Packaged agent API lists {names}, not {TOOLS}")
+    expected = TOOLS if "calculate" in names else BASE_TOOLS
+    if names != expected:
+        raise ValueError(f"Packaged agent API lists {names}, not {expected}")
 
 
 def _ethanol(client):

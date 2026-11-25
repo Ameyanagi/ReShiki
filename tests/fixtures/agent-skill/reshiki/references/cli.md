@@ -249,13 +249,12 @@ Experimental: ReShiki's agent tools, schemas and results may change between rele
 Usage: reshiki --cli read-output [--job N] FILE
 
 Runs the read_output tool and prints its labelled result as one JSON line,
-including job summaries, calculated values and the final XYZ geometry.
+including job summaries, calculated values and the selected XYZ geometry.
 
 Options:
   --job N  Select a zero-based job index; omit for the default job.
 
-Reads at most max_text_bytes (16777216 bytes). For larger files, use the MCP
-read_output tool's path form inside a granted read folder.
+Reads at most max_text_bytes (16777216 bytes).
 ```
 
 ## reshiki --cli export-input

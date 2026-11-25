@@ -1059,7 +1059,7 @@ async fn read_output_prints_the_labelled_tool_value_and_selected_job_errors() {
 }
 
 #[tokio::test]
-async fn read_output_bounds_inline_text_and_suggests_the_mcp_path_form() {
+async fn read_output_bounds_file_bytes() {
     let directory = tempfile::tempdir().unwrap();
     let input = directory.path().join("large.out");
     let limit = Budgets::default().max_text_bytes;
@@ -1072,17 +1072,22 @@ async fn read_output_bounds_inline_text_and_suggests_the_mcp_path_form() {
     assert!(out.is_empty());
     assert_eq!(
         err,
-        format!(
-            "reshiki: error: input exceeds max_text_bytes ({limit} bytes); use the MCP read_output tool's path form for larger files\n"
-        )
+        format!("reshiki: error: input exceeds max_text_bytes ({limit} bytes)\n")
     );
-    std::fs::write(&input, b"\xff").unwrap();
+}
+
+#[tokio::test]
+async fn read_output_accepts_a_gaussian_log_with_a_non_utf8_byte() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("result.log");
+    let mut log = include_bytes!("../../tests/fixtures/qc/pymatgen/H2O_gau_vib.out").to_vec();
+    log.extend_from_slice(b"Date locale: f\xe9vrier\n");
+    std::fs::write(&input, log).unwrap();
     let (code, out, err) = call(&["read-output", input.to_str().unwrap()]).await;
-    assert_eq!((code, out.as_str()), (FAILURE, ""));
-    assert_eq!(
-        err,
-        "reshiki: error: The calculation output must be UTF-8.\n"
-    );
+    assert_eq!(code, SUCCESS, "{err}");
+    let result: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(result["value"]["program"], "Gaussian");
+    assert_eq!(result["value"]["job"]["completion"], "normal");
 }
 
 #[test]

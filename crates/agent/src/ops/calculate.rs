@@ -19,7 +19,10 @@ use reshiki_io::qcdata::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{future::Future, pin::Pin, sync::Arc, time::Instant};
+
+/// The timeout message for the default calculation budget.
+pub const DEADLINE_EXCEEDED: &str = "the calculation exceeded its 30-minute deadline";
 
 /// One calculation in flight. Dropping it cancels the work.
 pub type CalcFuture = Pin<Box<dyn Future<Output = Result<Calculated, String>> + Send>>;
@@ -48,6 +51,8 @@ pub struct CalcRequest {
     pub task: CalcTask,
     pub frame: Frame,
     pub settings: XtbSettings,
+    /// The cooperative deadline set by the executor before calling the host.
+    pub deadline: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -277,6 +282,7 @@ pub(crate) fn decode(args: Value, budgets: &Budgets) -> Result<CalcRequest, OpEr
         task: args.task,
         frame,
         settings,
+        deadline: None,
     })
 }
 
@@ -284,12 +290,20 @@ pub(crate) async fn calculate(
     ctx: Context,
     hook: Arc<dyn Calculations>,
     versions: Versions,
-    request: CalcRequest,
+    mut request: CalcRequest,
 ) -> Result<ToolResult, OpError> {
     ctx.checkpoint()?;
+    request.deadline = ctx.deadline();
     let calculated = ctx
         .cancellable(hook.calculate(request, ctx.progress()))
-        .await?
+        .await
+        .map_err(|error| {
+            if error.kind == ErrorKind::Timeout {
+                OpError::new(ErrorKind::Timeout, DEADLINE_EXCEEDED)
+            } else {
+                error
+            }
+        })?
         .map_err(OpError::failed)?;
     Ok(ToolResult::valid(
         calculated.value,

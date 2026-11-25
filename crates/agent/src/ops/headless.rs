@@ -133,7 +133,9 @@ async fn run(
         Op::Name(args) => naming::name(ctx, store, naming, who, versions, args).await,
         Op::Schema(args) => ctx.checkpoint().map(|()| schema::run(&args, &versions)),
         Op::ExportInput(args) => export_input::export_input(ctx, versions, budgets, args).await,
-        Op::ReadOutput(args) => read_output::read_output(ctx, grants, versions, args).await,
+        Op::ReadOutput(args) => {
+            read_output::read_output(ctx, grants, versions, budgets.max_text_bytes, args).await
+        }
         Op::Calculate(args) => {
             let hook = calculations.ok_or_else(|| unknown_tool("calculate"))?;
             calculate::calculate(ctx, hook, versions, args).await

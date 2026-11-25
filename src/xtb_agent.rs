@@ -6,13 +6,13 @@ use crate::{
 };
 use reshiki_agent::ops::{
     calculate::{
-        CalcFuture, CalcRequest, CalcTask, CalcValue, Calculated, Calculations, Engine,
-        EngineIdentity, Frequencies, Optimization, method_name,
+        CalcFuture, CalcRequest, CalcTask, CalcValue, Calculated, Calculations, DEADLINE_EXCEEDED,
+        Engine, EngineIdentity, Frequencies, Optimization, method_name,
     },
     progress::{Monotonic, Progress},
 };
 use reshiki_optimize::{
-    Accuracy, EvalError, Level, Options, Outcome, Potential, Status,
+    Accuracy, EvalError, Level, Options, Outcome, Potential, Status, Step,
     conformers::{Topology, rmsd},
     optimize,
 };
@@ -88,6 +88,7 @@ fn run(
         task,
         frame,
         settings,
+        deadline,
     } = request;
     let limits = Limits::default();
     let exe = std::env::current_exe().map_err(|error| worker_error(Error::Spawn(error)))?;
@@ -146,22 +147,12 @@ fn run(
             cancel,
         };
         let outcome = optimize(&mut xtb, &open.numbers, &positions, &options, |step| {
-            if let Some(progress) = progress {
-                let energy = format!("{:.6}", step.energy).replace('-', "−");
-                progress.report(Progress {
-                    completed: (step.index + 1) as f64,
-                    total: None,
-                    message: Some(format!(
-                        "Optimizing · step {} · E = {energy} Eh",
-                        step.index
-                    )),
-                });
-            }
-            ControlFlow::Continue(())
+            optimization_step(step, deadline, progress)
         });
         match &outcome.status {
             Status::Converged | Status::MaxSteps => {}
             Status::ScfFailure(message) | Status::Failed(message) => return Err(message.clone()),
+            Status::Cancelled if deadline_passed(deadline) => return Err(DEADLINE_EXCEEDED.into()),
             Status::Cancelled => return Err(worker_error(Error::Cancelled)),
         }
         Some(outcome)
@@ -203,6 +194,32 @@ fn run(
         optimization,
         started.elapsed().as_secs_f64(),
     ))
+}
+
+fn deadline_passed(deadline: Option<Instant>) -> bool {
+    deadline.is_some_and(|deadline| Instant::now() >= deadline)
+}
+
+fn optimization_step(
+    step: &Step<'_>,
+    deadline: Option<Instant>,
+    progress: Option<&Monotonic>,
+) -> ControlFlow<()> {
+    if deadline_passed(deadline) {
+        return ControlFlow::Break(());
+    }
+    if let Some(progress) = progress {
+        let energy = format!("{:.6}", step.energy).replace('-', "−");
+        progress.report(Progress {
+            completed: (step.index + 1) as f64,
+            total: None,
+            message: Some(format!(
+                "Optimizing · step {} · E = {energy} Eh",
+                step.index
+            )),
+        });
+    }
+    ControlFlow::Continue(())
 }
 
 struct Xtb<'a> {
