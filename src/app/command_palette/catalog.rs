@@ -1615,8 +1615,8 @@ fn analysis(app: &App) -> Vec<Command> {
         list.push(Command::new(
             "Calculate (xTB)…",
             Analyze,
-            "Energy or geometry optimization with GFN2-xTB, g-xTB or GFN-FF",
-            "xtb gfn2 gfn-ff gfnff g-xtb gxtb semiempirical quantum chemistry energy optimize calculate",
+            "Energy, geometry optimization or conformer search with GFN2-xTB, g-xTB or GFN-FF",
+            "xtb gfn2 gfn-ff gfnff g-xtb gxtb semiempirical quantum chemistry energy optimize calculate conformer conformers search ensemble",
             Run::Send(vec![
                 Message::Inspector(InspectorTab::Predict),
                 Message::Xtb(xtb::Action::Page(xtb::Page::Xtb)),

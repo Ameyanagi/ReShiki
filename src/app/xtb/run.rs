@@ -37,6 +37,9 @@ pub(crate) struct Job {
     pub fixed: Vec<usize>,
     /// Use Tight convergence instead of Normal.
     pub tight: bool,
+    /// GFN-FF only: the geometry (Å) its topology comes from, when it is not
+    /// `positions` (a conformer search keeps one topology for every start).
+    pub topology: Option<Vec<[f64; 3]>>,
 }
 
 #[derive(Debug, Clone)]
@@ -139,7 +142,10 @@ pub(super) fn run(
         conventions: job.conventions,
         solvent: job.solvent,
         scf: job.scf.clone(),
-        gfnff: None,
+        gfnff: job.topology.clone().map(|positions| protocol::GfnFfOpen {
+            reference_positions: Some(positions),
+            fragment_charges: None,
+        }),
         threads: job.threads,
         heap_bytes: limits.heap_bytes,
     };

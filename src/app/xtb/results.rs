@@ -147,6 +147,10 @@ pub(crate) fn step_positions(
     let count = energies(result).len();
     let atoms = output.numbers.len();
     let path = result.trajectory.as_ref()?;
+    // A conformer is never the input or the result frame by position.
+    if result.task == Task::Conformers {
+        return path.frame(step).map(|frame| frame.positions_angstrom);
+    }
     if path.positions_angstrom.len() == count * atoms * 3 {
         let block = path
             .positions_angstrom
@@ -391,6 +395,7 @@ pub(crate) fn config(
     let task = match result.task {
         qcdata::Task::Optimize => CardTask::Optimize,
         qcdata::Task::Energy => CardTask::Energy,
+        qcdata::Task::Conformers => CardTask::Conformers,
         _ => return None,
     };
     // Settings the card cannot send: a retry ladder, GFN-FF fragment
