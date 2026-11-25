@@ -896,6 +896,27 @@ fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
         chloride.warnings[0],
         "Geometry from the Gaussian input file"
     );
+    // A Molden file that records its charge says so too (water as H3O+ in memory).
+    let water = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/qc/cclib/molden5.7_water_mp2.molden"
+    ))
+    .unwrap()
+    .replacen("[Atoms]", "[Charge]\n1\n[Atoms]", 1);
+    let (_, opened) = runtime
+        .block_on(prepare_contents(
+            "ion.molden".into(),
+            Ok(water.into_bytes()),
+        ))
+        .unwrap();
+    let Ok(Prepared::Records(batch)) = opened else {
+        panic!("a Molden file opens as a drawing");
+    };
+    assert!(
+        batch.warnings[0].contains(" · Not drawn: total charge +1"),
+        "{:?}",
+        batch.warnings
+    );
 }
 
 #[tokio::test]

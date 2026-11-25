@@ -525,7 +525,7 @@ pub(super) fn is_qc_file(path: &std::path::Path, extension: &str) -> bool {
 /// geometry, as an unsaved drawing named after the file. Its results are not
 /// shown yet, and the status says so.
 fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, String> {
-    use reshiki::qcread::{Format, read};
+    use reshiki::qcread::read;
     let name = super::import::name(path);
     let file = read(&name, contents).map_err(|e| e.to_string())?;
     let (index, job, step) = file
@@ -554,21 +554,19 @@ fn prepare_qc(path: &std::path::Path, contents: &[u8]) -> Result<Prepared, Strin
     if file.format.has_results() {
         notice.push_str(" · Results can't be shown yet");
     }
-    // Molden files rarely record charge and spin; the reader's warning says what it assumed.
-    // Other formats give the totals, but not which atoms carry them, unless there is one atom.
-    if file.format != Format::Molden {
-        let mut omitted = Vec::new();
-        match drawing.atoms.as_mut_slice() {
-            [atom] if frame.numbers.len() == 1 => atom.charge = frame.charge,
-            _ if frame.charge != 0 => omitted.push(format!("total charge {:+}", frame.charge)),
-            _ => {}
-        }
-        if frame.multiplicity != 1 {
-            omitted.push(format!("spin multiplicity {}", frame.multiplicity));
-        }
-        if !omitted.is_empty() {
-            notice.push_str(&format!(" · Not drawn: {}", omitted.join(", ")));
-        }
+    // Files give the total charge and spin, not which atoms carry them, unless there is one
+    // atom. Where a file records neither, the reader's warning says what it assumed.
+    let mut omitted = Vec::new();
+    match drawing.atoms.as_mut_slice() {
+        [atom] if frame.numbers.len() == 1 => atom.charge = frame.charge,
+        _ if frame.charge != 0 => omitted.push(format!("total charge {:+}", frame.charge)),
+        _ => {}
+    }
+    if frame.multiplicity != 1 {
+        omitted.push(format!("spin multiplicity {}", frame.multiplicity));
+    }
+    if !omitted.is_empty() {
+        notice.push_str(&format!(" · Not drawn: {}", omitted.join(", ")));
     }
     warnings.insert(0, notice);
     warnings.extend(file.warnings);
