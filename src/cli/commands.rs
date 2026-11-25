@@ -320,13 +320,33 @@ const NAME: CommandSpec = CommandSpec {
 // Calculation sessions are deliberately outside the agent operation/MCP catalog.
 const CALC: CommandSpec = CommandSpec {
     name: "calc",
-    summary: "Print a GFN2-xTB energy and optional gradient as one JSON line",
-    usage: "reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz",
+    summary: "Print an xTB calculation as one JSON line",
+    usage: "reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--gradient] [--wbo] FILE.xyz",
     options: &[
+        OptionSpec {
+            flag: "--task",
+            value: Some("TASK"),
+            help: "Calculate energy (default), gradient, hessian or orbitals.",
+            default: Some(|| json!("energy")),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--method",
+            value: Some("METHOD"),
+            help: "Use gfn2 (default), gfnff or gxtb.",
+            default: Some(|| json!("gfn2")),
+            sets: None,
+            equivalent: None,
+        },
         OptionSpec {
             flag: "--energy",
             value: None,
-            help: "Calculate the GFN2-xTB energy. Required.",
+            help: "Accepted for compatibility. Energy is always included.",
             default: None,
             sets: None,
             equivalent: None,
@@ -334,7 +354,15 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--gradient",
             value: None,
-            help: "Include the Cartesian energy gradient in Eh/bohr.",
+            help: "Include the Cartesian energy gradient.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--wbo",
+            value: None,
+            help: "Include Mayer–Wiberg bond orders.",
             default: None,
             sets: None,
             equivalent: None,
@@ -342,7 +370,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--charge",
             value: Some("N"),
-            help: "Set the molecular charge.",
+            help: "Set the molecular charge (default 0).",
             default: Some(|| json!(0)),
             sets: None,
             equivalent: None,
@@ -350,7 +378,7 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--uhf",
             value: Some("N"),
-            help: "Set the number of unpaired electrons. The default comes from the electron count.",
+            help: "Set unpaired electrons (default from valence count).",
             default: None,
             sets: None,
             equivalent: None,
@@ -358,8 +386,72 @@ const CALC: CommandSpec = CommandSpec {
         OptionSpec {
             flag: "--conventions",
             value: Some("MODE"),
-            help: "Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.",
+            help: "Use axtb (default) or xtb-6.8 conventions.",
             default: Some(|| json!("axtb")),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--alpb",
+            value: Some("NAME"),
+            help: "Use the ALPB solvent model.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--gbsa",
+            value: Some("NAME"),
+            help: "Use the GBSA solvent model.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--solvent-correction",
+            value: Some("METHOD"),
+            help: "Use gfn2 for g-xTB solvent calculations.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--etemp",
+            value: Some("K"),
+            help: "Set the electronic temperature in kelvin.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--accuracy",
+            value: Some("X"),
+            help: "Set a positive SCF accuracy multiplier (default 1).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--max-iter",
+            value: Some("N"),
+            help: "Set the SCF iteration limit (default 250).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--scf-retry",
+            value: Some("K[:N]"),
+            help: "Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--threads",
+            value: Some("N"),
+            help: "Use 1 to 64 worker threads (default 1).",
+            default: Some(|| json!(1)),
             sets: None,
             equivalent: None,
         },
@@ -526,7 +618,8 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
 ];
 
 const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
-const OPTIONS_RULE: &str = "Options are allowed once each; -- ends the options.";
+const OPTIONS_RULE: &str =
+    "Options are allowed once each except calc's --scf-retry; -- ends the options.";
 const STDOUT_CONTRACT: &str = "\
 stdout carries only the result: the file, one JSON line, or one receipt
   line with --receipt. With -o FILE and no --receipt it stays empty.";
@@ -815,35 +908,16 @@ fn analyze_help() -> String {
 }
 
 fn calc_help() -> String {
-    format!(
-        "\
-Usage: {}
-
-Reads the first structure of an XYZ file, with coordinates in angstroms,
-and runs GFN2-xTB in an isolated worker process. The first line is an atom
-count (1 to 500), followed by a comment line and exactly that many atom
-rows, each with an element symbol and three finite coordinates.
-
-Options:
-  --energy    Calculate the energy. Required.
-  --gradient  Include the Cartesian energy gradient.
-  --charge N  Set the molecular charge (default 0).
-  --uhf N     Set a nonnegative number of unpaired electrons. The default
-              comes from the electron count.
-  --conventions axtb|xtb-6.8
-              Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.
-
-Prints one JSON line with energy (Eh), gradient (Eh/bohr) when requested,
-homo_lumo_gap_ev (null without a LUMO), near_degenerate, method, conventions,
-numerics and engine. A gap below 0.1 eV also prints a warning on stderr.
-This CLI-only command has no MCP tool and uses the worker result format
-without an experimental envelope.
-
-Requires a build with xTB. Otherwise it reports that xTB is not included
-and exits 1. See docs/xtb-worker.md and docs/xtb-licensing.md.
-",
-        CALC.usage,
-    )
+    let mut text = format!("Usage: {}\n\nOptions:\n", CALC.usage);
+    for option in CALC.options {
+        let label = match option.value {
+            Some(value) => format!("{} {value}", option.flag),
+            None => option.flag.to_string(),
+        };
+        text.push_str(&format!("  {label:<28} {}\n", option.help));
+    }
+    text.push_str("\nSee docs/xtb-worker.md (Command line)\n");
+    text
 }
 
 fn predict_nmr_help() -> String {
