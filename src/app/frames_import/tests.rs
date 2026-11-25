@@ -70,7 +70,7 @@ fn the_lowest_frame_opens_with_the_ensemble_kept() {
     ));
     assert!(
         app.status
-            .contains("Frame 2 of 3 opened · 3 frames kept as an ensemble"),
+            .contains("Frame 2 of 3 opened · 3 kept as an ensemble"),
         "{}",
         app.status
     );

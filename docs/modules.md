@@ -85,6 +85,7 @@ explains how the crates and modules fit together.
 - `src/app/file_shortcuts.rs`
 - `src/app/files.rs`
 - `src/app/files/performance.rs`
+- `src/app/frames_import.rs`: Opening a file that holds several geometries of one molecule (a multi-frame XYZ such as a trajectory or a CREST ensemble, or an SD file of conformers)
 - `src/app/gates.rs`: Modal gates that run before message dispatch.
 - `src/app/generic.rs`: Finite expansion creates a new drawing; the source and its history stay intact.
 - `src/app/github.rs`: GitHub in the editor
