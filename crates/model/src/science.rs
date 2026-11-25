@@ -926,8 +926,26 @@ pub fn apply_geometry(
     if link.freshness(doc) == Freshness::Stale {
         return Err(ScienceError::Stale);
     }
-    let index = link
-        .atoms
+    let atoms = link.atoms.clone();
+    let frame = frame.clone();
+    move_model(doc, &atoms, &frame)
+}
+
+/// Move the 3D model linked to `atoms` (the drawing atom of each frame
+/// atom, as an attachment records them) to `frame`'s geometry, when the
+/// model still has those atoms in that order and each added hydrogen still
+/// sits nearest its own parent; otherwise [`ScienceError::ModelMismatch`].
+/// For geometries no result stores, such as an optimization step; the
+/// caller checks freshness. Nothing changes on error.
+pub fn move_model(
+    doc: &mut Document,
+    atoms: &[Option<u64>],
+    frame: &Frame,
+) -> Result<(), ScienceError> {
+    if atoms.len() != frame.numbers.len() || frame.positions_angstrom.len() != frame.numbers.len() {
+        return Err(ScienceError::ModelMismatch);
+    }
+    let index = atoms
         .iter()
         .flatten()
         .next()
@@ -954,7 +972,7 @@ pub fn apply_geometry(
             .geometry_sources()
             .iter()
             .chain(std::iter::repeat(&None))
-            .zip(&link.atoms)
+            .zip(atoms)
             .all(|(model, link)| model == link)
         && frame.numbers.iter().enumerate().all(|(i, z)| {
             let element = if i < heavy {

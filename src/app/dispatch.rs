@@ -174,6 +174,7 @@ impl App {
             }
             Message::Settings(action) => return Some(self.settings_action(action)),
             Message::QcExport(action) => return Some(self.qc_export_action(action)),
+            Message::Xtb(action) => return Some(self.xtb_action(action)),
             Message::CopyAs(format) => return Some(self.copy_as(format)),
             Message::Copy(cut) => return Some(self.copy_selection(cut)),
             Message::PastePicture => return Some(self.paste_native(true)),
@@ -323,6 +324,7 @@ impl App {
             Message::Optimization(action) => return self.optimization_action(action),
             Message::Models3d(action) => return self.models3d_action(action),
             Message::Nmr(action) => return self.nmr_action(action),
+            Message::Xtb(action) => return self.xtb_action(action),
             Message::LabelsReady(key, result) => self.labels_ready(key, result),
             Message::Mapping(action) => return self.mapping_action(action),
             Message::FigureExported(result) => self.figure_exported(result),

@@ -61,6 +61,7 @@ fn pending_model_redraws_at_whole_seconds_without_a_continuous_animation_loop() 
     canvas.model_generation = Some(crate::canvas::ModelGeneration {
         atoms: &ids,
         started,
+        label: "Generating 3D",
     });
     for millis in [0, 999, 1000, 4250] {
         let now = started + Duration::from_millis(millis);

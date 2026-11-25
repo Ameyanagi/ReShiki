@@ -151,6 +151,7 @@ reshiki-process = { path = "native/process" }
 reshiki-agent = { path = "crates/agent" }
 reshiki-mcp = { path = "crates/mcp" }
 reshiki-xtb-worker = { path = "crates/xtb-worker" }
+reshiki-optimize = { path = "crates/optimize" }
 tokio = { version = "1", features = [
   "process",
   "fs",

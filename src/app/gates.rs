@@ -17,6 +17,9 @@ impl App {
         #[cfg(any(windows, target_os = "linux"))]
         let message = self.desktop_opening_gate(message)?;
         let message = self.background_results_gate(message)?;
+        if let Message::Xtb(action @ super::xtb::Action::Cancel) = message {
+            return Break(self.xtb_action(action));
+        }
         if let Some(task) = self.optimization_gate(&message) {
             return Break(task);
         }
@@ -329,7 +332,8 @@ impl App {
                 | Message::Updates(_)
                 | Message::Imports(import::Action::Loaded(..))
                 | Message::Naming(super::naming::Action::CaptionNamed(..))
-        ) {
+        ) && !super::xtb::is_progress(message)
+        {
             self.context_menu = None;
             self.tab.inspector_ui.close_menu();
             if !matches!(
@@ -406,6 +410,12 @@ impl App {
                 Task::none()
             } else if self.tab.engine_job.is_some() {
                 self.cancel_engine_job();
+                Task::none()
+            } else if self.xtb_running() {
+                self.xtb_cancel();
+                Task::none()
+            } else if self.xtb_end_preview() {
+                self.status = "Showing the xTB result geometry".into();
                 Task::none()
             } else if self.cancel_model_generation() {
                 Task::none()
