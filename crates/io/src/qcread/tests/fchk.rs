@@ -238,27 +238,29 @@ fn fchk_g09_water_mp2_uses_total_energy_and_splits_sp_shell() {
 }
 
 #[test]
-fn fchk_sp_coefficients_copy_complete_rows_in_level_order() {
-    let file = open("cclib/g09_water_mp2.fchk");
-    let basis = file.jobs[0]
+fn fchk_sp_coefficients_keep_ao_order_when_levels_are_sorted() {
+    // Distinct signed coefficients expose changes to the s/p component order.
+    // Swapping energies must move the complete seven-AO rows into sorted order.
+    let values = (0..49).map(|i| f64::from(i - 24)).collect::<Vec<_>>();
+    let source = replace_real_array(
+        &text("cclib/g09_water_mp2.fchk"),
+        "Alpha MO coefficients",
+        |v| {
+            v.copy_from_slice(&values);
+        },
+    );
+    let source = replace_real_array(&source, "Alpha Orbital Energies", |v| v.swap(0, 1));
+    let file = read("source-order.fchk", source.as_bytes()).unwrap();
+    let orbitals = file.jobs[0]
         .result
         .as_ref()
         .unwrap()
         .orbitals
         .as_ref()
-        .unwrap()
-        .basis
-        .as_ref()
         .unwrap();
-    assert!(basis.shells.iter().all(|shell| shell.l < 2));
-    // Distinct signed coefficients expose any changes to the s/p component order.
-    // The selected level order must still move each complete seven-AO row together.
-    let values = (0..21).map(|i| f64::from(i - 10)).collect::<Vec<_>>();
-    let levels = [(2, -3.0), (0, -2.0), (1, -1.0)];
-    let actual = super::canonical_coefficients(basis, &values, 7, &levels).unwrap();
     assert_eq!(
-        actual,
-        [&values[14..21], &values[..7], &values[7..14]].concat()
+        orbitals.alpha.coefficients,
+        [&values[7..14], &values[..7], &values[14..]].concat()
     );
 }
 
@@ -497,10 +499,10 @@ fn fchk_high_shell_shapes_require_gaussian_pure_d() {
                 };
                 vec![
                     (source.clone(), true),
-                    (with_version(&neither, "ES64L-G16RevA.03"), true),
+                    (with_version(&neither, "ES64L-G16RevC.01"), true),
                     (with_version(&neither, "EM64L-G09RevD.01"), true),
                     // An explicit version overrides the marker-pair fallback.
-                    (with_version(&source, "G03 C.02"), false),
+                    (with_version(&source, "G03 C.02 (G16-compatible)"), false),
                     (with_version(&source, ""), false),
                     (with_version(&source, "G160 A.03"), false),
                     (no_ilsw, false),

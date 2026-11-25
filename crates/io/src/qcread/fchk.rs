@@ -510,13 +510,10 @@ fn basis(
     let types = fields.integers("Shell types")?;
     let gaussian = match fields.characters("Gaussian Version")? {
         Some(version) => version
-            .split(|c: char| !c.is_ascii_alphanumeric())
-            .any(|token| {
-                token
-                    .strip_prefix("G09")
-                    .or_else(|| token.strip_prefix("G16"))
-                    .is_some_and(|suffix| suffix.is_empty() || suffix.starts_with("Rev"))
-            }),
+            .split_whitespace()
+            .next()
+            .and_then(|word| word.rsplit('-').next())
+            .is_some_and(|id| id.starts_with("G09Rev") || id.starts_with("G16Rev")),
         None => fields.get("ILSW").is_some() && fields.get("IOpCl").is_some(),
     };
     let unverified: BTreeSet<_> = types
@@ -834,6 +831,16 @@ fn orbitals(
             "Restricted fchk orbitals require equal alpha and beta electron counts".into(),
         ));
     }
+    let ao_order = basis
+        .as_ref()
+        .map(|basis| {
+            // With unit Cartesian norms and Molden's pure d signs, the supported
+            // s, p, SP and pure d shells only permute these exact integer indices.
+            let indices = (0..n_ao).map(|i| i as f64).collect::<Vec<_>>();
+            mo_from_molden(basis, &indices, CartesianNorm::Unit)
+                .map(|order| order.into_iter().map(|i| i as usize).collect::<Vec<_>>())
+        })
+        .transpose()?;
     // Preserve source occupations and row identities when canonicalizing the spectrum.
     // Stable sorting also keeps the source order within a degenerate set.
     let permutation = |energies: &[f64]| {
@@ -849,14 +856,14 @@ fn orbitals(
     };
     let alpha_order = permutation(alpha_energies);
     let set = |occupied: usize, coefficients: Option<&[f64]>, levels: &[(usize, f64)]| {
-        let (rows, coefficients) = match (basis.as_ref(), coefficients) {
-            (Some(basis), Some(values)) => (
+        let (rows, coefficients) = match (ao_order.as_deref(), coefficients) {
+            (Some(ao_order), Some(values)) => (
                 (0..n_mo as u32).collect(),
-                canonical_coefficients(basis, values, n_ao, levels)?,
+                canonical_coefficients(ao_order, values, levels),
             ),
             _ => (Vec::new(), Vec::new()),
         };
-        Ok::<_, Error>(OrbitalSet {
+        OrbitalSet {
             energies_hartree: levels.iter().map(|&(_, energy)| energy).collect(),
             occupations: levels
                 .iter()
@@ -871,12 +878,12 @@ fn orbitals(
             symmetries: Vec::new(),
             rows,
             coefficients,
-        })
+        }
     };
-    let alpha = set(n_alpha, alpha_coefficients, &alpha_order)?;
+    let alpha = set(n_alpha, alpha_coefficients, &alpha_order);
     let beta = match beta_energies {
         Some(energies) => {
-            Beta::Unrestricted(set(n_beta, beta_coefficients, &permutation(energies))?)
+            Beta::Unrestricted(set(n_beta, beta_coefficients, &permutation(energies)))
         }
         None if shared_open => Beta::SameOrbitals {
             occupations: alpha_order
@@ -955,26 +962,16 @@ fn natural_orbital_route(keywords: &[String]) -> bool {
 
 #[allow(
     clippy::indexing_slicing,
-    reason = "The caller checks values.len() == n_ao*n_mo, and levels enumerates the n_mo spectrum"
+    reason = "The caller validates the matrix dimensions and builds the AO and MO permutations"
 )]
-fn canonical_coefficients(
-    basis: &BasisSet,
-    values: &[f64],
-    n_ao: usize,
-    levels: &[(usize, f64)],
-) -> Result<Vec<f64>, Error> {
+fn canonical_coefficients(ao_order: &[usize], values: &[f64], levels: &[(usize, f64)]) -> Vec<f64> {
+    let n_ao = ao_order.len();
     let mut converted = Vec::with_capacity(values.len());
-    let reorder_ao = basis.shells.iter().any(|shell| shell.l >= 2);
     for &(mo, _) in levels {
         let row = &values[mo * n_ao..(mo + 1) * n_ao];
-        if reorder_ao {
-            // Gaussian pure d uses Molden's order and signs.
-            converted.extend(mo_from_molden(basis, row, CartesianNorm::Unit)?);
-        } else {
-            converted.extend_from_slice(row);
-        }
+        converted.extend(ao_order.iter().map(|&ao| row[ao]));
     }
-    Ok(converted)
+    converted
 }
 
 fn vibrations(fields: &Fields, axes: usize, n_atoms: usize) -> Result<Option<Vibrations>, Error> {

@@ -1,20 +1,24 @@
 //! Molden records, converted at the boundary to the canonical AO convention.
 //!
+//! Producer-specific AO conventions come from exact writer headers in fixed
+//! sections. Heuristic producer names are used for provenance and shape omission.
+//!
 //! The cclib Molden 5.7 carbon fixture confirms Cartesian `Unit` normalization
 //! for d/f/g by MO orthonormality. The PySCF 2.15.0 fixtures confirm the Molden
 //! pure d/f/g order and signs, Cartesian d/f/g order and `Unit` normalization,
 //! and mixed per-l flags against signed grid values. By import policy, files
 //! from Molden and unidentified producers use the specification convention for
 //! pure d/f/g as verified on PySCF exports. The reader accepts this convention
-//! for PySCF exports with a recorded major version of 2 or later.
+//! for PySCF writer headers with a major version of 2 or later.
 //!
 //! The ORCA formaldehyde TDDFT and water TZVP fixtures verify bare radial
 //! coefficients for contracted s/p shells by implied AO overlap. Every d/f
 //! shell in these fixtures has one primitive. The phase comparison assumes
 //! ORCA's p order and signs are x, y, z. It confirms the Molden pure d order
 //! and signs and the pure f order with inverted m = ±3 signs. The adapter
-//! applies this convention to all `orca_2mkl` files. Pure g and Cartesian
-//! d/f/g from `orca_2mkl` and d/f/g from other named producers remain unverified.
+//! requires the `orca_2mkl` title header, which uses the bare program name.
+//! Pure g and Cartesian d/f/g from `orca_2mkl` and d/f/g from other named
+//! producers remain unverified.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -74,9 +78,11 @@ struct GaussianBasis {
     n_ao: usize,
 }
 
-struct Producer {
-    name: String,
-    verified_writer: bool,
+#[derive(Clone, Copy)]
+enum Writer {
+    Orca,
+    Pyscf(u32),
+    Other,
 }
 
 #[derive(Default)]
@@ -141,10 +147,9 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
             "Slater-type orbitals ([STO]) are not supported".into(),
         ));
     }
-    let producer = producer(text, &sections);
-    let orca = producer
-        .as_ref()
-        .is_some_and(|p| p.name == "ORCA" && p.verified_writer);
+    let program = producer(text, &sections);
+    let writer = writer(&sections);
+    let orca = matches!(writer, Writer::Orca);
     let representations = read_representations(&sections)?;
     let mut warnings = Vec::new();
     let n_atoms = scalar(&sections, "N_ATOMS")?
@@ -224,7 +229,7 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
     let shape_reason = basis
         .as_ref()
         .and_then(|b| b.basis.as_ref())
-        .and_then(|b| unsupported_shapes(b, producer.as_ref()));
+        .and_then(|b| unsupported_shapes(b, writer, program.as_deref()));
     if let Some(reason) = &shape_reason {
         warnings.push(reason.clone());
     }
@@ -390,7 +395,6 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
         steps,
         result: None,
     };
-    let program = producer.map(|p| p.name);
     let qc_program = QcProgram {
         name: program.clone().unwrap_or_else(|| "Molden".into()),
         version: None,
@@ -1433,7 +1437,37 @@ fn read_geometry_energies(section: &Section<'_>) -> Result<Vec<f64>, Error> {
     Ok(values)
 }
 
-fn producer(text: &str, sections: &[Section<'_>]) -> Option<Producer> {
+fn writer(sections: &[Section<'_>]) -> Writer {
+    let first_line = |name| {
+        sections
+            .iter()
+            .find(|s| s.name == name)?
+            .body
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty())
+    };
+    const ORCA_HEADER: &str = "Molden file created by orca_2mkl";
+    if first_line("TITLE")
+        .and_then(|line| line.get(..ORCA_HEADER.len()))
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(ORCA_HEADER))
+    {
+        return Writer::Orca;
+    }
+    let major = first_line("MOLDEN FORMAT").and_then(|line| {
+        let version = line.strip_prefix("made by pyscf v[")?.strip_suffix(']')?;
+        let (major, rest) = version.split_once('.')?;
+        let (minor, patch) = rest.split_once('.')?;
+        [major, minor, patch]
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+            .then_some(())?;
+        major.parse().ok()
+    });
+    major.map_or(Writer::Other, Writer::Pyscf)
+}
+
+fn producer(text: &str, sections: &[Section<'_>]) -> Option<String> {
     let metadata = sections
         .iter()
         .filter(|s| matches!(s.name.as_str(), "TITLE" | "MOLDEN FORMAT"))
@@ -1442,105 +1476,83 @@ fn producer(text: &str, sections: &[Section<'_>]) -> Option<Producer> {
         line.trim_start().starts_with(['#', '!', ';']) || line.trim_start().starts_with("//")
     });
     let lines: Vec<_> = comments.chain(metadata).collect();
+    let mut generic_molden = false;
     // Explicit generators win over titles such as "Molden output".
-    let explicit = lines.iter().find_map(|line| {
+    for line in &lines {
         let lower = line.to_ascii_lowercase();
-        let (_, offset) = [
+        for prefix in [
             "generated by ",
             "created by ",
             "written by ",
             "produced by ",
             "made by ",
             "producer:",
-        ]
-        .into_iter()
-        .filter_map(|prefix| {
-            lower
-                .find(prefix)
-                .map(|start| (start, start + prefix.len()))
-        })
-        .min()?;
-        // ASCII case folding preserves all original byte boundaries.
-        let token = producer_tokens(&line[offset..]).next()?;
-        let name = if token.eq_ignore_ascii_case("molden") {
-            "Molden"
-        } else {
-            named_producer(&token.to_ascii_lowercase()).unwrap_or(token)
-        };
-        Some(name.to_owned())
-    });
-    let name = explicit.or_else(|| {
-        let mut generic_molden = false;
-        for line in &lines {
-            let lower = line.to_ascii_lowercase();
-            if let Some(name) = named_producer(&lower) {
-                return Some(name.into());
+        ] {
+            if let Some((_, tail)) = lower.split_once(prefix) {
+                let offset = lower.len() - tail.len();
+                if tail
+                    .split_whitespace()
+                    .next()
+                    .is_some_and(|word| word.trim_matches([':', ',', ';']) == "molden")
+                {
+                    // "Generated by Molden from GAMESS" names the exporter;
+                    // GAMESS is the upstream calculation, not its convention.
+                    return Some("Molden".into());
+                }
+                if let Some(name) = named_producer(tail) {
+                    return Some(name.into());
+                }
+                // ASCII case folding preserves all original byte boundaries.
+                if let Some(name) = line.split_at(offset).1.split_whitespace().next() {
+                    let name = name.trim_matches([':', ',', ';']);
+                    if name.eq_ignore_ascii_case("molden") {
+                        generic_molden = true;
+                    } else if !name.is_empty() {
+                        return Some(name.into());
+                    }
+                }
             }
-            generic_molden |= producer_tokens(&lower).any(|token| token == "molden");
         }
-        generic_molden.then(|| "Molden".into())
-    })?;
-    let verified_writer = match name.as_str() {
-        "ORCA" => lines.iter().any(|line| {
-            line.split(|c: char| !c.is_ascii_alphanumeric() && !matches!(c, '-' | '_'))
-                .any(|token| token.eq_ignore_ascii_case("orca_2mkl"))
-        }),
-        "PySCF" => lines
-            .iter()
-            .find_map(|line| pyscf_major_version(&line.to_ascii_lowercase()))
-            .is_some_and(|major| major >= 2),
-        _ => false,
-    };
-    Some(Producer {
-        name,
-        verified_writer,
-    })
-}
-
-fn producer_tokens(text: &str) -> impl Iterator<Item = &str> {
-    text.split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
-        .filter(|token| !token.is_empty())
+    }
+    // Comments need an explicit declaration to name the producer.
+    for line in lines.into_iter().filter(|line| is_data(line)) {
+        let lower = line.to_ascii_lowercase();
+        if let Some(name) = named_producer(&lower) {
+            return Some(name.into());
+        }
+        generic_molden |= lower.contains("molden");
+    }
+    generic_molden.then(|| "Molden".into())
 }
 
 fn named_producer(lower: &str) -> Option<&'static str> {
-    producer_tokens(lower).find_map(|token| match token {
-        "orca" => Some("ORCA"),
-        "psi4" => Some("Psi4"),
-        "pyscf" => Some("PySCF"),
-        "xtb" => Some("xtb"),
-        "gaussian" => Some("Gaussian"),
-        "gamess" => Some("GAMESS"),
-        "turbomole" => Some("Turbomole"),
-        "q-chem" => Some("Q-Chem"),
-        "nwchem" => Some("NWChem"),
-        "molpro" => Some("Molpro"),
-        "cfour" => Some("CFOUR"),
-        _ => None,
-    })
+    [
+        ("orca", "ORCA"),
+        ("psi4", "Psi4"),
+        ("pyscf", "PySCF"),
+        ("xtb", "xtb"),
+        ("gaussian", "Gaussian"),
+        ("gamess", "GAMESS"),
+        ("turbomole", "Turbomole"),
+        ("q-chem", "Q-Chem"),
+        ("nwchem", "NWChem"),
+        ("molpro", "Molpro"),
+        ("cfour", "CFOUR"),
+    ]
+    .into_iter()
+    .find_map(|(needle, name)| lower.contains(needle).then_some(name))
 }
 
-fn pyscf_major_version(lower: &str) -> Option<u32> {
-    let (_, version) = lower.split_once("made by pyscf v[")?;
-    let (version, _) = version.split_once(']')?;
-    let (major, rest) = version.split_once('.')?;
-    let (minor, patch) = rest.split_once('.')?;
-    minor.parse::<u32>().ok()?;
-    patch.parse::<u32>().ok()?;
-    major.parse().ok()
-}
-
-fn unsupported_shapes(basis: &BasisSet, producer: Option<&Producer>) -> Option<String> {
-    let Producer {
-        name,
-        verified_writer,
-    } = producer?;
-    let orca = name == "ORCA";
-    if orca && !verified_writer {
-        return Some("Orbital shapes left out: ORCA radial primitive normalization is unverified without the orca_2mkl writer signature; orbital energies are kept".into());
-    }
-    if name == "Molden" || (name == "PySCF" && *verified_writer) {
-        return None;
-    }
+fn unsupported_shapes(basis: &BasisSet, writer: Writer, producer: Option<&str>) -> Option<String> {
+    let orca = matches!(writer, Writer::Orca);
+    let name = match (writer, producer) {
+        (Writer::Orca, _) => "ORCA",
+        (Writer::Pyscf(2..), _) | (_, None | Some("Molden")) => return None,
+        (_, Some("ORCA")) => {
+            return Some("Orbital shapes left out: ORCA radial primitive normalization is unverified without the orca_2mkl writer signature; orbital energies are kept".into());
+        }
+        (_, Some(name)) => name,
+    };
     let mut functions = BTreeSet::new();
     for shell in &basis.shells {
         let name = match (shell.l, shell.pure) {
