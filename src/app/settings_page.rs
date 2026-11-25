@@ -420,12 +420,8 @@ impl App {
             }
             Action::ChemDrawFormat(format) => {
                 self.appearance.chemdraw_format = format;
-                // A ChemDraw choice in the Export tab follows the new format.
-                let ui = &mut self.tab.inspector_ui;
-                ui.close_menu();
-                if ui.chemical.chemdraw() {
-                    ui.chemical = format.into();
-                }
+                self.tab.inspector_ui.close_menu();
+                self.follow_chemdraw_format();
                 self.save_preference(Section::CopyExport, "ChemDraw format");
             }
             // Only the newest render counts: an older one may finish last.
@@ -474,6 +470,7 @@ impl App {
                     }
                     Section::CopyExport => {
                         self.reset_export_panel_options();
+                        self.follow_chemdraw_format();
                     }
                     Section::Names => {
                         self.tab.naming.structure = None;

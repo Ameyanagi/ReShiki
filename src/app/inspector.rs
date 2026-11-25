@@ -2548,6 +2548,17 @@ impl App {
 
     /// The Export tab's Include editable drawing: its own choice, or the
     /// Settings default.
+    /// Every tab whose Structure choice is a ChemDraw format takes the
+    /// Settings one.
+    pub(super) fn follow_chemdraw_format(&mut self) {
+        let format = self.appearance.chemdraw_format.into();
+        for tab in std::iter::once(&mut self.tab).chain(&mut self.tabs.background) {
+            if tab.inspector_ui.chemical.chemdraw() {
+                tab.inspector_ui.chemical = format;
+            }
+        }
+    }
+
     pub(super) fn export_editable(&self) -> bool {
         self.export_tab_editable
             .unwrap_or(self.appearance.export_editable_drawing)
@@ -2677,7 +2688,8 @@ impl App {
                 .padding([7, 8])
                 .style(super::workspace::control(false))
                 .on_press_maybe(
-                    (!self.clipboard_working()).then_some(Message::CopyAs(chemical.copy_format()))
+                    (!self.clipboard_working() && chemical.copy_format().available())
+                        .then_some(Message::CopyAs(chemical.copy_format()))
                 ),
                 reshiki::accessibility::button(
                     "export-chemical",

@@ -1335,6 +1335,10 @@ impl super::App {
         {
             return self.export_figure(format, false, self.appearance.export_editable_drawing);
         }
+        // The other ChemDraw format is for this export only.
+        if self.tab.inspector_ui.chemical.chemdraw() {
+            self.tab.inspector_ui.chemical = self.appearance.chemdraw_format.into();
+        }
         let mut request = Request::molecule("export", self.tab.doc.clone());
         request.format = Some(format.into());
         self.run(request, Job::Export(format))

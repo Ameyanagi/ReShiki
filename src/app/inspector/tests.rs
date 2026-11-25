@@ -1533,5 +1533,17 @@ fn the_export_tab_offers_cdx_and_follows_the_chemdraw_format_setting() {
         ChemicalFormat::Cdx.copy_format(),
         reshiki::clipboard::CopyFormat::Cdx
     );
+    // Restore defaults takes the Export choice back to CDXML too.
+    let _ = app.update(Message::Settings(Settings::Restore(
+        super::super::settings_page::Section::CopyExport,
+    )));
+    assert_eq!(app.appearance.chemdraw_format, ChemDrawFormat::Cdxml);
+    assert_eq!(app.tab.inspector_ui.chemical, ChemicalFormat::Cdxml);
+    // Picking the other format serves one export, then the setting's returns.
+    let _ = app.update(Message::InspectorAction(Action::Chemical(
+        ChemicalFormat::Cdx,
+    )));
+    let _ = app.update(Message::Export("cdx"));
+    assert_eq!(app.tab.inspector_ui.chemical, ChemicalFormat::Cdxml);
     let _ = app.export_panel();
 }
