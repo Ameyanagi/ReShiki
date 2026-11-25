@@ -1375,3 +1375,17 @@ fn appended_invocations_keep_each_numbered_jobs_program_version() {
         );
     }
 }
+
+#[test]
+fn too_many_job_banners_are_refused_before_parsing() {
+    let banner = "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n                 $ JOB NUMBER  2 $\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$\n";
+    let text = format!(
+        "{}{}",
+        text(WATER6),
+        banner.repeat(crate::qcread::MAX_JOBS + 1)
+    );
+    assert!(matches!(
+        read("many.out", text.as_bytes()),
+        Err(crate::qcread::Error::Unsupported(_))
+    ));
+}

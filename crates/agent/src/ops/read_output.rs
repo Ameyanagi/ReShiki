@@ -208,6 +208,13 @@ fn gap(orbitals: &Orbitals) -> Option<f64> {
         Beta::Restricted => None,
         Beta::SameOrbitals { .. } => return None,
     };
+    // A spectrum without occupations leaves the combined frontier unknown.
+    if std::iter::once(&orbitals.alpha)
+        .chain(beta)
+        .any(|set| set.occupations.len() != set.energies_hartree.len())
+    {
+        return None;
+    }
     let levels = || {
         std::iter::once(&orbitals.alpha)
             .chain(beta)
@@ -469,8 +476,20 @@ mod tests {
         )
         .unwrap();
         let selected = Read::from_file(&file, None).unwrap().job.unwrap();
-        let gap = selected.homo_lumo_gap_ev.unwrap();
-        assert!((gap - 1.88).abs() < 0.01, "gap was {gap} eV");
+        let combined = selected.homo_lumo_gap_ev.unwrap();
+        assert!((combined - 1.88).abs() < 0.01, "gap was {combined} eV");
+        // Without beta occupations the combined frontier is unknown, not alpha's.
+        let mut orbitals = file.jobs[0]
+            .result
+            .as_ref()
+            .unwrap()
+            .orbitals
+            .clone()
+            .unwrap();
+        if let Beta::Unrestricted(beta) = &mut orbitals.beta {
+            beta.occupations.clear();
+        }
+        assert_eq!(gap(&orbitals), None);
     }
 
     #[test]
