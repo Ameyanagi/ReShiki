@@ -4,7 +4,7 @@ description: Vibrational frequencies, IR spectra and thermochemistry from an xTB
 ---
 
 :::caution[In progress]
-The Vibrations tab is being built and is not on the `xtb/next` branch yet. Until it lands, the **Opt + freq** task on the Calculate card is off. This page describes the agreed design and will be updated when it lands. From scripts, frequencies already work: see [Python](/guide/calculation-scripts/#python) and `reshiki --cli calc --task hessian`.
+The Vibrations tab is being built and is not on the `xtb/next` branch yet. Until it lands, the **Opt + freq** task on the Calculate card is off. This page describes the agreed design and will be updated when it lands. From the command line, frequencies already work: `reshiki --cli calc --task hessian` (see [xTB from scripts](/guide/calculation-scripts/#command-line)).
 :::
 
 **Opt + freq** optimizes the molecule, then calculates the analytic Hessian with the same method. Up to 200 atoms.
@@ -18,6 +18,6 @@ The Vibrations tab is being built and is not on the `xtb/next` branch yet. Until
 
 ## How good the numbers are
 
-xTB frequencies are approximate. They reliably tell a minimum from a saddle point and give the shape of an IR spectrum; individual bands can be off by tens of cm⁻¹. For thermochemistry in a paper, recompute frequencies with DFT; the [input export](/guide/calculation-files/) writes `Opt Freq` inputs from the xTB geometry.
+xTB frequencies are approximate. They reliably tell a minimum from a saddle point and give the shape of an IR spectrum; individual bands can be off by tens of cm⁻¹. For thermochemistry in a paper, recompute frequencies with DFT; the [input export](/guide/calculation-files/) writes an **Opt + freq** input for Gaussian, ORCA or GAMESS from the xTB geometry.
 
 Example, water with GFN2-xTB (axtb 0.2.0): 1590.13 cm⁻¹ (bend, IR 127.68 km/mol), 3468.58 and 3480.11 cm⁻¹ (stretches), zero-point energy 0.019453 Eh, point group C2v.
