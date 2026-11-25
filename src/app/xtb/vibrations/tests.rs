@@ -339,7 +339,6 @@ fn light_result(frequency: f64) -> (App, Arc<CalcResult>) {
         &mut app,
         XtbAction::Palette(palette::Action::View(View::Vibrations)),
     );
-    assert!(app.tab.xtb.vibrations.recomputing(&light));
     assert!(app.tab.xtb.vibrations.animation.is_none());
     (app, light)
 }
@@ -362,8 +361,13 @@ fn recomputed(app: &mut App, frequency: f64) {
 }
 
 #[test]
+#[cfg_attr(
+    any(windows, not(feature = "xtb")),
+    ignore = "recomputing modes runs the xTB engine"
+)]
 fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
     let (mut app, light) = light_result(1590.13);
+    assert!(app.tab.xtb.vibrations.recomputing(&light));
     recomputed(&mut app, 1592.13);
     assert!(!app.tab.xtb.vibrations.recomputing(&light));
     assert!(app.xtb_modes(&light).is_some());
@@ -372,6 +376,10 @@ fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
 }
 
 #[test]
+#[cfg_attr(
+    any(windows, not(feature = "xtb")),
+    ignore = "recomputing modes runs the xTB engine"
+)]
 fn recomputed_modes_require_matching_frequency_signs_and_values() {
     for (saved, fresh, drift) in [(-0.5, 0.5, "1.0"), (1590.13, 1593.13, "3.0")] {
         let (mut app, light) = light_result(saved);
@@ -398,6 +406,10 @@ fn recomputed_modes_require_matching_frequency_signs_and_values() {
 }
 
 #[test]
+#[cfg_attr(
+    any(windows, not(feature = "xtb")),
+    ignore = "recomputing modes runs the xTB engine"
+)]
 fn a_recompute_reply_from_a_previous_file_epoch_is_ignored() {
     let (mut app, light) = light_result(1590.13);
     app.tab.file_epoch += 1;
@@ -407,6 +419,10 @@ fn a_recompute_reply_from_a_previous_file_epoch_is_ignored() {
 }
 
 #[test]
+#[cfg_attr(
+    any(windows, not(feature = "xtb")),
+    ignore = "recomputing modes runs the xTB engine"
+)]
 fn switching_away_from_docked_vibrations_cancels_recomputation() {
     let (mut app, light) = light_result(1590.13);
     send(&mut app, XtbAction::Palette(palette::Action::Dock));
@@ -417,6 +433,10 @@ fn switching_away_from_docked_vibrations_cancels_recomputation() {
 }
 
 #[test]
+#[cfg_attr(
+    any(windows, not(feature = "xtb")),
+    ignore = "recomputing modes runs the xTB engine"
+)]
 fn undoing_the_result_cancels_recomputation() {
     let (mut app, light) = light_result(1590.13);
     let _ = app.update(Message::Undo);
@@ -431,4 +451,14 @@ fn animation_ticks_leave_the_view_and_style_choosers_open() {
     app.status_style_open = true;
     let _ = app.update(Message::Xtb(XtbAction::Vibrations(Action::Tick)));
     assert!(app.view_open && app.status_style_open);
+}
+
+/// A build without the engine (or Windows, until code signing) keeps the
+/// saved frequencies and explains why nothing animates.
+#[test]
+#[cfg(any(windows, not(feature = "xtb")))]
+fn without_the_engine_a_light_result_does_not_recompute() {
+    let (app, light) = light_result(1590.13);
+    assert!(!app.tab.xtb.vibrations.recomputing(&light));
+    assert!(app.xtb_modes(&light).is_none());
 }
