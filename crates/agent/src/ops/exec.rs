@@ -38,7 +38,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     task::Poll,
-    time::Instant,
+    time::{Duration, Instant},
 };
 #[cfg(test)]
 pub(crate) use tests::Barrier;
@@ -158,8 +158,8 @@ impl Drop for FinishGuard {
 }
 
 /// Runs operations within [`Budgets::concurrency`] permits and a queue of
-/// [`Budgets::queue`] waiting calls, each under a [`Budgets::op_deadline`]
-/// measured from admission.
+/// [`Budgets::queue`] waiting calls, each under its deadline measured from
+/// admission.
 #[derive(Clone)]
 pub struct Executor {
     shared: Arc<Shared>,
@@ -199,6 +199,7 @@ impl Executor {
         who: Principal,
         id: RequestId,
         progress: Option<Sink>,
+        deadline: Duration,
         f: F,
     ) -> Result<T, OpError>
     where
@@ -206,7 +207,7 @@ impl Executor {
         Fut: Future<Output = Result<T, OpError>> + Send + 'static,
         T: Send + 'static,
     {
-        let deadline = Instant::now().checked_add(self.shared.budgets.op_deadline);
+        let deadline = Instant::now().checked_add(deadline);
         let (token, admission) = self.admit((who, id))?;
         let permit = {
             let mut permit = pin!(Arc::clone(&self.shared.permits).acquire_owned());

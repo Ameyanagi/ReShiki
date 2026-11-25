@@ -17,7 +17,7 @@ use reshiki_agent::{
     Proposal,
     ops::{
         budget::Budgets,
-        catalog::SPECS,
+        catalog::BASE_SPECS,
         headless::HeadlessHost,
         host::{Call, ToolHost},
         result::ToolResult,
@@ -256,9 +256,9 @@ fn the_tools_work_end_to_end(era: Era) {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect();
-    let catalog: Vec<&str> = SPECS.iter().map(|spec| spec.name).collect();
+    let catalog: Vec<&str> = BASE_SPECS.iter().map(|spec| spec.name).collect();
     assert_eq!(names, catalog);
-    for (tool, spec) in tools.iter().zip(SPECS) {
+    for (tool, spec) in tools.iter().zip(BASE_SPECS) {
         assert_eq!(tool["inputSchema"], (spec.input_schema)(), "{}", spec.name);
         let hints = spec.hints.map(|hints| {
             json!({

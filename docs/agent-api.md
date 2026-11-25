@@ -27,13 +27,13 @@ This page explains the concepts both modes share. The other pages:
 
 ## The two modes
 
-|               | `reshiki --mcp`                                          | `reshiki --cli`                               |
-| ------------- | -------------------------------------------------------- | --------------------------------------------- |
-| Runs          | Until the client closes standard input                   | One command, then exits                       |
-| Drawings      | Session documents in memory, edited by handle, with undo | One input in, one output out                  |
-| Files         | `file_open` and `file_save` only, inside granted folders | The paths you name, with your own permissions |
-| `.rsk` output | `file_save` writes `.rsk` drawings                       | Cannot write `.rsk` drawings                  |
-| Results       | MCP tool results                                         | The file on standard output, or one JSON line |
+|               | `reshiki --mcp`                                                | `reshiki --cli`                               |
+| ------------- | -------------------------------------------------------------- | --------------------------------------------- |
+| Runs          | Until the client closes standard input                         | One command, then exits                       |
+| Drawings      | Session documents in memory, edited by handle, with undo       | One input in, one output out                  |
+| Files         | `file_open`, `file_save` and `read_output` use granted folders | The paths you name, with your own permissions |
+| `.rsk` output | `file_save` writes `.rsk` drawings                             | Cannot write `.rsk` drawings                  |
+| Results       | MCP tool results                                               | The file on standard output, or one JSON line |
 
 Both modes call the same operations, so a `convert` on the command line makes
 the same file as `convert`, or `import` and `export`, over MCP.
@@ -48,12 +48,12 @@ reshiki --mcp [--log-level <level>] [--allow-read <folder>]... [--allow-write <f
 An MCP client starts the server and talks to it; run by hand, it waits for
 MCP messages on stdin.
 
-| Option                   | Meaning                                                 |
-| ------------------------ | ------------------------------------------------------- |
-| `--log-level <level>`    | `error`, `warn` (default), `info` or `debug`, on stderr |
-| `--allow-read <folder>`  | Let `file_open` read files in `<folder>`; repeatable    |
-| `--allow-write <folder>` | Let `file_save` write files in `<folder>`; repeatable   |
-| `-h`, `--help`           | Print the usage to stderr and exit 0                    |
+| Option                   | Meaning                                                                 |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `--log-level <level>`    | `error`, `warn` (default), `info` or `debug`, on stderr                 |
+| `--allow-read <folder>`  | Let `file_open` and `read_output` read files in `<folder>`. Repeatable. |
+| `--allow-write <folder>` | Let `file_save` write files in `<folder>`; repeatable                   |
+| `-h`, `--help`           | Print the usage to stderr and exit 0                                    |
 
 `--attach`, for connecting to a running app, is reserved and exits 2. See
 [Folder grants](#folder-grants) for `--allow-read`, `--allow-write` and
@@ -96,14 +96,16 @@ writes "/Users/me/Figures".`, with `none` for a side without folders. The tool
 list is the same either way.
 
 The server offers tools only. It declares no resources, prompts or
-completions, sends no progress notifications and publishes no
-`outputSchema`. It never asks the client for roots, sampling or input.
+completions and publishes no `outputSchema`. It never asks the client for
+roots, sampling or input. A call with a
+`params._meta.progressToken` receives any progress the operation reports as
+`notifications/progress` before the result.
 
 ## Tools
 
-The [generated tool reference](agent-reference.md#tools) lists the 18 tools in
-`tools/list` order, with their annotation hints, parameters and result shapes.
-`reshiki --cli tools` prints the same catalog as JSON. Every tool sets all
+The [generated tool reference](agent-reference.md#tools) lists the 21 tools in
+catalog order, with their annotation hints, parameters and result shapes.
+`reshiki --cli tools` prints the full catalog as JSON. Every tool sets all
 four annotation hints explicitly, with `openWorldHint: false`. `file_save`,
 `apply`, `label_atoms` and `document_close` are marked destructive, so a client
 can ask you before it runs them.
@@ -155,6 +157,26 @@ cannot read, which includes some trade names such as `aspirin`, fails with
 
 Text, labels and images inside drawings and files are data, never
 instructions.
+
+`export_input` writes a Gaussian, ORCA or GAMESS input from the first frame
+of Cartesian XYZ in ångströms. Choose a single point, optimization, or
+optimization with frequencies. Null settings use the CLI defaults, with
+`molecule` as the title. The main input and any companion files come back
+inline within `max_output_bytes`.
+
+`read_output` returns job summaries and the selected job's calculated
+values and final geometry. Send inline `text` with a `file_name`, or give
+the `path` of a file in a granted read folder. Inline text is capped by
+`max_text_bytes` and a granted file by 128 MiB. Set `job` to a zero-based
+index or pass null to use the reader's default.
+
+`calculate` runs xTB energy, optimization, frequencies or optimization
+followed by frequencies on the first XYZ frame. The limits are 500 atoms
+and 200 for frequencies, with a 30-minute cooperative deadline. Include an
+MCP progress token to receive progress notifications. A host lists
+`calculate` only when it has the calculation hook on a build with xTB
+(macOS and Linux desktop). `info` reports the engine and method
+capabilities when the hook is available.
 
 ## Sessions and documents
 
@@ -365,9 +387,9 @@ The ones a tool returns:
 | `stale`             | `base_revision` is not the current revision; nothing changed                                             |
 | `busy`              | The queue is full or the server is stopping                                                              |
 | `budget`            | A [budget](#budgets) would be exceeded                                                                   |
-| `timeout`           | The 120 s deadline passed before the call changed anything                                               |
+| `timeout`           | The operation passed its deadline                                                                        |
 | `rejected`          | Validation or the document's edit policy refused the change                                              |
-| `unsupported`       | This server cannot do it. `reshiki --mcp` and `reshiki --cli` never return it                            |
+| `unsupported`       | The host, file format or calculation method does not support the request                                 |
 | `access_denied`     | A file outside the granted folders, with an extension the tool does not accept, or one the system denied |
 | `failed`            | The operation failed: unreadable chemistry, a missing or existing file, an I/O error                     |
 
@@ -379,8 +401,8 @@ every reason and its code.
 
 ## Folder grants
 
-Only `file_open` and `file_save` touch files, and only inside folders the user
-grants when the server starts. A client cannot add folders, and the server
+Tools that use paths (`file_open`, `file_save` and `read_output`) work inside
+folders the user grants when the server starts. A client cannot add folders, and the server
 never asks it for roots. Folders come from two sources, which add up:
 
 - `--allow-read <folder>` and `--allow-write <folder>` on the command line.
@@ -403,8 +425,8 @@ file grants nothing.
 | Windows         | `%LOCALAPPDATA%\reshiki\ReShiki\data\agent-access.json`              |
 | Any             | `$RESHIKI_DATA_DIR/agent-access.json` when `RESHIKI_DATA_DIR` is set |
 
-Read and write grants are separate: a write grant does not let `file_open`
-read. Each folder must exist. File system roots, the home folder (as Windows
+Both `file_open` and `read_output` require read grants. Each folder must
+exist. File system roots, the home folder (as Windows
 or the environment reports it) and its ancestors, ReShiki's data folder,
 earlier installations' data, the executable's folder, Unix `/proc`, `/sys`
 and `/dev`, and the Windows system folder cannot be granted. A folder that
@@ -422,8 +444,9 @@ hard link.
 ## Budgets
 
 Every limit is a budget the `info` tool reports. The main ones are 2
-operations at once with 8 more queued, a 120 s cooperative deadline per call,
-16 MiB of text per import, 16 session documents of up to 100,000 objects,
+operations at once with 8 more queued, a 120 s cooperative deadline for ordinary
+calls and 30 minutes for calculations,
+16 MiB of text per call, 16 session documents of up to 100,000 objects,
 16 MiB of output per result and a 2 GiB heap. The
 [generated budget table](agent-reference.md#budgets) lists every operation
 budget, and [runtime safety](runtime-safety.md#budgets) says what happens when
