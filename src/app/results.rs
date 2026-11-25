@@ -304,6 +304,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::PickColor(..)
                 | Action::CopyDpi(..)
                 | Action::ExportDpi(..)
+                | Action::ChemDrawFormat(..)
                 | Action::Restore(..) => None,
             }
         }

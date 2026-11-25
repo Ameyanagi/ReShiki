@@ -1,6 +1,7 @@
 //! Selection-focused properties and task-based export controls.
 use super::workspace::{control, hover_hint, keyed_command, muted_text, panel_action};
 use super::{App, InspectorTab, Message};
+use crate::appearance::ChemDrawFormat;
 use crate::canvas::Tool;
 use iced::widget::{Space, button, checkbox, column, container, row, text, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task};
@@ -210,15 +211,26 @@ pub enum ChemicalFormat {
     Smiles,
     Inchi,
     Cdxml,
+    Cdx,
 }
 impl ChemicalFormat {
-    pub(super) const ALL: [Self; 4] = [Self::Mol, Self::Smiles, Self::Inchi, Self::Cdxml];
+    pub(super) const ALL: [Self; 5] =
+        [Self::Mol, Self::Smiles, Self::Inchi, Self::Cdxml, Self::Cdx];
+    /// The formats in menu order: the Settings ChemDraw format before the other one.
+    pub(super) fn ordered(chemdraw: ChemDrawFormat) -> [Self; 5] {
+        let [mol, smiles, inchi, ..] = Self::ALL;
+        [mol, smiles, inchi, chemdraw.into(), chemdraw.other().into()]
+    }
+    pub(super) fn chemdraw(self) -> bool {
+        matches!(self, Self::Cdxml | Self::Cdx)
+    }
     pub(super) fn code(self) -> &'static str {
         match self {
             Self::Mol => "mol",
             Self::Smiles => "smiles",
             Self::Inchi => "inchi",
             Self::Cdxml => "cdxml",
+            Self::Cdx => "cdx",
         }
     }
     fn copy_format(self) -> reshiki::clipboard::CopyFormat {
@@ -228,6 +240,7 @@ impl ChemicalFormat {
             Self::Smiles => CopyFormat::Smiles,
             Self::Inchi => CopyFormat::Inchi,
             Self::Cdxml => CopyFormat::Cdxml,
+            Self::Cdx => CopyFormat::Cdx,
         }
     }
     fn description(self) -> &'static str {
@@ -235,7 +248,16 @@ impl ChemicalFormat {
             Self::Mol => "Molecular structure and coordinates for chemistry software.",
             Self::Smiles => "A text representation of the molecular structure.",
             Self::Inchi => "A standardized molecular identifier.",
-            Self::Cdxml => "An editable drawing interchange file.",
+            Self::Cdxml => "An editable ChemDraw drawing, as text.",
+            Self::Cdx => "An editable ChemDraw drawing, as a binary file.",
+        }
+    }
+}
+impl From<ChemDrawFormat> for ChemicalFormat {
+    fn from(format: ChemDrawFormat) -> Self {
+        match format {
+            ChemDrawFormat::Cdxml => Self::Cdxml,
+            ChemDrawFormat::Cdx => Self::Cdx,
         }
     }
 }
@@ -246,6 +268,7 @@ impl std::fmt::Display for ChemicalFormat {
             Self::Smiles => "SMILES text",
             Self::Inchi => "InChI identifier",
             Self::Cdxml => "CDXML drawing",
+            Self::Cdx => "CDX drawing",
         })
     }
 }
@@ -364,7 +387,7 @@ pub(super) struct State {
     pub(super) figure: FigureFormat,
     figure_menu: bool,
     resolution_menu: bool,
-    chemical: ChemicalFormat,
+    pub(super) chemical: ChemicalFormat,
     chemical_menu: bool,
     pending: Option<PropertyKey>,
     pending_revision: u64,
@@ -2466,19 +2489,21 @@ impl App {
             Message::InspectorAction(Action::ChemicalMenu(!open)),
         );
         let popup = open.then(|| {
-            let items = ChemicalFormat::ALL.into_iter().map(|format| {
-                reshiki::accessibility::button(
-                    format!("chemical-format-{}", format.code()),
-                    format.to_string(),
-                    text(format.copy_format().label()).size(12),
-                )
-                .checked(format == chemical)
-                .width(Length::Fill)
-                .padding([6, 10])
-                .style(super::workspace::control(format == chemical))
-                .on_press(Message::InspectorAction(Action::Chemical(format)))
-                .into()
-            });
+            let items = ChemicalFormat::ordered(self.appearance.chemdraw_format)
+                .into_iter()
+                .map(|format| {
+                    reshiki::accessibility::button(
+                        format!("chemical-format-{}", format.code()),
+                        format.to_string(),
+                        text(format.copy_format().label()).size(12),
+                    )
+                    .checked(format == chemical)
+                    .width(Length::Fill)
+                    .padding([6, 10])
+                    .style(super::workspace::control(format == chemical))
+                    .on_press(Message::InspectorAction(Action::Chemical(format)))
+                    .into()
+                });
             container(column(items))
                 .width(Length::Fill)
                 .padding(5)
@@ -2524,6 +2549,17 @@ impl App {
 
     /// The Export tab's Include editable drawing: its own choice, or the
     /// Settings default.
+    /// Every tab whose Structure choice is a ChemDraw format takes the
+    /// Settings one.
+    pub(super) fn follow_chemdraw_format(&mut self) {
+        let format = self.appearance.chemdraw_format.into();
+        for tab in std::iter::once(&mut self.tab).chain(&mut self.tabs.background) {
+            if tab.inspector_ui.chemical.chemdraw() {
+                tab.inspector_ui.chemical = format;
+            }
+        }
+    }
+
     pub(super) fn export_editable(&self) -> bool {
         self.export_tab_editable
             .unwrap_or(self.appearance.export_editable_drawing)
@@ -2653,7 +2689,8 @@ impl App {
                 .padding([7, 8])
                 .style(super::workspace::control(false))
                 .on_press_maybe(
-                    (!self.clipboard_working()).then_some(Message::CopyAs(chemical.copy_format()))
+                    (!self.clipboard_working() && chemical.copy_format().available())
+                        .then_some(Message::CopyAs(chemical.copy_format()))
                 ),
                 reshiki::accessibility::button(
                     "export-chemical",
@@ -2666,6 +2703,11 @@ impl App {
             ]
             .spacing(6)
             .align_y(Alignment::Center),
+            chemical.chemdraw().then(|| {
+                text("Electronic lab notebooks usually need CDX.")
+                    .size(11)
+                    .style(muted_text)
+            }),
             reshiki::accessibility::button(
                 "export-pages",
                 "Pages & printing",

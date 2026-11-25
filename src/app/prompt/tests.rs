@@ -104,3 +104,11 @@ fn the_template_warning_waits_for_ok() {
     assert!(app.prompt.is_none());
     assert!(app.templates.pending_warning.is_none());
 }
+
+#[test]
+fn save_as_lists_the_settings_chemdraw_format_first() {
+    use crate::appearance::ChemDrawFormat;
+    let codes = |chemdraw| save_formats(chemdraw).map(|(format, _)| format);
+    assert_eq!(codes(ChemDrawFormat::Cdxml)[1..], ["cdxml", "cdx", "mol"]);
+    assert_eq!(codes(ChemDrawFormat::Cdx)[1..], ["cdx", "cdxml", "mol"]);
+}

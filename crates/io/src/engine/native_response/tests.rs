@@ -921,20 +921,20 @@ async fn prepared_export_loss_notices_are_ordered_by_document_and_format() -> an
             Reaction,
             [
                 Analyzed(&[LOSS_REACTION_ROLES]),
-                Analyzed(&[LOSS_REACTION_ROLES]),
-                Analyzed(&[LOSS_REACTION_ROLES]),
+                Analyzed(&[]),
+                Analyzed(&[]),
                 Analyzed(&[LOSS_REACTION_ROLES]),
             ],
         ),
-        // Current behavior: finish orders reaction roles, arrow links, then dative paint;
-        // MOL/SMILES still omit the arrow-link notice and SMILES omits dative paint.
+        // CDXML/CDX keeps reaction roles, with arrow links before dative paint;
+        // MOL/SMILES omit the arrow-link notice and SMILES omits dative paint.
         (
             "prepared reaction with anchored arrow and projected dative",
             ReactionAnchorDative,
             [
                 Analyzed(&[LOSS_REACTION_ROLES, LOSS_DATIVE_MOL]),
-                Analyzed(&[LOSS_REACTION_ROLES, LOSS_ANCHOR, LOSS_DATIVE_DRAWING]),
-                Analyzed(&[LOSS_REACTION_ROLES, LOSS_ANCHOR, LOSS_DATIVE_DRAWING]),
+                Analyzed(&[LOSS_ANCHOR, LOSS_DATIVE_DRAWING]),
+                Analyzed(&[LOSS_ANCHOR, LOSS_DATIVE_DRAWING]),
                 Analyzed(&[LOSS_REACTION_ROLES]),
             ],
         ),
@@ -1013,11 +1013,15 @@ async fn attachment_early_export_loss_notices_are_pinned() -> anyhow::Result<()>
                 Unanalyzed(&[LOSS_ATTACHMENT, LOSS_DATIVE_DRAWING]),
             ],
         ),
-        // All attachment exports add the reaction-role notice.
+        // MOL omits reaction roles; CDXML/CDX retains them with the reaction arrow.
         (
             "attachment targets with reaction roles",
             Reaction,
-            [Unanalyzed(&[LOSS_ATTACHMENT, LOSS_REACTION_ROLES]); 3],
+            [
+                Unanalyzed(&[LOSS_ATTACHMENT, LOSS_REACTION_ROLES]),
+                Unanalyzed(&[LOSS_ATTACHMENT]),
+                Unanalyzed(&[LOSS_ATTACHMENT]),
+            ],
         ),
     ];
     for (name, decoration, expected) in cases {
@@ -1084,11 +1088,11 @@ async fn unprepared_drawing_export_loss_notices_are_pinned() -> anyhow::Result<(
             Dative,
             [Unanalyzed(&[LOSS_UNVALIDATED, LOSS_DATIVE_DRAWING]); 2],
         ),
-        // The unprepared fallback adds the reaction-role notice after the unvalidated notice.
+        // The unprepared fallback keeps reaction roles with the reaction arrow.
         (
             "unsanitizable carbon with reaction roles",
             Reaction,
-            [Unanalyzed(&[LOSS_UNVALIDATED, LOSS_REACTION_ROLES]); 2],
+            [Unanalyzed(&[LOSS_UNVALIDATED]); 2],
         ),
     ];
     for (name, decoration, expected) in cases {
