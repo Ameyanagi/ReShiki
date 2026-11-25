@@ -250,11 +250,18 @@ fn files_opened_together_ask_in_turn() {
     }
     let path = |app: &App| app.frames_import.as_ref().map(|d| d.path.clone());
     assert_eq!(path(&app), Some(PathBuf::from("a.xyz")));
+    // Each answer asks about the next file once it is done (the runtime
+    // sends Next after the chosen frame has opened).
     send(&mut app, Action::Close);
+    assert!(app.frames_import.is_none());
+    send(&mut app, Action::Next);
     assert_eq!(path(&app), Some(PathBuf::from("b.xyz")));
     send(&mut app, Action::Import);
     assert_eq!(model(&app).len(), 3, "b opened");
+    // c, opened while b's sheet was up, waits its turn too.
+    send(&mut app, Action::Next);
     assert_eq!(path(&app), Some(PathBuf::from("c.xyz")));
     send(&mut app, Action::Close);
+    send(&mut app, Action::Next);
     assert!(app.frames_import.is_none());
 }

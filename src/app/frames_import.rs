@@ -46,6 +46,8 @@ pub(crate) enum Action {
     Turn(f32, f32),
     Import,
     Close,
+    /// Ask about the next file opened together with the last one.
+    Next,
 }
 
 /// A file of several frames of one molecule, read.
@@ -67,8 +69,6 @@ pub(crate) struct Dialog {
     overlay: bool,
     /// The chosen frame as a 3D model, turned as the user turned it.
     preview: Option<reshiki::document::Document>,
-    /// Files with frames opened together with this one, asked about next.
-    queued: Vec<(PathBuf, File)>,
 }
 
 /// A multi-frame XYZ, or an SD file of 3D conformers (every record the
@@ -188,26 +188,9 @@ impl Dialog {
             keep: false,
             overlay: false,
             preview: None,
-            queued: vec![],
         };
         dialog.refresh();
         dialog
-    }
-
-    /// Ask about `file` once this sheet is answered.
-    pub(super) fn queue(&mut self, path: PathBuf, file: File) {
-        self.queued.push((path, file));
-    }
-
-    /// The sheet for the next queued file, which carries the rest.
-    fn next(&mut self) -> Option<Self> {
-        if self.queued.is_empty() {
-            return None;
-        }
-        let (path, file) = self.queued.remove(0);
-        let mut next = Self::new(path, file);
-        next.queued = std::mem::take(&mut self.queued);
-        Some(next)
     }
 
     /// Build the preview of the chosen frame, keeping the view's turn, with
@@ -265,9 +248,19 @@ impl Dialog {
 impl App {
     pub(super) fn frames_import_action(&mut self, action: Action) -> Task<Message> {
         let Some(dialog) = self.frames_import.as_mut() else {
+            if let (Action::Next, Some((path, file))) = (action, self.frames_queue.pop_front()) {
+                self.status = format!(
+                    "{} has several frames: choose which to open",
+                    super::import::name(&path)
+                );
+                self.error = false;
+                self.frames_import = Some(Dialog::new(path, file));
+            }
             return Task::none();
         };
         match action {
+            // A sheet is up: the next file asks once it is answered.
+            Action::Next => {}
             Action::Choose(Choice::Lowest) if dialog.file.energies().is_none() => {}
             Action::Choose(choice) => {
                 let before = dialog.index();
@@ -300,29 +293,25 @@ impl App {
                 }
             }
             Action::Close => {
-                self.frames_import = dialog.next();
-                self.status = match &self.frames_import {
-                    Some(next) => format!(
-                        "{} has several frames: choose which to open",
-                        super::import::name(&next.path)
-                    ),
-                    None => "Nothing opened".into(),
-                };
+                self.frames_import = None;
+                self.status = "Nothing opened".into();
                 self.error = false;
-                // Keyboard focus goes back to the drawing.
-                return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus);
+                // Keyboard focus goes back to the drawing, then the next file asks.
+                return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus)
+                    .chain(Task::done(Message::FramesImport(Action::Next)));
             }
             Action::Import => {
-                let Some(mut dialog) = self.frames_import.take() else {
+                let Some(dialog) = self.frames_import.take() else {
                     return Task::none();
                 };
-                // The next queued file asks once this one is open.
-                self.frames_import = dialog.next();
+                // The next file asks once this one has opened (an SD record
+                // opens a moment later), so tabs open in the order chosen.
                 return self
                     .frames_import_open(dialog)
                     .chain(iced::advanced::widget::operate(
                         super::keyboard_drawing::ReleaseFocus,
-                    ));
+                    ))
+                    .chain(Task::done(Message::FramesImport(Action::Next)));
             }
         }
         Task::none()
