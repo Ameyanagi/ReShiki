@@ -9,15 +9,20 @@ import platform
 import plistlib
 import re
 import shutil
+import signal
 import struct
 import subprocess
 import tarfile
 import tempfile
+import threading
+import time
 import tomllib
 import zipfile
+from concurrent.futures import Future
 from pathlib import Path
 
 from build_inchi_helper import RELEASE_TARGETS
+from check_agent_dependencies import AXTB_LICENSE, AXTB_SOURCE, axtb_fork, axtb_locked_source
 from check_agent_dependencies import verify as verify_agent_dependencies
 from check_runtime_dependencies import (
     verify_agent_api,
@@ -26,9 +31,13 @@ from check_runtime_dependencies import (
     verify_runtime,
     verify_single_executable,
 )
-from license_notices import write_notices
+from license_notices import dependency_metadata, write_notices
 
 ROOT = Path(__file__).resolve().parents[1]
+XTB_SYSTEMS = {"macos", "linux"}
+XTB_FIXTURES = ROOT / "tests/fixtures/xtb"
+XTB_HEADER = struct.Struct("<8sHHI")
+XTB_VERIFY_TIMEOUT_SECONDS = 60
 
 
 def run(command, **kwargs):
@@ -59,8 +68,11 @@ def numeric_version(value):
 
 
 def check_tag(tag):
-    if tag != f"v{version()}":
-        raise ValueError(f"Tag {tag!r} must match Cargo.toml version v{version()}")
+    package_version = version()
+    prefix = "nightly-" if tag.startswith("nightly-") else "v"
+    expected = f"{prefix}{package_version}"
+    if tag != expected:
+        raise ValueError(f"Tag {tag!r} must match Cargo.toml version {expected}")
 
 
 def release_platform(target):
@@ -153,6 +165,188 @@ def verify_inchi_worker(binary, version):
         raise ValueError("Packaged InChI helper returned an invalid molecule") from error
     if not valid:
         raise ValueError("Packaged InChI helper did not read methane correctly")
+
+
+def xtb_water_geometry():
+    count, _, *rows = (XTB_FIXTURES / "water.xyz").read_text(encoding="utf-8").splitlines()
+    numbers, positions = [], []
+    for row in rows:
+        symbol, *xyz = row.split()
+        numbers.append({"H": 1, "O": 8}[symbol])
+        positions.append([float(value) for value in xyz])
+    if int(count) != len(positions) or len(positions) != 3:
+        raise ValueError("Invalid xTB water fixture atom count")
+    return numbers, positions
+
+
+XTB_WATER_NUMBERS, XTB_WATER_POSITIONS = xtb_water_geometry()
+XTB_WATER_ENERGY = json.loads((XTB_FIXTURES / "reference.json").read_text(encoding="utf-8"))[
+    "axtb"
+]["water"]["energy"]
+
+
+def verify_xtb_worker(binary, metadata):
+    """Evaluate water through the packaged app's framed xTB worker protocol."""
+    xtb = metadata["xtb"]
+    deadline = time.monotonic() + XTB_VERIFY_TIMEOUT_SECONDS
+    temporary = tempfile.TemporaryDirectory(prefix="ReShiki xTB check ")
+    environment = os.environ.copy()
+    for name in ("AXTB_LAPACK", "AXTB_LAPACK_BLAS"):
+        environment.pop(name, None)
+    try:
+        process = subprocess.Popen(
+            [Path(binary).resolve(), "--xtb-worker"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            cwd=temporary.name,
+            env=environment,
+            start_new_session=os.name == "posix",
+        )
+    except BaseException:
+        temporary.cleanup()
+        raise
+
+    # Keep the worker unreaped between the liveness check and group signal.
+    process_lock = threading.Lock()
+
+    def stop():
+        with process_lock:
+            if os.name == "posix":
+                try:
+                    # An exited worker's process group ID may already have been reused.
+                    if process.poll() is None:
+                        os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            elif process.poll() is None:
+                process.kill()
+
+    def wait_for_exit():
+        while True:
+            with process_lock:
+                returncode = process.poll()
+            if returncode is not None:
+                return returncode
+            # Never hold the lock while waiting, so stop() can meet the deadline.
+            time.sleep(0.01)
+
+    def exchange():
+        stdin, stdout = process.stdin, process.stdout
+        assert stdin is not None and stdout is not None
+
+        def request(request_id, op, **fields):
+            body = json.dumps(dict(id=request_id, op=op, **fields)).encode()
+            stdin.write(XTB_HEADER.pack(b"RSHXTBWK", 1, 0, len(body)) + body)
+            stdin.flush()
+            header = stdout.read(XTB_HEADER.size)
+            if len(header) != XTB_HEADER.size:
+                raise ValueError(f"xTB worker returned an incomplete {op} header")
+            magic, protocol, kind, length = XTB_HEADER.unpack(header)
+            if (magic, protocol, kind) != (b"RSHXTBWK", 1, 0) or length > 4 * 1024 * 1024:
+                raise ValueError(f"xTB worker returned an incompatible {op} frame")
+            body = stdout.read(length)
+            if len(body) != length:
+                raise ValueError(f"xTB worker returned an incomplete {op} response")
+            response = json.loads(body)
+            if response.get("id") != request_id or "ok" not in response:
+                raise ValueError(f"xTB worker failed {op}: {response}")
+            return response["ok"]
+
+        def evaluate():
+            hello = request(1, "hello")
+            if hello["protocol"] != 1:
+                raise ValueError(f"xTB worker reported an incompatible protocol: {hello}")
+            if xtb["included"]:
+                engine = hello["engine"] or {}
+                if (
+                    engine.get("name") != "axtb"
+                    or engine.get("rev") != xtb["rev"]
+                    or engine.get("version") != xtb["version"]
+                    or "gfn2" not in hello["methods"]
+                ):
+                    raise ValueError(f"xTB worker reported an unexpected engine: {hello}")
+                opened = request(
+                    2,
+                    "open",
+                    numbers=XTB_WATER_NUMBERS,
+                    positions=XTB_WATER_POSITIONS,
+                    units="angstrom",
+                    method="gfn2",
+                    conventions="axtb",
+                    heap_bytes=256 * 1024 * 1024,
+                )
+                if opened.get("conventions") != "axtb":
+                    raise ValueError(f"xTB worker returned unexpected water conventions: {opened}")
+                result = request(3, "compute", units="angstrom", gradient=True)
+                if result.get("conventions") != "axtb":
+                    raise ValueError(f"xTB worker returned unexpected water conventions: {result}")
+                energy = result["energy"]
+                if not math.isclose(energy, XTB_WATER_ENERGY, rel_tol=0, abs_tol=1e-9):
+                    raise ValueError(f"xTB worker returned an unexpected water energy: {energy} Eh")
+                gradient = result["gradient"]
+                if len(gradient) != 3 or not all(
+                    len(row) == 3
+                    and all(type(value) in (int, float) and math.isfinite(value) for value in row)
+                    for row in gradient
+                ):
+                    raise ValueError(f"xTB worker returned an invalid water gradient: {gradient}")
+                gap = result.get("homo_lumo_gap_ev")
+                if (
+                    type(gap) not in (int, float)
+                    or not math.isfinite(gap)
+                    or gap < 0.1
+                    or result.get("near_degenerate") is not False
+                ):
+                    raise ValueError(f"xTB worker returned invalid water gap diagnostics: {result}")
+                request(4, "close")
+                summary = (
+                    f"xTB worker axtb {engine['version']}: water {energy:.15f} Eh, gradient OK."
+                )
+            else:
+                if hello["engine"] is not None:
+                    raise ValueError(f"xTB worker unexpectedly included an engine: {hello}")
+                # The stub exits on EOF because it has no session to close.
+                stdin.close()
+                summary = "xTB worker protocol 1 verified with no engine."
+
+            if stdout.read(1):
+                raise ValueError("xTB worker returned unexpected data after the last response")
+            returncode = wait_for_exit()
+            if returncode:
+                raise ValueError(f"xTB worker exited with status {returncode}")
+            return summary
+
+        try:
+            summary = evaluate()
+        except BaseException as error:
+            result.set_exception(error)
+            summary = None
+        try:
+            wait_for_exit()
+            stdin.close()
+            stdout.close()
+            temporary.cleanup()
+        except BaseException as error:
+            if not result.done():
+                result.set_exception(error)
+        if not result.done():
+            result.set_result(summary)
+
+    # A descendant outside the worker's process group can keep a pipe open even
+    # after SIGKILL. A daemon reader and no blocking cleanup on the caller keep
+    # the one deadline effective on POSIX and on platforms without killpg.
+    result = Future()
+    threading.Thread(target=exchange, name="ReShiki xTB check", daemon=True).start()
+    try:
+        print(result.result(timeout=max(0, deadline - time.monotonic())))
+    except TimeoutError as error:
+        stop()
+        raise ValueError(
+            f"xTB worker did not complete within {XTB_VERIFY_TIMEOUT_SECONDS} seconds"
+        ) from error
+    except BaseException:
+        stop()
+        raise
 
 
 def verify_geometry_dependencies(binary):
@@ -420,20 +614,77 @@ def verify_geometry_worker(binary, version, *, signed=False):
     )
 
 
-def notices(destination):
+def cargo_metadata(features=(), *, target=None):
+    command = ["cargo", "metadata", "--format-version", "1", "--locked"]
+    if features:
+        command.extend(["--features", ",".join(features)])
+    if target:
+        command.extend(["--filter-platform", target])
+    return json.loads(run(command, cwd=ROOT, capture_output=True, text=True).stdout)
+
+
+def notices(destination, features=(), *, target=None):
     from geometry_source import verify as verify_geometry_source
 
-    metadata = json.loads(
-        run(
-            ["cargo", "metadata", "--format-version", "1", "--locked"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-        ).stdout
-    )
+    metadata = cargo_metadata()
     verify_agent_dependencies(ROOT, metadata)
     verify_geometry_source(ROOT, cargo_metadata=metadata)
+    if features:
+        # The unfiltered feature graph includes dependencies outside the target's cfg.
+        metadata = cargo_metadata(features, target=target or host_target())
+        metadata = dependency_metadata(metadata)
+    # Keep the default workspace-wide notices path unchanged; feature packages
+    # carry only the application's normal/build dependency closure.
     write_notices(ROOT, destination, metadata)
+
+
+def xtb_release_metadata(package_version, features):
+    if "xtb" not in features:
+        return {"included": False}
+    metadata = cargo_metadata(features)
+    lock = tomllib.loads((ROOT / "Cargo.lock").read_text(encoding="utf-8"))
+    (driver,) = (
+        package
+        for package in metadata["packages"]
+        if package["name"] == "axtb-driver" and axtb_fork(package.get("source") or "")
+    )
+    (locked,) = (
+        package
+        for package in lock["package"]
+        if package["name"] == driver["name"] and package.get("source") == driver["source"]
+    )
+    revision = locked["source"].partition("#")[2]
+    if locked["version"] != driver["version"] or locked["source"] != axtb_locked_source(revision):
+        raise ValueError("axtb-driver metadata does not match the pinned Cargo.lock entry")
+    return dict(
+        included=True,
+        engine="axtb",
+        version=driver["version"],
+        license=AXTB_LICENSE,
+        source=AXTB_SOURCE,
+        rev=revision,
+        source_archive=f"reshiki-{package_version}-source.tar.gz",
+    )
+
+
+def xtb_readme(xtb, tag, system):
+    if not xtb["included"]:
+        return ""
+    release_page = (
+        f"on the same release page (https://github.com/Ameyanagi/ReShiki/releases/tag/{tag})"
+        if tag
+        else "on the GitHub release page of this version"
+    )
+    license_folder = "Licenses/"
+    if system == "macos":
+        license_folder = "ReShiki.app/Contents/Resources/Licenses/"
+    return (
+        "\nThis build contains axtb for xTB calculations. The axtb component is\n"
+        "licensed separately from ReShiki under LGPL-3.0-or-later. Its license\n"
+        f"texts are in {license_folder}. The complete corresponding source and\n"
+        f"rebuild steps are in {xtb['source_archive']}\n"
+        f"{release_page}.\n"
+    )
 
 
 def remove_owned_path(path):
@@ -443,7 +694,7 @@ def remove_owned_path(path):
         shutil.rmtree(path)
 
 
-def mac_bundle(destination, profile, *, target=None):
+def mac_bundle(destination, profile, *, target=None, features=()):
     executable = destination / "Contents/MacOS/reshiki"
     executable.parent.mkdir(parents=True, exist_ok=True)
     staged = executable.with_suffix(".new")
@@ -461,7 +712,7 @@ def mac_bundle(destination, profile, *, target=None):
         "Contents/Helpers/ReShiki Print.app",
     ):
         remove_owned_path(destination / old)
-    notices(resources / "Licenses")
+    notices(resources / "Licenses", features, target=target)
     # Development/manual builds; release signing replaces the ad-hoc signature.
     run(["codesign", "--force", "--deep", "--sign", "-", destination])
     return destination
@@ -556,6 +807,7 @@ def verify_archive(archive_path, signed=False):
             binary = folder / ("reshiki.exe" if metadata["platform"] == "windows" else "reshiki")
         verify_binary(binary, metadata["platform"], metadata["architecture"])
         verify_inchi_worker(binary, metadata["inchi"]["version"])
+        verify_xtb_worker(binary, metadata)
         verify_single_executable(binary, folder)
         verify_runtime(binary, folder)
         verify_agent_api(binary, folder, quarantine=signed and platform.system() == "Darwin")
@@ -568,7 +820,9 @@ def verify_archive(archive_path, signed=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tag")
+    parser.add_argument(
+        "--tag", help="Release tag for the package README (defaults to RELEASE_TAG)"
+    )
     parser.add_argument("--sign", action="store_true")
     parser.add_argument(
         "--installer",
@@ -578,19 +832,22 @@ def main():
     parser.add_argument("--target", choices=sorted(RELEASE_TARGETS))
     parser.add_argument("--check-tag-only", action="store_true")
     args = parser.parse_args()
-    if args.tag:
-        check_tag(args.tag)
+    tag = args.tag or os.environ.get("RELEASE_TAG")
+    if tag:
+        check_tag(tag)
     if args.check_tag_only:
         return
     if args.sign and platform.system() != "Darwin":
         raise ValueError("Developer ID signing requires macOS")
     target = args.target or host_target()
     system, arch = release_platform(target)
+    features = ("xtb",) if system in XTB_SYSTEMS else ()
     if {"Darwin": "macos", "Windows": "windows", "Linux": "linux"}.get(platform.system()) != system:
         raise ValueError(
             "Build and verify a release on a runner with the matching operating system"
         )
-    name = f"reshiki-{version()}-{system}-{arch}"
+    package_version = version()
+    name = f"reshiki-{package_version}-{system}-{arch}"
     # Keep dependency notices outside Cargo's target tree: rust-cache treats
     # nested crate sources as build output and removes their test directories.
     # This also stays separate from the development app in dist/ReShiki.app.
@@ -598,22 +855,32 @@ def main():
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
-    run(
-        ["cargo", "build", "--profile", "dist", "--locked", "--bin", "reshiki", "--target", target],
-        cwd=ROOT,
-    )
+    command = [
+        "cargo",
+        "build",
+        "--profile",
+        "dist",
+        "--locked",
+        "--bin",
+        "reshiki",
+        "--target",
+        target,
+    ]
+    if features:
+        command.extend(["--features", ",".join(features)])
+    run(command, cwd=ROOT)
     build = target_directory() / target / "dist"
     binary_name = "reshiki.exe" if system == "windows" else "reshiki"
     verify_binary(build / binary_name, system, arch)
     if system == "macos":
-        app = mac_bundle(folder / "ReShiki.app", "dist", target=target)
+        app = mac_bundle(folder / "ReShiki.app", "dist", target=target, features=features)
         if args.sign:
             from sign_macos import sign_and_notarize
 
             sign_and_notarize(app)
     else:
         shutil.copy2(build / binary_name, folder / binary_name)
-        notices(folder / "Licenses")
+        notices(folder / "Licenses", features, target=target)
     if system == "linux":
         # Ship a stripped binary; reshiki.debug keeps its symbols for crash reports.
         symbols = build / "reshiki.debug"
@@ -623,12 +890,14 @@ def main():
     from geometry_source import verify as geometry_metadata
 
     metadata = dict(
-        version=version(),
+        version=package_version,
+        release_tag=tag,
         platform=system,
         architecture=arch,
         rust_target=target,
         inchi=dict(version=INCHI_VERSION, dependency=dependency(ROOT), runtime="self-process"),
         geometry=dict(geometry_metadata(ROOT), linkage="static"),
+        xtb=xtb_release_metadata(package_version, features),
         signed=args.sign,
         notarized=args.sign,
         commit=os.environ.get("GITHUB_SHA", "local"),
@@ -648,7 +917,8 @@ def main():
             "macOS application signed with Developer ID and notarized by Apple.\n"
             if args.sign
             else "This build has no publisher signature.\n"
-        ),
+        )
+        + xtb_readme(metadata["xtb"], tag, system),
         encoding="utf-8",
     )
     output = archive(folder, ROOT / "dist/releases" / name)

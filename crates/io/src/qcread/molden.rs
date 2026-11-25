@@ -1,24 +1,32 @@
 //! Molden records, converted at the boundary to the canonical AO convention.
 //!
-//! The four cclib Molden 5.7 fixtures derive from GAMESS-US 2018 calculations.
-//! The Cartesian `Unit` adapter is checked by MO orthonormality on the carbon
-//! fixture's 109 MOs over 139 AOs: maximum |C S C^T - I| is about 2.9e-6 for
-//! `Unit`, versus 0.94 for `Axial`. Only that fixture has d/f/g functions: the
-//! check establishes their Cartesian normalization for this Molden export,
-//! not a convention for other generators or pure harmonics.
-//! By import policy, an unidentified producer adopts this Molden export's
-//! `Unit` convention; this fallback is not proof about the unknown producer.
-//! This evidence does not compare the fixtures to the independent Gaussian fchk
-//! calculations. Pure d/f/g shapes and identified non-Molden Cartesian d/f/g
-//! shapes are therefore omitted. ORCA shapes are omitted even for s/p: the
-//! radial primitive normalization of legacy orca_2mkl exports is unverified.
+//! Producer-specific AO conventions come from exact writer headers in fixed
+//! sections. Heuristic producer names are used for provenance and shape omission.
+//!
+//! The cclib Molden 5.7 carbon fixture confirms Cartesian `Unit` normalization
+//! for d/f/g by MO orthonormality. The PySCF 2.15.0 fixtures confirm the Molden
+//! pure d/f/g order and signs, Cartesian d/f/g order and `Unit` normalization,
+//! and mixed per-l flags against signed grid values. By import policy, files
+//! from Molden and unidentified producers use the specification convention for
+//! pure d/f/g as verified on PySCF exports. The reader accepts this convention
+//! for PySCF writer headers with a major version of 2 or later.
+//!
+//! The ORCA formaldehyde TDDFT and water TZVP fixtures verify bare radial
+//! coefficients for contracted s/p shells by implied AO overlap. Every d/f
+//! shell in these fixtures has one primitive. The phase comparison assumes
+//! ORCA's p order and signs are x, y, z. It confirms the Molden pure d order
+//! and signs and the pure f order with inverted m = ±3 signs. The adapter
+//! requires the exact title prefix `Molden file created by orca_2mkl for BaseName=`,
+//! with the bare program name. ORCA files without this header keep only orbital
+//! energies. Pure g and Cartesian d/f/g from `orca_2mkl` and d/f/g from other
+//! named producers remain unverified.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use reshiki_qcdata::{
     ANGSTROM_PER_BOHR, BasisSet, Beta, CartesianNorm, MAX_BASIS_FUNCTIONS, MAX_COEFFICIENTS,
     MAX_FRAME_ATOMS, MAX_HESSIAN_ATOMS, MAX_PRIMITIVES, MAX_TRAJECTORY_ATOMS, OrbitalSet, Orbitals,
-    Shell, Status, Task, Vibrations, mo_from_molden,
+    Shell, Status, Task, Vibrations, mo_from_molden, primitive_norm,
 };
 
 use super::{
@@ -69,6 +77,15 @@ struct GaussianBasis {
     // Keep the true AO count after dropping an oversized basis, to check sparse indices.
     basis: Option<BasisSet>,
     n_ao: usize,
+}
+
+#[derive(Clone, Copy)]
+enum Writer {
+    Orca,
+    Pyscf(u32),
+    /// Both writer headers, or a PySCF header without a readable version.
+    Unreadable,
+    Other,
 }
 
 #[derive(Default)]
@@ -133,6 +150,9 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
             "Slater-type orbitals ([STO]) are not supported".into(),
         ));
     }
+    let program = producer(text, &sections);
+    let writer = writer(&sections);
+    let orca = matches!(writer, Writer::Orca);
     let representations = read_representations(&sections)?;
     let mut warnings = Vec::new();
     let n_atoms = scalar(&sections, "N_ATOMS")?
@@ -206,14 +226,13 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
             let atoms = atoms
                 .as_ref()
                 .ok_or_else(|| Error::at(s.line, "[GTO] requires [Atoms]"))?;
-            read_basis(s, atoms, &representations)
+            read_basis(s, atoms, &representations, orca)
         })
         .transpose()?;
-    let program = producer(text, &sections);
     let shape_reason = basis
         .as_ref()
         .and_then(|b| b.basis.as_ref())
-        .and_then(|b| unsupported_shapes(b, program.as_deref()));
+        .and_then(|b| unsupported_shapes(b, writer, program.as_deref()));
     if let Some(reason) = &shape_reason {
         warnings.push(reason.clone());
     }
@@ -221,7 +240,7 @@ pub(super) fn read(text: &str, origin: &Origin<'_>) -> Result<QcFile, Error> {
         warnings.push(format!("Orbital shapes left out (more than {MAX_BASIS_FUNCTIONS} basis functions); orbital energies are kept"));
     }
     let mut molecular = unique(&sections, "MO")?
-        .map(|s| read_mos(s, basis.as_ref(), shape_reason.is_none()))
+        .map(|s| read_mos(s, basis.as_ref(), shape_reason.is_none(), orca))
         .transpose()?
         .unwrap_or_default();
     if !molecular.beta.occupations.is_empty() && molecular.missing_spins != 0 {
@@ -657,11 +676,16 @@ fn read_pseudo(section: &Section<'_>, atoms: &mut Atoms) -> Result<(), Error> {
 }
 
 fn read_representations(sections: &[Section<'_>]) -> Result<BTreeMap<u8, bool>, Error> {
+    let split_pure_flags = ["5D", "7F"]
+        .iter()
+        .all(|flag| sections.iter().any(|s| s.name == *flag));
     let mut representations = BTreeMap::new();
     for section in sections {
-        // The short [5D] and [7F] flags each declare both d and f.
-        // See https://www.theochem.ru.nl/molden/molden_format.html.
         let flags: &[(u8, bool)] = match section.name.as_str() {
+            // PySCF and orca_2mkl can write the pure pair on separate lines.
+            "5D" if split_pure_flags => &[(2, true)],
+            "7F" if split_pure_flags => &[(3, true)],
+            // A lone short flag follows the Molden specification.
             "5D" | "5D7F" => &[(2, true), (3, true)],
             "5D10F" => &[(2, true), (3, false)],
             "7F" | "6D7F" => &[(2, false), (3, true)],
@@ -691,6 +715,7 @@ fn read_basis(
     section: &Section<'_>,
     atoms: &Atoms,
     representations: &BTreeMap<u8, bool>,
+    orca: bool,
 ) -> Result<GaussianBasis, Error> {
     let mut lines = section
         .lines()
@@ -768,21 +793,29 @@ fn read_basis(
                 )?);
             }
         }
-        let shell = Shell {
+        let mut shell = Shell {
             atom,
             l,
             pure: representations.get(&l).copied().unwrap_or(false),
             exponents_per_bohr2: exponents,
             coefficients,
         };
-        shell.validate(atoms.geometry.atoms.len())?;
-        let p_shell = sp.then(|| Shell {
+        let mut p_shell = sp.then(|| Shell {
             l: 1,
             pure: false,
             coefficients: p_coefficients,
             ..shell.clone()
         });
-        if let Some(shell) = &p_shell {
+        for shell in std::iter::once(&mut shell).chain(p_shell.as_mut()) {
+            if orca {
+                for (&alpha, coefficient) in shell
+                    .exponents_per_bohr2
+                    .iter()
+                    .zip(&mut shell.coefficients)
+                {
+                    *coefficient /= primitive_norm(alpha, shell.l);
+                }
+            }
             shell.validate(atoms.geometry.atoms.len())?;
         }
         n_ao = n_ao
@@ -809,6 +842,7 @@ fn read_mos(
     section: &Section<'_>,
     basis: Option<&GaussianBasis>,
     keep_shapes: bool,
+    orca: bool,
 ) -> Result<MolecularOrbitals, Error> {
     let mut molecular = MolecularOrbitals::default();
     let mut current = Mo::default();
@@ -828,6 +862,7 @@ fn read_mos(
                     std::mem::take(&mut current),
                     basis,
                     keep_shapes,
+                    orca,
                 )?;
             }
             let value = value.trim();
@@ -881,7 +916,7 @@ fn read_mos(
         }
     }
     if current.fields != 0 || !current.coefficients.is_empty() {
-        finish_mo(&mut molecular, current, basis, keep_shapes)?;
+        finish_mo(&mut molecular, current, basis, keep_shapes, orca)?;
     }
     // Sparse entries in an existing row are zero. A header without any
     // coefficients supplies only a level, not evidence of a zero-valued MO.
@@ -890,13 +925,14 @@ fn read_mos(
 
 #[allow(
     clippy::indexing_slicing,
-    reason = "Sparse AO indices were checked by read_mos against this immutable basis's AO count"
+    reason = "Sparse indices were checked by read_mos and canonical blocks by mo_from_molden"
 )]
 fn finish_mo(
     molecular: &mut MolecularOrbitals,
     mut mo: Mo,
     basis: Option<&GaussianBasis>,
     keep_shapes: bool,
+    orca: bool,
 ) -> Result<(), Error> {
     mo.coefficients.sort_unstable_by_key(|&(index, _)| index);
     if mo
@@ -941,10 +977,20 @@ fn finish_mo(
                 row[index] = coefficient;
             }
             channel.rows += 1;
-            // The bounded Molden 5.7 Cartesian fixture evidence is documented
-            // at this module's boundary; pure and other high-l producers have
-            // already lost their shape rows.
-            Some(mo_from_molden(basis, &row, CartesianNorm::Unit)?)
+            let mut canonical = mo_from_molden(basis, &row, CartesianNorm::Unit)?;
+            if orca {
+                let mut offset = 0;
+                for shell in &basis.shells {
+                    let end = offset + shell.n_functions();
+                    if shell.l == 3 && shell.pure {
+                        // The ORCA water TZVP implied overlap verifies the f(±3) sign flips.
+                        canonical[offset] *= -1.0;
+                        canonical[end - 1] *= -1.0;
+                    }
+                    offset = end;
+                }
+            }
+            Some(canonical)
         }
     } else {
         None
@@ -1394,15 +1440,42 @@ fn read_geometry_energies(section: &Section<'_>) -> Result<Vec<f64>, Error> {
     Ok(values)
 }
 
+fn writer(sections: &[Section<'_>]) -> Writer {
+    let header = |name, prefix: &str| {
+        let line = sections.iter().find(|s| s.name == name)?.data().next()?;
+        let (actual, rest) = line.text.trim().split_at_checked(prefix.len())?;
+        actual.eq_ignore_ascii_case(prefix).then_some(rest)
+    };
+    match (
+        header("TITLE", "Molden file created by orca_2mkl for BaseName="),
+        header("MOLDEN FORMAT", "made by pyscf v["),
+    ) {
+        (Some(_), None) => Writer::Orca,
+        (None, None) => Writer::Other,
+        (None, Some(version)) => (|| {
+            let version = version.strip_suffix(']')?;
+            let (major, rest) = version.split_once('.')?;
+            let (minor, patch) = rest.split_once('.')?;
+            [major, minor, patch]
+                .iter()
+                .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+                .then_some(())?;
+            major.parse().ok()
+        })()
+        .map_or(Writer::Unreadable, Writer::Pyscf),
+        (Some(_), Some(_)) => Writer::Unreadable,
+    }
+}
+
 fn producer(text: &str, sections: &[Section<'_>]) -> Option<String> {
-    let title = sections
+    let metadata = sections
         .iter()
-        .filter(|s| s.name == "TITLE")
+        .filter(|s| matches!(s.name.as_str(), "TITLE" | "MOLDEN FORMAT"))
         .flat_map(|s| s.lines().map(|l| l.text));
     let comments = text.lines().filter(|line| {
         line.trim_start().starts_with(['#', '!', ';']) || line.trim_start().starts_with("//")
     });
-    let lines: Vec<_> = comments.chain(title).collect();
+    let lines: Vec<_> = comments.chain(metadata).collect();
     let mut generic_molden = false;
     // Explicit generators win over titles such as "Molden output".
     for line in &lines {
@@ -1412,6 +1485,7 @@ fn producer(text: &str, sections: &[Section<'_>]) -> Option<String> {
             "created by ",
             "written by ",
             "produced by ",
+            "made by ",
             "producer:",
         ] {
             if let Some((_, tail)) = lower.split_once(prefix) {
@@ -1440,7 +1514,8 @@ fn producer(text: &str, sections: &[Section<'_>]) -> Option<String> {
             }
         }
     }
-    for line in lines {
+    // Comments need an explicit declaration to name the producer.
+    for line in lines.into_iter().filter(|line| is_data(line)) {
         let lower = line.to_ascii_lowercase();
         if let Some(name) = named_producer(&lower) {
             return Some(name.into());
@@ -1468,30 +1543,38 @@ fn named_producer(lower: &str) -> Option<&'static str> {
     .find_map(|(needle, name)| lower.contains(needle).then_some(name))
 }
 
-fn unsupported_shapes(basis: &BasisSet, producer: Option<&str>) -> Option<String> {
-    if producer == Some("ORCA") {
-        return Some("Orbital shapes left out: ORCA/orca_2mkl radial primitive normalization is unverified for every angular momentum; orbital energies are kept".into());
-    }
+fn unsupported_shapes(basis: &BasisSet, writer: Writer, producer: Option<&str>) -> Option<String> {
+    let orca = matches!(writer, Writer::Orca);
+    let name = match (writer, producer) {
+        (Writer::Orca, _) => "ORCA",
+        (Writer::Unreadable, _) => {
+            return Some("Orbital shapes left out: the Molden writer header is conflicting or unreadable; orbital energies are kept".into());
+        }
+        (Writer::Pyscf(2..), _) | (Writer::Other, None | Some("Molden")) => return None,
+        (Writer::Pyscf(_), _) => "PySCF",
+        (Writer::Other, Some("ORCA")) => {
+            return Some("Orbital shapes left out: ORCA radial primitive normalization is unverified without the orca_2mkl writer signature; orbital energies are kept".into());
+        }
+        (Writer::Other, Some(name)) => name,
+    };
     let mut functions = BTreeSet::new();
     for shell in &basis.shells {
-        let named_other = producer.is_some_and(|producer| producer != "Molden");
         let name = match (shell.l, shell.pure) {
-            (2, true) => "pure d",
-            (3, true) => "pure f",
+            (2, true) if !orca => "pure d",
+            (3, true) if !orca => "pure f",
             (4, true) => "pure g",
-            (2, false) if named_other => "Cartesian d",
-            (3, false) if named_other => "Cartesian f",
-            (4, false) if named_other => "Cartesian g",
+            (2, false) => "Cartesian d",
+            (3, false) => "Cartesian f",
+            (4, false) => "Cartesian g",
             _ => continue,
         };
         functions.insert(name);
     }
-    let producer = producer.unwrap_or("an unidentified producer");
     if functions.is_empty() {
         return None;
     }
     Some(format!(
-        "Orbital shapes left out: {} functions from {producer} have no verified Molden convention; orbital energies are kept",
+        "Orbital shapes left out: {} functions from {name} have no verified Molden convention; orbital energies are kept",
         functions.into_iter().collect::<Vec<_>>().join(", ")
     ))
 }
