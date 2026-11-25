@@ -12,7 +12,7 @@ The Release builds workflow produces signed macOS disk images, Windows x64/ARM64
 
 Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.rsk` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs native chemistry, and checks uninstallation. Upgrades remove the old app-owned worker while preserving user drawings and caches.
 
-The macOS disk image contains the signed app and an Applications shortcut, created as a zlib image (`UDZO`) and then converted to LZMA (`ULMO`), because creating an LZMA image straight from a folder can fail. On hosted runners the conversion has failed with "Resource temporarily unavailable", which `hdiutil` reports when it cannot lock an image file; what held the lock is not known. As a workaround each conversion attempt reads a fresh copy of the zlib image, and each `hdiutil` step is tried up to five times, waiting 5, 10, 20 and 40 seconds in between. The image is given an explicit size (the files' total length plus 10% and 32 MB), because `hdiutil`'s own estimate can be too small for the copy. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has ten downloads plus `SHA256SUMS`; a nightly has eight, without the Intel Mac pair. Both publishers validate the exact filenames and their checksum sidecars before creating the shared OS/architecture/installer/portable download table. macOS archive manifests must declare the matching version, architecture, signature and notarization. Generated GitHub release notes are retained after this table.
+The macOS disk image contains the signed app and an Applications shortcut, created as a zlib image (`UDZO`) and then converted to LZMA (`ULMO`), because creating an LZMA image straight from a folder can fail. On hosted runners the conversion has failed with "Resource temporarily unavailable", which `hdiutil` reports when it cannot lock an image file; what held the lock is not known. As a workaround each conversion attempt reads a fresh copy of the zlib image, and each `hdiutil` step is tried up to five times, waiting 5, 10, 20 and 40 seconds in between. The image is given an explicit size (the files' total length plus 10% and 32 MB), because `hdiutil`'s own estimate can be too small for the copy. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. Stable releases have ten application downloads. Nightlies have eight because they skip the Intel Mac builds. Both publish the source archive, its `.sha256` file and `SHA256SUMS`. Both publishers validate the exact filenames and their checksum sidecars before creating the shared OS/architecture/installer/portable download table. Application checksums are published in `SHA256SUMS`. macOS archive manifests must declare the matching version, architecture, signature and notarization. Generated GitHub release notes are retained after this table.
 
 Keep the homepage, README, and installation guide's primary download links pointed
 at [the latest stable release](https://github.com/Ameyanagi/ReShiki/releases/latest).
@@ -22,6 +22,38 @@ list, where newer nightlies can appear above stable. See [GitHub's release optio
 Link to the [nightly installation instructions](https://reshiki.com/guide/install/#nightly-builds)
 as a secondary path for testers.
 
+## xTB and corresponding source
+
+macOS and Linux release builds, including nightlies, enable the `xtb` feature and
+contain axtb under LGPL-3.0-or-later. Windows releases keep the default features
+and report that xTB is not included. Archive verification exercises `--xtb-worker`
+on every platform, including a water energy and gradient when xTB is included.
+The [xTB licensing guide](xtb-licensing.md) describes the notices and source terms.
+
+Each release publishes `reshiki-<version>-source.tar.gz` and its `.sha256` on the
+same release page as the applications, with the source archive also listed in
+`SHA256SUMS`. It contains ReShiki's tracked release sources, the pinned axtb source,
+vendored Cargo dependencies, file hashes and `BUILD-WITH-XTB.md` with offline
+rebuild instructions, including how to use a modified axtb. With an empty
+`CARGO_HOME`, the source job checks the shipped sources and tests a rebuild with
+a modified axtb offline before publication. Nightly archives use the same unique
+version as their applications. Each archive is published in the same release as
+its applications, so it stays exactly as long as they do: permanently for tagged
+releases, and until the nightly release itself is deleted for nightlies. Prune
+nightlies only by deleting whole releases (`gh release delete`), never single
+assets; see [xTB licensing](xtb-licensing.md#corresponding-source).
+
+The source archive supports building and testing the application. Building the
+website requires the full repository because the archive excludes `docs/images/`
+assets used by the website.
+
+Build and check the source archive locally.
+
+```sh
+uv run --no-project --python 3.12 python scripts/xtb_source_archive.py build --output dist/releases
+uv run --no-project --python 3.12 python scripts/xtb_source_archive.py check dist/releases/reshiki-<version>-source.tar.gz
+```
+
 ## Test a build
 
 Open development pull requests against `main`, the default and development
@@ -29,7 +61,8 @@ branch. Tag tested commits on `main` for stable releases.
 
 The **Nightly builds** workflow builds `main` daily at 18:37 UTC (03:37 JST), or on
 manual dispatch with `main` selected. Each successful run publishes a downloadable
-GitHub prerelease with eight downloads and `SHA256SUMS`: a signed and notarized macOS
+GitHub prerelease with eight application downloads, the source archive, its
+checksum sidecar and `SHA256SUMS`: a signed and notarized macOS
 DMG/ZIP for Apple Silicon, Windows setup/ZIP for both architectures, and
 Linux archives for both architectures. Nightlies are not built for Intel Macs,
 whose build kept reaching the job's time limit; stable releases still include

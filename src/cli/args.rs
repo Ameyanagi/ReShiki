@@ -2,11 +2,15 @@
 //! `reshiki --cli help`.
 //!
 //! Tokens stay [`OsString`]s, so paths need not be UTF-8. `--` ends the
-//! options, each option is allowed at most once, and every problem is a
-//! usage error (exit 2) found before anything is read or run.
+//! options, each option except `--scf-retry` is allowed at most once, and
+//! every problem is a usage error (exit 2) found before anything is read or run.
 use super::{
     commands::{self, CommandSpec},
     input_format, input_formats, output_formats, render_formats,
+};
+use reshiki_xtb_worker::protocol::{
+    Conventions, Method, ScfRetry, ScfSettings, SolvationState, Solvent, SolventCorrection,
+    SolventModel,
 };
 use std::{
     ffi::{OsStr, OsString},
@@ -14,7 +18,7 @@ use std::{
 };
 
 /// A parsed command line.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum Command {
     Help {
         topic: Option<&'static CommandSpec>,
@@ -22,6 +26,7 @@ pub(crate) enum Command {
     },
     Info,
     Version,
+    Calc(Calc),
     Tools,
     Schema(Schema),
     Skill(Skill),
@@ -33,6 +38,30 @@ pub(crate) enum Command {
     Name(Name),
     PiecesCheck(Vec<PathBuf>),
     PiecesRender(PieceRender),
+}
+
+/// `calc`: the first XYZ frame and one xTB calculation.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Calc {
+    pub(crate) file: PathBuf,
+    pub(crate) task: CalcTask,
+    pub(crate) method: Method,
+    pub(crate) gradient: bool,
+    pub(crate) bond_orders: bool,
+    pub(crate) charge: i32,
+    pub(crate) uhf: Option<u32>,
+    pub(crate) conventions: Conventions,
+    pub(crate) solvent: Option<Solvent>,
+    pub(crate) scf: Option<ScfSettings>,
+    pub(crate) threads: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CalcTask {
+    Energy,
+    Gradient,
+    Hessian,
+    Orbitals,
 }
 
 /// A schema the CLI can print without a tool host.
@@ -181,6 +210,7 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "schema" => schema(&options(spec, rest)?),
         "skill" => skill(&options(spec, rest)?),
         "pieces" => pieces(spec, rest),
+        "calc" => calc(&options(spec, rest)?),
         "convert" => convert(&options(spec, rest)?),
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
@@ -212,6 +242,183 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         }
         _ => Err(unknown_command(&lossy)),
     }
+}
+
+fn calc(options: &Options) -> Result<Command, String> {
+    let file = options
+        .input
+        .as_ref()
+        .filter(|file| !file.is_empty() && *file != "-")
+        .map(PathBuf::from)
+        .ok_or("calc needs an XYZ file: FILE.xyz")?;
+    if !file
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("xyz"))
+    {
+        return Err("calc needs an XYZ file: FILE.xyz".into());
+    }
+    let charge = options
+        .charge
+        .as_deref()
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse::<i32>().ok())
+                .ok_or("--charge must be a whole number in the signed 32-bit range")
+        })
+        .transpose()?
+        .unwrap_or(0);
+    let uhf = options
+        .uhf
+        .as_deref()
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse::<u32>().ok())
+                .ok_or("--uhf must be a nonnegative whole number in the unsigned 32-bit range")
+        })
+        .transpose()?;
+    let conventions = match options.conventions.as_deref().map(OsStr::to_str) {
+        None | Some(Some("axtb")) => Conventions::Axtb,
+        Some(Some("xtb-6.8")) => Conventions::Xtb68,
+        _ => return Err("--conventions must be axtb or xtb-6.8".into()),
+    };
+    let task = match options.task.as_deref().map(OsStr::to_str) {
+        None | Some(Some("energy")) => CalcTask::Energy,
+        Some(Some("gradient")) => CalcTask::Gradient,
+        Some(Some("hessian")) => CalcTask::Hessian,
+        Some(Some("orbitals")) => CalcTask::Orbitals,
+        _ => return Err("--task must be energy, gradient, hessian or orbitals".into()),
+    };
+    let method = match options.method.as_deref().map(OsStr::to_str) {
+        None | Some(Some("gfn2")) => Method::Gfn2,
+        Some(Some("gfnff")) => Method::Gfnff,
+        Some(Some("gxtb")) => Method::Gxtb,
+        _ => return Err("--method must be gfn2, gfnff or gxtb".into()),
+    };
+    let correction = match options.solvent_correction.as_deref().map(OsStr::to_str) {
+        None => None,
+        Some(Some("gfn2")) => Some(SolventCorrection::Gfn2),
+        _ => return Err("--solvent-correction must be gfn2".into()),
+    };
+    let solvent = match (&options.alpb, &options.gbsa) {
+        (Some(_), Some(_)) => return Err("--alpb and --gbsa cannot be combined".into()),
+        (None, None) => {
+            if correction.is_some() {
+                return Err("--solvent-correction needs --alpb or --gbsa".into());
+            }
+            None
+        }
+        (alpb, gbsa) => {
+            let (model, name) = match (alpb, gbsa) {
+                (Some(name), _) => (SolventModel::Alpb, name),
+                (_, Some(name)) => (SolventModel::Gbsa, name),
+                _ => return Err("a solvent name is required".into()),
+            };
+            let name = name
+                .to_str()
+                .filter(|name| !name.trim().is_empty())
+                .ok_or("the solvent name must be nonempty UTF-8 text")?;
+            Some(Solvent {
+                model,
+                name: name.into(),
+                state: SolvationState::Gsolv,
+                correction,
+            })
+        }
+    };
+    let temperature = |name, value: &OsStr| {
+        value
+            .to_str()
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|value| value.is_finite() && *value >= 0.0)
+            .ok_or_else(|| format!("{name} must be finite and at least 0 K"))
+    };
+    let iterations = |name, value: &OsStr| {
+        value
+            .to_str()
+            .and_then(|value| value.parse::<u32>().ok())
+            .filter(|value| *value > 0)
+            .ok_or_else(|| format!("{name} must be a whole number from 1 to 4294967295"))
+    };
+    let electronic_temperature_k = options
+        .etemp
+        .as_deref()
+        .map(|value| temperature("--etemp", value))
+        .transpose()?;
+    let accuracy = options
+        .accuracy
+        .as_deref()
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| value.is_finite() && *value > 0.0)
+                .ok_or("--accuracy must be finite and positive")
+        })
+        .transpose()?;
+    let max_iterations = options
+        .max_iter
+        .as_deref()
+        .map(|value| iterations("--max-iter", value))
+        .transpose()?;
+    let mut retries = Vec::with_capacity(options.scf_retry.len());
+    for retry in &options.scf_retry {
+        let text = retry.to_str().ok_or("--scf-retry must be K or K:N")?;
+        let (kelvin, count) = text
+            .split_once(':')
+            .map_or((text, None), |(kelvin, count)| (kelvin, Some(count)));
+        let kelvin = temperature("--scf-retry temperature", OsStr::new(kelvin))?;
+        if electronic_temperature_k.is_some_and(|initial| kelvin < initial) {
+            return Err("--scf-retry temperature must be at least the explicit --etemp".into());
+        }
+        retries.push(ScfRetry {
+            electronic_temperature_k: Some(kelvin),
+            max_iterations: count
+                .map(|value| iterations("--scf-retry iterations", OsStr::new(value)))
+                .transpose()?,
+        });
+    }
+    let scf = if electronic_temperature_k.is_some()
+        || accuracy.is_some()
+        || max_iterations.is_some()
+        || !retries.is_empty()
+    {
+        Some(ScfSettings {
+            accuracy,
+            electronic_temperature_k,
+            max_iterations,
+            retries,
+        })
+    } else {
+        None
+    };
+    let threads = options
+        .threads
+        .as_deref()
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse::<u32>().ok())
+                .filter(|value| (1..=64).contains(value))
+                .ok_or("--threads must be a whole number from 1 to 64")
+        })
+        .transpose()?
+        .unwrap_or(1);
+    Ok(Command::Calc(Calc {
+        file,
+        task,
+        method,
+        gradient: options.gradient,
+        bond_orders: options.wbo,
+        charge,
+        uhf,
+        conventions,
+        solvent,
+        scf,
+        threads,
+    }))
 }
 
 fn pieces(spec: &CommandSpec, rest: &[OsString]) -> Result<Command, String> {
@@ -318,7 +525,7 @@ fn schema(options: &Options) -> Result<Command, String> {
     }
 }
 
-/// The tokens after a command, each option at most once.
+/// The tokens after a command; only the SCF retry ladder is repeatable.
 #[derive(Default)]
 struct Options {
     /// INPUT, PROPOSAL, FILE or `-`.
@@ -335,6 +542,19 @@ struct Options {
     nucleus: Option<OsString>,
     labels: Option<OsString>,
     decimals: Option<OsString>,
+    charge: Option<OsString>,
+    uhf: Option<OsString>,
+    conventions: Option<OsString>,
+    task: Option<OsString>,
+    method: Option<OsString>,
+    alpb: Option<OsString>,
+    gbsa: Option<OsString>,
+    solvent_correction: Option<OsString>,
+    etemp: Option<OsString>,
+    accuracy: Option<OsString>,
+    max_iter: Option<OsString>,
+    scf_retry: Vec<OsString>,
+    threads: Option<OsString>,
     svg_text: SvgText,
     pages: bool,
     dark: bool,
@@ -342,6 +562,8 @@ struct Options {
     receipt: bool,
     json: bool,
     locants: bool,
+    gradient: bool,
+    wbo: bool,
 }
 
 /// Splits `tokens` into the command's options and one positional input.
@@ -377,7 +599,7 @@ fn parse_options(
             return Err(foreign_option(command, token));
         };
         let name = option.flag;
-        if seen.contains(&name) {
+        if name != "--scf-retry" && seen.contains(&name) {
             return Err(format!("{name} given more than once"));
         }
         seen.push(name);
@@ -399,6 +621,19 @@ fn parse_options(
                 "--nucleus" => options.nucleus = Some(value),
                 "--labels" => options.labels = Some(value),
                 "--decimals" => options.decimals = Some(value),
+                "--charge" => options.charge = Some(value),
+                "--uhf" => options.uhf = Some(value),
+                "--conventions" => options.conventions = Some(value),
+                "--task" => options.task = Some(value),
+                "--method" => options.method = Some(value),
+                "--alpb" => options.alpb = Some(value),
+                "--gbsa" => options.gbsa = Some(value),
+                "--solvent-correction" => options.solvent_correction = Some(value),
+                "--etemp" => options.etemp = Some(value),
+                "--accuracy" => options.accuracy = Some(value),
+                "--max-iter" => options.max_iter = Some(value),
+                "--scf-retry" => options.scf_retry.push(value),
+                "--threads" => options.threads = Some(value),
                 "--svg-text" => {
                     options.svg_text = match value.to_str() {
                         Some("live") => SvgText::Live,
@@ -416,6 +651,8 @@ fn parse_options(
                 "--receipt" => options.receipt = true,
                 "--json" => options.json = true,
                 "--locants" => options.locants = true,
+                "--gradient" => options.gradient = true,
+                "--wbo" => options.wbo = true,
                 _ => {}
             }
         }

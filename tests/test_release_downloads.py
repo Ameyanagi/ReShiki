@@ -20,8 +20,8 @@ class ReleaseDownloadTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.directory = Path(self.temporary.name)
 
-    def assets(self, version):
-        for name in filenames(version):
+    def assets(self, version, *, nightly=False):
+        for name in filenames(version, nightly=nightly):
             path = self.directory / name
             if any(system in name for system in ("-macos-", "-windows-")) and name.endswith(".zip"):
                 architecture = "arm64" if "-arm64" in name else "x64"
@@ -50,28 +50,57 @@ class ReleaseDownloadTests(unittest.TestCase):
 
     def test_stable_and_nightly_tables_link_every_verified_asset(self):
         # Nightlies have no Intel macOS DMG or ZIP.
-        for tag, count in (("v0.9.1", 10), ("nightly-0.9.1-nightly.20260929.36501221724.1", 8)):
+        for tag, version, count in (
+            ("v0.17.1", "0.17.1", 11),
+            ("v0.17.1-nightly.1", "0.17.1-nightly.1", 11),
+            ("nightly-0.17.1-nightly.1", "0.17.1-nightly.1", 9),
+            (
+                "nightly-0.9.1-nightly.20260929.36501221724.1",
+                "0.9.1-nightly.20260929.36501221724.1",
+                9,
+            ),
+        ):
             with self.subTest(tag=tag):
                 for path in self.directory.iterdir():
                     path.unlink()
-                version = release_version(tag)
-                self.assets(version)
+                self.assertEqual(release_version(tag), version)
+                nightly = tag.startswith("nightly-")
+                self.assets(version, nightly=nightly)
                 notes = prepare(self.directory, "Ameyanagi/ReShiki", tag)
                 links = re.findall(r"\]\((https://github.com/[^)]+/download/[^)]+)\)", notes)
                 linked = {unquote(urlparse(url).path.rsplit("/", 1)[-1]) for url in links}
-                self.assertEqual(linked, set(filenames(version)) | {"SHA256SUMS"})
+                self.assertEqual(linked, set(filenames(version, nightly=nightly)) | {"SHA256SUMS"})
                 self.assertEqual(
                     len((self.directory / "SHA256SUMS").read_text().splitlines()), count
                 )
-                self.assertEqual(len(filenames(version)), count)
-                self.assertEqual("macos-x64" in notes, count == 10)
-                self.assertEqual("not made for Intel Macs" in notes, count == 8)
+                self.assertEqual(len(filenames(version, nightly=nightly)), count)
+                self.assertEqual("macos-x64" in notes, count == 11)
+                self.assertEqual("not made for Intel Macs" in notes, count == 9)
+                self.assertIn("Source code with xTB", notes)
                 self.assertIn("Windows and Linux downloads are unsigned", notes)
                 self.assertIn("/releases/latest", notes)
 
+    def test_source_archive_and_checksum_are_required_and_verified(self):
+        for tag in ("v0.9.1", "nightly-0.9.1-nightly.20260929.36501221724.1"):
+            version = release_version(tag)
+            nightly = tag.startswith("nightly-")
+            source = self.directory / f"reshiki-{version}-source.tar.gz"
+            for missing in (source, Path(str(source) + ".sha256")):
+                with self.subTest(tag=tag, missing=missing.name):
+                    for path in self.directory.iterdir():
+                        path.unlink()
+                    self.assets(version, nightly=nightly)
+                    missing.unlink()
+                    with self.assertRaisesRegex(ValueError, "missing=.*source\\.tar\\.gz"):
+                        prepare(self.directory, "Ameyanagi/ReShiki", tag)
+            self.assets(version, nightly=nightly)
+            source.write_bytes(b"damaged source archive")
+            with self.assertRaisesRegex(ValueError, "checksum mismatch: .*source\\.tar\\.gz"):
+                prepare(self.directory, "Ameyanagi/ReShiki", tag)
+
     def test_a_nightly_with_an_intel_mac_package_cannot_publish(self):
         version = "0.9.1-nightly.20260929.36501221724.1"
-        self.assets(version)
+        self.assets(version, nightly=True)
         (self.directory / f"reshiki-{version}-macos-x64.zip").touch()
         with self.assertRaisesRegex(ValueError, "unexpected="):
             prepare(self.directory, "Ameyanagi/ReShiki", f"nightly-{version}")
@@ -104,7 +133,7 @@ class ReleaseDownloadTests(unittest.TestCase):
             prepare(self.directory, "Ameyanagi/ReShiki", "v0.9.1")
 
     def test_unsafe_tags_and_repositories_are_rejected(self):
-        for tag in ("../v0.9.1", "v0.9.1/evil", "nightly-0.9.1", "v0.9.1\n"):
+        for tag in ("../v0.9.1", "v0.9.1/evil", "nightly-0.9", "v0.9.1\n"):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
                 release_version(tag)
         with self.assertRaises(ValueError):

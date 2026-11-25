@@ -10,6 +10,7 @@ pub const GEOMETRY_WORKER: &str = "--geometry-worker";
 pub const INCHI_WORKER: &str = "--inchi-worker";
 pub const CLIPBOARD_WORKER: &str = "--clipboard-worker";
 pub const PRINT_WORKER: &str = "--print-worker";
+pub const XTB_WORKER: &str = "--xtb-worker";
 
 /// Windows process flag shared by facade spawners. Lower-crate copies remain in
 /// io geometry/client.rs, io engine/reference.rs, chemistry inchi/generator.rs,
@@ -24,6 +25,7 @@ enum Worker {
     Naming,
     Geometry,
     Inchi,
+    Xtb,
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Clipboard,
     #[cfg(target_os = "macos")]
@@ -43,6 +45,7 @@ fn worker(first: &OsStr) -> Option<Worker> {
         (GEOMETRY_WORKER, Worker::Geometry),
         // LibreOffice owns its flags; `run` checks them when this table has no match.
         (INCHI_WORKER, Worker::Inchi),
+        (XTB_WORKER, Worker::Xtb),
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         (CLIPBOARD_WORKER, Worker::Clipboard),
         #[cfg(target_os = "macos")]
@@ -70,6 +73,7 @@ impl Worker {
                 crate::chemistry::inchi::worker::run();
                 0
             }
+            Self::Xtb => reshiki_xtb_worker::serve(),
             #[cfg(target_os = "linux")]
             Self::Clipboard => report(reshiki_linux::clipboard_worker(), ""),
             #[cfg(target_os = "macos")]
@@ -92,9 +96,10 @@ fn report(result: Result<(), String>, prefix: &str) -> i32 {
 }
 
 /// Runs the worker `first` selects and returns its exit code: 0 on success,
-/// 1 after printing one stderr line. Any other argument returns `None`.
+/// 1 after printing one stderr line. A worker protocol error can return 2.
+/// Any other argument returns `None`.
 ///
-/// The order is today's: EMF, naming, geometry, LibreOffice, InChI, then the
+/// The order is EMF, naming, geometry, LibreOffice, InChI, xTB, then the
 /// clipboard and print workers. The flags are distinct, so checking the table
 /// before LibreOffice's own flags cannot change which worker runs.
 pub fn run(first: &OsStr) -> Option<i32> {

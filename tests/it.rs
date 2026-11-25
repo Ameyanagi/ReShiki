@@ -112,6 +112,7 @@ mod tunable_pen_lines;
 mod typography;
 mod windows_native;
 mod windows_version_metadata;
+mod xtb;
 
 /// Cargo no longer finds test files by itself (`autotests = false`), so a file
 /// that is neither a module above nor a target in Cargo.toml would never be
