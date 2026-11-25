@@ -221,15 +221,21 @@ Usage: reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz
                                   [--job JOB] [--template N|--method M --basis B]
                                   [--charge C] [--multiplicity M] [--cores N]
                                   [--memory-gb G] [--title T] [--extra TEXT]
+                                  [--reactant R.xyz] [--product P.xyz] [--hessian H.hess]
                                   [--out PATH]
 
-Writes input for another program from the first frame of INPUT.xyz (Å);
-stdout without --out. An existing companion file stops the export.
-Warnings go to stderr.
+Writes input for another program from the first frame of INPUT.xyz (Å).
+Without --out, the input goes to stdout. With --out, the main file is
+replaced and new companions go beside it. An existing companion file
+stops the export. Warnings go to stderr.
+
+Gaussian supports qst2 and qst3. ORCA supports neb-ts. Endpoint files
+are accepted only for transition-state jobs and must list the same
+elements as INPUT.xyz in the same order.
 
 Options:
   --program PROGRAM   gaussian, orca, gamess or xyz. Required.
-  --job JOB           single-point, optimize, opt-freq, transition-state or irc.
+  --job JOB           single-point, optimize, opt-freq, transition-state (ts), qst2, qst3, irc or neb-ts.
   --template N        Built-in template, 1 to 3.
   --method M          Method, given with --basis.
   --basis B           Basis; empty for an ORCA composite method.
@@ -239,12 +245,18 @@ Options:
   --memory-gb G       Total memory in GB (16).
   --title T           Title (the input file name).
   --extra TEXT        More keywords, or GAMESS groups.
-  --out PATH          Main file, replaced if it exists; companions go beside it.
+  --reactant R.xyz    First reactant XYZ frame. Required for qst2, qst3 and neb-ts.
+  --product P.xyz     First product XYZ frame. Required for qst2, qst3 and neb-ts.
+  --hessian H.hess    ORCA Cartesian Hessian. Requires --program orca with --job ts or irc.
+  --out PATH          Main file. Required for ORCA neb-ts or when using --hessian.
 
 Templates:
   1  B3LYP-D3BJ/def2-SVP opt+freq
   2  r2SCAN-3c opt+freq (ORCA only)
   3  HF/6-31G(d) single point
+
+Example:
+  reshiki --cli export-input --program gaussian --job qst3 --reactant reactant.xyz --product product.xyz ts.xyz
 ```
 
 ## reshiki --cli name

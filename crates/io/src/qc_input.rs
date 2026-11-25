@@ -17,7 +17,7 @@ mod xyz;
 #[cfg(test)]
 mod tests;
 
-pub use hess::write_orca_hess;
+pub use hess::{read_orca_hess, write_orca_hess};
 pub use sdf::{SdfEntry, write_sdf};
 pub use xyz::write_xyz_trajectory;
 
