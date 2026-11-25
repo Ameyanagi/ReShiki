@@ -43,13 +43,14 @@ The library is split into workspace crates. Each crate depends only on the crate
 6. `reshiki` library (`src/lib.rs`): a facade that re-exports the moved modules at their existing `reshiki::<module>` paths, plus the Codex assistant client and its preferences, clipboard, printing, updates, hotkeys, Office and accessibility services, [chemical names](#chemical-names) (`naming`), EMF import (`metafile`), the [worker modes](#worker-modes) (`workers`) and the experimental `reshiki --cli` commands.
 7. `reshiki` executable (`src/main.rs`, `src/launch.rs`, `src/session.rs`, `src/app/`, `src/canvas/`, and `src/desktop/` on Windows and Linux): the Iced application, and the headless `--mcp` and `--cli` modes selected by the first argument.
 
-Leaf crates depend on no layer crate; only `reshiki-windows` uses another leaf, `reshiki-metafile`. The crates above use them:
+Leaf crates depend on no layer crate; only `reshiki-windows` uses another leaf, `reshiki-metafile`, and `reshiki-optimize` uses `reshiki-qcdata`. The crates above use them:
 
 - `reshiki-metafile` (`crates/metafile/`): bounded EMF framing checks and the physical picture size, plus the picture size limits for every format. `reshiki-model` and `native/windows` use it.
 - `reshiki-process` (`native/process/`): platform limits for the naming worker's child process. All of its platform FFI stays in this crate.
 - `reshiki-process-heap` (`crates/process-heap/`): the bounded allocator of worker processes and the adaptive [calculation resource policy](chemistry-resource-policy.md).
 - `reshiki-depict-math` (`crates/depict-math/`): the paired math call for the pinned depiction ABI, used by `reshiki-chemistry`.
 - `reshiki-geometry` (`native/geometry/`): the bounded MMFF/UFF and ETKDG geometry solver, used by `reshiki-io`.
+- `reshiki-optimize` (`crates/optimize/`): the geometry optimizer for any energy-and-gradient potential (xTB, force fields) and conformer clustering and ranking, written from the published methods. It uses the leaf `reshiki-qcdata` for result types.
 - `reshiki-macos`, `reshiki-windows` and `reshiki-linux` (`native/macos/`, `native/windows/`, `native/linux/`): platform services such as the clipboard, printing, document handoff and Office integration, as each platform supports them.
 
 Three packages wrap these layers for other hosts. None is a default member:
