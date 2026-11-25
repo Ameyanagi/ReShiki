@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! A deliberately small reader for the closed-shell Molden files emitted by axtb.
+//! Read axtb's Molden reference and compare it with the worker's canonical orbitals.
 
-use reshiki_qcdata::{BasisSet, CartesianNorm, OrbitalSet, Shell, mo_to_molden};
+use reshiki_qcdata::{
+    BasisSet, Beta, CartesianNorm, OrbitalSet, Orbitals, Shell, Spin, mo_to_molden,
+};
+use std::fmt;
 
 pub(super) struct Molden {
     pub(super) positions: Vec<[f64; 3]>,
     pub(super) basis: BasisSet,
-    pub(super) mos: Vec<MoldenMo>,
+    pub(super) alpha: Vec<MoldenMo>,
+    pub(super) beta: Vec<MoldenMo>,
 }
 
 pub(super) struct MoldenMo {
     energy_line: String,
+    occupation: f64,
     pub(super) coefficients: Vec<f64>,
 }
 
@@ -67,13 +72,18 @@ pub(super) fn parse(text: &str, spherical: bool) -> Molden {
     assert_eq!(lines.next(), Some("[MO]"));
     let basis = BasisSet { shells };
     let n_ao = basis.shells.iter().map(Shell::n_functions).sum::<usize>();
-    let mut mos = Vec::new();
+    let mut alpha = Vec::new();
+    let mut beta = Vec::new();
     while let Some(symmetry) = lines.next() {
-        assert!(symmetry.starts_with("Sym="));
         let energy_line = lines.next().expect("MO energy").to_owned();
         assert!(energy_line.starts_with("Ene="));
-        assert_eq!(lines.next(), Some("Spin= Alpha"));
-        assert!(lines.next().unwrap().starts_with("Occup="));
+        let mos = match lines.next().expect("MO spin") {
+            "Spin= Alpha" => &mut alpha,
+            "Spin= Beta" => &mut beta,
+            spin => panic!("unexpected Molden spin {spin}"),
+        };
+        assert_eq!(symmetry, format!("Sym= {}a", mos.len() + 1));
+        let occupation = number(lines.next().unwrap().strip_prefix("Occup= ").unwrap());
         let coefficients = (1..=n_ao)
             .map(|i| {
                 let [index, value] = fields(lines.next().expect("MO coefficient"));
@@ -83,26 +93,63 @@ pub(super) fn parse(text: &str, spherical: bool) -> Molden {
             .collect();
         mos.push(MoldenMo {
             energy_line,
+            occupation,
             coefficients,
         });
     }
-    assert!(!mos.is_empty());
+    assert!(!alpha.is_empty());
     Molden {
         positions,
         basis,
-        mos,
+        alpha,
+        beta,
     }
 }
 
-/// Rebuild all spherical GTO/MO data and return (values, bit-identical values, max error).
-/// Error is |actual-reference| / max(1, |reference|). Energies are checked as exact
-/// formatted lines, and are excluded from these floating-point comparison counts.
+/// Errors cover primitive exponents, contractions, and signed MO coefficients.
+/// Energies and occupations are checked separately at the precision of the file.
+#[derive(Default)]
+pub(super) struct Comparison {
+    compared: usize,
+    identical: usize,
+    pub(super) max_relative: f64,
+    worst: String,
+}
+
+impl Comparison {
+    fn compare(&mut self, actual: f64, reference: f64, label: fmt::Arguments<'_>) {
+        assert!(actual.is_finite() && reference.is_finite(), "{label}");
+        let relative = (actual - reference).abs() / reference.abs().max(1.0);
+        if relative > self.max_relative {
+            self.max_relative = relative;
+            self.worst = format!("{label}: {actual} vs {reference}");
+        }
+        self.compared += 1;
+        self.identical += usize::from(actual.to_bits() == reference.to_bits());
+    }
+
+    pub(super) fn assert_matches(&self) {
+        assert!(self.max_relative <= 1e-14, "{}: {self}", self.worst);
+    }
+}
+
+impl fmt::Display for Comparison {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "compared={} bit_identical={} max_rel={:.3e}",
+            self.compared, self.identical, self.max_relative
+        )
+    }
+}
+
 pub(super) fn check_spherical(
-    basis: &BasisSet,
-    orbitals: &OrbitalSet,
+    orbitals: &Orbitals,
     molden: &Molden,
-) -> (usize, usize, f64) {
-    let mut report = (0, 0, 0.0_f64);
+    expected_rows: &[u32],
+) -> Comparison {
+    let basis = orbitals.basis.as_ref().unwrap();
+    let mut report = Comparison::default();
     assert_eq!(basis.shells.len(), molden.basis.shells.len());
     for (index, (actual, reference)) in basis.shells.iter().zip(&molden.basis.shells).enumerate() {
         assert_eq!((actual.atom, actual.l), (reference.atom, reference.l));
@@ -119,8 +166,7 @@ pub(super) fn check_spherical(
         ] {
             assert_eq!(values.len(), expected.len(), "shell {index} {label} count");
             for (primitive, (&value, &expected)) in values.iter().zip(expected).enumerate() {
-                compare(
-                    &mut report,
+                report.compare(
                     value,
                     expected,
                     format_args!("shell {index} {label} {primitive}"),
@@ -129,33 +175,54 @@ pub(super) fn check_spherical(
         }
     }
     let n_ao = basis.shells.iter().map(Shell::n_functions).sum::<usize>();
-    assert!(n_ao > 0);
-    assert_eq!(orbitals.energies_hartree.len(), molden.mos.len());
-    assert_eq!(
-        orbitals.rows,
-        (0..molden.mos.len() as u32).collect::<Vec<_>>()
-    );
-    assert_eq!(orbitals.coefficients.len(), molden.mos.len() * n_ao);
-    for (index, (row, reference)) in orbitals
-        .coefficients
-        .chunks_exact(n_ao)
-        .zip(&molden.mos)
-        .enumerate()
-    {
-        assert_eq!(
-            energy_line(orbitals.energies_hartree[index]),
-            reference.energy_line,
-            "MO {index} energy"
-        );
-        let rebuilt = mo_to_molden(basis, row, CartesianNorm::Unit).unwrap();
-        assert_eq!(rebuilt.len(), reference.coefficients.len());
-        for (ao, (&value, &expected)) in rebuilt.iter().zip(&reference.coefficients).enumerate() {
-            compare(
-                &mut report,
-                value,
-                expected,
-                format_args!("MO {index} AO {ao}"),
+    let mut check_spin = |spin, set: &OrbitalSet, occupations: &[f64], mos: &[MoldenMo]| {
+        assert_eq!(mos.len(), n_ao, "{spin:?} Molden MO count");
+        assert_eq!(set.energies_hartree.len(), mos.len(), "{spin:?} energies");
+        assert_eq!(occupations.len(), mos.len(), "{spin:?} occupations");
+        for (index, mo) in mos.iter().enumerate() {
+            assert_eq!(
+                energy_line(set.energies_hartree[index]),
+                mo.energy_line,
+                "{spin:?} MO {index} energy"
             );
+            // The writer rounds occupations to ten places after the decimal.
+            assert_eq!(
+                number(&format!("{:.10}", occupations[index])),
+                mo.occupation,
+                "{spin:?} MO {index} occupation"
+            );
+        }
+        assert_eq!(set.rows, expected_rows, "{spin:?} selected rows");
+        assert_eq!(
+            set.coefficients.len(),
+            expected_rows.len() * n_ao,
+            "{spin:?} coefficient count"
+        );
+        for (&index, row) in expected_rows
+            .iter()
+            .zip(set.coefficients.chunks_exact(n_ao))
+        {
+            let rebuilt = mo_to_molden(basis, row, CartesianNorm::Unit).unwrap();
+            let reference = &mos[index as usize].coefficients;
+            assert_eq!(rebuilt.len(), reference.len());
+            for (ao, (&value, &expected)) in rebuilt.iter().zip(reference).enumerate() {
+                report.compare(value, expected, format_args!("{spin:?} MO {index} AO {ao}"));
+            }
+        }
+    };
+    check_spin(
+        Spin::Alpha,
+        &orbitals.alpha,
+        &orbitals.alpha.occupations,
+        &molden.alpha,
+    );
+    match &orbitals.beta {
+        Beta::Restricted => assert!(molden.beta.is_empty()),
+        Beta::SameOrbitals { occupations } => {
+            check_spin(Spin::Beta, &orbitals.alpha, occupations, &molden.beta);
+        }
+        Beta::Unrestricted(beta) => {
+            check_spin(Spin::Beta, beta, &beta.occupations, &molden.beta);
         }
     }
     report
@@ -179,21 +246,4 @@ fn energy_line(energy: f64) -> String {
     let scientific = format!("{energy:.14E}");
     let (mantissa, exponent) = scientific.split_once('E').unwrap();
     format!("Ene= {mantissa}E{:+03}", exponent.parse::<i32>().unwrap())
-}
-
-fn compare(
-    report: &mut (usize, usize, f64),
-    actual: f64,
-    reference: f64,
-    label: std::fmt::Arguments<'_>,
-) {
-    assert!(actual.is_finite() && reference.is_finite(), "{label}");
-    let ratio = (actual - reference).abs() / reference.abs().max(1.0);
-    assert!(
-        ratio <= 1e-14,
-        "{label}: {actual} != {reference} ({ratio:e})"
-    );
-    report.0 += 1;
-    report.1 += usize::from(actual.to_bits() == reference.to_bits());
-    report.2 = report.2.max(ratio);
 }

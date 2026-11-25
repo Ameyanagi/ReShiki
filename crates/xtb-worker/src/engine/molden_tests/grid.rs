@@ -22,8 +22,8 @@ pub(super) fn relative_errors(
 ) -> (usize, Vec<f64>) {
     let canonical = canonical_aos(basis);
     let nao = canonical.len();
-    assert!(nmo > 0 && nmo <= molden.mos.len());
-    assert_eq!(rows.len(), nao * molden.mos.len());
+    assert!(nmo > 0 && nmo <= molden.alpha.len());
+    assert_eq!(rows.len(), nao * molden.alpha.len());
     assert_eq!(positions.len(), molden.positions.len());
     let points = grid(positions);
     let mut maxima = vec![(0.0_f64, 0.0_f64); nmo];
@@ -32,7 +32,7 @@ pub(super) fn relative_errors(
         let reference_aos = molden_cartesian_values(molden, *point);
         for (mo, (difference, scale)) in maxima.iter_mut().enumerate() {
             let actual = dot(&rows[mo * nao..(mo + 1) * nao], &actual_aos);
-            let reference = dot(&molden.mos[mo].coefficients, &reference_aos);
+            let reference = dot(&molden.alpha[mo].coefficients, &reference_aos);
             assert!(actual.is_finite() && reference.is_finite(), "MO {mo}");
             *difference = difference.max((actual - reference).abs());
             *scale = scale.max(reference.abs());

@@ -1,10 +1,11 @@
 //! Compare the worker's signed orbitals with axtb's Molden text from the same SCF.
 
 mod grid;
+mod open_shell;
 mod reference;
 
 use super::{Method, canonical_orbitals, driver_method};
-use axtb_driver::{Calculator, MoldenTask, Request, Task};
+use axtb_driver::{Calculator, MoldenTask, Request, Response, Task};
 use reference::Molden;
 use reshiki_qcdata::{Beta, Orbitals, Shell, contraction_overlap};
 
@@ -12,7 +13,7 @@ const WATER: &str = include_str!("../../../../tests/fixtures/xtb/water.xyz");
 const CAFFEINE: &str = include_str!("../../../../tests/fixtures/xtb/caffeine.xyz");
 const FERROCENE: &str = include_str!("../../../../tests/fixtures/xtb/ferrocene.xyz");
 
-fn request(method: Method, xyz: &str, charge: i32) -> Request {
+fn request(method: Method, xyz: &str, charge: i32, uhf: u32) -> Request {
     let method = driver_method(method);
     let (numbers, positions) = axtb_driver::read_xyz(xyz, method, None).unwrap();
     Request {
@@ -20,12 +21,12 @@ fn request(method: Method, xyz: &str, charge: i32) -> Request {
         positions,
         method: Some(method.name().into()),
         charge: f64::from(charge),
-        uhf: Some(0),
+        uhf: Some(i64::from(uhf)),
         ..Request::default()
     }
 }
 
-fn orbitals_with_molden(request: &Request, method: Method, spherical: bool) -> (Orbitals, Molden) {
+fn compute_with_molden(request: &Request, spherical: bool) -> (Response, Molden) {
     let task = Task {
         orbitals: true,
         molden: Some(MoldenTask {
@@ -42,6 +43,12 @@ fn orbitals_with_molden(request: &Request, method: Method, spherical: bool) -> (
         .unwrap()
         .compute(&request.positions, &task)
         .unwrap();
+    let molden = reference::parse(response.molden.as_deref().unwrap(), spherical);
+    (response, molden)
+}
+
+fn closed_shell_orbitals(request: &Request, method: Method, spherical: bool) -> (Orbitals, Molden) {
+    let (response, molden) = compute_with_molden(request, spherical);
     let nao = response.orbitals.as_ref().unwrap().nao() as u32;
     let rows = (0..nao).collect::<Vec<_>>();
     let canonical = canonical_orbitals(&response, method, 0, &rows).unwrap();
@@ -57,8 +64,8 @@ fn orbitals_with_molden(request: &Request, method: Method, spherical: bool) -> (
             shell.l
         );
     }
-    let molden = reference::parse(response.molden.as_deref().unwrap(), spherical);
-    assert_eq!(molden.mos.len(), nao as usize);
+    assert_eq!(molden.alpha.len(), nao as usize);
+    assert!(molden.beta.is_empty());
     (canonical, molden)
 }
 
@@ -74,8 +81,8 @@ fn ao_cartesian_grid_and_spherical_rebuild() {
         ("Ce(IV)", "1\ncerium ion\nCe 0 0 0\n", 4, Method::Gxtb),
     ] {
         let label = driver_method(method).name();
-        let request = request(method, xyz, charge);
-        let (canonical, cartesian) = orbitals_with_molden(&request, method, false);
+        let request = request(method, xyz, charge, 0);
+        let (canonical, cartesian) = closed_shell_orbitals(&request, method, false);
         let basis = canonical.basis.as_ref().unwrap();
         let occupations = &canonical.alpha.occupations;
         let nmo = if name == "Ce(IV)" {
@@ -100,22 +107,19 @@ fn ao_cartesian_grid_and_spherical_rebuild() {
         }
         let grid_max = errors.into_iter().fold(0., f64::max);
 
-        let (canonical, spherical) = orbitals_with_molden(&request, method, true);
-        let (compared, identical, rebuild_max) = reference::check_spherical(
-            canonical.basis.as_ref().unwrap(),
-            &canonical.alpha,
-            &spherical,
-        );
-        eprintln!(
-            "{label} {name}: grid MOs={nmo} points={points} max_rel={grid_max:.3e}; spherical compared={compared} bit_identical={identical} max_rel={rebuild_max:.3e}"
+        let (canonical, spherical) = closed_shell_orbitals(&request, method, true);
+        let report = reference::check_spherical(&canonical, &spherical, &canonical.alpha.rows);
+        report.assert_matches();
+        println!(
+            "{label} {name}: grid MOs={nmo} points={points} max_rel={grid_max:.3e}; spherical {report}"
         );
     }
 }
 
 #[test]
 fn ao_grid_rejects_native_p_order() {
-    let request = request(Method::Gfn2, WATER, 0);
-    let (canonical, cartesian) = orbitals_with_molden(&request, Method::Gfn2, false);
+    let request = request(Method::Gfn2, WATER, 0, 0);
+    let (canonical, cartesian) = closed_shell_orbitals(&request, Method::Gfn2, false);
     let basis = canonical.basis.unwrap();
     let nao = basis.shells.iter().map(Shell::n_functions).sum();
     let mut wrong = canonical.alpha.coefficients;
@@ -133,9 +137,9 @@ fn ao_grid_rejects_native_p_order() {
         &request.positions,
         &wrong,
         &cartesian,
-        cartesian.mos.len(),
+        cartesian.alpha.len(),
     );
     let max = errors.into_iter().fold(0., f64::max);
     assert!(max > 1e-3, "wrong p order escaped the grid check: {max:e}");
-    eprintln!("gfn2 water with deliberately wrong p order: max_rel={max:.3e}");
+    println!("gfn2 water with deliberately wrong p order: max_rel={max:.3e}");
 }
