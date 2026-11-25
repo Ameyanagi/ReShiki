@@ -199,10 +199,12 @@ async fn foreign_drawings_keep_one_common_geometry_frame_through_editable_roundt
                 )
                 .await
                 .unwrap();
+                // The detected step has representable molecule roles and captions.
                 assert!(
                     warnings.is_empty(),
                     "{name}.{format} → {target}: {warnings:?}"
                 );
+                assert_eq!(restored.reactions.len(), 1, "{name}.{format} → {target}");
                 check_geometry(&restored, false);
                 let mut remaining = source_segments.clone();
                 for [a, b] in graphic_segments(&restored) {

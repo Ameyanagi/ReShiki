@@ -1,6 +1,76 @@
 use super::*;
 use std::collections::{BTreeSet, HashSet, VecDeque};
 
+fn stereo_edges(doc: &Document) -> Vec<(u64, u64)> {
+    // ChemDraw scopes a stereo group to its fragment, so the members of a
+    // drawing-wide group must share one.
+    let mut stereo: HashMap<_, Vec<u64>> = HashMap::new();
+    for atom in &doc.atoms {
+        if let Some(group) = atom.stereo_group {
+            stereo.entry(group).or_default().push(atom.id);
+        }
+    }
+    stereo
+        .values()
+        .flat_map(|ids| ids.iter().copied().zip(ids.iter().copied().skip(1)))
+        .collect()
+}
+
+#[derive(Default)]
+pub(super) struct Fragments {
+    components: Vec<HashSet<u64>>,
+    indices: HashMap<u64, usize>,
+}
+
+impl Fragments {
+    pub(super) fn of(doc: &Document) -> Self {
+        Self::new(doc, stereo_edges(doc))
+    }
+
+    fn new(doc: &Document, edges: Vec<(u64, u64)>) -> Self {
+        let components = connected_components(doc, edges);
+        let indices = components
+            .iter()
+            .enumerate()
+            .flat_map(|(i, ids)| ids.iter().map(move |&id| (id, i)))
+            .collect();
+        Self {
+            components,
+            indices,
+        }
+    }
+
+    pub(super) fn containing(&self, atom: u64) -> Option<(u64, &HashSet<u64>)> {
+        let &i = self.indices.get(&atom)?;
+        Some((i as u64, self.components.get(i)?))
+    }
+}
+
+fn connected_components(doc: &Document, stereo_edges: Vec<(u64, u64)>) -> Vec<HashSet<u64>> {
+    let mut remaining: BTreeSet<_> = doc.atoms.iter().map(|a| a.id).collect();
+    let mut neighbors: HashMap<u64, Vec<u64>> = HashMap::new();
+    for (a, b) in crate::attachments::edges(doc).chain(stereo_edges) {
+        neighbors.entry(a).or_default().push(b);
+        neighbors.entry(b).or_default().push(a);
+    }
+    let mut components = Vec::new();
+    while let Some(&first) = remaining.first() {
+        let mut component = HashSet::new();
+        let mut queue = VecDeque::from([first]);
+        remaining.remove(&first);
+        while let Some(id) = queue.pop_front() {
+            component.insert(id);
+            for &other in neighbors.get(&id).into_iter().flatten() {
+                if remaining.remove(&other) {
+                    queue.push_back(other);
+                }
+            }
+        }
+        components.push(component);
+    }
+    components
+}
+
 impl Writer<'_> {
     pub(super) fn crossings(&mut self, middle: usize) -> Result<()> {
         let doc = self.doc;
@@ -161,18 +231,7 @@ impl Writer<'_> {
                 ));
             }
         }
-        // ChemDraw scopes a stereo group to its fragment, so the members of a
-        // drawing-wide group must share one.
-        let mut stereo: HashMap<_, Vec<u64>> = HashMap::new();
-        for a in &doc.atoms {
-            if let Some(group) = a.stereo_group {
-                stereo.entry(group).or_default().push(a.id);
-            }
-        }
-        let stereo_edges: Vec<_> = stereo
-            .values()
-            .flat_map(|ids| ids.iter().copied().zip(ids.iter().copied().skip(1)))
-            .collect();
+        let stereo_edges = stereo_edges(doc);
         if sets.iter().any(|set| {
             stereo_edges
                 .iter()
@@ -182,29 +241,60 @@ impl Writer<'_> {
                 "A stereo group spans molecules that are grouped apart; group them together before editable export",
             ));
         }
-        let mut remaining: BTreeSet<_> = doc.atoms.iter().map(|a| a.id).collect();
-        let mut neighbors: HashMap<u64, Vec<u64>> = HashMap::new();
-        for (a, b) in crate::attachments::edges(doc).chain(stereo_edges) {
-            neighbors.entry(a).or_default().push(b);
-            neighbors.entry(b).or_default().push(a);
-        }
-        let mut components = Vec::new();
-        while let Some(&first) = remaining.first() {
-            let mut component = HashSet::new();
-            let mut queue = VecDeque::from([first]);
-            remaining.remove(&first);
-            while let Some(id) = queue.pop_front() {
-                component.insert(id);
-                for &other in neighbors.get(&id).into_iter().flatten() {
-                    if remaining.remove(&other) {
-                        queue.push_back(other);
-                    }
-                }
-            }
-            components.push(component);
-        }
+        let fragments = Fragments::new(doc, stereo_edges);
+        let indices = &fragments.indices;
+        let xml_indices = indices
+            .iter()
+            .map(|(&atom, &index)| Ok((self.atom_xml(atom)?, index)))
+            .collect::<Result<HashMap<_, _>>>()?;
         let children = self.tree.node(self.fragment)?.children.clone();
-        for (index, component) in components.into_iter().enumerate() {
+        let mut by_component = vec![Vec::new(); fragments.components.len()];
+        for n in children {
+            self.spend(1)?;
+            let el = self.tree.node(n)?;
+            let component = self
+                .atom_artwork
+                .get(&n)
+                .and_then(|id| indices.get(id))
+                .copied()
+                .or(match el.tag {
+                    "n" => self
+                        .tree
+                        .get(n, "id")?
+                        .and_then(|id| xml_indices.get(id))
+                        .copied(),
+                    "b" => self
+                        .tree
+                        .get(n, "B")?
+                        .and_then(|id| xml_indices.get(id))
+                        .copied(),
+                    "graphic" => el.children.iter().find_map(|&k| {
+                        self.tree.node(k).ok().filter(|n| n.tag == "represent")?;
+                        self.tree
+                            .get(k, "object")
+                            .ok()
+                            .flatten()
+                            .and_then(|id| xml_indices.get(id))
+                            .copied()
+                    }),
+                    _ => None,
+                });
+            if let Some(index) = component {
+                by_component.get_mut(index).ok_or(Error::Limit)?.push(n);
+            }
+        }
+        // Detach moved children together instead of scanning the shrinking
+        // original fragment once for every disconnected component.
+        let moved: HashSet<_> = by_component.iter().skip(1).flatten().copied().collect();
+        self.tree
+            .node_mut(self.fragment)?
+            .children
+            .retain(|n| !moved.contains(n));
+        for &n in &moved {
+            self.tree.node_mut(n)?.parent = None;
+        }
+        let mut targets = Vec::with_capacity(by_component.len());
+        for (index, children) in by_component.into_iter().enumerate() {
             let target = if index == 0 {
                 self.fragment
             } else {
@@ -213,37 +303,16 @@ impl Writer<'_> {
                 self.tree
                     .add(Some(self.page), "fragment", [("id", id), ("Z", z)])?
             };
-            let ids = component
-                .iter()
-                .map(|id| self.atom_xml(*id))
-                .collect::<Result<HashSet<_>>>()?;
-            for &n in &children {
-                self.spend(1)?;
-                let el = self.tree.node(n)?;
-                let belongs = self
-                    .atom_artwork
-                    .get(&n)
-                    .is_some_and(|id| component.contains(id))
-                    || match el.tag {
-                        "n" => self.tree.get(n, "id")?.is_some_and(|id| ids.contains(id)),
-                        "b" => self.tree.get(n, "B")?.is_some_and(|id| ids.contains(id)),
-                        "graphic" => el.children.iter().any(|&k| {
-                            self.tree.node(k).is_ok_and(|n| n.tag == "represent")
-                                && self
-                                    .tree
-                                    .get(k, "object")
-                                    .is_ok_and(|id| id.is_some_and(|id| ids.contains(id)))
-                        }),
-                        _ => false,
-                    };
-                if belongs && target != self.fragment {
+            for n in children {
+                if target != self.fragment {
                     self.tree.attach(target, n)?;
                 }
             }
-            for (id, n) in &mut self.objects {
-                if component.contains(id) {
-                    *n = target;
-                }
+            targets.push(target);
+        }
+        for (id, n) in &mut self.objects {
+            if let Some(&index) = indices.get(id) {
+                *n = *targets.get(index).ok_or(Error::Limit)?;
             }
         }
         let mut containers = Vec::new();

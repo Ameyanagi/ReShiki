@@ -12,6 +12,9 @@ PROJECT_FILES = ("LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE")
 THIRD_PARTY_FILE = "THIRD-PARTY-NOTICES.txt"
 NOTICE_PREFIXES = ("LICENSE", "LICENCE", "COPYING", "NOTICE", "COPYRIGHT", "UNLICENSE", "AUTHORS")
 AXTB_GIT_SOURCE = "git+https://github.com/Ameyanagi/axtb"
+# MIT crates that generate Wayland bindings from KDE's LGPL protocol descriptions.
+KDE_PROTOCOL_CRATES = frozenset({"wayland-protocols-misc", "wayland-protocols-plasma"})
+KDE_PROTOCOL_REVIEW = "licenses/rust/kde-wayland-protocols-lgpl-review.json"
 
 
 def dependency_metadata(metadata):
@@ -55,6 +58,40 @@ def notice_files(source):
             yield candidate, relative
 
 
+def kde_protocol_scope(root, package, key, source):
+    """Notice lines and copyright records for the LGPL KDE files; stop on unreviewed changes."""
+    review = json.loads((root / KDE_PROTOCOL_REVIEW).read_text(encoding="utf-8"))
+    reviewed = review["packages"].get(key)
+    digests = {
+        path.relative_to(source).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(source.rglob("*"))
+        if path.is_file() and path.suffix.lower() == ".xml"
+    }
+    inventory = "".join(f"{name} {digest}\n" for name, digest in digests.items())
+    if (
+        not reviewed
+        or not reviewed["license_texts"]
+        or any(reviewed[field] != package.get(field) for field in ("license", "source"))
+        or reviewed["xml_inventory_sha256"] != hashlib.sha256(inventory.encode()).hexdigest()
+        or any(digests.get(name) != digest for name, digest in reviewed["files"].items())
+    ):
+        raise ValueError(f"KDE protocol licenses changed for {key}; review {KDE_PROTOCOL_REVIEW}")
+    entries = [
+        f"  {review['license']} covers these KDE protocol descriptions, from which the crate\n",
+        "  generates Wayland bindings. Each entry holds the file's copyright block:\n",
+    ]
+    for name in reviewed["files"]:
+        block = (source / name).read_bytes().split(b"<copyright>", 1)[-1]
+        block = block.split(b"</copyright>", 1)[0].removeprefix(b"<![CDATA[")
+        label = f"{key}/{name} (copyright block)"
+        entries.append((label, block.removesuffix(b"]]>").strip() + b"\n"))
+    entries.append(f"  Complete {review['license']} text:\n")
+    entries += [f"    {key}/{text}\n" for text in reviewed["license_texts"]]
+    entries.append(f"  Review: {KDE_PROTOCOL_REVIEW}\n")
+    texts = {f"{key}/{text}": digest for text, digest in reviewed["license_texts"].items()}
+    return entries, texts
+
+
 def consolidated_notices(root, metadata):
     """Keep every attribution and complete text; share only byte-identical files."""
     index = [
@@ -67,6 +104,7 @@ def consolidated_notices(root, metadata):
         "Original ReShiki workspace crates use the accompanying project licenses.\n\n",
     ]
     texts = {}
+    labels = {}
 
     def record(label, content):
         # Reject an unknown encoding instead of silently discarding characters.
@@ -77,6 +115,7 @@ def consolidated_notices(root, metadata):
         digest = hashlib.sha256(content).hexdigest()
         if digest not in texts:
             texts[digest] = content
+        labels[label] = digest
         index.append(f"  {label}\n    Text SHA-256: {digest}\n")
 
     source_root = root / "licenses"
@@ -103,6 +142,14 @@ def consolidated_notices(root, metadata):
         for field in ("license", "license_file", "source", "repository", "homepage", "authors"):
             if package.get(field):
                 index.append(f"  {field}: {json.dumps(package[field], ensure_ascii=False)}\n")
+        kde_texts = {}
+        if package["name"] in KDE_PROTOCOL_CRATES:
+            entries, kde_texts = kde_protocol_scope(root, package, key, source)
+            for entry in entries:
+                if isinstance(entry, str):
+                    index.append(entry)
+                else:
+                    record(*entry)
         # The repository root uses the separately collected project/source terms.
         # Other workspace crates may carry incorporated material even when their
         # manifest still uses the original-code expression. Never skip those texts.
@@ -141,6 +188,8 @@ def consolidated_notices(root, metadata):
                 f"{key}/upstream-sources.json",
                 (json.dumps(supplement, indent=2, ensure_ascii=False) + "\n").encode(),
             )
+        if any(labels.get(text) != digest for text, digest in kde_texts.items()):
+            raise ValueError(f"KDE protocol license text missing for {key}; review its supplement")
         if not files and not supplement:
             raise ValueError(f"Missing license text for {key}; add a reviewed notice supplement")
         # Retain original authors, license declarations, source links, comments
