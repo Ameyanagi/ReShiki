@@ -5,16 +5,20 @@
 use super::build::Lattice;
 use super::{Atom, Error, Structure, V3, elements, number};
 
-/// The `key=value` pairs of an extended XYZ comment line; values may be
-/// quoted with double quotes.
-fn pairs(comment: &str) -> Vec<(String, String)> {
+/// The `key=value` pairs of an extended XYZ comment line; keys and values
+/// may be quoted with double quotes.
+pub(crate) fn pairs(comment: &str) -> Vec<(String, String)> {
     let mut out = vec![];
     let mut rest = comment.trim();
     while !rest.is_empty() {
         let Some((key, after)) = rest.split_once('=') else {
             break;
         };
-        let key = key.split_whitespace().last().unwrap_or_default();
+        let key = key
+            .split_whitespace()
+            .last()
+            .unwrap_or_default()
+            .trim_matches('"');
         let after = after.trim_start();
         let (value, tail) = if let Some(quoted) = after.strip_prefix('"') {
             quoted.split_once('"').unwrap_or((quoted, ""))
@@ -28,7 +32,7 @@ fn pairs(comment: &str) -> Vec<(String, String)> {
 }
 
 /// The species and position columns from a `Properties` value.
-fn columns(properties: &str) -> Option<(usize, usize)> {
+pub(crate) fn columns(properties: &str) -> Option<(usize, usize)> {
     let fields: Vec<&str> = properties.split(':').collect();
     let (mut column, mut species, mut position) = (0usize, None, None);
     for chunk in fields.chunks(3) {
@@ -44,6 +48,20 @@ fn columns(properties: &str) -> Option<(usize, usize)> {
         column = column.checked_add(count)?;
     }
     Some((species?, position?))
+}
+
+impl crate::qc_input::XyzColumns {
+    /// Read extended XYZ columns, using ordinary XYZ columns when absent.
+    pub fn from_comment(comment: &str) -> Option<Self> {
+        let (species, position) = match pairs(comment)
+            .into_iter()
+            .find(|(key, _)| key == "properties")
+        {
+            Some((_, properties)) => columns(&properties)?,
+            None => (0, 1),
+        };
+        Some(Self { species, position })
+    }
 }
 
 pub(super) fn read(text: &str) -> Result<Structure, Error> {

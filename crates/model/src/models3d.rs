@@ -854,8 +854,8 @@ impl Model3d {
         self.source_ids().into_iter().collect()
     }
 
-    /// Element and position of each atom, then each force-field hydrogen.
-    fn points<'a>(&'a self, doc: &'a Document) -> Option<Vec<(&'a str, [f32; 3])>> {
+    /// Element and position (Å) of each atom, then each force-field hydrogen.
+    pub fn points<'a>(&'a self, doc: &'a Document) -> Option<Vec<(&'a str, [f32; 3])>> {
         let mut points = self
             .atoms
             .iter()

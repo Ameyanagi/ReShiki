@@ -88,6 +88,13 @@ pub struct Element {
     pub valences: &'static [i32],
 }
 
+impl Element {
+    /// Average atomic mass from the element table, in unified atomic mass units.
+    pub fn average_mass_amu(&self) -> f64 {
+        self.average
+    }
+}
+
 // CIAAW/IUPAC Atomic Weights 2023, Table 2 (https://iupac.qmul.ac.uk/AtWt/):
 // bracketed mass numbers for elements without stable nuclides. These nominal
 // averages apply only to unlabelled atoms; RDKit's exact/common isotope data

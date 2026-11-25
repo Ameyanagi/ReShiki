@@ -70,7 +70,7 @@ struct Context {
         super::InspectorTab,
         crate::canvas::Tool,
         // Tuples compare up to twelve fields.
-        [bool; 12],
+        [bool; 13],
         u8,
     ),
 }
@@ -203,6 +203,7 @@ impl App {
                 self.status_style_open,
                 self.help_open,
                 self.settings.open,
+                self.qc_export.is_some(),
                 self.commands.open,
                 self.updates.open,
                 self.assistant.viewed_image.is_some(),
