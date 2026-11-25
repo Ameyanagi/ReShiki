@@ -105,9 +105,15 @@ fn solvent(result: &CalcResult) -> String {
     match &result.settings {
         Settings::Xtb(settings) => settings.solvent.as_ref().map_or_else(
             || "gas phase".into(),
-            |s| match s.correction {
-                Some(_) => format!("{} (ALPB, GFN2-xTB correction)", s.name),
-                None => format!("{} (ALPB)", s.name),
+            |s| {
+                let model = match s.model {
+                    qcdata::SolventModel::Alpb => "ALPB",
+                    qcdata::SolventModel::Gbsa => "GBSA",
+                };
+                match s.correction {
+                    Some(_) => format!("{} ({model}, GFN2-xTB correction)", s.name),
+                    None => format!("{} ({model})", s.name),
+                }
             },
         ),
         Settings::Imported { .. } => "imported".into(),
@@ -452,6 +458,20 @@ pub(crate) fn log(
         Task::Energy => "energy",
         _ => "other",
     };
+    if let Settings::Xtb(settings) = &result.settings {
+        let scf: Vec<String> = [
+            settings.accuracy.map(|a| format!("SCF accuracy {a}")),
+            settings
+                .max_iterations
+                .map(|n| format!("max {n} SCF iterations")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        if !scf.is_empty() {
+            lines.push(scf.join(" · "));
+        }
+    }
     match info {
         Some(info) => {
             let mut settings = format!("task {task} · {} threads", info.threads);

@@ -628,6 +628,23 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
         shown.method(),
         "g-xTB · axtb 0.2.0 · water (ALPB, GFN2-xTB correction) · xtb 6.8 compatible · 1000 K · charge 0 · multiplicity 1"
     );
+    // A saved GBSA result says GBSA, and the log keeps the SCF settings.
+    let mut gbsa = (*result).clone();
+    if let reshiki::qcdata::Settings::Xtb(settings) = &mut gbsa.settings {
+        settings.solvent.as_mut().expect("water").model = reshiki::qcdata::SolventModel::Gbsa;
+        settings.accuracy = Some(0.3);
+        settings.max_iterations = Some(500);
+    }
+    let method = results::method_line(&gbsa, shown.frame, None);
+    assert!(
+        method.contains("water (GBSA, GFN2-xTB correction)"),
+        "{method}"
+    );
+    let log = results::log(&gbsa, shown.frame, None, &method);
+    assert!(
+        log.contains("SCF accuracy 0.3 · max 500 SCF iterations"),
+        "{log}"
+    );
 
     // Recalculate runs the stored method and settings, not the card's.
     let _ = reopened.update(Message::Xtb(Action::Palette(palette::Action::Recalculate)));
