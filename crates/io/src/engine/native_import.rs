@@ -617,11 +617,16 @@ fn restore_reaction_maps(
     };
     // Join every step's pairs before numbering, so a chain whose steps are
     // listed out of order (A→B, C→D, B→C) still shares one number per atom.
-    fn root(parent: &[usize], mut i: usize) -> usize {
+    // Path halving keeps lookups short along long chains.
+    fn root(parent: &mut [usize], mut i: usize) -> usize {
         while let Some(&up) = parent.get(i)
             && up != i
         {
-            i = up;
+            let grand = parent.get(up).copied().unwrap_or(up);
+            if let Some(slot) = parent.get_mut(i) {
+                *slot = grand;
+            }
+            i = grand;
         }
         i
     }
@@ -684,7 +689,7 @@ fn restore_reaction_maps(
                 && !paired.contains(&b)
             {
                 paired.extend([a, b]);
-                let (ra, rb) = (root(&parent, a), root(&parent, b));
+                let (ra, rb) = (root(&mut parent, a), root(&mut parent, b));
                 let mut chain = take(&mut chains, ra);
                 let other = if ra == rb {
                     Chain::default()
@@ -727,7 +732,7 @@ fn restore_reaction_maps(
     // it takes the next unused one. Atoms with their own number keep it.
     let mut numbers = HashMap::new();
     for &i in &order {
-        let r = root(&parent, i);
+        let r = root(&mut parent, i);
         if let Some(map) = doc.atoms.get(i).map(|a| a.map_num).filter(|&m| m != 0) {
             numbers.entry(r).or_insert(map);
         }
@@ -735,7 +740,7 @@ fn restore_reaction_maps(
     let used: HashSet<_> = doc.atoms.iter().map(|a| a.map_num).collect();
     let mut next = 1;
     for &i in &order {
-        let r = root(&parent, i);
+        let r = root(&mut parent, i);
         let number = *numbers.entry(r).or_insert_with(|| {
             while used.contains(&next) {
                 next += 1;
