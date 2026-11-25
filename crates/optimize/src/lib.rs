@@ -12,6 +12,7 @@ mod linalg;
 
 mod model_hessian;
 mod optimizer;
+pub mod ts;
 
 pub use optimizer::{
     Acceleration, Convergence, Criteria, InitialHessian, Level, Method, Options, Outcome, Rebuild,
