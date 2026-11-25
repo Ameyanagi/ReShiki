@@ -1,5 +1,9 @@
-use super::mesh::{Grid, MAX_RAW, MAX_SAMPLES, MAX_SIDE, Mesh, isosurface, simplify};
+use super::mesh::{
+    Grid, MAX_RAW, MAX_SAMPLES, MAX_SIDE, Mesh, REFINE_FALLBACKS, isosurface, isosurface_with_step,
+    refine, simplify,
+};
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::Ordering;
 
 mod view;
 
@@ -185,7 +189,73 @@ fn topology(mesh: &Mesh) -> Vec<(bool, isize)> {
     components
 }
 
-fn check_field(mesh: Mesh, components: &[(bool, isize)], radius: Option<f32>) {
+fn volume(mesh: &Mesh) -> f64 {
+    mesh.triangles
+        .iter()
+        .map(|tri| {
+            let [a, b, c] = tri.map(|v| mesh.positions[v as usize].map(f64::from));
+            dot(a, cross(b, c)) / 6.
+        })
+        .sum()
+}
+
+fn edge_length_cv(mesh: &Mesh) -> f64 {
+    let mut edges = HashSet::new();
+    let mut lengths = Vec::new();
+    for triangle in &mesh.triangles {
+        for i in 0..3 {
+            let (a, b) = (triangle[i], triangle[(i + 1) % 3]);
+            if edges.insert((a.min(b), a.max(b))) {
+                let d = sub(
+                    mesh.positions[a as usize].map(f64::from),
+                    mesh.positions[b as usize].map(f64::from),
+                );
+                lengths.push(dot(d, d).sqrt());
+            }
+        }
+    }
+    let mean = lengths.iter().sum::<f64>() / lengths.len() as f64;
+    let variance = lengths.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / lengths.len() as f64;
+    variance.sqrt() / mean
+}
+
+fn check_gradient_normals(mesh: &Mesh, field: &impl Fn([f32; 3]) -> f32, step: f32) {
+    let mut signs = vec![None; mesh.positions.len()];
+    for (&tri, &positive) in mesh.triangles.iter().zip(&mesh.positive) {
+        for v in tri {
+            if let Some(previous) = signs[v as usize].replace(positive) {
+                assert_eq!(previous, positive, "opposite phases share a vertex");
+            }
+        }
+    }
+    // A much smaller stencil than production's gives an independent check of
+    // the field gradient and the opposite conventions at the two levels.
+    let h = step * 1e-3;
+    for (i, (&p, &normal)) in mesh.positions.iter().zip(&mesh.normals).enumerate() {
+        let gradient = std::array::from_fn(|axis| {
+            let (mut lo, mut hi) = (p, p);
+            lo[axis] -= h;
+            hi[axis] += h;
+            f64::from(field(hi)) - f64::from(field(lo))
+        });
+        let outward = gradient.map(|g| if signs[i].unwrap() { -g } else { g });
+        let length = dot(outward, outward).sqrt();
+        assert!(length.is_finite() && length > 0.);
+        assert!(
+            dot(outward, normal.map(f64::from)) > 0.95 * length,
+            "normal {i} points away from its phase's outward gradient"
+        );
+    }
+}
+
+fn check_field(
+    field: impl Fn([f32; 3]) -> f32,
+    grid: Grid,
+    iso: f32,
+    components: &[(bool, isize)],
+    radius: Option<f32>,
+) -> (Mesh, Mesh) {
+    let (mesh, step) = isosurface_with_step(&field, grid, iso);
     assert!(!mesh.truncated);
     let reduced = simplify(&mesh, 2000);
     assert!(
@@ -198,7 +268,14 @@ fn check_field(mesh: Mesh, components: &[(bool, isize)], radius: Option<f32>) {
         mesh.triangles.len(),
         reduced.triangles.len()
     );
-    for m in [&mesh, &reduced] {
+    let fallbacks_before = REFINE_FALLBACKS.load(Ordering::Relaxed);
+    let refined = refine(&reduced, &field, iso, step);
+    assert_eq!(REFINE_FALLBACKS.load(Ordering::Relaxed), fallbacks_before);
+    assert_eq!(refined.triangles, reduced.triangles);
+    assert_eq!(refined.positive, reduced.positive);
+    assert_eq!(refined.truncated, reduced.truncated);
+    assert_eq!(refined.positions.len(), reduced.positions.len());
+    for m in [&mesh, &reduced, &refined] {
         assert_eq!(topology(m), components);
         check_embedded(m);
         if let Some(radius) = radius {
@@ -211,6 +288,35 @@ fn check_field(mesh: Mesh, components: &[(bool, isize)], radius: Option<f32>) {
             assert!((total / m.positions.len() as f64 / radius as f64 - 1.).abs() < 0.02);
         }
     }
+    check_gradient_normals(&refined, &field, step);
+    if let Some(radius) = radius {
+        let max_radius_error = refined
+            .positions
+            .iter()
+            .map(|p| {
+                let r = p.iter().map(|&x| f64::from(x).powi(2)).sum::<f64>().sqrt();
+                (r - f64::from(radius)).abs()
+            })
+            .fold(0., f64::max);
+        let exact = 4. * std::f64::consts::PI * f64::from(radius).powi(3) / 3.;
+        let before_volume = (volume(&reduced) / exact - 1.).abs();
+        let after_volume = (volume(&refined) / exact - 1.).abs();
+        let before_cv = edge_length_cv(&reduced);
+        let after_cv = edge_length_cv(&refined);
+        eprintln!(
+            "refined sphere radius={radius} max_radius_error={max_radius_error:.9} step={step} volume_error={before_volume:.6}->{after_volume:.6} edge_cv={before_cv:.6}->{after_cv:.6}"
+        );
+        assert!(max_radius_error < 1e-3 * f64::from(step));
+        assert!(
+            after_volume < before_volume,
+            "volume error {before_volume:.6} -> {after_volume:.6}"
+        );
+        assert!(
+            after_cv < before_cv,
+            "edge-length CV {before_cv:.6} -> {after_cv:.6}"
+        );
+    }
+    (mesh, refined)
 }
 
 // These unsigned fixtures stop at zero so the negative level has no second shell.
@@ -220,20 +326,33 @@ fn sphere(p: [f32; 3]) -> f32 {
 
 #[test]
 fn sphere_topology() {
+    let mut worst_volume_error = 0_f64;
     for sign in [1., -1.] {
-        check_field(
-            isosurface(|p| sign * sphere(p), grid([-1.23; 3], 0.12, [22; 3]), 0.13),
+        let (_, refined) = check_field(
+            |p| sign * sphere(p),
+            grid([-1.23; 3], 0.12, [22; 3]),
+            0.13,
             &[(sign > 0., 2)],
             Some(0.87),
         );
+        let exact = 4. * std::f64::consts::PI * 0.87_f64.powi(3) / 3.;
+        worst_volume_error = worst_volume_error.max((volume(&refined) / exact - 1.).abs());
     }
+    // Vertices on the sphere: an inscribed polyhedron this coarse is at least
+    // 0.54 % short of the ball's volume (Fejes Toth), so 1 % is the honest bound.
+    assert!(
+        worst_volume_error < 0.01,
+        "refined sphere volume error {worst_volume_error:.6}"
+    );
 }
 
 #[test]
 fn opposite_lobe_topology() {
     let p = |v: [f32; 3]| v[2] * (-v.iter().map(|x| x * x).sum::<f32>().sqrt()).exp();
     check_field(
-        isosurface(p, grid([-1.77, -1.77, -2.81], 0.24, [16, 16, 25]), 0.27),
+        p,
+        grid([-1.77, -1.77, -2.81], 0.24, [16, 16, 25]),
+        0.27,
         &[(false, 2), (true, 2)],
         None,
     );
@@ -244,11 +363,9 @@ fn torus_topology() {
     let field =
         |[x, y, z]: [f32; 3]| (0.43f32.powi(2) - ((1.05 - x.hypot(y)).powi(2) + z * z)).max(0.);
     check_field(
-        isosurface(
-            field,
-            grid([-1.62, -1.62, -0.65], 0.13, [26, 26, 11]),
-            0.035,
-        ),
+        field,
+        grid([-1.62, -1.62, -0.65], 0.13, [26, 26, 11]),
+        0.035,
         &[(true, 0)],
         None,
     );
@@ -262,11 +379,9 @@ fn narrow_gap_survives_simplification() {
     let field =
         |[x, y, z]: [f32; 3]| (1. - ((x.abs() - center).powi(2) + y * y + z * z).sqrt()).max(0.);
     check_field(
-        isosurface(
-            field,
-            grid([-1.75, -0.97, -0.97], step, [29, 17, 17]),
-            1. - radius,
-        ),
+        field,
+        grid([-1.75, -0.97, -0.97], step, [29, 17, 17]),
+        1. - radius,
         &[(true, 2), (true, 2)],
         None,
     );
@@ -275,9 +390,8 @@ fn narrow_gap_survives_simplification() {
 #[test]
 fn grows_only_where_the_surface_leaves_the_box() {
     let initial = grid([-0.64, -1.07, -1.07], 0.12, [16, 19, 19]);
-    let mesh = isosurface(sphere, initial, 0.14);
+    let (mesh, _) = check_field(sphere, initial, 0.14, &[(true, 2)], Some(0.86));
     assert!(mesh.positions.iter().any(|p| p[0] < -0.83));
-    check_field(mesh, &[(true, 2)], Some(0.86));
 }
 
 #[test]
@@ -484,6 +598,58 @@ fn collapses_preserve_embedding_against_spatial_neighbours() {
 }
 
 #[test]
+fn refinement_rollback_rechecks_collisions_and_keeps_unrelated_moves() {
+    use super::mesh::guard_refinement;
+
+    let tetrahedron = [
+        [-0.5, -0.5, -0.5],
+        [0.5, -0.5, 0.5],
+        [0.5, 0.5, -0.5],
+        [-0.5, 0.5, 0.5],
+    ];
+    let faces = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
+    let mut mesh = Mesh::default();
+    for (component, positive) in [true, true, false, true].into_iter().enumerate() {
+        mesh.positions
+            .extend(tetrahedron.map(|[x, y, z]| [x + 4. * component as f32, y, z]));
+        mesh.triangles
+            .extend(faces.map(|t| t.map(|v| v + 4 * component as u32)));
+        mesh.positive.extend([positive; 4]);
+    }
+    mesh.normals = vec![[0., 0., 1.]; mesh.positions.len()];
+    assert_eq!(
+        topology(&mesh),
+        [(false, 2), (true, 2), (true, 2), (true, 2)]
+    );
+    check_embedded(&mesh);
+
+    let mut candidate = mesh.positions.clone();
+    // A overlaps stationary B. C occupies A's old position, so restoring A
+    // creates a second collision across phases that requires another pass.
+    candidate[..4].copy_from_slice(&mesh.positions[4..8]);
+    candidate[8..12].copy_from_slice(&mesh.positions[..4]);
+    for p in &mut candidate[12..] {
+        p[1] += 0.25;
+    }
+    let control = candidate[12..].to_vec();
+    assert!(guard_refinement(&mesh, &mut candidate));
+    assert_eq!(candidate[..4], mesh.positions[..4], "A was not restored");
+    assert_eq!(candidate[4..8], mesh.positions[4..8], "B moved");
+    assert_eq!(
+        candidate[8..12],
+        mesh.positions[8..12],
+        "C was not restored"
+    );
+    assert_eq!(
+        candidate[12..],
+        control,
+        "unrelated legal move was discarded"
+    );
+    mesh.positions = candidate;
+    check_embedded(&mesh);
+}
+
+#[test]
 fn nonfinite_samples_are_outside_the_surface() {
     let g = grid([-1.25; 3], 0.25, [11; 3]);
     let reference = isosurface(|p| if p == [0.75, 0., 0.] { 0. } else { sphere(p) }, g, 0.2);
@@ -527,6 +693,123 @@ fn nonfinite_gradients_use_face_normals() {
         assert_eq!(topology(&mesh), [(true, 2)]);
         check_embedded(&mesh);
     }
+}
+
+#[test]
+fn refinement_with_nonfinite_fields_uses_face_normals() {
+    let step = 0.25;
+    let mut mesh = simplify(
+        &isosurface(sphere, grid([-1.25; 3], step, [11; 3]), 0.2),
+        500,
+    );
+    // Poison the cached normals so keeping the input normals cannot mask a
+    // failed gradient or a failure to recompute normals after moving vertices.
+    mesh.normals.fill([f32::NAN; 3]);
+    for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let fallbacks_before = REFINE_FALLBACKS.load(Ordering::Relaxed);
+        let refined = refine(&mesh, |_| invalid, 0.2, step);
+        assert_eq!(REFINE_FALLBACKS.load(Ordering::Relaxed), fallbacks_before);
+        assert_eq!(refined.positions, mesh.positions);
+        assert_eq!(refined.triangles, mesh.triangles);
+        assert_eq!(refined.positive, mesh.positive);
+        assert!(refined.positions.iter().flatten().all(|x| x.is_finite()));
+        assert_eq!(topology(&refined), [(true, 2)]);
+        check_embedded(&refined);
+        let mut sums = vec![[0.; 3]; refined.positions.len()];
+        for tri in &refined.triangles {
+            let [a, b, c] = tri.map(|v| refined.positions[v as usize].map(f64::from));
+            let face = cross(sub(b, a), sub(c, a));
+            for &v in tri {
+                for (sum, component) in sums[v as usize].iter_mut().zip(face) {
+                    *sum += component;
+                }
+            }
+        }
+        for (normal, sum) in refined.normals.iter().zip(sums) {
+            let length = dot(sum, sum).sqrt();
+            let expected = sum.map(|x| x / length);
+            assert!(
+                normal
+                    .iter()
+                    .zip(expected)
+                    .all(|(&n, e)| (f64::from(n) - e).abs() < 1e-5),
+                "normal {normal:?} differs from its area-weighted face normal {expected:?}"
+            );
+        }
+    }
+}
+
+// Run with: cargo test -p reshiki-model --release refine_timing -- --ignored --nocapture
+#[test]
+#[ignore = "release-mode post-simplification refinement timing evidence"]
+fn refine_timing() {
+    use std::time::Instant;
+
+    assert!(
+        !std::hint::black_box(cfg!(debug_assertions)),
+        "run this ignored benchmark with --release"
+    );
+    // Identical 12-lobe benzene field and extraction grid to view/budget.rs.
+    let grid = grid([-5.5; 3], 11. / 96., [97; 3]);
+    let centers: Vec<[f32; 3]> = (0..6)
+        .map(|i| {
+            let angle = i as f32 * std::f32::consts::TAU / 6.;
+            [1.4 * angle.cos(), 1.4 * angle.sin(), 0.]
+        })
+        .collect();
+    let field = |p: [f32; 3]| {
+        centers
+            .iter()
+            .enumerate()
+            .map(|(i, center)| {
+                let d = std::array::from_fn::<_, 3, _>(|j| p[j] - center[j]);
+                let sign = if i % 2 == 0 { 1. } else { -1. };
+                sign * d[2] * (-1.6 * d.iter().map(|v| v * v).sum::<f32>().sqrt()).exp()
+            })
+            .sum()
+    };
+    let raw = isosurface(field, grid, 0.035);
+    assert!(!raw.truncated);
+    assert!(raw.triangles.len() > 20_000);
+    let components: Vec<_> = [(false, 2); 6].into_iter().chain([(true, 2); 6]).collect();
+    assert_eq!(topology(&raw), components);
+    let mut timing_failures = Vec::new();
+    for target in [20_000, 4_000] {
+        let mesh = simplify(&raw, target);
+        assert!(mesh.triangles.len() <= target);
+        assert!(mesh.triangles.len() >= target * 9 / 10);
+        let fallbacks_before = REFINE_FALLBACKS.load(Ordering::Relaxed);
+        // Extraction, simplification and all verification are outside the timer.
+        let start = Instant::now();
+        let refined =
+            std::hint::black_box(refine(std::hint::black_box(&mesh), field, 0.035, grid.step));
+        let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.;
+        let fallbacks = REFINE_FALLBACKS.load(Ordering::Relaxed) - fallbacks_before;
+        eprintln!(
+            "refine scene=12-lobe samples={} raw={} target={target} vertices={} triangles={} refine_ms={elapsed_ms:.2} fallbacks={fallbacks} edge_cv={:.6}->{:.6}",
+            97_usize.pow(3),
+            raw.triangles.len(),
+            refined.positions.len(),
+            refined.triangles.len(),
+            edge_length_cv(&mesh),
+            edge_length_cv(&refined),
+        );
+        assert_eq!(
+            fallbacks, 0,
+            "timing must exercise refinement without fallback"
+        );
+        assert_eq!(refined.triangles, mesh.triangles);
+        assert_eq!(refined.positive, mesh.positive);
+        assert_eq!(topology(&refined), components);
+        check_embedded(&refined);
+        check_gradient_normals(&refined, &field, grid.step);
+        if target == 20_000 && elapsed_ms > 150. {
+            timing_failures.push(format!(
+                "target={target}: refinement took {elapsed_ms:.2}ms, budget 150ms"
+            ));
+        }
+    }
+    assert!(timing_failures.is_empty(), "{}", timing_failures.join("\n"));
 }
 
 #[test]

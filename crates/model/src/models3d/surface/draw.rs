@@ -109,13 +109,13 @@ pub(in crate::models3d) fn meshes(doc: &Document, model: &Model3d) -> Option<Rc<
             )
         },
     );
-    let raw = mesh::isosurface(&field, Grid::around(lo, hi), iso);
+    let (raw, step) = mesh::isosurface_with_step(&field, Grid::around(lo, hi), iso);
     // A lobe the grown box still cuts would show a flat cap: draw nothing,
     // and remember that.
     let found = (!raw.truncated).then(|| {
         let fine = mesh::simplify(&raw, DETAIL[0]);
         let coarse = mesh::simplify(&fine, DETAIL[1]);
-        Rc::new([fine, coarse])
+        Rc::new([fine, coarse].map(|m| mesh::refine(&m, &field, iso, step)))
     });
     MESHES.with_borrow_mut(|kept| {
         if kept.len() >= KEPT {
