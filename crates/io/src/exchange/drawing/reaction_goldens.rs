@@ -292,3 +292,125 @@ fn conditions() {
 fn mapped() {
     golden("mapped", mapped_document(), &[(2, 1, 0, 1)]);
 }
+
+fn step_counts(xml: &str) -> Vec<Vec<[usize; 6]>> {
+    let xml = roxmltree::Document::parse(xml).unwrap();
+    xml.descendants()
+        .filter(|node| node.has_tag_name("scheme"))
+        .map(|scheme| {
+            scheme
+                .children()
+                .filter(|node| node.has_tag_name("step"))
+                .map(|step| {
+                    [
+                        "ReactionStepReactants",
+                        "ReactionStepProducts",
+                        "ReactionStepPlusses",
+                        "ReactionStepObjectsAboveArrow",
+                        "ReactionStepObjectsBelowArrow",
+                        "ReactionStepAtomMap",
+                    ]
+                    .map(|field| {
+                        step.attribute(field)
+                            .unwrap_or_default()
+                            .split_whitespace()
+                            .count()
+                    })
+                })
+                .collect()
+        })
+        .collect()
+}
+
+fn mapped_pairs(document: &Document, reaction: &Reaction) -> usize {
+    let numbers = |parts: &[Participant]| {
+        parts
+            .iter()
+            .flat_map(|part| &part.atoms)
+            .map(|&id| document.atom(id).unwrap().map_num)
+            .filter(|&number| number > 0)
+            .collect::<std::collections::HashSet<_>>()
+    };
+    numbers(&reaction.reactants)
+        .intersection(&numbers(&reaction.products))
+        .count()
+}
+
+#[tokio::test]
+async fn reaction_steps_round_trip_through_the_engine() {
+    use crate::{
+        chemistry::cdxml::schemes,
+        engine::{LocalEngine, Request},
+        exchange::{from_cdx, to_cdx},
+    };
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+
+    let engine = LocalEngine::in_process();
+    let write = |doc: &Document| super::write(doc, Default::default()).unwrap();
+    for (name, source) in [
+        ("simple", simple_document()),
+        ("multi_reactant", esterification_document()),
+        ("multi_step", multi_step_document()),
+        ("conditions", conditions_document()),
+        ("mapped", mapped_document()),
+    ] {
+        let xml = write(&source);
+        let binary = to_cdx(&xml).unwrap();
+        let binary_xml = from_cdx(&binary).unwrap();
+        for (format, contents, first) in [
+            ("cdxml", xml.clone(), &xml),
+            ("cdx", STANDARD.encode(&binary), &binary_xml),
+        ] {
+            let response = engine
+                .request(Request::import(format, &contents))
+                .await
+                .unwrap();
+            assert!(
+                !response.warnings.iter().any(|w| w == schemes::NOTICE),
+                "{name}.{format}"
+            );
+            let imported = response.document.unwrap();
+            assert_eq!(
+                imported.reactions.len(),
+                source.arrows.len(),
+                "{name}.{format}"
+            );
+            for (arrow, actual) in source.arrows.iter().zip(&imported.reactions) {
+                let expected = reactions::preview(&source, arrow.id).unwrap();
+                assert_eq!(
+                    (
+                        actual.reactants.len(),
+                        actual.products.len(),
+                        actual.agents.len()
+                    ),
+                    (
+                        expected.reactants.len(),
+                        expected.products.len(),
+                        expected.agents.len()
+                    ),
+                    "{name}.{format}"
+                );
+                for &id in &expected.annotations {
+                    let caption = source.annotations.iter().find(|a| a.id == id).unwrap();
+                    assert!(
+                        imported.annotations.iter().any(|a| {
+                            a.text == caption.text && actual.annotations.contains(&a.id)
+                        }),
+                        "{name}.{format}: missing caption {}",
+                        caption.text
+                    );
+                }
+                assert_eq!(
+                    mapped_pairs(&imported, actual),
+                    mapped_pairs(&source, &expected),
+                    "{name}.{format}"
+                );
+            }
+            let mut saved = write(&imported);
+            if format == "cdx" {
+                saved = from_cdx(&to_cdx(&saved).unwrap()).unwrap();
+            }
+            assert_eq!(step_counts(&saved), step_counts(first), "{name}.{format}");
+        }
+    }
+}

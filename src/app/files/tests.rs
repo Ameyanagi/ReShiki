@@ -661,7 +661,7 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
         "MOL keeps the structure only."
     );
 
-    // Reaction roles and arrow links drawn in ReShiki are lost as well.
+    // Arrow links drawn in ReShiki are lost as well; reaction roles are kept.
     let mut doc = Document::default();
     let arrow = doc.next_id();
     doc.arrows.push(reshiki::document::Arrow::new(
@@ -709,7 +709,7 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
             &doc
         ),
         format!(
-            "Keep as CDXML loses 4 reaction schemes, 12 steps, 3 objects ReShiki draws differently or leaves out, reaction roles and arrow links. {unchanged}"
+            "Keep as CDXML loses 4 reaction schemes, 12 steps, 3 objects ReShiki draws differently or leaves out and arrow links. {unchanged}"
         )
     );
 }

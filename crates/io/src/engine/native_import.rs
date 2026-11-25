@@ -17,9 +17,13 @@ use crate::{
     },
     document::Document,
     exchange::cycles,
+    reactions::{self, Participant, Reaction},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 #[cfg(test)]
 mod allene_tests;
 #[cfg(test)]
@@ -339,13 +343,12 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 let (xml, found) = cycles::take_cdxml(&text);
                 (xml.into_owned(), found)
             };
-            let xml = cdxml::symbol_text_to_unicode(&xml);
-            let (xml, approximated) = cdxml::approximate(&xml);
+            let source = cdxml::symbol_text_to_unicode(&xml);
+            let (drawing, approximated) = cdxml::approximate(&source);
             let (xml, variables) =
-                cdxml::drawing_variables(&xml).map_err(|e| Error::Binary(e.to_string()))?;
+                cdxml::drawing_variables(&drawing).map_err(|e| Error::Binary(e.to_string()))?;
             let mut warnings = Vec::from_iter(approximated);
-            // The schemes of a file with cycle data are the cycles' steps;
-            // the cycle's own message covers them.
+            // Cycle data owns the reaction steps in that file.
             let ours = found.is_some();
             let fresh = match found {
                 Some(cycles::Found::Fresh(payload)) => Some(payload),
@@ -355,23 +358,35 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 }
                 None => None,
             };
-            if cdxml::schemes::validate(&xml).map_err(|e| Error::Binary(e.to_string()))? && !ours {
-                warnings.push(cdxml::schemes::NOTICE.into());
-            }
+            let schemes = cdxml::schemes::read(&xml).map_err(|e| Error::Binary(e.to_string()))?;
+            let schemes = if ours {
+                Vec::new()
+            } else if drawing != source {
+                // Approximation can remove objects from a step's lists.
+                cdxml::schemes::read(&source).unwrap_or(schemes)
+            } else {
+                schemes
+            };
+            let step_count = schemes.iter().map(Vec::len).sum::<usize>();
+            let steps: Vec<_> = schemes.into_iter().flatten().flatten().collect();
             // The objects each file object became, while the scene has them.
             let objects = |prepared: &cdxml::PreparedCdxml, scene: &cdxml::CdxmlScene| {
-                fresh
-                    .as_ref()
-                    .map(|_| scene.file_objects(prepared))
+                (fresh.is_some() || !steps.is_empty())
+                    .then(|| scene.file_objects(prepared))
                     .transpose()
             };
-            // A cycle that does not come back opens as it was drawn.
             let restore = |document: &mut Document, objects: Option<_>, scale: f64| {
-                if let (Some(payload), Some(objects)) = (&fresh, objects)
-                    && cycles::restore(document, payload, &objects, scale as f32)
+                if let (Some(payload), Some(objects)) = (&fresh, &objects)
+                    && cycles::restore(document, payload, objects, scale as f32)
                         < payload.cycles.len()
                 {
                     return vec![cycles::EDITED_NOTICE.to_owned()];
+                }
+                let restored = objects
+                    .filter(|_| !steps.is_empty())
+                    .map_or(0, |objects| restore_reactions(document, &objects, &steps));
+                if restored < step_count {
+                    return vec![cdxml::schemes::NOTICE.to_owned()];
                 }
                 vec![]
             };
@@ -442,6 +457,137 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
     };
     prepared.document.validate().map_err(Error::Document)?;
     Ok(Preparation::Complete(Box::new(prepared)))
+}
+
+fn restore_reactions(
+    doc: &mut Document,
+    objects: &HashMap<u64, Vec<u64>>,
+    steps: &[cdxml::schemes::Step],
+) -> usize {
+    let resolve = |files: &[u64]| {
+        files
+            .iter()
+            .filter_map(|id| objects.get(id))
+            .flatten()
+            .copied()
+            .collect::<Vec<_>>()
+    };
+    let chemistry: HashSet<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| a.purpose.is_chemistry())
+        .map(|a| a.id)
+        .collect();
+    let mut arrows: HashSet<_> = doc
+        .arrows
+        .iter()
+        .filter(|a| a.purpose.is_chemistry())
+        .map(|a| a.id)
+        .collect();
+    let captions: HashSet<_> = doc.annotations.iter().map(|a| a.id).collect();
+    let mut maps = Vec::new();
+    for step in steps {
+        let resolved = resolve(&step.arrows);
+        let [arrow] = resolved.as_slice() else {
+            continue;
+        };
+        if !arrows.contains(arrow) {
+            continue;
+        }
+        let participants = |mut atoms: Vec<u64>| {
+            atoms.retain(|id| chemistry.contains(id));
+            reactions::molecules(doc, &atoms)
+                .into_iter()
+                .filter(|atoms| atoms.iter().all(|id| chemistry.contains(id)))
+                .map(|atoms| Participant {
+                    atoms,
+                    coefficient: 1,
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut reaction = Reaction::new(*arrow);
+        reaction.reactants = participants(resolve(&step.reactants));
+        reaction.products = participants(resolve(&step.products));
+        if reaction.reactants.is_empty() || reaction.products.is_empty() {
+            continue;
+        }
+        let mut surroundings = resolve(&step.above);
+        surroundings.extend(resolve(&step.below));
+        reaction.agents = participants(surroundings.clone());
+        reaction.annotations = surroundings
+            .into_iter()
+            .chain(resolve(&step.plusses))
+            .filter(|id| captions.contains(id))
+            .collect();
+        reaction.annotations.sort_unstable();
+        reaction.annotations.dedup();
+        arrows.remove(arrow);
+        doc.reactions.push(reaction);
+        maps.push(step.atom_map.as_slice());
+    }
+    if reactions::validate(doc).is_err() {
+        doc.reactions.clear();
+        return 0;
+    }
+    if maps.iter().any(|map| !map.is_empty()) {
+        restore_reaction_maps(doc, objects, &maps);
+    }
+    doc.reactions.len()
+}
+
+fn restore_reaction_maps(
+    doc: &mut Document,
+    objects: &HashMap<u64, Vec<u64>>,
+    maps: &[&[[u64; 2]]],
+) {
+    let indices: HashMap<_, _> = doc
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(i, a)| (a.id, i))
+        .collect();
+    let index = |file| {
+        let [id] = objects.get(&file)?.as_slice() else {
+            return None;
+        };
+        indices.get(id).copied()
+    };
+    let mut highest = doc.atoms.iter().map(|a| a.map_num).max().unwrap_or(0);
+    for (reaction, &pairs) in doc.reactions.iter().zip(maps) {
+        if pairs.is_empty() {
+            continue;
+        }
+        let members: HashSet<_> = reaction
+            .reactants
+            .iter()
+            .chain(&reaction.products)
+            .chain(&reaction.agents)
+            .flat_map(|part| part.atoms.iter().copied())
+            .collect();
+        if members
+            .iter()
+            .filter_map(|id| indices.get(id).and_then(|&i| doc.atoms.get(i)))
+            .any(|atom| atom.map_num > 0)
+        {
+            continue;
+        }
+        for &[a, b] in pairs {
+            if highest == i32::MAX as u32 {
+                return;
+            }
+            if let Some((a, b)) = index(a).zip(index(b))
+                && let Ok([a, b]) = doc.atoms.get_disjoint_mut([a, b])
+                && members.contains(&a.id)
+                && members.contains(&b.id)
+                && a.map_num == 0
+                && b.map_num == 0
+            {
+                highest += 1;
+                a.map_num = highest;
+                b.map_num = highest;
+            }
+        }
+    }
 }
 
 fn prepare_smiles(
