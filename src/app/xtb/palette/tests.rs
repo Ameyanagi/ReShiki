@@ -359,13 +359,10 @@ fn save_asks_once_about_large_results_and_make_lighter_drops_the_steps() {
     assert!(after * 20 < bytes, "{after} of {bytes}");
     assert!(!app.file_io.saving, "nothing is written before the answer");
 
-    // Another document in front (a new file epoch here) cancels instead.
+    // Asked about another document (a new file epoch here): nothing happens.
     let prompt = app.prompt.clone().expect("prompt");
     app.tab.file_epoch += 1;
-    assert!(matches!(
-        app.xtb_size_answer(prompt, Answer::Save),
-        Message::Cancel
-    ));
+    assert!(app.xtb_size_answer(prompt, Answer::Save).is_none());
     assert!(app.xtb_shown().is_some_and(|shown| shown.stored.keep_full));
     app.tab.file_epoch -= 1;
 
@@ -380,11 +377,24 @@ fn save_asks_once_about_large_results_and_make_lighter_drops_the_steps() {
     assert!(app.prompt.is_none());
 }
 
+#[test]
+fn named_save_as_asks_too_and_keeps_the_name() {
+    let mut app = large_results();
+    let _ = app.save_drawing_named("chain.rsk".into());
+    let Some(Prompt::LargeResults { then, .. }) = app.prompt.clone() else {
+        panic!("named Save As asks about large results");
+    };
+    assert!(matches!(
+        *then,
+        Message::Xtb(XtbAction::Palette(Action::SaveNamed(name))) if name == "chain.rsk"
+    ));
+}
+
 /// Writes the large-results document for the Save warning screenshots:
 /// `RESHIKI_XTB_LARGE_FIXTURE=/path/large.rsk cargo test … -- --ignored`.
 #[test]
 #[ignore = "writes an evidence fixture"]
-fn write_large_results_fixture() {
+fn manual_write_large_results_fixture() {
     let path = std::env::var("RESHIKI_XTB_LARGE_FIXTURE").expect("fixture path");
     let app = large_results();
     std::fs::write(path, app.tab.doc.file_json().expect("file")).expect("written");

@@ -1329,10 +1329,10 @@ impl App {
         // The answer goes on as the system dialog's would have.
         if let Message::Prompt(answer) = message {
             return ControlFlow::Break(match self.prompt.take() {
-                Some(prompt) => {
-                    let message = self.xtb_size_answer(prompt, answer);
-                    self.update(message)
-                }
+                Some(prompt) => match self.xtb_size_answer(prompt, answer) {
+                    Some(message) => self.update(message),
+                    None => Task::none(),
+                },
                 None => Task::none(),
             });
         }

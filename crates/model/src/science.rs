@@ -942,6 +942,9 @@ pub fn move_model(
     atoms: &[Option<u64>],
     frame: &Frame,
 ) -> Result<(), ScienceError> {
+    if atoms.len() != frame.numbers.len() || frame.positions_angstrom.len() != frame.numbers.len() {
+        return Err(ScienceError::ModelMismatch);
+    }
     let index = atoms
         .iter()
         .flatten()

@@ -78,10 +78,9 @@ pub(crate) struct State {
 impl State {
     /// The run information of a result the document holds.
     fn info(&self, result: &Arc<CalcResult>) -> Option<&RunInfo> {
-        // A live weak at the same address is the same allocation.
         self.infos
             .iter()
-            .find(|(weak, _)| weak.strong_count() > 0 && weak.as_ptr() == Arc::as_ptr(result))
+            .find(|(weak, _)| is(weak, result))
             .map(|(_, info)| info.as_ref())
     }
 
@@ -89,6 +88,12 @@ impl State {
         self.infos.retain(|(weak, _)| weak.strong_count() > 0);
         self.infos.push((Arc::downgrade(result), info));
     }
+}
+
+/// Whether `weak` is the live allocation `result`: a live weak at the same
+/// address is the same allocation.
+fn is(weak: &Weak<CalcResult>, result: &Arc<CalcResult>) -> bool {
+    weak.strong_count() > 0 && weak.as_ptr() == Arc::as_ptr(result)
 }
 
 /// What a run calculates and how: from the card, or a result's Recalculate.

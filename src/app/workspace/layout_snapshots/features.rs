@@ -1136,6 +1136,12 @@ fn xtb_results_inspector(app: &mut App, driver: &Driver<'_>) {
     let _ = app.update(Message::Xtb(Action::Palette(palette::Action::Dock)));
 }
 
+fn xtb_results_inspector_steps(app: &mut App, driver: &Driver<'_>) {
+    use crate::app::xtb::{Action, palette};
+    xtb_results_steps(app, driver);
+    let _ = app.update(Message::Xtb(Action::Palette(palette::Action::Dock)));
+}
+
 /// Save with more than 5 MB of kept results.
 fn xtb_size_prompt(app: &mut App, _: &Driver<'_>) {
     *app = crate::app::xtb::palette::tests::large_results();
@@ -1163,6 +1169,10 @@ async fn manual_xtb_layout_snapshots() {
         ("xtb-results-log", xtb_results_log as Scene),
         ("xtb-results-stale", xtb_results_stale as Scene),
         ("xtb-results-inspector", xtb_results_inspector as Scene),
+        (
+            "xtb-results-inspector-steps",
+            xtb_results_inspector_steps as Scene,
+        ),
         ("xtb-size-prompt", xtb_size_prompt as Scene),
     ] {
         let (mut app, _) = App::new();

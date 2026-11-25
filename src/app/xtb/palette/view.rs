@@ -206,6 +206,11 @@ impl App {
                     .on_press(Message::Xtb(XtbAction::Cancel))
                     .into(),
             ),
+            // Builds without the engine show stored results only.
+            None if super::super::unavailable().is_some() => (
+                "The molecule changed after this calculation. Results are kept, greyed.".into(),
+                Space::new().into(),
+            ),
             None => (
                 "The molecule changed after this calculation. Results are kept, greyed.".into(),
                 reshiki::accessibility::button(
@@ -249,11 +254,10 @@ impl App {
         let live = !shown.stale && self.tab.xtb.run.is_none();
         // Without a preview, the list marks the step the model shows (the
         // last one unless another step was used).
-        let shows = (0..energies.len()).rev().filter(|_| live).find(|&step| {
-            shown.step_positions(step).is_some_and(|positions| {
-                super::super::model_shows(&self.tab.doc, shown.atoms, &positions)
-            })
-        });
+        let shows = selected
+            .is_none()
+            .then(|| self.xtb_model_step(shown))
+            .flatten();
         let chart = canvas(StepChart {
             energies: energies.clone(),
             selected: selected.or(shows).unwrap_or(last),
@@ -301,7 +305,7 @@ impl App {
             // Any step the model does not show already, the last one too
             // after another step was used.
             let usable = live
-                && selected.is_some()
+                && self.xtb_step_preview().is_some()
                 && shown.step_positions(index).is_some_and(|positions| {
                     !super::super::model_shows(&self.tab.doc, shown.atoms, &positions)
                 });

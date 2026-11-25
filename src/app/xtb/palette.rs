@@ -2,12 +2,12 @@
 //! inspector), with Summary, Steps and Log, the stale banner, energy labels,
 //! "Saved in file" and the large-results question on Save.
 use super::results::{self, RunInfo, View};
-use super::{CalcTask, Request, state};
+use super::{CalcTask, Request, is, state};
 use crate::app::{App, Message};
 use iced::Task;
 use reshiki::document::Document;
 use reshiki::qcdata::{self, CalcResult, Frame};
-use reshiki::science::{self, Freshness, Science, Stored};
+use reshiki::science::{self, Freshness, Stored};
 use std::{
     cell::RefCell,
     sync::{Arc, Weak},
@@ -51,9 +51,10 @@ pub(crate) struct Dock {
 /// One document's palette.
 #[derive(Default)]
 pub(crate) struct Palette {
-    /// The result shown: an identity that Undo, Redo and other results'
-    /// edits keep, unlike an index or an attachment ID.
-    result: Option<Weak<CalcResult>>,
+    /// The result shown, and the lighter copies Make lighter made of it:
+    /// identities that Undo, Redo and other results' edits keep, unlike an
+    /// index or an attachment ID.
+    result: Vec<Weak<CalcResult>>,
     pub(super) open: bool,
     pub(super) view: View,
     pub(super) labels: bool,
@@ -76,9 +77,9 @@ struct Step {
 }
 
 struct Sizes {
-    /// The calculation data measured (cheap to compare: payloads are
-    /// shared) and the shown result's index; drawing edits keep it.
-    science: Science,
+    /// The results measured, by identity and "keep full" choice, without
+    /// holding them; drawing edits keep the sizes.
+    results: Vec<(Weak<CalcResult>, bool)>,
     index: usize,
     /// Saved bytes per result, in `Science::results` order.
     saved: Vec<usize>,
@@ -89,7 +90,7 @@ struct Sizes {
 impl Palette {
     /// Open on `result`'s Summary.
     pub(super) fn show(&mut self, result: &Arc<CalcResult>) {
-        self.result = Some(Arc::downgrade(result));
+        self.result = vec![Arc::downgrade(result)];
         self.open = true;
         self.view = View::Summary;
         self.step = None;
@@ -125,13 +126,11 @@ impl Shown<'_> {
 impl App {
     /// The result the palette follows, while the document holds it.
     pub(super) fn xtb_shown(&self) -> Option<Shown<'_>> {
-        let result = self.tab.xtb.palette.result.as_ref()?.upgrade()?;
         let science = &self.tab.doc.science;
-        let (index, stored) = science
-            .results
-            .iter()
-            .enumerate()
-            .find(|(_, s)| Arc::ptr_eq(&s.result, &result))?;
+        let (index, stored) = science.results.iter().enumerate().find(|(_, s)| {
+            let shown = &self.tab.xtb.palette.result;
+            shown.iter().any(|weak| is(weak, &s.result))
+        })?;
         let link = science.attachment(stored.attachment)?;
         Some(Shown {
             index,
@@ -171,18 +170,72 @@ impl App {
         previewing
     }
 
+    /// The step whose geometry the 3D model shows, if any: the last one
+    /// unless another step was used.
+    fn xtb_model_step(&self, shown: &Shown<'_>) -> Option<usize> {
+        let result = &shown.stored.result;
+        let count = results::energies(result).len();
+        let atom = shown.atoms.iter().flatten().next()?;
+        let model = self
+            .tab
+            .doc
+            .models
+            .iter()
+            .find(|m| m.linked_atoms.contains(atom))?;
+        let now: Vec<[f32; 3]> = model
+            .atoms
+            .iter()
+            .map(|a| a.xyz)
+            .chain(model.hydrogens.iter().map(|h| h.xyz))
+            .collect();
+        if now.is_empty() {
+            return None;
+        }
+        let at = |xyz: &[f64]| {
+            xyz.len() == now.len() * 3
+                && xyz
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .zip(&now)
+                    .all(|(p, q)| p.map(|x| x as f32) == *q)
+        };
+        let path = result
+            .trajectory
+            .as_ref()
+            .map_or(&[][..], |path| path.positions_angstrom.as_slice());
+        if path.len() == count * now.len() * 3 {
+            return path.chunks_exact(now.len() * 3).rposition(at);
+        }
+        [(count.checked_sub(1)?, shown.frame), (0, shown.input)]
+            .into_iter()
+            .find(|(_, frame)| at(frame.positions_angstrom.as_flattened()))
+            .map(|(step, _)| step)
+    }
+
     /// "Saved in file" for each result, and the shown result's full extra,
     /// measured again only when the calculation data or the shown result
     /// change.
     fn xtb_sizes(&self, shown: &Shown<'_>) -> (usize, usize) {
         let science = &self.tab.doc.science;
+        let same = |sizes: &Sizes| {
+            sizes.index == shown.index
+                && sizes.results.len() == science.results.len()
+                && sizes
+                    .results
+                    .iter()
+                    .zip(&science.results)
+                    .all(|((weak, keep), s)| is(weak, &s.result) && *keep == s.keep_full)
+        };
         let mut cache = self.tab.xtb.palette.sizes.borrow_mut();
         let sizes = match cache.take() {
-            Some(sizes) if sizes.index == shown.index && sizes.science == *science => {
-                cache.insert(sizes)
-            }
+            Some(sizes) if same(&sizes) => cache.insert(sizes),
             _ => cache.insert(Sizes {
-                science: science.clone(),
+                results: science
+                    .results
+                    .iter()
+                    .map(|s| (Arc::downgrade(&s.result), s.keep_full))
+                    .collect(),
                 index: shown.index,
                 saved: science.saved_sizes(),
                 full: shown.stored.result.heavy_bytes(),
@@ -329,33 +382,33 @@ impl App {
         if index >= count {
             return;
         }
+        let mut failure = None;
         let preview = shown.step_positions(index).and_then(|positions| {
             let mut doc = self.tab.doc.clone();
             let frame = Frame {
                 positions_angstrom: positions,
                 ..(**shown.frame).clone()
             };
-            science::move_model(&mut doc, shown.atoms, &frame).ok()?;
+            if let Err(error) = science::move_model(&mut doc, shown.atoms, &frame) {
+                failure = Some(error.to_string());
+                return None;
+            }
             // A model shown as 2D only appears beside the drawing.
             let atom = shown.atoms.iter().flatten().next()?;
-            let model = doc
-                .models
-                .iter()
-                .position(|m| m.linked_atoms.contains(atom))?;
-            if doc.models[model].display == reshiki::models3d::Display::TwoD {
+            let model = doc.models.iter().position(|m| {
+                m.linked_atoms.contains(atom) && m.display == reshiki::models3d::Display::TwoD
+            });
+            if let Some(model) = model {
                 reshiki::models3d::set_display(&mut doc, model, reshiki::models3d::Display::Both);
             }
             Some(doc)
         });
-        self.status = if preview.is_some() {
-            format!(
-                "Previewing step {index} of {} on the 3D model · Esc returns to the result",
-                count - 1
-            )
+        self.status = if let Some(error) = failure {
+            format!("Step {index} cannot be shown: {error}")
+        } else if preview.is_some() {
+            format!("Previewing step {index} of {} · Esc returns", count - 1)
         } else {
-            format!(
-                "Step {index} is not saved in the file; only the first and last steps are. Recalculate to see every step."
-            )
+            format!("Step {index} is not saved in this file")
         };
         self.error = false;
         self.tab.xtb.palette.confirm.clear();
@@ -425,6 +478,7 @@ impl App {
     }
 
     /// Run the shown result's calculation again on the molecule as it is now.
+    /// Builds without the engine show no Recalculate, as they show no Run.
     fn xtb_recalculate(&mut self) -> Task<Message> {
         if !self.xtb_can_start() {
             return Task::none();
@@ -508,12 +562,12 @@ impl App {
 impl App {
     /// The large-results question's answer, for the document it asked
     /// about: Make lighter changes it first (one Undo step), then the save
-    /// goes on. A different document in front cancels the save.
+    /// goes on. With a different document in front nothing happens.
     pub(in crate::app) fn xtb_size_answer(
         &mut self,
         prompt: crate::app::prompt::Prompt,
         answer: crate::app::prompt::Answer,
-    ) -> Message {
+    ) -> Option<Message> {
         use crate::app::prompt::{Answer, Prompt};
         let Prompt::LargeResults {
             tab,
@@ -522,15 +576,17 @@ impl App {
             ..
         } = &prompt
         else {
-            return prompt.answer(answer);
+            return Some(prompt.answer(answer));
         };
+        // Asked about another document: drop the question, and leave any
+        // close in progress alone.
         if (*tab, *epoch) != (self.tab.id, self.tab.file_epoch) {
-            return Message::Cancel;
+            return None;
         }
         if answer == Answer::Save && lighter.is_some() {
             self.xtb_make_lighter();
         }
-        prompt.answer(answer)
+        Some(prompt.answer(answer))
     }
 
     /// "Make lighter" as one Undo step; the palette and run details follow
@@ -554,9 +610,9 @@ impl App {
             if let Some(info) = self.tab.xtb.info(&old.result).cloned() {
                 self.tab.xtb.remember(&new.result, Arc::new(info));
             }
-            let shown = self.tab.xtb.palette.result.as_ref();
-            if shown.is_some_and(|weak| weak.as_ptr() == Arc::as_ptr(&old.result)) {
-                self.tab.xtb.palette.result = Some(Arc::downgrade(&new.result));
+            let shown = &mut self.tab.xtb.palette.result;
+            if shown.iter().any(|weak| is(weak, &old.result)) {
+                shown.push(Arc::downgrade(&new.result));
             }
         }
         let before = std::mem::replace(&mut self.tab.doc, doc);
