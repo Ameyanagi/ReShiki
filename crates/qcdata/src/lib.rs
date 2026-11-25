@@ -23,9 +23,9 @@ pub use molden::{
     molden_pure_order, shell_from_molden, shell_to_molden,
 };
 pub use result::{
-    AtomicCharges, BondOrder, CalcResult, ChargeScheme, Endpoints, GfnFfTopology, Provenance,
-    ScfRetry, Settings, SolvationState, Solvent, SolventCorrection, SolventModel, Source, Status,
-    Task, Thermo, Vibrations, XtbConventions, XtbSettings,
+    AtomicCharges, BondOrder, CalcResult, ChargeScheme, Convergence, Endpoints, GfnFfTopology,
+    Provenance, RunSummary, ScfRetry, Settings, SolvationState, Solvent, SolventCorrection,
+    SolventModel, Source, Status, Task, Thermo, Vibrations, XtbConventions, XtbSettings,
 };
 
 /// Ångströms per bohr, CODATA 2022.
@@ -54,6 +54,8 @@ pub const MAX_COEFFICIENTS: usize = 4_194_304;
 pub const MAX_PRIMITIVES: usize = 64;
 /// Angular momentum quantum number limit.
 pub const MAX_L: u8 = 5;
+/// Energy evaluations a saved run summary may list.
+pub const MAX_RUN_EVALUATIONS: usize = 100_000;
 /// Value count limit for one compact array.
 pub const MAX_COMPACT_VALUES: usize = 4_194_304;
 /// Decoded bytes allowed per encoded byte in a compact array.

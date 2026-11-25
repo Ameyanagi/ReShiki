@@ -129,6 +129,22 @@ pub fn check_calculation(
         )));
     }
     let count = frame.numbers.len();
+    if settings.threads == Some(0) {
+        return Err(Error::Invalid("worker threads must be at least 1".into()));
+    }
+    if settings
+        .fixed_atoms
+        .windows(2)
+        .any(|pair| pair[0] >= pair[1])
+        || settings
+            .fixed_atoms
+            .iter()
+            .any(|&atom| atom as usize >= count)
+    {
+        return Err(Error::Invalid(
+            "fixed atom indices must be strictly ascending and within the frame".into(),
+        ));
+    }
     if count > max {
         return Err(Error::TooLarge {
             what: "calculation atoms",
@@ -287,6 +303,9 @@ mod tests {
             max_iterations: None,
             scf_retries: vec![],
             gfnff: None,
+            threads: None,
+            convergence: Default::default(),
+            fixed_atoms: vec![],
         }
     }
 

@@ -2048,9 +2048,8 @@ impl Pass {
         Ok(())
     }
 
-    /// A reaction step may name an object this pass left out, or an arc that
-    /// is no longer an arrow. The steps are only checked, never kept, so those
-    /// names go; any other name stays for the check.
+    /// Remove references to omitted objects and arrows that became shapes
+    /// before validating the rewritten drawing.
     fn references(&mut self) -> Result<()> {
         let order = self.tree.descendants(0)?;
         let mut present = HashSet::new();
