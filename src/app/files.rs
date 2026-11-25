@@ -20,6 +20,17 @@ pub(super) const SAVE_FORMATS: [(&str, &str); 4] = [
     ("mol", "MOL"),
 ];
 
+/// [`SAVE_FORMATS`] with the Settings ChemDraw format first among ChemDraw's.
+pub(super) fn save_formats(
+    chemdraw: crate::appearance::ChemDrawFormat,
+) -> [(&'static str, &'static str); 4] {
+    let mut formats = SAVE_FORMATS;
+    if chemdraw == crate::appearance::ChemDrawFormat::Cdx {
+        formats.swap(1, 2);
+    }
+    formats
+}
+
 /// The format of a ChemDraw or MOL file, which Save can write back in place.
 pub(super) fn kept_format(path: &std::path::Path) -> Option<&'static str> {
     let extension = path.extension()?.to_str()?;

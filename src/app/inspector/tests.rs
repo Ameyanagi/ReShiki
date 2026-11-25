@@ -1501,3 +1501,37 @@ async fn export_destinations_are_visible_without_opening_sections_and_keep_their
         );
     }
 }
+
+#[test]
+fn the_export_tab_offers_cdx_and_follows_the_chemdraw_format_setting() {
+    use super::super::settings_page::Action as Settings;
+    let (mut app, _) = App::new();
+    assert_eq!(
+        ChemicalFormat::ordered(ChemDrawFormat::Cdxml).map(ChemicalFormat::code),
+        ["mol", "smiles", "inchi", "cdxml", "cdx"]
+    );
+    assert_eq!(
+        ChemicalFormat::ordered(ChemDrawFormat::Cdx).map(ChemicalFormat::code),
+        ["mol", "smiles", "inchi", "cdx", "cdxml"]
+    );
+    // A structure format stays when the setting changes.
+    let _ = app.update(Message::Settings(Settings::ChemDrawFormat(
+        ChemDrawFormat::Cdx,
+    )));
+    assert_eq!(app.appearance.chemdraw_format, ChemDrawFormat::Cdx);
+    assert_eq!(app.tab.inspector_ui.chemical, ChemicalFormat::Mol);
+    // A ChemDraw choice follows it; one export can still pick the other.
+    let _ = app.update(Message::InspectorAction(Action::Chemical(
+        ChemicalFormat::Cdxml,
+    )));
+    assert_eq!(app.tab.inspector_ui.chemical, ChemicalFormat::Cdxml);
+    let _ = app.update(Message::Settings(Settings::ChemDrawFormat(
+        ChemDrawFormat::Cdx,
+    )));
+    assert_eq!(app.tab.inspector_ui.chemical, ChemicalFormat::Cdx);
+    assert_eq!(
+        ChemicalFormat::Cdx.copy_format(),
+        reshiki::clipboard::CopyFormat::Cdx
+    );
+    let _ = app.export_panel();
+}

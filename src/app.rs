@@ -1770,14 +1770,18 @@ fn export_file(
     stem: Option<String>,
     details: Vec<String>,
 ) -> Task<Message> {
-    figure_export::Prepared::new(
-        contents.into_bytes(),
-        format,
-        stem,
-        details,
-        figure_export::Kind::Structure,
-    )
-    .start()
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    // The engine gives a CDX file as base64.
+    let bytes = if format == "cdx" {
+        match STANDARD.decode(&contents) {
+            Ok(bytes) => bytes,
+            Err(_) => return Task::done(Message::Exported(Err("Invalid binary drawing".into()))),
+        }
+    } else {
+        contents.into_bytes()
+    };
+    figure_export::Prepared::new(bytes, format, stem, details, figure_export::Kind::Structure)
+        .start()
 }
 fn export_format_label(format: &str) -> String {
     match format {

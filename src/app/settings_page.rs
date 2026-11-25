@@ -5,7 +5,7 @@ use super::{
     help::{Placement, modal},
     workspace::{accessible_checkbox, control, horizontal_line, muted_text},
 };
-use crate::appearance::{Background, Dpi, Settings};
+use crate::appearance::{Background, ChemDrawFormat, Dpi, Settings};
 use iced::keyboard::{Key, Modifiers, key::Named};
 use iced::widget::{
     Space, canvas, column, container, image, row, scrollable, stack, text, tooltip,
@@ -69,7 +69,9 @@ impl Section {
         match self {
             Self::Appearance => "The interface, and the canvas that new drawings start with.",
             Self::Drawing => "Guides and controls while you draw.",
-            Self::CopyExport => "Pictures that Copy, Copy image, Copy as and file export write.",
+            Self::CopyExport => {
+                "Pictures and ChemDraw files that Copy, Copy image, Copy as and file export write."
+            }
             Self::Names => "Chemical names, molecular weight and Check drawing.",
             Self::Assistant => "The model, and how its edits reach the drawing.",
             Self::Updates => "How ReShiki finds new versions.",
@@ -100,6 +102,7 @@ pub enum Action {
     PickColor([u8; 3]),
     CopyDpi(Dpi),
     ExportDpi(Dpi),
+    ChemDrawFormat(ChemDrawFormat),
     /// The copied and exported pictures of a drawing.
     Preview(PreviewKey, Result<Preview, String>),
     /// The PNG close-ups of a drawing at each of [`Dpi::ALL`].
@@ -266,6 +269,7 @@ fn restored(section: Section, a: &Settings) -> Settings {
             a.export_svg_live_text = d.export_svg_live_text;
             a.copy_dpi = d.copy_dpi;
             a.export_dpi = d.export_dpi;
+            a.chemdraw_format = d.chemdraw_format;
         }
         Section::Names => {
             a.name_typography = d.name_typography;
@@ -413,6 +417,16 @@ impl App {
                 self.appearance.export_dpi = dpi;
                 self.tab.inspector_ui.close_menu();
                 self.save_preference(Section::CopyExport, "PNG resolution");
+            }
+            Action::ChemDrawFormat(format) => {
+                self.appearance.chemdraw_format = format;
+                // A ChemDraw choice in the Export tab follows the new format.
+                let ui = &mut self.tab.inspector_ui;
+                ui.close_menu();
+                if ui.chemical.chemdraw() {
+                    ui.chemical = format.into();
+                }
+                self.save_preference(Section::CopyExport, "ChemDraw format");
             }
             // Only the newest render counts: an older one may finish last.
             Action::Preview(key, preview) => {
@@ -862,6 +876,22 @@ impl App {
                             self.dpi_strip(),
                         ),
                     ],
+                ),
+                (
+                    Some("ChemDraw files"),
+                    vec![Item::choice(
+                        "Format",
+                        "Export, Save as and Copy use it first. Lab notebooks usually need CDX.",
+                        choices(
+                            "settings-chemdraw-format",
+                            &[
+                                (ChemDrawFormat::Cdxml, "CDXML".into()),
+                                (ChemDrawFormat::Cdx, "CDX".into()),
+                            ],
+                            a.chemdraw_format,
+                            |format| Message::Settings(Action::ChemDrawFormat(format)),
+                        ),
+                    )],
                 ),
                 (
                     Some("Inside the file"),

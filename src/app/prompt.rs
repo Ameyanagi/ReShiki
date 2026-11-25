@@ -214,9 +214,10 @@ impl App {
                     .on_submit(Message::Prompt(Answer::Save)),
             )
         } else if matches!(prompt, Prompt::SaveAs) {
-            super::files::SAVE_FORMATS.iter().enumerate().fold(
-                content,
-                |content, (index, (format, name))| {
+            super::files::save_formats(self.appearance.chemdraw_format)
+                .iter()
+                .enumerate()
+                .fold(content, |content, (index, (format, name))| {
                     content.push(
                         button(
                             &format!("prompt-format-{format}"),
@@ -226,8 +227,7 @@ impl App {
                         )
                         .width(Length::Fill),
                     )
-                },
-            )
+                })
         } else {
             content
         };
