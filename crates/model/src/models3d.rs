@@ -1057,7 +1057,7 @@ struct View<'a> {
     /// Wireframe line width in drawing units.
     wire: f32,
     orbital_meshes: Option<Arc<[surface::mesh::Mesh; 2]>>,
-    orbital_snapshot: Option<Primitive>,
+    orbital_snapshot_reach: Option<f32>,
 }
 impl View<'_> {
     fn new<'a>(doc: &'a Document, model: &'a Model3d) -> Option<View<'a>> {
@@ -1150,13 +1150,12 @@ impl View<'_> {
         } else {
             model.center(&points)
         };
-        let saved = if orbital_meshes.is_none() {
-            surface::draw::saved(doc, model, origin)
-        } else {
-            None
-        };
+        let orbital_snapshot_reach = orbital_meshes
+            .is_none()
+            .then(|| surface::draw::snapshot_reach(doc, model))
+            .flatten();
         let surface_reach = orbital_meshes.as_ref().map_or_else(
-            || saved.as_ref().map_or(0., |(reach, _)| *reach),
+            || orbital_snapshot_reach.unwrap_or_default(),
             |meshes| surface::draw::reach(meshes, c),
         );
         // The bounding sphere holds the cell and its labels too.
@@ -1210,7 +1209,7 @@ impl View<'_> {
             perspective: model.perspective,
             wire: (model.size / 190.).max(1.6),
             orbital_meshes,
-            orbital_snapshot: saved.map(|(_, primitive)| primitive),
+            orbital_snapshot_reach,
         })
     }
     /// Drawing point and perspective factor of a rotated point.
@@ -3090,7 +3089,7 @@ impl View<'_> {
         &self,
         model: &Model3d,
         paint: &ModelPaint,
-    ) -> Option<(surface::draw::Prepared, Primitive)> {
+    ) -> Option<(surface::draw::Prepared, Option<Primitive>)> {
         let meshes = self.orbital_meshes.as_deref()?;
         // Stick draws a contour twice as wide.
         let painted = match (paint.glossy, model.style) {
@@ -3109,7 +3108,7 @@ impl View<'_> {
             fade,
             paint.outline(paint.line),
             paint.line,
-        )?;
+        );
         Some((prepared, primitive))
     }
 }
@@ -3123,6 +3122,8 @@ pub(crate) fn refresh_surface_snapshot(doc: &Document, model: &mut Model3d) {
     };
     let snapshot = View::with_meshes(doc, model, Some(meshes)).and_then(|view| {
         let (_, primitive) = view.live_surface(model, &ModelPaint::new(doc, model))?;
+        // Even when occluded, the mesh still sets the projection scale.
+        let primitive = primitive.unwrap_or_else(|| Primitive::Surface { groups: vec![] });
         Some(surface::Snapshot {
             shapes: surface::snapshot::encode(&primitive, view.origin)?,
             view: surface::draw::view_signature(doc, model),
@@ -3165,7 +3166,9 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     let outline = |width| paint.outline(width);
     // Labels of atoms in front of the surface, drawn after it.
     let mut late = vec![];
-    let orbital = view.live_surface(model, &paint);
+    let orbital = view
+        .live_surface(model, &paint)
+        .and_then(|(prepared, primitive)| Some((prepared, primitive?)));
     let side_outline = || {
         outline(line * 2.).map(|o| Outline {
             color: rgb(mix(float(o.color), float(backdrop), 1. - o.alpha)),
@@ -3680,11 +3683,14 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         }
     }
     if let Some(orbital) = orbital.map(|(_, primitive)| primitive).or_else(|| {
+        view.orbital_snapshot_reach?;
         if model.morph.is_some_and(|m| m < 1.) {
-            None
-        } else {
-            view.orbital_snapshot.take()
+            return None;
         }
+        let saved = model.surface.as_ref()?.snapshot.as_ref()?;
+        let primitive = surface::snapshot::decode(&saved.shapes, view.origin).ok()?;
+        matches!(&primitive, Primitive::Surface { groups } if !groups.is_empty())
+            .then_some(primitive)
     }) {
         drawn.push((1., orbital));
         drawn.extend(late);
