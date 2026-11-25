@@ -188,6 +188,8 @@ pub(crate) struct Failed {
     /// The frame's atomic numbers, once the 3D model existed.
     pub numbers: Vec<u8>,
     pub seconds: f64,
+    /// The file the run belonged to; Retry needs the same one.
+    pub epoch: u64,
 }
 
 impl Failed {
@@ -281,6 +283,15 @@ impl App {
                 let Some(request) = failed.request.as_deref() else {
                     return Task::none();
                 };
+                let first = request.atoms.first().copied().unwrap_or_default();
+                let same = failed.epoch == self.tab.file_epoch
+                    && self.tab.doc.atom(first).is_some()
+                    && reshiki::molecule_names::component(&self.tab.doc, first) == request.atoms;
+                if !same {
+                    self.status = "The molecule changed: run it from the Calculate card".into();
+                    self.error = false;
+                    return Task::none();
+                }
                 let mut request = request.clone();
                 if matches!(action, Action::Retry) {
                     let Some(hotter) = request.config.hotter() else {
@@ -420,7 +431,12 @@ impl App {
     }
 
     fn xtb_entry(&mut self, entry: Entry) -> Task<Message> {
-        if !available() {
+        if !available() || !self.xtb_can_start() {
+            return Task::none();
+        }
+        if self.xtb_target().is_none() {
+            self.status = "Select a molecule to calculate".into();
+            self.error = true;
             return Task::none();
         }
         match entry {
@@ -713,6 +729,7 @@ impl App {
             request,
             numbers,
             seconds,
+            epoch: self.tab.file_epoch,
         };
         self.status = format!("xTB calculation failed: {}", failed.explain().0);
         self.error = true;
@@ -960,9 +977,6 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
     result.input_frame = optimized.then_some(input);
     result.status = status;
     result.trajectory = trajectory;
-    if optimized {
-        result.gradient_hartree_per_bohr = report.gradient.clone();
-    }
     result.keep_full = run.keep_full;
     let mut notes = Vec::new();
     if computed.near_degenerate {

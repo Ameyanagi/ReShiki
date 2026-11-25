@@ -143,9 +143,10 @@ impl Config {
 pub(crate) enum Failure {
     /// The SCF did not converge; the worker's message.
     Scf(String),
-    /// The method has no parameters for this atomic number.
+    /// `by` (the method that said so, if known) has no parameters for `z`.
     Element {
         z: u8,
+        by: Option<XtbMethod>,
     },
     TooMany {
         count: usize,
@@ -172,20 +173,25 @@ impl Failure {
                     capitalized(message.trim_end_matches('.'))
                 ),
             ),
-            Self::Element { z } => {
+            Self::Element { z, by } => {
                 let symbol = symbol(*z);
+                let by = by.unwrap_or(method);
                 let title = match numbers.iter().position(|n| n == z) {
                     Some(index) => format!(
                         "Atom {} is {symbol} (Z = {z}). {} has no parameters for it.",
                         index + 1,
-                        method.label()
+                        by.label()
                     ),
-                    None => format!("{} has no parameters for {symbol} (Z = {z}).", method.label()),
+                    None => format!("{} has no parameters for {symbol} (Z = {z}).", by.label()),
                 };
-                let detail = if method == XtbMethod::Gfn2Xtb {
-                    "GFN2-xTB covers elements up to radon (Z = 86); g-xTB and GFN-FF go further."
-                } else {
-                    "Change or remove that atom to calculate."
+                let detail = match (method, by) {
+                    (XtbMethod::GXtb, XtbMethod::Gfn2Xtb) => {
+                        "g-xTB in solvent uses GFN2-xTB for the solvation energy; gas-phase g-xTB covers this element."
+                    }
+                    (_, XtbMethod::Gfn2Xtb) => {
+                        "GFN2-xTB covers elements up to radon (Z = 86); g-xTB and GFN-FF go further."
+                    }
+                    _ => "Change or remove that atom to calculate.",
                 };
                 (title, detail.into())
             }

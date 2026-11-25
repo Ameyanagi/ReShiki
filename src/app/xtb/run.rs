@@ -66,8 +66,6 @@ pub(crate) struct Report {
     pub converged: bool,
     /// Final geometry in Å (the input geometry for an energy job).
     pub positions: Vec<[f64; 3]>,
-    /// Atom-major Eh/bohr at `positions`. Empty for an energy job.
-    pub gradient: Vec<f64>,
     /// Accepted optimizer steps (0 for an energy job).
     pub steps: usize,
     /// One energy per accepted geometry, including the input.
@@ -155,8 +153,8 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
                 Ok::<_, Error>(opened.uhf)
             };
             return Err(match probe() {
-                Ok(valence) => Failure::Spin { valence },
-                Err(_) => Failure::Other(message),
+                Ok(valence) if valence % 2 != job.uhf % 2 => Failure::Spin { valence },
+                _ => Failure::Other(message),
             });
         }
         Err(error) => return Err(worker_failure(&error)),
@@ -213,9 +211,11 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
     };
     let final_xyz = outcome.as_ref().map(|outcome| outcome.positions.as_slice());
     let electronic = job.method.xtb_method().capabilities().orbitals;
+    // One evaluation gives the stored energy, gradient and properties.
     let final_request = Compute {
         positions: final_xyz.map(|xyz| xyz.as_chunks::<3>().0.to_vec()),
         units: Units::Bohr,
+        gradient: outcome.is_some(),
         bond_orders: electronic,
         orbitals: if electronic {
             OrbitalOutput::Levels
@@ -236,17 +236,17 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
         .as_ref()
         .is_none_or(|out| out.status == Status::Converged);
     let steps = outcome.as_ref().map_or(0, |outcome| outcome.steps);
-    let (gradient, energies) = outcome.map_or_else(
-        || (Vec::new(), vec![energy]),
-        |outcome| (outcome.gradient, outcome.energies),
-    );
+    let mut energies = outcome.map_or_else(Vec::new, |outcome| outcome.energies);
+    match energies.last_mut() {
+        Some(last) => *last = energy,
+        None => energies.push(energy),
+    }
     Ok(Report {
         engine,
         computed,
         energy,
         converged,
         positions,
-        gradient,
         steps,
         energies,
         path,
@@ -342,14 +342,23 @@ fn worker_failure(error: &Error) -> Failure {
             .and_then(|(_, number)| number.parse::<u8>().ok())
             .map_or_else(
                 || Failure::Other(message.clone()),
-                |z| Failure::Element { z },
+                |z| Failure::Element {
+                    z,
+                    // g-xTB in solvent also runs GFN2-xTB.
+                    by: super::state::METHODS
+                        .into_iter()
+                        .find(|method| message.starts_with(method.label())),
+                },
             ),
         Error::Engine {
             kind: ErrorKind::Limit,
             message,
         }
         | Error::Limit(message) => Failure::Other(message.clone()),
-        Error::Exited { .. } | Error::Protocol(_) | Error::Timeout | Error::Spawn(_) => {
+        Error::Exited { status, .. } => {
+            Failure::Crashed(format!("xTB worker exited with {status}"))
+        }
+        Error::Protocol(_) | Error::Timeout | Error::Spawn(_) => {
             Failure::Crashed(error.to_string())
         }
         Error::Cancelled => canceled(),

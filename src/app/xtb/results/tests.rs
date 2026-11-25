@@ -249,7 +249,9 @@ fn stored_properties_show_without_run_information() {
         (gap - (0.2 - 0.1058) * 27.211386245981).abs() < 1e-9,
         "{gap}"
     );
-    assert!(levels(&radical).is_empty(), "open shells show only the gap");
+    // Open shells list the alpha levels, from the alpha electron count.
+    let names: Vec<_> = levels(&radical).into_iter().map(|(name, _)| name).collect();
+    assert_eq!(names, ["α LUMO", "α HOMO", "α HOMO−1", "α HOMO−2"]);
 }
 
 #[test]

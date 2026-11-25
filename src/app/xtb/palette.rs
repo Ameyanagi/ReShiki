@@ -115,11 +115,11 @@ pub(super) struct Shown<'a> {
 }
 
 impl Shown<'_> {
-    fn method(&self) -> String {
+    pub(super) fn method(&self) -> String {
         results::method_line(&self.stored.result, self.frame, self.info)
     }
 
-    fn rows(&self) -> Vec<(&'static str, String)> {
+    pub(super) fn rows(&self) -> Vec<(&'static str, String)> {
         results::summary_rows(&self.stored.result, self.input, self.frame, self.info)
     }
 
@@ -152,6 +152,11 @@ impl App {
     /// has a newer result than the one on display, or the palette is closed
     /// on results.
     pub(super) fn xtb_can_show(&self) -> bool {
+        if !self.tab.xtb.palette.open
+            && matches!(self.tab.xtb.outcome, Some(super::Outcome::Failed(_)))
+        {
+            return true;
+        }
         let visible = self.xtb_palette_visible();
         match self.xtb_newest() {
             Some(newest) => {
@@ -319,6 +324,9 @@ impl App {
     pub(super) fn xtb_palette(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show => {
+                if matches!(self.tab.xtb.outcome, Some(super::Outcome::Failed(_))) {
+                    self.tab.xtb.palette.open = true;
+                }
                 let newest = self.xtb_newest();
                 let shown = self.xtb_shown().map(|shown| shown.stored.result.clone());
                 if let Some(result) = newest.or(shown) {

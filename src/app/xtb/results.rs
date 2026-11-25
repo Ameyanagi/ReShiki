@@ -3,7 +3,7 @@
 //! a stored result and what this session still knows about its run.
 use super::state::{NEAR_DEGENERATE, formula, scientific, signed, symbol};
 use reshiki::qcdata::{
-    Beta, CalcResult, Frame, OrbitalSet, Settings, Status, Task, XtbConventions,
+    Beta, CalcResult, Frame, OrbitalSet, Orbitals, Settings, Status, Task, XtbConventions,
 };
 
 /// Always shown under the method line.
@@ -14,8 +14,9 @@ const NEAR_DEGENERATE_EV: f64 = 0.1;
 const EV_PER_HARTREE: f64 = 27.211386245981;
 /// Debye per e·bohr.
 const DEBYE_PER_E_BOHR: f64 = 2.541746473;
-/// Bond orders listed from this order up, as the worker reports them.
-pub(crate) const BOND_ORDER_MIN: f64 = 0.1;
+/// Bond orders listed from this order up: what the worker reports and a
+/// saved file keeps.
+pub(crate) const BOND_ORDER_MIN: f64 = reshiki::qcdata::LIGHT_BOND_ORDER_MIN;
 
 /// The palette's tabs. Orbitals and Vibrations join them once the worker
 /// returns orbitals and frequencies.
@@ -246,66 +247,70 @@ pub(crate) fn gap_ev(result: &CalcResult, info: Option<&RunInfo>) -> Option<f64>
         .or_else(|| info.and_then(|info| info.gap_ev))
 }
 
-/// The smallest LUMO − HOMO of either spin (Eh), filling each spin's
-/// levels with its electron count; `None` without levels or a LUMO.
+/// The occupied count of the alpha spectrum (half the electrons, rounded
+/// up, for restricted levels); thermal smearing does not move it.
+fn alpha_electrons(orbitals: &Orbitals) -> Option<usize> {
+    let set = &orbitals.alpha;
+    let total = filled(set, &set.occupations)?;
+    Some(match orbitals.beta {
+        Beta::Restricted => total.div_ceil(2),
+        _ => total,
+    })
+}
+
+fn filled(set: &OrbitalSet, occupations: &[f64]) -> Option<usize> {
+    (occupations.len() == set.energies_hartree.len())
+        .then(|| occupations.iter().sum::<f64>().round() as usize)
+}
+
+/// LUMO − HOMO (Eh) as the engine reports it: the alpha frontier, except
+/// that unrestricted g-xTB in its own conventions takes the highest
+/// occupied and lowest empty level of either spin.
 fn gap_hartree(result: &CalcResult) -> Option<f64> {
     let orbitals = result.orbitals.as_ref()?;
-    let count = |set: &OrbitalSet, occupations: &[f64]| -> Option<usize> {
-        (occupations.len() == set.energies_hartree.len())
-            .then(|| occupations.iter().sum::<f64>().round() as usize)
-    };
-    let alpha = &orbitals.alpha;
-    let spins: Vec<(&[f64], usize)> = match &orbitals.beta {
-        Beta::Restricted => {
-            let total = count(alpha, &alpha.occupations)?;
-            let levels = &alpha.energies_hartree[..];
-            vec![(levels, total.div_ceil(2)), (levels, total / 2)]
+    let alpha = &orbitals.alpha.energies_hartree;
+    let n = alpha_electrons(orbitals)?;
+    let xtb68 =
+        matches!(&result.settings, Settings::Xtb(s) if s.conventions == XtbConventions::Xtb68);
+    match &orbitals.beta {
+        Beta::Unrestricted(beta) if !xtb68 => {
+            let m = filled(beta, &beta.occupations)?;
+            let levels = &beta.energies_hartree;
+            let homo = [
+                n.checked_sub(1).and_then(|i| alpha.get(i)),
+                m.checked_sub(1).and_then(|i| levels.get(i)),
+            ];
+            let lumo = [alpha.get(n), levels.get(m)];
+            let homo = homo.into_iter().flatten().copied().reduce(f64::max)?;
+            let lumo = lumo.into_iter().flatten().copied().reduce(f64::min)?;
+            Some(lumo - homo)
         }
-        Beta::SameOrbitals { occupations } => vec![
-            (
-                &alpha.energies_hartree[..],
-                count(alpha, &alpha.occupations)?,
-            ),
-            (&alpha.energies_hartree[..], count(alpha, occupations)?),
-        ],
-        Beta::Unrestricted(beta) => vec![
-            (
-                &alpha.energies_hartree[..],
-                count(alpha, &alpha.occupations)?,
-            ),
-            (&beta.energies_hartree[..], count(beta, &beta.occupations)?),
-        ],
-    };
-    spins
-        .iter()
-        .filter_map(|(levels, n)| Some(levels.get(*n)? - levels.get(n.checked_sub(1)?)?))
-        .reduce(f64::min)
+        _ => Some(alpha.get(n)? - alpha.get(n.checked_sub(1)?)?),
+    }
 }
 
 /// Orbital levels around the gap, "HOMO−2" … "LUMO+2", in eV, highest
-/// first; closed shells only (open shells show their gap).
+/// first. Open shells list the alpha spin, marked "α".
 pub(crate) fn levels(result: &CalcResult) -> Vec<(String, f64)> {
     let Some(orbitals) = result.orbitals.as_ref() else {
         return vec![];
     };
-    let set = &orbitals.alpha;
-    if !matches!(orbitals.beta, Beta::Restricted)
-        || set.occupations.len() != set.energies_hartree.len()
-    {
+    let Some(homo) = alpha_electrons(orbitals).and_then(|n| n.checked_sub(1)) else {
         return vec![];
-    }
-    let homo = (set.occupations.iter().sum::<f64>().round() as usize).div_ceil(2);
-    let Some(homo) = homo.checked_sub(1) else {
-        return vec![];
+    };
+    let spin = if matches!(orbitals.beta, Beta::Restricted) {
+        ""
+    } else {
+        "α "
     };
     let name = |index: usize| match index.cmp(&homo) {
-        std::cmp::Ordering::Equal => "HOMO".to_owned(),
-        std::cmp::Ordering::Less => format!("HOMO−{}", homo - index),
-        std::cmp::Ordering::Greater if index == homo + 1 => "LUMO".to_owned(),
-        std::cmp::Ordering::Greater => format!("LUMO+{}", index - homo - 1),
+        std::cmp::Ordering::Equal => format!("{spin}HOMO"),
+        std::cmp::Ordering::Less => format!("{spin}HOMO−{}", homo - index),
+        std::cmp::Ordering::Greater if index == homo + 1 => format!("{spin}LUMO"),
+        std::cmp::Ordering::Greater => format!("{spin}LUMO+{}", index - homo - 1),
     };
     let shown = homo.saturating_sub(2)..=homo + 3;
-    let mut rows: Vec<_> = (set.energies_hartree.iter().enumerate())
+    let mut rows: Vec<_> = (orbitals.alpha.energies_hartree.iter().enumerate())
         .filter(|(index, _)| shown.contains(index))
         .map(|(index, energy)| (name(index), energy * EV_PER_HARTREE))
         .collect();

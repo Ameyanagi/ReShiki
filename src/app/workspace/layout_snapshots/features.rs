@@ -1048,7 +1048,6 @@ fn xtb_stereo(app: &mut App, _: &Driver<'_>) {
             energy: -20.012345,
             converged: true,
             positions: mirrored.clone(),
-            gradient: vec![0.; mirrored.len() * 3],
             steps: 1,
             energies: vec![-20.0, -20.012345],
             path: [start.as_flattened(), mirrored.as_flattened()].concat(),
@@ -1074,7 +1073,6 @@ fn xtb_results(app: &mut App, _: &Driver<'_>) {
             energy: -20.012345,
             converged: true,
             positions: end.clone(),
-            gradient: vec![1e-4; end.len() * 3],
             steps: 2,
             evaluations: energies
                 .iter()

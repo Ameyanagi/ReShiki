@@ -23,11 +23,16 @@ fn path(frames: &[&[[f64; 3]]]) -> Event {
     let last = frames.last().expect("frames");
     Event::Done(Ok(std::sync::Arc::new(Report {
         engine: super::super::example_engine(),
-        computed: super::super::example_computed(*energies.last().expect("energies"), 0.05),
+        computed: {
+            // An optimization's last compute carries the gradient.
+            let mut computed =
+                super::super::example_computed(*energies.last().expect("energies"), 0.05);
+            computed.gradient = Some(vec![[0.; 3]; last.len()]);
+            computed
+        },
         energy: *energies.last().expect("energies"),
         converged: true,
         positions: last.to_vec(),
-        gradient: vec![0.; last.len() * 3],
         steps: frames.len() - 1,
         evaluations: energies
             .iter()

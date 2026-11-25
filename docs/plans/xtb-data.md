@@ -321,7 +321,7 @@ of a 200-atom molecule would take 8.2 MB that way. The owner's policy is binding
   `(Spin, row)` orbitals that placed surfaces use: the light result keeps their rows and the
   basis. The document passes `MAX_IMPORTED_HEAVY_BYTES` (2 MB) minus what the molecule's
   other imported results already keep. The light result keeps bond orders of at least
-  `LIGHT_BOND_ORDER_MIN` (0.3); the document may filter by drawn bonds instead.
+  `LIGHT_BOND_ORDER_MIN` (0.1, the worker's own cut); the document may filter by drawn bonds instead.
 - **Size estimates.** `heavy_bytes()` is what keeping the heavy data adds to the file: the
   pretty JSON length of the full result minus that of its light form ("Keep full results in
   this file (+1.4 MB)"); `saved_bytes(heavy_budget, pinned)` is the length of the pretty JSON
@@ -373,7 +373,7 @@ it again on its side.
 | `MAX_COMPACT_VALUES`       | 4,194,304 | Values in one compact array.                                                                                       |
 | `MAX_COMPACT_EXPANSION`    | 32        | Decoded bytes per encoded byte of a compact array.                                                                 |
 | `MAX_IMPORTED_HEAVY_BYTES` | 2,000,000 | Encoded heavy arrays saved per molecule for imported results.                                                      |
-| `LIGHT_BOND_ORDER_MIN`     | 0.3       | Smallest bond order a light result keeps.                                                                          |
+| `LIGHT_BOND_ORDER_MIN`     | 0.1       | Smallest bond order a light result keeps.                                                                          |
 
 `validate` enforces them after parsing; compact arrays enforce theirs while decoding.
 

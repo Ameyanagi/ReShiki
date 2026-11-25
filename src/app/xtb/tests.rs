@@ -57,13 +57,15 @@ pub(super) fn f32s(positions: &[[f64; 3]]) -> Vec<[f32; 3]> {
 }
 
 pub(super) fn optimized(start: &[[f64; 3]], end: &[[f64; 3]]) -> Event {
+    // An optimization's last compute carries the gradient.
+    let mut computed = run::example_computed(-5.070176, 14.01);
+    computed.gradient = Some(vec![[0.; 3]; end.len()]);
     Event::Done(Ok(Arc::new(Report {
         engine: run::example_engine(),
-        computed: run::example_computed(-5.070176, 14.01),
+        computed,
         energy: -5.070176,
         converged: true,
         positions: end.to_vec(),
-        gradient: vec![0.; end.len() * 3],
         steps: 1,
         energies: vec![-5.06, -5.070176],
         path: [start.as_flattened(), end.as_flattened()].concat(),
@@ -125,7 +127,6 @@ fn an_energy_keeps_the_result_and_the_model() {
             energy: -5.070176,
             converged: true,
             positions: START.to_vec(),
-            gradient: vec![],
             steps: 0,
             energies: vec![-5.070176],
             path: vec![],
@@ -186,7 +187,6 @@ fn an_energy_stores_the_worker_charges_bond_orders_and_orbital_levels() {
         computed,
         converged: true,
         positions: START.to_vec(),
-        gradient: vec![],
         steps: 0,
         energies: vec![-5.070176],
         path: vec![],
@@ -422,6 +422,12 @@ fn optimize_with_gfn2_shows_the_card_and_runs() {
     app.xtb.settings.method = qcdata::XtbMethod::GfnFf;
     app.xtb.settings.task = CalcTask::Energy;
     send(&mut app, Action::Entry(Entry::OptimizeGfn2));
+    if !available() {
+        // Builds without xTB hide the entry; a stray message changes nothing.
+        assert_eq!(app.xtb.settings.method, qcdata::XtbMethod::GfnFf);
+        assert!(!app.xtb_running());
+        return;
+    }
     assert_eq!(app.xtb.settings.method, qcdata::XtbMethod::Gfn2Xtb);
     assert_eq!(app.xtb.settings.task, CalcTask::Optimize);
     assert_eq!(app.xtb.page, Page::Xtb);
@@ -440,6 +446,11 @@ fn rerun_repeats_the_cards_last_calculation() {
     send(&mut app, Action::Cancel);
     app.xtb.page = Page::Nmr;
     send(&mut app, Action::Entry(Entry::Rerun));
+    if !available() {
+        assert_eq!(app.xtb.page, Page::Nmr);
+        assert!(!app.xtb_running());
+        return;
+    }
     assert_eq!(app.xtb.page, Page::Xtb);
     let run = app.tab.xtb.run.as_ref().expect("⌘R starts a run");
     assert_eq!(run.config.task, CalcTask::Energy);
@@ -493,4 +504,101 @@ fn a_crash_offers_run_again_and_details_without_the_structure() {
     assert!(!details.contains("0.96"), "no coordinates: {details}");
     send(&mut app, Action::RunAgain);
     assert!(app.xtb_running());
+}
+
+#[test]
+fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_settings() {
+    let (mut app, o) = water(CalcTask::Energy);
+    let mut computed: reshiki_xtb_worker::protocol::Computed =
+        serde_json::from_value(serde_json::json!({
+            "method": "gxtb",
+            "conventions": "xtb-6.8",
+            "engine_conventions": "gxtb",
+            "numerics": "f64",
+            "settings": {
+                "charge": 0, "uhf": 0, "threads": 1,
+                "solvent": { "model": "alpb", "name": "water", "correction": "gfn2" },
+                "scf": { "accuracy": 0.5, "electronic_temperature_k": 1000.0, "max_iterations": 400 }
+            },
+            "energy": -5.2,
+            "energy_terms": {},
+            "charges": { "scheme": "mulliken", "values": [-0.56, 0.28, 0.28] },
+            "dipole_e_bohr": [0.0, 0.0, 0.85],
+            "bond_orders": [{ "a": 0, "b": 1, "order": 0.92 }, { "a": 0, "b": 2, "order": 0.92 }],
+            "homo_lumo_gap_ev": 13.6,
+            "near_degenerate": false,
+            "arrays": [],
+            "seconds": 0.003
+        }))
+        .expect("worker response");
+    computed.orbitals = Some(
+        serde_json::from_value(serde_json::json!({
+            "core_electrons": [2, 0, 0],
+            "alpha": {
+                "energies_hartree": [-0.7, -0.5, -0.4, -0.3, 0.2, 0.4],
+                "occupations": [2., 2., 2., 2., 0., 0.]
+            },
+            "beta": "restricted"
+        }))
+        .expect("orbital levels"),
+    );
+    event(
+        &mut app,
+        Event::Done(Ok(Arc::new(Report {
+            engine: run::example_engine(),
+            energy: computed.energy,
+            computed,
+            converged: true,
+            positions: START.to_vec(),
+            steps: 0,
+            energies: vec![-5.2],
+            path: vec![],
+            evaluations: vec![],
+        }))),
+    );
+    let bytes = app.tab.doc.file_json().expect("save");
+
+    // A new window opens the file: no run information survives.
+    let (mut reopened, _) = App::new();
+    reopened.tab.busy = false;
+    reopened.tab.doc = Document::from_native_file(&bytes).expect("reopen");
+    let result = reopened.tab.doc.science.results[0].result.clone();
+    reopened.tab.xtb.palette.show(&result);
+    let shown = reopened.xtb_shown().expect("the palette shows the result");
+    assert!(shown.info.is_none());
+    let rows = shown.rows();
+    let row = |name: &str| {
+        rows.iter()
+            .find(|(label, _)| *label == name)
+            .map(|(_, value)| value.clone())
+    };
+    // (0.2 + 0.3) Eh from the stored levels, not the session's 13.6 eV.
+    assert_eq!(row("HOMO–LUMO gap").as_deref(), Some("13.61 eV"));
+    assert_eq!(row("Dipole").as_deref(), Some("2.16 D"));
+    assert!(row("Charges").is_some_and(|c| c.starts_with("O −0.560")));
+    assert_eq!(results::bond_orders(&result, shown.frame).len(), 2);
+    assert_eq!(results::levels(&result).len(), 5);
+    assert_eq!(
+        shown.method(),
+        "g-xTB · axtb 0.2.0 · water (ALPB, GFN2-xTB correction) · xtb 6.8 compatible · 1000 K · charge 0 · multiplicity 1"
+    );
+
+    // Recalculate runs the stored method and settings, not the card's.
+    let _ = reopened.update(Message::Xtb(Action::Palette(palette::Action::Recalculate)));
+    let run = reopened
+        .tab
+        .xtb
+        .run
+        .as_ref()
+        .expect("Recalculate starts a run");
+    let config = &run.config;
+    assert_eq!(
+        (config.method, config.solvent, config.xtb68),
+        (qcdata::XtbMethod::GXtb, Some("water"), true)
+    );
+    assert_eq!(
+        (config.accuracy, config.temperature_k, config.max_iterations),
+        (Some(0.5), Some(1000.), Some(400))
+    );
+    assert_eq!(run.atoms, [o]);
 }

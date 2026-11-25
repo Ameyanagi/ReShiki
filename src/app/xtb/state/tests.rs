@@ -230,12 +230,24 @@ fn retry_runs_hotter_only_below_1000_k() {
 
 #[test]
 fn failures_name_the_atom_the_limit_and_the_spin() {
-    let (title, detail) = Failure::Element { z: 92 }.explain(XtbMethod::Gfn2Xtb, &[8, 92, 8]);
+    let (title, detail) = Failure::Element {
+        z: 92,
+        by: Some(XtbMethod::Gfn2Xtb),
+    }
+    .explain(XtbMethod::Gfn2Xtb, &[8, 92, 8]);
     assert_eq!(
         title,
         "Atom 2 is U (Z = 92). GFN2-xTB has no parameters for it."
     );
     assert!(detail.contains("radon (Z = 86)"));
+    // g-xTB in water: its GFN2-xTB solvation part lacks uranium.
+    let (title, detail) = Failure::Element {
+        z: 92,
+        by: Some(XtbMethod::Gfn2Xtb),
+    }
+    .explain(XtbMethod::GXtb, &[8, 92, 8]);
+    assert!(title.ends_with("GFN2-xTB has no parameters for it."));
+    assert!(detail.contains("gas-phase g-xTB covers this element"));
     let (title, _) = Failure::TooMany {
         count: 812,
         limit: 500,
