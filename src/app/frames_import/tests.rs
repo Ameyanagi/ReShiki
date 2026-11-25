@@ -189,3 +189,19 @@ fn the_sheets_keys_leave_return_to_the_focused_control() {
         Some(Message::FramesImport(Action::Close))
     ));
 }
+
+#[test]
+fn reshikis_own_xyz_export_reopens_with_energies_charge_and_spin() {
+    // As Export XYZ… writes a water cation's conformers.
+    let frame = |rank: usize, e: f64, y: f64| {
+        format!(
+            "3\nwater conformer {rank} · ΔE 0.00 kcal/mol · 50.0 % · cluster 2 · charge=1 mult=2 · E = {e:.10} Eh\n\
+             O 0 0 0\nH 0.97 0 0\nH -0.30 {y} 0\n"
+        )
+    };
+    let text = frame(1, -5.0, 0.90) + &frame(2, -4.99, 0.95);
+    let file = detect(Path::new("water conformers.xyz"), text.as_bytes()).unwrap();
+    assert_eq!(file.energies(), Some(vec![-5.0, -4.99]));
+    let first = &file.steps()[0].frame;
+    assert_eq!((first.charge, first.multiplicity), (1, 2));
+}
