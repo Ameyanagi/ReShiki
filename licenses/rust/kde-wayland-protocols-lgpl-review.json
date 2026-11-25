@@ -8,7 +8,10 @@
       "crate_source": "https://github.com/Smithay/wayland-rs/tree/a3d7927d87799b2955bf491b51c7c2a3a82da661/wayland-protocols-misc",
       "protocol_origin": "A copy of KDE's server-decoration.xml, kept in the wayland-rs repository. The LGPL text comes from https://github.com/KDE/plasma-wayland-protocols/tree/3d8327f5c8727702c5b14730c32d70b30e2ae106.",
       "used_by": "smithay-client-toolkit 0.20.0, through smithay-clipboard, uses only the input-method protocol from this crate.",
-      "license_texts": ["upstream/plasma-wayland-protocols-LGPL-2.1-or-later-1ccf09bf2f59.txt"],
+      "license_texts": {
+        "upstream/plasma-wayland-protocols-LGPL-2.1-or-later-1ccf09bf2f59.txt": "1ccf09bf2f598308df4bed9cd8e9657dc5cd0973d2800318f2e241486e2edf3f"
+      },
+      "xml_inventory_sha256": "7bf916872a8103f91ea5cd6a16788ccda3f1fdbcafc52f72a016caa8ebb0da74",
       "license_text_note": "The crate ships only its MIT LICENSE.txt, so licenses/rust/manifest.json supplies the LGPL text from the KDE commit above.",
       "files": {
         "protocols/server-decoration.xml": "1b6d21b2ecb30b9e5580f07efc46e65e53fa1cc928aeb93607321ccef28d7d63"
@@ -21,10 +24,11 @@
       "crate_source": "https://github.com/Smithay/wayland-rs/tree/a3d7927d87799b2955bf491b51c7c2a3a82da661/wayland-protocols-plasma",
       "protocol_origin": "https://github.com/KDE/plasma-wayland-protocols/tree/3d8327f5c8727702c5b14730c32d70b30e2ae106 (git submodule, release 1.16)",
       "used_by": "winit 0.30.13 always enables this crate with its wayland feature, for KDE blur only. ReShiki never requests blur.",
-      "license_texts": [
-        "plasma-wayland-protocols/COPYING.LIB",
-        "plasma-wayland-protocols/LICENSES/LGPL-2.1-or-later.txt"
-      ],
+      "license_texts": {
+        "plasma-wayland-protocols/COPYING.LIB": "a9bdde5616ecdd1e980b44f360600ee8783b1f99b8cc83a2beb163a0a390e861",
+        "plasma-wayland-protocols/LICENSES/LGPL-2.1-or-later.txt": "1ccf09bf2f598308df4bed9cd8e9657dc5cd0973d2800318f2e241486e2edf3f"
+      },
+      "xml_inventory_sha256": "2c1106a907591827275fe7f5f34b891033d161a7e4833a484a435f09b5127435",
       "files": {
         "plasma-wayland-protocols/src/protocols/appmenu.xml": "7c202be470b2a4dd62fb82814d3b63fc02283f90fcedf205d9447e2fd602e552",
         "plasma-wayland-protocols/src/protocols/blur.xml": "a8a8aaf9f9284d55960b0ca628469cd7c06646a5d69c5362a03a525f0ea773b7",
@@ -46,12 +50,12 @@
       }
     }
   },
-  "facts": "Both crates declare MIT, but wayland-scanner generates their Rust code at build time from the KDE protocol descriptions listed above, which are LGPL-2.1-or-later. The other bundled descriptions are MIT-CMU, MIT or BSD-3-Clause, or carry no licence header (fullscreen-shell.xml). Both crates are Linux-only dependencies of ReShiki.",
-  "binary_content": "The generated code holds interface, request, event and argument names, signatures and version numbers. Descriptions become doc comments, which compilation drops. A Linux release build on Ubuntu arm64 with these versions contains org_kde_* interface names, but no description text and no copyright or SPDX lines.",
-  "reason": "Only interface identifiers and message layouts reach the binary. LGPL-2.1 section 5 leaves object code unrestricted when it uses only numerical parameters, data structure layouts and accessors, and small macros and small inline functions from the library's header material. The complete LGPL-2.1 text ships in the third-party notices together with this record. ReShiki's complete source, Cargo.lock and build instructions are public, so a recipient can modify these crates and rebuild. ReShiki keeps the KDE notices and does not relicense the protocol descriptions.",
+  "facts": "Both crates declare MIT, but wayland-scanner generates their Rust code at build time from the KDE protocol descriptions listed under files, which are LGPL-2.1-or-later. The other bundled descriptions are MIT-CMU, MIT or BSD-3-Clause, or carry no license header (fullscreen-shell.xml). xml_inventory_sha256 pins every bundled XML file: the SHA-256 of the sorted lines \"<path> <sha256>\\n\". Both crates are Linux-only dependencies of ReShiki.",
+  "binary_content": "The generated code holds protocol metadata: interface, request, event and argument names, message signatures, versions and flags. Description text becomes doc comments, which compilation drops. Running strings on a Linux aarch64 release build of the reshiki binary with these crate versions finds org_kde_* interface names, but no description text and no copyright or SPDX lines.",
+  "reason": "The project owner chose to keep these crates and treat their KDE files as LGPL-2.1-or-later in the notices. Only protocol metadata generated from the descriptions reaches the binary. By analogy with LGPL-2.1 section 5, object code that uses only numerical parameters, data structure layouts and accessors, and small macros and inline functions (ten lines or less) from a library's header material may be used without restriction; where that does not apply, section 6 governs distribution of the executable. The notices ship the complete LGPL-2.1 text and each file's copyright block with this record. ReShiki's complete source, Cargo.lock and build instructions are public, so a recipient can modify these crates and rebuild. ReShiki does not relicense the protocol descriptions.",
   "discussions": [
     "https://github.com/Smithay/wayland-rs/issues/796",
     "https://github.com/rust-windowing/winit/issues/4833"
   ],
-  "review": "This record covers only the package versions, checksums and file digests above. license_notices.py fails when either crate has an unreviewed version or its bundled GPL-family protocol files change. check_agent_dependencies.py fails when Cargo.lock moves either crate away from the reviewed version and checksum."
+  "review": "This record covers only the package versions, sources, checksums and file digests above. license_notices.py fails when either crate has an unreviewed version, source, license declaration, XML inventory or license text. check_agent_dependencies.py fails when Cargo.lock holds either crate without a reviewed version, source and checksum."
 }

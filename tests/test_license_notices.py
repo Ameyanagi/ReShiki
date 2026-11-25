@@ -410,7 +410,13 @@ class LicenseNoticeTests(unittest.TestCase):
             self.assertEqual((root / "again" / THIRD_PARTY_FILE).read_bytes(), result)
 
     def test_kde_protocol_lgpl_text_names_the_files_it_covers(self):
-        lgpl = b"<copyright>SPDX-License-Identifier: LGPL-2.1-or-later</copyright>"
+        lgpl = b"<copyright><![CDATA[ 2015 KDE Author\n SPDX: LGPL-2.1-or-later ]]></copyright>"
+        mit = b"<copyright>MIT-CMU</copyright> mentions GPL in a description"
+        terms = b"GNU LESSER GENERAL PUBLIC LICENSE 2.1"
+        source_id = "registry+https://github.com/rust-lang/crates.io-index"
+
+        def digest(content):
+            return hashlib.sha256(content).hexdigest()
 
         def notices(change=lambda package, source: None):
             with tempfile.TemporaryDirectory() as temporary:
@@ -420,13 +426,18 @@ class LicenseNoticeTests(unittest.TestCase):
                 source = root / "plasma"
                 (source / "protocols").mkdir(parents=True)
                 (source / "Cargo.toml").write_text('license = "MIT"\n')
-                (source / "COPYING.LIB").write_text("GNU LESSER GENERAL PUBLIC LICENSE 2.1")
+                (source / "COPYING.LIB").write_bytes(terms)
                 (source / "protocols/blur.xml").write_bytes(lgpl)
-                (source / "protocols/output.xml").write_text("SPDX-License-Identifier: MIT-CMU")
+                (source / "protocols/output.xml").write_bytes(mit)
+                inventory = (
+                    f"protocols/blur.xml {digest(lgpl)}\nprotocols/output.xml {digest(mit)}\n"
+                )
                 reviewed = {
                     "license": "MIT",
-                    "license_texts": ["COPYING.LIB"],
-                    "files": {"protocols/blur.xml": hashlib.sha256(lgpl).hexdigest()},
+                    "source": source_id,
+                    "license_texts": {"COPYING.LIB": digest(terms)},
+                    "xml_inventory_sha256": digest(inventory.encode()),
+                    "files": {"protocols/blur.xml": digest(lgpl)},
                 }
                 review = {
                     "license": "LGPL-2.1-or-later",
@@ -437,6 +448,7 @@ class LicenseNoticeTests(unittest.TestCase):
                     "name": "wayland-protocols-plasma",
                     "version": "1",
                     "license": "MIT",
+                    "source": source_id,
                     "manifest_path": str(source / "Cargo.toml"),
                 }
                 change(package, source)
@@ -444,29 +456,28 @@ class LicenseNoticeTests(unittest.TestCase):
 
         result = notices()
         entry = result.split("DEPENDENCY: wayland-protocols-plasma@1\n", 1)[1]
-        scope = entry.split("    Text SHA-256", 1)[0]
+        scope, review_line, _ = entry.partition(f"  Review: {KDE_PROTOCOL_REVIEW}\n")
+        self.assertTrue(review_line)
         self.assertIn("LGPL-2.1-or-later covers these KDE protocol descriptions", scope)
-        self.assertIn("    wayland-protocols-plasma@1/protocols/blur.xml\n", scope)
+        self.assertIn("  wayland-protocols-plasma@1/protocols/blur.xml (copyright block)\n", scope)
+        self.assertIn("2015 KDE Author\n SPDX: LGPL-2.1-or-later\n", result)
         self.assertIn("    wayland-protocols-plasma@1/COPYING.LIB\n", scope)
-        self.assertIn(f"  Review: {KDE_PROTOCOL_REVIEW}\n", scope)
         self.assertNotIn("output.xml", result)
-        self.assertIn("GNU LESSER GENERAL PUBLIC LICENSE 2.1", result)
-        # A version or license change, an edited or new GPL-family file, or a
-        # stale text reference stops packaging until the review is updated.
+        self.assertIn(terms.decode(), result)
+        # Any unreviewed version, source, license, XML file or license text
+        # stops packaging until the review is updated.
         for name, change, message in (
             ("version", lambda p, s: p.update(version="2"), "licenses changed"),
+            (
+                "source",
+                lambda p, s: p.update(source="git+https://example.test"),
+                "licenses changed",
+            ),
             ("license", lambda p, s: p.update(license="MIT OR LGPL-2.1"), "licenses changed"),
-            (
-                "edit",
-                lambda p, s: (s / "protocols/blur.xml").write_text("LGPL"),
-                "licenses changed",
-            ),
-            (
-                "new",
-                lambda p, s: (s / "protocols/new.xml").write_text("GPL-2.0"),
-                "licenses changed",
-            ),
-            ("text", lambda p, s: (s / "COPYING.LIB").rename(s / "LGPL"), "license text missing"),
+            ("lgpl", lambda p, s: (s / "protocols/blur.xml").write_text("x"), "licenses changed"),
+            ("mit", lambda p, s: (s / "protocols/output.xml").write_text("x"), "licenses changed"),
+            ("new", lambda p, s: (s / "protocols/new.xml").write_text("x"), "licenses changed"),
+            ("text", lambda p, s: (s / "COPYING.LIB").write_text("x"), "license text missing"),
         ):
             with self.subTest(change=name), self.assertRaisesRegex(ValueError, message):
                 notices(change)
@@ -498,6 +509,8 @@ class LicenseNoticeTests(unittest.TestCase):
         packages = [p for p in metadata["packages"] if p["name"] in KDE_PROTOCOL_CRATES]
         result = consolidated_notices(repository, {"packages": packages}).decode()
         self.assertEqual(result.count("LGPL-2.1-or-later covers these KDE protocol"), 2)
+        self.assertEqual(result.count(" (copyright block)\n"), 18)
+        self.assertIn("SPDX-FileCopyrightText: 2015 Martin Gräßlin", result)
         self.assertIn(
             "wayland-protocols-plasma@0.3.12/plasma-wayland-protocols/src/protocols/blur.xml",
             result,

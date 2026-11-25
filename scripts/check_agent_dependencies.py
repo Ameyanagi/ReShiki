@@ -197,18 +197,16 @@ def reviewed_certificate_data_license(package, locked_packages):
     )
 
 
-def kde_protocol_problems(locked_packages):
+def kde_protocol_problems(root, locked_packages):
     """Flag any locked KDE-protocol crate other than the reviewed versions and archives."""
-    reviewed = json.loads((ROOT / KDE_PROTOCOL_REVIEW).read_text(encoding="utf-8"))["packages"]
+    reviewed = json.loads((root / KDE_PROTOCOL_REVIEW).read_text(encoding="utf-8"))["packages"]
     return sorted(
         f"{key} generates code from LGPL KDE protocol files; review {KDE_PROTOCOL_REVIEW}"
         for locked in locked_packages
         if locked.get("name") in KDE_PROTOCOL_CRATES
         for key in [f"{locked['name']}@{locked.get('version')}"]
-        if any(
-            reviewed.get(key, {}).get(field) != locked.get(field)
-            for field in ("source", "checksum")
-        )
+        if key not in reviewed
+        or any(reviewed[key][field] != locked.get(field) for field in ("source", "checksum"))
     )
 
 
@@ -244,7 +242,7 @@ def verify(root=ROOT, metadata=None):
         metadata = json.loads(run(root, "cargo", "metadata", "--locked", "--format-version", "1"))
     lock = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
     problems += license_problems(metadata, set(baseline["packages"]), lock.get("package", []))
-    problems += kde_protocol_problems(lock.get("package", []))
+    problems += kde_protocol_problems(root, lock.get("package", []))
     if problems:
         raise ValueError("Agent dependency audit failed:\n" + "\n".join(f"- {p}" for p in problems))
 
