@@ -1396,9 +1396,14 @@ struct SharedPayloads {
     /// Holders and heap bytes by payload address.
     held: std::collections::HashMap<usize, (usize, usize)>,
     bytes: usize,
+    /// Calculation lists and attachments each snapshot owns itself.
+    containers: usize,
 }
 impl SharedPayloads {
     fn hold(&mut self, doc: &Document) {
+        if !doc.science.is_empty() {
+            self.containers += doc.science.container_bytes();
+        }
         for (address, bytes) in doc.science.payloads() {
             let entry = self.held.entry(address).or_insert((0, bytes));
             if entry.0 == 0 {
@@ -1408,6 +1413,9 @@ impl SharedPayloads {
         }
     }
     fn release(&mut self, doc: &Document) {
+        if !doc.science.is_empty() {
+            self.containers -= doc.science.container_bytes();
+        }
         for (address, _) in doc.science.payloads() {
             if let std::collections::hash_map::Entry::Occupied(mut entry) = self.held.entry(address)
             {
@@ -1688,6 +1696,12 @@ impl History {
     /// payload once.
     pub fn science_bytes(&self, live: &Document) -> usize {
         self.shared.bytes
+            + self.shared.containers
+            + if live.science.is_empty() {
+                0
+            } else {
+                live.science.container_bytes()
+            }
             + live
                 .science
                 .payloads()

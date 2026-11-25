@@ -815,7 +815,10 @@ fn history_counts_shared_payloads_once() {
         plain_history.bytes() + 30 * container + heap
     );
     assert!(history.bytes() < heap * 3);
-    assert_eq!(history.science_bytes(&doc), heap);
+    // The shared payloads once, plus the lists each of 30 snapshots and the
+    // live document own.
+    let lists = doc.science.container_bytes();
+    assert_eq!(history.science_bytes(&doc), heap + 31 * lists);
     assert!(history.undo_frames().all(|snapshot| Arc::ptr_eq(
         &snapshot.science.results[0].result,
         &doc.science.results[0].result,
@@ -828,13 +831,13 @@ fn history_counts_shared_payloads_once() {
     separate.science.results[0].result = Arc::new((*doc.science.results[0].result).clone());
     assert_eq!(
         history.science_bytes(&separate),
-        heap + doc.science.results[0].result.heap_bytes()
+        heap + doc.science.results[0].result.heap_bytes() + 31 * lists
     );
     let bytes = history.bytes();
     assert_eq!(history.release(usize::MAX, 0), bytes);
     assert_eq!(history.frames(), 0);
     assert_eq!(history.bytes(), 0);
-    assert_eq!(history.science_bytes(&doc), heap);
+    assert_eq!(history.science_bytes(&doc), heap + lists);
     assert_eq!(history.science_bytes(&plain), 0);
 }
 
@@ -846,11 +849,12 @@ fn history_commit_keeps_science_within_budget() {
     let bytes = full.heap_bytes() + start.frame.heap_bytes();
     add_result(&mut doc, &start, full);
     let mut history = History::default();
-    for _ in 0..3 {
+    let lists = doc.science.container_bytes();
+    for step in 1..=3 {
         let before = doc.clone();
         doc.translate(&[oxygen], 1., 0.);
         assert!(history.commit(before, &doc));
-        assert_eq!(history.science_bytes(&doc), bytes);
+        assert_eq!(history.science_bytes(&doc), bytes + (step + 1) * lists);
     }
     assert!(history.fit_science(&doc));
     assert_eq!(history.frames(), 3);
@@ -950,7 +954,9 @@ fn clipboard_selection_carries_no_science() {
     ));
     assert_eq!(
         History::default().science_bytes(&duplicated),
-        start.frame.heap_bytes() + source.science.results[0].result.heap_bytes()
+        start.frame.heap_bytes()
+            + source.science.results[0].result.heap_bytes()
+            + duplicated.science.container_bytes()
     );
 }
 
@@ -1487,6 +1493,14 @@ fn a_result_for_other_atoms_is_refused() {
         Err(ScienceError::Unknown)
     ));
     assert_eq!(doc, before);
+    let mut heavy_water = (*start.frame).clone();
+    heavy_water.isotopes = vec![0, 2, 2];
+    let mut deuterated = result(&heavy_water, Task::Optimize, false);
+    deuterated.input_frame = Some(start.frame.hash());
+    assert!(matches!(
+        attach(&mut doc, &start, vec![heavy_water], deuterated),
+        Err(ScienceError::Unknown)
+    ));
     let mut short = start.clone();
     short.atoms.pop();
     assert!(matches!(
@@ -1498,6 +1512,24 @@ fn a_result_for_other_atoms_is_refused() {
         ),
         Err(ScienceError::Unknown)
     ));
+}
+
+#[test]
+fn history_science_bytes_count_snapshot_attachments() {
+    let (mut doc, oxygen) = water();
+    let start = launch(&doc, oxygen, 0, 1).unwrap();
+    add_result(&mut doc, &start, result(&start.frame, Task::Energy, false));
+    let mut history = History::default();
+    let payloads = doc.science.heap_bytes();
+    for step in 0..5 {
+        reconciled_edit(&mut doc, &mut history, |doc| {
+            doc.atom_mut(oxygen).unwrap().position = Point::new(step as f32, 0.);
+        });
+    }
+    let containers = doc.science.container_bytes();
+    // Five snapshots and the live document each own their lists and attachments.
+    assert!(history.science_bytes(&doc) >= 6 * containers);
+    assert!(history.science_bytes(&doc) < payloads + 6 * containers + 1024);
 }
 
 #[test]

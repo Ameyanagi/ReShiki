@@ -508,8 +508,17 @@ fn check_result(
     result: &CalcResult,
     frame: &Frame,
 ) -> Result<(), ScienceError> {
+    let isotopes = |f: &Frame| -> Vec<u16> {
+        if f.isotopes.is_empty() {
+            vec![0; f.numbers.len()]
+        } else {
+            f.isotopes.clone()
+        }
+    };
     let same_atoms = result.task == reshiki_qcdata::Task::TransitionState
         || input.numbers == frame.numbers
+            && isotopes(input) == isotopes(frame)
+            && input.masses_amu == frame.masses_amu
             && input.charge == frame.charge
             && input.multiplicity == frame.multiplicity;
     if result.input_frame.unwrap_or(result.frame) != attachment.frame
