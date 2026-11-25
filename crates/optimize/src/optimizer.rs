@@ -1,25 +1,34 @@
-//! Molecular geometry minimization with ANC-RFO and Cartesian L-BFGS.
+//! Molecular geometry minimization with ANC or TRIC RFO and Cartesian L-BFGS.
 
 mod anc;
 mod coordinates;
 mod lbfgs;
+pub(crate) mod rfo;
+mod trust;
 
 use std::{cell::LazyCell, ops::ControlFlow};
 
-use crate::{Accuracy, EvalError, Potential, linalg::dot};
+use crate::{Accuracy, EvalError, Potential, internal::InternalModel, linalg::dot};
 use anc::{Anc, History};
 use coordinates::{Coordinates, metrics, project};
 use lbfgs::Lbfgs;
+use trust::{DirectionError, Search, TrustRegion};
+pub use trust::{Rebuild, Trust};
 
-/// ANC-RFO uses a projected Hessian and falls back to Cartesian L-BFGS.
+/// Coordinate model and search direction for minimization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Method {
+    /// Approximate normal coordinates with RFO. Falls back to Cartesian L-BFGS.
     #[default]
     AncRfo,
+    /// TRIC delocalized internals with RFO, a trust radius and the selected Hessian
+    /// update (Wang & Song 2016, Baker et al. 1996, Peng et al. 1996).
+    /// An unusable internal model falls back to ANC-RFO.
+    Internal,
     Lbfgs,
 }
 
-/// Starting curvature for ANC-RFO. Rebuilds always use the Lindh basis and carry
+/// Starting curvature for RFO. Rebuilds use the new coordinate basis and carry
 /// the learned curvature (Lindh et al., Chem. Phys. Lett. 241, 423, 1995).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum InitialHessian {
@@ -27,14 +36,14 @@ pub enum InitialHessian {
     #[default]
     Model,
     /// Request the potential's Hessian once, falling back to Lindh when unavailable.
-    /// Use max(|λ|, 0.001) on internal modes to preserve stiffness and start BFGS
+    /// ANC uses max(|λ|, curvature_floor) on projected modes to preserve stiffness and start BFGS
     /// with positive curvature (Nocedal & Wright, Numerical Optimization, §3.4).
     Potential,
     /// Use `Potential` up to and including `max_atoms`, counting fixed atoms too.
     Auto { max_atoms: usize },
 }
 
-/// Secant update of the ANC Hessian after an accepted displacement.
+/// Secant update of the RFO Hessian after an accepted displacement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Update {
     /// Direct BFGS with a positive-curvature test (Nocedal & Wright, §6.1).
@@ -47,7 +56,7 @@ pub enum Update {
     Bofill,
 }
 
-/// Extrapolate from up to five accepted points in a single ANC frame so errors,
+/// Extrapolate from up to five accepted points in a single model frame so errors,
 /// gradients and the trust radius share the same projected coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Acceleration {
@@ -107,14 +116,27 @@ impl Level {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Options {
     pub method: Method,
-    /// Source of the first ANC Hessian.
+    /// Trust radius and single-atom displacement limit for RFO.
+    pub trust: Trust,
+    /// Reject trials with actual/predicted reduction below this value. Zero
+    /// selects the original energy-rise-only rejection rule (1e-6 Eh).
+    pub reject_ratio: f64,
+    /// ANC eigenvalue and curvature-transport floor, and TRIC fragment-motion
+    /// prior, in hartree/bohr².
+    pub curvature_floor: f64,
+    /// When to rebuild the RFO basis and transport its learned curvature.
+    pub rebuild: Rebuild,
+    /// Add weak nonbonded stretch curvature to the Lindh model for elements
+    /// with tabulated van der Waals radii. Covalent and 1–3 pairs are excluded.
+    pub contacts: bool,
+    /// Source of the first RFO Hessian.
     pub initial_hessian: InitialHessian,
-    /// ANC Hessian update applied after each accepted step.
+    /// RFO Hessian update applied after each accepted step.
     pub update: Update,
-    /// DIIS-family trial steps for ANC-RFO.
+    /// DIIS-family trial steps in the active RFO coordinates.
     pub acceleration: Acceleration,
     /// Start at Coarse and request Normal when the maximum free gradient is within
     /// 20× its convergence threshold. This cutoff is a benchmark heuristic for
@@ -133,6 +155,11 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             method: Method::AncRfo,
+            trust: Trust::Global,
+            reject_ratio: 0.,
+            curvature_floor: 1e-3,
+            rebuild: Rebuild::default(),
+            contacts: false,
             initial_hessian: InitialHessian::Model,
             update: Update::Bfgs,
             acceleration: Acceleration::None,
@@ -156,8 +183,8 @@ pub struct Step<'a> {
     pub rms_gradient: f64,
     pub max_step: f64,
     pub rms_step: f64,
-    /// ANC Euclidean trust radius used for this step, or the per-atom
-    /// displacement limit after L-BFGS backtracking, in bohr.
+    /// Radius used for the accepted RFO step in global or per-free-atom units
+    /// (see [`Trust`]). L-BFGS reports its Cartesian atom limit after backtracking.
     pub trust_radius: f64,
     pub accuracy: Accuracy,
     pub positions: &'a [f64],
@@ -188,6 +215,15 @@ pub struct Outcome {
     /// One energy per accepted geometry, including the input. A successful
     /// accuracy change replaces the entry at the same geometry.
     pub energies: Vec<f64>,
+}
+
+/// A restricted RFO proposal. Internal back-transforms can recover a useful
+/// partial displacement, with its prediction evaluated at the attained point.
+pub(crate) struct TrialStep {
+    pub cartesian: Vec<f64>,
+    pub predicted: f64,
+    pub length: f64,
+    pub converged_transform: bool,
 }
 
 struct Point {
@@ -330,22 +366,26 @@ struct Engine<'a> {
     options: &'a Options,
     method: Method,
     anc: Option<Anc>,
+    internal: Option<InternalModel>,
+    internal_built_at: usize,
     initial_hessian: Option<Vec<f64>>,
     history: History,
     lbfgs: Lbfgs,
-    radius: f64,
+    trust: TrustRegion,
 }
 
 impl<'a> Engine<'a> {
-    fn new(options: &'a Options) -> Self {
+    fn new(options: &'a Options, free_atoms: usize) -> Self {
         Self {
             options,
             method: options.method,
             anc: None,
+            internal: None,
+            internal_built_at: 0,
             initial_hessian: None,
             history: History::default(),
             lbfgs: Lbfgs::default(),
-            radius: 0.3,
+            trust: TrustRegion::new(options, free_atoms),
         }
     }
 
@@ -356,7 +396,10 @@ impl<'a> Engine<'a> {
         point: &Point,
         steps: usize,
     ) -> Result<Option<(Point, f64)>, Status> {
-        if self.anc.as_ref().is_none_or(|a| steps - a.built_at >= 30) {
+        if self.anc.as_ref().is_none_or(|a| {
+            self.trust
+                .should_rebuild(self.options.rebuild, steps - a.built_at)
+        }) {
             self.anc = Anc::build(
                 numbers,
                 &eval.coords,
@@ -364,51 +407,113 @@ impl<'a> Engine<'a> {
                 steps,
                 self.anc.as_ref(),
                 self.initial_hessian.take(),
+                self.options,
             )
             .ok();
             self.history.clear();
+            self.trust.rebuilt();
         }
         let Some(anc) = &self.anc else {
             return Ok(None);
         };
-        let mut diis = if self.options.acceleration == Acceleration::None {
+        let diis = if self.options.acceleration == Acceleration::None {
             None
         } else {
             self.history.push(anc, point, &eval.coords);
             self.history
-                .direction(anc, self.options.acceleration, self.radius)
+                .direction(anc, self.options.acceleration, self.trust.model_radius())
         };
-        // Compute the ordinary direction only if needed; reuse it on smaller-radius retries.
         let rfo = LazyCell::new(|| anc.direction(&point.active_gradient));
-        for _ in 0..10 {
-            let radius = self.radius;
-            let accelerated = diis.take().and_then(|d| d.restricted(radius));
-            let used_diis = accelerated.is_some();
-            let Some((s, predicted, length)) =
-                accelerated.or_else(|| rfo.as_ref()?.restricted(radius))
-            else {
-                return Ok(None);
-            };
-            let trial = eval.trial(point, &s)?;
-            let actual = trial.energy - point.energy;
-            if actual > 1e-6 {
-                // Give ordinary RFO one try even if DIIS reached the radius floor.
-                if length <= 1e-3 && !used_diis {
-                    self.radius = 1e-3;
-                    break;
-                }
-                self.radius = (0.25 * length).max(1e-3);
-                continue;
-            }
-            let ratio = actual / predicted;
-            if ratio < 0.25 {
-                self.radius = (0.25 * radius).max(1e-3);
-            } else if ratio > 0.75 && length == radius {
-                self.radius = (2. * radius).min(0.5);
-            }
-            return Ok(Some((trial, radius)));
+        let search = self.trust.search(
+            eval,
+            point,
+            |bound| bound.restrict(|r| diis.as_ref()?.restricted(r)).map(Ok),
+            |bound| {
+                bound
+                    .restrict(|r| rfo.as_ref()?.restricted(r))
+                    .ok_or(DirectionError::NoStep)
+            },
+        )?;
+        Ok(search.accepted())
+    }
+
+    fn search_internal<P: Potential + ?Sized>(
+        &mut self,
+        eval: &mut Evaluator<P>,
+        numbers: &[u8],
+        point: &Point,
+        steps: usize,
+    ) -> Result<Option<(Point, f64)>, Status> {
+        let x = &point.positions;
+        let mut rebuild = self
+            .trust
+            .should_rebuild(self.options.rebuild, steps - self.internal_built_at)
+            || self
+                .internal
+                .as_ref()
+                .is_some_and(|model| model.needs_rebuild(x));
+        if self.internal.is_none() {
+            self.internal = InternalModel::build_with_options(
+                numbers,
+                &eval.coords.indices,
+                x,
+                false,
+                self.initial_hessian.as_deref(),
+                self.options,
+            )
+            .ok();
         }
-        Ok(None)
+        let Some(model) = &mut self.internal else {
+            return Ok(None);
+        };
+        let mut retried_chart = false;
+        loop {
+            if rebuild {
+                if model.rebuild(x).is_err() {
+                    return Ok(None);
+                }
+                self.history.clear();
+                self.trust.rebuilt();
+                self.internal_built_at = steps;
+            }
+            let diis = if self.options.acceleration == Acceleration::None {
+                None
+            } else {
+                self.history
+                    .push_internal(model, x, &point.active_gradient, point.energy);
+                self.history.internal_direction(
+                    model,
+                    x,
+                    self.options.acceleration,
+                    self.trust.model_radius(),
+                )
+            };
+            let rfo = LazyCell::new(|| model.direction(x, &point.active_gradient));
+            let search = self.trust.search(
+                eval,
+                point,
+                |bound| {
+                    diis.map(|d| {
+                        bound
+                            .restrict(|r| d.restricted(x, r))
+                            .ok_or(DirectionError::BackTransform)
+                    })
+                },
+                |bound| {
+                    let direction = rfo.as_ref().ok_or(DirectionError::NoStep)?;
+                    bound
+                        .restrict(|r| direction.restricted(x, r))
+                        .ok_or(DirectionError::BackTransform)
+                },
+            )?;
+            match search {
+                Search::Rebuild if !retried_chart => {
+                    rebuild = true;
+                    retried_chart = true;
+                }
+                result => return Ok(result.accepted()),
+            }
+        }
     }
 
     fn search_lbfgs<P: Potential + ?Sized>(
@@ -444,17 +549,28 @@ impl<'a> Engine<'a> {
         point: &Point,
         steps: usize,
     ) -> Result<(Point, Motion, f64), Status> {
-        let trial = if self.method == Method::AncRfo {
-            self.search_anc(eval, numbers, point, steps)?
-        } else {
-            None
-        };
-        let (next, radius) = if let Some(trial) = trial {
-            trial
-        } else {
-            self.method = Method::Lbfgs;
-            self.anc = None;
-            self.search_lbfgs(eval, point)?
+        let (next, radius) = loop {
+            match self.method {
+                Method::Internal => {
+                    if let Some(trial) = self.search_internal(eval, numbers, point, steps)? {
+                        // The seed remains available to ANC until the input point moves.
+                        self.initial_hessian = None;
+                        break trial;
+                    }
+                    self.method = Method::AncRfo;
+                    self.internal = None;
+                    self.history.clear();
+                    self.trust = TrustRegion::new(self.options, eval.coords.indices.len() / 3);
+                }
+                Method::AncRfo => {
+                    if let Some(trial) = self.search_anc(eval, numbers, point, steps)? {
+                        break trial;
+                    }
+                    self.method = Method::Lbfgs;
+                    self.anc = None;
+                }
+                Method::Lbfgs => break self.search_lbfgs(eval, point)?,
+            }
         };
         // Use the displacement that survived floating-point addition at the trial.
         let s: Vec<_> = eval
@@ -463,22 +579,32 @@ impl<'a> Engine<'a> {
             .iter()
             .map(|&i| next.positions[i] - point.positions[i])
             .collect();
-        let y: Vec<_> = next
-            .active_gradient
-            .iter()
-            .zip(&point.active_gradient)
-            .map(|(n, o)| n - o)
-            .collect();
         let (max, rms) = metrics(&s);
         let motion = Motion {
             de: next.energy - point.energy,
             max,
             rms,
         };
-        if let Some(anc) = &mut self.anc {
-            anc.update(&s, &y, self.options.update);
+        if let Some(model) = &mut self.internal {
+            model.update(
+                &point.positions,
+                &next.positions,
+                &point.active_gradient,
+                &next.active_gradient,
+                self.options.update,
+            );
         } else {
-            self.lbfgs.update(s, y);
+            let y = next
+                .active_gradient
+                .iter()
+                .zip(&point.active_gradient)
+                .map(|(new, old)| new - old)
+                .collect::<Vec<_>>();
+            if let Some(anc) = &mut self.anc {
+                anc.update(&s, &y, self.options.update);
+            } else {
+                self.lbfgs.update(s, y);
+            }
         }
         Ok((next, motion, radius))
     }
@@ -508,13 +634,13 @@ impl<'a> Engine<'a> {
 /// recent accepted gradient. A switch refreshes the energy and gradient at that
 /// geometry before taking another step. Each reported ΔE belongs to the last
 /// displacement, evaluated at one accuracy. Convergence requires Normal or Tight.
-/// ANC keeps its curvature and radius across accuracy changes. DIIS and L-BFGS
-/// discard their histories.
+/// Both RFO methods keep their curvature and radius across accuracy changes.
+/// DIIS and L-BFGS discard their histories.
 ///
 /// By default ANC starts from the projected Lindh curvature, flooring internal
 /// eigenvalues at 0.001 Eh/bohr². Davidson iteration finds the lowest augmented-Hessian
-/// eigenvector, with a dense solve on nonconvergence. ANC scales the step
-/// to a Euclidean trust radius, initially 0.3 bohr. The rational prediction is
+/// eigenvector, with a dense solve on nonconvergence. The default trust policy
+/// scales the step to a Euclidean radius, initially 0.3 bohr. The rational prediction is
 /// (g·s + s·Hs/2)/(1 + s·s). Actual/predicted below 0.25 quarters the radius
 /// (minimum 0.001 bohr); above 0.75 on the boundary doubles it (maximum 0.5).
 /// An energy rise above 1e-6 Eh rejects the trial and sets the radius to one
@@ -523,8 +649,13 @@ impl<'a> Engine<'a> {
 /// an unusable ANC model switches to L-BFGS. Accepted BFGS updates require
 /// y·s > 1e-12 |y||s| and positive model curvature. Every 30 accepted steps
 /// the Lindh basis is rebuilt. Learned curvature is transformed into the new
-/// basis, using the 0.001 floor for components outside the old internal space.
+/// basis, using the configured curvature floor for components outside the old internal space.
 /// A change of internal dimension starts from the fresh Lindh curvature.
+///
+/// TRIC measures steps in its delocalized coordinates and uses the same trust
+/// policy as ANC. It carries learned curvature through free Cartesian space when
+/// the chart changes, its rebuild is due, or two consecutive back-transforms are
+/// incomplete. A failed build or exhausted search retries the accepted geometry with ANC.
 ///
 /// L-BFGS retains 20 pairs, uses initial inverse curvature 2 bohr²/Eh and then
 /// (s·y)/(y·y), and limits the largest atom displacement to 0.3 bohr. Armijo
@@ -560,6 +691,12 @@ pub fn optimize<P: Potential + ?Sized>(
             return out;
         }
     };
+    if options.method != Method::Lbfgs
+        && let Err(message) = options.validate_rfo()
+    {
+        out.status = Status::Failed(message.into());
+        return out;
+    }
     let mut eval = Evaluator {
         potential,
         coords,
@@ -579,8 +716,8 @@ pub fn optimize<P: Potential + ?Sized>(
             return out;
         }
     };
-    let mut engine = Engine::new(options);
-    let request_hessian = options.method == Method::AncRfo
+    let mut engine = Engine::new(options, eval.coords.indices.len() / 3);
+    let request_hessian = options.method != Method::Lbfgs
         && match options.initial_hessian {
             InitialHessian::Model => false,
             InitialHessian::Potential => true,
@@ -588,7 +725,11 @@ pub fn optimize<P: Potential + ?Sized>(
         };
     let criteria = options.level.criteria();
     let mut motion = Motion::default();
-    let mut radius = 0.3;
+    let mut radius = if options.method == Method::Lbfgs {
+        0.3
+    } else {
+        engine.trust.radius
+    };
     let mut new_geometry = true;
     out.energies.push(point.energy);
     out.status = loop {

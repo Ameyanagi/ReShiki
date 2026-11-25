@@ -10,7 +10,7 @@ impl<F: FnMut(&[f64], &mut [f64], Accuracy) -> Result<f64, EvalError>> Potential
     }
 }
 
-fn surface(
+pub(super) fn surface(
     f: impl FnMut(&[f64], &mut [f64], Accuracy) -> Result<f64, EvalError>,
 ) -> impl Potential {
     Surface(f)
@@ -61,7 +61,7 @@ fn invalid_input_never_reaches_the_potential_or_callback() {
 
 #[test]
 fn callback_can_cancel_at_initial_or_accepted_points() {
-    for method in [Method::AncRfo, Method::Lbfgs] {
+    for method in [Method::AncRfo, Method::Internal, Method::Lbfgs] {
         for stop in [0, 3] {
             let mut p = surface(|x, g, _| Ok(well(x, g)));
             let mut accepted = Vec::new();
@@ -86,7 +86,7 @@ fn callback_can_cancel_at_initial_or_accepted_points() {
 
 #[test]
 fn failed_evaluations_preserve_the_last_accepted_sample() {
-    for method in [Method::AncRfo, Method::Lbfgs] {
+    for method in [Method::AncRfo, Method::Internal, Method::Lbfgs] {
         for (error, status) in [
             (
                 EvalError::Scf("SCF".into()),
@@ -159,7 +159,7 @@ fn nonfinite_or_unwritten_results_fail_even_on_fixed_atoms() {
 
 #[test]
 fn tight_recheck_can_resume_and_counts_once_at_the_same_point() {
-    for method in [Method::AncRfo, Method::Lbfgs] {
+    for method in [Method::AncRfo, Method::Internal, Method::Lbfgs] {
         let mut calls = Vec::new();
         let mut callbacks = Vec::new();
         let mut p = surface(|x, g, a| {
@@ -220,36 +220,65 @@ fn tight_recheck_reports_the_replacement_sample_before_convergence() {
 
 #[test]
 fn callback_can_cancel_a_tight_recheck_at_initial_or_accepted_points() {
-    for (index, normal_gradient) in [(0, 0.), (1, 4e-5)] {
-        for tight_gradient in [0., 0.01] {
-            let mut p = surface(|x, g, accuracy| {
-                g.fill(0.);
-                g[3] = if accuracy == Accuracy::Tight {
-                    tight_gradient
-                } else {
-                    normal_gradient
+    struct TightProbe {
+        normal_gradient: f64,
+        tight_gradient: f64,
+    }
+    impl Potential for TightProbe {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], a: Accuracy) -> Result<f64, EvalError> {
+            g.fill(0.);
+            if a == Accuracy::Tight {
+                g[3] = self.tight_gradient;
+                Ok(self.tight_gradient * x[3] - 4.)
+            } else {
+                let dx = x[3] - INITIAL[3];
+                g[3] = self.normal_gradient + 0.5 * dx;
+                Ok(self.normal_gradient * x[3] + 0.25 * dx * dx + 2.)
+            }
+        }
+        fn hessian(&mut self, _: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+            h.fill(0.);
+            h[3 * 6 + 3] = 0.5;
+            Some(Ok(()))
+        }
+    }
+    // The exact Normal curvature gives all three methods a small first step
+    // with no rejected trials, so the intended Tight callback has index one.
+    for method in [Method::AncRfo, Method::Internal, Method::Lbfgs] {
+        for (index, normal_gradient) in [(0, 0.), (1, 4e-5)] {
+            for tight_gradient in [0., 0.01] {
+                let mut p = TightProbe {
+                    normal_gradient,
+                    tight_gradient,
                 };
-                Ok(g[3] * x[3] + if accuracy == Accuracy::Tight { -4. } else { 2. })
-            });
-            let mut last_normal = Vec::new();
-            let result = optimize(&mut p, &[1, 1], &INITIAL, &anchored(Method::Lbfgs), |s| {
-                if s.accuracy == Accuracy::Tight {
-                    assert_eq!(s.index, index);
-                    assert_eq!(s.positions, last_normal);
-                    assert_eq!(s.energy, tight_gradient * s.positions[3] - 4.);
-                    ControlFlow::Break(())
-                } else {
-                    last_normal = s.positions.to_vec();
-                    proceed(s)
-                }
-            });
-            assert_eq!(result.status, Status::Cancelled);
-            assert_eq!((result.steps, result.evaluations), (index, index + 2));
-            assert_eq!(result.positions, last_normal);
-            assert_eq!(result.energy, tight_gradient * result.positions[3] - 4.);
-            assert_eq!(result.gradient[3], tight_gradient);
-            assert_eq!(result.energies.len(), index + 1);
-            assert_eq!(result.energies[index], result.energy);
+                let options = Options {
+                    initial_hessian: InitialHessian::Potential,
+                    ..anchored(method)
+                };
+                let mut last_normal = Vec::new();
+                let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
+                    if s.accuracy == Accuracy::Tight {
+                        assert_eq!(s.index, index);
+                        assert_eq!(s.positions, last_normal);
+                        assert_eq!(s.energy, tight_gradient * s.positions[3] - 4.);
+                        ControlFlow::Break(())
+                    } else {
+                        last_normal = s.positions.to_vec();
+                        proceed(s)
+                    }
+                });
+                assert_eq!(
+                    result.status,
+                    Status::Cancelled,
+                    "{method:?}: index {index}, Tight gradient {tight_gradient}"
+                );
+                assert_eq!((result.steps, result.evaluations), (index, index + 2));
+                assert_eq!(result.positions, last_normal);
+                assert_eq!(result.energy, tight_gradient * result.positions[3] - 4.);
+                assert_eq!(result.gradient[3], tight_gradient);
+                assert_eq!(result.energies.len(), index + 1);
+                assert_eq!(result.energies[index], result.energy);
+            }
         }
     }
 }
@@ -300,6 +329,7 @@ fn tight_resume_preserves_anc_curvature_and_radius_but_clears_lbfgs_history() {
                 // curvature instead of the initial inverse curvature of two.
                 -2. * 0.01
             }
+            Method::Internal => unreachable!("this test checks ANC and L-BFGS curvature formulas"),
         };
         assert!((tight_displacement - expected).abs() < 1e-12);
         assert_eq!(result.energies, [1., -1., -2.]);
@@ -565,23 +595,101 @@ fn tight_final_uses_the_last_displacement_and_same_accuracy_energy_difference() 
 
 #[test]
 fn unavailable_hessian_reproduces_the_model_run() {
-    let run = |initial_hessian| {
-        let mut p = surface(|x, g, _| Ok(well(x, g)));
-        let options = Options {
-            initial_hessian,
-            ..anchored(Method::AncRfo)
+    for method in [Method::AncRfo, Method::Internal] {
+        let run = |initial_hessian| {
+            let mut p = surface(|x, g, _| Ok(well(x, g)));
+            let options = Options {
+                initial_hessian,
+                ..anchored(method)
+            };
+            optimize(&mut p, &[1, 1], &INITIAL, &options, proceed)
         };
-        optimize(&mut p, &[1, 1], &INITIAL, &options, proceed)
-    };
-    let model = run(InitialHessian::Model);
-    let requested = run(InitialHessian::Potential);
-    assert_eq!(model.hessian_evaluations, 0);
-    assert_eq!(
-        requested,
-        Outcome {
-            hessian_evaluations: 1,
-            ..model
+        let model = run(InitialHessian::Model);
+        let requested = run(InitialHessian::Potential);
+        assert_eq!(model.hessian_evaluations, 0);
+        assert_eq!(
+            requested,
+            Outcome {
+                hessian_evaluations: 1,
+                ..model
+            }
+        );
+    }
+}
+
+#[test]
+fn internal_build_failure_preserves_the_potential_hessian_for_anc() {
+    const COINCIDENT: [f64; 6] = [-0., 0., -0., 0., 0., 0.];
+    let mut hessian = vec![0.; 36];
+    for i in 0..6 {
+        hessian[i * 6 + i] = 1.;
+    }
+    // A coincident pair has no defined internal bond or fragment frame. The
+    // exact Cartesian Hessian still gives ANC a usable positive model.
+    assert!(
+        crate::internal::InternalModel::build(
+            &[1, 1],
+            &[3, 4, 5],
+            &COINCIDENT,
+            true,
+            Some(&hessian),
+        )
+        .is_err()
+    );
+    struct SeparatedWell {
+        calls: Vec<(Vec<f64>, Accuracy)>,
+        hessian: Vec<f64>,
+    }
+    impl Potential for SeparatedWell {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], a: Accuracy) -> Result<f64, EvalError> {
+            for (&actual, &initial) in x[..3].iter().zip(&COINCIDENT[..3]) {
+                assert_eq!(actual.to_bits(), initial.to_bits());
+            }
+            self.calls.push((x.to_vec(), a));
+            g.copy_from_slice(x);
+            g[3] -= 1.4;
+            Ok(0.5 * dot(g, g))
         }
+        fn hessian(&mut self, x: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+            assert_eq!(x, COINCIDENT);
+            h.copy_from_slice(&self.hessian);
+            Some(Ok(()))
+        }
+    }
+    let run = |method| {
+        let mut p = SeparatedWell {
+            calls: Vec::new(),
+            hessian: hessian.clone(),
+        };
+        let options = Options {
+            initial_hessian: InitialHessian::Potential,
+            ..anchored(method)
+        };
+        let mut callbacks = Vec::new();
+        let out = optimize(&mut p, &[1, 1], &COINCIDENT, &options, |s| {
+            callbacks.push((s.index, s.positions.to_vec(), s.energy, s.accuracy));
+            proceed(s)
+        });
+        (out, p.calls, callbacks)
+    };
+    let (direct, direct_calls, direct_callbacks) = run(Method::AncRfo);
+    let (fallback, fallback_calls, fallback_callbacks) = run(Method::Internal);
+    assert_eq!(fallback.status, Status::Converged);
+    assert_eq!(fallback.method, Method::AncRfo);
+    assert!(fallback.steps > 0);
+    assert_eq!(fallback.hessian_evaluations, 1);
+    assert_eq!(fallback.evaluations, fallback.steps + 2);
+    assert_eq!(fallback_callbacks.len(), fallback.steps + 2);
+    assert!((fallback.positions[3] - 1.4).abs() < 1e-5);
+    assert_eq!(fallback, direct);
+    assert_eq!(fallback_calls, direct_calls);
+    assert_eq!(fallback_callbacks, direct_callbacks);
+    assert_eq!(
+        fallback_calls
+            .iter()
+            .filter(|(x, _)| x == &COINCIDENT)
+            .count(),
+        1
     );
 }
 
@@ -591,7 +699,7 @@ fn rejected_short_diis_step_retries_rfo_at_the_radius_floor() {
         acceleration: Acceleration::Gdiis,
         ..anchored(Method::AncRfo)
     };
-    let mut engine = Engine::new(&options);
+    let mut engine = Engine::new(&options, 1);
     let mut trials = Vec::new();
     let mut p = surface(|x, g, _| {
         trials.push(x.to_vec());
@@ -618,7 +726,7 @@ fn rejected_short_diis_step_retries_rfo_at_the_radius_floor() {
     for i in 0..6 {
         h[i * 6 + i] = 1.;
     }
-    let anc = Anc::build(&[1, 1], &eval.coords, &current, 0, None, Some(h)).unwrap();
+    let anc = Anc::build(&[1, 1], &eval.coords, &current, 0, None, Some(h), &options).unwrap();
     for sample in [
         point([d, 0., -d], [d, 0., 0.]),
         point([0., d, -d], [0., d, 0.]),
@@ -651,43 +759,45 @@ fn hessian_failures_preserve_the_initial_energy_and_gradient() {
             Some(self.0.take().map_or(Ok(()), Err))
         }
     }
-    for (error, status) in [
-        (Some(EvalError::Cancelled), Status::Cancelled),
-        (
-            Some(EvalError::Scf("scf".into())),
-            Status::ScfFailure("scf".into()),
-        ),
-        (
-            Some(EvalError::Failed("worker".into())),
-            Status::Failed("worker".into()),
-        ),
-        (None, Status::Failed("non-finite potential Hessian".into())),
-    ] {
-        let options = Options {
-            initial_hessian: InitialHessian::Potential,
-            ..anchored(Method::AncRfo)
-        };
-        let out = optimize(
-            &mut BrokenHessian(error),
-            &[1, 1],
-            &INITIAL,
-            &options,
-            proceed,
-        );
-        assert_eq!(out.status, status);
-        assert_eq!(
-            (out.steps, out.evaluations, out.hessian_evaluations),
-            (0, 1, 1)
-        );
-        assert_eq!(out.positions, INITIAL);
-        assert_eq!(out.gradient, INITIAL);
-        assert_eq!(out.energies, [0.5 * dot(&INITIAL, &INITIAL)]);
+    for method in [Method::AncRfo, Method::Internal] {
+        for (error, status) in [
+            (Some(EvalError::Cancelled), Status::Cancelled),
+            (
+                Some(EvalError::Scf("scf".into())),
+                Status::ScfFailure("scf".into()),
+            ),
+            (
+                Some(EvalError::Failed("worker".into())),
+                Status::Failed("worker".into()),
+            ),
+            (None, Status::Failed("non-finite potential Hessian".into())),
+        ] {
+            let options = Options {
+                initial_hessian: InitialHessian::Potential,
+                ..anchored(method)
+            };
+            let out = optimize(
+                &mut BrokenHessian(error),
+                &[1, 1],
+                &INITIAL,
+                &options,
+                proceed,
+            );
+            assert_eq!(out.status, status);
+            assert_eq!(
+                (out.steps, out.evaluations, out.hessian_evaluations),
+                (0, 1, 1)
+            );
+            assert_eq!(out.positions, INITIAL);
+            assert_eq!(out.gradient, INITIAL);
+            assert_eq!(out.energies, [0.5 * dot(&INITIAL, &INITIAL)]);
+        }
     }
 }
 
 #[test]
 fn adaptive_accuracy_uses_one_energy_scale_per_displacement() {
-    for method in [Method::AncRfo, Method::Lbfgs] {
+    for method in [Method::AncRfo, Method::Internal, Method::Lbfgs] {
         for tight_final in [false, true] {
             let energy = |x: &[f64], accuracy| {
                 let (center, offset) = match accuracy {

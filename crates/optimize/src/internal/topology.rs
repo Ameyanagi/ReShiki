@@ -22,28 +22,13 @@
 use std::collections::BTreeMap;
 
 use crate::ANGSTROM_PER_BOHR;
-use crate::model_hessian::{ALPHA, BEND, R_REF, STRETCH, TORSION, period};
+use crate::model_hessian::{
+    ALPHA, BEND, BOND_FACTOR, R_REF, STRETCH, TORSION, covalent_radius, period,
+};
 
 use super::geometry::{Vector, cross, dot, length, subtract};
 use super::primitive::{Local, bend_axes};
 
-// Picometers, indexed by atomic number minus one. These are molecular
-// single-bond radii, including the paper's predicted superheavy-element values.
-const COVALENT_PM: [u16; 118] = [
-    32, 46, // H–He
-    133, 102, 85, 75, 71, 63, 64, 67, // Li–Ne
-    155, 139, 126, 116, 111, 103, 99, 96, // Na–Ar
-    196, 171, 148, 136, 134, 122, 119, 116, 111, 110, 112, 118, 124, 121, 121, 116, 114,
-    117, // K–Kr
-    210, 185, 163, 154, 147, 138, 128, 125, 125, 120, 128, 136, 142, 140, 140, 136, 133,
-    131, // Rb–Xe
-    232, 196, 180, 163, 176, 174, 173, 172, 168, 169, 168, 167, 166, 165, 164, 170, 162, 152, 146,
-    137, 131, 129, 122, 123, 124, 133, 144, 144, 151, 145, 147, 142, // Cs–Rn
-    223, 201, 186, 175, 169, 170, 171, 172, 166, 166, 168, 168, 165, 167, 173, 176, 161, 157, 149,
-    143, 141, 134, 129, 128, 121, 122, 136, 143, 162, 175, 165, 157, // Fr–Og
-];
-
-const BOND_FACTOR: f64 = 1.3;
 const COS_FIVE_DEGREES: f64 = 0.996_194_698_091_745_5;
 const SIN_FIVE_DEGREES: f64 = 0.087_155_742_747_658_17;
 const MIN_DISTANCE: f64 = 1e-8;
@@ -199,10 +184,6 @@ impl Topology {
                 .zip(&other.locals)
                 .all(|((a, _), (b, _))| local_key(a) == local_key(b))
     }
-}
-
-fn covalent_radius(number: u8) -> f64 {
-    f64::from(COVALENT_PM[usize::from(number) - 1]) * 0.01 / ANGSTROM_PER_BOHR
 }
 
 fn lindh_rho(a: u8, b: u8, distance: f64) -> f64 {

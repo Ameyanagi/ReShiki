@@ -17,7 +17,9 @@ mod topology;
 
 use std::borrow::Cow;
 
-use crate::linalg::{dot, norm, symmetric_eigen};
+use crate::linalg::{dot, norm};
+use crate::model_hessian::contact_stretches;
+use crate::optimizer::{Options, Update, rfo};
 use chart::Chart;
 use metric::{Tangent, apply, congruence};
 use topology::Topology;
@@ -26,13 +28,21 @@ pub(crate) struct InternalModel {
     numbers: Vec<u8>,
     free: Vec<usize>,
     hbonds: bool,
+    parameters: ModelParameters,
     chart: Chart,
     /// Row i is the primitive-space eigenvector defining DLC i.
     basis: Vec<f64>,
     hessian: Vec<f64>,
+    positive_definite: bool,
     /// The last accepted point with a nonsingular Wilson matrix in this chart.
     linearized_at: Vec<f64>,
     tangent: Tangent,
+}
+
+#[derive(Clone, Copy)]
+struct ModelParameters {
+    contacts: bool,
+    curvature_floor: f64,
 }
 
 impl InternalModel {
@@ -42,12 +52,52 @@ impl InternalModel {
     /// (B_u⁺)ᵀ H_x B_u⁺ omits the gradient-weighted coordinate second derivatives
     /// (the K term), exact at a stationary point [Peng, Ayala, Schlegel &
     /// Frisch, J. Comput. Chem. **17**, 49 (1996)].
+    #[cfg(test)]
     pub(crate) fn build(
         numbers: &[u8],
         free: &[usize],
         positions: &[f64],
         hbonds: bool,
         cartesian_hessian: Option<&[f64]>,
+    ) -> Result<Self, String> {
+        Self::build_with_options(
+            numbers,
+            free,
+            positions,
+            hbonds,
+            cartesian_hessian,
+            &Options::default(),
+        )
+    }
+
+    pub(crate) fn build_with_options(
+        numbers: &[u8],
+        free: &[usize],
+        positions: &[f64],
+        hbonds: bool,
+        cartesian_hessian: Option<&[f64]>,
+        options: &Options,
+    ) -> Result<Self, String> {
+        Self::build_model(
+            numbers,
+            free,
+            positions,
+            hbonds,
+            cartesian_hessian,
+            ModelParameters {
+                contacts: options.contacts,
+                curvature_floor: options.curvature_floor,
+            },
+        )
+    }
+
+    fn build_model(
+        numbers: &[u8],
+        free: &[usize],
+        positions: &[f64],
+        hbonds: bool,
+        cartesian_hessian: Option<&[f64]>,
+        parameters: ModelParameters,
     ) -> Result<Self, String> {
         if free.is_empty() {
             return Err("TRIC requires free Cartesian components".into());
@@ -69,18 +119,37 @@ impl InternalModel {
             congruence(&tangent.dual, &restricted, free.len())
                 .ok_or("nonfinite transformed Cartesian Hessian")?
         } else {
-            chart.lindh_hessian(&basis)
+            let mut h = chart.lindh_hessian(&basis, parameters.curvature_floor);
+            if parameters.contacts {
+                for contact in contact_stretches(numbers, positions) {
+                    // dq_contact/dq_DLC = (B_u⁺)ᵀ b_contact. Add only
+                    // curvature, leaving the coordinate basis and metric intact.
+                    let row = apply(&tangent.dual, &contact.free_row(free));
+                    let n = row.len();
+                    for i in 0..n {
+                        for j in 0..=i {
+                            let value = h[i * n + j] + contact.force * row[i] * row[j];
+                            h[i * n + j] = value;
+                            h[j * n + i] = value;
+                        }
+                    }
+                }
+            }
+            h
         };
         if !hessian.iter().all(|v| v.is_finite()) {
             return Err("nonfinite internal Hessian".into());
         }
+        let positive_definite = rfo::is_positive_definite(&hessian, free.len());
         Ok(Self {
             numbers: numbers.to_vec(),
             free: free.to_vec(),
             hbonds,
+            parameters,
             chart,
             basis,
             hessian,
+            positive_definite,
             linearized_at: positions.to_vec(),
             tangent,
         })
@@ -112,18 +181,36 @@ impl InternalModel {
             .then_some(restricted)
     }
 
-    fn gradient(&self, positions: &[f64], g: &[f64]) -> Option<Vec<f64>> {
+    pub(crate) fn gradient(&self, positions: &[f64], g: &[f64]) -> Option<Vec<f64>> {
         Some(apply(
             &self.tangent_at(positions)?.dual,
             &self.free_gradient(g)?,
         ))
     }
 
-    fn displacement(&self, old: &[f64], new: &[f64]) -> Option<Vec<f64>> {
+    pub(crate) fn displacement(&self, old: &[f64], new: &[f64]) -> Option<Vec<f64>> {
         let delta = self
             .chart
             .differences(&self.chart.values(new)?, &self.chart.values(old)?);
         Some(apply(&self.basis, &delta))
+    }
+
+    pub(crate) fn hessian(&self) -> &[f64] {
+        &self.hessian
+    }
+
+    pub(crate) fn positive_definite(&self) -> bool {
+        self.positive_definite
+    }
+
+    pub(crate) fn cartesian_distance(&self, old: &[f64], new: &[f64]) -> f64 {
+        norm(
+            &self
+                .free
+                .iter()
+                .map(|&i| new[i] - old[i])
+                .collect::<Vec<_>>(),
+        )
     }
 
     /// Dense lowest augmented-Hessian eigenvector, following Banerjee et al.,
@@ -135,39 +222,31 @@ impl InternalModel {
         cartesian_gradient: &[f64],
     ) -> Option<InternalDirection<'a>> {
         let g = self.gradient(positions, cartesian_gradient)?;
-        if g.iter().all(|&x| x == 0.) {
-            return None;
-        }
-        let n = g.len();
-        let mut augmented = vec![0.; (n + 1) * (n + 1)];
-        for (i, row) in self.hessian.chunks_exact(n).enumerate() {
-            let start = i * (n + 1);
-            augmented[start..start + n].copy_from_slice(row);
-            augmented[start + n] = g[i];
-            augmented[n * (n + 1) + i] = g[i];
-        }
-        let (_, vectors) = symmetric_eigen(augmented, n + 1).ok()?;
-        // With an indefinite supplied Hessian, a negative mode perpendicular
-        // to the gradient can give a lowest root without a finite RFO step.
-        if vectors[n] == 0. {
-            return None;
-        }
-        let step: Vec<_> = vectors[..n].iter().map(|v| v / vectors[n]).collect();
+        let step = rfo::dense_step(&self.hessian, &g)?;
+        self.model_direction(positions, g, step)
+    }
+
+    pub(crate) fn model_direction<'a>(
+        &'a self,
+        positions: &'a [f64],
+        gradient: Vec<f64>,
+        step: Vec<f64>,
+    ) -> Option<InternalDirection<'a>> {
         let length = norm(&step);
-        let slope = dot(&g, &step);
+        let slope = dot(&gradient, &step);
         if !length.is_finite() || !slope.is_finite() || slope >= 0. {
             return None;
         }
         Some(InternalDirection {
             model: self,
             origin: positions,
-            gradient: g,
+            gradient,
             step,
             length,
         })
     }
 
-    /// BFGS at an accepted step. Both endpoint gradients are expressed in the
+    /// Selected secant update at an accepted step. Endpoint gradients use the
     /// same DLC chart using the reciprocal Wilson rows at their own geometry.
     pub(crate) fn update(
         &mut self,
@@ -175,6 +254,7 @@ impl InternalModel {
         new_positions: &[f64],
         old_gradient: &[f64],
         new_gradient: &[f64],
+        update: Update,
     ) {
         let Some(next) = self.tangent_at(new_positions).map(Cow::into_owned) else {
             return;
@@ -188,35 +268,16 @@ impl InternalModel {
             for (v, previous) in y.iter_mut().zip(old) {
                 *v -= previous;
             }
-            self.update_curvature(&s, &y);
+            rfo::update(
+                &mut self.hessian,
+                &mut self.positive_definite,
+                &s,
+                &mut y,
+                update,
+            );
         }
         self.tangent = next;
         self.linearized_at.copy_from_slice(new_positions);
-    }
-
-    fn update_curvature(&mut self, s: &[f64], y: &[f64]) {
-        let ys = dot(y, s);
-        if !ys.is_finite() || ys <= 1e-12 * norm(s) * norm(y) {
-            return;
-        }
-        let hs = apply(&self.hessian, s);
-        let shs = dot(s, &hs);
-        if !shs.is_finite() || shs <= 0. {
-            return;
-        }
-        let n = s.len();
-        let mut updated = self.hessian.clone();
-        for i in 0..n {
-            for j in 0..=i {
-                let h = self.hessian[i * n + j] + y[i] * y[j] / ys - hs[i] * hs[j] / shs;
-                if !h.is_finite() {
-                    return;
-                }
-                updated[i * n + j] = h;
-                updated[j * n + i] = h;
-            }
-        }
-        self.hessian = updated;
     }
 
     /// Recenter after a change of primitives or fragment orientation chart, or
@@ -237,7 +298,14 @@ impl InternalModel {
     /// If the old chart is already singular, its last usable tangent supplies
     /// the Cartesian curvature. A failed rebuild leaves the model usable.
     pub(crate) fn rebuild(&mut self, x: &[f64]) -> Result<(), String> {
-        let mut next = Self::build(&self.numbers, &self.free, x, self.hbonds, None)?;
+        let mut next = Self::build_model(
+            &self.numbers,
+            &self.free,
+            x,
+            self.hbonds,
+            None,
+            self.parameters,
+        )?;
         let old = self.tangent_at(x).unwrap_or(Cow::Borrowed(&self.tangent));
         // A = (B_new⁺)ᵀ B_oldᵀ, hence A H_old Aᵀ is the Cartesian transfer
         // without materializing a second full Cartesian Hessian.
@@ -249,6 +317,7 @@ impl InternalModel {
             .collect();
         next.hessian = congruence(&map, &self.hessian, self.dimension())
             .ok_or("nonfinite curvature after TRIC rebuild")?;
+        next.positive_definite = self.positive_definite;
         *self = next;
         Ok(())
     }
@@ -304,7 +373,7 @@ impl InternalDirection<'_> {
         &self,
         positions: &[f64],
         radius: f64,
-    ) -> Option<(Vec<f64>, f64, f64)> {
+    ) -> Option<crate::optimizer::TrialStep> {
         if positions != self.origin || !radius.is_finite() || radius <= 0. {
             return None;
         }
@@ -322,18 +391,19 @@ impl InternalDirection<'_> {
                 return None;
             }
         }
-        let quadratic = dot(&step, &apply(&self.model.hessian, &step));
-        let prediction = (dot(&self.gradient, &step) + 0.5 * quadratic) / (1. + length * length);
-        if !prediction.is_finite() || prediction >= 0. {
-            return None;
-        }
+        let prediction = rfo::prediction(&self.model.hessian, &self.gradient, &step)?;
         let cartesian = self
             .model
             .free
             .iter()
             .map(|&i| trial.positions[i] - positions[i])
             .collect();
-        Some((cartesian, prediction, length))
+        Some(crate::optimizer::TrialStep {
+            cartesian,
+            predicted: prediction,
+            length,
+            converged_transform: trial.converged,
+        })
     }
 }
 

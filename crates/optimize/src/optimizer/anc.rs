@@ -8,8 +8,9 @@ pub(super) use diis::History;
 use crate::linalg::{dot, norm, symmetric_eigen};
 use crate::model_hessian::model_hessian;
 
-use super::{Coordinates, Point, Update};
+use super::{Coordinates, Options, Point, TrialStep, Update};
 
+#[cfg(test)]
 const CURVATURE_FLOOR: f64 = 1e-3;
 
 pub(super) struct Anc {
@@ -17,6 +18,7 @@ pub(super) struct Anc {
     modes: Vec<f64>,
     hessian: Vec<f64>,
     nfree: usize,
+    curvature_floor: f64,
     // Bofill can lose positive definiteness, invalidating Davidson's unique
     // negative-root certificate. Keep the fast solve while it is guaranteed.
     positive_definite: bool,
@@ -32,7 +34,7 @@ pub(super) struct RfoDirection {
 
 impl RfoDirection {
     /// Scale the same eigenvector on all retries from this accepted point.
-    pub fn restricted(&self, radius: f64) -> Option<(Vec<f64>, f64, f64)> {
+    pub fn restricted(&self, radius: f64) -> Option<TrialStep> {
         let scale = (radius / self.length).min(1.);
         let length = self.length.min(radius);
         let predicted = scale * (self.linear + scale * self.quadratic) / (1. + length * length);
@@ -40,7 +42,12 @@ impl RfoDirection {
             return None;
         }
         let cart = self.cartesian.iter().map(|x| scale * x).collect();
-        Some((cart, predicted, length))
+        Some(TrialStep {
+            cartesian: cart,
+            predicted,
+            length,
+            converged_transform: true,
+        })
     }
 }
 
@@ -59,11 +66,12 @@ impl Anc {
         built_at: usize,
         previous: Option<&Self>,
         exact: Option<Vec<f64>>,
+        options: &Options,
     ) -> Result<Self, String> {
         let is_exact = exact.is_some();
         let full = match exact {
             Some(full) => full,
-            None => model_hessian(numbers, &point.positions)?,
+            None => model_hessian(numbers, &point.positions, options.contacts)?,
         };
         let nfree = coords.indices.len();
         let mut h = if nfree == point.positions.len() {
@@ -133,12 +141,13 @@ impl Anc {
             // Soft and disconnected-fragment directions still need a finite
             // restoring curvature for the initial RFO step.
             hessian[i * dim + i] =
-                if is_exact { values[i].abs() } else { values[i] }.max(CURVATURE_FLOOR);
+                if is_exact { values[i].abs() } else { values[i] }.max(options.curvature_floor);
         }
         let mut model = Self {
             modes,
             hessian,
             nfree,
+            curvature_floor: options.curvature_floor,
             positive_definite: true,
             built_at,
         };
@@ -160,12 +169,12 @@ impl Anc {
         let mut row_product = vec![0.; dim];
         for (i, t) in overlap.chunks_exact(dim).enumerate() {
             for (j, row) in old.hessian.chunks_exact(dim).enumerate() {
-                row_product[j] = dot(t, row) - CURVATURE_FLOOR * t[j];
+                row_product[j] = dot(t, row) - self.curvature_floor * t[j];
             }
             for (j, u) in overlap.chunks_exact(dim).take(i + 1).enumerate() {
                 let mut value = dot(&row_product, u);
                 if i == j {
-                    value += CURVATURE_FLOOR;
+                    value += self.curvature_floor;
                 }
                 if !value.is_finite() {
                     return Err("non-finite curvature after ANC rebuild".into());
@@ -193,7 +202,6 @@ impl Anc {
 
     /// Solve the augmented model for an ANC gradient.
     pub fn rfo_step(&self, g: &[f64]) -> Option<Vec<f64>> {
-        let n = g.len();
         if g.iter().all(|&v| v == 0.) {
             return None;
         }
@@ -208,7 +216,7 @@ impl Anc {
         }?;
         // Banerjee et al., J. Phys. Chem. 89, 52 (1985). Scaling the last
         // coordinate to one makes the last eigen-equation g·s = λ < 0.
-        Some(v[..n].iter().map(|x| x / v[n]).collect())
+        super::rfo::eigenvector_step(&v, g)
     }
 
     /// Convert an ANC displacement using the current rational model.
@@ -253,92 +261,13 @@ impl Anc {
     pub fn update(&mut self, displacement: &[f64], gradient_change: &[f64], update: Update) {
         let s = self.to_anc(displacement);
         let mut y = self.to_anc(gradient_change);
-        let n = s.len();
-        let mut ys = dot(&y, &s);
-        if update == Update::Bfgs && (!ys.is_finite() || ys <= 1e-12 * norm(&y) * norm(&s)) {
-            return;
-        }
-        let hs: Vec<_> = self
-            .hessian
-            .chunks_exact(n)
-            .map(|row| dot(row, &s))
-            .collect();
-        let shs = dot(&s, &hs);
-        if update == Update::Bofill {
-            self.bofill(&s, &y, &hs, ys, shs);
-            return;
-        }
-        if !shs.is_finite() || shs <= 0. {
-            return;
-        }
-        if update == Update::DampedBfgs {
-            if !ys.is_finite() {
-                return;
-            }
-            // Nocedal & Wright, Numerical Optimization, Procedure 18.2.
-            // Replacing y by r ensures s·r >= 0.2 s·Hs.
-            if ys < 0.2 * shs {
-                let theta = 0.8 * shs / (shs - ys);
-                for (yi, hsi) in y.iter_mut().zip(&hs) {
-                    *yi = theta * *yi + (1. - theta) * hsi;
-                }
-                ys = dot(&y, &s);
-            }
-            if !ys.is_finite() || ys <= 0. {
-                return;
-            }
-        }
-        for (i, row) in self.hessian.chunks_exact_mut(n).enumerate() {
-            for (j, x) in row.iter_mut().enumerate() {
-                *x += y[i] * y[j] / ys - hs[i] * hs[j] / shs;
-            }
-        }
-    }
-
-    fn bofill(&mut self, s: &[f64], y: &[f64], hs: &[f64], ys: f64, shs: f64) {
-        // Farkas & Schlegel, J. Chem. Phys. 111, 10806 (1999),
-        // doi:10.1063/1.480484: minimization blend of SR1 and BFGS,
-        // with phi = |(y − Hs)·s| / (|y − Hs| |s|).
-        let residual: Vec<_> = y.iter().zip(hs).map(|(yi, hsi)| yi - hsi).collect();
-        let snorm = norm(s);
-        let rnorm = norm(&residual);
-        if !(snorm.is_finite() && snorm > 0. && rnorm.is_finite() && rnorm > 0.) {
-            return;
-        }
-        let rs = dot(&residual, s);
-        let sr1 = rs.is_finite() && rs.abs() > 1e-12 * rnorm * snorm;
-        let bfgs = ys.is_finite()
-            && ys.abs() > 1e-12 * norm(y) * snorm
-            && shs.is_finite()
-            && shs.abs() > 1e-12 * norm(hs) * snorm;
-        // If one component is numerically undefined, use the other in full;
-        // both component updates satisfy the same secant equation.
-        let phi = match (sr1, bfgs) {
-            (true, true) => ((rs.abs() / rnorm) / snorm).min(1.),
-            (true, false) => 1.,
-            (false, true) => 0.,
-            (false, false) => return,
-        };
-        let n = s.len();
-        for i in 0..n {
-            for j in 0..=i {
-                let mut value = self.hessian[i * n + j];
-                if phi > 0. {
-                    // Cancel |r·s| analytically to avoid a small SR1 divisor.
-                    value += if bfgs {
-                        rs.signum() * (residual[i] / rnorm) * (residual[j] / snorm)
-                    } else {
-                        residual[i] * residual[j] / rs
-                    };
-                }
-                if phi < 1. {
-                    value += (1. - phi) * (y[i] * y[j] / ys - hs[i] * hs[j] / shs);
-                }
-                self.hessian[i * n + j] = value;
-                self.hessian[j * n + i] = value;
-            }
-        }
-        self.positive_definite &= (phi == 0. || rs > 0.) && (phi == 1. || (ys > 0. && shs > 0.));
+        super::rfo::update(
+            &mut self.hessian,
+            &mut self.positive_definite,
+            &s,
+            &mut y,
+            update,
+        );
     }
 }
 
@@ -356,6 +285,7 @@ mod tests {
             modes,
             hessian,
             nfree: n,
+            curvature_floor: CURVATURE_FLOOR,
             positive_definite: true,
             built_at: 0,
         }
@@ -394,13 +324,13 @@ mod tests {
         history.push(&anc, &diis_sample([0.; 3], [0., 0., 0.001]), &coords);
         let direction = history.direction(&anc, Acceleration::Gdiis, 0.01).unwrap();
         close(&direction.cartesian, &[0., 0., -0.001]);
-        assert!(direction.restricted(0.01).unwrap().1 < 0.);
+        assert!(direction.restricted(0.01).unwrap().predicted < 0.);
         for i in 0..3 {
             anc.hessian[3 * i + i] = 2.;
         }
         let direction = history.direction(&anc, Acceleration::Gdiis, 0.01).unwrap();
         close(&direction.cartesian, &[1e-3 / 6., 1e-3 / 6., -5e-3 / 6.]);
-        assert!(direction.restricted(0.01).unwrap().1 < 0.);
+        assert!(direction.restricted(0.01).unwrap().predicted < 0.);
         history.clear();
         assert!(history.direction(&anc, Acceleration::Gdiis, 0.01).is_none());
     }
@@ -515,7 +445,7 @@ mod tests {
                 -0.02 / 3. + correction,
             ],
         );
-        assert!(direction.restricted(0.1).unwrap().1 < 0.);
+        assert!(direction.restricted(0.1).unwrap().predicted < 0.);
     }
 
     #[test]
@@ -530,7 +460,7 @@ mod tests {
         }
         let direction = history.direction(&anc, Acceleration::Gediis, 0.1).unwrap();
         close(&direction.cartesian, &[-0.01, 0., 0.]);
-        assert!(direction.restricted(0.1).unwrap().1 < 0.);
+        assert!(direction.restricted(0.1).unwrap().predicted < 0.);
     }
 
     fn cartesian_hessian(anc: &Anc) -> Vec<f64> {
@@ -568,7 +498,16 @@ mod tests {
         // Fixed/free couplings are excluded, rather than Schur-complemented.
         exact[3] = 10.;
         exact[18] = 10.;
-        let anc = Anc::build(&z, &coords, &point, 0, None, Some(exact)).unwrap();
+        let anc = Anc::build(
+            &z,
+            &coords,
+            &point,
+            0,
+            None,
+            Some(exact),
+            &Options::default(),
+        )
+        .unwrap();
         close(
             &cartesian_hessian(&anc),
             &[4., 0., 0., 0., CURVATURE_FLOOR, 0., 0., 0., 2.],
@@ -593,7 +532,16 @@ mod tests {
         for (i, h) in [-4., 8., 9., -4., 10., 11.].into_iter().enumerate() {
             exact[6 * i + i] = h;
         }
-        let anc = Anc::build(&z, &coords, &point, 0, None, Some(exact)).unwrap();
+        let anc = Anc::build(
+            &z,
+            &coords,
+            &point,
+            0,
+            None,
+            Some(exact),
+            &Options::default(),
+        )
+        .unwrap();
         assert_eq!(anc.modes.len(), 6);
         close(&anc.hessian, &[4.]);
         assert!(point.rigid.iter().all(|u| dot(&anc.modes, u).abs() < 1e-12));
@@ -647,7 +595,7 @@ mod tests {
         assert!(!negative.positive_definite);
         assert!(symmetric_eigen(negative.hessian.clone(), 2).unwrap().0[0] < 0.);
         let direction = negative.direction(&[0.1, -0.2]).unwrap();
-        assert!(direction.restricted(0.3).unwrap().1 < 0.);
+        assert!(direction.restricted(0.3).unwrap().predicted < 0.);
     }
 
     #[test]
@@ -690,7 +638,7 @@ mod tests {
             gradient: vec![0.; 12],
             active_gradient: vec![0.; 12],
         };
-        let model = Anc::build(&z, &coords, &point, 0, None, None).unwrap();
+        let model = Anc::build(&z, &coords, &point, 0, None, None, &Options::default()).unwrap();
         assert_eq!(point.rigid.len(), 6);
         assert_eq!(model.modes.len(), 6 * 12);
         for (i, mode) in model.modes.as_chunks::<12>().0.iter().enumerate() {
@@ -715,6 +663,7 @@ mod tests {
                 modes: vec![0., 1., -1., 0.],
                 hessian: vec![curvature, 0., 0., 2.],
                 nfree: 2,
+                curvature_floor: CURVATURE_FLOOR,
                 positive_definite: curvature > 0.,
                 built_at: 0,
             };
@@ -722,7 +671,12 @@ mod tests {
             let slope = dot(&gradient, &direction.cartesian);
             assert!(slope < 0.);
             assert!((slope - root).abs() < 1e-12);
-            let (step, predicted, length) = direction.restricted(0.1).unwrap();
+            let TrialStep {
+                cartesian: step,
+                predicted,
+                length,
+                ..
+            } = direction.restricted(0.1).unwrap();
             assert_eq!(length, 0.1);
             assert!(predicted < 0. && dot(&gradient, &step) < 0.);
         }
@@ -734,6 +688,7 @@ mod tests {
             modes: vec![1., 0., 0., 0., 1., 0.],
             hessian: vec![2., 1., 1., 4.],
             nfree: 3,
+            curvature_floor: CURVATURE_FLOOR,
             positive_definite: true,
             built_at: 0,
         };
@@ -741,10 +696,75 @@ mod tests {
             modes: vec![0., 1., 0., 0., 0., 1.],
             hessian: vec![0.; 4],
             nfree: 3,
+            curvature_floor: CURVATURE_FLOOR,
             positive_definite: true,
             built_at: 30,
         };
-        new.carry_curvature(&old).unwrap();
-        assert_eq!(new.hessian, [4., 0., 0., CURVATURE_FLOOR]);
+        for floor in [CURVATURE_FLOOR, 0.007] {
+            new.curvature_floor = floor;
+            new.carry_curvature(&old).unwrap();
+            assert_eq!(new.hessian, [4., 0., 0., floor]);
+        }
+    }
+    #[test]
+    fn configurable_floor_applies_to_model_and_potential_seeds() {
+        let z = [18, 18];
+        let positions = vec![0., 0., 0., 15., 0., 0.];
+        let coords = Coordinates::new(&z, &positions, &[0]).unwrap();
+        let point = Point {
+            rigid: coords.rigid(&positions),
+            positions,
+            energy: 0.,
+            gradient: vec![0.; 6],
+            active_gradient: vec![0.; 3],
+        };
+        let options = Options {
+            curvature_floor: 0.007,
+            ..Options::default()
+        };
+        let model = Anc::build(&z, &coords, &point, 0, None, None, &options).unwrap();
+        close(
+            &cartesian_hessian(&model),
+            &[0.007, 0., 0., 0., 0.007, 0., 0., 0., 0.007],
+        );
+        let mut exact = vec![0.; 36];
+        exact[3 * 6 + 3] = -0.002;
+        exact[4 * 6 + 4] = 0.004;
+        exact[5 * 6 + 5] = -2.;
+        let model = Anc::build(&z, &coords, &point, 0, None, Some(exact), &options).unwrap();
+        close(
+            &cartesian_hessian(&model),
+            &[0.007, 0., 0., 0., 0.007, 0., 0., 0., 2.],
+        );
+    }
+
+    #[test]
+    fn contact_curvature_reaches_the_projected_anc_model() {
+        let z = [18, 18];
+        let positions = vec![0., 0., 0., 2. * 1.88 / crate::ANGSTROM_PER_BOHR, 0., 0.];
+        let coords = Coordinates::new(&z, &positions, &[]).unwrap();
+        let point = Point {
+            rigid: coords.rigid(&positions),
+            positions,
+            energy: 0.,
+            gradient: vec![0.; 6],
+            active_gradient: vec![0.; 6],
+        };
+        let base = Anc::build(&z, &coords, &point, 0, None, None, &Options::default()).unwrap();
+        let with = Anc::build(
+            &z,
+            &coords,
+            &point,
+            0,
+            None,
+            None,
+            &Options {
+                contacts: true,
+                ..Options::default()
+            },
+        )
+        .unwrap();
+        close(&base.hessian, &[CURVATURE_FLOOR]);
+        close(&with.hessian, &[0.002]);
     }
 }

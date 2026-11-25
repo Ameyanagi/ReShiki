@@ -9,14 +9,13 @@
 pub mod conformers;
 mod linalg;
 
-#[allow(dead_code)]
 mod internal;
 mod model_hessian;
 mod optimizer;
 
 pub use optimizer::{
-    Acceleration, Criteria, InitialHessian, Level, Method, Options, Outcome, Status, Step, Update,
-    optimize,
+    Acceleration, Criteria, InitialHessian, Level, Method, Options, Outcome, Rebuild, Status, Step,
+    Trust, Update, optimize,
 };
 
 /// Hartree in kcal/mol (CODATA 2022 hartree, thermochemical calorie).

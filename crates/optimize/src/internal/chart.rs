@@ -70,11 +70,11 @@ impl Chart {
         rows.iter().all(|v| v.is_finite()).then_some(rows)
     }
 
-    pub(super) fn lindh_hessian(&self, basis: &[f64]) -> Vec<f64> {
-        // A weak 0.001 Eh/bohr² prior on each centroid and each radius-scaled
+    pub(super) fn lindh_hessian(&self, basis: &[f64], curvature_floor: f64) -> Vec<f64> {
+        // A weak configurable prior on each centroid and each radius-scaled
         // rotation makes rigid fragment motions usable from the first RFO step.
         let mut force: Vec<_> = self.topology.locals.iter().map(|(_, k)| *k).collect();
-        force.resize(self.nprim, 0.001);
+        force.resize(self.nprim, curvature_floor);
         let dim = basis.len() / self.nprim;
         let mut h = vec![0.; dim * dim];
         for (i, u) in basis.chunks_exact(self.nprim).enumerate() {

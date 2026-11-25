@@ -39,7 +39,16 @@ fn small_gradient_lindh_anc_with_bfgs_updates_converges_without_dense_fallback()
         energy: 0.,
         positions,
     };
-    let mut anc = Anc::build(&numbers, &coordinates, &point, 0, None, None).unwrap();
+    let mut anc = Anc::build(
+        &numbers,
+        &coordinates,
+        &point,
+        0,
+        None,
+        None,
+        &crate::optimizer::Options::default(),
+    )
+    .unwrap();
     let dim = anc.hessian.len().isqrt();
     assert!(dim > MAX_SUBSPACE);
 
@@ -51,7 +60,7 @@ fn small_gradient_lindh_anc_with_bfgs_updates_converges_without_dense_fallback()
         .enumerate()
         .map(|(i, x)| x + 0.4 * (0.71 * i as f64 + 0.3).sin())
         .collect();
-    let target = model_hessian(&numbers, &nearby).unwrap();
+    let target = model_hessian(&numbers, &nearby, false).unwrap();
     for update in 0..12 {
         let displacement: Vec<_> = (0..point.positions.len())
             .map(|i| 0.01 * ((i + 1) as f64 * (update + 1) as f64 * 0.37).sin())

@@ -8,6 +8,7 @@
 
 use super::{InternalModel, fragment::Fragment, primitive::Local};
 use crate::linalg::{dot, norm, symmetric_eigen};
+use crate::optimizer::Update;
 use std::f64::consts::{PI, TAU};
 
 type Molecule = (Vec<u8>, Vec<f64>);
@@ -791,7 +792,13 @@ fn accepted_bfgs_update_satisfies_the_secant_equation_and_keeps_positive_curvatu
     let displacement = model.displacement(&x, &next.positions).unwrap();
     let y: Vec<_> = displacement.iter().map(|s| 3.0 * s).collect();
     let new_gradient = cartesian_gradient(&model, &next.positions, &free, &y);
-    model.update(&x, &next.positions, &vec![0.0; x.len()], &new_gradient);
+    model.update(
+        &x,
+        &next.positions,
+        &vec![0.0; x.len()],
+        &new_gradient,
+        Update::Bfgs,
+    );
     let hs: Vec<_> = model
         .hessian
         .chunks_exact(model.dimension())
@@ -803,7 +810,13 @@ fn accepted_bfgs_update_satisfies_the_secant_equation_and_keeps_positive_curvatu
     let before = model.hessian.clone();
     let negative_y: Vec<_> = displacement.iter().map(|s| -s).collect();
     let negative_gradient = cartesian_gradient(&model, &next.positions, &free, &negative_y);
-    model.update(&x, &next.positions, &vec![0.0; x.len()], &negative_gradient);
+    model.update(
+        &x,
+        &next.positions,
+        &vec![0.0; x.len()],
+        &negative_gradient,
+        Update::Bfgs,
+    );
     assert_eq!(model.hessian, before);
 }
 
@@ -823,7 +836,13 @@ fn rebuild_preserves_learned_cartesian_curvature_through_chart_and_metric_change
         .map(|(i, s)| (1.0 + i as f64 / 3.0) * s)
         .collect();
     let new_gradient = cartesian_gradient(&model, &next.positions, &free, &y);
-    model.update(&x, &next.positions, &vec![0.0; x.len()], &new_gradient);
+    model.update(
+        &x,
+        &next.positions,
+        &vec![0.0; x.len()],
+        &new_gradient,
+        Update::Bfgs,
+    );
     let before = physical_hessian(&model, &next.positions, &free);
     model.rebuild(&next.positions).unwrap();
     let after = physical_hessian(&model, &next.positions, &free);
@@ -938,7 +957,12 @@ fn rfo_restriction_returns_descent_with_negative_prediction_and_internal_radius(
             );
             let direction = model.direction(&x, &gradient).unwrap();
             for radius in [1e-4, 1e-3, 0.01] {
-                let (displacement, predicted, length) = direction.restricted(&x, radius).unwrap();
+                let crate::optimizer::TrialStep {
+                    cartesian: displacement,
+                    predicted,
+                    length,
+                    ..
+                } = direction.restricted(&x, radius).unwrap();
                 assert!(predicted.is_finite() && predicted < 0.0);
                 assert_eq!(displacement.len(), free.len());
                 let mut positions = x.clone();
@@ -969,4 +993,137 @@ fn rfo_restriction_returns_descent_with_negative_prediction_and_internal_radius(
             }
         }
     }
+}
+
+#[test]
+fn selected_updates_apply_endpoint_secants_in_the_nonlinear_internal_chart() {
+    let (numbers, x) = water_dimer();
+    let free = free_components(&x, &[0]);
+    let mut state = 0xb121_658c_78f4_e902;
+    let requested = random_vector(free.len(), 1e-3, &mut state);
+    for update in [Update::Bfgs, Update::DampedBfgs, Update::Bofill] {
+        let mut model = InternalModel::build(&numbers, &free, &x, true, None).unwrap();
+        let next = model.back_transform(&x, &requested).unwrap();
+        assert!(next.converged);
+        let s = model.displacement(&x, &next.positions).unwrap();
+        let y: Vec<_> = s.iter().map(|s| -s).collect();
+        let gradient = cartesian_gradient(&model, &next.positions, &free, &y);
+        let before = model.hessian.clone();
+        let hs: Vec<_> = before
+            .chunks_exact(s.len())
+            .map(|row| dot(row, &s))
+            .collect();
+        model.update(&x, &next.positions, &vec![0.; x.len()], &gradient, update);
+        if update == Update::Bfgs {
+            assert_eq!(model.hessian, before);
+            continue;
+        }
+        let actual: Vec<_> = model
+            .hessian
+            .chunks_exact(s.len())
+            .map(|row| dot(row, &s))
+            .collect();
+        let expected = if update == Update::DampedBfgs {
+            let shs = dot(&s, &hs);
+            let theta = 0.8 * shs / (shs - dot(&s, &y));
+            y.iter()
+                .zip(&hs)
+                .map(|(y, hs)| theta * y + (1. - theta) * hs)
+                .collect::<Vec<_>>()
+        } else {
+            y
+        };
+        assert!(maximum_error(&actual, &expected) < 1e-9);
+        let eigenvalues = symmetric_eigen(model.hessian.clone(), model.dimension())
+            .unwrap()
+            .0;
+        assert_eq!(eigenvalues[0] > 0., update == Update::DampedBfgs);
+        assert_eq!(model.positive_definite, update == Update::DampedBfgs);
+        assert_eq!(&next.positions[..3], &x[..3]);
+    }
+}
+
+#[test]
+fn contact_curvature_preserves_the_dlc_metric_and_matches_the_free_cartesian_form() {
+    use crate::model_hessian::contact_stretches;
+    use crate::optimizer::Options;
+    let (numbers, x) = water_dimer();
+    let free = free_components(&x, &[0]);
+    let base = InternalModel::build(&numbers, &free, &x, false, None).unwrap();
+    let augmented = InternalModel::build_with_options(
+        &numbers,
+        &free,
+        &x,
+        false,
+        None,
+        &Options {
+            contacts: true,
+            ..Options::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(base.basis, augmented.basis);
+    assert_eq!(base.tangent.b, augmented.tangent.b);
+    assert_eq!(base.chart.fragments.len(), augmented.chart.fragments.len());
+    let n = free.len();
+    for i in 0..n {
+        for j in 0..n {
+            assert_eq!(augmented.hessian[i * n + j], augmented.hessian[j * n + i]);
+        }
+    }
+    let mut state = 0xf1a7_12c4_69a1_380e;
+    let dx = random_vector(n, 0.01, &mut state);
+    let dq = super::metric::apply(&base.tangent.b, &dx);
+    let delta_h: Vec<_> = augmented
+        .hessian
+        .iter()
+        .zip(&base.hessian)
+        .map(|(a, b)| a - b)
+        .collect();
+    let actual = dot(&dq, &super::metric::apply(&delta_h, &dq));
+    let contacts = contact_stretches(&numbers, &x);
+    assert!(!contacts.is_empty());
+    let expected: f64 = contacts
+        .iter()
+        .map(|c| c.force * dot(&c.free_row(&free), &dx).powi(2))
+        .sum();
+    assert!(expected > 0.);
+    close(actual, expected, 1e-12);
+    assert!(
+        augmented
+            .hessian
+            .iter()
+            .zip(&base.hessian)
+            .any(|(a, b)| (a - b).abs() > 1e-8)
+    );
+}
+
+#[test]
+fn fragment_prior_uses_the_requested_curvature_floor_and_potential_curvature_is_unchanged() {
+    use crate::optimizer::Options;
+    let numbers = [18, 18];
+    let x = [0., 0., 0., 15., 0., 0.];
+    let free = [3, 4, 5];
+    let options = Options {
+        curvature_floor: 0.007,
+        contacts: true,
+        ..Options::default()
+    };
+    let mut model =
+        InternalModel::build_with_options(&numbers, &free, &x, false, None, &options).unwrap();
+    assert_eq!(model.hessian, [0.007, 0., 0., 0., 0.007, 0., 0., 0., 0.007]);
+    model.rebuild(&[0., 0., 0., 16., 1., 0.]).unwrap();
+    assert_eq!(model.parameters.curvature_floor, options.curvature_floor);
+    assert!(model.parameters.contacts);
+    assert_eq!(model.hessian, [0.007, 0., 0., 0., 0.007, 0., 0., 0., 0.007]);
+
+    // At a live contact, optional model curvature is not added to a supplied
+    // potential Hessian, which already describes that interaction.
+    let x = [0., 0., 0., 2. * 1.88 / crate::ANGSTROM_PER_BOHR, 0., 0.];
+    let exact = [2., 0., 0., 0., 3., 0., 0., 0., 4.];
+    let with =
+        InternalModel::build_with_options(&numbers, &free, &x, false, Some(&exact), &options)
+            .unwrap();
+    let without = InternalModel::build(&numbers, &free, &x, false, Some(&exact)).unwrap();
+    assert_eq!(with.hessian, without.hessian);
 }
