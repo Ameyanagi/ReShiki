@@ -88,7 +88,13 @@ pub(crate) struct RunInfo {
 /// "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1 · 25 Nov 2026 14:03".
 pub(crate) fn method_line(result: &CalcResult, frame: &Frame, info: Option<&RunInfo>) -> String {
     let provenance = &result.provenance;
-    let mut parts = vec![provenance.method.clone().unwrap_or_else(|| "xTB".into())];
+    // Files from other programs may not name their method.
+    let mut parts: Vec<String> = provenance
+        .method
+        .clone()
+        .or_else(|| matches!(result.settings, Settings::Xtb(_)).then(|| "xTB".into()))
+        .into_iter()
+        .collect();
     parts.push(match &provenance.program_version {
         Some(version) => format!("{} {version}", provenance.program),
         None => provenance.program.clone(),

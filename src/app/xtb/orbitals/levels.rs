@@ -116,7 +116,7 @@ pub(crate) fn columns(orbitals: &Orbitals) -> Vec<Column> {
         occupations: occupations.to_vec(),
         occupied: count(occupations, energies.len(), closed),
     };
-    match &orbitals.beta {
+    let mut columns = match &orbitals.beta {
         Beta::Restricted => vec![column(
             Spin::Alpha,
             "",
@@ -159,7 +159,11 @@ pub(crate) fn columns(orbitals: &Orbitals) -> Vec<Column> {
                 false,
             ),
         ],
-    }
+    };
+    // A spectrum without levels (or with energies too large to draw) has
+    // nothing to choose.
+    columns.retain(|c| !c.energies_ev.is_empty() && c.energies_ev.iter().all(|e| e.is_finite()));
+    columns
 }
 
 /// The level diagram: an energy axis, one column per spin, occupied levels
@@ -169,7 +173,6 @@ pub(crate) struct Diagram {
     pub columns: Vec<Column>,
     /// Chosen column and level.
     pub selected: Option<(usize, usize)>,
-    pub gap_ev: Option<f64>,
     pub live: bool,
 }
 
@@ -233,9 +236,12 @@ impl Diagram {
                 let members: Vec<usize> =
                     (index.max(*group.start())..=(*group.end()).min(*window.end())).collect();
                 // Degenerate levels side by side, sharing the column's width.
-                let width = (Self::LINE - 4. * (members.len() - 1) as f32) / members.len() as f32;
+                // Up to 4 px apart, closer for large groups so none vanishes.
+                let count = members.len() as f32;
+                let gap = (Self::LINE / (2. * count)).min(4.);
+                let width = (Self::LINE - gap * (count - 1.)) / count;
                 for (k, &member) in members.iter().enumerate() {
-                    let x0 = left + k as f32 * (width + 4.);
+                    let x0 = left + k as f32 * (width + gap);
                     placed.push(Placed {
                         column: c,
                         index: member,
@@ -342,8 +348,9 @@ impl canvas::Program<Message> for Diagram {
             .into_iter()
             .find(|step| (hi - lo) / step <= 6.)
             .unwrap_or(100.);
-        let mut tick = (lo / step).ceil() * step;
-        while tick <= hi {
+        let first = (lo / step).ceil() as i64;
+        for tick in (first..).take_while(|t| *t as f64 * step <= hi).take(12) {
+            let tick = tick as f64 * step;
             let at = y(tick);
             frame.stroke(
                 &canvas::Path::line(Point::new(Self::AXIS - 4., at), Point::new(Self::AXIS, at)),
@@ -357,7 +364,6 @@ impl canvas::Program<Message> for Diagram {
                 muted,
                 true,
             );
-            tick += step;
         }
         label(
             &mut frame,
@@ -445,8 +451,9 @@ impl canvas::Program<Message> for Diagram {
                     );
                 }
             }
-            if let (Some(homo), Some(lumo), Some(gap)) = (column.homo(), column.lumo(), self.gap_ev)
-            {
+            // The gap of the first column, as drawn (an open shell's α).
+            if let (Some(homo), Some(lumo)) = (column.homo(), column.lumo()) {
+                let gap = column.energies_ev[lumo] - column.energies_ev[homo];
                 let (top, bottom) = (y(column.energies_ev[lumo]), y(column.energies_ev[homo]));
                 let x = right + 30.;
                 frame.stroke(

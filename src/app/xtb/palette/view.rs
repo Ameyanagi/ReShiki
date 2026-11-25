@@ -116,12 +116,14 @@ impl App {
         }
 
         let method = shown.method();
-        let mut content = column![
-            header,
-            text(method.clone()).size(12),
-            line(results::LIMITATIONS, Tone::Muted),
-        ]
-        .spacing(4);
+        let mut content = column![header, text(method.clone()).size(12)].spacing(4);
+        // The semi-empirical caveat is about xTB, not imported results.
+        if matches!(
+            shown.stored.result.settings,
+            reshiki::qcdata::Settings::Xtb(_)
+        ) {
+            content = content.push(line(results::LIMITATIONS, Tone::Muted));
+        }
         if let Some(card) = failure {
             content = content.push(card);
         }
@@ -134,7 +136,7 @@ impl App {
         let body = match view {
             View::Summary => summary(&shown, inspector),
             View::Steps => self.xtb_steps(&shown, inspector),
-            View::Orbitals => self.xtb_orbitals_tab(&shown, inspector),
+            View::Orbitals => self.xtb_orbitals_tab(inspector),
             View::Log => log(&shown, &method),
         };
         let body: Element<'_, Message> = if inspector {

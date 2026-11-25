@@ -4,13 +4,14 @@ use reshiki::models3d::surface::orbital;
 use reshiki::qcdata::{self, BasisSet, CalcResult, Frame, Settings};
 use std::sync::Arc;
 
-/// Every orbital of `result` at its own frame, from the worker, in the
+/// Orbitals `rows` of `result` at its own frame, from the worker, in the
 /// canonical contract. The engine is pinned, so the levels match the
 /// stored ones; a mismatch is reported rather than shown.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn orbitals(
     result: &CalcResult,
     frame: &Frame,
+    rows: Vec<u32>,
     cancel: &reshiki_xtb_worker::client::Cancel,
 ) -> Result<qcdata::Orbitals, String> {
     use reshiki_xtb_worker::client::{Limits, Session};
@@ -53,7 +54,7 @@ pub(super) fn orbitals(
     let computed = session
         .compute(
             &Compute {
-                orbitals: OrbitalOutput::All,
+                orbitals: OrbitalOutput::Rows(rows),
                 ..Compute::default()
             },
             cancel,
