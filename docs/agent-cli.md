@@ -31,6 +31,7 @@ has every help text as the program prints it.
 | [predict-nmr](#predict-nmr)   | Print predicted NMR shifts as one JSON line                       |
 | [export-input](#export-input) | Write a quantum-chemistry input from an XYZ structure             |
 | [name](#name)                 | Print the systematic name of a structure                          |
+| [calc](#calc)                 | Print a GFN2-xTB energy and optional gradient as one JSON line    |
 | [pieces](#pieces)             | Check or render equipment piece files                             |
 | [info](#info)                 | Print versions, limits and formats as one JSON line               |
 | [tools](#tools)               | Print the agent tool catalog as one JSON line                     |
@@ -630,9 +631,12 @@ limits and formats under `value`. `cli`, beside `value`, lists the formats the
 command line reads and writes. `grants` and `files` describe the file tools of
 the MCP server; the command line uses neither.
 
-`reshiki --version` (or `reshiki --cli --version`) prints only the
-application version, such as `reshiki 0.17.1`, and exits without opening a
-window.
+`reshiki --version` (or `reshiki --cli --version`) prints the application
+version, such as `reshiki 0.17.1`, followed by an xTB status line, and exits
+without opening a window. The second line is `xTB: not included in this build`
+or `xTB: included (axtb VERSION, LICENSE, source URL)`, with the engine version,
+license and pinned fork source URL. See [xTB licensing and packaging](xtb-licensing.md)
+for the builds that include it.
 
 <details>
 <summary>Output of <code>reshiki --cli info</code>, shown on several lines</summary>
@@ -838,6 +842,33 @@ several lines:
 }
 ```
 
+## calc
+
+```text
+reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz
+```
+
+Runs one GFN2-xTB calculation through the [isolated worker](xtb-worker.md)
+on the first frame of an XYZ file (1 to 500 atoms, Ångström). It has no MCP
+tool.
+
+| Option               | Commands | Meaning                                                                              |
+| -------------------- | -------- | ------------------------------------------------------------------------------------ |
+| `--energy`           | calc     | Calculate the GFN2-xTB energy. Required.                                             |
+| `--gradient`         | calc     | Include the Cartesian energy gradient in Eh/bohr.                                    |
+| `--charge N`         | calc     | Molecular charge, default 0.                                                         |
+| `--uhf N`            | calc     | Nonnegative number of unpaired electrons. The default comes from the electron count. |
+| `--conventions MODE` | calc     | Use `axtb` (default) or `xtb-6.8` (xtb 6.8 compatible) conventions.                  |
+
+The command prints one JSON line with `energy` in Eh, `gradient` in Eh/bohr
+when requested, `method`, `conventions`, `numerics`, `engine`,
+`homo_lumo_gap_ev` (null without a LUMO), and `near_degenerate`. The command
+also writes a warning to stderr when the gap is below 0.1 eV. `calc` is
+CLI-only and prints its result without an experimental envelope.
+
+In a build without xTB, it writes `reshiki: xTB is not included in this build`
+to stderr and exits 1.
+
 ## help
 
 ```text
@@ -862,7 +893,8 @@ Prints the overview, or one command's help. `--help` and `-h` work in place of
 Standard output carries only the result: the file, one JSON line, or one
 receipt line with `--receipt`. With `-o OUTPUT` and no `--receipt` it stays
 empty. Every JSON line has `"experimental": true` and an `api` object with
-`operation_api` and `stability`, except the raw schema from `schema proposal`.
+`operation_api` and `stability`, except the raw schema from `schema proposal`
+and the worker calculation result from `calc`.
 
 Messages go to standard error, one per line:
 

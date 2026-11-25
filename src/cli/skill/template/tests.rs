@@ -272,6 +272,7 @@ fn body_states_the_notices_exit_codes_prefixes_and_staleness_rule() {
 fn identifiers_in_inline_code_exist_in_the_live_contracts() {
     let contracts = [
         reshiki_agent::ops::catalog::catalog_json().to_string(),
+        serde_json::to_string(&crate::cli::commands::catalog_json(None)).unwrap(),
         reshiki_agent::schema().to_string(),
         reshiki_agent::ops::catalog::RESULTS
             .iter()

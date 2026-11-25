@@ -419,6 +419,62 @@ const NAME: CommandSpec = CommandSpec {
     body: name_help,
 };
 
+// Calculation sessions are deliberately outside the agent operation/MCP catalog.
+const CALC: CommandSpec = CommandSpec {
+    name: "calc",
+    summary: "Print a GFN2-xTB energy and optional gradient as one JSON line",
+    usage: "reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz",
+    options: &[
+        OptionSpec {
+            flag: "--energy",
+            value: None,
+            help: "Calculate the GFN2-xTB energy. Required.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--gradient",
+            value: None,
+            help: "Include the Cartesian energy gradient in Eh/bohr.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--charge",
+            value: Some("N"),
+            help: "Set the molecular charge.",
+            default: Some(|| json!(0)),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--uhf",
+            value: Some("N"),
+            help: "Set the number of unpaired electrons. The default comes from the electron count.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--conventions",
+            value: Some("MODE"),
+            help: "Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.",
+            default: Some(|| json!("axtb")),
+            sets: None,
+            equivalent: None,
+        },
+    ],
+    tools: &[],
+    operand: Some(Operand {
+        name: "FILE.xyz",
+        help: "Read the first structure of an XYZ file in angstroms.",
+        sets: None,
+    }),
+    body: calc_help,
+};
+
 const PIECES: CommandSpec = CommandSpec {
     name: "pieces",
     summary: "Check or render equipment piece files",
@@ -563,6 +619,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     PREDICT_NMR,
     EXPORT_INPUT,
     NAME,
+    CALC,
     PIECES,
     INFO,
     TOOLS,
@@ -858,6 +915,38 @@ A ReShiki drawing (.rsk) cannot be written.
 
 fn analyze_help() -> String {
     format!("Usage: {}\n\n{ANALYZE_HELP}", ANALYZE.usage)
+}
+
+fn calc_help() -> String {
+    format!(
+        "\
+Usage: {}
+
+Reads the first structure of an XYZ file, with coordinates in angstroms,
+and runs GFN2-xTB in an isolated worker process. The first line is an atom
+count (1 to 500), followed by a comment line and exactly that many atom
+rows, each with an element symbol and three finite coordinates.
+
+Options:
+  --energy    Calculate the energy. Required.
+  --gradient  Include the Cartesian energy gradient.
+  --charge N  Set the molecular charge (default 0).
+  --uhf N     Set a nonnegative number of unpaired electrons. The default
+              comes from the electron count.
+  --conventions axtb|xtb-6.8
+              Use axtb (default) or xtb-6.8 (xtb 6.8 compatible) conventions.
+
+Prints one JSON line with energy (Eh), gradient (Eh/bohr) when requested,
+homo_lumo_gap_ev (null without a LUMO), near_degenerate, method, conventions,
+numerics and engine. A gap below 0.1 eV also prints a warning on stderr.
+This CLI-only command has no MCP tool and uses the worker result format
+without an experimental envelope.
+
+Requires a build with xTB. Otherwise it reports that xTB is not included
+and exits 1. See docs/xtb-worker.md and docs/xtb-licensing.md.
+",
+        CALC.usage,
+    )
 }
 
 fn predict_nmr_help() -> String {

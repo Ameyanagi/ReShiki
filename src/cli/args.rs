@@ -9,6 +9,7 @@ use super::{
     input_format, input_formats, output_formats, render_formats,
 };
 use reshiki_io::qc_input::{Job, Program, builtin_templates};
+use reshiki_xtb_worker::protocol::Conventions;
 use std::{
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
@@ -23,6 +24,7 @@ pub(crate) enum Command {
     },
     Info,
     Version,
+    Calc(Calc),
     Tools,
     Schema(Schema),
     Skill(Skill),
@@ -35,6 +37,16 @@ pub(crate) enum Command {
     Name(Name),
     PiecesCheck(Vec<PathBuf>),
     PiecesRender(PieceRender),
+}
+
+/// `calc`: the first XYZ frame and one GFN2-xTB energy or gradient.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Calc {
+    pub(crate) file: PathBuf,
+    pub(crate) gradient: bool,
+    pub(crate) charge: i32,
+    pub(crate) uhf: Option<u32>,
+    pub(crate) conventions: Conventions,
 }
 
 /// A schema the CLI can print without a tool host.
@@ -200,6 +212,7 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "schema" => schema(&options(spec, rest)?),
         "skill" => skill(&options(spec, rest)?),
         "pieces" => pieces(spec, rest),
+        "calc" => calc(&options(spec, rest)?),
         "convert" => convert(&options(spec, rest)?),
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
@@ -232,6 +245,58 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         }
         _ => Err(unknown_command(&lossy)),
     }
+}
+
+fn calc(options: &Options) -> Result<Command, String> {
+    if !options.energy {
+        return Err("calc needs --energy".into());
+    }
+    let file = options
+        .input
+        .as_ref()
+        .filter(|file| !file.is_empty() && *file != "-")
+        .map(PathBuf::from)
+        .ok_or("calc needs an XYZ file: FILE.xyz")?;
+    if !file
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("xyz"))
+    {
+        return Err("calc needs an XYZ file: FILE.xyz".into());
+    }
+    let charge = options
+        .charge
+        .as_deref()
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse::<i32>().ok())
+                .ok_or("--charge must be a whole number in the signed 32-bit range")
+        })
+        .transpose()?
+        .unwrap_or(0);
+    let uhf = options
+        .uhf
+        .as_deref()
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse::<u32>().ok())
+                .ok_or("--uhf must be a nonnegative whole number in the unsigned 32-bit range")
+        })
+        .transpose()?;
+    let conventions = match options.conventions.as_deref().map(OsStr::to_str) {
+        None | Some(Some("axtb")) => Conventions::Axtb,
+        Some(Some("xtb-6.8")) => Conventions::Xtb68,
+        _ => return Err("--conventions must be axtb or xtb-6.8".into()),
+    };
+    Ok(Command::Calc(Calc {
+        file,
+        gradient: options.gradient,
+        charge,
+        uhf,
+        conventions,
+    }))
 }
 
 fn pieces(spec: &CommandSpec, rest: &[OsString]) -> Result<Command, String> {
@@ -366,6 +431,8 @@ struct Options {
     memory_gb: Option<OsString>,
     title: Option<OsString>,
     extra: Option<OsString>,
+    uhf: Option<OsString>,
+    conventions: Option<OsString>,
     svg_text: SvgText,
     pages: bool,
     dark: bool,
@@ -373,6 +440,8 @@ struct Options {
     receipt: bool,
     json: bool,
     locants: bool,
+    energy: bool,
+    gradient: bool,
 }
 
 /// Splits `tokens` into the command's options and one positional input.
@@ -441,6 +510,8 @@ fn parse_options(
                 "--memory-gb" => options.memory_gb = Some(value),
                 "--title" => options.title = Some(value),
                 "--extra" => options.extra = Some(value),
+                "--uhf" => options.uhf = Some(value),
+                "--conventions" => options.conventions = Some(value),
                 "--svg-text" => {
                     options.svg_text = match value.to_str() {
                         Some("live") => SvgText::Live,
@@ -458,6 +529,8 @@ fn parse_options(
                 "--receipt" => options.receipt = true,
                 "--json" => options.json = true,
                 "--locants" => options.locants = true,
+                "--energy" => options.energy = true,
+                "--gradient" => options.gradient = true,
                 _ => {}
             }
         }
