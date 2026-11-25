@@ -4,8 +4,10 @@
 
 mod bitmap_budget;
 mod drawing;
+mod qc;
 mod render;
 mod styles;
+mod xtb;
 
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyBytes};
 
@@ -288,5 +290,10 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(with_labels, module)?)?;
     module.add_function(wrap_pyfunction!(with_atom_numbers, module)?)?;
     module.add_function(wrap_pyfunction!(render_many, module)?)?;
+    module.add_function(wrap_pyfunction!(qc::qc_elements, module)?)?;
+    module.add_function(wrap_pyfunction!(qc::qc_read, module)?)?;
+    module.add_function(wrap_pyfunction!(qc::qc_write_input, module)?)?;
+    module.add_function(wrap_pyfunction!(xtb::xtb_engine, module)?)?;
+    module.add_function(wrap_pyfunction!(xtb::xtb_calculate, module)?)?;
     Ok(())
 }

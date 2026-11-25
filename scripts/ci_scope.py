@@ -114,6 +114,11 @@ MATRICES: dict[str, list[dict[str, Any]]] = {
         },
     ],
 }
+# The engine wheel follows the same target, artifact and test choices as its
+# matching base wheel. Windows does not yet have an xTB engine distribution.
+MATRICES["xtb_wheel"] = [
+    row.copy() for row in MATRICES["wheel"] if not row["os"].startswith("windows")
+]
 
 
 def matrices(macos):

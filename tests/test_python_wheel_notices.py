@@ -7,10 +7,10 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from check_python_wheel_notices import verify_wheel
+from check_python_wheel_notices import AXTB_ATTRIBUTIONS, verify_wheel
 
 
-class PythonWheelNoticeTests(unittest.TestCase):
+class WheelFixture(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -41,6 +41,8 @@ class PythonWheelNoticeTests(unittest.TestCase):
                 archive.writestr(f"reshiki-1.0.dist-info/licenses/wheel-licenses/{name}", content)
         return path
 
+
+class PythonWheelNoticeTests(WheelFixture):
     def test_matching_files_and_declarations_pass(self):
         verify_wheel(self.wheel(), self.licenses)
 
@@ -92,6 +94,50 @@ class PythonWheelNoticeTests(unittest.TestCase):
             files = {**self.files, name: content + b"\n"}
             with self.subTest(file=name), self.assertRaisesRegex(ValueError, "differing bytes"):
                 verify_wheel(self.wheel(files=files), self.licenses)
+
+    def test_axtb_notices_are_rejected_in_the_base_wheel(self):
+        name = "THIRD-PARTY-NOTICES.txt"
+        content = self.files[name] + b"  licenses/axtb/SOURCE\n"
+        (self.licenses / name).write_bytes(content)
+        with self.assertRaisesRegex(ValueError, "base reshiki wheel must not contain"):
+            verify_wheel(self.wheel(files={**self.files, name: content}), self.licenses)
+
+
+class XtbWheelNoticeTests(WheelFixture):
+    def setUp(self):
+        super().setUp()
+        self.files["THIRD-PARTY-NOTICES.txt"] = (
+            "SOURCE ATTRIBUTIONS\n-------------------\n"
+            + "".join(f"  {name}\n" for name in AXTB_ATTRIBUTIONS)
+        ).encode()
+        for name, content in self.files.items():
+            (self.licenses / name).write_bytes(content)
+
+    def test_matching_files_and_declarations_pass(self):
+        verify_wheel(self.wheel(), self.licenses, xtb=True)
+
+    def test_missing_axtb_attribution_is_rejected(self):
+        name = "THIRD-PARTY-NOTICES.txt"
+        for attribution in AXTB_ATTRIBUTIONS:
+            content = self.files[name].replace(
+                f"  {attribution}\n".encode(), f"Mentioned elsewhere: {attribution}\n".encode()
+            )
+            (self.licenses / name).write_bytes(content)
+            with (
+                self.subTest(attribution=attribution),
+                self.assertRaisesRegex(ValueError, f"Missing source attribution: {attribution}"),
+            ):
+                verify_wheel(
+                    self.wheel(files={**self.files, name: content}), self.licenses, xtb=True
+                )
+
+    def test_no_font_attribution_is_required(self):
+        # Engine wheels do not need the drawing package's fonts.
+        verify_wheel(self.wheel(), self.licenses, xtb=True)
+
+    def test_axtb_notices_are_rejected_in_the_base_wheel(self):
+        with self.assertRaisesRegex(ValueError, "Missing source attribution"):
+            verify_wheel(self.wheel(), self.licenses)
 
 
 if __name__ == "__main__":

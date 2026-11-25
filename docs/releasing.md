@@ -148,7 +148,7 @@ Each release has a validation record, `docs/changes/release-<version>-validation
 
 ## Publish a version
 
-1. Update the application and workspace versions in `Cargo.toml`, the corresponding entries in `Cargo.lock`, and the app version in the [agent API version table](agent-api.md#versioning). Record the release changes. Run `uv run --locked python scripts/assemble_changelog.py --release 0.16.0` (with the new version): it appends the [release-note fragments](changes/unreleased/README.md) to `docs/changes-0.16.md` by section, adds their `credit` lines to `docs/contributors.md` and deletes the fragments. Then edit the notes into the [release notes template](writing-style.md#release-notes), move their **Developer** items into the release validation record, and point `docs/changes-unreleased.md` at them. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
+1. Update the application and workspace versions in `Cargo.toml`, the corresponding entries in `Cargo.lock`, and the app version in the [agent API version table](agent-api.md#versioning). Update the `reshiki-xtb==<version>` pin in `crates/python/pyproject.toml` to the PEP 440 form of the workspace version (`0.17.1-rc.1` becomes `0.17.1rc1`), then run `uv lock --project crates/python` to update its lockfile. Update the corresponding-source release link in `crates/python-xtb/README.md` to the new Cargo version. Repository tests check both values. Record the release changes. Run `uv run --locked python scripts/assemble_changelog.py --release 0.16.0` (with the new version): it appends the [release-note fragments](changes/unreleased/README.md) to `docs/changes-0.16.md` by section, adds their `credit` lines to `docs/contributors.md` and deletes the fragments. Then edit the notes into the [release notes template](writing-style.md#release-notes), move their **Developer** items into the release validation record, and point `docs/changes-unreleased.md` at them. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
 2. Run the checks and a manual release build. Review the resulting packages.
 3. In the release build, run Clean up from the toolbar and close its ▾ menu with Esc, and close 3D preview, atom label, Name import preview, Structure import, reaction mapping proposal, cycle layout review and assistant review with Enter and separately with Esc (use Apply/Discard buttons where those keys are unavailable). After each close, Delete or Cmd+Z must act on the drawing without a click. Make catalytic cycle and Clean up ▾ → Clean up cycle must apply immediately as one Undo step and return the keys to the drawing. The automated `review_close_returns_focus_*` tests cover the keyboard paths except assistant review; local assistant button clicks are covered, but check live proposals manually.
 4. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.16.0` for version `0.16.0`.
@@ -182,6 +182,17 @@ Leave `/demo/` and `/demo/index.html` out of the rule, so a release reaches visi
 The **npm** job then publishes the two browser packages, the editor `@ameyanagi/reshiki` (`packages/editor`) and the headless library `@ameyanagi/reshiki-headless` (`packages/headless`), from the build the **web_demo** job tested, so the WebAssembly is built only once. It runs both packages' tests, sets each package version to the app's version from `Cargo.toml` (which the tag matches, so `v0.13.1` publishes `0.13.1`; the `version` in each `package.json` is only a placeholder), and publishes each with `npm publish --provenance`. Stable versions get the `latest` dist-tag. Prerelease tags such as `v0.13.1-rc.1` get `next`, and a stable version older than the current `latest` gets `release-<major.minor>`, so `bun add @ameyanagi/reshiki` keeps installing the newest stable release, the same way the GitHub release is marked as a prerelease. Nightly builds never publish to npm. A version already on npm is skipped, so rerunning a release is safe. Without a credential, or when npm refuses it for a package (an expired token, or a trusted publisher that is not set up), the job leaves a notice for that package and succeeds, so npm never fails a release. See [Configure npm publishing](#configure-npm-publishing).
 
 The **pypi** job publishes the Python package `reshiki` (`crates/python`) after the GitHub release. The reusable **Python wheels** workflow (`python-wheels.yml`) builds abi3 wheels for all six targets: manylinux2014 x64 and ARM64, macOS ARM64 and Intel, and Windows x64 and ARM64. It runs the Python tests against the built wheel on Linux x64, Linux ARM64, macOS ARM64 and Windows x64; the tests' RDKit has no Intel macOS or Windows ARM64 wheel. The wheel version is the app's version from `Cargo.toml`, which maturin writes in PEP 440 form, so `v0.13.1` publishes `0.13.1` and `v0.13.1-rc.1` publishes `0.13.1rc1`. pip and uv skip prereleases unless asked for one. There is no sdist: the package compiles assets, presets and vendored crates from the repository root, which a maturin source distribution cannot include. Nightly builds never publish to PyPI, and files already on PyPI are skipped, so rerunning a release is safe. Pull requests that change `crates/python` or that workflow build and test the same wheels without publishing. See [Configure PyPI publishing](#configure-pypi-publishing).
+
+That workflow also builds the separate LGPL `reshiki-xtb` engine wheels for macOS
+ARM64 and Intel, and Linux x64 and ARM64. The macOS rows follow the same PR rules
+as the base wheels. Both packages require macOS 14 or later. On testable targets,
+CI installs the matching base and engine wheels from a local wheelhouse with
+`--no-index --find-links dist`, checks that
+the worker is executable, and runs the calculation and file tests. The base wheel
+tests use only the `excel` and `pandas` extras, so they do not build the engine.
+The **testpypi_xtb** job publishes only the engine wheels to TestPyPI after a
+version-tag run has published its GitHub release and corresponding source.
+The owner publishes `reshiki-xtb` to PyPI manually, as described below.
 
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 
@@ -260,6 +271,51 @@ gh run watch "$(gh run list --workflow release.yml --limit 1 --json databaseId -
 To try the publishing path on [TestPyPI](https://test.pypi.org/) first, add a pending publisher there with the same values, then run with `-f pypi_only=true -f pypi_repository=testpypi`. TestPyPI is a sandbox, so the version check is skipped there. It keeps the first upload of each version, and later runs skip it.
 
 After the first release, protect the `pypi` environment if publishing should wait for an approval (**Settings → Environments → pypi → Required reviewers**), and install with `uv add reshiki` or `pip install reshiki`.
+
+### Configure and publish `reshiki-xtb`
+
+Create a pending publisher before the first engine-wheel release. Use the
+values below. [TestPyPI publisher setup](https://test.pypi.org/manage/account/publishing/)
+
+| Field            | Value         |
+| ---------------- | ------------- |
+| Project name     | `reshiki-xtb` |
+| Owner            | `Ameyanagi`   |
+| Repository name  | `ReShiki`     |
+| Workflow name    | `release.yml` |
+| Environment name | `testpypi`    |
+
+The **testpypi_xtb** job uses trusted publishing from the `testpypi` GitHub
+environment, with no token or secret, and skips files already on TestPyPI.
+It runs only on `v*` tag pushes after both **publish** and **python_wheels**
+succeed. It never runs on `pypi_only` dispatches, which do not publish the
+required source archive. CI never publishes `reshiki-xtb` to PyPI.
+
+Publish each version in this order.
+
+1. Publish the tagged GitHub release with
+   `reshiki-<Cargo version>-source.tar.gz` at
+   `https://github.com/Ameyanagi/ReShiki/releases/tag/v<Cargo version>`.
+   Keep this archive public for as long as the engine wheels are available.
+2. Wait for the matching candidate-wheel tests and **testpypi_xtb** upload to
+   pass. Download the `python-xtb-wheel-*` artifacts from that same tag's run.
+3. As the PyPI project owner, upload those engine wheels manually and verify
+   that the matching version installs from PyPI.
+
+   ```sh
+   gh run download RUN_ID --pattern 'python-xtb-wheel-*' --dir build/xtb-wheels
+   uvx twine upload build/xtb-wheels/python-xtb-wheel-*/*.whl
+   uv venv build/xtb-check
+   uv pip install --python build/xtb-check/bin/python 'reshiki[xtb]==<PEP 440 version>'
+   build/xtb-check/bin/python -c 'from reshiki import xtb; print(xtb.engine())'
+   ```
+
+4. Tell users to install `reshiki[xtb]` once the matching `reshiki-xtb` wheel
+   is on PyPI.
+
+The source archive and tag use the Cargo version. The wheel filenames, PyPI
+versions and extra pin use its PEP 440 form. Keep the worker wheel's README and
+`SOURCE` notice pointed at the source archive for that release.
 
 ## Configure macOS signing
 

@@ -27,7 +27,7 @@ class LicenseNoticeTests(unittest.TestCase):
             (notices / "rust").mkdir(parents=True)
             (notices / "rust/manifest.json").write_text("{}", encoding="utf-8")
             (notices / "axtb").mkdir()
-            filenames = ("COPYING", "COPYING.LESSER", "NOTICE", "SOURCE")
+            filenames = ("COPYING", "COPYING.LESSER", "NOTICE", "CHANGES-reshiki.md", "SOURCE")
             for name in filenames:
                 (notices / "axtb" / name).write_text(f"Fork {name}\n", encoding="utf-8")
 

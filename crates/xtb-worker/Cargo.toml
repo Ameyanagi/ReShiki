@@ -5,6 +5,11 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
 
+[[bin]]
+name = "reshiki-xtb-worker"
+path = "src/bin/reshiki-xtb-worker.rs"
+required-features = ["engine"]
+
 [features]
 engine = ["dep:axtb-driver"]
 
