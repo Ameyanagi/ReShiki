@@ -101,11 +101,13 @@ fn muller_brown_refinement_and_downhill_paths_from_both_saddles() {
             positions: start.into(),
             energy: evaluate(&mut MullerBrown, &start).unwrap().0,
         };
-        let (point, converged) = saddle::refine(
+        let saddle::Refinement {
+            point, converged, ..
+        } = saddle::refine(
             &mut MullerBrown,
             &guess,
             &tangent,
-            false,
+            &[],
             &options,
             &mut proceed,
         )
@@ -124,7 +126,7 @@ fn muller_brown_refinement_and_downhill_paths_from_both_saddles() {
             options: &options,
         };
         let ends = [true, false].map(|forward| {
-            let (end, path) = descent
+            let (end, path, _) = descent
                 .trace(&mut MullerBrown, forward, &mut proceed)
                 .unwrap();
             assert!(path.len() > 1 && path.windows(2).all(|p| p[1].energy < p[0].energy));
@@ -285,6 +287,7 @@ fn molecular_barrier_irc_and_parallel_images() {
         one.connects
     );
     assert_eq!(one.frequencies_cm1.len(), 3);
+    assert_eq!(one.imaginary, 1);
     assert_eq!(
         one.frequencies_cm1
             .iter()
@@ -319,10 +322,19 @@ fn finite_difference_hessian_and_unconverged_band() {
         optimize_endpoints: false,
         ..TsOptions::default()
     };
-    let report = triangle_inputs(&[1; 3], &options, false, 1, proceed).unwrap();
+    let mut accepted_steps = 0;
+    let report = triangle_inputs(&[1; 3], &options, false, 1, |event| {
+        if let Event::Saddle { step, .. } = event {
+            accepted_steps = step;
+        }
+        proceed(event)
+    })
+    .unwrap();
     assert!(!report.neb_converged);
     assert!(report.saddle_converged && report.connects);
-    assert!(report.hessians > 2);
+    assert!(accepted_steps > 0);
+    // With an interval of one, frequencies reuse the rebuild at the last step.
+    assert_eq!(report.hessians, 1 + accepted_steps);
     assert!(report.evaluations >= report.hessians * 18);
     assert!((report.ts.energy - 0.0324).abs() < 1e-4);
 }
@@ -350,7 +362,7 @@ fn callbacks_cancel_every_stage() {
 
 #[test]
 fn invalid_inputs_skip_evaluations_and_events() {
-    let x = [0.; 6];
+    let x = [0., 0., 0., 1., 0., 0.];
     let base = Search {
         numbers: &[1, 1],
         masses_amu: &[1., 1.],
@@ -431,8 +443,8 @@ fn invalid_inputs_skip_evaluations_and_events() {
 fn same_graph_irc_ends_are_distinguished_by_superposed_rmsd() {
     let report = triangle_inputs(&[6; 3], &TsOptions::default(), true, 1, proceed).unwrap();
     assert_eq!(
-        bonds(&[6; 3], &report.reactant.positions),
-        bonds(&[6; 3], &report.product.positions)
+        bonds(&[6; 3], &report.reactant.positions).unwrap(),
+        bonds(&[6; 3], &report.product.positions).unwrap()
     );
     assert!(report.connects);
     for branch in report.irc.unwrap() {
@@ -458,6 +470,7 @@ fn stationary_minimum_is_reported_without_irc() {
         options: &TsOptions::default(),
     };
     let report = search(&mut [Triangle::default()], &input, proceed).unwrap();
+    assert_eq!(report.imaginary, 0);
     assert!(report.frequencies_cm1.iter().all(|&f| f >= -IMAGINARY_CM1));
     assert_eq!(report.irc, None);
     assert!(!report.connects);
@@ -533,6 +546,8 @@ fn higher_order_saddle_reports_both_imaginary_frequencies() {
     }];
     let report = search(&mut pool, &input, proceed).unwrap();
     assert!(report.saddle_converged);
+    assert_eq!(report.imaginary, 2);
+    assert!(report.irc.is_none() && !report.connects);
     assert_eq!(
         report
             .frequencies_cm1
@@ -541,4 +556,151 @@ fn higher_order_saddle_reports_both_imaginary_frequencies() {
             .count(),
         2
     );
+}
+
+#[test]
+fn fitted_cartesian_hessian_matches_independent_rebuild() {
+    let reference = triangle(1.45);
+    let mobile: Vec<_> = reference
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .flat_map(|r| {
+            [
+                8. + 0.6 * r[0] - 0.8 * r[1],
+                -7. + r[2],
+                2. - 0.8 * r[0] - 0.6 * r[1],
+            ]
+        })
+        .collect();
+    let fit = mapping::Fit::new(&reference, &mobile, &[1., 2., 4.]);
+    let fitted = fit.apply(&mobile);
+    assert!(distance(&reference, &fitted) < 1e-12);
+    let mut p = Triangle {
+        analytic: true,
+        ..Default::default()
+    };
+    let h = saddle::hessian(&mut p, &mobile).unwrap();
+    let rotated = fit.rotate_hessian(&h, mobile.len());
+    let rebuilt = saddle::hessian(&mut p, &fitted).unwrap();
+    assert!(distance(&rotated, &rebuilt) < 1e-12);
+}
+
+/// Radial carbon double well with minima at 1 and 3 bohr and a saddle at 2 bohr.
+struct CarbonStretch(f64);
+
+impl Potential for CarbonStretch {
+    fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+        let axis: [f64; 3] = std::array::from_fn(|i| x[i + 3] - x[i]);
+        let r = norm(&axis);
+        let t = r - 2.;
+        let q = t * t - 1.;
+        for i in 0..3 {
+            g[i + 3] = self.0 * t * q * axis[i] / r;
+            g[i] = -g[i + 3];
+        }
+        Ok(self.0 * q * q / 4.)
+    }
+}
+
+fn carbon_stretch(k: f64, options: TsOptions) -> TsReport {
+    search(
+        &mut [CarbonStretch(k)],
+        &Search {
+            numbers: &[6; 2],
+            masses_amu: &[12.; 2],
+            reactant: &[0., 0., 0., 1., 0., 0.],
+            product: &[0., 0., 0., 3., 0., 0.],
+            options: &options,
+        },
+        proceed,
+    )
+    .unwrap()
+}
+
+#[test]
+fn below_threshold_imaginary_frequency_keeps_report() {
+    // Reduced mass 6 amu. An odd image count puts an image at the exact saddle.
+    let k = 6. * (40. / 5_140.487_14_f64).powi(2);
+    let report = carbon_stretch(
+        k,
+        TsOptions {
+            neb_max_iterations: 0,
+            ..Default::default()
+        },
+    );
+    assert!(report.saddle_converged);
+    assert_eq!(report.imaginary, 0);
+    assert!((report.frequencies_cm1[0] + 40.).abs() < 0.01);
+    assert!(report.irc.is_none() && !report.connects);
+}
+
+#[test]
+fn exhausted_refinement_with_one_imaginary_mode_skips_irc() {
+    let report = carbon_stretch(
+        0.2,
+        TsOptions {
+            images: 16,
+            neb_max_iterations: 0,
+            saddle_max_steps: 0,
+            ..Default::default()
+        },
+    );
+    assert!(!report.saddle_converged);
+    assert_eq!(report.imaginary, 1);
+    assert!(report.frequencies_cm1[0] < -IMAGINARY_CM1);
+    assert!(report.irc.is_none() && !report.connects);
+}
+
+#[test]
+fn soft_saddle_refines_until_both_irc_launches_descend() {
+    let report = carbon_stretch(
+        0.002,
+        TsOptions {
+            images: 16,
+            neb_max_iterations: 0,
+            ..Default::default()
+        },
+    );
+    assert!(report.saddle_converged);
+    let stretch = |p: &Minimum| distance(&p.positions[..3], &p.positions[3..]);
+    assert!((stretch(&report.ts) - 2.).abs() * 6_f64.sqrt() < 0.015);
+    let first = report.irc.unwrap().map(|branch| {
+        assert!(branch.completed);
+        let end_offset = stretch(branch.path.last().unwrap()) - 2.;
+        assert!(
+            3. * end_offset.powi(2) > 1.,
+            "trace stopped on the concave side of the well"
+        );
+        let first = &branch.path[0];
+        assert!(first.energy < report.ts.energy);
+        stretch(first) - 2.
+    });
+    assert!(first[0] * first[1] < 0.);
+}
+
+#[test]
+fn search_rejects_coincident_nuclei_in_either_endpoint() {
+    let valid = [0., 0., 0., 0.1, 0., 0.];
+    let invalid = [0., 0., 0., 0.099, 0., 0.];
+    let base = Search {
+        numbers: &[1; 2],
+        masses_amu: &[1.; 2],
+        reactant: &valid,
+        product: &valid,
+        options: &TsOptions::default(),
+    };
+    assert!(base.validate().is_ok());
+    for input in [
+        Search {
+            reactant: &invalid,
+            ..base
+        },
+        Search {
+            product: &invalid,
+            ..base
+        },
+    ] {
+        assert!(matches!(input.validate(), Err(TsError::Invalid(_))));
+    }
 }

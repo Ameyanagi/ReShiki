@@ -153,23 +153,29 @@ mod report {
         text
     }
 
+    fn skipped_irc_reason(saddle_converged: bool, imaginary: usize) -> Option<String> {
+        if !saddle_converged {
+            Some("saddle refinement did not converge".into())
+        } else if imaginary != 1 {
+            Some(format!(
+                "expected one imaginary frequency below -{IMAGINARY_CM1} cm-1, found {imaginary}"
+            ))
+        } else {
+            None
+        }
+    }
+
     impl Summary<'_> {
         pub fn failure_reason(&self) -> Option<String> {
-            let count = imaginary(&self.report.frequencies_cm1);
-            if count != 1 {
-                Some(format!(
-                    "expected one imaginary frequency below -{IMAGINARY_CM1} cm-1, found {count}"
-                ))
-            } else if !self.report.connects {
-                Some("IRC did not connect the reactant and product".into())
-            } else {
-                None
-            }
+            skipped_irc_reason(self.report.saddle_converged, self.report.imaginary).or_else(|| {
+                (!self.report.connects)
+                    .then(|| "IRC did not connect the reactant and product".into())
+            })
         }
 
         pub fn write_table(&self, out: &mut dyn Write) -> Result<(), CliError> {
             let report = &self.report;
-            let irc = match &report.irc {
+            let mut irc = match &report.irc {
                 Some(_) if report.connects => "connects reactant and product".into(),
                 Some([plus, minus]) => {
                     format!(
@@ -178,8 +184,16 @@ mod report {
                         reached(minus.reached)
                     )
                 }
-                None => "skipped because there is no qualifying imaginary mode".into(),
+                None => skipped_irc_reason(report.saddle_converged, report.imaginary)
+                    .map_or_else(|| "skipped".into(), |reason| format!("skipped ({reason})")),
             };
+            if let Some(branches) = &report.irc {
+                for (branch, mode) in branches.iter().zip(["+mode", "-mode"]) {
+                    if !branch.completed {
+                        let _ = write!(irc, " · {mode} descent ended before gradient convergence");
+                    }
+                }
+            }
             let neb = if report.neb_converged {
                 "converged in"
             } else {
@@ -211,7 +225,7 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 report.ts.energy,
                 report.forward_barrier_kcal(),
                 report.reverse_barrier_kcal(),
-                imaginary(&report.frequencies_cm1),
+                report.imaginary,
                 lowest(&report.frequencies_cm1),
                 imaginary(&self.worker_frequencies),
                 lowest(&self.worker_frequencies),
@@ -297,6 +311,7 @@ Work          {} gradients · {} Hessians · {:.1} s",
             let branch = |branch: &IrcBranch| {
                 json!({
                     "reached": reached(branch.reached),
+                    "completed": branch.completed,
                     "energies": branch.energies,
                 })
             };
@@ -327,7 +342,7 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 },
                 "frequencies_cm1": report.frequencies_cm1,
                 "worker_frequencies_cm1": self.worker_frequencies,
-                "imaginary_count": imaginary(&report.frequencies_cm1),
+                "imaginary_count": report.imaginary,
                 "irc": report.irc.as_ref().map(|[plus, minus]| json!({
                     "plus": branch(plus),
                     "minus": branch(minus),
@@ -341,6 +356,26 @@ Work          {} gradients · {} Hessians · {:.1} s",
                 "seconds": self.seconds,
                 "moving_hydrogens": self.moving_hydrogens,
             })
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn skipped_irc_distinguishes_stationarity_from_imaginary_count() {
+            assert_eq!(
+                skipped_irc_reason(false, 1).as_deref(),
+                Some("saddle refinement did not converge")
+            );
+            for count in [0, 2] {
+                assert_eq!(
+                    skipped_irc_reason(true, count).unwrap(),
+                    format!("expected one imaginary frequency below -50 cm-1, found {count}")
+                );
+            }
+            assert_eq!(skipped_irc_reason(true, 1), None);
         }
     }
 }
@@ -370,12 +405,14 @@ mod tests {
             path: vec![point(-1.5, 1.)],
             end: reactant.clone(),
             reached: Reached::Reactant,
+            completed: true,
         };
         let minus = IrcBranch {
             energies: vec![-1., -1.25, -2.],
             path: vec![point(-1.25, 3.)],
             end: product.clone(),
             reached: Reached::Product,
+            completed: true,
         };
         let path = path_xyz(&numbers, &[reactant, ts.clone(), product]);
         assert_eq!(

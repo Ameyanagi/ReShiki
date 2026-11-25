@@ -44,11 +44,12 @@ pub struct TsOptions {
     pub optimize_endpoints: bool,
     pub neb_max_iterations: usize,
     pub saddle_max_steps: usize,
-    /// Rebuild interval in saddle steps. Zero uses Bofill updates throughout.
+    /// Rebuild interval in accepted saddle steps. Zero uses Bofill updates
+    /// between the initial build and the final stationarity check.
     pub hessian_every: usize,
     /// Maximum number of downhill IRC steps in each direction, before relaxation.
     pub irc_max_steps: usize,
-    /// Mass-weighted displacement per IRC step (√amu bohr).
+    /// Mass-weighted arc length per IRC step (√amu bohr).
     pub irc_step: f64,
 }
 
@@ -112,6 +113,10 @@ pub struct Minimum {
     pub energy: f64,
 }
 
+/// Identity of a relaxed IRC end under the supplied atom map. A unique match to
+/// an endpoint's covalent bond graph includes its other conformers and separated
+/// fragments. When both endpoint graphs match, the closer endpoint must have
+/// superposed all-atom RMSD below 0.5 Å. Otherwise the end is `Other`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reached {
     Reactant,
@@ -125,6 +130,8 @@ pub struct IrcBranch {
     pub energies: Vec<f64>,
     /// Accepted downhill points in bohr, excluding the TS and relaxed end.
     pub path: Vec<Minimum>,
+    /// Whether the downhill trace reached its gradient tolerance before relaxation.
+    pub completed: bool,
     pub end: Minimum,
     pub reached: Reached,
 }
@@ -139,15 +146,19 @@ pub struct TsReport {
     pub neb_converged: bool,
     pub climbing_image: usize,
     pub ts: Minimum,
-    /// Whether the P-RFO point met the Normal projected gradient tolerances.
+    /// Whether P-RFO met the Normal projected gradient tolerances and its followed-mode
+    /// Newton displacement was below one tenth of the mass-weighted IRC step.
     pub saddle_converged: bool,
     /// Ascending projected harmonic wavenumbers, with imaginary values negative.
     pub frequencies_cm1: Vec<f64>,
+    /// Number of projected frequencies strictly below −[`IMAGINARY_CM1`].
+    pub imaginary: usize,
     /// Cartesian unit displacement corresponding to the lowest mass-weighted mode.
     pub transition_mode: Vec<f64>,
     /// Branches along +transition_mode and −transition_mode, respectively.
-    /// Absent when the stationary point has no qualifying imaginary mode.
+    /// Present only for a converged candidate with one qualifying imaginary frequency.
     pub irc: Option<[IrcBranch; 2]>,
+    /// Whether the two relaxed IRC ends classify as the two requested endpoints.
     pub connects: bool,
     /// All energy/gradient calls, including central differences and minimizations.
     pub evaluations: usize,
@@ -204,7 +215,9 @@ fn validate_geometry(numbers: &[u8], x: &[f64]) -> Result<(), TsError> {
 impl Search<'_> {
     fn validate(&self) -> Result<(), TsError> {
         validate_geometry(self.numbers, self.reactant)?;
+        endpoint::validate_nuclei_separation(self.reactant)?;
         validate_geometry(self.numbers, self.product)?;
+        endpoint::validate_nuclei_separation(self.product)?;
         if self.masses_amu.len() != self.numbers.len()
             || !self.masses_amu.iter().all(|&m| m.is_finite() && m > 0.)
         {
@@ -286,8 +299,8 @@ fn emit(on_event: &mut impl FnMut(Event) -> ControlFlow<()>, event: Event) -> Re
 /// Locate and characterize a saddle between two atom-mapped geometries.
 /// Refinement proceeds from the highest interior image even if NEB exhausts
 /// its budget. A first-order saddle has one frequency below −[`IMAGINARY_CM1`].
-/// All qualifying modes appear in the report at a higher-order saddle.
-/// A spectrum with no qualifying mode is reported without tracing IRC.
+/// The report retains the spectrum and stationarity status of each candidate.
+/// IRC runs only for a converged refinement with exactly one qualifying mode.
 /// Image i uses potential i modulo the pool size. All other evaluations use
 /// the first potential. The caller may cancel at any stage or progress event.
 pub fn search<P: Potential + Send>(
@@ -353,21 +366,34 @@ pub fn search<P: Potential + Send>(
     )?;
 
     emit(&mut on_event, Event::Stage(Stage::Saddle))?;
-    let (mut ts, saddle_converged) = saddle::refine(
+    let saddle::Refinement {
+        point: mut ts,
+        converged: saddle_converged,
+        hessian,
+    } = saddle::refine(
         &mut pool[0],
         &band.path[band.climbing],
         &band.tangent,
-        true,
+        masses,
         options,
         &mut on_event,
     )?;
-    // Refit before building the Hessian so its Cartesian eigenvectors and all
-    // reported geometries share the same mass-weighted reactant frame.
-    ts.positions = mapping::superpose(&reactant.positions, &ts.positions, masses);
+    // The exact Hessian that certified the Newton displacement also supplies the
+    // spectrum. Rotate it with the fitted geometry so the reported mode and IRC
+    // launch share that frame. An exhausted Bofill model needs a fresh build.
+    let fit = mapping::Fit::new(&reactant.positions, &ts.positions, masses);
+    ts.positions = fit.apply(&ts.positions);
     emit(&mut on_event, Event::Stage(Stage::Frequencies))?;
-    let hessian = saddle::hessian(&mut pool[0], &ts.positions)?;
+    let hessian = match hessian {
+        Some(h) => fit.rotate_hessian(&h, ts.positions.len()),
+        None => saddle::hessian(&mut pool[0], &ts.positions)?,
+    };
     let (frequencies_cm1, transition_mode) = modes::frequencies(&ts.positions, &hessian, masses)?;
-    let irc = if frequencies_cm1.iter().any(|&f| f < -IMAGINARY_CM1) {
+    let imaginary = frequencies_cm1
+        .iter()
+        .filter(|&&f| f < -IMAGINARY_CM1)
+        .count();
+    let irc = if saddle_converged && imaginary == 1 {
         emit(&mut on_event, Event::Stage(Stage::Irc))?;
         Some(irc::branches(
             &mut pool[0],
@@ -395,6 +421,7 @@ pub fn search<P: Potential + Send>(
         climbing_image: band.climbing,
         ts,
         saddle_converged,
+        imaginary,
         frequencies_cm1,
         transition_mode,
         irc,

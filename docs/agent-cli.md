@@ -889,34 +889,37 @@ coordinates in ångströms. Two files must have the same element sequence.
 Their atom order defines the map. With one file, supply at least one bond
 change in the reactant-to-product direction to construct the missing endpoint.
 
-| Option | Command | Meaning |
-| --- | --- | --- |
-| `--reactant R.xyz` | ts | Read the reactant XYZ. |
-| `--product P.xyz` | ts | Read the product XYZ. |
-| `--form I-J` | ts | Form a bond using 1-based atom numbers. Repeatable. |
-| `--break I-J` | ts | Break a bond using 1-based atom numbers. Repeatable. |
-| `--charge N` | ts | Molecular charge. Defaults to 0. |
-| `--uhf N` | ts | Unpaired electron count. The worker infers it from the valence electron count when omitted. |
-| `--images N` | ts | Use 5 to 24 NEB images, including the endpoints. Defaults to 15. |
-| `--workers N` | ts | Use 1 to 8 single-threaded xTB sessions. Defaults to the smallest of 4, available CPUs and interior images. |
-| `--remap-hydrogens` | ts | Map heavy atoms by order and assign hydrogens by least motion. Print changed nearest heavy atoms on stderr. |
-| `--keep-endpoints` | ts | Skip endpoint relaxation before the search. A missing endpoint is still constructed with restrained minimization. |
-| `--out-dir DIR` | ts | Create the directory if needed and write `reactant.xyz`, `product.xyz`, `ts.xyz`, `path.xyz`, `irc.xyz` and `ts.hess`. |
-| `--json FILE` | ts | Write the machine-readable report to a new file. |
+| Option              | Command | Meaning                                                                                                                |
+| ------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `--reactant R.xyz`  | ts      | Read the reactant XYZ.                                                                                                 |
+| `--product P.xyz`   | ts      | Read the product XYZ.                                                                                                  |
+| `--form I-J`        | ts      | Form a bond using 1-based atom numbers. Repeatable.                                                                    |
+| `--break I-J`       | ts      | Break a bond using 1-based atom numbers. Repeatable.                                                                   |
+| `--charge N`        | ts      | Molecular charge. Defaults to 0.                                                                                       |
+| `--uhf N`           | ts      | Unpaired electron count. The worker infers it from the valence electron count when omitted.                            |
+| `--images N`        | ts      | Use 5 to 24 NEB images, including the endpoints. Defaults to 15.                                                       |
+| `--workers N`       | ts      | Use 1 to 8 single-threaded xTB sessions. Defaults to the smallest of 4, available CPUs and interior images.            |
+| `--remap-hydrogens` | ts      | Map heavy atoms by order and assign hydrogens by least motion. Print changed nearest heavy atoms on stderr.            |
+| `--keep-endpoints`  | ts      | Skip endpoint relaxation before the search. A missing endpoint is still constructed with restrained minimization.      |
+| `--out-dir DIR`     | ts      | Create the directory if needed and write `reactant.xyz`, `product.xyz`, `ts.xyz`, `path.xyz`, `irc.xyz` and `ts.hess`. |
+| `--json FILE`       | ts      | Write the machine-readable report to a new file.                                                                       |
 
 The table on stdout gives energies in hartree, barriers in kcal/mol and
 frequencies in cm⁻¹. The worker independently checks the frequencies at the
 reported TS. Both imaginary counts use the same cutoff of −50 cm⁻¹. Exit 0
-requires exactly one engine mode below the cutoff and IRC branches that reach
-the two endpoints. A stationary point that fails these checks produces the
-report and exits 1. Progress appears on stderr.
+requires a converged saddle refinement, exactly one engine mode below the
+cutoff, and IRC branches whose relaxed ends match the two endpoints. Other
+candidates produce a report and exit 1. Progress appears on stderr.
 
 `path.xyz` contains the final NEB band. When IRC connects, `irc.xyz` runs
-from the reactant side through the TS to the product side. Without a
-qualifying imaginary mode, it contains just the TS frame. `ts.hess` uses the
+from the reactant side through the TS to the product side. When refinement
+is unconverged or the imaginary count differs from one, IRC is skipped and
+the file contains just the TS frame. `ts.hess` uses the
 worker's Cartesian Hessian and can be read with ORCA's `InHess Read`. The
-JSON report includes both spectra, plus and minus IRC branch labels and
-energies, convergence, work counts and the hydrogen mapping review.
+JSON report includes both spectra, IRC branch labels and energies, convergence,
+work counts and the hydrogen mapping review. Each branch’s `completed` field
+records whether the downhill trace reached its gradient tolerance before final
+relaxation.
 Output files must be new.
 
 ```sh
