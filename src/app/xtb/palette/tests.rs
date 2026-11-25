@@ -114,6 +114,7 @@ fn an_edit_greys_the_results_undo_restores_them_and_recalculate_reruns() {
 
     let _ = app.update(Message::Redo);
     assert!(app.xtb_shown().is_some_and(|shown| shown.stale));
+    palette(&mut app, Action::KeepFull(true));
     app.xtb.settings.task = CalcTask::Energy;
     palette(&mut app, Action::Recalculate);
     let run = app.tab.xtb.run.as_ref().expect("Recalculate starts a run");
@@ -124,6 +125,7 @@ fn an_edit_greys_the_results_undo_restores_them_and_recalculate_reruns() {
     );
     assert_eq!((run.charge, run.unpaired, run.solvent), (0, 0, None));
     assert_eq!(run.atoms.len(), 2, "the molecule as it is now");
+    assert!(run.keep_full, "the new result keeps \"Keep full\" too");
     assert!(
         app.tab.model_job.is_some(),
         "the changed molecule gets a new model first"
