@@ -18,6 +18,8 @@ pub(crate) struct GeometryData {
     pub multiplicity: u32,
     #[serde(default)]
     pub title: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub isotopes: Vec<u16>,
 }
 
 impl GeometryData {
@@ -25,7 +27,7 @@ impl GeometryData {
         Frame {
             numbers: self.numbers.clone(),
             positions_angstrom: self.positions.clone(),
-            isotopes: Vec::new(),
+            isotopes: self.isotopes.clone(),
             masses_amu: Vec::new(),
             charge: self.charge,
             multiplicity: self.multiplicity,
@@ -40,6 +42,7 @@ impl GeometryData {
             charge: frame.charge,
             multiplicity: frame.multiplicity,
             title: title.into(),
+            isotopes: frame.isotopes.clone(),
         }
     }
 }
@@ -89,28 +92,57 @@ fn orbital_data(data: &mut Value, orbitals: Option<&Orbitals>) {
     }
 }
 
-fn orbital_gap(orbitals: &Orbitals) -> Option<f64> {
+fn orbital_gap(orbitals: &Orbitals, frame: &Frame) -> Option<f64> {
+    let electrons = frame.electrons()
+        - orbitals
+            .core_electrons
+            .iter()
+            .map(|&n| i64::from(n))
+            .sum::<i64>();
+    let unpaired = i64::from(frame.multiplicity) - 1;
+    let paired = electrons - unpaired;
+    if paired < 0 || paired % 2 != 0 {
+        return None;
+    }
+    let n_beta = usize::try_from(paired / 2).ok()?;
+    let n_alpha = usize::try_from(paired / 2 + unpaired).ok()?;
     let mut homo: Option<f64> = None;
     let mut lumo: Option<f64> = None;
-    let mut channel = |energies: &[f64], occupations: &[f64]| {
-        for (&energy, &occupation) in energies.iter().zip(occupations) {
-            if occupation > 0.0 {
-                homo = Some(homo.map_or(energy, |previous| previous.max(energy)));
-            } else {
-                lumo = Some(lumo.map_or(energy, |previous| previous.min(energy)));
-            }
+    let mut channel = |energies: &[f64], occupations: &[f64], count: usize, capacity: f64| {
+        // A smeared spectrum still has a frontier if its population agrees with
+        // the electron count for this spin.
+        if occupations.is_empty()
+            || (occupations.iter().sum::<f64>() - count as f64 * capacity).abs() > 1e-6
+        {
+            return None;
         }
+        let (occupied, virtuals) = energies.split_at_checked(count)?;
+        if let Some(&energy) = occupied.last() {
+            homo = Some(homo.map_or(energy, |previous| previous.max(energy)));
+        }
+        if let Some(&energy) = virtuals.first() {
+            lumo = Some(lumo.map_or(energy, |previous| previous.min(energy)));
+        }
+        Some(())
     };
     channel(
         &orbitals.alpha.energies_hartree,
         &orbitals.alpha.occupations,
-    );
+        n_alpha,
+        if matches!(&orbitals.beta, Beta::Restricted) {
+            2.0
+        } else {
+            1.0
+        },
+    )?;
     match &orbitals.beta {
         Beta::Restricted => {}
         Beta::SameOrbitals { occupations } => {
-            channel(&orbitals.alpha.energies_hartree, occupations);
+            channel(&orbitals.alpha.energies_hartree, occupations, n_beta, 1.0)?;
         }
-        Beta::Unrestricted(beta) => channel(&beta.energies_hartree, &beta.occupations),
+        Beta::Unrestricted(beta) => {
+            channel(&beta.energies_hartree, &beta.occupations, n_beta, 1.0)?;
+        }
     }
     Some((lumo? - homo?) * HARTREE_TO_EV)
 }
@@ -150,7 +182,10 @@ pub(crate) fn result_data(result: &CalcResult, frame: &Frame) -> Value {
         );
     }
     orbital_data(&mut data, result.orbitals.as_ref());
-    let gap = result.orbitals.as_ref().and_then(orbital_gap);
+    let gap = result
+        .orbitals
+        .as_ref()
+        .and_then(|orbitals| orbital_gap(orbitals, frame));
     data["homo_lumo_gap"] = json!(gap);
     data["near_degenerate"] = json!(gap.is_some_and(|gap| gap < NEAR_DEGENERATE_GAP_EV));
     if let Some(vibrations) = &result.vibrations {

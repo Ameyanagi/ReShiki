@@ -4,11 +4,15 @@ name: Python wheels
 on:
   pull_request:
     paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
       - "crates/python/**"
       - "crates/python-xtb/**"
       - "crates/xtb-worker/**"
       - "crates/optimize/**"
       - "crates/qcdata/**"
+      - "native/process/**"
+      - "crates/process-heap/**"
       - "LICENSE*"
       - "NOTICE"
       - "licenses/**"
@@ -249,23 +253,30 @@ jobs:
         if: matrix.test
         shell: bash
         run: |
-          uv sync --project crates/python --no-install-project
-          uv pip install --python crates/python/.venv/bin/python --no-index --find-links dist reshiki reshiki-xtb
-          uv run --project crates/python --no-sync python - <<'PY'
+          uv venv --clear .venv-xtb-pair
+          uv pip install --python .venv-xtb-pair/bin/python "numpy>=1.24" "pytest>=8,<10"
+          EXPECTED_VERSION=$(uv run --no-project python -c 'from pathlib import Path; print(next(Path("dist").glob("reshiki-*.whl")).name.split("-")[1])')
+          export EXPECTED_VERSION
+          uv pip install --python .venv-xtb-pair/bin/python --no-index --find-links dist "reshiki[xtb]==$EXPECTED_VERSION"
+          uv run --no-project --python .venv-xtb-pair/bin/python python - <<'PY'
           import os
           import subprocess
+          from importlib.metadata import version
 
           import reshiki
           import reshiki_xtb
           from reshiki import xtb
 
-          assert reshiki.__version__ == reshiki_xtb.__version__
+          expected = os.environ["EXPECTED_VERSION"]
+          assert version("reshiki") == expected
+          assert version("reshiki-xtb") == expected
+          assert reshiki.__version__ == reshiki_xtb.__version__ == expected
           worker = reshiki_xtb.worker_path()
           assert worker.is_file() and os.access(worker, os.X_OK), worker
           subprocess.run([str(worker), "--version"], check=True)
           print(xtb.engine())
           PY
-          uv run --project crates/python --no-sync pytest crates/python/tests/test_xtb.py crates/python/tests/test_qc.py
+          uv run --no-project --python .venv-xtb-pair/bin/python pytest crates/python/tests/test_xtb.py crates/python/tests/test_qc.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: python-xtb-wheel-${{ matrix.artifact }}

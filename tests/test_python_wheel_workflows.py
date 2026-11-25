@@ -19,11 +19,15 @@ class PythonWheelWorkflowTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/python-wheels.yml").read_text()
         triggers = workflow.split("  workflow_call:", 1)[0]
         for path in (
+            "Cargo.toml",
+            "Cargo.lock",
             "crates/python/**",
             "crates/python-xtb/**",
             "crates/xtb-worker/**",
             "crates/optimize/**",
             "crates/qcdata/**",
+            "native/process/**",
+            "crates/process-heap/**",
         ):
             with self.subTest(path=path):
                 self.assertIn(f'      - "{path}"\n', triggers)
@@ -73,7 +77,16 @@ class PythonWheelWorkflowTests(unittest.TestCase):
         engine = workflow_jobs("python-wheels.yml")["xtb_wheel"]
         self.assertIn("needs: [scope, wheel]", engine)
         self.assertIn("name: python-wheel-${{ matrix.artifact }}", engine)
-        install = next(line.strip() for line in engine.splitlines() if "uv pip install " in line)
+        self.assertIn("uv venv --clear .venv-xtb-pair", engine)
+        self.assertIn(
+            'uv pip install --python .venv-xtb-pair/bin/python "numpy>=1.24" "pytest>=8,<10"',
+            engine,
+        )
+        install = next(
+            line.strip()
+            for line in engine.splitlines()
+            if "uv pip install " in line and "--no-index" in line
+        )
         self.assertEqual(
             shlex.split(install),
             [
@@ -81,15 +94,19 @@ class PythonWheelWorkflowTests(unittest.TestCase):
                 "pip",
                 "install",
                 "--python",
-                "crates/python/.venv/bin/python",
+                ".venv-xtb-pair/bin/python",
                 "--no-index",
                 "--find-links",
                 "dist",
-                "reshiki",
-                "reshiki-xtb",
+                "reshiki[xtb]==$EXPECTED_VERSION",
             ],
         )
-        self.assertIn("assert reshiki.__version__ == reshiki_xtb.__version__", engine)
+        self.assertIn('glob("reshiki-*.whl")).name.split("-")[1]', engine)
+        self.assertIn('assert version("reshiki") == expected', engine)
+        self.assertIn('assert version("reshiki-xtb") == expected', engine)
+        self.assertIn("assert reshiki.__version__ == reshiki_xtb.__version__ == expected", engine)
+        self.assertNotIn("uv sync --project", engine)
+        self.assertIn("uv run --no-project --python .venv-xtb-pair/bin/python pytest", engine)
         self.assertIn("os.access(worker, os.X_OK)", engine)
         self.assertIn("print(xtb.engine())", engine)
         self.assertIn(
@@ -116,6 +133,12 @@ class PythonWheelWorkflowTests(unittest.TestCase):
         self.assertIn("pattern: python-xtb-wheel-*", engine)
         self.assertIn("repository-url: https://test.pypi.org/legacy/", engine)
         self.assertIn("skip-existing: true", engine)
+        check = 'scripts/check_python_wheel_notices.py --release-tag "$RELEASE_TAG" "dist/reshiki_xtb-*.whl"'
+        self.assertIn("RELEASE_TAG: ${{ github.ref_name }}", engine)
+        self.assertIn(check, engine)
+        self.assertIn("sparse-checkout: scripts", engine)
+        self.assertLess(engine.index("pattern: python-xtb-wheel-*"), engine.index(check))
+        self.assertLess(engine.index(check), engine.index("uses: pypa/gh-action-pypi-publish@"))
         self.assertIn("uses: ./.github/workflows/python-wheels.yml", jobs["python_wheels"])
         self.assertIn("pattern: python-wheel-*", jobs["pypi"])
         for name, job in jobs.items():

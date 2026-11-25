@@ -51,7 +51,9 @@ class Geometry:
 
     ``numbers`` has shape ``(N,)`` and atomic numbers 1–118. ``positions`` has
     shape ``(N, 3)`` in ångströms. An omitted multiplicity becomes 1 for an even
-    electron count or 2 for an odd count. Arrays are copied when constructed.
+    electron count or 2 for an odd count. ``isotopes`` gives one mass number per
+    atom, with 0 for natural abundance. It is ``None`` if all atoms are natural.
+    Arrays are copied when constructed.
 
     Example: ``Geometry.from_symbols(["H", "H"], [[0, 0, 0], [0, 0, 0.74]])``.
     """
@@ -61,6 +63,7 @@ class Geometry:
     charge: int = 0
     multiplicity: int | None = None
     title: str = ""
+    isotopes: NDArray[np.int64] | None = None
 
     def __post_init__(self) -> None:
         import numpy as np
@@ -93,12 +96,26 @@ class Geometry:
             raise _invalid("Charge and multiplicity do not fit the number of electrons.")
         if not isinstance(self.title, str):
             raise _invalid("Title must be a string.")
+        isotopes = None
+        if self.isotopes is not None:
+            masses = np.asarray(self.isotopes)
+            if masses.shape not in {(0,), numbers.shape}:
+                raise _invalid("Isotopes must give one mass number per atom.")
+            if masses.size:
+                if not np.issubdtype(masses.dtype, np.integer) or np.any(
+                    (masses < 0) | (masses > 65535)
+                ):
+                    raise _invalid("Isotope mass numbers must be integers from 0 to 65535.")
+                if masses.any():
+                    isotopes = np.array(masses, dtype=np.int64, copy=True)
+                    isotopes.setflags(write=False)
         numbers.setflags(write=False)
         positions.setflags(write=False)
         object.__setattr__(self, "numbers", numbers)
         object.__setattr__(self, "positions", positions)
         object.__setattr__(self, "charge", charge)
         object.__setattr__(self, "multiplicity", multiplicity)
+        object.__setattr__(self, "isotopes", isotopes)
 
     @property
     def symbols(self) -> tuple[str, ...]:
@@ -118,6 +135,7 @@ class Geometry:
         charge: int = 0,
         multiplicity: int | None = None,
         title: str = "",
+        isotopes: ArrayLike | None = None,
     ) -> Geometry:
         """Build a geometry from element symbols or atomic numbers.
 
@@ -141,6 +159,7 @@ class Geometry:
             charge,
             multiplicity,
             title,
+            np.asarray(isotopes) if isotopes is not None else None,
         )
 
     @classmethod
@@ -166,20 +185,24 @@ class Geometry:
             charge=charge,
             multiplicity=multiplicity,
             title=geometry["title"],
+            isotopes=geometry.get("isotopes"),
         )
 
     def to_xyz(self) -> str:
-        """Write one XYZ frame, retaining coordinate precision and the title.
+        """Write one XYZ frame, retaining coordinate precision, title and isotopes.
 
         Example: ``Path("water.xyz").write_text(water.to_xyz())``.
         For an XYZ round trip, pass the charge and multiplicity when reading it again.
         """
         title = self.title.replace("\r", " ").replace("\n", " ")
         rows = [str(len(self)), title]
-        rows.extend(
-            f"{symbol} {x:.17g} {y:.17g} {z:.17g}"
-            for symbol, (x, y, z) in zip(self.symbols, self.positions.tolist())
-        )
+        isotopes = self.isotopes.tolist() if self.isotopes is not None else [0] * len(self)
+        for symbol, isotope, (x, y, z) in zip(self.symbols, isotopes, self.positions.tolist()):
+            if symbol == "H" and isotope in (2, 3):
+                symbol = "DT"[isotope - 2]
+            elif isotope:
+                symbol = f"{isotope}{symbol}"
+            rows.append(f"{symbol} {x:.17g} {y:.17g} {z:.17g}")
         return "\n".join(rows) + "\n"
 
 
@@ -297,6 +320,7 @@ def _geometry_data(geometry: Geometry) -> dict[str, Any]:
         "charge": geometry.charge,
         "multiplicity": geometry.multiplicity,
         "title": geometry.title,
+        "isotopes": geometry.isotopes.tolist() if geometry.isotopes is not None else [],
     }
 
 
@@ -309,6 +333,7 @@ def _geometry_from_data(data: dict[str, Any]) -> Geometry:
         data["charge"],
         data["multiplicity"],
         data.get("title", ""),
+        np.asarray(data["isotopes"]) if "isotopes" in data else None,
     )
 
 

@@ -1,6 +1,6 @@
 //! Quantum chemistry input files and Cartesian geometry exports.
 
-use std::fmt::Write;
+use std::{borrow::Cow, fmt::Write};
 
 use reshiki_model::chemistry::{ELEMENTS, Element};
 use serde::{Deserialize, Serialize};
@@ -300,15 +300,11 @@ pub fn write(
             "The reactant, product and TS guess must list the same atoms in the same order.".into(),
         )
     };
-    let has_isotopes = frame.isotopes.iter().any(|&isotope| isotope != 0);
     let mut warnings = Vec::new();
     if program == Program::Xyz {
         check_atoms(frame)?;
         if !drawing_atoms_match {
             return Err(atom_order_error());
-        }
-        if has_isotopes {
-            warnings.push("XYZ files carry no isotopes; they are not written.".into());
         }
         return Ok(Output {
             main: File {
@@ -389,7 +385,7 @@ pub fn write(
             "Charge {charge} and multiplicity {multiplicity} do not fit {electrons} electrons."
         ));
     }
-    if has_isotopes {
+    if program != Program::Gaussian && frame.isotopes.iter().any(|&isotope| isotope != 0) {
         warnings.push(format!(
             "Isotopes are not written; set them in {} if you need them.",
             program.label()
@@ -578,9 +574,22 @@ fn coordinates_8(pos: [f64; 3]) -> [f64; 3] {
     pos.map(|x| if x.abs() < 0.5e-8 { 0.0 } else { x })
 }
 
-fn write_atoms(text: &mut String, frame: &Frame, indent: &str) {
-    for (_, element, pos) in atoms(frame) {
-        let sym = element.symbol;
+fn write_atoms(text: &mut String, frame: &Frame, program: Program) {
+    let indent = match program {
+        Program::Gaussian | Program::Gamess => " ",
+        Program::Orca => "  ",
+        Program::Xyz => "",
+    };
+    for (index, (_, element, pos)) in atoms(frame).enumerate() {
+        let isotope = frame.isotopes.get(index).copied().unwrap_or_default();
+        let sym = match (program, element.symbol, isotope) {
+            (_, symbol, 0) => Cow::Borrowed(symbol),
+            (Program::Gaussian, symbol, isotope) => format!("{symbol}(Iso={isotope})").into(),
+            (Program::Xyz, "H", 2) => Cow::Borrowed("D"),
+            (Program::Xyz, "H", 3) => Cow::Borrowed("T"),
+            (Program::Xyz, symbol, isotope) => format!("{isotope}{symbol}").into(),
+            (_, symbol, _) => Cow::Borrowed(symbol),
+        };
         let [x, y, z] = coordinates_8(pos);
         let _ = writeln!(text, "{indent}{sym:<2} {x:>14.8} {y:>14.8} {z:>14.8}");
     }
