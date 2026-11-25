@@ -134,7 +134,12 @@ fn ok<const N: usize>(fields: [(&str, Value); N], versions: &Versions) -> ToolRe
 
 /// Reports server information; the successful result contract is in
 /// [`super::catalog::RESULTS`].
-pub(crate) fn info(versions: &Versions, budgets: &Budgets, grants: &Grants) -> ToolResult {
+pub(crate) fn info(
+    versions: &Versions,
+    budgets: &Budgets,
+    grants: &Grants,
+    calculations: Value,
+) -> ToolResult {
     let granted = grants.summary();
     ok(
         [
@@ -150,6 +155,7 @@ pub(crate) fn info(versions: &Versions, budgets: &Budgets, grants: &Grants) -> T
                 json!({"read": granted.read, "write": granted.write}),
             ),
             ("files", json!({"read": *READ, "write": *WRITE})),
+            ("calculations", calculations),
         ],
         versions,
     )
@@ -182,6 +188,7 @@ pub fn budgets_json(budgets: &Budgets) -> Value {
         "concurrency": budgets.concurrency,
         "queue": budgets.queue,
         "op_deadline_seconds": budgets.op_deadline.as_secs(),
+        "calc_deadline_seconds": budgets.calc_deadline.as_secs(),
         "idle_ttl_seconds": budgets.idle_ttl.as_secs(),
         "idempotency_receipts": budgets.idempotency_receipts,
         "max_idempotency_key_bytes": budgets.max_idempotency_key_bytes,
