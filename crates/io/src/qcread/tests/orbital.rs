@@ -3,10 +3,12 @@
 //! The evaluator implements the canonical contract in docs/plans/xtb-data.md without
 //! production normalization, ordering, or harmonic helpers. The synthetic experiment
 //! expands a finite Legendre polynomial, independently of the evaluator's recurrence.
-//! No external chemistry implementation is used.
+//! The fixture tests compare this evaluator with signed grid values from PySCF,
+//! including ORCA references whose convention is fixed by implied AO overlap.
 use crate::qcread::tests::{fixture, open};
 use reshiki_qcdata::{
-    ANGSTROM_PER_BOHR, BasisSet, CartesianNorm, Frame, Shell, mo_from_molden, mo_to_molden,
+    ANGSTROM_PER_BOHR, BasisSet, CartesianNorm, Frame, Orbitals, Shell, mo_from_molden,
+    mo_to_molden, primitive_norm,
 };
 use std::{collections::BTreeMap, f64::consts::PI};
 
@@ -162,6 +164,206 @@ fn wavefunction(evaluators: &[Evaluator], row: &[f64], point: [f64; 3]) -> f64 {
         .zip(row)
         .map(|(a, c)| a * c)
         .sum()
+}
+
+struct Reference {
+    source: String,
+    points: Vec<[f64; 3]>,
+    orbitals: Vec<ReferenceOrbital>,
+}
+
+struct ReferenceOrbital {
+    index: u32,
+    energy: f64,
+    values: Vec<f64>,
+}
+
+fn read_reference(stem: &str) -> Reference {
+    let text = String::from_utf8(fixture(&format!("reference/{stem}.txt"))).unwrap();
+    let mut lines = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'));
+    let source = lines.next().unwrap().strip_prefix("source ").unwrap();
+    let n_points = lines.next().unwrap().strip_prefix("points ").unwrap();
+    let n_points: usize = n_points.parse().unwrap();
+    let points: Vec<_> = lines
+        .by_ref()
+        .take(n_points)
+        .map(|line| {
+            let mut fields = line.split_whitespace();
+            let point = std::array::from_fn(|_| fields.next().unwrap().parse().unwrap());
+            assert!(fields.next().is_none());
+            point
+        })
+        .collect();
+    assert_eq!(points.len(), n_points);
+    assert!(!points.is_empty());
+    let orbitals: Vec<_> = lines
+        .map(|line| {
+            let mut fields = line.split_whitespace();
+            assert_eq!(fields.next(), Some("orbital"));
+            assert_eq!(fields.next(), Some("a"));
+            let index = fields.next().unwrap().parse().unwrap();
+            let energy = fields.next().unwrap().parse().unwrap();
+            let values: Vec<_> = fields.map(|field| field.parse().unwrap()).collect();
+            assert_eq!(values.len(), n_points);
+            ReferenceOrbital {
+                index,
+                energy,
+                values,
+            }
+        })
+        .collect();
+    assert!(!orbitals.is_empty());
+    Reference {
+        source: source.into(),
+        points,
+        orbitals,
+    }
+}
+
+fn reference_error(reference: &Reference, orbitals: &Orbitals, frame: &Frame) -> f64 {
+    let basis = orbitals.basis.as_ref().expect("reference requires a basis");
+    let evaluators = evaluate_basis(basis, frame);
+    let n_ao: usize = basis.shells.iter().map(Shell::n_functions).sum();
+    let alpha = &orbitals.alpha;
+    let mut worst = 0.0_f64;
+    for orbital in &reference.orbitals {
+        assert!(
+            (orbital.energy - alpha.energies_hartree[orbital.index as usize]).abs() < 1e-6,
+            "{} orbital {} energy mismatch",
+            reference.source,
+            orbital.index
+        );
+        let index = alpha.rows.binary_search(&orbital.index).unwrap();
+        let row = &alpha.coefficients[index * n_ao..(index + 1) * n_ao];
+        let observed: Vec<_> = reference
+            .points
+            .iter()
+            .map(|&point| wavefunction(&evaluators, row, point))
+            .collect();
+        let dot: f64 = observed
+            .iter()
+            .zip(&orbital.values)
+            .map(|(a, b)| a * b)
+            .sum();
+        let sign = dot.signum();
+        for (actual, expected) in observed.iter().zip(&orbital.values) {
+            let error = (sign * actual - expected).abs();
+            assert!(error.is_finite());
+            worst = worst.max(error);
+        }
+    }
+    worst
+}
+
+fn compare(reference: &Reference) -> (f64, usize, usize) {
+    let file = open(&reference.source);
+    let job = &file.jobs[0];
+    let orbitals = job.result.as_ref().unwrap().orbitals.as_ref().unwrap();
+    let frame = &job.result_step().unwrap().frame;
+    let error = reference_error(reference, orbitals, frame);
+    (error, reference.points.len(), reference.orbitals.len())
+}
+
+macro_rules! reference_tests {
+    ($($test:ident => $stem:literal),+ $(,)?) => {
+        $(
+            #[test]
+            fn $test() {
+                let (error, points, orbitals) = compare(&read_reference($stem));
+                eprintln!("reference {}: {orbitals} orbitals x {points} points, max |error| = {error:.3e}", $stem);
+                assert!(error < 1e-9, "{}: {error:e}", $stem);
+            }
+        )+
+    };
+}
+
+reference_tests! {
+    reference_ch2o_ccpvtz_pure => "ch2o_ccpvtz_pure",
+    reference_h2o_ccpvqz_pure => "h2o_ccpvqz_pure",
+    reference_h2o_ccpvqz_cart => "h2o_ccpvqz_cart",
+    reference_ch3nh2_631gs_cart => "ch3nh2_631gs_cart",
+    reference_tih2f2_def2tzvp_pure => "tih2f2_def2tzvp_pure",
+    reference_h2o_ccpvqz_mixed_a => "h2o_ccpvqz_mixed_a",
+    reference_h2o_ccpvqz_mixed_b => "h2o_ccpvqz_mixed_b",
+    reference_g09_mo4ocl4_sp => "g09_Mo4OCl4-sp",
+    reference_orca611_water_tzvp => "orca611_water_tzvp",
+    reference_orca611_h2co_tddft => "orca611_h2co_tddft",
+}
+
+#[test]
+fn orbital_references_detect_perturbed_components() {
+    #[derive(Clone, Copy)]
+    enum Perturbation {
+        Swap(u8),
+        FlipPureD,
+        FlipPureF3,
+        BareRadial,
+    }
+    use Perturbation::{BareRadial, FlipPureD, FlipPureF3, Swap};
+
+    let cases: [(&str, &[Perturbation]); 6] = [
+        ("h2o_ccpvqz_pure", &[Swap(2), Swap(3), Swap(4), FlipPureD]),
+        ("h2o_ccpvqz_cart", &[Swap(2), Swap(3), Swap(4)]),
+        ("ch3nh2_631gs_cart", &[Swap(2)]),
+        ("g09_Mo4OCl4-sp", &[Swap(2), FlipPureD]),
+        ("orca611_water_tzvp", &[FlipPureF3, BareRadial]),
+        ("orca611_h2co_tddft", &[Swap(2)]),
+    ];
+    for (stem, perturbations) in cases {
+        let reference = read_reference(stem);
+        let file = open(&reference.source);
+        let job = &file.jobs[0];
+        let orbitals = job.result.as_ref().unwrap().orbitals.as_ref().unwrap();
+        let frame = &job.result_step().unwrap().frame;
+        let basis = orbitals.basis.as_ref().unwrap();
+        let n_ao: usize = basis.shells.iter().map(Shell::n_functions).sum();
+        for &change in perturbations {
+            let mut perturbed = orbitals.clone();
+            if matches!(change, BareRadial) {
+                for shell in &mut perturbed.basis.as_mut().unwrap().shells {
+                    for (&alpha, coefficient) in shell
+                        .exponents_per_bohr2
+                        .iter()
+                        .zip(&mut shell.coefficients)
+                    {
+                        *coefficient *= primitive_norm(alpha, shell.l);
+                    }
+                }
+            } else {
+                for row in perturbed.alpha.coefficients.chunks_exact_mut(n_ao) {
+                    let mut offset = 0;
+                    for shell in &basis.shells {
+                        let end = offset + shell.n_functions();
+                        match change {
+                            Swap(l) if shell.l == l => row.swap(offset, offset + 1),
+                            FlipPureD if shell.l == 2 && shell.pure => row[end - 1] *= -1.0,
+                            FlipPureF3 if shell.l == 3 && shell.pure => {
+                                row[offset] *= -1.0;
+                                row[end - 1] *= -1.0;
+                            }
+                            _ => {}
+                        }
+                        offset = end;
+                    }
+                }
+            }
+            let error = reference_error(&reference, &perturbed, frame);
+            let label = match change {
+                Swap(l) => format!(
+                    "swap first two {} components",
+                    ["d", "f", "g"][usize::from(l - 2)]
+                ),
+                FlipPureD => "flip last pure d component".into(),
+                FlipPureF3 => "undo pure f(±3) sign flips".into(),
+                BareRadial => "undo radial rescaling".into(),
+            };
+            eprintln!("perturbed {stem} ({label}): max |error| = {error:.3e}");
+            assert!(error > 1e-3, "{stem} ({label}): {error:e}");
+        }
+    }
 }
 
 // Gauss–Legendre quadrature on [-1,1], found by Newton iteration on P_n.

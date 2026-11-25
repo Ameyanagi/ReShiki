@@ -7,7 +7,7 @@ use reshiki_qcdata::{
 };
 
 #[test]
-fn fchk_g09_carbon_bigbasis_keeps_80_levels_without_unverified_pure_d_f_g_shapes() {
+fn fchk_g09_carbon_bigbasis_keeps_80_levels_without_unverified_pure_f_g_shapes() {
     let file = open("cclib/g09_C_bigbasis.fchk");
     let job = &file.jobs[0];
     let frame = &job.steps[0].frame;
@@ -25,7 +25,7 @@ fn fchk_g09_carbon_bigbasis_keeps_80_levels_without_unverified_pure_d_f_g_shapes
     assert!(job.completion.is_none());
     assert_eq!(job.index, 0);
     // Shell types, lines 52–55, include four -2, three -3, and two -4 records.
-    // Their pure d/f/g conventions have no verified mapping to our canonical AOs.
+    // The pure f/g shells prevent keeping any shapes, including the verified pure d.
     assert!(orbitals.basis.is_none());
     assert_eq!(orbitals.alpha.energies_hartree.len(), 80);
     assert!(orbitals.alpha.rows.is_empty());
@@ -42,7 +42,7 @@ fn fchk_g09_carbon_bigbasis_keeps_80_levels_without_unverified_pure_d_f_g_shapes
     assert_eq!(
         file.warnings,
         [
-            "Orbital shapes left out: Gaussian d, f and g functions have no verified convention here; orbital energies are kept"
+            "Orbital shapes left out: Gaussian pure f and pure g functions have no verified convention here; orbital energies are kept"
         ]
     );
     assert!(matches!(&result.provenance.source,
@@ -435,7 +435,7 @@ fn description(source: &str, calculation: &str, method: &str) -> String {
 }
 
 #[test]
-fn fchk_every_pure_or_cartesian_high_shell_omits_all_shapes() {
+fn fchk_high_shell_shapes_require_gaussian_pure_d() {
     for (l, name) in [(2usize, "d"), (3, "f"), (4, "g"), (5, "h")] {
         for pure in [false, true] {
             // Water's Shell types "0 -1 0 0" becomes "0 +/-l 0 0".
@@ -462,25 +462,59 @@ fn fchk_every_pure_or_cartesian_high_shell_omits_all_shapes() {
                     .flat_map(|row| row.iter().copied().chain(vec![0.0; n_ao - 7]))
                     .collect();
             });
-            let file = read("high-shell.fchk", source.as_bytes()).unwrap();
-            let orbitals = file.jobs[0]
-                .result
-                .as_ref()
-                .unwrap()
-                .orbitals
-                .as_ref()
-                .unwrap();
-            assert_eq!(orbitals.alpha.energies_hartree.len(), 7);
-            assert_eq!(orbitals.alpha.occupations.iter().sum::<f64>(), 10.0);
-            assert!(orbitals.basis.is_none());
-            assert!(orbitals.alpha.rows.is_empty());
-            assert!(orbitals.alpha.coefficients.is_empty());
-            assert_eq!(
-                file.warnings,
-                [format!(
-                    "Orbital shapes left out: Gaussian {name} functions have no verified convention here; orbital energies are kept"
-                )]
-            );
+            let cases = if l == 2 && pure {
+                // Rename the marker records without changing their type, width or values.
+                let no_ilsw = source.replacen("\nILSW ", "\nXLSW ", 1);
+                let no_iopcl = source.replacen("\nIOpCl ", "\nXOpCl ", 1);
+                let neither = no_ilsw.replacen("\nIOpCl ", "\nXOpCl ", 1);
+                let version_only =
+                    format!("{neither}{:<40}   C     G16 A.03\n", "Gaussian Version");
+                vec![
+                    (source, true),
+                    (version_only, true),
+                    (no_ilsw, false),
+                    (no_iopcl, false),
+                    (neither, false),
+                ]
+            } else {
+                vec![(source, true)]
+            };
+            for (source, gaussian) in cases {
+                let file = read("high-shell.fchk", source.as_bytes()).unwrap();
+                let orbitals = file.jobs[0]
+                    .result
+                    .as_ref()
+                    .unwrap()
+                    .orbitals
+                    .as_ref()
+                    .unwrap();
+                assert_eq!(orbitals.alpha.energies_hartree.len(), 7);
+                assert_eq!(orbitals.alpha.occupations.iter().sum::<f64>(), 10.0);
+                if gaussian && l == 2 && pure {
+                    let shell = &orbitals.basis.as_ref().unwrap().shells[1];
+                    assert_eq!((shell.l, shell.pure), (2, true));
+                    assert_eq!(orbitals.alpha.rows, (0..7).collect::<Vec<_>>());
+                    assert_eq!(orbitals.alpha.coefficients.len(), 7 * n_ao);
+                    assert!(file.warnings.is_empty());
+                } else {
+                    assert!(orbitals.basis.is_none());
+                    assert!(orbitals.alpha.rows.is_empty());
+                    assert!(orbitals.alpha.coefficients.is_empty());
+                    let label = if gaussian {
+                        let representation = if pure { "pure" } else { "Cartesian" };
+                        format!("Gaussian {representation} {name} functions")
+                    } else {
+                        "pure d functions in an fchk file not written by Gaussian 09 or later"
+                            .into()
+                    };
+                    assert_eq!(
+                        file.warnings,
+                        [format!(
+                            "Orbital shapes left out: {label} have no verified convention here; orbital energies are kept"
+                        )]
+                    );
+                }
+            }
         }
     }
 }
@@ -1085,7 +1119,7 @@ fn fchk_unproven_cartesian_d_keeps_levels_and_names_the_functions() {
     assert_eq!(
         file.warnings,
         [
-            "Orbital shapes left out: Gaussian d, f and g functions have no verified convention here; orbital energies are kept"
+            "Orbital shapes left out: Gaussian Cartesian d, pure f and pure g functions have no verified convention here; orbital energies are kept"
         ]
     );
 }
@@ -1123,7 +1157,7 @@ fn fchk_unproven_pure_h_keeps_levels_and_names_the_functions() {
     assert_eq!(
         file.warnings,
         [
-            "Orbital shapes left out: Gaussian d, f, g and h functions have no verified convention here; orbital energies are kept"
+            "Orbital shapes left out: Gaussian pure f, pure g and pure h functions have no verified convention here; orbital energies are kept"
         ]
     );
 }

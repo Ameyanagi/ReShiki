@@ -179,9 +179,10 @@ canonical form in component order and, for Cartesian shells, possibly normalizat
 | 15G        | xxxx, yyyy, zzzz, xxxy, xxxz, yyyx, yyyz, zzzx, zzzy, xxyy, xxzz, yyzz, xxyz, yyxz, zzxy |
 | 5D, 7F, 9G | m = 0, +1, −1, +2, −2, …                                                                 |
 
-Contraction coefficients already follow rule 7. Molden chooses pure or Cartesian once per
-angular momentum for the whole file and has no h shells, so writing a basis that mixes
-representations within one `l`, or has `l = 5`, is an error. `[STO]` bases are unsupported.
+Molden and PySCF exports already follow rule 7 for contraction coefficients. Molden chooses
+pure or Cartesian once per angular momentum for the whole file and has no h shells, so
+writing a basis that mixes representations within one `l`, or has `l = 5`, is an error.
+`[STO]` bases are unsupported.
 
 The specification does not say how Cartesian components are normalized, and producers differ.
 The converters take `CartesianNorm`:
@@ -192,8 +193,16 @@ The converters take `CartesianNorm`:
   r(a, b, c) = (2a − 1)!! (2b − 1)!! (2c − 1)!! / (2l − 1)!!, so importing multiplies the MO
   coefficient by √r and exporting divides by it. A d_xy coefficient of 1 becomes 1/√3.
 
-Each reader names the convention of its identified producer and proves it on a fixture.
-Producer-specific sign changes of pure functions belong to the reader's adapter.
+The cclib Molden 5.7 carbon fixture verifies Cartesian d/f/g `Unit` normalization by MO
+orthonormality. By import policy, unidentified Molden producers use the conventions verified
+on Molden and PySCF exports. Producer-specific sign changes of pure functions belong to the
+reader's adapter. The printed G09 and G16 Mo4OCl4-sp overlaps and the G09 fchk signed grid
+reference verify that the Gaussian pure d order and signs match Molden's.
+
+The ORCA adapter divides bare radial coefficients by `primitive_norm(alpha, l)` and flips
+the pure f coefficients at m = ±3, as verified by the implied AO overlap of the complete
+ORCA 6.1.1 water TZVP and formaldehyde TDDFT MO sets and checked against signed grid references.
+Pure g and Cartesian d/f/g remain unverified and cause the reader to keep only the orbital spectrum.
 
 Functions: `canonical_cartesian_order(l)`, `molden_cartesian_order(l)`, `molden_pure_order(l)`,
 `axial_norm_ratio(a, b, c)`, `primitive_norm(alpha, l)`, `contraction_overlap(shell)`,
@@ -201,9 +210,10 @@ Functions: `canonical_cartesian_order(l)`, `molden_cartesian_order(l)`, `molden_
 `mo_to_molden` (one MO over a basis). Tests use hand-built shells: permutations component by
 component, normalization ratios and the contraction overlap against numerical quadrature, a
 one-hot d_xy, an SP shell with different s and p coefficients, a two-primitive contraction,
-and round trips for every l and both conventions. Phase 5 validates signed grid values with
-independent per-shell evaluations, since PySCF's loader uses one Cartesian flag for the whole
-file.
+and round trips for every l and both conventions. The PySCF cc-pVQZ water fixtures validate
+pure d/f/g order and signs and Cartesian d/f/g order and `Unit` normalization against signed
+grid values. The two mixed water fixtures validate per-l flags by independent per-shell
+evaluation. PySCF's loader uses one Cartesian flag for the whole file.
 
 ### `Vibrations`
 

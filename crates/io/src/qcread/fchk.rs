@@ -2,12 +2,17 @@
 //!
 //! The Gaussian 09 User's Reference, "Structure of the Formatted Checkpoint File",
 //! specifies the field widths, atomic units, normalized primitive contractions, and
-//! Gaussian component order. This adapter is original code under MIT OR Apache-2.0.
+//! Gaussian component order. Printed G09 and G16 Mo4OCl4-sp overlaps verify the
+//! pure d order and signs, and the cclib G09 fchk fixture verifies signed grid
+//! values. The reader retains s/p/SP and enables pure d for Gaussian 09 or later.
+//! Higher pure shells and Cartesian d and above have unverified conventions.
+//! This adapter is original code under MIT OR Apache-2.0.
 use std::collections::{BTreeMap, BTreeSet};
 
 use reshiki_qcdata::{
-    ANGSTROM_PER_BOHR, AtomicCharges, BasisSet, Beta, ChargeScheme, MAX_BASIS_FUNCTIONS,
-    MAX_COEFFICIENTS, MAX_HESSIAN_ATOMS, OrbitalSet, Orbitals, Shell, Status, Task, Vibrations,
+    ANGSTROM_PER_BOHR, AtomicCharges, BasisSet, Beta, CartesianNorm, ChargeScheme,
+    MAX_BASIS_FUNCTIONS, MAX_COEFFICIENTS, MAX_HESSIAN_ATOMS, OrbitalSet, Orbitals, Shell, Status,
+    Task, Vibrations, mo_from_molden,
 };
 
 use super::{Error, Format, Job, JobKind, Origin, QcFile, QcProgram, Step, frame};
@@ -493,8 +498,8 @@ fn nonempty(text: &str) -> Option<String> {
     (!text.is_empty()).then(|| text.to_string())
 }
 
-/// Only s, p and SP shell conventions have been verified here. Any higher angular
-/// momentum leaves the spectrum intact while omitting all orbital shapes.
+/// Retain s, p, SP and Gaussian 09 or later pure d shells. An unverified shell
+/// convention leaves the spectrum intact while omitting all orbital shapes.
 fn basis(
     fields: &Fields,
     coordinates: &[f64],
@@ -503,22 +508,38 @@ fn basis(
     warnings: &mut Vec<String>,
 ) -> Result<Option<BasisSet>, Error> {
     let types = fields.integers("Shell types")?;
-    let high: BTreeSet<_> = types
+    let gaussian = fields.get("Gaussian Version").is_some()
+        || (fields.get("ILSW").is_some() && fields.get("IOpCl").is_some());
+    let unverified: BTreeSet<_> = types
         .unwrap_or_default()
         .iter()
-        .map(|t| t.unsigned_abs())
-        .filter(|&l| l >= 2)
+        .copied()
+        .filter(|&kind| kind.unsigned_abs() >= 2 && !(kind == -2 && gaussian))
+        .map(|kind| (kind.unsigned_abs(), kind > 0))
         .collect();
-    let mut names = high.into_iter().map(angular_name).collect::<Vec<_>>();
+    let non_gaussian_d = unverified.contains(&(2, false));
+    let mut names = unverified
+        .into_iter()
+        .map(|(l, cartesian)| {
+            let representation = if cartesian { "Cartesian" } else { "pure" };
+            format!("{representation} {}", angular_name(l))
+        })
+        .collect::<Vec<_>>();
     let verified = names.is_empty();
     if let Some(last) = names.pop() {
+        let qualifier = if gaussian { "Gaussian " } else { "" };
+        let location = if non_gaussian_d {
+            " in an fchk file not written by Gaussian 09 or later"
+        } else {
+            ""
+        };
         let functions = if names.is_empty() {
             last
         } else {
             format!("{} and {last}", names.join(", "))
         };
         warnings.push(format!(
-            "Orbital shapes left out: Gaussian {functions} functions have no verified convention here; orbital energies are kept"
+            "Orbital shapes left out: {qualifier}{functions} functions{location} have no verified convention here; orbital energies are kept"
         ));
     }
     let Some(count) = stored_coefficients else {
@@ -629,7 +650,7 @@ fn basis(
                 shells.push(Shell {
                     atom: atom as u32,
                     l,
-                    pure: false,
+                    pure: kind == -2,
                     exponents_per_bohr2: exponents[primitive_start..end].to_vec(),
                     coefficients: contractions[primitive_start..end].to_vec(),
                 });
@@ -819,8 +840,14 @@ fn orbitals(
     };
     let alpha_order = permutation(alpha_energies);
     let set = |occupied: usize, coefficients: Option<&[f64]>, levels: &[(usize, f64)]| {
-        let have_rows = basis.is_some() && coefficients.is_some();
-        OrbitalSet {
+        let (rows, coefficients) = match (basis.as_ref(), coefficients) {
+            (Some(basis), Some(values)) => (
+                (0..n_mo as u32).collect(),
+                canonical_coefficients(basis, values, n_ao, levels)?,
+            ),
+            _ => (Vec::new(), Vec::new()),
+        };
+        Ok::<_, Error>(OrbitalSet {
             energies_hartree: levels.iter().map(|&(_, energy)| energy).collect(),
             occupations: levels
                 .iter()
@@ -833,22 +860,14 @@ fn orbitals(
                 })
                 .collect(),
             symmetries: Vec::new(),
-            rows: if have_rows {
-                (0..n_mo as u32).collect()
-            } else {
-                Vec::new()
-            },
-            coefficients: coefficients
-                .filter(|_| have_rows)
-                .map_or_else(Vec::new, |values| {
-                    canonical_coefficients(values, n_ao, levels)
-                }),
-        }
+            rows,
+            coefficients,
+        })
     };
-    let alpha = set(n_alpha, alpha_coefficients, &alpha_order);
+    let alpha = set(n_alpha, alpha_coefficients, &alpha_order)?;
     let beta = match beta_energies {
         Some(energies) => {
-            Beta::Unrestricted(set(n_beta, beta_coefficients, &permutation(energies)))
+            Beta::Unrestricted(set(n_beta, beta_coefficients, &permutation(energies))?)
         }
         None if shared_open => Beta::SameOrbitals {
             occupations: alpha_order
@@ -929,11 +948,19 @@ fn natural_orbital_route(keywords: &[String]) -> bool {
     clippy::indexing_slicing,
     reason = "The caller checks values.len() == n_ao*n_mo, and levels enumerates the n_mo spectrum"
 )]
-fn canonical_coefficients(values: &[f64], n_ao: usize, levels: &[(usize, f64)]) -> Vec<f64> {
-    levels
-        .iter()
-        .flat_map(|&(mo, _)| values[mo * n_ao..(mo + 1) * n_ao].iter().copied())
-        .collect()
+fn canonical_coefficients(
+    basis: &BasisSet,
+    values: &[f64],
+    n_ao: usize,
+    levels: &[(usize, f64)],
+) -> Result<Vec<f64>, Error> {
+    let mut converted = Vec::with_capacity(values.len());
+    for &(mo, _) in levels {
+        let row = &values[mo * n_ao..(mo + 1) * n_ao];
+        // Gaussian pure d uses Molden's order and signs. The conversion leaves s/p/SP as is.
+        converted.extend(mo_from_molden(basis, row, CartesianNorm::Unit)?);
+    }
+    Ok(converted)
 }
 
 fn vibrations(fields: &Fields, axes: usize, n_atoms: usize) -> Result<Option<Vibrations>, Error> {
