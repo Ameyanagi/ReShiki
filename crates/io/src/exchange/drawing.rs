@@ -33,6 +33,11 @@ mod partial_charges;
 mod piece_tests;
 #[cfg(test)]
 mod purpose_tests;
+#[cfg(test)]
+mod reaction_goldens;
+#[cfg(test)]
+mod reaction_tests;
+mod steps;
 mod tables;
 mod tlc;
 mod tree;
@@ -188,7 +193,7 @@ struct Writer<'a> {
     work: usize,
     variable_labels: bool,
     /// Each molecule in a fragment of its own even without groups, so a
-    /// catalytic cycle's parts can be named apart.
+    /// reaction's participants or catalytic cycle's parts can be named apart.
     split_fragments: bool,
 }
 
@@ -198,6 +203,32 @@ struct Writer<'a> {
 /// links cannot be represented. Callers display `arrow_anchors::export_notice`.
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     write_impl(document, options, false, false)
+}
+
+/// Whether editable export omits an explicit reaction step.
+pub fn has_unwritten_reactions(document: &Document) -> bool {
+    if document.reactions.is_empty() {
+        return false;
+    }
+    let lowered = crate::arrows::lowered(document);
+    if lowered.reactions.len() < document.reactions.len() {
+        return true;
+    }
+    // A ChemDraw step has no place for a coefficient.
+    if document.reactions.iter().any(|reaction| {
+        [&reaction.reactants, &reaction.products, &reaction.agents]
+            .into_iter()
+            .flatten()
+            .any(|participant| participant.coefficient > 1)
+    }) {
+        return true;
+    }
+    let fragments = groups::Fragments::of(&lowered);
+    document.reactions.iter().any(|reaction| {
+        crate::reactions::preview(document, reaction.arrow).map_or(true, |reaction| {
+            steps::participant_fragments(&reaction, |atom| fragments.containing(atom)).is_none()
+        })
+    })
 }
 
 /// Transfer a validated drawing even when its chemical assignment is pending.
@@ -398,7 +429,19 @@ fn write_impl(
     w.marks()?;
     w.hidden_charges()?;
     w.arrows()?;
-    let middle = w.graphics()?;
+    let reactions = w.preview_steps();
+    // Each participant needs a fragment of its own for a step to name it.
+    let fragments = if reactions.is_empty() {
+        groups::Fragments::default()
+    } else {
+        groups::Fragments::of(document)
+    };
+    w.split_fragments |= steps::needs_fragments(&reactions, &fragments);
+    let plusses = reactions
+        .iter()
+        .flat_map(|r| r.plusses.iter().copied())
+        .collect();
+    let middle = w.graphics(&plusses)?;
     w.generic_units()?;
     let arrow_nodes: std::collections::HashSet<_> = document
         .arrows
@@ -448,6 +491,7 @@ fn write_impl(
     }
     let payload = w.cycles(&written_cycles)?;
     w.tables()?;
+    w.reaction_schemes(reactions, &fragments)?;
     let (_, hi) = w.painted_bounds;
     let right = (hi.x * w.scale + w.shift.x + 30.).ceil().max(612.);
     let bottom = (hi.y * w.scale + w.shift.y + 30.).ceil().max(792.);

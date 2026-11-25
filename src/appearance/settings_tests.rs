@@ -310,3 +310,22 @@ fn recent_symbols_default_empty_and_survive_reload() {
     assert_eq!(loaded.recent_symbols, ["⇌", "hν"]);
     assert_eq!(loaded.mode, Mode::Dark);
 }
+
+#[test]
+fn chemdraw_format_defaults_to_cdxml_and_survives_reload() {
+    assert_eq!(Settings::default().chemdraw_format, ChemDrawFormat::Cdxml);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("appearance.json");
+    // Settings from before the choice existed keep CDXML.
+    std::fs::write(&path, r#"{"mode":"dark"}"#).unwrap();
+    let mut settings = Settings::load_from(&path);
+    assert_eq!(settings.chemdraw_format, ChemDrawFormat::Cdxml);
+    settings.chemdraw_format = ChemDrawFormat::Cdx;
+    settings.save_to(&path).unwrap();
+    let saved: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(saved["chemdraw_format"], "cdx");
+    assert_eq!(
+        Settings::load_from(&path).chemdraw_format,
+        ChemDrawFormat::Cdx
+    );
+}
