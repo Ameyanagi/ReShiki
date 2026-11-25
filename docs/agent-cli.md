@@ -31,7 +31,7 @@ has every help text as the program prints it.
 | [predict-nmr](#predict-nmr)   | Print predicted NMR shifts as one JSON line                       |
 | [export-input](#export-input) | Write a quantum-chemistry input from an XYZ structure             |
 | [name](#name)                 | Print the systematic name of a structure                          |
-| [calc](#calc)                 | Print a GFN2-xTB energy and optional gradient as one JSON line    |
+| [calc](#calc)                 | Print an xTB calculation as one JSON line                         |
 | [pieces](#pieces)             | Check or render equipment piece files                             |
 | [info](#info)                 | Print versions, limits and formats as one JSON line               |
 | [tools](#tools)               | Print the agent tool catalog as one JSON line                     |
@@ -43,7 +43,7 @@ has every help text as the program prints it.
 
 - Each run takes one command. A command accepts only its own options; any
   other option is a usage error, such as `render does not take --pages`.
-- Each option is allowed once. A second `--to` gives `--to given more than once`.
+- Each option is allowed once, except the repeatable `calc --scf-retry` ladder. A second `--to` gives `--to given more than once`.
 - An option that takes a value uses the next argument as the value, even one
   that starts with `-`.
 - `--` ends the options. Every argument after it is the input, so a file
@@ -845,26 +845,29 @@ several lines:
 ## calc
 
 ```text
-reshiki --cli calc --energy [--gradient] [--charge N] [--uhf N] [--conventions axtb|xtb-6.8] FILE.xyz
+reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--gradient] [--wbo] FILE.xyz
 ```
 
-Runs one GFN2-xTB calculation through the [isolated worker](xtb-worker.md)
-on the first frame of an XYZ file (1 to 500 atoms, Ångström). It has no MCP
-tool.
+Runs one GFN2-xTB (default), GFN-FF or g-xTB 2.0.1 calculation through the
+[isolated worker](xtb-worker.md) on the first frame of an XYZ file (1 to 500
+atoms, Ångström). It has no MCP tool. `--task` is `energy` (default),
+`gradient`, `hessian` (with vibrations and thermochemistry, at most 200 atoms)
+or `orbitals` (every coefficient row and the basis); `--gradient` and `--wbo`
+(bond orders) add to any task; `--energy` is accepted for compatibility.
+`--scf-retry K[:N]` repeats to build an SCF retry ladder. g-xTB in solvent
+needs `--solvent-correction gfn2`. GFN-FF takes no solvent, SCF settings,
+orbitals or bond orders. Unsupported combinations exit 1 with the capability
+message. The options and output are described in
+[the worker's command line](xtb-worker.md#command-line).
 
-| Option               | Commands | Meaning                                                                              |
-| -------------------- | -------- | ------------------------------------------------------------------------------------ |
-| `--energy`           | calc     | Calculate the GFN2-xTB energy. Required.                                             |
-| `--gradient`         | calc     | Include the Cartesian energy gradient in Eh/bohr.                                    |
-| `--charge N`         | calc     | Molecular charge, default 0.                                                         |
-| `--uhf N`            | calc     | Nonnegative number of unpaired electrons. The default comes from the electron count. |
-| `--conventions MODE` | calc     | Use `axtb` (default) or `xtb-6.8` (xtb 6.8 compatible) conventions.                  |
-
-The command prints one JSON line with `energy` in Eh, `gradient` in Eh/bohr
-when requested, `method`, `conventions`, `numerics`, `engine`,
-`homo_lumo_gap_ev` (null without a LUMO), and `near_degenerate`. The command
-also writes a warning to stderr when the gap is below 0.1 eV. `calc` is
-CLI-only and prints its result without an experimental envelope.
+It prints the worker's `Computed` JSON plus `engine`, with binary arrays as
+`{"shape":[rows,columns],"values":[...]}`, and no experimental envelope. A gap
+below 0.1 eV also writes a warning to stderr and leaves the exit status
+unchanged.
 
 In a build without xTB, it writes `reshiki: xTB is not included in this build`
 to stderr and exits 1.

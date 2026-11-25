@@ -167,6 +167,7 @@ fn dump(app: &App, out: &mut String) {
         Page::Bonds,
         Page::Tilt,
         Page::Model,
+        Page::Calculate,
         Page::Attachments,
         Page::CopyAs,
         Page::AlignObjects,

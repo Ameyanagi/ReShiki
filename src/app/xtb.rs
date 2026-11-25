@@ -40,6 +40,7 @@ pub(crate) enum Page {
 pub(crate) enum Action {
     Page(Page),
     Task(CalcTask),
+    Method(qcdata::XtbMethod),
     Charge(String),
     Unpaired(String),
     Solvent(Option<&'static str>),
@@ -47,13 +48,47 @@ pub(crate) enum Action {
     Tight(bool),
     Threads(u32),
     Advanced,
+    Accuracy(String),
+    Temperature(String),
+    Iterations(String),
+    Xtb68(bool),
     Run,
+    /// Start from a menu, the context row or the keyboard.
+    Entry(Entry),
+    /// A failed run again at the retry electronic temperature.
+    Retry,
+    /// A failed run again, unchanged.
+    RunAgain,
+    /// Copy a failed run's details.
+    CopyDetails,
     Cancel,
     ApplyAnyway,
     Discard,
     Palette(palette::Action),
     #[cfg(not(target_arch = "wasm32"))]
     Event(u64, run::Event),
+}
+
+/// Ways to start a calculation without the card's Run button. Each shows
+/// the card, sets what it names and runs with the card's other settings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Entry {
+    /// Right-click → Calculate (xTB) ▸ Energy / Optimize.
+    Task(CalcTask),
+    /// The context row's "Optimize with GFN2-xTB".
+    OptimizeGfn2,
+    /// ⌘R: the last calculation again, on the selected molecule.
+    Rerun,
+}
+
+/// ⌘R, as menus and tooltips show it.
+pub(super) fn rerun_keys() -> String {
+    super::shortcuts::label(&Message::Xtb(Action::Entry(Entry::Rerun))).unwrap_or_default()
+}
+
+/// Whether this build can calculate; the entry points hide otherwise.
+pub(super) fn available() -> bool {
+    unavailable().is_none()
 }
 
 /// The window's card settings and page; the last used task stays chosen.
@@ -98,30 +133,18 @@ fn is(weak: &Weak<CalcResult>, result: &Arc<CalcResult>) -> bool {
 }
 
 /// What a run calculates and how: from the card, or a result's Recalculate.
-struct Request {
+#[derive(Clone)]
+pub(crate) struct Request {
     atoms: Vec<u64>,
-    task: CalcTask,
-    charge: i32,
-    unpaired: u32,
-    solvent: Option<&'static str>,
-    threads: u32,
-    tight: bool,
-    fixed: Vec<u64>,
+    config: state::Config,
     /// "Keep full results in this file" for the new result.
     keep_full: bool,
 }
 
 pub(crate) struct Run {
     serial: u64,
-    task: CalcTask,
     atoms: Vec<u64>,
-    charge: i32,
-    unpaired: u32,
-    solvent: Option<&'static str>,
-    threads: u32,
-    tight: bool,
-    /// Drawing atoms the optimizer holds fixed.
-    fixed: Vec<u64>,
+    config: state::Config,
     keep_full: bool,
     /// Absent while the 3D model is made first.
     launch: Option<Launch>,
@@ -152,9 +175,79 @@ pub(crate) enum Outcome {
         line: String,
         notes: Vec<String>,
     },
-    Failed(String),
+    Failed(Box<Failed>),
     /// Nothing applied yet: the stereo check found changes, or an edit was open.
     Review(Box<Review>),
+}
+
+/// A failed run and what Retry and Run again need.
+pub(crate) struct Failed {
+    pub failure: state::Failure,
+    /// The run's request; `None` when no run had started.
+    pub request: Option<Box<Request>>,
+    /// The frame's atomic numbers, once the 3D model existed.
+    pub numbers: Vec<u8>,
+    pub seconds: f64,
+    /// The document state when the run failed; Retry and Run again need
+    /// it unchanged, so they calculate what failed.
+    pub revision: (u64, u64),
+}
+
+impl Failed {
+    fn method(&self) -> qcdata::XtbMethod {
+        self.request
+            .as_ref()
+            .map_or(qcdata::XtbMethod::Gfn2Xtb, |r| r.config.method)
+    }
+
+    /// The error card's sentence and its second line.
+    pub(crate) fn explain(&self) -> (String, String) {
+        self.failure.explain(self.method(), &self.numbers)
+    }
+
+    /// Copy details: versions, what ran and why it stopped; no structure.
+    pub(crate) fn details(&self) -> String {
+        let mut parts = vec![format!("ReShiki {}", env!("CARGO_PKG_VERSION"))];
+        #[cfg(not(target_arch = "wasm32"))]
+        parts.push(format!("axtb {}", reshiki_xtb_worker::AXTB_REV));
+        if let Some(request) = &self.request {
+            let config = &request.config;
+            let default = |value: Option<String>| value.unwrap_or_else(|| "default".into());
+            parts.push(format!(
+                "{} · {:?} · charge {} · unpaired electrons {} · solvent {} · conventions {} · \
+                 accuracy {} · electronic temperature {} · max SCF iterations {} · {} threads · {}",
+                config.method.label(),
+                config.task,
+                config.charge,
+                config.unpaired,
+                config.solvent.unwrap_or("none"),
+                if config.xtb68 { "xtb 6.8" } else { "axtb" },
+                default(config.accuracy.map(|x| x.to_string())),
+                default(config.temperature_k.map(|k| format!("{k} K"))),
+                default(config.max_iterations.map(|n| n.to_string())),
+                config.threads,
+                if config.tight { "tight" } else { "normal" },
+            ));
+            if !config.fixed.is_empty() {
+                parts.push(format!("{} atoms held fixed", config.fixed.len()));
+            }
+        }
+        if !self.numbers.is_empty() {
+            parts.push(format!(
+                "{}, {} atoms",
+                state::formula(&self.numbers),
+                self.numbers.len()
+            ));
+        }
+        let reason = match &self.failure {
+            state::Failure::Scf(message)
+            | state::Failure::Crashed(message)
+            | state::Failure::Other(message) => message.clone(),
+            _ => self.explain().0,
+        };
+        parts.push(format!("{reason} (after {:.1} s)", self.seconds));
+        parts.join(" · ")
+    }
 }
 
 pub(crate) struct Review {
@@ -195,6 +288,39 @@ impl App {
     pub(super) fn xtb_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Run => return self.xtb_run(),
+            Action::Entry(entry) => return self.xtb_entry(entry),
+            Action::Retry | Action::RunAgain => {
+                let Some(Outcome::Failed(failed)) = &self.tab.xtb.outcome else {
+                    return Task::none();
+                };
+                let Some(request) = failed.request.as_deref() else {
+                    return Task::none();
+                };
+                if !self.xtb_can_retry(failed) {
+                    self.status = "The drawing changed: run it from the Calculate card".into();
+                    self.error = false;
+                    return Task::none();
+                }
+                let mut request = request.clone();
+                if matches!(action, Action::Retry) {
+                    let Some(hotter) = request.config.hotter() else {
+                        return Task::none();
+                    };
+                    request.config = hotter;
+                }
+                if !self.xtb_can_start() {
+                    return Task::none();
+                }
+                return self.xtb_begin(request);
+            }
+            Action::CopyDetails => {
+                if let Some(Outcome::Failed(failed)) = &self.tab.xtb.outcome {
+                    let details = failed.details();
+                    self.status = "Copied the calculation details".into();
+                    self.error = false;
+                    return iced::clipboard::write(details);
+                }
+            }
             Action::Cancel => self.xtb_cancel(),
             Action::ApplyAnyway => self.xtb_apply_anyway(),
             Action::Discard => {
@@ -225,6 +351,11 @@ impl App {
                     Action::Tight(tight) => settings.tight = tight,
                     Action::Threads(threads) => settings.threads = threads,
                     Action::Advanced => settings.advanced = !settings.advanced,
+                    Action::Method(method) => settings.method = method,
+                    Action::Accuracy(value) => settings.accuracy = value,
+                    Action::Temperature(value) => settings.temperature = value,
+                    Action::Iterations(value) => settings.iterations = value,
+                    Action::Xtb68(on) => settings.xtb68 = on,
                     _ => {}
                 }
             }
@@ -308,6 +439,35 @@ impl App {
         true
     }
 
+    /// Whether Retry and Run again can repeat `failed` as it ran.
+    pub(super) fn xtb_can_retry(&self, failed: &Failed) -> bool {
+        failed.request.is_some()
+            && self.tab.xtb.run.is_none()
+            && failed.revision == (self.tab.file_epoch, self.tab.revision)
+    }
+
+    fn xtb_entry(&mut self, entry: Entry) -> Task<Message> {
+        if !available() || !self.xtb_can_start() {
+            return Task::none();
+        }
+        if self.xtb_target().is_none() {
+            self.status = "Select a molecule to calculate".into();
+            self.error = true;
+            return Task::none();
+        }
+        match entry {
+            Entry::Task(task) => self.xtb.settings.task = task,
+            Entry::OptimizeGfn2 => {
+                self.xtb.settings.task = CalcTask::Optimize;
+                self.xtb.settings.method = qcdata::XtbMethod::Gfn2Xtb;
+            }
+            Entry::Rerun => {}
+        }
+        self.xtb.page = Page::Xtb;
+        let _ = self.show_inspector_tab(super::InspectorTab::Predict);
+        self.xtb_run()
+    }
+
     fn xtb_run(&mut self) -> Task<Message> {
         if !self.xtb_can_start() {
             return Task::none();
@@ -324,18 +484,6 @@ impl App {
         let (charge, multiplicity) = science::drawn_state(&self.tab.doc, first);
         let drawn = (charge, multiplicity.saturating_sub(1));
         let typed = settings.molecule.is_some() && settings.molecule == self.xtb_key();
-        let state = if typed {
-            settings.state(drawn)
-        } else {
-            Ok(drawn)
-        };
-        let (charge, unpaired) = match state {
-            Ok(state) => state,
-            Err(reason) => {
-                self.xtb_fail(reason.into());
-                return Task::none();
-            }
-        };
         let selected: std::collections::HashSet<u64> = self.tab.selected.iter().copied().collect();
         let fixed = if settings.hold_fixed && settings.task == CalcTask::Optimize {
             atoms
@@ -346,15 +494,16 @@ impl App {
         } else {
             vec![]
         };
+        let config = match settings.config(drawn, typed, fixed) {
+            Ok(config) => config,
+            Err(reason) => {
+                self.xtb_fail(state::Failure::Other(reason.into()));
+                return Task::none();
+            }
+        };
         let request = Request {
             atoms,
-            task: settings.task,
-            charge,
-            unpaired,
-            solvent: settings.solvent,
-            threads: settings.threads(),
-            tight: settings.tight,
-            fixed,
+            config,
             keep_full: false,
         };
         self.xtb_begin(request)
@@ -363,11 +512,10 @@ impl App {
     /// Start `request`; its run replaces the card's last outcome.
     fn xtb_begin(&mut self, request: Request) -> Task<Message> {
         if request.atoms.len() > state::MAX_ATOMS {
-            self.xtb_fail(format!(
-                "Too many atoms: {}. The limit is {} atoms.",
-                request.atoms.len(),
-                state::MAX_ATOMS
-            ));
+            self.xtb_fail(state::Failure::TooMany {
+                count: request.atoms.len(),
+                limit: state::MAX_ATOMS,
+            });
             return Task::none();
         }
         self.xtb_end_preview();
@@ -375,14 +523,8 @@ impl App {
         self.tab.xtb.outcome = None;
         self.tab.xtb.run = Some(Run {
             serial: self.tab.xtb.serial,
-            task: request.task,
             atoms: request.atoms,
-            charge: request.charge,
-            unpaired: request.unpaired,
-            solvent: request.solvent,
-            threads: request.threads,
-            tight: request.tight,
-            fixed: request.fixed,
+            config: request.config,
             keep_full: request.keep_full,
             launch: None,
             model: None,
@@ -409,8 +551,8 @@ impl App {
         match science::launch(
             &self.tab.doc,
             atom,
-            run.charge,
-            run.unpaired.saturating_add(1),
+            run.config.charge,
+            run.config.unpaired.saturating_add(1),
         ) {
             Ok(launch) => self.xtb_start(launch),
             Err(science::ScienceError::NoModel | science::ScienceError::StaleModel)
@@ -418,7 +560,10 @@ impl App {
             {
                 let task = self.model_for_calculation(run.atoms.clone());
                 let Some(key) = self.tab.model_job.as_ref().map(|job| job.key) else {
-                    self.xtb_fail(format!("xTB not started · {}", self.status));
+                    self.xtb_fail(state::Failure::Other(format!(
+                        "xTB not started · {}",
+                        self.status
+                    )));
                     return Task::none();
                 };
                 if let Some(run) = &mut self.tab.xtb.run {
@@ -430,11 +575,11 @@ impl App {
                 task
             }
             Err(error @ (science::ScienceError::NoModel | science::ScienceError::StaleModel)) => {
-                self.xtb_fail(format!("xTB not started: {error}"));
+                self.xtb_fail(state::Failure::Other(format!("xTB not started: {error}")));
                 Task::none()
             }
             Err(error) => {
-                self.xtb_fail(error.to_string());
+                self.xtb_fail(state::Failure::Other(error.to_string()));
                 Task::none()
             }
         }
@@ -457,40 +602,69 @@ impl App {
 
     #[cfg(target_arch = "wasm32")]
     fn xtb_start(&mut self, _: Launch) -> Task<Message> {
-        self.xtb_fail("xTB calculations run in the desktop app.".into());
+        self.xtb_fail(state::Failure::Other(
+            "xTB calculations run in the desktop app.".into(),
+        ));
         Task::none()
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     fn xtb_start(&mut self, launch: Launch) -> Task<Message> {
+        use reshiki_xtb_worker::protocol::{
+            Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
+        };
+
         let atoms = launch.frame.numbers.len();
         if atoms > state::MAX_ATOMS {
-            self.xtb_fail(format!(
-                "Too many atoms: {atoms}. The limit is {} atoms.",
-                state::MAX_ATOMS
-            ));
+            self.xtb_fail(state::Failure::TooMany {
+                count: atoms,
+                limit: state::MAX_ATOMS,
+            });
             return Task::none();
         }
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = &mut self.tab.xtb.run else {
             return Task::none();
         };
+        let config = &run.config;
+        let method = match config.method {
+            qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
+            qcdata::XtbMethod::GXtb => Method::Gxtb,
+            qcdata::XtbMethod::GfnFf => Method::Gfnff,
+        };
         let job = run::Job {
-            optimize: run.task == CalcTask::Optimize,
+            optimize: config.task == CalcTask::Optimize,
             numbers: launch.frame.numbers.clone(),
             positions: launch.frame.positions_angstrom.clone(),
-            charge: run.charge,
-            uhf: run.unpaired,
-            solvent: run.solvent.map(str::to_lowercase),
-            threads: run.threads,
+            charge: config.charge,
+            uhf: config.unpaired,
+            method,
+            conventions: if config.xtb68 {
+                Conventions::Xtb68
+            } else {
+                Conventions::Axtb
+            },
+            scf: ScfSettings {
+                accuracy: config.accuracy,
+                electronic_temperature_k: config.temperature_k,
+                max_iterations: config.max_iterations,
+                retries: vec![],
+            },
+            solvent: config.solvent.map(|name| Solvent {
+                model: SolventModel::Alpb,
+                name: name.to_lowercase(),
+                state: Default::default(),
+                correction: (method == Method::Gxtb).then_some(SolventCorrection::Gfn2),
+            }),
+            threads: config.threads,
             fixed: launch
                 .atoms
                 .iter()
                 .enumerate()
-                .filter(|(_, id)| id.is_some_and(|id| run.fixed.contains(&id)))
+                .filter(|(_, id)| id.is_some_and(|id| config.fixed.contains(&id)))
                 .map(|(index, _)| index)
                 .collect(),
-            tight: run.tight,
+            tight: config.tight,
         };
         run.label = format!("xTB · {}", state::formula(&launch.frame.numbers));
         run.launch = Some(launch);
@@ -539,22 +713,50 @@ impl App {
                 self.status = run.status();
                 self.error = false;
             }
-            run::Event::Done(result) => {
-                if let Some(run) = self.tab.xtb.run.take() {
-                    match result.and_then(|report| pending(&run, &report)) {
-                        Ok(pending) => self.xtb_store(pending, false),
-                        Err(reason) => self.xtb_fail(reason),
-                    }
+            run::Event::Done(result) => match result.and_then(|report| pending(run, &report)) {
+                Ok(pending) => {
+                    self.tab.xtb.run = None;
+                    self.xtb_store(pending, false);
                 }
-            }
+                Err(failure) => self.xtb_fail(failure),
+            },
         }
     }
 
-    fn xtb_fail(&mut self, reason: String) {
-        self.tab.xtb.run = None;
-        self.status = format!("xTB calculation failed: {reason}");
+    /// End the run in flight, if any, with `failure`. The card and the
+    /// results palette show it, keeping the request for Retry and Run again.
+    fn xtb_fail(&mut self, failure: state::Failure) {
+        let run = self.tab.xtb.run.take();
+        let numbers = run
+            .as_ref()
+            .and_then(|run| run.launch.as_ref())
+            .map(|launch| launch.frame.numbers.clone())
+            .unwrap_or_default();
+        let seconds = run.as_ref().map_or(0., Run::seconds);
+        // The state the run calculated: an edit during the run retires Retry.
+        let revision = run
+            .as_ref()
+            .map_or((self.tab.file_epoch, self.tab.revision), |run| run.revision);
+        let request = run.map(|mut run| {
+            Box::new(Request {
+                atoms: std::mem::take(&mut run.atoms),
+                config: run.config.clone(),
+                keep_full: run.keep_full,
+            })
+        });
+        let failed = Failed {
+            failure,
+            request,
+            numbers,
+            seconds,
+            revision,
+        };
+        self.status = format!("xTB calculation failed: {}", failed.explain().0);
         self.error = true;
-        self.tab.xtb.outcome = Some(Outcome::Failed(reason));
+        self.tab.xtb.palette.open = true;
+        // The card's actions must show, so a collapsed dock opens.
+        self.xtb.dock.collapsed = false;
+        self.tab.xtb.outcome = Some(Outcome::Failed(Box::new(failed)));
     }
 
     /// Cancel stops the worker (or the model generation) and applies nothing.
@@ -593,7 +795,7 @@ impl App {
         ) {
             Ok(attached) => attached,
             Err(error) => {
-                self.xtb_fail(error.to_string());
+                self.xtb_fail(state::Failure::Other(error.to_string()));
                 return;
             }
         };
@@ -649,7 +851,7 @@ impl App {
         let before = std::mem::replace(&mut self.tab.doc, doc);
         self.changed(before);
         if self.error {
-            self.tab.xtb.outcome = Some(Outcome::Failed(self.status.clone()));
+            self.xtb_fail(state::Failure::Other(self.status.clone()));
             return;
         }
         if let Some(result) = self
@@ -696,7 +898,7 @@ impl Run {
         format!(
             "{} · {}",
             self.label,
-            self.progress.line(self.task, self.seconds())
+            self.progress.line(self.config.task, self.seconds())
         )
     }
 }
@@ -749,13 +951,13 @@ fn preview(doc: &Document, atom: u64, positions: &[[f64; 3]]) -> Option<Document
 
 /// The result to store from a finished run.
 #[cfg(not(target_arch = "wasm32"))]
-fn pending(run: &Run, report: &run::Report) -> Result<Pending, String> {
+fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
     let launch = run
         .launch
         .clone()
-        .ok_or("the run finished before it started")?;
+        .ok_or_else(|| state::Failure::Other("the run finished before it started".into()))?;
     let input = launch.frame.hash();
-    let optimized = run.task == CalcTask::Optimize;
+    let optimized = run.config.task == CalcTask::Optimize;
     let frames = if optimized {
         vec![Frame {
             positions_angstrom: report.positions.clone(),
@@ -764,7 +966,17 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, String> {
     } else {
         vec![]
     };
-    let frame = frames.first().map_or(input, Frame::hash);
+    let frame = frames.first().unwrap_or(&launch.frame);
+    let task = if optimized {
+        qcdata::Task::Optimize
+    } else {
+        qcdata::Task::Energy
+    };
+    let gfnff_reference = (run.config.method == qcdata::XtbMethod::GfnFf).then_some(input);
+    let computed = &report.computed;
+    let mut result = computed
+        .to_calc_result(frame, task, &report.engine, gfnff_reference)
+        .map_err(|error| state::Failure::Other(error.to_string()))?;
     let status = if report.converged {
         qcdata::Status::Converged
     } else {
@@ -784,64 +996,22 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, String> {
         minimizer_energies_hartree: vec![],
         cluster_sizes: vec![],
     });
-    let result = CalcResult {
-        frame,
-        input_frame: optimized.then_some(input),
-        task: if optimized {
-            qcdata::Task::Optimize
-        } else {
-            qcdata::Task::Energy
-        },
-        endpoints: None,
-        settings: qcdata::Settings::Xtb(qcdata::XtbSettings {
-            method: qcdata::XtbMethod::Gfn2Xtb,
-            solvent: run.solvent.map(|name| qcdata::Solvent {
-                model: qcdata::SolventModel::Alpb,
-                name: name.to_lowercase(),
-                state: Default::default(),
-                correction: None,
-            }),
-            electronic_temperature_k: None,
-            accuracy: None,
-            max_iterations: None,
-            gfnff: None,
-        }),
-        provenance: qcdata::Provenance {
-            program: "axtb".into(),
-            program_version: Some(report.engine_version.clone()),
-            method: Some("GFN2-xTB".into()),
-            basis: None,
-            source: qcdata::Source::Calculated {
-                engine_revision: report.engine_rev.clone(),
-            },
-        },
-        status,
-        energy_hartree: Some(report.energy),
-        energy_terms: Default::default(),
-        gradient_hartree_per_bohr: report.gradient.clone(),
-        hessian_hartree_per_bohr2: vec![],
-        charges: vec![],
-        dipole_e_bohr: None,
-        bond_orders: vec![],
-        orbitals: None,
-        vibrations: None,
-        thermo: None,
-        trajectory,
-        keep_full: run.keep_full,
-        omitted_bytes: None,
-    };
+    result.input_frame = optimized.then_some(input);
+    result.status = status;
+    result.trajectory = trajectory;
+    result.keep_full = run.keep_full;
     let mut notes = Vec::new();
-    if report.near_degenerate {
+    if computed.near_degenerate {
         notes.push(state::NEAR_DEGENERATE.into());
     }
     let info = RunInfo {
-        gap_ev: report.gap_ev,
-        near_degenerate: report.near_degenerate,
+        gap_ev: computed.homo_lumo_gap_ev,
+        near_degenerate: computed.near_degenerate,
         evaluations: report.evaluations.clone(),
-        numerics: report.numerics.clone(),
-        tight: run.tight,
-        threads: run.threads,
-        fixed: run.fixed.clone(),
+        numerics: computed.numerics.clone(),
+        tight: run.config.tight,
+        threads: run.config.threads,
+        fixed: run.config.fixed.clone(),
         finished: chrono::Local::now().format("%-d %b %Y %H:%M").to_string(),
         seconds: run.seconds(),
     };
@@ -852,7 +1022,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, String> {
         result,
         line: state::summary(
             report.energy,
-            report.gap_ev,
+            computed.homo_lumo_gap_ev,
             optimized.then_some((report.converged, report.steps)),
         ),
         notes,
@@ -860,7 +1030,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, String> {
 }
 
 #[cfg(test)]
-pub(super) use run::{Event as RunEvent, Report as RunReport};
+pub(super) use run::{Event as RunEvent, Report as RunReport, example_computed, example_engine};
 
 #[cfg(test)]
 impl App {

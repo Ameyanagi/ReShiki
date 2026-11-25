@@ -179,18 +179,8 @@ impl AugmentedHessian<'_> {
         Some(correction)
     }
 
-    fn dense_lowest_eigenvector(&self) -> Option<Vec<f64>> {
-        let n = self.gradient.len();
-        let stride = n + 1;
-        let mut matrix = vec![0.; stride * stride];
-        for (i, row) in self.hessian.chunks_exact(n).enumerate() {
-            matrix[i * stride..i * stride + n].copy_from_slice(row);
-            matrix[i * stride + n] = self.gradient[i];
-            matrix[n * stride + i] = self.gradient[i];
-        }
-        let (_, mut vectors) = symmetric_eigen(matrix, stride).ok()?;
-        vectors.truncate(stride);
-        Some(vectors)
+    pub(super) fn dense_lowest_eigenvector(&self) -> Option<Vec<f64>> {
+        crate::optimizer::rfo::dense_lowest_eigenvector(self.hessian, self.gradient)
     }
 }
 

@@ -747,7 +747,16 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Tight(..)
                 | Action::Threads(..)
                 | Action::Advanced
+                | Action::Method(..)
+                | Action::Accuracy(..)
+                | Action::Temperature(..)
+                | Action::Iterations(..)
+                | Action::Xtb68(..)
                 | Action::Run
+                | Action::Entry(..)
+                | Action::Retry
+                | Action::RunAgain
+                | Action::CopyDetails
                 | Action::Cancel
                 | Action::ApplyAnyway
                 | Action::Discard => None,

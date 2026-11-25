@@ -1,5 +1,6 @@
 use std::env;
 use std::error::Error;
+use std::ffi::OsString;
 use std::fmt::Write as _;
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
@@ -7,91 +8,64 @@ use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use cosmolkit::{
-    EmbedParams, ForceFieldMinimizeParams, MmffForceFieldParams, MolecularForceField, Molecule,
-};
+use cosmolkit::{ForceFieldMinimizeParams, MolecularForceField};
 use reshiki_optimize::{
     ANGSTROM_PER_BOHR, Accuracy, EvalError, KCAL_PER_HARTREE, Level, Method, Options, Potential,
-    Status, optimize,
+    Status, Trust, optimize,
 };
 
-const MOLECULES: [(&str, &str); 20] = [
-    ("aspirin", "CC(=O)Oc1ccccc1C(=O)O"),
-    ("paracetamol", "CC(=O)Nc1ccc(O)cc1"),
-    ("ibuprofen", "CC(C)Cc1ccc(C(C)C(=O)O)cc1"),
-    ("naproxen", "COc1ccc2cc([C@@H](C)C(=O)O)ccc2c1"),
-    ("caffeine", "Cn1c(=O)c2c(ncn2C)n(C)c1=O"),
-    ("nicotine", "CN1CCC[C@H]1c1cccnc1"),
-    ("lidocaine", "CCN(CC)CC(=O)Nc1c(C)cccc1C"),
-    ("propranolol", "CC(C)NCC(O)COc1cccc2ccccc12"),
-    ("diazepam", "CN1C(=O)CN=C(c2ccccc2)c2cc(Cl)ccc21"),
-    ("fluoxetine", "CNCCC(Oc1ccc(C(F)(F)F)cc1)c1ccccc1"),
-    ("sertraline", "CN[C@H]1CC[C@H](c2ccccc21)c2cc(Cl)c(Cl)cc2"),
-    ("warfarin", "CC(=O)CC(c1ccccc1)c1c(O)c2ccccc2oc1=O"),
-    ("omeprazole", "COc1ccc2[nH]c(S(=O)Cc3ncc(C)c(OC)c3C)nc2c1"),
-    (
-        "celecoxib",
-        "Cc1ccc(-c2cc(C(F)(F)F)nn2-c2ccc(S(N)(=O)=O)cc2)cc1",
-    ),
-    (
-        "sildenafil",
-        "CCCc1nn(C)c2c(=O)[nH]c(-c3cc(S(=O)(=O)N4CCN(C)CC4)ccc3OCC)nc12",
-    ),
-    (
-        "losartan",
-        "CCCCc1nc(Cl)c(CO)n1Cc1ccc(-c2ccccc2-c2nn[nH]n2)cc1",
-    ),
-    (
-        "ciprofloxacin",
-        "O=C(O)c1cn(C2CC2)c2cc(N3CCNCC3)c(F)cc2c1=O",
-    ),
-    (
-        "tamoxifen",
-        r"CC/C(=C(\c1ccccc1)/c1ccc(OCCN(C)C)cc1)/c1ccccc1",
-    ),
-    (
-        "testosterone",
-        "C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=CC(=O)CC[C@]34C",
-    ),
-    (
-        "imatinib",
-        "Cc1ccc(NC(=O)c2ccc(CN3CCN(C)CC3)cc2)cc1Nc1nccc(-c2cccnc2)n1",
-    ),
+#[path = "mmff_benchmark/fixture.rs"]
+mod fixture;
+use fixture::{MOLECULES, MmffPotential};
+
+const RUNS: [(&str, Option<(Method, Level)>); 5] = [
+    ("Internal (default)", None),
+    ("ANC-RFO", Some((Method::AncRfo, Level::Normal))),
+    ("L-BFGS", Some((Method::Lbfgs, Level::Normal))),
+    ("ANC-RFO Tight", Some((Method::AncRfo, Level::Tight))),
+    ("L-BFGS Tight", Some((Method::Lbfgs, Level::Tight))),
 ];
 
-const RUNS: [(&str, Method, Level); 4] = [
-    ("ANC-RFO", Method::AncRfo, Level::Normal),
-    ("L-BFGS", Method::Lbfgs, Level::Normal),
-    ("ANC-RFO Tight", Method::AncRfo, Level::Tight),
-    ("L-BFGS Tight", Method::Lbfgs, Level::Tight),
-];
-
-struct MmffPotential(MolecularForceField);
-
-impl Potential for MmffPotential {
-    fn evaluate(
-        &mut self,
-        positions: &[f64],
-        gradient: &mut [f64],
-        _accuracy: Accuracy,
-    ) -> Result<f64, EvalError> {
-        let coordinates: Vec<_> = positions
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .map(|row| row.map(|x| x * ANGSTROM_PER_BOHR))
-            .collect();
-        let failed = |error: cosmolkit::ForceFieldError| EvalError::Failed(error.to_string());
-        self.0.set_positions_(&coordinates).map_err(failed)?;
-        let energy = self.0.energy().map_err(failed)?;
-        let mmff_gradient = self.0.gradient_unconstrained().map_err(failed)?;
-        for (output, &value) in gradient.iter_mut().zip(mmff_gradient.as_flattened()) {
-            *output = value * ANGSTROM_PER_BOHR / KCAL_PER_HARTREE;
-        }
-        Ok(energy / KCAL_PER_HARTREE)
-    }
+struct SweepConfig {
+    label: &'static str,
+    method: Method,
+    trust: Trust,
+    contacts: bool,
 }
 
+fn sweep_configs() -> [SweepConfig; 6] {
+    [
+        ("ANC Global", Method::AncRfo, Trust::global(), false),
+        ("ANC PerAtom", Method::AncRfo, Trust::per_atom(), false),
+        (
+            "ANC PerAtom + contacts",
+            Method::AncRfo,
+            Trust::per_atom(),
+            true,
+        ),
+        ("Internal Global", Method::Internal, Trust::global(), false),
+        (
+            "Internal PerAtom",
+            Method::Internal,
+            Trust::per_atom(),
+            false,
+        ),
+        (
+            "Internal PerAtom + contacts",
+            Method::Internal,
+            Trust::per_atom(),
+            true,
+        ),
+    ]
+    .map(|(label, method, trust, contacts)| SweepConfig {
+        label,
+        method,
+        trust,
+        contacts,
+    })
+}
+
+#[derive(Clone)]
 struct Run {
     label: &'static str,
     status: Status,
@@ -121,87 +95,101 @@ struct Benchmark {
     atoms: usize,
     heavy_atoms: usize,
     runs: Vec<Run>,
+    sweep_runs: Vec<Run>,
     reference_iterations: u32,
     reference_energy: f64,
 }
 
-fn benchmark(name: &'static str, smiles: &str) -> Result<Benchmark, Box<dyn Error>> {
-    let molecule = Molecule::from_smiles(smiles)?
-        .with_hydrogens()?
-        .sanitize()?;
-    let numbers: Vec<_> = molecule.atoms().iter().map(|a| a.atomic_number()).collect();
-    let heavy_atoms = numbers.iter().filter(|&&z| z > 1).count();
-    let charge: i32 = molecule
-        .atoms()
+fn run_mmff(
+    field: MolecularForceField,
+    numbers: &[u8],
+    positions: &[f64],
+    label: &'static str,
+    options: &Options,
+) -> Run {
+    let mut potential = MmffPotential(field);
+    let start = Instant::now();
+    let outcome = optimize(&mut potential, numbers, positions, options, |_| {
+        ControlFlow::Continue(())
+    });
+    let wall_ms = start.elapsed().as_secs_f64() * 1_000.0;
+    let max_gradient = outcome
+        .gradient
         .iter()
-        .map(|a| i32::from(a.formal_charge()))
-        .sum();
-    if !(10..=70).contains(&heavy_atoms) || charge != 0 {
-        return Err(format!(
-            "expected 10–70 heavy atoms and zero charge, got {heavy_atoms} and {charge}"
-        )
-        .into());
+        .map(|x| x.abs())
+        .reduce(f64::max)
+        .unwrap_or(f64::NAN)
+        * KCAL_PER_HARTREE
+        / ANGSTROM_PER_BOHR;
+    Run {
+        label,
+        status: outcome.status,
+        method: outcome.method,
+        steps: outcome.steps,
+        evaluations: outcome.evaluations,
+        energy: outcome.energy * KCAL_PER_HARTREE,
+        max_gradient,
+        wall_ms,
+        energies: outcome
+            .energies
+            .into_iter()
+            .map(|e| e * KCAL_PER_HARTREE)
+            .collect(),
     }
+}
 
-    let mut embedding = EmbedParams::etkdg_v3();
-    embedding.random_seed = 42;
-    embedding.num_threads = 1;
-    let embedded = molecule.with_3d_conformer_result_with_params(&embedding)?;
-    let [conformer] = embedded.molecule.conformers_3d() else {
-        return Err("ETKDG did not generate one conformer".into());
-    };
-    let positions: Vec<_> = conformer
-        .coordinates()
-        .as_flattened()
-        .iter()
-        .map(|x| x / ANGSTROM_PER_BOHR)
-        .collect();
-    let field_params = MmffForceFieldParams::new(None, "MMFF94".into(), f64::INFINITY, true);
-    let new_field = || {
-        embedded
-            .molecule
-            .mmff_force_field_with_params(&field_params)
-    };
+fn benchmark(
+    name: &'static str,
+    smiles: &str,
+    trust_sweep: bool,
+) -> Result<Benchmark, Box<dyn Error>> {
+    let fixture = fixture::prepare(smiles)?;
+    let numbers = &fixture.numbers;
+    let positions = &fixture.positions;
+    let new_field = || fixture.new_field();
 
     let mut runs = Vec::with_capacity(RUNS.len());
-    for (label, method, level) in RUNS {
-        let mut potential = MmffPotential(new_field()?);
-        let options = Options {
+    for (label, settings) in RUNS {
+        let options = settings.map_or_else(Options::default, |(method, level)| Options {
             method,
             level,
             ..Options::default()
-        };
-        let start = Instant::now();
-        let outcome = optimize(&mut potential, &numbers, &positions, &options, |_| {
-            ControlFlow::Continue(())
         });
-        let wall_ms = start.elapsed().as_secs_f64() * 1_000.0;
-        let max_gradient = outcome
-            .gradient
-            .iter()
-            .map(|x| x.abs())
-            .reduce(f64::max)
-            .unwrap_or(f64::NAN)
-            * KCAL_PER_HARTREE
-            / ANGSTROM_PER_BOHR;
-        if outcome.status != Status::Converged {
-            eprintln!("{name} {label}: {:?}", outcome.status);
+        let run = run_mmff(new_field()?, numbers, positions, label, &options);
+        if run.status != Status::Converged {
+            eprintln!("{name} {label}: {:?}", run.status);
         }
-        runs.push(Run {
-            label,
-            status: outcome.status,
-            method: outcome.method,
-            steps: outcome.steps,
-            evaluations: outcome.evaluations,
-            energy: outcome.energy * KCAL_PER_HARTREE,
-            max_gradient,
-            wall_ms,
-            energies: outcome
-                .energies
-                .into_iter()
-                .map(|e| e * KCAL_PER_HARTREE)
-                .collect(),
-        });
+        runs.push(run);
+    }
+    let mut sweep_runs = Vec::new();
+    if trust_sweep {
+        for config in sweep_configs() {
+            // Reuse the Normal runs so their values and timing match in both reports.
+            let run = if config.trust == Trust::default() {
+                let baseline = if config.method == Method::AncRfo {
+                    1
+                } else {
+                    0
+                };
+                Run {
+                    label: config.label,
+                    ..runs[baseline].clone()
+                }
+            } else {
+                let options = Options {
+                    method: config.method,
+                    trust: config.trust,
+                    contacts: config.contacts,
+                    level: Level::Normal,
+                    ..Options::default()
+                };
+                run_mmff(new_field()?, numbers, positions, config.label, &options)
+            };
+            if run.status != Status::Converged {
+                eprintln!("{name} {}: {:?}", config.label, run.status);
+            }
+            sweep_runs.push(run);
+        }
     }
 
     let defaults = ForceFieldMinimizeParams::default();
@@ -213,8 +201,9 @@ fn benchmark(name: &'static str, smiles: &str) -> Result<Benchmark, Box<dyn Erro
     Ok(Benchmark {
         name,
         atoms: numbers.len(),
-        heavy_atoms,
+        heavy_atoms: fixture.heavy_atoms,
         runs,
+        sweep_runs,
         reference_iterations: reference.iterations(),
         reference_energy: reference.energy(),
     })
@@ -228,14 +217,24 @@ fn csv_number(value: f64) -> String {
     }
 }
 
-fn write_csv(path: &Path, benchmarks: &[Benchmark]) -> io::Result<()> {
+fn write_csv(path: &Path, benchmarks: &[Benchmark], sweep: bool) -> io::Result<()> {
     let mut out = BufWriter::new(File::create(path)?);
     writeln!(
         out,
         "molecule,atoms,heavy_atoms,method,status,steps,evaluations,iterations,energy_kcal_mol,max_gradient_kcal_mol_angstrom,wall_ms"
     )?;
     for bench in benchmarks {
-        for run in &bench.runs {
+        let runs = if sweep {
+            &bench.sweep_runs
+        } else {
+            &bench.runs
+        };
+        for run in runs {
+            let label = if sweep {
+                format!("{} ({:?})", run.label, run.method)
+            } else {
+                run.label.to_owned()
+            };
             let status = format!("{:?}", run.status).replace('"', "\"\"");
             writeln!(
                 out,
@@ -243,7 +242,7 @@ fn write_csv(path: &Path, benchmarks: &[Benchmark]) -> io::Result<()> {
                 bench.name,
                 bench.atoms,
                 bench.heavy_atoms,
-                run.label,
+                label,
                 status,
                 run.steps,
                 run.evaluations,
@@ -252,27 +251,34 @@ fn write_csv(path: &Path, benchmarks: &[Benchmark]) -> io::Result<()> {
                 run.wall_ms,
             )?;
         }
-        writeln!(
-            out,
-            "{},{},{},COSMolKit,,,,{},{},,",
-            bench.name,
-            bench.atoms,
-            bench.heavy_atoms,
-            bench.reference_iterations,
-            csv_number(bench.reference_energy),
-        )?;
+        if !sweep {
+            writeln!(
+                out,
+                "{},{},{},COSMolKit,,,,{},{},,",
+                bench.name,
+                bench.atoms,
+                bench.heavy_atoms,
+                bench.reference_iterations,
+                csv_number(bench.reference_energy),
+            )?;
+        }
     }
     out.flush()
 }
 
-fn write_traces(path: &Path, benchmarks: &[Benchmark]) -> io::Result<()> {
+fn write_traces(path: &Path, benchmarks: &[Benchmark], sweep: bool) -> io::Result<()> {
     let mut out = BufWriter::new(File::create(path)?);
     write!(out, "{{")?;
     for (i, bench) in benchmarks.iter().enumerate() {
         // Names and run labels are fixed strings containing no JSON escapes.
         let separator = if i == 0 { "" } else { "," };
         write!(out, "{separator}\n  \"{}\": {{", bench.name)?;
-        for (j, run) in bench.runs.iter().enumerate() {
+        let runs = if sweep {
+            &bench.sweep_runs
+        } else {
+            &bench.runs
+        };
+        for (j, run) in runs.iter().enumerate() {
             let separator = if j == 0 { "" } else { "," };
             write!(
                 out,
@@ -284,6 +290,61 @@ fn write_traces(path: &Path, benchmarks: &[Benchmark]) -> io::Result<()> {
     }
     writeln!(out, "\n}}")?;
     out.flush()
+}
+
+fn sweep_markdown(benchmarks: &[Benchmark]) -> String {
+    let configs = sweep_configs();
+    let mut report = String::from(
+        "Normal-level trust sweep. PerAtom uses start 0.08, minimum 0.001, maximum 0.2, and atom cap 0.4 bohr. Contacts are disabled except in the two explicitly labelled configurations. Global reuses the original Normal run.\n\n| Molecule | Atoms |",
+    );
+    for config in &configs {
+        write!(report, " {} steps/evals |", config.label).unwrap();
+    }
+    report.push_str("\n| --- | ---: |");
+    for _ in &configs {
+        report.push_str(" ---: |");
+    }
+    report.push('\n');
+    for bench in benchmarks {
+        write!(report, "| {} | {} |", bench.name, bench.atoms).unwrap();
+        for (run, config) in bench.sweep_runs.iter().zip(&configs) {
+            write!(
+                report,
+                " {}/{} |",
+                run.steps,
+                run.marked_evaluations(config.method)
+            )
+            .unwrap();
+        }
+        report.push('\n');
+    }
+    report.push_str("| **Total steps/evals** | | ");
+    for i in 0..configs.len() {
+        let steps: usize = benchmarks
+            .iter()
+            .map(|bench| bench.sweep_runs[i].steps)
+            .sum();
+        let evaluations: usize = benchmarks
+            .iter()
+            .map(|bench| bench.sweep_runs[i].evaluations)
+            .sum();
+        write!(report, "{steps}/{evaluations} | ").unwrap();
+    }
+    report.push_str("\n| **Non-converged / fallbacks** | | ");
+    for (i, config) in configs.iter().enumerate() {
+        let non_converged = benchmarks
+            .iter()
+            .filter(|bench| bench.sweep_runs[i].status != Status::Converged)
+            .count();
+        let fallbacks = benchmarks
+            .iter()
+            .filter(|bench| bench.sweep_runs[i].method != config.method)
+            .count();
+        write!(report, "{non_converged}/{fallbacks} | ").unwrap();
+    }
+    report.push('\n');
+    report.push_str("\n\\* stopped at MaxSteps. † finished with a fallback method. ‡ stopped with an error or was cancelled.\n");
+    report
 }
 
 fn median(values: impl Iterator<Item = f64>) -> f64 {
@@ -302,34 +363,37 @@ fn median(values: impl Iterator<Item = f64>) -> f64 {
 
 fn markdown(benchmarks: &[Benchmark]) -> String {
     let mut table = String::from(concat!(
-        "| Molecule | Atoms | ANC steps/evals | L-BFGS steps/evals | ANC Tight evals | L-BFGS Tight evals | COSMolKit iterations | ΔE ANC−LBFGS (kcal/mol) | ΔE ANC−COSMolKit (kcal/mol) | L-BFGS evals / ANC evals |\n",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
+        "| Molecule | Atoms | Internal (default) steps/evals | ANC steps/evals | L-BFGS steps/evals | ANC Tight evals | L-BFGS Tight evals | COSMolKit iterations | ΔE ANC−LBFGS (kcal/mol) | ΔE ANC−COSMolKit (kcal/mol) | L-BFGS evals / ANC evals |\n",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
     ));
-    let mut total_steps = [0; 4];
-    let mut total_evals = [0; 4];
-    let mut non_converged = [0; 4];
+    let mut total_steps = [0; RUNS.len()];
+    let mut total_evals = [0; RUNS.len()];
+    let mut non_converged = [0; RUNS.len()];
     let mut total_atoms = 0;
     let mut total_iterations = 0;
     let mut deltas_lbfgs = Vec::with_capacity(benchmarks.len());
     let mut deltas_reference = Vec::with_capacity(benchmarks.len());
     for bench in benchmarks {
-        let anc = &bench.runs[0];
-        let lbfgs = &bench.runs[1];
+        let internal = &bench.runs[0];
+        let anc = &bench.runs[1];
+        let lbfgs = &bench.runs[2];
         let delta_lbfgs = anc.energy - lbfgs.energy;
         let delta_reference = anc.energy - bench.reference_energy;
         deltas_lbfgs.push(delta_lbfgs);
         deltas_reference.push(delta_reference);
         writeln!(
             table,
-            "| {} | {} | {}/{} | {}/{} | {} | {} | {} | {:+.6} | {:+.6} | {:.3} |",
+            "| {} | {} | {}/{} | {}/{} | {}/{} | {} | {} | {} | {:+.6} | {:+.6} | {:.3} |",
             bench.name,
             bench.atoms,
+            internal.steps,
+            internal.marked_evaluations(Method::default()),
             anc.steps,
             anc.marked_evaluations(Method::AncRfo),
             lbfgs.steps,
             lbfgs.marked_evaluations(Method::Lbfgs),
-            bench.runs[2].marked_evaluations(Method::AncRfo),
-            bench.runs[3].marked_evaluations(Method::Lbfgs),
+            bench.runs[3].marked_evaluations(Method::AncRfo),
+            bench.runs[4].marked_evaluations(Method::Lbfgs),
             bench.reference_iterations,
             delta_lbfgs,
             delta_reference,
@@ -346,51 +410,78 @@ fn markdown(benchmarks: &[Benchmark]) -> String {
     }
     writeln!(
         table,
-        "| **Totals / median ΔE** | {} | {}/{} | {}/{} | {} | {} | {} | {:+.6} | {:+.6} | {:.3} |",
+        "| **Totals / median ΔE** | {} | {}/{} | {}/{} | {}/{} | {} | {} | {} | {:+.6} | {:+.6} | {:.3} |",
         total_atoms,
         total_steps[0],
         total_evals[0],
         total_steps[1],
         total_evals[1],
+        total_steps[2],
         total_evals[2],
         total_evals[3],
+        total_evals[4],
         total_iterations,
         median(deltas_lbfgs.into_iter()),
         median(deltas_reference.into_iter()),
-        total_evals[1] as f64 / total_evals[0] as f64,
+        total_evals[2] as f64 / total_evals[1] as f64,
     )
     .unwrap();
     writeln!(
         table,
-        "\n\\* stopped at MaxSteps.\n\n† finished with L-BFGS after starting with ANC-RFO.\n\n‡ stopped with an error or was cancelled.\n\nNon-converged runs by method — ANC-RFO {}, L-BFGS {}, ANC-RFO Tight {}, L-BFGS Tight {}.",
-        non_converged[0], non_converged[1], non_converged[2], non_converged[3],
+        "\n\\* stopped at MaxSteps.\n\n† finished with a fallback method.\n\n‡ stopped with an error or was cancelled.\n\nNon-converged runs by method — Internal (default) {}, ANC-RFO {}, L-BFGS {}, ANC-RFO Tight {}, L-BFGS Tight {}.",
+        non_converged[0], non_converged[1], non_converged[2], non_converged[3], non_converged[4],
     )
     .unwrap();
     table
 }
 
-fn output_dir() -> Result<PathBuf, Box<dyn Error>> {
-    let mut args = env::args_os().skip(1);
-    match (args.next(), args.next(), args.next()) {
-        (None, None, None) => Ok("target/optimize-bench".into()),
-        (Some(flag), Some(path), None) if flag == "--out" => Ok(path.into()),
-        _ => Err("usage: mmff_benchmark [--out <dir>]".into()),
+#[derive(Debug, PartialEq, Eq)]
+struct Arguments {
+    out: PathBuf,
+    trust_sweep: bool,
+}
+
+fn arguments(args: impl IntoIterator<Item = OsString>) -> Result<Arguments, Box<dyn Error>> {
+    let mut args = args.into_iter();
+    let mut out = None;
+    let mut trust_sweep = false;
+    let usage = "usage: mmff_benchmark [--out <dir>] [--trust-sweep]";
+    while let Some(arg) = args.next() {
+        if arg == "--out" && out.is_none() {
+            out = Some(PathBuf::from(args.next().ok_or(usage)?));
+        } else if arg == "--trust-sweep" && !trust_sweep {
+            trust_sweep = true;
+        } else {
+            return Err(usage.into());
+        }
     }
+    Ok(Arguments {
+        out: out.unwrap_or_else(|| "target/optimize-bench".into()),
+        trust_sweep,
+    })
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let out = output_dir()?;
+    let Arguments { out, trust_sweep } = arguments(env::args_os().skip(1))?;
     let mut benchmarks = Vec::with_capacity(MOLECULES.len());
     for (name, smiles) in MOLECULES {
-        let bench = benchmark(name, smiles).map_err(|error| format!("{name}: {error}"))?;
+        let bench =
+            benchmark(name, smiles, trust_sweep).map_err(|error| format!("{name}: {error}"))?;
         benchmarks.push(bench);
     }
     let table = markdown(&benchmarks);
     fs::create_dir_all(&out)?;
-    write_csv(&out.join("results.csv"), &benchmarks)?;
-    write_traces(&out.join("traces.json"), &benchmarks)?;
+    write_csv(&out.join("results.csv"), &benchmarks, false)?;
+    write_traces(&out.join("traces.json"), &benchmarks, false)?;
     fs::write(out.join("results.md"), &table)?;
     print!("{table}");
+    if trust_sweep {
+        let report = sweep_markdown(&benchmarks);
+        write_csv(&out.join("trust-sweep.csv"), &benchmarks, true)?;
+        write_traces(&out.join("trust-sweep.json"), &benchmarks, true)?;
+        fs::write(out.join("trust-sweep.md"), &report)?;
+        print!("\n{report}");
+    }
     Ok(())
 }
 
@@ -403,17 +494,21 @@ mod tests {
         let runs = RUNS
             .into_iter()
             .enumerate()
-            .map(|(i, (label, method, _))| Run {
+            .map(|(i, (label, settings))| Run {
                 label,
                 status: match i {
-                    0 => Status::MaxSteps,
-                    3 => Status::Cancelled,
+                    0 | 1 => Status::MaxSteps,
+                    4 => Status::Cancelled,
                     _ => Status::Converged,
                 },
-                method: if i == 0 { Method::Lbfgs } else { method },
-                steps: 500,
-                evaluations: 507,
-                energy: 0.,
+                method: match i {
+                    0 => Method::AncRfo,
+                    1 => Method::Lbfgs,
+                    _ => settings.unwrap().0,
+                },
+                steps: 500 + i,
+                evaluations: 507 + i,
+                energy: i as f64,
                 max_gradient: 0.,
                 wall_ms: 0.,
                 energies: Vec::new(),
@@ -424,16 +519,66 @@ mod tests {
             atoms: 10,
             heavy_atoms: 10,
             runs,
+            sweep_runs: Vec::new(),
             reference_iterations: 500,
             reference_energy: 0.,
         }]);
         assert!(
-            report.contains("| 500/507*† | 500/507 | 507 | 507‡ |"),
+            report.contains("| 500/507*† | 501/508*† | 502/509 | 510 | 511‡ |"),
             "{report}"
         );
-        assert!(report.contains("| **Totals / median ΔE** | 10 | 500/507 | 500/507 | 507 | 507 |"));
+        assert!(
+            report.contains(
+                "| **Totals / median ΔE** | 10 | 500/507 | 501/508 | 502/509 | 510 | 511 | 500 | -1.000000 | +1.000000 | 1.002 |"
+            )
+        );
         assert!(report.contains("\\* stopped at MaxSteps."));
-        assert!(report.contains("† finished with L-BFGS after starting with ANC-RFO."));
-        assert!(report.contains("ANC-RFO 1, L-BFGS 0, ANC-RFO Tight 0, L-BFGS Tight 1"));
+        assert!(report.contains("† finished with a fallback method."));
+        assert!(report.contains(
+            "Internal (default) 1, ANC-RFO 1, L-BFGS 0, ANC-RFO Tight 0, L-BFGS Tight 1"
+        ));
+    }
+
+    #[test]
+    fn trust_sweep_is_opt_in_and_accepts_either_argument_order() {
+        let parse = |args: &[&str]| arguments(args.iter().map(OsString::from));
+        assert_eq!(
+            parse(&[]).unwrap(),
+            Arguments {
+                out: "target/optimize-bench".into(),
+                trust_sweep: false
+            }
+        );
+        let expected = Arguments {
+            out: "target/sweep".into(),
+            trust_sweep: true,
+        };
+        assert_eq!(
+            parse(&["--out", "target/sweep", "--trust-sweep"]).unwrap(),
+            expected
+        );
+        assert_eq!(
+            parse(&["--trust-sweep", "--out", "target/sweep"]).unwrap(),
+            expected
+        );
+        assert!(parse(&["--trust-sweep", "--trust-sweep"]).is_err());
+        assert!(parse(&["--out"]).is_err());
+    }
+
+    #[test]
+    fn trust_sweep_contains_only_the_requested_normal_comparisons() {
+        let configs = sweep_configs();
+        for (method, configs) in [
+            (Method::AncRfo, &configs[..3]),
+            (Method::Internal, &configs[3..]),
+        ] {
+            assert!(configs.iter().all(|config| config.method == method));
+            assert_eq!(configs[0].trust, Trust::default());
+            assert!(!configs[0].contacts);
+            assert_eq!(configs[1].trust, Trust::per_atom());
+            assert!(!configs[1].contacts);
+            assert_eq!(configs[2].trust, Trust::per_atom());
+            assert!(configs[2].contacts);
+        }
     }
 }

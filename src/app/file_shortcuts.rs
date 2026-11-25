@@ -427,6 +427,7 @@ impl Fields {
                         | Message::Redo
                         | Message::Optimization(super::optimization::Action::Begin)
                         | Message::Shortcut(super::shortcuts::Action::Join)
+                        | Message::Xtb(super::xtb::Action::Entry(_))
                         | Message::Zoom(_)
                 )
             ))

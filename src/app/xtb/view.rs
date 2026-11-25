@@ -1,5 +1,5 @@
 //! The Predict tab's NMR · xTB switch and the Calculate card.
-use super::state::{self, LATER_METHODS, LATER_SETTINGS, LATER_TASKS, SOLVENTS};
+use super::state::{self, LATER_TASKS, METHODS, SOLVENTS};
 use super::tone::{Tone, line};
 use super::{Action, CalcTask, Outcome, Page};
 use crate::app::inspector::Section;
@@ -94,12 +94,14 @@ impl App {
         let subtitle = match (&target, &numbers) {
             (None, _) => "Select a molecule".to_owned(),
             (Some(_), Some(numbers)) => format!(
-                "GFN2-xTB · {} ({} atoms)",
+                "{} · {} ({} atoms)",
+                settings.method.label(),
                 state::formula(numbers),
                 numbers.len()
             ),
             (Some(atoms), None) => format!(
-                "GFN2-xTB · {} atom{} drawn",
+                "{} · {} atom{} drawn",
+                settings.method.label(),
                 atoms.len(),
                 if atoms.len() == 1 { "" } else { "s" }
             ),
@@ -121,23 +123,19 @@ impl App {
             segment(format!("xtb-task-{name}"), name, false, None, Some(reason))
         }))
         .spacing(4);
-        let methods = row(std::iter::once(segment(
-            "xtb-method-gfn2".into(),
-            "GFN2-xTB",
-            true,
-            set(Action::Page(Page::Xtb)),
-            None,
-        ))
-        .chain(LATER_METHODS.map(|(name, reason)| {
+        let methods = row(METHODS.map(|method| {
             segment(
-                format!("xtb-method-{name}"),
-                name,
-                false,
+                format!("xtb-method-{}", method.label().to_lowercase()),
+                method.label(),
+                settings.method == method,
+                set(Action::Method(method)),
                 None,
-                Some(reason),
             )
-        })))
+        }))
         .spacing(4);
+        let electronic = state::electronic(settings.method);
+        let solvent_ok =
+            settings.method.capabilities().solvent != reshiki::qcdata::SolventSupport::None;
 
         // Charge and spin, prefilled from the drawing, with the live check.
         let drawn = first.map_or((0, 0), |atom| {
@@ -189,17 +187,17 @@ impl App {
             ),
         ]
         .spacing(8);
-        let state = Settings {
+        let config = Settings {
             charge: charge_text,
             unpaired: unpaired_text,
-            ..Default::default()
+            ..settings.clone()
         }
-        .state(drawn);
-        let check = match (&state, &numbers) {
+        .config(drawn, true, vec![]);
+        let check = match (&config, &numbers) {
             (Err(reason), _) => Err((*reason).to_owned()),
-            (Ok((charge, unpaired)), Some(numbers)) => {
+            (Ok(config), Some(numbers)) => {
                 let protons = numbers.iter().map(|&z| u32::from(z)).sum();
-                state::electrons(protons, *charge, *unpaired)
+                state::electrons(protons, config.charge, config.unpaired)
             }
             (Ok(_), None) => Ok("Electrons are checked once the 3D model is made".to_owned()),
         };
@@ -220,10 +218,11 @@ impl App {
         )
         .text_size(12)
         .width(WIDE);
-        let solvent: Element<'_, Message> = if idle {
+        let solvent: Element<'_, Message> = if idle && solvent_ok {
             solvent.into()
         } else {
-            container(text(Solvent(settings.solvent).to_string()).size(12))
+            let shown = Solvent(settings.solvent.filter(|_| solvent_ok));
+            container(text(shown.to_string()).size(12))
                 .padding(6)
                 .into()
         };
@@ -295,15 +294,21 @@ impl App {
                 tasks,
                 later,
                 line(
-                    "Opt + freq, orbitals and conformers need support in the xTB worker.",
+                    "Opt + freq and Orbitals are coming in the Vibrations and Orbitals tabs.",
                     Tone::Muted
                 ),
                 label("Method"),
                 methods,
-                line(
-                    "g-xTB and GFN-FF need support in the xTB worker.",
-                    Tone::Muted
-                ),
+            ]
+            .spacing(6),
+        );
+        if let Some(note) =
+            state::method_note(settings.method, settings.solvent.is_some() && solvent_ok)
+        {
+            body = body.push(line(note, Tone::Muted));
+        }
+        body = body.push(
+            column![
                 fields,
                 check_line,
                 label("Solvent (ALPB)"),
@@ -316,7 +321,7 @@ impl App {
         if optimize {
             body = body.push(hold);
         }
-        body = body.push(self.xtb_advanced(idle));
+        body = body.push(self.xtb_advanced(idle, electronic));
 
         // Run; while running, the progress row above replaces it.
         let count = numbers
@@ -327,14 +332,21 @@ impl App {
             let ready = target.is_some() && check.is_ok() && !too_many;
             body = body.push(
                 row![
-                    reshiki::accessibility::button(
-                        "xtb-run",
-                        "Run xTB calculation",
-                        text("Run").size(12)
-                    )
-                    .padding([7, 18])
-                    .style(crate::appearance::primary)
-                    .on_press_maybe(ready.then_some(Message::Xtb(Action::Run))),
+                    hover_hint(
+                        reshiki::accessibility::button(
+                            "xtb-run",
+                            "Run xTB calculation",
+                            text("Run").size(12)
+                        )
+                        .padding([7, 18])
+                        .style(crate::appearance::primary)
+                        .on_press_maybe(ready.then_some(Message::Xtb(Action::Run))),
+                        format!("Run ({})", super::rerun_keys()),
+                        tooltip::Position::Top,
+                    ),
+                    text(super::rerun_keys())
+                        .size(11)
+                        .style(crate::app::workspace::muted_text),
                     line(
                         if target.is_none() {
                             "Select a molecule to calculate".to_owned()
@@ -360,7 +372,7 @@ impl App {
         self.inspector_section(Section::Xtb, "xTB calculation", subtitle, true, body)
     }
 
-    fn xtb_advanced(&self, idle: bool) -> Element<'_, Message> {
+    fn xtb_advanced(&self, idle: bool, electronic: bool) -> Element<'_, Message> {
         let settings = &self.xtb.settings;
         let toggle = accessible_command(
             "xtb-advanced",
@@ -407,16 +419,75 @@ impl App {
             .into()
         }))
         .spacing(4);
-        column![
-            toggle,
-            label("Optimizer convergence"),
-            convergence,
-            label("Threads"),
-            threads,
-            line(LATER_SETTINGS, Tone::Muted),
+        // SCF fields: empty is the method's default, shown greyed.
+        let scf_idle = idle && electronic;
+        let default_kelvin = if settings.method == reshiki::qcdata::XtbMethod::GXtb {
+            "0"
+        } else {
+            "300"
+        };
+        let field = |id: &'static str,
+                     name: &'static str,
+                     default: &'static str,
+                     value: &str,
+                     on: fn(String) -> Action| {
+            column![
+                label(name),
+                reshiki::accessibility::text_input(id, name, default, value)
+                    .on_input_maybe(scf_idle.then_some(move |value| Message::Xtb(on(value))))
+                    .on_submit_maybe(scf_idle.then_some(Message::Xtb(Action::Run)))
+                    .size(12)
+                    .padding(6),
+            ]
+            .spacing(3)
+            .width(WIDE)
+        };
+        let scf = row![
+            field(
+                "xtb-accuracy",
+                "Accuracy",
+                "1.0",
+                &settings.accuracy,
+                Action::Accuracy
+            ),
+            field(
+                "xtb-temperature",
+                "Electronic temp. (K)",
+                default_kelvin,
+                &settings.temperature,
+                Action::Temperature
+            ),
+            field(
+                "xtb-iterations",
+                "Max SCF iterations",
+                "250",
+                &settings.iterations,
+                Action::Iterations
+            ),
         ]
-        .spacing(6)
-        .into()
+        .spacing(8);
+        let mut advanced = column![toggle, scf].spacing(6);
+        if !electronic {
+            advanced = advanced.push(line("No SCF settings with GFN-FF.", Tone::Muted));
+        } else if let Err(reason) = settings.scf() {
+            advanced = advanced.push(line(reason, Tone::Warning));
+        }
+        advanced
+            .push(accessible_checkbox(
+                "xtb-conventions",
+                "xtb 6.8 compatible",
+                settings.xtb68,
+                idle.then_some(Message::Xtb(Action::Xtb68(!settings.xtb68))),
+            ))
+            .push(line(
+                "Numerical conventions of xtb 6.8 instead of axtb's; recorded with the result.",
+                Tone::Muted,
+            ))
+            .push(label("Threads"))
+            .push(threads)
+            .push(label("Optimizer convergence"))
+            .push(convergence)
+            .into()
     }
 }
 
@@ -465,18 +536,18 @@ fn progress(run: &super::Run) -> Element<'_, Message> {
     let text_line = line(
         run.launch.as_ref().map_or_else(
             || "Making the 3D model first (MMFF94s)".into(),
-            |_| run.progress.line(run.task, run.seconds()),
+            |_| run.progress.line(run.config.task, run.seconds()),
         ),
         Tone::Muted,
     );
     let mut rows = column![text_line].spacing(6);
-    let optimizing = run.task == CalcTask::Optimize && run.launch.is_some();
+    let optimizing = run.config.task == CalcTask::Optimize && run.launch.is_some();
     let mut controls = row![].spacing(8).align_y(Alignment::Center);
     if optimizing {
         controls = controls.push(
             canvas(Spark {
                 deltas: run.progress.deltas().map(f64::abs).collect(),
-                threshold: if run.tight { 1e-6 } else { 5e-6 },
+                threshold: if run.config.tight { 1e-6 } else { 5e-6 },
             })
             .width(170)
             .height(46),
@@ -521,7 +592,7 @@ fn outcome_view(outcome: &Outcome, in_palette: bool) -> Element<'_, Message> {
             }
             lines.into()
         }
-        Outcome::Failed(reason) => line(reason.clone(), Tone::Error),
+        Outcome::Failed(failed) => line(failed.explain().0, Tone::Error),
         Outcome::Review(review) => {
             let mut lines = column![].spacing(4);
             for reason in &review.reasons {

@@ -9,7 +9,7 @@ use super::super::{
     object_toolbar, optimization, pages, palettes, printing, qc_export, reaction_mapping,
     reactions,
     shortcuts::{self, TabKey, keys, tab_keys},
-    tabs, template_library, view_settings,
+    tabs, template_library, view_settings, xtb,
 };
 use crate::canvas::Tool;
 use iced::keyboard::Modifiers;
@@ -1610,6 +1610,30 @@ fn analysis(app: &App) -> Vec<Command> {
             Message::Assistant(assistant::Action::Open),
         ),
     ];
+    // Builds that cannot calculate hide it, as they hide Run.
+    if xtb::available() {
+        list.push(Command::new(
+            "Calculate (xTB)…",
+            Analyze,
+            "Energy or geometry optimization with GFN2-xTB, g-xTB or GFN-FF",
+            "xtb gfn2 gfn-ff gfnff g-xtb gxtb semiempirical quantum chemistry energy optimize calculate",
+            Run::Send(vec![
+                Message::Inspector(InspectorTab::Predict),
+                Message::Xtb(xtb::Action::Page(xtb::Page::Xtb)),
+            ]),
+        ));
+        list.push(
+            Command::new(
+                "Run the last xTB calculation",
+                Analyze,
+                "Calculate the selected molecule again with the card's last settings",
+                "xtb rerun repeat again calculate",
+                Run::Send(vec![Message::Xtb(xtb::Action::Entry(xtb::Entry::Rerun))]),
+            )
+            .keys(xtb::rerun_keys())
+            .need(Need::Molecule),
+        );
+    }
     use reshiki::purpose::Purpose;
     for (purpose, detail, synonyms) in [
         (
