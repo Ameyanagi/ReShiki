@@ -1,3 +1,5 @@
+//! An orbital placed on a 3D model: which orbital, its isovalue and look,
+//! and a vector snapshot for builds without the orbital data.
 use super::Look;
 use reshiki_qcdata::Spin;
 use serde::{Deserialize, Deserializer, Serialize};
