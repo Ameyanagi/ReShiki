@@ -20,8 +20,6 @@ const CHART_WIDTH: f32 = 480.;
 /// Chart height in the inspector; the bottom dock's body is shorter.
 const CHART_HEIGHT: f32 = 156.;
 const DOCK_CHART_HEIGHT: f32 = 128.;
-/// Peak labels closer than this (px) to a taller one are left out.
-const LABEL_GAP: f32 = 30.;
 /// Peaks labelled on the spectrum: at most this many, at least this fraction of the tallest.
 const LABELS: usize = 8;
 const LABEL_FRACTION: f64 = 0.05;
@@ -520,7 +518,7 @@ pub(super) struct SpectrumData {
 }
 
 impl SpectrumData {
-    fn new(result: &CalcResult, settings: &State, scale: f64) -> Self {
+    fn new(result: &CalcResult, shape: BandShape, fwhm: f32, scale: f64) -> Self {
         let mut data = Self {
             sticks: vec![],
             curve: vec![],
@@ -561,13 +559,13 @@ impl SpectrumData {
         if data.unplottable {
             return data;
         }
-        let fwhm = f64::from(settings.fwhm);
+        let fwhm = f64::from(fwhm);
         data.curve = vibrational::ir_spectrum(
             frequencies,
             intensities,
             scale,
             fwhm,
-            settings.shape,
+            shape,
             (data.high, data.low),
             900,
         );
@@ -576,7 +574,7 @@ impl SpectrumData {
             intensities,
             scale,
             fwhm,
-            settings.shape,
+            shape,
             LABEL_FRACTION,
             LABELS,
         );
@@ -650,7 +648,12 @@ impl Spectrum {
             match cache.as_ref() {
                 Some((cached_key, data)) if *cached_key == key => Arc::clone(data),
                 _ => {
-                    let data = Arc::new(SpectrumData::new(result, settings, scale));
+                    let data = Arc::new(SpectrumData::new(
+                        result,
+                        settings.shape,
+                        settings.fwhm,
+                        scale,
+                    ));
                     *cache = Some((key, Arc::clone(&data)));
                     data
                 }
@@ -819,15 +822,27 @@ impl canvas::Program<Message> for Spectrum {
             }),
             canvas::Stroke::default().with_color(ink).with_width(1.4),
         );
-        // The selected mode's label wins; then the tallest peaks, each
-        // clear of the labels already placed.
-        let mut placed: Vec<f32> = Vec::new();
+        // The selected mode's label and the imaginary note win; then the
+        // tallest peaks, each clear of the text already placed (horizontal
+        // extents at the chart's 10 px text, about 6 px a character).
+        let extent = |text: &str| text.chars().count() as f32 * 6.;
+        let mut placed: Vec<(f32, f32)> = Vec::new();
+        let free = |placed: &[(f32, f32)], (lo, hi): (f32, f32)| {
+            placed.iter().all(|&(a, b)| hi + 4. < a || lo > b + 4.)
+        };
         if let Some(frequency) = self.selected {
             let x = self.x(frequency, bounds);
-            let left = x + 64. < bounds.width - Self::RIGHT;
+            let label = format!("{frequency:.0} cm⁻¹");
+            let width = extent(&label);
+            let left = x + 4. + width < bounds.width - Self::RIGHT;
+            let (lo, hi) = if left {
+                (x + 4., x + 4. + width)
+            } else {
+                (x - 4. - width, x - 4.)
+            };
             frame.fill_text(small(
-                format!("{frequency:.0} cm⁻¹"),
-                Point::new(if left { x + 4. } else { x - 4. }, Self::TOP + 2.),
+                label,
+                Point::new(if left { lo } else { hi }, Self::TOP + 2.),
                 accent,
                 if left {
                     iced::alignment::Horizontal::Left
@@ -835,30 +850,34 @@ impl canvas::Program<Message> for Spectrum {
                     iced::alignment::Horizontal::Right
                 },
             ));
-            placed.push(x);
+            placed.push((lo.min(x), hi.max(x)));
+        }
+        if self.imaginary_selected {
+            let note = "imaginary mode: not plotted";
+            // Top left: high wavenumbers rarely carry peak labels.
+            frame.fill_text(small(
+                note.into(),
+                Point::new(Self::LEFT + 4., Self::TOP + 2.),
+                theme.palette().danger,
+                iced::alignment::Horizontal::Left,
+            ));
+            placed.push((Self::LEFT + 4., Self::LEFT + 4. + extent(note)));
         }
         let mut peaks: Vec<&[f64; 2]> = self.data.peaks.iter().collect();
         peaks.sort_by(|a, b| b[1].total_cmp(&a[1]));
         for [wavenumber, value] in peaks {
             let x = self.x(*wavenumber, bounds);
-            if placed.iter().any(|other| (other - x).abs() < LABEL_GAP) {
+            let label = format!("{wavenumber:.0}");
+            let half = extent(&label) / 2.;
+            if !free(&placed, (x - half, x + half)) {
                 continue;
             }
-            placed.push(x);
+            placed.push((x - half, x + half));
             frame.fill_text(small(
-                format!("{wavenumber:.0}"),
+                label,
                 Point::new(x, (y(*value) - 12.).max(Self::TOP + 2.)),
                 ink,
                 iced::alignment::Horizontal::Center,
-            ));
-        }
-        if self.imaginary_selected {
-            frame.fill_text(small(
-                "imaginary mode: not plotted".into(),
-                // Top left: high wavenumbers rarely carry peak labels.
-                Point::new(Self::LEFT + 4., Self::TOP + 2.),
-                theme.palette().danger,
-                iced::alignment::Horizontal::Left,
             ));
         }
         vec![frame.into_geometry()]

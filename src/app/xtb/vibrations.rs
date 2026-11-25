@@ -192,7 +192,12 @@ pub(super) fn thermo_at(
 ) -> Option<Thermo> {
     let vibrations = result.vibrations.as_ref()?;
     let saved = result.thermo.as_ref()?;
-    if saved.symmetry_number == 0 || vibrations.masses_amu.len() != frame.numbers.len() {
+    // A non-positive rotor cutoff means harmonic-only entropy, which the
+    // local formula does not model: such results keep their saved conditions.
+    if saved.symmetry_number == 0
+        || saved.rotor_cutoff_cm1 <= 0.
+        || vibrations.masses_amu.len() != frame.numbers.len()
+    {
         return None;
     }
     let mut input = vibrational::ThermoInput {
@@ -209,9 +214,29 @@ pub(super) fn thermo_at(
     };
     let reproduces = |input: &vibrational::ThermoInput<'_>| {
         let thermo = vibrational::thermochemistry(input);
+        // Every saved quantity, not G alone: a wrong rotor type can match G
+        // by cancellation at an unusual temperature.
         thermo_is_finite(&thermo)
-            && (thermo.gibbs_correction_hartree - saved.gibbs_correction_hartree).abs()
-                <= GIBBS_TOLERANCE_HARTREE
+            && [
+                (
+                    thermo.gibbs_correction_hartree,
+                    saved.gibbs_correction_hartree,
+                ),
+                (
+                    thermo.enthalpy_correction_hartree,
+                    saved.enthalpy_correction_hartree,
+                ),
+                (
+                    thermo.zero_point_energy_hartree,
+                    saved.zero_point_energy_hartree,
+                ),
+                (
+                    thermo.temperature_k * thermo.entropy_hartree_per_k,
+                    saved.temperature_k * saved.entropy_hartree_per_k,
+                ),
+            ]
+            .iter()
+            .all(|(ours, theirs)| (ours - theirs).abs() <= GIBBS_TOLERANCE_HARTREE)
     };
     if !reproduces(&input) {
         input.linear = Some(!input.is_linear());
@@ -660,8 +685,14 @@ impl App {
         self.changed(before);
         if !self.error {
             self.status = format!("Added {count} displacement arrows · ⌘Z undoes");
-            // The drawing has them now; the preview would draw them twice.
-            self.tab.xtb.vibrations.arrows = false;
+            // The drawing has them now at equilibrium: stop there, so the
+            // preview neither draws them twice nor moves atoms out from under them.
+            let settings = &mut self.tab.xtb.vibrations;
+            settings.arrows = false;
+            settings.playing = false;
+            if let Some(animation) = &mut settings.animation {
+                animation.phase = 0.;
+            }
         }
     }
 
