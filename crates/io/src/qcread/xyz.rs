@@ -46,7 +46,14 @@ pub(super) fn read(text: &str) -> Result<QcFile, Error> {
                 if let Ok(z) = name.parse::<u8>() {
                     (1..=118).contains(&z).then_some((z, 0))
                 } else {
-                    element(name)
+                    let symbol = name.trim_start_matches(|c: char| c.is_ascii_digit());
+                    let (z, isotope) = element(symbol)?;
+                    let mass = name.strip_suffix(symbol)?;
+                    if mass.is_empty() {
+                        Some((z, isotope))
+                    } else {
+                        Some((z, mass.parse().ok()?))
+                    }
                 }
             },
             |_| Ok(()),

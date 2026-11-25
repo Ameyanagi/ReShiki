@@ -6,11 +6,13 @@ charge and multiplicity unless you override them. Choose ``method="gfn2"``
 also work, regardless of case.
 
 ``solvent="water"`` uses ALPB by default. Set ``solvent_model="gbsa"`` for
-GBSA with GFN2-xTB. In solution, g-xTB adds the GFN2-xTB ALPB correction to
-the gas-phase g-xTB energy. ``electronic_temperature`` is in kelvin.
+GBSA. In solution, g-xTB adds the GFN2-xTB solvation energy for the chosen model
+(ALPB or GBSA) to the gas-phase g-xTB energy. ``electronic_temperature`` is in kelvin.
 ``accuracy`` and ``max_iterations`` control SCF convergence. Use
 ``conventions="xtb-6.8"`` for the xTB 6.8 conventions where supported.
 Each worker uses one thread by default.
+Ctrl+C cancels a calculation running on the main thread, while a calculation
+started in another thread runs to completion.
 """
 
 from __future__ import annotations
@@ -112,6 +114,7 @@ def _calculate(
     method: str,
     charge: int | None,
     multiplicity: int | None,
+    unpaired: int | None,
     solvent: str | None,
     solvent_model: str,
     electronic_temperature: float | None,
@@ -130,6 +133,7 @@ def _calculate(
     options = {
         "geometry": _geometry_data(geometry),
         "method": method,
+        "unpaired": unpaired,
         "solvent": solvent,
         "solvent_model": solvent_model,
         "electronic_temperature": electronic_temperature,
@@ -155,6 +159,7 @@ def energy(
     method: str = "gfn2",
     charge: int | None = None,
     multiplicity: int | None = None,
+    unpaired: int | None = None,
     solvent: str | None = None,
     solvent_model: Literal["alpb", "gbsa"] = "alpb",
     electronic_temperature: float | None = None,
@@ -168,6 +173,8 @@ def energy(
     For example, ``energy(water, gradient=True, solvent="water")`` returns
     the energy and gradient in water. Request orbital energies and occupations
     with ``orbitals=True`` or bond orders with ``bond_orders=True``.
+    ``unpaired`` sets the number of unpaired electrons in the engine's valence
+    space and defaults to the multiplicity minus one.
     """
     request = {
         "operation": "energy",
@@ -182,6 +189,7 @@ def energy(
             method,
             charge,
             multiplicity,
+            unpaired,
             solvent,
             solvent_model,
             electronic_temperature,
@@ -202,6 +210,7 @@ def optimize(
     method: str = "gfn2",
     charge: int | None = None,
     multiplicity: int | None = None,
+    unpaired: int | None = None,
     solvent: str | None = None,
     solvent_model: Literal["alpb", "gbsa"] = "alpb",
     electronic_temperature: float | None = None,
@@ -215,6 +224,8 @@ def optimize(
     For example, ``optimize(water, level="tight", fixed_atoms=[0])`` holds the
     first atom fixed. Indices start at zero. The default limit is 500 steps.
     A calculation that reaches the limit returns with ``converged=False``.
+    ``unpaired`` sets the number of unpaired electrons in the engine's valence
+    space and defaults to the multiplicity minus one.
     """
     request = {
         "operation": "optimize",
@@ -228,6 +239,7 @@ def optimize(
         method,
         charge,
         multiplicity,
+        unpaired,
         solvent,
         solvent_model,
         electronic_temperature,
@@ -260,6 +272,7 @@ def frequencies(
     method: str = "gfn2",
     charge: int | None = None,
     multiplicity: int | None = None,
+    unpaired: int | None = None,
     solvent: str | None = None,
     solvent_model: Literal["alpb", "gbsa"] = "alpb",
     electronic_temperature: float | None = None,
@@ -273,6 +286,9 @@ def frequencies(
     Use an optimized geometry, for example ``frequencies(optimize(water).geometry)``.
     Specify the thermochemistry temperature in kelvin and pressure in pascals.
     Frequencies are in cm⁻¹, with imaginary modes reported as negative values.
+    For isotope-labeled geometries, thermochemistry uses a symmetry number of 1.
+    ``unpaired`` sets the number of unpaired electrons in the engine's valence
+    space and defaults to the multiplicity minus one.
     """
     request = {"operation": "frequencies", "temperature": temperature, "pressure": pressure}
     return _result_from_data(
@@ -282,6 +298,7 @@ def frequencies(
             method,
             charge,
             multiplicity,
+            unpaired,
             solvent,
             solvent_model,
             electronic_temperature,

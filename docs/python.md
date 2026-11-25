@@ -7,6 +7,9 @@ From 0.14.0, each ReShiki release publishes abi3 wheels
 with the app's version for macOS, Windows and Linux on x64 and ARM64; see
 [Releasing](releasing.md#configure-pypi-publishing).
 
+Ctrl+C cancels an xTB calculation running on the main thread, while a
+calculation started in another thread runs to completion.
+
 ## Draw and analyze
 
 ```python

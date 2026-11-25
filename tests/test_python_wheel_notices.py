@@ -4,10 +4,20 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from check_python_wheel_notices import AXTB_ATTRIBUTIONS, verify_wheel
+from check_python_wheel_notices import (
+    AXTB_ATTRIBUTIONS,
+    RELEASE_URL,
+    main,
+    release_version,
+    verify_release_wheel,
+    verify_wheel,
+)
 
 
 class WheelFixture(unittest.TestCase):
@@ -138,6 +148,110 @@ class XtbWheelNoticeTests(WheelFixture):
     def test_axtb_notices_are_rejected_in_the_base_wheel(self):
         with self.assertRaisesRegex(ValueError, "Missing source attribution"):
             verify_wheel(self.wheel(), self.licenses)
+
+
+class XtbWheelReleaseTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.directory = Path(temporary.name)
+
+    def wheel(self, version="1.2.3", *, metadata_version=None, body=None, headers=""):
+        path = self.directory / f"reshiki_xtb-{version}-py3-none-any.whl"
+        metadata_version = version if metadata_version is None else metadata_version
+        body = f"[Corresponding source]({RELEASE_URL}v1.2.3)." if body is None else body
+        metadata = (
+            f"Metadata-Version: 2.4\nName: reshiki-xtb\nVersion: {metadata_version}\n"
+            f"{headers}\n{body}\n"
+        )
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr(f"reshiki_xtb-{version}.dist-info/METADATA", metadata)
+        return path
+
+    def test_stable_and_prerelease_wheels_match_the_raw_release_tag(self):
+        for tag, expected in (
+            ("v1.2.3", "1.2.3"),
+            ("v1.2.3-alpha.1", "1.2.3a1"),
+            ("v1.2.3-beta.2", "1.2.3b2"),
+            ("v1.2.3-rc.1", "1.2.3rc1"),
+        ):
+            with self.subTest(tag=tag):
+                self.assertEqual(release_version(tag), expected)
+                verify_release_wheel(
+                    self.wheel(expected, body=f"[Source]({RELEASE_URL}{tag})."), tag
+                )
+
+    def test_mismatched_filename_version_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "must have release version 1.2.4rc1"):
+            verify_release_wheel(self.wheel(), "v1.2.4-rc.1")
+
+    def test_mismatched_or_duplicate_metadata_versions_are_rejected(self):
+        for options in (
+            {"metadata_version": "1.2.2"},
+            {"headers": "Version: 1.2.3\n"},
+        ):
+            with self.subTest(options=options), self.assertRaisesRegex(
+                ValueError, "metadata must have release version 1.2.3"
+            ):
+                verify_release_wheel(self.wheel(**options), "v1.2.3")
+
+    def test_source_link_must_name_only_the_exact_raw_tag(self):
+        tag = "v1.2.3-rc.1"
+        for body in (
+            "Source is on GitHub.",
+            f"[Source]({RELEASE_URL}v1.2.2).",
+            f"[Source]({RELEASE_URL}v1.2.3rc1).",
+            f"[Source]({RELEASE_URL}{tag}0).",
+            f"[Source]({RELEASE_URL}{tag}). [Old source]({RELEASE_URL}v1.2.2).",
+        ):
+            with self.subTest(body=body), self.assertRaisesRegex(ValueError, "source links"):
+                verify_release_wheel(self.wheel("1.2.3rc1", body=body), tag)
+
+    def test_source_project_url_is_accepted_with_the_readme_template(self):
+        verify_release_wheel(
+            self.wheel(
+                body=f"Release address: `{RELEASE_URL}v<version>`.",
+                headers=f"Project-URL: Source, {RELEASE_URL}v1.2.3\n",
+            ),
+            "v1.2.3",
+        )
+
+    def test_engine_metadata_is_required(self):
+        wheel = self.wheel()
+        with zipfile.ZipFile(wheel, "w") as archive:
+            archive.writestr("reshiki_xtb-1.2.3.dist-info/METADATA", "Name: reshiki\n")
+        with self.assertRaisesRegex(ValueError, "Expected reshiki-xtb metadata"):
+            verify_release_wheel(wheel, "v1.2.3")
+        with zipfile.ZipFile(wheel, "w") as archive:
+            archive.writestr("README.md", "No metadata")
+        with self.assertRaisesRegex(ValueError, "Expected one wheel METADATA"):
+            verify_release_wheel(wheel, "v1.2.3")
+
+    def test_unsupported_release_tags_are_rejected(self):
+        for tag in ("1.2.3", "v01.2.3", "v1.2.3-unrelated", "v1.2.3/extra"):
+            with self.subTest(tag=tag), self.assertRaisesRegex(ValueError, "Unsupported"):
+                release_version(tag)
+
+    def test_release_cli_checks_every_candidate_and_requires_a_match(self):
+        self.wheel()
+        pattern = str(self.directory / "reshiki_xtb-*.whl")
+        with (
+            patch.object(sys, "argv", ["check", "--release-tag", "v1.2.3", pattern]),
+            redirect_stdout(StringIO()) as output,
+        ):
+            main()
+            self.assertIn("Verified release version and source link", output.getvalue())
+            self.wheel("1.2.2")
+            with self.assertRaisesRegex(ValueError, "must have release version 1.2.3"):
+                main()
+        with (
+            patch.object(sys, "argv", ["check", "--release-tag", "v1.2.3", pattern + "missing"]),
+            redirect_stderr(StringIO()) as output,
+            self.assertRaises(SystemExit) as error,
+        ):
+            main()
+        self.assertEqual(error.exception.code, 2)
+        self.assertIn("No wheel files matched", output.getvalue())
 
 
 if __name__ == "__main__":

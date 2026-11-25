@@ -3,7 +3,7 @@ use std::fmt::Write;
 
 use crate::qcdata::Trajectory;
 
-use super::{Error, Frame, check_atoms, clean_title, single_line, write_atoms};
+use super::{Error, Frame, Program, check_atoms, clean_title, single_line, write_atoms};
 
 pub(super) fn frame(frame: &Frame, title: &str) -> String {
     let mut text = String::new();
@@ -34,5 +34,5 @@ pub fn write_xyz_trajectory(path: &Trajectory, title: &str) -> Result<String, Er
 
 fn write_frame(text: &mut String, frame: &Frame, comment: &str) {
     let _ = writeln!(text, "{}\n{comment}", frame.numbers.len());
-    write_atoms(text, frame, "");
+    write_atoms(text, frame, Program::Xyz);
 }

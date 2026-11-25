@@ -948,11 +948,19 @@ jobs:
       id-token: write
     steps:
       - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: python-xtb-wheel-*
           path: dist
           merge-multiple: true
+      - name: Check engine wheel release versions and source links
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/check_python_wheel_notices.py --release-tag "$RELEASE_TAG" "dist/reshiki_xtb-*.whl"
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           repository-url: https://test.pypi.org/legacy/

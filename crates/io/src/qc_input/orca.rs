@@ -2,8 +2,8 @@
 use std::fmt::Write;
 
 use super::{
-    Dispersion, Error, File, Frame, Geometry, Job, Method, Settings, single_line, write_atoms,
-    write_orca_hess, xyz,
+    Dispersion, Error, File, Frame, Geometry, Job, Method, Program, Settings, single_line,
+    write_atoms, write_orca_hess, xyz,
 };
 
 pub(super) fn maxcore(settings: &Settings) -> u64 {
@@ -164,7 +164,7 @@ pub(super) fn write(
         "\n* xyz {} {}",
         settings.charge, settings.multiplicity
     );
-    write_atoms(&mut text, inline, "  ");
+    write_atoms(&mut text, inline, Program::Orca);
     text.push_str("*\n");
     Ok((text, files))
 }

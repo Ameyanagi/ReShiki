@@ -2,6 +2,7 @@
 
 use crate::qc::{GeometryData, computed_data};
 use pyo3::prelude::*;
+use reshiki_model::chemistry::{ELEMENTS, ISOTOPES};
 use reshiki_optimize::{
     ANGSTROM_PER_BOHR, Accuracy, EvalError, Level, Options, Potential, Status, optimize,
 };
@@ -27,6 +28,7 @@ use std::{
 struct Calculation {
     geometry: GeometryData,
     method: String,
+    unpaired: Option<u32>,
     conventions: Conventions,
     solvent: Option<String>,
     solvent_model: SolventModel,
@@ -146,9 +148,9 @@ impl Calculation {
         program: &str,
     ) -> client::Result<Value> {
         let mut geometry = self.geometry;
-        let uhf = geometry
-            .multiplicity
-            .checked_sub(1)
+        let uhf = self
+            .unpaired
+            .or_else(|| geometry.multiplicity.checked_sub(1))
             .ok_or_else(|| Error::Input("Multiplicity must be positive".into()))?;
         session.open(
             &Open {
@@ -176,7 +178,19 @@ impl Calculation {
                 heap_bytes: Limits::default().heap_bytes,
             },
             cancel,
-        )?;
+        )
+        .map_err(|error| match error {
+            Error::Engine {
+                kind: ErrorKind::Input,
+                message,
+            } if message.contains("same parity as the valence electron count") => Error::Engine {
+                kind: ErrorKind::Input,
+                message: format!(
+                    "{message}. Pass unpaired= with the number of unpaired valence electrons."
+                ),
+            },
+            error => error,
+        })?;
 
         let mut optimization = None;
         let request = match self.request {
@@ -193,17 +207,22 @@ impl Calculation {
             Request::Frequencies {
                 temperature,
                 pressure,
-            } => Compute {
-                hessian: Some(HessianRequest {
-                    thermo: ThermoRequest {
-                        temperature_k: Some(temperature),
-                        pressure_pa: Some(pressure),
-                        ..ThermoRequest::default()
-                    },
-                    ..HessianRequest::default()
-                }),
-                ..Compute::default()
-            },
+            } => {
+                let masses_amu = isotope_masses(&geometry);
+                Compute {
+                    hessian: Some(HessianRequest {
+                        thermo: ThermoRequest {
+                            temperature_k: Some(temperature),
+                            pressure_pa: Some(pressure),
+                            // The engine's automatic symmetry ignores isotopes.
+                            symmetry_number: masses_amu.as_ref().map(|_| 1),
+                            ..ThermoRequest::default()
+                        },
+                        masses_amu,
+                    }),
+                    ..Compute::default()
+                }
+            }
             Request::Optimize {
                 level,
                 max_steps,
@@ -281,6 +300,28 @@ impl Calculation {
         }
         Ok(result)
     }
+}
+
+fn isotope_masses(geometry: &GeometryData) -> Option<Vec<f64>> {
+    if geometry.isotopes.iter().all(|&isotope| isotope == 0) {
+        return None;
+    }
+    Some(
+        geometry
+            .numbers
+            .iter()
+            .zip(&geometry.isotopes)
+            .map(|(&number, &isotope)| {
+                if isotope == 0 {
+                    ELEMENTS[usize::from(number)].average_mass_amu()
+                } else {
+                    ISOTOPES
+                        .binary_search_by_key(&(number, isotope), |&(z, a, _)| (z, a))
+                        .map_or(f64::from(isotope), |index| ISOTOPES[index].2)
+                }
+            })
+            .collect(),
+    )
 }
 
 fn orbital_levels(requested: bool) -> OrbitalOutput {

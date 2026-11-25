@@ -2,6 +2,11 @@
 //! used by the browser. Python owns the public objects and integrations.
 #![forbid(unsafe_code)]
 
+const _: () = assert!(
+    !reshiki_xtb_worker::INCLUDED,
+    "the base reshiki wheel must never enable the xTB engine"
+);
+
 mod bitmap_budget;
 mod drawing;
 mod qc;
