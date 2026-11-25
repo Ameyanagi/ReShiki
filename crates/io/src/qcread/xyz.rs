@@ -117,7 +117,9 @@ pub(super) fn read(text: &str) -> Result<QcFile, Error> {
             // with decimals; a bare frame number is not an energy.
             label
                 .split_once('.')
-                .filter(|(_, decimals)| decimals.len() >= 4)
+                .filter(|(_, decimals)| {
+                    decimals.len() >= 4 && decimals.bytes().all(|b| b.is_ascii_digit())
+                })
                 .and_then(|_| label.parse::<f64>().ok())
                 .filter(|e| e.is_finite())
         };

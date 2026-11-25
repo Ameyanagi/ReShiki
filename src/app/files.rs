@@ -965,10 +965,9 @@ impl super::App {
                 }
             }
             Ok(Prepared::Frames(file)) => {
-                // One sheet at a time, and never over a 3D optimization
-                // preview, whose gate would hold the sheet's buttons.
+                // One sheet at a time.
                 let name = super::import::name(&path);
-                if self.frames_import.is_some() || self.tab.optimization.is_some() {
+                if self.frames_import.is_some() {
                     self.status = format!("Could not open {name}: finish what is open first");
                     self.error = true;
                 } else {
