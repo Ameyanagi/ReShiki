@@ -465,11 +465,155 @@ existing render tests confirm.
 - Evidence: canvas screenshots before (no surface) and after, rendered SVG
   and PDF pages.
 
+## Looks, opacity and smoothness (L6b)
+
+The owner's review of the first renders (25 Nov): "the surface is not
+smooth", and "we need alpha and mesh also". Three things were wrong: the
+shading was ten flat, visible bands; outlines were slightly lumpy and
+polygonal at zoom; and short stray marks showed near edges (a gap in an
+outline run). This section replaces the opaque-only, ten-band design above
+where they differ.
+
+### Look (persisted with a placed figure)
+
+    Look { fill: Solid | Shaded | Outline | None, mesh: bool, opacity: 20..=100 }
+
+| Field     | Values                               | Default | Meaning                                                                                |
+| --------- | ------------------------------------ | ------- | -------------------------------------------------------------------------------------- |
+| `fill`    | `solid`, `shaded`, `outline`, `none` | shaded  | flat phase colours; lit and smoothly shaded; paper-coloured fill with outline; no fill |
+| `mesh`    | `true`, `false`                      | false   | a light wire grid on the surface, over the fill (`fill: none` needs `mesh: true`)      |
+| `opacity` | integer percent, 20 to 100           | 100     | the surface as a translucent film: what lies behind a lobe shows through it            |
+
+Serialized as `{"fill": "shaded", "mesh": false, "opacity": 100}`; reading
+validates once (opacity range, `none` without mesh is rejected). The figure
+stores the look with its other parameters, never a mesh. The UI lane shows
+Look as Solid · Shaded · Outline · Mesh (Mesh = `fill: none, mesh: true`),
+a "Mesh lines" check box for the other three, and an Opacity slider. The
+silhouette outline is drawn in every look when the model's own look draws
+outlines (Flat), as for the balls.
+
+Developer switch: `RESHIKI_DEV_ORBITAL_SURFACE=pistar:0.06,look=shaded+mesh,opacity=60`
+(`look=` takes `solid`, `shaded`, `outline` or `mesh`, the first three
+optionally `+mesh`).
+
+### Smooth geometry
+
+- After simplification the mesh is relaxed with Taubin's λ|μ smoothing
+  (no shrinking), then every vertex is moved back onto its level set by
+  Newton steps along ∇f, and normals are taken from ∇f again. Moves that
+  would flip a face or make the mesh pass through itself are undone, so the
+  embedding the visibility step relies on is kept. This removes the lumps
+  that the quadric simplifier leaves at lobe tips.
+- Every merged contour, outline run and mesh line is fitted with cubic
+  Béziers (Schneider 1990) to an error of 0.08 drawing units at its input
+  points, C1 except at real corners (a turn over 40°, such as where a ball
+  cuts a lobe). Outlines are round at any zoom and paths get shorter.
+- Slivers and stray marks: contours under 0.05 square units or thinner than
+  0.12 units (2·area / perimeter) and outline runs shorter than 1 unit are
+  dropped before fitting. These replace the old rule that dropped outline
+  runs shorter than 2 % of the model, which cut legitimate short outline
+  runs between two crossing lobes and left the gaps seen in the review.
+- Fitting moves a boundary by at most the fit error; the ray oracle checks
+  the fitted paths too, with the same approximation band as before.
+
+### Smooth shading
+
+The shading is still nested regions of the interpolated Lambert lightness
+(cuts never change the shading field), but with enough tones that one tone
+step is at most one 8-bit level in every colour channel of the final
+picture, which no 8-bit display or viewer can show as a step:
+
+    tones = clamp(ceil(channel range in levels × weight), 2, 128)
+
+where the channel range is that of the phase's colour ramp from the darkest
+to the lightest lightness (about 110 levels for the blue phase, 55 for the
+pale one) and `weight` is the group's share of the final colour (1 when
+opaque, α(1 − α)^d for depth group d below). Each tone region is clipped
+to its phase's whole region (an SVG `clipPath`), so independently fitted
+tone outlines can never reach past the lobe's edge.
+
+Considered and not used:
+
+- Canvas: iced 0.14's wgpu meshes take per-vertex colours (true Gouraud),
+  but its tiny-skia renderer draws no meshes at all, and the canvas draws
+  3D models from cached resvg tiles of the same SVG as the export, which is
+  what keeps late labels above the surface and canvas and export identical.
+- PDF type 4 (free-form Gouraud) shadings: our PDF is written by svg2pdf
+  from the usvg tree that the clipboard, page export and Python share;
+  usvg has no mesh paint, so this would mean patching the vendored usvg and
+  svg2pdf (and resvg, which matches on usvg's paints) or splitting every
+  page into interleaved SVG and shading chunks. At one level per step the
+  bands already look identical to a smooth shading in every 8-bit viewer,
+  so PDF uses the same vector regions as SVG.
+- A linear gradient per band: a band is curved, so one gradient direction
+  is wrong along most of it.
+
+### Opacity: depth groups
+
+With opacity α < 1 the hidden layers are needed. For a point on a surface
+piece, its depth count is the number of front pieces in front of it there
+(the same exact pairwise rule as §3). Depth group d holds everything with
+count d; each piece is split into convex fragments by count with the same
+half-plane splits used against occluders, so all of it stays exact:
+
+    molecule items (as today)
+    group G−1 … group 1, group 0     each composited as a whole at its alpha
+    labels of atoms in front of the surface
+
+- Front faces only carry fill (back faces are culled as before), so a ray
+  through one lobe is attenuated once, an atom inside a lobe shows through
+  its front face, and a lobe behind another shows through it. Balls and
+  bonds stay opaque, so a lobe part behind an atom is still cut away.
+- Each group is one SVG group with `opacity="α"`: its tones are opaque
+  inside the group, so there are no seams or doubled alpha between pieces.
+- The number of groups is the smallest G with α(1 − α)^G < 1/50, at most 6
+  (G = 1 at 100 %, when the output is exactly the opaque one).
+- Cost: fragments grow only where sheets overlap; a piece is split at most
+  into 4096 fragments (never reached in the demo scenes).
+
+### Mesh look
+
+Lines are the surface's intersections with three families of parallel
+planes 0.3 Å apart, perpendicular to the principal axes of the atoms (so
+the grid turns with the molecule and does not depend on the mesh
+triangles). They lie on the surface, so they are cut exactly like it: a
+segment on a triangle is clipped to that triangle's fragments, which
+already exclude what the molecule hides and carry the depth count.
+
+- At 100 % only front lines that nothing covers are drawn (hidden lines
+  removed). Below 100 % lines behind d front faces are drawn in group d,
+  and lines on back faces are cut the same way (back faces are clipped
+  against occluders for this only), so the far side of a lobe shows
+  faintly through the front.
+- Over a fill, lines are a darker shade of the phase colour, about half the
+  ball outline width. With `fill: none` there is no film to attenuate them,
+  so group d is drawn at α(1 − α)^d.
+- Order inside a group: fills, mesh lines, then the outline runs.
+
+### Primitive and snapshot
+
+    Primitive::Surface { groups: Vec<SurfaceGroup> }      // deepest first
+    SurfaceGroup { alpha, fills: Vec<SurfaceFill>, strokes: Vec<SurfaceStroke> }
+    SurfaceFill { region: Vec<PathCommand>, color, tones: Vec<(Vec<PathCommand>, color)> }
+    SurfaceStroke { paths: Vec<PathCommand>, outline: Outline }
+
+The snapshot format becomes `RSF2` (RSF1 was never released, so it is not
+read):
+
+    base64( deflate(  // little-endian
+        magic "RSF2",
+        group count u32, per group: alpha f32,
+            fill count u32, per fill: colour [u8; 3], path, tone count u32,
+                per tone: colour [u8; 3], path
+            stroke count u32, per stroke: colour [u8; 3], alpha f32, width f32, path
+        path = command count u32, per command: tag u8 (0 move, 1 line,
+               2 cubic, 3 close), then 1, 1, 3 or 0 points as x f32, y f32 ) )
+
+Over 300 KB, every other tone is dropped until it fits (the steps get
+coarser, the outlines do not change).
+
 ## Known limitations of the prototype
 
-- Opaque surfaces only. Translucent lobes need the hidden layers too (a
-  lobe behind another shows through it), which the merge throws away; not
-  needed for the first release.
 - One surface (one orbital, both signs) per model.
 - No surface on crystals, in Wireframe or in thermal ellipsoids, and none
   during the 2D → 3D morph (see section 2).
