@@ -1046,7 +1046,13 @@ fn supplied_full_and_restricted_cartesian_hessians_transform_with_fixed_componen
         for j in 0..ncart {
             full[i * ncart + j] = 0.003 * (i + 1) as f64 * (j + 1) as f64;
         }
-        full[i * ncart + i] += 1.0 + i as f64 / 5.0;
+        // Reflecting the full matrix before restriction would mix the negative
+        // curvature on the fixed atoms into the positive free block.
+        full[i * ncart + i] += if free.contains(&i) {
+            1.0 + i as f64 / 5.0
+        } else {
+            -10.
+        };
     }
     let restricted: Vec<_> = free
         .iter()
@@ -1062,6 +1068,92 @@ fn supplied_full_and_restricted_cartesian_hessians_transform_with_fixed_componen
         assert!(maximum_error(&transformed, &restricted) < 1e-8);
     }
     assert!(maximum_error(&from_full.hessian, &from_restricted.hessian) < 1e-10);
+}
+
+#[test]
+fn supplied_saddle_seed_decouples_fragment_stretch_from_global_rotation() {
+    use crate::{
+        Accuracy, EvalError, InitialHessian, Method, Options, Potential, Status, optimize,
+    };
+    use std::ops::ControlFlow;
+
+    // Two unbonded atoms in a radial harmonic well. A different surface supplies
+    // the seed, as when optimizing GFN2 with a force-field Hessian.
+    struct Pair;
+    impl Potential for Pair {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            let delta = sub(point(x, 1), point(x, 0));
+            let r = norm(&delta);
+            let stretch = r - 9.;
+            let gradient = scale(delta, 0.05 * stretch / r);
+            g[..3].copy_from_slice(&scale(gradient, -1.));
+            g[3..].copy_from_slice(&gradient);
+            Ok(0.025 * stretch * stretch)
+        }
+
+        fn hessian(&mut self, _: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+            // In normalized relative x/y coordinates (stretch/rotation at the
+            // start), the seed is [[-0.1, 1], [1, -4]]. Its determinant is < 0.
+            let block = [[-0.05, 0.5, 0.], [0.5, -2., 0.], [0.; 3]];
+            for (i, row) in h.as_chunks_mut::<6>().0.iter_mut().enumerate() {
+                for (j, value) in row.iter_mut().enumerate() {
+                    let k = block[i % 3][j % 3];
+                    *value = if i / 3 == j / 3 { k } else { -k };
+                }
+            }
+            Some(Ok(()))
+        }
+    }
+
+    let atoms = [18, 18];
+    let x = [0., 0., 0., 10., 0., 0.];
+    let free = [3, 4, 2, 1, 0, 5]; // Exercise a nontrivial free-column ordering.
+    let mut seed = [0.; 36];
+    Pair.hessian(&x, &mut seed).unwrap().unwrap();
+    let model = InternalModel::build(&atoms, &free, &x, false, Some(&seed)).unwrap();
+    let mut g = [0.; 6];
+    Pair.evaluate(&x, &mut g, Accuracy::Normal).unwrap();
+    let force = norm(&g);
+    let floor = model.parameters.curvature_floor;
+    // The stretch (parallel to g) is the sole physical mode of a free dimer.
+    let cartesian = physical_hessian(&model, &x, &free);
+    for (i, row) in cartesian.as_chunks::<6>().0.iter().enumerate() {
+        for (j, &k) in row.iter().enumerate() {
+            let stretch = g[free[i]] * g[free[j]] / force.powi(2);
+            close(
+                k,
+                floor * f64::from(i == j) + (0.1 - floor) * stretch,
+                1e-12,
+            );
+        }
+    }
+    let direction = model.direction(&x, &g).unwrap();
+    let step = direction.restricted(&x, f64::MAX).unwrap();
+    // The physical RFO equation is |g| s² + 0.1 s − |g| = 0 for the length s.
+    let length = 2. * force / (0.1 + 0.1_f64.hypot(2. * force));
+    close(direction.length, length, 1e-12);
+    for (&index, &dx) in free.iter().zip(&step.cartesian) {
+        close(dx, -length * g[index] / force, 1e-12);
+    }
+    let options = Options {
+        method: Method::Internal,
+        initial_hessian: InitialHessian::Potential,
+        ..Options::default()
+    };
+    let outcome = optimize(&mut Pair, &atoms, &x, &options, |_| {
+        ControlFlow::Continue(())
+    });
+    assert_eq!(outcome.status, Status::Converged);
+    assert_eq!(outcome.method, Method::Internal);
+    assert_eq!(outcome.hessian_evaluations, 1);
+    close(
+        norm(&sub(
+            point(&outcome.positions, 1),
+            point(&outcome.positions, 0),
+        )),
+        9.,
+        1e-5,
+    );
 }
 
 #[test]
@@ -1249,7 +1341,7 @@ fn contact_curvature_preserves_the_dlc_metric_and_matches_the_free_cartesian_for
 }
 
 #[test]
-fn fragment_prior_uses_the_requested_curvature_floor_and_potential_curvature_is_unchanged() {
+fn fragment_prior_and_supplied_seed_use_the_requested_curvature_floor() {
     use crate::optimizer::Options;
     let numbers = [18, 18];
     let x = [0., 0., 0., 15., 0., 0.];
@@ -1270,10 +1362,23 @@ fn fragment_prior_uses_the_requested_curvature_floor_and_potential_curvature_is_
     // At a live contact, optional model curvature is not added to a supplied
     // potential Hessian, which already describes that interaction.
     let x = [0., 0., 0., 2. * 1.88 / crate::ANGSTROM_PER_BOHR, 0., 0.];
-    let exact = [2., 0., 0., 0., 3., 0., 0., 0., 4.];
+    let exact = [-2., 0., 0., 0., 0.0002, 0., 0., 0., 4.];
     let with =
         InternalModel::build_with_options(&numbers, &free, &x, false, Some(&exact), &options)
             .unwrap();
-    let without = InternalModel::build(&numbers, &free, &x, false, Some(&exact)).unwrap();
+    let without = InternalModel::build_with_options(
+        &numbers,
+        &free,
+        &x,
+        false,
+        Some(&exact),
+        &Options {
+            contacts: false,
+            ..options
+        },
+    )
+    .unwrap();
     assert_eq!(with.hessian, without.hessian);
+    let expected = [2., 0., 0., 0., 0.007, 0., 0., 0., 4.];
+    assert!(maximum_error(&physical_hessian(&with, &x, &free), &expected) < 1e-12);
 }

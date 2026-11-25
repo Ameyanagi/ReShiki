@@ -5,7 +5,9 @@ mod diis;
 
 pub(super) use diis::History;
 
-use crate::linalg::{dot, norm, symmetric_eigen};
+#[cfg(test)]
+use crate::linalg::symmetric_eigen;
+use crate::linalg::{dot, norm, projected_eigen};
 use crate::model_hessian::model_hessian;
 
 use super::{Coordinates, Options, Point, TrialStep, Update};
@@ -51,13 +53,6 @@ impl RfoDirection {
     }
 }
 
-fn reflect(v: &mut [f64], u: &[f64]) {
-    let alpha = 2. * dot(v, u);
-    for (x, &ui) in v.iter_mut().zip(u) {
-        *x -= alpha * ui;
-    }
-}
-
 impl Anc {
     pub fn build(
         numbers: &[u8],
@@ -74,7 +69,7 @@ impl Anc {
             None => model_hessian(numbers, &point.positions, options.contacts)?,
         };
         let nfree = coords.indices.len();
-        let mut h = if nfree == point.positions.len() {
+        let h = if nfree == point.positions.len() {
             full
         } else {
             let mut restricted = Vec::with_capacity(nfree * nfree);
@@ -85,63 +80,17 @@ impl Anc {
             restricted
         };
 
-        // Q is a product of reflectors taking the orthonormal rigid vectors
-        // onto the first coordinate axes. The trailing block of Q^T H Q is
-        // exactly P H P restricted to range(P), even when H has extra nulls.
-        let mut axes = point.rigid.clone();
-        let mut reflectors = Vec::with_capacity(axes.len());
-        for k in 0..axes.len() {
-            let mut u = axes[k][k..].to_vec();
-            u[0] += norm(&u).copysign(u[0]);
-            let length = norm(&u);
-            if !(length.is_finite() && length > 0.) {
-                return Err("singular rigid-body basis".into());
-            }
-            u.iter_mut().for_each(|x| *x /= length);
-            for axis in &mut axes[k + 1..] {
-                reflect(&mut axis[k..], &u);
-            }
-            let mut w: Vec<_> = h
-                .chunks_exact(nfree)
-                .skip(k)
-                .map(|row| dot(&row[k..], &u))
-                .collect();
-            let uhu = dot(&u, &w);
-            for (wi, ui) in w.iter_mut().zip(&u) {
-                *wi = 2. * (*wi - uhu * ui);
-            }
-            for (i, row) in h.chunks_exact_mut(nfree).skip(k).enumerate() {
-                for (j, x) in row[k..].iter_mut().enumerate() {
-                    *x -= u[i] * w[j] + w[i] * u[j];
-                }
-            }
-            reflectors.push(u);
-        }
-        let rank = reflectors.len();
-        let dim = nfree - rank;
+        let (values, modes) = projected_eigen(h, nfree, &point.rigid)?;
+        let dim = values.len();
         if dim == 0 {
             return Err("no internal search directions".into());
         }
-        let block = if rank == 0 {
-            h
-        } else {
-            h.chunks_exact(nfree)
-                .skip(rank)
-                .flat_map(|r| r[rank..].iter().copied())
-                .collect()
-        };
-        let (values, vectors) = symmetric_eigen(block, dim)?;
-        let mut modes = vec![0.; dim * nfree];
         let mut hessian = vec![0.; dim * dim];
-        for (i, mode) in modes.chunks_exact_mut(nfree).enumerate() {
-            mode[rank..].copy_from_slice(&vectors[i * dim..(i + 1) * dim]);
-            for (k, u) in reflectors.iter().enumerate().rev() {
-                reflect(&mut mode[k..], u);
-            }
+        for (i, &value) in values.iter().enumerate() {
             // Soft and disconnected-fragment directions still need a finite
             // restoring curvature for the initial RFO step.
             hessian[i * dim + i] =
-                if is_exact { values[i].abs() } else { values[i] }.max(options.curvature_floor);
+                if is_exact { value.abs() } else { value }.max(options.curvature_floor);
         }
         let mut model = Self {
             modes,

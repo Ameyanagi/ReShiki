@@ -5,12 +5,11 @@ use crate::linalg::norm;
 
 /// Trust region for both RFO methods. The ratio thresholds and boundary
 /// expansion follow Nocedal & Wright, Numerical Optimization, Algorithm 4.1.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Trust {
-    /// Bound the Euclidean model-space displacement. Start at 0.3 and adapt
-    /// between 0.001 and 0.5. ANC uses bohr; TRIC also contains angular coordinates.
-    #[default]
-    Global,
+    /// Bound the Euclidean model-space displacement. ANC uses bohr; TRIC also
+    /// contains angular coordinates. The radius adapts within `[min, max]`.
+    Global { start: f64, min: f64, max: f64 },
     /// Divide the model-space length by √(free atoms). Also bound the actual
     /// Cartesian RMS per free atom by the radius, and each atom's displacement
     /// by `atom_cap` bohr. Restrict the whole direction before evaluation.
@@ -22,7 +21,22 @@ pub enum Trust {
     },
 }
 
+impl Default for Trust {
+    fn default() -> Self {
+        Self::global()
+    }
+}
+
 impl Trust {
+    /// Start at 0.3 in model-space units and adapt within [0.001, 0.5].
+    pub const fn global() -> Self {
+        Self::Global {
+            start: 0.3,
+            min: 0.001,
+            max: 0.5,
+        }
+    }
+
     /// Start at 0.08 bohr RMS per atom, within [0.001, 0.2], with a 0.4 bohr atom cap.
     pub const fn per_atom() -> Self {
         Self::PerAtom {
@@ -52,22 +66,26 @@ impl Default for Rebuild {
 
 impl Options {
     pub(super) fn validate_rfo(&self) -> Result<(), &'static str> {
-        if let Trust::PerAtom {
-            start,
-            min,
-            max,
-            atom_cap,
-        } = self.trust
-            && !(min > 0.
-                && min <= start
-                && start <= max
-                && max.is_finite()
-                && atom_cap.is_finite()
-                && atom_cap > 0.)
+        let (start, min, max, atom_cap) = match self.trust {
+            Trust::Global { start, min, max } => (start, min, max, None),
+            Trust::PerAtom {
+                start,
+                min,
+                max,
+                atom_cap,
+            } => (start, min, max, Some(atom_cap)),
+        };
+        if !(min > 0.
+            && min <= start
+            && start <= max
+            && max.is_finite()
+            && atom_cap.is_none_or(|cap| cap.is_finite() && cap > 0.))
         {
-            return Err(
-                "expected finite positive trust radii with min <= start <= max and a positive finite atom cap",
-            );
+            return Err(if atom_cap.is_some() {
+                "expected finite positive trust radii with min <= start <= max and a positive finite atom cap"
+            } else {
+                "expected finite positive trust radii with min <= start <= max"
+            });
         }
         if !self.reject_ratio.is_finite() || self.reject_ratio < 0. {
             return Err("reject_ratio must be finite and nonnegative");
@@ -157,7 +175,7 @@ impl Search {
 impl TrustRegion {
     pub fn new(options: &Options, free_atoms: usize) -> Self {
         let (radius, min, max, scale, atom_cap) = match options.trust {
-            Trust::Global => (0.3, 0.001, 0.5, 1., None),
+            Trust::Global { start, min, max } => (start, min, max, 1., None),
             Trust::PerAtom {
                 start,
                 min,
@@ -293,6 +311,106 @@ impl TrustRegion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Method, optimize};
+    use std::ops::ControlFlow;
+
+    #[test]
+    fn global_radius_adaptation_honors_custom_bounds() {
+        assert_eq!(
+            Options::default().trust,
+            Trust::Global {
+                start: 0.3,
+                min: 0.001,
+                max: 0.5
+            }
+        );
+        let options = Options {
+            trust: Trust::Global {
+                start: 0.15,
+                min: 0.02,
+                max: 1.,
+            },
+            ..Options::default()
+        };
+        let mut region = TrustRegion::new(&options, 9);
+        assert_eq!(region.model_radius(), 0.15);
+        for _ in 0..4 {
+            region.accept(0.1, true);
+        }
+        assert_eq!(region.radius, 0.02);
+        for _ in 0..8 {
+            region.accept(1., true);
+        }
+        assert_eq!(region.radius, 1.);
+        assert_eq!(region.model_radius(), 1.);
+    }
+
+    #[test]
+    fn both_rfo_methods_use_configurable_global_start_and_maximum() {
+        let initial = [0., 0., 0., 10., 0., 0.];
+        for method in [Method::AncRfo, Method::Internal] {
+            for start in [0.15_f64, 0.3, 0.5] {
+                for max in [0.5_f64, 1.] {
+                    // The distant single-atom fragments have Cartesian model
+                    // coordinates. This harmonic well keeps the early steps
+                    // on the trust boundary until the radius reaches its cap.
+                    let mut potential = super::super::tests::surface(|x, g, _| {
+                        g.fill(0.);
+                        g[3] = x[3] - 20.;
+                        Ok(0.5 * g[3] * g[3])
+                    });
+                    let options = Options {
+                        method,
+                        trust: Trust::Global {
+                            start,
+                            min: 0.001,
+                            max,
+                        },
+                        fixed_atoms: vec![0],
+                        max_steps: 4,
+                        tight_final: false,
+                        ..Options::default()
+                    };
+                    let mut radii = Vec::new();
+                    let outcome = optimize(&mut potential, &[1, 1], &initial, &options, |step| {
+                        radii.push(step.trust_radius);
+                        ControlFlow::Continue(())
+                    });
+                    assert_eq!(outcome.status, Status::MaxSteps, "{options:?}");
+                    assert_eq!(outcome.method, method, "{options:?}");
+                    assert_eq!(outcome.evaluations, 5, "{options:?}");
+                    assert_eq!(
+                        radii,
+                        [
+                            start,
+                            start,
+                            (2. * start).min(max),
+                            (4. * start).min(max),
+                            max
+                        ],
+                        "{options:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn global_radii_must_be_positive_finite_and_ordered() {
+        for (start, min, max) in [
+            (0.3, 0., 0.5),
+            (f64::NAN, 0.001, 0.5),
+            (0.3, 0.001, f64::INFINITY),
+            (0.3, 0.4, 0.5),
+            (0.6, 0.001, 0.5),
+        ] {
+            let options = Options {
+                trust: Trust::Global { start, min, max },
+                ..Options::default()
+            };
+            assert!(options.validate_rfo().is_err(), "{options:?}");
+        }
+    }
 
     #[test]
     fn poor_prediction_rebuild_counts_consecutive_steps_and_limits_basis_age() {

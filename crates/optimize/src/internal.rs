@@ -30,9 +30,9 @@ mod topology;
 
 use std::borrow::Cow;
 
-use crate::linalg::{dot, norm};
+use crate::linalg::{dot, norm, projected_eigen};
 use crate::model_hessian::contact_stretches;
-use crate::optimizer::{Options, Update, rfo};
+use crate::optimizer::{Options, Update, rfo, rigid};
 use chart::Chart;
 use metric::{Tangent, apply, congruence};
 
@@ -66,10 +66,12 @@ struct ModelParameters {
 impl InternalModel {
     /// Positions are in bohr. Free indices are unique Cartesian components, in
     /// the order expected by the caller. An optional row-major Cartesian Hessian
-    /// can be full (atom order) or restricted (free order). Its transformation
-    /// (B_u⁺)ᵀ H_x B_u⁺ omits the gradient-weighted coordinate second derivatives
-    /// (the K term), exact at a stationary point [Peng, Ayala, Schlegel &
-    /// Frisch, J. Comput. Chem. **17**, 49 (1996)].
+    /// can be full (atom order) or restricted (free order). Its physical free
+    /// Cartesian eigenvalues are reflected and floored before transformation.
+    /// Unanchored global rigid directions receive the same curvature floor.
+    /// The transformation (B_u⁺)ᵀ H_x B_u⁺ omits the gradient-weighted coordinate
+    /// second derivatives (the K term), and is exact at a stationary point
+    /// [Peng, Ayala, Schlegel & Frisch, J. Comput. Chem. **17**, 49 (1996)].
     #[cfg(test)]
     pub(crate) fn build(
         numbers: &[u8],
@@ -143,7 +145,9 @@ impl InternalModel {
             Curvature::Initial(seed) => {
                 let h = if let Some(h) = seed {
                     let restricted = restrict_hessian(h, positions.len(), free)?;
-                    congruence(dual, &restricted, free.len())
+                    let seeded =
+                        potential_seed(restricted, positions, free, parameters.curvature_floor)?;
+                    congruence(dual, &seeded, free.len())
                         .ok_or("nonfinite transformed Cartesian Hessian")?
                 } else {
                     let mut h = chart.lindh_hessian(&basis, parameters.curvature_floor);
@@ -369,6 +373,48 @@ impl InternalModel {
         congruence(&map, &self.hessian, self.dimension())
             .ok_or_else(|| "nonfinite curvature after TRIC rebuild".to_owned())
     }
+}
+
+/// Reflect/floor the physical free-Cartesian block before the nonorthogonal
+/// DLC change of basis. Only global rigid motion is removed, and any fixed
+/// component anchors the system. Relative fragment motion remains physical.
+fn potential_seed(
+    restricted: Vec<f64>,
+    positions: &[f64],
+    free: &[usize],
+    floor: f64,
+) -> Result<Vec<f64>, String> {
+    let n = free.len();
+    let axes: Vec<_> = if n == positions.len() {
+        rigid(positions)
+            .into_iter()
+            .map(|axis| free.iter().map(|&i| axis[i]).collect())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let (values, modes) = projected_eigen(restricted, n, &axes)?;
+    // floor I gives each removed global rigid direction curvature_floor
+    // hartree/bohr². Physical eigenmodes replace that prior with max(|λ|, floor).
+    let mut seed = vec![0.; n * n];
+    for i in 0..n {
+        seed[i * n + i] = floor;
+    }
+    for (&value, mode) in values.iter().zip(modes.chunks_exact(n)) {
+        let extra = value.abs().max(floor) - floor;
+        for (i, row) in seed.chunks_exact_mut(n).enumerate() {
+            let weight = extra * mode[i];
+            for (entry, &v) in row[..=i].iter_mut().zip(mode) {
+                *entry += weight * v;
+            }
+        }
+    }
+    for i in 0..n {
+        for j in 0..i {
+            seed[j * n + i] = seed[i * n + j];
+        }
+    }
+    Ok(seed)
 }
 
 /// Select H_ff and average roundoff-sized asymmetries before the basis change.

@@ -35,7 +35,7 @@ struct SweepConfig {
 
 fn sweep_configs() -> [SweepConfig; 6] {
     [
-        ("ANC Global", Method::AncRfo, Trust::Global, false),
+        ("ANC Global", Method::AncRfo, Trust::global(), false),
         ("ANC PerAtom", Method::AncRfo, Trust::per_atom(), false),
         (
             "ANC PerAtom + contacts",
@@ -43,7 +43,7 @@ fn sweep_configs() -> [SweepConfig; 6] {
             Trust::per_atom(),
             true,
         ),
-        ("Internal Global", Method::Internal, Trust::Global, false),
+        ("Internal Global", Method::Internal, Trust::global(), false),
         (
             "Internal PerAtom",
             Method::Internal,
@@ -166,7 +166,7 @@ fn benchmark(
         for config in sweep_configs() {
             // Global is the original Normal run, reused so its baseline values
             // and timing are identical in the default and sweep reports.
-            let run = if config.trust == Trust::Global {
+            let run = if config.trust == Trust::default() {
                 let baseline = if config.method == Method::AncRfo {
                     0
                 } else {
@@ -578,7 +578,7 @@ mod tests {
             (Method::Internal, &configs[3..]),
         ] {
             assert!(configs.iter().all(|config| config.method == method));
-            assert_eq!(configs[0].trust, Trust::Global);
+            assert_eq!(configs[0].trust, Trust::default());
             assert!(!configs[0].contacts);
             assert_eq!(configs[1].trust, Trust::per_atom());
             assert!(!configs[1].contacts);

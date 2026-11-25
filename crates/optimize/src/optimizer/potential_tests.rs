@@ -791,7 +791,7 @@ fn unanchored_coupled_harmonic_reaches_known_cartesian_coordinates() {
         });
         // Small transverse errors on this collinear, anisotropic surface can
         // exhaust both RFO searches at the radius floor with these policies.
-        if method == Method::Internal && (options.trust != Trust::Global || options.contacts) {
+        if method == Method::Internal && (options.trust != Trust::default() || options.contacts) {
             assert_minimized(&outcome, &options);
         } else {
             assert_converged(&outcome, &options);

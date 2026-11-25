@@ -14,6 +14,7 @@ use crate::{
     linalg::{dot, norm},
 };
 use anc::{Anc, History};
+pub(crate) use coordinates::rigid;
 use coordinates::{Coordinates, metrics, project};
 use lbfgs::Lbfgs;
 use trust::{DirectionError, Search, TrustRegion};
@@ -41,8 +42,13 @@ pub enum InitialHessian {
     Model,
     /// Request the potential's Hessian when the first step is needed. An unavailable,
     /// failed or non-finite Hessian falls back to Lindh. Cancellation stops the run.
-    /// ANC uses max(|λ|, curvature_floor) on projected modes to preserve stiffness and start BFGS
-    /// with positive curvature (Nocedal & Wright, Numerical Optimization, §3.4).
+    /// ANC and Internal restrict to free Cartesians and use max(|λ|,
+    /// curvature_floor) on physical modes to start with positive curvature.
+    /// With all atoms free, the projection removes global translation and rotation
+    /// and retains relative fragment motion. Internal assigns
+    /// curvature_floor to those global rigid directions before transforming to
+    /// DLC, without the gradient-weighted coordinate second derivatives (Peng
+    /// et al., J. Comput. Chem. 17, 49, 1996).
     Potential,
     /// Use `Potential` up to and including `max_atoms`, counting fixed atoms too.
     Auto { max_atoms: usize },
@@ -147,8 +153,10 @@ pub struct Options {
     /// Reject trials with actual/predicted reduction below this value. Zero
     /// selects the original energy-rise-only rejection rule (1e-6 Eh).
     pub reject_ratio: f64,
-    /// ANC eigenvalue and curvature-transport floor, and TRIC fragment-motion
-    /// prior, in hartree/bohr².
+    /// Curvature floor in hartree/bohr² (default 1e-3). ANC uses it for its
+    /// eigenvalues and curvature transport. Internal uses it for the model
+    /// fragment-motion prior and the physical eigenvalues of a supplied Hessian.
+    /// Global rigid modes in a supplied Internal seed receive this curvature.
     pub curvature_floor: f64,
     /// When to rebuild the RFO basis and transport its learned curvature.
     pub rebuild: Rebuild,
@@ -181,7 +189,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             method: Method::AncRfo,
-            trust: Trust::Global,
+            trust: Trust::default(),
             reject_ratio: 0.,
             curvature_floor: 1e-3,
             rebuild: Rebuild::default(),
