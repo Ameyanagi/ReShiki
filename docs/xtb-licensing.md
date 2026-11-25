@@ -129,17 +129,22 @@ checked and uploaded.
 **Each published binary has its source available for as long as the binary
 is.** The archive is an asset of the same GitHub release as the binaries it
 corresponds to, uploaded by the same `gh release create` call (stable releases
-in `release.yml`, nightlies in `nightly.yml`). Deleting a release deletes all
-of its assets, so the archive and its binaries disappear together:
+in `release.yml`, nightlies in `nightly.yml`). The GitHub CLI publishes the
+release only after every asset has uploaded, so a published release never has
+one without the other. Deleting a release deletes all of its assets, so the
+archive and its binaries disappear together:
 
 - Tagged releases keep their archive permanently.
-- Nightlies are pruned with their binaries. Nothing deletes nightly releases
-  automatically today (every nightly since the first, 2026-09-28, is still
-  published), so a nightly's archive stays as long as its nightly does. When a
+- Nightlies are pruned with their binaries. No workflow or script deletes
+  nightly releases today (the oldest still published dates from
+  2026-09-29), so a nightly's archive stays as long as its nightly does. When a
   nightly is removed, by hand or by a future pruning step, it must be removed
   as a whole release (`gh release delete`), which takes its archive with it.
-- Workflows and scripts never delete individual release assets; a test fails
-  if one does.
+- Workflows and scripts never add, replace or delete single assets of an
+  application release (only the separate `web-demo` release replaces its own
+  asset). A test fails on the usual ways of doing so: `gh release upload`,
+  `--clobber`, `gh release delete-asset`, and the REST `releases/assets`
+  endpoint from the shell or Python.
 
 `BUILD-WITH-XTB.md` lists the release profile settings for macOS, Linux arm64,
 and Linux x64, and gives two offline procedures:

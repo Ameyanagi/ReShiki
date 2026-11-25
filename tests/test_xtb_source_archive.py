@@ -125,16 +125,19 @@ class XtbSourceArchiveTests(unittest.TestCase):
             self.assertEqual(len(commands), 1, workflow)
             for asset in ("*.tar.gz", "*-source.tar.gz.sha256", "SHA256SUMS"):
                 self.assertIn(asset, commands[0], f"{workflow}: {asset}")
-        forbidden = re.compile(
-            r"delete-asset|releases/assets/[^ ]*.*-X *DELETE|-X *DELETE[^\n]*releases/assets"
+        # Nothing may add, replace or delete single assets of an application
+        # release; only the separate web-demo release replaces its own asset.
+        single_asset = re.compile(
+            r"gh release upload|--clobber|delete-asset|releases/assets"
+            r"|requests\.delete|method=[\"']DELETE"
         )
         offenders = [
-            path.relative_to(ROOT).as_posix()
+            f"{path.relative_to(ROOT).as_posix()}: {line.strip()}"
             for folder in (".github", "scripts")
             for path in sorted((ROOT / folder).rglob("*"))
-            if path.is_file()
-            and path.suffix in {".yml", ".yaml", ".py", ".sh", ".ps1"}
-            and forbidden.search(path.read_text(encoding="utf-8", errors="replace"))
+            if path.is_file() and path.suffix in {".yml", ".yaml", ".py", ".sh", ".ps1"}
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
+            if single_asset.search(line) and "web-demo" not in line
         ]
         self.assertEqual(offenders, [], "release assets must only be deleted with their release")
 
