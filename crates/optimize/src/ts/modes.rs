@@ -97,6 +97,21 @@ pub(super) fn spectrum(
         .map_err(TsError::Failed)
 }
 
+/// Weight one triangle of the symmetric Cartesian Hessian and mirror each pair.
+/// Independent multiplications can round differently and lose symmetry under projection.
+pub(super) fn mass_weight(h: &[f64], inverse_sqrt: &[f64]) -> Vec<f64> {
+    let n = inverse_sqrt.len();
+    let mut weighted = vec![0.; h.len()];
+    for i in 0..n {
+        for j in 0..=i {
+            let value = h[i * n + j] * inverse_sqrt[i] * inverse_sqrt[j];
+            weighted[i * n + j] = value;
+            weighted[j * n + i] = value;
+        }
+    }
+    weighted
+}
+
 /// Harmonic wavenumbers [cm^-1], ascending with imaginary values negative,
 /// and the lowest mass-weighted eigenvector converted to a unit Cartesian
 /// displacement. The Hessian is in Eh/bohr² and masses are in amu.
@@ -107,11 +122,7 @@ pub(super) fn frequencies(
 ) -> Result<(Vec<f64>, Vec<f64>), TsError> {
     let n = x.len();
     let inverse_sqrt: Vec<_> = masses.iter().flat_map(|m| [m.sqrt().recip(); 3]).collect();
-    let weighted: Vec<_> = h
-        .iter()
-        .enumerate()
-        .map(|(ij, v)| v * inverse_sqrt[ij / n] * inverse_sqrt[ij % n])
-        .collect();
+    let weighted = mass_weight(h, &inverse_sqrt);
     let (eigenvalues, vectors) = spectrum(x, &weighted, masses)?;
     let factor = wavenumber_factor();
     let frequencies = eigenvalues
@@ -172,5 +183,39 @@ mod tests {
         let (frequencies, mode) = frequencies(&x, &[0.0; 81], &[1.0; 3]).unwrap();
         assert_eq!(frequencies, vec![0.0; 3]);
         assert!((norm(&mode) - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn mixed_mass_radial_springs_preserve_symmetry_and_projected_index() {
+        let x = [0., 0., 0., 2., 0., 0., 1., 4., 0., 2., 1., 3.];
+        let masses = [16., 12., 14., 35.45];
+        let mut h = [0.; 144];
+        // At its reference length, each spring contributes k u uᵀ.
+        for a in 0..4 {
+            for b in a + 1..4 {
+                let axis: [f64; 3] = std::array::from_fn(|i| x[3 * a + i] - x[3 * b + i]);
+                let length = norm(&axis);
+                let unit = axis.map(|d| d / length);
+                let k = if (a, b) == (0, 1) { -0.1 } else { 0.1 };
+                for i in 0..3 {
+                    for j in 0..3 {
+                        let hij = k * (unit[i] * unit[j]);
+                        for (m, n, sign) in [(a, a, 1.), (b, b, 1.), (a, b, -1.), (b, a, -1.)] {
+                            h[(3 * m + i) * 12 + 3 * n + j] += sign * hij;
+                        }
+                    }
+                }
+            }
+        }
+        let (freq, _) = frequencies(&x, &h, &masses).unwrap();
+        assert_eq!(freq.len(), 6);
+        assert!(freq[0] < -super::super::IMAGINARY_CM1 && freq[1] > 0.);
+        let inv: Vec<_> = masses.iter().flat_map(|m| [m.sqrt().recip(); 3]).collect();
+        let weighted = mass_weight(&h, &inv);
+        for i in 0..12 {
+            for j in 0..i {
+                assert_eq!(weighted[i * 12 + j], weighted[j * 12 + i]);
+            }
+        }
     }
 }

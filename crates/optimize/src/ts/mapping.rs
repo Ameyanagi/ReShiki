@@ -94,7 +94,7 @@ pub(super) fn superpose(reference: &[f64], mobile: &[f64], masses: &[f64]) -> Ve
     Fit::new(reference, mobile, masses).apply(mobile)
 }
 
-struct Fit {
+pub(super) struct Fit {
     rotation: [[f64; 3]; 3],
     reference_anchor: [f64; 3],
     reference_mean: [f64; 3],
@@ -103,7 +103,7 @@ struct Fit {
 }
 
 impl Fit {
-    fn new(reference: &[f64], mobile: &[f64], masses: &[f64]) -> Self {
+    pub(super) fn new(reference: &[f64], mobile: &[f64], masses: &[f64]) -> Self {
         if masses.is_empty() {
             return Self {
                 rotation: from_fn(|i| from_fn(|j| f64::from(i == j))),
@@ -151,7 +151,7 @@ impl Fit {
         }
     }
 
-    fn apply(&self, positions: &[f64]) -> Vec<f64> {
+    pub(super) fn apply(&self, positions: &[f64]) -> Vec<f64> {
         positions
             .as_chunks::<3>()
             .0
@@ -169,6 +169,26 @@ impl Fit {
                 })
             })
             .collect()
+    }
+
+    /// Rotate each Cartesian 3×3 atom-pair block as R H_ab Rᵀ into the fitted
+    /// frame. Translating the positions has no effect on the force constants.
+    pub(super) fn rotate_hessian(&self, h: &[f64], n: usize) -> Vec<f64> {
+        let mut rotated = vec![0.; h.len()];
+        for i in 0..n {
+            for j in 0..=i {
+                let mut value = 0.;
+                for (a, &ria) in self.rotation[i % 3].iter().enumerate() {
+                    let row = (i / 3 * 3 + a) * n + j / 3 * 3;
+                    for (b, &rjb) in self.rotation[j % 3].iter().enumerate() {
+                        value += ria * h[row + b] * rjb;
+                    }
+                }
+                rotated[i * n + j] = value;
+                rotated[j * n + i] = value;
+            }
+        }
+        rotated
     }
 }
 
