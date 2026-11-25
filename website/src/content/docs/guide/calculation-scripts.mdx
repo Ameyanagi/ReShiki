@@ -31,17 +31,17 @@ Optimization from the command line, and calculation tools for AI agents over MCP
 
 ## Python
 
-:::note[In review]
-The Python API and the `reshiki-xtb` package are in review and will be on TestPyPI first.
+:::note[Planned]
+The Python API below and the `reshiki-xtb` package are in review and not on this branch yet. They go to TestPyPI first. The `reshiki` package on PyPI today has neither `reshiki.qc` nor `reshiki.xtb`.
 :::
 
-Calculations need the optional `reshiki-xtb` package, which holds the engine. Install both with:
+Calculations will need the optional `reshiki-xtb` package, which holds the engine. Install both with:
 
 ```sh
 pip install "reshiki[xtb]"        # or: uv add "reshiki[xtb]"
 ```
 
-`reshiki-xtb` is available for macOS (Apple silicon and Intel) and Linux (x86-64 and ARM64), not for Windows yet. Without it, the calculation functions raise `reshiki.xtb.XtbNotInstalled` with the install command; reading and writing files works without it.
+`reshiki-xtb` will be built for macOS (Apple silicon and Intel) and Linux (x86-64 and ARM64), not for Windows yet. Without it, the calculation functions raise `reshiki.xtb.XtbNotInstalled` with the install command; reading and writing files works without it.
 
 ```python
 from reshiki import qc, xtb
@@ -60,7 +60,7 @@ print(log.default_job.result.energy)
 qc.write_input("water.inp", opt.geometry, program="orca", job="opt-freq")
 ```
 
-Results are plain Python objects with NumPy arrays: positions in ångström, energies in hartree, gradients in hartree/bohr, frequencies in cm⁻¹. Press Ctrl+C to stop a long calculation; the engine process stops with it. The full reference is in the [Python package](/developer/python/) page.
+Results are plain Python objects with NumPy arrays: positions in ångström, energies in hartree, gradients in hartree/bohr, frequencies in cm⁻¹. Ctrl+C stops a long calculation, and the engine process with it. The [Python package](/developer/python/) page will carry the full reference.
 
 ## Licence and source
 
@@ -71,11 +71,11 @@ The xTB engine is [axtb](https://github.com/atomsforhumanity/axtb), used through
 | macOS and Linux apps                | yes, built into the `reshiki` executable |
 | Windows app                         | no, not yet                              |
 | Python `reshiki`                    | no                                       |
-| Python `reshiki-xtb`                | yes, as the `reshiki-xtb-worker` program |
+| Python `reshiki-xtb` (planned)      | yes, as the `reshiki-xtb-worker` program |
 | npm packages, web editor, Nix flake | no                                       |
 
 - The licence texts (GPL-3.0 and LGPL-3.0), axtb's notice and the fork's list of changes ship with every download that contains axtb, in the third-party notices.
 - Each release that contains axtb publishes `reshiki-<version>-source.tar.gz` on its [GitHub release page](https://github.com/Ameyanagi/ReShiki/releases): ReShiki's source, the fork at the pinned revision and every dependency, so it builds offline.
-- **Use a modified axtb.** The archive's `BUILD-WITH-XTB.md` gives the steps to rebuild ReShiki, or the `reshiki-xtb` package, with your own changes to axtb. Each release checks those steps by rebuilding with a modified axtb before it is published.
+- **Use a modified axtb.** The archive's `BUILD-WITH-XTB.md` gives the steps to rebuild the ReShiki app with your own changes to axtb. Each release checks those steps by rebuilding with a modified axtb before it is published.
 
 Details for developers: [xTB licensing and packaging](/developer/xtb-licensing/).

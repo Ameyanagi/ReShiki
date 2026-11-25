@@ -24,38 +24,40 @@ The results palette repeats this in one line under every result.
 
 ## Methods
 
-| Method                    | Use it for                                                                          | Not available                                  |
-| ------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------- |
-| **GFN2-xTB** (default)    | Most molecules, elements up to radon (Z = 86)                                       | Lanthanide f electrons (they stay in the core) |
-| **g-xTB** (version 2.0.1) | Energies closer to DFT; in solvent, the GFN2-xTB solvation energy is added          | Transition-state search                        |
-| **GFN-FF**                | Large molecules and metal complexes; a force field, the fastest; closed shells only | Orbitals, bond orders, solvent, SCF settings   |
+| Method                    | Use it for                                                                          | Not available                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **GFN2-xTB** (default)    | Most molecules, elements up to radon (Z = 86)                                       | Lanthanide f electrons (they stay in the core)                        |
+| **g-xTB** (version 2.0.1) | Energies closer to DFT; in solvent, the GFN2-xTB solvation energy is added          | Transition-state search (planned for GFN2-xTB only)                   |
+| **GFN-FF**                | Large molecules and metal complexes; a force field, the fastest; closed shells only | Orbitals, bond orders, solvent, SCF settings, transition-state search |
 
 Solvents use the ALPB model: water, methanol, DMSO, chloroform, toluene and others. The card turns off what the chosen method cannot do and says why under the field.
 
 ## Run a calculation
 
 1. Select the molecule. If the drawing holds only one molecule, you can leave the selection empty.
-2. Open **Predict → xTB**. You can also right-click the molecule and choose **Calculate (xTB) → Energy** or **Optimize**, click **Optimize with GFN2-xTB** in the row above the canvas, or search the command palette for **Calculate (xTB)…**.
+2. Open **Predict → xTB**, or search the command palette for **Calculate (xTB)…**.
 3. Choose the **Task** (**Energy** or **Optimize**) and the **Method**.
 4. Check **Charge** and **Unpaired electrons**. Both come from the drawing: the charges and radicals you drew. The line below checks the electron count, for example `40 electrons · multiplicity 1`.
 5. Pick a **Solvent**, or leave **None (gas phase)**.
-6. Click **Run**. ⌘R (Ctrl+R on Linux) repeats the last calculation on the selected molecule.
+6. Click **Run**.
+
+Shortcuts that start at once, with the card's current settings: right-click the molecule and choose **Calculate (xTB) → Energy** or **Optimize**; click **Optimize with GFN2-xTB** in the row above the canvas; or press ⌘R (Ctrl+R on Linux) to run the selected molecule again.
 
 <Screenshot
   src="/manual/xtb-card.webp"
   alt="The xTB calculation card for acetic acid under Predict: Task Optimize, Method GFN2-xTB, Charge 0 and Unpaired electrons 0 from the drawing, Solvent None (gas phase), the note that no 3D model exists yet, Hold selected atoms fixed, and the open Advanced settings: Accuracy 1.0, Electronic temp. 300 K, Max SCF iterations 250, xtb 6.8 compatible, Threads Auto (8), Optimizer convergence Normal, and the Run (⌘R) button."
 />
 
-If the molecule has no 3D model yet, **Run** first makes one with MMFF94s. The 2D drawing never moves.
+If the molecule has no 3D model yet, or the drawing changed since it was made, **Run** first makes or updates it with MMFF94s. That model is kept as its own Undo step. The 2D drawing never moves.
 
-While it runs, the card shows the step, the energy change and the time, for example `Optimizing · step 12 · ΔE −2.1 × 10⁻⁵ Eh · 3.2 s`, and the 3D model follows the optimization. **Cancel** stops at once and applies nothing.
+While it runs, the card shows the step, the energy change and the time, for example `Optimizing · step 12 · ΔE −2.1 × 10⁻⁵ Eh · 3.2 s`, and the 3D model follows the optimization. **Cancel** stops at once and applies no xTB result; a starting model made by MMFF for this run stays, and Undo removes it.
 
 ### Advanced settings
 
 - **Accuracy** and **Max SCF iterations** tighten or loosen the SCF.
-- **Electronic temp.** (default 300 K) smears the orbital occupations. Raise it when the SCF does not converge.
-- **xtb 6.8 compatible** uses the numerical conventions of the xtb 6.8 program instead of axtb's own. The result records the choice.
-- **Threads**: **Auto** uses the computer's cores.
+- **Electronic temp.** smears the orbital occupations: default 300 K for GFN2-xTB, 0 K for g-xTB. Raise it when the SCF does not converge.
+- **xtb 6.8 compatible** uses the numerical conventions of the reference programs instead of axtb's own: those of xtb 6.8 for GFN2-xTB and GFN-FF, and of the g-xTB 2.0.1 program for g-xTB. The result records the choice.
+- **Threads**: **Auto** uses the computer's cores, up to 8.
 - **Optimizer convergence**: **Normal** or **Tight**.
 
 ### Hold atoms in place
@@ -86,33 +88,35 @@ When the HOMO–LUMO gap is below 0.1 eV, a warning appears under the header: _N
 
 ## Optimized geometries
 
-An optimization updates the molecule's 3D model as one Undo step (`Applied xTB geometry · ⌘Z undoes`). The 2D drawing does not move.
+When an optimization finishes, ReShiki first compares stereocentres and double-bond geometry with the drawing. If none changed, the optimized geometry replaces the molecule's 3D model as one Undo step (`Applied xTB geometry · ⌘Z undoes`). If one changed, nothing is applied until you choose **Apply anyway** or **Discard**. The 2D drawing does not move.
 
-ReShiki then compares stereocentres and double-bond geometry with the drawing. If one changed, nothing is applied until you choose **Apply anyway** or **Discard**.
+- An optimization that reaches the step limit before converging still applies its last geometry and says `Stopped after N steps`.
+- If you edited the molecule or its 3D model while it ran, the result is kept but the model is not moved.
 
 If you edit the molecule later, its results stay readable but greyed, with **Recalculate**.
 
 ## When something goes wrong
 
-Errors appear in the palette with one action:
+Errors appear in the palette, with an action where one helps:
 
-- **The SCF did not converge.** → **Retry at 1000 K**, a higher electronic temperature.
+- **The SCF did not converge.** When a higher electronic temperature can help, the palette offers **Retry at 1000 K**.
 - An element the method has no parameters for: the message names the atom. GFN2-xTB covers elements up to radon; g-xTB and GFN-FF go further.
 - Too many atoms: the message gives the limit.
-- **The calculation stopped unexpectedly. Your drawing is safe.** → **Run again**, or copy the details for a bug report.
+- **The calculation stopped unexpectedly. Your drawing is safe.** → **Run again**, and copy the details for a bug report.
 
 ## Limits
 
 - Energy and optimization: up to 500 atoms.
-- Frequencies and conformer re-ranking: up to 200 atoms. Transition states: up to 120 atoms.
-- One molecule per calculation. To calculate part of a structure, split it or select a fragment.
+- Frequencies: up to 200 atoms (today from the [command line](/guide/calculation-scripts/#command-line)). Planned: conformer re-ranking up to 200 atoms, transition states up to 120.
+- One molecule per calculation: selecting some of its atoms calculates the whole molecule. To calculate a fragment, copy it into a separate molecule first.
 
 ## File size
 
-Results are saved in the `.rsk` file with the molecule and kept small on purpose: the settings, the final geometry, energies, charges, dipole, bond orders and orbital energies. Intermediate optimization steps, gradients and other large arrays are not saved; ReShiki recomputes them when needed, because the engine version is fixed. The palette footer shows **Saved in file** for each result.
+Results are saved in the `.rsk` file with the molecule and kept small on purpose: the settings, the starting and final geometries, the energy of every step, charges, dipole, bond orders and orbital energies. The geometries of intermediate steps and the gradients are left out; after reopening, clicking such a step says it is not saved in the file. Recalculate to get them back: the engine version is fixed, so the numbers are the same. The palette footer shows **Saved in file** for each result.
 
-- **Keep full results in this file** saves everything for one result, at the size it shows.
-- When the results in a document exceed 5 MB, Save asks once and offers **Make lighter**, which drops the data you chose to keep. Data imported from other programs cannot be recomputed, so it stays.
+- **Keep full results in this file** also saves the step geometries and gradients of that result, at the size it shows.
+- The **Log** tab's SCF details are kept only while the app is open. Copy them first if you need them.
+- When the results in a document exceed 5 MB, Save asks once. If some results keep full data, it offers **Make lighter**, which drops that data. Data imported from other programs cannot be recomputed, so it stays.
 
 <Screenshot
   src="/manual/xtb-save-warning.webp"
