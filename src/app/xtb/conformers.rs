@@ -568,10 +568,11 @@ pub(crate) fn superposed(
     reference: &qcdata::Frame,
     mobile: &qcdata::Frame,
 ) -> Option<Vec<[f64; 3]>> {
+    // The browser build has no fitting: no overlay rather than a misplaced one.
     #[cfg(target_arch = "wasm32")]
     return {
-        let _ = reference;
-        Some(mobile.positions_angstrom.clone())
+        let _ = (reference, mobile);
+        None
     };
     #[cfg(not(target_arch = "wasm32"))]
     {

@@ -61,8 +61,30 @@ impl EnergyPlot {
         }
     }
 
+    /// The highest level drawn, from the finite ones.
     fn top(&self) -> f64 {
-        self.delta_kcal.iter().copied().fold(0.1, f64::max)
+        self.delta_kcal
+            .iter()
+            .copied()
+            .filter(|d| d.is_finite())
+            .fold(0.1, f64::max)
+    }
+
+    /// Where item `item`, drawn in `slot`, sits.
+    fn point(&self, slot: usize, item: usize, bounds: Rectangle) -> Point {
+        let delta = self.delta_kcal.get(item).copied().unwrap_or(0.);
+        Point::new(self.x(slot, bounds).0, self.y(delta, bounds))
+    }
+
+    fn y(&self, delta: f64, bounds: Rectangle) -> f32 {
+        let bottom = bounds.height - BOTTOM;
+        let ratio = delta / self.top();
+        let ratio = if ratio.is_finite() {
+            ratio.clamp(0., 1.)
+        } else {
+            1.
+        };
+        bottom - (bottom - TOP).max(1.) * ratio as f32
     }
 }
 
@@ -81,13 +103,19 @@ impl canvas::Program<Message> for EnergyPlot {
         };
         let select = self.select?;
         let point = cursor.position_in(bounds)?;
+        // The nearest level by x; the nearest point of a line in the plane.
         let order = self.order();
-        let slot = (0..order.len()).min_by(|&a, &b| {
-            (self.x(a, bounds).0 - point.x)
-                .abs()
-                .total_cmp(&(self.x(b, bounds).0 - point.x).abs())
-        })?;
-        let item = *order.get(slot)?;
+        let distance = |slot: usize, item: usize| {
+            let at = self.point(slot, item, bounds);
+            match self.layout {
+                Layout::Levels => (at.x - point.x).abs(),
+                Layout::Line => at.distance(point),
+            }
+        };
+        let (_, &item) = order
+            .iter()
+            .enumerate()
+            .min_by(|(a, i), (b, j)| distance(*a, **i).total_cmp(&distance(*b, **j)))?;
         Some(canvas::Action::publish(select(item)).and_capture())
     }
 
@@ -117,9 +145,8 @@ impl canvas::Program<Message> for EnergyPlot {
         let ink = theme.palette().text;
         let accent = theme.palette().primary;
         let bottom = bounds.height - BOTTOM;
-        let height = (bottom - TOP).max(1.);
         let top = self.top();
-        let y = |delta: f64| bottom - height * (delta / top).clamp(0., 1.) as f32;
+        let y = |delta: f64| self.y(delta, bounds);
         let label = |frame: &mut Frame, text: String, at: Point, color: Color| {
             frame.fill_text(Text {
                 content: text,
@@ -138,7 +165,11 @@ impl canvas::Program<Message> for EnergyPlot {
         );
         label(
             &mut frame,
-            format!("{top:.1}"),
+            if top < 1e4 {
+                format!("{top:.1}")
+            } else {
+                format!("{top:.0e}")
+            },
             Point::new(4., TOP - 6.),
             muted,
         );
@@ -213,5 +244,37 @@ impl canvas::Program<Message> for EnergyPlot {
             }
         }
         vec![frame.into_geometry()]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plot(delta_kcal: Vec<f64>, layout: Layout) -> EnergyPlot {
+        EnergyPlot {
+            delta_kcal,
+            layout,
+            selected: None,
+            notes: vec![],
+            select: None,
+        }
+    }
+
+    #[test]
+    fn levels_sort_by_energy_and_huge_values_stay_on_the_chart() {
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(300., 120.));
+        let levels = plot(vec![2., 0., f64::INFINITY], Layout::Levels);
+        assert_eq!(levels.order(), [1, 0, 2]);
+        for (slot, &item) in levels.order().iter().enumerate() {
+            let at = levels.point(slot, item, bounds);
+            assert!(at.x.is_finite() && at.y.is_finite(), "{at:?}");
+            assert!((TOP..=bounds.height - BOTTOM).contains(&at.y));
+        }
+        // A trajectory keeps file order; its lowest sits on the axis.
+        let line = plot(vec![3., 0., 1.], Layout::Line);
+        assert_eq!(line.order(), [0, 1, 2]);
+        assert_eq!(line.point(1, 1, bounds).y, bounds.height - BOTTOM);
+        assert_eq!(line.point(0, 0, bounds).y, TOP);
     }
 }
