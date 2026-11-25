@@ -190,27 +190,45 @@ def verify_xtb_worker(binary, metadata):
     xtb = metadata["xtb"]
     deadline = time.monotonic() + XTB_VERIFY_TIMEOUT_SECONDS
     temporary = tempfile.TemporaryDirectory(prefix="ReShiki xTB check ")
+    environment = os.environ.copy()
+    for name in ("AXTB_LAPACK", "AXTB_LAPACK_BLAS"):
+        environment.pop(name, None)
     try:
         process = subprocess.Popen(
             [Path(binary).resolve(), "--xtb-worker"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             cwd=temporary.name,
+            env=environment,
             start_new_session=os.name == "posix",
         )
     except BaseException:
         temporary.cleanup()
         raise
 
+    # Keep the worker unreaped between the liveness check and group signal.
+    process_lock = threading.Lock()
+
     def stop():
-        if os.name == "posix":
-            # The worker may already have exited while a child holds its stdout.
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        elif process.poll() is None:
-            process.kill()
+        with process_lock:
+            if os.name == "posix":
+                try:
+                    # An exited worker's process group ID may already have been reused.
+                    if process.poll() is None:
+                        os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            elif process.poll() is None:
+                process.kill()
+
+    def wait_for_exit():
+        while True:
+            with process_lock:
+                returncode = process.poll()
+            if returncode is not None:
+                return returncode
+            # Never hold the lock while waiting, so stop() can meet the deadline.
+            time.sleep(0.01)
 
     def exchange():
         stdin, stdout = process.stdin, process.stdout
@@ -293,8 +311,9 @@ def verify_xtb_worker(binary, metadata):
 
             if stdout.read(1):
                 raise ValueError("xTB worker returned unexpected data after the last response")
-            if process.wait():
-                raise ValueError(f"xTB worker exited with status {process.returncode}")
+            returncode = wait_for_exit()
+            if returncode:
+                raise ValueError(f"xTB worker exited with status {returncode}")
             return summary
 
         try:
@@ -303,7 +322,7 @@ def verify_xtb_worker(binary, metadata):
             result.set_exception(error)
             summary = None
         try:
-            process.wait()
+            wait_for_exit()
             stdin.close()
             stdout.close()
             temporary.cleanup()

@@ -737,6 +737,7 @@ while data := sys.stdin.buffer.read(header.size):
             def launch(command, **kwargs):
                 self.assertEqual(command, [Path("fixture-reshiki").resolve(), "--xtb-worker"])
                 self.assertEqual(kwargs["start_new_session"], os.name == "posix" and not portable)
+                self.worker_environment = kwargs["env"].copy()
                 process = popen([sys.executable, worker, json.dumps(config)], **kwargs)
                 processes.append(process)
                 return process
@@ -754,7 +755,11 @@ while data := sys.stdin.buffer.read(header.size):
                         )
                     )
                     if portable:
-                        stack.enter_context(patch("build_release.os", SimpleNamespace(name="nt")))
+                        stack.enter_context(
+                            patch(
+                                "build_release.os", SimpleNamespace(name="nt", environ=os.environ)
+                            )
+                        )
                     elif killpg is not None:
                         stack.enter_context(
                             patch("build_release.os.killpg", side_effect=kill_group)
@@ -773,7 +778,7 @@ while data := sys.stdin.buffer.read(header.size):
                 ]
                 return requests, output.getvalue()
             finally:
-                if detached and (root / "child.pid").exists():
+                if (root / "child.pid").exists():
                     try:
                         os.kill(int((root / "child.pid").read_text()), signal.SIGKILL)
                     except ProcessLookupError:
@@ -801,6 +806,20 @@ while data := sys.stdin.buffer.read(header.size):
         self.assertEqual([request["op"] for request in requests], ["hello"])
         self.assertEqual(summary, "xTB worker protocol 1 verified with no engine.\n")
 
+    def test_worker_ignores_external_lapack_overrides_and_preserves_other_environment(self):
+        environment = {
+            "AXTB_LAPACK": "/external/lapack",
+            "AXTB_LAPACK_BLAS": "/external/blas",
+            "RESHIKI_TEST_XTB_ENV": "preserved",
+        }
+        with patch.dict(os.environ, environment):
+            self.verify_fixture()
+            self.assertNotIn("AXTB_LAPACK", self.worker_environment)
+            self.assertNotIn("AXTB_LAPACK_BLAS", self.worker_environment)
+            self.assertEqual(self.worker_environment["RESHIKI_TEST_XTB_ENV"], "preserved")
+            for name, value in environment.items():
+                self.assertEqual(os.environ[name], value)
+
     def test_water_rejects_wrong_conventions_and_gap_diagnostics(self):
         cases = [
             ("open", "conventions", "xtb-6.8", "conventions"),
@@ -825,16 +844,79 @@ while data := sys.stdin.buffer.read(header.size):
         self.assertLess(self.verification_elapsed, 3)
         if os.name == "posix":
             self.assertTrue(self.group_kills)
-            self.assertTrue(all(sig == signal.SIGKILL for _, sig, _ in self.group_kills))
+            self.assertTrue(
+                all(sig == signal.SIGKILL and status is None for _, sig, status in self.group_kills)
+            )
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group reaping regression")
+    def test_timeout_keeps_reader_from_reaping_during_group_signal(self):
+        import build_release
+
+        body = json.dumps(dict(id=1, ok=dict(protocol=1, engine=None, methods=[]))).encode()
+        process = SimpleNamespace(
+            pid=12345,
+            returncode=None,
+            stdin=io.BytesIO(),
+            stdout=io.BytesIO(build_release.XTB_HEADER.pack(b"RSHXTBWK", 1, 0, len(body)) + body),
+        )
+        exit_requested = threading.Event()
+        reader_waiting = threading.Event()
+        reader_reaped = threading.Event()
+
+        def poll():
+            reader = threading.current_thread().name == "ReShiki xTB check"
+            if reader:
+                reader_waiting.set()
+            if exit_requested.is_set():
+                process.returncode = 0
+                if reader:
+                    reader_reaped.set()
+            return process.returncode
+
+        def wait():
+            reader_waiting.set()
+            if not exit_requested.wait(timeout=2):
+                raise AssertionError("A blocking reader wait prevented timeout cleanup")
+            return poll()
+
+        def kill_group(pid, sig):
+            self.assertEqual((pid, sig), (process.pid, signal.SIGKILL))
+            self.assertTrue(reader_waiting.is_set())
+            # Simulate exit during signaling; the reader must not reap it yet.
+            exit_requested.set()
+            self.assertFalse(reader_reaped.wait(timeout=0.1))
+
+        process.poll = poll
+        process.wait = wait
+        threads = set(threading.enumerate())
+        started = time.monotonic()
+        try:
+            with (
+                patch("build_release.subprocess.Popen", return_value=process),
+                patch("build_release.os.killpg", side_effect=kill_group) as signal_group,
+                patch("build_release.XTB_VERIFY_TIMEOUT_SECONDS", 0.2),
+                self.assertRaisesRegex(ValueError, "did not complete within"),
+            ):
+                build_release.verify_xtb_worker(
+                    Path("fixture-reshiki"), {"xtb": {"included": False}}
+                )
+            self.assertLess(time.monotonic() - started, 1.5)
+            signal_group.assert_called_once()
+            self.assertTrue(reader_reaped.wait(timeout=1))
+        finally:
+            exit_requested.set()
+            for thread in set(threading.enumerate()) - threads:
+                if thread.name == "ReShiki xTB check":
+                    thread.join(timeout=2)
 
     @unittest.skipUnless(os.name == "posix", "POSIX inherited-pipe regression")
-    def test_timeout_kills_group_after_worker_exits_with_inherited_stdout(self):
+    def test_timeout_does_not_signal_group_after_worker_exits_with_inherited_stdout(self):
         replies = self.replies()
         replies["hello"].update(engine=None, methods=[])
         with self.assertRaisesRegex(ValueError, "did not complete within 1 seconds"):
             self.verify_fixture(replies=replies, included=False, mode="inherited_pipe")
         self.assertLess(self.verification_elapsed, 3)
-        self.assertTrue(any(status == 0 for _, _, status in self.group_kills))
+        self.assertEqual(self.group_kills, [])
 
     @unittest.skipUnless(os.name == "posix", "POSIX inherited-pipe regression")
     def test_detached_descendant_cannot_stall_timeout_cleanup(self):

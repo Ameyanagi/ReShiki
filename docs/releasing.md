@@ -40,6 +40,10 @@ a modified axtb offline before publication. Nightly archives use the same unique
 version as their applications. Keep each source archive and checksum available
 for as long as its release's application downloads remain available.
 
+The source archive supports building and testing the application. Building the
+website requires the full repository because the archive excludes `docs/images/`
+assets used by the website.
+
 Build and check the source archive locally.
 
 ```sh

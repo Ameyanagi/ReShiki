@@ -82,6 +82,35 @@ def artifact_setting(expression, artifact):
     raise ValueError(f"No matching workflow setting for {artifact}: {expression}")
 
 
+def workflow_environment(block, indentation, artifact):
+    environment = []
+    in_environment = False
+    for line in block.splitlines():
+        if line == f"{' ' * (indentation - 2)}env:":
+            in_environment = True
+            continue
+        if not in_environment or not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line.startswith(" " * indentation):
+            break
+        environment.append(line)
+    settings = {}
+    for name, value in re.findall(
+        rf"^{' ' * indentation}(CARGO_PROFILE_DIST_\w+|MACOSX_DEPLOYMENT_TARGET): (.+)$",
+        "\n".join(environment),
+        re.M,
+    ):
+        expression = re.fullmatch(r"\$\{\{ (.+) \}\}", value)
+        if expression:
+            settings[name] = artifact_setting(expression[1], artifact)
+        else:
+            literal = shlex.split(value, comments=True)
+            if len(literal) != 1:
+                raise ValueError(f"Unsupported workflow environment setting: {name}: {value}")
+            settings[name] = literal[0]
+    return settings
+
+
 class XtbSourceArchiveTests(unittest.TestCase):
     def test_patch_arguments_cover_exactly_seven_real_crate_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -275,20 +304,20 @@ directory = "vendored-crates"
             self.assertIn("codesign --force --sign - target/dist/reshiki", instructions)
             self.assertIn("bundle_metadata", instructions)
             self.assertIn("licenses/axtb/", instructions)
+            self.assertIn("sources for building and testing the ReShiki\napplication", instructions)
+            self.assertIn("The website cannot be built from this archive", instructions)
+            self.assertIn("`docs/images/` assets", instructions)
             for directory in EXCLUDED_MEDIA:
                 self.assertIn(f"`{directory}**`", instructions)
 
-    def test_dist_environment_matches_release_workflow(self):
-        job = workflow_job(WORKFLOW.read_text(encoding="utf-8"), "build")
-        expressions = dict(
-            re.findall(r"^      (CARGO_PROFILE_DIST_\w+): \$\{\{ (.+) \}\}$", job, re.M)
-        )
-        deployment_target = re.search(
-            r"^      - name: Build and test extracted portable archive\n"
-            r'        env:\n          MACOSX_DEPLOYMENT_TARGET: "([^"]+)"$',
-            job,
-            re.M,
-        )[1]
+    def assert_dist_environment_matches_release_workflow(self, workflow):
+        job = workflow_job(workflow, "build")
+        build_steps = [
+            step
+            for step in re.findall(r"^      - .+?(?=^      - |\Z)", job, re.M | re.S)
+            if "scripts/build_release.py" in step
+        ]
+        self.assertTrue(build_steps, "No desktop build steps found")
         platforms = {
             "macos-arm64": "macOS (Apple Silicon and Intel)",
             "macos-x64": "macOS (Apple Silicon and Intel)",
@@ -300,14 +329,95 @@ directory = "vendored-crates"
         )
         self.assertEqual(set(platforms.values()), DIST_ENV.keys())
         for artifact, platform in platforms.items():
-            with self.subTest(artifact=artifact):
-                environment = {
-                    key: artifact_setting(expression, artifact)
-                    for key, expression in expressions.items()
-                }
-                if artifact.startswith("macos-"):
-                    environment["MACOSX_DEPLOYMENT_TARGET"] = deployment_target
-                self.assertEqual(DIST_ENV[platform], environment)
+            for step in build_steps:
+                environment = workflow_environment(job, 6, artifact)
+                environment.update(workflow_environment(step, 10, artifact))
+                if not artifact.startswith("macos-"):
+                    environment.pop("MACOSX_DEPLOYMENT_TARGET", None)
+                self.assertEqual(DIST_ENV[platform], environment, artifact)
+
+    def test_dist_environment_matches_release_workflow(self):
+        self.assert_dist_environment_matches_release_workflow(WORKFLOW.read_text(encoding="utf-8"))
+
+    def test_dist_environment_detects_step_overrides(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        build_env = "      - name: Build and test extracted portable archive\n        env:\n"
+        self.assertIn(build_env, workflow)
+        overrides = {
+            "CARGO_PROFILE_DIST_LTO": '"fat"',
+            "CARGO_PROFILE_DIST_CODEGEN_UNITS": "2",
+            "CARGO_PROFILE_DIST_STRIP": '"none"',
+            "CARGO_PROFILE_DIST_SPLIT_DEBUGINFO": '"off"',
+            "CARGO_PROFILE_DIST_OPT_LEVEL": "1",
+            "MACOSX_DEPLOYMENT_TARGET": '"13.0"',
+        }
+        for name, value in overrides.items():
+            with self.subTest(name=name):
+                if name == "MACOSX_DEPLOYMENT_TARGET":
+                    changed = workflow.replace(
+                        build_env + '          MACOSX_DEPLOYMENT_TARGET: "14.0"\n',
+                        build_env + f"          {name}: {value}\n",
+                        1,
+                    )
+                else:
+                    changed = workflow.replace(
+                        build_env, build_env + f"          {name}: {value}\n", 1
+                    )
+                with self.assertRaises(AssertionError):
+                    self.assert_dist_environment_matches_release_workflow(changed)
+
+    def test_dist_environment_detects_literal_job_overrides(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        original = re.search(r"^      CARGO_PROFILE_DIST_LTO: .+$", workflow, re.M)[0]
+        for value in ("false", '"fat"', "'thin'"):
+            with self.subTest(value=value):
+                changed = workflow.replace(original, f"      CARGO_PROFILE_DIST_LTO: {value}", 1)
+                environment = workflow_environment(workflow_job(changed, "build"), 6, "macos-arm64")
+                self.assertEqual(environment["CARGO_PROFILE_DIST_LTO"], shlex.split(value)[0])
+                with self.assertRaises(AssertionError):
+                    self.assert_dist_environment_matches_release_workflow(changed)
+
+    def test_dist_environment_applies_step_deployment_target_over_literal_job_value(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        job = workflow_job(workflow, "build")
+        changed_job = job.replace(
+            "    env:\n", '    env:\n      MACOSX_DEPLOYMENT_TARGET: "13.0"\n', 1
+        )
+        changed = workflow.replace(job, changed_job, 1)
+        self.assert_dist_environment_matches_release_workflow(changed)
+
+        build_env = "      - name: Build and test extracted portable archive\n        env:\n"
+        changed = changed.replace(
+            build_env + '          MACOSX_DEPLOYMENT_TARGET: "14.0"\n', build_env, 1
+        )
+        with self.assertRaises(AssertionError):
+            self.assert_dist_environment_matches_release_workflow(changed)
+
+    def test_dist_environment_ignores_settings_outside_env_blocks(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        job = workflow_job(workflow, "build")
+        command = re.search(r"^        run: (.+scripts/build_release\.py.+)$", job, re.M)[0]
+        changes = {
+            "job outputs": job.replace(
+                "    steps:\n",
+                '    outputs:\n      CARGO_PROFILE_DIST_LTO: "fat"\n'
+                '      MACOSX_DEPLOYMENT_TARGET: "13.0"\n    steps:\n',
+                1,
+            ),
+            "step run block": job.replace(
+                command,
+                "        run: |\n          cat <<'ENV_EXAMPLE'\n"
+                '          CARGO_PROFILE_DIST_LTO: "fat"\n'
+                '          MACOSX_DEPLOYMENT_TARGET: "13.0"\n'
+                "          ENV_EXAMPLE\n          " + command.removeprefix("        run: "),
+                1,
+            ),
+        }
+        for location, changed_job in changes.items():
+            with self.subTest(location=location):
+                self.assert_dist_environment_matches_release_workflow(
+                    workflow.replace(job, changed_job, 1)
+                )
 
     def test_source_and_desktop_jobs_share_nightly_stamp_before_packaging(self):
         workflow = WORKFLOW.read_text(encoding="utf-8")

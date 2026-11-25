@@ -303,10 +303,14 @@ def build_instructions(root):
     exclusions = " and ".join(f"`{directory}**`" for directory in EXCLUDED_MEDIA)
     return f"""# Rebuilding ReShiki with xTB
 
-This archive contains ReShiki, the pinned axtb fork, and all locked Cargo
-sources. Cargo's source replacements in `.cargo/config.toml` let both builds
-use `vendored-crates/` in a fresh, offline Cargo environment. Install the
-prerequisites below and run the commands from this directory.
+This archive contains the sources for building and testing the ReShiki
+application, the pinned axtb fork, and all locked Cargo sources. Cargo's source
+replacements in `.cargo/config.toml` let both builds use `vendored-crates/` in
+a fresh, offline Cargo environment. Install the prerequisites below and run
+the commands from this directory.
+
+The website cannot be built from this archive because `docs/images/` assets
+used by the website are excluded. Use the full repository to build the website.
 
 ## Prerequisites
 

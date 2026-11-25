@@ -109,6 +109,10 @@ release page. `scripts/xtb_source_archive.py` packages the tracked working-tree
 files from the release checkout. For nightlies, the source and desktop build
 jobs stamp the same version into `Cargo.toml` and `Cargo.lock` first.
 
+The archive is for building and testing the ReShiki application. It excludes
+`docs/images/` assets used by the website, so building the website requires
+the full repository.
+
 ```
 reshiki-<version>-source/
   …                     ReShiki's tracked working-tree files, with media exclusions
