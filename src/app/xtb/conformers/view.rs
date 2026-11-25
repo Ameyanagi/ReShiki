@@ -305,7 +305,7 @@ impl App {
             ),
         })
         .width(Length::Fill)
-        .height(110);
+        .height(84);
         let table = column![plot, header, list, note].spacing(4);
         let side = self.xtb_conformer_side(shown, &rows, current, live);
         if inspector {
