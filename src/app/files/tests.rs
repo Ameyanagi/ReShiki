@@ -838,10 +838,7 @@ fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
         notice.starts_with("Final geometry of job 3 of 3: "),
         "{notice}"
     );
-    assert!(
-        notice.ends_with("Normal termination · Results can't be shown yet"),
-        "{notice}"
-    );
+    assert!(notice.ends_with("Normal termination"), "{notice}");
     // An input has no results to mention.
     let Ok(Prepared::Records(batch)) = open("water.com", "cclib/g16_water_mp2.com") else {
         panic!("a Gaussian input opens as a drawing");
@@ -859,10 +856,7 @@ fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
     };
     // H      3  1    -0.272880     0.951649     0.000000
     assert_eq!(batch.drawings[0].atoms.len(), 3);
-    assert_eq!(
-        batch.warnings[0],
-        "Geometry from the Molden file · Results can't be shown yet"
-    );
+    assert_eq!(batch.warnings[0], "Geometry from the Molden file");
 
     // The anion radical's "-1 2" line: the drawing cannot say which atom carries them.
     let Ok(Prepared::Records(batch)) = open(
@@ -917,6 +911,54 @@ fn program_outputs_open_the_default_jobs_geometry_with_a_notice() {
         "{:?}",
         batch.warnings
     );
+    let science = &batch.drawings[0].science;
+    let frame = science.frame(&science.results[0].result.frame).unwrap();
+    assert_eq!((frame.charge, frame.multiplicity), (1, 2));
+}
+
+#[test]
+fn mismatched_calculation_opens_the_geometry_with_a_warning() {
+    let molden = b"[Molden Format]\n[Atoms] Angs\nH 1 1 0 0 0\nH 2 1 0 0 0\n";
+    let Prepared::Records(batch) = prepare_qc("overlap.molden".as_ref(), molden).unwrap() else {
+        panic!("the geometry should still open");
+    };
+    let doc = &batch.drawings[0];
+    assert_eq!(doc.models[0].atoms.len(), 1);
+    assert!(doc.science.is_empty());
+    assert!(batch.warnings[0].ends_with(" · Results can't be shown yet"));
+    assert!(
+        batch
+            .warnings
+            .iter()
+            .any(|warning| warning.starts_with("Could not attach the calculation results"))
+    );
+}
+
+#[tokio::test]
+async fn molden_and_fchk_open_with_orbitals_in_the_results_palette() {
+    let (mut app, _) = App::new();
+    let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/qc/cclib/");
+    for name in ["molden5.7_dvb_ir.molden", "g09_dvb_ir.fchk"] {
+        let opened = read(std::path::Path::new(fixtures).join(name)).await;
+        let _ = app.update(Message::FilePrepared(opened));
+        assert!(!app.error, "{name}: {}", app.status);
+        let doc = &app.tab.doc;
+        let [stored] = doc.science.results.as_slice() else {
+            panic!("{name}: {}", app.status);
+        };
+        let orbitals = stored.result.orbitals.as_ref().unwrap();
+        assert!(!orbitals.alpha.energies_hartree.is_empty());
+        assert!(!orbitals.alpha.rows.is_empty());
+        assert!(!orbitals.alpha.coefficients.is_empty());
+        let attachment = doc.science.attachment(stored.attachment).unwrap();
+        assert_eq!(attachment.atoms, doc.models[0].geometry_sources());
+        assert_eq!(
+            attachment.freshness(doc),
+            reshiki::science::Freshness::Current
+        );
+        assert_eq!(app.tab.name(), name);
+        assert!(app.xtb_bottom_palette().is_some());
+    }
 }
 
 #[tokio::test]
@@ -939,11 +981,11 @@ async fn program_outputs_open_the_last_optimization_step_in_3d() {
     assert_eq!(first, [1.205666, 0.676891, 0.0]);
     assert_eq!(last, [0.269445, 1.410118, 0.0]);
 
-    let (_, opened) = prepare_contents(name.into(), Ok(bytes)).await.unwrap();
-    let Prepared::Records(batch) = opened.unwrap() else {
-        panic!("a Gaussian optimization opens as a drawing");
-    };
-    let doc = &batch.drawings[0];
+    let (mut app, _) = App::new();
+    let opened = prepare_contents(name.into(), Ok(bytes)).await;
+    let _ = app.update(Message::FilePrepared(opened));
+    assert!(!app.error, "{}", app.status);
+    let doc = &app.tab.doc;
     // The last Standard orientation ends with atom 20:
     //     20          1           0        2.364759    0.813041   -0.000000
     assert_eq!(doc.atoms.len(), 20);
@@ -953,4 +995,49 @@ async fn program_outputs_open_the_last_optimization_step_in_3d() {
         .find(|atom| atom.id == doc.atoms[0].id)
         .unwrap();
     assert_eq!(placed.xyz, last.map(|coord| coord as f32));
+    let [stored] = doc.science.results.as_slice() else {
+        panic!("{}", app.status);
+    };
+    let input = job.steps.first().unwrap().frame.hash();
+    assert_eq!(stored.result.input_frame, Some(input));
+    assert!(doc.science.frame(&input).is_some());
+    assert_eq!(stored.result.frame, job.steps.last().unwrap().frame.hash());
+    assert!(app.xtb_bottom_palette().is_some());
+}
+
+#[tokio::test]
+async fn orca_output_opens_its_result_in_the_palette() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/qc/cclib/orca60_water_mp2.out"
+    );
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::FilePrepared(read(path.into()).await));
+    assert!(!app.error, "{}", app.status);
+    let [stored] = app.tab.doc.science.results.as_slice() else {
+        panic!("{}", app.status);
+    };
+    assert_eq!(stored.result.provenance.program, "ORCA");
+    assert!(app.xtb_bottom_palette().is_some());
+}
+
+#[tokio::test]
+async fn xyz_opens_without_calculation_results() {
+    use iced::futures::StreamExt;
+
+    let (mut app, _) = App::new();
+    app.engine = reshiki::engine::LocalEngine::in_process();
+    app.cancel_engine_job();
+    let contents = b"2\nhydrogen\nH 0 0 0\nH 0 0 0.74\n".to_vec();
+    let opened = prepare_contents("hydrogen.xyz".into(), Ok(contents)).await;
+    let task = app.file_prepared(opened);
+    let mut stream = iced_runtime::task::into_stream(task).unwrap();
+    let Some(iced_runtime::Action::Output(message)) = stream.next().await else {
+        panic!("missing XYZ import result");
+    };
+    let _ = app.update(message);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.models[0].atoms.len(), 2);
+    assert!(app.tab.doc.science.is_empty());
+    assert!(app.xtb_bottom_palette().is_none());
 }

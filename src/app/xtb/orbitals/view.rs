@@ -1,5 +1,7 @@
 //! The Orbitals tab's widgets: level diagram, list, surface controls and
 //! Place on canvas.
+// Column and level indices come from the choice made for these columns.
+#![allow(clippy::indexing_slicing)]
 use super::levels::Diagram;
 use super::{Action, ISO_RANGE, LookChoice, PRESETS, send};
 use crate::app::workspace::{accessible_checkbox, accessible_command, control, muted_text};
@@ -21,7 +23,7 @@ impl App {
         inspector: bool,
     ) -> Element<'a, Message> {
         let Some(target) = self.xtb_orbital_target() else {
-            return line("This result has no orbital levels.", Tone::Muted).into();
+            return line("This result has no orbital levels.", Tone::Muted);
         };
         let choice = self.xtb_orbital_choice(&target);
         let live = target.problem.is_none();
@@ -284,6 +286,6 @@ impl App {
                 "Orbitals from the opened file; a placed orbital is saved with the file."
             }
         };
-        line(note, Tone::Muted).into()
+        line(note, Tone::Muted)
     }
 }
