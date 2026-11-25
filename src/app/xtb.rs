@@ -21,6 +21,7 @@ mod results;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
 mod state;
+mod tone;
 mod view;
 
 #[cfg(test)]

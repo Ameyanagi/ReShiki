@@ -1,7 +1,7 @@
 //! The results palette's widgets: header, method lines, the stale banner,
 //! the Summary, Steps and Log tabs, and the footer with file sizes.
 use super::super::results::{self, View};
-use super::super::view::{Tone, line};
+use super::super::tone::{Tone, line};
 use super::super::{Action as XtbAction, state};
 use super::{Action, Shown};
 use crate::app::workspace::{accessible_command, control, muted_text, panel};

@@ -212,6 +212,7 @@ explains how the crates and modules fit together.
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced
 - `src/app/xtb/run.rs`: One xTB job on its own thread
 - `src/app/xtb/state.rs`: The Calculate card's settings, a run's progress and the finish decision, kept free of iced and the worker so they can be tested alone.
+- `src/app/xtb/tone.rs`: Text lines in the xTB card and results palette
 - `src/app/xtb/view.rs`: The Predict tab's NMR · xTB switch and the Calculate card.
 - `src/appearance.rs`: Interface preferences and defaults for new drawings.
 - `src/assistant/codex.rs`: Small JSONL app-server client using the user's existing Codex sign-in.

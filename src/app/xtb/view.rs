@@ -1,45 +1,14 @@
 //! The Predict tab's NMR · xTB switch and the Calculate card.
 use super::state::{self, LATER_METHODS, LATER_SETTINGS, LATER_TASKS, SOLVENTS};
+use super::tone::{Tone, line};
 use super::{Action, CalcTask, Outcome, Page};
 use crate::app::inspector::Section;
-use crate::app::workspace::{
-    accessible_checkbox, accessible_command, control, hover_hint, muted_text,
-};
+use crate::app::workspace::{accessible_checkbox, accessible_command, control, hover_hint};
 use crate::app::{App, Message};
 use iced::widget::{Space, canvas, column, container, progress_bar, row, text, tooltip};
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 
 const WIDE: Length = Length::Fill;
-
-/// A line in the card's tone: muted, good, warning or error.
-#[derive(Clone, Copy)]
-pub(super) enum Tone {
-    Muted,
-    Good,
-    Warning,
-    Error,
-}
-
-pub(super) fn line<'a>(content: impl Into<String>, tone: Tone) -> Element<'a, Message> {
-    text(content.into())
-        .size(11)
-        .style(move |theme: &Theme| {
-            let seed = match tone {
-                Tone::Muted => return muted_text(theme),
-                Tone::Good => theme.palette().success,
-                Tone::Warning => theme.palette().warning,
-                Tone::Error => crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47)),
-            };
-            text::Style {
-                color: Some(crate::appearance::readable(
-                    seed,
-                    &[theme.palette().background],
-                    reshiki::color_contrast::TEXT_TARGET,
-                )),
-            }
-        })
-        .into()
-}
 
 fn label<'a>(content: &'a str) -> Element<'a, Message> {
     text(content).size(12).into()
