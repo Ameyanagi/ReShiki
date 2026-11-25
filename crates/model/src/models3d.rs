@@ -31,6 +31,7 @@ pub use polish::{Generated, Labels};
 pub(crate) use polish::{deserialize_models, fingerprint};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// How a molecule with a model is shown.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -236,6 +237,9 @@ pub struct Model3d {
     pub manual_along: bool,
     #[serde(default)]
     pub background: Background,
+    /// An orbital placed on this model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface: Option<surface::Figure>,
     pub force_field: ForceField,
     #[serde(default, skip_serializing_if = "is_original")]
     pub layout: Layout,
@@ -634,6 +638,7 @@ impl Model3d {
             along: None,
             manual_along: false,
             background: Background::default(),
+            surface: None,
             force_field,
             layout: Layout::Original,
             drawn: None,
@@ -1051,10 +1056,21 @@ struct View<'a> {
     perspective: f32,
     /// Wireframe line width in drawing units.
     wire: f32,
+    orbital_meshes: Option<Arc<[surface::mesh::Mesh; 2]>>,
+    orbital_snapshot: Option<Primitive>,
 }
 impl View<'_> {
     fn new<'a>(doc: &'a Document, model: &'a Model3d) -> Option<View<'a>> {
+        Self::with_meshes(doc, model, surface::draw::meshes(doc, model))
+    }
+
+    fn with_meshes<'a>(
+        doc: &'a Document,
+        model: &'a Model3d,
+        orbital_meshes: Option<Arc<[surface::mesh::Mesh; 2]>>,
+    ) -> Option<View<'a>> {
         let center = layout_center(doc, model)?;
+        let origin = center.offset(model.offset.x, model.offset.y);
         let mut points = model.points(doc)?;
         let originals = points.len();
         let mut shown = model.shown(doc);
@@ -1134,6 +1150,15 @@ impl View<'_> {
         } else {
             model.center(&points)
         };
+        let saved = if orbital_meshes.is_none() {
+            surface::draw::saved(doc, model, origin)
+        } else {
+            None
+        };
+        let surface_reach = orbital_meshes.as_ref().map_or_else(
+            || saved.as_ref().map_or(0., |(reach, _)| *reach),
+            |meshes| surface::draw::reach(meshes, c),
+        );
         // The bounding sphere holds the cell and its labels too.
         let reach = if model.style == Style::Ellipsoids {
             points
@@ -1156,7 +1181,7 @@ impl View<'_> {
             model.cell_reach(doc, c)
         })
         // A surface lies wholly inside the reach, so the camera stays out of it.
-        .max(surface::draw::meshes(doc, model).map_or(0., |m| surface::draw::reach(&m, c)));
+        .max(surface_reach);
         Some(View {
             center: c,
             rotated: points
@@ -1179,11 +1204,13 @@ impl View<'_> {
                 .map(|e| e.map(|e| e.rotated(model.rotation)))
                 .collect(),
             reach,
-            origin: center.offset(model.offset.x, model.offset.y),
+            origin,
             scale: 0.44 * model.size / reach,
             camera: reach * (1.2 + 9. * (1. - model.perspective)),
             perspective: model.perspective,
             wire: (model.size / 190.).max(1.6),
+            orbital_meshes,
+            orbital_snapshot: saved.map(|(_, primitive)| primitive),
         })
     }
     /// Drawing point and perspective factor of a rotated point.
@@ -3008,6 +3035,105 @@ pub fn balls_and_sticks(
     Some((balls, sticks))
 }
 
+struct ModelPaint {
+    dark: bool,
+    card: [u8; 3],
+    card_edge: [u8; 3],
+    backdrop: [u8; 3],
+    line: f32,
+    glossy: bool,
+    depth_fade: f32,
+}
+
+impl ModelPaint {
+    fn new(doc: &Document, model: &Model3d) -> Self {
+        let paper = doc.canvas_theme.background();
+        let dark = doc.canvas_theme.is_dark();
+        // On a dark canvas the card is the paper lightened a little.
+        let (card, card_edge) = if dark {
+            let lighter = |t| rgb(mix(float(paper), WHITE, t));
+            (lighter(0.08), lighter(0.16))
+        } else {
+            (CARD, CARD_EDGE)
+        };
+        Self {
+            dark,
+            card,
+            card_edge,
+            backdrop: match model.background {
+                Background::None => paper,
+                Background::Card => card,
+            },
+            line: (model.size / 400.).clamp(0.6, 1.1),
+            glossy: model.look == Look::Glossy,
+            depth_fade: model.depth_fade,
+        }
+    }
+
+    fn fade(&self, reach: f32, z: f32) -> f32 {
+        self.depth_fade * ((reach - z) / (2. * reach)).clamp(0., 1.)
+    }
+
+    fn outline(&self, width: f32) -> Option<Outline> {
+        (!self.glossy)
+            .then_some(if self.dark { RIM } else { OUTLINE })
+            .map(|(color, alpha)| Outline {
+                color,
+                alpha,
+                width,
+            })
+    }
+}
+
+impl View<'_> {
+    fn live_surface(
+        &self,
+        model: &Model3d,
+        paint: &ModelPaint,
+    ) -> Option<(surface::draw::Prepared, Primitive)> {
+        let meshes = self.orbital_meshes.as_deref()?;
+        // Stick draws a contour twice as wide.
+        let painted = match (paint.glossy, model.style) {
+            (true, _) => 0.,
+            (false, Style::Stick) => paint.line * 2.,
+            (false, _) => paint.line,
+        };
+        let colors = surface::draw::phase_colors(model, paint.dark);
+        let backdrop = float(paint.backdrop);
+        let fade = paint.fade(self.reach, 0.);
+        let prepared =
+            surface::draw::Prepared::new(meshes, model, self, painted, colors, backdrop, fade)?;
+        let primitive = prepared.paint(
+            colors,
+            backdrop,
+            fade,
+            paint.outline(paint.line),
+            paint.line,
+        )?;
+        Some((prepared, primitive))
+    }
+}
+
+pub(crate) fn refresh_surface_snapshot(doc: &Document, model: &mut Model3d) {
+    if model.surface.is_none() {
+        return;
+    }
+    let Some(meshes) = surface::draw::meshes(doc, model) else {
+        return;
+    };
+    let snapshot = View::with_meshes(doc, model, Some(meshes)).and_then(|view| {
+        let (_, primitive) = view.live_surface(model, &ModelPaint::new(doc, model))?;
+        Some(surface::Snapshot {
+            shapes: surface::snapshot::encode(&primitive, view.origin)?,
+            view: surface::draw::view_signature(doc, model),
+            reach: view.reach,
+        })
+    });
+    if let Some(figure) = &mut model.surface {
+        figure.snapshot = snapshot;
+    }
+}
+
 fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Option<()> {
     let mut view = View::new(doc, model)?;
     // The 2D → 3D morph, eased as in the prototype; hydrogens fade in.
@@ -3026,47 +3152,20 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         bonds.retain(|&(a, b)| view.half_bond(a, b).is_some());
     }
     let (rotated, reach, style) = (&view.rotated, view.reach, model.style);
-    let paper = doc.canvas_theme.background();
-    let dark = doc.canvas_theme.is_dark();
-    // On a dark canvas the card is the paper lightened a little.
-    let (card, card_edge) = if dark {
-        let lighter = |t| rgb(mix(float(paper), WHITE, t));
-        (lighter(0.08), lighter(0.16))
-    } else {
-        (CARD, CARD_EDGE)
-    };
-    let backdrop = match model.background {
-        Background::None => paper,
-        Background::Card => card,
-    };
-    let fade = |z: f32| model.depth_fade * ((reach - z) / (2. * reach)).clamp(0., 1.);
-    let line = (model.size / 400.).clamp(0.6, 1.1);
-    let glossy = model.look == Look::Glossy;
-    // The balls' painted outline reaches half its width past their discs;
-    // Stick draws a contour twice as wide.
-    let painted = match (glossy, style) {
-        (true, _) => 0.,
-        (false, Style::Stick) => line * 2.,
-        (false, _) => line,
-    };
+    let paint = ModelPaint::new(doc, model);
+    let ModelPaint {
+        card,
+        card_edge,
+        backdrop,
+        line,
+        glossy,
+        ..
+    } = paint;
+    let fade = |z| paint.fade(reach, z);
+    let outline = |width| paint.outline(width);
     // Labels of atoms in front of the surface, drawn after it.
     let mut late = vec![];
-    let outline = |width| {
-        (!glossy)
-            .then_some(if dark { RIM } else { OUTLINE })
-            .map(|(color, alpha)| Outline {
-                color,
-                alpha,
-                width,
-            })
-    };
-    let orbital =
-        surface::draw::Prepared::new(doc, model, &view, painted, dark, float(backdrop), fade(0.))
-            .and_then(|prepared| {
-                let primitive =
-                    prepared.primitive(dark, float(backdrop), fade(0.), outline(line), line)?;
-                Some((prepared, primitive))
-            });
+    let orbital = view.live_surface(model, &paint);
     let side_outline = || {
         outline(line * 2.).map(|o| Outline {
             color: rgb(mix(float(o.color), float(backdrop), 1. - o.alpha)),
@@ -3580,7 +3679,13 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             }
         }
     }
-    if let Some((_, orbital)) = orbital {
+    if let Some(orbital) = orbital.map(|(_, primitive)| primitive).or_else(|| {
+        if model.morph.is_some_and(|m| m < 1.) {
+            None
+        } else {
+            view.orbital_snapshot.take()
+        }
+    }) {
         drawn.push((1., orbital));
         drawn.extend(late);
     }

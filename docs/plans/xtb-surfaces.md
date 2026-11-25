@@ -226,8 +226,7 @@ Pieces are tested against an occluder's footprint bounding box first, and
 skipped if they are wholly in front of its front (largest Z of the cap);
 a piece wholly behind it is clipped like any other.
 
-Not in the prototype (no surface is drawn for these models, and the
-switch says so): crystals (repeat copies are translucent and the cell's
+Surfaces are unavailable on crystals (repeat copies are translucent and the cell's
 front edges, origin and axis labels are drawn over the model, which needs
 compositing the prototype does not do), Wireframe (labels and lines have
 no ball to sit on) and thermal ellipsoids (proxy not wired up). During the
@@ -425,11 +424,10 @@ suggests a lower detail.
 
 The PR reports the measured numbers next to these.
 
-## Developer switch
+## Analytic demo
 
-`RESHIKI_DEV_ORBITAL_SURFACE` (read once in `main` before any mode) turns on
-an analytic demo surface for every 3D model, in the canvas and in
-`reshiki --cli render`:
+Tests use `surface::demo_on_this_thread` to draw an analytic surface on
+supported 3D models:
 
 - `pi`: π-like orbital, a p function `(n·d) e^(−1.6|d|)` on every heavy atom,
   `n` the normal of the molecule's best-fit plane, all with the same sign
@@ -438,9 +436,8 @@ an analytic demo surface for every 3D model, in the canvas and in
   lobes, which overlap each other on screen when turned).
 - An optional `:iso` suffix sets the isovalue (default 0.06).
 
-The switch draws only; nothing is saved. Unset, the renderer runs exactly the
-code it runs today (the surface hook returns before any work), which the
-existing render tests confirm.
+The demo draws without saving. With the demo off, the existing render
+tests confirm byte-identical primitives for models without a figure.
 
 ## Proof
 
@@ -459,7 +456,8 @@ existing render tests confirm.
   nothing. Points within the stated approximation band of an outline or
   intersection curve are skipped and counted.
 - Unchanged output: the existing models3d, scene and canvas render tests
-  pass unchanged; with the switch unset `primitives()` is byte-identical.
+  pass unchanged. With the demo off, `primitives()` is byte-identical for
+  models without a figure.
 - Export: the same scene to SVG and PDF; SVG has no `<image>`, PDF has no
   image XObject; bytes and times within budget at 20 000 triangles; snapshot
   round trip (encode, decode, same shapes) and its size.
@@ -493,7 +491,7 @@ a "Mesh lines" check box for the other three, and an Opacity slider. The
 silhouette outline is drawn in every look when the model's own look draws
 outlines (Flat), as for the balls.
 
-Developer switch: `RESHIKI_DEV_ORBITAL_SURFACE=pistar:0.06,look=shaded+mesh,opacity=60`
+Analytic demo test option: `pistar:0.06,look=shaded+mesh,opacity=60`
 (`look=` takes `solid`, `shaded`, `outline` or `mesh`, the first three
 optionally `+mesh`).
 

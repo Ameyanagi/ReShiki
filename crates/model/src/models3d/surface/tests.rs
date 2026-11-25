@@ -121,7 +121,7 @@ fn check_embedded(mesh: &Mesh) {
 }
 
 // Walk directed edge uses, every vertex link, and each component of the dual graph.
-fn topology(mesh: &Mesh) -> Vec<(bool, isize)> {
+pub(super) fn topology(mesh: &Mesh) -> Vec<(bool, isize)> {
     assert_eq!(mesh.positions.len(), mesh.normals.len());
     assert_eq!(mesh.positive.len(), mesh.triangles.len());
     let mut directed = HashMap::new();

@@ -14,8 +14,11 @@ use std::{
     sync::Arc,
 };
 
-use reshiki_qcdata::{CalcResult, Frame, FrameHash, MAX_IMPORTED_HEAVY_BYTES, Settings};
+use reshiki_qcdata::{
+    BasisSet, Beta, CalcResult, Frame, FrameHash, MAX_IMPORTED_HEAVY_BYTES, Settings, Spin,
+};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::document::Document;
 
@@ -306,6 +309,12 @@ impl Science {
     /// molecule's imported data stays within [`MAX_IMPORTED_HEAVY_BYTES`],
     /// in arrival order.
     pub fn saved(&self) -> Self {
+        self.saved_with_pins(&HashMap::new())
+    }
+
+    /// The saved form, retaining the orbital rows needed by placed figures.
+    /// Pins are grouped by [`result_key`].
+    pub fn saved_with_pins(&self, pins: &HashMap<String, Vec<(Spin, u32)>>) -> Self {
         let mut budgets = HashMap::<Vec<u64>, usize>::new();
         let results = self
             .results
@@ -320,7 +329,10 @@ impl Science {
                     }
                     return stored.clone();
                 }
-                let result = match stored.result.for_file(*budget, &[]) {
+                let pinned = pins
+                    .get(&result_key(&stored.result))
+                    .map_or(&[][..], Vec::as_slice);
+                let result = match stored.result.for_file(*budget, pinned) {
                     Cow::Borrowed(_) => {
                         if matches!(stored.result.settings, Settings::Imported { .. }) {
                             *budget = budget.saturating_sub(stored.result.heavy_bytes());
@@ -357,7 +369,12 @@ impl Science {
     /// whole palette; slow for large imported results, so callers cache it
     /// per document revision off the UI thread.
     pub fn saved_sizes(&self) -> Vec<usize> {
-        self.saved()
+        self.saved_sizes_with_pins(&HashMap::new())
+    }
+
+    /// Saved result sizes including the orbital rows needed by placed figures.
+    pub fn saved_sizes_with_pins(&self, pins: &HashMap<String, Vec<(Spin, u32)>>) -> Vec<usize> {
+        self.saved_with_pins(pins)
             .results
             .iter()
             .map(|stored| {
@@ -371,10 +388,15 @@ impl Science {
     /// Pretty-printed JSON bytes the file spends on calculation data; Save
     /// offers [`make_lighter`] above [`LIGHTER_BYTES`].
     pub fn file_bytes(&self) -> usize {
+        self.file_bytes_with_pins(&HashMap::new())
+    }
+
+    /// Saved calculation bytes including orbital rows needed by placed figures.
+    pub fn file_bytes_with_pins(&self, pins: &HashMap<String, Vec<(Spin, u32)>>) -> usize {
         if self.is_empty() {
             return 0;
         }
-        serde_json::to_vec_pretty(&self.saved())
+        serde_json::to_vec_pretty(&self.saved_with_pins(pins))
             .map(|json| json.len())
             .unwrap_or(0)
     }
@@ -901,6 +923,170 @@ pub fn results_for(doc: &Document, atom: u64) -> Vec<ResultView<'_>> {
         .collect()
 }
 
+/// Stable figure reference: the first 16 lowercase SHA-256 hex digits of
+/// the result's frame, input frame, task, settings and provenance JSON tuple.
+/// Changing calculated values or pinning orbital rows leaves the key intact.
+pub fn result_key(result: &CalcResult) -> String {
+    let identity = (
+        result.frame,
+        result.input_frame,
+        result.task,
+        &result.settings,
+        &result.provenance,
+    );
+    let bytes = serde_json::to_vec(&identity).unwrap_or_default();
+    let digest = Sha256::digest(bytes);
+    format!(
+        "{:016x}",
+        u64::from_be_bytes(digest.first_chunk::<8>().copied().unwrap_or_default())
+    )
+}
+
+/// The newest result with this stable figure reference, and its storage index.
+pub fn find_result<'a>(doc: &'a Document, key: &str) -> Option<(usize, &'a Stored)> {
+    doc.science
+        .results
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, stored)| result_key(&stored.result) == key)
+}
+
+/// Clipboard calculation data needed by the document's placed orbital figures.
+/// Only their linked molecules' referenced results survive, in light form with
+/// the figures' coefficient rows and basis. Other calculation data stays behind.
+pub fn for_figures(doc: &Document) -> Science {
+    let mut molecules = HashMap::<&str, Vec<HashSet<u64>>>::new();
+    for model in &doc.models {
+        if let Some(figure) = &model.surface {
+            molecules
+                .entry(&figure.orbital.result)
+                .or_default()
+                .push(model.linked_atoms.iter().copied().collect());
+        }
+    }
+    if molecules.is_empty() {
+        return Science::default();
+    }
+    let pins = doc.orbital_pins();
+    let results: Vec<_> = doc
+        .science
+        .results
+        .iter()
+        .filter_map(|stored| {
+            let attachment = doc.science.attachment(stored.attachment)?;
+            let key = result_key(&stored.result);
+            let linked = molecules.get(key.as_str())?;
+            let belongs = linked.iter().any(|atoms| {
+                attachment.atoms.iter().any(Option::is_some)
+                    && attachment
+                        .atoms
+                        .iter()
+                        .flatten()
+                        .all(|id| atoms.contains(id))
+            });
+            belongs.then(|| Stored {
+                attachment: stored.attachment,
+                keep_full: false,
+                result: Arc::new(
+                    stored
+                        .result
+                        .light(pins.get(&key).map_or(&[][..], Vec::as_slice)),
+                ),
+            })
+        })
+        .collect();
+    let attachments: HashSet<u64> = results.iter().map(|stored| stored.attachment).collect();
+    let mut science = Science {
+        frames: doc.science.frames.clone(),
+        attachments: doc
+            .science
+            .attachments
+            .iter()
+            .filter(|attachment| attachments.contains(&attachment.id))
+            .cloned()
+            .collect(),
+        results,
+    };
+    science.collect_garbage();
+    science
+}
+
+/// Keep a recomputed orbital row with its result so a placed figure reopens
+/// with the same phase. Existing rows keep their original coefficients and
+/// shared payload. Nothing changes on error.
+pub fn pin_orbital(
+    doc: &mut Document,
+    key: &str,
+    spin: Spin,
+    index: u32,
+    basis: &BasisSet,
+    row: &[f64],
+) -> Result<(), ScienceError> {
+    let (stored_index, stored) = find_result(doc, key).ok_or(ScienceError::Unknown)?;
+    let invalid =
+        |message: &str| ScienceError::Invalid(reshiki_qcdata::Error::Invalid(message.into()));
+    let orbitals = stored
+        .result
+        .orbitals
+        .as_ref()
+        .ok_or_else(|| invalid("Calculation has no orbital spectrum"))?;
+    if orbitals
+        .basis
+        .as_ref()
+        .is_some_and(|stored| stored != basis)
+    {
+        return Err(invalid(
+            "Pinned orbital basis differs from the stored basis",
+        ));
+    }
+    let set = match (spin, &orbitals.beta) {
+        (Spin::Beta, Beta::Unrestricted(set)) => set,
+        _ => &orbitals.alpha,
+    };
+    let position = match set.rows.binary_search(&index) {
+        Ok(_) => return Ok(()),
+        Err(position) => position,
+    };
+    let frame = doc
+        .science
+        .frame(&stored.result.frame)
+        .ok_or(ScienceError::Unknown)?;
+    let n_ao: usize = basis.shells.iter().map(|shell| shell.n_functions()).sum();
+    if row.len() != n_ao {
+        return Err(invalid("Pinned orbital row must match its basis"));
+    }
+    let mut result = stored.result.as_ref().clone();
+    let orbitals = result
+        .orbitals
+        .as_mut()
+        .ok_or_else(|| invalid("Calculation has no orbital spectrum"))?;
+    orbitals.basis = Some(basis.clone());
+    let set = match (spin, &mut orbitals.beta) {
+        (Spin::Beta, Beta::Unrestricted(set)) => set,
+        _ => &mut orbitals.alpha,
+    };
+    set.rows.insert(position, index);
+    set.coefficients
+        .splice(position * n_ao..position * n_ao, row.iter().copied());
+    result.validate(frame)?;
+    if doc
+        .science
+        .heap_bytes()
+        .saturating_sub(stored.result.heap_bytes())
+        .saturating_add(result.heap_bytes())
+        > MAX_SCIENCE_BYTES
+    {
+        return Err(ScienceError::TooLarge);
+    }
+    doc.science
+        .results
+        .get_mut(stored_index)
+        .ok_or(ScienceError::Unknown)?
+        .result = Arc::new(result);
+    Ok(())
+}
+
 /// Move the molecule's 3D model to `frame`, a geometry stored for
 /// `attachment` (its own frame or a result's, such as an optimization's
 /// final frame): "Apply xTB geometry", one undo step for the caller. The 2D
@@ -1183,10 +1369,14 @@ pub fn set_keep_full(doc: &mut Document, index: usize, keep: bool) -> bool {
 /// data, in the file and in this document. Imported results, which cannot
 /// be recomputed, are left alone. Returns how many results changed.
 pub fn make_lighter(doc: &mut Document) -> usize {
+    let pins = doc.orbital_pins();
     let mut changed = 0;
     for stored in &mut doc.science.results {
         if stored.keep_full && matches!(stored.result.settings, Settings::Xtb(_)) {
-            stored.result = Arc::new(stored.result.light(&[]));
+            let pinned = pins
+                .get(&result_key(&stored.result))
+                .map_or(&[][..], Vec::as_slice);
+            stored.result = Arc::new(stored.result.light(pinned));
             stored.keep_full = false;
             changed += 1;
         }
