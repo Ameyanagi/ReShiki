@@ -309,6 +309,50 @@ fn a_rear_rim_is_split_between_uncovered_and_once_covered_groups() {
     check_horizontal_intervals(&result.rims[1], 0., &[(3., 7.)]);
 }
 
+fn rim_under_front_piece(depth: f32) -> Visible {
+    visible(&Input {
+        positions: &[
+            [0., 0., 0.],
+            [10., 0., 0.],
+            [0., 10., 0.],
+            [0., -1., -1.],
+            [3., -1., depth],
+            [7., -1., depth],
+            [7., 3., depth],
+            [3., 3., depth],
+        ],
+        triangles: &[[0, 1, 2], [1, 0, 3], [4, 5, 6], [4, 6, 7]],
+        positive: &[true, true, false, false],
+        front: &[true, false, true, true],
+        lightness: &[1.; 8],
+        occluders: &[],
+        tones: &[1, 1],
+        lines: &[],
+        tolerance: 0.,
+    })
+}
+
+#[test]
+fn a_shallow_front_fold_keeps_a_rim_in_the_nearest_group() {
+    let result = rim_under_front_piece(0.1);
+    check_depth_output(&result, &[1, 1]);
+    check_horizontal_intervals(&result.rims[0], 0., &[(0., 10.)]);
+    assert!(result.rims[1].is_empty());
+    assert!(depth_contains(&result, 0, false, [4., 1.]));
+    assert!(depth_contains(&result, 1, true, [4., 1.]));
+    assert!(!depth_contains(&result, 0, true, [4., 1.]));
+}
+
+#[test]
+fn a_distinctly_nearer_front_piece_moves_a_rim_to_the_covered_group() {
+    let result = rim_under_front_piece(2.);
+    check_depth_output(&result, &[1, 1]);
+    check_horizontal_intervals(&result.rims[0], 0., &[(0., 3.), (7., 10.)]);
+    check_horizontal_intervals(&result.rims[1], 0., &[(3., 7.)]);
+    assert!(depth_contains(&result, 0, false, [4., 1.]));
+    assert!(depth_contains(&result, 1, true, [4., 1.]));
+}
+
 #[test]
 fn a_front_triangle_line_is_cut_by_a_ball_and_grouped_under_a_near_sheet() {
     for tones in [&[1][..], &[1, 1][..], &[0, 0][..]] {
@@ -1074,7 +1118,7 @@ fn arbitrarily_close_depths_keep_the_nearest_of_three_sheets() {
 }
 
 #[test]
-fn tiny_depth_gaps_hide_the_rear_silhouette() {
+fn tiny_depth_gaps_keep_the_rim_visible_while_hiding_the_rear_fill() {
     let result = visible(&Input {
         positions: &[
             [0., 0., 0.],
@@ -1095,14 +1139,11 @@ fn tiny_depth_gaps_hide_the_rear_silhouette() {
         tolerance: 0.,
     });
     assert!(first_layer(&result, false).is_some_and(|layer| contains(&layer.region, [2., 2.])));
-    assert!(
-        result.rims[0].is_empty(),
-        "a strictly nearer sheet hides the rim"
-    );
+    check_horizontal_intervals(&result.rims[0], 0., &[(0., 10.)]);
 }
 
 #[test]
-fn exact_depth_ties_use_the_same_owner_for_fill_and_rims() {
+fn exact_depth_ties_resolve_fill_ownership_and_keep_the_whole_rim() {
     let result = visible(&Input {
         positions: &[
             [0., 0., 0.],
@@ -1124,12 +1165,7 @@ fn exact_depth_ties_use_the_same_owner_for_fill_and_rims() {
     });
     assert!(first_layer(&result, true).is_some_and(|layer| contains(&layer.region, [1., 1.])));
     assert!(first_layer(&result, false).is_some_and(|layer| contains(&layer.region, [7., 1.])));
-    let length: f32 = result.rims[0]
-        .iter()
-        .flat_map(|run| run.windows(2))
-        .map(|edge| (edge[1][0] - edge[0][0]).hypot(edge[1][1] - edge[0][1]))
-        .sum();
-    assert!((length - 5.).abs() < 0.001, "tied rear rim length {length}");
+    check_horizontal_intervals(&result.rims[0], 0., &[(0., 10.)]);
 }
 
 #[test]

@@ -219,7 +219,26 @@ fn edge_length_cv(mesh: &Mesh) -> f64 {
     variance.sqrt() / mean
 }
 
-fn check_gradient_normals(mesh: &Mesh, field: &impl Fn([f32; 3]) -> f32, step: f32) {
+fn summed_face_normals(mesh: &Mesh) -> Vec<[f64; 3]> {
+    let mut sums = vec![[0.; 3]; mesh.positions.len()];
+    for tri in &mesh.triangles {
+        let [a, b, c] = tri.map(|v| mesh.positions[v as usize].map(f64::from));
+        let face = cross(sub(b, a), sub(c, a));
+        for &v in tri {
+            for (sum, component) in sums[v as usize].iter_mut().zip(face) {
+                *sum += component;
+            }
+        }
+    }
+    sums
+}
+
+fn check_gradient_normals(
+    mesh: &Mesh,
+    original: &Mesh,
+    field: &impl Fn([f32; 3]) -> f32,
+    step: f32,
+) {
     let mut signs = vec![None; mesh.positions.len()];
     for (&tri, &positive) in mesh.triangles.iter().zip(&mesh.positive) {
         for v in tri {
@@ -231,19 +250,57 @@ fn check_gradient_normals(mesh: &Mesh, field: &impl Fn([f32; 3]) -> f32, step: f
     // A much smaller stencil than production's gives an independent check of
     // the field gradient and the opposite conventions at the two levels.
     let h = step * 1e-3;
+    let face_normals = summed_face_normals(mesh);
+    let mut wider_stencils = 0;
+    let mut face_fallbacks = 0;
     for (i, (&p, &normal)) in mesh.positions.iter().zip(&mesh.normals).enumerate() {
-        let gradient = std::array::from_fn(|axis| {
-            let (mut lo, mut hi) = (p, p);
-            lo[axis] -= h;
-            hi[axis] += h;
-            f64::from(field(hi)) - f64::from(field(lo))
-        });
-        let outward = gradient.map(|g| if signs[i].unwrap() { -g } else { g });
-        let length = dot(outward, outward).sqrt();
-        assert!(length.is_finite() && length > 0.);
+        let displacement = sub(p.map(f64::from), original.positions[i].map(f64::from));
+        assert!(
+            dot(displacement, displacement) <= (0.5 * f64::from(step)).powi(2),
+            "vertex {i} moved by more than half a grid step"
+        );
+        let gradient = |h| {
+            std::array::from_fn(|axis| {
+                let (mut lo, mut hi) = (p, p);
+                lo[axis] -= h;
+                hi[axis] += h;
+                f64::from(field(hi)) - f64::from(field(lo))
+            })
+            .map(|g| if signs[i].unwrap() { -g } else { g })
+        };
+        let mut outward = gradient(h);
+        let mut length = dot(outward, outward).sqrt();
+        if !length.is_finite() || length == 0. {
+            assert_eq!(p, original.positions[i], "moved vertex {i} has no gradient");
+            // At a clamp boundary only the wider stencil may reach the field.
+            outward = gradient(step * 1e-2);
+            length = dot(outward, outward).sqrt();
+            wider_stencils += 1;
+        }
+        if !length.is_finite() || length == 0. {
+            // A restored QEM vertex can lie in a flat part of the field.
+            let sum = face_normals[i];
+            let face_length = dot(sum, sum).sqrt();
+            assert!(face_length.is_finite() && face_length > 0.);
+            let expected = sum.map(|x| x / face_length);
+            assert!(
+                normal
+                    .iter()
+                    .zip(expected)
+                    .all(|(&n, e)| (f64::from(n) - e).abs() < 1e-5),
+                "restored vertex {i} normal {normal:?} differs from face normal {expected:?}"
+            );
+            face_fallbacks += 1;
+            continue;
+        }
         assert!(
             dot(outward, normal.map(f64::from)) > 0.95 * length,
             "normal {i} points away from its phase's outward gradient"
+        );
+    }
+    if wider_stencils > 0 {
+        eprintln!(
+            "restored normals: {wider_stencils} require a wider field stencil, {face_fallbacks} use area-weighted faces"
         );
     }
 }
@@ -288,15 +345,22 @@ fn check_field(
             assert!((total / m.positions.len() as f64 / radius as f64 - 1.).abs() < 0.02);
         }
     }
-    check_gradient_normals(&refined, &field, step);
+    check_gradient_normals(&refined, &reduced, &field, step);
     if let Some(radius) = radius {
-        let max_radius_error = refined
+        let radius_errors: Vec<_> = refined
             .positions
             .iter()
             .map(|p| {
                 let r = p.iter().map(|&x| f64::from(x).powi(2)).sum::<f64>().sqrt();
                 (r - f64::from(radius)).abs()
             })
+            .collect();
+        let max_radius_error = radius_errors.iter().copied().fold(0., f64::max);
+        // Restored vertices retain the simplified mesh's existing level error.
+        let max_projected_radius_error = radius_errors
+            .iter()
+            .zip(refined.positions.iter().zip(&reduced.positions))
+            .filter_map(|(&error, (p, original))| (p != original).then_some(error))
             .fold(0., f64::max);
         let exact = 4. * std::f64::consts::PI * f64::from(radius).powi(3) / 3.;
         let before_volume = (volume(&reduced) / exact - 1.).abs();
@@ -304,9 +368,9 @@ fn check_field(
         let before_cv = edge_length_cv(&reduced);
         let after_cv = edge_length_cv(&refined);
         eprintln!(
-            "refined sphere radius={radius} max_radius_error={max_radius_error:.9} step={step} volume_error={before_volume:.6}->{after_volume:.6} edge_cv={before_cv:.6}->{after_cv:.6}"
+            "refined sphere radius={radius} max_radius_error={max_radius_error:.9} max_projected_radius_error={max_projected_radius_error:.9} step={step} volume_error={before_volume:.6}->{after_volume:.6} edge_cv={before_cv:.6}->{after_cv:.6}"
         );
-        assert!(max_radius_error < 1e-3 * f64::from(step));
+        assert!(max_projected_radius_error < 1e-3 * f64::from(step));
         assert!(
             after_volume < before_volume,
             "volume error {before_volume:.6} -> {after_volume:.6}"
@@ -597,9 +661,7 @@ fn collapses_preserve_embedding_against_spatial_neighbours() {
     check_embedded(&reduced);
 }
 
-#[test]
-fn refinement_restores_vertices_when_capped_projection_misses_the_level() {
-    let step = 0.1;
+fn unit_octahedron() -> Mesh {
     let positions = vec![
         [1., 0., 0.],
         [0., 1., 0.],
@@ -608,7 +670,7 @@ fn refinement_restores_vertices_when_capped_projection_misses_the_level() {
         [0., 0., 1.],
         [0., 0., -1.],
     ];
-    let mut mesh = Mesh {
+    Mesh {
         normals: positions.clone(),
         positions,
         triangles: vec![
@@ -623,7 +685,13 @@ fn refinement_restores_vertices_when_capped_projection_misses_the_level() {
         ],
         positive: vec![true; 8],
         truncated: false,
-    };
+    }
+}
+
+#[test]
+fn refinement_restores_vertices_when_capped_projection_misses_the_level() {
+    let step = 0.1;
+    let mut mesh = unit_octahedron();
     for sign in [1., -1.] {
         mesh.positive.fill(sign > 0.);
         let field = |p: [f32; 3]| sign * (2. - p.iter().map(|x| x * x).sum::<f32>());
@@ -649,6 +717,38 @@ fn refinement_restores_vertices_when_capped_projection_misses_the_level() {
             );
         }
         assert!(volume_ratio >= 0.99, "volume ratio {volume_ratio:.9}");
+    }
+}
+
+#[test]
+fn refinement_restores_vertices_when_a_flat_field_hides_large_displacement() {
+    let step = 0.1;
+    let mut mesh = unit_octahedron();
+    for sign in [1., -1.] {
+        mesh.positive.fill(sign > 0.);
+        let field = |p: [f32; 3]| {
+            let s = p.iter().map(|x| x * x).sum::<f32>();
+            sign * (1. + (1. - s) * (1.001 - (200. * (s - 0.12)).tanh()))
+        };
+        let refined = refine(&mesh, field, 1., step);
+        let volume_ratio = volume(&refined) / volume(&mesh);
+        let max_displacement = refined
+            .positions
+            .iter()
+            .zip(&mesh.positions)
+            .map(|(&p, &original)| {
+                let d = sub(p.map(f64::from), original.map(f64::from));
+                dot(d, d).sqrt()
+            })
+            .fold(0., f64::max);
+        eprintln!(
+            "flat field sign={sign} volume_ratio={volume_ratio:.9} max_displacement={max_displacement:.9}"
+        );
+        assert!(volume_ratio >= 0.99, "volume ratio {volume_ratio:.9}");
+        assert!(
+            max_displacement <= 0.5 * f64::from(step),
+            "vertex displacement {max_displacement:.9} exceeds half a grid step"
+        );
     }
 }
 
@@ -770,17 +870,7 @@ fn refinement_with_nonfinite_fields_uses_face_normals() {
         assert!(refined.positions.iter().flatten().all(|x| x.is_finite()));
         assert_eq!(topology(&refined), [(true, 2)]);
         check_embedded(&refined);
-        let mut sums = vec![[0.; 3]; refined.positions.len()];
-        for tri in &refined.triangles {
-            let [a, b, c] = tri.map(|v| refined.positions[v as usize].map(f64::from));
-            let face = cross(sub(b, a), sub(c, a));
-            for &v in tri {
-                for (sum, component) in sums[v as usize].iter_mut().zip(face) {
-                    *sum += component;
-                }
-            }
-        }
-        for (normal, sum) in refined.normals.iter().zip(sums) {
+        for (normal, sum) in refined.normals.iter().zip(summed_face_normals(&refined)) {
             let length = dot(sum, sum).sqrt();
             let expected = sum.map(|x| x / length);
             assert!(
@@ -857,7 +947,7 @@ fn refine_timing() {
         assert_eq!(refined.positive, mesh.positive);
         assert_eq!(topology(&refined), components);
         check_embedded(&refined);
-        check_gradient_normals(&refined, &field, grid.step);
+        check_gradient_normals(&refined, &mesh, &field, grid.step);
         if target == 20_000 && elapsed_ms > 150. {
             timing_failures.push(format!(
                 "target={target}: refinement took {elapsed_ms:.2}ms, budget 150ms"

@@ -143,11 +143,10 @@ pub fn open(points: &[[f32; 2]], error: f32) -> Vec<PathCommand> {
     guarded(&clean(points), error, false)
 }
 
-/// Fits each nonzero-winding contour with absolute area ≥ `min_area` and
-/// width (twice its absolute area divided by its perimeter) ≥ `min_width`.
-/// Outer and hole contours retain their respective input orientations.
-/// The largest input contour determines outer winding. Holes outside all
-/// surviving outer input polygons are discarded.
+/// Fits shapes with net area ≥ `min_area` and twice net area divided by total
+/// perimeter ≥ `min_width`, then removes individual holes below that width.
+/// A rejected shape takes every descendant contour with it. Input winding is
+/// retained; unparented clockwise contours are holes without an outer and drop.
 pub fn region(
     contours: &[Vec<[f32; 2]>],
     error: f32,
@@ -156,8 +155,15 @@ pub fn region(
 ) -> Vec<PathCommand> {
     #[cfg(test)]
     STROKE.set(false);
-    let mut surviving = Vec::new();
-    let mut largest_area = 0.0_f64;
+    struct Contour {
+        points: Vec<V>,
+        twice_area: f64,
+        perimeter: f64,
+        parent: Option<usize>,
+        hole: bool,
+        dropped: bool,
+    }
+    let mut input = Vec::new();
     for contour in contours {
         let mut p = clean(contour);
         strip_seam(&mut p);
@@ -173,25 +179,67 @@ pub fn region(
             perimeter += (v - prev).length();
             prev = v;
         }
-        let magnitude = twice_area.abs();
-        if magnitude > largest_area.abs() {
-            largest_area = twice_area;
-        }
-        if magnitude >= 2.0 * f64::from(min_area) && magnitude >= f64::from(min_width) * perimeter {
-            surviving.push((p, twice_area));
+        input.push(Contour {
+            points: p,
+            twice_area,
+            perimeter,
+            parent: None,
+            hole: false,
+            dropped: false,
+        });
+    }
+
+    let mut order: Vec<_> = (0..input.len()).collect();
+    order.sort_unstable_by(|&a, &b| {
+        input[b]
+            .twice_area
+            .abs()
+            .total_cmp(&input[a].twice_area.abs())
+    });
+    for (position, &i) in order.iter().enumerate() {
+        let contour = &input[i];
+        // Search the larger contours from smallest to largest to find the parent.
+        let parent = order[..position].iter().rev().copied().find(|&j| {
+            input[j].twice_area.abs() > contour.twice_area.abs()
+                && polygon_contains(&input[j].points, contour.points[0])
+        });
+        // An island inside a hole starts its own shape.
+        input[i].hole = parent.is_some_and(|parent| {
+            !input[parent].hole && input[parent].twice_area * contour.twice_area < 0.0
+        });
+        input[i].parent = parent;
+    }
+
+    let mut shapes: Vec<_> = input
+        .iter()
+        .map(|c| (c.twice_area.abs(), c.perimeter))
+        .collect();
+    for contour in &input {
+        if contour.hole
+            && let Some(parent) = contour.parent
+        {
+            shapes[parent].0 -= contour.twice_area.abs();
+            shapes[parent].1 += contour.perimeter;
         }
     }
+    for &i in &order {
+        let contour = &input[i];
+        let orphan = contour.parent.is_none() && contour.twice_area < 0.0;
+        let ancestor_dropped = contour.parent.is_some_and(|parent| input[parent].dropped);
+        let (twice_net_area, perimeter) = shapes[i];
+        let sliver = !contour.hole
+            && (twice_net_area < 2.0 * f64::from(min_area)
+                || twice_net_area < f64::from(min_width) * perimeter);
+        input[i].dropped = orphan || ancestor_dropped || sliver;
+    }
     let mut out = Vec::new();
-    for (p, area) in &surviving {
-        // An orphaned hole paints an island under the nonzero fill rule.
-        if area * largest_area < 0.0
-            && !surviving.iter().any(|(outer, outer_area)| {
-                outer_area * largest_area > 0.0 && polygon_contains(outer, p[0])
-            })
+    for contour in &input {
+        if !contour.dropped
+            && (!contour.hole
+                || contour.twice_area.abs() >= f64::from(min_width) * contour.perimeter)
         {
-            continue;
+            out.extend(guarded(&contour.points, error, true));
         }
-        out.extend(guarded(p, error, true));
     }
     out
 }

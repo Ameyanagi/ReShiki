@@ -500,12 +500,12 @@ optionally `+mesh`).
 ### Smooth geometry
 
 - After simplification the mesh is relaxed with Taubin's λ|μ smoothing
-  (no shrinking), then every vertex is moved back onto its level set by
-  Newton steps along ∇f, and normals are taken from ∇f again. Moves that
-  would flip a face, make a needle or make the mesh pass through itself
-  are undone, so the embedding the visibility step relies on is kept. This
-  removes the lumps that the quadric simplifier leaves at lobe tips
-  (25 ms for 20 000 triangles).
+  (no shrinking), then Newton steps along ∇f project the vertices toward
+  their level set, and normals are taken from ∇f again. Refinement
+  restores a vertex if its total displacement exceeds half a grid step
+  or if the move would flip a face, make a needle or make the mesh pass
+  through itself. This removes the lumps that the quadric simplifier
+  leaves at lobe tips (25 ms for 20 000 triangles).
 - Every merged contour, outline run and mesh line is fitted with cubic
   Béziers (Schneider 1990): outlines, outline runs and mesh lines to 0.04
   drawing units at their input points (tight, so an outline cut by a ball follows the painted rim), shading-tone contours to 0.75 units
@@ -523,16 +523,18 @@ optionally `+mesh`).
   commands, 4 % of them lines, with no polygon fallbacks.
 - Fills use the nonzero rule: fitted contours of one region may touch or
   cross by twice the error, which even-odd would turn into small holes;
-  holes keep the opposite winding through merging and fitting.
-- Slivers and stray marks: contours under 0.05 square units or thinner than
-  0.12 units (2·area / perimeter) and outline runs shorter than 1 unit are
-  dropped before fitting. These replace the old rule that dropped outline
-  runs shorter than 2 % of the model, which cut legitimate short outline
-  runs between two crossing lobes and left the gaps seen in the review.
-  Mesh-line runs keep pieces down to 0.25 units. Strokes have butt ends: a
-  run ends exactly where something nearer hides it, and a round cap would
-  poke past that point. A sliver-filtered outer contour takes its holes
-  with it (a lone hole would paint under the nonzero rule).
+  `visible()` produces outers with positive signed area (counterclockwise
+  in XY) and holes with negative signed area, which fitting preserves.
+- Sliver filtering uses unthinned contours in regions with holes to find
+  each shape's outer and direct holes, then drops the shape and all nested
+  contours if its net area is under 0.05 square units or its width (2·net
+  area / combined perimeter) is under 0.12 units. Remaining holes under
+  0.12 units wide and holes without a containing contour are dropped.
+- Outline runs shorter than 1 unit are dropped before fitting. This replaces
+  the old 2 % of model size cutoff, which cut legitimate short outline runs
+  between crossing lobes and left gaps. Mesh-line runs keep pieces down to
+  0.25 units. Strokes have butt ends so a run ends where the nearer piece
+  hides it.
 - Fitting moves a boundary by at most the fit error; the ray oracle checks
   the fitted outlines too, with the same approximation band as before.
 - Paths are written in relative SVG commands to a hundredth of a unit, the
@@ -605,7 +607,9 @@ half-plane splits used against occluders, so all of it stays exact:
   inside the group, so there are no seams or doubled alpha between pieces.
 - Rims count covering triangles, with the intervals of a triangle's clipped
   pieces united first. A shared clipping cut along a farther rim therefore
-  attenuates that rim once.
+  attenuates that rim once. A front piece counts only if it is more than
+  0.5 drawing units nearer in S-space Z at the interval midpoint, so
+  shallow mesh folds stay in the same rim group.
 - The number of groups is the smallest G with α(1 − α)^G < 1/50, at most 6
   (G = 1 at 100 %, when the output is exactly the opaque one).
 - Cost: fragments grow only where sheets overlap; a piece is split at most
@@ -652,8 +656,10 @@ read):
         path = command count u32, per command: tag u8 (0 move, 1 line,
                2 cubic, 3 close), then 1, 1, 3 or 0 points as x f32, y f32 ) )
 
-Over 300 KB, every other tone is dropped until it fits (the steps get
-coarser, the outlines do not change).
+Encoding drops alternate tones until the snapshot fits the 300 KiB encoded
+size limit, the 16 MiB inflated size limit and the shared limit of
+1 000 000 path commands. If the regions and strokes alone exceed a limit,
+encoding returns no snapshot.
 
 ## Known limitations of the prototype
 

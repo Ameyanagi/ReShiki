@@ -24,10 +24,10 @@ const MIN_PATH_BYTES: usize = 4 + 1 + 8;
 pub const MAX_BYTES: usize = 300 * 1024;
 
 /// Encodes a surface with points relative to `origin`, the model frame's centre.
-/// If the snapshot exceeds either size limit, drops every other tone in each
-/// fill and retries until it fits or no tones remain. Regions and strokes are
-/// always retained exactly. Returns `None` for invalid data, other primitives,
-/// or a surface that cannot fit even without tones.
+/// If the snapshot exceeds a size or path command limit, drops every other
+/// tone in each fill and retries until it fits or no tones remain. Regions
+/// and strokes are always retained exactly. Returns `None` for invalid data,
+/// other primitives, or a surface that cannot fit even without tones.
 pub fn encode(surface: &Primitive, origin: Point) -> Option<String> {
     let Primitive::Surface { groups } = surface else {
         return None;
@@ -37,8 +37,8 @@ pub fn encode(surface: &Primitive, origin: Point) -> Option<String> {
     }
     let mut tone_stride = 1;
     loop {
-        let bytes = write_snapshot(groups, origin, tone_stride)?;
-        if bytes.len() <= MAX_INFLATED_BYTES {
+        let (bytes, command_count) = write_snapshot(groups, origin, tone_stride)?;
+        if command_count <= MAX_PATH_COMMANDS && bytes.len() <= MAX_INFLATED_BYTES {
             let packed = compress_to_vec(&bytes, 9);
             if packed.len().div_ceil(3) * 4 <= MAX_BYTES {
                 return Some(STANDARD.encode(packed));
@@ -55,8 +55,13 @@ pub fn encode(surface: &Primitive, origin: Point) -> Option<String> {
     }
 }
 
-fn write_snapshot(groups: &[SurfaceGroup], origin: Point, tone_stride: usize) -> Option<Vec<u8>> {
+fn write_snapshot(
+    groups: &[SurfaceGroup],
+    origin: Point,
+    tone_stride: usize,
+) -> Option<(Vec<u8>, usize)> {
     let mut bytes = MAGIC.to_vec();
+    let mut command_count = 0;
     write_count(&mut bytes, groups.len())?;
     for group in groups {
         if !valid_alpha(group.alpha) {
@@ -66,13 +71,13 @@ fn write_snapshot(groups: &[SurfaceGroup], origin: Point, tone_stride: usize) ->
         write_count(&mut bytes, group.fills.len())?;
         for fill in &group.fills {
             bytes.extend_from_slice(&fill.color);
-            write_path(&mut bytes, &fill.region, origin)?;
+            command_count += write_path(&mut bytes, &fill.region, origin)?;
             write_count(&mut bytes, fill.tones.len() / tone_stride)?;
             // Retain the lighter member of each pair. A final single tone is
             // dropped too, so retries eventually reach the base regions.
             for (path, color) in fill.tones.iter().skip(tone_stride - 1).step_by(tone_stride) {
                 bytes.extend_from_slice(color);
-                write_path(&mut bytes, path, origin)?;
+                command_count += write_path(&mut bytes, path, origin)?;
             }
         }
         write_count(&mut bytes, group.strokes.len())?;
@@ -83,10 +88,10 @@ fn write_snapshot(groups: &[SurfaceGroup], origin: Point, tone_stride: usize) ->
             bytes.extend_from_slice(&stroke.outline.color);
             bytes.extend_from_slice(&stroke.outline.alpha.to_le_bytes());
             bytes.extend_from_slice(&stroke.outline.width.to_le_bytes());
-            write_path(&mut bytes, &stroke.paths, origin)?;
+            command_count += write_path(&mut bytes, &stroke.paths, origin)?;
         }
     }
-    Some(bytes)
+    Some((bytes, command_count))
 }
 
 fn valid_alpha(alpha: f32) -> bool {
@@ -102,7 +107,7 @@ fn write_count(bytes: &mut Vec<u8>, count: usize) -> Option<()> {
     Some(())
 }
 
-fn write_path(bytes: &mut Vec<u8>, path: &[PathCommand], origin: Point) -> Option<()> {
+fn write_path(bytes: &mut Vec<u8>, path: &[PathCommand], origin: Point) -> Option<usize> {
     if !matches!(path.first(), Some(PathCommand::Move(_))) {
         return None;
     }
@@ -123,7 +128,7 @@ fn write_path(bytes: &mut Vec<u8>, path: &[PathCommand], origin: Point) -> Optio
             bytes.extend_from_slice(&relative.y.to_le_bytes());
         }
     }
-    Some(())
+    Some(path.len())
 }
 
 fn inflate(mut packed: &[u8]) -> Result<Vec<u8>, String> {
@@ -520,7 +525,7 @@ mod tests {
                 .map(|index| (noisy_path(&mut noise, 6000), [fill_index as u8, index, 60]))
                 .collect();
         }
-        let original = write_snapshot(groups(&surface), Point::default(), 1).unwrap();
+        let (original, _) = write_snapshot(groups(&surface), Point::default(), 1).unwrap();
         assert!(STANDARD.encode(compress_to_vec(&original, 9)).len() > MAX_BYTES);
         let text = encode(&surface, Point::default()).unwrap();
         assert!(text.len() <= MAX_BYTES);
@@ -570,6 +575,42 @@ mod tests {
         let mut oversized_stroke = surface;
         groups_mut(&mut oversized_stroke)[0].strokes[0].paths = path;
         assert!(encode(&oversized_stroke, Point::default()).is_none());
+    }
+
+    #[test]
+    fn encode_rejects_over_budget_and_round_trips_at_the_limit() {
+        let origin = Point::default();
+        let mut surface = small_surface();
+        let group = &mut groups_mut(&mut surface)[0];
+        let fill = &mut group.fills[0];
+        fill.tones.clear();
+        fill.region.resize(
+            MAX_PATH_COMMANDS + 1 - group.strokes[0].paths.len(),
+            PathCommand::Line(origin),
+        );
+        assert!(encode(&surface, origin).is_none());
+
+        groups_mut(&mut surface)[0].fills[0].region.pop();
+        let text = encode(&surface, origin).unwrap();
+        let decoded = decode(&text, origin).unwrap();
+        assert!(groups(&decoded) == groups(&surface));
+    }
+
+    #[test]
+    fn encode_drops_alternate_tones_to_fit_the_command_budget() {
+        let origin = Point::default();
+        let mut surface = small_surface();
+        let group = &mut groups_mut(&mut surface)[0];
+        let fill = &mut group.fills[0];
+        fill.region.resize(
+            MAX_PATH_COMMANDS - group.strokes[0].paths.len() - fill.tones[1].0.len(),
+            PathCommand::Line(origin),
+        );
+
+        let text = encode(&surface, origin).unwrap();
+        let decoded = decode(&text, origin).unwrap();
+        groups_mut(&mut surface)[0].fills[0].tones.remove(0);
+        assert!(groups(&decoded) == groups(&surface));
     }
 
     #[test]
@@ -697,7 +738,7 @@ mod tests {
         ] {
             let mut surface = small_surface();
             groups_mut(&mut surface)[0].fills[0].region = path;
-            let bytes = write_snapshot(groups(&surface), point, 1).unwrap();
+            let (bytes, _) = write_snapshot(groups(&surface), point, 1).unwrap();
             assert_eq!(
                 decode_bytes(&bytes).unwrap_err(),
                 "Snapshot Close does not follow a segment in its subpath"

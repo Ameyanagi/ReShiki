@@ -16,6 +16,8 @@ type Polygon = Vec<[f64; 2]>;
 type Segment = ([f64; 2], [f64; 2]);
 
 const AREA: f64 = 1e-9;
+// Shallow folds should not dim a continuous silhouette rim.
+const FOLD_DEPTH: f64 = 0.5;
 // A fine common grid avoids slivers at T-junctions. Leave five f64 mantissa
 // bits for roundoff when the same intersection is reached by different cuts.
 const UNION_BITS: u32 = f64::MANTISSA_DIGITS - 5;
@@ -1089,6 +1091,12 @@ fn merge_layers(
             joined = union(suffix, &nested[i]);
             &joined
         };
+        // Thinning an outer and its holes independently can erase a thin ring.
+        let tolerance = if contours.iter().any(|contour| area(contour) < 0.) {
+            0.
+        } else {
+            tolerance
+        };
         (!contours.is_empty()).then(|| Layer {
             positive: group % 2 == 0,
             depth: group / 2,
@@ -1191,7 +1199,8 @@ pub fn visible(input: &Input<'_>) -> Visible {
                             return None;
                         }
                         let (lo, hi) = segment_interval(a, b, &other.polygon)?;
-                        coverage::in_front(&pieces, j, i, along(a, b, (lo + hi) * 0.5))
+                        let midpoint = along(a, b, (lo + hi) * 0.5);
+                        (other.z.at(midpoint) - piece.z.at(midpoint) > FOLD_DEPTH)
                             .then_some((other.triangle, (lo, hi)))
                     });
                     runs::rim_segments(a, b, covers, &mut batch.rims);

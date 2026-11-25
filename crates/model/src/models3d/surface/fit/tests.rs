@@ -944,6 +944,139 @@ fn region_drops_narrow_sliver_and_keeps_its_neighbour() {
 }
 
 #[test]
+fn region_drops_a_thin_annulus_by_its_net_width() {
+    let outer = circle(256, 20.0);
+    let mut hole = circle(80, 19.997);
+    hole.reverse();
+    let commands = region(&[outer, hole], 0.12, 0.05, 0.12);
+    assert!(
+        commands.is_empty(),
+        "large contours can enclose a shape narrower than the width threshold"
+    );
+}
+
+#[test]
+fn visible_thin_annulus_drops_after_shape_filtering() {
+    use super::super::visible::{Input, visible};
+
+    const OUTER: u32 = 256;
+    const INNER: u32 = 80;
+    let positions: Vec<_> = circle(OUTER as usize, 20.0)
+        .into_iter()
+        .chain(circle(INNER as usize, 19.997))
+        .map(|[x, y]| [x, y, 0.0])
+        .collect();
+    let mut triangles = Vec::new();
+    let (mut outer, mut inner) = (0, 0);
+    // Connect the rings in angular order, advancing one boundary at a time.
+    while outer < OUTER || inner < INNER {
+        let a = outer % OUTER;
+        let b = OUTER + inner % INNER;
+        if (outer + 1) * INNER <= (inner + 1) * OUTER {
+            outer += 1;
+            triangles.push([a, outer % OUTER, b]);
+        } else {
+            inner += 1;
+            triangles.push([a, OUTER + inner % INNER, b]);
+        }
+    }
+    let front = vec![true; triangles.len()];
+    let result = visible(&Input {
+        positions: &positions,
+        triangles: &triangles,
+        positive: &front,
+        front: &front,
+        lightness: &vec![1.0; positions.len()],
+        occluders: &[],
+        tones: &[1],
+        lines: &[],
+        tolerance: 0.03,
+    });
+    assert_eq!(result.layers.len(), 1);
+    assert_eq!(result.layers[0].region.len(), 2);
+    assert!(region(&result.layers[0].region, 0.12, 0.05, 0.12).is_empty());
+}
+
+#[test]
+fn region_drops_a_hole_with_its_sliver_island_inside_a_larger_hole() {
+    let outer = rectangle(0.0, 0.0, 200.0, 200.0);
+    let mut larger_hole = rectangle(10.0, 10.0, 180.0, 180.0);
+    larger_hole.reverse();
+    let island = vec![
+        [20.0, 20.0],
+        [22.0, 20.0],
+        [22.0, 20.99],
+        [122.0, 20.99],
+        [122.0, 21.01],
+        [22.0, 21.01],
+        [22.0, 22.0],
+        [20.0, 22.0],
+    ];
+    let mut island_hole = rectangle(20.5, 20.5, 1.0, 1.0);
+    island_hole.reverse();
+    let commands = region(
+        &[island_hole, outer.clone(), island, larger_hole.clone()],
+        0.12,
+        0.05,
+        0.12,
+    );
+    let paths = flatten(&commands);
+    assert_eq!(
+        paths.len(),
+        2,
+        "only the outer and larger hole must survive"
+    );
+    assert!(nonzero_contains(&paths, [5.0, 5.0]));
+    assert!(!nonzero_contains(&paths, [21.0, 21.0]));
+    assert_vertices_within(&outer, &commands, 0.12);
+    assert_vertices_within(&larger_hole, &commands, 0.12);
+}
+
+#[test]
+fn region_preserves_a_square_hole_after_shape_filtering() {
+    let outer = rectangle(0.0, 0.0, 10.0, 10.0);
+    let mut hole = rectangle(3.0, 3.0, 4.0, 4.0);
+    hole.reverse();
+    let commands = region(&[hole.clone(), outer.clone()], 0.12, 0.05, 0.12);
+    let paths = flatten(&commands);
+    assert_eq!(paths.len(), 2);
+    assert!(nonzero_contains(&paths, [1.0, 5.0]));
+    assert!(!nonzero_contains(&paths, [5.0, 5.0]));
+    assert_vertices_within(&outer, &commands, 0.12);
+    assert_vertices_within(&hole, &commands, 0.12);
+}
+
+#[test]
+fn visible_region_has_counterclockwise_outer_winding() {
+    use super::super::visible::{Input, visible};
+
+    let result = visible(&Input {
+        positions: &[[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 10.0, 0.0]],
+        triangles: &[[0, 1, 2]],
+        positive: &[true],
+        front: &[true],
+        lightness: &[1.0; 3],
+        occluders: &[],
+        tones: &[1],
+        lines: &[],
+        tolerance: 0.0,
+    });
+    assert_eq!(result.layers.len(), 1);
+    assert_eq!(result.layers[0].region.len(), 1);
+    let outer = &result.layers[0].region[0];
+    let twice_area: f64 = outer
+        .iter()
+        .zip(outer.iter().cycle().skip(1))
+        .take(outer.len())
+        .map(|(a, b)| f64::from(a[0]) * f64::from(b[1]) - f64::from(a[1]) * f64::from(b[0]))
+        .sum();
+    assert!(
+        twice_area > 0.0,
+        "visible outers must have positive signed area"
+    );
+}
+
+#[test]
 fn region_drops_holes_when_sliver_filter_removes_their_outer_contour() {
     // The long thin arm makes 2 * area / perimeter less than 0.12, even
     // though the square contains a hole that passes both sliver thresholds.

@@ -473,7 +473,12 @@ fn project_vertex(
     };
     // Capped Newton steps can stop far from the level on a coarse mesh.
     let distance = (f64::from(value) - f64::from(level)).abs() / dot(gradient, gradient).sqrt();
-    if distance.is_finite() && distance <= 0.05 * f64::from(step) {
+    // A nearly flat field can hide a large move in that local distance estimate.
+    let displacement = sub(p.map(f64::from), original.map(f64::from));
+    if distance.is_finite()
+        && distance <= 0.05 * f64::from(step)
+        && dot(displacement, displacement) <= (0.5 * f64::from(step)).powi(2)
+    {
         (p, outward_normal(gradient, level > 0.))
     } else {
         (original, [0.; 3])
