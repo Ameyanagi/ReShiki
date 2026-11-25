@@ -10,7 +10,6 @@
 pub mod conformers;
 mod linalg;
 
-mod internal;
 mod model_hessian;
 mod optimizer;
 

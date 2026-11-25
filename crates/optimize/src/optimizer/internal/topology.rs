@@ -36,6 +36,10 @@ use chart_check::ChartCheck;
 const COS_FIVE_DEGREES: f64 = 0.996_194_698_091_745_5;
 const SIN_FIVE_DEGREES: f64 = 0.087_155_742_747_658_17;
 const MIN_DISTANCE: f64 = 1e-8;
+// A compact covalent graph can produce O(n⁴) torsions. Limit local primitives
+// during enumeration so ANC takes over before allocating dense Wilson rows
+// and DLC weights. The chart adds at most six rigid coordinates per fragment.
+const MAX_LOCAL_PRIMITIVES_PER_ATOM: usize = 64;
 // Weak initial curvature for an auxiliary H···acceptor distance (Eh/bohr²).
 const HBOND_STIFFNESS: f64 = 1e-3;
 
@@ -78,6 +82,7 @@ impl Topology {
         let mut graph = vec![Vec::new(); numbers.len()];
         let mut covalent = Vec::new();
         let mut locals = Vec::new();
+        let primitive_limit = numbers.len().saturating_mul(MAX_LOCAL_PRIMITIVES_PER_ATOM);
         let mut linear_lines = Vec::new();
         for a in 0..numbers.len() {
             for b in a + 1..numbers.len() {
@@ -94,6 +99,7 @@ impl Topology {
                     graph[a].push(Neighbor { atom: b, rho });
                     graph[b].push(Neighbor { atom: a, rho });
                     locals.push((Local::Stretch(a, b), STRETCH * rho));
+                    check_primitive_limit(locals.len(), primitive_limit)?;
                 }
             }
         }
@@ -120,11 +126,12 @@ impl Topology {
                             locals.push((Local::Bend(a, b, c), force));
                         }
                     }
+                    check_primitive_limit(locals.len(), primitive_limit)?;
                 }
             }
         }
-        add_torsions(&mut locals, &graph, x);
-        add_impropers(&mut locals, &graph, x);
+        add_torsions(&mut locals, &graph, x, primitive_limit)?;
+        add_impropers(&mut locals, &graph, x, primitive_limit)?;
 
         let mut hydrogen_bonds = Vec::new();
         if hbonds {
@@ -153,6 +160,7 @@ impl Topology {
                     }) {
                         hydrogen_bonds.push((h, a));
                         locals.push((Local::Stretch(h.min(a), h.max(a)), HBOND_STIFFNESS));
+                        check_primitive_limit(locals.len(), primitive_limit)?;
                     }
                 }
             }
@@ -207,6 +215,15 @@ impl Topology {
     }
 }
 
+fn check_primitive_limit(count: usize, limit: usize) -> Result<(), String> {
+    if count > limit {
+        return Err(format!(
+            "internal topology exceeds {MAX_LOCAL_PRIMITIVES_PER_ATOM} local primitives per atom"
+        ));
+    }
+    Ok(())
+}
+
 fn lindh_rho(a: u8, b: u8, distance: f64) -> f64 {
     let (a, b) = (period(a), period(b));
     (ALPHA[a][b] * (R_REF[a][b].powi(2) - distance.powi(2))).exp()
@@ -237,7 +254,12 @@ fn components(graph: &[Vec<Neighbor>]) -> Vec<Vec<usize>> {
     fragments
 }
 
-fn add_torsions(locals: &mut Vec<(Local, f64)>, graph: &[Vec<Neighbor>], x: &[f64]) {
+fn add_torsions(
+    locals: &mut Vec<(Local, f64)>,
+    graph: &[Vec<Neighbor>],
+    x: &[f64],
+    limit: usize,
+) -> Result<(), String> {
     let mut torsions: BTreeMap<[usize; 4], f64> = BTreeMap::new();
     for b in 0..graph.len() {
         for first in &graph[b] {
@@ -268,6 +290,7 @@ fn add_torsions(locals: &mut Vec<(Local, f64)>, graph: &[Vec<Neighbor>], x: &[f6
                                 .entry(key)
                                 .and_modify(|value| *value = value.max(force))
                                 .or_insert(force);
+                            check_primitive_limit(locals.len() + torsions.len(), limit)?;
                         }
                     }
                 }
@@ -293,9 +316,15 @@ fn add_torsions(locals: &mut Vec<(Local, f64)>, graph: &[Vec<Neighbor>], x: &[f6
             .into_iter()
             .map(|([a, b, c, d], k)| (Local::Torsion(a, b, c, d), k)),
     );
+    Ok(())
 }
 
-fn add_impropers(locals: &mut Vec<(Local, f64)>, graph: &[Vec<Neighbor>], x: &[f64]) {
+fn add_impropers(
+    locals: &mut Vec<(Local, f64)>,
+    graph: &[Vec<Neighbor>],
+    x: &[f64],
+    limit: usize,
+) -> Result<(), String> {
     for (b, adjacent) in graph.iter().enumerate() {
         // At a planar center, stretches and ordinary bends have no first-order
         // response normal to the plane. Using every neighbor triple spans the
@@ -304,10 +333,12 @@ fn add_impropers(locals: &mut Vec<(Local, f64)>, graph: &[Vec<Neighbor>], x: &[f
             for (j, c) in adjacent.iter().enumerate().skip(i + 1) {
                 for d in &adjacent[j + 1..] {
                     add_improper_triple(locals, b, [*a, *c, *d], x);
+                    check_primitive_limit(locals.len(), limit)?;
                 }
             }
         }
     }
+    Ok(())
 }
 
 fn add_improper_triple(

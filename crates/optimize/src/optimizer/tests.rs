@@ -633,6 +633,127 @@ fn tight_final_reuses_the_normal_displacement_with_a_fresh_tight_gradient() {
 }
 
 #[test]
+fn energy_gradient_small_gradient_converges_at_a_constant_minimum() {
+    let mut p = surface(|_, g, _| {
+        g.fill(0.);
+        Ok(0.)
+    });
+    let options = Options {
+        convergence: Convergence::EnergyGradient {
+            gradient_norm: 1e-3,
+        },
+        ..Options::default()
+    };
+    let mut trace = Vec::new();
+    let out = optimize(&mut p, &[1], &[0.; 3], &options, |s| {
+        trace.push((s.index, s.accuracy));
+        proceed(s)
+    });
+    assert_eq!(out.status, Status::Converged);
+    assert_eq!((out.steps, out.evaluations), (0, 2));
+    assert_eq!(out.positions, [0.; 3]);
+    assert_eq!(trace, [(0, Accuracy::Normal), (0, Accuracy::Tight)]);
+}
+
+#[test]
+fn energy_gradient_small_gradient_converges_after_one_harmonic_step() {
+    let mut p = surface(|x, g, a| {
+        g.fill(0.);
+        g[3] = 0.5 * x[3];
+        Ok(0.25 * x[3].powi(2) + if a == Accuracy::Tight { 100. } else { 0. })
+    });
+    let options = Options {
+        convergence: Convergence::EnergyGradient {
+            gradient_norm: 1e-3,
+        },
+        max_steps: 1,
+        ..anchored(Method::Lbfgs)
+    };
+    let mut trace = Vec::new();
+    let out = optimize(
+        &mut p,
+        &[1, 1],
+        &[0., 0., 0., 0.01, 0., 0.],
+        &options,
+        |s| {
+            trace.push((s.index, s.accuracy, s.delta_energy));
+            proceed(s)
+        },
+    );
+    assert_eq!(out.status, Status::Converged);
+    assert_eq!((out.steps, out.evaluations), (1, 3));
+    assert_eq!(out.positions, [0.; 6]);
+    assert_eq!(out.energy, 100.);
+    assert!(trace[1].2 < -Level::Normal.criteria().energy);
+    assert_eq!(trace[2], (1, Accuracy::Tight, 0.));
+}
+
+#[test]
+fn energy_gradient_small_gradient_rechecks_the_threshold_and_norm_at_tight() {
+    let threshold = Level::Normal.criteria().max_gradient / 100.;
+    for (tight_gradient, gradient_norm, status) in [
+        (0.99 * threshold, 1e-3, Status::Converged),
+        (threshold, 1e-3, Status::MaxSteps),
+        (0.99 * threshold, 0.99 * threshold, Status::MaxSteps),
+    ] {
+        let mut p = surface(|_, g, a| {
+            g.fill(0.);
+            g[3] = if a == Accuracy::Tight {
+                tight_gradient
+            } else {
+                0.
+            };
+            Ok(0.)
+        });
+        let options = Options {
+            convergence: Convergence::EnergyGradient { gradient_norm },
+            max_steps: 0,
+            ..anchored(Method::Lbfgs)
+        };
+        let out = optimize(&mut p, &[1, 1], &INITIAL, &options, proceed);
+        assert_eq!(out.status, status, "{tight_gradient}, {gradient_norm}");
+        assert_eq!((out.steps, out.evaluations), (0, 2));
+        assert_eq!(out.gradient[3], tight_gradient);
+    }
+}
+
+#[test]
+fn energy_gradient_small_gradient_failed_tight_recheck_requires_a_fresh_pair() {
+    let mut p = surface(|x, g, a| {
+        g.fill(0.);
+        if a == Accuracy::Tight {
+            g[3] = 1e-5;
+            Ok(100. + 1e-5 * x[3])
+        } else {
+            g[3] = 0.5 * x[3];
+            Ok(0.25 * x[3].powi(2))
+        }
+    });
+    let options = Options {
+        convergence: Convergence::EnergyGradient {
+            gradient_norm: 1.5e-5,
+        },
+        max_steps: 3,
+        ..anchored(Method::Lbfgs)
+    };
+    let mut trace = Vec::new();
+    let out = optimize(
+        &mut p,
+        &[1, 1],
+        &[0., 0., 0., 0.002, 0., 0.],
+        &options,
+        |s| {
+            trace.push((s.index, s.accuracy));
+            proceed(s)
+        },
+    );
+    assert_eq!(out.status, Status::Converged);
+    assert_eq!((out.steps, out.evaluations), (3, 5));
+    assert_eq!(trace[1..3], [(1, Accuracy::Normal), (1, Accuracy::Tight)]);
+    assert_eq!(trace[3..], [(2, Accuracy::Tight), (3, Accuracy::Tight)]);
+}
+
+#[test]
 fn energy_gradient_requires_two_consecutive_accepted_steps_and_resets_on_failure() {
     let mut calls = 0;
     let mut p = surface(|x, g, _| {

@@ -765,6 +765,76 @@ fn invalid_and_degenerate_geometries_are_rejected_without_nonfinite_outputs() {
     assert!(model.direction(&x, &nonfinite).is_none());
 }
 
+fn compact_carbons(count: usize) -> Molecule {
+    let mut x = Vec::new();
+    for atom in 0..count {
+        x.extend([
+            (atom % 4) as f64 / 6.,
+            (atom / 4 % 4) as f64 / 6.,
+            (atom / 16) as f64 / 6.,
+        ]);
+    }
+    (vec![6; count], x)
+}
+
+#[test]
+fn compact_clusters_stop_during_primitive_enumeration() {
+    // The twelve-atom case is deliberately first: without the guard it only
+    // enumerates a small topology, then fails before reaching the 64-atom case
+    // or allocating either case's dense Wilson matrix and DLC basis.
+    for count in [12, 64] {
+        let (numbers, x) = compact_carbons(count);
+        let expected = "internal topology exceeds 64 local primitives per atom";
+        match super::topology::Topology::generate(&numbers, &x, false) {
+            Ok(topology) => panic!(
+                "compact {count}-atom topology generated {} local primitives",
+                topology.locals.len()
+            ),
+            Err(error) => assert_eq!(error, expected),
+        }
+        let free = free_components(&x, &[]);
+        assert_eq!(
+            lindh_model(&numbers, &free, &x, false).err().unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn compact_cluster_falls_back_to_one_accepted_anc_step() {
+    use crate::{Accuracy, EvalError, Method, Potential, Status, optimize};
+    use std::ops::ControlFlow;
+
+    struct Expansion(Vec<f64>);
+    impl Potential for Expansion {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            for ((g, x), target) in g.iter_mut().zip(x).zip(&self.0) {
+                *g = x - target;
+            }
+            Ok(0.5 * dot(g, g))
+        }
+    }
+
+    let (numbers, x) = compact_carbons(12);
+    let target = x.iter().map(|x| 1.2 * x).collect();
+    let fallback = optimize(
+        &mut Expansion(target),
+        &numbers,
+        &x,
+        &Options {
+            fixed_atoms: vec![0],
+            max_steps: 1,
+            ..Options::default()
+        },
+        |_| ControlFlow::Continue(()),
+    );
+    assert_eq!(fallback.status, Status::MaxSteps);
+    assert_eq!(fallback.steps, 1);
+    assert_eq!(fallback.method, Method::AncRfo);
+    assert!(fallback.energy < fallback.energies[0]);
+    assert_eq!(&fallback.positions[..3], &x[..3]);
+}
+
 #[test]
 fn organic_local_metric_has_expected_dlc_dimensions() {
     for ((numbers, x), expected) in [(water(), 3), (ammonia(), 6)] {

@@ -14,7 +14,7 @@ mod profile;
 macro_rules! profile_phase {
     ($phase:literal) => {
         #[cfg(test)]
-        let _phase = crate::internal::profile::Span::start($phase);
+        let _phase = crate::optimizer::internal::profile::Span::start($phase);
     };
 }
 
@@ -30,9 +30,9 @@ mod topology;
 
 use std::borrow::Cow;
 
+use super::{Options, TrialStep, Update, coordinates::rigid, rfo};
 use crate::linalg::{dot, norm, projected_eigen};
 use crate::model_hessian::contact_stretches;
-use crate::optimizer::{Options, Update, rfo, rigid};
 use chart::Chart;
 use metric::{Tangent, apply, congruence};
 
@@ -429,11 +429,7 @@ impl InternalDirection<'_> {
     /// radius. Return free Cartesian displacements, rational energy prediction
     /// and internal step length. A fallback iterate is assessed at its attained
     /// internal displacement and must still satisfy the trust radius.
-    pub(crate) fn restricted(
-        &self,
-        positions: &[f64],
-        radius: f64,
-    ) -> Option<crate::optimizer::TrialStep> {
+    pub(crate) fn restricted(&self, positions: &[f64], radius: f64) -> Option<TrialStep> {
         if positions != self.origin || !radius.is_finite() || radius <= 0. {
             return None;
         }
@@ -458,7 +454,7 @@ impl InternalDirection<'_> {
             .iter()
             .map(|&i| trial.positions[i] - positions[i])
             .collect();
-        Some(crate::optimizer::TrialStep {
+        Some(TrialStep {
             cartesian,
             predicted: prediction,
             length,

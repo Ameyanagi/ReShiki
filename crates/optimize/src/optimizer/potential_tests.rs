@@ -347,6 +347,48 @@ fn energy_gradient_stops_on_a_soft_mode_after_two_qualifying_displacements() {
     }
 }
 
+#[test]
+fn a_tight_recheck_at_the_input_can_recover_below_the_trust_floor() {
+    let initial: [f64; 6] = [0., -0., 0., 10., 0., 0.];
+    for method in [Method::AncRfo, Method::Internal, Method::Lbfgs] {
+        let options = Options {
+            method,
+            fixed_atoms: vec![0],
+            ..Options::default()
+        };
+        let mut potential = super::tests::surface(|x, g, accuracy| {
+            for (&actual, &held) in x[..3].iter().zip(&initial[..3]) {
+                assert_eq!(actual.to_bits(), held.to_bits());
+            }
+            let minimum = if accuracy == Accuracy::Tight {
+                10.0001
+            } else {
+                10.
+            };
+            let displacement = x[3] - minimum;
+            g.fill(0.);
+            g[3] = 2000. * displacement;
+            Ok(1000. * displacement.powi(2))
+        });
+        let mut accepted = Vec::new();
+        let outcome = optimize(&mut potential, &[1, 1], &initial, &options, |step| {
+            accepted.push((step.index, step.accuracy, step.positions[3], step.energy));
+            ControlFlow::Continue(())
+        });
+        assert_converged(&outcome, &options);
+        assert_eq!(accepted[0], (0, Accuracy::Normal, 10., 0.));
+        assert_eq!(accepted[1].0, 0);
+        assert_eq!(accepted[1].1, Accuracy::Tight);
+        assert_eq!(accepted[1].2, 10.);
+        assert!(accepted[2..].iter().all(|step| step.1 == Accuracy::Tight));
+        assert_eq!(accepted[2].0, 1);
+        assert!((accepted[2].2 - initial[3]).abs() < 0.001);
+        assert!(accepted[2].3 < accepted[1].3);
+        assert!((outcome.positions[3] - 10.0001).abs() < 1e-8);
+        assert!(outcome.energy < 1e-12);
+    }
+}
+
 fn atom(positions: &[Jet], index: usize) -> [Jet; 3] {
     std::array::from_fn(|axis| positions[3 * index + axis])
 }

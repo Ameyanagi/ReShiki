@@ -2,20 +2,20 @@
 
 mod anc;
 mod coordinates;
+mod internal;
 mod lbfgs;
-pub(crate) mod rfo;
+mod rfo;
 mod trust;
 
 use std::{cell::LazyCell, ops::ControlFlow};
 
 use crate::{
     Accuracy, EvalError, Potential,
-    internal::{Curvature as InternalCurvature, InternalModel},
     linalg::{dot, norm},
 };
 use anc::{Anc, History};
-pub(crate) use coordinates::rigid;
 use coordinates::{Coordinates, metrics, project};
+use internal::{Curvature as InternalCurvature, InternalModel};
 use lbfgs::Lbfgs;
 use trust::{DirectionError, Search, TrustRegion};
 pub use trust::{Rebuild, Trust};
@@ -25,6 +25,8 @@ pub use trust::{Rebuild, Trust};
 pub enum Method {
     /// Translation–rotation–internal coordinates (TRIC), delocalized for RFO
     /// (Wang & Song 2016, Baker et al. 1996, Banerjee et al. 1985).
+    /// Falls back to ANC if the local primitive count exceeds 64 times the
+    /// atom count, before allocating dense Wilson rows.
     #[default]
     Internal,
     /// RFO in approximate normal coordinates from a Cartesian Hessian
@@ -99,14 +101,15 @@ pub enum Convergence {
     /// with an exception for a maximum gradient below 1/100 of its threshold.
     #[default]
     Standard,
-    /// Require the level's maximum/RMS gradient and absolute energy-change
-    /// tests, plus a strict upper bound on the Euclidean norm of the free
-    /// projected gradient (hartree/bohr). Two consecutive accepted displacements at the same
-    /// accuracy must qualify. Displacement magnitudes do not limit convergence.
+    /// Require the level's maximum/RMS gradient and absolute energy-change tests,
+    /// plus a free projected gradient norm strictly below `gradient_norm`
+    /// (hartree/bohr), on two consecutive accepted displacements at the same
+    /// accuracy. A maximum gradient below 1/100 of its threshold waives the
+    /// energy-change and displacement requirements. Step magnitudes are unrestricted.
     ///
-    /// Coarse cannot qualify. A Tight final re-evaluation checks its fresh
-    /// gradient with the last Normal energy change and the qualifying Normal
-    /// pair; if it fails, two qualifying Tight displacements are required.
+    /// Coarse cannot qualify. A Tight recheck tests its fresh gradient and may
+    /// use the qualifying Normal pair and its last energy change. After a failed
+    /// recheck, only Tight displacements count toward a new pair.
     EnergyGradient { gradient_norm: f64 },
 }
 
@@ -742,7 +745,9 @@ impl<'a> Engine<'a> {
 /// A maximum gradient below 1/100 of its threshold waives the energy and step tests.
 /// Without held atoms, the gradient is projected off global rigid motion.
 /// [`Convergence::EnergyGradient`] instead requires two qualifying accepted
-/// displacements and a gradient norm bound. Only Normal or Tight can converge.
+/// displacements and a gradient norm bound. The same small-gradient exception
+/// waives its energy-change and displacement-pair tests. Only Normal or Tight
+/// can converge.
 ///
 /// By default, evaluations start at [`Accuracy::Normal`]. The Tight recheck
 /// evaluates the same geometry with a fresh gradient and uses the preceding
@@ -823,6 +828,7 @@ pub fn optimize<P: Potential + ?Sized>(
         };
     let criteria = options.level.criteria();
     let mut motion = None;
+    let mut accuracy_changed = false;
     let mut verification_motion = None;
     let mut qualifying_steps = 0_u8;
     let mut diagnostics = Diagnostics::at_geometry(if options.method == Method::Lbfgs {
@@ -855,10 +861,13 @@ pub fn optimize<P: Potential + ?Sized>(
                 convergence_info.converged(criteria, convergence_motion.is_some())
             }
             Convergence::EnergyGradient { gradient_norm } => {
+                let active_gradient_norm = norm(&point.active_gradient);
+                let small_gradient = convergence_info.converged(criteria, false)
+                    && active_gradient_norm < gradient_norm;
                 let qualifies = convergence_motion.is_some()
                     && convergence_info.energy_gradient(
                         criteria,
-                        norm(&point.active_gradient),
+                        active_gradient_norm,
                         gradient_norm,
                     );
                 if motion.is_some() {
@@ -867,10 +876,11 @@ pub fn optimize<P: Potential + ?Sized>(
                     } else {
                         0
                     };
-                } else if !qualifies {
+                } else if !qualifies || qualifying_steps < 2 {
+                    // Only a complete pair can survive a Tight recheck.
                     qualifying_steps = 0;
                 }
-                qualifies && qualifying_steps >= 2
+                small_gradient || (qualifies && qualifying_steps >= 2)
             }
         };
         let next_accuracy = if converged {
@@ -896,6 +906,7 @@ pub fn optimize<P: Potential + ?Sized>(
                 Ok(p) => p,
                 Err(status) => break status,
             };
+            accuracy_changed = true;
             out.energies[out.steps] = point.energy;
             engine.lbfgs.clear();
             engine.history.clear();
@@ -912,11 +923,11 @@ pub fn optimize<P: Potential + ?Sized>(
                 Err(status) => break status,
             };
         }
-        let accuracy_changed = out.steps > 0 && motion.is_none();
         match engine.advance(&mut eval, numbers, &point, out.steps, accuracy_changed) {
             Ok((next, displacement, next_diagnostics)) => {
                 point = next;
                 motion = Some(displacement);
+                accuracy_changed = false;
                 verification_motion = None;
                 diagnostics = next_diagnostics;
             }

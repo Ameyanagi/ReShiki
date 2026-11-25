@@ -185,8 +185,8 @@ fn add_scaled(target: &mut [f64], weights: &[f64], derivative: f64) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::metric::{Tangent, transpose_apply};
     use super::Chart;
-    use crate::internal::metric::{Tangent, transpose_apply};
 
     #[test]
     fn sparse_dlc_projection_matches_dense_rows_with_permuted_fixed_components() {

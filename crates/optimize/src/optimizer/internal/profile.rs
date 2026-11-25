@@ -11,7 +11,7 @@ use crate::{
     optimize,
 };
 
-#[path = "../../examples/mmff_benchmark/fixture.rs"]
+#[path = "../../../examples/mmff_benchmark/fixture.rs"]
 mod fixture;
 
 #[derive(Default)]

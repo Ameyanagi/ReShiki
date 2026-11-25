@@ -2,8 +2,8 @@
 
 use std::collections::VecDeque;
 
-use crate::internal::{InternalDirection, InternalModel};
 use crate::linalg::norm;
+use crate::optimizer::internal::{InternalDirection, InternalModel};
 use crate::optimizer::{Acceleration, Coordinates, Point, rfo};
 
 use super::{Anc, RfoDirection};
@@ -162,9 +162,9 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::internal::Curvature;
     use crate::linalg::dot;
     use crate::optimizer::Options;
+    use crate::optimizer::internal::Curvature;
 
     fn held_water() -> (InternalModel, Vec<f64>, Vec<usize>) {
         let angle = 104.5_f64.to_radians();
