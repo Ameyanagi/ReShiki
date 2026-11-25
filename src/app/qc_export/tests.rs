@@ -303,6 +303,49 @@ fn charge_follows_the_drawing_after_the_model_was_made() {
 }
 
 #[test]
+fn a_stale_model_is_not_written_until_updated() {
+    let (mut app, atoms) = ethanol();
+    send(&mut app, Action::Open);
+    send(&mut app, Action::Generate);
+    finish_model(&mut app);
+    send(&mut app, Action::Close);
+    let doc = &mut app.tab.doc;
+    let added = doc.add_atom("C", Point::new(108., -21.));
+    doc.add_bond(atoms[2], added, 1, "plain");
+    // An edit moves the revision, which the staleness cache is keyed by.
+    app.tab.revision += 1;
+    app.tab.selected = vec![atoms[0]];
+    send(&mut app, Action::Open);
+    assert_eq!(
+        preview(&app),
+        Err("The drawing changed since this 3D model was made: update the model first.".into())
+    );
+    send(&mut app, Action::Update);
+    finish_model(&mut app);
+    assert!(preview(&app).unwrap().starts_with("%nprocshared"));
+}
+
+#[test]
+fn an_earlier_dialogs_save_receipt_leaves_the_open_dialog_alone() {
+    let (mut app, _) = ethanol();
+    send(&mut app, Action::Open);
+    let first = app.qc_export.as_ref().unwrap().id;
+    send(&mut app, Action::Close);
+    send(&mut app, Action::Open);
+    send(&mut app, Action::Field(Field::Title, "typed".into()));
+    send(&mut app, Action::Saved(first, Err("disk full".into())));
+    assert_eq!(app.qc_export.as_ref().unwrap().title, "typed");
+    assert_eq!((app.status.as_str(), app.error), ("disk full", true));
+    let current = app.qc_export.as_ref().unwrap().id;
+    send(
+        &mut app,
+        Action::Saved(current, Ok(Some("/tmp/x.gjf".into()))),
+    );
+    assert!(app.qc_export.is_none());
+    assert_eq!(app.status, "Saved /tmp/x.gjf");
+}
+
+#[test]
 fn a_hidden_irc_field_does_not_block_other_tasks() {
     let (mut app, _) = ethanol();
     send(&mut app, Action::Open);

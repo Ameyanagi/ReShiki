@@ -356,6 +356,9 @@ pub fn write(
     } else {
         None
     };
+    for endpoint in [geometry.reactant, geometry.product].into_iter().flatten() {
+        check_atoms(endpoint)?;
+    }
     if !drawing_atoms_match || frames.any(|endpoint| endpoint.numbers != frame.numbers) {
         return Err(atom_order_error());
     }
@@ -473,9 +476,23 @@ pub fn write(
     })
 }
 
+/// What every writer needs: atoms, each with a known element and a finite
+/// position. Charge and spin are only warned about.
 fn check_atoms(frame: &Frame) -> Result<(), Error> {
     if frame.numbers.is_empty() {
         return Err(Error::Invalid("The structure has no atoms.".into()));
+    }
+    if frame.positions_angstrom.len() != frame.numbers.len()
+        || frame.numbers.iter().any(|z| !(1..=118).contains(z))
+        || frame
+            .positions_angstrom
+            .iter()
+            .flatten()
+            .any(|x| !x.is_finite())
+    {
+        return Err(Error::Invalid(
+            "The structure has an unknown element or a missing position.".into(),
+        ));
     }
     Ok(())
 }

@@ -1,7 +1,7 @@
 //! SDF records with V3000 3D connection tables.
 use std::{collections::HashSet, fmt::Write};
 
-use super::{Error, Frame, atoms, clean_title, single_line};
+use super::{Error, Frame, atoms, check_atoms, clean_title, single_line};
 
 pub struct SdfEntry<'a> {
     pub frame: &'a Frame,
@@ -15,6 +15,7 @@ pub fn write_sdf(entries: &[SdfEntry]) -> Result<String, Error> {
     let mut text = String::new();
     for entry in entries {
         let frame = entry.frame;
+        check_atoms(frame)?;
         let atom_count = frame.numbers.len();
         if entry.formal_charges.len() > atom_count {
             return Err(Error::Invalid(

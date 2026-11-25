@@ -7,6 +7,39 @@ fn invalid(settings: &Settings, geometry: &Geometry<'_>, expected: &str) {
 }
 
 #[test]
+fn malformed_frames_are_refused_by_every_writer() {
+    let message = "The structure has an unknown element or a missing position.";
+    let mut missing = water();
+    missing.positions_angstrom.pop();
+    let mut unknown = water();
+    unknown.numbers[0] = 0;
+    let mut infinite = water();
+    infinite.positions_angstrom[1][0] = f64::NAN;
+    for frame in [&missing, &unknown, &infinite] {
+        for program in Program::ALL {
+            invalid(
+                &settings(program, Job::SinglePoint),
+                &geometry(frame),
+                message,
+            );
+        }
+        let entry = SdfEntry {
+            frame,
+            title: "water",
+            bonds: &[],
+            formal_charges: &[],
+            properties: &[],
+        };
+        assert_eq!(write_sdf(&[entry]).unwrap_err().to_string(), message);
+        let hessian = vec![0.0; 81];
+        assert_eq!(
+            write_orca_hess(frame, &hessian).unwrap_err().to_string(),
+            message
+        );
+    }
+}
+
+#[test]
 fn validation_messages() {
     let frame = water();
     let geometry = geometry(&frame);

@@ -18,6 +18,7 @@ const ACCENT: Color = Color::from_rgb8(47, 122, 95);
 const WARNING: Color = Color::from_rgb8(161, 98, 7);
 const ERROR: Color = Color::from_rgb8(185, 28, 28);
 const METHOD: &str = "qc-export-method";
+static NEXT_DIALOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {
@@ -51,7 +52,8 @@ pub enum Action {
     Update,
     Copy,
     Save,
-    Saved(Result<Option<PathBuf>, String>),
+    /// A save finished for the dialog with this id.
+    Saved(u64, Result<Option<PathBuf>, String>),
 }
 
 /// A template in the menu, shown by its name.
@@ -67,6 +69,8 @@ impl std::fmt::Display for Choice {
 /// The open dialog. Numbers stay as typed so a half-typed field is not
 /// rewritten; they are read when the file is written.
 pub(super) struct Dialog {
+    /// Tells this dialog's save receipts from an earlier dialog's.
+    id: u64,
     atoms: Vec<u64>,
     name: String,
     program: Program,
@@ -278,6 +282,7 @@ impl App {
             .unwrap_or_else(|| "molecule".into());
         let [default, ..] = qc_input::builtin_templates();
         let mut dialog = Dialog {
+            id: NEXT_DIALOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             atoms,
             title: name.clone(),
             name,
@@ -306,24 +311,30 @@ impl App {
         if let Action::Open = action {
             return self.open_qc_export();
         }
-        if let Action::Saved(result) = action {
+        if let Action::Saved(id, result) = action {
+            // A receipt for an earlier dialog only reports in the status bar.
+            let ours = self
+                .qc_export
+                .as_ref()
+                .is_some_and(|dialog| dialog.id == id);
             match result {
-                Ok(Some(path)) => {
-                    self.status = format!("Saved {}", path.display());
-                    self.error = false;
-                    self.qc_export = None;
-                    return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus);
-                }
-                Ok(None) => {}
-                Err(error) => match &mut self.qc_export {
-                    Some(dialog) => dialog.message = error,
-                    None => {
-                        self.status = error;
-                        self.error = true;
+                Ok(None) => return Task::none(),
+                Err(error) if ours => {
+                    if let Some(dialog) = &mut self.qc_export {
+                        dialog.message = error;
                     }
-                },
+                    return Task::none();
+                }
+                Ok(Some(path)) => {
+                    (self.status, self.error) = (format!("Saved {}", path.display()), false)
+                }
+                Err(error) => (self.status, self.error) = (error, true),
             }
-            return Task::none();
+            if !ours {
+                return Task::none();
+            }
+            self.qc_export = None;
+            return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus);
         }
         let output = self.qc_output();
         let [default, ..] = qc_input::builtin_templates();
@@ -332,7 +343,7 @@ impl App {
         };
         dialog.message.clear();
         match action {
-            Action::Open | Action::Saved(_) => {}
+            Action::Open | Action::Saved(..) => {}
             Action::Close => {
                 self.qc_export = None;
                 return iced::advanced::widget::operate(super::keyboard_drawing::ReleaseFocus);
@@ -429,7 +440,7 @@ impl App {
                 Err(error) => dialog.message = error,
             },
             Action::Save => match output {
-                Ok(output) => return save(output, dialog.program),
+                Ok(output) => return save(output, dialog.program, dialog.id),
                 Err(error) => dialog.message = error,
             },
         }
@@ -504,8 +515,15 @@ impl App {
     fn qc_output(&self) -> Result<Output, String> {
         let dialog = self.qc_export.as_ref().ok_or_else(String::new)?;
         let settings = dialog.settings()?;
-        let Model::Ready { frame, .. } = self.qc_model(dialog) else {
-            return Err("The molecule needs a 3D model first.".into());
+        let frame = match self.qc_model(dialog) {
+            Model::Ready { stale: true, .. } => {
+                return Err(
+                    "The drawing changed since this 3D model was made: update the model first."
+                        .into(),
+                );
+            }
+            Model::Ready { frame, .. } => frame,
+            _ => return Err("The molecule needs a 3D model first.".into()),
         };
         let geometry = Geometry {
             frame: &frame,
@@ -953,7 +971,7 @@ impl App {
 }
 
 /// Save the main file through the file dialog and its companions beside it.
-fn save(output: Output, program: Program) -> Task<Message> {
+fn save(output: Output, program: Program, id: u64) -> Task<Message> {
     Task::perform(
         async move {
             let Output {
@@ -987,7 +1005,7 @@ fn save(output: Output, program: Program) -> Task<Message> {
             }
             Ok(path)
         },
-        |result| Message::QcExport(Action::Saved(result)),
+        move |result| Message::QcExport(Action::Saved(id, result)),
     )
 }
 

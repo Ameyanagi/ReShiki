@@ -3,9 +3,10 @@ use std::fmt::Write;
 
 use crate::qcdata::ANGSTROM_PER_BOHR;
 
-use super::{Error, Frame, atoms};
+use super::{Error, Frame, atoms, check_atoms};
 
 pub fn write_orca_hess(frame: &Frame, hessian_hartree_per_bohr2: &[f64]) -> Result<String, Error> {
+    check_atoms(frame)?;
     let dimension = frame.numbers.len() * 3;
     let hessian = hessian_hartree_per_bohr2;
     if dimension.checked_pow(2) != Some(hessian.len()) || hessian.iter().any(|x| !x.is_finite()) {
