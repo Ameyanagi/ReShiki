@@ -1,7 +1,7 @@
 use reshiki_qcdata::{
     AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Frame,
     LIGHT_BOND_ORDER_MIN, MAX_IMPORTED_HEAVY_BYTES, OrbitalSet, Orbitals, Provenance, Settings,
-    Shell, Source, Spin, Status, Task, Thermo, Vibrations, XtbMethod, XtbSettings,
+    Shell, Source, Spin, Status, Task, Thermo, Trajectory, Vibrations, XtbMethod, XtbSettings,
 };
 
 fn unit_modes(n_modes: usize, width: usize, random: &mut impl FnMut() -> f64) -> Vec<f64> {
@@ -139,6 +139,7 @@ fn fixture(n_atoms: u32) -> (Frame, CalcResult) {
             rotor_cutoff_cm1: 50.0,
             imaginary_cutoff_cm1: -25.0,
             symmetry_number: 1,
+            point_group: Some("C1".into()),
         }),
         trajectory: None,
         keep_full: false,
@@ -175,10 +176,87 @@ fn light_gfn2_results_fit_both_budgets() {
         assert_eq!(light.charges, result.charges);
         assert_eq!(light.bond_orders, result.bond_orders);
         assert_eq!(light.thermo, result.thermo);
+        let full_vibrations = result.vibrations.as_ref().unwrap();
+        let light_vibrations = light.vibrations.as_ref().unwrap();
+        assert_eq!(
+            light_vibrations.reduced_masses_amu,
+            full_vibrations.reduced_masses_amu
+        );
+        assert_eq!(light_vibrations.masses_amu, full_vibrations.masses_amu);
+        assert!(light_vibrations.modes.is_empty());
         let bytes = result.saved_bytes(MAX_IMPORTED_HEAVY_BYTES, &[]);
         println!("{atoms}-atom light GFN2 result: {bytes} bytes");
         assert!(bytes <= limit);
     }
+}
+
+#[test]
+fn light_50_atom_optimization_with_frequencies_fits_20_kb() {
+    let (mut frame, mut result) = fixture(50);
+    // A 50-atom hydrocarbon with the orbital levels the Calculate card requests.
+    frame.numbers[16..].fill(1);
+    result.frame = frame.hash();
+    result.task = Task::Optimize;
+    result.vibrations.as_mut().unwrap().masses_amu[16..].fill(1.008);
+    let orbitals = result.orbitals.as_mut().unwrap();
+    orbitals.basis = None;
+    orbitals.core_electrons[16..].fill(0);
+    orbitals.alpha.energies_hartree.truncate(98);
+    orbitals.alpha.occupations = (0..98).map(|i| if i < 49 { 2.0 } else { 0.0 }).collect();
+    orbitals.alpha.rows.clear();
+    orbitals.alpha.coefficients.clear();
+    let mut input = frame.clone();
+    input.positions_angstrom[0][0] += 0.11;
+    result.input_frame = Some(input.hash());
+    result.trajectory = Some(Trajectory {
+        numbers: frame.numbers.clone(),
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: frame.charge,
+        multiplicity: frame.multiplicity,
+        positions_angstrom: (0..12)
+            .flat_map(|step| {
+                frame
+                    .positions_angstrom
+                    .iter()
+                    .flatten()
+                    .enumerate()
+                    .map(move |(axis, &x)| {
+                        x + if axis == 0 {
+                            f64::from(11 - step) * 0.01
+                        } else {
+                            0.0
+                        }
+                    })
+            })
+            .collect(),
+        energies_hartree: (0..12)
+            .map(|step| result.energy_hartree.unwrap() + f64::from(11 - step) * 0.0001)
+            .collect(),
+        labels: vec![],
+        minimizer_energies_hartree: vec![],
+        cluster_sizes: vec![],
+    });
+    result.validate(&frame).unwrap();
+    let saved = result.for_file(MAX_IMPORTED_HEAVY_BYTES, &[]);
+    let json = serde_json::to_vec_pretty(&saved).unwrap();
+    println!(
+        "50-atom light optimization and frequencies: {} bytes",
+        json.len()
+    );
+    assert!(json.len() < 20_000);
+    let decoded: CalcResult = serde_json::from_slice(&json).unwrap();
+    decoded.validate(&frame).unwrap();
+    assert_eq!(decoded.task, Task::Optimize);
+    assert_eq!(decoded.orbitals.unwrap().alpha.energies_hartree.len(), 98);
+    let vibrations = decoded.vibrations.unwrap();
+    assert_eq!(vibrations.frequencies_cm1.len(), 144);
+    assert_eq!(vibrations.ir_intensities_km_mol.len(), 144);
+    assert_eq!(vibrations.reduced_masses_amu.len(), 144);
+    assert_eq!(vibrations.masses_amu.len(), 50);
+    assert!(vibrations.modes.is_empty());
+    assert_eq!(decoded.thermo, result.thermo);
+    assert_eq!(decoded.trajectory.unwrap().energies_hartree.len(), 12);
 }
 
 #[test]

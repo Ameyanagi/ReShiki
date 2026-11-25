@@ -173,6 +173,7 @@ fn imported() -> (Frame, CalcResult) {
             rotor_cutoff_cm1: 100.0,
             imaginary_cutoff_cm1: -25.0,
             symmetry_number: 1,
+            point_group: None,
         }),
         trajectory: Some(trajectory),
         keep_full: true,
@@ -291,8 +292,20 @@ fn calculated_result_round_trips_with_solvent_settings() {
         xtb["scf_retries"],
         serde_json::json!([{ "electronic_temperature_k": 1000.0 }])
     );
-    let decoded: CalcResult = serde_json::from_value(value.clone()).unwrap();
+    let mut decoded: CalcResult = serde_json::from_value(value.clone()).unwrap();
     decoded.validate(&frame).unwrap();
+    let vibrations = calculated.vibrations.as_ref().unwrap();
+    let decoded_vibrations = decoded.vibrations.as_mut().unwrap();
+    assert_compact(
+        &vibrations.reduced_masses_amu,
+        &mut decoded_vibrations.reduced_masses_amu,
+        false,
+    );
+    assert_compact(
+        &vibrations.masses_amu,
+        &mut decoded_vibrations.masses_amu,
+        false,
+    );
     assert_eq!(decoded, calculated);
     for (parent, key) in [
         (&value, "gradient_hartree_per_bohr"),
@@ -303,12 +316,25 @@ fn calculated_result_round_trips_with_solvent_settings() {
         (&value["orbitals"]["alpha"], "rows"),
         (&value["orbitals"]["alpha"], "coefficients"),
         (&value["vibrations"], "modes"),
-        (&value["vibrations"], "reduced_masses_amu"),
-        (&value["vibrations"], "masses_amu"),
         (&value["trajectory"], "positions_angstrom"),
     ] {
         assert!(parent.get(key).is_none(), "{key} should be omitted");
     }
+}
+
+#[test]
+fn thermochemistry_point_group_is_optional_and_preserves_the_engine_label() {
+    let (_, mut result) = imported();
+    let value = serde_json::to_value(&result).unwrap();
+    assert!(value["thermo"].get("point_group").is_none());
+    let decoded: CalcResult = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded.thermo.unwrap().point_group, None);
+
+    result.thermo.as_mut().unwrap().point_group = Some("Cinfv".into());
+    let value = serde_json::to_value(&result).unwrap();
+    assert_eq!(value["thermo"]["point_group"], "Cinfv");
+    let decoded: CalcResult = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded.thermo, result.thermo);
 }
 
 #[test]

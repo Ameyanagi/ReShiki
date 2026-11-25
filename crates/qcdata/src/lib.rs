@@ -9,6 +9,8 @@ pub mod compact;
 mod frame;
 mod molden;
 mod result;
+/// Thermochemistry, IR spectra, and normal-mode geometries.
+pub mod vibrational;
 
 pub use basis::{
     BasisSet, Beta, OrbitalSet, Orbitals, Shell, Spin, canonical_cartesian_order,

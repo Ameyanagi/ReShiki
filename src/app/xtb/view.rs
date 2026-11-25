@@ -327,7 +327,8 @@ impl App {
         let count = numbers
             .as_ref()
             .map_or_else(|| target.as_ref().map_or(0, Vec::len), Vec::len);
-        let too_many = count > state::MAX_ATOMS;
+        let limit = settings.task.limit();
+        let too_many = count > limit;
         if run.is_none() {
             let ready = target.is_some() && check.is_ok() && !too_many;
             body = body.push(
@@ -361,10 +362,13 @@ impl App {
             );
             if too_many {
                 body = body.push(line(
-                    format!(
-                        "Too many atoms: {count}. The limit is {} atoms.",
-                        state::MAX_ATOMS
-                    ),
+                    if settings.task.frequencies() {
+                        format!(
+                            "Frequencies are limited to {limit} atoms; this molecule has {count}."
+                        )
+                    } else {
+                        format!("Too many atoms: {count}. The limit is {limit} atoms.")
+                    },
                     Tone::Error,
                 ));
             }
@@ -541,7 +545,7 @@ fn progress(run: &super::Run) -> Element<'_, Message> {
         Tone::Muted,
     );
     let mut rows = column![text_line].spacing(6);
-    let optimizing = run.config.task == CalcTask::Optimize && run.launch.is_some();
+    let optimizing = run.config.task.optimizes() && run.launch.is_some() && !run.progress.hessian;
     let mut controls = row![].spacing(8).align_y(Alignment::Center);
     if optimizing {
         controls = controls.push(

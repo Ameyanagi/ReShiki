@@ -112,7 +112,7 @@ fn info(gap: f64) -> RunInfo {
 fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
     let result = optimized(true);
     let rows = summary_rows(&result, &frame(&START), &frame(&END), Some(&info(14.01)));
-    let labels: Vec<_> = rows.iter().map(|(label, _)| *label).collect();
+    let labels: Vec<_> = rows.iter().map(|(label, _)| label.as_str()).collect();
     assert_eq!(
         labels,
         [
@@ -305,7 +305,7 @@ fn the_method_line_names_engine_solvent_state_and_time() {
 
 #[test]
 fn the_table_and_log_are_plain_text() {
-    let rows = vec![("Total energy", "−5.070176 Eh".to_owned())];
+    let rows = vec![("Total energy".into(), "−5.070176 Eh".into())];
     assert_eq!(
         tsv("GFN2-xTB", &rows),
         "# GFN2-xTB\nQuantity\tValue\nTotal energy\t−5.070176 Eh\n"
@@ -324,6 +324,80 @@ fn the_table_and_log_are_plain_text() {
     assert!(text.contains("optimization converged in 2 steps"), "{text}");
     let reopened = log(&result, &frame(&END), None, "GFN2-xTB");
     assert!(reopened.contains("SCF details are kept only while the app is open"));
+}
+
+#[test]
+fn light_frequency_results_keep_the_spectrum_and_recalculate_the_same_task() {
+    let output = frame(&END);
+    let report = super::super::tests::optfreq(&START, &END);
+    for (task, card_task) in [
+        (Task::Optimize, CardTask::OptFreq),
+        (Task::Hessian, CardTask::Frequencies),
+    ] {
+        let result = report
+            .computed
+            .to_calc_result(&output, task, &report.engine, None)
+            .unwrap();
+        assert_eq!(config(&result, &output, None, 1).unwrap().task, card_task);
+        let light = result.light(&[]);
+        assert_eq!(config(&light, &output, None, 1).unwrap().task, card_task);
+        assert_eq!(light.thermo, result.thermo);
+        let full = result.vibrations.unwrap();
+        let light = light.vibrations.unwrap();
+        assert_eq!(light.reduced_masses_amu, full.reduced_masses_amu);
+        assert_eq!(light.masses_amu, full.masses_amu);
+        assert!(!full.modes.is_empty());
+        assert!(light.modes.is_empty());
+    }
+}
+
+#[test]
+fn the_summary_and_log_show_imaginary_modes_and_stored_thermochemistry() {
+    let output = frame(&END);
+    let mut report = super::super::tests::optfreq(&START, &END);
+    let vibrations = report.computed.vibrations.as_mut().unwrap();
+    vibrations.frequencies_cm1 = vec![-212., 23., 1590.13];
+    vibrations.point_group = Some("Dinfh".into());
+    let thermo = report.computed.thermo.as_mut().unwrap();
+    thermo.temperature_k = 350.;
+    thermo.pressure_pa = 100_000.;
+    thermo.rotor_cutoff_cm1 = 75.;
+    thermo.imaginary_cutoff_cm1 = -10.;
+    thermo.gibbs_correction_hartree = 0.023230 - 350.0 * 0.00007198;
+    let result = report
+        .computed
+        .to_calc_result(&output, Task::Optimize, &report.engine, None)
+        .unwrap();
+    let rows = summary_rows(&result, &frame(&START), &output, None);
+    let row = |name: &str| {
+        rows.iter()
+            .find(|(label, _)| label == name)
+            .map(|(_, value)| value.as_str())
+    };
+    assert_eq!(
+        row("Frequencies"),
+        Some("1 imaginary (−212i cm⁻¹) · lowest real 23 cm⁻¹")
+    );
+    assert_eq!(row("H (350.00 K)"), Some("−5.046946 Eh"));
+    assert_eq!(row("Point group"), Some("D∞h"));
+    let status =
+        super::super::state::summary(report.energy, None, None, result.vibrations.as_ref());
+    assert!(status.ends_with(" · 1 imaginary frequency"));
+    let text = log(&result, &output, None, "GFN2-xTB");
+    for expected in [
+        "task opt+freq",
+        "frequencies (cm⁻¹)\n -212.00    23.00  1590.13\nimaginary modes 1",
+        "ZPVE  0.019453 Eh\nH(T)  -5.046946 Eh\nS  0.00007198 Eh/K\nG(T)  -5.072139 Eh",
+        "point group D∞h",
+        "thermochemistry: quasi-RRHO (Grimme 2012), free-rotor interpolation below 75 cm⁻¹, imaginary modes above −10 cm⁻¹ inverted (xtb defaults), T 350.00 K, p 100000 Pa",
+    ] {
+        assert!(text.contains(expected), "Expected {expected:?} in {text}");
+    }
+    let hessian = CalcResult {
+        task: Task::Hessian,
+        ..result
+    };
+    assert!(log(&hessian, &output, None, "GFN2-xTB").contains("task frequencies"));
 }
 
 #[test]
@@ -469,7 +543,7 @@ fn recalculate_reads_the_settings_the_result_stored() {
         settings.gfnff.as_mut().unwrap().fragment_charges = vec![1, -1];
     }
     assert_eq!(config(&force_field, &frame, None, 3), None);
-    let mut hessian = result;
-    hessian.task = Task::Hessian;
-    assert_eq!(config(&hessian, &frame, None, 3), None);
+    let mut conformers = result;
+    conformers.task = Task::Conformers;
+    assert_eq!(config(&conformers, &frame, None, 3), None);
 }

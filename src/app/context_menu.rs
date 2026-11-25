@@ -245,6 +245,8 @@ impl App {
                 [
                     (CalcTask::Energy, "Energy"),
                     (CalcTask::Optimize, "Optimize"),
+                    (CalcTask::OptFreq, "Optimize + frequencies"),
+                    (CalcTask::Frequencies, "Frequencies"),
                 ]
                 .map(|(task, label)| {
                     command(label, Message::Xtb(Action::Entry(Entry::Task(task))), idle)
