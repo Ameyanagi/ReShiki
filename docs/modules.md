@@ -207,6 +207,10 @@ explains how the crates and modules fit together.
 - `src/app/workspace/model_face_qa.rs`: Matched real-renderer and pointer evidence for model faces, frames and hints.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
 - `src/app/xtb.rs`: Predict → xTB
+- `src/app/xtb/orbitals.rs`: The results palette's Orbitals tab
+- `src/app/xtb/orbitals/compute.rs`: Work off the UI thread
+- `src/app/xtb/orbitals/levels.rs`: The orbital levels of a result
+- `src/app/xtb/orbitals/view.rs`: The Orbitals tab's widgets
 - `src/app/xtb/palette.rs`: The xTB results palette
 - `src/app/xtb/palette/view.rs`: The results palette's widgets
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced
