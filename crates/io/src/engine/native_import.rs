@@ -615,46 +615,68 @@ fn restore_reaction_maps(
         };
         indices.get(id).copied()
     };
-    let used: HashSet<_> = doc.atoms.iter().map(|a| a.map_num).collect();
-    let mut next = 1;
-    for (reaction, &pairs) in doc.reactions.iter().skip(before).zip(maps) {
-        if pairs.is_empty() {
-            continue;
+    // Join every step's pairs before numbering, so a chain whose steps are
+    // listed out of order (A→B, C→D, B→C) still shares one number per atom.
+    fn root(parent: &[usize], mut i: usize) -> usize {
+        while let Some(&up) = parent.get(i)
+            && up != i
+        {
+            i = up;
         }
-        let reactants: HashSet<_> = reaction
-            .reactants
-            .iter()
-            .flat_map(|part| part.atoms.iter().copied())
-            .collect();
-        let products: HashSet<_> = reaction
-            .products
-            .iter()
-            .flat_map(|part| part.atoms.iter().copied())
-            .collect();
+        i
+    }
+    let mut parent: Vec<_> = (0..doc.atoms.len()).collect();
+    let mut order = Vec::new();
+    for (reaction, &pairs) in doc.reactions.iter().skip(before).zip(maps) {
+        let side = |parts: &[Participant]| {
+            parts
+                .iter()
+                .flat_map(|part| part.atoms.iter().copied())
+                .collect::<HashSet<_>>()
+        };
+        let (reactants, products) = (side(&reaction.reactants), side(&reaction.products));
+        let id = |i: usize| doc.atoms.get(i).map(|a| a.id);
         let mut paired = HashSet::new();
         for &[a, b] in pairs {
             if let Some((a, b)) = index(a).zip(index(b))
-                && let Ok([a, b]) = doc.atoms.get_disjoint_mut([a, b])
-                && reactants.contains(&a.id)
-                && products.contains(&b.id)
-                && !paired.contains(&a.id)
-                && !paired.contains(&b.id)
+                && id(a).is_some_and(|id| reactants.contains(&id))
+                && id(b).is_some_and(|id| products.contains(&id))
+                && !paired.contains(&a)
+                && !paired.contains(&b)
             {
-                paired.extend([a.id, b.id]);
-                match (a.map_num, b.map_num) {
-                    (0, 0) => {
-                        while used.contains(&next) {
-                            next += 1;
-                        }
-                        a.map_num = next;
-                        b.map_num = next;
-                        next += 1;
-                    }
-                    (map, 0) => b.map_num = map,
-                    (0, map) => a.map_num = map,
-                    _ => {}
+                paired.extend([a, b]);
+                let (ra, rb) = (root(&parent, a), root(&parent, b));
+                if let Some(slot) = parent.get_mut(ra) {
+                    *slot = rb;
                 }
+                order.extend([a, b]);
             }
+        }
+    }
+    // A chain keeps the first number any of its atoms already had; otherwise
+    // it takes the next unused one. Atoms with their own number keep it.
+    let mut numbers = HashMap::new();
+    for &i in &order {
+        let r = root(&parent, i);
+        if let Some(map) = doc.atoms.get(i).map(|a| a.map_num).filter(|&m| m != 0) {
+            numbers.entry(r).or_insert(map);
+        }
+    }
+    let used: HashSet<_> = doc.atoms.iter().map(|a| a.map_num).collect();
+    let mut next = 1;
+    for &i in &order {
+        let r = root(&parent, i);
+        let number = *numbers.entry(r).or_insert_with(|| {
+            while used.contains(&next) {
+                next += 1;
+            }
+            next += 1;
+            next - 1
+        });
+        if let Some(atom) = doc.atoms.get_mut(i)
+            && atom.map_num == 0
+        {
+            atom.map_num = number;
         }
     }
 }
