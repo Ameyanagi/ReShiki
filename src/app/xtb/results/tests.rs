@@ -454,6 +454,21 @@ fn recalculate_reads_the_settings_the_result_stored() {
         settings.solvent.as_mut().unwrap().name = "benzene".into();
     }
     assert_eq!(config(&benzene, &frame, None, 3), None);
+    // GFN-FF saves its resolved default fragment charges: still repeatable.
+    let mut force_field = result.clone();
+    if let qcdata::Settings::Xtb(settings) = &mut force_field.settings {
+        settings.method = qcdata::XtbMethod::GfnFf;
+        settings.solvent = None;
+        settings.gfnff = Some(qcdata::GfnFfTopology {
+            reference: frame.hash(),
+            fragment_charges: vec![0],
+        });
+    }
+    assert!(config(&force_field, &frame, None, 3).is_some());
+    if let qcdata::Settings::Xtb(settings) = &mut force_field.settings {
+        settings.gfnff.as_mut().unwrap().fragment_charges = vec![1, -1];
+    }
+    assert_eq!(config(&force_field, &frame, None, 3), None);
     let mut hessian = result;
     hessian.task = Task::Hessian;
     assert_eq!(config(&hessian, &frame, None, 3), None);

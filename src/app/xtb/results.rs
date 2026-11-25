@@ -367,12 +367,13 @@ pub(crate) fn config(
         qcdata::Task::Energy => CardTask::Energy,
         _ => return None,
     };
-    // Settings the card cannot send: a retry ladder, a GFN-FF
-    // topology with fragment charges, another solvation state.
+    // Settings the card cannot send: a retry ladder, GFN-FF fragment
+    // charges other than the default (the whole charge on the first
+    // fragment, which the worker saves resolved), another solvation state.
     let topology = settings
         .gfnff
         .as_ref()
-        .is_some_and(|gfnff| !gfnff.fragment_charges.is_empty());
+        .is_some_and(|gfnff| gfnff.fragment_charges.iter().skip(1).any(|&q| q != 0));
     if !settings.scf_retries.is_empty() || topology {
         return None;
     }
