@@ -857,7 +857,7 @@ explains how the crates and modules fit together.
 - `crates/model/src/models3d/crystal.rs`: Crystal and periodic structures (#417)
 - `crates/model/src/models3d/ellipsoids.rs`: ORTEP displacement ellipsoids in Cartesian ångström and their exact silhouettes.
 - `crates/model/src/models3d/polish.rs`: Persistent generated chemistry, separate from the live source drawing.
-- `crates/model/src/models3d/surface.rs`: Orbital isosurfaces drawn as vector shapes in a 3D model (prototype; see docs/plans/xtb-surfaces.md).
+- `crates/model/src/models3d/surface.rs`: Orbital isosurfaces drawn as vector shapes in a 3D model (see docs/plans/xtb-surfaces.md).
 - `crates/model/src/models3d/surface/draw.rs`: The developer demo surface and its place in a model's picture
 - `crates/model/src/models3d/surface/fit.rs`: Smooth cubic outlines for merged surface regions and runs, after Schneider's digitized-curve fitting (Graphics Gems, 1990).
 - `crates/model/src/models3d/surface/look.rs`: How an orbital surface is drawn

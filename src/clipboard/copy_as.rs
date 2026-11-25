@@ -189,9 +189,8 @@ fn reaction_reason(doc: &Document) -> Option<&'static str> {
 /// abbreviation members. Unselected molecules are never added implicitly.
 pub fn selection_or_drawing(doc: &Document, selected: &[u64]) -> Document {
     if selected.is_empty() {
-        // The clipboard carries no calculation data.
         Document {
-            science: Default::default(),
+            science: crate::science::for_figures(doc),
             ..doc.clone()
         }
     } else {
