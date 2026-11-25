@@ -133,7 +133,7 @@ fn explicit_roles_keep_conditions_and_unique_atom_map_pairs() {
     let agent = doc.add_atom("O", Point::new(190., 55.));
     let arrow = arrow(&mut doc, 140., 0.);
     let plus = text(&mut doc, "+", -120., 95.);
-    let reflux = text(&mut doc, "reflux", 160., -53.);
+    let reflux = text(&mut doc, "reflux", 160., 80.);
     let heat = text(&mut doc, "heat", 170., -90.);
     doc.arrow_labels.push(ArrowLabel {
         arrow,
@@ -347,7 +347,7 @@ fn an_explicit_draft_with_an_empty_side_has_no_step() {
 }
 
 #[test]
-fn left_arrow_conditions_use_visible_agent_geometry_and_linked_sides() {
+fn left_arrow_conditions_use_visible_agent_geometry_and_drawn_sides() {
     let mut doc = Document::default();
     let reactant = doc.add_atom("C", Point::new(300., 0.));
     let product = doc.add_atom("O", Point::new(0., 0.));
@@ -376,25 +376,18 @@ fn left_arrow_conditions_use_visible_agent_geometry_and_linked_sides() {
     let xml = xml(&doc);
     let tree = Xml::parse(&xml).unwrap();
     let step = steps(&tree)[0];
+    // A label linked below but drawn above counts as drawn, as a reopened
+    // file reads it.
     let above = ids(step, "ReactionStepObjectsAboveArrow");
-    assert_eq!(above.len(), 2);
+    assert_eq!(above.len(), 3);
     assert!(target(&tree, above[0]).has_tag_name("fragment"));
-    assert_eq!(
-        target(&tree, above[1])
-            .first_element_child()
-            .unwrap()
-            .text(),
-        Some("heat")
-    );
-    let below = ids(step, "ReactionStepObjectsBelowArrow");
-    assert_eq!(below.len(), 1);
-    assert_eq!(
-        target(&tree, below[0])
-            .first_element_child()
-            .unwrap()
-            .text(),
-        Some("linked")
-    );
+    for (id, condition) in above[1..].iter().zip(["heat", "linked"]) {
+        assert_eq!(
+            target(&tree, id).first_element_child().unwrap().text(),
+            Some(condition)
+        );
+    }
+    assert!(ids(step, "ReactionStepObjectsBelowArrow").is_empty());
 }
 
 #[test]

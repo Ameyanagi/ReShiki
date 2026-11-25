@@ -278,6 +278,11 @@ mod tests {
         doc.add_bond(reactant, hydrogen, 1, "plain");
         doc.add_bond(hydrogen, product, 0, "dotted");
         doc.reactions[0].reactants[0].atoms.push(hydrogen);
+        // A step keeps no coefficient, so 2 A → B loses its amount.
+        let mut doubled = no_products.clone();
+        doubled.reactions[0].products = doc.reactions[0].products.clone();
+        doubled.reactions[0].reactants[0].coefficient = 2;
+        assert!(crate::exchange::drawing::has_unwritten_reactions(&doubled));
         for doc in [no_reactants, no_products, doc] {
             doc.validate().unwrap();
             let xml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();

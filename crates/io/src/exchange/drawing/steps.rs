@@ -215,9 +215,8 @@ impl<'a> Writer<'a> {
                 }
             }
         }
-        let labels: HashMap<_, _> = arrow_labels::of(self.original, arrow.id)
-            .map(|l| (l.annotation, l.side))
-            .collect();
+        // Where the text is drawn, as ChemDraw and a reopened file read it,
+        // even for a label linked to the other side.
         for annotation in self
             .original
             .annotations
@@ -225,10 +224,7 @@ impl<'a> Writer<'a> {
             .filter(|a| a.text.trim() != "+" && reaction.annotations.contains(&a.id))
         {
             if let Some(key) = self.object(annotation.id) {
-                let above = labels.get(&annotation.id).map_or_else(
-                    || arrow_labels::side_at(arrow, annotation.centre()) == Some(Side::Above),
-                    |side| *side == Side::Above,
-                );
+                let above = arrow_labels::side_at(arrow, annotation.centre()) == Some(Side::Above);
                 let side = if above {
                     &mut step.above
                 } else {

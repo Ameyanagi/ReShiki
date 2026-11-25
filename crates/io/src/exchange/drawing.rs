@@ -214,6 +214,15 @@ pub fn has_unwritten_reactions(document: &Document) -> bool {
     if lowered.reactions.len() < document.reactions.len() {
         return true;
     }
+    // A ChemDraw step has no place for a coefficient.
+    if document.reactions.iter().any(|reaction| {
+        [&reaction.reactants, &reaction.products, &reaction.agents]
+            .into_iter()
+            .flatten()
+            .any(|participant| participant.coefficient > 1)
+    }) {
+        return true;
+    }
     let fragments = groups::Fragments::of(&lowered);
     document.reactions.iter().any(|reaction| {
         crate::reactions::preview(document, reaction.arrow).map_or(true, |reaction| {
