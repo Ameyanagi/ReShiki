@@ -234,7 +234,7 @@ at Tight), or heavy-atom RMSD < 0.1 Å to it.
 | `xtb --opt normal` (6.8.0)           |                 3,674 / 16 |         1.00 |           58 |          126 |             34.5 s (process) |
 | #1415 ANC-RFO                        |                 6,689 / 23 |         1.57 |          128 |          141 |                       43.6 s |
 | **TRIC internal (new default)**      |           **2,818 / 15.5** |     **0.93** |      **143** |      **144** |                   **17.2 s** |
-| TRIC + energy-gradient stop (option) |                 2,258 / 12 |         0.80 |          113 |          142 |                       13.3 s |
+| TRIC + energy-gradient stop (option) |                 2,251 / 12 |         0.79 |          113 |          142 |                       13.1 s |
 
 Per set (ratio vs xtb, new default): drugs 0.71, floppy 0.80, rings 0.81, charged/open 0.99,
 metals 1.04, Baker 1.10. Wall time includes the engine: axtb's GFN2 gradient here is about
