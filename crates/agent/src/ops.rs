@@ -19,9 +19,8 @@
 //! [`headless::HeadlessHost`] puts the layers together for a process without
 //! the app: the [`catalog`] tools over session documents.
 //!
-//! Progress notifications ([`progress`]) are reserved for a later transport,
-//! such as an in-app host or MCP `progressToken`. The P1 transports pass
-//! `progress: None` in every [`host::Call`].
+//! MCP sends [`progress`] notifications when a call supplies a
+//! `progressToken`. The CLI passes no progress sink.
 //!
 //! # Effect rule
 //!
@@ -54,6 +53,7 @@
 pub mod analyze;
 pub mod apply;
 pub mod budget;
+pub mod calculate;
 pub mod catalog;
 pub mod compose;
 pub mod convert;
@@ -61,6 +61,7 @@ pub mod documents;
 pub mod error;
 pub mod exec;
 pub mod export;
+pub mod export_input;
 pub mod files;
 pub mod headless;
 pub mod host;
@@ -72,6 +73,7 @@ pub mod naming;
 pub mod policy;
 pub mod predict_nmr;
 pub mod progress;
+pub mod read_output;
 pub mod render;
 pub mod result;
 pub mod schema;
