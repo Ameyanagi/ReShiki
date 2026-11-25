@@ -33,6 +33,9 @@ pub(in crate::app::xtb) fn searched(method: &str) -> CalcResult {
             accuracy: None,
             max_iterations: None,
             gfnff: None,
+            threads: None,
+            convergence: None,
+            fixed_atoms: vec![],
         }),
         provenance: Provenance {
             program: "axtb".into(),
@@ -68,6 +71,7 @@ pub(in crate::app::xtb) fn searched(method: &str) -> CalcResult {
         }),
         keep_full: false,
         omitted_bytes: None,
+        run: None,
     }
 }
 
@@ -293,6 +297,15 @@ mod app {
         let stored = &app.tab.doc.science.results[0];
         assert_eq!(stored.result.task, qcdata::Task::Conformers);
         assert_eq!(stored.result.trajectory.as_ref().unwrap().steps(), 3);
+        // The run's settings and time are saved, as for an optimization.
+        assert_eq!(
+            stored.result.run.as_ref().map(|run| run.seconds),
+            Some(12.5)
+        );
+        assert!(matches!(
+            &stored.result.settings,
+            qcdata::Settings::Xtb(s) if s.threads.is_some() && s.convergence.is_some()
+        ));
         assert_eq!(
             stored.result.provenance.method.as_deref(),
             Some("MMFF94s ETKDG 100 starts · Butina 0.75 Å · GFN2-xTB re-rank")

@@ -241,16 +241,18 @@ fn each_result_keeps_its_own_run_details_through_undo() {
         }
         done
     };
+    let threads = |app: &App| match &app.xtb_shown()?.stored.result.settings {
+        reshiki::qcdata::Settings::Xtb(settings) => settings.threads,
+        _ => None,
+    };
     event(&mut app, energy());
     let first = app.xtb_shown().expect("first").stored.result.clone();
-    app.xtb.settings.threads = 2;
+    let first_threads = threads(&app);
+    let second_threads = if first_threads == Some(2) { 3 } else { 2 };
+    app.xtb.settings.threads = second_threads;
     send(&mut app, XtbAction::Run);
     event(&mut app, energy());
-    let threads = |app: &App| {
-        app.xtb_shown()
-            .and_then(|shown| shown.info.map(|info| info.threads))
-    };
-    assert_eq!(threads(&app), Some(2));
+    assert_eq!(threads(&app), Some(second_threads));
     assert_eq!(
         app.tab.doc.science.results.len(),
         2,
@@ -261,7 +263,7 @@ fn each_result_keeps_its_own_run_details_through_undo() {
     palette(&mut app, Action::Show);
     let shown = app.xtb_shown().expect("the first result again");
     assert!(std::sync::Arc::ptr_eq(&shown.stored.result, &first));
-    assert_ne!(shown.info.map(|info| info.threads), Some(2));
+    assert_eq!(threads(&app), first_threads);
 }
 
 #[test]

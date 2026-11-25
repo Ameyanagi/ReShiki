@@ -354,6 +354,26 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
     };
     result.trajectory = Some(trajectory);
     result.keep_full = run.keep_full;
+    // The run's settings and summary, as an optimization records them: the
+    // whole search's time, and the SCF work of the lowest conformer's run.
+    if let qcdata::Settings::Xtb(settings) = &mut result.settings {
+        settings.threads = Some(run.config.threads);
+        settings.convergence = Some(if run.config.tight {
+            qcdata::Convergence::Tight
+        } else {
+            qcdata::Convergence::Normal
+        });
+    }
+    result.run = Some(qcdata::RunSummary {
+        seconds: found.seconds,
+        scf_iterations: found
+            .best
+            .evaluations
+            .iter()
+            .map(|evaluation| evaluation.scf_iterations as u32)
+            .collect(),
+        finished: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+    });
     let mut notes = found.notes.clone();
     if found.stopped {
         notes.push(format!(
@@ -365,10 +385,11 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         notes.push(state::NEAR_DEGENERATE.into());
     }
     let line = format!(
-        "{kept} conformer{} kept · {} starts · {} clusters · lowest {}",
+        "{kept} conformer{} kept · {} starts · {} cluster{} · lowest {}",
         if kept == 1 { "" } else { "s" },
         found.starts,
         found.clusters,
+        if found.clusters == 1 { "" } else { "s" },
         state::summary(found.best.energy, computed.homo_lumo_gap_ev, None),
     );
     let info = RunInfo {
@@ -376,11 +397,6 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
         near_degenerate: computed.near_degenerate,
         evaluations: found.best.evaluations.clone(),
         numerics: computed.numerics.clone(),
-        tight: run.config.tight,
-        threads: run.config.threads,
-        fixed: vec![],
-        finished: chrono::Local::now().format("%-d %b %Y %H:%M").to_string(),
-        seconds: found.seconds,
     };
     Ok(Pending {
         launch,

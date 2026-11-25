@@ -273,6 +273,7 @@ mod tests {
             trajectory: Some(path),
             keep_full: false,
             omitted_bytes: None,
+            run: None,
         };
         result.validate(&frame).unwrap();
         (doc, atoms, result)
