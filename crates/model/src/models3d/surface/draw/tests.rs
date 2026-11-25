@@ -1,4 +1,6 @@
 use super::*;
+use crate::document::Point;
+use crate::graphics::PathCommand;
 use crate::models3d::{
     Display, ForceField, Hydrogen, Labels, Placed, require_version, set_display,
 };
@@ -79,28 +81,59 @@ fn tilted(mut doc: Document, degrees: f32) -> Document {
     doc
 }
 
-/// Whether `p` lies inside the first (whole) layer of either phase.
+/// Whether `p` lies inside a fitted phase region.
 fn covered(surface: &Primitive, p: Point) -> bool {
-    let Primitive::Surface { layers, .. } = surface else {
+    let Primitive::Surface { groups } = surface else {
         return false;
     };
-    let inside = |contour: &Vec<Point>| {
-        let mut odd = false;
-        for (a, b) in contour.iter().zip(contour.iter().cycle().skip(1)) {
+    groups.iter().flat_map(|g| &g.fills).any(|fill| {
+        let (mut start, mut from) = (Point::default(), Point::default());
+        let mut winding = 0;
+        let mut edge = |a: Point, b: Point| {
             if (a.y > p.y) != (b.y > p.y) && p.x < a.x + (p.y - a.y) / (b.y - a.y) * (b.x - a.x) {
-                odd = !odd;
+                winding += if a.y < b.y { 1 } else { -1 };
+            }
+        };
+        for command in &fill.region {
+            match *command {
+                PathCommand::Move(a) => (start, from) = (a, a),
+                PathCommand::Line(to) => {
+                    edge(from, to);
+                    from = to;
+                }
+                PathCommand::Cubic(b, c, to) => {
+                    let a = from;
+                    for step in 1..=16 {
+                        let t = step as f32 / 16.;
+                        let u = 1. - t;
+                        let coord = |a, b, c, d| {
+                            u * u * u * a + 3. * u * u * t * b + 3. * u * t * t * c + t * t * t * d
+                        };
+                        let next =
+                            Point::new(coord(a.x, b.x, c.x, to.x), coord(a.y, b.y, c.y, to.y));
+                        edge(from, next);
+                        from = next;
+                    }
+                }
+                PathCommand::Close => {
+                    edge(from, start);
+                    from = start;
+                }
             }
         }
-        odd
-    };
-    // The first layer of each phase (blue positive, grey negative) covers its whole region.
-    let blue = |c: &[u8; 3]| i32::from(c[2]) > i32::from(c[0]) + 40;
-    [true, false].iter().any(|&positive| {
-        layers
-            .iter()
-            .find(|(_, c)| blue(c) == positive)
-            .is_some_and(|(region, _)| region.iter().filter(|c| inside(c)).count() % 2 == 1)
+        winding != 0
     })
+}
+
+fn groups(doc: &Document, spec: &str) -> Vec<SurfaceGroup> {
+    demo_on_this_thread(Some(spec)).unwrap();
+    let mut surfaces = surfaces(doc);
+    demo_on_this_thread(None).unwrap();
+    assert_eq!(surfaces.len(), 1, "{spec}");
+    let Primitive::Surface { groups } = surfaces.remove(0) else {
+        unreachable!()
+    };
+    groups
 }
 
 #[test]
@@ -117,11 +150,51 @@ fn without_the_switch_nothing_changes() {
 
 #[test]
 fn the_switch_rejects_bad_specs() {
-    for spec in ["sigma", "pi:0", "pi:-1", "pi:nan", "pistar:x"] {
-        assert!(demo_on_this_thread(Some(spec)).is_err(), "{spec}");
+    for (spec, message) in [
+        ("sigma", "Unknown demo"),
+        ("pi:0", "Isovalue"),
+        ("pi:-1", "Isovalue"),
+        ("pi:nan", "Isovalue"),
+        ("pistar:x", "Isovalue"),
+        ("pi,look=smooth", "Unknown surface look"),
+        ("pi,look=mesh+mesh", "Unknown surface look"),
+        ("pi,opacity=19", "opacity"),
+        ("pi,opacity=101", "opacity"),
+        ("pi,opacity=0.6", "opacity"),
+        ("pi,alpha=50", "Unknown surface option"),
+        ("pi,mesh", "key=value"),
+        ("pi,look=solid,look=mesh", "Duplicate surface option"),
+    ] {
+        let error = demo_on_this_thread(Some(spec)).unwrap_err();
+        assert!(error.contains(message), "{spec}: {error}");
     }
-    demo_on_this_thread(Some("pistar:0.04")).unwrap();
+    for (spec, expected) in [
+        ("pi", (Demo::Pi, 0.06, Look::default())),
+        ("pistar:0.05", (Demo::PiStar, 0.05, Look::default())),
+        (
+            "pistar:0.06,look=shaded+mesh,opacity=60",
+            (
+                Demo::PiStar,
+                0.06,
+                Look::new(Fill::Shaded, true, 60).unwrap(),
+            ),
+        ),
+    ] {
+        demo_on_this_thread(Some(spec)).unwrap();
+        assert_eq!(switch(), Some(expected));
+    }
     demo_on_this_thread(None).unwrap();
+}
+
+#[test]
+fn changing_the_look_reuses_the_mesh() {
+    let doc = ethylene();
+    demo_on_this_thread(Some("pi")).unwrap();
+    let shaded = meshes(&doc, &doc.models[0]).unwrap();
+    demo_on_this_thread(Some("pi,look=mesh,opacity=30")).unwrap();
+    let mesh = meshes(&doc, &doc.models[0]).unwrap();
+    demo_on_this_thread(None).unwrap();
+    assert!(Rc::ptr_eq(&shaded, &mesh));
 }
 
 #[test]
@@ -143,24 +216,15 @@ fn the_surface_is_drawn_after_the_molecule_and_holds_both_phases() {
             .iter()
             .any(|p| matches!(p, Primitive::Sphere { .. } | Primitive::ShadedQuad { .. }))
     );
-    let Primitive::Surface {
-        layers,
-        rims,
-        outline,
-    } = &all[at]
-    else {
+    let Primitive::Surface { groups } = &all[at] else {
         unreachable!()
     };
-    let blue = layers
-        .iter()
-        .filter(|(_, c)| i32::from(c[2]) > i32::from(c[0]) + 40)
-        .count();
-    assert!(
-        blue >= 3 && blue < layers.len(),
-        "{blue} of {}",
-        layers.len()
-    );
-    assert!(!rims.is_empty() && outline.is_some());
+    let [positive, negative] = groups[0].fills.as_slice() else {
+        panic!("Expected two phases");
+    };
+    let blue = |[r, _, b]: [u8; 3]| i32::from(b) > i32::from(r) + 40;
+    assert!(blue(positive.color) && !blue(negative.color));
+    assert!(!groups[0].strokes.is_empty());
     demo_on_this_thread(None).unwrap();
 }
 
@@ -312,10 +376,20 @@ fn the_frame_holds_the_surface() {
     let (lo, hi) = crate::models3d::frame(&doc, &doc.models[0]).unwrap();
     // Same frame; the model draws smaller inside it.
     assert_eq!((lo, hi), plain);
-    let Primitive::Surface { layers, rims, .. } = &surfaces(&doc)[0] else {
+    let Primitive::Surface { groups } = &surfaces(&doc)[0] else {
         unreachable!()
     };
-    for p in layers.iter().flat_map(|(r, _)| r).chain(rims).flatten() {
+    // The base regions also clip the fitted tone paths to the frame.
+    let fills = groups
+        .iter()
+        .flat_map(|g| &g.fills)
+        .map(|fill| &fill.region);
+    let strokes = groups.iter().flat_map(|g| &g.strokes).map(|s| &s.paths);
+    for p in fills
+        .chain(strokes)
+        .flatten()
+        .flat_map(PathCommand::iter_points)
+    {
         assert!(
             p.x >= lo.x && p.y >= lo.y && p.x <= hi.x && p.y <= hi.y,
             "{p:?}"
@@ -325,34 +399,341 @@ fn the_frame_holds_the_surface() {
 }
 
 #[test]
-fn svg_has_only_vector_paths() {
-    demo_on_this_thread(Some("pistar")).unwrap();
-    let svg = scene::svg(&tilted(benzene(), 50.));
-    assert!(svg.contains("fill-rule=\"evenodd\""));
+fn looks_paint_the_requested_fills_and_strokes() {
+    let doc = tilted(ethylene(), 55.);
+    let shaded = groups(&doc, "pi,look=shaded");
+    assert_eq!(shaded.len(), 1);
+    assert_eq!(shaded[0].alpha, 1.);
+    let positive = &shaded[0].fills[0];
+    assert!(positive.tones.len() >= 60, "{}", positive.tones.len());
+    // The endpoint range bounds the average step. The steeper part of the
+    // exact piecewise ramp can round to two levels between uniform midpoints.
+    for (a, b) in std::iter::once(positive.color)
+        .chain(positive.tones.iter().map(|(_, color)| *color))
+        .zip(positive.tones.iter().map(|(_, color)| *color))
+    {
+        assert!(
+            a.into_iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 2),
+            "{a:?} → {b:?}"
+        );
+    }
+
+    let solid = groups(&doc, "pi,look=solid");
+    assert!(!solid[0].fills.is_empty());
+    assert!(solid[0].fills.iter().all(|fill| fill.tones.is_empty()));
+
+    let outline = groups(&doc, "pi,look=outline");
+    let backdrop = match doc.models[0].background {
+        crate::models3d::Background::None => doc.canvas_theme.background(),
+        crate::models3d::Background::Card => crate::models3d::CARD,
+    };
+    assert!(!outline[0].fills.is_empty());
+    assert!(outline[0].fills.iter().all(|fill| fill.color == backdrop));
+
+    let mesh = groups(&doc, "pi,look=mesh");
+    assert!(mesh[0].fills.is_empty());
+    assert!(
+        mesh[0]
+            .strokes
+            .iter()
+            .any(|stroke| stroke.outline.alpha == 0.9)
+    );
+
+    let both = groups(&doc, "pi,look=shaded+mesh");
+    assert_eq!(both[0].fills, shaded[0].fills);
+    let (rim, mesh) = both[0].strokes.split_last().unwrap();
+    assert_eq!(rim, &shaded[0].strokes[0]);
+    assert!(!mesh.is_empty());
+    assert!(mesh.iter().all(|stroke| stroke.outline.alpha == 0.9));
+
+    let mut glossy = doc;
+    glossy.models[0].look = crate::models3d::Look::Glossy;
+    let line_width = (glossy.models[0].size / 400.).clamp(0.6, 1.1);
+    let mesh = groups(&glossy, "pi,look=mesh");
+    assert!(!mesh[0].strokes.is_empty());
+    assert!(mesh[0].strokes.iter().all(|stroke| {
+        stroke.outline.alpha == 0.9 && stroke.outline.width == 0.45 * line_width
+    }));
+}
+
+#[test]
+fn translated_mesh_line_crosses_the_diagonal_in_one_run() {
+    let mesh = Mesh {
+        positions: vec![[0., 0., 0.], [0.26, 0., 0.], [0.26, 0.1, 0.], [0., 0.1, 0.]],
+        triangles: vec![[0, 1, 2], [0, 2, 3]],
+        positive: vec![true; 2],
+        ..Mesh::default()
+    };
+    let project = |[x, y, z]: [f32; 3]| [1000. + 17.3 * x, 1000. + 17.3 * y, 17.3 * z];
+    let positions: Vec<_> = mesh.positions.iter().copied().map(project).collect();
+    let front = vec![true; 2];
+    let lines = mesh_lines(&mesh, &front, false, &[[0.; 3]], project);
+    assert_eq!(lines.len(), 2, "one segment per triangle at x = 0.15");
+    let visible = visible::visible(&Input {
+        positions: &positions,
+        triangles: &mesh.triangles,
+        positive: &mesh.positive,
+        front: &front,
+        lightness: &[0.; 4],
+        occluders: &[],
+        tones: &[0],
+        lines: &lines,
+        tolerance: TOLERANCE,
+    });
+    let runs = &visible.lines[0][0];
+    assert_eq!(runs.len(), 1, "{runs:?}");
+    let length: f32 = runs[0]
+        .windows(2)
+        .map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]))
+        .sum();
+    assert!((length - 1.73).abs() < 0.001, "{length}");
+}
+
+#[test]
+fn mesh_strokes_keep_subunit_runs() {
+    let short = vec![vec![[0., 0.], [0.3, 0.]], vec![[0., 1.], [0.2, 1.]]];
+    let prepared = Prepared {
+        positions: Vec::new(),
+        triangles: Vec::new(),
+        front: Vec::new(),
+        visible: Visible {
+            lines: vec![[short.clone(), Vec::new()]],
+            rims: vec![short],
+            ..Visible::default()
+        },
+        look: Look::new(Fill::None, true, 100).unwrap(),
+        tones: vec![0],
+    };
+    let outline = Outline {
+        color: [0; 3],
+        alpha: 1.,
+        width: 1.,
+    };
+    let Some(Primitive::Surface { groups }) =
+        prepared.primitive(false, [255.; 3], 0., Some(outline), 1.)
+    else {
+        panic!("the 0.3-unit mesh line should be painted");
+    };
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].strokes.len(), 1);
+    assert_eq!(
+        groups[0].strokes[0].paths,
+        [
+            PathCommand::Move(Point::new(0., 0.)),
+            PathCommand::Line(Point::new(0.3, 0.))
+        ]
+    );
+}
+
+#[test]
+fn turning_caps_depth_groups_and_tones() {
+    let mut doc = tilted(benzene(), 55.);
+    let stopped = groups(&doc, "pistar,opacity=60");
+    assert!(stopped.len() > 2);
+    assert!(
+        stopped
+            .last()
+            .unwrap()
+            .fills
+            .iter()
+            .any(|f| f.tones.len() >= 16)
+    );
+
+    doc.models[0].turning = true;
+    let turning = groups(&doc, "pistar,opacity=60");
+    assert_eq!(turning.len(), 2);
+    for fill in turning.iter().flat_map(|g| &g.fills) {
+        assert!(fill.tones.len() < 16, "the base fill also counts as a tone");
+    }
+}
+
+#[test]
+fn tone_counts_follow_the_faded_endpoint_range_and_group_weights() {
+    let backdrop = [255.; 3];
+    let fade = 0.175;
+    assert_eq!(shaded(POSITIVE, 0.35, backdrop, fade), [86, 119, 188]);
+    assert_eq!(shaded(POSITIVE, 1., backdrop, fade), [175, 196, 238]);
+    // The ramp bends at lightness 0.6: 33 levels below it (blue), 80 above (red).
+    assert_eq!(tone_counts(Look::default(), false, backdrop, fade), [114]);
+    let film = Look::new(Fill::Shaded, false, 60).unwrap();
+    assert_eq!(tone_counts(film, false, backdrop, fade), [68, 28, 11, 5]);
+}
+
+#[test]
+fn translucent_groups_put_the_nearest_layer_last() {
+    let doc = tilted(benzene(), 55.);
+    let opaque = groups(&doc, "pistar");
+    let film = groups(&doc, "pistar,opacity=60");
+    assert!(film.len() > 1);
+    assert!(film.iter().all(|group| group.alpha == 0.6));
+    assert_eq!(
+        film.last().unwrap().fills[0].region,
+        opaque[0].fills[0].region
+    );
+
+    let mesh = groups(&doc, "pistar,look=mesh,opacity=30");
+    assert!(mesh.len() >= 3);
+    for (group, alpha) in mesh
+        .iter()
+        .rev()
+        .zip([0.3, 0.21, 0.147, 0.1029, 0.07203, 0.050421])
+    {
+        assert!(group.fills.is_empty());
+        assert!((group.alpha - alpha).abs() < 1e-6, "{}", group.alpha);
+    }
+}
+
+#[test]
+fn svg_composites_groups_with_clipped_vector_tones() {
+    demo_on_this_thread(Some("pistar,opacity=60")).unwrap();
+    let svg = scene::svg(&tilted(benzene(), 55.));
+    demo_on_this_thread(None).unwrap();
+    assert!(svg.contains("<g opacity=\"0.6\">"));
+    assert!(svg.contains("<clipPath id=\"reshiki-surface-"));
+    assert!(svg.contains("fill-rule=\"nonzero\""));
+    assert!(svg.contains("clip-rule=\"nonzero\""));
+    assert!(svg.split("<path d=\"").skip(1).any(|element| {
+        element.split_once('"').is_some_and(|(path, rest)| {
+            path.contains('c')
+                && rest
+                    .split('>')
+                    .next()
+                    .is_some_and(|attributes| attributes.contains("fill-rule=\"nonzero\""))
+        })
+    }));
     assert!(!svg.contains("<image"));
+}
+
+#[test]
+fn opaque_shaded_svg_preserves_fitted_region_commands() {
+    demo_on_this_thread(Some("pi")).unwrap();
+    let doc = ethylene();
+    for degrees in [0., 55.] {
+        let surfaces = surfaces(&tilted(doc.clone(), degrees));
+        let Primitive::Surface { groups } = &surfaces[0] else {
+            unreachable!()
+        };
+        let mut expected = (0, 0);
+        for command in groups[0].fills.iter().flat_map(|fill| &fill.region) {
+            match command {
+                PathCommand::Cubic(..) => expected.0 += 1,
+                PathCommand::Line(..) => expected.1 += 1,
+                PathCommand::Move(..) | PathCommand::Close => {}
+            }
+        }
+        let svg = scene::svg_part(&surfaces, Point::new(-100., -100.), Point::new(100., 100.));
+        let (mut regions, mut cubics, mut lines) = (0, 0, 0);
+        // Each clip repeats its exact phase region path.
+        for clip in svg.split("<clipPath id=\"reshiki-surface-").skip(1) {
+            let (_, path) = clip.split_once("<path d=\"").unwrap();
+            let (data, _) = path.split_once('"').unwrap();
+            regions += 1;
+            // Relative commands: lower case.
+            cubics += data.matches('c').count();
+            lines += data.matches('l').count();
+        }
+        assert_eq!(regions, groups[0].fills.len());
+        assert_eq!((cubics, lines), expected, "{degrees}°");
+        if degrees == 0. {
+            assert!(
+                cubics > lines,
+                "{cubics} cubic commands, {lines} line commands"
+            );
+        }
+    }
     demo_on_this_thread(None).unwrap();
 }
 
-/// Release-mode numbers for the PR: mesh build, frame, SVG and snapshot
-/// bytes at both details, for each demo molecule. Run with
+/// Reports fitting quality for the shaded benzene π* surface, including
+/// every phase region, tone path and surface stroke.
+#[test]
+#[ignore]
+fn benzene_fit_diagnostic() {
+    fn counts<'a>(commands: impl Iterator<Item = &'a PathCommand>) -> [usize; 5] {
+        let mut counts = [0; 5];
+        for command in commands {
+            counts[0] += 1;
+            counts[match command {
+                PathCommand::Cubic(..) => 1,
+                PathCommand::Line(_) => 2,
+                PathCommand::Move(_) => 3,
+                PathCommand::Close => 4,
+            }] += 1;
+        }
+        counts
+    }
+
+    let _ = fit::take_diagnostics();
+    let groups = groups(&tilted(benzene(), 55.), "pistar");
+    let diagnostics = fit::take_diagnostics();
+    let fills = counts(
+        groups
+            .iter()
+            .flat_map(|group| &group.fills)
+            .flat_map(|fill| {
+                std::iter::once(&fill.region).chain(fill.tones.iter().map(|(path, _)| path))
+            })
+            .flatten(),
+    );
+    let strokes = counts(
+        groups
+            .iter()
+            .flat_map(|group| &group.strokes)
+            .flat_map(|stroke| &stroke.paths),
+    );
+    for ((label, [commands, cubics, lines, moves, closes]), (corners, fallbacks)) in
+        [("fills (regions + tones)", fills), ("strokes", strokes)]
+            .into_iter()
+            .zip(diagnostics)
+    {
+        println!(
+            "{label}: {commands} commands ({moves} moves, {closes} closes), {cubics} cubics, {lines} lines, {corners} corners detected, {fallbacks} topology-fallback contours"
+        );
+    }
+
+    let [commands, cubics, lines, ..] = fills;
+    assert!(cubics + lines > 0 && strokes[0] > 0);
+    assert!(
+        lines * 100 <= (cubics + lines) * 5,
+        "fills: {lines} of {} segments are lines, exceeding 5%",
+        cubics + lines,
+    );
+    assert!(
+        commands <= 36_311,
+        "{commands} fill commands exceed budget 36311"
+    );
+}
+
+/// Release-mode frame and export budgets at drawing detail. Run with
 /// `cargo test --release -p reshiki-model export_budgets -- --ignored --nocapture`.
 #[test]
 #[ignore]
 fn export_budgets() {
     use std::time::Instant;
     println!(
-        "| molecule | demo | detail | triangles | mesh ms | frame ms | layers | points | SVG KB | snapshot KB |"
+        "| molecule | demo | look | triangles | frame ms | groups | group 0 tones | path commands | SVG KB | exported SVG KB | snapshot KB |"
     );
-    println!("|---|---|---|---:|---:|---:|---:|---:|---:|---:|");
+    println!("|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|");
     for (name, doc) in [("ethylene", ethylene()), ("benzene", benzene())] {
         let doc = tilted(doc, 55.);
         for demo in ["pi", "pistar"] {
             demo_on_this_thread(Some(demo)).unwrap();
             MESHES.with_borrow_mut(Vec::clear);
-            let started = Instant::now();
             let meshes = meshes(&doc, &doc.models[0]).unwrap();
-            let mesh_ms = started.elapsed().as_secs_f32() * 1000.;
-            for (k, turning) in [false, true].into_iter().enumerate() {
+            for (look, opacity, turning) in [
+                ("shaded", 100, false),
+                ("shaded", 100, true),
+                ("shaded+mesh", 100, false),
+                ("shaded", 60, false),
+                ("shaded", 60, true),
+                ("mesh", 100, false),
+                ("mesh", 30, false),
+                ("mesh", 30, true),
+                ("solid", 100, false),
+                ("outline", 100, false),
+            ] {
+                demo_on_this_thread(Some(&format!("{demo},look={look},opacity={opacity}")))
+                    .unwrap();
                 let mut doc = doc.clone();
                 doc.models[0].turning = turning;
                 let started = Instant::now();
@@ -363,22 +744,43 @@ fn export_budgets() {
                     .iter()
                     .find(|p| matches!(p, Primitive::Surface { .. }))
                     .unwrap();
-                let Primitive::Surface { layers, rims, .. } = surface else {
+                let Primitive::Surface { groups } = surface else {
                     unreachable!()
                 };
-                let points: usize = layers
+                let tones: usize = groups
+                    .last()
+                    .unwrap()
+                    .fills
                     .iter()
-                    .flat_map(|(r, _)| r)
-                    .chain(rims)
-                    .map(Vec::len)
+                    .map(|fill| fill.tones.len())
+                    .sum();
+                let commands: usize = groups
+                    .iter()
+                    .map(|group| {
+                        group
+                            .fills
+                            .iter()
+                            .map(|f| {
+                                f.region.len()
+                                    + f.tones.iter().map(|(path, _)| path.len()).sum::<usize>()
+                            })
+                            .sum::<usize>()
+                            + group.strokes.iter().map(|s| s.paths.len()).sum::<usize>()
+                    })
                     .sum();
                 let snapshot = super::super::snapshot::encode(surface, Point::default()).unwrap();
+                // File export writes the parsed tree back out (absolute commands).
+                let exported = resvg::usvg::Tree::from_str(&svg, &resvg::usvg::Options::default())
+                    .unwrap()
+                    .to_string(&resvg::usvg::WriteOptions::default())
+                    .len();
                 println!(
-                    "| {name} | {demo} | {} | {} | {mesh_ms:.0} | {frame_ms:.0} | {} | {points} | {:.0} | {:.0} |",
-                    DETAIL[k],
-                    meshes[k].triangles.len(),
-                    layers.len(),
+                    "| {name} | {demo} | {look} {opacity}{} | {} | {frame_ms:.1} | {} | {tones} | {commands} | {:.1} | {:.1} | {:.1} |",
+                    if turning { " (turning)" } else { "" },
+                    meshes[usize::from(turning)].triangles.len(),
+                    groups.len(),
                     svg.len() as f32 / 1024.,
+                    exported as f32 / 1024.,
                     snapshot.len() as f32 / 1024.,
                 );
             }
@@ -399,4 +801,32 @@ fn write_evidence_documents() {
     ] {
         std::fs::write(dir.join(format!("{name}.rsk")), doc.file_json().unwrap()).unwrap();
     }
+}
+
+/// Writes the demo surfaces' SVG for each look to
+/// `RESHIKI_SURFACE_EVIDENCE_DIR`, for rendering them in other viewers.
+#[test]
+#[ignore]
+fn write_look_svgs() {
+    let dir = std::path::PathBuf::from(std::env::var("RESHIKI_SURFACE_EVIDENCE_DIR").unwrap());
+    for (name, demo, doc) in [
+        ("ethylene", "pi", tilted(ethylene(), 55.)),
+        ("benzene", "pistar", tilted(benzene(), 55.)),
+    ] {
+        for look in [
+            "",
+            ",look=solid",
+            ",look=outline",
+            ",look=mesh",
+            ",look=shaded+mesh",
+            ",opacity=60",
+            ",opacity=30",
+            ",look=mesh,opacity=30",
+        ] {
+            demo_on_this_thread(Some(&format!("{demo}{look}"))).unwrap();
+            let file = format!("{name}{}.svg", look.replace([',', '=', '+'], "-"));
+            std::fs::write(dir.join(file), scene::svg(&doc)).unwrap();
+        }
+    }
+    demo_on_this_thread(None).unwrap();
 }

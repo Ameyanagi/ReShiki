@@ -6,8 +6,9 @@ mod evidence;
 
 type V3 = [f64; 3];
 
-// Deliberately independent of the visibility implementation: rays hit both
-// sides of the actual 3D triangles, then compete with the analytic painted caps.
+// Deliberately independent of the visibility implementation: the original
+// G=1 oracle hits both sides of the actual 3D triangles. The G=3 oracle keeps
+// front-facing hits in depth/index order, ahead of the analytic painted caps.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Hit {
     Surface(bool),
@@ -175,7 +176,7 @@ struct Frame {
 }
 
 impl Frame {
-    fn input<'a>(&'a self, mesh: &'a Mesh, bands: usize) -> Input<'a> {
+    fn input<'a>(&'a self, mesh: &'a Mesh, tones: &'a [usize]) -> Input<'a> {
         Input {
             positions: &self.positions,
             triangles: &mesh.triangles,
@@ -183,7 +184,8 @@ impl Frame {
             front: &self.front,
             lightness: &self.lightness,
             occluders: &self.occluders,
-            bands,
+            tones,
+            lines: &[],
             tolerance: 0.025,
         }
     }
@@ -344,7 +346,7 @@ impl Oracle<'_> {
         })
     }
 
-    fn triangle_depth(&self, index: usize, point: [f64; 2]) -> Option<f64> {
+    fn triangle_hit(&self, index: usize, point: [f64; 2]) -> Option<(f64, bool)> {
         let (origin, direction) = self.camera.ray(point);
         let [a, b, c] = self.mesh.triangles[index].map(|i| self.view[i as usize]);
         let ab = sub(b, a);
@@ -366,7 +368,41 @@ impl Oracle<'_> {
             return None;
         }
         let t = inverse * dot(ac, q);
-        (t > 0.).then(|| self.camera.project(add(origin, mul(direction, t)))[2])
+        (t > 0.).then(|| {
+            (
+                self.camera.project(add(origin, mul(direction, t)))[2],
+                determinant > 0.,
+            )
+        })
+    }
+
+    fn triangle_depth(&self, index: usize, point: [f64; 2]) -> Option<f64> {
+        self.triangle_hit(index, point).map(|(depth, _)| depth)
+    }
+
+    fn front_signs(&self, point: [f64; 2], depths: usize) -> Vec<bool> {
+        let [x, y] = self.bucket(point);
+        let molecule = self.molecule(point).map(|(depth, _)| depth);
+        let mut hits: Vec<_> = self.buckets[y * 64 + x]
+            .iter()
+            .filter_map(|&index| {
+                let (depth, front) = self.triangle_hit(index, point)?;
+                (front && molecule.is_none_or(|molecule| depth > molecule)).then_some((
+                    depth,
+                    index,
+                    self.mesh.positive[index],
+                ))
+            })
+            .collect();
+        hits.sort_by(|a, b| {
+            // Exact depth ties have the lower triangle index in front.
+            if a.0 == b.0 {
+                a.1.cmp(&b.1)
+            } else {
+                b.0.total_cmp(&a.0)
+            }
+        });
+        hits.into_iter().take(depths).map(|hit| hit.2).collect()
     }
 
     fn surface(&self, point: [f64; 2]) -> (Option<(f64, bool)>, u8) {
@@ -439,8 +475,9 @@ impl Oracle<'_> {
     }
 }
 
+/// Nonzero winding, as the SVG fills use.
 fn contains(region: &[Vec<[f32; 2]>], point: [f64; 2]) -> bool {
-    let mut inside = false;
+    let mut winding = 0;
     for contour in region {
         for (a, b) in contour
             .iter()
@@ -452,11 +489,11 @@ fn contains(region: &[Vec<[f32; 2]>], point: [f64; 2]) -> bool {
             if (a[1] > point[1]) != (b[1] > point[1])
                 && point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0]
             {
-                inside = !inside;
+                winding += if b[1] > a[1] { 1 } else { -1 };
             }
         }
     }
-    inside
+    winding != 0
 }
 
 fn distance_to_segment(point: [f64; 2], a: [f32; 2], b: [f32; 2]) -> f64 {
@@ -472,11 +509,57 @@ fn distance_to_segment(point: [f64; 2], a: [f32; 2], b: [f32; 2]) -> f64 {
     ((point[0] - a[0] - t * d[0]).powi(2) + (point[1] - a[1] - t * d[1]).powi(2)).sqrt()
 }
 
-fn first_layer(result: &Visible, positive: bool) -> Option<&Layer> {
+/// The layers as drawn: fitted with the drawing's error and sliver limits,
+/// then flattened finely enough that flattening adds no visible error.
+fn fitted(mut result: Visible) -> Visible {
+    use super::super::draw::{FIT_ERROR, MIN_AREA, MIN_WIDTH};
+    use super::super::fit;
+    use crate::graphics::PathCommand;
+    for layer in &mut result.layers {
+        let mut contours: Vec<Vec<[f32; 2]>> = Vec::new();
+        let mut at = [0.; 2];
+        for command in fit::region(&layer.region, FIT_ERROR, MIN_AREA, MIN_WIDTH) {
+            match command {
+                PathCommand::Move(p) => {
+                    at = [p.x, p.y];
+                    contours.push(vec![at]);
+                }
+                PathCommand::Line(p) => {
+                    at = [p.x, p.y];
+                    contours.last_mut().unwrap().push(at);
+                }
+                PathCommand::Cubic(b, c, d) => {
+                    let [a, b, c, d] = [at, [b.x, b.y], [c.x, c.y], [d.x, d.y]];
+                    let contour = contours.last_mut().unwrap();
+                    for i in 1..=32 {
+                        let t = i as f32 / 32.;
+                        let s = 1. - t;
+                        contour.push(std::array::from_fn(|k| {
+                            s * s * s * a[k]
+                                + 3. * s * s * t * b[k]
+                                + 3. * s * t * t * c[k]
+                                + t * t * t * d[k]
+                        }));
+                    }
+                    at = d;
+                }
+                PathCommand::Close => {}
+            }
+        }
+        layer.region = contours;
+    }
+    result
+}
+
+fn first_layer_at_depth(result: &Visible, positive: bool, depth: usize) -> Option<&Layer> {
     result
         .layers
         .iter()
-        .find(|layer| layer.positive == positive)
+        .find(|layer| layer.depth == depth && layer.positive == positive)
+}
+
+fn first_layer(result: &Visible, positive: bool) -> Option<&Layer> {
+    first_layer_at_depth(result, positive, 0)
 }
 
 #[derive(Default, Debug)]
@@ -493,7 +576,65 @@ struct Counts {
 
 const ORACLE_SAMPLES: usize = 3_000;
 
+#[derive(Default, Debug)]
+struct DepthCounts {
+    checked: usize,
+    skipped: usize,
+    populated: [usize; 3],
+}
+
+fn classify_depth_samples(
+    result: &Visible,
+    oracle: &Oracle<'_>,
+    seed: u64,
+) -> (DepthCounts, Vec<[f64; 2]>) {
+    assert_eq!(
+        result.stats.fragment_limit_hits, 0,
+        "oracle scene reached the fragment cap"
+    );
+    let mut random = Random(seed);
+    let mut counts = DepthCounts::default();
+    let mut disagreements = Vec::new();
+    let delta =
+        0.0075 * (oracle.bounds[2] - oracle.bounds[0]).max(oracle.bounds[3] - oracle.bounds[1]);
+    for _ in 0..ORACLE_SAMPLES {
+        let point = [0, 1]
+            .map(|i| oracle.bounds[i] + random.unit() * (oracle.bounds[i + 2] - oracle.bounds[i]));
+        let expected = oracle.front_signs(point, 3);
+        // Compare the first G signs and their existence, including absent
+        // entries. Deeper hits and triangle changes within one sign cannot
+        // create an exemption around an otherwise stable first-G sequence.
+        if [[delta, 0.], [-delta, 0.], [0., delta], [0., -delta]]
+            .iter()
+            .any(|offset| {
+                oracle.front_signs([point[0] + offset[0], point[1] + offset[1]], 3) != expected
+            })
+        {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.checked += 1;
+        for (depth, populated) in counts.populated.iter_mut().enumerate() {
+            *populated += usize::from(expected.get(depth).is_some());
+        }
+        if (0..3).any(|depth| {
+            [false, true].into_iter().any(|positive| {
+                let drawn = first_layer_at_depth(result, positive, depth)
+                    .is_some_and(|layer| contains(&layer.region, point));
+                drawn != (expected.get(depth) == Some(&positive))
+            })
+        }) {
+            disagreements.push(point);
+        }
+    }
+    (counts, disagreements)
+}
+
 fn classify_samples(result: &Visible, oracle: &Oracle<'_>, seed: u64) -> (Counts, Vec<[f64; 2]>) {
+    assert_eq!(
+        result.stats.fragment_limit_hits, 0,
+        "oracle scene reached the fragment cap"
+    );
     let mut random = Random(seed);
     let mut counts = Counts::default();
     let mut disagreements = Vec::new();
@@ -542,7 +683,10 @@ fn classify_samples(result: &Visible, oracle: &Oracle<'_>, seed: u64) -> (Counts
 
 fn check_oracle(label: &str, result: &Visible, oracle: &Oracle<'_>, seed: u64) -> Counts {
     let (counts, disagreements) = classify_samples(result, oracle, seed);
-    eprintln!("surface oracle {label}: {counts:?}");
+    eprintln!(
+        "surface oracle G=1 {label}: {counts:?}, disagreements={}",
+        disagreements.len()
+    );
     assert!(
         disagreements.is_empty(),
         "{label}: {} disagreements, first at {:?}",
@@ -581,7 +725,8 @@ fn ray_oracle_rejects_a_false_hole_inside_a_uniformly_visible_square() {
     let mut result = Visible {
         layers: vec![Layer {
             positive: true,
-            band: 0,
+            depth: 0,
+            tone: 0,
             region: vec![square],
         }],
         ..Visible::default()
@@ -595,7 +740,8 @@ fn ray_oracle_rejects_a_false_hole_inside_a_uniformly_visible_square() {
     // exemption near returned contours would conceal every missing point.
     result.layers[0]
         .region
-        .push(vec![[49.5, 20.], [50.5, 20.], [50.5, 80.], [49.5, 80.]]);
+        // Wound against the square, as holes are under the nonzero rule.
+        .push(vec![[49.5, 20.], [49.5, 80.], [50.5, 80.], [50.5, 20.]]);
     let (counts, disagreements) = classify_samples(&result, &oracle, seed);
     eprintln!(
         "surface oracle false-hole self-test: {counts:?}, {} disagreements",
@@ -609,6 +755,99 @@ fn ray_oracle_rejects_a_false_hole_inside_a_uniformly_visible_square() {
         disagreements
             .iter()
             .all(|p| { (49.5..50.5).contains(&p[0]) && (20.0..80.0).contains(&p[1]) })
+    );
+}
+
+#[test]
+fn depth_ray_oracle_orders_front_faces_and_filters_the_painted_molecule() {
+    let mut mesh = Mesh::default();
+    for (index, depth) in [2., 2., 3., 1.].into_iter().enumerate() {
+        let base = mesh.positions.len() as u32;
+        mesh.positions
+            .extend([[0., 0., depth], [10., 0., depth], [0., -10., depth]]);
+        // The nearest two-sided hit is a back face, which G=3 must exclude.
+        mesh.triangles.push(if index == 2 {
+            [base, base + 1, base + 2]
+        } else {
+            [base, base + 2, base + 1]
+        });
+        mesh.positive.push(index == 0);
+    }
+    let mut oracle = Oracle {
+        view: mesh.positions.iter().copied().map(f64s).collect(),
+        mesh: &mesh,
+        camera: Camera {
+            perspective: false,
+            c: 100.,
+            scale: 1.,
+        },
+        paint: Vec::new(),
+        bounds: [0., 0., 10., 10.],
+        buckets: vec![vec![3, 2, 1, 0]; 64 * 64],
+    };
+    let point = [2., 2.];
+    assert_eq!(oracle.surface(point).0, Some((3., false)));
+    assert_eq!(oracle.front_signs(point, 3), [true, false, false]);
+    oracle.paint.push(Paint::Ball {
+        center: [2., 2., 1.],
+        radius: 1.,
+        depth: 0.,
+    });
+    // The rear sheet ties the paint depth and is therefore already hidden.
+    assert_eq!(oracle.front_signs(point, 3), [true, false]);
+}
+
+#[test]
+fn depth_ray_oracle_rejects_a_false_hole_in_a_rear_layer() {
+    let square = vec![[10., 10.], [90., 10.], [90., 90.], [10., 90.]];
+    let mut mesh = Mesh::default();
+    let mut result = Visible::default();
+    for (depth, positive) in [true, false, true].into_iter().enumerate() {
+        let base = mesh.positions.len() as u32;
+        mesh.positions
+            .extend(square.iter().map(|&[x, y]| [x, -y, 3. - depth as f32]));
+        mesh.triangles
+            .extend([[base, base + 2, base + 1], [base, base + 3, base + 2]]);
+        mesh.positive.extend([positive; 2]);
+        result.layers.push(Layer {
+            positive,
+            depth,
+            tone: 0,
+            region: vec![square.clone()],
+        });
+    }
+    let oracle = Oracle {
+        view: mesh.positions.iter().copied().map(f64s).collect(),
+        mesh: &mesh,
+        camera: Camera {
+            perspective: false,
+            c: 100.,
+            scale: 1.,
+        },
+        paint: Vec::new(),
+        bounds: [0., 0., 100., 100.],
+        buckets: vec![(0..6).collect(); 64 * 64],
+    };
+    let seed = 0xfa15_e401;
+    let (counts, disagreements) = classify_depth_samples(&result, &oracle, seed);
+    assert!(
+        disagreements.is_empty(),
+        "all three true squares must agree"
+    );
+    assert!(counts.populated.into_iter().all(|count| count > 1_500));
+    result.layers[1]
+        .region
+        // Wound against the square, as holes are under the nonzero rule.
+        .push(vec![[49.5, 20.], [49.5, 80.], [50.5, 80.], [50.5, 20.]]);
+    let (_, disagreements) = classify_depth_samples(&result, &oracle, seed);
+    assert!(
+        !disagreements.is_empty(),
+        "the oracle must inspect a rear layer even when the nearest is correct"
+    );
+    assert!(
+        disagreements
+            .iter()
+            .all(|p| (49.5..50.5).contains(&p[0]) && (20.0..80.0).contains(&p[1]))
     );
 }
 
@@ -635,25 +874,41 @@ fn analytic_rays_agree_with_layers_through_balls_sticks_and_overlapping_lobes() 
     let mut front_of_ball = 0;
     let mut front_of_stick = 0;
     let mut overlap = 0;
+    let mut checked = 0;
+    let mut skipped = 0;
     for perspective in [false, true] {
         for (index, rotation) in rotations().into_iter().enumerate() {
             for (name, items) in [("pierced", molecule.as_slice()), ("overlap", &[][..])] {
                 let (frame, oracle) = prepare(&mesh, items, rotation, perspective);
-                let output = visible(&frame.input(&mesh, 1));
+                let output = visible(&frame.input(&mesh, &[1]));
                 let counts = check_oracle(
                     &format!("{name}, perspective={perspective}, rotation={index}"),
                     &output,
                     &oracle,
                     0x7ab3_91a5 + index as u64,
                 );
+                // The fitted, drawn outlines must agree too.
+                let fitted = check_oracle(
+                    &format!("fitted {name}, perspective={perspective}, rotation={index}"),
+                    &fitted(output),
+                    &oracle,
+                    0x5eed_f17d + index as u64,
+                );
+                checked += fitted.checked;
+                skipped += fitted.skipped;
                 hidden_by_ball += counts.ball_hides;
                 hidden_by_stick += counts.stick_hides;
                 front_of_ball += counts.front_of_ball;
                 front_of_stick += counts.front_of_stick;
                 overlap += counts.phases_overlap;
+                checked += counts.checked;
+                skipped += counts.skipped;
             }
         }
     }
+    eprintln!(
+        "surface oracle total G=1, polygons and fitted paths: checked={checked}, skipped={skipped}, disagreements=0"
+    );
     assert!(hidden_by_ball > 30, "ball must hide mesh: {hidden_by_ball}");
     assert!(
         hidden_by_stick > 30,
@@ -670,6 +925,56 @@ fn analytic_rays_agree_with_layers_through_balls_sticks_and_overlapping_lobes() 
     assert!(
         overlap > 100,
         "both phases must overlap along rays: {overlap}"
+    );
+}
+
+#[test]
+fn front_facing_rays_agree_with_three_depths_through_balls_sticks_and_overlapping_lobes() {
+    let mesh = p_mesh();
+    let molecule = [PIERCING_BALL, CROSSING_STICK];
+    let mut total = DepthCounts::default();
+    let mut total_disagreements = 0;
+    let mut failures = Vec::new();
+    for perspective in [false, true] {
+        for (index, rotation) in rotations().into_iter().enumerate() {
+            for (name, items) in [("pierced", molecule.as_slice()), ("overlap", &[][..])] {
+                let (frame, oracle) = prepare(&mesh, items, rotation, perspective);
+                let output = visible(&frame.input(&mesh, &[1; 3]));
+                let (counts, disagreements) =
+                    classify_depth_samples(&output, &oracle, 0x7ab3_91a5 + index as u64);
+                let label = format!("{name}, perspective={perspective}, rotation={index}");
+                eprintln!(
+                    "surface oracle G=3 {label}: {counts:?}, disagreements={}",
+                    disagreements.len()
+                );
+                if !disagreements.is_empty() {
+                    failures.push(format!(
+                        "{label}: {} disagreements, first at {:?}",
+                        disagreements.len(),
+                        disagreements.first()
+                    ));
+                }
+                total.checked += counts.checked;
+                total.skipped += counts.skipped;
+                for (depth, populated) in total.populated.iter_mut().enumerate() {
+                    *populated += counts.populated[depth];
+                }
+                total_disagreements += disagreements.len();
+                assert!(
+                    counts.skipped * 100 < ORACLE_SAMPLES * 15,
+                    "{label}: approximation band skipped >=15%: {counts:?}"
+                );
+            }
+        }
+    }
+    eprintln!(
+        "surface oracle total G=3: checked={}, skipped={}, disagreements={total_disagreements}, populated={:?}",
+        total.checked, total.skipped, total.populated
+    );
+    assert_eq!(total_disagreements, 0, "{}", failures.join("\n"));
+    assert!(
+        total.populated[1] > 100,
+        "the oracle must compare populated rear depths: {total:?}"
     );
 }
 
@@ -699,12 +1004,15 @@ fn a_lobe_enclosed_by_a_slightly_larger_painted_ball_is_fully_hidden() {
     for perspective in [false, true] {
         for (index, rotation) in rotations().into_iter().enumerate() {
             let (frame, oracle) = prepare(&mesh, &molecule, rotation, perspective);
-            let output = visible(&frame.input(&mesh, 1));
+            let output = visible(&frame.input(&mesh, &[1]));
             assert!(
                 output.layers.iter().all(|layer| layer.region.is_empty()),
                 "enclosed lobe leaked: perspective={perspective}, rotation={index}"
             );
-            assert!(output.rims.is_empty(), "enclosed lobe left a visible rim");
+            assert!(
+                output.rims.iter().all(Vec::is_empty),
+                "enclosed lobe left a visible rim"
+            );
             let counts = check_oracle(
                 &format!("enclosed, perspective={perspective}, rotation={index}"),
                 &output,
@@ -778,13 +1086,13 @@ fn occlusion_evidence_images() -> std::io::Result<()> {
                 .iter()
                 .map(|&n| (0.35 + 0.65 * dot(rotate(f64s(n), rotation), light).max(0.)) as f32)
                 .collect();
-            let output = visible(&frame.input(mesh, BANDS));
+            let output = visible(&frame.input(mesh, &[BANDS]));
             let (counts, disagreements) =
                 classify_samples(&output, &oracle, 0x7ab3_91a5 + index as u64);
             let file = format!("occlusion-{name}-{view}.svg");
             fs::write(
                 dir.join(&file),
-                evidence::svg(&oracle, &output, BANDS, &counts, &disagreements),
+                evidence::svg(&oracle, &output, &[BANDS], &counts, &disagreements),
             )?;
             writeln!(
                 readme,
@@ -854,7 +1162,8 @@ fn cap_facets_cannot_leak_either_phase_just_inside_the_analytic_ball() {
         front: &[true, true],
         lightness: &[0.7; 6],
         occluders: &occluders,
-        bands: 1,
+        tones: &[1],
+        lines: &[],
         tolerance: 0.00001,
     };
     let result = visible(&input);
@@ -880,7 +1189,8 @@ fn cap_tangent_planes_clip_a_straddling_triangle() {
             radius: 100.,
             depth: 100.,
         }],
-        bands: 1,
+        tones: &[1],
+        lines: &[],
         tolerance: 0.00001,
     });
     for (point, expected) in [([59.98_f64, 0.], false), ([60.5, -0.4], true)] {
@@ -920,7 +1230,7 @@ fn cyclic_long_thin_triangles_are_visible_without_a_global_depth_order() {
         mesh.positive[positive_triangle] = true;
         let (frame, oracle) = prepare(&mesh, &[], rotations()[0], false);
         assert!(frame.front.iter().all(|front| *front));
-        let result = visible(&frame.input(&mesh, 1));
+        let result = visible(&frame.input(&mesh, &[1]));
         assert!(
             result.stats.overlaps >= 3,
             "cyclic scene must exercise all three projected overlaps"

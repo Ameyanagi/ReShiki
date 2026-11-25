@@ -3049,7 +3049,6 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         (false, Style::Stick) => line * 2.,
         (false, _) => line,
     };
-    let orbital = surface::draw::Prepared::new(doc, model, &view, painted);
     // Labels of atoms in front of the surface, drawn after it.
     let mut late = vec![];
     let outline = |width| {
@@ -3061,6 +3060,13 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 width,
             })
     };
+    let orbital =
+        surface::draw::Prepared::new(doc, model, &view, painted, dark, float(backdrop), fade(0.))
+            .and_then(|prepared| {
+                let primitive =
+                    prepared.primitive(dark, float(backdrop), fade(0.), outline(line), line)?;
+                Some((prepared, primitive))
+            });
     let side_outline = || {
         outline(line * 2.).map(|o| Outline {
             color: rgb(mix(float(o.color), float(backdrop), 1. - o.alpha)),
@@ -3264,7 +3270,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 };
                 if orbital
                     .as_ref()
-                    .is_some_and(|s| s.clear(&view, p, radius) && !under_ball())
+                    .is_some_and(|(s, _)| s.clear(&view, p, radius) && !under_ball())
                 {
                     late.push((alpha, text));
                     continue;
@@ -3574,11 +3580,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             }
         }
     }
-    if let Some(orbital) = orbital {
-        drawn.push((
-            1.,
-            orbital.primitive(dark, float(backdrop), fade(0.), outline(line)),
-        ));
+    if let Some((_, orbital)) = orbital {
+        drawn.push((1., orbital));
         drawn.extend(late);
     }
     out.extend(drawn.into_iter().map(|(alpha, p)| {

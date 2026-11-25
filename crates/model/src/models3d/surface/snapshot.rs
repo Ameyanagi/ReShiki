@@ -1,7 +1,5 @@
 //! Compact snapshots of the merged 2D shapes of an orbital surface.
 
-use std::borrow::Cow;
-
 use base64::{Engine, engine::general_purpose::STANDARD};
 use miniz_oxide::{
     deflate::compress_to_vec,
@@ -14,94 +12,114 @@ use miniz_oxide::{
 };
 
 use crate::document::Point;
-use crate::polygon::{closed_edges, signed_area};
-use crate::scene::{Outline, Primitive};
+use crate::graphics::PathCommand;
+use crate::scene::{Outline, Primitive, SurfaceFill, SurfaceGroup, SurfaceStroke};
 
-const MAGIC: &[u8; 4] = b"RSF1";
+const MAGIC: &[u8; 4] = b"RSF2";
 const MAX_INFLATED_BYTES: usize = 16 * 1024 * 1024;
-const MIN_CONTOUR_POINTS: usize = 3;
-const MIN_RIM_POINTS: usize = 2;
+const MAX_PATH_COMMANDS: usize = 1_000_000;
+const MIN_PATH_BYTES: usize = 4 + 1 + 8;
 
 /// Largest encoded snapshot, in bytes.
 pub const MAX_BYTES: usize = 300 * 1024;
 
 /// Encodes a surface with points relative to `origin`, the model frame's centre.
-/// If the original encoding exceeds the size limits, thins contours and rims
-/// with Douglas–Peucker, doubling the tolerance from 0.1 to 12.8 drawing units.
-/// Containment between separately thinned contours is not checked. Returns
-/// `None` for an invalid outline, a primitive other than a surface, or a surface
-/// that cannot fit in the snapshot.
+/// If the snapshot exceeds a size or path command limit, drops every other
+/// tone in each fill and retries until it fits or no tones remain. Regions
+/// and strokes are always retained exactly. Returns `None` for invalid data,
+/// other primitives, or a surface that cannot fit even without tones.
 pub fn encode(surface: &Primitive, origin: Point) -> Option<String> {
-    let Primitive::Surface {
-        layers,
-        rims,
-        outline,
-    } = surface
-    else {
+    let Primitive::Surface { groups } = surface else {
         return None;
     };
-    if outline
-        .as_ref()
-        .is_some_and(|outline| !valid_outline(outline))
-    {
+    if !origin.is_finite() {
         return None;
     }
-
-    let layers = layers.iter().filter(|(contours, _)| {
-        contours
-            .iter()
-            .any(|contour| contour.len() >= MIN_CONTOUR_POINTS)
-    });
-    let layer_count = u32::try_from(layers.clone().count()).ok()?.to_le_bytes();
-    let mut bytes = Vec::new();
-    for tolerance in [0., 0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8] {
-        bytes.clear();
-        bytes.extend_from_slice(MAGIC);
-        bytes.push(u8::from(outline.is_some()));
-        if let Some(outline) = outline {
-            bytes.extend_from_slice(&outline.color);
-            bytes.extend_from_slice(&outline.alpha.to_le_bytes());
-            bytes.extend_from_slice(&outline.width.to_le_bytes());
-        }
-        bytes.extend_from_slice(&layer_count);
-        for (contours, color) in layers.clone() {
-            bytes.extend_from_slice(color);
-            write_paths(&mut bytes, contours, origin, tolerance, true)?;
-        }
-        write_paths(&mut bytes, rims, origin, tolerance, false)?;
-
-        if bytes.len() <= MAX_INFLATED_BYTES {
+    let mut tone_stride = 1;
+    loop {
+        let (bytes, command_count) = write_snapshot(groups, origin, tone_stride)?;
+        if command_count <= MAX_PATH_COMMANDS && bytes.len() <= MAX_INFLATED_BYTES {
             let packed = compress_to_vec(&bytes, 9);
             if packed.len().div_ceil(3) * 4 <= MAX_BYTES {
                 return Some(STANDARD.encode(packed));
             }
         }
+        if !groups
+            .iter()
+            .flat_map(|group| &group.fills)
+            .any(|fill| fill.tones.len() >= tone_stride)
+        {
+            return None;
+        }
+        tone_stride = tone_stride.checked_mul(2)?;
     }
-    None
+}
+
+fn write_snapshot(
+    groups: &[SurfaceGroup],
+    origin: Point,
+    tone_stride: usize,
+) -> Option<(Vec<u8>, usize)> {
+    let mut bytes = MAGIC.to_vec();
+    let mut command_count = 0;
+    write_count(&mut bytes, groups.len())?;
+    for group in groups {
+        if !valid_alpha(group.alpha) {
+            return None;
+        }
+        bytes.extend_from_slice(&group.alpha.to_le_bytes());
+        write_count(&mut bytes, group.fills.len())?;
+        for fill in &group.fills {
+            bytes.extend_from_slice(&fill.color);
+            command_count += write_path(&mut bytes, &fill.region, origin)?;
+            write_count(&mut bytes, fill.tones.len() / tone_stride)?;
+            // Retain the lighter member of each pair. A final single tone is
+            // dropped too, so retries eventually reach the base regions.
+            for (path, color) in fill.tones.iter().skip(tone_stride - 1).step_by(tone_stride) {
+                bytes.extend_from_slice(color);
+                command_count += write_path(&mut bytes, path, origin)?;
+            }
+        }
+        write_count(&mut bytes, group.strokes.len())?;
+        for stroke in &group.strokes {
+            if !valid_outline(&stroke.outline) {
+                return None;
+            }
+            bytes.extend_from_slice(&stroke.outline.color);
+            bytes.extend_from_slice(&stroke.outline.alpha.to_le_bytes());
+            bytes.extend_from_slice(&stroke.outline.width.to_le_bytes());
+            command_count += write_path(&mut bytes, &stroke.paths, origin)?;
+        }
+    }
+    Some((bytes, command_count))
+}
+
+fn valid_alpha(alpha: f32) -> bool {
+    alpha > 0. && alpha <= 1.
 }
 
 fn valid_outline(outline: &Outline) -> bool {
-    outline.width.is_finite() && outline.width >= 0. && (0. ..=1.).contains(&outline.alpha)
+    valid_alpha(outline.alpha) && outline.width.is_finite() && outline.width > 0.
 }
 
-fn write_paths(
-    bytes: &mut Vec<u8>,
-    paths: &[Vec<Point>],
-    origin: Point,
-    tolerance: f64,
-    contour: bool,
-) -> Option<()> {
-    let min_points = if contour {
-        MIN_CONTOUR_POINTS
-    } else {
-        MIN_RIM_POINTS
-    };
-    let paths = paths.iter().filter(|path| path.len() >= min_points);
-    bytes.extend_from_slice(&u32::try_from(paths.clone().count()).ok()?.to_le_bytes());
-    for path in paths {
-        let points = thin(path, tolerance, contour);
-        bytes.extend_from_slice(&u32::try_from(points.len()).ok()?.to_le_bytes());
-        for point in points.iter() {
+fn write_count(bytes: &mut Vec<u8>, count: usize) -> Option<()> {
+    bytes.extend_from_slice(&u32::try_from(count).ok()?.to_le_bytes());
+    Some(())
+}
+
+fn write_path(bytes: &mut Vec<u8>, path: &[PathCommand], origin: Point) -> Option<usize> {
+    if !matches!(path.first(), Some(PathCommand::Move(_))) {
+        return None;
+    }
+    write_count(bytes, path.len())?;
+    for command in path {
+        bytes.push(match command {
+            PathCommand::Move(_) => 0,
+            PathCommand::Line(_) => 1,
+            PathCommand::Cubic(..) => 2,
+            PathCommand::Close => 3,
+        });
+        for point in command.iter_points() {
             let relative = point.offset(-origin.x, -origin.y);
             if !relative.is_finite() {
                 return None;
@@ -110,129 +128,18 @@ fn write_paths(
             bytes.extend_from_slice(&relative.y.to_le_bytes());
         }
     }
-    Some(())
-}
-
-fn thin(points: &[Point], tolerance: f64, contour: bool) -> Cow<'_, [Point]> {
-    let repeated_end = points.len() > 1 && points.first() == points.last();
-    let closed = contour || repeated_end;
-    let len = points.len() - usize::from(repeated_end);
-    if tolerance == 0. || len <= if closed { 3 } else { 2 } {
-        return Cow::Borrowed(points);
-    }
-
-    let last = if closed { len } else { len - 1 };
-    let point_at = |i| points.get(if i == len { 0 } else { i });
-    let farthest = |first, last| {
-        let (a, b) = (point_at(first)?, point_at(last)?);
-        let interior = points.get(first + 1..last)?;
-        let (dx, dy) = (
-            f64::from(b.x) - f64::from(a.x),
-            f64::from(b.y) - f64::from(a.y),
-        );
-        let length_sq = dx * dx + dy * dy;
-        interior
-            .iter()
-            .enumerate()
-            .map(|(offset, p)| {
-                let (x, y) = (
-                    f64::from(p.x) - f64::from(a.x),
-                    f64::from(p.y) - f64::from(a.y),
-                );
-                let t = if length_sq > 0. {
-                    ((x * dx + y * dy) / length_sq).clamp(0., 1.)
-                } else {
-                    0.
-                };
-                (
-                    first + 1 + offset,
-                    (x - t * dx).powi(2) + (y - t * dy).powi(2),
-                )
-            })
-            .max_by(|a, b| a.1.total_cmp(&b.1))
-    };
-
-    let mut stack = if closed {
-        // Split the ring at opposite vertices, then keep a third vertex even
-        // when both arcs are within tolerance of the same chord.
-        let Some((opposite, _)) = farthest(0, last) else {
-            return Cow::Borrowed(points);
-        };
-        let Some((third, _)) = farthest(0, opposite)
-            .into_iter()
-            .chain(farthest(opposite, last))
-            .max_by(|a, b| a.1.total_cmp(&b.1))
-        else {
-            return Cow::Borrowed(points);
-        };
-        let (a, b) = (opposite.min(third), opposite.max(third));
-        vec![(b, last), (a, b), (0, a)]
-    } else {
-        vec![(0, last)]
-    };
-    let tolerance_sq = tolerance * tolerance;
-    let mut simplified = Vec::new();
-    while let Some((first, last)) = stack.pop() {
-        if let Some((i, distance_sq)) = farthest(first, last)
-            && distance_sq > tolerance_sq
-        {
-            // Visit the left segment first to emit points in path order.
-            stack.extend([(i, last), (first, i)]);
-        } else if let Some(&point) = points.get(first) {
-            simplified.push(point);
-        }
-    }
-    simplified.extend(points.get(last).copied());
-    if simplified.len() == points.len() {
-        return Cow::Borrowed(points);
-    }
-    if contour {
-        let mut ring = simplified.as_slice();
-        if repeated_end && let Some((_, vertices)) = ring.split_last() {
-            ring = vertices;
-        }
-        let area = signed_area(points);
-        let thinned_area = signed_area(ring);
-        if !(area * thinned_area > 0.
-            && (thinned_area - area).abs() <= 0.1 * area.abs()
-            && !self_intersects(ring))
-        {
-            return Cow::Borrowed(points);
-        }
-    }
-    Cow::Owned(simplified)
-}
-
-fn self_intersects(points: &[Point]) -> bool {
-    let mut edges: Vec<_> = closed_edges(points).enumerate().collect();
-    edges.sort_unstable_by(|(_, (a, b)), (_, (c, d))| a.x.min(b.x).total_cmp(&c.x.min(d.x)));
-    let side = |a: Point, b: Point, p: Point| {
-        (f64::from(b.x) - f64::from(a.x)) * (f64::from(p.y) - f64::from(a.y))
-            - (f64::from(b.y) - f64::from(a.y)) * (f64::from(p.x) - f64::from(a.x))
-    };
-    for (i, &(first, (a, b))) in edges.iter().enumerate() {
-        for &(second, (c, d)) in edges.iter().skip(i + 1) {
-            if a.x.max(b.x) < c.x.min(d.x) {
-                break;
-            }
-            let distance = first.abs_diff(second);
-            if distance != 1
-                && distance != points.len() - 1
-                && a.y.min(b.y) <= c.y.max(d.y)
-                && c.y.min(d.y) <= a.y.max(b.y)
-                && side(a, b, c) * side(a, b, d) <= 0.
-                && side(c, d, a) * side(c, d, b) <= 0.
-            {
-                return true;
-            }
-        }
-    }
-    false
+    Some(path.len())
 }
 
 fn inflate(mut packed: &[u8]) -> Result<Vec<u8>, String> {
     let mut decoder = Box::<DecompressorOxide>::default();
-    let mut data = vec![0; packed.len().min(MAX_INFLATED_BYTES).next_power_of_two()];
+    let mut data = vec![
+        0;
+        packed
+            .len()
+            .clamp(1, MAX_INFLATED_BYTES)
+            .next_power_of_two()
+    ];
     let mut written = 0;
     loop {
         let (status, consumed, produced) = decompress(
@@ -253,17 +160,20 @@ fn inflate(mut packed: &[u8]) -> Result<Vec<u8>, String> {
             }
             TINFLStatus::Done => return Err("Trailing compressed snapshot data".into()),
             TINFLStatus::HasMoreOutput if data.len() < MAX_INFLATED_BYTES => {
-                data.resize(data.len() * 2, 0);
+                data.resize((data.len() * 2).min(MAX_INFLATED_BYTES), 0);
             }
             _ => return Err("Invalid or oversized snapshot deflate data".into()),
         }
     }
 }
 
-/// Decodes the surface and places it at `origin`.
+/// Decodes an RSF2 surface and places it at `origin`.
 pub fn decode(text: &str, origin: Point) -> Result<Primitive, String> {
     if text.len() > MAX_BYTES {
         return Err("Snapshot is too large".into());
+    }
+    if !origin.is_finite() {
+        return Err("Non-finite snapshot origin".into());
     }
     let packed = STANDARD
         .decode(text)
@@ -273,9 +183,36 @@ pub fn decode(text: &str, origin: Point) -> Result<Primitive, String> {
     if &take::<4>(&mut bytes)? != MAGIC {
         return Err("Invalid snapshot magic".into());
     }
-    let outline = match take(&mut bytes)? {
-        [0] => None,
-        [1] => {
+    // A group always contains its alpha and both collection counts.
+    let group_count = read_count(&mut bytes, 4 + 4 + 4)?;
+    let mut groups = Vec::with_capacity(group_count);
+    let mut total_path_commands = 0;
+    for _ in 0..group_count {
+        let alpha = f32::from_le_bytes(take(&mut bytes)?);
+        if !valid_alpha(alpha) {
+            return Err("Invalid snapshot group alpha".into());
+        }
+        let fill_count = read_count(&mut bytes, 3 + MIN_PATH_BYTES + 4)?;
+        let mut fills = Vec::with_capacity(fill_count);
+        for _ in 0..fill_count {
+            let color = take(&mut bytes)?;
+            let region = read_path(&mut bytes, origin, &mut total_path_commands)?;
+            let tone_count = read_count(&mut bytes, 3 + MIN_PATH_BYTES)?;
+            let mut tones = Vec::with_capacity(tone_count);
+            for _ in 0..tone_count {
+                let color = take(&mut bytes)?;
+                let path = read_path(&mut bytes, origin, &mut total_path_commands)?;
+                tones.push((path, color));
+            }
+            fills.push(SurfaceFill {
+                region,
+                color,
+                tones,
+            });
+        }
+        let stroke_count = read_count(&mut bytes, 3 + 4 + 4 + MIN_PATH_BYTES)?;
+        let mut strokes = Vec::with_capacity(stroke_count);
+        for _ in 0..stroke_count {
             let outline = Outline {
                 color: take(&mut bytes)?,
                 alpha: f32::from_le_bytes(take(&mut bytes)?),
@@ -284,30 +221,19 @@ pub fn decode(text: &str, origin: Point) -> Result<Primitive, String> {
             if !valid_outline(&outline) {
                 return Err("Invalid snapshot outline".into());
             }
-            Some(outline)
+            let paths = read_path(&mut bytes, origin, &mut total_path_commands)?;
+            strokes.push(SurfaceStroke { paths, outline });
         }
-        _ => return Err("Invalid snapshot outline flag".into()),
-    };
-    // Each layer needs a color, both counts, and at least one contour.
-    let layer_count = read_count(&mut bytes, 3 + 4 + 4 + 8 * MIN_CONTOUR_POINTS)?;
-    let mut layers = Vec::with_capacity(layer_count);
-    for _ in 0..layer_count {
-        let color = take(&mut bytes)?;
-        let contours = read_paths(&mut bytes, origin, MIN_CONTOUR_POINTS)?;
-        if contours.is_empty() {
-            return Err("Snapshot layer has no contours".into());
-        }
-        layers.push((contours, color));
+        groups.push(SurfaceGroup {
+            alpha,
+            fills,
+            strokes,
+        });
     }
-    let rims = read_paths(&mut bytes, origin, MIN_RIM_POINTS)?;
     if !bytes.is_empty() {
         return Err("Trailing snapshot data".into());
     }
-    Ok(Primitive::Surface {
-        layers,
-        rims,
-        outline,
-    })
+    Ok(Primitive::Surface { groups })
 }
 
 fn take<const N: usize>(bytes: &mut &[u8]) -> Result<[u8; N], String> {
@@ -324,31 +250,66 @@ fn read_count(bytes: &mut &[u8], item_bytes: usize) -> Result<usize, String> {
     Ok(count)
 }
 
-fn read_paths(
+fn read_path(
     bytes: &mut &[u8],
     origin: Point,
-    min_points: usize,
-) -> Result<Vec<Vec<Point>>, String> {
-    let path_count = read_count(bytes, 4 + 8 * min_points)?;
-    let mut paths = Vec::with_capacity(path_count);
-    for _ in 0..path_count {
-        let point_count = read_count(bytes, 8)?;
-        if point_count < min_points {
-            return Err("Snapshot path has too few points".into());
-        }
-        let mut points = Vec::with_capacity(point_count);
-        for _ in 0..point_count {
-            let x = f32::from_le_bytes(take(bytes)?);
-            let y = f32::from_le_bytes(take(bytes)?);
-            let point = origin.offset(x, y);
-            if !point.is_finite() {
-                return Err("Non-finite snapshot coordinate".into());
-            }
-            points.push(point);
-        }
-        paths.push(points);
+    total_path_commands: &mut usize,
+) -> Result<Vec<PathCommand>, String> {
+    // Close is the smallest command, occupying just its tag byte.
+    let command_count = read_count(bytes, 1)?;
+    if command_count == 0 {
+        return Err("Snapshot path is empty".into());
     }
-    Ok(paths)
+    // Validate each command before growing the decoded path.
+    let mut path = Vec::new();
+    let mut subpath_open = false;
+    for index in 0..command_count {
+        if *total_path_commands == MAX_PATH_COMMANDS {
+            return Err("Snapshot has too many path commands".into());
+        }
+        let [tag] = take(bytes)?;
+        if index == 0 && tag != 0 {
+            return Err("Snapshot path does not start with Move".into());
+        }
+        let command = match tag {
+            0 => {
+                subpath_open = true;
+                PathCommand::Move(read_point(bytes, origin)?)
+            }
+            1 => PathCommand::Line(read_point(bytes, origin)?),
+            2 => PathCommand::Cubic(
+                read_point(bytes, origin)?,
+                read_point(bytes, origin)?,
+                read_point(bytes, origin)?,
+            ),
+            3 => {
+                if !subpath_open
+                    || !matches!(
+                        path.last(),
+                        Some(PathCommand::Line(_) | PathCommand::Cubic(..))
+                    )
+                {
+                    return Err("Snapshot Close does not follow a segment in its subpath".into());
+                }
+                subpath_open = false;
+                PathCommand::Close
+            }
+            _ => return Err("Invalid snapshot path command".into()),
+        };
+        *total_path_commands += 1;
+        path.push(command);
+    }
+    Ok(path)
+}
+
+fn read_point(bytes: &mut &[u8], origin: Point) -> Result<Point, String> {
+    let x = f32::from_le_bytes(take(bytes)?);
+    let y = f32::from_le_bytes(take(bytes)?);
+    let point = origin.offset(x, y);
+    if !point.is_finite() {
+        return Err("Non-finite snapshot coordinate".into());
+    }
+    Ok(point)
 }
 
 #[cfg(test)]
@@ -362,311 +323,513 @@ mod tests {
         )
     }
 
-    fn small_surface(outline: Option<Outline>) -> Primitive {
+    fn groups(surface: &Primitive) -> &[SurfaceGroup] {
+        let Primitive::Surface { groups } = surface else {
+            panic!("Expected a surface");
+        };
+        groups
+    }
+
+    fn groups_mut(surface: &mut Primitive) -> &mut Vec<SurfaceGroup> {
+        let Primitive::Surface { groups } = surface else {
+            panic!("Expected a surface");
+        };
+        groups
+    }
+
+    fn small_surface() -> Primitive {
         Primitive::Surface {
-            layers: vec![
-                (
-                    vec![vec![
-                        Point::new(8., -5.),
-                        Point::new(11., -5.),
-                        Point::new(11., -3.),
-                        Point::new(8., -3.),
-                    ]],
-                    [120, 180, 220],
-                ),
-                (
-                    vec![vec![
-                        Point::new(9., -4.75),
-                        Point::new(10.5, -4.75),
-                        Point::new(9.25, -4.),
-                    ]],
-                    [25, 45, 60],
-                ),
+            groups: vec![
+                SurfaceGroup {
+                    alpha: 0.6,
+                    fills: vec![SurfaceFill {
+                        region: vec![
+                            PathCommand::Move(Point::new(8., -5.)),
+                            PathCommand::Line(Point::new(11., -5.)),
+                            PathCommand::Cubic(
+                                Point::new(12., -4.5),
+                                Point::new(12., -3.5),
+                                Point::new(11., -3.),
+                            ),
+                            PathCommand::Line(Point::new(8., -3.)),
+                            PathCommand::Close,
+                            PathCommand::Move(Point::new(9., -4.5)),
+                            PathCommand::Line(Point::new(10., -4.)),
+                            PathCommand::Line(Point::new(9., -3.5)),
+                            PathCommand::Close,
+                        ],
+                        color: [120, 180, 220],
+                        tones: vec![
+                            (
+                                vec![
+                                    PathCommand::Move(Point::new(9., -4.75)),
+                                    PathCommand::Cubic(
+                                        Point::new(10., -4.75),
+                                        Point::new(10.5, -4.25),
+                                        Point::new(9.25, -4.),
+                                    ),
+                                    PathCommand::Close,
+                                ],
+                                [25, 45, 60],
+                            ),
+                            (vec![PathCommand::Move(Point::new(10., -4.))], [255; 3]),
+                        ],
+                    }],
+                    strokes: vec![SurfaceStroke {
+                        paths: vec![
+                            PathCommand::Move(Point::new(8., -3.)),
+                            PathCommand::Line(Point::new(11., -3.)),
+                            PathCommand::Move(Point::new(8., -5.)),
+                            PathCommand::Cubic(
+                                Point::new(9., -5.5),
+                                Point::new(10., -5.5),
+                                Point::new(11., -5.),
+                            ),
+                        ],
+                        outline: Outline {
+                            color: [26, 33, 41],
+                            alpha: 0.45,
+                            width: 0.8,
+                        },
+                    }],
+                },
+                SurfaceGroup {
+                    alpha: 1.,
+                    fills: vec![],
+                    strokes: vec![],
+                },
             ],
-            rims: vec![vec![Point::new(8., -3.), Point::new(11., -3.)]],
-            outline,
         }
     }
 
-    fn assert_surface_eq(expected: Primitive, actual: Primitive) {
-        let fields = |surface| match surface {
-            Primitive::Surface {
-                layers,
-                rims,
-                outline,
-            } => (layers, rims, outline),
-            _ => panic!("Expected a surface"),
-        };
-        assert_eq!(fields(actual), fields(expected));
+    // A complete independent wire fixture, including every required color.
+    fn wire_fixture() -> Vec<u8> {
+        let mut bytes = b"RSF2".to_vec();
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&0.5f32.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&[1, 2, 3]);
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.push(0);
+        bytes.extend_from_slice(&2f32.to_le_bytes());
+        bytes.extend_from_slice(&3f32.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&[4, 5, 6]);
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.push(0);
+        bytes.extend_from_slice(&4f32.to_le_bytes());
+        bytes.extend_from_slice(&5f32.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&[7, 8, 9]);
+        bytes.extend_from_slice(&0.75f32.to_le_bytes());
+        bytes.extend_from_slice(&1.25f32.to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.push(0);
+        bytes.extend_from_slice(&6f32.to_le_bytes());
+        bytes.extend_from_slice(&7f32.to_le_bytes());
+        bytes
     }
 
     #[test]
-    fn round_trip() {
+    fn round_trip_all_commands_and_groups() {
         let origin = Point::new(10., -4.);
-        let outline = Outline {
-            color: [26, 33, 41],
-            alpha: 0.45,
-            width: 0.8,
+        let surface = small_surface();
+        let text = encode(&surface, origin).unwrap();
+        assert_eq!(groups(&surface), groups(&decode(&text, origin).unwrap()));
+        let empty = Primitive::Surface { groups: vec![] };
+        let text = encode(&empty, origin).unwrap();
+        assert!(groups(&decode(&text, origin).unwrap()).is_empty());
+    }
+
+    #[test]
+    fn exact_rsf2_layout() {
+        let surface = Primitive::Surface {
+            groups: vec![SurfaceGroup {
+                alpha: 0.5,
+                fills: vec![SurfaceFill {
+                    region: vec![PathCommand::Move(Point::new(12., -1.))],
+                    color: [1, 2, 3],
+                    tones: vec![(vec![PathCommand::Move(Point::new(14., 1.))], [4, 5, 6])],
+                }],
+                strokes: vec![SurfaceStroke {
+                    paths: vec![PathCommand::Move(Point::new(16., 3.))],
+                    outline: Outline {
+                        color: [7, 8, 9],
+                        alpha: 0.75,
+                        width: 1.25,
+                    },
+                }],
+            }],
         };
-        for outline in [Some(outline), None] {
-            let surface = small_surface(outline);
-            let text = encode(&surface, origin).unwrap();
-            assert_surface_eq(surface, decode(&text, origin).unwrap());
-        }
+        let text = encode(&surface, Point::new(10., -4.)).unwrap();
+        assert_eq!(
+            inflate(&STANDARD.decode(text).unwrap()).unwrap(),
+            wire_fixture()
+        );
     }
 
     #[test]
     fn origin_shift() {
         let origin = Point::new(10., -4.);
         let moved_origin = Point::new(-6., 3.5);
-        let mut surface = small_surface(None);
+        let mut surface = small_surface();
         let text = encode(&surface, origin).unwrap();
-        let Primitive::Surface { layers, rims, .. } = &mut surface else {
-            panic!("Expected a surface");
-        };
-        for point in layers
-            .iter_mut()
-            .flat_map(|(contours, _)| contours)
-            .chain(rims)
-            .flatten()
-        {
-            *point = point.offset(moved_origin.x - origin.x, moved_origin.y - origin.y);
+        for group in groups_mut(&mut surface) {
+            for path in group
+                .fills
+                .iter_mut()
+                .flat_map(|fill| {
+                    std::iter::once(&mut fill.region)
+                        .chain(fill.tones.iter_mut().map(|(path, _)| path))
+                })
+                .chain(group.strokes.iter_mut().map(|stroke| &mut stroke.paths))
+            {
+                for command in path {
+                    *command = command.map(|point| {
+                        point.offset(moved_origin.x - origin.x, moved_origin.y - origin.y)
+                    });
+                }
+            }
         }
-        assert_surface_eq(surface, decode(&text, moved_origin).unwrap());
+        assert_eq!(
+            groups(&surface),
+            groups(&decode(&text, moved_origin).unwrap())
+        );
     }
 
-    #[test]
-    fn thins_large_surface() {
-        const POINTS: usize = 400;
-        let mut noise = 1u32;
-        let layers: Vec<(Vec<Vec<Point>>, [u8; 3])> = (0..40)
-            .map(|layer| {
-                let contours = (0..20)
-                    .map(|contour| {
-                        (0..POINTS)
-                            .map(|i| {
-                                noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-                                let radius = if layer == 0 && contour == 0 {
-                                    0.01
-                                } else {
-                                    11.5 + (noise >> 16) as f32 / 65_536.
-                                };
-                                let angle = std::f32::consts::TAU * i as f32 / POINTS as f32;
-                                let (sin, cos) = angle.sin_cos();
-                                Point::new(
-                                    30. * contour as f32 + radius * cos,
-                                    30. * layer as f32 + radius * sin,
-                                )
-                            })
-                            .collect()
-                    })
-                    .collect();
-                (contours, [layer as u8, 70, 130])
+    fn noisy_path(noise: &mut u32, points: usize) -> Vec<PathCommand> {
+        let mut coordinate = || {
+            *noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            f32::from_bits(0x3f80_0000 | (*noise >> 9))
+        };
+        (0..points)
+            .map(|index| {
+                let point = Point::new(coordinate(), coordinate());
+                if index == 0 {
+                    PathCommand::Move(point)
+                } else {
+                    PathCommand::Line(point)
+                }
             })
-            .collect();
-        let mut closed_rim = layers[0].0[0].clone();
-        closed_rim.push(closed_rim[0]);
-        let rim_start = closed_rim[0];
-        let surface = Primitive::Surface {
-            layers,
-            rims: vec![
-                closed_rim,
-                (0..100).map(|i| Point::new(i as f32, 5.)).collect(),
-            ],
-            outline: None,
-        };
-        let origin = Point::default();
-        let text = encode(&surface, origin).unwrap();
+            .collect()
+    }
+
+    #[test]
+    fn drops_alternate_tones_without_changing_regions_or_strokes() {
+        let mut surface = small_surface();
+        let group = &mut groups_mut(&mut surface)[0];
+        group.fills.push(group.fills[0].clone());
+        let mut noise = 1;
+        for (fill_index, fill) in group.fills.iter_mut().enumerate() {
+            fill.tones = (0..9)
+                .map(|index| (noisy_path(&mut noise, 6000), [fill_index as u8, index, 60]))
+                .collect();
+        }
+        let (original, _) = write_snapshot(groups(&surface), Point::default(), 1).unwrap();
+        assert!(STANDARD.encode(compress_to_vec(&original, 9)).len() > MAX_BYTES);
+        let text = encode(&surface, Point::default()).unwrap();
         assert!(text.len() <= MAX_BYTES);
-        let Primitive::Surface { layers, rims, .. } = decode(&text, origin).unwrap() else {
-            panic!("Expected a surface");
-        };
-        assert_eq!(layers.len(), 40);
-        assert_eq!(layers[0].0[0].len(), POINTS);
-        let mut total_points = 0;
-        for (contours, _) in layers {
-            assert_eq!(contours.len(), 20);
-            for contour in contours {
-                assert!((3..=POINTS).contains(&contour.len()));
-                total_points += contour.len();
-            }
-        }
-        assert!(total_points < 40 * 20 * POINTS);
-        assert_eq!(rims[0].len(), 4);
-        assert_eq!(rims[0].first(), Some(&rim_start));
-        assert_eq!(rims[0].last(), Some(&rim_start));
-        assert_eq!(rims[1], [Point::new(0., 5.), Point::new(99., 5.)]);
-    }
-
-    #[test]
-    fn rejects_malformed_snapshots() {
-        let origin = Point::default();
-        assert!(decode("not base64!", origin).is_err());
-
-        // No outline or layers, with one rim containing two points.
-        let mut bytes = b"RSF1\0".to_vec();
-        for field in [0u32, 1, 2] {
-            bytes.extend_from_slice(&field.to_le_bytes());
-        }
-        let point_start = bytes.len();
-        bytes.extend_from_slice(&[0; 16]);
-        assert!(decode_bytes(&bytes).is_ok());
-
-        assert_eq!(decode_bytes(&bytes[..4]).unwrap_err(), "Truncated snapshot");
-        let mut bad_magic = bytes.clone();
-        bad_magic[0] = b'X';
-        assert_eq!(
-            decode_bytes(&bad_magic).unwrap_err(),
-            "Invalid snapshot magic"
-        );
-        let mut bad_count = bytes.clone();
-        bad_count[point_start - 4..point_start].copy_from_slice(&3u32.to_le_bytes());
-        assert_eq!(
-            decode_bytes(&bad_count).unwrap_err(),
-            "Snapshot count exceeds remaining data"
-        );
-        bytes[point_start..point_start + 4].copy_from_slice(&f32::NAN.to_le_bytes());
-        assert_eq!(
-            decode_bytes(&bytes).unwrap_err(),
-            "Non-finite snapshot coordinate"
-        );
-    }
-
-    #[test]
-    fn rejects_inflate_over_16_mib() {
-        // The header is 17 bytes, so this valid rim inflates to 16 MiB plus one byte.
-        let point_count = (16 * 1024 * 1024u32 - 17).div_ceil(8);
-        let mut bytes = b"RSF1\0".to_vec();
-        for field in [0, 1, point_count] {
-            bytes.extend_from_slice(&field.to_le_bytes());
-        }
-        bytes.resize(17 + point_count as usize * 8, 0);
-        assert!(decode_bytes(&bytes).is_err());
-    }
-
-    #[test]
-    fn rejects_short_paths() {
-        for (contour, min_points) in [(true, 3u32), (false, 2)] {
-            for point_count in 0..min_points {
-                let mut bytes = b"RSF1\0".to_vec();
-                bytes.extend_from_slice(&u32::from(contour).to_le_bytes());
-                if contour {
-                    bytes.extend_from_slice(&[0; 3]); // Layer color.
-                }
-                bytes.extend_from_slice(&2u32.to_le_bytes()); // Path count.
-                // A valid second path leaves enough bytes for the path-count bound.
-                for count in [point_count, 6] {
-                    bytes.extend_from_slice(&count.to_le_bytes());
-                    bytes.resize(bytes.len() + count as usize * 8, 0);
-                }
-                if contour {
-                    bytes.extend_from_slice(&[0; 4]); // Rim count.
-                }
-                assert!(decode_bytes(&bytes).is_err());
+        let decoded = decode(&text, Point::default()).unwrap();
+        let before = groups(&surface);
+        let after = groups(&decoded);
+        assert_eq!(before.len(), after.len());
+        let retained = after[0].fills[0].tones.len();
+        assert!(retained < before[0].fills[0].tones.len());
+        let stride = [2, 4, 8, 16]
+            .into_iter()
+            .find(|stride| before[0].fills[0].tones.len() / stride == retained)
+            .unwrap();
+        for (before, after) in before.iter().zip(after) {
+            assert_eq!(before.alpha, after.alpha);
+            assert_eq!(before.strokes, after.strokes);
+            assert_eq!(before.fills.len(), after.fills.len());
+            for (before, after) in before.fills.iter().zip(&after.fills) {
+                assert_eq!(before.region, after.region);
+                assert_eq!(before.color, after.color);
+                let expected: Vec<_> = before
+                    .tones
+                    .iter()
+                    .skip(stride - 1)
+                    .step_by(stride)
+                    .cloned()
+                    .collect();
+                assert_eq!(after.tones, expected);
             }
         }
     }
 
     #[test]
-    fn drops_short_paths_on_encode() {
-        let mut surface = small_surface(None);
-        let Primitive::Surface { layers, rims, .. } = &mut surface else {
-            panic!("Expected a surface");
-        };
-        let point = Point::default();
-        layers[0].0.extend([vec![], vec![point], vec![point; 2]]);
-        rims.extend([vec![], vec![point]]);
-        let text = encode(&surface, point).unwrap();
-        assert_surface_eq(small_surface(None), decode(&text, point).unwrap());
+    fn can_drop_the_last_tone_but_never_required_paths() {
+        let mut noise = 1;
+        let path = noisy_path(&mut noise, 90_000);
+        let mut surface = small_surface();
+        groups_mut(&mut surface)[0].fills[0].tones = vec![(path.clone(), [1, 2, 3])];
+        let text = encode(&surface, Point::default()).unwrap();
+        let decoded = decode(&text, Point::default()).unwrap();
+        groups_mut(&mut surface)[0].fills[0].tones.clear();
+        assert_eq!(groups(&surface), groups(&decoded));
+
+        let mut oversized_region = surface.clone();
+        groups_mut(&mut oversized_region)[0].fills[0].region = path.clone();
+        assert!(encode(&oversized_region, Point::default()).is_none());
+        let mut oversized_stroke = surface;
+        groups_mut(&mut oversized_stroke)[0].strokes[0].paths = path;
+        assert!(encode(&oversized_stroke, Point::default()).is_none());
     }
 
     #[test]
-    fn rejects_empty_layers_on_decode() {
-        let mut bytes = b"RSF1\0".to_vec();
-        bytes.extend_from_slice(&1u32.to_le_bytes()); // Layer count.
-        bytes.extend_from_slice(&[0; 7]); // Layer color and zero contours.
-        bytes.extend_from_slice(&1u32.to_le_bytes()); // Rim count.
-        bytes.extend_from_slice(&3u32.to_le_bytes()); // Enough data for the layer-count bound.
-        bytes.extend_from_slice(&[0; 24]);
-        assert_eq!(
-            decode_bytes(&bytes).unwrap_err(),
-            "Snapshot layer has no contours"
-        );
-    }
-
-    #[test]
-    fn drops_empty_layers_on_encode() {
-        let mut surface = small_surface(None);
-        let Primitive::Surface { layers, .. } = &mut surface else {
-            panic!("Expected a surface");
-        };
+    fn encode_rejects_over_budget_and_round_trips_at_the_limit() {
         let origin = Point::default();
-        layers.insert(0, (vec![], [1, 2, 3]));
-        layers.insert(2, (vec![vec![origin; 2]], [4, 5, 6]));
+        let mut surface = small_surface();
+        let group = &mut groups_mut(&mut surface)[0];
+        let fill = &mut group.fills[0];
+        fill.tones.clear();
+        fill.region.resize(
+            MAX_PATH_COMMANDS + 1 - group.strokes[0].paths.len(),
+            PathCommand::Line(origin),
+        );
+        assert!(encode(&surface, origin).is_none());
+
+        groups_mut(&mut surface)[0].fills[0].region.pop();
         let text = encode(&surface, origin).unwrap();
-        assert_surface_eq(small_surface(None), decode(&text, origin).unwrap());
+        let decoded = decode(&text, origin).unwrap();
+        assert!(groups(&decoded) == groups(&surface));
     }
 
     #[test]
-    fn rejects_invalid_outlines() {
-        for (width, alpha) in [
-            (f32::INFINITY, 1.),
-            (f32::NAN, 1.),
-            (-1., 1.),
-            (1., f32::NAN),
-            (1., f32::INFINITY),
-            (1., -0.1),
-            (1., 1.1),
-        ] {
-            let mut bytes = b"RSF1\x01\0\0\0".to_vec();
-            bytes.extend_from_slice(&alpha.to_le_bytes());
-            bytes.extend_from_slice(&width.to_le_bytes());
-            bytes.extend_from_slice(&[0; 8]);
-            assert!(
-                decode_bytes(&bytes).is_err(),
-                "width {width}, alpha {alpha}"
-            );
-            let outline = Outline {
-                color: [0; 3],
-                alpha,
-                width,
-            };
-            assert!(encode(&small_surface(Some(outline)), Point::default()).is_none());
-        }
-    }
-
-    #[test]
-    fn keeps_contour_when_thinning_introduces_a_crossing() {
-        // The shortcut crosses another edge while changing area by less than 10%.
-        let points = [
-            [-4., -2.],
-            [-4., -4.],
-            [5., -4.],
-            [-1., -3.],
-            [3., 1.],
-            [2., 24.],
-        ]
-        .map(|[x, y]| Point::new(x, y));
-        assert_eq!(thin(&points, 2., true).as_ref(), points);
-    }
-
-    #[test]
-    fn keeps_contour_when_thinning_distorts_signed_area() {
-        let loses_area = [[0., 0.], [10., 0.], [10., 5.], [5., 8.], [0., 5.]];
-        let reverses = [[3., 3.], [5., 3.], [10., 4.], [4., 0.], [1., 6.]];
-        for (points, tolerance) in [(loses_area, 3.), (reverses, 8.)] {
-            let points = points.map(|[x, y]| Point::new(x, y));
-            assert_eq!(thin(&points, tolerance, true).as_ref(), points);
-        }
-    }
-
-    #[test]
-    fn rejects_trailing_compressed_input() {
+    fn encode_drops_alternate_tones_to_fit_the_command_budget() {
         let origin = Point::default();
-        let text = encode(&small_surface(None), origin).unwrap();
-        let mut packed = STANDARD.decode(text).unwrap();
+        let mut surface = small_surface();
+        let group = &mut groups_mut(&mut surface)[0];
+        let fill = &mut group.fills[0];
+        fill.region.resize(
+            MAX_PATH_COMMANDS - group.strokes[0].paths.len() - fill.tones[1].0.len(),
+            PathCommand::Line(origin),
+        );
+
+        let text = encode(&surface, origin).unwrap();
+        let decoded = decode(&text, origin).unwrap();
+        groups_mut(&mut surface)[0].fills[0].tones.remove(0);
+        assert!(groups(&decoded) == groups(&surface));
+    }
+
+    #[test]
+    fn rejects_bad_magic_truncation_and_counts() {
+        let fixture = wire_fixture();
+        assert!(decode_bytes(&fixture).is_ok());
+        for length in 0..fixture.len() {
+            assert!(decode_bytes(&fixture[..length]).is_err(), "length {length}");
+        }
+        for magic in [b"RSF1", b"XSF2"] {
+            let mut bytes = fixture.clone();
+            bytes[..4].copy_from_slice(magic);
+            assert_eq!(decode_bytes(&bytes).unwrap_err(), "Invalid snapshot magic");
+        }
+        for offset in [4, 12, 19, 32, 39, 52, 67] {
+            let mut bytes = fixture.clone();
+            bytes[offset..offset + 4].copy_from_slice(&u32::MAX.to_le_bytes());
+            assert_eq!(
+                decode_bytes(&bytes).unwrap_err(),
+                "Snapshot count exceeds remaining data",
+                "count at {offset}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_empty_paths_and_paths_without_move() {
+        for (count_offset, tag_offset) in [(19, 23), (39, 43), (67, 71)] {
+            let mut bytes = wire_fixture();
+            bytes[count_offset..count_offset + 4].copy_from_slice(&0u32.to_le_bytes());
+            assert_eq!(decode_bytes(&bytes).unwrap_err(), "Snapshot path is empty");
+            for tag in [1, 2, 3, 255] {
+                let mut bytes = wire_fixture();
+                bytes[tag_offset] = tag;
+                assert_eq!(
+                    decode_bytes(&bytes).unwrap_err(),
+                    "Snapshot path does not start with Move"
+                );
+            }
+        }
+        let mut surface = small_surface();
+        for path in [
+            vec![],
+            vec![PathCommand::Close],
+            vec![PathCommand::Line(Point::default())],
+        ] {
+            groups_mut(&mut surface)[0].fills[0].region = path;
+            assert!(encode(&surface, Point::default()).is_none());
+        }
+        let mut bytes = wire_fixture();
+        bytes[19..23].copy_from_slice(&2u32.to_le_bytes());
+        bytes.insert(32, 255);
+        assert_eq!(
+            decode_bytes(&bytes).unwrap_err(),
+            "Invalid snapshot path command"
+        );
+    }
+
+    #[test]
+    fn rejects_more_than_one_million_total_path_commands() {
+        fn path(bytes: &mut Vec<u8>, commands: usize) {
+            write_count(bytes, commands).unwrap();
+            for index in 0..commands {
+                bytes.push(u8::from(index != 0));
+                bytes.extend_from_slice(&[0; 8]);
+            }
+        }
+
+        fn fixture(last_path_commands: usize) -> Vec<u8> {
+            let mut bytes = MAGIC.to_vec();
+            write_count(&mut bytes, 2).unwrap();
+            bytes.extend_from_slice(&1f32.to_le_bytes());
+            write_count(&mut bytes, 1).unwrap();
+            bytes.extend_from_slice(&[1, 2, 3]);
+            path(&mut bytes, 250_000);
+            write_count(&mut bytes, 1).unwrap();
+            bytes.extend_from_slice(&[4, 5, 6]);
+            path(&mut bytes, 250_000);
+            write_count(&mut bytes, 1).unwrap();
+            bytes.extend_from_slice(&[7, 8, 9]);
+            bytes.extend_from_slice(&1f32.to_le_bytes());
+            bytes.extend_from_slice(&1f32.to_le_bytes());
+            path(&mut bytes, 250_000);
+            bytes.extend_from_slice(&1f32.to_le_bytes());
+            write_count(&mut bytes, 1).unwrap();
+            bytes.extend_from_slice(&[10, 11, 12]);
+            path(&mut bytes, last_path_commands);
+            write_count(&mut bytes, 0).unwrap();
+            write_count(&mut bytes, 0).unwrap();
+            bytes
+        }
+
+        // The budget spans regions, tones, strokes, and groups.
+        assert!(decode_bytes(&fixture(250_000)).is_ok());
+        assert_eq!(
+            decode_bytes(&fixture(250_001)).err().as_deref(),
+            Some("Snapshot has too many path commands")
+        );
+    }
+
+    #[test]
+    fn rejects_close_without_preceding_segment_in_subpath() {
+        let point = Point::default();
+        for path in [
+            vec![PathCommand::Move(point), PathCommand::Close],
+            vec![
+                PathCommand::Move(point),
+                PathCommand::Line(point),
+                PathCommand::Close,
+                PathCommand::Close,
+            ],
+            vec![
+                PathCommand::Move(point),
+                PathCommand::Line(point),
+                PathCommand::Move(point),
+                PathCommand::Close,
+            ],
+            vec![
+                PathCommand::Move(point),
+                PathCommand::Line(point),
+                PathCommand::Close,
+                PathCommand::Line(point),
+                PathCommand::Close,
+            ],
+        ] {
+            let mut surface = small_surface();
+            groups_mut(&mut surface)[0].fills[0].region = path;
+            let (bytes, _) = write_snapshot(groups(&surface), point, 1).unwrap();
+            assert_eq!(
+                decode_bytes(&bytes).unwrap_err(),
+                "Snapshot Close does not follow a segment in its subpath"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_alpha_and_width() {
+        for alpha in [0., -0.1, 1.1, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            for offset in [8, 59] {
+                let mut bytes = wire_fixture();
+                bytes[offset..offset + 4].copy_from_slice(&alpha.to_le_bytes());
+                assert!(decode_bytes(&bytes).is_err(), "alpha {alpha} at {offset}");
+            }
+            let mut surface = small_surface();
+            groups_mut(&mut surface)[0].alpha = alpha;
+            assert!(encode(&surface, Point::default()).is_none());
+            groups_mut(&mut surface)[0].alpha = 1.;
+            groups_mut(&mut surface)[0].strokes[0].outline.alpha = alpha;
+            assert!(encode(&surface, Point::default()).is_none());
+        }
+        for width in [0., -1., f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let mut bytes = wire_fixture();
+            bytes[63..67].copy_from_slice(&width.to_le_bytes());
+            assert!(decode_bytes(&bytes).is_err(), "width {width}");
+            let mut surface = small_surface();
+            groups_mut(&mut surface)[0].strokes[0].outline.width = width;
+            assert!(encode(&surface, Point::default()).is_none());
+        }
+    }
+
+    #[test]
+    fn rejects_non_finite_coordinates_and_origins() {
+        for coordinate in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            for offset in [24, 28, 44, 48, 72, 76] {
+                let mut bytes = wire_fixture();
+                bytes[offset..offset + 4].copy_from_slice(&coordinate.to_le_bytes());
+                assert_eq!(
+                    decode_bytes(&bytes).unwrap_err(),
+                    "Non-finite snapshot coordinate"
+                );
+            }
+            let origin = Point::new(coordinate, 0.);
+            let surface = small_surface();
+            assert!(encode(&surface, origin).is_none());
+            assert!(decode(&encode(&surface, Point::default()).unwrap(), origin).is_err());
+        }
+        let mut bytes = wire_fixture();
+        bytes[24..28].copy_from_slice(&f32::MAX.to_le_bytes());
+        let text = STANDARD.encode(compress_to_vec(&bytes, 9));
+        assert!(decode(&text, Point::new(f32::MAX, 0.)).is_err());
+        let mut surface = small_surface();
+        groups_mut(&mut surface)[0].fills[0].region[0] =
+            PathCommand::Move(Point::new(f32::MAX, 0.));
+        assert!(encode(&surface, Point::new(-f32::MAX, 0.)).is_none());
+    }
+
+    #[test]
+    fn rejects_trailing_encoded_compressed_and_inflated_data() {
+        let text = encode(&small_surface(), Point::default()).unwrap();
+        for suffix in [" ", "=", "AAAA", "\n"] {
+            assert!(decode(&(text.clone() + suffix), Point::default()).is_err());
+        }
+        let mut packed = STANDARD.decode(&text).unwrap();
         packed.push(0);
-        assert!(decode(&STANDARD.encode(packed), origin).is_err());
+        assert_eq!(
+            decode(&STANDARD.encode(packed), Point::default()).unwrap_err(),
+            "Trailing compressed snapshot data"
+        );
+        let mut bytes = wire_fixture();
+        bytes.push(0);
+        assert_eq!(decode_bytes(&bytes).unwrap_err(), "Trailing snapshot data");
+    }
+
+    #[test]
+    fn rejects_invalid_or_oversized_base64_and_deflate() {
+        for text in ["", "not base64!", "AA=="] {
+            assert!(decode(text, Point::default()).is_err());
+        }
+        assert_eq!(
+            decode(&"A".repeat(MAX_BYTES + 1), Point::default()).unwrap_err(),
+            "Snapshot is too large"
+        );
+        let bytes = vec![0; MAX_INFLATED_BYTES + 1];
+        assert_eq!(
+            decode_bytes(&bytes).unwrap_err(),
+            "Invalid or oversized snapshot deflate data"
+        );
+        let packed = compress_to_vec(&bytes[..MAX_INFLATED_BYTES], 1);
+        assert_eq!(inflate(&packed).unwrap().len(), MAX_INFLATED_BYTES);
     }
 
     #[test]

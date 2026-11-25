@@ -157,13 +157,10 @@ pub enum Primitive {
         spread: f32,
         blur: f32,
     },
-    /// A 3D model's orbital surface as seen in its view: shading layers,
-    /// each a region filled even-odd in an exact colour and drawn over the
-    /// last, then the visible outline runs stroked with `outline`.
+    /// A 3D model's orbital surface as seen in its view, composited by
+    /// depth group from deepest to nearest in exact colours.
     Surface {
-        layers: Vec<(Vec<Vec<Point>>, [u8; 3])>,
-        rims: Vec<Vec<Point>>,
-        outline: Option<Outline>,
+        groups: Vec<SurfaceGroup>,
     },
     /// A 3D model's soft background card: a rounded rectangle in exact colors.
     Card {
@@ -216,6 +213,28 @@ pub struct Outline {
     pub color: [u8; 3],
     pub alpha: f32,
     pub width: f32,
+}
+/// A surface depth layer, composited as a whole at `alpha`. Opaque fills
+/// and their clipped shading tones precede mesh lines and outline runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SurfaceGroup {
+    pub alpha: f32,
+    pub fills: Vec<SurfaceFill>,
+    pub strokes: Vec<SurfaceStroke>,
+}
+/// A surface phase's nonzero-filled region and nested shading tones. Each
+/// tone is clipped to `region`, so its fitted curve cannot spill past it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SurfaceFill {
+    pub region: Vec<crate::graphics::PathCommand>,
+    pub color: [u8; 3],
+    pub tones: Vec<(Vec<crate::graphics::PathCommand>, [u8; 3])>,
+}
+/// Surface mesh lines or silhouette runs with an exact stroke paint.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SurfaceStroke {
+    pub paths: Vec<crate::graphics::PathCommand>,
+    pub outline: Outline,
 }
 fn visible(a: &Atom, doc: &Document) -> bool {
     crate::atom_labels::visible(a, doc)
@@ -4396,15 +4415,26 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                     points.extend([p.offset(-r, -r), p.offset(r, r)]);
                 }
             }
-            Primitive::Surface {
-                layers,
-                rims,
-                outline,
-            } => {
-                let r = outline.map_or(0., |o| o.width / 2.);
-                let contours = layers.iter().flat_map(|(region, _)| region);
-                for p in contours.chain(rims).flatten() {
-                    points.extend([p.offset(-r, -r), p.offset(r, r)]);
+            Primitive::Surface { groups } => {
+                for group in groups {
+                    for fill in &group.fills {
+                        points.extend(
+                            fill.region
+                                .iter()
+                                .chain(fill.tones.iter().flat_map(|(commands, _)| commands))
+                                .flat_map(crate::graphics::PathCommand::iter_points),
+                        );
+                    }
+                    for stroke in &group.strokes {
+                        let r = stroke.outline.width / 2.;
+                        for p in stroke
+                            .paths
+                            .iter()
+                            .flat_map(crate::graphics::PathCommand::iter_points)
+                        {
+                            points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                        }
+                    }
                 }
             }
             Primitive::Card {
