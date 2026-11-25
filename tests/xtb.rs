@@ -1569,6 +1569,7 @@ mod protocol_v2 {
                 rotor_cutoff_cm1: 100.0,
                 imaginary_cutoff_cm1: 20.0,
                 symmetry_number: 2,
+                point_group: None,
             });
             result.hessian = (0..9)
                 .flat_map(|row| (0..9).map(move |col| f64::from(row + col) / 13.0))

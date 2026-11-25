@@ -23,6 +23,7 @@ use std::{
 #[derive(Debug, Clone)]
 pub(crate) struct Job {
     pub optimize: bool,
+    pub frequencies: bool,
     pub numbers: Vec<u8>,
     pub positions: Vec<[f64; 3]>,
     pub charge: i32,
@@ -48,6 +49,8 @@ pub(crate) enum Event {
         energies: Vec<f64>,
         positions: Vec<[f64; 3]>,
     },
+    /// The final Hessian evaluation is starting.
+    Hessian,
     /// Elapsed time goes on while the worker computes: every 250 ms.
     Tick,
     /// The last event of a job.
@@ -173,7 +176,7 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
         let options = Options {
             level,
             fixed_atoms: job.fixed,
-            tight_final: false,
+            tight_final: job.frequencies,
             ..Options::default()
         };
         let mut xtb = Xtb {
@@ -185,6 +188,8 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
         let mut batch = Batch::default();
         let outcome = optimize(&mut xtb, &open.numbers, &positions, &options, |step| {
             let positions = angstroms(step.positions);
+            // The Tight recheck reports the same step with a new energy.
+            path.truncate(step.index * step.positions.len());
             path.extend_from_slice(positions.as_flattened());
             let event = batch.push(step.index, step.energy, positions, Instant::now());
             if event.is_some_and(|event| tx.unbounded_send(event).is_err()) {
@@ -216,14 +221,17 @@ fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<R
         positions: final_xyz.map(|xyz| xyz.as_chunks::<3>().0.to_vec()),
         units: Units::Bohr,
         gradient: outcome.is_some(),
+        hessian: job.frequencies.then(HessianRequest::default),
         bond_orders: electronic,
         orbitals: if electronic {
             OrbitalOutput::Levels
         } else {
             OrbitalOutput::None
         },
-        ..Compute::default()
     };
+    if job.frequencies && tx.unbounded_send(Event::Hessian).is_err() {
+        return Err(canceled());
+    }
     let computed = session
         .compute(&final_request, cancel)
         .map_err(|error| worker_failure(&error))?;
@@ -390,6 +398,7 @@ impl Batch {
         if self.energies.is_empty() {
             self.first = index;
         }
+        self.energies.truncate(index - self.first);
         self.energies.push(energy);
         self.positions = positions;
         let elapsed = self.sent_at.map(|sent| now.duration_since(sent));
@@ -457,9 +466,10 @@ mod tests {
             Some(Event::Steps { first: 0, .. })
         ));
         assert!(push(1, -2., 99).is_none());
+        assert!(push(1, -2.1, 99).is_none());
         assert!(
             matches!(push(2, -3., 100), Some(Event::Steps { first: 1, energies, positions })
-            if energies == [-2., -3.] && positions == [[-3., 0., 0.]])
+            if energies == [-2.1, -3.] && positions == [[-3., 0., 0.]])
         );
         assert!(push(3, -4., 100).is_none());
         assert!(

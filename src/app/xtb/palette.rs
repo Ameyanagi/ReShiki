@@ -1,5 +1,5 @@
 //! The xTB results palette: docked under the status bar like NMR (or in the
-//! inspector), with Summary, Steps and Log, the stale banner, energy labels,
+//! inspector), with result tabs, the stale banner, energy labels,
 //! "Saved in file" and the large-results question on Save.
 use super::results::{self, RunInfo, View};
 use super::{Request, is, state};
@@ -119,7 +119,7 @@ impl Shown<'_> {
         results::method_line(&self.stored.result, self.frame, self.info)
     }
 
-    pub(super) fn rows(&self) -> Vec<(&'static str, String)> {
+    pub(super) fn rows(&self) -> Vec<(String, String)> {
         results::summary_rows(&self.stored.result, self.input, self.frame, self.info)
     }
 
@@ -680,7 +680,7 @@ pub(in crate::app) fn size_question(
     );
     let text = match lighter {
         Some((count, after)) => format!(
-            "Make lighter drops the full data you chose to keep for {count} result{} (optimization steps, gradients), leaving {} of results. Energies and final geometries stay; data imported from other programs stays.",
+            "Make lighter drops the full data you chose to keep for {count} result{} (optimization steps, gradients, normal modes), leaving {} of results. Energies and final geometries stay; data imported from other programs stays.",
             if count == 1 { "" } else { "s" },
             results::size(after)
         ),

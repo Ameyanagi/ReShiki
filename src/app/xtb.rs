@@ -22,6 +22,7 @@ mod results;
 mod run;
 mod state;
 mod tone;
+mod vibrations;
 mod view;
 
 #[cfg(test)]
@@ -73,7 +74,7 @@ pub(crate) enum Action {
 /// the card, sets what it names and runs with the card's other settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Entry {
-    /// Right-click → Calculate (xTB) ▸ Energy / Optimize.
+    /// A task from the right-click Calculate (xTB) menu.
     Task(CalcTask),
     /// The context row's "Optimize with GFN2-xTB".
     OptimizeGfn2,
@@ -511,10 +512,11 @@ impl App {
 
     /// Start `request`; its run replaces the card's last outcome.
     fn xtb_begin(&mut self, request: Request) -> Task<Message> {
-        if request.atoms.len() > state::MAX_ATOMS {
+        let limit = request.config.task.limit();
+        if request.atoms.len() > limit {
             self.xtb_fail(state::Failure::TooMany {
                 count: request.atoms.len(),
-                limit: state::MAX_ATOMS,
+                limit,
             });
             return Task::none();
         }
@@ -614,26 +616,25 @@ impl App {
             Conventions, Method, ScfSettings, Solvent, SolventCorrection, SolventModel,
         };
 
-        let atoms = launch.frame.numbers.len();
-        if atoms > state::MAX_ATOMS {
-            self.xtb_fail(state::Failure::TooMany {
-                count: atoms,
-                limit: state::MAX_ATOMS,
-            });
-            return Task::none();
-        }
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = &mut self.tab.xtb.run else {
             return Task::none();
         };
         let config = &run.config;
+        let count = launch.frame.numbers.len();
+        let limit = config.task.limit();
+        if count > limit {
+            self.xtb_fail(state::Failure::TooMany { count, limit });
+            return Task::none();
+        }
         let method = match config.method {
             qcdata::XtbMethod::Gfn2Xtb => Method::Gfn2,
             qcdata::XtbMethod::GXtb => Method::Gxtb,
             qcdata::XtbMethod::GfnFf => Method::Gfnff,
         };
         let job = run::Job {
-            optimize: config.task == CalcTask::Optimize,
+            optimize: config.task.optimizes(),
+            frequencies: config.task.frequencies(),
             numbers: launch.frame.numbers.clone(),
             positions: launch.frame.positions_angstrom.clone(),
             charge: config.charge,
@@ -694,7 +695,8 @@ impl App {
             return;
         };
         match event {
-            run::Event::Tick => {
+            run::Event::Tick | run::Event::Hessian => {
+                run.progress.hessian |= matches!(event, run::Event::Hessian);
                 self.status = run.status();
                 self.error = false;
             }
@@ -957,7 +959,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         .clone()
         .ok_or_else(|| state::Failure::Other("the run finished before it started".into()))?;
     let input = launch.frame.hash();
-    let optimized = run.config.task == CalcTask::Optimize;
+    let optimized = run.config.task.optimizes();
     let frames = if optimized {
         vec![Frame {
             positions_angstrom: report.positions.clone(),
@@ -967,10 +969,10 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         vec![]
     };
     let frame = frames.first().unwrap_or(&launch.frame);
-    let task = if optimized {
-        qcdata::Task::Optimize
-    } else {
-        qcdata::Task::Energy
+    let task = match run.config.task {
+        CalcTask::Energy => qcdata::Task::Energy,
+        CalcTask::Optimize | CalcTask::OptFreq => qcdata::Task::Optimize,
+        CalcTask::Frequencies => qcdata::Task::Hessian,
     };
     let gfnff_reference = (run.config.method == qcdata::XtbMethod::GfnFf).then_some(input);
     let computed = &report.computed;
@@ -1015,16 +1017,18 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
         finished: chrono::Local::now().format("%-d %b %Y %H:%M").to_string(),
         seconds: run.seconds(),
     };
+    let line = state::summary(
+        report.energy,
+        computed.homo_lumo_gap_ev,
+        optimized.then_some((report.converged, report.steps)),
+        result.vibrations.as_ref(),
+    );
     Ok(Pending {
         info,
         launch,
         frames,
         result,
-        line: state::summary(
-            report.energy,
-            computed.homo_lumo_gap_ev,
-            optimized.then_some((report.converged, report.steps)),
-        ),
+        line,
         notes,
     })
 }

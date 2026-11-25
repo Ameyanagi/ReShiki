@@ -9,16 +9,37 @@ pub(crate) enum Task {
     Energy,
     #[default]
     Optimize,
+    OptFreq,
+    Frequencies,
 }
 
 impl Task {
-    pub(crate) const ALL: [(Self, &'static str); 2] =
-        [(Self::Energy, "Energy"), (Self::Optimize, "Optimize")];
+    pub(crate) const ALL: [(Self, &'static str); 4] = [
+        (Self::Energy, "Energy"),
+        (Self::Optimize, "Optimize"),
+        (Self::OptFreq, "Opt + freq"),
+        (Self::Frequencies, "Frequencies"),
+    ];
+
+    pub(crate) fn optimizes(self) -> bool {
+        matches!(self, Self::Optimize | Self::OptFreq)
+    }
+
+    pub(crate) fn frequencies(self) -> bool {
+        matches!(self, Self::OptFreq | Self::Frequencies)
+    }
+
+    pub(crate) fn limit(self) -> usize {
+        if self.frequencies() {
+            qcdata::MAX_HESSIAN_ATOMS
+        } else {
+            qcdata::MAX_CALC_ATOMS
+        }
+    }
 }
 
 /// Shown disabled, each with the reason, until their tabs arrive.
-pub(crate) const LATER_TASKS: [(&str, &str); 3] = [
-    ("Opt + freq", "Coming in the Vibrations tab"),
+pub(crate) const LATER_TASKS: [(&str, &str); 2] = [
     ("Orbitals", "Coming in the Orbitals tab"),
     ("Conformers", "Coming with the conformer search"),
 ];
@@ -38,8 +59,6 @@ pub(crate) const SOLVENTS: [&str; 9] = [
     "THF",
     "hexane",
 ];
-/// Energy and optimization limit of the worker.
-pub(crate) const MAX_ATOMS: usize = 500;
 pub(crate) const NEAR_DEGENERATE: &str = "Near-degenerate electronic structure: results can differ between computers. Try a higher electronic temperature or more unpaired electrons.";
 
 /// Whether `method` runs an SCF, and so has orbitals and SCF settings.
@@ -174,7 +193,7 @@ impl Failure {
     }
 }
 
-fn capitalized(text: &str) -> String {
+pub(super) fn capitalized(text: &str) -> String {
     let mut chars = text.chars();
     chars.next().map_or_else(String::new, |first| {
         first.to_uppercase().chain(chars).collect()
@@ -441,6 +460,7 @@ pub(crate) fn signed(value: f64, places: usize) -> String {
 pub(crate) struct Progress {
     /// Energy of each accepted optimizer step, from step 0.
     pub energies: Vec<f64>,
+    pub hessian: bool,
 }
 
 impl Progress {
@@ -467,7 +487,9 @@ impl Progress {
         let time = format!("{seconds:.1} s");
         match task {
             Task::Energy => format!("Computing energy · {time}"),
-            Task::Optimize => match self.deltas().last() {
+            Task::Frequencies => format!("Computing frequencies · {time}"),
+            Task::OptFreq if self.hessian => format!("Computing frequencies · {time}"),
+            Task::Optimize | Task::OptFreq => match self.deltas().last() {
                 Some(delta) => format!(
                     "Optimizing · step {} · ΔE {} Eh · {time}",
                     self.step(),
@@ -485,6 +507,7 @@ pub(crate) fn summary(
     energy: f64,
     gap_ev: Option<f64>,
     optimized: Option<(bool, usize)>,
+    vibrations: Option<&qcdata::Vibrations>,
 ) -> String {
     let mut line = format!("E {} Eh", signed(energy, 6));
     if let Some(gap) = gap_ev {
@@ -497,6 +520,18 @@ pub(crate) fn summary(
         )),
         Some((false, steps)) => line.push_str(&format!(" · not converged after {steps} steps")),
         None => {}
+    }
+    if let Some(vibrations) = vibrations {
+        let imaginary = vibrations.imaginary_count();
+        match imaginary {
+            0 => {
+                if let Some(lowest) = vibrations.frequencies_cm1.first() {
+                    line.push_str(&format!(" · lowest {lowest:.0} cm⁻¹"));
+                }
+            }
+            1 => line.push_str(" · 1 imaginary frequency"),
+            n => line.push_str(&format!(" · {n} imaginary frequencies")),
+        }
     }
     line
 }
