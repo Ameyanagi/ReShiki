@@ -1,6 +1,7 @@
 //! Orbital isosurfaces drawn as vector shapes in a 3D model (prototype; see
 //! docs/plans/xtb-surfaces.md).
 pub mod draw;
+pub mod fit;
 pub mod mesh;
 pub mod snapshot;
 pub mod visible;
