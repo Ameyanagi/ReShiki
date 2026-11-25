@@ -219,7 +219,9 @@ fn explicit_isotope_masses_lower_water_frequencies() {
         .vibrations
         .unwrap();
     let masses = vec![16.0, 2.014, 2.014];
-    request.hessian.as_mut().unwrap().masses_amu = Some(masses.clone());
+    let hessian = request.hessian.as_mut().unwrap();
+    hessian.masses_amu = Some(masses.clone());
+    hessian.thermo.symmetry_number = Some(2);
     let heavy = session.compute(request).unwrap();
     let vibrations = heavy.vibrations.as_ref().unwrap();
     assert_eq!(vibrations.masses_amu, masses);
@@ -308,11 +310,12 @@ fn water_gxtb_alpb_reports_each_composite_part() {
     .unwrap()
     .composite
     .unwrap();
-    for (actual_parts, expected_parts) in [
-        (&actual.parts, &expected.parts),
+    for (actual_parts, expected_parts, hessian) in [
+        (&actual.parts, &expected.parts, false),
         (
             actual.hessian_parts.as_ref().unwrap(),
             expected.hessian_parts.as_ref().unwrap(),
+            true,
         ),
     ] {
         assert_eq!(
@@ -325,7 +328,13 @@ fn water_gxtb_alpb_reports_each_composite_part() {
             assert_eq!(part.conventions, expected.conventions);
             assert_eq!(part.electronic_temperature_k, expected.etemp);
             assert_eq!(part.max_iterations, expected.max_iter);
-            assert_eq!(part.iterations, expected.iterations);
+            if hessian {
+                assert_eq!(expected.iterations, 0);
+                assert_eq!(part.iterations, None);
+            } else {
+                assert!(expected.iterations > 0);
+                assert_eq!(part.iterations, Some(expected.iterations));
+            }
             assert_eq!(part.retry, expected.retry);
         }
     }

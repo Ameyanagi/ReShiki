@@ -127,11 +127,15 @@ computes leave the session open at its last successful geometry.
 | `orbitals`    | `"none"` (default), `"levels"` (energies and occupations), `"all"` (also every coefficient row and the basis) or `{ "rows": [i, …] }` (strictly increasing zero-based MO indices). SCF methods.                 |
 
 `masses_amu` overrides the vibrational analysis masses with one positive finite
-mass per atom. `thermo` accepts optional `temperature_k`, `pressure_pa`,
+mass per atom and requires `thermo.symmetry_number` because automatic symmetry
+ignores isotopes. `thermo` accepts optional `temperature_k`, `pressure_pa`,
 `rotor_cutoff_cm1`, `imaginary_cutoff_cm1`, `frequency_scale` and `symmetry_number`.
 Thermochemistry requires positive finite temperature, pressure and frequency
 scale, a symmetry number of at least 1, and finite cutoffs. The engine uses
 the magnitude of the imaginary cutoff.
+
+A caller that saves a Hessian result computed with explicit masses must store
+those masses on the frame it passes to `to_calc_result`.
 
 Each SCF starts from the previous geometry's converged wavefunction in the
 same session (axtb's `restart: previous`), whatever geometries the optimizer
@@ -201,8 +205,9 @@ method's own start `eeq`, `sad`, `eeq-bc`).
   and `retry` (`null` or a retry label). This includes settings selected by
   the driver's built-in ladders when `scf.retries` is omitted. With a Hessian,
   `hessian_parts` reports the same fields for each of the same three parts of
-  the Hessian calculation. Conversion to qcdata adds the component energies
-  to `energy_terms` with a `composite.` prefix.
+  the Hessian calculation, with `iterations` set to `null` when the driver
+  reports no SCF count. Conversion to qcdata adds the component energies to
+  `energy_terms` with a `composite.` prefix.
 - `gfnff` (GFN-FF): `{ "fragments": [...] }`, the zero-based fragment of each
   atom; the reference geometry and fragment charges are in `settings.gfnff`.
   Conversion to qcdata requires the reference frame hash.

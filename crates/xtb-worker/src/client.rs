@@ -901,20 +901,25 @@ fn validate_computed_header(
         return Err("Worker returned inconsistent method-specific outputs".into());
     }
     let composite = open.method == protocol::Method::Gxtb && open.solvent.is_some();
-    let has_parts = |parts: &BTreeMap<String, protocol::CompositePart>| {
+    let valid_parts = |parts: &BTreeMap<String, protocol::CompositePart>, hessian| {
         let names = ["gxtb", "gfn2_solvated", "gfn2_gas"];
-        parts.len() == names.len() && names.iter().all(|name| parts.contains_key(*name))
+        parts.len() == names.len()
+            && names.iter().all(|name| {
+                parts
+                    .get(*name)
+                    .is_some_and(|part| part.iterations.map_or(hessian, |count| count > 0))
+            })
     };
     if computed.composite.is_some() != composite
         || computed.composite.as_ref().is_some_and(|composite| {
             composite.components.is_empty()
                 || composite.components.values().any(|v| !v.is_finite())
-                || !has_parts(&composite.parts)
+                || !valid_parts(&composite.parts, false)
                 || composite.hessian_parts.is_some() != request.hessian.is_some()
                 || composite
                     .hessian_parts
                     .as_ref()
-                    .is_some_and(|p| !has_parts(p))
+                    .is_some_and(|p| !valid_parts(p, true))
         })
     {
         return Err("Worker returned inconsistent solvent composite outputs".into());
@@ -966,6 +971,13 @@ fn validate_computed_header(
             .as_ref()
             .ok_or_else(|| "Worker omitted vibrational analysis".to_owned())?;
         validate_vibrations(vibrations, opened)?;
+        if hessian
+            .masses_amu
+            .as_ref()
+            .is_some_and(|masses| *masses != vibrations.masses_amu)
+        {
+            return Err("Worker returned vibrational masses that differ from the request".into());
+        }
         validate_thermo(
             computed
                 .thermo

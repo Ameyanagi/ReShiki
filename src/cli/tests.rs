@@ -703,8 +703,66 @@ fn calc_parses_tasks_solvent_and_a_repeatable_scf_ladder() {
     );
     assert!(command.gradient && command.bond_orders);
     assert_eq!(command.threads, 4);
-    assert!(parsed(&["calc", "--scf-retry", "299", "water.xyz"]).is_ok());
-    assert!(parsed(&["calc", "--etemp", "1000", "--scf-retry", "300", "water.xyz"]).is_ok());
+    assert!(parsed(&["calc", "--etemp", "300", "--scf-retry", "300", "water.xyz"]).is_ok());
+}
+
+#[test]
+fn calc_allows_lower_retry_temperatures_when_etemp_is_omitted() {
+    let Command::Calc(command) = parsed(&[
+        "calc",
+        "--scf-retry",
+        "0",
+        "--scf-retry",
+        "299:100",
+        "water.xyz",
+    ])
+    .unwrap() else {
+        panic!("calc command");
+    };
+    assert_eq!(
+        command.scf,
+        Some(ScfSettings {
+            accuracy: None,
+            electronic_temperature_k: None,
+            max_iterations: None,
+            retries: vec![
+                ScfRetry {
+                    electronic_temperature_k: Some(0.0),
+                    max_iterations: None,
+                },
+                ScfRetry {
+                    electronic_temperature_k: Some(299.0),
+                    max_iterations: Some(100),
+                },
+            ],
+        })
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn calc_rejects_retries_below_explicit_etemp_before_io() {
+    for options in [
+        vec!["--etemp", "1000", "--scf-retry", "300"],
+        vec!["--scf-retry", "300:100", "--etemp", "1000"],
+        vec![
+            "--etemp",
+            "1000",
+            "--scf-retry",
+            "2000",
+            "--scf-retry",
+            "300",
+        ],
+    ] {
+        let mut tokens = vec!["calc", "unread.xyz"];
+        tokens.extend(options);
+        let (code, out, err) = call(&tokens).await;
+        assert_eq!(code, USAGE, "{tokens:?}");
+        assert!(out.is_empty());
+        assert_eq!(
+            err,
+            "reshiki: --scf-retry temperature must be at least the explicit --etemp\n"
+        );
+    }
 }
 
 #[test]

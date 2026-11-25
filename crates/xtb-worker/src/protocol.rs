@@ -408,6 +408,12 @@ impl Open {
                     ));
                 }
                 let thermo = &hessian.thermo;
+                if hessian.masses_amu.is_some() && thermo.symmetry_number.is_none() {
+                    return Err(ResponseError::new(
+                        ErrorKind::Input,
+                        "give thermo.symmetry_number with explicit masses; automatic symmetry ignores isotopes",
+                    ));
+                }
                 if [
                     thermo.temperature_k,
                     thermo.pressure_pa,
@@ -857,7 +863,8 @@ pub struct CompositePart {
     pub conventions: String,
     pub electronic_temperature_k: f64,
     pub max_iterations: usize,
-    pub iterations: usize,
+    #[serde(deserialize_with = "Deserialize::deserialize")]
+    pub iterations: Option<usize>,
     #[serde(deserialize_with = "Deserialize::deserialize")]
     pub retry: Option<String>,
 }

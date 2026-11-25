@@ -370,6 +370,9 @@ fn calc(options: &Options) -> Result<Command, String> {
             .split_once(':')
             .map_or((text, None), |(kelvin, count)| (kelvin, Some(count)));
         let kelvin = temperature("--scf-retry temperature", OsStr::new(kelvin))?;
+        if electronic_temperature_k.is_some_and(|initial| kelvin < initial) {
+            return Err("--scf-retry temperature must be at least the explicit --etemp".into());
+        }
         retries.push(ScfRetry {
             electronic_temperature_k: Some(kelvin),
             max_iterations: count

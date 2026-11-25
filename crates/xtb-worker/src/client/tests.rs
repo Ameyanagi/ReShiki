@@ -298,14 +298,22 @@ fn composite_is_present_exactly_for_solvated_gxtb_with_finite_components() {
         .unwrap(),
     );
     assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
-    let part = json!({
-        "method":"gfn2", "conventions":"xtb", "electronic_temperature_k":300,
-        "max_iterations":250, "iterations":3, "retry":null
-    });
-    let parts = json!({"gfn2_gas":part, "gfn2_solvated":part, "gxtb":part});
-    result.composite.as_mut().unwrap().parts = serde_json::from_value(parts.clone()).unwrap();
+    let parts = |iterations: Option<usize>| {
+        let part = json!({
+            "method":"gfn2", "conventions":"xtb", "electronic_temperature_k":300,
+            "max_iterations":250, "iterations":iterations, "retry":null
+        });
+        serde_json::from_value(json!({"gfn2_gas":part, "gfn2_solvated":part, "gxtb":part})).unwrap()
+    };
+    result.composite.as_mut().unwrap().parts = parts(Some(3));
     assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_ok());
-    result.composite.as_mut().unwrap().hessian_parts = Some(serde_json::from_value(parts).unwrap());
+    for iterations in [None, Some(0)] {
+        result.composite.as_mut().unwrap().parts = parts(iterations);
+        assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
+    }
+    let composite = result.composite.as_mut().unwrap();
+    composite.parts = parts(Some(3));
+    composite.hessian_parts = Some(parts(None));
     assert!(validate_computed_header(&result, Some(&opened), Some(&input), &request).is_err());
 
     let (hessian_request, mut hessian) = hessian_result();
@@ -323,6 +331,10 @@ fn composite_is_present_exactly_for_solvated_gxtb_with_finite_components() {
     let validate_hessian = |result: &Computed| {
         validate_computed_header(result, Some(&opened), Some(&input), &hessian_request)
     };
+    assert!(validate_hessian(&hessian).is_ok());
+    hessian.composite.as_mut().unwrap().hessian_parts = Some(parts(Some(0)));
+    assert!(validate_hessian(&hessian).is_err());
+    hessian.composite.as_mut().unwrap().hessian_parts = Some(parts(Some(3)));
     assert!(validate_hessian(&hessian).is_ok());
     let mut hessian_parts = hessian
         .composite
@@ -629,6 +641,20 @@ fn hessian_header_requires_all_requested_arrays_and_thermo_settings() {
     result.thermo.as_mut().unwrap().temperature_k = 300.0;
     result.vibrations.as_mut().unwrap().reduced_masses_amu[0] = f64::NAN;
     assert!(validate(&result, &request).is_err());
+}
+
+#[test]
+fn hessian_header_requires_exact_requested_masses() {
+    let (mut request, mut result) = hessian_result();
+    let hessian = request.hessian.as_mut().unwrap();
+    hessian.masses_amu = Some(vec![4.0, 4.0]);
+    hessian.thermo.symmetry_number = Some(1);
+    assert!(validate(&result, &request).is_ok());
+    result.vibrations.as_mut().unwrap().masses_amu[0] = 4.0_f64.next_up();
+    assert_eq!(
+        validate(&result, &request).unwrap_err(),
+        "Worker returned vibrational masses that differ from the request"
+    );
 }
 
 #[test]

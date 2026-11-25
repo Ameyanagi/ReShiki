@@ -417,7 +417,7 @@ impl Session {
                             conventions: part.conventions.into(),
                             electronic_temperature_k: part.etemp,
                             max_iterations: part.max_iter,
-                            iterations: part.iterations,
+                            iterations: (part.iterations > 0).then_some(part.iterations),
                             retry: part.retry,
                         },
                     )
