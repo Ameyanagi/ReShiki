@@ -165,6 +165,7 @@ fn draw_primitives_with_opacity(
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. }
+            | Primitive::Surface { .. }
             | Primitive::Gradient { .. }
             | Primitive::Glow { .. } => {}
             Primitive::Line(a, b, width) => {
@@ -473,6 +474,7 @@ fn draw_halo(
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. }
+            | Primitive::Surface { .. }
             | Primitive::Gradient { .. }
             | Primitive::Glow { .. } => {}
         }
