@@ -64,8 +64,7 @@ pub(super) fn keep_format_text(
                 _ => lost.push(format!("{count} {many}")),
             }
         }
-        // ChemDraw keeps roles as reaction steps, except on arrows drawn as shapes.
-        if reshiki::arrows::lowered(doc).reactions.len() < doc.reactions.len() {
+        if reshiki::exchange::drawing::has_unwritten_reactions(doc) {
             lost.push("reaction roles".into());
         }
         if reshiki::arrow_anchors::export_notice(doc).is_some()

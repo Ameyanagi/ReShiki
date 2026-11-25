@@ -234,6 +234,252 @@ fn an_empty_arrow_and_a_lowered_arrow_have_no_scheme() {
 }
 
 #[test]
+fn disconnected_salt_participants_reference_every_fragment_once() {
+    let mut doc = Document::default();
+    let sodium = doc.add_atom("Na", Point::new(0., 0.));
+    let chloride = doc.add_atom("Cl", Point::new(40., 0.));
+    let product = doc.add_atom("O", Point::new(300., 0.));
+    doc.atom_mut(sodium).unwrap().charge = 1;
+    doc.atom_mut(chloride).unwrap().charge = -1;
+    let arrow = arrow(&mut doc, 120., 0.);
+    let mut reaction = Reaction::new(arrow);
+    reaction.reactants = vec![participant(vec![sodium, chloride])];
+    reaction.products = vec![participant(vec![product])];
+    doc.reactions.push(reaction);
+    let xml = xml(&doc);
+    let tree = Xml::parse(&xml).unwrap();
+    let step = steps(&tree)[0];
+    let reactants = ids(step, "ReactionStepReactants");
+    assert_eq!(reactants.len(), 2);
+    let elements: Vec<_> = reactants
+        .iter()
+        .map(|id| {
+            target(&tree, id)
+                .first_element_child()
+                .unwrap()
+                .attribute("Element")
+                .unwrap()
+        })
+        .collect();
+    assert_eq!(elements, ["11", "17"]);
+    assert_eq!(ids(step, "ReactionStepProducts").len(), 1);
+}
+
+#[test]
+fn a_fragment_in_two_assigned_roles_has_no_step() {
+    for pair in [(0, 1), (0, 2), (1, 2)] {
+        let mut doc = Document::default();
+        let atoms = [("N", 0., 0.), ("O", 300., 0.), ("N", 170., -30.)]
+            .map(|(element, x, y)| doc.add_atom(element, Point::new(x, y)));
+        let hydrogen = doc.add_atom(
+            "H",
+            doc.atom(atoms[pair.0]).unwrap().position.offset(30., 0.),
+        );
+        doc.add_bond(atoms[pair.0], hydrogen, 1, "plain");
+        doc.add_bond(hydrogen, atoms[pair.1], 0, "dotted");
+        let mut roles = atoms.map(|atom| participant(vec![atom]));
+        roles[pair.0].atoms.push(hydrogen);
+        let [reactant, product, agent] = roles;
+        let arrow = arrow(&mut doc, 120., 0.);
+        let mut reaction = Reaction::new(arrow);
+        reaction.reactants = vec![reactant];
+        reaction.products = vec![product];
+        reaction.agents = vec![agent];
+        doc.reactions.push(reaction);
+        let xml = xml(&doc);
+        assert!(
+            steps(&Xml::parse(&xml).unwrap()).is_empty(),
+            "roles {pair:?}"
+        );
+    }
+}
+
+#[test]
+fn an_explicit_draft_with_an_empty_side_has_no_step() {
+    for empty_reactants in [false, true] {
+        let mut doc = Document::default();
+        let atom = doc.add_atom("C", Point::new(0., 0.));
+        let arrow = arrow(&mut doc, 100., 0.);
+        let mut reaction = Reaction::new(arrow);
+        if empty_reactants {
+            reaction.products.push(participant(vec![atom]));
+        } else {
+            reaction.reactants.push(participant(vec![atom]));
+        }
+        doc.reactions.push(reaction);
+        let xml = xml(&doc);
+        assert!(steps(&Xml::parse(&xml).unwrap()).is_empty());
+    }
+}
+
+#[test]
+fn left_arrow_conditions_use_visible_agent_geometry_and_linked_sides() {
+    let mut doc = Document::default();
+    let reactant = doc.add_atom("C", Point::new(300., 0.));
+    let product = doc.add_atom("O", Point::new(0., 0.));
+    let catalyst = [(-25., 170.), (120., 170.), (180., 210.)]
+        .map(|(y, x)| doc.add_atom("C", Point::new(x, y)));
+    doc.add_bond(catalyst[0], catalyst[1], 1, "plain");
+    doc.add_bond(catalyst[1], catalyst[2], 1, "plain");
+    doc.contract(&catalyst, "Cat", "").unwrap();
+    let arrow_id = arrow(&mut doc, 120., 0.);
+    let arrow = doc.arrows.last_mut().unwrap();
+    std::mem::swap(&mut arrow.start, &mut arrow.end);
+    let heat = text(&mut doc, "heat", 150., -50.);
+    let linked = text(&mut doc, "linked", 150., -80.);
+    doc.arrow_labels.push(ArrowLabel {
+        arrow: arrow_id,
+        annotation: linked,
+        side: Side::Below,
+        gap: None,
+    });
+    let mut reaction = Reaction::new(arrow_id);
+    reaction.reactants = vec![participant(vec![reactant])];
+    reaction.products = vec![participant(vec![product])];
+    reaction.agents = vec![participant(catalyst.to_vec())];
+    reaction.annotations = vec![heat];
+    doc.reactions.push(reaction);
+    let xml = xml(&doc);
+    let tree = Xml::parse(&xml).unwrap();
+    let step = steps(&tree)[0];
+    let above = ids(step, "ReactionStepObjectsAboveArrow");
+    assert_eq!(above.len(), 2);
+    assert!(target(&tree, above[0]).has_tag_name("fragment"));
+    assert_eq!(
+        target(&tree, above[1])
+            .first_element_child()
+            .unwrap()
+            .text(),
+        Some("heat")
+    );
+    let below = ids(step, "ReactionStepObjectsBelowArrow");
+    assert_eq!(below.len(), 1);
+    assert_eq!(
+        target(&tree, below[0])
+            .first_element_child()
+            .unwrap()
+            .text(),
+        Some("linked")
+    );
+}
+
+#[test]
+fn an_agent_fragment_is_listed_once_on_the_first_assigned_side() {
+    let mut doc = Document::default();
+    let reactant = doc.add_atom("C", Point::new(0., 0.));
+    let product = doc.add_atom("O", Point::new(300., 0.));
+    let above = doc.add_atom("N", Point::new(170., -25.));
+    let below = doc.add_atom("N", Point::new(170., 25.));
+    let hydrogen = doc.add_atom("H", Point::new(200., -25.));
+    doc.add_bond(above, hydrogen, 1, "plain");
+    doc.add_bond(hydrogen, below, 0, "dotted");
+    let arrow = arrow(&mut doc, 120., 0.);
+    let mut reaction = Reaction::new(arrow);
+    reaction.reactants = vec![participant(vec![reactant])];
+    reaction.products = vec![participant(vec![product])];
+    reaction.agents = vec![participant(vec![above, hydrogen]), participant(vec![below])];
+    doc.reactions.push(reaction);
+    let xml = xml(&doc);
+    let tree = Xml::parse(&xml).unwrap();
+    let step = steps(&tree)[0];
+    assert_eq!(ids(step, "ReactionStepObjectsAboveArrow").len(), 1);
+    assert!(ids(step, "ReactionStepObjectsBelowArrow").is_empty());
+}
+
+#[test]
+fn explicit_roles_keep_graphic_plusses_that_native_symbols_can_preserve() {
+    for axis_y in [
+        Point::new(0., 20.),
+        Point::new(0., 40.),
+        Point::new(12., 16.),
+    ] {
+        let mut doc = Document::default();
+        let first = doc.add_atom("C", Point::new(0., 0.));
+        let second = doc.add_atom("O", Point::new(80., 0.));
+        let product = doc.add_atom("N", Point::new(300., 0.));
+        let arrow = arrow(&mut doc, 140., 0.);
+        let mut plus = Graphic::dragged(
+            doc.next_id(),
+            GraphicKind::Symbol(SymbolKind::Plus),
+            Point::new(40., 0.),
+            Point::new(60., 0.),
+            Default::default(),
+            Default::default(),
+            false,
+        );
+        plus.axis_y = axis_y;
+        let parts = HashMap::from([(plus.id, plus.parts())]);
+        doc.graphics.push(plus);
+        let options = || Options {
+            graphic_parts: Some(&parts),
+            ..Default::default()
+        };
+        let inferred = write(&doc, options()).unwrap();
+        let mut reaction = Reaction::new(arrow);
+        reaction.reactants = vec![participant(vec![first]), participant(vec![second])];
+        reaction.products = vec![participant(vec![product])];
+        doc.reactions.push(reaction);
+        let explicit = write(&doc, options()).unwrap();
+        let tree = Xml::parse(&explicit).unwrap();
+        let step = steps(&tree)[0];
+        if axis_y == Point::new(0., 20.) {
+            let plusses = ids(step, "ReactionStepPlusses");
+            assert_eq!(plusses.len(), 1);
+            assert_eq!(
+                target(&tree, plusses[0]).attribute("SymbolType"),
+                Some("Plus")
+            );
+        } else {
+            assert!(ids(step, "ReactionStepPlusses").is_empty());
+            assert!(
+                !tree
+                    .descendants()
+                    .any(|n| n.attribute("SymbolType") == Some("Plus"))
+            );
+            let curves = |xml: &str| {
+                Xml::parse(xml)
+                    .unwrap()
+                    .descendants()
+                    .filter(|n| n.has_tag_name("curve"))
+                    .map(|n| n.attribute("CurvePoints").unwrap().to_string())
+                    .collect::<Vec<_>>()
+            };
+            assert!(!curves(&explicit).is_empty());
+            assert_eq!(curves(&explicit), curves(&inferred));
+        }
+    }
+}
+
+#[test]
+fn one_reaction_on_a_sheet_with_eight_thousand_reference_atoms_exports() {
+    let mut doc = Document::default();
+    doc.add_atom("C", Point::new(0., 0.));
+    doc.add_atom("O", Point::new(300., 0.));
+    let mut reference = doc.atoms[0].clone();
+    reference.purpose = crate::purpose::Purpose::Reference;
+    for index in 0..8_000 {
+        reference.id = index + 3;
+        reference.position = Point::new(
+            (index % 100) as f32 * 30.,
+            1000. + (index / 100) as f32 * 30.,
+        );
+        doc.atoms.push(reference.clone());
+    }
+    arrow(&mut doc, 100., 0.);
+    let xml = xml(&doc);
+    let tree = Xml::parse(&xml).unwrap();
+    let step = steps(&tree)[0];
+    assert_eq!(ids(step, "ReactionStepReactants").len(), 1);
+    assert_eq!(ids(step, "ReactionStepProducts").len(), 1);
+    assert_eq!(
+        tree.descendants()
+            .filter(|n| n.has_tag_name("fragment"))
+            .count(),
+        8_002
+    );
+}
+
+#[test]
 fn a_shared_reactant_and_product_fragment_skips_the_step() {
     let mut doc = Document::default();
     let donor = doc.add_atom("N", Point::new(0., 0.));

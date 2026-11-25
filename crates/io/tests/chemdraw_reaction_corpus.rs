@@ -1,7 +1,11 @@
 //! Reaction roles in the independent SDK corpus, including explicit roles
 //! that the drawing's geometry would not infer.
 use reshiki_io::{compatibility, engine::LocalEngine, exchange, formats};
-use reshiki_model::{document::Document, reactions};
+use reshiki_model::{
+    cycles,
+    document::{Annotation, Document, Point},
+    reactions,
+};
 use std::path::Path;
 
 fn fixture(name: &str, format: &str) -> Vec<u8> {
@@ -137,14 +141,14 @@ async fn a_corpus_caption_used_as_a_reactant_keeps_the_metadata_loss_notice() {
 }
 
 #[tokio::test]
-async fn a_complete_step_resolves_the_captured_group_and_superseded_arrow() {
+async fn a_complete_step_resolves_the_captured_group_and_deduplicates_superseded_arrows() {
     // The original capture has no reactant or product references. Give its
     // existing group (six-atom ring) and outside fragment (water) those roles.
     // The source step still names legacy graphic 17, superseded by arrow 23.
     let complete = |xml: &str| {
         xml.replace(
             "ReactionStepArrows=\"17\"",
-            "ReactionStepArrows=\"17\" ReactionStepReactants=\"20\" ReactionStepProducts=\"19\"",
+            "ReactionStepArrows=\"17 23\" ReactionStepReactants=\"20\" ReactionStepProducts=\"19\"",
         )
         .replace(
             "ReactionStepObjectsBelowArrow=\"20 16\"",
@@ -161,6 +165,12 @@ async fn a_complete_step_resolves_the_captured_group_and_superseded_arrow() {
     let binary = binary(&complete(&captured));
     let engine = LocalEngine::in_process();
     for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let contents = compatibility::import_text(format, bytes.clone()).unwrap();
+        assert_eq!(
+            formats::chemdraw_loss(format, &contents),
+            formats::ChemdrawLoss::default(),
+            "{format}"
+        );
         let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
             .await
             .unwrap();
@@ -188,5 +198,255 @@ async fn a_complete_step_resolves_the_captured_group_and_superseded_arrow() {
         assert_eq!(reaction.annotations, [document.annotations[0].id]);
         assert_eq!(document.annotations[0].text, "Fixed text");
         reactions::validate(&document).unwrap();
+    }
+}
+
+fn map_numbers(document: &Document, ids: &[u64]) -> Vec<u32> {
+    ids.iter()
+        .map(|id| document.atom(*id).unwrap().map_num)
+        .collect()
+}
+
+#[tokio::test]
+async fn shared_intermediates_propagate_atom_maps_in_either_step_order() {
+    let source =
+        String::from_utf8(fixture("080-multischeme-5-schemes-2-steps-8", "cdxml")).unwrap();
+    let mut reversed: Vec<_> = source.lines().collect();
+    let step_lines: Vec<_> = reversed
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| line.contains("<step ").then_some(index))
+        .collect();
+    for &[first, second] in step_lines.as_chunks::<2>().0 {
+        reversed.swap(first, second);
+    }
+    let reversed = reversed.join("\n");
+    let engine = LocalEngine::in_process();
+    for (order, source) in [("forward", source), ("reverse", reversed)] {
+        let binary = binary(&source);
+        for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+            let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+                .await
+                .unwrap();
+            assert!(warnings.is_empty(), "{order}.{format}: {warnings:?}");
+            assert_eq!(document.reactions.len(), 10, "{order}.{format}");
+            for [first, second] in document.reactions.as_chunks::<2>().0 {
+                let (first, second) = if order == "forward" {
+                    (first, second)
+                } else {
+                    (second, first)
+                };
+                let starting = map_numbers(&document, &first.reactants[0].atoms);
+                let intermediate = map_numbers(&document, &first.products[0].atoms);
+                let final_product = map_numbers(&document, &second.products[0].atoms);
+                assert!(starting.iter().all(|map| *map > 0), "{order}.{format}");
+                assert_eq!(starting.len(), 4);
+                assert_eq!(starting, intermediate, "{order}.{format}");
+                assert_eq!(intermediate, final_product, "{order}.{format}");
+                assert_eq!(
+                    sorted(first.products[0].atoms.clone()),
+                    sorted(second.reactants[0].atoms.clone())
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn atom_map_fields_use_aggregate_then_manual_then_auto() {
+    let source = String::from_utf8(fixture("040-reaction-scheme-4", "cdxml")).unwrap();
+    let manual = "ReactionStepAtomMapManual=\"3 12 4 13 5 14 6 15\"";
+    let reversed = "3 15 4 14 5 13 6 12";
+    let engine = LocalEngine::in_process();
+    for (name, maps, expected) in [
+        ("manual", manual.to_owned(), vec![1, 2, 3, 4]),
+        ("auto", manual.replace("Manual", "Auto"), vec![1, 2, 3, 4]),
+        (
+            "manual before auto",
+            format!("ReactionStepAtomMapAuto=\"{reversed}\" {manual}"),
+            vec![1, 2, 3, 4],
+        ),
+        (
+            "disjoint manual and auto",
+            "ReactionStepAtomMapAuto=\"5 14 6 15\" ReactionStepAtomMapManual=\"3 12 4 13\"".into(),
+            vec![1, 2, 3, 4],
+        ),
+        (
+            "aggregate before manual",
+            format!("{manual} ReactionStepAtomMap=\"{reversed}\""),
+            vec![4, 3, 2, 1],
+        ),
+        (
+            "empty aggregate",
+            format!("{manual} ReactionStepAtomMap=\"\""),
+            vec![0, 0, 0, 0],
+        ),
+    ] {
+        let source = source.replace(manual, &maps);
+        let binary = binary(&source);
+        for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+            let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+                .await
+                .unwrap();
+            assert!(warnings.is_empty(), "{name}.{format}: {warnings:?}");
+            assert_eq!(document.reactions.len(), 1, "{name}.{format}");
+            let reaction = &document.reactions[0];
+            assert_eq!(
+                map_numbers(&document, &reaction.products[0].atoms),
+                expected,
+                "{name}.{format}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn conflicting_or_out_of_role_atom_pairs_do_not_erase_other_maps() {
+    let source = String::from_utf8(fixture("040-reaction-scheme-4", "cdxml"))
+        .unwrap()
+        .replace(
+            "ReactionStepAtomMapManual=\"3 12 4 13 5 14 6 15\"",
+            // The third pair conflicts with two established maps; the fourth
+            // has its roles reversed. The final pairs still restore normally.
+            "ReactionStepAtomMapManual=\"3 12 4 13 3 13 14 5 5 14 6 15\"",
+        );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let document = formats::read_with_engine(bytes, format, &engine)
+            .await
+            .unwrap();
+        let reaction = &document.reactions[0];
+        assert_eq!(
+            map_numbers(&document, &reaction.reactants[0].atoms),
+            [1, 2, 3, 4],
+            "{format}"
+        );
+        assert_eq!(
+            map_numbers(&document, &reaction.products[0].atoms),
+            [1, 2, 3, 4],
+            "{format}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn an_invalid_step_keeps_the_other_scheme_and_counts_only_its_own_loss() {
+    let source = String::from_utf8(fixture("073-multischeme-2-schemes-1-steps-1", "cdxml"))
+        .unwrap()
+        .replacen(
+            "ReactionStepProducts=\"12\"",
+            "ReactionStepProducts=\"3\"",
+            1,
+        );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let contents = compatibility::import_text(format, bytes.clone()).unwrap();
+        let loss = formats::chemdraw_loss(format, &contents);
+        assert_eq!((loss.schemes, loss.steps), (1, 1), "{format}");
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert_eq!(document.reactions.len(), 1, "{format}");
+        assert_eq!(document.reactions[0].arrow, document.arrows[1].id);
+        assert_eq!(document.reactions[0].reactants.len(), 2);
+        assert_eq!(document.reactions[0].products.len(), 1);
+        assert!(
+            matches!(warnings.as_slice(), [warning] if warning.contains("external reaction roles and condition references are not retained")),
+            "{format}: {warnings:?}"
+        );
+        reactions::validate(&document).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn save_loss_credits_the_restored_step_when_an_invalid_step_shares_its_arrow() {
+    let source = String::from_utf8(fixture("073-multischeme-2-schemes-1-steps-1", "cdxml"))
+        .unwrap()
+        .replacen(
+            "ReactionStepProducts=\"12\"",
+            "ReactionStepProducts=\"3\"",
+            1,
+        )
+        .replace("ReactionStepArrows=\"57\"", "ReactionStepArrows=\"27\"")
+        .replace(
+            "<step id=\"61\"",
+            "<step id=\"100\" ReactionStepArrows=\"57\" />\n      <step id=\"61\"",
+        );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let contents = compatibility::import_text(format, bytes.clone()).unwrap();
+        let loss = formats::chemdraw_loss(format, &contents);
+        // Neither scheme is complete: the first is invalid and the second
+        // keeps its valid step while losing the added incomplete step.
+        assert_eq!((loss.schemes, loss.steps), (2, 2), "{format}");
+        let document = formats::read_with_engine(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert_eq!(document.reactions.len(), 1, "{format}");
+        assert_eq!(document.reactions[0].arrow, document.arrows[0].id);
+    }
+}
+
+#[tokio::test]
+async fn a_fresh_cycle_keeps_unrelated_explicit_steps_and_their_save_loss_credit() {
+    let engine = LocalEngine::in_process();
+    let mut document = formats::read_with_engine(
+        fixture("073-multischeme-2-schemes-1-steps-1", "cdxml"),
+        "cdxml",
+        &engine,
+    )
+    .await
+    .unwrap();
+    // Reverse the first step's explicit roles so geometry cannot recover them.
+    let first = &mut document.reactions[0];
+    std::mem::swap(&mut first.reactants, &mut first.products);
+    let mut intermediates = Vec::new();
+    for (x, y, text) in [
+        (800., -200., "Pd(0)L2"),
+        (970., 90., "ArPdX"),
+        (570., 90., "ArPdAr"),
+    ] {
+        let id = document.next_id();
+        document.annotations.push(Annotation {
+            id,
+            angle: 0.,
+            position: Point::new(x, y),
+            text: text.into(),
+            format: Default::default(),
+        });
+        intermediates.push(id);
+    }
+    cycles::make(&mut document, &intermediates).unwrap();
+    for format in ["cdxml", "cdx"] {
+        let bytes = formats::write_with_engine(document.clone(), format, &engine)
+            .await
+            .unwrap();
+        let contents = compatibility::import_text(format, bytes.clone()).unwrap();
+        assert_eq!(
+            formats::chemdraw_loss(format, &contents),
+            formats::ChemdrawLoss::default(),
+            "{format}"
+        );
+        let (restored, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        assert_eq!(
+            restored
+                .graphics
+                .iter()
+                .filter(|g| g.cycle.is_some())
+                .count(),
+            1
+        );
+        assert_eq!(restored.reactions.len(), 2, "{format}");
+        assert_eq!(restored.reactions[0].reactants.len(), 1);
+        assert_eq!(restored.reactions[0].products.len(), 2);
+        assert_eq!(restored.reactions[1].reactants.len(), 2);
+        assert_eq!(restored.reactions[1].products.len(), 1);
+        reactions::validate(&restored).unwrap();
     }
 }

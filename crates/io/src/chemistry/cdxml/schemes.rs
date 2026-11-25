@@ -17,38 +17,31 @@ pub struct Loss {
     pub unsupported: usize,
 }
 
-pub(crate) fn loss(text: &str, restore_steps: bool) -> Result<Loss> {
+pub(crate) fn loss(text: &str, restored: &HashSet<u64>) -> Result<Loss> {
     let tree = Tree::parse_import(text)?;
     let mut loss = Loss {
         pages: tree.children(0, "page")?.len().saturating_sub(1),
         ..Loss::default()
     };
+    let kept = |index| -> Result<bool> {
+        Ok(tree
+            .node(index)?
+            .attr("id")
+            .and_then(|id| id.parse().ok())
+            .is_some_and(|id| restored.contains(&id)))
+    };
     for index in tree.descendants(0)? {
         match tree.node(index)?.tag.as_str() {
-            "scheme" => loss.schemes += 1,
-            "step" => loss.steps += 1,
-            _ => {}
-        }
-    }
-    if restore_steps
-        && has_schemes(text)
-        && let Ok(schemes) = read_tree(&tree)
-    {
-        let mut arrows = HashSet::new();
-        for scheme in schemes {
-            let kept = scheme
-                .iter()
-                .flatten()
-                .filter(|step| {
-                    step.arrows
-                        .first()
-                        .is_some_and(|&arrow| arrows.insert(arrow))
-                })
-                .count();
-            loss.steps -= kept;
-            if kept > 0 && kept == scheme.len() {
-                loss.schemes -= 1;
+            "scheme" => {
+                let steps = tree.children(index, "step")?;
+                let mut complete = !steps.is_empty();
+                for index in steps {
+                    complete &= kept(index)?;
+                }
+                loss.schemes += usize::from(!complete);
             }
+            "step" => loss.steps += usize::from(!kept(index)?),
+            _ => {}
         }
     }
     loss.unsupported = super::approximate::approximated(text);
@@ -62,6 +55,8 @@ fn has_schemes(text: &str) -> bool {
 
 #[derive(Default)]
 pub(crate) struct Step {
+    pub id: u64,
+    pub representable: bool,
     pub reactants: Vec<u64>,
     pub products: Vec<u64>,
     pub plusses: Vec<u64>,
@@ -75,15 +70,15 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
     Ok(!read(text)?.is_empty())
 }
 
-/// Read each scheme's steps. Unrepresentable steps have no file-ID lists.
-pub(crate) fn read(text: &str) -> Result<Vec<Vec<Option<Step>>>> {
+/// Read each scheme's steps, including references for unrepresentable steps.
+pub(crate) fn read(text: &str) -> Result<Vec<Vec<Step>>> {
     if !has_schemes(text) {
         return Ok(Vec::new());
     }
     read_tree(&Tree::parse_import(text)?)
 }
 
-fn read_tree(tree: &Tree) -> Result<Vec<Vec<Option<Step>>>> {
+fn read_tree(tree: &Tree) -> Result<Vec<Vec<Step>>> {
     let nodes = tree.descendants(0)?;
     let mut ids = HashMap::new();
     // ChemDraw itself repeats an identifier, for example on linked property
@@ -106,7 +101,7 @@ fn read_tree(tree: &Tree) -> Result<Vec<Vec<Option<Step>>>> {
         }
     }
     let mut references = 0usize;
-    let mut schemes: Vec<Vec<Option<Step>>> = Vec::new();
+    let mut schemes: Vec<Vec<Step>> = Vec::new();
     for &index in &metadata {
         let node = tree.node(index)?;
         // A scheme or step shares its identifier with nothing.
@@ -132,8 +127,18 @@ fn read_tree(tree: &Tree) -> Result<Vec<Vec<Option<Step>>>> {
         } else if parent.is_none_or(|p| p.tag != "scheme") || !node.children.is_empty() {
             return Err(invalid());
         }
-        let mut step = Step::default();
+        let mut step = Step {
+            id: node
+                .attr("id")
+                .ok_or_else(invalid)?
+                .parse()
+                .map_err(|_| invalid())?,
+            ..Default::default()
+        };
         let mut representable = true;
+        let mut aggregate_map = None;
+        let mut manual_map = None;
+        let mut auto_map = None;
         for (name, value) in &node.attributes {
             if name == "id" {
                 continue;
@@ -191,19 +196,32 @@ fn read_tree(tree: &Tree) -> Result<Vec<Vec<Option<Step>>>> {
                 "ReactionStepReactants" => step.reactants = list,
                 "ReactionStepProducts" => step.products = list,
                 "ReactionStepPlusses" => step.plusses = list,
-                "ReactionStepArrows" => step.arrows = list,
+                "ReactionStepArrows" => {
+                    list.sort_unstable();
+                    list.dedup();
+                    step.arrows = list;
+                }
                 "ReactionStepObjectsAboveArrow" => step.above = list,
                 "ReactionStepObjectsBelowArrow" => step.below = list,
-                "ReactionStepAtomMap" => step.atom_map = list.as_chunks().0.to_vec(),
+                "ReactionStepAtomMap" => aggregate_map = Some(list),
+                "ReactionStepAtomMapManual" => manual_map = Some(list),
+                "ReactionStepAtomMapAuto" => auto_map = Some(list),
                 _ => {}
             }
         }
-        representable &=
-            step.arrows.len() == 1 && !step.reactants.is_empty() && !step.products.is_empty();
-        schemes
-            .last_mut()
-            .ok_or_else(invalid)?
-            .push(representable.then_some(step));
+        let atom_map = aggregate_map.unwrap_or_else(|| {
+            manual_map
+                .into_iter()
+                .flatten()
+                .chain(auto_map.into_iter().flatten())
+                .collect()
+        });
+        step.atom_map = atom_map.as_chunks().0.to_vec();
+        step.representable = representable
+            && step.arrows.len() == 1
+            && !step.reactants.is_empty()
+            && !step.products.is_empty();
+        schemes.last_mut().ok_or_else(invalid)?.push(step);
     }
     Ok(schemes)
 }

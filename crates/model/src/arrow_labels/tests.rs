@@ -7,6 +7,37 @@ use crate::{
 
 const ARROW: u64 = 1;
 
+#[test]
+fn visual_sides_are_independent_of_horizontal_and_vertical_arrow_direction() {
+    for (start, end, above, below) in [
+        (
+            Point::new(0., 0.),
+            Point::new(100., 0.),
+            Point::new(50., -25.),
+            Point::new(50., 25.),
+        ),
+        (
+            Point::new(0., 0.),
+            Point::new(0., 100.),
+            Point::new(-25., 50.),
+            Point::new(25., 50.),
+        ),
+    ] {
+        for (start, end) in [(start, end), (end, start)] {
+            let arrow = Arrow::new(
+                ARROW,
+                start,
+                end,
+                Preset::Forward,
+                ArrowStyle::preset(Preset::Forward),
+            );
+            assert_eq!(side_at(&arrow, above), Some(Side::Above));
+            assert_eq!(side_at(&arrow, below), Some(Side::Below));
+            assert_eq!(side_at(&arrow, start.lerp(end, 0.5)), Some(Side::Below));
+        }
+    }
+}
+
 fn scheme() -> Document {
     let mut doc = Document::default();
     doc.arrows.push(Arrow::new(

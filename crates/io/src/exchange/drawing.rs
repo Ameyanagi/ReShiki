@@ -205,6 +205,23 @@ pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     write_impl(document, options, false, false)
 }
 
+/// Whether editable export omits an explicit reaction step.
+pub fn has_unwritten_reactions(document: &Document) -> bool {
+    if document.reactions.is_empty() {
+        return false;
+    }
+    let lowered = crate::arrows::lowered(document);
+    if lowered.reactions.len() < document.reactions.len() {
+        return true;
+    }
+    let fragments = groups::fragment_indices(&groups::fragment_components(&lowered));
+    document.reactions.iter().any(|reaction| {
+        crate::reactions::preview(document, reaction.arrow).map_or(true, |reaction| {
+            steps::participant_fragments(&reaction, |atom| fragments.get(&atom).copied()).is_none()
+        })
+    })
+}
+
 /// Transfer a validated drawing even when its chemical assignment is pending.
 /// Preserve explicit input; do not manufacture charges or molecular properties.
 pub(crate) fn write_preserving(document: &Document, options: Options<'_>) -> Result<String> {

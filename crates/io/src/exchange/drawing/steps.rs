@@ -1,11 +1,9 @@
 //! ChemDraw reaction steps for ordinary arrows and catalytic cycles.
-use super::{Key, P, Result, Writer, invalid};
+use super::{Key, P, Result, Writer, invalid, objects};
 use crate::{
     arrow_labels::{self, Side},
     document::{Arrow, Point},
-    graphics::GraphicKind,
     reactions::{self, Participant, Reaction},
-    scientific::SymbolKind,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -146,11 +144,7 @@ impl<'a> Writer<'a> {
                     .chain(
                         doc.graphics
                             .iter()
-                            .filter(|g| {
-                                g.kind == GraphicKind::Symbol(SymbolKind::Plus)
-                                    && !explicit
-                                    && in_row(g.origin)
-                            })
+                            .filter(|g| objects::native_plus(g) && in_row(g.origin))
                             .map(|g| g.id),
                     )
                     .collect();
@@ -171,15 +165,11 @@ impl<'a> Writer<'a> {
             file_arrow,
             plusses,
         } = preview;
-        let Some([mut reactants, mut products, agents]) =
-            participant_fragments(&reaction, |atom| {
-                self.xml_id(self.outer_fragment(atom).ok()??).ok()
-            })
-        else {
+        let Some([reactants, products, _]) = participant_fragments(&reaction, |atom| {
+            self.xml_id(self.outer_fragment(atom).ok()??).ok()
+        }) else {
             return Ok(None);
         };
-        dedup(&mut reactants);
-        dedup(&mut products);
         let mut step = Step {
             reactants,
             products,
@@ -191,22 +181,38 @@ impl<'a> Writer<'a> {
                 step.plusses.push(self.xml_id(key)?);
             }
         }
-        let project = projection(arrow);
-        for (agent, id) in reaction.agents.iter().zip(agents) {
-            let (lo, hi) = agent
+        let mut assigned_agents = HashSet::new();
+        for agent in &reaction.agents {
+            let bounds = agent
                 .atoms
                 .iter()
+                .filter(|&&id| self.original.atom_visible(id))
                 .filter_map(|&id| self.atom(id).ok())
-                .map(|a| project(a.position).1)
-                .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), a| {
-                    (lo.min(a), hi.max(a))
+                .map(|a| a.position)
+                .fold(None::<(Point, Point)>, |bounds, p| {
+                    Some(bounds.map_or((p, p), |(lo, hi)| {
+                        (
+                            Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                            Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                        )
+                    }))
                 });
-            let side = if lo + hi < 0. {
+            let above = bounds.is_some_and(|(lo, hi)| {
+                arrow_labels::side_at(arrow, lo.lerp(hi, 0.5)) == Some(Side::Above)
+            });
+            let side = if above {
                 &mut step.above
             } else {
                 &mut step.below
             };
-            side.push(id);
+            for &atom in &agent.atoms {
+                if let Some(fragment) = self.outer_fragment(atom)? {
+                    let id = self.xml_id(fragment)?;
+                    if assigned_agents.insert(id) {
+                        side.push(id);
+                    }
+                }
+            }
         }
         let labels: HashMap<_, _> = arrow_labels::of(self.original, arrow.id)
             .map(|l| (l.annotation, l.side))
@@ -219,7 +225,7 @@ impl<'a> Writer<'a> {
         {
             if let Some(key) = self.object(annotation.id) {
                 let above = labels.get(&annotation.id).map_or_else(
-                    || project(annotation.centre()).1 < 0.,
+                    || arrow_labels::side_at(arrow, annotation.centre()) == Some(Side::Above),
                     |side| *side == Side::Above,
                 );
                 let side = if above {
@@ -312,29 +318,39 @@ fn dedup(ids: &mut Vec<u64>) {
     ids.retain(|id| seen.insert(*id));
 }
 
-fn participant_fragments(
+pub(super) fn participant_fragments(
     reaction: &Reaction,
     fragment: impl Fn(u64) -> Option<u64>,
 ) -> Option<[Vec<u64>; 3]> {
     let ids = |parts: &[Participant]| {
-        parts
-            .iter()
-            .map(|p| fragment(*p.atoms.first()?))
-            .collect::<Option<Vec<_>>>()
+        let mut ids = Vec::new();
+        for part in parts {
+            if part.atoms.is_empty() {
+                return None;
+            }
+            for &atom in &part.atoms {
+                ids.push(fragment(atom)?);
+            }
+        }
+        dedup(&mut ids);
+        Some(ids)
     };
     let reactants = ids(&reaction.reactants)?;
     let products = ids(&reaction.products)?;
     let agents = ids(&reaction.agents)?;
-    let unique: HashSet<_> = reactants.iter().collect();
-    (!products.iter().any(|id| unique.contains(id))).then_some([reactants, products, agents])
+    if reactants.is_empty() || products.is_empty() {
+        return None;
+    }
+    let mut unique = HashSet::new();
+    for id in reactants.iter().chain(&products).chain(&agents) {
+        if !unique.insert(*id) {
+            return None;
+        }
+    }
+    Some([reactants, products, agents])
 }
 
-pub(super) fn needs_fragments(previews: &[Preview<'_>], components: &[HashSet<u64>]) -> bool {
-    let fragments: HashMap<_, _> = components
-        .iter()
-        .enumerate()
-        .flat_map(|(i, ids)| ids.iter().map(move |&id| (id, i as u64)))
-        .collect();
+pub(super) fn needs_fragments(previews: &[Preview<'_>], fragments: &HashMap<u64, u64>) -> bool {
     previews
         .iter()
         .any(|p| participant_fragments(&p.reaction, |id| fragments.get(&id).copied()).is_some())

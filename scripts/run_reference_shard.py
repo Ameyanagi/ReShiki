@@ -76,6 +76,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("reshiki-io", "chemdraw_drawing_elements"): 0,
     ("reshiki-io", "chemdraw_multipage"): 0,
     ("reshiki-io", "chemdraw_multipage_boundaries"): 0,
+    ("reshiki-io", "chemdraw_reaction_corpus"): 0,
     ("reshiki-io", "chemdraw_save_loss"): 0,
     ("reshiki-io", "chemdraw_visibility_and_label_faces"): 0,
     ("reshiki-io", "generic_editable_export"): 0,

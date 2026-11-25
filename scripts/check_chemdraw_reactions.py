@@ -24,14 +24,13 @@ EXPECTED = {
 
 
 def expected_counts(case, reader):
-    # RDKit 2026.09 loses the shared intermediate's first product role;
-    # Indigo 1.49 exposes one collapsed pathway through its count* methods.
+    if case == "multi_step" and reader == "Indigo":
+        return ((1, 1, 0),), "Indigo counts the pathway as one reaction."
     if case == "multi_step":
-        return ((1, 1, 0),) if reader == "Indigo" else ((1, 0, 0), (1, 1, 0))
-    # RDKit 2026.09 reports no agent here, with or without the below-arrow text.
+        return ((1, 0, 0), (1, 1, 0)), "RDKit omits the first step's product."
     if case == "conditions" and reader != "Indigo":
-        return ((2, 1, 0),)
-    return EXPECTED[case]
+        return ((2, 1, 0),), "RDKit reports zero agents, with or without the below-arrow text."
+    return EXPECTED[case], None
 
 
 def read_rdkit(parse, path):
@@ -42,7 +41,12 @@ def read_rdkit(parse, path):
     )
     mapped = tuple(
         tuple(
-            sum(atom.GetAtomMapNum() > 0 for molecule in side for atom in molecule.GetAtoms())
+            sorted(
+                (atom.GetAtomMapNum(), atom.GetAtomicNum())
+                for molecule in side
+                for atom in molecule.GetAtoms()
+                if atom.GetAtomMapNum() > 0
+            )
             for side in (reaction.GetReactants(), reaction.GetProducts())
         )
         for reaction in reactions
@@ -60,7 +64,7 @@ def format_counts(counts):
 
 
 def check(path, reader, parse):
-    expected = expected_counts(path.stem, reader)
+    expected, note = expected_counts(path.stem, reader)
     try:
         if not path.is_file():
             raise FileNotFoundError(path)
@@ -68,8 +72,10 @@ def check(path, reader, parse):
         passed = counts == expected
         detail = f"counts={format_counts(counts)}"
         if path.stem == "mapped" and reader != "Indigo":
-            passed = passed and all(r > 0 and p > 0 for r, p in mapped)
-            detail += f" mapped_atoms={list(mapped)}"
+            for reactants, products in mapped:
+                unique = len({number for number, _ in reactants}) == len(reactants)
+                passed = passed and bool(reactants) and unique and reactants == products
+            detail += f" map_number_element_pairs={list(mapped)}"
         if not passed:
             detail += f" expected={format_counts(expected)}"
     except Exception as error:
@@ -77,6 +83,8 @@ def check(path, reader, parse):
         detail = f"counts=unavailable expected={format_counts(expected)} error="
         detail += " ".join(str(error).split())
     print(f"{'PASS' if passed else 'FAIL'} {reader} {path.name} {detail}")
+    if passed and note:
+        print(f"NOTE {reader} {path.name} {note}")
     return passed
 
 

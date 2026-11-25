@@ -72,11 +72,12 @@ fn drawing_losses(
             .into(),
         );
     }
-    // CDXML/CDX keeps roles unless lowering an arrow to shapes removes its reaction.
     if roles
-        && !document.reactions.is_empty()
-        && (!matches!(format, "cdxml" | "cdx")
-            || crate::arrows::lowered(document).reactions.len() < document.reactions.len())
+        && if matches!(format, "cdxml" | "cdx") {
+            crate::exchange::drawing::has_unwritten_reactions(document)
+        } else {
+            !document.reactions.is_empty()
+        }
     {
         notices.push(REACTION_ROLES_NOTICE.into());
     }
@@ -261,6 +262,35 @@ mod tests {
         assert_eq!(count(&doc), 1);
         doc.reactions.pop();
         assert_eq!(count(&doc), 0);
+    }
+
+    #[test]
+    fn editable_exchange_reports_incomplete_and_overlapping_reaction_roles() {
+        let mut doc = Document::default();
+        add_reaction(&mut doc, Body::Line, false);
+        let reactant = doc.reactions[0].reactants[0].atoms[0];
+        let product = doc.reactions[0].products[0].atoms[0];
+        let mut no_reactants = doc.clone();
+        no_reactants.reactions[0].reactants.clear();
+        let mut no_products = doc.clone();
+        no_products.reactions[0].products.clear();
+        let hydrogen = doc.add_atom("H", Point::new(-20., 0.));
+        doc.add_bond(reactant, hydrogen, 1, "plain");
+        doc.add_bond(hydrogen, product, 0, "dotted");
+        doc.reactions[0].reactants[0].atoms.push(hydrogen);
+        for doc in [no_reactants, no_products, doc] {
+            doc.validate().unwrap();
+            let xml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();
+            assert!(!xml.contains("<step "));
+            for format in ["cdxml", "cdx"] {
+                assert!(
+                    notices(&doc, format, Route::UnpreparedFallback)
+                        .iter()
+                        .any(|notice| notice == REACTION_ROLES_NOTICE),
+                    "{format}"
+                );
+            }
+        }
     }
 
     #[test]

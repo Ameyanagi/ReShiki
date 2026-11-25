@@ -662,8 +662,8 @@ async fn a_part_split_in_two_opens_as_drawn() {
     assert!(doc.graphics.iter().all(|g| g.cycle.is_none()));
 }
 
-#[test]
-fn only_the_cycles_that_come_back_count_as_kept_on_save() {
+#[tokio::test]
+async fn a_cycle_without_saved_data_reopens_as_ordinary_steps_beside_a_saved_cycle() {
     let (mut document, _) = structure_cycle();
     // A second cycle whose part is split in two writes steps but no data.
     let mut parts = vec![];
@@ -684,5 +684,15 @@ fn only_the_cycles_that_come_back_count_as_kept_on_save() {
         .retain(|b| !(split.contains(&b.a) && split.contains(&b.b) && b.a == split[1]));
     let xml = write(&document, Default::default()).unwrap();
     let loss = crate::formats::chemdraw_loss("cdxml", &xml);
-    assert_eq!((loss.schemes, loss.steps), (1, 2));
+    assert_eq!((loss.schemes, loss.steps), (0, 0));
+    let reopened = import("cdxml", &xml).await.document.unwrap();
+    assert_eq!(
+        reopened
+            .graphics
+            .iter()
+            .filter(|g| g.cycle.is_some())
+            .count(),
+        1
+    );
+    assert_eq!(reopened.reactions.len(), 2);
 }

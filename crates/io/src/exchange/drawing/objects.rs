@@ -1,11 +1,21 @@
 use super::*;
 use crate::{
     arrows::{Body, Head, HeadShape, NoGo},
-    graphics::{GraphicKind, GraphicStyle, LinePattern, PathHeads},
+    graphics::{Graphic, GraphicKind, GraphicStyle, LinePattern, PathHeads},
     ring_fills::RingEffect,
     scientific::{MarkKind, SymbolKind},
 };
 use std::collections::HashSet;
+
+pub(super) fn native_plus(graphic: &Graphic) -> bool {
+    if graphic.kind != GraphicKind::Symbol(SymbolKind::Plus) {
+        return false;
+    }
+    let (x, y) = (graphic.axis_x, graphic.axis_y);
+    let (xx, yy) = (x.x * x.x + x.y * x.y, y.x * y.x + y.y * y.y);
+    let scale = xx.max(yy);
+    scale > 1e-6 && (xx - yy).abs() <= scale * 1e-4 && (x.x * y.x + x.y * y.y).abs() <= scale * 1e-4
+}
 
 fn head_attributes(heads: &PathHeads, scalar: fn(f32) -> f64) -> [(&'static str, String); 6] {
     let head = |h| match h {
@@ -588,7 +598,7 @@ impl Writer<'_> {
                 self.objects.push((g.id, n));
                 continue;
             }
-            if g.kind == GraphicKind::Symbol(SymbolKind::Plus) && plusses.contains(&g.id) {
+            if native_plus(g) && plusses.contains(&g.id) {
                 let center = P::from(g.origin);
                 let axis = P::from(g.axis_x);
                 let style = self.chemdraw_style(&g.style, false);

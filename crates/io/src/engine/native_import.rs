@@ -348,8 +348,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             let (xml, variables) =
                 cdxml::drawing_variables(&drawing).map_err(|e| Error::Binary(e.to_string()))?;
             let mut warnings = Vec::from_iter(approximated);
-            // Cycle data owns the reaction steps in that file.
-            let ours = found.is_some();
+            let edited = matches!(found, Some(cycles::Found::Edited));
             let fresh = match found {
                 Some(cycles::Found::Fresh(payload)) => Some(payload),
                 Some(cycles::Found::Edited) => {
@@ -359,7 +358,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 None => None,
             };
             let schemes = cdxml::schemes::read(&xml).map_err(|e| Error::Binary(e.to_string()))?;
-            let schemes = if ours {
+            let schemes = if edited {
                 Vec::new()
             } else if drawing != source {
                 // Approximation can remove objects from a step's lists.
@@ -367,8 +366,8 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             } else {
                 schemes
             };
-            let step_count = schemes.iter().map(Vec::len).sum::<usize>();
-            let steps: Vec<_> = schemes.into_iter().flatten().flatten().collect();
+            let steps: Vec<_> = ordinary_steps(&schemes, fresh.as_ref()).collect();
+            let step_count = steps.len();
             // The objects each file object became, while the scene has them.
             let objects = |prepared: &cdxml::PreparedCdxml, scene: &cdxml::CdxmlScene| {
                 (fresh.is_some() || !steps.is_empty())
@@ -376,19 +375,20 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                     .transpose()
             };
             let restore = |document: &mut Document, objects: Option<_>, scale: f64| {
+                let mut notices = Vec::new();
                 if let (Some(payload), Some(objects)) = (&fresh, &objects)
                     && cycles::restore(document, payload, objects, scale as f32)
                         < payload.cycles.len()
                 {
-                    return vec![cycles::EDITED_NOTICE.to_owned()];
+                    notices.push(cycles::EDITED_NOTICE.to_owned());
                 }
-                let restored = objects
-                    .filter(|_| !steps.is_empty())
-                    .map_or(0, |objects| restore_reactions(document, &objects, &steps));
+                let restored = objects.filter(|_| !steps.is_empty()).map_or(0, |objects| {
+                    restore_reactions(document, &objects, &steps).len()
+                });
                 if restored < step_count {
-                    return vec![cdxml::schemes::NOTICE.to_owned()];
+                    notices.push(cdxml::schemes::NOTICE.to_owned());
                 }
-                vec![]
+                notices
             };
             if !variables.is_empty() {
                 let prepared = cdxml::prepare_drawing(&xml)?;
@@ -459,11 +459,70 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
     Ok(Preparation::Complete(Box::new(prepared)))
 }
 
+fn ordinary_steps<'a>(
+    schemes: &'a [Vec<cdxml::schemes::Step>],
+    fresh: Option<&cycles::Payload>,
+) -> impl Iterator<Item = &'a cdxml::schemes::Step> {
+    let owned: HashSet<_> = fresh
+        .into_iter()
+        .flat_map(|payload| &payload.cycles)
+        .flat_map(|saved| saved.drawn.iter().copied())
+        .collect();
+    schemes
+        .iter()
+        .flatten()
+        .filter(move |step| !step.arrows.iter().any(|id| owned.contains(id)))
+}
+
+/// Run role restoration on the drawing scene for save-loss accounting, without
+/// chemical analysis or a new layout.
+pub(crate) fn restored_chemdraw_steps(
+    source: &str,
+    fresh: Option<&cycles::Payload>,
+) -> Result<HashSet<u64>, Error> {
+    let source_schemes = cdxml::schemes::read(source);
+    if source_schemes
+        .as_ref()
+        .is_ok_and(|schemes| ordinary_steps(schemes, fresh).next().is_none())
+    {
+        return Ok(HashSet::new());
+    }
+    let (drawing, _) = cdxml::approximate(source);
+    let (xml, variables) =
+        cdxml::drawing_variables(&drawing).map_err(|e| Error::Binary(e.to_string()))?;
+    let schemes = cdxml::schemes::read(&xml).map_err(|e| Error::Binary(e.to_string()))?;
+    let schemes = if drawing != source {
+        source_schemes.unwrap_or(schemes)
+    } else {
+        schemes
+    };
+    let steps: Vec<_> = ordinary_steps(&schemes, fresh).collect();
+    if steps.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let prepared = cdxml::prepare_drawing(&xml)?;
+    let scene = cdxml::assemble_cdxml(&prepared)?;
+    let objects = scene.file_objects(&prepared)?;
+    let mut document = scene.into_unchecked_drawing()?;
+    variables
+        .restore(&prepared, &mut document)
+        .map_err(|e| Error::Binary(e.to_string()))?;
+    if let Some(payload) = fresh {
+        cycles::restore(
+            &mut document,
+            payload,
+            &objects,
+            prepared.source_scale as f32,
+        );
+    }
+    Ok(restore_reactions(&mut document, &objects, &steps))
+}
+
 fn restore_reactions(
     doc: &mut Document,
     objects: &HashMap<u64, Vec<u64>>,
-    steps: &[cdxml::schemes::Step],
-) -> usize {
+    steps: &[&cdxml::schemes::Step],
+) -> HashSet<u64> {
     let resolve = |files: &[u64]| {
         files
             .iter()
@@ -485,8 +544,13 @@ fn restore_reactions(
         .map(|a| a.id)
         .collect();
     let captions: HashSet<_> = doc.annotations.iter().map(|a| a.id).collect();
+    let before = doc.reactions.len();
+    let mut restored = HashSet::new();
     let mut maps = Vec::new();
     for step in steps {
+        if !step.representable {
+            continue;
+        }
         let resolved = resolve(&step.arrows);
         let [arrow] = resolved.as_slice() else {
             continue;
@@ -521,23 +585,25 @@ fn restore_reactions(
             .collect();
         reaction.annotations.sort_unstable();
         reaction.annotations.dedup();
-        arrows.remove(arrow);
         doc.reactions.push(reaction);
+        if reactions::validate(doc).is_err() {
+            doc.reactions.pop();
+            continue;
+        }
+        arrows.remove(arrow);
+        restored.insert(step.id);
         maps.push(step.atom_map.as_slice());
     }
-    if reactions::validate(doc).is_err() {
-        doc.reactions.clear();
-        return 0;
-    }
     if maps.iter().any(|map| !map.is_empty()) {
-        restore_reaction_maps(doc, objects, &maps);
+        restore_reaction_maps(doc, objects, before, &maps);
     }
-    doc.reactions.len()
+    restored
 }
 
 fn restore_reaction_maps(
     doc: &mut Document,
     objects: &HashMap<u64, Vec<u64>>,
+    before: usize,
     maps: &[&[[u64; 2]]],
 ) {
     let indices: HashMap<_, _> = doc
@@ -552,39 +618,41 @@ fn restore_reaction_maps(
         };
         indices.get(id).copied()
     };
-    let mut highest = doc.atoms.iter().map(|a| a.map_num).max().unwrap_or(0);
-    for (reaction, &pairs) in doc.reactions.iter().zip(maps) {
+    let used: HashSet<_> = doc.atoms.iter().map(|a| a.map_num).collect();
+    let mut next = 1;
+    for (reaction, &pairs) in doc.reactions.iter().skip(before).zip(maps) {
         if pairs.is_empty() {
             continue;
         }
-        let members: HashSet<_> = reaction
+        let reactants: HashSet<_> = reaction
             .reactants
             .iter()
-            .chain(&reaction.products)
-            .chain(&reaction.agents)
             .flat_map(|part| part.atoms.iter().copied())
             .collect();
-        if members
+        let products: HashSet<_> = reaction
+            .products
             .iter()
-            .filter_map(|id| indices.get(id).and_then(|&i| doc.atoms.get(i)))
-            .any(|atom| atom.map_num > 0)
-        {
-            continue;
-        }
+            .flat_map(|part| part.atoms.iter().copied())
+            .collect();
         for &[a, b] in pairs {
-            if highest == i32::MAX as u32 {
-                return;
-            }
             if let Some((a, b)) = index(a).zip(index(b))
                 && let Ok([a, b]) = doc.atoms.get_disjoint_mut([a, b])
-                && members.contains(&a.id)
-                && members.contains(&b.id)
-                && a.map_num == 0
-                && b.map_num == 0
+                && reactants.contains(&a.id)
+                && products.contains(&b.id)
             {
-                highest += 1;
-                a.map_num = highest;
-                b.map_num = highest;
+                match (a.map_num, b.map_num) {
+                    (0, 0) => {
+                        while used.contains(&next) {
+                            next += 1;
+                        }
+                        a.map_num = next;
+                        b.map_num = next;
+                        next += 1;
+                    }
+                    (map, 0) => b.map_num = map,
+                    (0, map) => a.map_num = map,
+                    _ => {}
+                }
             }
         }
     }

@@ -627,15 +627,15 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
     let unchanged = "Save as ReShiki leaves the ChemDraw file unchanged.";
     assert_eq!(
         opened("075-multischeme-4-schemes-3-steps-3.cdxml"),
-        format!("Keep as CDXML loses 4 reaction schemes and 12 steps. {unchanged}")
+        "ChemDraw keeps most of the drawing."
     );
     assert_eq!(
         opened("105-freshmix-seeded-mixed-001.cdxml"),
-        format!("Keep as CDXML loses 9 reaction schemes, 18 steps and 2 pages. {unchanged}")
+        format!("Keep as CDXML loses 2 pages. {unchanged}")
     );
     assert_eq!(
         opened("105-freshmix-seeded-mixed-001.cdx"),
-        format!("Keep as CDX loses 9 reaction schemes, 18 steps and 2 pages. {unchanged}")
+        format!("Keep as CDX loses 2 pages. {unchanged}")
     );
     // A file the format keeps whole, and MOL, say what they said before.
     assert_eq!(
@@ -661,7 +661,7 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
         "MOL keeps the structure only."
     );
 
-    // Arrow links drawn in ReShiki are lost as well; reaction roles are kept.
+    // Arrow links and incomplete reaction roles are lost.
     let mut doc = Document::default();
     let arrow = doc.next_id();
     doc.arrows.push(reshiki::document::Arrow::new(
@@ -709,8 +709,34 @@ fn the_first_save_of_a_chemdraw_file_names_what_keeping_the_format_loses() {
             &doc
         ),
         format!(
-            "Keep as CDXML loses 4 reaction schemes, 12 steps, 3 objects ReShiki draws differently or leaves out and arrow links. {unchanged}"
+            "Keep as CDXML loses 4 reaction schemes, 12 steps, 3 objects ReShiki draws differently or leaves out, reaction roles and arrow links. {unchanged}"
         )
+    );
+    let reactant = doc.add_atom("C", Point::new(-40., 0.));
+    let product = doc.add_atom("O", Point::new(160., 0.));
+    doc.reactions[0]
+        .reactants
+        .push(reshiki::reactions::Participant {
+            atoms: vec![reactant],
+            coefficient: 1,
+        });
+    doc.reactions[0]
+        .products
+        .push(reshiki::reactions::Participant {
+            atoms: vec![product],
+            coefficient: 1,
+        });
+    assert_eq!(
+        keep_format_text("cdx", ChemdrawLoss::default(), &doc),
+        format!("Keep as CDX loses arrow links. {unchanged}")
+    );
+    let hydrogen = doc.add_atom("H", Point::new(-20., 0.));
+    doc.add_bond(reactant, hydrogen, 1, "plain");
+    doc.add_bond(hydrogen, product, 0, "dotted");
+    doc.reactions[0].reactants[0].atoms.push(hydrogen);
+    assert_eq!(
+        keep_format_text("cdx", ChemdrawLoss::default(), &doc),
+        format!("Keep as CDX loses reaction roles and arrow links. {unchanged}")
     );
 }
 

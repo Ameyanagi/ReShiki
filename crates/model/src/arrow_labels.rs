@@ -247,6 +247,26 @@ fn frame_along(arrow: &Arrow, dir: Point) -> Frame {
         len,
     }
 }
+/// The visual side of a point: above either horizontal arrow direction, or
+/// left of a vertical arrow. A collapsed arrow has no side.
+pub fn side_at(arrow: &Arrow, point: Point) -> Option<Side> {
+    let len = arrow.start.distance(arrow.end);
+    if len <= 1e-3 {
+        return None;
+    }
+    let frame = frame_along(
+        arrow,
+        Point::new(
+            (arrow.end.x - arrow.start.x) / len,
+            (arrow.end.y - arrow.start.y) / len,
+        ),
+    );
+    Some(if dot(sub(point, frame.mid), frame.up) > 0. {
+        Side::Above
+    } else {
+        Side::Below
+    })
+}
 /// Extent of a text's turned box measured along a unit vector.
 fn extent(text: &Annotation, along: Point) -> f32 {
     let (w, h) = text.size();
