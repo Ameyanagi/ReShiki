@@ -251,6 +251,9 @@ impl ScfSettings {
             max_iterations: self.max_iterations,
             scf_retries: self.retries.clone(),
             gfnff,
+            threads: None,
+            convergence: Default::default(),
+            fixed_atoms: vec![],
         }
     }
 }
@@ -759,6 +762,7 @@ impl Computed {
             self.settings.solvent.clone(),
             gfnff,
         );
+        settings.threads = Some(self.settings.threads);
         // A converged retry rung (outside the solvent composite, whose parts
         // climb their own ladders) is what produced the result: save it, not
         // the ladder, so recomputing reproduces these numbers.
@@ -815,6 +819,7 @@ impl Computed {
             trajectory: None,
             keep_full: false,
             omitted_bytes: None,
+            run: None,
         };
         result.validate(frame)?;
         Ok(result)
