@@ -583,6 +583,7 @@ fn ensemble(
         trajectory: Some(trajectory),
         keep_full: false,
         omitted_bytes: None,
+        run: None,
     };
     let kept = kept.len();
     reshiki::science::attach(doc, &launch, vec![lowest], result).map_err(|e| e.to_string())?;
