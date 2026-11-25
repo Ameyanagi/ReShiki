@@ -368,10 +368,7 @@ fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
     assert!(!app.tab.xtb.vibrations.recomputing(&light));
     assert!(app.xtb_modes(&light).is_some());
     assert!(app.tab.xtb.vibrations.animation.is_some());
-    assert!(
-        app.status
-            .contains("differ from the saved ones by up to 2.0 cm⁻¹")
-    );
+    assert!(app.status.contains("differ by up to 2.0 cm⁻¹"));
 }
 
 #[test]
