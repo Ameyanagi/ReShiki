@@ -1,5 +1,9 @@
 //! Lindh's positive semidefinite model Hessian in Cartesian atomic units.
 
+mod contacts;
+
+pub(crate) use contacts::{BOND_FACTOR, contact_stretches, covalent_radius};
+
 use std::collections::HashMap;
 
 // R. Lindh et al., Chem. Phys. Lett. 241, 423–428 (1995),
@@ -8,15 +12,16 @@ use std::collections::HashMap;
 // and T. Helgaker, J. Chem. Phys. 117, 9160–9174 (2002),
 // doi:10.1063/1.1515483 (author copy: trygvehelgaker.no/Publications/
 // JChemPhys_117_09160_2002.pdf). No implementation source was used.
-const ALPHA: [[f64; 3]; 3] = [
+pub(crate) const ALPHA: [[f64; 3]; 3] = [
     [1.0, 0.3949, 0.3949],
     [0.3949, 0.28, 0.28],
     [0.3949, 0.28, 0.28],
 ];
-const R_REF: [[f64; 3]; 3] = [[1.35, 2.10, 2.53], [2.10, 2.87, 3.40], [2.53, 3.40, 3.40]];
-const STRETCH: f64 = 0.45;
-const BEND: f64 = 0.15;
-const TORSION: f64 = 0.005;
+pub(crate) const R_REF: [[f64; 3]; 3] =
+    [[1.35, 2.10, 2.53], [2.10, 2.87, 3.40], [2.53, 3.40, 3.40]];
+pub(crate) const STRETCH: f64 = 0.45;
+pub(crate) const BEND: f64 = 0.15;
+pub(crate) const TORSION: f64 = 0.005;
 
 // Numerical pruning choices, rather than fitted parameters. Discard bends and
 // torsions within one degree of collinearity, where their coordinates become
@@ -51,7 +56,11 @@ struct Neighbor {
 /// pair weights above 1e-4 and angles more than one degree from collinearity.
 /// The local path enumeration scales with local coordination. The dense output
 /// requires O(N²) space.
-pub(crate) fn model_hessian(numbers: &[u8], positions: &[f64]) -> Result<Vec<f64>, String> {
+pub(crate) fn model_hessian(
+    numbers: &[u8],
+    positions: &[f64],
+    contacts: bool,
+) -> Result<Vec<f64>, String> {
     let dimension = numbers
         .len()
         .checked_mul(3)
@@ -138,6 +147,19 @@ pub(crate) fn model_hessian(numbers: &[u8], positions: &[f64]) -> Result<Vec<f64
             }
         }
     }
+    if contacts {
+        for contact in contact_stretches(numbers, positions) {
+            add_outer_product(
+                &mut hessian,
+                dimension,
+                contact.force,
+                &[
+                    (contact.a, scale(contact.unit, -1.)),
+                    (contact.b, contact.unit),
+                ],
+            );
+        }
+    }
     for row in 0..dimension {
         for column in 0..row {
             hessian[row * dimension + column] = hessian[column * dimension + row];
@@ -149,7 +171,7 @@ pub(crate) fn model_hessian(numbers: &[u8], positions: &[f64]) -> Result<Vec<f64
     Ok(hessian)
 }
 
-fn period(number: u8) -> usize {
+pub(crate) fn period(number: u8) -> usize {
     match number {
         1..=2 => 0,
         3..=10 => 1,
@@ -327,7 +349,7 @@ mod tests {
 
     #[test]
     fn hydrogen_matches_hand_calculation() {
-        let hessian = model_hessian(&[1, 1], &[0.0, 0.0, 0.0, 1.4, 0.0, 0.0]).unwrap();
+        let hessian = model_hessian(&[1, 1], &[0.0, 0.0, 0.0, 1.4, 0.0, 0.0], false).unwrap();
         // 0.45 exp(1.0 * (1.35² - 1.40²)) = 0.3921904574987212.
         let expected = 0.392_190_457_498_721_2;
         for row in 0..6 {
@@ -382,7 +404,7 @@ mod tests {
     #[test]
     fn water_and_ethane_are_symmetric_psd_with_rigid_null_modes() {
         for (numbers, positions) in [water(), ethane()] {
-            let hessian = model_hessian(&numbers, &positions).unwrap();
+            let hessian = model_hessian(&numbers, &positions, false).unwrap();
             let dimension = positions.len();
             for i in 0..dimension {
                 for j in 0..dimension {
@@ -426,14 +448,14 @@ mod tests {
     fn rigid_transforms_rotate_the_hessian() {
         // A cyclic permutation is a proper rotation and exercises all axes.
         for (numbers, positions) in [water(), ethane()] {
-            let hessian = model_hessian(&numbers, &positions).unwrap();
+            let hessian = model_hessian(&numbers, &positions, false).unwrap();
             let transformed: Vec<f64> = positions
                 .as_chunks::<3>()
                 .0
                 .iter()
                 .flat_map(|p| [p[1] + 15.0, p[2] - 8.0, p[0] + 4.0])
                 .collect();
-            let rotated = model_hessian(&numbers, &transformed).unwrap();
+            let rotated = model_hessian(&numbers, &transformed, false).unwrap();
             let dimension = positions.len();
             for i in 0..dimension {
                 let original_i = i / 3 * 3 + (i % 3 + 1) % 3;
@@ -520,6 +542,7 @@ mod tests {
         let linear = model_hessian(
             &[1, 6, 6, 1],
             &[-4.0, 0.0, 0.0, -2.0, 0.0, 0.0, 2.0, 0.0, 0.0, 4.0, 0.0, 0.0],
+            false,
         )
         .unwrap();
         assert!(linear.iter().all(|value| value.is_finite()));
@@ -556,15 +579,36 @@ mod tests {
 
     #[test]
     fn validates_inputs_and_handles_single_atoms() {
-        assert_eq!(model_hessian(&[], &[]).unwrap(), Vec::<f64>::new());
+        assert_eq!(model_hessian(&[], &[], false).unwrap(), Vec::<f64>::new());
         assert_eq!(
-            model_hessian(&[18], &[1.0, 2.0, 3.0]).unwrap(),
+            model_hessian(&[18], &[1.0, 2.0, 3.0], false).unwrap(),
             vec![0.0; 9]
         );
-        assert!(model_hessian(&[0], &[0.0; 3]).is_err());
-        assert!(model_hessian(&[119], &[0.0; 3]).is_err());
-        assert!(model_hessian(&[1], &[0.0; 2]).is_err());
-        assert!(model_hessian(&[1], &[f64::NAN, 0.0, 0.0]).is_err());
-        assert!(model_hessian(&[1, 1], &[0.0; 6]).is_err());
+        assert!(model_hessian(&[0], &[0.0; 3], false).is_err());
+        assert!(model_hessian(&[119], &[0.0; 3], false).is_err());
+        assert!(model_hessian(&[1], &[0.0; 2], false).is_err());
+        assert!(model_hessian(&[1], &[f64::NAN, 0.0, 0.0], false).is_err());
+        assert!(model_hessian(&[1, 1], &[0.0; 6], false).is_err());
+    }
+    #[test]
+    fn optional_contact_is_the_radial_rank_one_curvature_with_rigid_null_modes() {
+        let r = 2. * 1.88 / crate::ANGSTROM_PER_BOHR;
+        let x = [0., 0., 0., r, 0., 0.];
+        let base = model_hessian(&[18, 18], &x, false).unwrap();
+        let augmented = model_hessian(&[18, 18], &x, true).unwrap();
+        assert!(base.iter().all(|v| *v == 0.));
+        for i in 0..6 {
+            for j in 0..6 {
+                let expected = match (i, j) {
+                    (0, 0) | (3, 3) => 0.001,
+                    (0, 3) | (3, 0) => -0.001,
+                    _ => 0.,
+                };
+                assert!((augmented[i * 6 + j] - expected).abs() < 1e-15);
+            }
+        }
+        let (eigenvalues, _) = crate::linalg::symmetric_eigen(augmented, 6).unwrap();
+        assert!(eigenvalues[..5].iter().all(|v| v.abs() < 1e-15));
+        assert!((eigenvalues[5] - 0.002).abs() < 1e-15);
     }
 }

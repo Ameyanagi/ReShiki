@@ -912,13 +912,33 @@ explains how the crates and modules fit together.
 - `crates/optimize/src/conformers/topology.rs`: Validate molecular connectivity and enumerate heavy-atom graph automorphisms.
 - `crates/optimize/src/lib.rs`: Geometry optimization and conformer ranking for any energy-and-gradient potential.
 - `crates/optimize/src/linalg.rs`: Dense symmetric eigendecomposition and vector operations for geometry optimization.
+- `crates/optimize/src/linalg/cholesky.rs`: Scaled Cholesky factorization and triangular solves.
+- `crates/optimize/src/linalg/projected.rs`: Symmetric eigendecomposition on the complement of known orthonormal axes.
 - `crates/optimize/src/model_hessian.rs`: Lindh's positive semidefinite model Hessian in Cartesian atomic units.
-- `crates/optimize/src/optimizer.rs`: Molecular geometry minimization with ANC-RFO and Cartesian L-BFGS.
-- `crates/optimize/src/optimizer/anc.rs`: Approximate normal coordinates, rational-function steps and direct BFGS updates.
+- `crates/optimize/src/model_hessian/contacts.rs`: Weak nonbonded stretch curvature for the Lindh Hessian.
+- `crates/optimize/src/optimizer.rs`: Molecular geometry minimization with TRIC or ANC RFO and Cartesian L-BFGS.
+- `crates/optimize/src/optimizer/anc.rs`: Approximate normal coordinates, rational-function steps and Hessian updates.
 - `crates/optimize/src/optimizer/anc/davidson.rs`: Lowest eigenvector of the symmetric RFO matrix [H g; gᵀ 0].
 - `crates/optimize/src/optimizer/anc/davidson/regression.rs`: Davidson regression on a realistic Lindh model Hessian after BFGS updates.
+- `crates/optimize/src/optimizer/anc/diis.rs`: Accepted-point histories and coordinate transforms for shared DIIS proposals.
 - `crates/optimize/src/optimizer/coordinates.rs`: Free Cartesian coordinates and the instantaneous translation and rotation subspace.
+- `crates/optimize/src/optimizer/internal.rs`: Translation-rotation-internal coordinates for molecular RFO.
+- `crates/optimize/src/optimizer/internal/back_transform.rs`: Iterative back-transformation after Pulay & Fogarasi, J.
+- `crates/optimize/src/optimizer/internal/chart.rs`: Primitive values, their local differences and free-column Wilson rows.
+- `crates/optimize/src/optimizer/internal/delocalize.rs`: Products of the sparse primitive Wilson rows at a DLC build.
+- `crates/optimize/src/optimizer/internal/fragment.rs`: Fragment translations and exponential-map rotations for TRIC.
+- `crates/optimize/src/optimizer/internal/geometry.rs`: Three-dimensional Cartesian geometry used by the internal coordinate charts.
+- `crates/optimize/src/optimizer/internal/metric.rs`: Dense Wilson matrices.
+- `crates/optimize/src/optimizer/internal/primitive.rs`: Local internal-coordinate values and analytic Wilson B rows.
+- `crates/optimize/src/optimizer/internal/product.rs`: Row-major A Bᵀ, optionally computing a symmetric result from its lower triangle.
+- `crates/optimize/src/optimizer/internal/profile.rs`: Test-only, nested wall timers.
+- `crates/optimize/src/optimizer/internal/topology.rs`: Covalent topology and the primitive part of a molecular coordinate chart.
+- `crates/optimize/src/optimizer/internal/topology/chart_check.rs`: Exact chart checks for bounded, ordinary organic coordination.
 - `crates/optimize/src/optimizer/lbfgs.rs`: Limited-memory inverse BFGS in free Cartesian coordinates.
+- `crates/optimize/src/optimizer/rfo.rs`: Shared rational-function, secant-update and DIIS calculations.
+- `crates/optimize/src/optimizer/rfo/diis.rs`: DIIS interpolation in the current RFO coordinate frame.
+- `crates/optimize/src/optimizer/rfo/positive.rs`: The unique negative RFO root for a positive-definite physical Hessian.
+- `crates/optimize/src/optimizer/trust.rs`: Trust-region acceptance and radius adjustment shared by both RFO coordinate models.
 
 ## reshiki-process-heap
 
