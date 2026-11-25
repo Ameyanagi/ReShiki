@@ -1,6 +1,6 @@
 //! DIIS interpolation in the current RFO coordinate frame.
 
-use crate::linalg::{dot, norm};
+use crate::linalg::{cholesky::Cholesky, dot, norm};
 use crate::optimizer::Acceleration;
 
 const MIN_POINTS: usize = 3;
@@ -8,7 +8,7 @@ const SMALL_STEP: f64 = 2.5e-3;
 const LARGE_GRADIENT: f64 = 1e-3;
 
 pub(crate) fn is_positive_definite(hessian: &[f64], dimension: usize) -> bool {
-    Cholesky::new(hessian, dimension).is_some()
+    Cholesky::new(hessian, dimension, 0., 64. * f64::EPSILON).is_some()
 }
 
 /// Safeguarded DIIS in a single coordinate chart. RMS controls use free
@@ -49,7 +49,7 @@ pub(crate) fn diis_direction<T>(
         return proposal(step);
     }
     // Use the same current H^-1 for every accepted-point residual.
-    let factor = Cholesky::new(hessian, n)?;
+    let factor = Cholesky::new(hessian, n, 0., 64. * f64::EPSILON)?;
     let errors: Vec<_> = gradients
         .iter()
         .map(|g| factor.solve(g))
@@ -112,7 +112,7 @@ pub(crate) fn residual_coefficients(errors: &[Vec<f64>]) -> Option<Vec<f64>> {
         .iter()
         .flat_map(|left| scaled.iter().map(move |right| dot(left, right)))
         .collect();
-    let weights = Cholesky::new(&gram, count)?.solve(&vec![1.; count])?;
+    let weights = Cholesky::new(&gram, count, 0., 64. * f64::EPSILON)?.solve(&vec![1.; count])?;
     // Eq. (9) and control (d) of Farkas & Schlegel: these unnormalized
     // weights are c_i/||r||^2, with the shortest error scaled to unit norm.
     if weights.iter().any(|value| value.abs() > 1e8) {
@@ -183,8 +183,8 @@ pub(crate) fn energy_coefficients(
                         - quadratic[base * count + right];
                 }
             }
-            let Some(solution) =
-                Cholesky::new(&reduced, dimension).and_then(|factor| factor.solve(&rhs))
+            let Some(solution) = Cholesky::new(&reduced, dimension, 0., 64. * f64::EPSILON)
+                .and_then(|factor| factor.solve(&rhs))
             else {
                 continue;
             };
@@ -209,66 +209,4 @@ pub(crate) fn energy_coefficients(
         }
     }
     best
-}
-
-// Golub & Van Loan, Matrix Computations: a scaled Cholesky factorization
-// followed by triangular solves. Scaling also keeps the small DIIS systems
-// insensitive to the absolute gradient and energy units.
-struct Cholesky {
-    lower: Vec<f64>,
-    dimension: usize,
-    scale: f64,
-}
-
-impl Cholesky {
-    fn new(matrix: &[f64], dimension: usize) -> Option<Self> {
-        let scale = matrix
-            .iter()
-            .fold(0_f64, |largest, value| largest.max(value.abs()));
-        if !(scale.is_finite() && scale > 0.) || matrix.iter().any(|value| !value.is_finite()) {
-            return None;
-        }
-        let mut lower = vec![0.; matrix.len()];
-        for i in 0..dimension {
-            for j in 0..=i {
-                let value = matrix[i * dimension + j] / scale
-                    - dot(
-                        &lower[i * dimension..i * dimension + j],
-                        &lower[j * dimension..j * dimension + j],
-                    );
-                if i == j {
-                    if !value.is_finite() || value <= 64. * f64::EPSILON {
-                        return None;
-                    }
-                    lower[i * dimension + j] = value.sqrt();
-                } else {
-                    lower[i * dimension + j] = value / lower[j * dimension + j];
-                }
-            }
-        }
-        Some(Self {
-            lower,
-            dimension,
-            scale,
-        })
-    }
-
-    fn solve(&self, rhs: &[f64]) -> Option<Vec<f64>> {
-        let n = self.dimension;
-        let mut result = vec![0.; n];
-        for i in 0..n {
-            result[i] = (rhs[i] / self.scale - dot(&self.lower[i * n..i * n + i], &result[..i]))
-                / self.lower[i * n + i];
-        }
-        for i in (0..n).rev() {
-            for j in i + 1..n {
-                result[i] -= self.lower[j * n + i] * result[j];
-            }
-            result[i] /= self.lower[i * n + i];
-        }
-        result
-            .iter()
-            .all(|value| value.is_finite())
-            .then_some(result)
-    }
 }

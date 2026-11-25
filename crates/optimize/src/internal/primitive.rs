@@ -29,6 +29,33 @@ pub(super) enum Local {
     OutOfPlane(usize, usize, usize, usize),
 }
 
+/// A local Wilson row touches at most four atoms.
+pub(super) struct SparseRow {
+    entries: [(usize, Vector); 4],
+    len: usize,
+}
+
+impl SparseRow {
+    fn new(entries: &[(usize, Vector)]) -> Option<Self> {
+        if entries
+            .iter()
+            .any(|(_, v)| v.iter().any(|x| !x.is_finite()))
+        {
+            return None;
+        }
+        let mut row = Self {
+            entries: [(0, [0.; 3]); 4],
+            len: entries.len(),
+        };
+        row.entries[..entries.len()].copy_from_slice(entries);
+        Some(row)
+    }
+
+    pub(super) fn entries(&self) -> &[(usize, Vector)] {
+        &self.entries[..self.len]
+    }
+}
+
 impl Local {
     pub(super) fn value(&self, x: &[f64]) -> Option<f64> {
         let value = match *self {
@@ -76,10 +103,23 @@ impl Local {
         if row.len() != x.len() {
             return None;
         }
+        for &(atom, vector) in self.sparse_row(x)?.entries() {
+            for (target, value) in row[3 * atom..3 * atom + 3].iter_mut().zip(vector) {
+                *target += value;
+            }
+        }
+        if row.iter().any(|value| !value.is_finite()) {
+            row.fill(0.0);
+            return None;
+        }
+        Some(())
+    }
+
+    pub(super) fn sparse_row(&self, x: &[f64]) -> Option<SparseRow> {
         match *self {
             Self::Stretch(a, b) => {
                 let (u, _) = bond(x, a, b)?;
-                write_sparse(row, &[(a, u), (b, scale(u, -1.0))])
+                SparseRow::new(&[(a, u), (b, scale(u, -1.0))])
             }
             Self::Bend(a, b, c) => {
                 let (u, ru) = bond(x, a, b)?;
@@ -90,10 +130,7 @@ impl Local {
                 }
                 let first = divide(cross(u, normal), ru);
                 let last = divide(cross(normal, v), rv);
-                write_sparse(
-                    row,
-                    &[(a, first), (b, scale(add(first, last), -1.0)), (c, last)],
-                )
+                SparseRow::new(&[(a, first), (b, scale(add(first, last), -1.0)), (c, last)])
             }
             Self::LinearBend(a, b, c, axis) => {
                 let (u, ru) = bond(x, a, b)?;
@@ -103,10 +140,7 @@ impl Local {
                 // angle row these derivatives are smooth through linearity.
                 let first = divide(subtract(e, scale(u, dot(e, u))), ru);
                 let last = divide(subtract(e, scale(v, dot(e, v))), rv);
-                write_sparse(
-                    row,
-                    &[(a, first), (b, scale(add(first, last), -1.0)), (c, last)],
-                )
+                SparseRow::new(&[(a, first), (b, scale(add(first, last), -1.0)), (c, last)])
             }
             Self::Torsion(a, b, c, d) => {
                 let (u, ru) = bond(x, a, b)?;
@@ -130,7 +164,7 @@ impl Local {
                 );
                 let second = subtract(axis_change, first);
                 let third = scale(add(axis_change, last), -1.0);
-                write_sparse(row, &[(a, first), (b, second), (c, third), (d, last)])
+                SparseRow::new(&[(a, first), (b, second), (c, third), (d, last)])
             }
             Self::OutOfPlane(a, b, c, d) => {
                 let (u, ru) = bond(x, a, b)?;
@@ -149,7 +183,7 @@ impl Local {
                 let third = divide(cross(w, plane), rv);
                 let fourth = divide(cross(plane, v), rw);
                 let second = scale(add(first, add(third, fourth)), -1.0);
-                write_sparse(row, &[(a, first), (b, second), (c, third), (d, fourth)])
+                SparseRow::new(&[(a, first), (b, second), (c, third), (d, fourth)])
             }
         }
     }
@@ -200,25 +234,6 @@ fn bond(x: &[f64], a: usize, b: usize) -> Option<(Vector, f64)> {
 fn unit(vector: Vector) -> Option<(Vector, f64)> {
     let norm = length(vector);
     (norm.is_finite() && norm > 0.0).then(|| (divide(vector, norm), norm))
-}
-
-fn write_sparse(row: &mut [f64], entries: &[(usize, Vector)]) -> Option<()> {
-    if entries
-        .iter()
-        .any(|(_, vector)| vector.iter().any(|value| !value.is_finite()))
-    {
-        return None;
-    }
-    for &(atom, vector) in entries {
-        for (target, value) in row[3 * atom..3 * atom + 3].iter_mut().zip(vector) {
-            *target += value;
-        }
-    }
-    if row.iter().any(|value| !value.is_finite()) {
-        row.fill(0.0);
-        return None;
-    }
-    Some(())
 }
 
 fn add(a: Vector, b: Vector) -> Vector {

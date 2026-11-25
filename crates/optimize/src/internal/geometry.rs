@@ -3,7 +3,13 @@
 pub(super) type Vector = [f64; 3];
 
 pub(super) fn length(vector: Vector) -> f64 {
-    vector[0].hypot(vector[1]).hypot(vector[2])
+    let squared = dot(vector, vector);
+    if squared.is_normal() {
+        squared.sqrt()
+    } else {
+        // Preserve the scaled norm for subnormal or overflowing squares.
+        vector[0].hypot(vector[1]).hypot(vector[2])
+    }
 }
 
 pub(super) fn dot(a: Vector, b: Vector) -> f64 {

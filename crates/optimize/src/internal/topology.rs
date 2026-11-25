@@ -30,6 +30,9 @@ use crate::model_hessian::{
 use super::geometry::{Vector, cross, dot, length, subtract};
 use super::primitive::{Local, bend_axes};
 
+mod chart_check;
+use chart_check::ChartCheck;
+
 const COS_FIVE_DEGREES: f64 = 0.996_194_698_091_745_5;
 const SIN_FIVE_DEGREES: f64 = 0.087_155_742_747_658_17;
 const MIN_DISTANCE: f64 = 1e-8;
@@ -51,12 +54,14 @@ pub(super) struct Topology {
     hydrogen_bonds: Vec<(usize, usize)>,
     // One oriented line per pair of linear bends, in generation order.
     linear_lines: Vec<Vector>,
+    chart_check: Option<ChartCheck>,
 }
 
 impl Topology {
     /// Generate a deterministic local chart from Cartesian positions in bohr.
     /// Covalent bonds use `r <= 1.3 (r_cov(A) + r_cov(B))`.
     pub(super) fn generate(numbers: &[u8], x: &[f64], hbonds: bool) -> Result<Self, String> {
+        profile_phase!("topology");
         if numbers.is_empty() {
             return Err("internal topology needs at least one atom".into());
         }
@@ -161,7 +166,22 @@ impl Topology {
             covalent,
             hydrogen_bonds,
             linear_lines,
+            chart_check: ChartCheck::new(numbers, x, hbonds, &graph),
         })
+    }
+
+    /// Check ordinary organic charts without regenerating their local paths.
+    /// Unusual angles, coordination and optional hydrogen bonds use the full
+    /// generator, retaining the same chart-selection rules in every case.
+    pub(super) fn same_chart_at(&self, numbers: &[u8], x: &[f64], hbonds: bool) -> bool {
+        if let Some(result) = self
+            .chart_check
+            .as_ref()
+            .and_then(|check| check.same_chart_at(numbers, x, hbonds, &self.covalent))
+        {
+            return result;
+        }
+        Self::generate(numbers, x, hbonds).is_ok_and(|new| self.same_chart(&new))
     }
 
     /// Whether the same coordinates are present and their retained linear-bend
@@ -298,6 +318,25 @@ fn add_improper_triple(
 ) {
     let atoms = [a.atom, c.atom, d.atom];
     let vectors = atoms.map(|atom| direction(x, b, atom));
+    let mask = improper_mask(vectors);
+    // Lindh has no separate improper parameter. Use its small torsion
+    // coefficient with this triple's three bonds to the center, and include
+    // each peripheral atom to preserve symmetry in the redundant coordinates.
+    let force = TORSION * a.rho * c.rho * d.rho;
+    for index in 0..3 {
+        if mask & (1 << index) != 0 {
+            let a = atoms[index];
+            let c = atoms[(index + 1) % 3];
+            let d = atoms[(index + 2) % 3];
+            // A lies out of the B–C–D plane, with B always second.
+            locals.push((Local::OutOfPlane(a, b, c.min(d), c.max(d)), force));
+        }
+    }
+}
+
+/// Peripheral atoms whose out-of-plane coordinates the generator retains.
+/// Shared with the bounded chart check so planarity has one definition.
+fn improper_mask(vectors: [Vector; 3]) -> u8 {
     let normals = [
         cross(vectors[1], vectors[2]),
         cross(vectors[2], vectors[0]),
@@ -308,21 +347,14 @@ fn add_improper_triple(
     // The normalized scalar triple product measures departure from planarity
     // using the best-conditioned bond pair.
     if maximum < 1e-10 || dot(vectors[0], normals[0]).abs() > SIN_FIVE_DEGREES * maximum {
-        return;
+        return 0;
     }
-    // Lindh has no separate improper parameter. Use its small torsion
-    // coefficient with this triple's three bonds to the center, and include
-    // each peripheral atom to preserve symmetry in the redundant coordinates.
-    let force = TORSION * a.rho * c.rho * d.rho;
-    for index in 0..3 {
-        if lengths[index] > SIN_FIVE_DEGREES {
-            let a = atoms[index];
-            let c = atoms[(index + 1) % 3];
-            let d = atoms[(index + 2) % 3];
-            // A lies out of the B–C–D plane, with B always second.
-            locals.push((Local::OutOfPlane(a, b, c.min(d), c.max(d)), force));
-        }
-    }
+    lengths
+        .iter()
+        .enumerate()
+        .fold(0, |mask, (index, &length)| {
+            mask | (u8::from(length > SIN_FIVE_DEGREES) << index)
+        })
 }
 
 // Mantina et al., J. Phys. Chem. A 113, 5806–5812 (2009),

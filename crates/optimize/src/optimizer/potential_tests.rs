@@ -276,6 +276,76 @@ fn optimizer_options() -> impl Iterator<Item = Options> {
         )
 }
 
+#[test]
+fn energy_gradient_stops_on_a_soft_mode_after_two_qualifying_displacements() {
+    struct SoftMode;
+    impl Potential for SoftMode {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], _: Accuracy) -> Result<f64, EvalError> {
+            g.fill(0.);
+            // A force on the fixed atom must not enter the convergence norm.
+            g[0] = 100.;
+            g[3] = 1e-6 * x[3];
+            Ok(0.5e-6 * x[3].powi(2))
+        }
+
+        fn hessian(&mut self, _: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+            h.fill(0.);
+            h[3 * 6 + 3] = 1e-6;
+            Some(Ok(()))
+        }
+    }
+
+    let initial = [0., 0., 0., 10., 0., 0.];
+    let options = Options {
+        initial_hessian: InitialHessian::Potential,
+        curvature_floor: 1e-6,
+        fixed_atoms: vec![0],
+        tight_final: false,
+        max_steps: 2,
+        ..Options::default()
+    };
+    let standard = optimize(&mut SoftMode, &[1, 1], &initial, &options, |_| {
+        ControlFlow::Continue(())
+    });
+    assert_eq!(standard.status, Status::MaxSteps);
+
+    let mut trace = Vec::new();
+    let energy_gradient = optimize(
+        &mut SoftMode,
+        &[1, 1],
+        &initial,
+        &Options {
+            convergence: Convergence::EnergyGradient {
+                gradient_norm: 1e-5,
+            },
+            ..options
+        },
+        |step| {
+            trace.push((
+                step.index,
+                step.max_gradient,
+                step.delta_energy,
+                step.max_step,
+                step.rms_step,
+            ));
+            ControlFlow::Continue(())
+        },
+    );
+    assert_eq!(energy_gradient.status, Status::Converged);
+    assert_eq!(energy_gradient.steps, 2);
+    assert_eq!(trace.len(), 3);
+    assert_eq!(energy_gradient.positions, standard.positions);
+    let criteria = Level::Normal.criteria();
+    for &(index, gradient, delta, displacement, rms_displacement) in &trace[1..] {
+        assert!((1..=2).contains(&index));
+        assert!(gradient < 1e-5);
+        assert!(gradient >= criteria.max_gradient / 100.);
+        assert!(delta.abs() <= criteria.energy);
+        assert!(displacement > criteria.max_step);
+        assert!(rms_displacement > criteria.rms_step);
+    }
+}
+
 fn atom(positions: &[Jet], index: usize) -> [Jet; 3] {
     std::array::from_fn(|axis| positions[3 * index + axis])
 }

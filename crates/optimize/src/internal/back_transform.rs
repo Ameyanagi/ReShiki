@@ -1,10 +1,7 @@
 //! Iterative back-transformation after Pulay & Fogarasi, J. Chem. Phys.
 //! **96**, 2856 (1992), and Peng et al., J. Comput. Chem. **17**, 49 (1996).
 
-use super::{
-    InternalModel,
-    metric::{apply, transpose_apply},
-};
+use super::{InternalModel, metric::apply};
 use crate::linalg::norm;
 
 pub(crate) struct BackTransform {
@@ -14,8 +11,8 @@ pub(crate) struct BackTransform {
 
 impl InternalModel {
     /// Solve Uᵀ(q(x) − q(x₀)) = target in the local chart. Wrap each proper
-    /// torsion before applying Uᵀ. Newton corrections use the current B_u⁺
-    /// and are scattered only into free Cartesian components.
+    /// torsion before applying Uᵀ. Reuse the starting Wilson matrix (Peng et al.)
+    /// while the residual contracts, refreshing it for slow or stalled trials.
     pub(crate) fn back_transform(&self, origin: &[f64], target: &[f64]) -> Option<BackTransform> {
         if target.len() != self.dimension() {
             return None;
@@ -24,7 +21,7 @@ impl InternalModel {
         if !initial_norm.is_finite() {
             return None;
         }
-        let q0 = self.chart.values(origin)?;
+        let q0 = self.values_at(origin)?;
         let mut x = origin.to_vec();
         let mut residual = target.to_vec();
         let mut previous_norm = initial_norm;
@@ -32,11 +29,26 @@ impl InternalModel {
         let mut first = None;
         let mut best = None;
         let mut best_norm = f64::INFINITY;
-        for _ in 0..25 {
-            let Some(tangent) = self.tangent_at(&x) else {
+        let mut tangent = self.tangent_at(origin)?;
+        let mut refresh = false;
+        for iteration in 0..25 {
+            profile_phase!("back-transform iter");
+            if refresh {
+                let Some(next) = self.tangent_at(&x) else {
+                    break;
+                };
+                tangent = next;
+            }
+            // The outer residual verifies an ordinary chord correction. Use
+            // the refined linear solve when contraction required a fresh tangent.
+            let dx = if refresh {
+                tangent.cartesian_step(&residual)
+            } else {
+                tangent.cartesian_correction(&residual)
+            };
+            let Some(dx) = dx else {
                 break;
             };
-            let dx = transpose_apply(&tangent.dual, self.free.len(), &residual);
             let rms = norm(&dx) / (self.free.len() as f64).sqrt();
             if !rms.is_finite() {
                 break;
@@ -80,6 +92,9 @@ impl InternalModel {
             if increases == 2 {
                 break;
             }
+            // Allow a contracting chord iteration time to finish. Switch to
+            // full Newton near the iteration limit to recover slow trials.
+            refresh = error > 0.75 * previous_norm || iteration >= 15;
             previous_norm = error;
         }
         // Recover an iterate that realized at least 90% of the requested

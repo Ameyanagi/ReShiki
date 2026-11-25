@@ -1,9 +1,10 @@
-//! Shared dense rational-function, secant-update and DIIS calculations.
+//! Shared rational-function, secant-update and DIIS calculations.
 //!
 //! Coordinates are supplied by the caller. Every vector in one proposal must
 //! use the same model chart, including both endpoint secant gradients.
 
 mod diis;
+mod positive;
 
 use super::Update;
 use crate::linalg::{dot, norm, symmetric_eigen};
@@ -41,6 +42,21 @@ pub(crate) fn dense_step(hessian: &[f64], gradient: &[f64]) -> Option<Vec<f64>> 
         return None;
     }
     eigenvector_step(&dense_lowest_eigenvector(hessian, gradient)?, gradient)
+}
+
+/// Lowest-root RFO displacement. A positive-definite H has one negative
+/// augmented root, found by a shifted solve with an accuracy check. A failed
+/// solve retains the dense eigenproblem. Small systems also use the dense
+/// solve, avoiding an iterative solve's setup and roundoff on tiny modes.
+pub(crate) fn step(hessian: &[f64], gradient: &[f64], positive_definite: bool) -> Option<Vec<f64>> {
+    const DENSE_DIMENSION: usize = 20;
+    if !positive_definite || gradient.len() <= DENSE_DIMENSION {
+        return dense_step(hessian, gradient);
+    }
+    if gradient.iter().all(|&x| x == 0.) {
+        return None;
+    }
+    positive::step(hessian, gradient).or_else(|| dense_step(hessian, gradient))
 }
 
 pub(crate) fn prediction(hessian: &[f64], gradient: &[f64], step: &[f64]) -> Option<f64> {

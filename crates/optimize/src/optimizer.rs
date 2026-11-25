@@ -8,7 +8,11 @@ mod trust;
 
 use std::{cell::LazyCell, ops::ControlFlow};
 
-use crate::{Accuracy, EvalError, Potential, internal::InternalModel, linalg::dot};
+use crate::{
+    Accuracy, EvalError, Potential,
+    internal::InternalModel,
+    linalg::{dot, norm},
+};
 use anc::{Anc, History};
 use coordinates::{Coordinates, metrics, project};
 use lbfgs::Lbfgs;
@@ -80,6 +84,24 @@ pub enum Level {
     Tight,
 }
 
+/// Tests required to declare a minimum at the selected [`Level`].
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum Convergence {
+    /// Require energy, maximum/RMS gradient and maximum/RMS displacement tests,
+    /// with an exception for a maximum gradient below 1/100 of its threshold.
+    #[default]
+    Standard,
+    /// Require the level's maximum/RMS gradient and absolute energy-change
+    /// tests, plus a strict upper bound on the Euclidean norm of the free
+    /// projected gradient (hartree/bohr). Two consecutive accepted displacements at the same
+    /// accuracy must qualify. Displacement magnitudes do not limit convergence.
+    ///
+    /// Coarse cannot qualify. A Tight final re-evaluation checks its fresh
+    /// gradient with the last Normal energy change and the qualifying Normal
+    /// pair; if it fails, two qualifying Tight displacements are required.
+    EnergyGradient { gradient_norm: f64 },
+}
+
 /// Convergence thresholds in hartree, hartree/bohr and bohr.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Criteria {
@@ -144,6 +166,9 @@ pub struct Options {
     /// inexact evaluations (cf. Carter, SIAM J. Sci. Comput. 14, 368, 1993).
     pub adaptive_accuracy: bool,
     pub level: Level,
+    /// Which convergence tests to apply. The energy-gradient norm bound must
+    /// be finite and positive.
+    pub convergence: Convergence,
     pub max_steps: usize,
     /// Zero-based atom indices whose input coordinates are held exactly fixed.
     pub fixed_atoms: Vec<usize>,
@@ -166,6 +191,7 @@ impl Default for Options {
             acceleration: Acceleration::None,
             adaptive_accuracy: false,
             level: Level::Normal,
+            convergence: Convergence::Standard,
             max_steps: 500,
             fixed_atoms: Vec::new(),
             tight_final: true,
@@ -187,6 +213,16 @@ pub struct Step<'a> {
     /// Radius used for the accepted RFO step in global or per-free-atom units
     /// (see [`Trust`]). L-BFGS reports its Cartesian atom limit after backtracking.
     pub trust_radius: f64,
+    /// Whether the accepted proposal reached the boundary used by the trust
+    /// controller. With [`Trust::PerAtom`], either model or Cartesian length
+    /// can reach the radius; the separate atom cap alone does not set this flag.
+    /// L-BFGS uses the reported Cartesian atom limit after backtracking.
+    /// False for the input and same-geometry accuracy changes.
+    pub on_boundary: bool,
+    /// Actual/predicted energy change for the accepted trial. RFO uses its
+    /// rational model; L-BFGS uses the linear prediction g·s after backtracking.
+    /// NaN for the input and same-geometry accuracy changes.
+    pub ratio: f64,
     pub accuracy: Accuracy,
     pub positions: &'a [f64],
 }
@@ -242,8 +278,31 @@ struct Motion {
     rms: f64,
 }
 
+#[derive(Clone, Copy)]
+struct Diagnostics {
+    radius: f64,
+    on_boundary: bool,
+    ratio: f64,
+}
+
+impl Diagnostics {
+    fn at_geometry(radius: f64) -> Self {
+        Self {
+            radius,
+            on_boundary: false,
+            ratio: f64::NAN,
+        }
+    }
+}
+
 impl Point {
-    fn step(&self, index: usize, motion: Motion, radius: f64, accuracy: Accuracy) -> Step<'_> {
+    fn step(
+        &self,
+        index: usize,
+        motion: Motion,
+        diagnostics: Diagnostics,
+        accuracy: Accuracy,
+    ) -> Step<'_> {
         let (max_gradient, rms_gradient) = metrics(&self.active_gradient);
         Step {
             index,
@@ -253,7 +312,9 @@ impl Point {
             rms_gradient,
             max_step: motion.max,
             rms_step: motion.rms,
-            trust_radius: radius,
+            trust_radius: diagnostics.radius,
+            on_boundary: diagnostics.on_boundary,
+            ratio: diagnostics.ratio,
             accuracy,
             positions: &self.positions,
         }
@@ -270,6 +331,14 @@ impl Step<'_> {
                     && self.delta_energy.abs() <= c.energy
                     && self.max_step <= c.max_step
                     && self.rms_step <= c.rms_step))
+    }
+
+    fn energy_gradient(&self, c: Criteria, gradient_norm: f64, bound: f64) -> bool {
+        self.accuracy != Accuracy::Coarse
+            && self.max_gradient <= c.max_gradient
+            && self.rms_gradient <= c.rms_gradient
+            && self.delta_energy.abs() <= c.energy
+            && gradient_norm < bound
     }
 }
 
@@ -396,7 +465,7 @@ impl<'a> Engine<'a> {
         point: &Point,
         steps: usize,
         accuracy_changed: bool,
-    ) -> Result<Option<(Point, f64)>, Status> {
+    ) -> Result<Option<(Point, Diagnostics)>, Status> {
         if self.anc.as_ref().is_none_or(|a| {
             self.trust
                 .should_rebuild(self.options.rebuild, steps - a.built_at)
@@ -446,7 +515,7 @@ impl<'a> Engine<'a> {
         point: &Point,
         steps: usize,
         accuracy_changed: bool,
-    ) -> Result<Option<(Point, f64)>, Status> {
+    ) -> Result<Option<(Point, Diagnostics)>, Status> {
         let x = &point.positions;
         let mut rebuild = self
             .trust
@@ -525,7 +594,7 @@ impl<'a> Engine<'a> {
         eval: &mut Evaluator<P>,
         point: &Point,
         accuracy_changed: bool,
-    ) -> Result<(Point, f64), Status> {
+    ) -> Result<(Point, Diagnostics), Status> {
         loop {
             let Some(mut d) = self.lbfgs.direction(&point.active_gradient, &point.rigid) else {
                 return Err(Status::Failed("no finite L-BFGS descent direction".into()));
@@ -538,7 +607,19 @@ impl<'a> Engine<'a> {
             for _ in 0..=halvings {
                 let trial = eval.trial(point, &d)?;
                 if trial.energy <= point.energy + 1e-4 * scale * slope {
-                    return Ok((trial, 0.3 * scale));
+                    let radius = 0.3 * scale;
+                    let largest = d
+                        .as_chunks::<3>()
+                        .0
+                        .iter()
+                        .map(|atom| norm(atom))
+                        .fold(0., f64::max);
+                    let diagnostics = Diagnostics {
+                        radius,
+                        on_boundary: largest >= radius * (1. - 32. * f64::EPSILON),
+                        ratio: (trial.energy - point.energy) / (scale * slope),
+                    };
+                    return Ok((trial, diagnostics));
                 }
                 scale *= 0.5;
                 d.iter_mut().for_each(|v| *v *= 0.5);
@@ -557,8 +638,8 @@ impl<'a> Engine<'a> {
         point: &Point,
         steps: usize,
         accuracy_changed: bool,
-    ) -> Result<(Point, Motion, f64), Status> {
-        let (next, radius) = loop {
+    ) -> Result<(Point, Motion, Diagnostics), Status> {
+        let (next, diagnostics) = loop {
             match self.method {
                 Method::Internal => {
                     if let Some(trial) =
@@ -619,7 +700,7 @@ impl<'a> Engine<'a> {
                 self.lbfgs.update(s, y);
             }
         }
-        Ok((next, motion, radius))
+        Ok((next, motion, diagnostics))
     }
 }
 
@@ -634,18 +715,26 @@ impl<'a> Engine<'a> {
 /// RMS is their Euclidean norm divided by the square root of their count.
 /// With no anchors, the gradient is projected perpendicular to the
 /// instantaneous translations and rotations.
-/// Both gradient thresholds must pass (≤). In addition, the last accepted
+/// With [`Convergence::Standard`], both gradient thresholds must pass (≤).
+/// In addition, the last accepted
 /// |energy change|, maximum step and RMS step must all pass (≤), or the maximum
 /// gradient must be strictly below 1/100 of its threshold. Only this last rule
-/// can converge at the initial point or immediately after an accuracy change.
+/// can converge at the initial point or immediately after Coarse → Normal.
+/// [`Convergence::EnergyGradient`] requires two consecutive accepted steps at
+/// the same accuracy to pass the energy and both gradient thresholds (≤), with
+/// the Euclidean gradient norm strictly below its configured bound. It waives
+/// the displacement limits and the initial small-gradient exception.
 ///
 /// With `tight_final`, first convergence triggers a Tight evaluation at the same
 /// geometry. The callback receives the Tight sample before convergence is
 /// tested and may cancel. If minimization continues, all trials use Tight.
 /// With `adaptive_accuracy`, trials start at Coarse and switch once to Normal
 /// when the accepted gradient reaches the cutoff. Each accuracy change refreshes
-/// the energy and gradient and clears the last displacement. Only Normal or
-/// Tight can converge. The displacement test uses two endpoints at that accuracy.
+/// the energy and gradient. Coarse → Normal clears the last displacement;
+/// Normal → Tight checks the fresh Tight gradient with the preceding Normal
+/// displacement and energy change. Only Normal or Tight can converge.
+/// For energy-gradient convergence, the qualifying Normal pair remains valid
+/// for this recheck; a failed Tight gradient check resets that pair.
 /// Both RFO methods keep their curvature and radius across accuracy changes.
 /// DIIS and L-BFGS discard their histories.
 ///
@@ -707,6 +796,12 @@ pub fn optimize<P: Potential + ?Sized>(
             return out;
         }
     };
+    if let Convergence::EnergyGradient { gradient_norm } = options.convergence
+        && (!gradient_norm.is_finite() || gradient_norm <= 0.)
+    {
+        out.status = Status::Failed("gradient_norm must be finite and positive".into());
+        return out;
+    }
     if options.method != Method::Lbfgs
         && let Err(message) = options.validate_rfo()
     {
@@ -741,18 +836,57 @@ pub fn optimize<P: Potential + ?Sized>(
         };
     let criteria = options.level.criteria();
     let mut motion = None;
-    let mut radius = if options.method == Method::Lbfgs {
+    let mut verification_motion = None;
+    let mut qualifying_steps = 0_u8;
+    let mut diagnostics = Diagnostics::at_geometry(if options.method == Method::Lbfgs {
         0.3
     } else {
         engine.trust.radius
-    };
+    });
     out.energies.push(point.energy);
     out.status = loop {
-        let info = point.step(out.steps, motion.unwrap_or_default(), radius, eval.accuracy);
+        let info = point.step(
+            out.steps,
+            motion.unwrap_or_default(),
+            diagnostics,
+            eval.accuracy,
+        );
         if on_step(&info).is_break() {
             break Status::Cancelled;
         }
-        let next_accuracy = if info.converged(criteria, motion.is_some()) {
+        let convergence_motion = motion.or(verification_motion);
+        // Re-evaluations report no movement, but the Tight convergence check
+        // may still use the accepted Normal displacement that triggered it.
+        let mut convergence_info = info;
+        if let Some(previous) = convergence_motion {
+            convergence_info.delta_energy = previous.de;
+            convergence_info.max_step = previous.max;
+            convergence_info.rms_step = previous.rms;
+        }
+        let converged = match options.convergence {
+            Convergence::Standard => {
+                convergence_info.converged(criteria, convergence_motion.is_some())
+            }
+            Convergence::EnergyGradient { gradient_norm } => {
+                let qualifies = convergence_motion.is_some()
+                    && convergence_info.energy_gradient(
+                        criteria,
+                        norm(&point.active_gradient),
+                        gradient_norm,
+                    );
+                if motion.is_some() {
+                    qualifying_steps = if qualifies {
+                        qualifying_steps.saturating_add(1)
+                    } else {
+                        0
+                    };
+                } else if !qualifies {
+                    qualifying_steps = 0;
+                }
+                qualifies && qualifying_steps >= 2
+            }
+        };
+        let next_accuracy = if converged {
             if !options.tight_final || eval.accuracy == Accuracy::Tight {
                 break Status::Converged;
             }
@@ -765,6 +899,11 @@ pub fn optimize<P: Potential + ?Sized>(
             eval.accuracy
         };
         if next_accuracy != eval.accuracy {
+            verification_motion = if next_accuracy == Accuracy::Tight {
+                motion
+            } else {
+                None
+            };
             eval.accuracy = next_accuracy;
             point = match eval.evaluate(point.positions.clone()) {
                 Ok(p) => p,
@@ -774,6 +913,7 @@ pub fn optimize<P: Potential + ?Sized>(
             engine.lbfgs.clear();
             engine.history.clear();
             motion = None;
+            diagnostics = Diagnostics::at_geometry(diagnostics.radius);
             continue;
         }
         if out.steps == options.max_steps {
@@ -787,10 +927,11 @@ pub fn optimize<P: Potential + ?Sized>(
         }
         let accuracy_changed = out.steps > 0 && motion.is_none();
         match engine.advance(&mut eval, numbers, &point, out.steps, accuracy_changed) {
-            Ok((next, displacement, next_radius)) => {
+            Ok((next, displacement, next_diagnostics)) => {
                 point = next;
                 motion = Some(displacement);
-                radius = next_radius;
+                verification_motion = None;
+                diagnostics = next_diagnostics;
             }
             Err(status) => break status,
         }

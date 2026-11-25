@@ -14,8 +14,8 @@ mod model_hessian;
 mod optimizer;
 
 pub use optimizer::{
-    Acceleration, Criteria, InitialHessian, Level, Method, Options, Outcome, Rebuild, Status, Step,
-    Trust, Update, optimize,
+    Acceleration, Convergence, Criteria, InitialHessian, Level, Method, Options, Outcome, Rebuild,
+    Status, Step, Trust, Update, optimize,
 };
 
 /// Hartree in kcal/mol (CODATA 2022 hartree, thermochemical calorie).

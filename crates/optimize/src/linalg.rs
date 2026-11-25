@@ -1,9 +1,11 @@
 //! Dense symmetric eigendecomposition and vector operations for geometry optimization.
 
+pub(crate) mod cholesky;
+
 // A fused operation is fast on these targets. Other targets (including WASM
 // and baseline x86-64) can vectorize separate multiplies and additions.
 #[inline]
-fn multiply_add(x: f64, y: f64, z: f64) -> f64 {
+pub(crate) fn multiply_add(x: f64, y: f64, z: f64) -> f64 {
     if cfg!(any(target_arch = "aarch64", target_feature = "fma")) {
         x.mul_add(y, z)
     } else {

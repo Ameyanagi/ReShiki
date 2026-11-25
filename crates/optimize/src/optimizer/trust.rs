@@ -1,6 +1,6 @@
 //! Trust-region acceptance and radius adjustment shared by both RFO coordinate models.
 
-use super::{Evaluator, Options, Point, Potential, Status, TrialStep};
+use super::{Diagnostics, Evaluator, Options, Point, Potential, Status, TrialStep};
 use crate::linalg::norm;
 
 /// Trust region for both RFO methods. The ratio thresholds and boundary
@@ -140,15 +140,15 @@ pub(super) enum DirectionError {
 }
 
 pub(super) enum Search {
-    Accepted(Point, f64),
+    Accepted(Point, Diagnostics),
     Exhausted,
     Rebuild,
 }
 
 impl Search {
-    pub fn accepted(self) -> Option<(Point, f64)> {
+    pub fn accepted(self) -> Option<(Point, Diagnostics)> {
         match self {
-            Self::Accepted(point, radius) => Some((point, radius)),
+            Self::Accepted(point, diagnostics) => Some((point, diagnostics)),
             _ => None,
         }
     }
@@ -273,7 +273,14 @@ impl TrustRegion {
                 length == model_radius
             };
             self.accept(ratio, on_boundary);
-            return Ok(Search::Accepted(trial, radius));
+            return Ok(Search::Accepted(
+                trial,
+                Diagnostics {
+                    radius,
+                    on_boundary,
+                    ratio,
+                },
+            ));
         }
         Ok(if self.failed_transforms >= 2 {
             Search::Rebuild

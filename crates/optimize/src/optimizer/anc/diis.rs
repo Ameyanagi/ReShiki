@@ -153,7 +153,7 @@ impl History {
             rms_step,
             acceleration,
             radius,
-            |g| rfo::dense_step(model.hessian(), g),
+            |g| rfo::step(model.hessian(), g, model.positive_definite()),
             |step| model.model_direction(positions, current.gradient.clone(), step),
         )
     }

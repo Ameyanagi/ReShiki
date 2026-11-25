@@ -2,17 +2,30 @@
 //!
 //! Each covalent fragment contributes valence coordinates, a centroid and an
 //! orientation relative to its reference geometry [Wang & Song, J. Chem.
-//! Phys. **144**, 214108 (2016)]. The nonzero eigenvectors of the free-column
-//! Wilson metric define the delocalized coordinates [Baker, Kessi & Delley,
-//! J. Chem. Phys. **105**, 192 (1996)]. A basis remains fixed across accepted
+//! Phys. **144**, 214108 (2016)]. An orthonormal basis for the range of the
+//! free-column Wilson matrix defines delocalized coordinates [Baker, Kessi &
+//! Delley, J. Chem. Phys. **105**, 192 (1996)]. A basis remains fixed across accepted
 //! steps until a rebuild. The Wilson matrix follows the instantaneous geometry.
+
+#[cfg(test)]
+mod profile;
+
+// Compile the timer and its clock reads only into the unit-test binary.
+macro_rules! profile_phase {
+    ($phase:literal) => {
+        #[cfg(test)]
+        let _phase = crate::internal::profile::Span::start($phase);
+    };
+}
 
 mod back_transform;
 mod chart;
+mod delocalize;
 mod fragment;
 mod geometry;
 mod metric;
 mod primitive;
+mod product;
 mod topology;
 
 use std::borrow::Cow;
@@ -22,7 +35,6 @@ use crate::model_hessian::contact_stretches;
 use crate::optimizer::{Options, Update, rfo};
 use chart::Chart;
 use metric::{Tangent, apply, congruence};
-use topology::Topology;
 
 pub(crate) struct InternalModel {
     numbers: Vec<u8>,
@@ -30,13 +42,19 @@ pub(crate) struct InternalModel {
     hbonds: bool,
     parameters: ModelParameters,
     chart: Chart,
-    /// Row i is the primitive-space eigenvector defining DLC i.
+    /// Each row defines one orthonormal primitive-space direction.
     basis: Vec<f64>,
     hessian: Vec<f64>,
     positive_definite: bool,
     /// The last accepted point with a nonsingular Wilson matrix in this chart.
     linearized_at: Vec<f64>,
+    primitive_values: Vec<f64>,
     tangent: Tangent,
+}
+
+enum Curvature<'a> {
+    Initial(Option<&'a [f64]>),
+    Transport(&'a InternalModel),
 }
 
 #[derive(Clone, Copy)]
@@ -83,7 +101,7 @@ impl InternalModel {
             free,
             positions,
             hbonds,
-            cartesian_hessian,
+            Curvature::Initial(cartesian_hessian),
             ModelParameters {
                 contacts: options.contacts,
                 curvature_floor: options.curvature_floor,
@@ -96,9 +114,10 @@ impl InternalModel {
         free: &[usize],
         positions: &[f64],
         hbonds: bool,
-        cartesian_hessian: Option<&[f64]>,
+        curvature: Curvature<'_>,
         parameters: ModelParameters,
     ) -> Result<Self, String> {
+        profile_phase!("model build");
         if free.is_empty() {
             return Err("TRIC requires free Cartesian components".into());
         }
@@ -109,38 +128,46 @@ impl InternalModel {
             }
             seen[i] = true;
         }
-        let chart = Chart::new(numbers, positions, hbonds)?;
+        let mut chart = Chart::new(numbers, positions, hbonds)?;
+        let primitive_values = chart.values(positions).ok_or("undefined primitive value")?;
         let rows = chart
             .rows(positions, free)
             .ok_or("undefined primitive Wilson matrix")?;
         let (basis, tangent) = Tangent::delocalize(&rows, free.len())?;
-        let hessian = if let Some(h) = cartesian_hessian {
-            let restricted = restrict_hessian(h, positions.len(), free)?;
-            congruence(&tangent.dual, &restricted, free.len())
-                .ok_or("nonfinite transformed Cartesian Hessian")?
-        } else {
-            let mut h = chart.lindh_hessian(&basis, parameters.curvature_floor);
-            if parameters.contacts {
-                for contact in contact_stretches(numbers, positions) {
-                    // dq_contact/dq_DLC = (B_u⁺)ᵀ b_contact. Add only
-                    // curvature, leaving the coordinate basis and metric intact.
-                    let row = apply(&tangent.dual, &contact.free_row(free));
-                    let n = row.len();
-                    for i in 0..n {
-                        for j in 0..=i {
-                            let value = h[i * n + j] + contact.force * row[i] * row[j];
-                            h[i * n + j] = value;
-                            h[j * n + i] = value;
+        chart
+            .set_basis(&basis, free.len())
+            .ok_or("invalid DLC basis dimensions")?;
+        let dual = tangent.dense_dual().expect("new DLC basis");
+        let (hessian, positive_definite) = match curvature {
+            Curvature::Transport(old) => (old.transport(positions, dual)?, old.positive_definite),
+            Curvature::Initial(seed) => {
+                let h = if let Some(h) = seed {
+                    let restricted = restrict_hessian(h, positions.len(), free)?;
+                    congruence(dual, &restricted, free.len())
+                        .ok_or("nonfinite transformed Cartesian Hessian")?
+                } else {
+                    let mut h = chart.lindh_hessian(&basis, parameters.curvature_floor);
+                    if parameters.contacts {
+                        for contact in contact_stretches(numbers, positions) {
+                            let row = apply(dual, &contact.free_row(free));
+                            for (i, &ri) in row.iter().enumerate() {
+                                for (j, &rj) in row[..=i].iter().enumerate() {
+                                    let k = h[i * row.len() + j] + contact.force * ri * rj;
+                                    h[i * row.len() + j] = k;
+                                    h[j * row.len() + i] = k;
+                                }
+                            }
                         }
                     }
+                    h
+                };
+                if !h.iter().all(|v| v.is_finite()) {
+                    return Err("nonfinite internal Hessian".into());
                 }
+                let pd = rfo::is_positive_definite(&h, free.len());
+                (h, pd)
             }
-            h
         };
-        if !hessian.iter().all(|v| v.is_finite()) {
-            return Err("nonfinite internal Hessian".into());
-        }
-        let positive_definite = rfo::is_positive_definite(&hessian, free.len());
         Ok(Self {
             numbers: numbers.to_vec(),
             free: free.to_vec(),
@@ -151,6 +178,7 @@ impl InternalModel {
             hessian,
             positive_definite,
             linearized_at: positions.to_vec(),
+            primitive_values,
             tangent,
         })
     }
@@ -163,8 +191,8 @@ impl InternalModel {
         if x == self.linearized_at {
             return Some(Cow::Borrowed(&self.tangent));
         }
-        let rows = self.chart.rows(x, &self.free)?;
-        Tangent::at(&rows, &self.basis, self.free.len()).map(Cow::Owned)
+        let b = self.chart.projected_rows(x, &self.free)?;
+        Tangent::from_projected(b, self.free.len()).map(Cow::Owned)
     }
 
     fn free_gradient(&self, g: &[f64]) -> Option<Vec<f64>> {
@@ -182,16 +210,22 @@ impl InternalModel {
     }
 
     pub(crate) fn gradient(&self, positions: &[f64], g: &[f64]) -> Option<Vec<f64>> {
-        Some(apply(
-            &self.tangent_at(positions)?.dual,
-            &self.free_gradient(g)?,
-        ))
+        self.tangent_at(positions)?
+            .gradient(&self.free_gradient(g)?)
+    }
+
+    fn values_at(&self, x: &[f64]) -> Option<Cow<'_, [f64]>> {
+        if x == self.linearized_at {
+            Some(Cow::Borrowed(&self.primitive_values))
+        } else {
+            self.chart.values(x).map(Cow::Owned)
+        }
     }
 
     pub(crate) fn displacement(&self, old: &[f64], new: &[f64]) -> Option<Vec<f64>> {
         let delta = self
             .chart
-            .differences(&self.chart.values(new)?, &self.chart.values(old)?);
+            .differences(&self.values_at(new)?, &self.values_at(old)?);
         Some(apply(&self.basis, &delta))
     }
 
@@ -213,7 +247,7 @@ impl InternalModel {
         )
     }
 
-    /// Dense lowest augmented-Hessian eigenvector, following Banerjee et al.,
+    /// Lowest augmented-Hessian eigenvector, following Banerjee et al.,
     /// J. Phys. Chem. **89**, 52 (1985). The caller supplies the projected
     /// gradient in full atom order or, when shorter, free-component order.
     pub(crate) fn direction<'a>(
@@ -221,8 +255,9 @@ impl InternalModel {
         positions: &'a [f64],
         cartesian_gradient: &[f64],
     ) -> Option<InternalDirection<'a>> {
+        profile_phase!("RFO direction");
         let g = self.gradient(positions, cartesian_gradient)?;
-        let step = rfo::dense_step(&self.hessian, &g)?;
+        let step = rfo::step(&self.hessian, &g, self.positive_definite)?;
         self.model_direction(positions, g, step)
     }
 
@@ -232,7 +267,7 @@ impl InternalModel {
         gradient: Vec<f64>,
         step: Vec<f64>,
     ) -> Option<InternalDirection<'a>> {
-        self.chart.values(positions)?;
+        self.values_at(positions)?;
         let length = norm(&step);
         let slope = dot(&gradient, &step);
         if !length.is_finite() || !slope.is_finite() || slope >= 0. {
@@ -259,17 +294,24 @@ impl InternalModel {
     ) {
         // The next search rebuilds at the accepted point. Do not form a
         // secant across an expired principal-log chart in the meantime.
-        let Some(s) = self.displacement(old_positions, new_positions) else {
+        let Some(new_values) = self.chart.values(new_positions) else {
             return;
         };
+        let Some(old_values) = self.values_at(old_positions) else {
+            return;
+        };
+        let s = apply(
+            &self.basis,
+            &self.chart.differences(&new_values, &old_values),
+        );
         let Some(next) = self.tangent_at(new_positions).map(Cow::into_owned) else {
             return;
         };
-        if let (Some(old), Some(new)) = (
+        if let (Some(old), Some(mut y)) = (
             self.gradient(old_positions, old_gradient),
-            self.free_gradient(new_gradient),
+            self.free_gradient(new_gradient)
+                .and_then(|g| next.gradient(&g)),
         ) {
-            let mut y = apply(&next.dual, &new);
             for (v, previous) in y.iter_mut().zip(old) {
                 *v -= previous;
             }
@@ -282,20 +324,24 @@ impl InternalModel {
             );
         }
         self.tangent = next;
+        self.primitive_values = new_values;
         self.linearized_at.copy_from_slice(new_positions);
     }
 
     /// Recenter after a change of primitives or fragment orientation chart, or
     /// when the instantaneous delocalized metric fails the relative rank test.
     pub(crate) fn needs_rebuild(&self, positions: &[f64]) -> bool {
+        profile_phase!("chart check");
         !self.chart.valid_positions(positions)
             || self
                 .chart
                 .fragments
                 .iter()
                 .any(|f| f.needs_rebuild(positions))
-            || !Topology::generate(&self.numbers, positions, self.hbonds)
-                .is_ok_and(|graph| self.chart.topology.same_chart(&graph))
+            || !self
+                .chart
+                .topology
+                .same_chart_at(&self.numbers, positions, self.hbonds)
             || self.tangent_at(positions).is_none()
     }
 
@@ -303,28 +349,25 @@ impl InternalModel {
     /// If the old chart is already singular, its last usable tangent supplies
     /// the Cartesian curvature. A failed rebuild leaves the model usable.
     pub(crate) fn rebuild(&mut self, x: &[f64]) -> Result<(), String> {
-        let mut next = Self::build_model(
+        profile_phase!("rebuild");
+        *self = Self::build_model(
             &self.numbers,
             &self.free,
             x,
             self.hbonds,
-            None,
+            Curvature::Transport(self),
             self.parameters,
         )?;
-        let old = self.tangent_at(x).unwrap_or(Cow::Borrowed(&self.tangent));
-        // A = (B_new⁺)ᵀ B_oldᵀ, hence A H_old Aᵀ is the Cartesian transfer
-        // without materializing a second full Cartesian Hessian.
-        let map: Vec<_> = next
-            .tangent
-            .dual
-            .chunks_exact(self.free.len())
-            .flat_map(|r| apply(&old.b, r))
-            .collect();
-        next.hessian = congruence(&map, &self.hessian, self.dimension())
-            .ok_or("nonfinite curvature after TRIC rebuild")?;
-        next.positive_definite = self.positive_definite;
-        *self = next;
         Ok(())
+    }
+
+    fn transport(&self, x: &[f64], new_dual: &[f64]) -> Result<Vec<f64>, String> {
+        profile_phase!("curvature transport");
+        let old = self.tangent_at(x).unwrap_or(Cow::Borrowed(&self.tangent));
+        // A = (B_new⁺)ᵀ B_oldᵀ, hence A H_old Aᵀ is the Cartesian transfer.
+        let map = product::row_products(new_dual, &old.b, self.free.len(), false);
+        congruence(&map, &self.hessian, self.dimension())
+            .ok_or_else(|| "nonfinite curvature after TRIC rebuild".to_owned())
     }
 }
 

@@ -497,6 +497,8 @@ fn convergence_requires_both_gradient_tests_and_an_accepted_step_or_small_gradie
         max_step: c.max_step,
         rms_step: c.rms_step,
         trust_radius: 0.3,
+        on_boundary: false,
+        ratio: f64::NAN,
         accuracy: Accuracy::Normal,
         positions: &[],
     };
@@ -565,7 +567,7 @@ fn singular_model_falls_back_without_evaluating_the_input_twice() {
 }
 
 #[test]
-fn tight_final_requires_a_tight_displacement_above_the_gradient_only_threshold() {
+fn tight_final_reuses_the_normal_displacement_with_a_fresh_tight_gradient() {
     let mut p = surface(|x, g, a| {
         g.fill(0.);
         g[3] = 4e-5;
@@ -577,8 +579,8 @@ fn tight_final_requires_a_tight_displacement_above_the_gradient_only_threshold()
         proceed(s)
     });
     assert_eq!(result.status, Status::Converged);
-    assert_eq!((result.steps, result.evaluations), (2, 4));
-    assert_eq!(callbacks.len(), 4);
+    assert_eq!((result.steps, result.evaluations), (1, 3));
+    assert_eq!(callbacks.len(), 3);
     let (index, accuracy, rms, de) = callbacks[2];
     assert_eq!(index, 1);
     assert_eq!(accuracy, Accuracy::Tight);
@@ -587,10 +589,331 @@ fn tight_final_requires_a_tight_displacement_above_the_gradient_only_threshold()
     assert_eq!(callbacks[1].2, rms);
     assert_eq!(de, 0.);
     assert!((rms - 4e-5 / 3f64.sqrt()).abs() < 1e-18);
-    assert_eq!(callbacks[3].1, Accuracy::Tight);
-    assert_eq!(callbacks[3].3, result.energies[2] - result.energies[1]);
-    assert!(callbacks[3].3.abs() < Level::Normal.criteria().energy);
+    assert!(callbacks[1].3.abs() < Level::Normal.criteria().energy);
     assert_eq!(result.energy, 100. + result.positions[3] * 4e-5);
+}
+
+#[test]
+fn energy_gradient_requires_two_consecutive_accepted_steps_and_resets_on_failure() {
+    let mut calls = 0;
+    let mut p = surface(|x, g, _| {
+        calls += 1;
+        g.fill(0.);
+        // Step two fails only the additional norm bound. The level's maximum
+        // and RMS gradient tests pass throughout.
+        g[3] = if calls == 3 { 2e-5 } else { 1e-5 };
+        Ok(1e-5 * x[3])
+    });
+    let options = Options {
+        convergence: Convergence::EnergyGradient {
+            gradient_norm: 1.5e-5,
+        },
+        tight_final: false,
+        ..anchored(Method::Lbfgs)
+    };
+    let mut accepted = Vec::new();
+    let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
+        accepted.push(s.index);
+        proceed(s)
+    });
+    assert_eq!(result.status, Status::Converged);
+    assert_eq!(result.steps, 4);
+    assert_eq!(accepted, [0, 1, 2, 3, 4]);
+    assert_eq!(result.evaluations, 5);
+}
+
+#[test]
+fn energy_gradient_keeps_the_level_gradient_and_energy_thresholds() {
+    let c = Level::Normal.criteria();
+    let s = Step {
+        index: 1,
+        energy: 0.,
+        delta_energy: -c.energy,
+        max_gradient: c.max_gradient,
+        rms_gradient: c.rms_gradient,
+        max_step: 100.,
+        rms_step: 100.,
+        trust_radius: 0.3,
+        on_boundary: true,
+        ratio: 1.,
+        accuracy: Accuracy::Normal,
+        positions: &[],
+    };
+    assert!(s.energy_gradient(c, 0.999e-3, 1e-3));
+    assert!(!s.energy_gradient(c, 1e-3, 1e-3));
+    assert!(!s.energy_gradient(c, 1.01e-3, 1e-3));
+    for failure in [
+        Step {
+            max_gradient: 1.01 * c.max_gradient,
+            ..s
+        },
+        Step {
+            rms_gradient: 1.01 * c.rms_gradient,
+            ..s
+        },
+        Step {
+            delta_energy: -1.01 * c.energy,
+            ..s
+        },
+        Step {
+            accuracy: Accuracy::Coarse,
+            ..s
+        },
+    ] {
+        assert!(!failure.energy_gradient(c, 0.999e-3, 1e-3));
+    }
+}
+
+#[test]
+fn energy_gradient_does_not_count_rejected_trials() {
+    let mut calls = 0;
+    let mut p = surface(|x, g, _| {
+        calls += 1;
+        g.fill(0.);
+        g[3] = 1e-5;
+        Ok(1e-5 * x[3] + if (2..=4).contains(&calls) { 1. } else { 0. })
+    });
+    let options = Options {
+        convergence: Convergence::EnergyGradient {
+            gradient_norm: 1.5e-5,
+        },
+        tight_final: false,
+        ..anchored(Method::Lbfgs)
+    };
+    let mut callbacks = Vec::new();
+    let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
+        callbacks.push(s.index);
+        proceed(s)
+    });
+    assert_eq!(result.status, Status::Converged);
+    assert_eq!(result.steps, 2);
+    assert_eq!(result.evaluations, 6);
+    assert_eq!(callbacks, [0, 1, 2]);
+}
+
+#[test]
+fn energy_gradient_tight_recheck_preserves_or_resets_the_normal_pair() {
+    for fail_recheck in [false, true] {
+        let mut tight_calls = 0;
+        let mut p = surface(|x, g, a| {
+            g.fill(0.);
+            let offset = if a == Accuracy::Tight {
+                tight_calls += 1;
+                100.
+            } else {
+                0.
+            };
+            g[3] = if fail_recheck && a == Accuracy::Tight && tight_calls == 1 {
+                2e-5
+            } else {
+                1e-5
+            };
+            Ok(1e-5 * x[3] + offset)
+        });
+        let options = Options {
+            convergence: Convergence::EnergyGradient {
+                gradient_norm: 1.5e-5,
+            },
+            ..anchored(Method::Lbfgs)
+        };
+        let mut trace = Vec::new();
+        let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
+            trace.push((s.index, s.accuracy, s.delta_energy));
+            if s.accuracy == Accuracy::Tight && s.index == 2 {
+                assert_eq!((s.delta_energy, s.max_step, s.rms_step), (0., 0., 0.));
+                assert!(s.ratio.is_nan());
+                assert!(!s.on_boundary);
+            }
+            proceed(s)
+        });
+        assert_eq!(result.status, Status::Converged);
+        assert_eq!(result.steps, if fail_recheck { 4 } else { 2 });
+        assert_eq!(trace[2].0, 2);
+        assert_eq!(trace[2].1, Accuracy::Normal);
+        assert_eq!(trace[3], (2, Accuracy::Tight, 0.));
+        assert!(trace[4..].iter().all(|s| s.1 == Accuracy::Tight));
+        assert_eq!(result.energy, 100. + 1e-5 * result.positions[3]);
+    }
+}
+
+#[test]
+fn energy_gradient_does_not_count_coarse_motion_or_accuracy_rechecks() {
+    for max_steps in [2, 3] {
+        let mut coarse_calls = 0;
+        let mut p = surface(|x, g, a| {
+            g.fill(0.);
+            let offset = if a == Accuracy::Coarse {
+                coarse_calls += 1;
+                0.
+            } else {
+                100.
+            };
+            g[3] = if a == Accuracy::Coarse && coarse_calls == 1 {
+                0.02
+            } else {
+                1e-5
+            };
+            Ok(1e-5 * x[3] + offset)
+        });
+        let options = Options {
+            convergence: Convergence::EnergyGradient {
+                gradient_norm: 1.5e-5,
+            },
+            adaptive_accuracy: true,
+            tight_final: false,
+            max_steps,
+            ..anchored(Method::Lbfgs)
+        };
+        let mut trace = Vec::new();
+        let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
+            trace.push((s.index, s.accuracy));
+            proceed(s)
+        });
+        assert_eq!(
+            trace[..3],
+            [
+                (0, Accuracy::Coarse),
+                (1, Accuracy::Coarse),
+                (1, Accuracy::Normal)
+            ]
+        );
+        assert_eq!(result.steps, max_steps);
+        assert_eq!(
+            result.status,
+            if max_steps == 2 {
+                Status::MaxSteps
+            } else {
+                Status::Converged
+            }
+        );
+    }
+}
+
+#[test]
+fn energy_gradient_norm_must_be_finite_and_positive_even_for_lbfgs() {
+    for method in [Method::AncRfo, Method::Internal, Method::Lbfgs] {
+        for gradient_norm in [f64::NAN, f64::INFINITY, 0., -1.] {
+            let mut p = surface(|_, _, _| panic!("invalid convergence option was evaluated"));
+            let options = Options {
+                convergence: Convergence::EnergyGradient { gradient_norm },
+                ..anchored(method)
+            };
+            let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |_| {
+                panic!("invalid convergence option callback")
+            });
+            assert!(matches!(result.status, Status::Failed(_)));
+            assert_eq!(result.evaluations, 0);
+        }
+    }
+}
+
+#[test]
+fn rfo_diagnostics_describe_the_accepted_trial_after_rejection() {
+    let initial = [0., 0., 0., 1., 0., 0.];
+    let mut calls = 0;
+    let p = surface(|x, g, _| {
+        calls += 1;
+        Ok(well(x, g) + if calls == 2 { 1. } else { 0. })
+    });
+    let options = Options {
+        max_steps: 1,
+        tight_final: false,
+        ..anchored(Method::AncRfo)
+    };
+    // Seed the exact harmonic Hessian so the model prediction can be checked
+    // independently of model-Hessian construction.
+    struct Harmonic<P>(P);
+    impl<P: Potential> Potential for Harmonic<P> {
+        fn evaluate(&mut self, x: &[f64], g: &mut [f64], a: Accuracy) -> Result<f64, EvalError> {
+            self.0.evaluate(x, g, a)
+        }
+        fn hessian(&mut self, x: &[f64], h: &mut [f64]) -> Option<Result<(), EvalError>> {
+            h.fill(0.);
+            for i in 0..x.len() {
+                h[i * x.len() + i] = 1.;
+            }
+            Some(Ok(()))
+        }
+    }
+    let mut callbacks = 0;
+    let result = optimize(
+        &mut Harmonic(p),
+        &[1, 1],
+        &initial,
+        &Options {
+            initial_hessian: InitialHessian::Potential,
+            ..options
+        },
+        |s| {
+            callbacks += 1;
+            if s.index == 0 {
+                assert!(s.ratio.is_nan());
+                assert!(!s.on_boundary);
+            } else {
+                assert_eq!(s.trust_radius, 0.075);
+                assert!(s.on_boundary);
+                let displacement = s.positions[3] - initial[3];
+                let predicted = (initial[3] * displacement + 0.5 * displacement.powi(2))
+                    / (1. + displacement.powi(2));
+                assert!((s.ratio - s.delta_energy / predicted).abs() < 1e-13);
+            }
+            proceed(s)
+        },
+    );
+    assert_eq!(result.status, Status::MaxSteps);
+    assert_eq!((result.steps, result.evaluations, callbacks), (1, 3, 2));
+}
+
+#[test]
+fn lbfgs_diagnostics_use_the_backtracked_linear_prediction_and_atom_limit() {
+    let mut p = surface(|x, g, _| {
+        g.fill(0.);
+        g[3] = 64. * x[3];
+        Ok(32. * x[3].powi(2))
+    });
+    let options = Options {
+        tight_final: false,
+        max_steps: 2,
+        ..anchored(Method::Lbfgs)
+    };
+    let mut trace = Vec::new();
+    let result = optimize(&mut p, &[1, 1], &[0., 0., 0., 0.1, 0., 0.], &options, |s| {
+        trace.push((s.trust_radius, s.on_boundary, s.ratio));
+        proceed(s)
+    });
+    assert_eq!(result.status, Status::Converged);
+    assert_eq!(trace.len(), 3);
+    assert_eq!((trace[1].0, trace[1].1), (0.15, true));
+    assert!((trace[1].2 - 0.25).abs() < 1e-14);
+    assert_eq!((trace[2].0, trace[2].1), (0.3, false));
+    assert!((trace[2].2 - 0.5).abs() < 1e-14);
+}
+
+#[test]
+fn per_atom_boundary_flag_distinguishes_the_radius_from_the_atom_cap() {
+    for (atom_cap, on_boundary, next_radius) in [(0.01, false, 0.3), (0.4, true, 0.5)] {
+        let mut p = surface(|x, g, _| Ok(well(x, g)));
+        let options = Options {
+            trust: Trust::PerAtom {
+                start: 0.3,
+                min: 0.001,
+                max: 0.5,
+                atom_cap,
+            },
+            max_steps: 2,
+            tight_final: false,
+            ..anchored(Method::AncRfo)
+        };
+        let mut trace = Vec::new();
+        let result = optimize(&mut p, &[1, 1], &INITIAL, &options, |s| {
+            trace.push((s.trust_radius, s.on_boundary));
+            proceed(s)
+        });
+        assert_eq!(result.status, Status::MaxSteps);
+        assert_eq!(result.method, Method::AncRfo);
+        assert_eq!(trace[1], (0.3, on_boundary));
+        assert_eq!(trace[2].0, next_radius);
+    }
 }
 
 #[test]
@@ -734,12 +1057,12 @@ fn rejected_short_diis_step_retries_rfo_at_the_radius_floor() {
         engine.history.push(&anc, &sample, &eval.coords);
     }
     engine.anc = Some(anc);
-    let (_, radius) = engine
+    let (_, diagnostics) = engine
         .search_anc(&mut eval, &[1, 1], &current, 2, false)
         .unwrap()
         .unwrap();
     drop(p);
-    assert_eq!(radius, 1e-3);
+    assert_eq!(diagnostics.radius, 1e-3);
     assert_eq!(trials.len(), 2);
     assert!((trials[0][5] + d).abs() < 1e-15);
     assert!(trials[1][5] > trials[0][5]); // The ordinary RFO step is shorter.
