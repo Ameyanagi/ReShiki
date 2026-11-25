@@ -1043,11 +1043,9 @@ fn xtb_stereo(app: &mut App, _: &Driver<'_>) {
     let mirrored: Vec<[f64; 3]> = start.iter().map(|&[x, y, z]| [-x, y, z]).collect();
     app.xtb_answer(crate::app::xtb::RunEvent::Done(Ok(std::sync::Arc::new(
         crate::app::xtb::RunReport {
-            engine_version: "0.2.0".into(),
-            engine_rev: reshiki_xtb_worker::AXTB_REV.into(),
+            engine: crate::app::xtb::example_engine(),
+            computed: crate::app::xtb::example_computed(-20.012345, 6.2),
             energy: -20.012345,
-            gap_ev: Some(6.2),
-            near_degenerate: false,
             converged: true,
             positions: mirrored.clone(),
             gradient: vec![0.; mirrored.len() * 3],
@@ -1055,7 +1053,6 @@ fn xtb_stereo(app: &mut App, _: &Driver<'_>) {
             energies: vec![-20.0, -20.012345],
             path: [start.as_flattened(), mirrored.as_flattened()].concat(),
             evaluations: vec![],
-            numerics: String::new(),
         },
     ))));
 }
@@ -1072,11 +1069,9 @@ fn xtb_results(app: &mut App, _: &Driver<'_>) {
     let energies = vec![-20.0, -20.011, -20.012345];
     app.xtb_answer(crate::app::xtb::RunEvent::Done(Ok(std::sync::Arc::new(
         crate::app::xtb::RunReport {
-            engine_version: "0.2.0".into(),
-            engine_rev: reshiki_xtb_worker::AXTB_REV.into(),
+            engine: crate::app::xtb::example_engine(),
+            computed: crate::app::xtb::example_computed(-20.012345, 6.2),
             energy: -20.012345,
-            gap_ev: Some(6.2),
-            near_degenerate: false,
             converged: true,
             positions: end.clone(),
             gradient: vec![1e-4; end.len() * 3],
@@ -1089,7 +1084,6 @@ fn xtb_results(app: &mut App, _: &Driver<'_>) {
                     seconds: 0.004,
                 })
                 .collect(),
-            numerics: "f64".into(),
             energies,
             path: [
                 start.as_flattened(),

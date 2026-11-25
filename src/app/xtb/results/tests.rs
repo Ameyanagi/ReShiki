@@ -157,14 +157,99 @@ fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
 
 #[test]
 fn near_degenerate_gaps_warn() {
-    assert_eq!(warning(Some(&info(0.05))), Some(NEAR_DEGENERATE));
-    assert_eq!(warning(Some(&info(3.4))), None);
+    let result = optimized(false);
+    assert_eq!(warning(&result, Some(&info(0.05))), Some(NEAR_DEGENERATE));
+    assert_eq!(warning(&result, Some(&info(3.4))), None);
     let flagged = RunInfo {
         near_degenerate: true,
         ..info(3.4)
     };
-    assert_eq!(warning(Some(&flagged)), Some(NEAR_DEGENERATE));
-    assert_eq!(warning(None), None);
+    assert_eq!(warning(&result, Some(&flagged)), Some(NEAR_DEGENERATE));
+    assert_eq!(warning(&result, None), None);
+    // Stored levels decide after reopening, without run information.
+    let mut close = with_properties(optimized(false));
+    close.orbitals.as_mut().unwrap().alpha.energies_hartree[4] = -0.406;
+    assert_eq!(warning(&close, None), Some(NEAR_DEGENERATE));
+}
+
+/// Water's GFN2-xTB properties (axtb test geometry: charges and gap; the
+/// lower levels and bond orders are example values).
+fn with_properties(mut result: CalcResult) -> CalcResult {
+    result.charges = vec![qcdata::AtomicCharges {
+        scheme: qcdata::ChargeScheme::Mulliken,
+        values: vec![-0.561, 0.2805, 0.2805],
+    }];
+    result.dipole_e_bohr = Some([0., 0., 0.85]);
+    result.bond_orders = vec![
+        qcdata::BondOrder {
+            a: 0,
+            b: 1,
+            order: 0.92,
+        },
+        qcdata::BondOrder {
+            a: 0,
+            b: 2,
+            order: 0.92,
+        },
+    ];
+    // 8 valence electrons: four doubly occupied levels, then the LUMO.
+    let energies = vec![-0.95, -0.62, -0.53, -0.4091, 0.1058, 0.2];
+    result.orbitals = Some(qcdata::Orbitals {
+        basis: None,
+        core_electrons: vec![],
+        alpha: qcdata::OrbitalSet {
+            occupations: vec![2., 2., 2., 2., 0., 0.],
+            energies_hartree: energies,
+            symmetries: vec![],
+            rows: vec![],
+            coefficients: vec![],
+        },
+        beta: qcdata::Beta::Restricted,
+    });
+    result
+}
+
+#[test]
+fn stored_properties_show_without_run_information() {
+    let result = with_properties(optimized(false));
+    let (input, output) = (frame(&START), frame(&END));
+    let rows = summary_rows(&result, &input, &output, None);
+    let row = |name: &str| {
+        rows.iter()
+            .find(|(label, _)| *label == name)
+            .map(|(_, value)| value.as_str())
+    };
+    // (0.1058 + 0.4091) Eh in eV.
+    assert_eq!(row("HOMO–LUMO gap"), Some("14.01 eV"));
+    assert_eq!(row("Dipole"), Some("2.16 D"));
+    assert_eq!(
+        row("Charges"),
+        Some("O −0.561 · H +0.281 · H +0.281 (mulliken)")
+    );
+    assert_eq!(
+        bond_orders(&result, &output),
+        [
+            ("O1–H2".to_owned(), "0.92".to_owned()),
+            ("O1–H3".to_owned(), "0.92".to_owned())
+        ]
+    );
+    let names: Vec<_> = levels(&result).into_iter().map(|(name, _)| name).collect();
+    assert_eq!(names, ["LUMO+1", "LUMO", "HOMO", "HOMO−1", "HOMO−2"]);
+    assert!((levels(&result)[2].1 - -0.4091 * 27.211386245981).abs() < 1e-9);
+
+    // An open shell sharing orbitals: alpha fills one more level.
+    let mut radical = result.clone();
+    let orbitals = radical.orbitals.as_mut().unwrap();
+    orbitals.alpha.occupations = vec![1., 1., 1., 1., 1., 0.];
+    orbitals.beta = qcdata::Beta::SameOrbitals {
+        occupations: vec![1., 1., 1., 1., 0., 0.],
+    };
+    let gap = gap_ev(&radical, None).unwrap();
+    assert!(
+        (gap - (0.2 - 0.1058) * 27.211386245981).abs() < 1e-9,
+        "{gap}"
+    );
+    assert!(levels(&radical).is_empty(), "open shells show only the gap");
 }
 
 #[test]
@@ -200,6 +285,19 @@ fn the_method_line_names_engine_solvent_state_and_time() {
     assert_eq!(
         method_line(&result, &frame(&END), None),
         "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1"
+    );
+    // g-xTB in water at 1000 K with xtb 6.8 conventions.
+    let mut result = result;
+    if let Settings::Xtb(settings) = &mut result.settings {
+        settings.method = qcdata::XtbMethod::GXtb;
+        settings.conventions = qcdata::XtbConventions::Xtb68;
+        settings.electronic_temperature_k = Some(1000.);
+        settings.solvent.as_mut().unwrap().correction = Some(qcdata::SolventCorrection::Gfn2);
+    }
+    result.provenance.method = Some("g-xTB".into());
+    assert_eq!(
+        method_line(&result, &frame(&END), None),
+        "g-xTB · axtb 0.2.0 · water (ALPB, GFN2-xTB correction) · xtb 6.8 compatible · 1000 K · charge 0 · multiplicity 1"
     );
 }
 

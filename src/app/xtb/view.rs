@@ -536,18 +536,18 @@ fn progress(run: &super::Run) -> Element<'_, Message> {
     let text_line = line(
         run.launch.as_ref().map_or_else(
             || "Making the 3D model first (MMFF94s)".into(),
-            |_| run.progress.line(run.task, run.seconds()),
+            |_| run.progress.line(run.config.task, run.seconds()),
         ),
         Tone::Muted,
     );
     let mut rows = column![text_line].spacing(6);
-    let optimizing = run.task == CalcTask::Optimize && run.launch.is_some();
+    let optimizing = run.config.task == CalcTask::Optimize && run.launch.is_some();
     let mut controls = row![].spacing(8).align_y(Alignment::Center);
     if optimizing {
         controls = controls.push(
             canvas(Spark {
                 deltas: run.progress.deltas().map(f64::abs).collect(),
-                threshold: if run.tight { 1e-6 } else { 5e-6 },
+                threshold: if run.config.tight { 1e-6 } else { 5e-6 },
             })
             .width(170)
             .height(46),
@@ -592,7 +592,7 @@ fn outcome_view(outcome: &Outcome, in_palette: bool) -> Element<'_, Message> {
             }
             lines.into()
         }
-        Outcome::Failed(reason) => line(reason.clone(), Tone::Error),
+        Outcome::Failed(failed) => line(failed.explain().0, Tone::Error),
         Outcome::Review(review) => {
             let mut lines = column![].spacing(4);
             for reason in &review.reasons {

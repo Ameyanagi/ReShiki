@@ -1,5 +1,5 @@
 //! A run from Run to its finish, with the worker's events written by hand.
-use super::run::{Event, Report};
+use super::run::{self, Event, Report};
 use super::*;
 use reshiki::document::Point;
 use reshiki::geometry::Point3;
@@ -58,11 +58,9 @@ pub(super) fn f32s(positions: &[[f64; 3]]) -> Vec<[f32; 3]> {
 
 pub(super) fn optimized(start: &[[f64; 3]], end: &[[f64; 3]]) -> Event {
     Event::Done(Ok(Arc::new(Report {
-        engine_version: "0.2.0".into(),
-        engine_rev: "9d0388c".into(),
+        engine: run::example_engine(),
+        computed: run::example_computed(-5.070176, 14.01),
         energy: -5.070176,
-        gap_ev: Some(14.01),
-        near_degenerate: false,
         converged: true,
         positions: end.to_vec(),
         gradient: vec![0.; end.len() * 3],
@@ -70,7 +68,6 @@ pub(super) fn optimized(start: &[[f64; 3]], end: &[[f64; 3]]) -> Event {
         energies: vec![-5.06, -5.070176],
         path: [start.as_flattened(), end.as_flattened()].concat(),
         evaluations: vec![],
-        numerics: String::new(),
     })))
 }
 
@@ -123,11 +120,9 @@ fn an_energy_keeps_the_result_and_the_model() {
     event(
         &mut app,
         Event::Done(Ok(Arc::new(Report {
-            engine_version: "0.2.0".into(),
-            engine_rev: "9d0388c".into(),
+            engine: run::example_engine(),
+            computed: run::example_computed(-5.070176, 0.05),
             energy: -5.070176,
-            gap_ev: Some(14.01),
-            near_degenerate: true,
             converged: true,
             positions: START.to_vec(),
             gradient: vec![],
@@ -135,18 +130,85 @@ fn an_energy_keeps_the_result_and_the_model() {
             energies: vec![-5.070176],
             path: vec![],
             evaluations: vec![],
-            numerics: String::new(),
         }))),
     );
     assert_eq!(model(&app.tab.doc), f32s(&START));
     let stored = &app.tab.doc.science.results[0].result;
     assert_eq!(stored.task, qcdata::Task::Energy);
     assert_eq!(stored.energy_hartree, Some(-5.070176));
-    assert_eq!(app.status, "xTB · E −5.070176 Eh · gap 14.01 eV");
+    assert_eq!(app.status, "xTB · E −5.070176 Eh · gap 0.05 eV");
     assert!(matches!(
         &app.tab.xtb.outcome,
         Some(Outcome::Done { notes, .. }) if notes == &[state::NEAR_DEGENERATE.to_owned()]
     ));
+}
+
+#[test]
+fn an_energy_stores_the_worker_charges_bond_orders_and_orbital_levels() {
+    let (mut app, _) = water(CalcTask::Energy);
+    let mut computed = run::example_computed(-5.070176, 14.01);
+    computed.conventions = qcdata::XtbConventions::Xtb68;
+    computed.engine_conventions = "xtb".into();
+    computed.settings.scf.accuracy = Some(0.5);
+    computed.settings.scf.electronic_temperature_k = Some(500.);
+    computed.settings.scf.max_iterations = Some(400);
+    computed.charges = Some(qcdata::AtomicCharges {
+        scheme: qcdata::ChargeScheme::Mulliken,
+        values: vec![-0.56, 0.28, 0.28],
+    });
+    computed.dipole_e_bohr = Some([0., 0., 0.85]);
+    computed.bond_orders = Some(vec![
+        qcdata::BondOrder {
+            a: 0,
+            b: 1,
+            order: 0.92,
+        },
+        qcdata::BondOrder {
+            a: 0,
+            b: 2,
+            order: 0.92,
+        },
+    ]);
+    computed.orbitals = Some(
+        serde_json::from_value(serde_json::json!({
+            "core_electrons": [2, 0, 0],
+            "alpha": {
+                "energies_hartree": [-0.7, -0.5, -0.4, -0.3, 0.2, 0.4],
+                "occupations": [2., 2., 2., 2., 0., 0.]
+            },
+            "beta": "restricted"
+        }))
+        .expect("orbital levels"),
+    );
+    let report = Arc::new(Report {
+        engine: run::example_engine(),
+        energy: computed.energy,
+        computed,
+        converged: true,
+        positions: START.to_vec(),
+        gradient: vec![],
+        steps: 0,
+        energies: vec![-5.070176],
+        path: vec![],
+        evaluations: vec![],
+    });
+    event(&mut app, Event::Done(Ok(report.clone())));
+
+    let stored = &app.tab.doc.science.results[0].result;
+    assert_eq!(stored.charges, report.computed.charges.as_slice());
+    assert_eq!(stored.dipole_e_bohr, report.computed.dipole_e_bohr);
+    assert_eq!(
+        Some(&stored.bond_orders),
+        report.computed.bond_orders.as_ref()
+    );
+    assert_eq!(stored.orbitals, report.computed.orbitals);
+    let qcdata::Settings::Xtb(settings) = &stored.settings else {
+        panic!("expected xTB settings");
+    };
+    assert_eq!(settings.conventions, qcdata::XtbConventions::Xtb68);
+    assert_eq!(settings.accuracy, Some(0.5));
+    assert_eq!(settings.electronic_temperature_k, Some(500.));
+    assert_eq!(settings.max_iterations, Some(400));
 }
 
 #[test]
@@ -201,15 +263,47 @@ fn a_worker_failure_applies_nothing() {
     let (mut app, _) = water(CalcTask::Optimize);
     event(
         &mut app,
-        Event::Done(Err("SCF did not converge: 250 iterations".into())),
+        Event::Done(Err(state::Failure::Scf("250 iterations".into()))),
     );
     assert!(app.error);
     assert_eq!(
         app.status,
-        "xTB calculation failed: SCF did not converge: 250 iterations"
+        "xTB calculation failed: The SCF did not converge."
     );
     assert!(app.tab.doc.science.results.is_empty());
     assert_eq!(model(&app.tab.doc), f32s(&START));
+}
+
+#[test]
+fn an_scf_failure_retains_the_request_for_retry() {
+    let (mut app, o) = water(CalcTask::Optimize);
+    send(&mut app, Action::Cancel);
+    app.xtb.settings.temperature = "450".into();
+    app.xtb.settings.threads = 2;
+    send(&mut app, Action::Run);
+    let config = app
+        .tab
+        .xtb
+        .run
+        .as_ref()
+        .expect("run started")
+        .config
+        .clone();
+    app.xtb.settings.task = CalcTask::Energy;
+
+    let failure = state::Failure::Scf("250 iterations".into());
+    event(&mut app, Event::Done(Err(failure.clone())));
+    assert!(!app.xtb_running());
+    let Some(Outcome::Failed(failed)) = &app.tab.xtb.outcome else {
+        panic!("expected an SCF failure");
+    };
+    let Some(request) = &failed.request else {
+        panic!("the failure keeps its request");
+    };
+    assert_eq!(failed.failure, failure);
+    assert_eq!(request.atoms, [o]);
+    assert_eq!(request.config, config);
+    assert!(!request.keep_full);
 }
 
 /// CHFClBr with F wedged, its model matching the wedge (as in the science tests).
@@ -317,4 +411,86 @@ fn progress_keeps_menus_open() {
         "{}",
         app.status
     );
+}
+
+#[test]
+fn optimize_with_gfn2_shows_the_card_and_runs() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let o = app.tab.doc.add_atom("O", Point::default());
+    app.tab.selected = vec![o];
+    app.xtb.settings.method = qcdata::XtbMethod::GfnFf;
+    app.xtb.settings.task = CalcTask::Energy;
+    send(&mut app, Action::Entry(Entry::OptimizeGfn2));
+    assert_eq!(app.xtb.settings.method, qcdata::XtbMethod::Gfn2Xtb);
+    assert_eq!(app.xtb.settings.task, CalcTask::Optimize);
+    assert_eq!(app.xtb.page, Page::Xtb);
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, crate::app::InspectorTab::Predict);
+    let run = app.tab.xtb.run.as_ref().expect("the entry starts a run");
+    assert_eq!(
+        (run.config.task, run.config.method),
+        (CalcTask::Optimize, qcdata::XtbMethod::Gfn2Xtb)
+    );
+}
+
+#[test]
+fn rerun_repeats_the_cards_last_calculation() {
+    let (mut app, _) = water(CalcTask::Energy);
+    send(&mut app, Action::Cancel);
+    app.xtb.page = Page::Nmr;
+    send(&mut app, Action::Entry(Entry::Rerun));
+    assert_eq!(app.xtb.page, Page::Xtb);
+    let run = app.tab.xtb.run.as_ref().expect("⌘R starts a run");
+    assert_eq!(run.config.task, CalcTask::Energy);
+}
+
+#[test]
+fn retry_runs_the_failed_request_at_1000_k() {
+    let (mut app, _) = water(CalcTask::Optimize);
+    event(
+        &mut app,
+        Event::Done(Err(state::Failure::Scf(
+            "SCF did not converge in 250 iterations".into(),
+        ))),
+    );
+    assert!(
+        app.tab.xtb.palette.open,
+        "the error card shows in the palette"
+    );
+    // The card changing meanwhile does not change what is retried.
+    app.xtb.settings.task = CalcTask::Energy;
+    send(&mut app, Action::Retry);
+    let run = app.tab.xtb.run.as_ref().expect("Retry starts a run");
+    assert_eq!(run.config.task, CalcTask::Optimize);
+    assert_eq!(run.config.temperature_k, Some(state::RETRY_TEMPERATURE_K));
+    assert!(app.tab.xtb.outcome.is_none());
+}
+
+#[test]
+fn a_crash_offers_run_again_and_details_without_the_structure() {
+    let (mut app, _) = water(CalcTask::Energy);
+    event(
+        &mut app,
+        Event::Done(Err(state::Failure::Crashed(
+            "xTB worker exited with signal: 11: ".into(),
+        ))),
+    );
+    assert_eq!(
+        app.status,
+        "xTB calculation failed: The calculation stopped unexpectedly. Your drawing is safe."
+    );
+    let Some(Outcome::Failed(failed)) = &app.tab.xtb.outcome else {
+        panic!("a failure");
+    };
+    let details = failed.details();
+    assert!(
+        details.contains("GFN2-xTB · Energy · charge 0"),
+        "{details}"
+    );
+    assert!(details.contains("H2O, 3 atoms"), "{details}");
+    assert!(details.contains("signal: 11"), "{details}");
+    assert!(!details.contains("0.96"), "no coordinates: {details}");
+    send(&mut app, Action::RunAgain);
+    assert!(app.xtb_running());
 }

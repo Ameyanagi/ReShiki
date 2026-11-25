@@ -91,7 +91,17 @@ impl App {
         if !self.tab.xtb.palette.open {
             return None;
         }
-        let shown = self.xtb_shown()?;
+        let failure = self.xtb_failure_card();
+        let Some(shown) = self.xtb_shown() else {
+            return failure.map(|card| {
+                column![
+                    self.xtb_palette_header(vec![], View::Summary, inspector),
+                    card
+                ]
+                .spacing(8)
+                .into()
+            });
+        };
         let palette = &self.tab.xtb.palette;
         let views = View::available(&shown.stored.result);
         let view = if views.contains(&palette.view) {
@@ -99,6 +109,53 @@ impl App {
         } else {
             View::Summary
         };
+        let collapsed = self.xtb.dock.collapsed && !inspector;
+        let header = self.xtb_palette_header(views, view, inspector);
+        if collapsed {
+            return Some(header);
+        }
+
+        let method = shown.method();
+        let mut content = column![
+            header,
+            text(method.clone()).size(12),
+            line(results::LIMITATIONS, Tone::Muted),
+        ]
+        .spacing(4);
+        if let Some(card) = failure {
+            content = content.push(card);
+        }
+        if shown.stale {
+            content = content.push(self.xtb_stale_banner());
+        }
+        if let Some(warning) = results::warning(&shown.stored.result, shown.info) {
+            content = content.push(alert(true, warning.into(), String::new(), vec![]));
+        }
+        let body = match view {
+            View::Summary => summary(&shown, inspector),
+            View::Steps => self.xtb_steps(&shown, inspector),
+            View::Log => log(&shown, &method),
+        };
+        let body: Element<'_, Message> = if inspector {
+            body
+        } else {
+            scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
+                .id("xtb-results-body")
+                .height(BODY_HEIGHT)
+                .into()
+        };
+        content = content.push(container(body).padding([6, 0]));
+        content = content.push(self.xtb_footer(&shown, view, inspector));
+        Some(content.into())
+    }
+
+    /// "xTB results", the tabs `views` with `view` chosen, and the dock commands.
+    fn xtb_palette_header(
+        &self,
+        views: Vec<View>,
+        view: View,
+        inspector: bool,
+    ) -> Element<'_, Message> {
         let tabs = row(views.into_iter().map(|choice| {
             let active = choice == view;
             reshiki::accessibility::button(
@@ -152,44 +209,63 @@ impl App {
                 .on_press(send(Action::Close)),
         );
         // The inspector is narrow: its commands wrap below the tabs.
-        let header: Element<'_, Message> = if inspector {
+        if inspector {
             header.wrap().vertical_spacing(6).into()
         } else {
             header.into()
-        };
-        if collapsed {
-            return Some(header);
         }
+    }
 
-        let method = shown.method();
-        let mut content = column![
-            header,
-            text(method.clone()).size(12),
-            line(results::LIMITATIONS, Tone::Muted),
-        ]
-        .spacing(4);
-        if shown.stale {
-            content = content.push(self.xtb_stale_banner());
-        }
-        if let Some(warning) = results::warning(shown.info) {
-            content = content.push(line(warning, Tone::Warning));
-        }
-        let body = match view {
-            View::Summary => summary(&shown, inspector),
-            View::Steps => self.xtb_steps(&shown, inspector),
-            View::Log => log(&shown, &method),
+    /// The last run's failure, with its one action (two after a crash).
+    fn xtb_failure_card(&self) -> Option<Element<'_, Message>> {
+        let Some(super::super::Outcome::Failed(failed)) = &self.tab.xtb.outcome else {
+            return None;
         };
-        let body: Element<'_, Message> = if inspector {
-            body
-        } else {
-            scrollable(container(body).padding(iced::Padding::ZERO.right(12)))
-                .id("xtb-results-body")
-                .height(BODY_HEIGHT)
+        let (title, detail) = failed.explain();
+        let button = |id: &'static str, name: &'static str, label: &'static str, action| {
+            reshiki::accessibility::button(id, name, text(label).size(12))
+                .padding([6, 12])
+                .style(crate::appearance::secondary)
+                .on_press(Message::Xtb(action))
                 .into()
         };
-        content = content.push(container(body).padding([6, 0]));
-        content = content.push(self.xtb_footer(&shown, view, inspector));
-        Some(content.into())
+        let retry = failed.request.is_some() && self.tab.xtb.run.is_none();
+        let actions = match &failed.failure {
+            state::Failure::Scf(_)
+                if retry
+                    && failed
+                        .request
+                        .as_ref()
+                        .is_some_and(|r| r.config.hotter().is_some()) =>
+            {
+                vec![button(
+                    "xtb-retry-hot",
+                    "Retry at electronic temperature 1000 K",
+                    "Retry at 1000 K",
+                    XtbAction::Retry,
+                )]
+            }
+            state::Failure::Crashed(_) => {
+                let mut actions = vec![];
+                if retry {
+                    actions.push(button(
+                        "xtb-run-again",
+                        "Run the calculation again",
+                        "Run again",
+                        XtbAction::RunAgain,
+                    ));
+                }
+                actions.push(button(
+                    "xtb-copy-details",
+                    "Copy the calculation details",
+                    "Copy details",
+                    XtbAction::CopyDetails,
+                ));
+                actions
+            }
+            _ => vec![],
+        };
+        Some(alert(false, title, detail, actions))
     }
 
     fn xtb_stale_banner(&self) -> Element<'_, Message> {
@@ -199,7 +275,7 @@ impl App {
                     "Recalculating with the same settings · {}",
                     run.launch.as_ref().map_or_else(
                         || "making the 3D model first (MMFF94s)".into(),
-                        |_| run.progress.line(run.task, run.seconds())
+                        |_| run.progress.line(run.config.task, run.seconds())
                     )
                 ),
                 accessible_command("xtb-results-cancel", "Cancel the calculation", "Cancel")
@@ -448,6 +524,64 @@ impl App {
     }
 }
 
+/// An inline card with a round "!" icon: red for an error, amber for a
+/// warning. The status bar repeats an error's sentence.
+fn alert<'a>(
+    warning: bool,
+    title: String,
+    detail: String,
+    actions: Vec<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    let icon = container(text("!").size(12).center())
+        .width(20)
+        .height(20)
+        .center(20)
+        .style(move |theme: &Theme| {
+            let tone = if warning {
+                theme.palette().warning
+            } else {
+                theme.palette().danger
+            };
+            container::Style {
+                background: Some(tone.into()),
+                text_color: Some(Color::WHITE),
+                border: iced::Border {
+                    radius: 10.0.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+        });
+    let mut words = column![text(title).size(12)].spacing(2);
+    if !detail.is_empty() {
+        words = words.push(line(detail, Tone::Muted));
+    }
+    let content = row![icon, words.width(Length::Fill)]
+        .push(row(actions).spacing(8))
+        .spacing(10)
+        .align_y(Alignment::Center);
+    let card = container(content)
+        .padding([8, 10])
+        .width(Length::Fill)
+        .style(move |theme: &Theme| {
+            let tone = if warning {
+                theme.palette().warning
+            } else {
+                theme.palette().danger
+            };
+            container::Style {
+                background: Some(Color { a: 0.08, ..tone }.into()),
+                border: iced::Border {
+                    color: Color { a: 0.6, ..tone },
+                    width: 1.,
+                    radius: 6.0.into(),
+                },
+                ..Default::default()
+            }
+        });
+    card.into()
+}
+
 /// Label and value rows: two columns at the bottom, one in the inspector.
 fn summary<'a>(shown: &Shown<'a>, inspector: bool) -> Element<'a, Message> {
     let rows = shown.rows();
@@ -467,11 +601,54 @@ fn summary<'a>(shown: &Shown<'a>, inspector: bool) -> Element<'a, Message> {
         .spacing(6)
         .width(Length::Fill)
     };
+    let tables = tables(shown);
     if inspector {
-        return column_of(&rows).into();
+        let mut body = column![column_of(&rows)].spacing(12);
+        if let Some(tables) = tables {
+            body = body.push(tables);
+        }
+        return body.into();
     }
     let (left, right) = rows.split_at(rows.len().div_ceil(2));
-    row![column_of(left), column_of(right)].spacing(24).into()
+    let mut body = row![column_of(left), column_of(right)].spacing(24);
+    if let Some(tables) = tables {
+        body = body.push(tables);
+    }
+    body.into()
+}
+
+/// Bond orders and orbital levels as small two-column tables.
+fn tables<'a>(shown: &Shown<'a>) -> Option<Element<'a, Message>> {
+    let result = &shown.stored.result;
+    let table = |title: &'static str, rows: Vec<(String, String)>| -> Element<'a, Message> {
+        let mut table = column![text(title).size(12).style(muted_text)].spacing(4);
+        for (name, value) in rows {
+            table = table.push(
+                row![
+                    text(name).size(12).width(72).style(greyed(shown.stale)),
+                    text(value).size(12).style(greyed(shown.stale)),
+                ]
+                .spacing(8),
+            );
+        }
+        table.width(Length::Shrink).into()
+    };
+    let bonds = results::bond_orders(result, shown.frame);
+    let levels: Vec<_> = results::levels(result)
+        .into_iter()
+        .map(|(name, ev)| (name, format!("{} eV", state::signed(ev, 2))))
+        .collect();
+    if bonds.is_empty() && levels.is_empty() {
+        return None;
+    }
+    let mut both = row![].spacing(24);
+    if !bonds.is_empty() {
+        both = both.push(table("Bond orders (≥ 0.1)", bonds));
+    }
+    if !levels.is_empty() {
+        both = both.push(table("Orbital levels", levels));
+    }
+    Some(both.into())
 }
 
 fn log<'a>(shown: &Shown<'a>, method: &str) -> Element<'a, Message> {

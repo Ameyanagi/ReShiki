@@ -2,11 +2,11 @@
 //! inspector), with Summary, Steps and Log, the stale banner, energy labels,
 //! "Saved in file" and the large-results question on Save.
 use super::results::{self, RunInfo, View};
-use super::{CalcTask, Request, is, state};
+use super::{Request, is, state};
 use crate::app::{App, Message};
 use iced::Task;
 use reshiki::document::Document;
-use reshiki::qcdata::{self, CalcResult, Frame};
+use reshiki::qcdata::{CalcResult, Frame};
 use reshiki::science::{self, Freshness, Stored};
 use std::{
     cell::RefCell,
@@ -294,9 +294,25 @@ impl App {
         }
         let shown = self.xtb_shown().filter(|shown| !shown.stale)?;
         let energy = shown.stored.result.energy_hartree?;
+        // Partial charges beside the drawn atoms (implicit hydrogens have none).
+        let atom_labels = shown
+            .stored
+            .result
+            .charges
+            .first()
+            .map(|charges| {
+                shown
+                    .atoms
+                    .iter()
+                    .zip(&charges.values)
+                    .filter_map(|(atom, q)| Some(((*atom)?, results::signed_charge(*q))))
+                    .collect()
+            })
+            .unwrap_or_default();
         Some(crate::canvas::ResultLabel {
             atoms: shown.atoms.iter().flatten().copied().collect(),
             text: format!("E {} Eh", state::signed(energy, 6)),
+            atom_labels,
         })
     }
 
@@ -534,34 +550,16 @@ impl App {
             self.error = true;
             return Task::none();
         };
-        let solvent = match &result.settings {
-            qcdata::Settings::Xtb(settings) => settings.solvent.as_ref().and_then(|s| {
-                state::SOLVENTS
-                    .into_iter()
-                    .find(|name| name.eq_ignore_ascii_case(&s.name))
-            }),
-            qcdata::Settings::Imported { .. } => None,
-        };
-        let info = shown.info;
+        let mut config = state::Config::from_result(
+            result,
+            shown.frame,
+            shown.info,
+            self.xtb.settings.threads(),
+        );
+        config.fixed.retain(|id| self.tab.doc.atom(*id).is_some());
         let request = Request {
             atoms: reshiki::molecule_names::component(&self.tab.doc, first),
-            task: if result.task == qcdata::Task::Optimize {
-                CalcTask::Optimize
-            } else {
-                CalcTask::Energy
-            },
-            charge: shown.frame.charge,
-            unpaired: shown.frame.multiplicity.saturating_sub(1),
-            solvent,
-            threads: info.map_or_else(|| self.xtb.settings.threads(), |info| info.threads),
-            tight: info.is_some_and(|info| info.tight),
-            fixed: info.map_or_else(Vec::new, |info| {
-                info.fixed
-                    .iter()
-                    .copied()
-                    .filter(|id| self.tab.doc.atom(*id).is_some())
-                    .collect()
-            }),
+            config,
             keep_full: shown.stored.keep_full,
         };
         self.xtb_end_preview();

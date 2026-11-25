@@ -1,6 +1,7 @@
 //! One xTB job on its own thread: the worker client driven by the optimizer.
 
 use super::results::Evaluation;
+use super::state::Failure;
 use iced::futures::{Stream, channel::mpsc};
 use reshiki_optimize::{
     ANGSTROM_PER_BOHR, Accuracy, EvalError, Level, Options, Potential, Status, optimize,
@@ -8,7 +9,8 @@ use reshiki_optimize::{
 use reshiki_xtb_worker::{
     client::{Cancel, Error, Limits, Session},
     protocol::{
-        Compute, Computed, Conventions, ErrorKind, Method, Open, Solvent, SolventModel, Units,
+        self, Compute, Computed, Conventions, Engine, ErrorKind, HessianRequest, Method, Open,
+        OrbitalOutput, ScfSettings, Solvent, Units,
     },
 };
 use std::{
@@ -26,8 +28,10 @@ pub(crate) struct Job {
     pub charge: i32,
     /// Unpaired electrons.
     pub uhf: u32,
-    /// ALPB solvent name, e.g. "water"; None is gas phase.
-    pub solvent: Option<String>,
+    pub method: Method,
+    pub conventions: Conventions,
+    pub scf: ScfSettings,
+    pub solvent: Option<Solvent>,
     pub threads: u32,
     /// Zero-based frame atoms the optimizer holds fixed.
     pub fixed: Vec<usize>,
@@ -47,18 +51,17 @@ pub(crate) enum Event {
     /// Elapsed time goes on while the worker computes: every 250 ms.
     Tick,
     /// The last event of a job.
-    Done(Result<Arc<Report>, String>),
+    Done(Result<Arc<Report>, Failure>),
 }
 
 #[derive(Debug)]
 pub(crate) struct Report {
     /// From the worker's hello.
-    pub engine_version: String,
-    pub engine_rev: String,
+    pub engine: Engine,
+    /// The worker's final calculation at `positions`.
+    pub computed: Computed,
     /// Hartree, at `positions`.
     pub energy: f64,
-    pub gap_ev: Option<f64>,
-    pub near_degenerate: bool,
     /// Whether optimization converged. Always true for energy jobs.
     pub converged: bool,
     /// Final geometry in Å (the input geometry for an energy job).
@@ -73,8 +76,6 @@ pub(crate) struct Report {
     pub path: Vec<f64>,
     /// Every energy the worker computed, in order, for the Log tab.
     pub evaluations: Vec<Evaluation>,
-    /// How the engine computed (its numerics line).
-    pub numerics: String,
 }
 
 impl From<&Computed> for Evaluation {
@@ -107,45 +108,59 @@ pub(crate) fn start(job: Job, cancel: Cancel) -> impl Stream<Item = Event> + Sen
         .name("xtb-run".into())
         .spawn(move || {
             let result = run(job, &cancel, &worker_tx);
-            let done = Event::Done(result.map(Arc::new).map_err(|error| error.to_string()));
+            let done = Event::Done(result.map(Arc::new));
             let _ = worker_tx.unbounded_send(done);
             worker_tx.close_channel();
         });
     if let Err(error) = thread {
-        let _ = tx.unbounded_send(Event::Done(Err(error.to_string())));
+        let _ = tx.unbounded_send(Event::Done(Err(Failure::Other(error.to_string()))));
         tx.close_channel();
     }
     rx
 }
 
-fn run(
-    job: Job,
-    cancel: &Cancel,
-    tx: &mpsc::UnboundedSender<Event>,
-) -> Result<Report, Box<dyn std::error::Error>> {
+fn run(job: Job, cancel: &Cancel, tx: &mpsc::UnboundedSender<Event>) -> Result<Report, Failure> {
     let limits = Limits::default();
-    let (mut session, hello) = Session::start(&std::env::current_exe()?, limits, cancel)?;
-    let engine = hello.engine.ok_or(Error::Unavailable)?;
+    let exe = std::env::current_exe().map_err(|error| worker_failure(&Error::Spawn(error)))?;
+    let (mut session, hello) =
+        Session::start(&exe, limits, cancel).map_err(|error| worker_failure(&error))?;
+    let engine = hello
+        .engine
+        .ok_or_else(|| worker_failure(&Error::Unavailable))?;
     let open = Open {
         numbers: job.numbers,
         positions: job.positions,
         units: Units::Angstrom,
         charge: job.charge,
         uhf: Some(job.uhf),
-        method: Method::Gfn2,
-        conventions: Conventions::default(),
-        solvent: job.solvent.map(|name| Solvent {
-            model: SolventModel::Alpb,
-            name,
-            state: Default::default(),
-            correction: None,
-        }),
-        scf: Default::default(),
+        method: job.method,
+        conventions: job.conventions,
+        solvent: job.solvent,
+        scf: job.scf.clone(),
         gfnff: None,
         threads: job.threads,
         heap_bytes: limits.heap_bytes,
     };
-    session.open(&open, cancel)?;
+    match session.open(&open, cancel) {
+        Ok(_) => {}
+        Err(Error::Engine {
+            kind: ErrorKind::Input,
+            message,
+        }) if message.contains("same parity as the valence electron count") => {
+            drop(session);
+            let probe = || {
+                let (mut session, _) = Session::start(&exe, limits, cancel)?;
+                let opened = session.open(&Open { uhf: None, ..open }, cancel)?;
+                session.close(cancel)?;
+                Ok::<_, Error>(opened.uhf)
+            };
+            return Err(match probe() {
+                Ok(valence) => Failure::Spin { valence },
+                Err(_) => Failure::Other(message),
+            });
+        }
+        Err(error) => return Err(worker_failure(&error)),
+    }
 
     let mut path = Vec::new();
     let mut evaluations = Vec::new();
@@ -167,6 +182,7 @@ fn run(
             session: &mut session,
             cancel,
             evaluations: &mut evaluations,
+            failure: None,
         };
         let mut batch = Batch::default();
         let outcome = optimize(&mut xtb, &open.numbers, &positions, &options, |step| {
@@ -180,15 +196,13 @@ fn run(
         });
         let remaining = batch.flush();
         if remaining.is_some_and(|event| tx.unbounded_send(event).is_err()) {
-            return Err("Calculation canceled".into());
+            return Err(canceled());
         }
         match outcome.status {
             Status::Converged | Status::MaxSteps => {}
-            Status::ScfFailure(message) => {
-                return Err(format!("SCF did not converge: {message}").into());
-            }
-            Status::Failed(message) => return Err(message.into()),
-            Status::Cancelled => return Err("Calculation canceled".into()),
+            Status::ScfFailure(message) => return Err(Failure::Scf(message)),
+            Status::Failed(message) => return Err(xtb.failure.unwrap_or(Failure::Other(message))),
+            Status::Cancelled => return Err(canceled()),
         }
         if path.len() != open.numbers.len() * 3 * outcome.energies.len() {
             path.clear();
@@ -198,12 +212,25 @@ fn run(
         None
     };
     let final_xyz = outcome.as_ref().map(|outcome| outcome.positions.as_slice());
-    let computed = session.compute(&request(final_xyz, false), cancel)?;
+    let electronic = job.method.xtb_method().capabilities().orbitals;
+    let final_request = Compute {
+        positions: final_xyz.map(|xyz| xyz.as_chunks::<3>().0.to_vec()),
+        units: Units::Bohr,
+        bond_orders: electronic,
+        orbitals: if electronic {
+            OrbitalOutput::Levels
+        } else {
+            OrbitalOutput::None
+        },
+        ..Compute::default()
+    };
+    let computed = session
+        .compute(&final_request, cancel)
+        .map_err(|error| worker_failure(&error))?;
+    // The result is complete; a worker that fails to exit cleanly is reaped.
     let _ = session.close(cancel);
     evaluations.push(Evaluation::from(&computed));
-    let energy = outcome
-        .as_ref()
-        .map_or(computed.energy, |outcome| outcome.energy);
+    let energy = computed.energy;
     let positions = final_xyz.map_or_else(|| open.positions, angstroms);
     let converged = outcome
         .as_ref()
@@ -214,11 +241,9 @@ fn run(
         |outcome| (outcome.gradient, outcome.energies),
     );
     Ok(Report {
-        engine_version: engine.version,
-        engine_rev: engine.rev,
+        engine,
+        computed,
         energy,
-        gap_ev: computed.homo_lumo_gap_ev,
-        near_degenerate: computed.near_degenerate,
         converged,
         positions,
         gradient,
@@ -226,23 +251,7 @@ fn run(
         energies,
         path,
         evaluations,
-        numerics: computed.numerics,
     })
-}
-
-fn request(bohr: Option<&[f64]>, gradient: bool) -> Compute {
-    let units = if bohr.is_some() {
-        Units::Bohr
-    } else {
-        Units::Angstrom
-    };
-    let positions = bohr.map(|xyz| xyz.as_chunks::<3>().0.to_vec());
-    Compute {
-        positions,
-        units,
-        gradient,
-        ..Compute::default()
-    }
 }
 
 fn angstroms(positions: &[f64]) -> Vec<[f64; 3]> {
@@ -255,6 +264,8 @@ struct Xtb<'a> {
     session: &'a mut Session,
     cancel: &'a Cancel,
     evaluations: &'a mut Vec<Evaluation>,
+    // The optimizer's Failed status carries only a string.
+    failure: Option<Failure>,
 }
 
 impl Potential for Xtb<'_> {
@@ -264,16 +275,20 @@ impl Potential for Xtb<'_> {
         gradient: &mut [f64],
         _accuracy: Accuracy,
     ) -> Result<f64, EvalError> {
-        let request = request(Some(positions), true);
-        let result = self.session.compute(&request, self.cancel);
-        let computed = result.map_err(|error| match error {
-            Error::Cancelled => EvalError::Cancelled,
-            Error::Engine {
-                kind: ErrorKind::Scf,
-                message,
-            } => EvalError::Scf(message),
-            error => EvalError::Failed(error.to_string()),
-        })?;
+        let request = Compute {
+            positions: Some(positions.as_chunks::<3>().0.to_vec()),
+            units: Units::Bohr,
+            gradient: true,
+            ..Compute::default()
+        };
+        let computed = self
+            .session
+            .compute(&request, self.cancel)
+            .map_err(|error| {
+                self.failure = Some(worker_failure(&error));
+                eval_error(error)
+            })?;
+        self.failure = None;
         self.evaluations.push(Evaluation::from(&computed));
         let rows = computed
             .gradient
@@ -281,6 +296,69 @@ impl Potential for Xtb<'_> {
         gradient.copy_from_slice(rows.as_flattened());
         Ok(computed.energy)
     }
+
+    fn hessian(&mut self, positions: &[f64], out: &mut [f64]) -> Option<Result<(), EvalError>> {
+        if positions.len() / 3 > protocol::MAX_HESSIAN_ATOMS {
+            return None;
+        }
+        let request = Compute {
+            positions: Some(positions.as_chunks::<3>().0.to_vec()),
+            units: Units::Bohr,
+            hessian: Some(HessianRequest::default()),
+            ..Compute::default()
+        };
+        Some(
+            self.session
+                .compute(&request, self.cancel)
+                .map(|computed| out.copy_from_slice(&computed.hessian))
+                .map_err(eval_error),
+        )
+    }
+}
+
+fn eval_error(error: Error) -> EvalError {
+    match error {
+        Error::Cancelled => EvalError::Cancelled,
+        Error::Engine {
+            kind: ErrorKind::Scf,
+            message,
+        } => EvalError::Scf(message),
+        error => EvalError::Failed(error.to_string()),
+    }
+}
+
+fn worker_failure(error: &Error) -> Failure {
+    match error {
+        Error::Engine {
+            kind: ErrorKind::Scf,
+            message,
+        } => Failure::Scf(message.clone()),
+        Error::Engine {
+            kind: ErrorKind::UnsupportedElement,
+            message,
+        } => message
+            .trim_end()
+            .rsplit_once("Z=")
+            .and_then(|(_, number)| number.parse::<u8>().ok())
+            .map_or_else(
+                || Failure::Other(message.clone()),
+                |z| Failure::Element { z },
+            ),
+        Error::Engine {
+            kind: ErrorKind::Limit,
+            message,
+        }
+        | Error::Limit(message) => Failure::Other(message.clone()),
+        Error::Exited { .. } | Error::Protocol(_) | Error::Timeout | Error::Spawn(_) => {
+            Failure::Crashed(error.to_string())
+        }
+        Error::Cancelled => canceled(),
+        error => Failure::Other(error.to_string()),
+    }
+}
+
+fn canceled() -> Failure {
+    Failure::Other("Calculation canceled".into())
 }
 
 #[derive(Default)]
@@ -319,6 +397,37 @@ impl Batch {
             positions: std::mem::take(&mut self.positions),
         })
     }
+}
+
+/// The hello's engine, as tests answer it.
+#[cfg(test)]
+pub(crate) fn example_engine() -> Engine {
+    Engine {
+        name: "axtb".into(),
+        version: "0.2.0".into(),
+        license: "LGPL-3.0-or-later".into(),
+        source: "https://github.com/Ameyanagi/axtb".into(),
+        rev: "9d0388c".into(),
+    }
+}
+
+/// A neutral singlet GFN2-xTB answer with only an energy and a gap.
+#[cfg(test)]
+pub(crate) fn example_computed(energy: f64, gap_ev: f64) -> Computed {
+    serde_json::from_value(serde_json::json!({
+        "method": "gfn2",
+        "conventions": "axtb",
+        "engine_conventions": "axtb",
+        "numerics": "f64",
+        "settings": { "charge": 0, "uhf": 0, "solvent": null, "scf": {}, "threads": 1 },
+        "energy": energy,
+        "energy_terms": {},
+        "homo_lumo_gap_ev": gap_ev,
+        "near_degenerate": gap_ev < protocol::NEAR_DEGENERATE_GAP_EV,
+        "arrays": [],
+        "seconds": 0.003
+    }))
+    .expect("worker response")
 }
 
 #[cfg(test)]

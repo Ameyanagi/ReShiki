@@ -136,3 +136,172 @@ fn stereo_changes_read_as_the_card_says_them() {
         "Optimization changed the E/Z configuration of the C4=C5 double bond."
     );
 }
+
+#[test]
+fn the_config_follows_the_method_capabilities() {
+    let mut settings = Settings {
+        task: Task::Energy,
+        solvent: Some("water"),
+        temperature: "500".into(),
+        ..Settings::default()
+    };
+    let config = settings.config((0, 0), false, vec![7]).expect("GFN2-xTB");
+    assert_eq!(config.method, XtbMethod::Gfn2Xtb);
+    assert_eq!(config.solvent, Some("water"));
+    assert_eq!(config.temperature_k, Some(500.));
+    assert!(
+        config.fixed.is_empty(),
+        "atoms are held only when optimizing"
+    );
+
+    // GFN-FF: no solvent, no SCF settings, closed shells only.
+    settings.method = XtbMethod::GfnFf;
+    settings.task = Task::Optimize;
+    let config = settings.config((0, 0), false, vec![7]).expect("GFN-FF");
+    assert_eq!(
+        (
+            config.solvent,
+            config.temperature_k,
+            config.fixed.as_slice()
+        ),
+        (None, None, &[7][..])
+    );
+    assert_eq!(
+        settings.config((0, 1), false, vec![]),
+        Err("GFN-FF calculates closed shells only: set Unpaired electrons to 0")
+    );
+    assert_eq!(
+        method_note(XtbMethod::GfnFf, false).map(|n| n.contains("closed shells")),
+        Some(true)
+    );
+
+    // g-xTB keeps the solvent and says how it is treated.
+    settings.method = XtbMethod::GXtb;
+    assert_eq!(
+        settings.config((0, 0), false, vec![]).map(|c| c.solvent),
+        Ok(Some("water"))
+    );
+    assert!(method_note(XtbMethod::GXtb, true).is_some_and(|n| n.contains("GFN2-xTB solvation")));
+    assert_eq!(method_note(XtbMethod::GXtb, false), None);
+}
+
+#[test]
+fn typed_scf_settings_are_checked() {
+    let settings = |accuracy: &str, temperature: &str, iterations: &str| Settings {
+        accuracy: accuracy.into(),
+        temperature: temperature.into(),
+        iterations: iterations.into(),
+        ..Settings::default()
+    };
+    assert_eq!(settings("", "", "").scf(), Ok((None, None, None)));
+    assert_eq!(
+        settings(" 0.5 ", "1000", "400").scf(),
+        Ok((Some(0.5), Some(1000.), Some(400)))
+    );
+    assert!(settings("0", "", "").scf().is_err());
+    assert!(settings("", "−5", "").scf().is_err());
+    assert!(settings("", "", "1.5").scf().is_err());
+    // A bad field stops Run with its reason.
+    assert_eq!(
+        settings("", "", "0").config((0, 0), false, vec![]),
+        Err("Max SCF iterations must be a whole number from 1 to 10000")
+    );
+}
+
+#[test]
+fn retry_runs_hotter_only_below_1000_k() {
+    let config = Settings::default().config((0, 0), false, vec![]).unwrap();
+    let hotter = config.hotter().expect("300 K by default");
+    assert_eq!(hotter.temperature_k, Some(RETRY_TEMPERATURE_K));
+    assert_eq!(
+        Config {
+            temperature_k: None,
+            ..hotter.clone()
+        },
+        config
+    );
+    assert_eq!(hotter.hotter(), None, "already at 1000 K");
+    let force_field = Config {
+        method: XtbMethod::GfnFf,
+        ..config
+    };
+    assert_eq!(force_field.hotter(), None, "GFN-FF has no SCF");
+}
+
+#[test]
+fn failures_name_the_atom_the_limit_and_the_spin() {
+    let (title, detail) = Failure::Element { z: 92 }.explain(XtbMethod::Gfn2Xtb, &[8, 92, 8]);
+    assert_eq!(
+        title,
+        "Atom 2 is U (Z = 92). GFN2-xTB has no parameters for it."
+    );
+    assert!(detail.contains("radon (Z = 86)"));
+    let (title, _) = Failure::TooMany {
+        count: 812,
+        limit: 500,
+    }
+    .explain(XtbMethod::Gfn2Xtb, &[]);
+    assert_eq!(
+        title,
+        "This molecule has 812 atoms. The limit is 500 atoms."
+    );
+    let (title, detail) = Failure::Spin { valence: 0 }.explain(XtbMethod::Gfn2Xtb, &[]);
+    assert_eq!(
+        title,
+        "xTB's valence model gives 0 unpaired electrons for this molecule, which its full electron count cannot have."
+    );
+    assert!(detail.contains("Use g-xTB, or GFN-FF"));
+    let (title, detail) = Failure::Scf("SCF did not converge in 250 iterations".into())
+        .explain(XtbMethod::Gfn2Xtb, &[]);
+    assert_eq!(title, "The SCF did not converge.");
+    assert_eq!(
+        detail,
+        "SCF did not converge in 250 iterations. Nothing was applied to the drawing."
+    );
+}
+
+#[test]
+fn recalculate_reads_the_settings_the_result_stored() {
+    let frame = qcdata::Frame {
+        numbers: vec![8, 1, 1],
+        positions_angstrom: vec![[0.; 3], [0.96, 0., 0.], [-0.24, 0.93, 0.]],
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let result: qcdata::CalcResult = serde_json::from_value(serde_json::json!({
+        "frame": frame.hash(),
+        "task": "energy",
+        "settings": { "xtb": {
+            "method": "g_xtb",
+            "conventions": "xtb-6.8",
+            "solvent": { "model": "alpb", "name": "water", "correction": "gfn2" },
+            "electronic_temperature_k": 1000.0,
+            "accuracy": 0.5,
+            "max_iterations": 400
+        } },
+        "provenance": { "program": "axtb", "source": { "calculated": { "engine_revision": "9d0388c" } } },
+        "status": "converged"
+    }))
+    .expect("a stored result");
+    let config = Config::from_result(&result, &frame, None, 3);
+    assert_eq!(
+        config,
+        Config {
+            task: Task::Energy,
+            method: XtbMethod::GXtb,
+            charge: 0,
+            unpaired: 0,
+            solvent: Some("water"),
+            xtb68: true,
+            accuracy: Some(0.5),
+            temperature_k: Some(1000.),
+            max_iterations: Some(400),
+            threads: 3,
+            tight: false,
+            fixed: vec![],
+        }
+    );
+}

@@ -224,6 +224,9 @@ pub(crate) fn symbol(z: u8) -> &'static str {
         .unwrap_or("?")
 }
 
+/// Typed SCF overrides: accuracy, electronic temperature (K), maximum iterations.
+pub(crate) type Scf = (Option<f64>, Option<f64>, Option<u32>);
+
 /// The card's choices. Charge, unpaired electrons and the SCF fields hold
 /// what was typed; an empty field means the drawing's value or the
 /// method's default.
@@ -340,7 +343,7 @@ impl Settings {
 
     /// The typed SCF overrides: accuracy, electronic temperature (K) and
     /// maximum iterations. Empty fields are the method's defaults.
-    pub(crate) fn scf(&self) -> Result<(Option<f64>, Option<f64>, Option<u32>), &'static str> {
+    pub(crate) fn scf(&self) -> Result<Scf, &'static str> {
         fn typed<T: std::str::FromStr + PartialOrd>(
             text: &str,
             range: std::ops::RangeInclusive<T>,
