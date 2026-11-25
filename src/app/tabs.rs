@@ -333,6 +333,8 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
+        // The export dialog names atoms of this tab's drawing.
+        self.qc_export = None;
         // Check drawing findings stay with their tab until its drawing changes.
         self.tab.pulse = None;
         self.check_results = false;

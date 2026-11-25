@@ -42,10 +42,13 @@ pub mod nmr;
 pub mod payload;
 pub mod piece_library;
 pub mod preview;
+pub mod qc_input;
 pub mod recovery;
 pub mod svg_drawing;
 pub mod task;
 pub mod template_library;
+
+pub use reshiki_qcdata as qcdata;
 
 /// The repository root, from which the development reference resolves its
 /// Python worker and fixtures; this crate lives at crates/io.

@@ -4123,6 +4123,7 @@ dependencies = [
  "reshiki-geometry",
  "reshiki-model",
  "reshiki-process-heap",
+ "reshiki-qcdata",
  "reshiki-windows",
  "resvg",
  "roxmltree",
