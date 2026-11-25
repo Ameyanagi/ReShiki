@@ -474,10 +474,12 @@ fn molecule_name(label: &Option<String>) -> &str {
         return label;
     }
     let lower = name.to_ascii_lowercase();
+    // Only a "conformer N" suffix is dropped: "compound 101" and "compound
+    // 102" are two molecules of a library.
     if lower.ends_with("conformer") {
         name[..name.len() - "conformer".len()].trim_end()
     } else {
-        name
+        label
     }
 }
 

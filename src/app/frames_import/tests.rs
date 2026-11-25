@@ -139,6 +139,8 @@ fn an_sd_file_asks_only_for_3d_records_of_one_molecule() {
     assert_eq!(file.energies(), Some(vec![-5.06, -5.07]));
     let library = water("water", 0.1, -5.06) + &water("deuterated?", -0.1, -5.07);
     assert!(detect(Path::new("w.sdf"), library.as_bytes()).is_none());
+    let numbered = water("compound 101", 0.1, -5.06) + &water("compound 102", -0.1, -5.07);
+    assert!(detect(Path::new("w.sdf"), numbered.as_bytes()).is_none());
     // A record of another calculated state is not a conformer of the first.
     let cation = water("water conformer 2", -0.1, -5.07).replace(
         "\n\n$$$$",
