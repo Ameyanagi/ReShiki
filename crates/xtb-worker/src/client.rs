@@ -130,7 +130,12 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn start(executable: &Path, limits: Limits) -> Result<(Self, Hello)> {
+    /// Start the worker and complete its cancellable hello handshake.
+    /// An already cancelled token prevents the worker from being spawned.
+    pub fn start(executable: &Path, limits: Limits, cancel: &Cancel) -> Result<(Self, Hello)> {
+        if cancel.cancelled() {
+            return Err(Error::Cancelled);
+        }
         if !executable.is_absolute() {
             return Err(Error::Spawn(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -156,8 +161,7 @@ impl Session {
             stderr: VecDeque::with_capacity(STDERR_BYTES),
             _thread: PhantomData,
         };
-        let hello: Hello =
-            session.request(RequestOp::Hello {}, limits.hello, &Cancel::default(), false)?;
+        let hello: Hello = session.request(RequestOp::Hello {}, limits.hello, cancel, false)?;
         if let Err(message) = validate_hello(&hello) {
             return Err(session.protocol_error(message));
         }
@@ -265,14 +269,10 @@ impl Session {
         Ok(computed)
     }
 
-    /// Close the worker and reap it. Closing uses the hello request deadline.
-    pub fn close(mut self) -> Result<()> {
-        let _: Closed = self.request(
-            RequestOp::Close {},
-            self.limits.hello,
-            &Cancel::default(),
-            true,
-        )?;
+    /// Close the worker and reap it. Closing uses the hello request deadline,
+    /// and cancellation remains active until the worker exits.
+    pub fn close(mut self, cancel: &Cancel) -> Result<()> {
+        let _: Closed = self.request(RequestOp::Close {}, self.limits.hello, cancel, true)?;
         Ok(())
     }
 

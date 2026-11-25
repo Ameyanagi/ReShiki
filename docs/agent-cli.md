@@ -830,39 +830,20 @@ reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnf
 
 Runs one GFN2-xTB (default), GFN-FF or g-xTB 2.0.1 calculation through the
 [isolated worker](xtb-worker.md) on the first frame of an XYZ file (1 to 500
-atoms, Ångström, case-insensitive element symbols). It has no MCP tool.
+atoms, Ångström). It has no MCP tool. `--task` is `energy` (default),
+`gradient`, `hessian` (with vibrations and thermochemistry, at most 200 atoms)
+or `orbitals` (every coefficient row and the basis); `--gradient` and `--wbo`
+(bond orders) add to any task; `--energy` is accepted for compatibility.
+`--scf-retry K[:N]` repeats to build an SCF retry ladder. g-xTB in solvent
+needs `--solvent-correction gfn2`. GFN-FF takes no solvent, SCF settings,
+orbitals or bond orders. Unsupported combinations exit 1 with the capability
+message. The options and output are described in
+[the worker's command line](xtb-worker.md#command-line).
 
-| Option                        | Commands | Meaning                                                                                                                                                               |
-| ----------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--task TASK`                 | calc     | `energy` (default), `gradient`, `hessian` with vibrations and thermochemistry, or `orbitals` with every coefficient row and basis.                                    |
-| `--method METHOD`             | calc     | `gfn2` (default), `gfnff` or `gxtb`.                                                                                                                                  |
-| `--energy`                    | calc     | Accepted for compatibility; every task includes energy.                                                                                                               |
-| `--gradient`                  | calc     | Add the Cartesian energy gradient in Eh/bohr to any task.                                                                                                             |
-| `--wbo`                       | calc     | Include Mayer–Wiberg bond orders.                                                                                                                                     |
-| `--charge N`                  | calc     | Molecular charge, default 0.                                                                                                                                          |
-| `--uhf N`                     | calc     | Nonnegative number of unpaired electrons. The default comes from the electron count.                                                                                  |
-| `--conventions MODE`          | calc     | `axtb` (default) or `xtb-6.8` (xtb 6.8 compatible) conventions.                                                                                                       |
-| `--alpb NAME`                 | calc     | Use ALPB implicit solvent; cannot be combined with `--gbsa`.                                                                                                          |
-| `--gbsa NAME`                 | calc     | Use GBSA implicit solvent; cannot be combined with `--alpb`.                                                                                                          |
-| `--solvent-correction METHOD` | calc     | `gfn2` is required for g-xTB in solvent and refused for GFN2-xTB.                                                                                                     |
-| `--etemp K`                   | calc     | Electronic temperature, default 300 K for GFN2-xTB or 0 K for g-xTB.                                                                                                  |
-| `--accuracy X`                | calc     | Positive SCF accuracy multiplier, default 1.                                                                                                                          |
-| `--max-iter N`                | calc     | Positive SCF iteration limit, default 250.                                                                                                                            |
-| `--scf-retry K[:N]`           | calc     | Retry an unconverged SCF at K kelvin, optionally changing the iteration limit. Repeat to build a ladder. Every K must be at least the initial electronic temperature. |
-| `--threads N`                 | calc     | Worker threads, 1 to 64, default 1.                                                                                                                                   |
-
-GFN-FF supports energy, gradients and Hessians for singlets. It takes no
-solvent, SCF settings, orbitals or bond orders. A Hessian is limited to 200
-atoms. Unsupported combinations exit 1 with the capability message.
-
-The command prints the worker's complete `Computed` JSON result plus `engine`,
-including energy in Eh, gradient in Eh/bohr when requested, settings and
-engine metadata, charges, moments, the HOMO–LUMO gap in eV (null without a LUMO),
-and any requested analysis. Binary arrays appear under their names as
-`{"shape":[rows,columns],"values":[...]}`. The `arrays` descriptors and the
-empty compact orbital coefficient fields are preserved. A gap below 0.1 eV
-also writes a warning to stderr and leaves the successful exit status unchanged.
-`calc` is CLI-only and prints its result without an experimental envelope.
+It prints the worker's `Computed` JSON plus `engine`, with binary arrays as
+`{"shape":[rows,columns],"values":[...]}`, and no experimental envelope. A gap
+below 0.1 eV also writes a warning to stderr and leaves the exit status
+unchanged.
 
 In a build without xTB, it writes `reshiki: xTB is not included in this build`
 to stderr and exits 1.

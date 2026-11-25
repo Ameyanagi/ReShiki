@@ -292,13 +292,16 @@ spherical Molden output.
   default (callers may shorten them). Closing uses the hello deadline.
   The client drains stdout and stderr while it waits, so a blocked pipe
   cannot stall either side.
-- **Cancel** is kill and reap: the client terminates the process group and
-  waits for it before returning. `open` and `compute` check cancellation
-  before validating input locally, so an already cancelled handle returns
-  `Cancelled` even for invalid input. The session is gone; a new one starts
-  with `open`. There is no cancel message. A reply to an earlier request (a
-  wrong `id`), a second response, or a chunk after the announced ones is a
-  protocol error, never taken as the answer to the current request.
+- `Session::start(executable, limits, cancel)`, `open`, `compute` and
+  `session.close(cancel)` check the caller's `&Cancel` before sending each
+  request and while waiting for its reply. Closing also checks while waiting
+  for the worker to exit. `start`, `open` and `compute` check cancellation
+  before validating local input. An already cancelled token makes `start`
+  return `Error::Cancelled` before spawning. If a worker is running, the
+  client terminates its process group or job and reaps it before returning
+  `Error::Cancelled`. A subsequent calculation needs a new session.
+- A reply to an earlier request (a wrong `id`), a second response, or a
+  chunk after the announced ones is a protocol error.
 - **Crash or EOF**: if the worker exits or closes stdout before a complete
   response (chunks included), the client reports the exit status and the last
   4 KiB of stderr. The session is gone. If the worker reads EOF on stdin

@@ -2,19 +2,18 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use crate::headless;
-use reshiki_xtb_worker::client::{Error, Limits, Session};
+use reshiki_xtb_worker::client::{Cancel, Error, Limits, Session};
 use std::{path::Path, time::Duration};
 
+#[cfg(unix)]
+use reshiki_xtb_worker::protocol::{self, Opened, Outcome, Response};
 #[cfg(feature = "xtb")]
 use reshiki_xtb_worker::protocol::{
     ArrayName, ErrorKind, GfnFfOpen, HARTREE_TO_EV, HessianRequest, NEAR_DEGENERATE_GAP_EV,
     OrbitalOutput, SolvationState, Solvent, SolventModel,
 };
 #[cfg(any(feature = "xtb", unix))]
-use reshiki_xtb_worker::{
-    client::Cancel,
-    protocol::{Compute, Conventions, Method, Open, Units},
-};
+use reshiki_xtb_worker::protocol::{Compute, Conventions, Method, Open, Units};
 #[cfg(feature = "xtb")]
 use serde::Deserialize;
 #[cfg(feature = "xtb")]
@@ -160,8 +159,8 @@ fn worker_and_cli_match_reference_energies_gradients_and_gaps() {
         assert_eq!(molecules.len(), 3);
         for name in ["water", "caffeine", "ferrocene"] {
             let expected = &molecules[name];
-            let (mut session, hello) =
-                Session::start(executable(), limits()).expect("start xTB worker");
+            let (mut session, hello) = Session::start(executable(), limits(), &Cancel::default())
+                .expect("start xTB worker");
             assert!(
                 hello.engine.is_some(),
                 "feature-enabled worker has an engine"
@@ -188,7 +187,7 @@ fn worker_and_cli_match_reference_energies_gradients_and_gaps() {
                 result.gradient.as_deref().expect("requested gradient"),
                 expected,
             );
-            session.close().expect("close worker");
+            session.close(&Cancel::default()).expect("close worker");
 
             let dir = tempfile::tempdir().expect("CLI working folder");
             let xyz = fixtures().join(format!("{name}.xyz"));
@@ -297,7 +296,8 @@ fn frame(open: &Open) -> reshiki_qcdata::Frame {
 fn water_hessian_crosses_binary_chunks_and_converts_to_a_valid_calc_result() {
     let open = molecule("water");
     let frame = frame(&open);
-    let (mut session, hello) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, hello) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
     session.open(&open, &Cancel::default()).expect("open water");
     let computed = session
         .compute(
@@ -353,7 +353,7 @@ fn water_hessian_crosses_binary_chunks_and_converts_to_a_valid_calc_result() {
         computed.normal_modes
     );
     assert_eq!(result.energy_hartree, Some(computed.energy));
-    session.close().expect("close worker");
+    session.close(&Cancel::default()).expect("close worker");
 
     let dir = tempfile::tempdir().expect("CLI folder");
     let xyz = fixtures().join("water.xyz");
@@ -384,7 +384,8 @@ fn water_hessian_crosses_binary_chunks_and_converts_to_a_valid_calc_result() {
 fn ferrocene_all_orbitals_have_canonical_basis_rows_and_cli_arrays() {
     let open = molecule("ferrocene");
     let frame = frame(&open);
-    let (mut session, hello) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, hello) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
     let opened = session
         .open(&open, &Cancel::default())
         .expect("open ferrocene");
@@ -425,7 +426,7 @@ fn ferrocene_all_orbitals_have_canonical_basis_rows_and_cli_arrays() {
     result
         .validate(&frame)
         .expect("valid result with all orbital rows");
-    session.close().expect("close worker");
+    session.close(&Cancel::default()).expect("close worker");
 
     let dir = tempfile::tempdir().expect("CLI folder");
     let xyz = fixtures().join("ferrocene.xyz");
@@ -475,7 +476,8 @@ fn gfnff_topology_and_fragment_charges_survive_a_restarted_session() {
         reference_positions: Some(open.positions.clone()),
         fragment_charges: Some(vec![1, -1]),
     });
-    let (mut original, hello) = Session::start(executable(), limits()).expect("start GFN-FF");
+    let (mut original, hello) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start GFN-FF");
     original
         .open(&open, &Cancel::default())
         .expect("open reference topology");
@@ -532,13 +534,16 @@ fn gfnff_topology_and_fragment_charges_survive_a_restarted_session() {
     let saved_topology = settings.gfnff.expect("saved topology");
     assert_eq!(saved_topology.reference, reference);
     assert_eq!(saved_topology.fragment_charges, [1, -1]);
-    original.close().expect("close original GFN-FF");
+    original
+        .close(&Cancel::default())
+        .expect("close original GFN-FF");
     open.positions = positions;
     open.gfnff = Some(GfnFfOpen {
         reference_positions: Some(topology.reference_positions_bohr.clone()),
         fragment_charges: Some(topology.fragment_charges.clone()),
     });
-    let (mut restarted, _) = Session::start(executable(), limits()).expect("restart GFN-FF");
+    let (mut restarted, _) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("restart GFN-FF");
     restarted
         .open(&open, &Cancel::default())
         .expect("restore topology");
@@ -554,7 +559,9 @@ fn gfnff_topology_and_fragment_charges_survive_a_restarted_session() {
         .expect("restarted GFN-FF energy");
     assert!((computed.energy - repeated.energy).abs() < 1e-12);
     assert_eq!(computed.gradient, repeated.gradient);
-    restarted.close().expect("close restarted GFN-FF");
+    restarted
+        .close(&Cancel::default())
+        .expect("close restarted GFN-FF");
 }
 
 #[cfg(feature = "xtb")]
@@ -562,7 +569,8 @@ fn gfnff_topology_and_fragment_charges_survive_a_restarted_session() {
 fn unsupported_gfnff_outputs_are_refused_by_client_and_cli() {
     let mut open = molecule("water");
     open.method = Method::Gfnff;
-    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, _) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
     session
         .open(&open, &Cancel::default())
         .expect("open GFN-FF");
@@ -593,7 +601,7 @@ fn unsupported_gfnff_outputs_are_refused_by_client_and_cli() {
             .compute(&Compute::default(), &Cancel::default())
             .expect("session survives refusal");
     }
-    session.close().expect("close worker");
+    session.close(&Cancel::default()).expect("close worker");
     let dir = tempfile::tempdir().expect("CLI folder");
     let xyz = fixtures().join("water.xyz");
     for (args, expected) in [
@@ -619,7 +627,8 @@ fn unsupported_gfnff_outputs_are_refused_by_client_and_cli() {
 #[cfg(feature = "xtb")]
 #[test]
 fn reused_session_matches_fresh_sessions_for_three_displaced_geometries() {
-    let (mut reused, _) = Session::start(executable(), limits()).expect("start reusable worker");
+    let (mut reused, _) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start reusable worker");
     reused
         .open(&molecule("water"), &Cancel::default())
         .expect("open reusable molecule");
@@ -634,14 +643,15 @@ fn reused_session_matches_fresh_sessions_for_three_displaced_geometries() {
                 &Cancel::default(),
             )
             .expect("reused compute");
-        let (mut fresh, _) = Session::start(executable(), limits()).expect("start fresh worker");
+        let (mut fresh, _) =
+            Session::start(executable(), limits(), &Cancel::default()).expect("start fresh worker");
         fresh
             .open(&geometry, &Cancel::default())
             .expect("open displaced geometry");
         let independent = fresh
             .compute(&compute(None, false), &Cancel::default())
             .expect("fresh compute");
-        fresh.close().expect("close fresh worker");
+        fresh.close(&Cancel::default()).expect("close fresh worker");
         let difference = (cached.energy - independent.energy).abs();
         maximum_difference = maximum_difference.max(difference);
         eprintln!(
@@ -650,7 +660,9 @@ fn reused_session_matches_fresh_sessions_for_three_displaced_geometries() {
             independent.scf.as_ref().expect("SCF metadata").iterations
         );
     }
-    reused.close().expect("close reused worker");
+    reused
+        .close(&Cancel::default())
+        .expect("close reused worker");
     assert!(
         maximum_difference <= 1e-10,
         "maximum reused/fresh |ΔE|={maximum_difference:.16e} Eh"
@@ -660,7 +672,8 @@ fn reused_session_matches_fresh_sessions_for_three_displaced_geometries() {
 #[cfg(feature = "xtb")]
 #[test]
 fn invalid_client_input_is_rejected_without_losing_the_session() {
-    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, _) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
     let water = molecule("water");
     let mut invalid = Vec::new();
     let mut open = water.clone();
@@ -745,7 +758,9 @@ fn invalid_client_input_is_rejected_without_losing_the_session() {
         recovered.energy,
         initial.energy
     );
-    session.close().expect("close worker after invalid input");
+    session
+        .close(&Cancel::default())
+        .expect("close worker after invalid input");
 }
 
 #[cfg(feature = "xtb")]
@@ -753,7 +768,7 @@ fn invalid_client_input_is_rejected_without_losing_the_session() {
 fn failed_engine_compute_keeps_the_last_successful_geometry() {
     let water = molecule("water");
     let cancel = Cancel::default();
-    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, _) = Session::start(executable(), limits(), &cancel).expect("start worker");
     let pid = session.pid();
     session.open(&water, &cancel).expect("open water");
     session
@@ -783,7 +798,8 @@ fn failed_engine_compute_keeps_the_last_successful_geometry() {
         .expect("compute after the engine error");
     assert_eq!(session.pid(), pid, "engine error changed the worker PID");
 
-    let (mut fresh, _) = Session::start(executable(), limits()).expect("start fresh worker");
+    let (mut fresh, _) =
+        Session::start(executable(), limits(), &cancel).expect("start fresh worker");
     fresh.open(&water, &cancel).expect("open original water");
     let original = fresh
         .compute(&compute(None, false), &cancel)
@@ -794,8 +810,8 @@ fn failed_engine_compute_keeps_the_last_successful_geometry() {
         difference <= 1e-10,
         "recovered and fresh energies differ by {difference:.16e} Eh"
     );
-    fresh.close().expect("close fresh worker");
-    session.close().expect("close recovered worker");
+    fresh.close(&cancel).expect("close fresh worker");
+    session.close(&cancel).expect("close recovered worker");
 }
 
 #[cfg(feature = "xtb")]
@@ -817,7 +833,8 @@ fn worker_rejects_invalid_electrons_spin_and_unknown_solvent_on_open() {
             }),
         ),
     ] {
-        let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+        let (mut session, _) =
+            Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
         let mut open = molecule("water");
         open.charge = charge;
         open.uhf = uhf;
@@ -837,7 +854,9 @@ fn worker_rejects_invalid_electrons_spin_and_unknown_solvent_on_open() {
                 "{name}: {result:?}"
             );
         }
-        session.close().expect("close worker after rejected open");
+        session
+            .close(&Cancel::default())
+            .expect("close worker after rejected open");
     }
 }
 
@@ -855,15 +874,19 @@ fn cef3_checks_explicit_spin_against_frame_and_valence_electrons_and_keeps_drive
         uhf: Some(0),
         ..molecule("water")
     };
-    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, _) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
     let result = session.open(&cef3, &Cancel::default());
     assert!(
         matches!(result, Err(Error::Input(_))),
         "neutral CeF3 with explicit UHF 0: {result:?}"
     );
-    session.close().expect("close worker after local refusal");
+    session
+        .close(&Cancel::default())
+        .expect("close worker after local refusal");
 
-    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, _) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
     cef3.uhf = Some(1);
     let result = session.open(&cef3, &Cancel::default());
     assert!(
@@ -876,14 +899,19 @@ fn cef3_checks_explicit_spin_against_frame_and_valence_electrons_and_keeps_drive
         ),
         "neutral CeF3 with UHF 1: {result:?}"
     );
-    session.close().expect("close worker after rejected open");
+    session
+        .close(&Cancel::default())
+        .expect("close worker after rejected open");
 
     cef3.uhf = None;
-    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, _) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
     session
         .open(&cef3, &Cancel::default())
         .expect("open neutral CeF3 with the driver's default spin");
-    session.close().expect("close worker after omitted UHF");
+    session
+        .close(&Cancel::default())
+        .expect("close worker after omitted UHF");
 }
 
 #[cfg(all(feature = "xtb", unix))]
@@ -954,7 +982,8 @@ fn cancellation_precedes_local_validation_and_reaps_the_worker() {
     cancel.cancel();
     let water = molecule("water");
 
-    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, _) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
     let pid = session.pid();
     let invalid_open = Open {
         threads: 0,
@@ -964,7 +993,8 @@ fn cancellation_precedes_local_validation_and_reaps_the_worker() {
     assert!(matches!(result, Err(Error::Cancelled)), "{result:?}");
     assert_pid_gone(pid);
 
-    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, _) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
     session
         .open(&water, &Cancel::default())
         .expect("open water");
@@ -998,79 +1028,15 @@ fn long_running_molecule() -> Open {
 #[cfg(unix)]
 #[test]
 fn cancellation_after_the_compute_frame_kills_and_reaps_the_worker() {
-    use reshiki_xtb_worker::protocol::{Request, RequestOp};
-
     let dir = tempfile::tempdir().expect("fake worker folder");
-    let received = dir.path().join("compute-received");
-    let quoted_received = received.to_string_lossy().replace('\'', "'\\''");
     let open = molecule("water");
+    let opened = fake_opened(&open, Some(6));
+    let mut session = open_scripted_worker(dir.path(), &open, &opened, &[]);
     let request = compute(None, false);
-    let receive = |id, op| {
-        let length = reshiki_xtb_worker::protocol::encode_frame(&Request { id, op })
-            .expect("encode fake worker request")
-            .len();
-        format!(
-            "received=$(dd bs=1 count={length} 2>/dev/null | wc -c)\n[ \"$received\" -eq {length} ] || exit 8\n"
-        )
-    };
-    let response = |value| {
-        let frame = reshiki_xtb_worker::protocol::encode_frame(&value)
-            .expect("encode fake worker response");
-        let escaped: String = frame.iter().map(|byte| format!("\\{byte:03o}")).collect();
-        format!("printf '{escaped}'\n")
-    };
-    let body = format!(
-        "{}{}{}{}{}: > '{quoted_received}'\nexec sleep 30\n",
-        receive(1, RequestOp::Hello {}),
-        response(serde_json::json!({
-            "id": 1,
-            "ok": {
-                "protocol": 2,
-                "engine": {
-                    "name": "axtb", "version": "1", "license": "MIT",
-                    "source": "test", "rev": "test"
-                },
-                "methods": ["gfn2", "gfnff", "gxtb"],
-                "max_atoms": reshiki_xtb_worker::protocol::MAX_ATOMS,
-                "max_hessian_atoms": reshiki_xtb_worker::protocol::MAX_HESSIAN_ATOMS,
-            }
-        })),
-        receive(2, RequestOp::Open(open.clone())),
-        response(serde_json::json!({
-            "id": 2,
-            "ok": {
-                "atoms": open.numbers.len(),
-                "method": "gfn2",
-                "conventions": "axtb",
-                "numerics": "gfn2:1",
-                "engine_conventions": "axtb",
-                "basis_functions": 6
-            }
-        })),
-        receive(3, RequestOp::Compute(request.clone())),
-    );
-    let (script, _) = write_fake_worker(dir.path(), &body);
-    let (mut session, _) = Session::start(&script, limits()).expect("start fake worker");
-    session
-        .open(&open, &Cancel::default())
-        .expect("open fake worker");
     let pid = session.pid();
     let watchdog = PidWatchdog::from_pid(move || Some(pid), Duration::from_secs(8));
     let cancel = Cancel::default();
-    let cancel_helper = cancel.clone();
-    let helper = thread::spawn(move || {
-        let waiting = Instant::now();
-        while !received.exists() {
-            assert!(
-                waiting.elapsed() < Duration::from_secs(5),
-                "compute frame was not received"
-            );
-            thread::sleep(Duration::from_millis(5));
-        }
-        let started = Instant::now();
-        cancel_helper.cancel();
-        started
-    });
+    let helper = cancel_after_request(dir.path(), 2, &cancel, Duration::ZERO);
     let result = session.compute(&request, &cancel);
     let cancelled = helper.join();
     watchdog.finish();
@@ -1094,6 +1060,7 @@ fn compute_deadline_kills_and_reaps_the_worker() {
             compute: Duration::from_millis(2),
             ..limits()
         },
+        &Cancel::default(),
     )
     .expect("start worker");
     session
@@ -1117,7 +1084,8 @@ fn compute_deadline_kills_and_reaps_the_worker() {
 #[cfg(all(feature = "xtb", unix))]
 #[test]
 fn sigkill_during_compute_reports_exit_without_hanging() {
-    let (mut session, _) = Session::start(executable(), limits()).expect("start worker");
+    let (mut session, _) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start worker");
     session
         .open(&long_running_molecule(), &Cancel::default())
         .expect("open caffeine cluster");
@@ -1216,30 +1184,217 @@ fn write_fake_worker(dir: &Path, body: &str) -> (std::path::PathBuf, std::path::
 }
 
 #[cfg(unix)]
+fn write_scripted_worker(
+    dir: &Path,
+    responses: &[&[u8]],
+) -> (std::path::PathBuf, std::path::PathBuf) {
+    use std::fmt::Write;
+
+    let mut body = String::from(
+        r#"set -e
+cd "$(dirname "$0")"
+read_request() {
+    dd bs=1 count=16 of=header 2>/dev/null
+    [ "$(wc -c < header)" -eq 16 ]
+    set -- $(od -An -tu4 -j12 -N4 header)
+    received=$(dd bs=1 count="$1" 2>/dev/null | wc -c)
+    [ "$received" -eq "$1" ]
+}
+"#,
+    );
+    for (index, bytes) in responses.iter().enumerate() {
+        std::fs::write(dir.join(format!("response-{index}")), bytes).expect("write response");
+        writeln!(
+            body,
+            "read_request\n: > request-{index}\ncat response-{index}"
+        )
+        .expect("write script");
+    }
+    body.push_str("exec sleep 30\n");
+    write_fake_worker(dir, &body)
+}
+
+#[cfg(unix)]
+fn ok_frame(id: u64, ok: &impl serde::Serialize) -> Vec<u8> {
+    protocol::encode_frame(&Response {
+        id,
+        result: Outcome::Ok { ok },
+    })
+    .expect("encode fake worker response")
+}
+
+#[cfg(unix)]
+fn hello_frame() -> Vec<u8> {
+    ok_frame(
+        1,
+        &protocol::Hello {
+            protocol: protocol::VERSION,
+            engine: Some(protocol::Engine {
+                name: "axtb".into(),
+                version: "0.2.0".into(),
+                license: "LGPL-3.0-or-later".into(),
+                source: "https://github.com/Ameyanagi/axtb".into(),
+                rev: "test".into(),
+            }),
+            methods: Method::ALL.to_vec(),
+            max_atoms: protocol::MAX_ATOMS,
+            max_hessian_atoms: protocol::MAX_HESSIAN_ATOMS,
+        },
+    )
+}
+
+#[cfg(unix)]
+fn fake_opened(open: &Open, basis_functions: Option<u32>) -> Opened {
+    Opened {
+        atoms: open.numbers.len(),
+        method: open.method,
+        conventions: open.conventions,
+        numerics: match open.method {
+            Method::Gfn2 => "gfn2:1",
+            Method::Gfnff => "gfnff:1",
+            Method::Gxtb => "gxtb-v2.0.1:1",
+        }
+        .into(),
+        engine_conventions: "axtb".into(),
+        basis_functions,
+    }
+}
+
+#[cfg(unix)]
+fn open_scripted_worker(dir: &Path, open: &Open, opened: &Opened, next: &[u8]) -> Session {
+    let (script, _) = write_scripted_worker(dir, &[&hello_frame(), &ok_frame(2, opened), next]);
+    let cancel = Cancel::default();
+    let (mut session, _) = Session::start(&script, limits(), &cancel).expect("fake worker hello");
+    session.open(open, &cancel).expect("open fake worker");
+    session
+}
+
+#[cfg(unix)]
+fn fake_worker_pid(pid_file: &Path) -> Option<u32> {
+    std::fs::read_to_string(pid_file).ok()?.trim().parse().ok()
+}
+
+#[cfg(unix)]
+fn cancel_after_request(
+    dir: &Path,
+    index: usize,
+    cancel: &Cancel,
+    delay: Duration,
+) -> thread::JoinHandle<Instant> {
+    let received = dir.join(format!("request-{index}"));
+    let cancel = cancel.clone();
+    thread::spawn(move || {
+        let waiting = Instant::now();
+        while !received.exists() {
+            assert!(
+                waiting.elapsed() < Duration::from_secs(3),
+                "request {index} was not received"
+            );
+            thread::sleep(Duration::from_millis(5));
+        }
+        thread::sleep(delay);
+        let cancelled = Instant::now();
+        cancel.cancel();
+        cancelled
+    })
+}
+
+#[cfg(unix)]
+#[test]
+fn cancellation_during_hello_kills_and_reaps_the_worker() {
+    let dir = tempfile::tempdir().expect("fake worker folder");
+    let (script, pid_file) = write_scripted_worker(dir.path(), &[&[]]);
+    let watchdog_pid = pid_file.clone();
+    let watchdog = PidWatchdog::from_pid(
+        move || fake_worker_pid(&watchdog_pid),
+        Duration::from_secs(5),
+    );
+    let cancel = Cancel::default();
+    let helper = cancel_after_request(dir.path(), 0, &cancel, Duration::from_millis(200));
+    let started = Instant::now();
+    let error = Session::start(&script, limits(), &cancel).err();
+    let elapsed = started.elapsed();
+    watchdog.finish();
+    helper.join().expect("cancel helper");
+    assert!(matches!(error, Some(Error::Cancelled)), "{error:?}");
+    assert!(elapsed < Duration::from_secs(2), "hello took {elapsed:?}");
+    assert_pid_gone(fake_worker_pid(&pid_file).expect("fake worker PID"));
+}
+
+#[cfg(unix)]
+#[test]
+fn cancellation_during_close_kills_and_reaps_the_worker() {
+    let open = molecule("water");
+    let opened = fake_opened(&open, Some(6));
+    for (case, response) in [
+        ("no close reply", vec![]),
+        ("no exit", ok_frame(3, &protocol::Closed {})),
+    ] {
+        let dir = tempfile::tempdir().expect("fake worker folder");
+        let session = open_scripted_worker(dir.path(), &open, &opened, &response);
+        let pid = session.pid();
+        let watchdog = PidWatchdog::from_pid(move || Some(pid), Duration::from_secs(5));
+        let cancel = Cancel::default();
+        let helper = cancel_after_request(dir.path(), 2, &cancel, Duration::from_millis(200));
+        let started = Instant::now();
+        let result = session.close(&cancel);
+        let elapsed = started.elapsed();
+        watchdog.finish();
+        helper.join().expect("cancel helper");
+        assert!(
+            matches!(result, Err(Error::Cancelled)),
+            "{case}: {result:?}"
+        );
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "{case}: close took {elapsed:?}"
+        );
+        assert_pid_gone(pid);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn cancellation_before_hello_skips_spawning_the_worker() {
+    let dir = tempfile::tempdir().expect("fake worker folder");
+    let (script, pid_file) = write_scripted_worker(dir.path(), &[&hello_frame()]);
+    let cancel = Cancel::default();
+    cancel.cancel();
+    for executable in [script, dir.path().join("missing-worker")] {
+        let started = Instant::now();
+        let error = Session::start(&executable, limits(), &cancel).err();
+        let elapsed = started.elapsed();
+        assert!(matches!(error, Some(Error::Cancelled)), "{error:?}");
+        assert!(elapsed < Duration::from_secs(2), "start took {elapsed:?}");
+    }
+    assert!(!pid_file.exists(), "cancelled start launched the script");
+}
+
+#[cfg(unix)]
 #[test]
 fn fake_workers_exit_garbage_and_partial_response_never_hang() {
     let hello_deadline = Duration::from_secs(5);
     let watchdog_deadline = hello_deadline + Duration::from_secs(2);
+    let frame = ok_frame(1, &protocol::Closed {});
+    let escaped: String = frame[..protocol::HEADER_LEN + 7]
+        .iter()
+        .map(|byte| format!("\\{byte:03o}"))
+        .collect();
+    let partial = format!("printf '{escaped}'\n");
     for (name, body) in [
-        ("exit", "echo 'fake immediate exit' >&2\nexit 7\n"),
+        ("exit", "echo 'fake immediate exit' >&2\nexit 7\n".into()),
         (
             "garbage",
-            "printf 'this is not an xTB protocol frame'\nexec sleep 30\n",
+            "printf 'this is not an xTB protocol frame'\nexec sleep 30\n".into(),
         ),
-        (
-            "truncated_eof",
-            "printf 'RSHXTBWK\\002\\000\\000\\000\\020\\000\\000\\000{\"id\":1'\n",
-        ),
+        ("truncated_eof", partial.clone()),
         (
             "truncated_closed_stdout",
-            "printf 'RSHXTBWK\\002\\000\\000\\000\\020\\000\\000\\000{\"id\":1'\nexec 1>&-\nexec sleep 30\n",
+            format!("{partial}exec 1>&-\nexec sleep 30\n"),
         ),
         // A complete valid header announcing 16 body bytes, followed by only
         // seven bytes and a live process: this must reach the hello deadline.
-        (
-            "partial",
-            "printf 'RSHXTBWK\\002\\000\\000\\000\\020\\000\\000\\000{\"id\":1'\nexec sleep 30\n",
-        ),
+        ("partial", format!("{partial}exec sleep 30\n")),
     ] {
         let dir = tempfile::tempdir().expect("fake worker folder");
         // Respond only after hello for the framing cases. The first request
@@ -1251,16 +1406,8 @@ fn fake_workers_exit_garbage_and_partial_response_never_hang() {
         };
         let (script, pid_file) = write_fake_worker(dir.path(), &format!("{receive_hello}{body}"));
         let watchdog_pid = pid_file.clone();
-        let watchdog = PidWatchdog::from_pid(
-            move || {
-                std::fs::read_to_string(watchdog_pid)
-                    .ok()?
-                    .trim()
-                    .parse()
-                    .ok()
-            },
-            watchdog_deadline,
-        );
+        let watchdog =
+            PidWatchdog::from_pid(move || fake_worker_pid(&watchdog_pid), watchdog_deadline);
         let started = Instant::now();
         let result = Session::start(
             &script,
@@ -1268,6 +1415,7 @@ fn fake_workers_exit_garbage_and_partial_response_never_hang() {
                 hello: hello_deadline,
                 ..limits()
             },
+            &Cancel::default(),
         );
         let elapsed = started.elapsed();
         watchdog.finish();
@@ -1296,25 +1444,445 @@ fn fake_workers_exit_garbage_and_partial_response_never_hang() {
             elapsed < watchdog_deadline,
             "{name}: returned after {elapsed:?}"
         );
-        let pid = std::fs::read_to_string(pid_file)
-            .expect("fake worker PID")
-            .trim()
-            .parse()
-            .expect("PID number");
+        assert_pid_gone(fake_worker_pid(&pid_file).expect("fake worker PID"));
+    }
+}
+
+#[cfg(unix)]
+mod protocol_v2 {
+    use super::*;
+    use protocol::{
+        ArrayHeader, ArrayName, Computed, GfnFfReport, GfnFfSettings, HessianRequest,
+        OrbitalOutput, ScfReport, SessionSettings, VibrationsReport,
+    };
+    use reshiki_qcdata::{
+        AtomicCharges, BasisSet, Beta, ChargeScheme, OrbitalSet, Orbitals, Shell, Thermo,
+    };
+
+    const PROMPT: Duration = Duration::from_secs(2);
+
+    fn energy_result(open: &Open, opened: &Opened) -> Computed {
+        let gfnff = open.method == Method::Gfnff;
+        Computed {
+            method: opened.method,
+            conventions: opened.conventions,
+            engine_conventions: opened.engine_conventions.clone(),
+            numerics: opened.numerics.clone(),
+            settings: SessionSettings {
+                charge: open.charge,
+                uhf: 0,
+                solvent: open.solvent.clone(),
+                scf: open.scf.clone(),
+                gfnff: gfnff.then(|| GfnFfSettings {
+                    reference_positions_bohr: open
+                        .positions
+                        .iter()
+                        .map(|p| p.map(|x| x / reshiki_qcdata::ANGSTROM_PER_BOHR))
+                        .collect(),
+                    fragment_charges: vec![open.charge],
+                }),
+                threads: open.threads,
+            },
+            energy: -5.125,
+            energy_terms: Default::default(),
+            gradient: None,
+            charges: Some(AtomicCharges {
+                scheme: if gfnff {
+                    ChargeScheme::Eeq
+                } else {
+                    ChargeScheme::Mulliken
+                },
+                values: vec![0.0; opened.atoms],
+            }),
+            dipole_e_bohr: Some([0.0, 0.0, 0.875]),
+            quadrupole_e_bohr2: (!gfnff).then_some([0.0; 6]),
+            bond_orders: None,
+            orbitals: None,
+            homo_lumo_gap_ev: (!gfnff).then_some(14.0),
+            near_degenerate: false,
+            scf: (!gfnff).then(|| ScfReport {
+                iterations: 4,
+                start: "eeq".into(),
+                electronic_temperature_k: 300.0,
+                retry: None,
+            }),
+            composite: None,
+            gfnff: gfnff.then(|| GfnFfReport {
+                fragments: vec![0; opened.atoms],
+            }),
+            hessian_method: None,
+            vibrations: None,
+            thermo: None,
+            arrays: vec![],
+            seconds: 0.01,
+            hessian: vec![],
+            dipole_derivatives: vec![],
+            normal_modes: vec![],
+        }
+    }
+
+    fn array_header(name: ArrayName, shape: [u32; 2]) -> ArrayHeader {
+        let values = u64::from(shape[0]) * u64::from(shape[1]);
+        ArrayHeader {
+            name,
+            shape,
+            chunks: values.div_ceil(protocol::CHUNK_VALUES as u64) as u32,
+        }
+    }
+
+    struct WaterHessian {
+        open: Open,
+        opened: Opened,
+        request: Compute,
+        result: Computed,
+    }
+
+    impl WaterHessian {
+        fn new(orbitals: OrbitalOutput) -> Self {
+            let open = molecule("water");
+            let opened = fake_opened(&open, Some(6));
+            let mut result = energy_result(&open, &opened);
+            result.gradient = Some(vec![[0.0; 3]; 3]);
+            result.hessian_method = Some("analytic".into());
+            result.vibrations = Some(VibrationsReport {
+                conventions: "axtb".into(),
+                frequencies_cm1: vec![1600.0, 3600.0, 3700.0],
+                ir_intensities_km_mol: vec![1.25, 3.5, 4.75],
+                reduced_masses_amu: vec![1.0; 3],
+                force_constants_mdyn_per_angstrom: vec![1.0, 3.0, 4.0],
+                masses_amu: vec![16.0, 1.0, 1.0],
+                linear: false,
+                point_group: Some("c2v".into()),
+            });
+            result.thermo = Some(Thermo {
+                temperature_k: 298.15,
+                pressure_pa: 101_325.0,
+                zero_point_energy_hartree: 0.02,
+                enthalpy_correction_hartree: 0.025,
+                entropy_hartree_per_k: 0.000_07,
+                gibbs_correction_hartree: 0.025 - 298.15 * 0.000_07,
+                heat_capacity_hartree_per_k: Some(0.000_04),
+                frequency_scale: 1.0,
+                rotor_cutoff_cm1: 100.0,
+                imaginary_cutoff_cm1: 20.0,
+                symmetry_number: 2,
+            });
+            result.hessian = (0..9)
+                .flat_map(|row| (0..9).map(move |col| f64::from(row + col) / 13.0))
+                .collect();
+            result.hessian[0] = -0.0;
+            result.dipole_derivatives = (0..27).map(|i| f64::from(i) / 17.0).collect();
+            result.normal_modes = vec![-0.0; 27];
+            for (index, row) in result
+                .normal_modes
+                .as_chunks_mut::<9>()
+                .0
+                .iter_mut()
+                .enumerate()
+            {
+                row[index] = 0.6;
+                row[index + 3] = 0.8;
+            }
+            result.arrays = vec![
+                array_header(ArrayName::Hessian, [9, 9]),
+                array_header(ArrayName::DipoleDerivatives, [9, 3]),
+                array_header(ArrayName::NormalModes, [3, 9]),
+            ];
+            if orbitals == OrbitalOutput::All {
+                result.orbitals = Some(Orbitals {
+                    basis: Some(BasisSet {
+                        shells: [(0, 0), (0, 1), (1, 0), (2, 0)]
+                            .into_iter()
+                            .map(|(atom, l)| Shell {
+                                atom,
+                                l,
+                                pure: false,
+                                exponents_per_bohr2: vec![1.0],
+                                coefficients: vec![1.0],
+                            })
+                            .collect(),
+                    }),
+                    core_electrons: vec![2, 0, 0],
+                    alpha: OrbitalSet {
+                        energies_hartree: vec![-1.0, -0.8, -0.6, -0.4, 0.1, 0.2],
+                        occupations: vec![2.0, 2.0, 2.0, 2.0, 0.0, 0.0],
+                        symmetries: vec![],
+                        rows: (0..6).collect(),
+                        coefficients: (0..36).map(|i| f64::from(i) / 19.0).collect(),
+                    },
+                    beta: Beta::Restricted,
+                });
+                result
+                    .arrays
+                    .push(array_header(ArrayName::CoefficientsAlpha, [6, 6]));
+            }
+            let request = Compute {
+                hessian: Some(HessianRequest::default()),
+                orbitals,
+                ..compute(None, false)
+            };
+            Self {
+                open,
+                opened,
+                request,
+                result,
+            }
+        }
+
+        fn chunks(&self) -> Vec<Vec<u8>> {
+            self.result
+                .arrays
+                .iter()
+                .map(|array| protocol::encode_chunk(0, self.result.array_values(array.name)))
+                .collect()
+        }
+
+        fn response(&self, id: u64, chunks: Vec<Vec<u8>>) -> Vec<u8> {
+            let mut bytes = ok_frame(id, &self.result);
+            bytes.extend(chunks.into_iter().flatten());
+            bytes
+        }
+
+        fn exchange(
+            &self,
+            case: &str,
+            response: &[u8],
+            limit: Duration,
+        ) -> Result<Computed, Error> {
+            let dir = tempfile::tempdir().expect("fake worker folder");
+            let mut session = open_scripted_worker(dir.path(), &self.open, &self.opened, response);
+            let pid = session.pid();
+            let result = timely_compute(&mut session, &self.request, case, limit);
+            if result.is_ok() {
+                assert!(kill(pid, "-0"), "{case}: worker exited after a valid reply");
+                drop(session);
+            }
+            assert_pid_gone(pid);
+            result
+        }
+
+        fn rejects(&self, case: &str, response: &[u8], limit: Duration) {
+            let result = self.exchange(case, response, limit);
+            assert!(
+                matches!(result, Err(Error::Protocol(_))),
+                "{case}: {result:?}"
+            );
+        }
+    }
+
+    fn timely_compute(
+        session: &mut Session,
+        request: &Compute,
+        case: &str,
+        limit: Duration,
+    ) -> Result<Computed, Error> {
+        let pid = session.pid();
+        let watchdog = PidWatchdog::from_pid(move || Some(pid), Duration::from_secs(5));
+        let started = Instant::now();
+        let result = session.compute(request, &Cancel::default());
+        let elapsed = started.elapsed();
+        watchdog.finish();
+        assert!(elapsed < limit, "{case}: compute took {elapsed:?}");
+        result
+    }
+
+    #[test]
+    fn valid_binary_arrays_round_trip_bit_for_bit() {
+        for orbitals in [OrbitalOutput::None, OrbitalOutput::All] {
+            let fixture = WaterHessian::new(orbitals);
+            let response = fixture.response(3, fixture.chunks());
+            let result = fixture
+                .exchange("valid Hessian", &response, PROMPT)
+                .expect("accept valid response and chunks");
+            assert_eq!(result.arrays, fixture.result.arrays);
+            for array in &result.arrays {
+                let actual = result.array_values(array.name);
+                let expected = fixture.result.array_values(array.name);
+                assert_eq!(actual.len(), expected.len(), "{:?}", array.name);
+                for (actual, expected) in actual.iter().zip(expected) {
+                    assert_eq!(actual.to_bits(), expected.to_bits(), "{:?}", array.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn late_open_reply_id_is_rejected() {
+        let fixture = WaterHessian::new(OrbitalOutput::None);
+        fixture.rejects("late reply", &fixture.response(2, fixture.chunks()), PROMPT);
+    }
+
+    #[test]
+    fn extra_chunk_after_announced_chunks_is_rejected() {
+        let fixture = WaterHessian::new(OrbitalOutput::None);
+        let mut chunks = fixture.chunks();
+        chunks.push(chunks[0].clone());
+        fixture.rejects("extra chunk", &fixture.response(3, chunks), PROMPT);
+    }
+
+    #[test]
+    fn second_json_reply_after_announced_chunks_is_rejected() {
+        let fixture = WaterHessian::new(OrbitalOutput::None);
+        let mut response = fixture.response(3, fixture.chunks());
+        response.extend(ok_frame(3, &fixture.result));
+        fixture.rejects("second JSON reply", &response, PROMPT);
+    }
+
+    #[test]
+    fn mismatched_array_dimensions_are_rejected() {
+        for (case, orbitals, index, shape) in [
+            ("Hessian columns", OrbitalOutput::None, 0, [9, 8]),
+            ("normal mode rows", OrbitalOutput::None, 2, [2, 9]),
+            ("coefficient columns", OrbitalOutput::All, 3, [6, 5]),
+        ] {
+            let mut fixture = WaterHessian::new(orbitals);
+            fixture.result.arrays[index].shape = shape;
+            fixture.rejects(case, &fixture.response(3, fixture.chunks()), PROMPT);
+        }
+
+        let fixture = WaterHessian::new(OrbitalOutput::None);
+        let mut chunks = fixture.chunks();
+        chunks[0] = protocol::encode_chunk(0, &fixture.result.hessian[..80]);
+        fixture.rejects("Hessian value count", &fixture.response(3, chunks), PROMPT);
+    }
+
+    #[test]
+    fn oversized_array_announcements_are_rejected_without_waiting_for_chunks() {
+        let coefficient_columns = (reshiki_qcdata::MAX_COEFFICIENTS / 6 + 1) as u32;
+        for (case, orbitals, index, shape) in [
+            (
+                "oversized Hessian",
+                OrbitalOutput::None,
+                0,
+                [600_000, 600_000],
+            ),
+            (
+                "oversized coefficients",
+                OrbitalOutput::All,
+                3,
+                [6, coefficient_columns],
+            ),
+        ] {
+            let mut fixture = WaterHessian::new(orbitals);
+            let name = fixture.result.arrays[index].name;
+            fixture.result.arrays[index] = array_header(name, shape);
+            fixture.rejects(case, &fixture.response(3, vec![]), Duration::from_secs(1));
+        }
+    }
+
+    #[test]
+    fn wrong_chunk_index_and_non_finite_values_are_rejected() {
+        let fixture = WaterHessian::new(OrbitalOutput::None);
+        let mut non_finite = fixture.result.hessian.clone();
+        non_finite[40] = f64::NAN;
+        for (case, chunk) in [
+            (
+                "wrong chunk index",
+                protocol::encode_chunk(1, &fixture.result.hessian),
+            ),
+            ("non-finite value", protocol::encode_chunk(0, &non_finite)),
+        ] {
+            let mut chunks = fixture.chunks();
+            chunks[0] = chunk;
+            fixture.rejects(case, &fixture.response(3, chunks), PROMPT);
+        }
+    }
+
+    #[test]
+    fn unsupported_gfnff_requests_leave_the_next_response_for_energy() {
+        let dir = tempfile::tempdir().expect("fake worker folder");
+        let open = Open {
+            method: Method::Gfnff,
+            ..molecule("water")
+        };
+        let opened = fake_opened(&open, None);
+        let energy = energy_result(&open, &opened);
+        let response = ok_frame(3, &energy);
+        let mut session = open_scripted_worker(dir.path(), &open, &opened, &response);
+        let pid = session.pid();
+        for (case, request) in [
+            (
+                "GFN-FF orbitals",
+                Compute {
+                    orbitals: OrbitalOutput::All,
+                    ..compute(None, false)
+                },
+            ),
+            (
+                "GFN-FF bond orders",
+                Compute {
+                    bond_orders: true,
+                    ..compute(None, false)
+                },
+            ),
+        ] {
+            let result = timely_compute(&mut session, &request, case, PROMPT);
+            assert!(
+                matches!(result, Err(Error::Unsupported(_))),
+                "{case}: {result:?}"
+            );
+        }
+        let result = timely_compute(&mut session, &compute(None, false), "GFN-FF energy", PROMPT)
+            .expect("unsupported requests left the energy reply unread");
+        assert_eq!(result.energy.to_bits(), energy.energy.to_bits());
+        drop(session);
         assert_pid_gone(pid);
+    }
+
+    #[test]
+    fn hessian_atom_limit_leaves_the_next_response_for_energy() {
+        let dir = tempfile::tempdir().expect("fake worker folder");
+        let open = Open {
+            numbers: vec![2; 201],
+            positions: (0..201).map(|i| [f64::from(i) * 3.0, 0.0, 0.0]).collect(),
+            ..molecule("water")
+        };
+        let opened = fake_opened(&open, Some(201));
+        let energy = energy_result(&open, &opened);
+        let response = ok_frame(3, &energy);
+        let mut session = open_scripted_worker(dir.path(), &open, &opened, &response);
+        let pid = session.pid();
+        let request = Compute {
+            hessian: Some(HessianRequest::default()),
+            ..compute(None, false)
+        };
+        let result = timely_compute(&mut session, &request, "201-atom Hessian", PROMPT);
+        assert!(matches!(result, Err(Error::Limit(_))), "{result:?}");
+        let result = timely_compute(
+            &mut session,
+            &compute(None, false),
+            "201-atom energy",
+            PROMPT,
+        )
+        .expect("Hessian rejection left the energy reply unread");
+        assert_eq!(result.energy.to_bits(), energy.energy.to_bits());
+        drop(session);
+        assert_pid_gone(pid);
+    }
+
+    #[test]
+    fn chunk_where_json_is_expected_is_rejected() {
+        let fixture = WaterHessian::new(OrbitalOutput::None);
+        let mut response = protocol::encode_chunk(0, &fixture.result.hessian);
+        response.extend(fixture.response(3, fixture.chunks()));
+        fixture.rejects("chunk before JSON", &response, PROMPT);
     }
 }
 
 #[cfg(not(feature = "xtb"))]
 #[test]
 fn build_without_xtb_has_null_engine_and_a_clear_calc_error() {
-    let (session, hello) = Session::start(executable(), limits()).expect("start native worker");
+    let (session, hello) =
+        Session::start(executable(), limits(), &Cancel::default()).expect("start native worker");
     assert!(
         hello.engine.is_none(),
         "build without xTB advertises no engine"
     );
     assert!(hello.methods.is_empty());
-    assert!(matches!(session.close(), Err(Error::Unavailable)));
+    assert!(matches!(
+        session.close(&Cancel::default()),
+        Err(Error::Unavailable)
+    ));
     let dir = tempfile::tempdir().expect("CLI working folder");
     let water = fixtures().join("water.xyz");
     let output = headless::run_cli(

@@ -130,8 +130,9 @@ pub(super) fn run(
             error => failed(error),
         }
     }
-    let (mut session, hello) = Session::start(&executable, limits).map_err(calculation_error)?;
     let cancel = Cancel::default();
+    let (mut session, hello) =
+        Session::start(&executable, limits, &cancel).map_err(calculation_error)?;
     session.open(&open, &cancel).map_err(calculation_error)?;
     let computed = session
         .compute(
@@ -151,7 +152,7 @@ pub(super) fn run(
             &cancel,
         )
         .map_err(calculation_error)?;
-    session.close().map_err(calculation_error)?;
+    session.close(&cancel).map_err(calculation_error)?;
     let serde_json::Value::Object(mut result) = serde_json::to_value(&computed).map_err(failed)?
     else {
         return Err(CliError::Failed(
