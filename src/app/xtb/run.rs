@@ -24,6 +24,8 @@ use std::{
 pub(crate) struct Job {
     pub optimize: bool,
     pub frequencies: bool,
+    /// Analysis masses (u) for isotope-labelled molecules; standard masses otherwise.
+    pub masses: Option<Vec<f64>>,
     pub numbers: Vec<u8>,
     pub positions: Vec<[f64; 3]>,
     pub charge: i32,
@@ -259,7 +261,15 @@ fn final_request(job: &Job, positions: Option<&[f64]>) -> Compute {
         positions: positions.map(|xyz| xyz.as_chunks::<3>().0.to_vec()),
         units: Units::Bohr,
         gradient: positions.is_some(),
-        hessian: job.frequencies.then(HessianRequest::default),
+        hessian: job.frequencies.then(|| HessianRequest {
+            masses_amu: job.masses.clone(),
+            // The worker's point-group symmetry ignores isotopes, so explicit
+            // masses need a symmetry number: 1, as substitution usually lowers it.
+            thermo: protocol::ThermoRequest {
+                symmetry_number: job.masses.is_some().then_some(1),
+                ..Default::default()
+            },
+        }),
         bond_orders: electronic,
         orbitals: if electronic {
             OrbitalOutput::Levels
@@ -464,6 +474,7 @@ mod tests {
         Job {
             optimize: true,
             frequencies: false,
+            masses: None,
             numbers: vec![8, 1, 1],
             positions: vec![[0.; 3]; 3],
             charge: 0,

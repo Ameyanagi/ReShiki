@@ -1073,3 +1073,26 @@ fn manual_write_evidence_files() {
         std::fs::write(dir.join(name), bytes).expect("written");
     }
 }
+
+#[test]
+fn isotope_labels_give_explicit_analysis_masses() {
+    let frame = Frame {
+        numbers: vec![8, 1, 1],
+        positions_angstrom: START.to_vec(),
+        isotopes: vec![0, 2, 0],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let masses = isotope_masses(&frame).expect("a labelled atom");
+    assert!((masses[1] - 2.014101778).abs() < 1e-9, "deuterium");
+    assert!((masses[0] - 15.999).abs() < 0.01 && (masses[2] - 1.008).abs() < 0.001);
+    assert!(
+        isotope_masses(&Frame {
+            isotopes: vec![],
+            ..frame
+        })
+        .is_none()
+    );
+}
