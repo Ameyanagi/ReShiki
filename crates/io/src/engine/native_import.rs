@@ -625,8 +625,15 @@ fn restore_reaction_maps(
         }
         i
     }
-    // The step sides each atom is on. Saving pairs atoms by number, so a
-    // number may appear only once on each side of each step.
+    // Saving pairs atoms by equal numbers, so a chain keeps a pair on a step
+    // side only while no other atom of the chain is on that side too.
+    #[derive(Default)]
+    struct Chain {
+        // Atoms of the chain on each (step, product side).
+        sides: HashMap<(usize, bool), usize>,
+        // The step sides that hold one of the chain's pairs.
+        paired: HashSet<(usize, bool)>,
+    }
     let mut sides_of = HashMap::<u64, Vec<(usize, bool)>>::new();
     for (step, reaction) in doc.reactions.iter().skip(before).enumerate() {
         for (side, parts) in [(false, &reaction.reactants), (true, &reaction.products)] {
@@ -636,9 +643,9 @@ fn restore_reaction_maps(
         }
     }
     let mut parent: Vec<_> = (0..doc.atoms.len()).collect();
-    let mut sides: HashMap<usize, HashSet<(usize, bool)>> = HashMap::new();
+    let mut chains = HashMap::<usize, Chain>::new();
     let mut order = Vec::new();
-    for (reaction, &pairs) in doc.reactions.iter().skip(before).zip(maps) {
+    for (step, (reaction, &pairs)) in doc.reactions.iter().skip(before).zip(maps).enumerate() {
         let side = |parts: &[Participant]| {
             parts
                 .iter()
@@ -647,6 +654,17 @@ fn restore_reaction_maps(
         };
         let (reactants, products) = (side(&reaction.reactants), side(&reaction.products));
         let id = |i: usize| doc.atoms.get(i).map(|a| a.id);
+        let take = |chains: &mut HashMap<usize, Chain>, root: usize| {
+            chains.remove(&root).unwrap_or_else(|| Chain {
+                sides: id(root)
+                    .and_then(|id| sides_of.get(&id))
+                    .into_iter()
+                    .flatten()
+                    .map(|&slot| (slot, 1))
+                    .collect(),
+                paired: HashSet::new(),
+            })
+        };
         let mut paired = HashSet::new();
         for &[a, b] in pairs {
             if let Some((a, b)) = index(a).zip(index(b))
@@ -657,29 +675,39 @@ fn restore_reaction_maps(
             {
                 paired.extend([a, b]);
                 let (ra, rb) = (root(&parent, a), root(&parent, b));
-                if ra != rb {
-                    let on = |i| {
-                        id(i)
-                            .and_then(|id| sides_of.get(&id))
-                            .into_iter()
-                            .flatten()
-                            .copied()
-                            .collect::<HashSet<_>>()
-                    };
-                    let mut joined = sides.remove(&ra).unwrap_or_else(|| on(a));
-                    let other = sides.remove(&rb).unwrap_or_else(|| on(b));
-                    // A pair that would put one number twice on a step side
-                    // conflicts with earlier pairs, which keep their numbers.
-                    if !joined.is_disjoint(&other) {
-                        sides.insert(ra, joined);
-                        sides.insert(rb, other);
-                        continue;
+                let mut chain = take(&mut chains, ra);
+                let other = if ra == rb {
+                    Chain::default()
+                } else {
+                    take(&mut chains, rb)
+                };
+                let new = [(step, false), (step, true)];
+                let count = |slot| {
+                    chain.sides.get(slot).unwrap_or(&0) + other.sides.get(slot).unwrap_or(&0)
+                };
+                // A pair that would make a numbered step side ambiguous
+                // conflicts with earlier pairs, which keep their numbers.
+                if chain
+                    .paired
+                    .iter()
+                    .chain(&other.paired)
+                    .chain(&new)
+                    .any(|slot| count(slot) > 1)
+                {
+                    chains.insert(ra, chain);
+                    if ra != rb {
+                        chains.insert(rb, other);
                     }
-                    joined.extend(other);
-                    sides.insert(rb, joined);
-                    if let Some(slot) = parent.get_mut(ra) {
-                        *slot = rb;
-                    }
+                    continue;
+                }
+                for (slot, n) in other.sides {
+                    *chain.sides.entry(slot).or_default() += n;
+                }
+                chain.paired.extend(other.paired);
+                chain.paired.extend(new);
+                chains.insert(rb, chain);
+                if let Some(slot) = parent.get_mut(ra) {
+                    *slot = rb;
                 }
                 order.extend([a, b]);
             }

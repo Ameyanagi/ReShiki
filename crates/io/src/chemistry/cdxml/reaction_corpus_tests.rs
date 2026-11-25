@@ -831,3 +831,36 @@ async fn a_later_pair_never_gives_one_number_twice_to_a_step_side() {
         assert_eq!(saved_step_pairs(&saved), [first_step, vec![]], "{format}");
     }
 }
+
+#[tokio::test]
+async fn an_unmapped_step_holding_both_ends_keeps_the_earlier_pair() {
+    // A -> B is mapped; the later A + B -> C lists no atom pairs.
+    let source = r#"<?xml version="1.0" encoding="UTF-8"?>
+<CDXML><page id="1">
+<fragment id="2"><n id="3" p="0 0" Element="6"/></fragment>
+<arrow id="4" Tail3D="20 0 0" Head3D="80 0 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None"/>
+<fragment id="5"><n id="6" p="100 0" Element="8"/></fragment>
+<arrow id="7" Tail3D="20 60 0" Head3D="80 60 0" ArrowheadHead="Full" ArrowheadTail="None" ArrowheadType="Solid" FillType="None"/>
+<fragment id="8"><n id="9" p="100 60" Element="7"/></fragment>
+<scheme id="10">
+<step id="11" ReactionStepReactants="2" ReactionStepProducts="5" ReactionStepArrows="4" ReactionStepAtomMap="3 6"/>
+<step id="12" ReactionStepReactants="2 5" ReactionStepProducts="8" ReactionStepArrows="7"/>
+</scheme></page></CDXML>"#;
+    let binary = binary(source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.as_bytes().to_vec()), ("cdx", binary)] {
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        assert_eq!(document.reactions.len(), 2, "{format}");
+        let saved = String::from_utf8(
+            formats::write_with_engine(document, "cdxml", &engine)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let first_step = vec![("6".into(), "8".into())];
+        assert_eq!(saved_step_pairs(&saved), [first_step, vec![]], "{format}");
+    }
+}
