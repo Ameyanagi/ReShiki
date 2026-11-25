@@ -8,7 +8,7 @@ use crate::{
 const ARROW: u64 = 1;
 
 #[test]
-fn visual_sides_are_independent_of_horizontal_and_vertical_arrow_direction() {
+fn visual_sides_follow_the_dominant_axis_in_either_direction() {
     for (start, end, above, below) in [
         (
             Point::new(0., 0.),
@@ -19,6 +19,12 @@ fn visual_sides_are_independent_of_horizontal_and_vertical_arrow_direction() {
         (
             Point::new(0., 0.),
             Point::new(0., 100.),
+            Point::new(-25., 50.),
+            Point::new(25., 50.),
+        ),
+        (
+            Point::new(0., 0.),
+            Point::new(1., 100.),
             Point::new(-25., 50.),
             Point::new(25., 50.),
         ),

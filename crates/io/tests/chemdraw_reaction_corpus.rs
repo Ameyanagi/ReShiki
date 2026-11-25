@@ -331,6 +331,36 @@ async fn conflicting_or_out_of_role_atom_pairs_do_not_erase_other_maps() {
 }
 
 #[tokio::test]
+async fn repeated_atom_map_endpoints_keep_only_the_first_pair_in_a_step() {
+    let source = String::from_utf8(fixture("040-reaction-scheme-4", "cdxml"))
+        .unwrap()
+        .replace(
+            "ReactionStepAtomMapManual=\"3 12 4 13 5 14 6 15\"",
+            // Reuse reactant 3, then product 12. Neither later pair may map
+            // another atom; the remaining independent pairs still restore.
+            "ReactionStepAtomMapManual=\"3 12 3 13 4 12 5 14 6 15\"",
+        );
+    let binary = binary(&source);
+    let engine = LocalEngine::in_process();
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let (document, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert!(warnings.is_empty(), "{format}: {warnings:?}");
+        assert_eq!(document.reactions.len(), 1, "{format}");
+        let reaction = &document.reactions[0];
+        for participant in [&reaction.reactants[0], &reaction.products[0]] {
+            assert_eq!(
+                map_numbers(&document, &participant.atoms),
+                [1, 0, 2, 3],
+                "{format}"
+            );
+        }
+        reactions::validate(&document).unwrap();
+    }
+}
+
+#[tokio::test]
 async fn an_invalid_step_keeps_the_other_scheme_and_counts_only_its_own_loss() {
     let source = String::from_utf8(fixture("073-multischeme-2-schemes-1-steps-1", "cdxml"))
         .unwrap()
@@ -390,13 +420,11 @@ async fn save_loss_credits_the_restored_step_when_an_invalid_step_shares_its_arr
     }
 }
 
-#[tokio::test]
-async fn a_fresh_cycle_keeps_unrelated_explicit_steps_and_their_save_loss_credit() {
-    let engine = LocalEngine::in_process();
+async fn mixed_cycle_document(engine: &LocalEngine) -> Document {
     let mut document = formats::read_with_engine(
         fixture("073-multischeme-2-schemes-1-steps-1", "cdxml"),
         "cdxml",
-        &engine,
+        engine,
     )
     .await
     .unwrap();
@@ -420,6 +448,13 @@ async fn a_fresh_cycle_keeps_unrelated_explicit_steps_and_their_save_loss_credit
         intermediates.push(id);
     }
     cycles::make(&mut document, &intermediates).unwrap();
+    document
+}
+
+#[tokio::test]
+async fn a_fresh_cycle_keeps_unrelated_explicit_steps_and_their_save_loss_credit() {
+    let engine = LocalEngine::in_process();
+    let document = mixed_cycle_document(&engine).await;
     for format in ["cdxml", "cdx"] {
         let bytes = formats::write_with_engine(document.clone(), format, &engine)
             .await
@@ -447,6 +482,48 @@ async fn a_fresh_cycle_keeps_unrelated_explicit_steps_and_their_save_loss_credit
         assert_eq!(restored.reactions[0].products.len(), 2);
         assert_eq!(restored.reactions[1].reactants.len(), 2);
         assert_eq!(restored.reactions[1].products.len(), 1);
+        reactions::validate(&restored).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn an_edited_cycle_keeps_unrelated_explicit_steps_and_their_save_loss_credit() {
+    let engine = LocalEngine::in_process();
+    let document = mixed_cycle_document(&engine).await;
+    let xml = String::from_utf8(
+        formats::write_with_engine(document, "cdxml", &engine)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    // Change an ordinary condition caption while leaving the cycle seal.
+    let source = xml.replace("cat. 1.1", "cat. edited");
+    assert_ne!(source, xml);
+    let binary = binary(&source);
+    for (format, bytes) in [("cdxml", source.into_bytes()), ("cdx", binary)] {
+        let contents = compatibility::import_text(format, bytes.clone()).unwrap();
+        let loss = formats::chemdraw_loss(format, &contents);
+        // Only the text-intermediate cycle's unrepresentable steps are lost.
+        assert_eq!((loss.schemes, loss.steps), (1, 3), "{format}");
+        let (restored, warnings) = formats::read_with_warnings(bytes, format, &engine)
+            .await
+            .unwrap();
+        assert_eq!(warnings.len(), 2, "{format}: {warnings:?}");
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("catalytic cycle was edited"))
+        );
+        assert!(warnings.iter().any(|w| {
+            w.contains("external reaction roles and condition references are not retained")
+        }));
+        assert!(restored.graphics.iter().all(|g| g.cycle.is_none()));
+        assert_eq!(restored.reactions.len(), 2, "{format}");
+        assert_eq!(restored.reactions[0].reactants.len(), 1);
+        assert_eq!(restored.reactions[0].products.len(), 2);
+        assert_eq!(restored.reactions[1].reactants.len(), 2);
+        assert_eq!(restored.reactions[1].products.len(), 1);
+        assert!(restored.annotations.iter().any(|a| a.text == "cat. edited"));
         reactions::validate(&restored).unwrap();
     }
 }

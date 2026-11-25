@@ -21,6 +21,10 @@ EXPECTED = {
     "conditions": ((2, 1, 1),),
     "mapped": ((2, 1, 0),),
 }
+# Canonical mapped reaction SMILES fixes all six pairs to their molecular endpoints.
+EXPECTED_MAPPED_SMILES = (
+    "O[C:5]([CH3:4])=[O:6].[CH3:1][CH2:2][OH:3]>>[CH3:1][CH2:2][O:3][C:5]([CH3:4])=[O:6]",
+)
 
 
 def expected_counts(case, reader):
@@ -39,18 +43,9 @@ def read_rdkit(parse, path):
         (r.GetNumReactantTemplates(), r.GetNumProductTemplates(), r.GetNumAgentTemplates())
         for r in reactions
     )
-    mapped = tuple(
-        tuple(
-            sorted(
-                (atom.GetAtomMapNum(), atom.GetAtomicNum())
-                for molecule in side
-                for atom in molecule.GetAtoms()
-                if atom.GetAtomMapNum() > 0
-            )
-            for side in (reaction.GetReactants(), reaction.GetProducts())
-        )
-        for reaction in reactions
-    )
+    mapped = ()
+    if path.stem == "mapped":
+        mapped = tuple(rdChemReactions.ReactionToSmiles(r, canonical=True) for r in reactions)
     return counts, mapped
 
 
@@ -72,10 +67,10 @@ def check(path, reader, parse):
         passed = counts == expected
         detail = f"counts={format_counts(counts)}"
         if path.stem == "mapped" and reader != "Indigo":
-            for reactants, products in mapped:
-                unique = len({number for number, _ in reactants}) == len(reactants)
-                passed = passed and bool(reactants) and unique and reactants == products
-            detail += f" map_number_element_pairs={list(mapped)}"
+            passed = passed and mapped == EXPECTED_MAPPED_SMILES
+            detail += f" mapped_reaction_smiles={list(mapped)}"
+            if mapped != EXPECTED_MAPPED_SMILES:
+                detail += f" expected_mapped_reaction_smiles={list(EXPECTED_MAPPED_SMILES)}"
         if not passed:
             detail += f" expected={format_counts(expected)}"
     except Exception as error:

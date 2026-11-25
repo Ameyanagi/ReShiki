@@ -520,10 +520,18 @@ async fn a_file_changed_elsewhere_opens_as_saved_with_a_note() {
             "{format}: {:?}",
             response.warnings
         );
-        // One message: the cycle's, not also the steps'.
-        assert_eq!(response.warnings.len(), 1, "{:?}", response.warnings);
+        // The reversible step has two arrows and cannot restore as a native
+        // reaction; the other two steps still come back from the file.
+        assert!(
+            response
+                .warnings
+                .iter()
+                .any(|w| w == cdxml::schemes::NOTICE)
+        );
+        assert_eq!(response.warnings.len(), 2, "{:?}", response.warnings);
         let doc = response.document.unwrap();
         assert!(doc.graphics.iter().all(|g| g.cycle.is_none()));
+        assert_eq!(doc.reactions.len(), 2, "{format}");
         assert!(doc.arrows.len() >= 4, "{format}");
         assert!(doc.annotations.iter().any(|a| a.text == "ArY"));
     }
@@ -541,7 +549,7 @@ fn a_fresh_cycle_file_loses_no_steps_on_save() {
         assert_eq!((loss.schemes, loss.steps), (0, 0), "{format}");
     }
     let loss = crate::formats::chemdraw_loss("cdxml", &xml.replace(">ArX<", ">ArY<"));
-    assert_eq!((loss.schemes, loss.steps), (1, 3));
+    assert_eq!((loss.schemes, loss.steps), (1, 1));
 }
 
 #[tokio::test]

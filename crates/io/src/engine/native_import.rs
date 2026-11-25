@@ -348,7 +348,6 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             let (xml, variables) =
                 cdxml::drawing_variables(&drawing).map_err(|e| Error::Binary(e.to_string()))?;
             let mut warnings = Vec::from_iter(approximated);
-            let edited = matches!(found, Some(cycles::Found::Edited));
             let fresh = match found {
                 Some(cycles::Found::Fresh(payload)) => Some(payload),
                 Some(cycles::Found::Edited) => {
@@ -358,9 +357,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 None => None,
             };
             let schemes = cdxml::schemes::read(&xml).map_err(|e| Error::Binary(e.to_string()))?;
-            let schemes = if edited {
-                Vec::new()
-            } else if drawing != source {
+            let schemes = if drawing != source {
                 // Approximation can remove objects from a step's lists.
                 cdxml::schemes::read(&source).unwrap_or(schemes)
             } else {
@@ -634,12 +631,16 @@ fn restore_reaction_maps(
             .iter()
             .flat_map(|part| part.atoms.iter().copied())
             .collect();
+        let mut paired = HashSet::new();
         for &[a, b] in pairs {
             if let Some((a, b)) = index(a).zip(index(b))
                 && let Ok([a, b]) = doc.atoms.get_disjoint_mut([a, b])
                 && reactants.contains(&a.id)
                 && products.contains(&b.id)
+                && !paired.contains(&a.id)
+                && !paired.contains(&b.id)
             {
+                paired.extend([a.id, b.id]);
                 match (a.map_num, b.map_num) {
                     (0, 0) => {
                         while used.contains(&next) {

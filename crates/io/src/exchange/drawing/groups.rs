@@ -16,8 +16,34 @@ fn stereo_edges(doc: &Document) -> Vec<(u64, u64)> {
         .collect()
 }
 
-pub(super) fn fragment_components(doc: &Document) -> Vec<HashSet<u64>> {
-    connected_components(doc, stereo_edges(doc))
+#[derive(Default)]
+pub(super) struct Fragments {
+    components: Vec<HashSet<u64>>,
+    indices: HashMap<u64, usize>,
+}
+
+impl Fragments {
+    pub(super) fn of(doc: &Document) -> Self {
+        Self::new(doc, stereo_edges(doc))
+    }
+
+    fn new(doc: &Document, edges: Vec<(u64, u64)>) -> Self {
+        let components = connected_components(doc, edges);
+        let indices = components
+            .iter()
+            .enumerate()
+            .flat_map(|(i, ids)| ids.iter().map(move |&id| (id, i)))
+            .collect();
+        Self {
+            components,
+            indices,
+        }
+    }
+
+    pub(super) fn containing(&self, atom: u64) -> Option<(u64, &HashSet<u64>)> {
+        let &i = self.indices.get(&atom)?;
+        Some((i as u64, self.components.get(i)?))
+    }
 }
 
 fn connected_components(doc: &Document, stereo_edges: Vec<(u64, u64)>) -> Vec<HashSet<u64>> {
@@ -43,14 +69,6 @@ fn connected_components(doc: &Document, stereo_edges: Vec<(u64, u64)>) -> Vec<Ha
         components.push(component);
     }
     components
-}
-
-pub(super) fn fragment_indices(components: &[HashSet<u64>]) -> HashMap<u64, u64> {
-    components
-        .iter()
-        .enumerate()
-        .flat_map(|(i, ids)| ids.iter().map(move |&id| (id, i as u64)))
-        .collect()
 }
 
 impl Writer<'_> {
@@ -191,10 +209,10 @@ impl Writer<'_> {
         }
         Ok(())
     }
-    pub(super) fn groups(&mut self, reactions: &[steps::Preview]) -> Result<()> {
+    pub(super) fn groups(&mut self, reactions: &[steps::Preview]) -> Result<Fragments> {
         let doc = self.doc;
         if doc.groups.is_empty() && !self.split_fragments && reactions.is_empty() {
-            return Ok(());
+            return Ok(Fragments::default());
         }
         let sets: Vec<HashSet<_>> = doc
             .groups
@@ -223,20 +241,20 @@ impl Writer<'_> {
                 "A stereo group spans molecules that are grouped apart; group them together before editable export",
             ));
         }
-        let components = connected_components(doc, stereo_edges);
-        let indices = fragment_indices(&components);
+        let fragments = Fragments::new(doc, stereo_edges);
         if doc.groups.is_empty() && !self.split_fragments {
-            self.split_fragments = steps::needs_fragments(reactions, &indices);
+            self.split_fragments = steps::needs_fragments(reactions, &fragments);
             if !self.split_fragments {
-                return Ok(());
+                return Ok(Fragments::default());
             }
         }
+        let indices = &fragments.indices;
         let xml_indices = indices
             .iter()
-            .map(|(&atom, &index)| Ok((self.atom_xml(atom)?, index as usize)))
+            .map(|(&atom, &index)| Ok((self.atom_xml(atom)?, index)))
             .collect::<Result<HashMap<_, _>>>()?;
         let children = self.tree.node(self.fragment)?.children.clone();
-        let mut by_component = vec![Vec::new(); components.len()];
+        let mut by_component = vec![Vec::new(); fragments.components.len()];
         for n in children {
             self.spend(1)?;
             let el = self.tree.node(n)?;
@@ -244,7 +262,7 @@ impl Writer<'_> {
                 .atom_artwork
                 .get(&n)
                 .and_then(|id| indices.get(id))
-                .map(|&index| index as usize)
+                .copied()
                 .or(match el.tag {
                     "n" => self
                         .tree
@@ -281,7 +299,7 @@ impl Writer<'_> {
         for &n in &moved {
             self.tree.node_mut(n)?.parent = None;
         }
-        let mut targets = Vec::with_capacity(components.len());
+        let mut targets = Vec::with_capacity(by_component.len());
         for (index, children) in by_component.into_iter().enumerate() {
             let target = if index == 0 {
                 self.fragment
@@ -300,7 +318,7 @@ impl Writer<'_> {
         }
         for (id, n) in &mut self.objects {
             if let Some(&index) = indices.get(id) {
-                *n = *targets.get(index as usize).ok_or(Error::Limit)?;
+                *n = *targets.get(index).ok_or(Error::Limit)?;
             }
         }
         let mut containers = Vec::new();
@@ -368,7 +386,7 @@ impl Writer<'_> {
                 .unwrap_or(0);
             self.tree.set(n, "Z", z.to_string())?;
         }
-        Ok(())
+        Ok(fragments)
     }
     pub(super) fn abbreviations(&mut self) -> Result<()> {
         let doc = self.doc;

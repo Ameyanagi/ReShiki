@@ -4,7 +4,7 @@ use crate::{
     arrows::{ArrowStyle, Body, Preset},
     chemistry::cdxml::schemes,
     document::{Annotation, Arrow},
-    graphics::{Graphic, GraphicKind},
+    graphics::{Graphic, GraphicKind, LinePattern},
     reactions::{Participant, Reaction},
     scientific::SymbolKind,
 };
@@ -295,6 +295,40 @@ fn a_fragment_in_two_assigned_roles_has_no_step() {
 }
 
 #[test]
+fn a_fragment_with_an_unassigned_atom_omits_only_its_step() {
+    let mut doc = Document::default();
+    let nitrogen = doc.add_atom("N", Point::new(0., 0.));
+    let hydrogen = doc.add_atom("H", Point::new(42., 0.));
+    let oxygen = doc.add_atom("O", Point::new(42., 60.));
+    let fluorine = doc.add_atom("F", Point::new(300., 0.));
+    let chlorine = doc.add_atom("Cl", Point::new(600., 0.));
+    doc.add_bond(nitrogen, hydrogen, 1, "plain");
+    for (x, reactants, product) in [
+        (120., vec![nitrogen, hydrogen], fluorine),
+        (420., vec![fluorine], chlorine),
+    ] {
+        let mut reaction = Reaction::new(arrow(&mut doc, x, 0.));
+        reaction.reactants = vec![participant(reactants)];
+        reaction.products = vec![participant(vec![product])];
+        doc.reactions.push(reaction);
+    }
+    assert!(!has_unwritten_reactions(&doc));
+    assert_eq!(steps(&Xml::parse(&xml(&doc)).unwrap()).len(), 2);
+
+    doc.add_bond(hydrogen, oxygen, 0, "dotted");
+    assert!(has_unwritten_reactions(&doc));
+    let xml = xml(&doc);
+    let tree = Xml::parse(&xml).unwrap();
+    let steps = steps(&tree);
+    assert_eq!(steps.len(), 1);
+    let product = target(&tree, ids(steps[0], "ReactionStepProducts")[0]);
+    assert_eq!(
+        product.first_element_child().unwrap().attribute("Element"),
+        Some("17")
+    );
+}
+
+#[test]
 fn an_explicit_draft_with_an_empty_side_has_no_step() {
     for empty_reactants in [false, true] {
         let mut doc = Document::default();
@@ -388,10 +422,13 @@ fn an_agent_fragment_is_listed_once_on_the_first_assigned_side() {
 
 #[test]
 fn explicit_roles_keep_graphic_plusses_that_native_symbols_can_preserve() {
-    for axis_y in [
-        Point::new(0., 20.),
-        Point::new(0., 40.),
-        Point::new(12., 16.),
+    for (axis_x, axis_y, pattern, native) in [
+        ((20., 0.), (0., 20.), LinePattern::Solid, true),
+        ((20., 0.), (0., 40.), LinePattern::Solid, false),
+        ((20., 0.), (12., 16.), LinePattern::Solid, false),
+        ((12., 16.), (-16., 12.), LinePattern::Solid, false),
+        ((-20., 0.), (0., -20.), LinePattern::Solid, false),
+        ((20., 0.), (0., 20.), LinePattern::Dashed, false),
     ] {
         let mut doc = Document::default();
         let first = doc.add_atom("C", Point::new(0., 0.));
@@ -407,7 +444,9 @@ fn explicit_roles_keep_graphic_plusses_that_native_symbols_can_preserve() {
             Default::default(),
             false,
         );
-        plus.axis_y = axis_y;
+        plus.axis_x = Point::new(axis_x.0, axis_x.1);
+        plus.axis_y = Point::new(axis_y.0, axis_y.1);
+        plus.style.pattern = pattern;
         let parts = HashMap::from([(plus.id, plus.parts())]);
         doc.graphics.push(plus);
         let options = || Options {
@@ -422,7 +461,7 @@ fn explicit_roles_keep_graphic_plusses_that_native_symbols_can_preserve() {
         let explicit = write(&doc, options()).unwrap();
         let tree = Xml::parse(&explicit).unwrap();
         let step = steps(&tree)[0];
-        if axis_y == Point::new(0., 20.) {
+        if native {
             let plusses = ids(step, "ReactionStepPlusses");
             assert_eq!(plusses.len(), 1);
             assert_eq!(
@@ -441,7 +480,12 @@ fn explicit_roles_keep_graphic_plusses_that_native_symbols_can_preserve() {
                     .unwrap()
                     .descendants()
                     .filter(|n| n.has_tag_name("curve"))
-                    .map(|n| n.attribute("CurvePoints").unwrap().to_string())
+                    .map(|n| {
+                        (
+                            n.attribute("CurvePoints").unwrap().to_string(),
+                            n.attribute("CurveType").unwrap().to_string(),
+                        )
+                    })
                     .collect::<Vec<_>>()
             };
             assert!(!curves(&explicit).is_empty());

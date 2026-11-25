@@ -8,13 +8,13 @@ use crate::{
 use std::collections::HashSet;
 
 pub(super) fn native_plus(graphic: &Graphic) -> bool {
-    if graphic.kind != GraphicKind::Symbol(SymbolKind::Plus) {
-        return false;
-    }
     let (x, y) = (graphic.axis_x, graphic.axis_y);
-    let (xx, yy) = (x.x * x.x + x.y * x.y, y.x * y.x + y.y * y.y);
-    let scale = xx.max(yy);
-    scale > 1e-6 && (xx - yy).abs() <= scale * 1e-4 && (x.x * y.x + x.y * y.y).abs() <= scale * 1e-4
+    graphic.kind == GraphicKind::Symbol(SymbolKind::Plus)
+        && graphic.style.pattern == LinePattern::Solid
+        && x.x > 1e-3
+        && x.y == 0.
+        && y.x == 0.
+        && y.y.abs() == x.x
 }
 
 fn head_attributes(heads: &PathHeads, scalar: fn(f32) -> f64) -> [(&'static str, String); 6] {
@@ -602,13 +602,6 @@ impl Writer<'_> {
                 let center = P::from(g.origin);
                 let axis = P::from(g.axis_x);
                 let style = self.chemdraw_style(&g.style, false);
-                let line_type = match style.pattern {
-                    LinePattern::Dotted => {
-                        return Err(invalid("Dotted graphics require native or image export"));
-                    }
-                    LinePattern::Dashed => "Dashed",
-                    _ => "Solid",
-                };
                 let id = self.id()?;
                 let color = self.color(style.stroke)?;
                 let n = self.tree.add(
@@ -620,7 +613,7 @@ impl Writer<'_> {
                         ("GraphicType", "Symbol".into()),
                         ("SymbolType", "Plus".into()),
                         ("color", color),
-                        ("LineType", line_type.into()),
+                        ("LineType", "Solid".into()),
                         ("LineWidth", number(real(style.width_pt))),
                         (
                             "BoundingBox",

@@ -1,5 +1,5 @@
 //! ChemDraw reaction steps for ordinary arrows and catalytic cycles.
-use super::{Key, P, Result, Writer, invalid, objects};
+use super::{Key, P, Result, Writer, groups::Fragments, invalid, objects};
 use crate::{
     arrow_labels::{self, Side},
     document::{Arrow, Point},
@@ -158,7 +158,7 @@ impl<'a> Writer<'a> {
             .collect()
     }
 
-    fn reaction_step(&self, preview: Preview<'a>) -> Result<Option<Step>> {
+    fn reaction_step(&self, preview: Preview<'a>, fragments: &Fragments) -> Result<Option<Step>> {
         let Preview {
             reaction,
             arrow,
@@ -166,7 +166,8 @@ impl<'a> Writer<'a> {
             plusses,
         } = preview;
         let Some([reactants, products, _]) = participant_fragments(&reaction, |atom| {
-            self.xml_id(self.outer_fragment(atom).ok()??).ok()
+            let (_, atoms) = fragments.containing(atom)?;
+            Some((self.xml_id(self.outer_fragment(atom).ok()??).ok()?, atoms))
         }) else {
             return Ok(None);
         };
@@ -268,11 +269,15 @@ impl<'a> Writer<'a> {
         mapped
     }
 
-    pub(super) fn reaction_schemes(&mut self, previews: Vec<Preview<'a>>) -> Result<()> {
+    pub(super) fn reaction_schemes(
+        &mut self,
+        previews: Vec<Preview<'a>>,
+        fragments: &Fragments,
+    ) -> Result<()> {
         let mut steps = BTreeMap::new();
         let mut by_fragment = HashMap::<_, Vec<_>>::new();
         for (i, preview) in previews.into_iter().enumerate() {
-            if let Some(step) = self.reaction_step(preview)? {
+            if let Some(step) = self.reaction_step(preview, fragments)? {
                 for id in step.reactants.iter().chain(&step.products) {
                     by_fragment.entry(*id).or_default().push(i);
                 }
@@ -318,21 +323,28 @@ fn dedup(ids: &mut Vec<u64>) {
     ids.retain(|id| seen.insert(*id));
 }
 
-pub(super) fn participant_fragments(
+pub(super) fn participant_fragments<'a>(
     reaction: &Reaction,
-    fragment: impl Fn(u64) -> Option<u64>,
+    fragment: impl Fn(u64) -> Option<(u64, &'a HashSet<u64>)>,
 ) -> Option<[Vec<u64>; 3]> {
     let ids = |parts: &[Participant]| {
+        let role_atoms: HashSet<_> = parts.iter().flat_map(|p| p.atoms.iter().copied()).collect();
         let mut ids = Vec::new();
+        let mut seen = HashSet::new();
         for part in parts {
             if part.atoms.is_empty() {
                 return None;
             }
             for &atom in &part.atoms {
-                ids.push(fragment(atom)?);
+                let (id, atoms) = fragment(atom)?;
+                if seen.insert(id) {
+                    if !atoms.is_subset(&role_atoms) {
+                        return None;
+                    }
+                    ids.push(id);
+                }
             }
         }
-        dedup(&mut ids);
         Some(ids)
     };
     let reactants = ids(&reaction.reactants)?;
@@ -350,8 +362,8 @@ pub(super) fn participant_fragments(
     Some([reactants, products, agents])
 }
 
-pub(super) fn needs_fragments(previews: &[Preview<'_>], fragments: &HashMap<u64, u64>) -> bool {
+pub(super) fn needs_fragments(previews: &[Preview<'_>], fragments: &Fragments) -> bool {
     previews
         .iter()
-        .any(|p| participant_fragments(&p.reaction, |id| fragments.get(&id).copied()).is_some())
+        .any(|p| participant_fragments(&p.reaction, |id| fragments.containing(id)).is_some())
 }

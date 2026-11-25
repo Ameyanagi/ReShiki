@@ -214,10 +214,10 @@ pub fn has_unwritten_reactions(document: &Document) -> bool {
     if lowered.reactions.len() < document.reactions.len() {
         return true;
     }
-    let fragments = groups::fragment_indices(&groups::fragment_components(&lowered));
+    let fragments = groups::Fragments::of(&lowered);
     document.reactions.iter().any(|reaction| {
         crate::reactions::preview(document, reaction.arrow).map_or(true, |reaction| {
-            steps::participant_fragments(&reaction, |atom| fragments.get(&atom).copied()).is_none()
+            steps::participant_fragments(&reaction, |atom| fragments.containing(atom)).is_none()
         })
     })
 }
@@ -447,7 +447,7 @@ fn write_impl(
         }
     }
     w.crossings(middle)?;
-    w.groups(&reactions)?;
+    let fragments = w.groups(&reactions)?;
     w.abbreviations()?;
     w.orbitals_behind_labels()?;
     // Abbreviations move bonds into nested fragments. Native areas must be
@@ -475,7 +475,7 @@ fn write_impl(
     }
     let payload = w.cycles(&written_cycles)?;
     w.tables()?;
-    w.reaction_schemes(reactions)?;
+    w.reaction_schemes(reactions, &fragments)?;
     let (_, hi) = w.painted_bounds;
     let right = (hi.x * w.scale + w.shift.x + 30.).ceil().max(612.);
     let bottom = (hi.y * w.scale + w.shift.y + 30.).ceil().max(792.);
