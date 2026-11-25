@@ -520,7 +520,7 @@ impl App {
             let Some(mut config) = super::results::config(
                 &result,
                 shown.frame,
-                shown.info,
+                shown.atoms,
                 self.xtb.settings.threads(),
             ) else {
                 return Task::none();
@@ -786,7 +786,7 @@ impl App {
         let Some(mut config) = super::results::config(
             &result,
             shown.frame,
-            shown.info,
+            shown.atoms,
             self.xtb.settings.threads(),
         ) else {
             self.status = "The Calculate card cannot repeat this calculation".into();

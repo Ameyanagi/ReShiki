@@ -121,7 +121,7 @@ impl App {
             && self.xtb_model_at_result(shown)
             && unavailable().is_none()
             && self.tab.xtb.run.is_none()
-            && super::super::results::config(&shown.stored.result, shown.frame, shown.info, 1)
+            && super::super::results::config(&shown.stored.result, shown.frame, shown.atoms, 1)
                 .is_some();
         // The dock's body is short: the explanation goes in the inspector only.
         let detail = if can_push && self.xtb.dock.inspector {
