@@ -1335,6 +1335,16 @@ impl super::App {
     ) {
         match result {
             Ok(Some(saved)) => {
+                // The other ChemDraw format served this one file.
+                let chemical = self.tab.inspector_ui.chemical;
+                if chemical.chemdraw()
+                    && saved
+                        .path
+                        .extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case(chemical.code()))
+                {
+                    self.tab.inspector_ui.chemical = self.appearance.chemdraw_format.into();
+                }
                 self.status =
                     export_status(&saved.path, &saved.details, cfg!(target_arch = "wasm32"));
                 self.error = false;
