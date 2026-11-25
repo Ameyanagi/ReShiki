@@ -254,6 +254,8 @@ fn files_opened_together_ask_in_turn() {
     // sends Next after the chosen frame has opened).
     send(&mut app, Action::Close);
     assert!(app.frames_import.is_none());
+    // A second click landing before Next leaves the waiting files alone.
+    send(&mut app, Action::Import);
     send(&mut app, Action::Next);
     assert_eq!(path(&app), Some(PathBuf::from("b.xyz")));
     send(&mut app, Action::Import);
