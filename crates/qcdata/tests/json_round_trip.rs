@@ -1,8 +1,8 @@
 use reshiki_qcdata::{
     AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Endpoints, Error, Frame,
-    MAX_SAVED_CONFORMERS, OrbitalSet, Orbitals, Provenance, Settings, Shell, SolvationState,
-    Solvent, SolventCorrection, SolventModel, Source, Spin, Status, Task, Thermo, Trajectory,
-    Vibrations, XtbMethod, XtbSettings,
+    MAX_SAVED_CONFORMERS, OrbitalSet, Orbitals, Provenance, ScfRetry, Settings, Shell,
+    SolvationState, Solvent, SolventCorrection, SolventModel, Source, Spin, Status, Task, Thermo,
+    Trajectory, Vibrations, XtbConventions, XtbMethod, XtbSettings,
 };
 
 fn assert_compact(expected: &[f64], decoded: &mut [f64], quantized: bool) {
@@ -259,8 +259,9 @@ fn calculated_result_round_trips_with_solvent_settings() {
     let mut calculated = original.light(&[]);
     calculated.settings = Settings::Xtb(XtbSettings {
         method: XtbMethod::GXtb,
+        conventions: XtbConventions::Xtb68,
         solvent: Some(Solvent {
-            model: SolventModel::Alpb,
+            model: SolventModel::Gbsa,
             name: "water".into(),
             state: SolvationState::Bar1mol,
             correction: Some(SolventCorrection::Gfn2),
@@ -268,6 +269,10 @@ fn calculated_result_round_trips_with_solvent_settings() {
         electronic_temperature_k: Some(300.0),
         accuracy: Some(0.1),
         max_iterations: Some(256),
+        scf_retries: vec![ScfRetry {
+            electronic_temperature_k: Some(1000.0),
+            max_iterations: None,
+        }],
         gfnff: None,
     });
     calculated.provenance.program = "ReShiki".into();
@@ -279,6 +284,13 @@ fn calculated_result_round_trips_with_solvent_settings() {
     calculated.keep_full = false;
     calculated.omitted_bytes = None;
     let value = serde_json::to_value(&calculated).unwrap();
+    let xtb = &value["settings"]["xtb"];
+    assert_eq!(xtb["conventions"], "xtb-6.8");
+    assert_eq!(xtb["solvent"]["model"], "gbsa");
+    assert_eq!(
+        xtb["scf_retries"],
+        serde_json::json!([{ "electronic_temperature_k": 1000.0 }])
+    );
     let decoded: CalcResult = serde_json::from_value(value.clone()).unwrap();
     decoded.validate(&frame).unwrap();
     assert_eq!(decoded, calculated);
@@ -523,10 +535,12 @@ fn xtb_settings_require_calculated_provenance_with_revision() {
     let (frame, mut result) = imported();
     result.settings = Settings::Xtb(XtbSettings {
         method: XtbMethod::Gfn2Xtb,
+        conventions: XtbConventions::Axtb,
         solvent: None,
         electronic_temperature_k: None,
         accuracy: None,
         max_iterations: None,
+        scf_retries: vec![],
         gfnff: None,
     });
     assert!(result.validate(&frame).is_err());
@@ -538,6 +552,11 @@ fn xtb_settings_require_calculated_provenance_with_revision() {
         engine_revision: "v1.2.3".into(),
     };
     result.validate(&frame).unwrap();
+    let value = serde_json::to_value(&result).unwrap();
+    assert!(value["settings"]["xtb"].get("conventions").is_none());
+    assert!(value["settings"]["xtb"].get("scf_retries").is_none());
+    let decoded: CalcResult = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded.settings, result.settings);
 }
 
 #[test]

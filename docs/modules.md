@@ -267,6 +267,7 @@ explains how the crates and modules fit together.
 - `src/cli.rs`: `reshiki --cli`
 - `src/cli/analyze.rs`: `reshiki --cli analyze`
 - `src/cli/args.rs`: Token parsing for the grammar in `commands::COMMANDS`, described by `reshiki --cli help`.
+- `src/cli/calc.rs`: CLI-only calculation sessions call the xTB worker directly.
 - `src/cli/commands.rs`: The command grammar and help text for `reshiki --cli`.
 - `src/cli/compose.rs`: `reshiki --cli compose`
 - `src/cli/convert.rs`: `reshiki --cli convert`
@@ -991,6 +992,16 @@ explains how the crates and modules fit together.
 
 - `crates/web-worker/src/lib.rs`: The browser editor's Web Worker for heavy jobs, as a WebAssembly module of its own that `packages/editor/src/worker.js` runs.
 
+## reshiki-xtb-worker
+
+- `crates/xtb-worker/src/ao.rs`: Conversion from axtb's spherical AOs to qcdata's unit-norm canonical AOs.
+- `crates/xtb-worker/src/client.rs`: Persistent, synchronous supervision of one bounded xTB worker.
+- `crates/xtb-worker/src/engine.rs`: Warm-started calculations through the pinned axtb driver.
+- `crates/xtb-worker/src/lib.rs`: The xTB protocol, client and engine-backed worker.
+- `crates/xtb-worker/src/protocol.rs`: Version 2 of the ReShiki xTB worker wire format.
+- `crates/xtb-worker/src/protocol/wire_orbitals.rs`: Orbital metadata on the wire.
+- `crates/xtb-worker/src/worker.rs`: Request dispatch and error responses for the xTB worker.
+
 ## reshiki-geometry
 
 - `native/geometry/src/cage.rs`: Conservative admission of closed sp2 carbon cages and their geometry.
@@ -1017,7 +1028,7 @@ explains how the crates and modules fit together.
 
 ## reshiki-process
 
-- `native/process/src/lib.rs`: Safe, naming-specific child limits.
+- `native/process/src/lib.rs`: Safe child process supervision.
 - `native/process/src/unix.rs`
 - `native/process/src/windows.rs`: Windows 10+ creation-time job membership; no spawn/assign interval.
 

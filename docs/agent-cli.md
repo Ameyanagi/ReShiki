@@ -31,6 +31,7 @@ has every help text as the program prints it.
 | [predict-nmr](#predict-nmr)   | Print predicted NMR shifts as one JSON line                       |
 | [export-input](#export-input) | Write a quantum-chemistry input from an XYZ structure             |
 | [name](#name)                 | Print the systematic name of a structure                          |
+| [calc](#calc)                 | Print an xTB calculation as one JSON line                         |
 | [pieces](#pieces)             | Check or render equipment piece files                             |
 | [info](#info)                 | Print versions, limits and formats as one JSON line               |
 | [tools](#tools)               | Print the agent tool catalog as one JSON line                     |
@@ -42,7 +43,7 @@ has every help text as the program prints it.
 
 - Each run takes one command. A command accepts only its own options; any
   other option is a usage error, such as `render does not take --pages`.
-- Each option is allowed once. A second `--to` gives `--to given more than once`.
+- Each option is allowed once, except the repeatable `calc --scf-retry` ladder. A second `--to` gives `--to given more than once`.
 - An option that takes a value uses the next argument as the value, even one
   that starts with `-`.
 - `--` ends the options. Every argument after it is the input, so a file
@@ -630,9 +631,12 @@ limits and formats under `value`. `cli`, beside `value`, lists the formats the
 command line reads and writes. `grants` and `files` describe the file tools of
 the MCP server; the command line uses neither.
 
-`reshiki --version` (or `reshiki --cli --version`) prints only the
-application version, such as `reshiki 0.17.1`, and exits without opening a
-window.
+`reshiki --version` (or `reshiki --cli --version`) prints the application
+version, such as `reshiki 0.17.1`, followed by an xTB status line, and exits
+without opening a window. The second line is `xTB: not included in this build`
+or `xTB: included (axtb VERSION, LICENSE, source URL)`, with the engine version,
+license and pinned fork source URL. See [xTB licensing and packaging](xtb-licensing.md)
+for the builds that include it.
 
 <details>
 <summary>Output of <code>reshiki --cli info</code>, shown on several lines</summary>
@@ -838,6 +842,36 @@ several lines:
 }
 ```
 
+## calc
+
+```text
+reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--gradient] [--wbo] FILE.xyz
+```
+
+Runs one GFN2-xTB (default), GFN-FF or g-xTB 2.0.1 calculation through the
+[isolated worker](xtb-worker.md) on the first frame of an XYZ file (1 to 500
+atoms, Ångström). It has no MCP tool. `--task` is `energy` (default),
+`gradient`, `hessian` (with vibrations and thermochemistry, at most 200 atoms)
+or `orbitals` (every coefficient row and the basis); `--gradient` and `--wbo`
+(bond orders) add to any task; `--energy` is accepted for compatibility.
+`--scf-retry K[:N]` repeats to build an SCF retry ladder. g-xTB in solvent
+needs `--solvent-correction gfn2`. GFN-FF takes no solvent, SCF settings,
+orbitals or bond orders. Unsupported combinations exit 1 with the capability
+message. The options and output are described in
+[the worker's command line](xtb-worker.md#command-line).
+
+It prints the worker's `Computed` JSON plus `engine`, with binary arrays as
+`{"shape":[rows,columns],"values":[...]}`, and no experimental envelope. A gap
+below 0.1 eV also writes a warning to stderr and leaves the exit status
+unchanged.
+
+In a build without xTB, it writes `reshiki: xTB is not included in this build`
+to stderr and exits 1.
+
 ## help
 
 ```text
@@ -862,7 +896,8 @@ Prints the overview, or one command's help. `--help` and `-h` work in place of
 Standard output carries only the result: the file, one JSON line, or one
 receipt line with `--receipt`. With `-o OUTPUT` and no `--receipt` it stays
 empty. Every JSON line has `"experimental": true` and an `api` object with
-`operation_api` and `stability`, except the raw schema from `schema proposal`.
+`operation_api` and `stability`, except the raw schema from `schema proposal`
+and the worker calculation result from `calc`.
 
 Messages go to standard error, one per line:
 

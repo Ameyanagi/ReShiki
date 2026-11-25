@@ -136,6 +136,7 @@ class NativeRuntimeTests(unittest.TestCase):
                 "architecture": "arm64",
                 "inchi": {"version": "1.07.5"},
                 "geometry": {"version": "2026.03.6"},
+                "xtb": {"included": False},
             }
             with zipfile.ZipFile(archive, "w") as stream:
                 stream.writestr("package/build.json", json.dumps(metadata))
@@ -145,6 +146,7 @@ class NativeRuntimeTests(unittest.TestCase):
                 patch("build_release.platform.system", return_value="Windows"),
                 patch("build_release.verify_binary"),
                 patch("build_release.verify_inchi_worker") as helper,
+                patch("build_release.verify_xtb_worker") as xtb,
                 patch(
                     "build_release.verify_runtime", side_effect=lambda *_: order.append("runtime")
                 ) as check,
@@ -156,6 +158,7 @@ class NativeRuntimeTests(unittest.TestCase):
             ):
                 build_release.verify_archive(archive)
             self.assertEqual(helper.call_args.args[0].name, "reshiki.exe")
+            xtb.assert_called_once_with(helper.call_args.args[0], metadata)
             self.assertEqual(check.call_args.args[0].parent, check.call_args.args[1])
             self.assertEqual(check.call_count, 1)
             self.assertEqual(order, ["runtime", "agent"])
@@ -170,6 +173,7 @@ class NativeRuntimeTests(unittest.TestCase):
                 "architecture": "arm64",
                 "inchi": {"version": "1.07.5"},
                 "geometry": {"version": "2026.03.6"},
+                "xtb": {"included": True, "version": "0.2.0", "rev": "a" * 40},
             }
             with zipfile.ZipFile(archive, "w") as stream:
                 stream.writestr("package/build.json", json.dumps(metadata))
@@ -188,6 +192,7 @@ class NativeRuntimeTests(unittest.TestCase):
                 patch("build_release.run", side_effect=run),
                 patch("build_release.verify_binary"),
                 patch("build_release.verify_inchi_worker"),
+                patch("build_release.verify_xtb_worker") as xtb,
                 patch(
                     "build_release.verify_runtime", side_effect=lambda *_: order.append("runtime")
                 ) as check,
@@ -201,6 +206,9 @@ class NativeRuntimeTests(unittest.TestCase):
             ):
                 build_release.verify_archive(archive, signed=True)
             signature.assert_called_once()
+            xtb.assert_called_once_with(
+                signature.call_args.args[0] / "Contents/MacOS/reshiki", metadata
+            )
             self.assertEqual(order, ["runtime", "agent"])
             agent.assert_called_once_with(*check.call_args.args, quarantine=True)
             geometry.assert_called_once_with(

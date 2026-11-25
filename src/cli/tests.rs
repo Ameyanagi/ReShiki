@@ -1,13 +1,17 @@
 use super::{
     args::{
-        Compose, Convert, Export, Input, Labels, Name, Output, PredictNmr, Preview, Render, Schema,
-        Skill, Source, SvgText, parse,
+        Calc, CalcTask, Compose, Convert, Export, Input, Labels, Name, Output, PredictNmr, Preview,
+        Render, Schema, Skill, Source, SvgText, parse,
     },
     *,
 };
 use reshiki_agent::ops::{
     budget::Budgets,
     documents::{EXPORT_FORMATS, IMPORT_FORMATS},
+};
+use reshiki_xtb_worker::protocol::{
+    Conventions, Method, ScfRetry, ScfSettings, SolvationState, Solvent, SolventCorrection,
+    SolventModel,
 };
 use serde_json::Value;
 use std::path::PathBuf;
@@ -79,6 +83,7 @@ async fn help_describes_one_command() {
         ("predict-nmr", "Usage: reshiki --cli predict-nmr "),
         ("export-input", "Usage: reshiki --cli export-input "),
         ("name", "Usage: reshiki --cli name "),
+        ("calc", "Usage: reshiki --cli calc "),
         ("info", "Usage: reshiki --cli info"),
         ("tools", "Usage: reshiki --cli tools"),
         ("schema", "Usage: reshiki --cli schema NAME"),
@@ -511,15 +516,330 @@ async fn unknown_commands_point_to_help() {
 async fn version_prints_the_app_version_and_exits() {
     let (code, out, err) = call(&["--version"]).await;
     assert_eq!(code, SUCCESS);
+    let mut lines = out.lines();
     assert_eq!(
-        out,
-        format!("reshiki {}\n", crate::updates::CURRENT_VERSION)
+        lines.next(),
+        Some(format!("reshiki {}", crate::updates::CURRENT_VERSION).as_str())
     );
+    #[cfg(feature = "xtb")]
+    {
+        use reshiki_xtb_worker::{AXTB_LICENSE, AXTB_REV, AXTB_SOURCE, AXTB_VERSION};
+        assert_eq!(lines.next(), Some(format!("xTB: included (axtb {AXTB_VERSION}, {AXTB_LICENSE}, source {AXTB_SOURCE}/tree/{AXTB_REV})").as_str()));
+    }
+    #[cfg(not(feature = "xtb"))]
+    assert_eq!(lines.next(), Some("xTB: not included in this build"));
+    assert_eq!(lines.next(), None);
+    assert!(out.ends_with('\n'));
     assert!(err.is_empty());
     let (code, out, err) = call(&["--version", "x"]).await;
     assert_eq!(code, USAGE);
     assert!(out.is_empty());
     assert_eq!(err, "reshiki: --version takes no arguments\n");
+}
+
+#[test]
+fn calc_parses_its_default_task_compatibility_flags_and_optional_settings() {
+    assert_eq!(
+        parsed(&["calc", "--energy", "water.xyz"]),
+        Ok(Command::Calc(Calc {
+            file: "water.xyz".into(),
+            task: CalcTask::Energy,
+            method: Method::Gfn2,
+            gradient: false,
+            bond_orders: false,
+            charge: 0,
+            uhf: None,
+            conventions: Conventions::Axtb,
+            solvent: None,
+            scf: None,
+            threads: 1,
+        }))
+    );
+    assert_eq!(
+        parsed(&[
+            "calc",
+            "--gradient",
+            "--charge",
+            "-1",
+            "water.XYZ",
+            "--uhf",
+            "1",
+            "--conventions",
+            "xtb-6.8",
+            "--energy"
+        ]),
+        Ok(Command::Calc(Calc {
+            file: "water.XYZ".into(),
+            task: CalcTask::Energy,
+            method: Method::Gfn2,
+            gradient: true,
+            bond_orders: false,
+            charge: -1,
+            uhf: Some(1),
+            conventions: Conventions::Xtb68,
+            solvent: None,
+            scf: None,
+            threads: 1,
+        }))
+    );
+    assert_eq!(
+        parsed(&[
+            "calc",
+            "--energy",
+            "--conventions",
+            "axtb",
+            "--",
+            "-water.xyz"
+        ]),
+        Ok(Command::Calc(Calc {
+            file: "-water.xyz".into(),
+            task: CalcTask::Energy,
+            method: Method::Gfn2,
+            gradient: false,
+            bond_orders: false,
+            charge: 0,
+            uhf: None,
+            conventions: Conventions::Axtb,
+            solvent: None,
+            scf: None,
+            threads: 1,
+        }))
+    );
+    for tokens in [
+        vec!["calc"],
+        vec!["calc", "--energy"],
+        vec!["calc", "--energy", "-"],
+        vec!["calc", "--energy", "water.mol"],
+        vec!["calc", "--energy", "a.xyz", "b.xyz"],
+        vec!["calc", "--energy", "--energy", "water.xyz"],
+        vec!["calc", "--energy", "--charge", "2147483648", "water.xyz"],
+        vec!["calc", "--energy", "--charge", "1.5", "water.xyz"],
+        vec!["calc", "--energy", "--uhf", "-1", "water.xyz"],
+        vec!["calc", "--energy", "--uhf", "4294967296", "water.xyz"],
+        vec!["calc", "--energy", "--uhf", "1.5", "water.xyz"],
+        vec!["calc", "--energy", "--charge"],
+        vec!["calc", "--energy", "--uhf"],
+        vec!["calc", "--energy", "--from", "xyz", "water.xyz"],
+    ] {
+        assert!(parsed(&tokens).is_err(), "{tokens:?}");
+    }
+}
+
+#[test]
+fn calc_parses_tasks_solvent_and_a_repeatable_scf_ladder() {
+    let Command::Calc(default) = parsed(&["calc", "water.xyz"]).unwrap() else {
+        panic!("calc command");
+    };
+    assert_eq!(default.task, CalcTask::Energy);
+    assert_eq!(default.method, Method::Gfn2);
+    assert!(!default.gradient);
+    for (name, task) in [
+        ("energy", CalcTask::Energy),
+        ("gradient", CalcTask::Gradient),
+        ("hessian", CalcTask::Hessian),
+        ("orbitals", CalcTask::Orbitals),
+    ] {
+        let Command::Calc(command) = parsed(&["calc", "--task", name, "water.xyz"]).unwrap() else {
+            panic!("calc command");
+        };
+        assert_eq!(command.task, task);
+    }
+    let Command::Calc(command) = parsed(&[
+        "calc",
+        "--task",
+        "orbitals",
+        "--method",
+        "gxtb",
+        "--gbsa",
+        "water",
+        "--solvent-correction",
+        "gfn2",
+        "--etemp",
+        "0",
+        "--accuracy",
+        "0.5",
+        "--max-iter",
+        "50",
+        "--scf-retry",
+        "300:100",
+        "--scf-retry",
+        "1000",
+        "--threads",
+        "4",
+        "--gradient",
+        "--wbo",
+        "water.xyz",
+    ])
+    .unwrap() else {
+        panic!("calc command");
+    };
+    assert_eq!(command.task, CalcTask::Orbitals);
+    assert_eq!(command.method, Method::Gxtb);
+    assert_eq!(
+        command.solvent,
+        Some(Solvent {
+            model: SolventModel::Gbsa,
+            name: "water".into(),
+            state: SolvationState::Gsolv,
+            correction: Some(SolventCorrection::Gfn2),
+        })
+    );
+    assert_eq!(
+        command.scf,
+        Some(ScfSettings {
+            accuracy: Some(0.5),
+            electronic_temperature_k: Some(0.0),
+            max_iterations: Some(50),
+            retries: vec![
+                ScfRetry {
+                    electronic_temperature_k: Some(300.0),
+                    max_iterations: Some(100)
+                },
+                ScfRetry {
+                    electronic_temperature_k: Some(1000.0),
+                    max_iterations: None
+                },
+            ],
+        })
+    );
+    assert!(command.gradient && command.bond_orders);
+    assert_eq!(command.threads, 4);
+    assert!(parsed(&["calc", "--etemp", "300", "--scf-retry", "300", "water.xyz"]).is_ok());
+}
+
+#[test]
+fn calc_allows_lower_retry_temperatures_when_etemp_is_omitted() {
+    let Command::Calc(command) = parsed(&[
+        "calc",
+        "--scf-retry",
+        "0",
+        "--scf-retry",
+        "299:100",
+        "water.xyz",
+    ])
+    .unwrap() else {
+        panic!("calc command");
+    };
+    assert_eq!(
+        command.scf,
+        Some(ScfSettings {
+            accuracy: None,
+            electronic_temperature_k: None,
+            max_iterations: None,
+            retries: vec![
+                ScfRetry {
+                    electronic_temperature_k: Some(0.0),
+                    max_iterations: None,
+                },
+                ScfRetry {
+                    electronic_temperature_k: Some(299.0),
+                    max_iterations: Some(100),
+                },
+            ],
+        })
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn calc_rejects_retries_below_explicit_etemp_before_io() {
+    for options in [
+        vec!["--etemp", "1000", "--scf-retry", "300"],
+        vec!["--scf-retry", "300:100", "--etemp", "1000"],
+        vec![
+            "--etemp",
+            "1000",
+            "--scf-retry",
+            "2000",
+            "--scf-retry",
+            "300",
+        ],
+    ] {
+        let mut tokens = vec!["calc", "unread.xyz"];
+        tokens.extend(options);
+        let (code, out, err) = call(&tokens).await;
+        assert_eq!(code, USAGE, "{tokens:?}");
+        assert!(out.is_empty());
+        assert_eq!(
+            err,
+            "reshiki: --scf-retry temperature must be at least the explicit --etemp\n"
+        );
+    }
+}
+
+#[test]
+fn calc_rejects_invalid_task_solvent_and_scf_syntax() {
+    for options in [
+        vec!["--task", "optimize"],
+        vec!["--method", "gxtb-v1.1"],
+        vec!["--alpb", "water", "--gbsa", "water"],
+        vec!["--alpb", ""],
+        vec!["--solvent-correction", "gfn2"],
+        vec!["--alpb", "water", "--solvent-correction", "gxtb"],
+        vec!["--etemp", "-1"],
+        vec!["--etemp", "NaN"],
+        vec!["--accuracy", "0"],
+        vec!["--accuracy", "inf"],
+        vec!["--max-iter", "0"],
+        vec!["--max-iter", "1.5"],
+        vec!["--scf-retry", ""],
+        vec!["--scf-retry", "300:"],
+        vec!["--scf-retry", "300:1:2"],
+        vec!["--threads", "0"],
+        vec!["--threads", "65"],
+        vec!["--method", "gfn2", "--method", "gfnff"],
+        vec!["--wbo", "--wbo"],
+    ] {
+        let mut tokens = vec!["calc", "water.xyz"];
+        tokens.extend(options);
+        assert!(parsed(&tokens).is_err(), "{tokens:?}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn calc_conventions_usage_errors() {
+    for (options, expected) in [
+        (
+            &["--conventions", "xtb"][..],
+            "--conventions must be axtb or xtb-6.8",
+        ),
+        (&["--conventions"][..], "--conventions needs a value"),
+        (
+            &["--conventions", "axtb", "--conventions", "xtb-6.8"][..],
+            "--conventions given more than once",
+        ),
+    ] {
+        let mut tokens = vec!["calc", "--energy", "water.xyz"];
+        tokens.extend_from_slice(options);
+        let (code, out, err) = call(&tokens).await;
+        assert_eq!(code, USAGE);
+        assert!(out.is_empty());
+        assert_eq!(err, format!("reshiki: {expected}\n"));
+    }
+}
+
+#[test]
+fn calc_is_an_explicit_cli_only_exception_to_mcp_parity() {
+    let spec = commands::find("calc").unwrap();
+    assert!(spec.tools.is_empty());
+    let catalog = reshiki_agent::ops::catalog::catalog_json();
+    assert!(
+        !catalog
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|tool| tool["name"] == "calc")
+    );
+    assert!(help(Some(spec)).contains("See docs/xtb-worker.md (Command line)"));
+    assert!(include_str!("../../docs/xtb-worker.md").contains("`calc` is a CLI-only command."));
+}
+
+#[cfg(not(feature = "xtb"))]
+#[tokio::test(flavor = "multi_thread")]
+async fn calc_without_xtb_reports_unavailability_and_no_stdout() {
+    let (code, out, err) = call(&["calc", "--energy", "--gradient", "unread.xyz"]).await;
+    assert_eq!(code, FAILURE);
+    assert!(out.is_empty());
+    assert_eq!(err, "reshiki: xTB is not included in this build\n");
 }
 
 #[test]
@@ -2209,6 +2529,10 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
     (
         "name",
         include_str!("../../tests/fixtures/cli-help/name.txt"),
+    ),
+    (
+        "calc",
+        include_str!("../../tests/fixtures/cli-help/calc.txt"),
     ),
     (
         "pieces",

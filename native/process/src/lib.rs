@@ -1,4 +1,4 @@
-//! Safe, naming-specific child limits. All platform FFI is contained here.
+//! Safe child process supervision. All platform FFI is contained here.
 #![deny(unsafe_op_in_unsafe_fn)]
 #![cfg_attr(
     not(test),
@@ -38,10 +38,20 @@ pub use windows::Child;
 /// Always supplies three pipes; pipe operations return WouldBlock rather than
 /// waiting. Daemonizing launchers are outside this narrow naming contract.
 pub fn spawn(command: &mut Command, limits: Limits) -> io::Result<Child> {
+    spawn_worker(command, limits, false)
+}
+
+/// Spawn a persistent worker whose caller enforces per-request deadlines.
+/// On macOS the observer still terminates the group when the parent exits.
+pub fn spawn_session(command: &mut Command, limits: Limits) -> io::Result<Child> {
+    spawn_worker(command, limits, true)
+}
+
+fn spawn_worker(command: &mut Command, limits: Limits, _persistent: bool) -> io::Result<Child> {
     validate(limits)?;
     #[cfg(unix)]
     {
-        unix::spawn(command, limits)
+        unix::spawn(command, limits, _persistent)
     }
     #[cfg(windows)]
     {

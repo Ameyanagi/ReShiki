@@ -419,6 +419,154 @@ const NAME: CommandSpec = CommandSpec {
     body: name_help,
 };
 
+// Calculation sessions are deliberately outside the agent operation/MCP catalog.
+const CALC: CommandSpec = CommandSpec {
+    name: "calc",
+    summary: "Print an xTB calculation as one JSON line",
+    usage: "reshiki --cli calc [--task energy|gradient|hessian|orbitals] [--method gfn2|gfnff|gxtb]
+    [--charge N] [--uhf N] [--conventions axtb|xtb-6.8]
+    [--alpb NAME | --gbsa NAME] [--solvent-correction gfn2]
+    [--etemp K] [--accuracy X] [--max-iter N] [--scf-retry K[:N]]... [--threads N]
+    [--gradient] [--wbo] FILE.xyz",
+    options: &[
+        OptionSpec {
+            flag: "--task",
+            value: Some("TASK"),
+            help: "Calculate energy (default), gradient, hessian or orbitals.",
+            default: Some(|| json!("energy")),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--method",
+            value: Some("METHOD"),
+            help: "Use gfn2 (default), gfnff or gxtb.",
+            default: Some(|| json!("gfn2")),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--energy",
+            value: None,
+            help: "Accepted for compatibility. Energy is always included.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--gradient",
+            value: None,
+            help: "Include the Cartesian energy gradient.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--wbo",
+            value: None,
+            help: "Include Mayer–Wiberg bond orders.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--charge",
+            value: Some("N"),
+            help: "Set the molecular charge (default 0).",
+            default: Some(|| json!(0)),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--uhf",
+            value: Some("N"),
+            help: "Set unpaired electrons (default from valence count).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--conventions",
+            value: Some("MODE"),
+            help: "Use axtb (default) or xtb-6.8 conventions.",
+            default: Some(|| json!("axtb")),
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--alpb",
+            value: Some("NAME"),
+            help: "Use the ALPB solvent model.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--gbsa",
+            value: Some("NAME"),
+            help: "Use the GBSA solvent model.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--solvent-correction",
+            value: Some("METHOD"),
+            help: "Use gfn2 for g-xTB solvent calculations.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--etemp",
+            value: Some("K"),
+            help: "Set the electronic temperature in kelvin.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--accuracy",
+            value: Some("X"),
+            help: "Set a positive SCF accuracy multiplier (default 1).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--max-iter",
+            value: Some("N"),
+            help: "Set the SCF iteration limit (default 250).",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--scf-retry",
+            value: Some("K[:N]"),
+            help: "Retry at K kelvin (optional N iterations). No rung may go below an explicitly given --etemp.",
+            default: None,
+            sets: None,
+            equivalent: None,
+        },
+        OptionSpec {
+            flag: "--threads",
+            value: Some("N"),
+            help: "Use 1 to 64 worker threads (default 1).",
+            default: Some(|| json!(1)),
+            sets: None,
+            equivalent: None,
+        },
+    ],
+    tools: &[],
+    operand: Some(Operand {
+        name: "FILE.xyz",
+        help: "Read the first structure of an XYZ file in angstroms.",
+        sets: None,
+    }),
+    body: calc_help,
+};
+
 const PIECES: CommandSpec = CommandSpec {
     name: "pieces",
     summary: "Check or render equipment piece files",
@@ -563,6 +711,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     PREDICT_NMR,
     EXPORT_INPUT,
     NAME,
+    CALC,
     PIECES,
     INFO,
     TOOLS,
@@ -572,7 +721,8 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
 ];
 
 const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
-const OPTIONS_RULE: &str = "Options are allowed once each; -- ends the options.";
+const OPTIONS_RULE: &str =
+    "Options are allowed once each except calc's --scf-retry; -- ends the options.";
 const STDOUT_CONTRACT: &str = "\
 stdout carries only the result: the file, one JSON line, or one receipt
   line with --receipt. With -o FILE and no --receipt it stays empty.";
@@ -858,6 +1008,19 @@ A ReShiki drawing (.rsk) cannot be written.
 
 fn analyze_help() -> String {
     format!("Usage: {}\n\n{ANALYZE_HELP}", ANALYZE.usage)
+}
+
+fn calc_help() -> String {
+    let mut text = format!("Usage: {}\n\nOptions:\n", CALC.usage);
+    for option in CALC.options {
+        let label = match option.value {
+            Some(value) => format!("{} {value}", option.flag),
+            None => option.flag.to_string(),
+        };
+        text.push_str(&format!("  {label:<28} {}\n", option.help));
+    }
+    text.push_str("\nSee docs/xtb-worker.md (Command line)\n");
+    text
 }
 
 fn predict_nmr_help() -> String {
