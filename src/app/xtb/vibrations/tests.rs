@@ -45,8 +45,10 @@ fn opening_the_tab_animates_the_selected_mode_without_touching_the_document() {
     let moved = shown(&app);
     assert_ne!(moved, f32s(&MOVED), "a tick moves the model");
     // Mode 1 of the example moves atom 1 along x only.
-    assert_ne!(moved[0][0], MOVED[0][0] as f32);
-    assert_eq!(moved[1], f32s(&MOVED)[1]);
+    let [first, second, ..] = MOVED;
+    let [x, ..] = first;
+    assert_ne!(moved.first().unwrap().first().copied(), Some(x as f32));
+    assert_eq!(moved.get(1).copied(), Some(second.map(|x| x as f32)));
     assert_eq!(
         model(&app.tab.doc),
         f32s(&MOVED),
@@ -75,17 +77,22 @@ fn another_mode_or_amplitude_rebuilds_the_frames() {
     }
     let third = shown(&app);
     // Mode 3 of the example moves atom 1 along z.
-    assert_eq!(third[0][0], MOVED[0][0] as f32);
-    assert_ne!(third[0][2], MOVED[0][2] as f32);
-    let small = third[0][2] - MOVED[0][2] as f32;
+    let [[x, _, z], ..] = MOVED;
+    let [third_x, _, third_z] = *third.first().unwrap();
+    assert_eq!(third_x, x as f32);
+    assert_ne!(third_z, z as f32);
+    let small = third_z - z as f32;
     vibrations(&mut app, Action::Amplitude(0.6));
-    let large = shown(&app)[0][2] - MOVED[0][2] as f32;
+    let [_, _, large_z] = *shown(&app).first().unwrap();
+    let large = large_z - z as f32;
     assert!((large / small - 2.).abs() < 1e-3, "{small} → {large}");
 }
 
 #[test]
 fn arrows_show_on_the_animation_and_add_to_the_drawing_as_one_undo_step() {
     let mut app = opened();
+    use reshiki::models3d::{self, Display};
+    models3d::set_display(&mut app.tab.doc, 0, Display::TwoD);
     vibrations(&mut app, Action::Arrows(true));
     assert_eq!(
         app.display_document().arrows.len(),
@@ -96,35 +103,73 @@ fn arrows_show_on_the_animation_and_add_to_the_drawing_as_one_undo_step() {
     vibrations(&mut app, Action::PlaceArrows);
     let arrows = &app.tab.doc.arrows;
     assert_eq!(arrows.len(), 1);
-    assert_eq!(arrows[0].purpose, reshiki::purpose::Purpose::Illustration);
+    assert_eq!(
+        arrows.first().unwrap().purpose,
+        reshiki::purpose::Purpose::Illustration
+    );
+    assert_eq!(app.tab.doc.models.first().unwrap().display, Display::Both);
     assert!(app.status.starts_with("Added 1 displacement arrows"));
     let _ = app.update(Message::Undo);
     assert!(app.tab.doc.arrows.is_empty());
+    assert_eq!(app.tab.doc.models.first().unwrap().display, Display::TwoD);
 }
 
 #[test]
-fn thermochemistry_uses_the_saved_values_at_the_saved_conditions_and_recomputes_otherwise() {
+fn thermochemistry_changes_conditions_only_if_it_reproduces_the_saved_gibbs_correction() {
     let app = opened();
     let shown = app.xtb_shown().unwrap();
-    let result = &shown.stored.result;
-    let saved = result.thermo.clone().unwrap();
-    let at = |kelvin| thermo_at(result, shown.frame, kelvin, 101_325.).unwrap();
-    let hot = at(500.);
-    let cold = at(298.15);
-    assert!(hot.entropy_hartree_per_k > cold.entropy_hartree_per_k);
-    assert!(hot.gibbs_correction_hartree < cold.gibbs_correction_hartree);
-    assert_eq!(hot.symmetry_number, saved.symmetry_number);
-    let rows = view::thermo_rows(&saved, result.energy_hartree);
-    assert_eq!(rows[0], ("ZPVE", "0.019453 Eh".to_owned()));
-    assert!(
-        rows.iter()
-            .any(|row| *row == ("Point group", "C2v".to_owned()))
-    );
-    let mut settings = State::default();
-    settings.pressure = "0".into();
+    let result = &*shown.stored.result;
+    let vibrations = result.vibrations.as_ref().unwrap();
+    let mut input = vibrational::ThermoInput {
+        frequencies_cm1: &vibrations.frequencies_cm1,
+        masses_amu: &vibrations.masses_amu,
+        positions_angstrom: &shown.frame.positions_angstrom,
+        linear: None,
+        symmetry_number: 2,
+        temperature_k: 298.15,
+        pressure_pa: 101_325.,
+        frequency_scale: 1.,
+        rotor_cutoff_cm1: 50.,
+        imaginary_cutoff_cm1: 20.,
+    };
+    assert!(!input.is_linear());
+    let mut result = result.clone();
+    for linear in [None, Some(true)] {
+        input.linear = linear;
+        input.temperature_k = 298.15;
+        let mut saved = vibrational::thermochemistry(&input);
+        saved.point_group = Some("c2v".into());
+        result.thermo = Some(saved.clone());
+
+        let hot = thermo_at(&result, shown.frame, 500., 101_325.).unwrap();
+        input.temperature_k = 500.;
+        assert_eq!(
+            hot.gibbs_correction_hartree,
+            vibrational::thermochemistry(&input).gibbs_correction_hartree
+        );
+        assert!(hot.entropy_hartree_per_k > saved.entropy_hartree_per_k);
+        assert_eq!(hot.point_group, saved.point_group);
+        assert!(thermo_at(&result, shown.frame, 0., 101_325.).is_none());
+
+        saved.gibbs_correction_hartree += 0.01;
+        result.thermo = Some(saved);
+        assert!(thermo_at(&result, shown.frame, 500., 101_325.).is_none());
+    }
+    result.thermo.as_mut().unwrap().symmetry_number = 0;
+    assert!(thermo_at(&result, shown.frame, 500., 101_325.).is_none());
+}
+
+#[test]
+fn typed_conditions_have_finite_physical_bounds() {
+    let mut settings = State {
+        pressure: "1e-7".into(),
+        ..State::default()
+    };
     assert!(settings.conditions().is_none());
     settings.pressure = "2".into();
     assert_eq!(settings.conditions(), Some((298.15, 202_650.)));
+    settings.temperature = "0.9".into();
+    assert!(settings.conditions().is_none());
 }
 
 /// Water whose Frequencies result has one imaginary mode.
@@ -148,26 +193,86 @@ fn saddle() -> App {
 #[test]
 fn push_starts_opt_freq_from_the_displaced_geometry() {
     let mut app = saddle();
+    let accepted = app.xtb_shown().unwrap().frame.positions_angstrom.clone();
     vibrations(&mut app, Action::Push);
     let run = app.tab.xtb.run.as_ref().expect("Push starts a run");
     assert_eq!(run.config.task, CalcTask::OptFreq);
     let start = run.start.as_ref().expect("a pushed start");
-    // Mode 1 moves atom 1 along x: by exactly the push distance.
-    // (The model stores f32 coordinates.)
-    assert!((start[0][0] - START[0][0] - PUSH_ANGSTROM).abs() < 1e-6);
-    assert!((start[1][0] - START[1][0]).abs() < 1e-6);
-    assert_eq!(start[1][1..], START[1][1..]);
+    // Mode 1 moves atom 1 along x by the push distance.
+    let [[x, y, z], second, third] = accepted.as_slice() else {
+        panic!("expected three atoms");
+    };
+    assert_eq!(
+        start.positions,
+        [[x + PUSH_ANGSTROM, *y, *z], *second, *third]
+    );
+    assert_eq!(start.from, accepted);
+    assert_eq!(
+        run.launch.as_ref().unwrap().frame.positions_angstrom,
+        start.positions
+    );
     assert!(app.tab.xtb.vibrations.animation.is_none());
+}
+
+#[test]
+fn push_is_refused_if_the_model_moved_after_calculation() {
+    let mut app = saddle();
+    let shown = app.xtb_shown().unwrap();
+    let mut config =
+        super::super::results::config(&shown.stored.result, shown.frame, shown.info, 1).unwrap();
+    config.task = CalcTask::OptFreq;
+    let atom = *shown.atoms.iter().flatten().next().unwrap();
+    let request = Request {
+        atoms: vec![atom],
+        config,
+        keep_full: false,
+        start: Some(Start {
+            positions: vibrational::displaced(
+                &START,
+                &[1., 0., 0., 0., 0., 0., 0., 0., 0.],
+                PUSH_ANGSTROM,
+            ),
+            from: START.to_vec(),
+        }),
+    };
+    app.tab.doc = super::super::preview(&app.tab.doc, atom, &MOVED).unwrap();
+    vibrations(&mut app, Action::Push);
+    assert!(app.tab.xtb.run.is_none());
+    assert_eq!(app.status, "The 3D model moved after this calculation");
+
+    // Reject a request made before the move even at the worker boundary.
+    let _ = app.xtb_begin(request);
+    assert!(app.tab.xtb.run.is_none());
+    assert!(matches!(
+        &app.tab.xtb.outcome,
+        Some(Outcome::Failed(failed)) if failed.failure == state::Failure::Other(
+            "The 3D model moved after this calculation".into()
+        )
+    ));
+    assert_eq!(model(&app.tab.doc), f32s(&MOVED));
+}
+
+#[test]
+fn a_different_model_geometry_disables_animation() {
+    let mut app = opened();
+    let result = app.xtb_shown().unwrap();
+    let atom = *result.atoms.iter().flatten().next().unwrap();
+    app.tab.doc = super::super::preview(&app.tab.doc, atom, &START).unwrap();
+    app.xtb_vibrations_sync();
+    assert!(app.xtb_vibration_preview().is_none());
+    assert_eq!(shown(&app), f32s(&START));
 }
 
 #[test]
 fn an_unconverged_push_keeps_the_accepted_structure() {
     let mut app = saddle();
     vibrations(&mut app, Action::Push);
-    let mut report = optfreq(&START, &MOVED);
+    let start = app.tab.xtb.run.as_ref().unwrap().start.as_ref().unwrap();
+    let mut report = optfreq(&start.positions, &MOVED);
     report.converged = false;
     event(&mut app, run::Event::Done(Ok(Arc::new(report))));
     assert_eq!(model(&app.tab.doc), f32s(&START), "{}", app.status);
+    assert_eq!(app.tab.xtb.palette.view, View::Summary);
     assert!(matches!(
         &app.tab.xtb.outcome,
         Some(Outcome::Done { notes, .. })
@@ -180,26 +285,51 @@ fn an_unconverged_push_keeps_the_accepted_structure() {
 fn a_converged_push_replaces_the_structure_and_shows_the_vibrations() {
     let mut app = saddle();
     vibrations(&mut app, Action::Push);
+    let displaced = app
+        .tab
+        .xtb
+        .run
+        .as_ref()
+        .unwrap()
+        .start
+        .as_ref()
+        .unwrap()
+        .positions
+        .clone();
     event(
         &mut app,
-        run::Event::Done(Ok(Arc::new(optfreq(&START, &MOVED)))),
+        run::Event::Done(Ok(Arc::new(optfreq(&displaced, &MOVED)))),
     );
     assert_eq!(model(&app.tab.doc), f32s(&MOVED));
     assert_eq!(app.tab.xtb.palette.view, View::Vibrations);
+    let shown = app.xtb_shown().unwrap();
+    assert_eq!(shown.input.positions_angstrom, displaced);
+    let light = shown.stored.result.light(&[]);
+    assert_eq!(light.input_frame, Some(shown.input.hash()));
+    assert_eq!(
+        super::super::results::step_positions(&light, 0, shown.input, shown.frame),
+        Some(displaced)
+    );
     let _ = app.update(Message::Undo);
     assert_eq!(model(&app.tab.doc), f32s(&START), "one Undo step");
 }
 
-#[test]
-fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
+fn light_result(frequency: f64) -> (App, Arc<CalcResult>) {
     let (mut app, _) = water(CalcTask::OptFreq);
-    event(
-        &mut app,
-        run::Event::Done(Ok(Arc::new(optfreq(&START, &MOVED)))),
-    );
-    let light = Arc::new(app.tab.doc.science.results[0].result.light(&[]));
+    let mut report = optfreq(&START, &MOVED);
+    *report
+        .computed
+        .vibrations
+        .as_mut()
+        .unwrap()
+        .frequencies_cm1
+        .first_mut()
+        .unwrap() = frequency;
+    event(&mut app, run::Event::Done(Ok(Arc::new(report))));
+    let stored = app.tab.doc.science.results.first_mut().unwrap();
+    let light = Arc::new(stored.result.light(&[]));
     assert!(light.vibrations.as_ref().unwrap().modes.is_empty());
-    app.tab.doc.science.results[0].result = light.clone();
+    stored.result = light.clone();
     app.tab.xtb.palette.show(&light);
     send(
         &mut app,
@@ -207,13 +337,30 @@ fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
     );
     assert!(app.tab.xtb.vibrations.recomputing(&light));
     assert!(app.tab.xtb.vibrations.animation.is_none());
+    (app, light)
+}
 
+fn recomputed(app: &mut App, frequency: f64) {
     let mut report = optfreq(&MOVED, &MOVED);
-    report.positions = MOVED.to_vec();
-    if let Some(v) = &mut report.computed.vibrations {
-        v.frequencies_cm1[0] += 2.;
-    }
-    vibrations(&mut app, Action::Recomputed(1, Ok(Arc::new(report))));
+    *report
+        .computed
+        .vibrations
+        .as_mut()
+        .unwrap()
+        .frequencies_cm1
+        .first_mut()
+        .unwrap() = frequency;
+    let pending = app.tab.xtb.vibrations.recompute.as_ref().unwrap();
+    vibrations(
+        app,
+        Action::Recomputed(pending.epoch, pending.serial, Ok(Arc::new(report))),
+    );
+}
+
+#[test]
+fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
+    let (mut app, light) = light_result(1590.13);
+    recomputed(&mut app, 1592.13);
     assert!(!app.tab.xtb.vibrations.recomputing(&light));
     assert!(app.xtb_modes(&light).is_some());
     assert!(app.tab.xtb.vibrations.animation.is_some());
@@ -221,4 +368,57 @@ fn a_light_result_recomputes_its_modes_when_the_tab_opens() {
         app.status
             .contains("differ from the saved ones by up to 2.0 cm⁻¹")
     );
+}
+
+#[test]
+fn recomputed_modes_require_matching_frequency_signs_and_values() {
+    for (saved, fresh, drift) in [(-0.5, 0.5, "1.0"), (1590.13, 1593.13, "3.0")] {
+        let (mut app, light) = light_result(saved);
+        recomputed(&mut app, fresh);
+        assert!(app.xtb_modes(&light).is_none());
+        assert!(app.xtb_vibration_preview().is_none());
+        assert_eq!(
+            app.tab.xtb.vibrations.problem.as_ref().unwrap().1,
+            format!(
+                "The recomputed frequencies differ from the saved ones (up to {drift} cm⁻¹); the modes are not shown."
+            )
+        );
+        send(
+            &mut app,
+            XtbAction::Palette(palette::Action::View(View::Summary)),
+        );
+        send(
+            &mut app,
+            XtbAction::Palette(palette::Action::View(View::Vibrations)),
+        );
+        assert!(app.tab.xtb.vibrations.problem.is_none());
+        assert!(app.tab.xtb.vibrations.recomputing(&light));
+    }
+}
+
+#[test]
+fn a_recompute_reply_from_a_previous_file_epoch_is_ignored() {
+    let (mut app, light) = light_result(1590.13);
+    app.tab.file_epoch += 1;
+    recomputed(&mut app, 1590.13);
+    assert!(app.xtb_modes(&light).is_none());
+    assert!(app.xtb_vibration_preview().is_none());
+}
+
+#[test]
+fn switching_away_from_docked_vibrations_cancels_recomputation() {
+    let (mut app, light) = light_result(1590.13);
+    send(&mut app, XtbAction::Palette(palette::Action::Dock));
+    send(&mut app, XtbAction::Page(Page::Nmr));
+    assert!(!app.tab.xtb.vibrations.recomputing(&light));
+    send(&mut app, XtbAction::Page(Page::Xtb));
+    assert!(app.tab.xtb.vibrations.recomputing(&light));
+}
+
+#[test]
+fn undoing_the_result_cancels_recomputation() {
+    let (mut app, light) = light_result(1590.13);
+    let _ = app.update(Message::Undo);
+    assert!(app.xtb_shown().is_none());
+    assert!(!app.tab.xtb.vibrations.recomputing(&light));
 }

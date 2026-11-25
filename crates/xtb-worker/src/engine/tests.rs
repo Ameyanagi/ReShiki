@@ -98,6 +98,7 @@ fn public_thermo_errors(open: &Open, computed: &Computed) -> [f64; 5] {
         masses_amu: &vibrations.masses_amu,
         positions_angstrom: &open.positions,
         symmetry_number: expected.symmetry_number,
+        linear: None,
         temperature_k: expected.temperature_k,
         pressure_pa: expected.pressure_pa,
         frequency_scale: expected.frequency_scale,
@@ -120,32 +121,37 @@ fn assert_thermo_maximum_errors(errors: &[(String, [f64; 5])]) {
     let mut maxima = [0.0_f64; 5];
     let mut cases = [""; 5];
     for (case, errors) in errors {
-        for i in 0..5 {
-            assert!(
-                errors[i].is_finite(),
-                "{} is nonfinite: {case}",
-                quantities[i]
-            );
-            if errors[i] >= maxima[i] {
-                maxima[i] = errors[i];
-                cases[i] = case;
+        for ((&error, quantity), (maximum, maximum_case)) in errors
+            .iter()
+            .zip(quantities)
+            .zip(maxima.iter_mut().zip(&mut cases))
+        {
+            assert!(error.is_finite(), "{quantity} is nonfinite: {case}");
+            if error >= *maximum {
+                *maximum = error;
+                *maximum_case = case;
             }
         }
     }
-    for i in 0..5 {
+    for ((quantity, maximum), case) in quantities.into_iter().zip(maxima).zip(cases) {
         eprintln!(
             "maximum {} absolute error = {:.12e} ({})",
-            quantities[i], maxima[i], cases[i]
+            quantity, maximum, case
         );
     }
-    for i in 0..5 {
+    for (((quantity, maximum), tolerance), case) in quantities
+        .into_iter()
+        .zip(maxima)
+        .zip(tolerances)
+        .zip(cases)
+    {
         assert!(
-            maxima[i] <= tolerances[i],
+            maximum <= tolerance,
             "{} error {:.12e} exceeds {}: {}",
-            quantities[i],
-            maxima[i],
-            tolerances[i],
-            cases[i]
+            quantity,
+            maximum,
+            tolerance,
+            case
         );
     }
 }
@@ -300,7 +306,14 @@ fn public_thermochemistry_matches_the_imaginary_cutoff_boundary() {
             ..Compute::default()
         })
         .unwrap();
-    let cutoff = baseline.vibrations.as_ref().unwrap().frequencies_cm1[0].abs();
+    let cutoff = baseline
+        .vibrations
+        .as_ref()
+        .unwrap()
+        .frequencies_cm1
+        .first()
+        .unwrap()
+        .abs();
     assert!(cutoff > 1.0 && cutoff < 20.0);
     let (mut session, _) = Session::open(open.clone(), open.heap_budget().unwrap()).unwrap();
     let computed = session
@@ -437,7 +450,7 @@ fn water_matches_the_pinned_driver_for_every_method_and_conventions() {
                     .flat_map(|a| {
                         let matrix = &matrix;
                         (a + 1..3).filter_map(move |b| {
-                            let order = matrix.data[a * 3 + b];
+                            let order = *matrix.data.get(a * 3 + b).unwrap();
                             (order >= 0.1).then_some(BondOrder {
                                 a: a as u32,
                                 b: b as u32,
@@ -559,7 +572,7 @@ fn explicit_isotope_masses_lower_water_frequencies() {
     heavy
         .to_calc_result(&frame, reshiki_qcdata::Task::Hessian, &engine, None)
         .unwrap();
-    frame.masses_amu[1] = 2.0;
+    *frame.masses_amu.get_mut(1).unwrap() = 2.0;
     assert!(matches!(
         heavy.to_calc_result(&frame, reshiki_qcdata::Task::Hessian, &engine, None),
         Err(reshiki_qcdata::Error::Invalid(message))
@@ -706,7 +719,7 @@ fn scf_restarts_and_refused_gfnff_requests_leave_geometry_intact() {
     let first = session.compute(Compute::default()).unwrap();
     let retained = session.positions.clone();
     let mut replacement = retained.clone();
-    replacement[1][0] += 0.7;
+    replacement.get_mut(1).unwrap()[0] += 0.7;
     for compute in [
         Compute {
             positions: Some(replacement.clone()),
@@ -806,7 +819,7 @@ fn worker_streams_the_computed_arrays_in_announced_order() {
     assert_eq!(computed.arrays.len(), expected.arrays.len());
     for array in computed.arrays {
         let mut values = Vec::new();
-        let count = array.shape[0] as usize * array.shape[1] as usize;
+        let count = *array.shape.first().unwrap() as usize * *array.shape.get(1).unwrap() as usize;
         for index in 0..array.chunks {
             let mut header = [0; protocol::HEADER_LEN];
             reader.read_exact(&mut header).unwrap();

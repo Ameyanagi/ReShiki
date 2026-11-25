@@ -11,6 +11,7 @@ use iced::widget::{Column, Space, canvas, column, container, row, scrollable, sl
 use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme, mouse};
 use reshiki::qcdata::vibrational::{self, BandShape};
 use reshiki::qcdata::{CalcResult, Thermo};
+use std::sync::{Arc, Weak};
 
 /// cal/mol per hartree.
 const CAL_PER_MOL_PER_HARTREE: f64 = 627_509.474;
@@ -20,6 +21,9 @@ const CHART_HEIGHT: f32 = 156.;
 /// Peaks labelled on the spectrum: at most this many, at least this fraction of the tallest.
 const LABELS: usize = 8;
 const LABEL_FRACTION: f64 = 0.05;
+const MAX_WAVENUMBER: f64 = 10_000.;
+const MAX_TICKS: usize = 40;
+const UNPLOTTABLE: &str = "Frequencies outside 0–10000 cm⁻¹ cannot be plotted";
 
 fn send(action: Action) -> Message {
     Message::Xtb(XtbAction::Vibrations(action))
@@ -45,9 +49,7 @@ impl App {
             return column![].into();
         };
         let settings = &self.tab.xtb.vibrations;
-        let selected = settings
-            .mode
-            .min(vibrations.frequencies_cm1.len().saturating_sub(1));
+        let selected = self.xtb_mode(vibrations.frequencies_cm1.len());
         let mut body = column![].spacing(8);
         if let Some(banner) = self.xtb_imaginary_banner(shown) {
             body = body.push(banner);
@@ -111,6 +113,7 @@ impl App {
             )
         };
         let can_push = !shown.stale
+            && self.xtb_model_at_result(shown)
             && unavailable().is_none()
             && self.tab.xtb.run.is_none()
             && super::super::results::config(&shown.stored.result, shown.frame, shown.info, 1)
@@ -141,11 +144,14 @@ impl App {
         let settings = &self.tab.xtb.vibrations;
         let result = &shown.stored.result;
         let modes = self.xtb_modes(result).is_some();
-        let live = modes && !shown.stale;
+        let model_matches = self.xtb_model_at_result(shown);
+        let live = modes && !shown.stale && model_matches;
         let mut controls = column![].spacing(7);
         // Why nothing moves, when nothing can.
         let note = if shown.stale {
             Some("Recalculate to show the vibrations.".to_owned())
+        } else if !model_matches {
+            Some("The 3D model is not at this result's geometry; use the result's geometry (Steps tab) to animate.".to_owned())
         } else if settings.recomputing(result) {
             Some("Recomputing the normal modes…".to_owned())
         } else if let Some((_, problem)) = settings
@@ -371,9 +377,13 @@ fn thermochemistry<'a>(settings: &'a State, shown: &Shown<'a>) -> Element<'a, Me
     });
     let Some(thermo) = thermo else {
         let why = if settings.conditions().is_none() {
-            "Enter a positive temperature and pressure."
+            "Enter a positive temperature and pressure.".to_owned()
         } else {
-            "This result has no atomic masses: only the saved conditions can be shown."
+            format!(
+                "This result's thermochemistry can be shown only at its saved conditions ({:.2} K, {:.3} atm).",
+                saved.temperature_k,
+                saved.pressure_pa / super::PA_PER_ATM,
+            )
         };
         return block.push(line(why, Tone::Warning)).into();
     };
@@ -389,9 +399,15 @@ fn thermochemistry<'a>(settings: &'a State, shown: &Shown<'a>) -> Element<'a, Me
     block
         .push(line(
             format!(
-                "Quasi-RRHO (Grimme 2012), xtb's defaults: modes below {:.0} cm⁻¹ blend into free \
-                 rotors; imaginary modes above −{:.0} cm⁻¹ count as real, the others are left out.",
-                thermo.rotor_cutoff_cm1, thermo.imaginary_cutoff_cm1
+                "Quasi-RRHO (Grimme 2012){}: modes below {} cm⁻¹ blend into free \
+                 rotors; imaginary modes above −{} cm⁻¹ count as real, the others are left out.",
+                if super::super::results::thermo_defaults(&thermo) {
+                    ", xtb's defaults"
+                } else {
+                    ""
+                },
+                thermo.rotor_cutoff_cm1,
+                thermo.imaginary_cutoff_cm1.abs(),
             ),
             Tone::Muted,
         ))
@@ -467,15 +483,141 @@ fn spectrum_controls(settings: &State) -> Element<'_, Message> {
     .into()
 }
 
-/// The broadened IR spectrum, wavenumber decreasing to the right; a click
-/// picks the nearest mode.
-struct Spectrum {
+/// Broadening depends on the result and spectrum controls, independently of
+/// which mode is highlighted or where its animation is in the period.
+pub(super) struct SpectrumKey {
+    result: Weak<CalcResult>,
+    shape: BandShape,
+    fwhm_bits: u32,
+    scale_bits: u64,
+}
+
+impl PartialEq for SpectrumKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.result.ptr_eq(&other.result)
+            && self.shape == other.shape
+            && self.fwhm_bits == other.fwhm_bits
+            && self.scale_bits == other.scale_bits
+    }
+}
+
+pub(super) struct SpectrumData {
     /// Scaled real frequencies and their mode indices.
     sticks: Vec<(usize, f64, f64)>,
     curve: Vec<[f64; 2]>,
     peaks: Vec<[f64; 2]>,
     high: f64,
     low: f64,
+    unplottable: bool,
+}
+
+impl SpectrumData {
+    fn new(result: &CalcResult, settings: &State, scale: f64) -> Self {
+        let mut data = Self {
+            sticks: vec![],
+            curve: vec![],
+            peaks: vec![],
+            high: 4000.,
+            low: 400.,
+            unplottable: false,
+        };
+        let Some(vibrations) = &result.vibrations else {
+            return data;
+        };
+        let frequencies = &vibrations.frequencies_cm1;
+        let intensities = &vibrations.ir_intensities_km_mol;
+        let highest = frequencies
+            .iter()
+            .map(|frequency| frequency * scale)
+            .filter(|frequency| frequency.is_finite())
+            .fold(0., f64::max);
+        data.high = if highest > 3900. {
+            (((highest.min(MAX_WAVENUMBER) + 100.) / 500.).ceil() * 500.).min(MAX_WAVENUMBER)
+        } else {
+            4000.
+        };
+        data.low = 400_f64
+            .min(
+                frequencies
+                    .iter()
+                    .map(|f| f * scale)
+                    .filter(|f| f.is_finite() && *f >= 0.)
+                    .fold(f64::INFINITY, f64::min)
+                    - 50.,
+            )
+            .max(0.);
+        data.unplottable = frequencies.iter().any(|frequency| {
+            let scaled = frequency * scale;
+            !scaled.is_finite() || scaled > MAX_WAVENUMBER
+        });
+        if data.unplottable {
+            return data;
+        }
+        let fwhm = f64::from(settings.fwhm);
+        data.curve = vibrational::ir_spectrum(
+            frequencies,
+            intensities,
+            scale,
+            fwhm,
+            settings.shape,
+            (data.high, data.low),
+            900,
+        );
+        data.peaks = vibrational::ir_peaks(
+            frequencies,
+            intensities,
+            scale,
+            fwhm,
+            settings.shape,
+            LABEL_FRACTION,
+            LABELS,
+        );
+        data.sticks = frequencies
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.is_finite() && **f >= 0.)
+            .map(|(index, f)| {
+                (
+                    index,
+                    f * scale,
+                    intensities.get(index).copied().unwrap_or(0.),
+                )
+            })
+            .collect();
+        data
+    }
+
+    fn message(&self) -> Option<&'static str> {
+        if self.unplottable {
+            Some(UNPLOTTABLE)
+        } else if !self.curve.iter().any(|[_, value]| *value > 0.) {
+            Some("No IR intensities in this result")
+        } else {
+            None
+        }
+    }
+}
+
+/// A bounded axis generator also tolerates ranges much larger than the chart
+/// permits, without a floating-point subtraction loop that can stop advancing.
+fn spectrum_ticks(high: f64, low: f64) -> Vec<f64> {
+    let span = high - low;
+    if !high.is_finite() || !low.is_finite() || !span.is_finite() || span < 0. {
+        return Vec::new();
+    }
+    let base_step = if span > 2000. { 500. } else { 250. };
+    let step = (span / (MAX_TICKS - 1) as f64 / base_step).ceil().max(1.) * base_step;
+    let first = (high / step).floor() * step;
+    (0..MAX_TICKS)
+        .map(|index| first - index as f64 * step)
+        .take_while(|tick| tick.is_finite() && *tick >= low && *tick <= high)
+        .collect()
+}
+
+/// The broadened IR spectrum, wavenumber decreasing to the right; a click
+/// picks the nearest mode.
+struct Spectrum {
+    data: Arc<SpectrumData>,
     /// The selected mode's scaled frequency, or `None` for an imaginary one.
     selected: Option<f64>,
     imaginary_selected: bool,
@@ -487,84 +629,43 @@ impl Spectrum {
     const TOP: f32 = 18.;
     const BOTTOM: f32 = 30.;
 
-    fn new(result: &CalcResult, settings: &State, selected: usize) -> Self {
-        let empty = Self {
-            sticks: vec![],
-            curve: vec![],
-            peaks: vec![],
-            high: 4000.,
-            low: 400.,
-            selected: None,
-            imaginary_selected: false,
-        };
-        let Some(vibrations) = &result.vibrations else {
-            return empty;
-        };
+    fn new(result: &Arc<CalcResult>, settings: &State, selected: usize) -> Self {
         let scale = settings.scale().unwrap_or(1.);
-        let frequencies = &vibrations.frequencies_cm1;
-        let intensities = &vibrations.ir_intensities_km_mol;
-        let highest = frequencies.iter().copied().fold(0., f64::max) * scale;
-        let high = if highest > 3900. {
-            ((highest + 100.) / 500.).ceil() * 500.
-        } else {
-            4000.
+        let key = SpectrumKey {
+            result: Arc::downgrade(result),
+            shape: settings.shape,
+            fwhm_bits: settings.fwhm.to_bits(),
+            scale_bits: scale.to_bits(),
         };
-        let low = 400_f64
-            .min(
-                frequencies
-                    .iter()
-                    .filter(|f| **f > 0.)
-                    .map(|f| f * scale)
-                    .fold(f64::INFINITY, f64::min)
-                    - 50.,
-            )
-            .max(0.);
-        let fwhm = f64::from(settings.fwhm);
-        let curve = vibrational::ir_spectrum(
-            frequencies,
-            intensities,
-            scale,
-            fwhm,
-            settings.shape,
-            (high, low),
-            900,
-        );
-        let peaks = vibrational::ir_peaks(
-            frequencies,
-            intensities,
-            scale,
-            fwhm,
-            settings.shape,
-            LABEL_FRACTION,
-            LABELS,
-        );
-        let sticks = frequencies
-            .iter()
-            .enumerate()
-            .filter(|(_, f)| **f >= 0.)
-            .map(|(index, f)| {
-                (
-                    index,
-                    f * scale,
-                    intensities.get(index).copied().unwrap_or(0.),
-                )
-            })
-            .collect();
-        let frequency = frequencies.get(selected).copied();
+        let data = {
+            let mut cache = settings.spectrum.borrow_mut();
+            match cache.as_ref() {
+                Some((cached_key, data)) if *cached_key == key => Arc::clone(data),
+                _ => {
+                    let data = Arc::new(SpectrumData::new(result, settings, scale));
+                    *cache = Some((key, Arc::clone(&data)));
+                    data
+                }
+            }
+        };
+        let frequency = result
+            .vibrations
+            .as_ref()
+            .and_then(|vibrations| vibrations.frequencies_cm1.get(selected))
+            .copied();
         Self {
-            sticks,
-            curve,
-            peaks,
-            high,
-            low,
-            selected: frequency.filter(|f| *f >= 0.).map(|f| f * scale),
+            data,
+            selected: frequency
+                .filter(|f| f.is_finite() && *f >= 0.)
+                .map(|f| f * scale),
             imaginary_selected: frequency.is_some_and(|f| f < 0.),
         }
     }
 
     fn x(&self, wavenumber: f64, bounds: Rectangle) -> f32 {
         let width = bounds.width - Self::LEFT - Self::RIGHT;
-        Self::LEFT + ((self.high - wavenumber) / (self.high - self.low)) as f32 * width
+        Self::LEFT
+            + ((self.data.high - wavenumber) / (self.data.high - self.data.low)) as f32 * width
     }
 }
 
@@ -582,7 +683,7 @@ impl canvas::Program<Message> for Spectrum {
             return None;
         };
         let point = cursor.position_in(bounds)?;
-        let (index, _, _) = self.sticks.iter().min_by(|a, b| {
+        let (index, _, _) = self.data.sticks.iter().min_by(|a, b| {
             (self.x(a.1, bounds) - point.x)
                 .abs()
                 .total_cmp(&(self.x(b.1, bounds) - point.x).abs())
@@ -596,7 +697,7 @@ impl canvas::Program<Message> for Spectrum {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if !self.sticks.is_empty() && cursor.is_over(bounds) {
+        if !self.data.sticks.is_empty() && cursor.is_over(bounds) {
             mouse::Interaction::Pointer
         } else {
             mouse::Interaction::default()
@@ -638,19 +739,13 @@ impl canvas::Program<Message> for Spectrum {
             align_x: align.into(),
             ..Default::default()
         };
-        let step = if self.high - self.low > 2000. {
-            500.
-        } else {
-            250.
-        };
-        let mut tick = (self.high / step).floor() * step;
-        while tick >= self.low {
+        for tick in spectrum_ticks(self.data.high, self.data.low) {
             let x = self.x(tick, bounds);
             frame.stroke(
                 &canvas::Path::line(Point::new(x, base), Point::new(x, base + 4.)),
                 canvas::Stroke::default().with_color(muted).with_width(1.),
             );
-            if (tick / 1000.).fract() == 0. || step < 500. {
+            if (tick / 1000.).fract() == 0. || self.data.high - self.data.low <= 2000. {
                 frame.fill_text(small(
                     format!("{tick:.0}"),
                     Point::new(x, base + 6.),
@@ -658,7 +753,6 @@ impl canvas::Program<Message> for Spectrum {
                     iced::alignment::Horizontal::Center,
                 ));
             }
-            tick -= step;
         }
         frame.fill_text(small(
             "Wavenumber (cm⁻¹)".into(),
@@ -666,24 +760,30 @@ impl canvas::Program<Message> for Spectrum {
             muted,
             iced::alignment::Horizontal::Center,
         ));
-        let top = self.curve.iter().map(|p| p[1]).fold(0., f64::max);
-        if top <= 0. {
+        if let Some(message) = self.data.message() {
             frame.fill_text(small(
-                "No IR intensities in this result".into(),
+                message.into(),
                 Point::new(Self::LEFT + width / 2., Self::TOP + height / 2.),
                 muted,
                 iced::alignment::Horizontal::Center,
             ));
             return vec![frame.into_geometry()];
         }
+        let top = self
+            .data
+            .curve
+            .iter()
+            .map(|[_, value]| *value)
+            .fold(0., f64::max);
         let y = |value: f64| base - (value / top * 0.92) as f32 * height;
         let tallest = self
+            .data
             .sticks
             .iter()
             .map(|s| s.2)
             .fold(0., f64::max)
             .max(1e-12);
-        for &(_, frequency, intensity) in &self.sticks {
+        for &(_, frequency, intensity) in &self.data.sticks {
             let chosen = self.selected == Some(frequency);
             let x = self.x(frequency, bounds);
             let stick_top = base - (intensity / tallest * 0.92) as f32 * height;
@@ -700,7 +800,7 @@ impl canvas::Program<Message> for Spectrum {
         }
         frame.stroke(
             &canvas::Path::new(|path| {
-                for (index, [wavenumber, value]) in self.curve.iter().enumerate() {
+                for (index, [wavenumber, value]) in self.data.curve.iter().enumerate() {
                     let point = Point::new(self.x(*wavenumber, bounds), y(*value));
                     if index == 0 {
                         path.move_to(point);
@@ -711,7 +811,7 @@ impl canvas::Program<Message> for Spectrum {
             }),
             canvas::Stroke::default().with_color(ink).with_width(1.4),
         );
-        for [wavenumber, value] in &self.peaks {
+        for [wavenumber, value] in &self.data.peaks {
             frame.fill_text(small(
                 format!("{wavenumber:.0}"),
                 Point::new(self.x(*wavenumber, bounds), y(*value) - 12.),
@@ -736,5 +836,107 @@ impl canvas::Program<Message> for Spectrum {
             ));
         }
         vec![frame.into_geometry()]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::xtb::tests::{START, optfreq};
+    use reshiki::qcdata::{Frame, Task};
+
+    fn spectrum_result() -> CalcResult {
+        let frame = Frame {
+            numbers: vec![8, 1, 1],
+            positions_angstrom: START.to_vec(),
+            isotopes: vec![],
+            masses_amu: vec![],
+            charge: 0,
+            multiplicity: 1,
+            drawing_atoms: vec![],
+        };
+        let report = optfreq(&START, &START);
+        report
+            .computed
+            .to_calc_result(&frame, Task::Hessian, &report.engine, None)
+            .unwrap()
+    }
+
+    #[test]
+    fn enormous_or_nonfinite_frequencies_construct_a_bounded_spectrum_without_a_curve() {
+        for frequency in [1e20, f64::INFINITY, f64::NAN] {
+            let mut result = spectrum_result();
+            let vibrations = result.vibrations.as_mut().unwrap();
+            vibrations.frequencies_cm1 = vec![100., frequency];
+            vibrations.ir_intensities_km_mol = vec![1., 1.];
+            let spectrum = Spectrum::new(&Arc::new(result), &State::default(), 0);
+            assert!(spectrum.data.curve.is_empty());
+            assert!(spectrum.data.peaks.is_empty());
+            assert_eq!(
+                spectrum.data.message(),
+                Some("Frequencies outside 0–10000 cm⁻¹ cannot be plotted")
+            );
+            assert!(spectrum.data.high.is_finite());
+            assert!(spectrum.data.low.is_finite());
+            assert!(spectrum.data.high <= MAX_WAVENUMBER);
+            assert!(spectrum_ticks(spectrum.data.high, spectrum.data.low).len() <= MAX_TICKS);
+        }
+    }
+
+    #[test]
+    fn the_plot_limit_applies_to_scaled_frequencies_and_includes_ten_thousand() {
+        let mut result = spectrum_result();
+        let vibrations = result.vibrations.as_mut().unwrap();
+        vibrations.frequencies_cm1 = vec![0., MAX_WAVENUMBER];
+        vibrations.ir_intensities_km_mol = vec![1., 1.];
+        let result = Arc::new(result);
+        let mut settings = State::default();
+        let at_limit = Spectrum::new(&result, &settings, 1);
+        assert_eq!(at_limit.data.high, MAX_WAVENUMBER);
+        assert_eq!(at_limit.data.low, 0.);
+        assert_eq!(at_limit.data.message(), None);
+        assert!(!at_limit.data.curve.is_empty());
+        settings.scale = "1.01".into();
+        let over_limit = Spectrum::new(&result, &settings, 1);
+        assert!(over_limit.data.curve.is_empty());
+        assert_eq!(over_limit.data.message(), Some(UNPLOTTABLE));
+    }
+
+    #[test]
+    fn axis_ticks_are_bounded_even_when_five_hundred_no_longer_changes_the_frequency() {
+        let ticks = spectrum_ticks(1e20, 0.);
+        assert!(!ticks.is_empty());
+        assert!(ticks.len() <= MAX_TICKS);
+        assert!(ticks.iter().all(|tick| tick.is_finite()));
+        assert!(ticks.windows(2).all(|pair| {
+            let [left, right] = pair else {
+                return false;
+            };
+            left > right
+        }));
+        assert!(spectrum_ticks(f64::INFINITY, 0.).is_empty());
+    }
+
+    #[test]
+    fn spectrum_cache_reuses_broadening_for_modes_and_rebuilds_for_spectrum_controls() {
+        let result = Arc::new(spectrum_result());
+        let mut settings = State::default();
+        let first = Spectrum::new(&result, &settings, 0);
+        let other_mode = Spectrum::new(&result, &settings, 1);
+        assert!(Arc::ptr_eq(&first.data, &other_mode.data));
+        assert_ne!(first.selected, other_mode.selected);
+
+        settings.shape = BandShape::Gaussian;
+        let gaussian = Spectrum::new(&result, &settings, 1);
+        assert!(!Arc::ptr_eq(&first.data, &gaussian.data));
+        settings.fwhm = 20.;
+        let wider = Spectrum::new(&result, &settings, 1);
+        assert!(!Arc::ptr_eq(&gaussian.data, &wider.data));
+        settings.scale = "0.95".into();
+        let scaled = Spectrum::new(&result, &settings, 1);
+        assert!(!Arc::ptr_eq(&wider.data, &scaled.data));
+        let other_result = Arc::new(spectrum_result());
+        let different = Spectrum::new(&other_result, &settings, 1);
+        assert!(!Arc::ptr_eq(&scaled.data, &different.data));
     }
 }

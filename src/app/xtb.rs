@@ -145,7 +145,14 @@ pub(crate) struct Request {
     keep_full: bool,
     /// Start here (Å, frame order) instead of the model: "Push along mode".
     /// Only a converged optimization from here replaces the model geometry.
-    start: Option<Vec<[f64; 3]>>,
+    start: Option<Start>,
+}
+
+/// A displaced input and the accepted geometry from which it was pushed.
+#[derive(Clone)]
+struct Start {
+    positions: Vec<[f64; 3]>,
+    from: Vec<[f64; 3]>,
 }
 
 pub(crate) struct Run {
@@ -153,7 +160,7 @@ pub(crate) struct Run {
     atoms: Vec<u64>,
     config: state::Config,
     keep_full: bool,
-    start: Option<Vec<[f64; 3]>>,
+    start: Option<Start>,
     /// Absent while the 3D model is made first.
     launch: Option<Launch>,
     /// The 3D model generation this run asked for, once it asked.
@@ -267,6 +274,8 @@ pub(crate) struct Review {
 struct Pending {
     /// Started away from the model ("Push along mode").
     pushed: bool,
+    /// The accepted model geometry before a push, in frame order.
+    accepted: Option<Vec<[f64; 3]>>,
     launch: Launch,
     frames: Vec<Frame>,
     result: CalcResult,
@@ -347,7 +356,23 @@ impl App {
             Action::Page(page) => self.xtb.page = page,
             Action::Palette(action) => {
                 let opened = matches!(action, palette::Action::View(results::View::Vibrations));
+                let showing = matches!(action, palette::Action::Show);
+                let before = showing
+                    .then(|| {
+                        self.xtb_shown()
+                            .map(|shown| Arc::clone(&shown.stored.result))
+                    })
+                    .flatten();
                 let task = self.xtb_palette(action);
+                if showing
+                    && self.xtb_shown().is_some_and(|shown| {
+                        before
+                            .as_ref()
+                            .is_none_or(|before| !Arc::ptr_eq(before, &shown.stored.result))
+                    })
+                {
+                    self.tab.xtb.vibrations.mode = 0;
+                }
                 if opened {
                     return Task::batch([task, self.xtb_vibrations_opened()]);
                 }
@@ -565,6 +590,7 @@ impl App {
             cancel: Default::default(),
             handle: None,
         });
+        self.xtb_vibrations_sync();
         self.xtb_launch()
     }
 
@@ -637,7 +663,7 @@ impl App {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn xtb_start(&mut self, launch: Launch) -> Task<Message> {
+    fn xtb_start(&mut self, mut launch: Launch) -> Task<Message> {
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = &mut self.tab.xtb.run else {
             return Task::none();
@@ -649,6 +675,21 @@ impl App {
             self.xtb_fail(state::Failure::TooMany { count, limit });
             return Task::none();
         }
+        if let Some(start) = &run.start {
+            if start.positions.len() != count
+                || start.from.len() != count
+                || !model_shows(&self.tab.doc, &launch.atoms, &start.from)
+            {
+                self.xtb_fail(state::Failure::Other(
+                    "The 3D model moved after this calculation".into(),
+                ));
+                return Task::none();
+            }
+            launch.frame = Arc::new(Frame {
+                positions_angstrom: start.positions.clone(),
+                ..(*launch.frame).clone()
+            });
+        }
         let fixed = launch
             .atoms
             .iter()
@@ -656,16 +697,7 @@ impl App {
             .filter(|(_, id)| id.is_some_and(|id| config.fixed.contains(&id)))
             .map(|(index, _)| index)
             .collect();
-        let mut job = job(config, &launch.frame, fixed);
-        if let Some(start) = &run.start {
-            if start.len() != count {
-                self.xtb_fail(state::Failure::Other(
-                    "The molecule changed after this calculation".into(),
-                ));
-                return Task::none();
-            }
-            job.positions = start.clone();
-        }
+        let job = job(config, &launch.frame, fixed);
         run.label = format!("xTB · {}", state::formula(&launch.frame.numbers));
         run.launch = Some(launch);
         run.revision = (epoch, revision);
@@ -803,7 +835,10 @@ impl App {
         };
         let optimized = pending.result.task == qcdata::Task::Optimize;
         let mut notes = pending.notes.clone();
-        let moved = !shows(&self.tab.doc, &pending.launch);
+        let moved = pending.accepted.as_ref().map_or_else(
+            || !shows(&self.tab.doc, &pending.launch),
+            |accepted| !model_shows(&self.tab.doc, &pending.launch.atoms, accepted),
+        );
         if attached.freshness == Freshness::Stale {
             notes.push(
                 "The molecule changed during the calculation: the result is kept, the 3D model is unchanged."
@@ -877,7 +912,7 @@ impl App {
             self.tab.xtb.palette.show(&result);
             self.tab.xtb.vibrations.mode = 0;
             // After a push the question was the imaginary mode: show its answer.
-            if pending.pushed {
+            if pending.pushed && applied {
                 self.tab.xtb.palette.view = results::View::Vibrations;
             }
         }
@@ -977,9 +1012,13 @@ fn model_shows(doc: &Document, atoms: &[Option<u64>], positions: &[[f64; 3]]) ->
         .iter()
         .find(|m| m.linked_atoms.contains(atom))
         .is_some_and(|model| {
+            let mut sources = model.geometry_sources();
+            sources.resize(model.atoms.len() + model.hydrogens.len(), None);
             let now = model.atoms.iter().map(|a| a.xyz);
             let now = now.chain(model.hydrogens.iter().map(|h| h.xyz));
-            now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
+            atoms.len() == positions.len()
+                && sources == atoms
+                && now.eq(positions.iter().map(|p| p.map(|x| x as f32)))
         })
 }
 
@@ -1083,6 +1122,7 @@ fn pending(run: &Run, report: &run::Report) -> Result<Pending, state::Failure> {
     );
     Ok(Pending {
         pushed: run.start.is_some(),
+        accepted: run.start.as_ref().map(|start| start.from.clone()),
         info,
         launch,
         frames,

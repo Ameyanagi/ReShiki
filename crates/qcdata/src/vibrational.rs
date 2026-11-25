@@ -20,6 +20,9 @@ pub struct ThermoInput<'a> {
     pub positions_angstrom: &'a [[f64; 3]],
     /// Rotational symmetry number (one or greater).
     pub symmetry_number: u32,
+    /// Override the rigid-rotor type; `None` detects linearity from the geometry.
+    /// Monatomic geometries always have no rotational contribution.
+    pub linear: Option<bool>,
     /// Absolute temperature in kelvin.
     pub temperature_k: f64,
     /// Ideal-gas pressure in pascals.
@@ -32,19 +35,46 @@ pub struct ThermoInput<'a> {
     pub imaginary_cutoff_cm1: f64,
 }
 
+impl ThermoInput<'_> {
+    /// Whether the effective rigid rotor is linear, including any override.
+    ///
+    /// With `linear: None`, uses the same scale-free inertia test as
+    /// [`thermochemistry`]. Monatomic geometries have no rigid rotor and return
+    /// `false`. Geometry and mass requirements are the same as for that function.
+    pub fn is_linear(&self) -> bool {
+        assert_eq!(self.masses_amu.len(), self.positions_angstrom.len());
+        if self.masses_amu.len() <= 1 {
+            return false;
+        }
+        self.linear.unwrap_or_else(|| {
+            let total_mass = self.masses_amu.iter().sum();
+            let (trace, determinant) =
+                inertia_invariants(self.masses_amu, self.positions_angstrom, total_mass);
+            linear_inertia(trace, determinant)
+        })
+    }
+}
+
+fn linear_inertia(trace: f64, determinant: f64) -> bool {
+    // For a nearly linear rotor the two large moments approach trace/2.
+    // This scale-free test corresponds to I_min/I_max <= 1e-10 in that limit.
+    determinant <= 1e-10 * (trace / 2.0).powi(3)
+}
+
 // Trace and determinant give the sum and product of the three principal moments
 // (in amu Å²) without diagonalizing the symmetric inertia tensor.
 fn inertia_invariants(masses: &[f64], positions: &[[f64; 3]], total_mass: f64) -> (f64, f64) {
     let mut center = [0.0; 3];
     for (&mass, position) in masses.iter().zip(positions) {
-        for i in 0..3 {
-            center[i] += mass * position[i];
+        for (sum, coordinate) in center.iter_mut().zip(position) {
+            *sum += mass * coordinate;
         }
     }
     let center = center.map(|sum| sum / total_mass);
     let (mut xx, mut yy, mut zz, mut xy, mut xz, mut yz) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-    for (&mass, position) in masses.iter().zip(positions) {
-        let [x, y, z] = std::array::from_fn(|i| position[i] - center[i]);
+    let [cx, cy, cz] = center;
+    for (&mass, &[px, py, pz]) in masses.iter().zip(positions) {
+        let (x, y, z) = (px - cx, py - cy, pz - cz);
         xx += mass * (y * y + z * z);
         yy += mass * (x * x + z * z);
         zz += mass * (x * x + y * y);
@@ -84,9 +114,10 @@ pub fn thermochemistry(input: &ThermoInput<'_>) -> Thermo {
     let rotor_factor_amu_angstrom2 = rotor_factor * AMU_KG * 1e-20;
     let (rotation_over_kt, rotational_q) = if input.masses_amu.len() == 1 {
         (0.0, 1.0)
-    } else if determinant <= 1e-10 * perpendicular_moment.powi(3) {
-        // For a nearly linear rotor the two large moments approach trace/2.
-        // This scale-free test corresponds to I_min/I_max <= 1e-10 in that limit.
+    } else if input
+        .linear
+        .unwrap_or_else(|| linear_inertia(trace, determinant))
+    {
         (
             1.0,
             rotor_factor_amu_angstrom2 * perpendicular_moment / f64::from(input.symmetry_number),
@@ -368,40 +399,39 @@ pub fn ir_peaks(
     }
     grid.sort_by(f64::total_cmp);
     grid.dedup_by(|left, right| *left == *right);
-    let values: Vec<f64> = grid
-        .iter()
-        .map(|&x| ir_curve_value(&bands, x, fwhm_cm1, shape))
+    let samples: Vec<[f64; 2]> = grid
+        .into_iter()
+        .map(|x| [x, ir_curve_value(&bands, x, fwhm_cm1, shape)])
         .collect();
     let mut maxima = Vec::new();
-    if grid.len() == 1 {
-        maxima.push(grid[0]);
+    if let [[x, _]] = samples.as_slice() {
+        maxima.push(*x);
     } else {
         // Endpoint maxima occur for isolated bands with negligible tails from
         // other transitions, as well as when all nonzero centers coincide.
-        if values[0] >= values[1] {
-            maxima.push(ir_refine_maximum(&bands, grid[0], grid[1], fwhm_cm1, shape));
+        if let Some([[first_x, first_y], [second_x, second_y]]) = samples.windows(2).next()
+            && first_y >= second_y
+        {
+            maxima.push(ir_refine_maximum(
+                &bands, *first_x, *second_x, fwhm_cm1, shape,
+            ));
         }
-        for index in 1..grid.len() - 1 {
-            if values[index] >= values[index - 1]
-                && values[index] >= values[index + 1]
-                && (values[index] > values[index - 1] || values[index] > values[index + 1])
+        for window in samples.windows(3) {
+            if let [[before_x, before_y], [_, y], [after_x, after_y]] = window
+                && y >= before_y
+                && y >= after_y
+                && (y > before_y || y > after_y)
             {
                 maxima.push(ir_refine_maximum(
-                    &bands,
-                    grid[index - 1],
-                    grid[index + 1],
-                    fwhm_cm1,
-                    shape,
+                    &bands, *before_x, *after_x, fwhm_cm1, shape,
                 ));
             }
         }
-        if values[values.len() - 1] >= values[values.len() - 2] {
+        if let Some([[before_x, before_y], [last_x, last_y]]) = samples.windows(2).next_back()
+            && last_y >= before_y
+        {
             maxima.push(ir_refine_maximum(
-                &bands,
-                grid[grid.len() - 2],
-                grid[grid.len() - 1],
-                fwhm_cm1,
-                shape,
+                &bands, *before_x, *last_x, fwhm_cm1, shape,
             ));
         }
     }
@@ -476,7 +506,9 @@ fn displace_along(positions: &[[f64; 3]], unit_mode: &[[f64; 3]], distance: f64)
     positions
         .iter()
         .zip(unit_mode)
-        .map(|(position, direction)| std::array::from_fn(|i| position[i] + distance * direction[i]))
+        .map(|(&[x, y, z], &[dx, dy, dz])| {
+            [x + distance * dx, y + distance * dy, z + distance * dz]
+        })
         .collect()
 }
 
@@ -573,7 +605,9 @@ pub fn xyz_movie(numbers: &[u8], frames: &[Vec<[f64; 3]>], comment: &str) -> Str
             writeln!(
                 output,
                 "{} {:.8} {:.8} {:.8}",
-                SYMBOLS[usize::from(number) - 1],
+                SYMBOLS
+                    .get(usize::from(number) - 1)
+                    .expect("atomic numbers were checked above"),
                 xyz[0],
                 xyz[1],
                 xyz[2]
@@ -616,6 +650,7 @@ mod thermo_tests {
                 [3.5, -0.563239, -0.077047],
             ],
             symmetry_number: 1,
+            linear: None,
             temperature_k: 298.15,
             pressure_pa: 101_325.0,
             frequency_scale: 1.0,
@@ -649,6 +684,7 @@ mod thermo_tests {
             masses_amu: &[12.0, 16.0],
             positions_angstrom: &[[0.0; 3], [1.3, 0.0, 0.0]],
             symmetry_number: 1,
+            linear: None,
             temperature_k: 298.15,
             pressure_pa: 101_325.0,
             frequency_scale: 1.0,
@@ -656,6 +692,7 @@ mod thermo_tests {
             imaginary_cutoff_cm1: 20.0,
         };
         let aligned = thermochemistry(&input);
+        assert!(input.is_linear());
         let rotated = thermochemistry(&ThermoInput {
             positions_angstrom: &[[2.0, -3.0, 5.0], [2.3, -2.6, 6.2]],
             ..input
@@ -663,6 +700,59 @@ mod thermo_tests {
         assert!((rotated.entropy_hartree_per_k - aligned.entropy_hartree_per_k).abs() < 1e-15);
         let enthalpy = 3.5 * BOLTZMANN_HARTREE_PER_K * input.temperature_k;
         assert!((rotated.enthalpy_correction_hartree - enthalpy).abs() < 1e-15);
+    }
+
+    #[test]
+    fn linear_override_changes_the_rotational_terms_of_a_bent_geometry() {
+        let mut input = ThermoInput {
+            frequencies_cm1: &[],
+            masses_amu: &[15.999, 1.008, 1.008],
+            positions_angstrom: &[
+                [0.0, 0.0, 0.119262],
+                [0.0, 0.763239, -0.477047],
+                [0.0, -0.763239, -0.477047],
+            ],
+            symmetry_number: 2,
+            linear: None,
+            temperature_k: 298.15,
+            pressure_pa: 101_325.0,
+            frequency_scale: 1.0,
+            rotor_cutoff_cm1: 50.0,
+            imaginary_cutoff_cm1: 20.0,
+        };
+        assert!(!input.is_linear());
+        let bent = thermochemistry(&input);
+        input.linear = Some(false);
+        assert!(!input.is_linear());
+        assert_eq!(thermochemistry(&input), bent);
+
+        input.linear = Some(true);
+        assert!(input.is_linear());
+        let linear = thermochemistry(&input);
+        let expected_enthalpy_difference = 0.5 * BOLTZMANN_HARTREE_PER_K * input.temperature_k;
+        assert!(
+            (bent.enthalpy_correction_hartree
+                - linear.enthalpy_correction_hartree
+                - expected_enthalpy_difference)
+                .abs()
+                < 1e-15
+        );
+        assert!(
+            (bent.heat_capacity_hartree_per_k.unwrap()
+                - linear.heat_capacity_hartree_per_k.unwrap()
+                - 0.5 * BOLTZMANN_HARTREE_PER_K)
+                .abs()
+                < 1e-15
+        );
+        assert_ne!(linear.entropy_hartree_per_k, bent.entropy_hartree_per_k);
+        assert_ne!(
+            linear.gibbs_correction_hartree,
+            bent.gibbs_correction_hartree
+        );
+        assert_eq!(
+            linear.zero_point_energy_hartree,
+            bent.zero_point_energy_hartree
+        );
     }
 }
 
@@ -680,7 +770,12 @@ mod spectrum_and_geometry_tests {
     fn trapezoid(points: &[[f64; 2]]) -> f64 {
         points
             .windows(2)
-            .map(|pair| 0.5 * (pair[0][1] + pair[1][1]) * (pair[1][0] - pair[0][0]))
+            .map(|pair| {
+                let [left, right] = pair else {
+                    unreachable!("a two-point window always has two points")
+                };
+                0.5 * (left[1] + right[1]) * (right[0] - left[0])
+            })
             .sum()
     }
 
@@ -718,8 +813,16 @@ mod spectrum_and_geometry_tests {
     fn both_profiles_have_the_requested_fwhm() {
         for shape in [BandShape::Lorentzian, BandShape::Gaussian] {
             let spectrum = ir_spectrum(&[1000.0], &[100.0], 1.0, 20.0, shape, (990.0, 1010.0), 3);
-            close(spectrum[0][1] / spectrum[1][1], 0.5, 1e-14);
-            close(spectrum[2][1] / spectrum[1][1], 0.5, 1e-14);
+            close(
+                spectrum.first().unwrap()[1] / spectrum.get(1).unwrap()[1],
+                0.5,
+                1e-14,
+            );
+            close(
+                spectrum.get(2).unwrap()[1] / spectrum.get(1).unwrap()[1],
+                0.5,
+                1e-14,
+            );
         }
     }
 
@@ -728,7 +831,7 @@ mod spectrum_and_geometry_tests {
         for shape in [BandShape::Lorentzian, BandShape::Gaussian] {
             let peaks = ir_peaks(&[1000.0, 1010.0], &[50.0, 50.0], 1.0, 40.0, shape, 0.0, 10);
             assert_eq!(peaks.len(), 1);
-            close(peaks[0][0], 1005.0, 0.05);
+            close(peaks.first().unwrap()[0], 1005.0, 0.05);
             let curve = ir_spectrum(
                 &[1000.0, 1010.0],
                 &[50.0, 50.0],
@@ -738,7 +841,7 @@ mod spectrum_and_geometry_tests {
                 (1005.0, 1005.0),
                 1,
             );
-            close(peaks[0][1], curve[0][1], 1e-12);
+            close(peaks.first().unwrap()[1], curve.first().unwrap()[1], 1e-12);
         }
     }
 
@@ -761,11 +864,14 @@ mod spectrum_and_geometry_tests {
             1.0,
             40.0,
             BandShape::Gaussian,
-            (peaks[0][0] - 0.1, peaks[0][0] + 0.1),
+            (
+                peaks.first().unwrap()[0] - 0.1,
+                peaks.first().unwrap()[0] + 0.1,
+            ),
             3,
         );
-        assert!(left[1][1] > left[0][1]);
-        assert!(left[1][1] > left[2][1]);
+        assert!(left.get(1).unwrap()[1] > left.first().unwrap()[1]);
+        assert!(left.get(1).unwrap()[1] > left.get(2).unwrap()[1]);
     }
 
     #[test]
@@ -773,7 +879,7 @@ mod spectrum_and_geometry_tests {
         for shape in [BandShape::Lorentzian, BandShape::Gaussian] {
             let peaks = ir_peaks(&[100.0, 200.0], &[1.0, 99.0], 1.0, 10_000.0, shape, 0.0, 10);
             assert_eq!(peaks.len(), 1);
-            close(peaks[0][0], 199.0, 0.01);
+            close(peaks.first().unwrap()[0], 199.0, 0.01);
         }
     }
 
@@ -790,9 +896,13 @@ mod spectrum_and_geometry_tests {
                 10,
             );
             assert_eq!(peaks.len(), 2);
-            close(peaks[0][0], 300.0789, 1e-10);
-            close(peaks[1][0], 200.0456, 1e-10);
-            close(peaks[1][1] / peaks[0][1], 2.0 / 3.0, 1e-12);
+            close(peaks.first().unwrap()[0], 300.0789, 1e-10);
+            close(peaks.get(1).unwrap()[0], 200.0456, 1e-10);
+            close(
+                peaks.get(1).unwrap()[1] / peaks.first().unwrap()[1],
+                2.0 / 3.0,
+                1e-12,
+            );
             let highest = ir_peaks(
                 &[100.0123, 200.0456, 300.0789],
                 &[1.0, 2.0, 3.0],
@@ -803,7 +913,7 @@ mod spectrum_and_geometry_tests {
                 1,
             );
             assert_eq!(highest.len(), 1);
-            close(highest[0][0], 300.0789, 1e-10);
+            close(highest.first().unwrap()[0], 300.0789, 1e-10);
         }
     }
 
@@ -821,8 +931,12 @@ mod spectrum_and_geometry_tests {
         close(trapezoid(&spectrum), 123.0, 1e-9);
         let peaks = ir_peaks(&[1000.0], &[123.0], 0.9, 20.0, BandShape::Gaussian, 0.0, 10);
         assert_eq!(peaks.len(), 1);
-        close(peaks[0][0], 900.0, 1e-12);
-        close(spectrum[8900][1] / spectrum[9000][1], 0.5, 1e-12);
+        close(peaks.first().unwrap()[0], 900.0, 1e-12);
+        close(
+            spectrum.get(8900).unwrap()[1] / spectrum.get(9000).unwrap()[1],
+            0.5,
+            1e-12,
+        );
     }
 
     #[test]
@@ -837,8 +951,8 @@ mod spectrum_and_geometry_tests {
             5,
         );
         assert_eq!(peaks.len(), 2);
-        close(peaks[0][0], 900.0, 1e-6);
-        close(peaks[1][0], 500.0, 1e-6);
+        close(peaks.first().unwrap()[0], 900.0, 1e-6);
+        close(peaks.get(1).unwrap()[0], 500.0, 1e-6);
         let highest = ir_peaks(
             &[100.0, 500.0, 900.0],
             &[5.0, 20.0, 10.0],
@@ -849,7 +963,7 @@ mod spectrum_and_geometry_tests {
             1,
         );
         assert_eq!(highest.len(), 1);
-        close(highest[0][0], 500.0, 1e-6);
+        close(highest.first().unwrap()[0], 500.0, 1e-6);
     }
 
     #[test]
@@ -863,7 +977,11 @@ mod spectrum_and_geometry_tests {
             (0.0, 0.0),
             1,
         );
-        close(spectrum[0][1], 4.0 / std::f64::consts::PI, 1e-14);
+        close(
+            spectrum.first().unwrap()[1],
+            4.0 / std::f64::consts::PI,
+            1e-14,
+        );
         let peaks = ir_peaks(
             &[-100.0, 0.0],
             &[100.0, 20.0],
@@ -874,7 +992,7 @@ mod spectrum_and_geometry_tests {
             10,
         );
         assert_eq!(peaks.len(), 1);
-        close(peaks[0][0], 0.0, 0.0);
+        close(peaks.first().unwrap()[0], 0.0, 0.0);
     }
 
     #[test]
@@ -901,12 +1019,16 @@ mod spectrum_and_geometry_tests {
         let positions = [[1.0, 2.0, 3.0], [-1.0, 0.0, 2.0]];
         let mode = [3.0, 4.0, 0.0, 0.0, 0.0, 2.0];
         let shifted = displaced(&positions, &mode, 0.2);
-        close(shifted[0][0], 1.12, 1e-14);
-        close(shifted[0][1], 2.16, 1e-14);
-        close(shifted[1][2], 2.08, 1e-14);
-        close((shifted[0][0] - 1.0).hypot(shifted[0][1] - 2.0), 0.2, 1e-14);
+        close(shifted.first().unwrap()[0], 1.12, 1e-14);
+        close(shifted.first().unwrap()[1], 2.16, 1e-14);
+        close(shifted.get(1).unwrap()[2], 2.08, 1e-14);
+        close(
+            (shifted.first().unwrap()[0] - 1.0).hypot(shifted.first().unwrap()[1] - 2.0),
+            0.2,
+            1e-14,
+        );
         let reversed = displaced(&positions, &mode, -0.2);
-        close(reversed[0][0], 0.88, 1e-14);
+        close(reversed.first().unwrap()[0], 0.88, 1e-14);
         assert_eq!(displaced(&positions, &[0.0; 6], 1.0), positions);
     }
 
@@ -916,9 +1038,9 @@ mod spectrum_and_geometry_tests {
         let frames = mode_frames(&positions, &[0.0, 0.0, 7.0], 0.4, 4);
         assert_eq!(frames.len(), 4);
         for (frame, expected_z) in frames.iter().zip([3.0, 3.4, 3.0, 2.6]) {
-            close(frame[0][0], 1.0, 1e-14);
-            close(frame[0][1], 2.0, 1e-14);
-            close(frame[0][2], expected_z, 1e-14);
+            close(frame.first().unwrap()[0], 1.0, 1e-14);
+            close(frame.first().unwrap()[1], 2.0, 1e-14);
+            close(frame.first().unwrap()[2], expected_z, 1e-14);
         }
         assert!(mode_frames(&positions, &[0.0, 0.0, 7.0], 0.4, 0).is_empty());
     }
@@ -926,7 +1048,11 @@ mod spectrum_and_geometry_tests {
     #[test]
     fn very_large_mode_coefficients_do_not_overflow_normalization() {
         let moved = displaced(&[[0.0; 3]], &[f64::MAX, f64::MAX, 0.0], 0.5);
-        close(moved[0][0].hypot(moved[0][1]), 0.5, 1e-14);
+        close(
+            moved.first().unwrap()[0].hypot(moved.first().unwrap()[1]),
+            0.5,
+            1e-14,
+        );
     }
 
     #[test]
