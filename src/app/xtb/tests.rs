@@ -479,6 +479,24 @@ fn retry_runs_the_failed_request_at_1000_k() {
 }
 
 #[test]
+fn an_edit_during_the_run_retires_retry() {
+    let (mut app, _) = water(CalcTask::Energy);
+    app.tab.doc.add_atom("C", Point::new(40., 0.));
+    app.tab.revision += 1;
+    event(
+        &mut app,
+        Event::Done(Err(state::Failure::Scf("not converged".into()))),
+    );
+    let Some(Outcome::Failed(failed)) = &app.tab.xtb.outcome else {
+        panic!("a failure");
+    };
+    assert!(
+        !app.xtb_can_retry(failed),
+        "the run calculated the drawing before the edit"
+    );
+}
+
+#[test]
 fn an_edit_after_a_failure_retires_retry() {
     let (mut app, _) = water(CalcTask::Energy);
     event(

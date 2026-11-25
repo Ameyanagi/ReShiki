@@ -251,9 +251,11 @@ pub(crate) fn signed_charge(value: f64) -> String {
 /// The HOMO–LUMO gap in eV from the stored orbital levels, else from this
 /// session's run.
 pub(crate) fn gap_ev(result: &CalcResult, info: Option<&RunInfo>) -> Option<f64> {
-    gap_hartree(result)
-        .map(|gap| gap * EV_PER_HARTREE)
-        .or_else(|| info.and_then(|info| info.gap_ev))
+    // The worker's own value while this session knows it, absence included.
+    match info {
+        Some(info) => info.gap_ev,
+        None => gap_hartree(result).map(|gap| gap * EV_PER_HARTREE),
+    }
 }
 
 /// The occupied count of the alpha spectrum (half the electrons, rounded
@@ -308,7 +310,7 @@ pub(crate) fn levels(result: &CalcResult) -> Vec<(String, f64)> {
     let Some(orbitals) = result.orbitals.as_ref() else {
         return vec![];
     };
-    let Some(homo) = alpha_electrons(orbitals).and_then(|n| n.checked_sub(1)) else {
+    let Some(n) = alpha_electrons(orbitals) else {
         return vec![];
     };
     let spin = if matches!(orbitals.beta, Beta::Restricted) {
@@ -316,24 +318,25 @@ pub(crate) fn levels(result: &CalcResult) -> Vec<(String, f64)> {
     } else {
         "α "
     };
-    let mut rows = around(&orbitals.alpha.energies_hartree, homo, spin);
+    let mut rows = around(&orbitals.alpha.energies_hartree, n, spin);
     if let Beta::Unrestricted(beta) = &orbitals.beta
-        && let Some(homo) = filled(beta, &beta.occupations).and_then(|n| n.checked_sub(1))
+        && let Some(n) = filled(beta, &beta.occupations)
     {
-        rows.extend(around(&beta.energies_hartree, homo, "β "));
+        rows.extend(around(&beta.energies_hartree, n, "β "));
     }
     rows
 }
 
-/// HOMO−2 … LUMO+2 of one spectrum, highest first, names prefixed by `spin`.
-fn around(levels: &[f64], homo: usize, spin: &str) -> Vec<(String, f64)> {
-    let name = |index: usize| match index.cmp(&homo) {
-        std::cmp::Ordering::Equal => format!("{spin}HOMO"),
-        std::cmp::Ordering::Less => format!("{spin}HOMO−{}", homo - index),
-        std::cmp::Ordering::Greater if index == homo + 1 => format!("{spin}LUMO"),
-        std::cmp::Ordering::Greater => format!("{spin}LUMO+{}", index - homo - 1),
+/// HOMO−2 … LUMO+2 of one spectrum with `n` occupied levels, highest
+/// first, names prefixed by `spin`. An empty spin starts at its LUMO.
+fn around(levels: &[f64], n: usize, spin: &str) -> Vec<(String, f64)> {
+    let name = |index: usize| match index.checked_sub(n) {
+        None if index + 1 == n => format!("{spin}HOMO"),
+        None => format!("{spin}HOMO−{}", n - 1 - index),
+        Some(0) => format!("{spin}LUMO"),
+        Some(above) => format!("{spin}LUMO+{above}"),
     };
-    let shown = homo.saturating_sub(2)..=homo + 3;
+    let shown = n.saturating_sub(3)..=n + 2;
     let mut rows: Vec<_> = (levels.iter().enumerate())
         .filter(|(index, _)| shown.contains(index))
         .map(|(index, energy)| (name(index), energy * EV_PER_HARTREE))

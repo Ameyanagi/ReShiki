@@ -721,6 +721,10 @@ impl App {
             .map(|launch| launch.frame.numbers.clone())
             .unwrap_or_default();
         let seconds = run.as_ref().map_or(0., Run::seconds);
+        // The state the run calculated: an edit during the run retires Retry.
+        let revision = run
+            .as_ref()
+            .map_or((self.tab.file_epoch, self.tab.revision), |run| run.revision);
         let request = run.map(|mut run| {
             Box::new(Request {
                 atoms: std::mem::take(&mut run.atoms),
@@ -733,7 +737,7 @@ impl App {
             request,
             numbers,
             seconds,
-            revision: (self.tab.file_epoch, self.tab.revision),
+            revision,
         };
         self.status = format!("xTB calculation failed: {}", failed.explain().0);
         self.error = true;
