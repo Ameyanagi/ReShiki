@@ -83,6 +83,8 @@ struct GaussianBasis {
 enum Writer {
     Orca,
     Pyscf(u32),
+    /// Both writer headers, or a PySCF header without a readable version.
+    Unreadable,
     Other,
 }
 
@@ -1450,21 +1452,18 @@ fn writer(sections: &[Section<'_>]) -> Writer {
     ) {
         (Some(_), None) => Writer::Orca,
         (None, None) => Writer::Other,
-        // An unreadable version counts as an unsupported PySCF writer.
-        (None, Some(version)) => Writer::Pyscf(
-            (|| {
-                let version = version.strip_suffix(']')?;
-                let (major, rest) = version.split_once('.')?;
-                let (minor, patch) = rest.split_once('.')?;
-                [major, minor, patch]
-                    .iter()
-                    .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
-                    .then_some(())?;
-                major.parse().ok()
-            })()
-            .unwrap_or(0),
-        ),
-        (Some(_), Some(_)) => Writer::Other,
+        (None, Some(version)) => (|| {
+            let version = version.strip_suffix(']')?;
+            let (major, rest) = version.split_once('.')?;
+            let (minor, patch) = rest.split_once('.')?;
+            [major, minor, patch]
+                .iter()
+                .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+                .then_some(())?;
+            major.parse().ok()
+        })()
+        .map_or(Writer::Unreadable, Writer::Pyscf),
+        (Some(_), Some(_)) => Writer::Unreadable,
     }
 }
 
@@ -1548,6 +1547,9 @@ fn unsupported_shapes(basis: &BasisSet, writer: Writer, producer: Option<&str>) 
     let orca = matches!(writer, Writer::Orca);
     let name = match (writer, producer) {
         (Writer::Orca, _) => "ORCA",
+        (Writer::Unreadable, _) => {
+            return Some("Orbital shapes left out: the Molden writer header is conflicting or unreadable; orbital energies are kept".into());
+        }
         (Writer::Pyscf(2..), _) | (Writer::Other, None | Some("Molden")) => return None,
         (Writer::Pyscf(_), _) => "PySCF",
         (Writer::Other, Some("ORCA")) => {

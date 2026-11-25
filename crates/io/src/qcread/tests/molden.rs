@@ -399,9 +399,14 @@ fn conflicting_writer_headers_keep_only_spectrum() {
     );
     assert!(matches!(
         super::writer(&super::sections(&raw).unwrap()),
-        super::Writer::Other
+        super::Writer::Unreadable
     ));
     let file = modified(&raw);
+    assert!(
+        file.warnings
+            .iter()
+            .any(|w| w.contains("conflicting or unreadable"))
+    );
     let spectra = orbitals(&file);
     assert!(spectra.basis.is_none());
     assert!(spectra.alpha.rows.is_empty() && spectra.alpha.coefficients.is_empty());
@@ -536,10 +541,14 @@ fn high_shell_shape_support_depends_on_writer_and_producer() {
                     assert!(orbitals.alpha.rows.is_empty());
                     assert!(orbitals.alpha.coefficients.is_empty());
                     let representation = if pure { "pure" } else { "Cartesian" };
-                    let warning = format!(
-                        "Orbital shapes left out: {representation} {shell} functions from {} have no verified Molden convention; orbital energies are kept",
-                        producer.unwrap()
-                    );
+                    let warning = if metadata.contains("invalid") {
+                        "Orbital shapes left out: the Molden writer header is conflicting or unreadable; orbital energies are kept".into()
+                    } else {
+                        format!(
+                            "Orbital shapes left out: {representation} {shell} functions from {} have no verified Molden convention; orbital energies are kept",
+                            producer.unwrap()
+                        )
+                    };
                     assert!(file.warnings.contains(&warning));
                 }
             }
