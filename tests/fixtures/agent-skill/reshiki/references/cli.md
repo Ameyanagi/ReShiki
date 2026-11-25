@@ -15,6 +15,7 @@ Commands:
   export-input  Write a quantum-chemistry input from an XYZ structure
   name          Print the systematic name of a structure
   calc          Print an xTB calculation as one JSON line
+  ts            Search for a transition state with GFN2-xTB
   pieces        Check or render equipment piece files
   info          Print versions, limits and formats as one JSON line
   tools         Print the agent tool catalog as one JSON line
@@ -22,7 +23,7 @@ Commands:
   skill         Write an Agent Skill folder that teaches AI agents to use ReShiki
   help          Show this help, or a command's help: reshiki --cli help <command>
 
-Options are allowed once each except calc's --scf-retry; -- ends the options.
+Repeatable options are calc's --scf-retry and ts's --form and --break. -- ends the options.
 
 Examples:
   reshiki --cli convert --smiles 'CCO' -o ethanol.mol
@@ -34,7 +35,7 @@ Examples:
   reshiki --cli compose proposal.json -o scheme.svg
 
 Output:
-  stdout carries only the result: the file, one JSON line, or one receipt
+  stdout carries only the result: a file, a text report, one JSON line, or one receipt
   line with --receipt. With -o FILE and no --receipt it stays empty.
   Warnings and errors go to stderr.
 
@@ -309,6 +310,41 @@ Options:
   --threads N                  Use 1 to 64 worker threads (default 1).
 
 See docs/xtb-worker.md (Command line)
+```
+
+## reshiki --cli ts
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
+    [--out-dir DIR] [--json FILE]
+
+Search using gas-phase GFN2-xTB with axtb conventions. Requires the xtb feature.
+Supply two atom-mapped XYZ files or one XYZ file with the bond changes.
+Each structure must have 2 to 120 atoms. With two files, atom order
+defines the map. --remap-hydrogens keeps heavy atoms mapped by order.
+
+Options:
+  --reactant R.xyz             Read the reactant from the first XYZ frame in angstroms.
+  --product P.xyz              Read the product from the first XYZ frame in angstroms.
+  --form I-J                   Form a bond from reactant to product (1-based atom numbers, repeatable).
+  --break I-J                  Break a bond from reactant to product (1-based atom numbers, repeatable).
+  --charge N                   Set the molecular charge (default 0).
+  --uhf N                      Set unpaired electrons (default from valence count).
+  --images N                   Use 5 to 24 NEB images including endpoints (default 15).
+  --workers N                  Use 1 to 8 single-threaded workers (default: at most 4, available CPUs and interior images).
+  --remap-hydrogens            Reassign product hydrogens by least motion and list changed heavy-atom neighbors.
+  --keep-endpoints             Skip relaxation of the search endpoints.
+  --out-dir DIR                Write endpoint, TS, NEB and IRC XYZ files and an ORCA Hessian.
+  --json FILE                  Write a JSON report.
+
+Exit 0 requires one engine frequency below -50 cm-1 and IRC branches that
+reach both endpoints. Progress and the hydrogen mapping review go to stderr.
+
+Examples:
+  reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
+  reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
 ```
 
 ## reshiki --cli pieces

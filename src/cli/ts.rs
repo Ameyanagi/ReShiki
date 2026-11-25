@@ -1,0 +1,265 @@
+//! Gas-phase transition-state searches using the isolated xTB worker.
+
+mod geometry;
+mod output;
+#[cfg(feature = "xtb")]
+mod worker;
+
+#[cfg(feature = "xtb")]
+use crate::cli::{args::Ts, calc::Geometry, host::CliError};
+#[cfg(feature = "xtb")]
+use reshiki_optimize::{
+    ANGSTROM_PER_BOHR,
+    ts::{self, Event, Search, Stage, TsOptions},
+};
+#[cfg(feature = "xtb")]
+use reshiki_xtb_worker::{
+    client::Limits,
+    protocol::{Conventions, Method, Open, Units},
+};
+#[cfg(feature = "xtb")]
+use std::{io::Write, ops::ControlFlow, thread, time::Instant};
+#[cfg(feature = "xtb")]
+use worker::Worker;
+
+#[cfg(feature = "xtb")]
+pub(super) fn run(command: Ts, out: &mut dyn Write, err: &mut dyn Write) -> Result<bool, CliError> {
+    let (reactant, product) = geometry::load(&command).map_err(CliError::Failed)?;
+    output::check_destinations(&command).map_err(CliError::Failed)?;
+    let start = reactant
+        .as_ref()
+        .or(product.as_ref())
+        .ok_or_else(|| CliError::Failed("no XYZ endpoint".into()))?;
+    let masses: Vec<_> = start
+        .numbers
+        .iter()
+        .map(|&z| {
+            crate::chemistry::ELEMENTS
+                .get(usize::from(z))
+                .map(|element| element.average_mass_amu())
+                .ok_or_else(|| CliError::Failed(format!("unknown element Z={z}")))
+        })
+        .collect::<Result<_, _>>()?;
+    let executable = std::env::current_exe().map_err(|error| {
+        CliError::Failed(format!("cannot locate the xTB worker executable: {error}"))
+    })?;
+    let limits = Limits::default();
+    let open = Open {
+        numbers: start.numbers.clone(),
+        positions: start.positions.clone(),
+        units: Units::Angstrom,
+        charge: command.charge,
+        uhf: command.uhf,
+        method: Method::Gfn2,
+        conventions: Conventions::Axtb,
+        solvent: None,
+        scf: Default::default(),
+        gfnff: None,
+        threads: 1,
+        heap_bytes: limits.heap_bytes,
+    };
+    let options = TsOptions {
+        images: command.images,
+        optimize_endpoints: !command.keep_endpoints,
+        ..TsOptions::default()
+    };
+    let started = Instant::now();
+    let mut summary = thread::scope(|scope| {
+        let (first, engine, uhf) =
+            Worker::start(scope, &executable, &open, limits).map_err(failed)?;
+        let mut workers = vec![first];
+        for _ in 1..command.workers {
+            let (worker, _, _) =
+                Worker::start(scope, &executable, &open, limits).map_err(failed)?;
+            workers.push(worker);
+        }
+        let first = workers
+            .first_mut()
+            .ok_or_else(|| CliError::Failed("no xTB worker".into()))?;
+        let (reactant, mut product) = match (&reactant, &product) {
+            (Some(r), Some(p)) => (bohr(r), bohr(p)),
+            (_, from_product) => {
+                build_endpoint(first, start, &command, from_product.is_some(), err)?
+            }
+        };
+        let moving_hydrogens = if command.remap_hydrogens {
+            let moved = geometry::remap(&open.numbers, &reactant, &mut product)
+                .map_err(CliError::Failed)?;
+            review_hydrogens(&moved, &open.numbers, err);
+            moved
+        } else {
+            Vec::new()
+        };
+        let search = Search {
+            numbers: &open.numbers,
+            masses_amu: &masses,
+            reactant: &reactant,
+            product: &product,
+            options: &options,
+        };
+        let mut progress = Progress::default();
+        let report =
+            ts::search(&mut workers, &search, |event| progress.show(event, err)).map_err(failed)?;
+        let _ = writeln!(err, "Checking TS frequencies with the xTB worker");
+        let computed = workers
+            .first_mut()
+            .ok_or_else(|| CliError::Failed("no xTB worker".into()))?
+            .analyze_hessian(&report.ts.positions)
+            .map_err(failed)?;
+        let vibrations = computed.vibrations.ok_or_else(|| {
+            CliError::Failed("the xTB worker returned no vibrational analysis".into())
+        })?;
+        Ok::<_, CliError>(output::Summary {
+            command: &command,
+            numbers: &open.numbers,
+            masses: &masses,
+            report,
+            engine,
+            uhf,
+            worker_frequencies: vibrations.frequencies_cm1,
+            worker_hessian: computed.hessian,
+            iterations: progress.iterations,
+            steps: progress.steps,
+            evaluations: workers.iter().map(|worker| worker.gradients).sum(),
+            seconds: 0.,
+            moving_hydrogens,
+        })
+    })?;
+    summary.seconds = started.elapsed().as_secs_f64();
+    summary.write_table(out)?;
+    summary.write_files().map_err(CliError::Failed)?;
+    if let Some(reason) = summary.failure_reason() {
+        out.flush().map_err(CliError::Stdout)?;
+        let _ = writeln!(err, "reshiki: {reason}");
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+#[cfg(feature = "xtb")]
+fn failed(error: impl Into<ts::TsError>) -> CliError {
+    CliError::Failed(error.into().to_string())
+}
+
+#[cfg(feature = "xtb")]
+fn bohr(geometry: &Geometry) -> Vec<f64> {
+    geometry
+        .positions
+        .as_flattened()
+        .iter()
+        .map(|x| x / ANGSTROM_PER_BOHR)
+        .collect()
+}
+
+#[cfg(feature = "xtb")]
+fn build_endpoint(
+    worker: &mut Worker,
+    start: &Geometry,
+    command: &Ts,
+    from_product: bool,
+    err: &mut dyn Write,
+) -> Result<(Vec<f64>, Vec<f64>), CliError> {
+    let indices = |pairs: &[(usize, usize)]| {
+        pairs
+            .iter()
+            .map(|&(i, j)| (i - 1, j - 1))
+            .collect::<Vec<_>>()
+    };
+    let form = indices(&command.form);
+    let break_ = indices(&command.break_);
+    let (name, form, break_) = if from_product {
+        ("reactant", &break_, &form)
+    } else {
+        ("product", &form, &break_)
+    };
+    let _ = writeln!(err, "Building the {name} endpoint");
+    let start_xyz = bohr(start);
+    let (built, matched) =
+        ts::build_endpoint(worker, &start.numbers, &start_xyz, form, break_, |_, _| {
+            ControlFlow::Continue(())
+        })
+        .map_err(failed)?;
+    if !matched {
+        return Err(CliError::Failed(format!(
+            "the constructed {name} does not match the requested bond changes"
+        )));
+    }
+    Ok(if from_product {
+        (built.positions, start_xyz)
+    } else {
+        (start_xyz, built.positions)
+    })
+}
+
+#[cfg(feature = "xtb")]
+fn review_hydrogens(moved: &[geometry::MovingHydrogen], numbers: &[u8], err: &mut dyn Write) {
+    if moved.is_empty() {
+        let _ = writeln!(err, "Moving hydrogens: none");
+        return;
+    }
+    let label = |index: usize| {
+        let element = numbers
+            .get(index - 1)
+            .copied()
+            .map_or("?", geometry::symbol);
+        format!("{element}{index}")
+    };
+    let _ = writeln!(err, "Moving hydrogens:");
+    for change in moved {
+        let from = label(change.reactant_heavy_atom);
+        let to = label(change.product_heavy_atom);
+        let _ = writeln!(err, "  H{}: {from} → {to}", change.hydrogen);
+    }
+}
+
+#[cfg(feature = "xtb")]
+#[derive(Default)]
+struct Progress {
+    iterations: usize,
+    steps: usize,
+}
+
+#[cfg(feature = "xtb")]
+impl Progress {
+    fn show(&mut self, event: Event, err: &mut dyn Write) -> ControlFlow<()> {
+        match event {
+            Event::Stage(stage) => {
+                let label = match stage {
+                    Stage::Endpoints => "Preparing endpoints",
+                    Stage::Interpolation => "Interpolating the path",
+                    Stage::Neb => "Running climbing-image NEB",
+                    Stage::Saddle => "Refining the saddle",
+                    Stage::Frequencies => "Analyzing TS frequencies",
+                    Stage::Irc => "Tracing both IRC branches",
+                };
+                let _ = writeln!(err, "{label}");
+            }
+            Event::Neb {
+                iteration,
+                max_force,
+                climbing,
+                ..
+            } => {
+                if iteration > 0 && iteration.is_multiple_of(10) {
+                    let climbing =
+                        climbing.map_or_else(|| "pending".into(), |image| (image + 1).to_string());
+                    let _ = writeln!(
+                        err,
+                        "NEB {iteration}: max force {max_force:.4} Eh/bohr, climbing image {climbing}"
+                    );
+                }
+                self.iterations = iteration;
+            }
+            Event::Saddle {
+                step, max_gradient, ..
+            } => {
+                if step > self.steps && step.is_multiple_of(10) {
+                    let _ = writeln!(err, "Saddle {step}: max gradient {max_gradient:.4} Eh/bohr");
+                }
+                self.steps = step;
+            }
+            Event::Endpoint { .. } | Event::Irc { .. } => {}
+        }
+        ControlFlow::Continue(())
+    }
+}

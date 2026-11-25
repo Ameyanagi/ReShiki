@@ -1,7 +1,7 @@
 use super::{
     args::{
         Calc, CalcTask, Compose, Convert, Export, Input, Labels, Name, Output, PredictNmr, Preview,
-        Render, Schema, Skill, Source, SvgText, parse,
+        Render, Schema, Skill, Source, SvgText, Ts, parse,
     },
     *,
 };
@@ -837,6 +837,191 @@ fn calc_is_an_explicit_cli_only_exception_to_mcp_parity() {
 #[tokio::test(flavor = "multi_thread")]
 async fn calc_without_xtb_reports_unavailability_and_no_stdout() {
     let (code, out, err) = call(&["calc", "--energy", "--gradient", "unread.xyz"]).await;
+    assert_eq!(code, FAILURE);
+    assert!(out.is_empty());
+    assert_eq!(err, "reshiki: xTB is not included in this build\n");
+}
+
+#[test]
+fn ts_parses_mapped_endpoints_and_defaults() {
+    let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+    let expected = Ts {
+        reactant: Some("r.xyz".into()),
+        product: Some("p.xyz".into()),
+        form: Vec::new(),
+        break_: Vec::new(),
+        charge: 0,
+        uhf: None,
+        images: 15,
+        workers: 4.min(cpus),
+        remap_hydrogens: false,
+        keep_endpoints: false,
+        out_dir: None,
+        json: None,
+    };
+    assert_eq!(
+        parsed(&["ts", "--reactant", "r.xyz", "--product", "p.xyz"]),
+        Ok(Command::Ts(expected)),
+    );
+    let Command::Ts(command) = parsed(&[
+        "ts",
+        "--reactant",
+        "r.xyz",
+        "--product",
+        "p.xyz",
+        "--images",
+        "5",
+    ])
+    .unwrap() else {
+        panic!("ts command");
+    };
+    assert_eq!(command.workers, 3.min(cpus));
+}
+
+#[test]
+fn ts_parses_repeatable_bond_edits_and_output_paths() {
+    assert_eq!(
+        parsed(&[
+            "ts",
+            "--product",
+            "p.xyz",
+            "--form",
+            "3-7",
+            "--form",
+            "5-3",
+            "--break",
+            "1-3",
+            "--break",
+            "3-2",
+            "--charge",
+            "-1",
+            "--uhf",
+            "2",
+            "--images",
+            "24",
+            "--workers",
+            "8",
+            "--remap-hydrogens",
+            "--keep-endpoints",
+            "--out-dir",
+            "results",
+            "--json",
+            "report.json",
+        ]),
+        Ok(Command::Ts(Ts {
+            reactant: None,
+            product: Some("p.xyz".into()),
+            form: vec![(3, 7), (3, 5)],
+            break_: vec![(1, 3), (2, 3)],
+            charge: -1,
+            uhf: Some(2),
+            images: 24,
+            workers: 8,
+            remap_hydrogens: true,
+            keep_endpoints: true,
+            out_dir: Some("results".into()),
+            json: Some("report.json".into()),
+        })),
+    );
+    assert!(
+        parsed(&[
+            "ts",
+            "--reactant",
+            "r.xyz",
+            "--break",
+            "1-2",
+            "--images",
+            "5",
+            "--workers",
+            "8"
+        ])
+        .is_ok()
+    );
+}
+
+#[test]
+fn ts_rejects_invalid_options_and_endpoint_combinations() {
+    for tokens in [
+        &[][..],
+        &["--form", "1-2"],
+        &["--reactant", "r.xyz"],
+        &["--product", "p.xyz"],
+        &["--reactant", "r.xyz", "--product", "p.xyz", "--form", "1-2"],
+        &[
+            "--reactant",
+            "r.xyz",
+            "--product",
+            "p.xyz",
+            "--break",
+            "1-2",
+        ],
+        &["--reactant", "r.xyz", "--form", "3-7", "--break", "7-3"],
+        &["--reactant", "-", "--form", "1-2"],
+        &["--reactant", "", "--form", "1-2"],
+        &["r.xyz", "--product", "p.xyz", "--form", "1-2"],
+    ] {
+        assert!(parsed(&[&["ts"], tokens].concat()).is_err(), "{tokens:?}");
+    }
+    for pair in [
+        "3:7", "3", "3-", "3--7", "3-7-2", "0-7", "3-0", "3-3", "+3-7", "3 -7", "3-X",
+    ] {
+        for flag in ["--form", "--break"] {
+            assert!(
+                parsed(&["ts", "--reactant", "r.xyz", flag, pair]).is_err(),
+                "{flag} {pair}"
+            );
+        }
+    }
+    for options in [
+        &["--images", "4"][..],
+        &["--images", "25"],
+        &["--images", "5.5"],
+        &["--workers", "0"],
+        &["--workers", "9"],
+        &["--workers", "-1"],
+        &["--charge", "2147483648"],
+        &["--charge", "1.5"],
+        &["--uhf", "-1"],
+        &["--uhf", "4294967296"],
+        &["--uhf", "1.5"],
+        &["--uhf"],
+        &["--reactant", "again.xyz"],
+        &["--product", "again.xyz"],
+        &["--json"],
+        &["--json", "a", "--json", "b"],
+        &["--keep-endpoints", "--keep-endpoints"],
+        &["--out-dir", ""],
+        &["--method", "gfn2"],
+        &["--alpb", "water"],
+        &["--conventions", "xtb-6.8"],
+    ] {
+        let tokens = [
+            &["ts", "--reactant", "r.xyz", "--product", "p.xyz"],
+            options,
+        ]
+        .concat();
+        assert!(parsed(&tokens).is_err(), "{options:?}");
+    }
+}
+
+#[test]
+fn ts_is_cli_only() {
+    let spec = commands::find("ts").unwrap();
+    assert!(spec.tools.is_empty());
+    assert!(
+        reshiki_agent::ops::catalog::catalog_json()
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|tool| tool["name"] != "ts")
+    );
+}
+
+#[cfg(not(feature = "xtb"))]
+#[tokio::test]
+async fn ts_without_xtb_reports_unavailability() {
+    let (code, out, err) =
+        call(&["ts", "--reactant", "unread.xyz", "--product", "unread.xyz"]).await;
     assert_eq!(code, FAILURE);
     assert!(out.is_empty());
     assert_eq!(err, "reshiki: xTB is not included in this build\n");
@@ -2534,6 +2719,7 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
         "calc",
         include_str!("../../tests/fixtures/cli-help/calc.txt"),
     ),
+    ("ts", include_str!("../../tests/fixtures/cli-help/ts.txt")),
     (
         "pieces",
         include_str!("../../tests/fixtures/cli-help/pieces.txt"),

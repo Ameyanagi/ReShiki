@@ -567,6 +567,96 @@ const CALC: CommandSpec = CommandSpec {
     body: calc_help,
 };
 
+const fn ts_option(
+    flag: &'static str,
+    value: Option<&'static str>,
+    help: &'static str,
+) -> OptionSpec {
+    OptionSpec {
+        flag,
+        value,
+        help,
+        default: None,
+        sets: None,
+        equivalent: None,
+    }
+}
+
+const TS: CommandSpec = CommandSpec {
+    name: "ts",
+    summary: "Search for a transition state with GFN2-xTB",
+    usage: "reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
+    [--out-dir DIR] [--json FILE]",
+    options: &[
+        ts_option(
+            "--reactant",
+            Some("R.xyz"),
+            "Read the reactant from the first XYZ frame in angstroms.",
+        ),
+        ts_option(
+            "--product",
+            Some("P.xyz"),
+            "Read the product from the first XYZ frame in angstroms.",
+        ),
+        ts_option(
+            "--form",
+            Some("I-J"),
+            "Form a bond from reactant to product (1-based atom numbers, repeatable).",
+        ),
+        ts_option(
+            "--break",
+            Some("I-J"),
+            "Break a bond from reactant to product (1-based atom numbers, repeatable).",
+        ),
+        OptionSpec {
+            default: Some(|| json!(0)),
+            ..ts_option(
+                "--charge",
+                Some("N"),
+                "Set the molecular charge (default 0).",
+            )
+        },
+        ts_option(
+            "--uhf",
+            Some("N"),
+            "Set unpaired electrons (default from valence count).",
+        ),
+        OptionSpec {
+            default: Some(|| json!(reshiki_optimize::ts::TsOptions::default().images)),
+            ..ts_option(
+                "--images",
+                Some("N"),
+                "Use 5 to 24 NEB images including endpoints (default 15).",
+            )
+        },
+        ts_option(
+            "--workers",
+            Some("N"),
+            "Use 1 to 8 single-threaded workers (default: at most 4, available CPUs and interior images).",
+        ),
+        ts_option(
+            "--remap-hydrogens",
+            None,
+            "Reassign product hydrogens by least motion and list changed heavy-atom neighbors.",
+        ),
+        ts_option(
+            "--keep-endpoints",
+            None,
+            "Skip relaxation of the search endpoints.",
+        ),
+        ts_option(
+            "--out-dir",
+            Some("DIR"),
+            "Write endpoint, TS, NEB and IRC XYZ files and an ORCA Hessian.",
+        ),
+        ts_option("--json", Some("FILE"), "Write a JSON report."),
+    ],
+    tools: &[],
+    operand: None,
+    body: ts_help,
+};
+
 const PIECES: CommandSpec = CommandSpec {
     name: "pieces",
     summary: "Check or render equipment piece files",
@@ -712,6 +802,7 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
     EXPORT_INPUT,
     NAME,
     CALC,
+    TS,
     PIECES,
     INFO,
     TOOLS,
@@ -722,9 +813,9 @@ pub(crate) const COMMANDS: &[CommandSpec] = &[
 
 const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
 const OPTIONS_RULE: &str =
-    "Options are allowed once each except calc's --scf-retry; -- ends the options.";
+    "Repeatable options are calc's --scf-retry and ts's --form and --break. -- ends the options.";
 const STDOUT_CONTRACT: &str = "\
-stdout carries only the result: the file, one JSON line, or one receipt
+stdout carries only the result: a file, a text report, one JSON line, or one receipt
   line with --receipt. With -o FILE and no --receipt it stays empty.";
 const SUCCESS_MEANING: &str = "success";
 const FAILURE_MEANING: &str =
@@ -1011,15 +1102,40 @@ fn analyze_help() -> String {
 }
 
 fn calc_help() -> String {
-    let mut text = format!("Usage: {}\n\nOptions:\n", CALC.usage);
-    for option in CALC.options {
+    let mut text = format!("Usage: {}\n\n", CALC.usage);
+    text.push_str(&option_help(&CALC));
+    text.push_str("\nSee docs/xtb-worker.md (Command line)\n");
+    text
+}
+
+fn ts_help() -> String {
+    format!(
+        "Usage: {}\n\n\
+Search using gas-phase GFN2-xTB with axtb conventions. Requires the xtb feature.\n\
+Supply two atom-mapped XYZ files or one XYZ file with the bond changes.\n\
+Each structure must have 2 to {} atoms. With two files, atom order\n\
+defines the map. --remap-hydrogens keeps heavy atoms mapped by order.\n\n\
+{}\n\
+Exit 0 requires one engine frequency below -50 cm-1 and IRC branches that\n\
+reach both endpoints. Progress and the hydrogen mapping review go to stderr.\n\n\
+Examples:\n  \
+reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results\n  \
+reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json\n",
+        TS.usage,
+        reshiki_optimize::ts::MAX_ATOMS,
+        option_help(&TS),
+    )
+}
+
+fn option_help(spec: &CommandSpec) -> String {
+    let mut text = String::from("Options:\n");
+    for option in spec.options {
         let label = match option.value {
             Some(value) => format!("{} {value}", option.flag),
             None => option.flag.to_string(),
         };
         text.push_str(&format!("  {label:<28} {}\n", option.help));
     }
-    text.push_str("\nSee docs/xtb-worker.md (Command line)\n");
     text
 }
 

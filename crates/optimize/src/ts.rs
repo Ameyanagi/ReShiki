@@ -123,6 +123,8 @@ pub enum Reached {
 pub struct IrcBranch {
     /// TS energy, each accepted downhill point, and the relaxed end energy.
     pub energies: Vec<f64>,
+    /// Accepted downhill points in bohr, excluding the TS and relaxed end.
+    pub path: Vec<Minimum>,
     pub end: Minimum,
     pub reached: Reached,
 }
@@ -144,7 +146,8 @@ pub struct TsReport {
     /// Cartesian unit displacement corresponding to the lowest mass-weighted mode.
     pub transition_mode: Vec<f64>,
     /// Branches along +transition_mode and −transition_mode, respectively.
-    pub irc: [IrcBranch; 2],
+    /// Absent when the stationary point has no qualifying imaginary mode.
+    pub irc: Option<[IrcBranch; 2]>,
     pub connects: bool,
     /// All energy/gradient calls, including central differences and minimizations.
     pub evaluations: usize,
@@ -172,8 +175,6 @@ pub enum TsError {
     Failed(String),
     #[error("transition-state search cancelled")]
     Cancelled,
-    #[error("no projected imaginary frequency below −50 cm⁻¹")]
-    NoSaddle,
 }
 
 impl From<EvalError> for TsError {
@@ -286,7 +287,7 @@ fn emit(on_event: &mut impl FnMut(Event) -> ControlFlow<()>, event: Event) -> Re
 /// Refinement proceeds from the highest interior image even if NEB exhausts
 /// its budget. A first-order saddle has one frequency below −[`IMAGINARY_CM1`].
 /// All qualifying modes appear in the report at a higher-order saddle.
-/// A spectrum with no qualifying mode gives [`TsError::NoSaddle`].
+/// A spectrum with no qualifying mode is reported without tracing IRC.
 /// Image i uses potential i modulo the pool size. All other evaluations use
 /// the first potential. The caller may cancel at any stage or progress event.
 pub fn search<P: Potential + Send>(
@@ -366,23 +367,26 @@ pub fn search<P: Potential + Send>(
     emit(&mut on_event, Event::Stage(Stage::Frequencies))?;
     let hessian = saddle::hessian(&mut pool[0], &ts.positions)?;
     let (frequencies_cm1, transition_mode) = modes::frequencies(&ts.positions, &hessian, masses)?;
-    if !frequencies_cm1.iter().any(|&f| f < -IMAGINARY_CM1) {
-        return Err(TsError::NoSaddle);
-    }
-    emit(&mut on_event, Event::Stage(Stage::Irc))?;
-    let irc = irc::branches(
-        &mut pool[0],
-        search,
-        [&reactant, &product],
-        &ts,
-        &hessian,
-        &transition_mode,
-        &mut on_event,
-    )?;
-    let connects = matches!(
-        (irc[0].reached, irc[1].reached),
-        (Reached::Reactant, Reached::Product) | (Reached::Product, Reached::Reactant)
-    );
+    let irc = if frequencies_cm1.iter().any(|&f| f < -IMAGINARY_CM1) {
+        emit(&mut on_event, Event::Stage(Stage::Irc))?;
+        Some(irc::branches(
+            &mut pool[0],
+            search,
+            [&reactant, &product],
+            &ts,
+            &hessian,
+            &transition_mode,
+            &mut on_event,
+        )?)
+    } else {
+        None
+    };
+    let connects = irc.as_ref().is_some_and(|[plus, minus]| {
+        matches!(
+            (plus.reached, minus.reached),
+            (Reached::Reactant, Reached::Product) | (Reached::Product, Reached::Reactant)
+        )
+    });
     Ok(TsReport {
         reactant,
         product,
