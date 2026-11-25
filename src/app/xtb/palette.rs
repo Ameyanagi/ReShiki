@@ -558,12 +558,16 @@ impl App {
             self.error = true;
             return Task::none();
         };
-        let mut config = state::Config::from_result(
+        let Some(mut config) = state::Config::from_result(
             result,
             shown.frame,
             shown.info,
             self.xtb.settings.threads(),
-        );
+        ) else {
+            self.status = "The Calculate card cannot repeat this calculation".into();
+            self.error = true;
+            return Task::none();
+        };
         config.fixed.retain(|id| self.tab.doc.atom(*id).is_some());
         let request = Request {
             atoms: reshiki::molecule_names::component(&self.tab.doc, first),

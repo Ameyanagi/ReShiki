@@ -301,7 +301,7 @@ fn recalculate_reads_the_settings_the_result_stored() {
     let config = Config::from_result(&result, &frame, None, 3);
     assert_eq!(
         config,
-        Config {
+        Some(Config {
             task: Task::Energy,
             method: XtbMethod::GXtb,
             charge: 0,
@@ -314,6 +314,20 @@ fn recalculate_reads_the_settings_the_result_stored() {
             threads: 3,
             tight: false,
             fixed: vec![],
-        }
+        })
     );
+    // GBSA, a solvent the card does not list, or an imported job: no rerun.
+    let mut gbsa = result.clone();
+    if let qcdata::Settings::Xtb(settings) = &mut gbsa.settings {
+        settings.solvent.as_mut().unwrap().model = qcdata::SolventModel::Gbsa;
+    }
+    assert_eq!(Config::from_result(&gbsa, &frame, None, 3), None);
+    let mut benzene = result.clone();
+    if let qcdata::Settings::Xtb(settings) = &mut benzene.settings {
+        settings.solvent.as_mut().unwrap().name = "benzene".into();
+    }
+    assert_eq!(Config::from_result(&benzene, &frame, None, 3), None);
+    let mut hessian = result;
+    hessian.task = qcdata::Task::Hessian;
+    assert_eq!(Config::from_result(&hessian, &frame, None, 3), None);
 }

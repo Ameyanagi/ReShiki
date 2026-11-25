@@ -85,43 +85,45 @@ pub(crate) struct Config {
 impl Config {
     /// A stored result's settings, to calculate it again; what the file
     /// does not keep comes from `info` (this session's run), else defaults.
+    /// `None` when the card cannot reproduce it: imported results, other
+    /// tasks, GBSA or a solvent the card does not list.
     pub(crate) fn from_result(
         result: &qcdata::CalcResult,
         frame: &qcdata::Frame,
         info: Option<&super::results::RunInfo>,
         threads: u32,
-    ) -> Self {
-        let mut config = Self {
-            task: if result.task == qcdata::Task::Optimize {
-                Task::Optimize
-            } else {
-                Task::Energy
-            },
-            method: XtbMethod::Gfn2Xtb,
+    ) -> Option<Self> {
+        let qcdata::Settings::Xtb(settings) = &result.settings else {
+            return None;
+        };
+        let task = match result.task {
+            qcdata::Task::Optimize => Task::Optimize,
+            qcdata::Task::Energy => Task::Energy,
+            _ => return None,
+        };
+        let solvent = match &settings.solvent {
+            None => None,
+            Some(s) if s.model == qcdata::SolventModel::Alpb => Some(
+                SOLVENTS
+                    .into_iter()
+                    .find(|name| name.eq_ignore_ascii_case(&s.name))?,
+            ),
+            Some(_) => return None,
+        };
+        Some(Self {
+            task,
+            method: settings.method,
             charge: frame.charge,
             unpaired: frame.multiplicity.saturating_sub(1),
-            solvent: None,
-            xtb68: false,
-            accuracy: None,
-            temperature_k: None,
-            max_iterations: None,
+            solvent,
+            xtb68: settings.conventions == qcdata::XtbConventions::Xtb68,
+            accuracy: settings.accuracy,
+            temperature_k: settings.electronic_temperature_k,
+            max_iterations: settings.max_iterations,
             threads: info.map_or(threads, |info| info.threads),
             tight: info.is_some_and(|info| info.tight),
             fixed: info.map_or_else(Vec::new, |info| info.fixed.clone()),
-        };
-        if let qcdata::Settings::Xtb(settings) = &result.settings {
-            config.method = settings.method;
-            config.solvent = settings.solvent.as_ref().and_then(|s| {
-                SOLVENTS
-                    .into_iter()
-                    .find(|name| name.eq_ignore_ascii_case(&s.name))
-            });
-            config.xtb68 = settings.conventions == qcdata::XtbConventions::Xtb68;
-            config.accuracy = settings.accuracy;
-            config.temperature_k = settings.electronic_temperature_k;
-            config.max_iterations = settings.max_iterations;
-        }
-        config
+        })
     }
 
     /// The same calculation at the retry electronic temperature, unless it
