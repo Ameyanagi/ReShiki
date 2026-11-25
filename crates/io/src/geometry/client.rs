@@ -155,6 +155,23 @@ impl Client {
         mode: Ensemble,
         deadline: BatchInstant,
     ) -> Result<Starts, Error> {
+        self.conformer_starts_with(prepared, field, starts, base_seed, mode, deadline, |_| {})
+            .await
+    }
+
+    /// Like [`Self::conformer_starts`], with the cumulative count of valid
+    /// conformers reported after each accepted batch.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn conformer_starts_with(
+        &self,
+        prepared: &Prepared,
+        field: ForceField,
+        starts: u32,
+        base_seed: i32,
+        mode: Ensemble,
+        deadline: BatchInstant,
+        mut progress: impl FnMut(usize),
+    ) -> Result<Starts, Error> {
         if !(1..=MAX_CONFORMER_STARTS).contains(&starts) {
             return Err(Error::Invalid(format!(
                 "Conformer search needs 1–{MAX_CONFORMER_STARTS} starts"
@@ -209,6 +226,7 @@ impl Client {
             result.conformers.extend(batch.ensemble);
             result.batches += 1;
             remaining -= operation.conformers;
+            progress(result.conformers.len());
         }
         Ok(result)
     }

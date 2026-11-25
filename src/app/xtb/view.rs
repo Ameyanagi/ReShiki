@@ -15,7 +15,7 @@ fn label<'a>(content: &'a str) -> Element<'a, Message> {
 }
 
 /// One segment of a segmented control; `None` leaves it disabled with `hint`.
-fn segment<'a>(
+pub(super) fn segment<'a>(
     id: String,
     name: &'a str,
     active: bool,
@@ -321,6 +321,10 @@ impl App {
         if optimize {
             body = body.push(hold);
         }
+        let search = settings.task == CalcTask::Conformers;
+        if search {
+            body = body.push(self.xtb_conformer_fields(idle, numbers.as_deref()));
+        }
         body = body.push(self.xtb_advanced(idle, electronic));
 
         // Run; while running, the progress row above replaces it.
@@ -328,8 +332,14 @@ impl App {
             .as_ref()
             .map_or_else(|| target.as_ref().map_or(0, Vec::len), Vec::len);
         let too_many = count > state::MAX_ATOMS;
+        let search_ok = !search
+            || self
+                .xtb
+                .conformers
+                .config(numbers.as_ref().map(Vec::len))
+                .is_ok();
         if run.is_none() {
-            let ready = target.is_some() && check.is_ok() && !too_many;
+            let ready = target.is_some() && check.is_ok() && !too_many && search_ok;
             body = body.push(
                 row![
                     hover_hint(
@@ -536,7 +546,10 @@ fn progress(run: &super::Run) -> Element<'_, Message> {
     let text_line = line(
         run.launch.as_ref().map_or_else(
             || "Making the 3D model first (MMFF94s)".into(),
-            |_| run.progress.line(run.config.task, run.seconds()),
+            |_| match &run.search {
+                Some(live) => live.line(run.seconds()),
+                None => run.progress.line(run.config.task, run.seconds()),
+            },
         ),
         Tone::Muted,
     );
@@ -555,6 +568,10 @@ fn progress(run: &super::Run) -> Element<'_, Message> {
     }
     controls = controls.push(Space::new().width(Length::Fill)).push(cancel);
     rows = rows.push(controls);
+    if let Some(live) = run.search.as_ref().filter(|_| run.launch.is_some()) {
+        // Embedding has no count yet: the bar waits at the start.
+        rows = rows.push(progress_bar(0.0..=1.0, live.fraction().unwrap_or(0.)).girth(3));
+    }
     if optimizing {
         rows = rows.push(
             progress_bar(
