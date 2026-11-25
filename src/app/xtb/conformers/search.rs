@@ -88,8 +88,7 @@ impl App {
         if format == Format::Sdf && shown.stale {
             // Bonds and charges come from the drawing, which no longer
             // describes these geometries.
-            self.status =
-                "The molecule changed after this search: export XYZ, or recalculate first".into();
+            self.status = "The molecule changed: export XYZ, or recalculate".into();
             self.error = true;
             return Task::none();
         }
@@ -345,7 +344,7 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
     result.status = if found.stopped {
         qcdata::Status::NotConverged {
             reason: format!(
-                "Cancelled after {} of {} representatives",
+                "Canceled after {} of {} representatives",
                 found.reranked, found.planned
             ),
         }
@@ -377,7 +376,7 @@ fn pending(run: &crate::app::xtb::Run, found: &super::Found) -> Result<Pending, 
     let mut notes = found.notes.clone();
     if found.stopped {
         notes.push(format!(
-            "Cancelled. {} re-ranked conformers are kept and usable.",
+            "Canceled. {} re-ranked conformers are kept and usable.",
             found.reranked
         ));
     }

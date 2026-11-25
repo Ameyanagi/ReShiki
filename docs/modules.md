@@ -207,6 +207,11 @@ explains how the crates and modules fit together.
 - `src/app/workspace/model_face_qa.rs`: Matched real-renderer and pointer evidence for model faces, frames and hints.
 - `src/app/workspace/selection_canvas_qa.rs`: Opt-in renderer/input regression, also used for matched visual evidence.
 - `src/app/xtb.rs`: Predict → xTB
+- `src/app/xtb/conformers.rs`: Conformer search
+- `src/app/xtb/conformers/export.rs`: Conformer ensembles as files
+- `src/app/xtb/conformers/pipeline.rs`: Desktop conformer sampling, clustering and xTB ranking.
+- `src/app/xtb/conformers/search.rs`: A conformer search as the app runs it
+- `src/app/xtb/conformers/view.rs`: The card's Conformers fields, the Conformers tab and its footer.
 - `src/app/xtb/palette.rs`: The xTB results palette
 - `src/app/xtb/palette/view.rs`: The results palette's widgets
 - `src/app/xtb/results.rs`: The results palette's content, kept free of iced

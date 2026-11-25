@@ -391,11 +391,11 @@ mod app {
         let result = &app.tab.doc.science.results[0].result;
         assert!(matches!(
             &result.status,
-            qcdata::Status::NotConverged { reason } if reason == "Cancelled after 3 of 20 representatives"
+            qcdata::Status::NotConverged { reason } if reason == "Canceled after 3 of 20 representatives"
         ));
         assert!(matches!(
             &app.tab.xtb.outcome,
-            Some(Outcome::Done { notes, .. }) if notes.iter().any(|n| n == "Cancelled. 3 re-ranked conformers are kept and usable.")
+            Some(Outcome::Done { notes, .. }) if notes.iter().any(|n| n == "Canceled. 3 re-ranked conformers are kept and usable.")
         ));
     }
 
