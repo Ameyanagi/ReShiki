@@ -271,7 +271,7 @@ impl App {
     /// Whether Recalculate can repeat the shown result with the card.
     fn xtb_repeatable(&self) -> bool {
         self.xtb_shown().is_some_and(|shown| {
-            state::Config::from_result(&shown.stored.result, shown.frame, shown.info, 1).is_some()
+            results::config(&shown.stored.result, shown.frame, shown.info, 1).is_some()
         })
     }
 

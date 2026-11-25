@@ -1,7 +1,10 @@
 //! The results palette's content, kept free of iced: the method line, the
 //! Summary rows, the optimization steps, the log and file sizes, built from
 //! a stored result and what this session still knows about its run.
-use super::state::{NEAR_DEGENERATE, formula, scientific, signed, symbol};
+use super::state::{
+    Config, NEAR_DEGENERATE, SOLVENTS, Task as CardTask, formula, scientific, signed, symbol,
+};
+use reshiki::qcdata;
 use reshiki::qcdata::{
     Beta, CalcResult, Frame, OrbitalSet, Orbitals, Settings, Status, Task, XtbConventions,
 };
@@ -214,9 +217,15 @@ pub(crate) fn summary_rows(
         rows.push((
             "Run time",
             format!(
-                "{:.1} s · {} SCF calculations",
+                "{:.1} s · {} {}",
                 info.seconds,
-                info.evaluations.len()
+                info.evaluations.len(),
+                // GFN-FF has no SCF.
+                if matches!(&result.settings, Settings::Xtb(s) if !super::state::electronic(s.method)) {
+                    "calculations"
+                } else {
+                    "SCF calculations"
+                }
             ),
         ));
     }
@@ -331,6 +340,58 @@ fn around(levels: &[f64], homo: usize, spin: &str) -> Vec<(String, f64)> {
         .collect();
     rows.reverse();
     rows
+}
+
+/// A stored result's settings, to calculate it again; what the file
+/// does not keep comes from `info` (this session's run), else defaults.
+/// `None` when the card cannot reproduce it: imported results, other
+/// tasks, GBSA or a solvent the card does not list.
+pub(crate) fn config(
+    result: &qcdata::CalcResult,
+    frame: &qcdata::Frame,
+    info: Option<&RunInfo>,
+    threads: u32,
+) -> Option<Config> {
+    let qcdata::Settings::Xtb(settings) = &result.settings else {
+        return None;
+    };
+    let task = match result.task {
+        qcdata::Task::Optimize => CardTask::Optimize,
+        qcdata::Task::Energy => CardTask::Energy,
+        _ => return None,
+    };
+    // Settings the card cannot send: a retry ladder, a GFN-FF
+    // topology with fragment charges, another solvation state.
+    let topology = settings
+        .gfnff
+        .as_ref()
+        .is_some_and(|gfnff| !gfnff.fragment_charges.is_empty());
+    if !settings.scf_retries.is_empty() || topology {
+        return None;
+    }
+    let solvent = match &settings.solvent {
+        None => None,
+        Some(s) if s.model == qcdata::SolventModel::Alpb && s.state == Default::default() => Some(
+            SOLVENTS
+                .into_iter()
+                .find(|name| name.eq_ignore_ascii_case(&s.name))?,
+        ),
+        Some(_) => return None,
+    };
+    Some(Config {
+        task,
+        method: settings.method,
+        charge: frame.charge,
+        unpaired: frame.multiplicity.saturating_sub(1),
+        solvent,
+        xtb68: settings.conventions == qcdata::XtbConventions::Xtb68,
+        accuracy: settings.accuracy,
+        temperature_k: settings.electronic_temperature_k,
+        max_iterations: settings.max_iterations,
+        threads: info.map_or(threads, |info| info.threads),
+        tight: info.is_some_and(|info| info.tight),
+        fixed: info.map_or_else(Vec::new, |info| info.fixed.clone()),
+    })
 }
 
 /// "C1–O2" with "1.92": each stored bond order, in the frame's atom order.

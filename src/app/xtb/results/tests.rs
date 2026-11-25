@@ -399,3 +399,62 @@ fn unrestricted_gaps_follow_the_conventions_and_list_both_spins() {
     });
     assert_eq!(gap_ev(&result, None), None);
 }
+
+#[test]
+fn recalculate_reads_the_settings_the_result_stored() {
+    let frame = qcdata::Frame {
+        numbers: vec![8, 1, 1],
+        positions_angstrom: vec![[0.; 3], [0.96, 0., 0.], [-0.24, 0.93, 0.]],
+        isotopes: vec![],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let result: qcdata::CalcResult = serde_json::from_value(serde_json::json!({
+        "frame": frame.hash(),
+        "task": "energy",
+        "settings": { "xtb": {
+            "method": "g_xtb",
+            "conventions": "xtb-6.8",
+            "solvent": { "model": "alpb", "name": "water", "correction": "gfn2" },
+            "electronic_temperature_k": 1000.0,
+            "accuracy": 0.5,
+            "max_iterations": 400
+        } },
+        "provenance": { "program": "axtb", "source": { "calculated": { "engine_revision": "9d0388c" } } },
+        "status": "converged"
+    }))
+    .expect("a stored result");
+    assert_eq!(
+        config(&result, &frame, None, 3),
+        Some(Config {
+            task: CardTask::Energy,
+            method: qcdata::XtbMethod::GXtb,
+            charge: 0,
+            unpaired: 0,
+            solvent: Some("water"),
+            xtb68: true,
+            accuracy: Some(0.5),
+            temperature_k: Some(1000.),
+            max_iterations: Some(400),
+            threads: 3,
+            tight: false,
+            fixed: vec![],
+        })
+    );
+    // GBSA, a solvent the card does not list, or an imported job: no rerun.
+    let mut gbsa = result.clone();
+    if let qcdata::Settings::Xtb(settings) = &mut gbsa.settings {
+        settings.solvent.as_mut().unwrap().model = qcdata::SolventModel::Gbsa;
+    }
+    assert_eq!(config(&gbsa, &frame, None, 3), None);
+    let mut benzene = result.clone();
+    if let qcdata::Settings::Xtb(settings) = &mut benzene.settings {
+        settings.solvent.as_mut().unwrap().name = "benzene".into();
+    }
+    assert_eq!(config(&benzene, &frame, None, 3), None);
+    let mut hessian = result;
+    hessian.task = Task::Hessian;
+    assert_eq!(config(&hessian, &frame, None, 3), None);
+}

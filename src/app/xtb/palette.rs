@@ -559,12 +559,9 @@ impl App {
             self.error = true;
             return Task::none();
         };
-        let Some(mut config) = state::Config::from_result(
-            result,
-            shown.frame,
-            shown.info,
-            self.xtb.settings.threads(),
-        ) else {
+        let Some(mut config) =
+            results::config(result, shown.frame, shown.info, self.xtb.settings.threads())
+        else {
             self.status = "The Calculate card cannot repeat this calculation".into();
             self.error = true;
             return Task::none();
