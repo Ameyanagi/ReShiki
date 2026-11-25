@@ -216,6 +216,8 @@ impl App {
         let previewing = self.xtb_step().is_some();
         self.tab.xtb.palette.step = None;
         self.tab.xtb.palette.confirm.clear();
+        // The overlay belongs to the preview that drew it.
+        self.tab.xtb.palette.ensemble.overlay = false;
         previewing
     }
 
@@ -595,9 +597,12 @@ impl App {
         config.fixed.retain(|id| self.tab.doc.atom(*id).is_some());
         let request = Request {
             atoms: reshiki::molecule_names::component(&self.tab.doc, first),
+            // A search runs again with the card's Conformers fields.
+            search: (config.task == super::CalcTask::Conformers)
+                .then(|| self.xtb.conformers.config(None).ok())
+                .flatten(),
             config,
             keep_full: shown.stored.keep_full,
-            search: None,
         };
         self.xtb_end_preview();
         self.xtb_begin(request)

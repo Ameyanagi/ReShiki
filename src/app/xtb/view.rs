@@ -190,7 +190,7 @@ impl App {
         let config = Settings {
             charge: charge_text,
             unpaired: unpaired_text,
-            ..settings.clone()
+            ..super::conformers::effective(settings, &self.xtb.conformers)
         }
         .config(drawn, true, vec![]);
         let check = match (&config, &numbers) {

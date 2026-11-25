@@ -144,6 +144,10 @@ pub(crate) fn sdf(
             if let Some(start) = path.minimizer_energies_hartree.get(*step) {
                 items.push(("START_ENERGY_HARTREE".into(), format!("{start:.10}")));
             }
+            // The calculated state, which a typed charge can set apart from
+            // the drawn formal charges.
+            items.push(("TOTAL_CHARGE".into(), path.charge.to_string()));
+            items.push(("MULTIPLICITY".into(), path.multiplicity.to_string()));
             (frame, format!("{title} conformer {rank}"), items)
         })
         .collect();
@@ -332,6 +336,7 @@ mod tests {
     #[test]
     fn sdf_exports_ranked_records_with_charges_and_shared_bonds() {
         let (doc, atoms, result) = water();
+        let path = result.trajectory.as_ref().unwrap();
         let text = sdf(&doc, &atoms, &result, "Water").unwrap();
         let records: Vec<_> = text.split_terminator("$$$$\n").collect();
         assert_eq!(records.len(), 3);
@@ -383,7 +388,9 @@ mod tests {
                 format!(
                     "> <RANK>\n{rank}\n\n> <ENERGY_HARTREE>\n{energy}\n\n\
                      > <DELTA_E_KCAL_MOL>\n{delta}\n\n> <BOLTZMANN_PERCENT>\n{percent}\n\n\
-                     > <CLUSTER_SIZE>\n{size}\n\n> <START_ENERGY_HARTREE>\n{start}\n\n"
+                     > <CLUSTER_SIZE>\n{size}\n\n> <START_ENERGY_HARTREE>\n{start}\n\n\
+                     > <TOTAL_CHARGE>\n{}\n\n> <MULTIPLICITY>\n{}\n\n",
+                    path.charge, path.multiplicity
                 )
             );
         }

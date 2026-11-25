@@ -1,7 +1,8 @@
 //! A conformer search as the app runs it: the card's fields, the start
 //! from the molecule's 3D model, progress, Cancel (keeping what is
 //! re-ranked), the stored result and the tab's overlay and export.
-use super::{Action, Format, Phase, Row, Table};
+use super::{Action, Format, Row, Table};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::app::xtb::{Action as XtbAction, Pending, results::RunInfo, state};
 use crate::app::{App, Message};
 use iced::Task;
@@ -20,7 +21,10 @@ impl App {
             Action::Three(three) => settings.three = three,
             Action::Overlay(on) => {
                 self.tab.xtb.palette.ensemble.overlay = on;
-                self.xtb_reshow_conformer();
+                // Off only takes the ghosts away from a preview.
+                if on || self.xtb_step().is_some() {
+                    self.xtb_reshow_conformer();
+                }
             }
             Action::Export(format) => return self.xtb_export_conformers(format),
         }
@@ -80,6 +84,14 @@ impl App {
             .map(|stem| stem.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Molecule".into());
         let result = &shown.stored.result;
+        if format == Format::Sdf && shown.stale {
+            // Bonds and charges come from the drawing, which no longer
+            // describes these geometries.
+            self.status =
+                "The molecule changed after this search: export XYZ, or recalculate first".into();
+            self.error = true;
+            return Task::none();
+        }
         let text = match format {
             Format::Xyz => super::export::xyz(result, &stem),
             Format::Sdf => super::export::sdf(&self.tab.doc, shown.atoms, result, &stem),
@@ -117,11 +129,14 @@ impl App {
         let Some(live) = run.search.as_mut() else {
             return false;
         };
+        // Making the 3D model first: Cancel ends the run as usual. Once the
+        // search runs, its thread knows best what finished, so the run
+        // waits for its last word: the kept conformers, or nothing.
+        if run.launch.is_none() {
+            return false;
+        }
         if live.stopping {
             return true;
-        }
-        if !matches!(live.phase, Phase::Reranking { done, .. } if done > 0) {
-            return false;
         }
         live.stopping = true;
         #[cfg(not(target_arch = "wasm32"))]
@@ -129,17 +144,6 @@ impl App {
         self.status = run.status();
         self.error = false;
         true
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    pub(in crate::app::xtb) fn xtb_search_start(
-        &mut self,
-        _: reshiki::science::Launch,
-    ) -> Task<Message> {
-        self.xtb_fail(state::Failure::Other(
-            "xTB calculations run in the desktop app.".into(),
-        ));
-        Task::none()
     }
 
     /// Start the search for the run in flight from its molecule's model.
@@ -197,7 +201,13 @@ impl App {
             parents,
             bonds,
             config: live.config.clone(),
-            job: crate::app::xtb::job(&run.config, &launch),
+            job: crate::app::xtb::run::Job {
+                // One GFN-FF topology, from the 3D model, for every start: the
+                // result records that frame as its topology reference.
+                topology: (run.config.method == qcdata::XtbMethod::GfnFf)
+                    .then(|| launch.frame.positions_angstrom.clone()),
+                ..crate::app::xtb::job(&run.config, &launch)
+            },
         };
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         let Some(run) = self.tab.xtb.run.as_mut() else {
@@ -249,6 +259,15 @@ impl App {
                 }
                 Err(failure) => self.xtb_fail(failure),
             },
+            // Cancelled before any conformer was kept.
+            super::Event::Done(Err(state::Failure::Other(message)))
+                if message == "Calculation canceled"
+                    && run.search.as_ref().is_some_and(|live| live.stopping) =>
+            {
+                self.tab.xtb.run = None;
+                self.status = "Calculation canceled".into();
+                self.error = false;
+            }
             super::Event::Done(Err(failure)) => self.xtb_fail(failure),
         }
     }

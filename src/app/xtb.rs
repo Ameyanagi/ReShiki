@@ -279,7 +279,10 @@ struct Pending {
 /// A run's progress, which never closes menus or moves focus.
 pub(super) fn is_progress(message: &Message) -> bool {
     #[cfg(not(target_arch = "wasm32"))]
-    return matches!(message, Message::Xtb(Action::Event(..)));
+    return matches!(
+        message,
+        Message::Xtb(Action::Event(..) | Action::Search(..))
+    );
     #[cfg(target_arch = "wasm32")]
     false
 }
@@ -494,7 +497,7 @@ impl App {
             self.error = true;
             return Task::none();
         };
-        let settings = &self.xtb.settings;
+        let settings = &conformers::effective(&self.xtb.settings, &self.xtb.conformers);
         let (charge, multiplicity) = science::drawn_state(&self.tab.doc, first);
         let drawn = (charge, multiplicity.saturating_sub(1));
         let typed = settings.molecule.is_some() && settings.molecule == self.xtb_key();
@@ -525,25 +528,6 @@ impl App {
             },
             _ => None,
         };
-        // GFN-FF or GFN2-xTB minimizing every start is the search's method.
-        let mut config = config;
-        if let Some(method) = search.as_ref().and_then(|s| s.minimizer.xtb()) {
-            if !state::electronic(method) {
-                if config.unpaired > 0 {
-                    self.xtb_fail(state::Failure::Other(
-                        "GFN-FF calculates closed shells only: set Unpaired electrons to 0".into(),
-                    ));
-                    return Task::none();
-                }
-                (
-                    config.solvent,
-                    config.accuracy,
-                    config.temperature_k,
-                    config.max_iterations,
-                ) = (None, None, None, None);
-            }
-            config.method = method;
-        }
         let request = Request {
             atoms,
             config,
@@ -974,6 +958,7 @@ fn job(config: &state::Config, launch: &Launch) -> run::Job {
             .map(|(index, _)| index)
             .collect(),
         tight: config.tight,
+        topology: None,
     }
 }
 

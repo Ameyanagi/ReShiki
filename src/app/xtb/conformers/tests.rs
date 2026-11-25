@@ -157,7 +157,7 @@ fn progress_reads_as_the_search_goes() {
     live.stopping = true;
     assert_eq!(
         live.line(9.),
-        "Stopping · keeping 7 of 20 re-ranked · 9.0 s"
+        "Stopping · keeping what finished (7 of 20) · 9.0 s"
     );
 }
 
@@ -346,13 +346,21 @@ mod app {
     #[test]
     fn cancel_while_reranking_keeps_the_finished_conformers() {
         let (mut app, _) = water(CalcTask::Conformers);
-        // Before any representative finished, Cancel ends the search.
+        // The search thread decides what is kept: with nothing finished it
+        // answers that it was cancelled.
+        search(&mut app, Event::Phase(Phase::Clustering));
+        send(&mut app, XtbAction::Cancel);
+        assert!(app.xtb_running());
+        assert!(app.status.contains("Stopping"), "{}", app.status);
         search(
             &mut app,
-            Event::Phase(Phase::Reranking { done: 0, total: 20 }),
+            Event::Done(Err(crate::app::xtb::state::Failure::Other(
+                "Calculation canceled".into(),
+            ))),
         );
-        send(&mut app, XtbAction::Cancel);
         assert!(!app.xtb_running());
+        assert_eq!(app.status, "Calculation canceled");
+        assert!(app.tab.xtb.outcome.is_none());
 
         let (mut app, _) = water(CalcTask::Conformers);
         search(
@@ -365,7 +373,8 @@ mod app {
             "the finished conformers are still to come"
         );
         assert!(
-            app.status.contains("Stopping · keeping 3 of 20 re-ranked"),
+            app.status
+                .contains("Stopping · keeping what finished (3 of 20)"),
             "{}",
             app.status
         );
@@ -397,10 +406,50 @@ mod app {
         let (mut app, _) = water(CalcTask::Conformers);
         search(&mut app, found(false));
         let bytes = app.tab.doc.science.saved_sizes()[0];
+        // Saved positions are one compact string, not a list of numbers.
+        let saved = serde_json::to_value(&app.tab.doc.science.results[0]).unwrap();
+        assert!(
+            saved["result"]["trajectory"]["positions_angstrom"].is_string(),
+            "{saved}"
+        );
         // Three water conformers: a few kilobytes at most.
         assert!(bytes < 4_000, "{bytes}");
         let xyz =
             super::super::export::xyz(&app.tab.doc.science.results[0].result, "water").unwrap();
         assert_eq!(xyz.lines().filter(|l| l.trim() == "3").count(), 3);
     }
+}
+
+#[test]
+fn an_xtb_minimizer_is_the_method_the_card_checks_and_runs() {
+    use crate::app::xtb::CalcTask;
+    let card = crate::app::xtb::state::Settings {
+        task: CalcTask::Conformers,
+        method: XtbMethod::GfnFf,
+        unpaired: "1".into(),
+        ..Default::default()
+    };
+    // GFN-FF itself is closed-shell only.
+    assert!(card.config((0, 0), true, vec![]).is_err());
+    let gfn2 = Settings {
+        minimizer: Minimizer::Gfn2,
+        ..Settings::default()
+    };
+    let effective = effective(&card, &gfn2);
+    assert_eq!(effective.method, XtbMethod::Gfn2Xtb);
+    assert!(effective.config((0, 0), true, vec![]).is_ok());
+    // A force-field minimizer re-ranks with the card's method.
+    assert_eq!(
+        super::effective(&card, &Settings::default()).method,
+        XtbMethod::GfnFf
+    );
+    // Without re-ranking, the representatives field does not apply.
+    let ignored = Settings {
+        representatives: "0".into(),
+        ..gfn2
+    };
+    assert_eq!(
+        ignored.config(None).unwrap().representatives,
+        MAX_REPRESENTATIVES
+    );
 }

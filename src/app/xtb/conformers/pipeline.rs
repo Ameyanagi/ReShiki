@@ -150,6 +150,12 @@ fn search_conformers(
             let n = finished.failed;
             notes.push(format!("{n} starts failed with xTB and were left out."));
         }
+        if finished.unconverged > 0 {
+            let n = finished.unconverged;
+            notes.push(format!(
+                "{n} starts did not converge within the step limit and were left out."
+            ));
+        }
         starts = finished
             .reports
             .iter()
@@ -223,6 +229,12 @@ fn search_conformers(
             let n = finished.failed;
             notes.push(format!(
                 "{n} representatives failed with xTB and were left out."
+            ));
+        }
+        if finished.unconverged > 0 {
+            let n = finished.unconverged;
+            notes.push(format!(
+                "{n} representatives did not converge within the step limit and were left out."
             ));
         }
         (finished.engine, finished.reports)
@@ -337,8 +349,21 @@ fn sample(
     if count == 0 {
         return Err(Failure::Other("No conformer starts were generated".into()));
     }
-    sampled
-        .conformers
+    // A start the force field left unconverged would cluster and rank by a
+    // geometry and energy that are not a minimum; keep them only when no
+    // start converged.
+    let mut conformers = sampled.conformers;
+    if !embedded && conformers.iter().any(|entry| entry.converged) {
+        let before = conformers.len();
+        conformers.retain(|entry| entry.converged);
+        let dropped = before - conformers.len();
+        if dropped > 0 {
+            notes.push(format!(
+                "{dropped} starts did not converge with the force field and were left out."
+            ));
+        }
+    }
+    conformers
         .into_iter()
         .map(|entry| {
             let positions = frame_positions(
@@ -442,10 +467,8 @@ fn optimize_all(
         return Err(no_representatives());
     }
     emit_phase(tx, phase(0, total));
-    let workers = thread::available_parallelism()
-        .map_or(1, |n| n.get())
-        .min(8)
-        .min(total);
+    // The card's Threads setting is how many xTB workers run at once.
+    let workers = (template.threads.max(1) as usize).min(8).min(total);
     let next = AtomicUsize::new(0);
     thread::scope(|scope| {
         let (completed_tx, completed) = sync_channel::channel();
@@ -487,10 +510,8 @@ fn optimize_all(
         let mut outcomes = Vec::with_capacity(total);
         let mut done = 0;
         for outcome in completed {
-            if outcome.1.is_ok() {
-                done += 1;
-                emit_phase(tx, phase(done, total));
-            }
+            done += 1;
+            emit_phase(tx, phase(done, total));
             outcomes.push(outcome);
         }
         Ok(outcomes)
@@ -501,14 +522,23 @@ struct Finished {
     engine: Engine,
     reports: Vec<(usize, Arc<run::Report>)>,
     failed: usize,
+    /// Optimizations that stopped at the step limit, left out.
+    unconverged: usize,
 }
 
 fn select_finished(outcomes: Vec<Optimization>, stopped: bool) -> Result<Finished, Failure> {
     let mut reports = Vec::new();
     let mut first_failure = None;
     let mut failed = 0;
+    let mut unconverged = 0;
     for (slot, result) in outcomes {
         match result {
+            Ok(report) if !report.converged => {
+                unconverged += 1;
+                first_failure.get_or_insert(Failure::Other(
+                    "The xTB optimizations did not converge within the step limit".into(),
+                ));
+            }
             Ok(report) => reports.push((slot, report)),
             Err(Failure::Other(message)) if stopped && message == CANCELED => {}
             Err(error) => {
@@ -533,6 +563,7 @@ fn select_finished(outcomes: Vec<Optimization>, stopped: bool) -> Result<Finishe
         engine,
         reports,
         failed,
+        unconverged,
     })
 }
 

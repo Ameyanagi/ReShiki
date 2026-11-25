@@ -168,15 +168,20 @@ impl Settings {
             .ok()
             .filter(|w| w.is_finite() && *w >= 0.1 && *w <= 100.)
             .ok_or("Energy window must be from 0.1 to 100 kcal/mol")?;
-        let representatives = self
-            .representatives
-            .trim()
-            .parse::<usize>()
-            .ok()
-            .filter(|n| (1..=MAX_REPRESENTATIVES).contains(n))
-            .ok_or(format!(
-                "Representatives must be a whole number from 1 to {MAX_REPRESENTATIVES}"
-            ))?;
+        // When xTB minimized every start there is no re-ranking: every
+        // cluster representative is kept, and the field does not apply.
+        let representatives = if self.minimizer.xtb().is_some() {
+            MAX_REPRESENTATIVES
+        } else {
+            self.representatives
+                .trim()
+                .parse::<usize>()
+                .ok()
+                .filter(|n| (1..=MAX_REPRESENTATIVES).contains(n))
+                .ok_or(format!(
+                    "Representatives must be a whole number from 1 to {MAX_REPRESENTATIVES}"
+                ))?
+        };
         if let Some(atoms) = atoms {
             if atoms > MAX_ATOMS {
                 return Err(format!(
@@ -257,6 +262,10 @@ impl Live {
         let starts = self.config.starts;
         let field = self.config.minimizer.label();
         let text = match self.phase {
+            Phase::Reranking { done, total } if self.stopping => {
+                format!("Stopping · keeping what finished ({done} of {total})")
+            }
+            _ if self.stopping => "Stopping".into(),
             Phase::Starts => format!("Embedding {starts} starts · {field}"),
             Phase::Sampled { done, total } => {
                 format!("Embedding {total} · minimizing {done}/{total} ({field})")
@@ -265,9 +274,6 @@ impl Live {
                 format!("Embedding {total} · {field} {done}/{total}")
             }
             Phase::Clustering => format!("Clustering {starts} starts"),
-            Phase::Reranking { done, total } if self.stopping => {
-                format!("Stopping · keeping {done} of {total} re-ranked")
-            }
             Phase::Reranking { done, total } => {
                 format!("Clustered · {} {done}/{total}", self.method.label())
             }
@@ -296,6 +302,22 @@ impl Live {
 pub(crate) fn gfn2_estimate(atoms: usize, starts: u32, threads: u32) -> f64 {
     let gradient = 0.008 * (atoms as f64 / 24.).powf(1.6);
     gradient * 100. * f64::from(starts) / f64::from(threads.max(1))
+}
+
+/// The card's settings as a run uses them: a search whose minimizer is
+/// GFN-FF or GFN2-xTB runs every calculation with that method, and is
+/// checked as such (closed shells for GFN-FF, its solvent and SCF fields).
+pub(crate) fn effective(
+    settings: &super::state::Settings,
+    search: &Settings,
+) -> super::state::Settings {
+    match search.minimizer.xtb() {
+        Some(method) if settings.task == super::CalcTask::Conformers => super::state::Settings {
+            method,
+            ..settings.clone()
+        },
+        _ => settings.clone(),
+    }
 }
 
 /// Whether `result` is a conformer search.

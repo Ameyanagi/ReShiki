@@ -104,10 +104,12 @@ impl App {
                     Tone::Warning,
                 ));
             }
-            Minimizer::GfnFf => body = body.push(line(
-                "GFN-FF minimizes every start; re-ranking is skipped. Recommended for metal complexes.",
-                Tone::Muted,
-            )),
+            Minimizer::GfnFf => {
+                body = body.push(line(
+                    "GFN-FF minimizes every start; re-ranking is skipped.",
+                    Tone::Muted,
+                ))
+            }
             _ => {}
         }
 
@@ -222,17 +224,21 @@ impl App {
             .then(|| self.xtb_model_step(shown))
             .flatten();
         let current = selected.or(shows);
-        let field = super::start_field(&shown.stored.result);
+        // The inspector is narrow: there the table keeps rank, ΔE, share and
+        // the stereo check; the selected row's details follow below it.
+        let field = super::start_field(&shown.stored.result).filter(|_| !inspector);
         let cell = |content: String, width: f32| text(content).size(12).width(width);
         let mut header = row![cell("#".into(), 24.), cell("ΔE xTB".into(), 64.)].spacing(8);
         if let Some(field) = field {
             header = header.push(cell(format!("ΔE {field}"), 84.));
         }
-        header = header
-            .push(cell("Boltzmann".into(), 72.))
-            .push(cell("RMSD".into(), 60.))
-            .push(cell("Cluster".into(), 50.))
-            .push(cell("Stereo".into(), 60.));
+        header = header.push(cell("Boltzmann".into(), 72.));
+        if !inspector {
+            header = header
+                .push(cell("RMSD".into(), 60.))
+                .push(cell("Cluster".into(), 50.));
+        }
+        header = header.push(cell("Stereo".into(), 60.));
         let header = container(header).padding([2, 8]);
         let list = Column::with_children(rows.iter().enumerate().map(|(index, r)| {
             let active = current == Some(index);
@@ -248,17 +254,19 @@ impl App {
                     84.,
                 ));
             }
-            cells = cells
-                .push(cell(format!("{:.1} %", r.percent), 72.))
-                .push(cell(
-                    r.rmsd.map_or_else(|| "—".into(), |x| format!("{x:.2} Å")),
-                    60.,
-                ))
-                .push(cell(
-                    r.cluster.map_or_else(|| "—".into(), |c| c.to_string()),
-                    50.,
-                ))
-                .push(stereo(r));
+            cells = cells.push(cell(format!("{:.1} %", r.percent), 72.));
+            if !inspector {
+                cells = cells
+                    .push(cell(
+                        r.rmsd.map_or_else(|| "—".into(), |x| format!("{x:.2} Å")),
+                        60.,
+                    ))
+                    .push(cell(
+                        r.cluster.map_or_else(|| "—".into(), |c| c.to_string()),
+                        50.,
+                    ));
+            }
+            cells = cells.push(stereo(r));
             reshiki::accessibility::button(
                 format!("xtb-conformer-{index}"),
                 format!("Conformer {}, {:.2} kcal/mol", index + 1, r.delta_kcal),
@@ -358,6 +366,9 @@ impl App {
                             ": {cluster} start{} in this cluster",
                             if cluster == 1 { "" } else { "s" }
                         ));
+                    }
+                    if let Some(rmsd) = r.rmsd.filter(|_| index > 0) {
+                        text.push_str(&format!(" · RMSD to #1 {rmsd:.2} Å"));
                     }
                     if r.stereo == Some(false) {
                         text.push_str(" · the stereo check finds a change");
