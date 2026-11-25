@@ -560,9 +560,9 @@ reshiki --cli export-input INPUT.xyz --program gaussian|orca|gamess|xyz [--job J
 
 `reshiki --cli help export-input` prints the [full help](agent-reference.md#reshiki---cli-export-input).
 
-Gaussian, ORCA and GAMESS exports for single-point, optimize and opt-freq
-jobs use the MCP `export_input` tool. The CLI writes the returned main input
-and any companions to the requested location. `--title` defaults to the
+The command and the MCP `export_input` tool share the XYZ parser and the input
+writer; the command also offers XYZ output and the transition-state jobs, and
+writes the main input and any companions to the requested location. `--title` defaults to the
 input file's stem.
 
 | Option              | Commands     | Meaning                                                 |

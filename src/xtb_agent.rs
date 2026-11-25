@@ -89,6 +89,8 @@ fn run(
         frame,
         settings,
         deadline,
+        // Dropped when this thread's work ends, after the worker is reaped.
+        hold: _hold,
     } = request;
     let limits = Limits::default();
     let exe = std::env::current_exe().map_err(|error| worker_error(Error::Spawn(error)))?;

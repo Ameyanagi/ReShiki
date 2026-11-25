@@ -335,9 +335,10 @@ pub(crate) async fn read_output(
     ctx: Context,
     grants: Arc<Grants>,
     versions: Versions,
-    max_text_bytes: usize,
+    budgets: Budgets,
     args: ReadOutput,
 ) -> Result<ToolResult, OpError> {
+    let (max_text_bytes, max_output_bytes) = (budgets.max_text_bytes, budgets.max_output_bytes);
     let (value, messages) = ctx
         .blocking(move || {
             let bytes = match args.source {
@@ -359,6 +360,15 @@ pub(crate) async fn read_output(
                 }
             })?;
             let value = Read::from_file(&file, args.job)?;
+            let bytes = serde_json::to_vec(&value).map_or(usize::MAX, |json| json.len());
+            if bytes > max_output_bytes {
+                return Err(OpError::new(
+                    ErrorKind::Budget,
+                    format!(
+                        "The summary is more than {max_output_bytes} bytes; max_output_bytes allows at most {max_output_bytes}. Choose one job with job"
+                    ),
+                ));
+            }
             Ok((value, file.warnings))
         })
         .await?;
