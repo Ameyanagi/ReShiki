@@ -154,7 +154,7 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
             .inspector_ui
             .update(super::super::inspector::Action::ChemicalMenu(true));
         let chemicals = snapshot(&app, &mut renderer, size);
-        assert_eq!(chemicals.nodes.len(), 4);
+        assert_eq!(chemicals.nodes.len(), 5);
         assert!(
             chemicals
                 .nodes

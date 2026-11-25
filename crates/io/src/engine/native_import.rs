@@ -17,9 +17,13 @@ use crate::{
     },
     document::Document,
     exchange::cycles,
+    reactions::{self, Participant, Reaction},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 #[cfg(test)]
 mod allene_tests;
 #[cfg(test)]
@@ -339,14 +343,11 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 let (xml, found) = cycles::take_cdxml(&text);
                 (xml.into_owned(), found)
             };
-            let xml = cdxml::symbol_text_to_unicode(&xml);
-            let (xml, approximated) = cdxml::approximate(&xml);
+            let source = cdxml::symbol_text_to_unicode(&xml);
+            let (drawing, approximated) = cdxml::approximate(&source);
             let (xml, variables) =
-                cdxml::drawing_variables(&xml).map_err(|e| Error::Binary(e.to_string()))?;
+                cdxml::drawing_variables(&drawing).map_err(|e| Error::Binary(e.to_string()))?;
             let mut warnings = Vec::from_iter(approximated);
-            // The schemes of a file with cycle data are the cycles' steps;
-            // the cycle's own message covers them.
-            let ours = found.is_some();
             let fresh = match found {
                 Some(cycles::Found::Fresh(payload)) => Some(payload),
                 Some(cycles::Found::Edited) => {
@@ -355,25 +356,36 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 }
                 None => None,
             };
-            if cdxml::schemes::validate(&xml).map_err(|e| Error::Binary(e.to_string()))? && !ours {
-                warnings.push(cdxml::schemes::NOTICE.into());
-            }
+            let schemes = cdxml::schemes::read(&xml).map_err(|e| Error::Binary(e.to_string()))?;
+            let schemes = if drawing != source {
+                // Approximation can remove objects from a step's lists.
+                cdxml::schemes::read(&source).unwrap_or(schemes)
+            } else {
+                schemes
+            };
+            let steps: Vec<_> = ordinary_steps(&schemes, fresh.as_ref()).collect();
+            let step_count = steps.len();
             // The objects each file object became, while the scene has them.
             let objects = |prepared: &cdxml::PreparedCdxml, scene: &cdxml::CdxmlScene| {
-                fresh
-                    .as_ref()
-                    .map(|_| scene.file_objects(prepared))
+                (fresh.is_some() || !steps.is_empty())
+                    .then(|| scene.file_objects(prepared))
                     .transpose()
             };
-            // A cycle that does not come back opens as it was drawn.
             let restore = |document: &mut Document, objects: Option<_>, scale: f64| {
-                if let (Some(payload), Some(objects)) = (&fresh, objects)
-                    && cycles::restore(document, payload, &objects, scale as f32)
+                let mut notices = Vec::new();
+                if let (Some(payload), Some(objects)) = (&fresh, &objects)
+                    && cycles::restore(document, payload, objects, scale as f32)
                         < payload.cycles.len()
                 {
-                    return vec![cycles::EDITED_NOTICE.to_owned()];
+                    notices.push(cycles::EDITED_NOTICE.to_owned());
                 }
-                vec![]
+                let restored = objects.filter(|_| !steps.is_empty()).map_or(0, |objects| {
+                    restore_reactions(document, &objects, &steps).len()
+                });
+                if restored < step_count {
+                    notices.push(cdxml::schemes::NOTICE.to_owned());
+                }
+                notices
             };
             if !variables.is_empty() {
                 let prepared = cdxml::prepare_drawing(&xml)?;
@@ -442,6 +454,209 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
     };
     prepared.document.validate().map_err(Error::Document)?;
     Ok(Preparation::Complete(Box::new(prepared)))
+}
+
+fn ordinary_steps<'a>(
+    schemes: &'a [Vec<cdxml::schemes::Step>],
+    fresh: Option<&cycles::Payload>,
+) -> impl Iterator<Item = &'a cdxml::schemes::Step> {
+    let owned: HashSet<_> = fresh
+        .into_iter()
+        .flat_map(|payload| &payload.cycles)
+        .flat_map(|saved| saved.drawn.iter().copied())
+        .collect();
+    schemes
+        .iter()
+        .flatten()
+        .filter(move |step| !step.arrows.iter().any(|id| owned.contains(id)))
+}
+
+/// Run role restoration on the drawing scene for save-loss accounting, without
+/// chemical analysis or a new layout.
+pub(crate) fn restored_chemdraw_steps(
+    source: &str,
+    fresh: Option<&cycles::Payload>,
+) -> Result<HashSet<u64>, Error> {
+    let source_schemes = cdxml::schemes::read(source);
+    if source_schemes
+        .as_ref()
+        .is_ok_and(|schemes| ordinary_steps(schemes, fresh).next().is_none())
+    {
+        return Ok(HashSet::new());
+    }
+    let (drawing, _) = cdxml::approximate(source);
+    let (xml, variables) =
+        cdxml::drawing_variables(&drawing).map_err(|e| Error::Binary(e.to_string()))?;
+    let schemes = cdxml::schemes::read(&xml).map_err(|e| Error::Binary(e.to_string()))?;
+    let schemes = if drawing != source {
+        source_schemes.unwrap_or(schemes)
+    } else {
+        schemes
+    };
+    let steps: Vec<_> = ordinary_steps(&schemes, fresh).collect();
+    if steps.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let prepared = cdxml::prepare_drawing(&xml)?;
+    let scene = cdxml::assemble_cdxml(&prepared)?;
+    let objects = scene.file_objects(&prepared)?;
+    let mut document = scene.into_unchecked_drawing()?;
+    variables
+        .restore(&prepared, &mut document)
+        .map_err(|e| Error::Binary(e.to_string()))?;
+    if let Some(payload) = fresh {
+        cycles::restore(
+            &mut document,
+            payload,
+            &objects,
+            prepared.source_scale as f32,
+        );
+    }
+    Ok(restore_reactions(&mut document, &objects, &steps))
+}
+
+fn restore_reactions(
+    doc: &mut Document,
+    objects: &HashMap<u64, Vec<u64>>,
+    steps: &[&cdxml::schemes::Step],
+) -> HashSet<u64> {
+    let resolve = |files: &[u64]| {
+        files
+            .iter()
+            .filter_map(|id| objects.get(id))
+            .flatten()
+            .copied()
+            .collect::<Vec<_>>()
+    };
+    let chemistry: HashSet<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| a.purpose.is_chemistry())
+        .map(|a| a.id)
+        .collect();
+    let mut arrows: HashSet<_> = doc
+        .arrows
+        .iter()
+        .filter(|a| a.purpose.is_chemistry())
+        .map(|a| a.id)
+        .collect();
+    let captions: HashSet<_> = doc.annotations.iter().map(|a| a.id).collect();
+    let before = doc.reactions.len();
+    let mut restored = HashSet::new();
+    let mut maps = Vec::new();
+    for step in steps {
+        if !step.representable {
+            continue;
+        }
+        let resolved = resolve(&step.arrows);
+        let [arrow] = resolved.as_slice() else {
+            continue;
+        };
+        if !arrows.contains(arrow) {
+            continue;
+        }
+        let participants = |mut atoms: Vec<u64>| {
+            atoms.retain(|id| chemistry.contains(id));
+            reactions::molecules(doc, &atoms)
+                .into_iter()
+                .filter(|atoms| atoms.iter().all(|id| chemistry.contains(id)))
+                .map(|atoms| Participant {
+                    atoms,
+                    coefficient: 1,
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut reaction = Reaction::new(*arrow);
+        reaction.reactants = participants(resolve(&step.reactants));
+        reaction.products = participants(resolve(&step.products));
+        if reaction.reactants.is_empty() || reaction.products.is_empty() {
+            continue;
+        }
+        let mut surroundings = resolve(&step.above);
+        surroundings.extend(resolve(&step.below));
+        reaction.agents = participants(surroundings.clone());
+        reaction.annotations = surroundings
+            .into_iter()
+            .chain(resolve(&step.plusses))
+            .filter(|id| captions.contains(id))
+            .collect();
+        reaction.annotations.sort_unstable();
+        reaction.annotations.dedup();
+        doc.reactions.push(reaction);
+        if reactions::validate(doc).is_err() {
+            doc.reactions.pop();
+            continue;
+        }
+        arrows.remove(arrow);
+        restored.insert(step.id);
+        maps.push(step.atom_map.as_slice());
+    }
+    if maps.iter().any(|map| !map.is_empty()) {
+        restore_reaction_maps(doc, objects, before, &maps);
+    }
+    restored
+}
+
+fn restore_reaction_maps(
+    doc: &mut Document,
+    objects: &HashMap<u64, Vec<u64>>,
+    before: usize,
+    maps: &[&[[u64; 2]]],
+) {
+    let indices: HashMap<_, _> = doc
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(i, a)| (a.id, i))
+        .collect();
+    let index = |file| {
+        let [id] = objects.get(&file)?.as_slice() else {
+            return None;
+        };
+        indices.get(id).copied()
+    };
+    let used: HashSet<_> = doc.atoms.iter().map(|a| a.map_num).collect();
+    let mut next = 1;
+    for (reaction, &pairs) in doc.reactions.iter().skip(before).zip(maps) {
+        if pairs.is_empty() {
+            continue;
+        }
+        let reactants: HashSet<_> = reaction
+            .reactants
+            .iter()
+            .flat_map(|part| part.atoms.iter().copied())
+            .collect();
+        let products: HashSet<_> = reaction
+            .products
+            .iter()
+            .flat_map(|part| part.atoms.iter().copied())
+            .collect();
+        let mut paired = HashSet::new();
+        for &[a, b] in pairs {
+            if let Some((a, b)) = index(a).zip(index(b))
+                && let Ok([a, b]) = doc.atoms.get_disjoint_mut([a, b])
+                && reactants.contains(&a.id)
+                && products.contains(&b.id)
+                && !paired.contains(&a.id)
+                && !paired.contains(&b.id)
+            {
+                paired.extend([a.id, b.id]);
+                match (a.map_num, b.map_num) {
+                    (0, 0) => {
+                        while used.contains(&next) {
+                            next += 1;
+                        }
+                        a.map_num = next;
+                        b.map_num = next;
+                        next += 1;
+                    }
+                    (map, 0) => b.map_num = map,
+                    (0, map) => a.map_num = map,
+                    _ => {}
+                }
+            }
+        }
+    }
 }
 
 fn prepare_smiles(
