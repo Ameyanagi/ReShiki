@@ -4,8 +4,7 @@
 //! Drawing commands run on an in-process `HeadlessHost` through
 //! `ToolHost::call`, the operation layer `reshiki --mcp` serves, so both
 //! share the same import, analyze, render, compose and export semantics.
-//! `calc` is a CLI-only exception: it calls the isolated xTB worker directly
-//! and has no MCP tool.
+//! `calc` and `ts` are CLI-only commands that call the isolated xTB worker.
 //!
 //! # Output contract
 //!
@@ -45,6 +44,8 @@ mod predict_nmr;
 mod reference;
 mod render;
 mod skill;
+#[cfg(any(feature = "xtb", test))]
+mod ts;
 
 pub use mcp_usage::{MCP_USAGE, heap};
 pub use reference::agent_reference;
@@ -166,6 +167,21 @@ async fn run_command(
             #[cfg(feature = "xtb")]
             {
                 calc::run(command, out, err)
+            }
+            #[cfg(not(feature = "xtb"))]
+            {
+                let _ = command;
+                let _ = writeln!(err, "reshiki: xTB is not included in this build");
+                return Ok(FAILURE);
+            }
+        }
+        Command::Ts(command) => {
+            #[cfg(feature = "xtb")]
+            {
+                match ts::run(command, out, err) {
+                    Ok(verified) => return Ok(if verified { SUCCESS } else { FAILURE }),
+                    Err(error) => Err(error),
+                }
             }
             #[cfg(not(feature = "xtb"))]
             {

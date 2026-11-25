@@ -1,14 +1,14 @@
 //! CLI-only calculation sessions call the xTB worker directly.
 
 #[cfg(any(feature = "xtb", test))]
-struct Geometry {
-    numbers: Vec<u8>,
-    positions: Vec<[f64; 3]>,
+pub(super) struct Geometry {
+    pub(super) numbers: Vec<u8>,
+    pub(super) positions: Vec<[f64; 3]>,
 }
 
 /// Read exactly the first plain XYZ frame without rounding its coordinates.
 #[cfg(any(feature = "xtb", test))]
-fn xyz(input: impl std::io::BufRead) -> Result<Geometry, String> {
+pub(super) fn xyz(input: impl std::io::BufRead) -> Result<Geometry, String> {
     let mut lines = input
         .lines()
         .map(|line| line.map_err(|error| format!("cannot read XYZ: {error}")));
@@ -66,6 +66,27 @@ fn xyz(input: impl std::io::BufRead) -> Result<Geometry, String> {
     Ok(Geometry { numbers, positions })
 }
 
+#[cfg(any(feature = "xtb", test))]
+pub(super) fn read_xyz(path: &std::path::Path) -> Result<Geometry, String> {
+    use std::{
+        fs::File,
+        io::{BufReader, Read},
+    };
+
+    let file_error = |error| format!("cannot read {}: {error}", path.display());
+    if !std::fs::metadata(path).map_err(file_error)?.is_file() {
+        return Err(format!("{} is not a regular XYZ file", path.display()));
+    }
+    let file = File::open(path).map_err(file_error)?;
+    let limit = reshiki_agent::ops::budget::Budgets::default().max_text_bytes;
+    let mut frame = BufReader::new(file).take(limit as u64 + 1);
+    let geometry = xyz(&mut frame)?;
+    if frame.limit() == 0 {
+        return Err(format!("the first XYZ frame exceeds {limit} bytes"));
+    }
+    Ok(geometry)
+}
+
 #[cfg(feature = "xtb")]
 pub(super) fn run(
     command: super::args::Calc,
@@ -78,31 +99,8 @@ pub(super) fn run(
         protocol::{Compute, HessianRequest, Open, OrbitalOutput, Units},
     };
     use serde_json::json;
-    use std::{
-        fs::File,
-        io::{BufReader, Read},
-    };
 
-    let file_error =
-        |error| CliError::Failed(format!("cannot read {}: {error}", command.file.display()));
-    if !std::fs::metadata(&command.file)
-        .map_err(file_error)?
-        .is_file()
-    {
-        return Err(CliError::Failed(format!(
-            "{} is not a regular XYZ file",
-            command.file.display()
-        )));
-    }
-    let file = File::open(&command.file).map_err(file_error)?;
-    let limit = reshiki_agent::ops::budget::Budgets::default().max_text_bytes;
-    let mut frame = BufReader::new(file).take(limit as u64 + 1);
-    let geometry = xyz(&mut frame).map_err(CliError::Failed)?;
-    if frame.limit() == 0 {
-        return Err(CliError::Failed(format!(
-            "the first XYZ frame exceeds {limit} bytes"
-        )));
-    }
+    let geometry = read_xyz(&command.file).map_err(CliError::Failed)?;
     let executable = std::env::current_exe().map_err(|error| {
         CliError::Failed(format!("cannot locate the xTB worker executable: {error}"))
     })?;

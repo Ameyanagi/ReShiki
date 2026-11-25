@@ -124,10 +124,10 @@ fn muller_brown_refinement_and_downhill_paths_from_both_saddles() {
             options: &options,
         };
         let ends = [true, false].map(|forward| {
-            let (end, energies) = descent
+            let (end, path) = descent
                 .trace(&mut MullerBrown, forward, &mut proceed)
                 .unwrap();
-            assert!(energies.len() > 2 && energies.windows(2).all(|e| e[1] < e[0]));
+            assert!(path.len() > 1 && path.windows(2).all(|p| p[1].energy < p[0].energy));
             end.positions
         });
         for well in [outside, INTERMEDIATE] {
@@ -299,10 +299,15 @@ fn molecular_barrier_irc_and_parallel_images() {
     assert_eq!(one.path.last(), Some(&one.product));
     assert!((dot(&one.transition_mode, &one.transition_mode) - 1.).abs() < 1e-12);
     assert_eq!(one.hessians, 2);
-    for branch in &one.irc {
+    for branch in one.irc.as_ref().unwrap() {
+        assert_eq!(branch.energies.len(), branch.path.len() + 2);
         assert_eq!(branch.energies[0], one.ts.energy);
         assert!(branch.energies[1] < one.ts.energy);
         assert_eq!(branch.energies.last(), Some(&branch.end.energy));
+        for (point, &energy) in branch.path.iter().zip(&branch.energies[1..]) {
+            assert_eq!(point.energy, energy);
+            assert_eq!(point.positions.len(), one.ts.positions.len());
+        }
     }
 }
 
@@ -430,7 +435,7 @@ fn same_graph_irc_ends_are_distinguished_by_superposed_rmsd() {
         bonds(&[6; 3], &report.product.positions)
     );
     assert!(report.connects);
-    for branch in report.irc {
+    for branch in report.irc.unwrap() {
         let reference = match branch.reached {
             Reached::Reactant => &report.reactant,
             Reached::Product => &report.product,
@@ -443,7 +448,7 @@ fn same_graph_irc_ends_are_distinguished_by_superposed_rmsd() {
 }
 
 #[test]
-fn stationary_minimum_returns_no_saddle() {
+fn stationary_minimum_is_reported_without_irc() {
     let x = triangle(1.1);
     let input = Search {
         numbers: &[1; 3],
@@ -452,10 +457,10 @@ fn stationary_minimum_returns_no_saddle() {
         product: &x,
         options: &TsOptions::default(),
     };
-    assert_eq!(
-        search(&mut [Triangle::default()], &input, proceed).unwrap_err(),
-        TsError::NoSaddle
-    );
+    let report = search(&mut [Triangle::default()], &input, proceed).unwrap();
+    assert!(report.frequencies_cm1.iter().all(|&f| f >= -IMAGINARY_CM1));
+    assert_eq!(report.irc, None);
+    assert!(!report.connects);
 }
 
 #[test]

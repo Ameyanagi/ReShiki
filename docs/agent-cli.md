@@ -32,6 +32,7 @@ has every help text as the program prints it.
 | [export-input](#export-input) | Write a quantum-chemistry input from an XYZ structure             |
 | [name](#name)                 | Print the systematic name of a structure                          |
 | [calc](#calc)                 | Print an xTB calculation as one JSON line                         |
+| [ts](#ts)                     | Search for a transition state with GFN2-xTB                       |
 | [pieces](#pieces)             | Check or render equipment piece files                             |
 | [info](#info)                 | Print versions, limits and formats as one JSON line               |
 | [tools](#tools)               | Print the agent tool catalog as one JSON line                     |
@@ -43,7 +44,7 @@ has every help text as the program prints it.
 
 - Each run takes one command. A command accepts only its own options; any
   other option is a usage error, such as `render does not take --pages`.
-- Each option is allowed once, except the repeatable `calc --scf-retry` ladder. A second `--to` gives `--to given more than once`.
+- `calc --scf-retry`, `ts --form` and `ts --break` can repeat. Other options are allowed once each.
 - An option that takes a value uses the next argument as the value, even one
   that starts with `-`.
 - `--` ends the options. Every argument after it is the input, so a file
@@ -872,6 +873,57 @@ unchanged.
 In a build without xTB, it writes `reshiki: xTB is not included in this build`
 to stderr and exits 1.
 
+## ts
+
+```text
+reshiki --cli ts [--reactant R.xyz] [--product P.xyz] [--form I-J]... [--break I-J]...
+    [--charge N] [--uhf N] [--images N] [--workers N] [--remap-hydrogens] [--keep-endpoints]
+    [--out-dir DIR] [--json FILE]
+```
+
+Searches for a gas-phase transition state with GFN2-xTB and axtb conventions.
+The command requires the `xtb` feature. [xTB worker reference](xtb-worker.md)
+
+Each endpoint uses the first plain XYZ frame with 2 to 120 atoms and
+coordinates in ångströms. Two files must have the same element sequence.
+Their atom order defines the map. With one file, supply at least one bond
+change in the reactant-to-product direction to construct the missing endpoint.
+
+| Option | Command | Meaning |
+| --- | --- | --- |
+| `--reactant R.xyz` | ts | Read the reactant XYZ. |
+| `--product P.xyz` | ts | Read the product XYZ. |
+| `--form I-J` | ts | Form a bond using 1-based atom numbers. Repeatable. |
+| `--break I-J` | ts | Break a bond using 1-based atom numbers. Repeatable. |
+| `--charge N` | ts | Molecular charge. Defaults to 0. |
+| `--uhf N` | ts | Unpaired electron count. The worker infers it from the valence electron count when omitted. |
+| `--images N` | ts | Use 5 to 24 NEB images, including the endpoints. Defaults to 15. |
+| `--workers N` | ts | Use 1 to 8 single-threaded xTB sessions. Defaults to the smallest of 4, available CPUs and interior images. |
+| `--remap-hydrogens` | ts | Map heavy atoms by order and assign hydrogens by least motion. Print changed nearest heavy atoms on stderr. |
+| `--keep-endpoints` | ts | Skip endpoint relaxation before the search. A missing endpoint is still constructed with restrained minimization. |
+| `--out-dir DIR` | ts | Create the directory if needed and write `reactant.xyz`, `product.xyz`, `ts.xyz`, `path.xyz`, `irc.xyz` and `ts.hess`. |
+| `--json FILE` | ts | Write the machine-readable report to a new file. |
+
+The table on stdout gives energies in hartree, barriers in kcal/mol and
+frequencies in cm⁻¹. The worker independently checks the frequencies at the
+reported TS. Both imaginary counts use the same cutoff of −50 cm⁻¹. Exit 0
+requires exactly one engine mode below the cutoff and IRC branches that reach
+the two endpoints. A stationary point that fails these checks produces the
+report and exits 1. Progress appears on stderr.
+
+`path.xyz` contains the final NEB band. When IRC connects, `irc.xyz` runs
+from the reactant side through the TS to the product side. Without a
+qualifying imaginary mode, it contains just the TS frame. `ts.hess` uses the
+worker's Cartesian Hessian and can be read with ORCA's `InHess Read`. The
+JSON report includes both spectra, plus and minus IRC branch labels and
+energies, convergence, work counts and the hydrogen mapping review.
+Output files must be new.
+
+```sh
+reshiki --cli ts --reactant hcn.xyz --product hnc.xyz --out-dir results
+reshiki --cli ts --reactant hcn.xyz --form 2-3 --break 1-3 --json ts.json
+```
+
 ## help
 
 ```text
@@ -893,8 +945,8 @@ Prints the overview, or one command's help. `--help` and `-h` work in place of
 
 ## Output and messages
 
-Standard output carries only the result: the file, one JSON line, or one
-receipt line with `--receipt`. With `-o OUTPUT` and no `--receipt` it stays
+Standard output carries only the result: a file, a text report, one JSON line,
+or one receipt line with `--receipt`. With `-o OUTPUT` and no `--receipt` it stays
 empty. Every JSON line has `"experimental": true` and an `api` object with
 `operation_api` and `stability`, except the raw schema from `schema proposal`
 and the worker calculation result from `calc`.

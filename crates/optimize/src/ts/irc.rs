@@ -90,7 +90,7 @@ impl Descent<'_> {
         p: &mut impl Potential,
         forward: bool,
         on_event: &mut impl FnMut(Event) -> ControlFlow<()>,
-    ) -> Result<(Minimum, Vec<f64>), TsError> {
+    ) -> Result<(Minimum, Vec<Minimum>), TsError> {
         let n = self.ts.positions.len();
         let scale: Vec<f64> = if self.masses.is_empty() {
             vec![1.; n]
@@ -98,7 +98,7 @@ impl Descent<'_> {
             self.masses.iter().flat_map(|m| [m.sqrt(); 3]).collect()
         };
         let mut point = self.ts.clone();
-        let mut energies = vec![point.energy];
+        let mut path = Vec::new();
         emit(
             on_event,
             Event::Irc {
@@ -108,7 +108,7 @@ impl Descent<'_> {
             },
         )?;
         if self.options.irc_max_steps == 0 {
-            return Ok((point, energies));
+            return Ok((point, path));
         }
         let weight_gradient =
             |g: Vec<f64>| -> Vec<f64> { g.iter().zip(&scale).map(|(v, w)| v / w).collect() };
@@ -184,7 +184,7 @@ impl Descent<'_> {
             saddle::bofill(&mut h, &displacement, &change);
             point = next;
             gradient = next_gradient;
-            energies.push(point.energy);
+            path.push(point.clone());
             emit(
                 on_event,
                 Event::Irc {
@@ -194,7 +194,7 @@ impl Descent<'_> {
                 },
             )?;
         }
-        Ok((point, energies))
+        Ok((point, path))
     }
 }
 
@@ -249,21 +249,24 @@ pub(super) fn branches(
     };
     let graphs = endpoints.map(|m| bonds(search.numbers, &m.positions));
     let mut branch = |forward| -> Result<IrcBranch, TsError> {
-        let (last, mut energies) = descent.trace(p, forward, on_event)?;
+        let (last, path) = descent.trace(p, forward, on_event)?;
         let mut end = minimize(p, search.numbers, &last.positions, |i, energy| {
             if i == 0 {
                 ControlFlow::Continue(())
             } else {
                 on_event(Event::Irc {
                     forward,
-                    step: energies.len() - 1 + i,
+                    step: path.len() + i,
                     energy,
                 })
             }
         })?;
         end.positions =
             mapping::superpose(&endpoints[0].positions, &end.positions, search.masses_amu);
-        energies.push(end.energy);
+        let energies = std::iter::once(ts.energy)
+            .chain(path.iter().map(|point| point.energy))
+            .chain(std::iter::once(end.energy))
+            .collect();
         let reached = classify(
             &end.positions,
             search.numbers,
@@ -273,6 +276,7 @@ pub(super) fn branches(
         );
         Ok(IrcBranch {
             energies,
+            path,
             end,
             reached,
         })
