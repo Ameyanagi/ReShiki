@@ -214,9 +214,10 @@ impl App {
                     .on_submit(Message::Prompt(Answer::Save)),
             )
         } else if matches!(prompt, Prompt::SaveAs) {
-            super::files::SAVE_FORMATS.iter().enumerate().fold(
-                content,
-                |content, (index, (format, name))| {
+            save_formats(self.appearance.chemdraw_format)
+                .iter()
+                .enumerate()
+                .fold(content, |content, (index, (format, name))| {
                     content.push(
                         button(
                             &format!("prompt-format-{format}"),
@@ -226,8 +227,7 @@ impl App {
                         )
                         .width(Length::Fill),
                     )
-                },
-            )
+                })
         } else {
             content
         };
@@ -266,6 +266,15 @@ impl App {
             Message::Prompt(Answer::Cancel),
         )
     }
+}
+
+/// The Save as formats, with the Settings ChemDraw format first among ChemDraw's.
+fn save_formats(chemdraw: crate::appearance::ChemDrawFormat) -> [(&'static str, &'static str); 4] {
+    let mut formats = super::files::SAVE_FORMATS;
+    if chemdraw == crate::appearance::ChemDrawFormat::Cdx {
+        formats.swap(1, 2);
+    }
+    formats
 }
 
 #[cfg(test)]

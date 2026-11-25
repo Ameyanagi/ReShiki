@@ -389,7 +389,19 @@ impl CdxmlScene {
                 out.entry(id).or_default().extend(&entry.atoms);
             }
         }
-        // A fragment can be listed more than once.
+        let atom_sources = prepared.fragments.iter().flat_map(|f| &f.atom_ids);
+        for (&file, &drawing) in atom_sources.zip(&prepared.molecule.ids) {
+            out.entry(u64::from(file)).or_default().push(drawing);
+        }
+        for fragment in &prepared.fragment_bindings {
+            if let Some(node) = nodes.get(fragment.source) {
+                for group in node.ancestors().filter(|n| n.has_tag_name("group")) {
+                    if let Some(id) = group.attribute("id").and_then(|id| id.parse().ok()) {
+                        out.entry(id).or_default().extend(&fragment.atoms);
+                    }
+                }
+            }
+        }
         for ids in out.values_mut() {
             ids.sort_unstable();
             ids.dedup();
