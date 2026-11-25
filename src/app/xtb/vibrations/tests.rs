@@ -223,7 +223,7 @@ fn push_is_refused_if_the_model_moved_after_calculation() {
     let mut app = saddle();
     let shown = app.xtb_shown().unwrap();
     let mut config =
-        super::super::results::config(&shown.stored.result, shown.frame, shown.info, 1).unwrap();
+        super::super::results::config(&shown.stored.result, shown.frame, shown.atoms, 1).unwrap();
     config.task = CalcTask::OptFreq;
     let atom = *shown.atoms.iter().flatten().next().unwrap();
     let request = Request {

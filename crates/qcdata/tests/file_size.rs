@@ -1,7 +1,8 @@
 use reshiki_qcdata::{
-    AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Frame,
-    LIGHT_BOND_ORDER_MIN, MAX_IMPORTED_HEAVY_BYTES, OrbitalSet, Orbitals, Provenance, Settings,
-    Shell, Source, Spin, Status, Task, Thermo, Trajectory, Vibrations, XtbMethod, XtbSettings,
+    AtomicCharges, BasisSet, Beta, BondOrder, CalcResult, ChargeScheme, Convergence, Frame,
+    LIGHT_BOND_ORDER_MIN, MAX_IMPORTED_HEAVY_BYTES, OrbitalSet, Orbitals, Provenance, RunSummary,
+    Settings, Shell, Source, Spin, Status, Task, Thermo, Trajectory, Vibrations, XtbMethod,
+    XtbSettings,
 };
 
 fn unit_modes(n_modes: usize, width: usize, random: &mut impl FnMut() -> f64) -> Vec<f64> {
@@ -77,6 +78,9 @@ fn fixture(n_atoms: u32) -> (Frame, CalcResult) {
             max_iterations: None,
             scf_retries: vec![],
             gfnff: None,
+            threads: None,
+            convergence: Default::default(),
+            fixed_atoms: vec![],
         }),
         provenance: Provenance {
             program: "ReShiki".into(),
@@ -144,6 +148,7 @@ fn fixture(n_atoms: u32) -> (Frame, CalcResult) {
         trajectory: None,
         keep_full: false,
         omitted_bytes: None,
+        run: None,
     };
     (frame, result)
 }
@@ -257,6 +262,36 @@ fn light_50_atom_optimization_with_frequencies_fits_20_kb() {
     assert!(vibrations.modes.is_empty());
     assert_eq!(decoded.thermo, result.thermo);
     assert_eq!(decoded.trajectory.unwrap().energies_hartree.len(), 12);
+}
+
+#[test]
+fn light_optimization_run_metadata_costs_at_most_two_kilobytes() {
+    let (frame, result) = fixture(24);
+    let mut result = result.light(&[]);
+    result.task = Task::Optimize;
+    result.validate(&frame).unwrap();
+    let baseline = result.saved_bytes(0, &[]);
+    let Settings::Xtb(settings) = &mut result.settings else {
+        unreachable!();
+    };
+    settings.threads = Some(4);
+    settings.convergence = Some(Convergence::Tight);
+    settings.fixed_atoms = vec![0, 11, 23];
+    result.run = Some(RunSummary {
+        seconds: 42.5,
+        scf_iterations: (0..60).map(|i| 4 + i % 9).collect(),
+        finished: Some("2026-11-26T05:03:00Z".into()),
+    });
+    let saved = result.for_file(0, &[]);
+    saved.validate(&frame).unwrap();
+    assert_eq!(saved.run, result.run);
+    assert_eq!(saved.settings, result.settings);
+    let bytes = result.saved_bytes(0, &[]);
+    let added = bytes - baseline;
+    eprintln!(
+        "24-atom light optimization: {baseline} bytes without run metadata, {bytes} bytes with run metadata; {added} bytes added"
+    );
+    assert!(added <= 2 * 1024);
 }
 
 #[test]

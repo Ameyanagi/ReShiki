@@ -255,6 +255,7 @@ fn scientific_result_has_session_settings_and_provenance() {
     assert_eq!(settings.accuracy, Some(0.5));
     assert_eq!(settings.max_iterations, Some(500));
     assert_eq!(settings.scf_retries, computed.settings.scf.retries);
+    assert_eq!(settings.threads, Some(computed.settings.threads));
 
     // The rung that converged replaces the ladder in the saved settings.
     // An iteration-only rung keeps the reported temperature and the accuracy.

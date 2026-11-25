@@ -45,6 +45,9 @@ fn optimized(full: bool) -> CalcResult {
             accuracy: None,
             max_iterations: None,
             gfnff: None,
+            threads: Some(4),
+            convergence: Some(Convergence::Tight),
+            fixed_atoms: vec![0],
         }),
         provenance: Provenance {
             program: "axtb".into(),
@@ -80,6 +83,11 @@ fn optimized(full: bool) -> CalcResult {
         }),
         keep_full: false,
         omitted_bytes: None,
+        run: Some(qcdata::RunSummary {
+            seconds: 1.25,
+            scf_iterations: vec![9, 5],
+            finished: Some("2026-11-25T14:03:00Z".into()),
+        }),
     }
 }
 
@@ -100,11 +108,6 @@ fn info(gap: f64) -> RunInfo {
             },
         ],
         numerics: "f64".into(),
-        tight: true,
-        threads: 4,
-        fixed: vec![7],
-        finished: "25 Nov 2026 14:03".into(),
-        seconds: 1.25,
     }
 }
 
@@ -144,15 +147,21 @@ fn the_summary_shows_what_the_run_returned_and_hides_the_rest() {
     assert_eq!(molecule, "H2O · 3 atoms");
     assert_eq!(run_time, "1.2 s · 2 SCF calculations");
 
-    // A reopened file has no run information: no gap or time rows, no empty ones.
+    // The saved run summary survives reopening, and missing properties are omitted.
     let rows = summary_rows(&result, &frame(&START), &frame(&END), None);
-    assert!(rows.iter().all(|(label, value)| {
-        !value.is_empty() && *label != "HOMO–LUMO gap" && *label != "Run time"
-    }));
+    assert_eq!(
+        rows.last().unwrap(),
+        &("Run time".into(), "1.2 s · 2 SCF calculations".into())
+    );
+    assert!(
+        rows.iter()
+            .all(|(label, value)| !value.is_empty() && *label != "HOMO–LUMO gap")
+    );
 
     let mut energy = optimized(false);
     energy.task = Task::Energy;
     energy.trajectory = None;
+    energy.run = None;
     energy.gradient_hartree_per_bohr.clear();
     let rows = summary_rows(&energy, &frame(&START), &frame(&START), None);
     assert_eq!(rows.len(), 2, "{rows:?}");
@@ -295,17 +304,24 @@ fn steps_keep_every_geometry_in_memory_and_the_ends_in_a_file() {
 
 #[test]
 fn the_method_line_names_engine_solvent_state_and_time() {
-    let result = optimized(true);
+    let mut result = optimized(true);
+    let local = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 11, 25, 14, 3, 0)
+        .unwrap()
+        .with_timezone(&chrono::Local);
     assert_eq!(
-        method_line(&result, &frame(&END), Some(&info(14.01))),
-        "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1 · 25 Nov 2026 14:03"
+        method_line(&result, &frame(&END)),
+        format!(
+            "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1 · {}",
+            local.format("%-d %b %Y %H:%M")
+        )
     );
+    result.run.as_mut().unwrap().finished = Some("unknown".into());
     assert_eq!(
-        method_line(&result, &frame(&END), None),
+        method_line(&result, &frame(&END)),
         "GFN2-xTB · axtb 0.2.0 · water (ALPB) · charge 0 · multiplicity 1"
     );
     // g-xTB in water at 1000 K with xtb 6.8 conventions.
-    let mut result = result;
+    result.run = None;
     if let Settings::Xtb(settings) = &mut result.settings {
         settings.method = qcdata::XtbMethod::GXtb;
         settings.conventions = qcdata::XtbConventions::Xtb68;
@@ -314,7 +330,7 @@ fn the_method_line_names_engine_solvent_state_and_time() {
     }
     result.provenance.method = Some("g-xTB".into());
     assert_eq!(
-        method_line(&result, &frame(&END), None),
+        method_line(&result, &frame(&END)),
         "g-xTB · axtb 0.2.0 · water (ALPB, GFN2-xTB correction) · xtb 6.8 compatible · 1000 K · charge 0 · multiplicity 1"
     );
 }
@@ -326,7 +342,7 @@ fn the_table_and_log_are_plain_text() {
         tsv("GFN2-xTB", &rows),
         "# GFN2-xTB\nQuantity\tValue\nTotal energy\t−5.070176 Eh\n"
     );
-    let result = optimized(true);
+    let mut result = optimized(true);
     let text = log(&result, &frame(&END), Some(&info(14.01)), "GFN2-xTB");
     assert!(text.contains("engine revision 9d0388c"), "{text}");
     assert!(
@@ -338,8 +354,11 @@ fn the_table_and_log_are_plain_text() {
         "{text}"
     );
     assert!(text.contains("optimization converged in 2 steps"), "{text}");
+    result.run = None;
     let reopened = log(&result, &frame(&END), None, "GFN2-xTB");
-    assert!(reopened.contains("SCF details are kept only while the app is open"));
+    assert!(
+        reopened.contains("SCF details were not saved with this result; recalculate to see them.")
+    );
 }
 
 #[test]
@@ -354,9 +373,9 @@ fn light_frequency_results_keep_the_spectrum_and_recalculate_the_same_task() {
             .computed
             .to_calc_result(&output, task, &report.engine, None)
             .unwrap();
-        assert_eq!(config(&result, &output, None, 1).unwrap().task, card_task);
+        assert_eq!(config(&result, &output, &[], 1).unwrap().task, card_task);
         let light = result.light(&[]);
-        assert_eq!(config(&light, &output, None, 1).unwrap().task, card_task);
+        assert_eq!(config(&light, &output, &[], 1).unwrap().task, card_task);
         assert_eq!(light.thermo, result.thermo);
         let full = result.vibrations.unwrap();
         let light = light.vibrations.unwrap();
@@ -517,7 +536,7 @@ fn recalculate_reads_the_settings_the_result_stored() {
     }))
     .expect("a stored result");
     assert_eq!(
-        config(&result, &frame, None, 3),
+        config(&result, &frame, &[], 3),
         Some(Config {
             task: CardTask::Energy,
             method: qcdata::XtbMethod::GXtb,
@@ -538,12 +557,12 @@ fn recalculate_reads_the_settings_the_result_stored() {
     if let qcdata::Settings::Xtb(settings) = &mut gbsa.settings {
         settings.solvent.as_mut().unwrap().model = qcdata::SolventModel::Gbsa;
     }
-    assert_eq!(config(&gbsa, &frame, None, 3), None);
+    assert_eq!(config(&gbsa, &frame, &[], 3), None);
     let mut benzene = result.clone();
     if let qcdata::Settings::Xtb(settings) = &mut benzene.settings {
         settings.solvent.as_mut().unwrap().name = "benzene".into();
     }
-    assert_eq!(config(&benzene, &frame, None, 3), None);
+    assert_eq!(config(&benzene, &frame, &[], 3), None);
     // GFN-FF saves its resolved default fragment charges: still repeatable.
     let mut force_field = result.clone();
     if let qcdata::Settings::Xtb(settings) = &mut force_field.settings {
@@ -554,12 +573,18 @@ fn recalculate_reads_the_settings_the_result_stored() {
             fragment_charges: vec![0],
         });
     }
-    assert!(config(&force_field, &frame, None, 3).is_some());
+    assert!(config(&force_field, &frame, &[], 3).is_some());
     if let qcdata::Settings::Xtb(settings) = &mut force_field.settings {
         settings.gfnff.as_mut().unwrap().fragment_charges = vec![1, -1];
     }
-    assert_eq!(config(&force_field, &frame, None, 3), None);
+    assert_eq!(config(&force_field, &frame, &[], 3), None);
+    let mut hessian = result.clone();
+    hessian.task = Task::Hessian;
+    assert_eq!(
+        config(&hessian, &frame, &[], 3).unwrap().task,
+        CardTask::Frequencies
+    );
     let mut conformers = result;
     conformers.task = Task::Conformers;
-    assert_eq!(config(&conformers, &frame, None, 3), None);
+    assert_eq!(config(&conformers, &frame, &[], 3), None);
 }

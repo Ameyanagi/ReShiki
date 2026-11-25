@@ -179,6 +179,10 @@ fn optfreq_stores_the_vibrations_and_applies_geometry_as_one_undo_step() {
     let shown = app.xtb_shown().expect("the new result");
     let result = &shown.stored.result;
     assert_eq!(result.task, qcdata::Task::Optimize);
+    let qcdata::Settings::Xtb(settings) = &result.settings else {
+        panic!("expected xTB settings");
+    };
+    assert_eq!(settings.convergence, Some(qcdata::Convergence::Tight));
     assert_eq!(result.frame, shown.frame.hash());
     assert_eq!(shown.frame.positions_angstrom, MOVED);
     assert_eq!(result.vibrations.as_ref().unwrap().modes.len(), 27);
@@ -216,6 +220,10 @@ fn frequencies_store_a_hessian_on_the_starting_geometry() {
     assert_eq!(model(&app.tab.doc), f32s(&START));
     let shown = app.xtb_shown().expect("the new result");
     assert_eq!(shown.stored.result.task, qcdata::Task::Hessian);
+    let qcdata::Settings::Xtb(settings) = &shown.stored.result.settings else {
+        panic!("expected xTB settings");
+    };
+    assert_eq!(settings.convergence, None);
     assert_eq!(shown.stored.result.frame, shown.input.hash());
     assert_eq!(
         shown.frame.positions_angstrom,
@@ -729,12 +737,8 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
     );
     let bytes = app.tab.doc.file_json().expect("save");
 
-    // A new window opens the file: no run information survives.
-    let (mut reopened, _) = App::new();
-    reopened.tab.busy = false;
-    reopened.tab.doc = Document::from_native_file(&bytes).expect("reopen");
+    let mut reopened = reopen_result(&bytes);
     let result = reopened.tab.doc.science.results[0].result.clone();
-    reopened.tab.xtb.palette.show(&result);
     let shown = reopened.xtb_shown().expect("the palette shows the result");
     assert!(shown.info.is_none());
     let rows = shown.rows();
@@ -753,10 +757,9 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
         ("H2–H3".to_owned(), "0.21".to_owned())
     );
     assert_eq!(results::levels(&result).len(), 5);
-    assert_eq!(
-        shown.method(),
-        "g-xTB · axtb 0.2.0 · water (ALPB, GFN2-xTB correction) · xtb 6.8 compatible · 1000 K · charge 0 · multiplicity 1"
-    );
+    assert!(shown.method().starts_with(
+        "g-xTB · axtb 0.2.0 · water (ALPB, GFN2-xTB correction) · xtb 6.8 compatible · 1000 K · charge 0 · multiplicity 1 · "
+    ));
     // A saved GBSA result says GBSA, and the log keeps the SCF settings.
     let mut gbsa = (*result).clone();
     if let reshiki::qcdata::Settings::Xtb(settings) = &mut gbsa.settings {
@@ -764,7 +767,7 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
         settings.accuracy = Some(0.3);
         settings.max_iterations = Some(500);
     }
-    let method = results::method_line(&gbsa, shown.frame, None);
+    let method = results::method_line(&gbsa, shown.frame);
     assert!(
         method.contains("water (GBSA, GFN2-xTB correction)"),
         "{method}"
@@ -793,6 +796,150 @@ fn a_reopened_file_shows_the_properties_and_recalculates_with_the_stored_setting
         (Some(0.5), Some(1000.), Some(400))
     );
     assert_eq!(run.atoms, [o]);
+}
+
+fn reopen_result(bytes: &[u8]) -> App {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = Document::from_native_file(bytes).expect("reopen");
+    app.tab
+        .xtb
+        .palette
+        .show(&app.tab.doc.science.results[0].result);
+    app
+}
+
+fn saved_optimization() -> (Vec<u8>, [u64; 2]) {
+    let (mut app, carbon, start) = halocarbon();
+    send(&mut app, Action::Cancel);
+    let fixed = [carbon, app.tab.doc.atoms[2].id];
+    app.tab.selected = fixed.into_iter().rev().collect();
+    send(&mut app, Action::Task(CalcTask::Optimize));
+    send(&mut app, Action::Threads(3));
+    send(&mut app, Action::Tight(true));
+    send(&mut app, Action::HoldFixed(true));
+    send(&mut app, Action::Run);
+    app.tab.xtb.run.as_mut().expect("started").started -= std::time::Duration::from_secs(1);
+
+    let mut end = start.clone();
+    end.last_mut().unwrap()[2] -= 0.01;
+    let mut computed = run::example_computed(-5.2, 13.6);
+    computed.settings.threads = 3;
+    computed.gradient = Some(vec![[0.; 3]; end.len()]);
+    event(
+        &mut app,
+        Event::Done(Ok(Arc::new(Report {
+            engine: run::example_engine(),
+            computed,
+            energy: -5.2,
+            converged: true,
+            positions: end.clone(),
+            steps: 1,
+            energies: vec![-5.06, -5.2],
+            path: [start.as_flattened(), end.as_flattened()].concat(),
+            evaluations: [(-5.06, 9), (-5.1, 5), (-5.2, 6)]
+                .map(|(energy, scf_iterations)| Evaluation {
+                    energy,
+                    scf_iterations,
+                    seconds: 0.01,
+                })
+                .to_vec(),
+        }))),
+    );
+    assert_eq!(app.tab.doc.science.results.len(), 1, "{}", app.status);
+    (app.tab.doc.file_json().expect("save"), fixed)
+}
+
+#[test]
+fn a_reopened_optimization_keeps_its_run_summary_and_recalculate_settings() {
+    let (bytes, fixed) = saved_optimization();
+    let mut reopened = reopen_result(&bytes);
+    let shown = reopened.xtb_shown().expect("the palette shows the result");
+    assert!(shown.info.is_none());
+    let result = &shown.stored.result;
+    let run = result.run.as_ref().expect("saved run summary");
+    assert!(run.seconds >= 1.);
+    assert!(shown.rows().contains(&(
+        "Run time".into(),
+        format!("{:.1} s · 3 SCF calculations", run.seconds),
+    )));
+    let finished = run.finished.as_ref().expect("finish time");
+    let local = chrono::DateTime::parse_from_rfc3339(finished)
+        .expect("RFC 3339 finish time")
+        .with_timezone(&chrono::Local);
+    let method = shown.method();
+    assert!(method.ends_with(&format!(" · {}", local.format("%-d %b %Y %H:%M"))));
+    let log = results::log(result, shown.frame, shown.info, &method);
+    assert!(log.contains("task optimize · 3 threads · tight convergence · 2 atoms held fixed"));
+    let mut table = log
+        .lines()
+        .skip_while(|line| *line != " calc    SCF iterations");
+    assert_eq!(table.next(), Some(" calc    SCF iterations"));
+    for row in ["1 9", "2 5", "3 6"] {
+        assert!(
+            table
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .eq(row.split_whitespace()),
+            "{log}"
+        );
+    }
+    assert_eq!(
+        table.next().unwrap(),
+        format!("run time {:.1} s", run.seconds)
+    );
+
+    reopened.xtb.settings.threads = 7;
+    send(&mut reopened, Action::Palette(palette::Action::Recalculate));
+    let config = &reopened
+        .tab
+        .xtb
+        .run
+        .as_ref()
+        .expect("Recalculate starts a run")
+        .config;
+    assert_eq!(config.threads, 3);
+    assert!(config.tight);
+    assert_eq!(config.fixed.len(), fixed.len());
+    assert!(fixed.iter().all(|id| config.fixed.contains(id)));
+}
+
+#[test]
+fn a_reopened_legacy_optimization_recalculates_with_defaults() {
+    let (bytes, _) = saved_optimization();
+    let mut json: serde_json::Value = serde_json::from_slice(&bytes).expect("saved document");
+    let result = json["science"]["results"][0]["result"]
+        .as_object_mut()
+        .unwrap();
+    assert!(result.remove("run").is_some());
+    let settings = result["settings"]["xtb"].as_object_mut().unwrap();
+    for key in ["threads", "convergence", "fixed_atoms"] {
+        assert!(settings.remove(key).is_some());
+    }
+    let mut reopened = reopen_result(&serde_json::to_vec(&json).unwrap());
+    let shown = reopened.xtb_shown().expect("the palette shows the result");
+    let log = results::log(
+        &shown.stored.result,
+        shown.frame,
+        shown.info,
+        &shown.method(),
+    );
+    assert!(log.lines().any(|line| line == "task optimize"));
+    assert!(log.contains("SCF details were not saved with this result; recalculate to see them."));
+
+    reopened.xtb.settings.threads = 7;
+    send(&mut reopened, Action::Palette(palette::Action::Recalculate));
+    let config = &reopened
+        .tab
+        .xtb
+        .run
+        .as_ref()
+        .expect("Recalculate starts a run")
+        .config;
+    assert_eq!(config.threads, 7);
+    assert!(!config.tight);
+    assert!(config.fixed.is_empty());
 }
 
 /// A drawing whose 3D model has `positions` (heavy atoms in drawing order,
