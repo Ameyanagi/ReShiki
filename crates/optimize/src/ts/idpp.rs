@@ -3,6 +3,8 @@
 //! has a linearly interpolated target distance and weight w(d)=d^-4. A cheap
 //! NEB/FIRE relaxation acts on this analytic objective without Potential calls.
 
+use std::ops::ControlFlow;
+
 use crate::linalg::norm;
 
 use super::{TsError, neb};
@@ -12,6 +14,7 @@ pub(super) fn interpolate(
     product: &[f64],
     masses: &[f64],
     images: usize,
+    on_cancel: &mut impl FnMut() -> ControlFlow<()>,
 ) -> Result<Vec<Vec<f64>>, TsError> {
     let mut band: Vec<Vec<f64>> = (0..images)
         .map(|i| {
@@ -46,7 +49,10 @@ pub(super) fn interpolate(
     let mut energies = vec![0.0; images];
     let mut gradients = vec![vec![0.0; reactant.len()]; images];
     let weights = vec![1.0; masses.len()];
-    for _ in 0..600 {
+    for iteration in 0usize..600 {
+        if iteration.is_multiple_of(20) && on_cancel().is_break() {
+            return Err(TsError::Cancelled);
+        }
         for i in 1..images - 1 {
             let fraction = i as f64 / (images - 1) as f64;
             let (energy, gradient) = objective(&band[i], fraction, &pairs);
@@ -197,7 +203,14 @@ mod tests {
     fn crossing_pairs_are_separated_and_endpoints_stay_fixed() {
         let start = [-1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 3.0];
         let end = [1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 3.0];
-        let band = interpolate(&start, &end, &[1.0; 4], 5).unwrap();
+        let band = interpolate(
+            &start,
+            &end,
+            &[1.0; 4],
+            5,
+            &mut || ControlFlow::Continue(()),
+        )
+        .unwrap();
         assert_eq!(band[0], start);
         assert_eq!(band[4], end);
         for image in &band {
@@ -208,5 +221,23 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn callback_cancels_during_idpp_iterations() {
+        let start = [-1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 3.0];
+        let end = [1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0, 3.0];
+        let mut polls = 0;
+        let result = interpolate(&start, &end, &[1.0; 4], 5, &mut || {
+            polls += 1;
+            // Allow the initial poll and cancel only after relaxation has run.
+            if polls == 2 {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        assert_eq!(polls, 2);
+        assert_eq!(result.unwrap_err(), TsError::Cancelled);
     }
 }

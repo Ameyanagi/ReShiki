@@ -162,9 +162,15 @@ impl App {
             frame: science.frame(&stored.result.frame)?,
             atoms: &link.atoms,
             stale: link.freshness(&self.tab.doc) == Freshness::Stale
-                || ts.is_some_and(|ts| {
-                    ts.stale(&self.tab.doc, (self.tab.file_epoch, self.tab.revision))
-                }),
+                || ts::is_ts(&stored.result)
+                    && ts.map_or_else(
+                        || {
+                            ts::matching_plans(&self.tab.doc, &link.atoms)
+                                .next()
+                                .is_none()
+                        },
+                        |ts| ts.stale(&self.tab.doc, (self.tab.file_epoch, self.tab.revision)),
+                    ),
             info: self.tab.xtb.info(&stored.result),
             ts,
         })
@@ -488,7 +494,12 @@ impl App {
                 positions_angstrom: positions,
                 ..(**shown.frame).clone()
             };
-            if let Err(error) = science::move_model(&mut doc, shown.atoms, &frame) {
+            let moved = if path {
+                ts::preview_image(&mut doc, shown.atoms, shown.input, &frame)
+            } else {
+                science::move_model(&mut doc, shown.atoms, &frame)
+            };
+            if let Err(error) = moved {
                 failure = Some(error.to_string());
                 return None;
             }

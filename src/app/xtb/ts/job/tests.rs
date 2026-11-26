@@ -31,6 +31,7 @@ fn plan(start: Side) -> TsPlan {
         start,
         start_atoms: vec![20, 90, 80],
         mapped: vec![1, 2],
+        mapped_hydrogens: vec![],
         form: vec![(90, 80)],
         break_: vec![(20, 90)],
         hydrogen_moves: vec![(20, 90)],
@@ -76,6 +77,47 @@ fn explicit_mapped_hydrogen_is_not_reassigned_to_an_implicit_move() {
     let changes = changes(&launch, &plan).unwrap();
     assert_eq!(changes.break_, [(2, 3), (2, 4)]);
     assert_eq!(changes.form, [(0, 3), (0, 4)]);
+}
+
+#[test]
+fn keto_enol_inferred_transfer_skips_the_closest_stationary_mapped_hydrogen() {
+    let (doc, arrow) = super::super::card::tests::hydrogen_transfer();
+    let plan = reshiki::reactions::ts_plan::plan(&doc, arrow).unwrap();
+    let id = |map| doc.atoms.iter().find(|a| a.map_num == map).unwrap().id;
+    assert_eq!(plan.mapped_hydrogens, [id(5)]);
+    assert_eq!(plan.hydrogen_moves, [(id(2), id(3))]);
+    assert!(plan.form.is_empty() && plan.break_.is_empty());
+
+    let launch = Launch {
+        frame: Arc::new(Frame {
+            numbers: vec![6, 6, 8, 6, 1, 1, 1, 1, 1, 1],
+            positions_angstrom: vec![
+                [2.3, -1.27, 0.],
+                [0., 0., 0.],
+                [1.9, 1.14, 0.],
+                [1.5, 0., 0.],
+                [0.3, 1., 0.], // Stationary mapped H, closest to O.
+                [-0.4, -0.9, 0.4],
+                [-0.45, 0.03, -0.98], // The closest eligible H.
+                [1.82, -2.22, 0.],
+                [2.94, -1.19, 0.88],
+                [2.94, -1.19, -0.88],
+            ],
+            isotopes: vec![],
+            masses_amu: vec![],
+            charge: 0,
+            multiplicity: 1,
+            drawing_atoms: vec![],
+        }),
+        atoms: (1..=5).map(|map| Some(id(map))).chain([None; 5]).collect(),
+        baseline: "test".into(),
+    };
+    let mut unreserved = plan.clone();
+    unreserved.mapped_hydrogens.clear();
+    assert_eq!(changes(&launch, &unreserved).unwrap().form, [(2, 4)]);
+    let changes = changes(&launch, &plan).unwrap();
+    assert_eq!(changes.form, [(2, 6)]);
+    assert_eq!(changes.break_, [(1, 6)]);
 }
 
 #[test]
@@ -159,7 +201,7 @@ fn completion() -> (Launch, Completion) {
         atoms: vec![Some(20), Some(90)],
         baseline: "test".into(),
     };
-    let masses = engine_masses(&launch.frame.numbers).unwrap();
+    let masses = engine_masses(&launch.frame).unwrap();
     let mut checked = crate::app::xtb::run::example_computed(-1., 1.);
     checked.hessian = vec![0.5; 36];
     checked.vibrations = Some(
@@ -175,7 +217,7 @@ fn completion() -> (Launch, Completion) {
     );
     let done = Completion {
         report: ts_report(),
-        checked,
+        checked: Ok(checked),
         engine: crate::app::xtb::run::example_engine(),
         changes: Changes {
             form: vec![(0, 1)],
@@ -227,7 +269,13 @@ fn result_retains_worker_hessian_endpoint_hashes_and_energy_only_band() {
 #[test]
 fn worker_disagreement_or_failed_irc_keeps_candidate_with_cli_reason() {
     let (launch, mut done) = completion();
-    done.checked.vibrations.as_mut().unwrap().frequencies_cm1 = vec![-49.9];
+    done.checked
+        .as_mut()
+        .unwrap()
+        .vibrations
+        .as_mut()
+        .unwrap()
+        .frequencies_cm1 = vec![-49.9];
     let report = complete(&launch, done).unwrap();
     assert_eq!(
         report.result.status,
@@ -247,6 +295,56 @@ fn worker_disagreement_or_failed_irc_keeps_candidate_with_cli_reason() {
         }
     );
     assert!(!report.extras.connects);
+}
+
+#[test]
+fn launch_masses_use_isotope_labels_unless_explicit_masses_are_present() {
+    let mut frame = (*launch().frame).clone();
+    let natural = engine_masses(&frame).unwrap();
+    frame.isotopes = vec![18, 2, 0, 0, 0];
+    let labelled = engine_masses(&frame).unwrap();
+    assert!((labelled[0] - 17.999_16).abs() < 1e-5);
+    assert!((labelled[1] - 2.014_102).abs() < 1e-6);
+    assert_eq!(labelled[2..], natural[2..]);
+    frame.masses_amu = vec![18., 2., 15., 1., 1.];
+    assert_eq!(engine_masses(&frame).unwrap(), frame.masses_amu);
+}
+
+#[test]
+fn failed_worker_check_keeps_engine_candidate_and_cancellation_discards_it() {
+    let (launch, mut done) = completion();
+    done.checked = Err(ts::TsError::Failed("worker timed out".into()));
+    let report = complete(&launch, done).unwrap();
+    let result = &report.result;
+    assert_eq!(
+        result.status,
+        qcdata::Status::NotConverged {
+            reason: "worker check failed: worker timed out".into()
+        }
+    );
+    assert_eq!(result.energy_hartree, Some(-1.));
+    assert_eq!(result.hessian_hartree_per_bohr2, [0.25; 36]);
+    assert_eq!(result.vibrations.as_ref().unwrap().frequencies_cm1, [-60.]);
+    assert_eq!(
+        result.trajectory.as_ref().unwrap().energies_hartree,
+        [-3., -1.1, -2.]
+    );
+    assert_eq!(
+        result.endpoints,
+        Some(qcdata::Endpoints {
+            reactant: report.frames[1].hash(),
+            product: report.frames[2].hash(),
+        })
+    );
+    assert_eq!(report.extras.irc_energies, [vec![-1., -3.], vec![-1., -2.]]);
+    assert!(report.extras.worker_frequencies.is_empty());
+    result.validate(&report.frames[0]).unwrap();
+
+    let (launch, mut done) = completion();
+    done.checked = Err(ts::TsError::Cancelled);
+    assert!(
+        matches!(complete(&launch, done), Err(Failure::Other(message)) if message == "Calculation canceled")
+    );
 }
 
 #[test]

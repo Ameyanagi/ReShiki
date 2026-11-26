@@ -4,8 +4,10 @@ use super::Action as XtbAction;
 use super::{is, state};
 use crate::app::{App, Message};
 use iced::Task;
-use reshiki::qcdata::{CalcResult, Task as CalcTask};
+use reshiki::document::Document;
+use reshiki::qcdata::{CalcResult, Frame, Task as CalcTask};
 use reshiki::reactions::ts_plan::{self, TsPlan};
+use reshiki::science::ScienceError;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::{Arc, Weak};
@@ -182,7 +184,7 @@ pub(super) struct Session {
 }
 
 impl Session {
-    pub(super) fn stale(&self, doc: &reshiki::document::Document, revision: (u64, u64)) -> bool {
+    pub(super) fn stale(&self, doc: &Document, revision: (u64, u64)) -> bool {
         if let Some((at, stale)) = self.freshness.get()
             && at == revision
         {
@@ -227,6 +229,78 @@ pub(super) fn path_energies(result: &CalcResult) -> &[f64] {
         .map_or(&[], |path| &path.energies_hartree)
 }
 
+/// A saved TS links to its starting molecule. Find current plans that can
+/// still start from that molecule, including the roles on the opposite side.
+pub(super) fn matching_plans<'a>(
+    doc: &'a Document,
+    atoms: &'a [Option<u64>],
+) -> impl Iterator<Item = (u64, TsPlan)> + 'a {
+    let anchor = atoms.iter().flatten().next();
+    let count = atoms.iter().flatten().count();
+    doc.reactions
+        .iter()
+        .filter(move |reaction| {
+            anchor.is_some_and(|id| {
+                reaction
+                    .reactants
+                    .iter()
+                    .chain(&reaction.products)
+                    .any(|participant| participant.atoms.contains(id))
+            })
+        })
+        .filter_map(move |reaction| {
+            let plan = ts_plan::plan(doc, reaction.arrow).ok()?;
+            (plan.start_atoms.len() == count
+                && plan.start_atoms.iter().all(|id| atoms.contains(&Some(*id))))
+            .then_some((reaction.arrow, plan))
+        })
+}
+
+/// Copy a path image's coordinates into the canvas preview. The model keeps
+/// its existing bond topology, including the original parents of added H.
+pub(super) fn preview_image(
+    doc: &mut Document,
+    atoms: &[Option<u64>],
+    input: &Frame,
+    image: &Frame,
+) -> Result<(), ScienceError> {
+    let anchor = atoms.iter().flatten().next().ok_or(ScienceError::NoModel)?;
+    let model = doc
+        .models
+        .iter_mut()
+        .find(|model| model.linked_atoms.contains(anchor))
+        .ok_or(ScienceError::NoModel)?;
+    let count = model.atoms.len() + model.hydrogens.len();
+    let positions: Vec<_> = image
+        .positions_angstrom
+        .iter()
+        .map(|xyz| xyz.map(|x| x as f32))
+        .collect();
+    if image.numbers != input.numbers
+        || count != atoms.len()
+        || count != image.numbers.len()
+        || count != positions.len()
+        || !model
+            .geometry_sources()
+            .into_iter()
+            .chain(std::iter::repeat_n(None, model.hydrogens.len()))
+            .eq(atoms.iter().copied())
+        || !positions.iter().flatten().all(|x| x.is_finite())
+    {
+        return Err(ScienceError::ModelMismatch);
+    }
+    for (position, xyz) in model
+        .atoms
+        .iter_mut()
+        .map(|a| &mut a.xyz)
+        .chain(model.hydrogens.iter_mut().map(|h| &mut h.xyz))
+        .zip(positions)
+    {
+        *position = xyz;
+    }
+    Ok(())
+}
+
 impl App {
     pub(super) fn xtb_ts_action(&mut self, action: Action) -> Task<Message> {
         match action {
@@ -259,16 +333,7 @@ impl App {
         }
         // The file links the result to the starting molecule. Only infer an
         // arrow after reopening when that molecule identifies a single plan.
-        let doc = &self.tab.doc;
-        let mut candidates = doc.arrows.iter().filter_map(|arrow| {
-            let plan = ts_plan::plan(doc, arrow.id).ok()?;
-            (plan.start_atoms.len() == shown.atoms.iter().flatten().count()
-                && plan
-                    .start_atoms
-                    .iter()
-                    .all(|id| shown.atoms.contains(&Some(*id))))
-            .then_some((arrow.id, plan))
-        });
+        let mut candidates = matching_plans(&self.tab.doc, shown.atoms);
         let candidate = candidates.next()?;
         candidates.next().is_none().then_some(candidate)
     }

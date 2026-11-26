@@ -70,11 +70,20 @@ pub(in crate::app::xtb::ts) fn claisen() -> (Document, u64) {
     (doc, arrow)
 }
 
-fn hydrogen_transfer() -> (Document, u64) {
+#[cfg(all(not(target_arch = "wasm32"), feature = "xtb"))]
+pub(in crate::app::xtb::ts) fn hydrogen_transfer() -> (Document, u64) {
     let mut doc = Document::default();
-    let atoms = [("C", 1), ("C", 2), ("O", 3), ("C", 4)];
-    let left = molecule(&mut doc, &atoms, &[(1, 4, 1), (2, 4, 1), (3, 4, 2)]);
-    let right = molecule(&mut doc, &atoms, &[(1, 4, 1), (2, 4, 2), (3, 4, 1)]);
+    let atoms = [("C", 1), ("C", 2), ("O", 3), ("C", 4), ("H", 5)];
+    let left = molecule(
+        &mut doc,
+        &atoms,
+        &[(1, 4, 1), (2, 4, 1), (3, 4, 2), (2, 5, 1)],
+    );
+    let right = molecule(
+        &mut doc,
+        &atoms,
+        &[(1, 4, 1), (2, 4, 2), (3, 4, 1), (2, 5, 1)],
+    );
     let arrow = assign(&mut doc, &[&left], &[&right]);
     (doc, arrow)
 }
@@ -118,7 +127,71 @@ fn mapped_claisen_names_map_numbers_and_starts_ready_without_hydrogen_moves() {
 }
 
 #[test]
+fn diels_alder_lists_bonds_in_arrow_direction_when_search_starts_on_product() {
+    let mut doc = Document::default();
+    let diene = molecule(
+        &mut doc,
+        &[("C", 1), ("C", 2), ("C", 3), ("C", 4)],
+        &[(1, 2, 2), (2, 3, 1), (3, 4, 2)],
+    );
+    let ethylene = molecule(&mut doc, &[("C", 5), ("C", 6)], &[(5, 6, 2)]);
+    let ring = molecule(
+        &mut doc,
+        &(1..=6).map(|number| ("C", number)).collect::<Vec<_>>(),
+        &[
+            (1, 2, 1),
+            (2, 3, 2),
+            (3, 4, 1),
+            (4, 5, 1),
+            (5, 6, 1),
+            (6, 1, 1),
+        ],
+    );
+    let arrow = assign(&mut doc, &[&diene, &ethylene], &[&ring]);
+    let plan = ts_plan::plan(&doc, arrow).unwrap();
+    assert_eq!(plan.start, Side::Product);
+    assert_eq!(subtitle(&doc, arrow, &Ok(plan.clone())), "GFN2-xTB · 2 → 1");
+    assert_eq!(
+        summary(&doc, &plan).bonds,
+        "Bonds formed: C1–C6, C4–C5 · broken: none"
+    );
+
+    let reaction = &mut doc.reactions[0];
+    std::mem::swap(&mut reaction.reactants, &mut reaction.products);
+    let reverse = ts_plan::plan(&doc, arrow).unwrap();
+    assert_eq!(reverse.start, Side::Reactant);
+    assert_eq!(
+        summary(&doc, &reverse).bonds,
+        "Bonds formed: none · broken: C1–C6, C4–C5"
+    );
+}
+
+#[test]
+fn product_start_lists_hydrogen_moves_in_arrow_direction() {
+    let mut doc = Document::default();
+    let carbonyl = molecule(&mut doc, &[("C", 1), ("O", 2)], &[(1, 2, 2)]);
+    let methane = molecule(&mut doc, &[("C", 3)], &[]);
+    let alcohol = molecule(
+        &mut doc,
+        &[("C", 1), ("O", 2), ("C", 3)],
+        &[(1, 2, 1), (1, 3, 1)],
+    );
+    let arrow = assign(&mut doc, &[&carbonyl, &methane], &[&alcohol]);
+    let plan = ts_plan::plan(&doc, arrow).unwrap();
+    assert_eq!(plan.start, Side::Product);
+    assert_eq!(plan.hydrogen_moves, [(alcohol[&2], alcohol[&3])]);
+    let review = summary(&doc, &plan);
+    assert_eq!(review.bonds, "Bonds formed: C1–C3 · broken: none");
+    assert_eq!(
+        review.hydrogens,
+        ["Hydrogens that move:", "H from C3 to O2 (least motion)"]
+    );
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
+#[test]
 fn an_unmapped_drawing_keeps_the_shape_but_cannot_start() {
+    assert!(crate::app::xtb::available());
     let (mut doc, arrow) = claisen();
     for atom in &mut doc.atoms {
         atom.map_num = 0;
@@ -135,14 +208,17 @@ fn an_unmapped_drawing_keeps_the_shape_but_cannot_start() {
     let before = doc.clone();
     let mut app = app(doc, arrow);
     let _ = app.xtb_ts_card_action(Action::Find);
+    assert_eq!(app.tab.xtb.ts_card.scope, Some((app.tab.file_epoch, arrow)));
     assert!(app.tab.xtb.run.is_none());
     assert!(app.tab.model_job.is_none());
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
 }
 
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
 fn moving_hydrogens_require_review_of_this_plan_and_scope() {
+    assert!(crate::app::xtb::available());
     let (doc, arrow) = hydrogen_transfer();
     let plan = ts_plan::plan(&doc, arrow).unwrap();
     assert_eq!(
@@ -167,6 +243,7 @@ fn moving_hydrogens_require_review_of_this_plan_and_scope() {
     let before = doc.clone();
     let mut app = app(doc, arrow);
     let _ = app.xtb_ts_card_action(Action::Find);
+    assert_eq!(app.tab.xtb.ts_card.scope, Some((app.tab.file_epoch, arrow)));
     assert!(app.tab.xtb.run.is_none());
     assert!(app.tab.model_job.is_none());
     assert_eq!(app.tab.doc, before);
@@ -184,8 +261,10 @@ fn no_moving_hydrogens_can_still_be_explicitly_unchecked() {
     assert!(!card.ready(&doc, scope, &plan, true));
 }
 
+#[cfg(all(not(target_arch = "wasm32"), not(windows), feature = "xtb"))]
 #[test]
 fn two_to_two_is_one_diagnostic_and_cannot_start() {
+    assert!(crate::app::xtb::available());
     let mut doc = Document::default();
     let a = molecule(&mut doc, &[("C", 1)], &[]);
     let b = molecule(&mut doc, &[("O", 2)], &[]);
@@ -208,6 +287,7 @@ fn two_to_two_is_one_diagnostic_and_cannot_start() {
     let before = doc.clone();
     let mut app = app(doc, arrow);
     let _ = app.xtb_ts_card_action(Action::Find);
+    assert_eq!(app.tab.xtb.ts_card.scope, Some((app.tab.file_epoch, arrow)));
     assert!(app.tab.xtb.run.is_none());
     assert!(app.tab.model_job.is_none());
     assert_eq!(app.tab.doc, before);

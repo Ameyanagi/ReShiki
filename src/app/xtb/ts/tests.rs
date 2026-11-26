@@ -10,12 +10,17 @@ fn send(app: &mut App, action: XtbAction) {
     let _ = app.update(Message::Xtb(action));
 }
 
-fn start() -> (App, u64) {
-    let (doc, arrow) = card::tests::claisen();
+fn reaction_app(doc: Document, arrow: u64) -> App {
     let (mut app, _) = App::new();
     app.tab.doc = doc;
     app.tab.selected = vec![arrow];
     app.tab.busy = false;
+    app
+}
+
+fn start() -> (App, u64) {
+    let (doc, arrow) = card::tests::claisen();
+    let mut app = reaction_app(doc, arrow);
     send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
     let plan = ts_plan::plan(&app.tab.doc, arrow).unwrap();
     assert_eq!(app.tab.xtb.run.as_ref().unwrap().atoms, plan.start_atoms);
@@ -24,19 +29,49 @@ fn start() -> (App, u64) {
 }
 
 fn finish_model(app: &mut App) {
-    let positions = (0..app.model_atoms().len())
+    let order = app.model_atoms();
+    let mut positions: Vec<_> = (0..order.len())
         .map(|i| Point3 {
             x: i as f64 * 1.4,
             y: 0.,
             z: 0.,
         })
         .collect();
-    let _ = app.finish_model(positions, vec![]);
+    let mut parents = vec![];
+    for (index, id) in order.iter().enumerate() {
+        let hydrogens = match app.tab.doc.atom(*id).unwrap().map_num {
+            1 | 4 | 6 => 2,
+            2 | 5 => 1,
+            3 => 0,
+            map => panic!("unexpected Claisen map number {map}"),
+        };
+        for hydrogen in 0..hydrogens {
+            positions.push(Point3 {
+                x: positions[index].x,
+                y: if hydrogen == 0 { 1. } else { -1. },
+                z: 0.,
+            });
+            parents.push(index);
+        }
+    }
+    assert_eq!(
+        parents.len(),
+        8,
+        "the Claisen model includes every hydrogen"
+    );
+    let _ = app.finish_model(positions, parents);
     assert!(
         app.tab.xtb.run.as_ref().unwrap().launch.is_some(),
         "{}",
         app.status
     );
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let launch = run.launch.as_ref().unwrap();
+    assert_eq!(
+        launch.frame.numbers.len(),
+        run.ts.as_ref().unwrap().request.plan.atoms
+    );
+    assert_eq!(launch.frame.numbers.iter().filter(|&&z| z == 1).count(), 8);
 }
 
 fn example_report(launch: &Launch) -> Arc<job::Report> {
@@ -189,6 +224,171 @@ fn search_progress_and_finish_keep_the_drawing_and_open_a_previewable_path() {
             .request
             .images,
         20
+    );
+}
+
+#[test]
+fn reopened_light_and_full_paths_become_stale_after_an_opposite_side_map_edit() {
+    let (mut app, arrow) = start();
+    finish_model(&mut app);
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let report = example_report(run.launch.as_ref().unwrap());
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+    assert!(!app.xtb_shown().unwrap().stale);
+
+    for keep_full in [false, true] {
+        reshiki::science::set_keep_full(&mut app.tab.doc, 0, keep_full);
+        let file = app.tab.doc.file_json().unwrap();
+        let (mut reopened, _) = App::new();
+        reopened.tab.doc = Document::from_native_file(&file).unwrap();
+        reopened.tab.busy = false;
+        reopened.tab.selected = vec![arrow];
+        send(&mut reopened, XtbAction::Palette(palette::Action::Show));
+        let shown = reopened.xtb_shown().unwrap();
+        assert!(
+            shown.ts.is_none(),
+            "reload has no in-memory reaction session"
+        );
+        assert_eq!(shown.stored.keep_full, keep_full);
+        assert!(!shown.stale, "the unchanged saved reaction is current");
+
+        let before = reopened.tab.doc.clone();
+        let product = reopened.tab.doc.reactions[0].products[0].atoms[0];
+        assert!(
+            !shown.atoms.contains(&Some(product)),
+            "edit the opposite side"
+        );
+        reopened.tab.doc.atom_mut(product).unwrap().map_num = 0;
+        reopened.changed(before);
+        assert!(
+            reopened.xtb_shown().unwrap().stale,
+            "the reloaded result must see the changed product (keep_full={keep_full})"
+        );
+        send(&mut reopened, XtbAction::Ts(Action::Rerun));
+        assert!(!reopened.xtb_running(), "a stale reaction cannot be rerun");
+    }
+}
+
+#[test]
+fn path_image_previews_a_hydrogen_nearest_its_new_parent() {
+    let (doc, arrow) = card::tests::hydrogen_transfer();
+    let mut app = reaction_app(doc, arrow);
+    send(
+        &mut app,
+        XtbAction::Ts(Action::Card(card::Action::Reviewed(true))),
+    );
+    send(&mut app, XtbAction::Ts(Action::Card(card::Action::Find)));
+    let order = app.model_atoms();
+    let index = |map| {
+        order
+            .iter()
+            .position(|id| app.tab.doc.atom(*id).unwrap().map_num == map)
+            .unwrap()
+    };
+    let donor = index(2);
+    let acceptor = index(3);
+    let other_carbon = index(1);
+    let mut positions: Vec<_> = order
+        .iter()
+        .enumerate()
+        .map(|(i, _)| Point3 {
+            x: i as f64 * 1.4,
+            y: 0.,
+            z: 0.,
+        })
+        .collect();
+    let moved = Point3 {
+        x: positions[acceptor].x,
+        y: 0.9,
+        z: 0.,
+    };
+    positions.extend([
+        Point3 {
+            x: positions[donor].x,
+            y: 1.,
+            z: 0.,
+        },
+        Point3 {
+            x: positions[donor].x,
+            y: -1.,
+            z: 0.,
+        },
+        Point3 {
+            x: positions[other_carbon].x,
+            y: 1.,
+            z: 0.,
+        },
+        Point3 {
+            x: positions[other_carbon].x,
+            y: -1.,
+            z: 0.,
+        },
+        Point3 {
+            x: positions[other_carbon].x,
+            y: 0.,
+            z: 1.,
+        },
+    ]);
+    let _ = app.finish_model(
+        positions,
+        vec![donor, donor, other_carbon, other_carbon, other_carbon],
+    );
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let launch = run.launch.as_ref().unwrap();
+    let mut report = example_report(launch);
+    let report_data = Arc::get_mut(&mut report).unwrap();
+    let mut image = report_data.frames[2].clone();
+    image.positions_angstrom[order.len()] = [moved.x, moved.y, moved.z];
+    report_data.extras.image_positions[2].clone_from(&image.positions_angstrom);
+    let before = app.tab.doc.models[0].hydrogens[0];
+    assert_eq!(before.parent, donor as u64);
+    let mut document = app.tab.doc.clone();
+    assert!(matches!(
+        reshiki::science::move_model(&mut document, &launch.atoms, &image),
+        Err(ScienceError::ModelMismatch)
+    ));
+
+    send(
+        &mut app,
+        XtbAction::TsEvent(serial, Event::Done(Ok(report))),
+    );
+    send(&mut app, XtbAction::Ts(Action::Image(2)));
+    let preview = app.xtb_step_preview().expect("the TS image should preview");
+    assert_eq!(
+        preview.models[0].hydrogens[0].xyz,
+        [moved.x as f32, moved.y as f32, moved.z as f32]
+    );
+    assert_eq!(preview.models[0].hydrogens[0].parent, before.parent);
+    assert_eq!(app.tab.doc.models[0].hydrogens[0], before);
+}
+
+#[test]
+fn background_ts_completion_preserves_the_foreground_predict_page_and_dock() {
+    let (mut app, _) = start();
+    finish_model(&mut app);
+    let first = app.tab.id;
+    let run = app.tab.xtb.run.as_ref().unwrap();
+    let serial = run.serial;
+    let report = example_report(run.launch.as_ref().unwrap());
+    app.add_tab();
+    let foreground = app.tab.id;
+    app.xtb.page = crate::app::xtb::Page::Nmr;
+    app.xtb.dock.inspector = true;
+    app.xtb.dock.collapsed = true;
+    let finished = Message::Xtb(XtbAction::TsEvent(serial, Event::Done(Ok(report))));
+    let _ = app.update(Message::Tab(first, Box::new(finished)));
+    assert_eq!(app.tab.id, foreground);
+    assert_eq!(app.xtb.page, crate::app::xtb::Page::Nmr);
+    assert!(app.xtb.dock.collapsed);
+    assert!(app.tab.doc.science.results.is_empty());
+    assert_eq!(
+        app.in_tab(first, |app| app.tab.doc.science.results.len()),
+        Some(1)
     );
 }
 
