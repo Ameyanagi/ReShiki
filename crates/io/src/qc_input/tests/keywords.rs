@@ -164,6 +164,61 @@ fn orca_warns_when_maxcore_is_below_1000_mb() {
 }
 
 #[test]
+fn gamess_basis_substitution_keeps_supported_names_and_aliases() {
+    for basis in [
+        "6-31G(d)",
+        "6-31g(D)",
+        "6-31G*",
+        "6-31G",
+        "STO-3G",
+        " sto-3g\t",
+    ] {
+        assert!(gamess::basis_keywords(basis.trim()).is_some());
+        assert_eq!(nearest_gamess_basis(basis), None, "{basis}");
+    }
+}
+
+#[test]
+fn gamess_basis_substitutions_write_with_the_nearest_builtin() {
+    let frame = water();
+    for (basis, substitute, group) in [
+        ("STO-2G", "STO-3G", "GBASIS=STO NGAUSS=3"),
+        (" sto-6g ", "STO-3G", "GBASIS=STO NGAUSS=3"),
+        ("3-21G", "6-31G", "GBASIS=N31 NGAUSS=6"),
+        ("4-31G", "6-31G", "GBASIS=N31 NGAUSS=6"),
+        ("6-21G", "6-31G", "GBASIS=N31 NGAUSS=6"),
+        ("6-31+G", "6-31G", "GBASIS=N31 NGAUSS=6"),
+        ("6-31++G", "6-31G", "GBASIS=N31 NGAUSS=6"),
+        ("6-311G", "6-31G", "GBASIS=N31 NGAUSS=6"),
+        ("6-311++G", "6-31G", "GBASIS=N31 NGAUSS=6"),
+        ("SV", "6-31G", "GBASIS=N31 NGAUSS=6"),
+        ("def-SV", "6-31G", "GBASIS=N31 NGAUSS=6"),
+        (" def2-sv ", "6-31G", "GBASIS=N31 NGAUSS=6"),
+        ("def2-SVP", "6-31G(d)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("def2-SV(P)", "6-31G(d)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("def2-TZVP", "6-31G(d)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("cc-pVDZ", "6-31G(d)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("6-31G**", "6-31G(d)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("6-311G(d,p)", "6-31G(d)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("3-21G*", "6-31G(d)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("6-31+G(d)", "6-31G(d)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("custom", "6-31G(d)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+        ("", "6-31G(d)", "GBASIS=N31 NGAUSS=6 NDFUNC=1"),
+    ] {
+        assert_eq!(nearest_gamess_basis(basis), Some(substitute), "{basis}");
+        let mut settings = settings(Program::Gamess, Job::SinglePoint);
+        settings.basis = nearest_gamess_basis(basis).unwrap().into();
+        let output = write(&settings, &geometry(&frame), "water", GENERATOR).unwrap();
+        assert!(
+            output
+                .main
+                .text
+                .contains(&format!(" $BASIS {group} $END\n"))
+        );
+    }
+}
+
+#[test]
 fn gamess_maps_builtin_bases_hf_mp2_and_per_process_memory() {
     let frame = water();
     for (basis, group) in [

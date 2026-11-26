@@ -185,6 +185,23 @@ pub fn builtin_templates() -> [Template; 3] {
     })
 }
 
+/// Suggest a built-in GAMESS basis, or keep an already supported name or alias.
+pub fn nearest_gamess_basis(basis: &str) -> Option<&'static str> {
+    let basis = basis.trim();
+    if gamess::basis_keywords(basis).is_some() {
+        return None;
+    }
+    let upper = basis.to_ascii_uppercase();
+    let substitute = match upper.as_str() {
+        basis if basis.starts_with("STO-") => "STO-3G",
+        "3-21G" | "3-21+G" | "3-21++G" | "4-31G" | "4-31+G" | "4-31++G" | "6-21G" | "6-21+G"
+        | "6-21++G" | "6-31+G" | "6-31++G" | "6-311G" | "6-311+G" | "6-311++G" | "SV"
+        | "DEF-SV" | "DEF2-SV" => "6-31G",
+        _ => "6-31G(d)",
+    };
+    Some(substitute)
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Settings {
     pub program: Program,

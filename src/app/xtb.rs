@@ -23,6 +23,8 @@ pub(super) mod palette;
 mod results;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
+mod source;
+pub(super) use source::Source;
 mod state;
 mod tone;
 mod vibrations;
