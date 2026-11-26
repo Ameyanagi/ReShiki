@@ -417,7 +417,7 @@ mod execution {
         assert!(app.tab.xtb.run.is_none());
         assert!(app.tab.xtb.energy_state.batch.is_none());
         assert!(
-            app.status.contains("review its species again"),
+            app.status.contains("the reaction changed"),
             "{}",
             app.status
         );

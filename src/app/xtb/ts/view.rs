@@ -165,11 +165,12 @@ pub(in crate::app::xtb) fn search_log(result: &CalcResult, session: Option<&Sess
     if !super::is_ts(result) {
         return String::new();
     }
-    let mut rows = super::saved_search(result).map_or_else(
-        || {
-            session.map_or_else(
-                || {
-                    vec![
+    let mut rows =
+        super::saved_search(result).map_or_else(
+            || {
+                session.map_or_else(
+                    || {
+                        vec![
                 ("Method".into(), "IDPP → CI-NEB → P-RFO → IRC".into()),
                 (
                     "Images".into(),
@@ -191,7 +192,7 @@ pub(in crate::app::xtb) fn search_log(result: &CalcResult, session: Option<&Sess
                         || "not saved".into(),
                         |v| {
                             format!(
-                                "{} significant imaginary mode(s) in saved frequency analysis",
+                                "significant imaginary modes in the saved frequencies: {}",
                                 v.frequencies_cm1
                                     .iter()
                                     .filter(|&&f| f < -IMAGINARY_CM1)
@@ -218,12 +219,12 @@ pub(in crate::app::xtb) fn search_log(result: &CalcResult, session: Option<&Sess
                 ),
                 ("Hessians".into(), "count not saved with this result".into()),
             ]
-                },
-                |session| session.extras.diagnostics.clone(),
-            )
-        },
-        |search| search.diagnostics.clone(),
-    );
+                    },
+                    |session| session.extras.diagnostics.clone(),
+                )
+            },
+            |search| search.diagnostics.clone(),
+        );
     if let Some(run) = &result.run {
         rows.push(("Total time".into(), format!("{:.2} s", run.seconds)));
     }

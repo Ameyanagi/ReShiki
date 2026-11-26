@@ -595,7 +595,7 @@ fn diagnostics(
             }
         } else {
             format!(
-                "engine {} imaginary mode(s); worker {worker} · {}",
+                "imaginary modes: engine {} · worker {worker} · {}",
                 report.imaginary,
                 if report.imaginary == worker {
                     "agree"

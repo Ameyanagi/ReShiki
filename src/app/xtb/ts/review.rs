@@ -468,7 +468,7 @@ impl App {
         match action {
             Action::Cancel => {
                 if !dialog.visible() {
-                    self.status = "Atom matching cancelled".into();
+                    self.status = "Atom matching canceled".into();
                     self.error = false;
                 }
                 self.tab.xtb.ts_review = None;
@@ -477,7 +477,7 @@ impl App {
             _ if dialog.at != at => {
                 if !dialog.visible() {
                     self.tab.xtb.ts_review = None;
-                    self.status = "Reaction changed; atom matching cancelled".into();
+                    self.status = "Reaction changed; atom matching canceled".into();
                     self.error = false;
                 }
                 return Task::none();
