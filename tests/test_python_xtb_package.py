@@ -2,6 +2,7 @@
 
 import importlib.util
 import os
+import sys
 import tempfile
 import unittest
 from importlib.metadata import PackagePath
@@ -56,7 +57,12 @@ class XtbPackageTests(unittest.TestCase):
                 ([], 0o755),
                 ([PackagePath("other/reshiki-xtb-worker-copy")], 0o755),
                 ([PackagePath("bin/reshiki-xtb-worker")], None),
-                ([PackagePath("bin/reshiki-xtb-worker")], 0o644),
+                # Windows has no execute bit (and no reshiki-xtb wheel).
+                *(
+                    ()
+                    if sys.platform == "win32"
+                    else (([PackagePath("bin/reshiki-xtb-worker")], 0o644),)
+                ),
             ):
                 worker.unlink(missing_ok=True)
                 if mode is not None:
