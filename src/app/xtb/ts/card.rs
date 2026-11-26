@@ -798,28 +798,28 @@ impl App {
             if let Some(result) = result {
                 content = content.push(line(xtb::results::previous_result(result), Tone::Muted));
             }
-        } else if let Some(view) = &presentation {
-            if let Some(reason) = &view.reason {
-                content = content
-                    .push(line("No reliable transition state found.", Tone::Warning))
-                    .push(line(reason.clone(), Tone::Muted))
-                    .push(xtb::available().then(|| {
-                        failure_actions(
-                            view.recovery,
-                            arrow,
-                            idle && (view.recovery != view::Recovery::ShowWhere || !stale),
-                            result.is_some_and(|result| view::has_reached_endpoint(result)),
-                        )
-                    }));
-                if let Some(highest) = view.highest_path_kcal {
-                    content = content.push(line(
-                        format!(
-                            "Highest point on the path: about {} above the reactants.",
-                            unit.format(highest)
-                        ),
-                        Tone::Muted,
-                    ));
-                }
+        } else if let Some(view) = &presentation
+            && let Some(reason) = &view.reason
+        {
+            content = content
+                .push(line("No reliable transition state found.", Tone::Warning))
+                .push(line(reason.clone(), Tone::Muted))
+                .push(xtb::available().then(|| {
+                    failure_actions(
+                        view.recovery,
+                        arrow,
+                        idle && (view.recovery != view::Recovery::ShowWhere || !stale),
+                        result.is_some_and(|result| view::has_reached_endpoint(result)),
+                    )
+                }));
+            if let Some(highest) = view.highest_path_kcal {
+                content = content.push(line(
+                    format!(
+                        "Highest point on the path: about {} above the reactants.",
+                        unit.format(highest)
+                    ),
+                    Tone::Muted,
+                ));
             }
             // An early-stopped IRC descent still connects; the Path tab notes it.
         }
