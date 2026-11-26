@@ -389,6 +389,7 @@ impl App {
             atoms: plan.start_atoms.clone(),
             config,
             keep_full: false,
+            start: None,
             search: None,
             ts: Some(Request {
                 arrow,
@@ -482,6 +483,8 @@ impl App {
                     }
                 };
                 let pending = super::Pending {
+                    pushed: false,
+                    accepted: None,
                     launch,
                     frames,
                     result,

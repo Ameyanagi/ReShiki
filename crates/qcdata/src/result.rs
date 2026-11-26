@@ -252,6 +252,9 @@ pub struct Thermo {
     pub imaginary_cutoff_cm1: f64,
     /// Rotational symmetry number.
     pub symmetry_number: u32,
+    /// Raw Schoenflies point-group label reported by the engine, if available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub point_group: Option<String>,
 }
 
 /// Settings for a reproducible xTB calculation or an imported job.
@@ -673,7 +676,8 @@ impl CalcResult {
         Ok(())
     }
 
-    /// Copy the light data, retaining the basis and the requested coefficient rows if present.
+    /// Copy the light data, retaining vibrational masses and the basis and requested
+    /// coefficient rows if present. Cartesian vibrational modes are omitted.
     ///
     /// Expects a validated result and may panic otherwise.
     pub fn light(&self, pinned: &[(Spin, u32)]) -> Self {
@@ -745,8 +749,8 @@ impl CalcResult {
                 frequencies_cm1: v.frequencies_cm1.clone(),
                 ir_intensities_km_mol: v.ir_intensities_km_mol.clone(),
                 modes: Vec::new(),
-                reduced_masses_amu: Vec::new(),
-                masses_amu: Vec::new(),
+                reduced_masses_amu: v.reduced_masses_amu.clone(),
+                masses_amu: v.masses_amu.clone(),
             }),
             thermo: self.thermo.clone(),
             trajectory: self.trajectory.as_ref().map(|path| Trajectory {
@@ -902,6 +906,11 @@ impl CalcResult {
         bytes
             + self.orbitals.as_ref().map_or(0, Orbitals::heap_bytes)
             + self.trajectory.as_ref().map_or(0, Trajectory::heap_bytes)
+            + self
+                .thermo
+                .as_ref()
+                .and_then(|thermo| thermo.point_group.as_ref())
+                .map_or(0, String::len)
     }
 }
 

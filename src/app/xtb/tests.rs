@@ -57,10 +57,14 @@ pub(super) fn f32s(positions: &[[f64; 3]]) -> Vec<[f32; 3]> {
 }
 
 pub(super) fn optimized(start: &[[f64; 3]], end: &[[f64; 3]]) -> Event {
+    Event::Done(Ok(Arc::new(optimization(start, end))))
+}
+
+fn optimization(start: &[[f64; 3]], end: &[[f64; 3]]) -> Report {
     // An optimization's last compute carries the gradient.
     let mut computed = run::example_computed(-5.070176, 14.01);
     computed.gradient = Some(vec![[0.; 3]; end.len()]);
-    Event::Done(Ok(Arc::new(Report {
+    Report {
         engine: run::example_engine(),
         computed,
         energy: -5.070176,
@@ -70,7 +74,42 @@ pub(super) fn optimized(start: &[[f64; 3]], end: &[[f64; 3]]) -> Event {
         energies: vec![-5.06, -5.070176],
         path: [start.as_flattened(), end.as_flattened()].concat(),
         evaluations: vec![],
-    })))
+    }
+}
+
+pub(super) fn optfreq(start: &[[f64; 3]], end: &[[f64; 3]]) -> Report {
+    let mut report = optimization(start, end);
+    report.computed.vibrations = Some(
+        serde_json::from_value(serde_json::json!({
+            "conventions": "axtb",
+            "frequencies_cm1": [1590.13, 3468.58, 3480.11],
+            "ir_intensities_km_mol": [127.68, 14.05, 5.08],
+            "reduced_masses_amu": [1.08, 1.04, 1.07],
+            "force_constants_mdyn_per_angstrom": [1.6, 7.4, 7.6],
+            "masses_amu": [15.999, 1.008, 1.008],
+            "linear": false,
+            "point_group": "c2v"
+        }))
+        .unwrap(),
+    );
+    report.computed.thermo = Some(qcdata::Thermo {
+        temperature_k: 298.15,
+        pressure_pa: 101325.,
+        zero_point_energy_hartree: 0.019453,
+        enthalpy_correction_hartree: 0.023230,
+        entropy_hartree_per_k: 0.00007198,
+        gibbs_correction_hartree: 0.001769,
+        heat_capacity_hartree_per_k: Some(0.0000095),
+        frequency_scale: 1.,
+        rotor_cutoff_cm1: 50.,
+        imaginary_cutoff_cm1: 20.,
+        symmetry_number: 2,
+        point_group: None,
+    });
+    report.computed.normal_modes = (0..3)
+        .flat_map(|i| (0..9).map(move |j| if j == i { 1. } else { 0. }))
+        .collect();
+    report
 }
 
 #[test]
@@ -114,6 +153,106 @@ fn an_optimization_moves_a_preview_then_applies_as_one_undo_step() {
     let _ = app.update(Message::Undo);
     assert_eq!(model(&app.tab.doc), before);
     assert!(app.tab.doc.science.results.is_empty());
+}
+
+#[test]
+fn optfreq_stores_the_vibrations_and_applies_geometry_as_one_undo_step() {
+    let (mut app, _) = water(CalcTask::OptFreq);
+    event(
+        &mut app,
+        Event::Steps {
+            first: 0,
+            energies: vec![-5.06, -5.07],
+            positions: MOVED.to_vec(),
+        },
+    );
+    assert!(app.status.starts_with("xTB · H2O · Optimizing · step 1"));
+    event(&mut app, Event::Hessian);
+    assert!(app.status.starts_with("xTB · H2O · Computing frequencies"));
+
+    event(&mut app, Event::Done(Ok(Arc::new(optfreq(&START, &MOVED)))));
+    assert_eq!(model(&app.tab.doc), f32s(&MOVED));
+    assert!(matches!(
+        &app.tab.xtb.outcome,
+        Some(Outcome::Done { line, .. }) if line.ends_with("converged in 1 step · lowest 1590 cm⁻¹")
+    ));
+    let shown = app.xtb_shown().expect("the new result");
+    let result = &shown.stored.result;
+    assert_eq!(result.task, qcdata::Task::Optimize);
+    let qcdata::Settings::Xtb(settings) = &result.settings else {
+        panic!("expected xTB settings");
+    };
+    assert_eq!(settings.convergence, Some(qcdata::Convergence::Tight));
+    assert_eq!(result.frame, shown.frame.hash());
+    assert_eq!(shown.frame.positions_angstrom, MOVED);
+    assert_eq!(result.vibrations.as_ref().unwrap().modes.len(), 27);
+    assert!(result.thermo.is_some());
+    assert_eq!(
+        results::View::available(result),
+        [View::Summary, View::Vibrations, View::Steps, View::Log]
+    );
+    let rows = shown.rows();
+    let row = |name: &str| {
+        rows.iter()
+            .find(|(label, _)| label == name)
+            .map(|(_, value)| value.as_str())
+    };
+    assert_eq!(row("Frequencies"), Some("lowest 1590 cm⁻¹"));
+    assert_eq!(row("ZPVE"), Some("0.019453 Eh (12.21 kcal/mol)"));
+    assert_eq!(row("G (298.15 K)"), Some("−5.068407 Eh"));
+    assert_eq!(row("Point group"), Some("C2v"));
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(model(&app.tab.doc), f32s(&START));
+    assert!(app.tab.doc.science.results.is_empty());
+}
+
+#[test]
+fn frequencies_store_a_hessian_on_the_starting_geometry() {
+    let (mut app, _) = water(CalcTask::Frequencies);
+    let report = Report {
+        steps: 0,
+        energies: vec![-5.070176],
+        path: vec![],
+        ..optfreq(&START, &START)
+    };
+    event(&mut app, Event::Done(Ok(Arc::new(report))));
+    assert_eq!(model(&app.tab.doc), f32s(&START));
+    let shown = app.xtb_shown().expect("the new result");
+    assert_eq!(shown.stored.result.task, qcdata::Task::Hessian);
+    let qcdata::Settings::Xtb(settings) = &shown.stored.result.settings else {
+        panic!("expected xTB settings");
+    };
+    assert_eq!(settings.convergence, None);
+    assert_eq!(shown.stored.result.frame, shown.input.hash());
+    assert_eq!(
+        shown.frame.positions_angstrom,
+        shown.input.positions_angstrom
+    );
+    assert!(shown.stored.result.vibrations.is_some());
+    assert!(shown.stored.result.trajectory.is_none());
+}
+
+#[test]
+fn frequencies_reject_a_target_above_the_hessian_limit() {
+    let (mut app, _) = App::new();
+    let settings = Settings {
+        task: CalcTask::Frequencies,
+        ..Settings::default()
+    };
+    let _ = app.xtb_begin(Request {
+        atoms: (1..=201).collect(),
+        config: settings.config((0, 0), false, vec![]).unwrap(),
+        keep_full: false,
+        start: None,
+        search: None,
+        ts: None,
+    });
+    assert!(matches!(
+        &app.tab.xtb.outcome,
+        Some(Outcome::Failed(failed)) if failed.failure == state::Failure::TooMany { count: 201, limit: 200 }
+    ));
+    assert!(!app.xtb_running());
 }
 
 #[test]
@@ -723,7 +862,7 @@ fn a_reopened_optimization_keeps_its_run_summary_and_recalculate_settings() {
     let run = result.run.as_ref().expect("saved run summary");
     assert!(run.seconds >= 1.);
     assert!(shown.rows().contains(&(
-        "Run time",
+        "Run time".into(),
         format!("{:.1} s · 3 SCF calculations", run.seconds),
     )));
     let finished = run.finished.as_ref().expect("finish time");
@@ -935,4 +1074,27 @@ fn manual_write_evidence_files() {
     for (name, bytes) in files {
         std::fs::write(dir.join(name), bytes).expect("written");
     }
+}
+
+#[test]
+fn isotope_labels_give_explicit_analysis_masses() {
+    let frame = Frame {
+        numbers: vec![8, 1, 1],
+        positions_angstrom: START.to_vec(),
+        isotopes: vec![0, 2, 0],
+        masses_amu: vec![],
+        charge: 0,
+        multiplicity: 1,
+        drawing_atoms: vec![],
+    };
+    let masses = isotope_masses(&frame).expect("a labelled atom");
+    assert!((masses[1] - 2.014101778).abs() < 1e-9, "deuterium");
+    assert!((masses[0] - 15.999).abs() < 0.01 && (masses[2] - 1.008).abs() < 0.001);
+    assert!(
+        isotope_masses(&Frame {
+            isotopes: vec![],
+            ..frame
+        })
+        .is_none()
+    );
 }

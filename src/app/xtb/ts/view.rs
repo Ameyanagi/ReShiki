@@ -167,11 +167,11 @@ impl App {
                 .wrap(),
             );
         }
-        let engine = shown
-            .ts
-            .and_then(|session| session.extras.engine_imaginary)
-            .or_else(|| imaginary_frequency(result));
-        details = details.push(match engine {
+        let imaginary = shown.ts.map_or_else(
+            || imaginary_frequency(result),
+            |session| session.extras.engine_imaginary,
+        );
+        details = details.push(match imaginary {
             Some(frequency) => line(
                 format!(
                     "Imaginary frequency {}i cm⁻¹",
@@ -179,7 +179,10 @@ impl App {
                 ),
                 Tone::Good,
             ),
-            None => line("No significant engine imaginary frequency.", Tone::Warning),
+            None if shown.ts.is_some() => {
+                line("No significant engine imaginary frequency.", Tone::Warning)
+            }
+            None => line("No significant imaginary frequency.", Tone::Warning),
         });
         if let Some(session) = shown.ts {
             let frequencies = &session.extras.worker_frequencies;

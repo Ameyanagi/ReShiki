@@ -412,16 +412,6 @@ fn complete(launch: &Launch, done: Completion) -> Result<Report, Failure> {
         Some(reason) => qcdata::Status::NotConverged { reason },
         None => qcdata::Status::Converged,
     };
-    // The engine frequencies characterize the searched stationary point and
-    // survive reopening. The independent worker values stay in session extras.
-    if let Some(vibrations) = &mut result.vibrations {
-        if vibrations.frequencies_cm1.len() != report.frequencies_cm1.len() {
-            vibrations.ir_intensities_km_mol.clear();
-            vibrations.modes.clear();
-            vibrations.reduced_masses_amu.clear();
-        }
-        vibrations.frequencies_cm1 = report.frequencies_cm1.clone();
-    }
     result.trajectory = Some(qcdata::Trajectory {
         numbers: transition.numbers.clone(),
         isotopes: transition.isotopes.clone(),
