@@ -151,7 +151,10 @@ pub(crate) fn headline(result: &CalcResult, frame: &Frame) -> String {
             let unit = if kept == 1 { "conformer" } else { "conformers" };
             format!("{kept} {unit} kept")
         }
-        Task::TransitionState => "Transition-state search".into(),
+        Task::TransitionState if matches!(result.status, Status::Converged) => {
+            "Transition state found".into()
+        }
+        Task::TransitionState => "Transition-state search · no reliable saddle".into(),
     };
     let (method, medium) = match &result.settings {
         Settings::Xtb(settings) => (

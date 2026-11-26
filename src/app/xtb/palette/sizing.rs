@@ -19,6 +19,8 @@ impl App {
             && !self.xtb.dock.inspector
             && self.window_size.height < SHORT_WINDOW_HEIGHT
             && !self.xtb_palette_has_failure()
+            // A finished search opens on its Path and explanation.
+            && !self.tab.xtb.palette.is_showing_ts()
         {
             self.tab.xtb.palette.collapsed = true;
         }
