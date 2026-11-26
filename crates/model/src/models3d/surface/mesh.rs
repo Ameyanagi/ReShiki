@@ -1,7 +1,8 @@
 //! Closed surfaces of a signed scalar field, in model coordinates (Å).
 //!
-//! Each lattice cube is cut into six tetrahedra, a variant of marching cubes (Lorensen &
-//! Cline 1987) \[Lorensen1987MarchingCubes\]. Full references: docs/references/xtb.md.
+//! Each lattice cube is cut into six tetrahedra (marching tetrahedra, Doi & Koide 1991), a
+//! variant of marching cubes (Lorensen & Cline 1987) \[Lorensen1987MarchingCubes\]. Full
+//! references: docs/references/xtb.md.
 
 // Lattice strides, tetrahedron corners and triangle indices all refer to the
 // corresponding bounded arrays. A collapse retains these indices until compaction.

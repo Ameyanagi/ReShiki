@@ -94,7 +94,7 @@ pub(crate) fn update(
         if !ys.is_finite() {
             return;
         }
-        // Nocedal & Wright, Numerical Optimization, Procedure 18.2 [Powell1978Damping].
+        // Nocedal & Wright, Numerical Optimization, Procedure 18.2 [Nocedal2006Numerical].
         // Replacing y by r ensures s·r >= 0.2 s·Hs.
         if ys < 0.2 * shs {
             let theta = 0.8 * shs / (shs - ys);
