@@ -147,7 +147,7 @@ def test_keyboard_interrupt(worker):
     def interrupt():
         # Keep interrupting until the call has raised, so a fast machine cannot
         # finish the calculation between one interrupt and the next check.
-        while not stop.wait(0.01):
+        while not stop.wait(0.002):
             _thread.interrupt_main()
 
     thread = Thread(target=interrupt)
