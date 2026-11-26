@@ -167,7 +167,8 @@ Paths below are relative to `crates/optimize/src`.
   (`optimizer/lbfgs.rs`, `optimizer/trust.rs`, `optimizer/rfo.rs`).
 - **Golub2013Matrix**: Golub & Van Loan, _Matrix Computations_, 4th ed., Johns Hopkins
   University Press (2013), ISBN 978-1-4214-0794-4. Symmetric eigensolver and Krylov shift
-  (`linalg.rs`, `optimizer/rfo/positive.rs`).
+  (`linalg.rs`, `optimizer/rfo/positive.rs`); also the Jacobi principal axes of the symmetry
+  number (`crates/qcdata/src/vibrational/symmetry.rs`).
 - **Horn1987Quaternion**: Horn, J. Opt. Soc. Am. A 4, 629 (1987),
   doi:10.1364/JOSAA.4.000629. Quaternion rotations of TRIC fragments and conformer
   superposition (`optimizer/internal/fragment.rs`, `conformers/alignment.rs`; also the TS
@@ -210,7 +211,10 @@ thermochemistry for other temperatures, scales and cutoffs (`thermochemistry` in
   Quasi-RRHO entropy of low-frequency modes.
 - **FernandezRamos2007Symmetry**: Fernández-Ramos et al., Theor. Chem. Acc. 118, 813 (2007),
   doi:10.1007/s00214-007-0328-0. Rotational symmetry numbers in the rotational partition
-  function (the number itself comes from axtb's point-group detection).
+  function. ReShiki counts the proper rotations of the isotope-labelled geometry itself
+  (`rotational_symmetry_number` in `crates/qcdata/src/vibrational.rs` and
+  `vibrational/symmetry.rs`, using Jacobi rotations (Golub2013Matrix) and augmenting-path
+  atom matching (Kuhn1955Hungarian)).
 - **Eckart1935Conditions**: Eckart, Phys. Rev. 47, 552 (1935), doi:10.1103/PhysRev.47.552,
   and **Miller1980Eckart**: Miller, Handy & Adams, J. Chem. Phys. 72, 99 (1980),
   doi:10.1063/1.438959. Projection of rigid translations and rotations from the Hessian
